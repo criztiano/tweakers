@@ -10,6 +10,8 @@ import { TimelineToggleButton } from './Timeline/TimelineToggleButton';
 
 export type TweakPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 export type TweakMode = 'popover' | 'inline';
+/** `card` is the panel's glass surface; `none` puts the rows straight on the host's ground. */
+export type TweakChrome = 'card' | 'none';
 export type TweakTheme = 'light' | 'dark' | 'system';
 
 interface TweakRootProps {
@@ -25,9 +27,15 @@ interface TweakRootProps {
    * registered panel, which is the single-surface default.
    */
   panels?: string | string[];
+  /**
+   * `none` drops the panel card — no glass, no border, no radius, no padding —
+   * so the rows sit directly on the host's own surface. For app chrome that
+   * already provides the ground the panel would otherwise float on.
+   */
+  chrome?: TweakChrome;
 }
 
-export function TweakRoot({ position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system', productionEnabled = isDevDefault, panels: only }: TweakRootProps) {
+export function TweakRoot({ position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system', productionEnabled = isDevDefault, panels: only, chrome = 'card' }: TweakRootProps) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [timelineCount, setTimelineCount] = useState(0);
@@ -170,7 +178,7 @@ export function TweakRoot({ position = 'top-right', defaultOpen = true, mode = '
 
   const content = (
   <ShortcutListener>
-    <div className="tweakers-root" data-mode={mode} data-theme={theme}>
+    <div className="tweakers-root" data-mode={mode} data-theme={theme} data-chrome={chrome}>
       <div
         ref={panelRef}
         className="tweakers-panel"

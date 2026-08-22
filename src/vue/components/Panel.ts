@@ -170,6 +170,10 @@ export const Panel = defineComponent({
           defaultOpen: props.defaultOpen,
           isRoot: true,
           inline: props.inline,
+          enabled: props.panel.module ? (values.value['_enabled'] as boolean) : undefined,
+          onEnabledChange: props.panel.module
+            ? (v: boolean) => TweakStore.updateValue(props.panel.id, '_enabled', v)
+            : undefined,
           toolbar: () =>
             TweakStore.arePresetsHidden(props.panel.id)
               ? h(Fragment, null, [props.toolbarExtra?.()])

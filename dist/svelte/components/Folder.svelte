@@ -4,6 +4,7 @@
 
   import type { Snippet } from 'svelte';
   import { ICON_PANEL, ICON_CHEVRON } from '../../icons';
+  import Checkbox from './Checkbox.svelte';
 
   let {
     title,
@@ -16,6 +17,8 @@
     children,
     hint,
     hintId,
+    enabled = undefined,
+    onEnabledChange = undefined,
   } = $props<{
     title: string;
     defaultOpen?: boolean;
@@ -29,9 +32,21 @@
     /** One line of help for the section, revealed on hover over the header. */
     hint?: string;
     hintId?: string;
+    /**
+     * Root only — the panel declared `_enabled`, so the whole panel is a
+     * module: the title carries the switch and the body goes away when it is
+     * off. Same idiom as ModuleFolder, one level up.
+     */
+    enabled?: boolean;
+    onEnabledChange?: (enabled: boolean) => void;
   }>();
 
+
   let isOpen = $state(collapsible ? defaultOpen : true);
+  // A module panel's switch is the only thing that shows or hides its body —
+  // the rows below the title belong to a feature that is either on or off.
+  const isModule = $derived(isRoot && enabled !== undefined && onEnabledChange !== undefined);
+  const bodyOpen = $derived(isOpen && (!isModule || !!enabled));
   let isCollapsed = $state(collapsible ? !defaultOpen : false);
   let contentHeight = $state<number | undefined>(undefined);
 
@@ -123,6 +138,9 @@
       <div class="tweakers-folder-header tweakers-panel-header" onclick={(e) => { e.stopPropagation(); handleToggle(); }}>
         <div class="tweakers-folder-header-top">
           <div class="tweakers-folder-title-row">
+            {#if isModule}
+              <Checkbox checked={!!enabled} onChange={onEnabledChange!} label={title} />
+            {/if}
             <span class="tweakers-folder-title tweakers-folder-title-root">{title}</span>
           </div>
         </div>
@@ -132,11 +150,13 @@
         </div>
       </div>
 
+      {#if bodyOpen}
       <div class="tweakers-folder-content">
         <div class="tweakers-folder-inner">
           {#if children}{@render children()}{/if}
         </div>
       </div>
+      {/if}
     </div>
   </div>
 {:else if isRoot}
@@ -156,6 +176,9 @@
         <div class="tweakers-folder-header-top">
           {#if isOpen}
             <div class="tweakers-folder-title-row">
+              {#if isModule}
+                <Checkbox checked={!!enabled} onChange={onEnabledChange!} label={title} />
+              {/if}
               <span class="tweakers-folder-title tweakers-folder-title-root">{title}</span>
             </div>
           {/if}
@@ -179,7 +202,7 @@
         {/if}
       </div>
 
-      {#if isOpen}
+      {#if bodyOpen}
         <div class="tweakers-folder-content">
           <div class="tweakers-folder-inner">
             {#if children}{@render children()}{/if}

@@ -469,6 +469,11 @@ type PanelConfig = {
     affordances?: Record<string, AffordanceConfig>;
     /** Label overrides by control path, retained on the same terms as `hints`. */
     labels?: Record<string, string>;
+    /**
+     * Config declared `_enabled` at its root — the whole panel is a module, and
+     * its title carries the switch. Same idiom as a module folder, one level up.
+     */
+    module?: boolean;
     kind?: 'timeline';
 };
 type Listener = () => void;

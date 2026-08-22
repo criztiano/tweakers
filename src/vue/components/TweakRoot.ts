@@ -10,6 +10,8 @@ import { TimelineToggleButton } from './Timeline/TimelineToggleButton';
 
 export type TweakPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 export type TweakMode = 'popover' | 'inline';
+/** `card` is the panel's glass surface; `none` puts the rows straight on the host's ground. */
+export type TweakChrome = 'card' | 'none';
 export type TweakTheme = 'light' | 'dark' | 'system';
 
 declare const process: { env?: { NODE_ENV?: string } } | undefined;
@@ -52,6 +54,15 @@ export const TweakRoot = defineComponent({
     panels: {
       type: [String, Array] as unknown as () => string | string[] | undefined,
       default: undefined,
+    },
+    /**
+     * `none` drops the panel card — no glass, no border, no radius, no padding —
+     * so the rows sit directly on the host's own surface. For app chrome that
+     * already provides the ground the panel would otherwise float on.
+     */
+    chrome: {
+      type: String as () => TweakChrome,
+      default: 'card',
     },
   },
   setup(props) {
@@ -108,7 +119,7 @@ export const TweakRoot = defineComponent({
     };
 
     const renderContent = () => h(ShortcutListener, null, {
-      default: () => h('div', { class: 'tweakers-root', 'data-mode': props.mode, 'data-theme': props.theme }, [
+      default: () => h('div', { class: 'tweakers-root', 'data-mode': props.mode, 'data-theme': props.theme, 'data-chrome': props.chrome }, [
         h('div', {
           class: 'tweakers-panel',
           'data-position': props.mode === 'inline' ? undefined : props.position,

@@ -157,7 +157,19 @@ export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra 
 
   return (
     <div className="tweakers-panel-wrapper">
-      <Folder title={panel.name} defaultOpen={defaultOpen} isRoot={true} inline={inline} onOpenChange={setIsPanelOpen} toolbar={toolbar} tabs={tabBar}>
+      <Folder
+        title={panel.name}
+        defaultOpen={defaultOpen}
+        isRoot={true}
+        inline={inline}
+        onOpenChange={setIsPanelOpen}
+        toolbar={toolbar}
+        tabs={tabBar}
+        enabled={panel.module ? (values['_enabled'] as boolean) : undefined}
+        onEnabledChange={
+          panel.module ? (v) => TweakStore.updateValue(panel.id, '_enabled', v) : undefined
+        }
+      >
         {renderControls()}
       </Folder>
     </div>

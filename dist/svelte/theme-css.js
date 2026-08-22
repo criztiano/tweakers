@@ -275,6 +275,19 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   overflow: hidden;
 }
 
+/* Chromeless: the host already owns the ground, so the panel adds no surface
+   of its own — no glass, no hairline, no radius, no padding. The rows sit on
+   the app's own body and read as part of it rather than as a card on top. */
+.tweakers-root[data-chrome="none"] .tweakers-panel-inner {
+  background: none;
+  border: none;
+  border-radius: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  padding: 0;
+}
+
 .tweakers-panel-inner {
   background: var(--tweak-glass-bg);
   border: 1px solid var(--tweak-border);

@@ -11,9 +11,11 @@
 
   export type TweakPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
   export type TweakMode = 'popover' | 'inline';
+  /** `card` is the panel's glass surface; `none` puts the rows straight on the host's ground. */
+  export type TweakChrome = 'card' | 'none';
   export type TweakTheme = 'light' | 'dark' | 'system';
 
-  let { position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system' as TweakTheme, productionEnabled = isDevDefault, panels: only = undefined } = $props<{
+  let { position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system' as TweakTheme, productionEnabled = isDevDefault, panels: only = undefined, chrome = 'card' } = $props<{
     position?: TweakPosition;
     defaultOpen?: boolean;
     mode?: TweakMode;
@@ -26,6 +28,12 @@
      * registered panel, which is the single-surface default.
      */
     panels?: string | string[];
+    /**
+     * `none` drops the panel card — no glass, no border, no radius, no padding —
+     * so the rows sit directly on the host's own surface. For app chrome that
+     * already provides the ground the panel would otherwise float on.
+     */
+    chrome?: TweakChrome;
   }>();
 
   const inline = $derived(mode === 'inline');
@@ -77,7 +85,7 @@
 
   {#snippet content()}
     <ShortcutListener>
-      <div class="tweakers-root" data-mode={mode} data-theme={theme}>
+      <div class="tweakers-root" data-mode={mode} data-theme={theme} data-chrome={chrome}>
         <div class="tweakers-panel" data-mode={mode} data-position={inline ? undefined : position}>
           {#if panels.length > 0}
             {#each panels as panel (panel.id)}

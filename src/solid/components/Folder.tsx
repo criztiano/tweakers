@@ -1,6 +1,7 @@
 import { createSignal, createEffect, onCleanup, Show, JSX } from 'solid-js';
 import { animate } from 'motion';
 import { ICON_PANEL, ICON_CHEVRON } from '../../icons';
+import { Checkbox } from './Checkbox';
 
 interface FolderProps {
   title: string;
@@ -15,6 +16,13 @@ interface FolderProps {
   /** One line of help for the section, revealed on hover over the header. */
   hint?: string;
   hintId?: string;
+  /**
+   * Root only — the panel declared `_enabled`, so the whole panel is a module:
+   * the title carries the switch and the body goes away when it is off. Same
+   * idiom as ModuleFolder, one level up.
+   */
+  enabled?: boolean;
+  onEnabledChange?: (enabled: boolean) => void;
 }
 
 export function Folder(props: FolderProps) {
@@ -22,6 +30,12 @@ export function Folder(props: FolderProps) {
   const [isCollapsed, setIsCollapsed] = createSignal(!(props.defaultOpen ?? true));
   const [contentHeight, setContentHeight] = createSignal<number | undefined>(undefined);
   const [windowHeight, setWindowHeight] = createSignal(typeof window !== 'undefined' ? window.innerHeight : 800);
+
+  // A module panel's switch is the only thing that shows or hides its body —
+  // the rows below the title belong to a feature that is either on or off.
+  const isModule = () =>
+    !!props.isRoot && props.enabled !== undefined && props.onEnabledChange !== undefined;
+  const bodyOpen = () => isOpen() && (!isModule() || !!props.enabled);
 
   if (props.isRoot) {
     const onResize = () => setWindowHeight(window.innerHeight);
@@ -145,6 +159,13 @@ export function Folder(props: FolderProps) {
           {props.isRoot ? (
             <Show when={isOpen()}>
               <div class="tweakers-folder-title-row">
+                <Show when={isModule()}>
+                  <Checkbox
+                    checked={props.enabled!}
+                    onChange={props.onEnabledChange!}
+                    label={props.title}
+                  />
+                </Show>
                 <span class="tweakers-folder-title tweakers-folder-title-root">
                   {props.title}
                 </span>
@@ -197,7 +218,7 @@ export function Folder(props: FolderProps) {
         </Show>
       </div>
 
-      <Show when={props.isRoot ? isOpen() : contentMounted()}>
+      <Show when={props.isRoot ? bodyOpen() : contentMounted()}>
         <div
           ref={(el) => {
             if (props.isRoot) return;

@@ -727,7 +727,7 @@ var TweakStoreClass = class {
     this.initTabValue(controls, values);
     this.initTransitionModes(config, "", values);
     this.overlayPersistedValues(target, values);
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, kind: options.kind });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, module: "_enabled" in config ? true : void 0, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -765,7 +765,7 @@ var TweakStoreClass = class {
         nextValues[path] = mode;
       }
     }
-    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, kind: options.kind ?? existing.kind };
+    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, module: "_enabled" in config ? true : void 0, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
     const previousBaseValues = this.baseValues.get(id) ?? {};
@@ -2372,9 +2372,37 @@ var ICON_PANEL = {
   ]
 };
 
-// src/components/Folder.tsx
+// src/components/Checkbox.tsx
 import { jsx, jsxs } from "react/jsx-runtime";
-function Folder({ title, children, defaultOpen = true, collapsible = true, isRoot = false, inline = false, onOpenChange, toolbar, tabs, hint, hintId }) {
+function Checkbox({ checked, onChange, label, disabled = false, id }) {
+  return /* @__PURE__ */ jsx(
+    "button",
+    {
+      type: "button",
+      id,
+      role: "checkbox",
+      "aria-checked": disabled ? "mixed" : checked,
+      "aria-label": label,
+      "aria-disabled": disabled || void 0,
+      className: "tweakers-checkbox",
+      "data-checked": checked && !disabled ? "true" : void 0,
+      "data-disabled": disabled ? "true" : void 0,
+      onClick: (e) => {
+        e.stopPropagation();
+        if (!disabled) onChange(!checked);
+      },
+      children: /* @__PURE__ */ jsxs("svg", { viewBox: "0 0 22 22", width: "22", height: "22", "aria-hidden": "true", children: [
+        /* @__PURE__ */ jsx("path", { className: "tweakers-checkbox-slash", d: "M6 16 16 6", fill: "none" }),
+        /* @__PURE__ */ jsx("rect", { className: "tweakers-checkbox-chip", x: "5", y: "5", width: "12", height: "12", rx: "2" }),
+        /* @__PURE__ */ jsx("path", { className: "tweakers-checkbox-dash", d: "M6 11h10", fill: "none" })
+      ] })
+    }
+  );
+}
+
+// src/components/Folder.tsx
+import { jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
+function Folder({ title, children, defaultOpen = true, collapsible = true, isRoot = false, inline = false, onOpenChange, toolbar, tabs, hint, hintId, enabled, onEnabledChange }) {
   const [isOpen, setIsOpen] = useState(collapsible ? defaultOpen : true);
   const [isCollapsed, setIsCollapsed] = useState(collapsible ? !defaultOpen : false);
   const contentRef = useRef3(null);
@@ -2398,6 +2426,8 @@ function Folder({ title, children, defaultOpen = true, collapsible = true, isRoo
     ro.observe(el);
     return () => ro.disconnect();
   }, [isOpen]);
+  const isModule = isRoot && enabled !== void 0 && onEnabledChange !== void 0;
+  const bodyOpen = isOpen && (!isModule || enabled);
   const handleToggle = () => {
     if (!collapsible) return;
     if (inline && isRoot) return;
@@ -2410,8 +2440,8 @@ function Folder({ title, children, defaultOpen = true, collapsible = true, isRoo
     }
     onOpenChange?.(next);
   };
-  const folderContent = /* @__PURE__ */ jsxs("div", { ref: isRoot ? contentRef : void 0, className: `tweakers-folder ${isRoot ? "tweakers-folder-root" : ""}`, children: [
-    /* @__PURE__ */ jsxs(
+  const folderContent = /* @__PURE__ */ jsxs2("div", { ref: isRoot ? contentRef : void 0, className: `tweakers-folder ${isRoot ? "tweakers-folder-root" : ""}`, children: [
+    /* @__PURE__ */ jsxs2(
       "div",
       {
         className: `tweakers-folder-header ${isRoot ? "tweakers-panel-header" : ""} ${collapsible ? "" : "tweakers-folder-header-static"}`,
@@ -2419,22 +2449,32 @@ function Folder({ title, children, defaultOpen = true, collapsible = true, isRoo
         "data-hint": hint ? "true" : void 0,
         "aria-describedby": hint ? hintId : void 0,
         children: [
-          /* @__PURE__ */ jsxs("div", { className: "tweakers-folder-header-top", children: [
-            isRoot ? isOpen && /* @__PURE__ */ jsx("div", { className: "tweakers-folder-title-row", children: /* @__PURE__ */ jsx("span", { className: "tweakers-folder-title tweakers-folder-title-root", children: title }) }) : /* @__PURE__ */ jsx("div", { className: "tweakers-folder-title-row", children: /* @__PURE__ */ jsx("span", { className: "tweakers-folder-title", children: title }) }),
-            !isRoot && toolbar && /* @__PURE__ */ jsx("div", { className: "tweakers-folder-toolbar", onClick: (e) => e.stopPropagation(), children: toolbar }),
-            isRoot && !inline && /* @__PURE__ */ jsxs(
+          /* @__PURE__ */ jsxs2("div", { className: "tweakers-folder-header-top", children: [
+            isRoot ? isOpen && /* @__PURE__ */ jsxs2("div", { className: "tweakers-folder-title-row", children: [
+              isModule && /* @__PURE__ */ jsx2(
+                Checkbox,
+                {
+                  checked: enabled,
+                  onChange: onEnabledChange,
+                  label: title
+                }
+              ),
+              /* @__PURE__ */ jsx2("span", { className: "tweakers-folder-title tweakers-folder-title-root", children: title })
+            ] }) : /* @__PURE__ */ jsx2("div", { className: "tweakers-folder-title-row", children: /* @__PURE__ */ jsx2("span", { className: "tweakers-folder-title", children: title }) }),
+            !isRoot && toolbar && /* @__PURE__ */ jsx2("div", { className: "tweakers-folder-toolbar", onClick: (e) => e.stopPropagation(), children: toolbar }),
+            isRoot && !inline && /* @__PURE__ */ jsxs2(
               "svg",
               {
                 className: "tweakers-panel-icon",
                 viewBox: "0 0 16 16",
                 fill: "none",
                 children: [
-                  /* @__PURE__ */ jsx("path", { opacity: "0.5", d: ICON_PANEL.path, fill: "currentColor" }),
-                  ICON_PANEL.circles.map((c, i) => /* @__PURE__ */ jsx("circle", { cx: c.cx, cy: c.cy, r: c.r, fill: "currentColor", stroke: "currentColor", strokeWidth: "1.25" }, i))
+                  /* @__PURE__ */ jsx2("path", { opacity: "0.5", d: ICON_PANEL.path, fill: "currentColor" }),
+                  ICON_PANEL.circles.map((c, i) => /* @__PURE__ */ jsx2("circle", { cx: c.cx, cy: c.cy, r: c.r, fill: "currentColor", stroke: "currentColor", strokeWidth: "1.25" }, i))
                 ]
               }
             ),
-            !isRoot && collapsible && /* @__PURE__ */ jsx(
+            !isRoot && collapsible && /* @__PURE__ */ jsx2(
               motion.svg,
               {
                 className: "tweakers-folder-icon",
@@ -2447,17 +2487,17 @@ function Folder({ title, children, defaultOpen = true, collapsible = true, isRoo
                 initial: false,
                 animate: { rotate: isOpen ? 0 : 180 },
                 transition: { type: "spring", visualDuration: 0.35, bounce: 0.15 },
-                children: /* @__PURE__ */ jsx("path", { d: ICON_CHEVRON })
+                children: /* @__PURE__ */ jsx2("path", { d: ICON_CHEVRON })
               }
             )
           ] }),
-          isRoot && toolbar && isOpen && /* @__PURE__ */ jsx("div", { className: "tweakers-panel-toolbar", onClick: (e) => e.stopPropagation(), children: toolbar }),
-          isRoot && tabs && isOpen && /* @__PURE__ */ jsx("div", { className: "tweakers-panel-tabs", onClick: (e) => e.stopPropagation(), children: tabs }),
-          hint && /* @__PURE__ */ jsx("span", { className: "tweakers-hint", id: hintId, role: "tooltip", children: hint })
+          isRoot && toolbar && isOpen && /* @__PURE__ */ jsx2("div", { className: "tweakers-panel-toolbar", onClick: (e) => e.stopPropagation(), children: toolbar }),
+          isRoot && tabs && isOpen && /* @__PURE__ */ jsx2("div", { className: "tweakers-panel-tabs", onClick: (e) => e.stopPropagation(), children: tabs }),
+          hint && /* @__PURE__ */ jsx2("span", { className: "tweakers-hint", id: hintId, role: "tooltip", children: hint })
         ]
       }
     ),
-    /* @__PURE__ */ jsx(AnimatePresence, { initial: false, children: isOpen && /* @__PURE__ */ jsx(
+    /* @__PURE__ */ jsx2(AnimatePresence, { initial: false, children: bodyOpen && /* @__PURE__ */ jsx2(
       motion.div,
       {
         className: "tweakers-folder-content",
@@ -2466,16 +2506,16 @@ function Folder({ title, children, defaultOpen = true, collapsible = true, isRoo
         exit: isRoot ? void 0 : { height: 0, opacity: 0 },
         transition: isRoot ? void 0 : { type: "spring", visualDuration: 0.35, bounce: 0.1 },
         style: isRoot ? void 0 : { clipPath: "inset(0 -20px)" },
-        children: /* @__PURE__ */ jsx("div", { className: "tweakers-folder-inner", children })
+        children: /* @__PURE__ */ jsx2("div", { className: "tweakers-folder-inner", children })
       }
     ) })
   ] });
   if (isRoot) {
     if (inline) {
-      return /* @__PURE__ */ jsx("div", { className: "tweakers-panel-inner tweakers-panel-inline", children: folderContent });
+      return /* @__PURE__ */ jsx2("div", { className: "tweakers-panel-inner tweakers-panel-inline", children: folderContent });
     }
     const panelStyle = isOpen ? { width: 280, height: contentHeight !== void 0 ? Math.min(contentHeight + 10, windowHeight - 32) : "auto", borderRadius: 14, boxShadow: "var(--tweak-shadow)", cursor: void 0, overflowY: "auto" } : { width: 42, height: 42, borderRadius: "50%", boxSizing: "border-box", boxShadow: "var(--tweak-shadow-collapsed)", overflow: "hidden", cursor: "pointer" };
-    return /* @__PURE__ */ jsx(
+    return /* @__PURE__ */ jsx2(
       motion.div,
       {
         className: "tweakers-panel-inner",
@@ -2632,7 +2672,7 @@ function formatModifier(modifier) {
 }
 
 // src/components/ShortcutListener.tsx
-import { jsx as jsx2 } from "react/jsx-runtime";
+import { jsx as jsx3 } from "react/jsx-runtime";
 var ShortcutContext = createContext({ activePanelId: null, activePath: null });
 function ShortcutListener({ children }) {
   const [activeShortcut, setActiveShortcut] = useState2({ activePanelId: null, activePath: null });
@@ -2815,41 +2855,11 @@ function ShortcutListener({ children }) {
       window.removeEventListener("blur", handleWindowBlur);
     };
   }, [resolveActiveTarget]);
-  return /* @__PURE__ */ jsx2(ShortcutContext.Provider, { value: activeShortcut, children });
+  return /* @__PURE__ */ jsx3(ShortcutContext.Provider, { value: activeShortcut, children });
 }
 
 // src/components/ModuleFolder.tsx
 import { useState as useState3 } from "react";
-
-// src/components/Checkbox.tsx
-import { jsx as jsx3, jsxs as jsxs2 } from "react/jsx-runtime";
-function Checkbox({ checked, onChange, label, disabled = false, id }) {
-  return /* @__PURE__ */ jsx3(
-    "button",
-    {
-      type: "button",
-      id,
-      role: "checkbox",
-      "aria-checked": disabled ? "mixed" : checked,
-      "aria-label": label,
-      "aria-disabled": disabled || void 0,
-      className: "tweakers-checkbox",
-      "data-checked": checked && !disabled ? "true" : void 0,
-      "data-disabled": disabled ? "true" : void 0,
-      onClick: (e) => {
-        e.stopPropagation();
-        if (!disabled) onChange(!checked);
-      },
-      children: /* @__PURE__ */ jsxs2("svg", { viewBox: "0 0 22 22", width: "22", height: "22", "aria-hidden": "true", children: [
-        /* @__PURE__ */ jsx3("path", { className: "tweakers-checkbox-slash", d: "M6 16 16 6", fill: "none" }),
-        /* @__PURE__ */ jsx3("rect", { className: "tweakers-checkbox-chip", x: "5", y: "5", width: "12", height: "12", rx: "2" }),
-        /* @__PURE__ */ jsx3("path", { className: "tweakers-checkbox-dash", d: "M6 11h10", fill: "none" })
-      ] })
-    }
-  );
-}
-
-// src/components/ModuleFolder.tsx
 import { jsx as jsx4, jsxs as jsxs3 } from "react/jsx-runtime";
 function ModuleFolder({ title, enabled, onEnabledChange, defaultOpen = true, hint, hintId, children }) {
   const [isOpen, setIsOpen] = useState3(defaultOpen);
@@ -7319,7 +7329,21 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
     ),
     toolbarExtra
   ] });
-  return /* @__PURE__ */ jsx34("div", { className: "tweakers-panel-wrapper", children: /* @__PURE__ */ jsx34(Folder, { title: panel.name, defaultOpen, isRoot: true, inline, onOpenChange: setIsPanelOpen, toolbar, tabs: tabBar, children: renderControls() }) });
+  return /* @__PURE__ */ jsx34("div", { className: "tweakers-panel-wrapper", children: /* @__PURE__ */ jsx34(
+    Folder,
+    {
+      title: panel.name,
+      defaultOpen,
+      isRoot: true,
+      inline,
+      onOpenChange: setIsPanelOpen,
+      toolbar,
+      tabs: tabBar,
+      enabled: panel.module ? values["_enabled"] : void 0,
+      onEnabledChange: panel.module ? (v) => TweakStore.updateValue(panel.id, "_enabled", v) : void 0,
+      children: renderControls()
+    }
+  ) });
 }
 
 // src/components/Timeline/TimelineToggleButton.tsx
@@ -7416,7 +7440,7 @@ function TimelineToggleButton() {
 
 // src/components/TweakRoot.tsx
 import { jsx as jsx36 } from "react/jsx-runtime";
-function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover", theme = "system", productionEnabled = isDevDefault, panels: only }) {
+function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover", theme = "system", productionEnabled = isDevDefault, panels: only, chrome = "card" }) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState22([]);
   const [timelineCount, setTimelineCount] = useState22(0);
@@ -7525,7 +7549,7 @@ function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover
     bottom: "auto"
   } : void 0;
   const timelineToggle = timelineCount > 0 && onlyKey === void 0 ? /* @__PURE__ */ jsx36(TimelineToggleButton, {}) : null;
-  const content = /* @__PURE__ */ jsx36(ShortcutListener, { children: /* @__PURE__ */ jsx36("div", { className: "tweakers-root", "data-mode": mode, "data-theme": theme, children: /* @__PURE__ */ jsx36(
+  const content = /* @__PURE__ */ jsx36(ShortcutListener, { children: /* @__PURE__ */ jsx36("div", { className: "tweakers-root", "data-mode": mode, "data-theme": theme, "data-chrome": chrome, children: /* @__PURE__ */ jsx36(
     "div",
     {
       ref: panelRef,

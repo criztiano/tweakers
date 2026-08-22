@@ -479,6 +479,11 @@ type PanelConfig = {
     affordances?: Record<string, AffordanceConfig>;
     /** Label overrides by control path, retained on the same terms as `hints`. */
     labels?: Record<string, string>;
+    /**
+     * Config declared `_enabled` at its root — the whole panel is a module, and
+     * its title carries the switch. Same idiom as a module folder, one level up.
+     */
+    module?: boolean;
     kind?: 'timeline';
 };
 type Listener$1 = () => void;
@@ -774,6 +779,8 @@ declare function useTweakers<T extends TweakConfig>(name: string, config: T, opt
 
 type TweakPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 type TweakMode = 'popover' | 'inline';
+/** `card` is the panel's glass surface; `none` puts the rows straight on the host's ground. */
+type TweakChrome = 'card' | 'none';
 type TweakTheme = 'light' | 'dark' | 'system';
 declare const TweakRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     position: {
@@ -805,6 +812,15 @@ declare const TweakRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     panels: {
         type: () => string | string[] | undefined;
         default: undefined;
+    };
+    /**
+     * `none` drops the panel card — no glass, no border, no radius, no padding —
+     * so the rows sit directly on the host's own surface. For app chrome that
+     * already provides the ground the panel would otherwise float on.
+     */
+    chrome: {
+        type: () => TweakChrome;
+        default: string;
     };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
@@ -839,6 +855,15 @@ declare const TweakRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         type: () => string | string[] | undefined;
         default: undefined;
     };
+    /**
+     * `none` drops the panel card — no glass, no border, no radius, no padding —
+     * so the rows sit directly on the host's own surface. For app chrome that
+     * already provides the ground the panel would otherwise float on.
+     */
+    chrome: {
+        type: () => TweakChrome;
+        default: string;
+    };
 }>> & Readonly<{}>, {
     position: TweakPosition;
     mode: TweakMode;
@@ -846,6 +871,7 @@ declare const TweakRoot: vue.DefineComponent<vue.ExtractPropTypes<{
     theme: TweakTheme;
     productionEnabled: boolean;
     panels: string | string[] | undefined;
+    chrome: TweakChrome;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 interface TweakersDirectiveOptions {
@@ -1706,6 +1732,19 @@ declare const Folder: vue.DefineComponent<vue.ExtractPropTypes<{
         required: false;
         default: null;
     };
+    /**
+     * Root only — the panel declared `_enabled`, so the whole panel is a
+     * module: the title carries the switch and the body goes away when it is
+     * off. Same idiom as ModuleFolder, one level up.
+     */
+    enabled: {
+        type: BooleanConstructor;
+        default: undefined;
+    };
+    onEnabledChange: {
+        type: PropType<(enabled: boolean) => void>;
+        default: undefined;
+    };
     /** One line of help for the section, revealed on hover over the header. */
     hint: {
         type: StringConstructor;
@@ -1744,6 +1783,19 @@ declare const Folder: vue.DefineComponent<vue.ExtractPropTypes<{
         required: false;
         default: null;
     };
+    /**
+     * Root only — the panel declared `_enabled`, so the whole panel is a
+     * module: the title carries the switch and the body goes away when it is
+     * off. Same idiom as ModuleFolder, one level up.
+     */
+    enabled: {
+        type: BooleanConstructor;
+        default: undefined;
+    };
+    onEnabledChange: {
+        type: PropType<(enabled: boolean) => void>;
+        default: undefined;
+    };
     /** One line of help for the section, revealed on hover over the header. */
     hint: {
         type: StringConstructor;
@@ -1761,6 +1813,8 @@ declare const Folder: vue.DefineComponent<vue.ExtractPropTypes<{
     isRoot: boolean;
     inline: boolean;
     toolbar: (() => ReturnType<typeof h>) | null;
+    enabled: boolean;
+    onEnabledChange: (enabled: boolean) => void;
     hint: string;
     hintId: string;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
@@ -2155,8 +2209,8 @@ declare const WaveformVisualization: vue.DefineComponent<vue.ExtractPropTypes<{
 }>> & Readonly<{}>, {
     mode: WaveformMode;
     progress: number;
-    height: number;
     width: number;
+    height: number;
     border: boolean;
     grid: boolean;
     loop: WaveformLoop | null;
@@ -2328,8 +2382,8 @@ declare const AnalyserVisualization: vue.DefineComponent<vue.ExtractPropTypes<{
     spring: AnalyserSpring;
     mode: AnalyserMode;
     source: AnalyserSource;
-    height: number;
     width: number;
+    height: number;
     grid: boolean;
     pixelSize: number;
     gridSubdivisions: number;
@@ -2616,8 +2670,8 @@ declare const CurveComposer: vue.DefineComponent<vue.ExtractPropTypes<{
 }>> & Readonly<{}>, {
     mode: "continuous" | "trigger";
     onSelect: (index: number) => void;
-    height: number;
     width: number;
+    height: number;
     direction: DriverDirection;
     gap: number;
     grid: boolean;
@@ -2817,8 +2871,8 @@ declare const GradientPanel: vue.DefineComponent<vue.ExtractPropTypes<{
         required: true;
     };
 }>> & Readonly<{
-    onDrag?: ((...args: any[]) => any) | undefined;
     onChange?: ((...args: any[]) => any) | undefined;
+    onDrag?: ((...args: any[]) => any) | undefined;
 }>, {}, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 /**
@@ -2981,9 +3035,9 @@ declare const XYPad: vue.DefineComponent<vue.ExtractPropTypes<{
     x: XYAxis;
     y: XYAxis;
     shortcut: ShortcutConfig;
-    grid: number | boolean;
-    size: number;
     disabled: boolean;
+    size: number;
+    grid: number | boolean;
     formatValue: (value: XYValue) => string;
     shortcutActive: boolean;
     density: number;

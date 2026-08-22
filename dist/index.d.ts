@@ -770,6 +770,11 @@ type PanelConfig = {
     affordances?: Record<string, AffordanceConfig>;
     /** Label overrides by control path, retained on the same terms as `hints`. */
     labels?: Record<string, string>;
+    /**
+     * Config declared `_enabled` at its root — the whole panel is a module, and
+     * its title carries the switch. Same idiom as a module folder, one level up.
+     */
+    module?: boolean;
     kind?: 'timeline';
 };
 type Listener$1 = () => void;
@@ -1100,6 +1105,8 @@ declare function useTweakers<T extends TweakConfig>(name: string, config: T, opt
 
 type TweakPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 type TweakMode = 'popover' | 'inline';
+/** `card` is the panel's glass surface; `none` puts the rows straight on the host's ground. */
+type TweakChrome = 'card' | 'none';
 type TweakTheme = 'light' | 'dark' | 'system';
 interface TweakRootProps {
     position?: TweakPosition;
@@ -1114,8 +1121,14 @@ interface TweakRootProps {
      * registered panel, which is the single-surface default.
      */
     panels?: string | string[];
+    /**
+     * `none` drops the panel card — no glass, no border, no radius, no padding —
+     * so the rows sit directly on the host's own surface. For app chrome that
+     * already provides the ground the panel would otherwise float on.
+     */
+    chrome?: TweakChrome;
 }
-declare function TweakRoot({ position, defaultOpen, mode, theme, productionEnabled, panels: only }: TweakRootProps): react.JSX.Element | null;
+declare function TweakRoot({ position, defaultOpen, mode, theme, productionEnabled, panels: only, chrome }: TweakRootProps): react.JSX.Element | null;
 
 /**
  * Fail-soft browser persistence shared by TweakStore (panel values) and
@@ -1531,8 +1544,15 @@ interface FolderProps {
     /** One line of help for the section, revealed on hover over the header. */
     hint?: string;
     hintId?: string;
+    /**
+     * Root only — the panel declared `_enabled`, so the whole panel is a module:
+     * the title carries the switch and the body goes away when it is off. Same
+     * idiom as ModuleFolder, one level up.
+     */
+    enabled?: boolean;
+    onEnabledChange?: (enabled: boolean) => void;
 }
-declare function Folder({ title, children, defaultOpen, collapsible, isRoot, inline, onOpenChange, toolbar, tabs, hint, hintId }: FolderProps): react.JSX.Element;
+declare function Folder({ title, children, defaultOpen, collapsible, isRoot, inline, onOpenChange, toolbar, tabs, hint, hintId, enabled, onEnabledChange }: FolderProps): react.JSX.Element;
 
 interface ControlShellProps {
     /** Help text for this control. Without one the tooltip is not rendered. */

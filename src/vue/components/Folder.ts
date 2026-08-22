@@ -1,6 +1,7 @@
 import { defineComponent, h, onMounted, onUnmounted, ref, type PropType } from 'vue';
 import { AnimatePresence, motion } from 'motion-v';
 import { ICON_CHEVRON, ICON_PANEL } from '../../icons';
+import { Checkbox } from './Checkbox';
 
 export const Folder = defineComponent({
   name: 'TweakersFolder',
@@ -16,6 +17,16 @@ export const Folder = defineComponent({
       required: false,
       default: null,
     },
+    /**
+     * Root only — the panel declared `_enabled`, so the whole panel is a
+     * module: the title carries the switch and the body goes away when it is
+     * off. Same idiom as ModuleFolder, one level up.
+     */
+    enabled: { type: Boolean, default: undefined },
+    onEnabledChange: {
+      type: Function as PropType<(enabled: boolean) => void>,
+      default: undefined,
+    },
     /** One line of help for the section, revealed on hover over the header. */
     hint: { type: String, default: undefined },
     hintId: { type: String, default: undefined },
@@ -23,6 +34,12 @@ export const Folder = defineComponent({
   emits: ['openChange'],
   setup(props, { emit, slots }) {
     const isOpen = ref(props.collapsible ? props.defaultOpen : true);
+
+    // A module panel's switch is the only thing that shows or hides its body —
+    // the rows below the title belong to a feature that is either on or off.
+    const isModule = () =>
+      props.isRoot && props.enabled !== undefined && props.onEnabledChange !== undefined;
+    const bodyOpen = () => isOpen.value && (!isModule() || !!props.enabled);
     const isCollapsed = ref(props.collapsible ? !props.defaultOpen : false);
     const contentRef = ref<HTMLElement | null>(null);
     const contentHeight = ref<number | undefined>(undefined);
@@ -84,6 +101,13 @@ export const Folder = defineComponent({
         props.isRoot
           ? (isOpen.value
               ? h('div', { class: 'tweakers-folder-title-row' }, [
+                isModule()
+                  ? h(Checkbox, {
+                    checked: !!props.enabled,
+                    onChange: props.onEnabledChange!,
+                    label: props.title,
+                  })
+                  : null,
                 h('span', { class: 'tweakers-folder-title tweakers-folder-title-root' }, props.title),
               ])
               : null)
@@ -127,7 +151,7 @@ export const Folder = defineComponent({
 
     const renderContent = () => {
       if (props.isRoot) {
-        return isOpen.value
+        return bodyOpen()
           ? h('div', { class: 'tweakers-folder-content' }, [renderChildren()])
           : null;
       }

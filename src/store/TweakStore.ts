@@ -511,6 +511,11 @@ export type PanelConfig = {
   affordances?: Record<string, AffordanceConfig>;
   /** Label overrides by control path, retained on the same terms as `hints`. */
   labels?: Record<string, string>;
+  /**
+   * Config declared `_enabled` at its root — the whole panel is a module, and
+   * its title carries the switch. Same idiom as a module folder, one level up.
+   */
+  module?: boolean;
   kind?: 'timeline';
 };
 
@@ -766,7 +771,7 @@ class TweakStoreClass {
     // stale saved value instead of resurrecting it.
     this.overlayPersistedValues(target, values);
 
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, kind: options.kind });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, module: '_enabled' in config ? true : undefined, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -812,7 +817,7 @@ class TweakStoreClass {
       }
     }
 
-    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, kind: options.kind ?? existing.kind };
+    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, module: '_enabled' in config ? true : undefined, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
 
