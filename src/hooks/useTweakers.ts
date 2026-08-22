@@ -18,8 +18,12 @@ export interface UseTweakersOptions {
    * Host-owned backing for the toolbar's preset UI. The toolbar renders this
    * list instead of the built-in localStorage snapshots; the host applies
    * values in `onSelect` and owns persistence (see PresetProvider).
+   *
+   * `false` leaves this panel's header bare of the toolbar altogether — for
+   * the secondary panels of a multi-panel app, where a snapshot means the
+   * whole instrument and so belongs to one panel only.
    */
-  presets?: PresetProvider;
+  presets?: PresetProvider | false;
 }
 
 export function useTweakers<T extends TweakConfig>(

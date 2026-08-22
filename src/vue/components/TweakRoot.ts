@@ -43,6 +43,16 @@ export const TweakRoot = defineComponent({
       type: Boolean,
       default: isDevDefault,
     },
+    /**
+     * Render only the named panels, in the order given. For apps that place
+     * more than one panel surface in more than one place — a rack of per-voice
+     * columns beside a global panel, say. Omitted, a root renders every
+     * registered panel, which is the single-surface default.
+     */
+    panels: {
+      type: [String, Array] as unknown as () => string | string[] | undefined,
+      default: undefined,
+    },
   },
   setup(props) {
     const panels = ref<PanelConfig[]>([]);
@@ -56,10 +66,10 @@ export const TweakRoot = defineComponent({
       // Timeline panels are their own dock (TweakTimeline); exclude them here so
       // only real settings panels render, but track their presence to decide
       // whether to surface the visibility toggle.
-      panels.value = TweakStore.getPanels('panel');
+      panels.value = TweakStore.selectPanels(props.panels);
       timelines.value = TimelineStore.getTimelines();
       unsubscribePanels = TweakStore.subscribeGlobal(() => {
-        panels.value = TweakStore.getPanels('panel');
+        panels.value = TweakStore.selectPanels(props.panels);
       });
       unsubscribeTimelines = TimelineStore.subscribeGlobal(() => {
         timelines.value = TimelineStore.getTimelines();
@@ -71,7 +81,8 @@ export const TweakRoot = defineComponent({
       unsubscribeTimelines?.();
     });
 
-    const timelineToggle = (): VNodeChild => timelines.value.length > 0 ? h(TimelineToggleButton) : null;
+    const timelineToggle = (): VNodeChild =>
+      timelines.value.length > 0 && props.panels === undefined ? h(TimelineToggleButton) : null;
 
     const renderPanels = () => {
       // No settings panels but timelines exist: render a minimal shell whose
@@ -107,7 +118,10 @@ export const TweakRoot = defineComponent({
     });
 
     return () => {
-      if (!props.productionEnabled || !mounted.value || typeof window === 'undefined' || (panels.value.length === 0 && timelines.value.length === 0)) {
+      const empty =
+        panels.value.length === 0 &&
+        (props.panels !== undefined || timelines.value.length === 0);
+      if (!props.productionEnabled || !mounted.value || typeof window === 'undefined' || empty) {
         return null;
       }
 

@@ -13,12 +13,19 @@
   export type TweakMode = 'popover' | 'inline';
   export type TweakTheme = 'light' | 'dark' | 'system';
 
-  let { position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system' as TweakTheme, productionEnabled = isDevDefault } = $props<{
+  let { position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system' as TweakTheme, productionEnabled = isDevDefault, panels: only = undefined } = $props<{
     position?: TweakPosition;
     defaultOpen?: boolean;
     mode?: TweakMode;
     theme?: TweakTheme;
     productionEnabled?: boolean;
+    /**
+     * Render only the named panels, in the order given. For apps that place
+     * more than one panel surface in more than one place — a rack of per-voice
+     * columns beside a global panel, say. Omitted, a root renders every
+     * registered panel, which is the single-surface default.
+     */
+    panels?: string | string[];
   }>();
 
   const inline = $derived(mode === 'inline');
@@ -42,11 +49,11 @@
     if (typeof window === 'undefined') return;
 
     mounted = true;
-    panels = TweakStore.getPanels('panel');
+    panels = TweakStore.selectPanels(only);
     timelineCount = TimelineStore.getTimelines().length;
 
     const unsubPanels = TweakStore.subscribeGlobal(() => {
-      panels = TweakStore.getPanels('panel');
+      panels = TweakStore.selectPanels(only);
     });
     const unsubTimelines = TimelineStore.subscribeGlobal(() => {
       timelineCount = TimelineStore.getTimelines().length;
@@ -59,11 +66,11 @@
   });
 </script>
 
-{#if productionEnabled && mounted && (panels.length > 0 || timelineCount > 0)}
+{#if productionEnabled && mounted && (panels.length > 0 || (only === undefined && timelineCount > 0))}
   <!-- Timeline-backed panels render in TweakTimeline; their presence only adds a
        visibility toggle to the dock toolbar here. -->
   {#snippet timelineToggle()}
-    {#if timelineCount > 0}
+    {#if timelineCount > 0 && only === undefined}
       <TimelineToggleButton />
     {/if}
   {/snippet}

@@ -598,6 +598,8 @@ declare class TweakStoreClass {
     private presets;
     private activePreset;
     private presetProviders;
+    /** Panels whose header carries no preset toolbar (see setPresetsHidden). */
+    private presetsHidden;
     private baseValues;
     private persistTargets;
     registerPanel(id: string, name: string, config: TweakConfig, shortcuts?: Record<string, ShortcutConfig>, options?: TweakStorePanelOptions): void;
@@ -614,6 +616,14 @@ declare class TweakStoreClass {
     getValue(panelId: string, path: string): TweakValue | undefined;
     getValues(panelId: string): Record<string, TweakValue>;
     getPanels(kind?: 'panel' | 'timeline'): PanelConfig[];
+    /**
+     * The settings panels a root should draw, given its optional `panels` filter.
+     * `undefined` means every panel — the single-surface default. A list means
+     * exactly those names, in the order named, so two roots never fight over the
+     * same panel and a panel that has not registered yet leaves a gap that fills
+     * when it does.
+     */
+    selectPanels(only?: string | string[]): PanelConfig[];
     getPanel(id: string): PanelConfig | undefined;
     subscribe(panelId: string, listener: Listener): () => void;
     subscribeGlobal(listener: Listener): () => void;
@@ -666,6 +676,15 @@ declare class TweakStoreClass {
      */
     setPresetProvider(panelId: string, provider: PresetProvider | null | undefined): void;
     getPresetProvider(panelId: string): PresetProvider | null;
+    /**
+     * Hide (or restore) a panel's preset toolbar. For the secondary panels of a
+     * multi-panel app — a rack of per-voice columns, say — where a snapshot
+     * means the whole instrument and so belongs to one panel only. Hiding the
+     * toolbar hides its add and copy buttons with it: the header of a panel that
+     * does not own presets is bare.
+     */
+    setPresetsHidden(panelId: string, hidden: boolean): void;
+    arePresetsHidden(panelId: string): boolean;
     /** Provider mode hides the implicit "Version 1" base row — the host owns the whole list. */
     hasPresetProvider(panelId: string): boolean;
     /** The dropdown rows in host order, from the provider when one is set. */

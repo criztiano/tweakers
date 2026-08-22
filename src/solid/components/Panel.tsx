@@ -129,7 +129,9 @@ export function Panel(props: PanelProps) {
     <ControlRenderer panelId={props.panel.id} controls={props.panel.controls} values={values()} />
   );
 
-  const toolbar = (
+  const presetsHidden = () => TweakStore.arePresetsHidden(props.panel.id);
+
+  const toolbar = presetsHidden() ? props.toolbarExtra : (
     <>
       <button
         ref={addButtonRef}

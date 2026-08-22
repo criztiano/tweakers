@@ -734,6 +734,8 @@ class TweakStoreClass {
   // replace the object on every host render so callbacks never go stale, and
   // only a data change should notify.
   private presetProviders: Map<string, { provider: PresetProvider; serialized: string }> = new Map();
+  /** Panels whose header carries no preset toolbar (see setPresetsHidden). */
+  private presetsHidden: Set<string> = new Set();
   private baseValues: Map<string, Record<string, TweakValue>> = new Map();
   // Resolved storage target per panel (null = persistence off). Absent = not
   // yet registered.
@@ -852,6 +854,7 @@ class TweakStoreClass {
     this.baseValues.delete(id);
     this.persistTargets.delete(id);
     this.presetProviders.delete(id);
+    this.presetsHidden.delete(id);
     this.notifyGlobal();
   }
 
@@ -965,6 +968,22 @@ class TweakStoreClass {
     if (kind === 'panel') return all.filter((panel) => panel.kind !== 'timeline');
     if (kind === 'timeline') return all.filter((panel) => panel.kind === 'timeline');
     return all;
+  }
+
+  /**
+   * The settings panels a root should draw, given its optional `panels` filter.
+   * `undefined` means every panel — the single-surface default. A list means
+   * exactly those names, in the order named, so two roots never fight over the
+   * same panel and a panel that has not registered yet leaves a gap that fills
+   * when it does.
+   */
+  selectPanels(only?: string | string[]): PanelConfig[] {
+    const registered = this.getPanels('panel');
+    if (only === undefined) return registered;
+    const names = typeof only === 'string' ? [only] : only;
+    return names
+      .map((name) => registered.find((panel) => panel.name === name))
+      .filter((panel): panel is PanelConfig => panel !== undefined);
   }
 
   getPanel(id: string): PanelConfig | undefined {
@@ -1253,6 +1272,25 @@ class TweakStoreClass {
 
   getPresetProvider(panelId: string): PresetProvider | null {
     return this.presetProviders.get(panelId)?.provider ?? null;
+  }
+
+  /**
+   * Hide (or restore) a panel's preset toolbar. For the secondary panels of a
+   * multi-panel app — a rack of per-voice columns, say — where a snapshot
+   * means the whole instrument and so belongs to one panel only. Hiding the
+   * toolbar hides its add and copy buttons with it: the header of a panel that
+   * does not own presets is bare.
+   */
+  setPresetsHidden(panelId: string, hidden: boolean): void {
+    const had = this.presetsHidden.has(panelId);
+    if (hidden === had) return;
+    if (hidden) this.presetsHidden.add(panelId);
+    else this.presetsHidden.delete(panelId);
+    this.notify(panelId);
+  }
+
+  arePresetsHidden(panelId: string): boolean {
+    return this.presetsHidden.has(panelId);
   }
 
   /** Provider mode hides the implicit "Version 1" base row — the host owns the whole list. */

@@ -170,7 +170,10 @@ export const Panel = defineComponent({
           defaultOpen: props.defaultOpen,
           isRoot: true,
           inline: props.inline,
-          toolbar: () => toolbarNode,
+          toolbar: () =>
+            TweakStore.arePresetsHidden(props.panel.id)
+              ? h(Fragment, null, [props.toolbarExtra?.()])
+              : toolbarNode,
         }, {
           default: () => [
             h(ControlRenderer, {

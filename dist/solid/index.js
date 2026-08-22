@@ -684,6 +684,8 @@ var TweakStoreClass = class {
     // replace the object on every host render so callbacks never go stale, and
     // only a data change should notify.
     this.presetProviders = /* @__PURE__ */ new Map();
+    /** Panels whose header carries no preset toolbar (see setPresetsHidden). */
+    this.presetsHidden = /* @__PURE__ */ new Set();
     this.baseValues = /* @__PURE__ */ new Map();
     // Resolved storage target per panel (null = persistence off). Absent = not
     // yet registered.
@@ -776,6 +778,7 @@ var TweakStoreClass = class {
     this.baseValues.delete(id);
     this.persistTargets.delete(id);
     this.presetProviders.delete(id);
+    this.presetsHidden.delete(id);
     this.notifyGlobal();
   }
   // Overlay saved values onto freshly-computed defaults, in place. Only keys
@@ -865,6 +868,19 @@ var TweakStoreClass = class {
     if (kind === "panel") return all.filter((panel) => panel.kind !== "timeline");
     if (kind === "timeline") return all.filter((panel) => panel.kind === "timeline");
     return all;
+  }
+  /**
+   * The settings panels a root should draw, given its optional `panels` filter.
+   * `undefined` means every panel — the single-surface default. A list means
+   * exactly those names, in the order named, so two roots never fight over the
+   * same panel and a panel that has not registered yet leaves a gap that fills
+   * when it does.
+   */
+  selectPanels(only) {
+    const registered = this.getPanels("panel");
+    if (only === void 0) return registered;
+    const names = typeof only === "string" ? [only] : only;
+    return names.map((name) => registered.find((panel) => panel.name === name)).filter((panel) => panel !== void 0);
   }
   getPanel(id) {
     return this.panels.get(id);
@@ -1103,6 +1119,23 @@ var TweakStoreClass = class {
   }
   getPresetProvider(panelId) {
     return this.presetProviders.get(panelId)?.provider ?? null;
+  }
+  /**
+   * Hide (or restore) a panel's preset toolbar. For the secondary panels of a
+   * multi-panel app — a rack of per-voice columns, say — where a snapshot
+   * means the whole instrument and so belongs to one panel only. Hiding the
+   * toolbar hides its add and copy buttons with it: the header of a panel that
+   * does not own presets is bare.
+   */
+  setPresetsHidden(panelId, hidden) {
+    const had = this.presetsHidden.has(panelId);
+    if (hidden === had) return;
+    if (hidden) this.presetsHidden.add(panelId);
+    else this.presetsHidden.delete(panelId);
+    this.notify(panelId);
+  }
+  arePresetsHidden(panelId) {
+    return this.presetsHidden.has(panelId);
   }
   /** Provider mode hides the implicit "Version 1" base row — the host owns the whole list. */
   hasPresetProvider(panelId) {
@@ -1800,7 +1833,9 @@ function createTweakers(name, config, options) {
     });
   });
   createEffect(() => {
-    const provider = options?.presets ?? null;
+    const declared = options?.presets;
+    TweakStore.setPresetsHidden(panelId, declared === false);
+    const provider = declared === false ? null : declared ?? null;
     if (provider) JSON.stringify(provider);
     TweakStore.setPresetProvider(panelId, provider);
   });
@@ -8813,7 +8848,8 @@ Apply these values as the new defaults in the createTweakers call.`;
       return values();
     }
   });
-  const toolbar = [(() => {
+  const presetsHidden = () => TweakStore.arePresetsHidden(props.panel.id);
+  const toolbar = presetsHidden() ? props.toolbarExtra : [(() => {
     var _el$ = _tmpl$58(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.nextSibling, _el$6 = _el$5.nextSibling, _el$7 = _el$6.nextSibling;
     _el$.addEventListener("pointerleave", handleAddTapEnd);
     _el$.addEventListener("pointercancel", handleAddTapEnd);
@@ -8956,12 +8992,13 @@ function TweakRoot(props) {
   const [timelineCount, setTimelineCount] = createSignal23(0);
   const [mounted, setMounted] = createSignal23(false);
   const inline = () => (props.mode ?? "popover") === "inline";
+  const read = () => TweakStore.selectPanels(props.panels);
   onMount13(() => {
     setMounted(true);
-    setPanels(TweakStore.getPanels("panel"));
+    setPanels(read());
     setTimelineCount(TimelineStore.getTimelines().length);
     const unsubPanels = TweakStore.subscribeGlobal(() => {
-      setPanels(TweakStore.getPanels("panel"));
+      setPanels(read());
     });
     const unsubTimelines = TimelineStore.subscribeGlobal(() => {
       setTimelineCount(TimelineStore.getTimelines().length);
@@ -8971,7 +9008,7 @@ function TweakRoot(props) {
       unsubTimelines();
     });
   });
-  const timelineToggle = () => timelineCount() > 0 ? _$createComponent23(TimelineToggleButton, {}) : null;
+  const timelineToggle = () => timelineCount() > 0 && props.panels === void 0 ? _$createComponent23(TimelineToggleButton, {}) : null;
   const content = () => _$createComponent23(ShortcutListener, {
     get children() {
       var _el$ = _tmpl$60(), _el$2 = _el$.firstChild;
@@ -9039,7 +9076,7 @@ function TweakRoot(props) {
   });
   return _$createComponent23(Show17, {
     get when() {
-      return _$memo15(() => !!(mounted() && typeof window !== "undefined"))() && (panels().length > 0 || timelineCount() > 0);
+      return _$memo15(() => !!(mounted() && typeof window !== "undefined"))() && (panels().length > 0 || props.panels === void 0 && timelineCount() > 0);
     },
     get children() {
       return _$createComponent23(Show17, {

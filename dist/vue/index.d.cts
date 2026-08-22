@@ -589,6 +589,8 @@ declare class TweakStoreClass {
     private presets;
     private activePreset;
     private presetProviders;
+    /** Panels whose header carries no preset toolbar (see setPresetsHidden). */
+    private presetsHidden;
     private baseValues;
     private persistTargets;
     registerPanel(id: string, name: string, config: TweakConfig, shortcuts?: Record<string, ShortcutConfig>, options?: TweakStorePanelOptions): void;
@@ -605,6 +607,14 @@ declare class TweakStoreClass {
     getValue(panelId: string, path: string): TweakValue | undefined;
     getValues(panelId: string): Record<string, TweakValue>;
     getPanels(kind?: 'panel' | 'timeline'): PanelConfig[];
+    /**
+     * The settings panels a root should draw, given its optional `panels` filter.
+     * `undefined` means every panel — the single-surface default. A list means
+     * exactly those names, in the order named, so two roots never fight over the
+     * same panel and a panel that has not registered yet leaves a gap that fills
+     * when it does.
+     */
+    selectPanels(only?: string | string[]): PanelConfig[];
     getPanel(id: string): PanelConfig | undefined;
     subscribe(panelId: string, listener: Listener$1): () => void;
     subscribeGlobal(listener: Listener$1): () => void;
@@ -657,6 +667,15 @@ declare class TweakStoreClass {
      */
     setPresetProvider(panelId: string, provider: PresetProvider | null | undefined): void;
     getPresetProvider(panelId: string): PresetProvider | null;
+    /**
+     * Hide (or restore) a panel's preset toolbar. For the secondary panels of a
+     * multi-panel app — a rack of per-voice columns, say — where a snapshot
+     * means the whole instrument and so belongs to one panel only. Hiding the
+     * toolbar hides its add and copy buttons with it: the header of a panel that
+     * does not own presets is bare.
+     */
+    setPresetsHidden(panelId: string, hidden: boolean): void;
+    arePresetsHidden(panelId: string): boolean;
     /** Provider mode hides the implicit "Version 1" base row — the host owns the whole list. */
     hasPresetProvider(panelId: string): boolean;
     /** The dropdown rows in host order, from the provider when one is set. */
@@ -749,7 +768,7 @@ interface UseTweakersOptions {
      * Host-owned backing for the toolbar's preset UI (see PresetProvider).
      * Reactive `presets`/`activeId` sources are tracked through the watcher.
      */
-    presets?: PresetProvider;
+    presets?: PresetProvider | false;
 }
 declare function useTweakers<T extends TweakConfig>(name: string, config: T, options?: UseTweakersOptions): ComputedRef<ResolvedValues<T>>;
 
@@ -777,6 +796,16 @@ declare const TweakRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         type: BooleanConstructor;
         default: boolean;
     };
+    /**
+     * Render only the named panels, in the order given. For apps that place
+     * more than one panel surface in more than one place — a rack of per-voice
+     * columns beside a global panel, say. Omitted, a root renders every
+     * registered panel, which is the single-surface default.
+     */
+    panels: {
+        type: () => string | string[] | undefined;
+        default: undefined;
+    };
 }>, () => vue.VNode<vue.RendererNode, vue.RendererElement, {
     [key: string]: any;
 }> | null, {}, {}, {}, vue.ComponentOptionsMixin, vue.ComponentOptionsMixin, {}, string, vue.PublicProps, Readonly<vue.ExtractPropTypes<{
@@ -800,12 +829,23 @@ declare const TweakRoot: vue.DefineComponent<vue.ExtractPropTypes<{
         type: BooleanConstructor;
         default: boolean;
     };
+    /**
+     * Render only the named panels, in the order given. For apps that place
+     * more than one panel surface in more than one place — a rack of per-voice
+     * columns beside a global panel, say. Omitted, a root renders every
+     * registered panel, which is the single-surface default.
+     */
+    panels: {
+        type: () => string | string[] | undefined;
+        default: undefined;
+    };
 }>> & Readonly<{}>, {
     position: TweakPosition;
     mode: TweakMode;
     defaultOpen: boolean;
     theme: TweakTheme;
     productionEnabled: boolean;
+    panels: string | string[] | undefined;
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 interface TweakersDirectiveOptions {

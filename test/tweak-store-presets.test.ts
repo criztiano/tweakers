@@ -200,3 +200,33 @@ describe('preset provider mode', () => {
     }
   });
 });
+
+// A secondary panel in a multi-panel app declares `presets: false`: a snapshot
+// means the whole instrument, so the toolbar belongs to one panel only.
+describe('hidden preset toolbars', () => {
+  const id = 'presets-hidden-panel';
+
+  afterEach(() => {
+    TweakStore.unregisterPanel(id);
+  });
+
+  it('is off until a panel asks for it', () => {
+    TweakStore.registerPanel(id, id, { level: 0.5 });
+    expect(TweakStore.arePresetsHidden(id)).toBe(false);
+  });
+
+  it('hides and restores the toolbar', () => {
+    TweakStore.registerPanel(id, id, { level: 0.5 });
+    TweakStore.setPresetsHidden(id, true);
+    expect(TweakStore.arePresetsHidden(id)).toBe(true);
+    TweakStore.setPresetsHidden(id, false);
+    expect(TweakStore.arePresetsHidden(id)).toBe(false);
+  });
+
+  it('forgets the flag when the panel unregisters', () => {
+    TweakStore.registerPanel(id, id, { level: 0.5 });
+    TweakStore.setPresetsHidden(id, true);
+    TweakStore.unregisterPanel(id);
+    expect(TweakStore.arePresetsHidden(id)).toBe(false);
+  });
+});

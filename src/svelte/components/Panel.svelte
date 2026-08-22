@@ -82,6 +82,9 @@
 <div class="tweakers-panel-wrapper">
   <Folder title={panel.name} {defaultOpen} isRoot={true} {inline} onOpenChange={(open) => (isPanelOpen = open)}>
     {#snippet toolbar()}
+      {#if TweakStore.arePresetsHidden(panel.id)}
+        {@render toolbarExtra?.()}
+      {:else}
       <button
         class="tweakers-toolbar-add"
         onclick={handleAddPreset}
@@ -145,6 +148,7 @@
       </button>
 
       {@render toolbarExtra?.()}
+      {/if}
     {/snippet}
 
     {#each panel.controls as control (control.path)}

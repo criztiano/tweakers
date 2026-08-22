@@ -14,7 +14,7 @@ export interface CreateTweakersOptions {
      * Host-owned backing for the toolbar's preset UI (see PresetProvider).
      * Back `presets`/`activeId` with $state-read getters to keep the list live.
      */
-    presets?: PresetProvider;
+    presets?: PresetProvider | false;
     /** Stable id shares one panel/persistence target across mounts. */
     id?: string;
     /** Persist values per machine (see TweakersPersistOptions). */

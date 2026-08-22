@@ -78,7 +78,9 @@ export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra 
 
   const iconTransition = { type: 'spring' as const, visualDuration: 0.4, bounce: 0.1 };
 
-  const toolbar = (
+  const presetsHidden = TweakStore.arePresetsHidden(panel.id);
+
+  const toolbar = presetsHidden ? toolbarExtra : (
     <>
       <motion.button
         className="tweakers-toolbar-add"

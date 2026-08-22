@@ -26,6 +26,13 @@ interface TweakRootProps {
   mode?: TweakMode;
   theme?: TweakTheme;
   productionEnabled?: boolean;
+  /**
+   * Render only the named panels, in the order given. For apps that place
+   * more than one panel surface in more than one place — a rack of per-voice
+   * columns beside a global panel, say. Omitted, a root renders every
+   * registered panel, which is the single-surface default.
+   */
+  panels?: string | string[];
 }
 
 export function TweakRoot(props: TweakRootProps) {
@@ -35,12 +42,14 @@ export function TweakRoot(props: TweakRootProps) {
   const [mounted, setMounted] = createSignal(false);
   const inline = () => (props.mode ?? 'popover') === 'inline';
 
+  const read = () => TweakStore.selectPanels(props.panels);
+
   onMount(() => {
     setMounted(true);
-    setPanels(TweakStore.getPanels('panel'));
+    setPanels(read());
     setTimelineCount(TimelineStore.getTimelines().length);
     const unsubPanels = TweakStore.subscribeGlobal(() => {
-      setPanels(TweakStore.getPanels('panel'));
+      setPanels(read());
     });
     const unsubTimelines = TimelineStore.subscribeGlobal(() => {
       setTimelineCount(TimelineStore.getTimelines().length);
@@ -53,7 +62,8 @@ export function TweakRoot(props: TweakRootProps) {
 
   // Timeline-backed panels render in TweakTimeline, but their presence adds a
   // visibility toggle to the dock toolbar here.
-  const timelineToggle = () => (timelineCount() > 0 ? <TimelineToggleButton /> : null);
+  const timelineToggle = () =>
+    timelineCount() > 0 && props.panels === undefined ? <TimelineToggleButton /> : null;
 
   const content = () => (
     <ShortcutListener>
@@ -92,7 +102,13 @@ export function TweakRoot(props: TweakRootProps) {
   );
 
   return (
-    <Show when={mounted() && typeof window !== 'undefined' && (panels().length > 0 || timelineCount() > 0)}>
+    <Show
+      when={
+        mounted() &&
+        typeof window !== 'undefined' &&
+        (panels().length > 0 || (props.panels === undefined && timelineCount() > 0))
+      }
+    >
       <Show when={!inline()} fallback={content()}>
         <Portal mount={document.body}>
           {content()}

@@ -35,7 +35,9 @@ export function createTweakers(name, config, options) {
     // the stringify read) and push swaps into the store; setPresetProvider only
     // notifies when that data changed.
     $effect(() => {
-        const provider = options?.presets ?? null;
+        const declared = options?.presets;
+        TweakStore.setPresetsHidden(panelId, declared === false);
+        const provider = declared === false ? null : declared ?? null;
         if (provider)
             JSON.stringify(provider);
         TweakStore.setPresetProvider(panelId, provider);

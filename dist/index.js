@@ -705,6 +705,8 @@ var TweakStoreClass = class {
     // replace the object on every host render so callbacks never go stale, and
     // only a data change should notify.
     this.presetProviders = /* @__PURE__ */ new Map();
+    /** Panels whose header carries no preset toolbar (see setPresetsHidden). */
+    this.presetsHidden = /* @__PURE__ */ new Set();
     this.baseValues = /* @__PURE__ */ new Map();
     // Resolved storage target per panel (null = persistence off). Absent = not
     // yet registered.
@@ -797,6 +799,7 @@ var TweakStoreClass = class {
     this.baseValues.delete(id);
     this.persistTargets.delete(id);
     this.presetProviders.delete(id);
+    this.presetsHidden.delete(id);
     this.notifyGlobal();
   }
   // Overlay saved values onto freshly-computed defaults, in place. Only keys
@@ -886,6 +889,19 @@ var TweakStoreClass = class {
     if (kind === "panel") return all.filter((panel) => panel.kind !== "timeline");
     if (kind === "timeline") return all.filter((panel) => panel.kind === "timeline");
     return all;
+  }
+  /**
+   * The settings panels a root should draw, given its optional `panels` filter.
+   * `undefined` means every panel — the single-surface default. A list means
+   * exactly those names, in the order named, so two roots never fight over the
+   * same panel and a panel that has not registered yet leaves a gap that fills
+   * when it does.
+   */
+  selectPanels(only) {
+    const registered = this.getPanels("panel");
+    if (only === void 0) return registered;
+    const names = typeof only === "string" ? [only] : only;
+    return names.map((name) => registered.find((panel) => panel.name === name)).filter((panel) => panel !== void 0);
   }
   getPanel(id) {
     return this.panels.get(id);
@@ -1124,6 +1140,23 @@ var TweakStoreClass = class {
   }
   getPresetProvider(panelId) {
     return this.presetProviders.get(panelId)?.provider ?? null;
+  }
+  /**
+   * Hide (or restore) a panel's preset toolbar. For the secondary panels of a
+   * multi-panel app — a rack of per-voice columns, say — where a snapshot
+   * means the whole instrument and so belongs to one panel only. Hiding the
+   * toolbar hides its add and copy buttons with it: the header of a panel that
+   * does not own presets is bare.
+   */
+  setPresetsHidden(panelId, hidden) {
+    const had = this.presetsHidden.has(panelId);
+    if (hidden === had) return;
+    if (hidden) this.presetsHidden.add(panelId);
+    else this.presetsHidden.delete(panelId);
+    this.notify(panelId);
+  }
+  arePresetsHidden(panelId) {
+    return this.presetsHidden.has(panelId);
   }
   /** Provider mode hides the implicit "Version 1" base row — the host owns the whole list. */
   hasPresetProvider(panelId) {
@@ -1864,7 +1897,9 @@ function useTweakStorePanel(name, config, options = {}) {
     });
   }, [hasStableId, panelId, name, serializedConfig, serializedShortcuts, serializedPersist, serializedHints, serializedLabels]);
   useEffect(() => {
-    TweakStore.setPresetProvider(panelId, optionsRef.current.presets ?? null);
+    const presets = optionsRef.current.presets;
+    TweakStore.setPresetsHidden(panelId, presets === false);
+    TweakStore.setPresetProvider(panelId, presets === false ? null : presets ?? null);
   });
   useEffect(() => {
     TweakStore.syncCurveConfigs(panelId, configRef.current);
@@ -7213,7 +7248,8 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
     /* @__PURE__ */ jsx34("div", { className: "tweakers-panel-tab-page", children: renderRows(pageControls) }, activeTab.path)
   ] }) : renderRows(pageControls);
   const iconTransition = { type: "spring", visualDuration: 0.4, bounce: 0.1 };
-  const toolbar = /* @__PURE__ */ jsxs31(Fragment8, { children: [
+  const presetsHidden = TweakStore.arePresetsHidden(panel.id);
+  const toolbar = presetsHidden ? toolbarExtra : /* @__PURE__ */ jsxs31(Fragment8, { children: [
     /* @__PURE__ */ jsx34(
       motion10.button,
       {
@@ -7380,7 +7416,7 @@ function TimelineToggleButton() {
 
 // src/components/TweakRoot.tsx
 import { jsx as jsx36 } from "react/jsx-runtime";
-function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover", theme = "system", productionEnabled = isDevDefault }) {
+function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover", theme = "system", productionEnabled = isDevDefault, panels: only }) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState22([]);
   const [timelineCount, setTimelineCount] = useState22(0);
@@ -7393,12 +7429,17 @@ function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover
   const draggingRef = useRef24(false);
   const dragStartRef = useRef24(null);
   const didDragRef = useRef24(false);
+  const onlyKey = Array.isArray(only) ? only.join("\0") : only;
+  const read = useCallback17(
+    () => TweakStore.selectPanels(onlyKey === void 0 ? void 0 : onlyKey.split("\0")),
+    [onlyKey]
+  );
   useEffect18(() => {
     setMounted(true);
-    setPanels(TweakStore.getPanels("panel"));
+    setPanels(read());
     setTimelineCount(TimelineStore.getTimelines().length);
     const unsubscribePanels = TweakStore.subscribeGlobal(() => {
-      setPanels(TweakStore.getPanels("panel"));
+      setPanels(read());
     });
     const unsubscribeTimelines = TimelineStore.subscribeGlobal(() => {
       setTimelineCount(TimelineStore.getTimelines().length);
@@ -7474,7 +7515,7 @@ function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover
   if (!mounted || typeof window === "undefined") {
     return null;
   }
-  if (panels.length === 0 && timelineCount === 0) {
+  if (panels.length === 0 && (onlyKey !== void 0 || timelineCount === 0)) {
     return null;
   }
   const dragStyle = dragOffset ? {
@@ -7483,7 +7524,7 @@ function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover
     right: "auto",
     bottom: "auto"
   } : void 0;
-  const timelineToggle = timelineCount > 0 ? /* @__PURE__ */ jsx36(TimelineToggleButton, {}) : null;
+  const timelineToggle = timelineCount > 0 && onlyKey === void 0 ? /* @__PURE__ */ jsx36(TimelineToggleButton, {}) : null;
   const content = /* @__PURE__ */ jsx36(ShortcutListener, { children: /* @__PURE__ */ jsx36("div", { className: "tweakers-root", "data-mode": mode, "data-theme": theme, children: /* @__PURE__ */ jsx36(
     "div",
     {
