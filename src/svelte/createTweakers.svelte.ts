@@ -37,7 +37,7 @@ export interface CreateTweakersOptions {
    * Host-owned backing for the toolbar's preset UI (see PresetProvider).
    * Back `presets`/`activeId` with $state-read getters to keep the list live.
    */
-  presets?: PresetProvider;
+  presets?: PresetProvider | false;
   /** Stable id shares one panel/persistence target across mounts. */
   id?: string;
   /** Persist values per machine (see TweakersPersistOptions). */
@@ -93,7 +93,9 @@ export function createTweakers<T extends TweakConfig>(
   // the stringify read) and push swaps into the store; setPresetProvider only
   // notifies when that data changed.
   $effect(() => {
-    const provider = options?.presets ?? null;
+    const declared = options?.presets;
+    TweakStore.setPresetsHidden(panelId, declared === false);
+    const provider = declared === false ? null : declared ?? null;
     if (provider) JSON.stringify(provider);
     TweakStore.setPresetProvider(panelId, provider);
   });

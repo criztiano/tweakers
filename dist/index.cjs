@@ -871,6 +871,8 @@ var TweakStoreClass = class {
     // replace the object on every host render so callbacks never go stale, and
     // only a data change should notify.
     this.presetProviders = /* @__PURE__ */ new Map();
+    /** Panels whose header carries no preset toolbar (see setPresetsHidden). */
+    this.presetsHidden = /* @__PURE__ */ new Set();
     this.baseValues = /* @__PURE__ */ new Map();
     // Resolved storage target per panel (null = persistence off). Absent = not
     // yet registered.
@@ -891,7 +893,7 @@ var TweakStoreClass = class {
     this.initTabValue(controls, values);
     this.initTransitionModes(config, "", values);
     this.overlayPersistedValues(target, values);
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, kind: options.kind });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, module: "_enabled" in config ? true : void 0, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -929,7 +931,7 @@ var TweakStoreClass = class {
         nextValues[path] = mode;
       }
     }
-    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, kind: options.kind ?? existing.kind };
+    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, module: "_enabled" in config ? true : void 0, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
     const previousBaseValues = this.baseValues.get(id) ?? {};
@@ -963,6 +965,7 @@ var TweakStoreClass = class {
     this.baseValues.delete(id);
     this.persistTargets.delete(id);
     this.presetProviders.delete(id);
+    this.presetsHidden.delete(id);
     this.notifyGlobal();
   }
   // Overlay saved values onto freshly-computed defaults, in place. Only keys
@@ -1052,6 +1055,19 @@ var TweakStoreClass = class {
     if (kind === "panel") return all.filter((panel) => panel.kind !== "timeline");
     if (kind === "timeline") return all.filter((panel) => panel.kind === "timeline");
     return all;
+  }
+  /**
+   * The settings panels a root should draw, given its optional `panels` filter.
+   * `undefined` means every panel — the single-surface default. A list means
+   * exactly those names, in the order named, so two roots never fight over the
+   * same panel and a panel that has not registered yet leaves a gap that fills
+   * when it does.
+   */
+  selectPanels(only) {
+    const registered = this.getPanels("panel");
+    if (only === void 0) return registered;
+    const names = typeof only === "string" ? [only] : only;
+    return names.map((name) => registered.find((panel) => panel.name === name)).filter((panel) => panel !== void 0);
   }
   getPanel(id) {
     return this.panels.get(id);
@@ -1291,6 +1307,23 @@ var TweakStoreClass = class {
   getPresetProvider(panelId) {
     return this.presetProviders.get(panelId)?.provider ?? null;
   }
+  /**
+   * Hide (or restore) a panel's preset toolbar. For the secondary panels of a
+   * multi-panel app — a rack of per-voice columns, say — where a snapshot
+   * means the whole instrument and so belongs to one panel only. Hiding the
+   * toolbar hides its add and copy buttons with it: the header of a panel that
+   * does not own presets is bare.
+   */
+  setPresetsHidden(panelId, hidden) {
+    const had = this.presetsHidden.has(panelId);
+    if (hidden === had) return;
+    if (hidden) this.presetsHidden.add(panelId);
+    else this.presetsHidden.delete(panelId);
+    this.notify(panelId);
+  }
+  arePresetsHidden(panelId) {
+    return this.presetsHidden.has(panelId);
+  }
   /** Provider mode hides the implicit "Version 1" base row — the host owns the whole list. */
   hasPresetProvider(panelId) {
     return this.presetProviders.has(panelId);
@@ -1514,7 +1547,8 @@ var TweakStoreClass = class {
           sample: value.sample,
           domain: value.domain,
           markers: value.markers,
-          height: value.height
+          height: value.height,
+          aspect: value.aspect
         });
       } else if (typeof value === "string") {
         if (this.isHexColor(value)) {
@@ -2030,7 +2064,9 @@ function useTweakStorePanel(name, config, options = {}) {
     });
   }, [hasStableId, panelId, name, serializedConfig, serializedShortcuts, serializedPersist, serializedHints, serializedLabels]);
   (0, import_react.useEffect)(() => {
-    TweakStore.setPresetProvider(panelId, optionsRef.current.presets ?? null);
+    const presets = optionsRef.current.presets;
+    TweakStore.setPresetsHidden(panelId, presets === false);
+    TweakStore.setPresetProvider(panelId, presets === false ? null : presets ?? null);
   });
   (0, import_react.useEffect)(() => {
     TweakStore.syncCurveConfigs(panelId, configRef.current);
@@ -2504,9 +2540,37 @@ var ICON_PANEL = {
   ]
 };
 
-// src/components/Folder.tsx
+// src/components/Checkbox.tsx
 var import_jsx_runtime = require("react/jsx-runtime");
-function Folder({ title, children, defaultOpen = true, collapsible = true, isRoot = false, inline = false, onOpenChange, toolbar, tabs, hint, hintId }) {
+function Checkbox({ checked, onChange, label, disabled = false, id }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+    "button",
+    {
+      type: "button",
+      id,
+      role: "checkbox",
+      "aria-checked": disabled ? "mixed" : checked,
+      "aria-label": label,
+      "aria-disabled": disabled || void 0,
+      className: "tweakers-checkbox",
+      "data-checked": checked && !disabled ? "true" : void 0,
+      "data-disabled": disabled ? "true" : void 0,
+      onClick: (e) => {
+        e.stopPropagation();
+        if (!disabled) onChange(!checked);
+      },
+      children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("svg", { viewBox: "0 0 22 22", width: "22", height: "22", "aria-hidden": "true", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { className: "tweakers-checkbox-slash", d: "M6 16 16 6", fill: "none" }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("rect", { className: "tweakers-checkbox-chip", x: "5", y: "5", width: "12", height: "12", rx: "2" }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { className: "tweakers-checkbox-dash", d: "M6 11h10", fill: "none" })
+      ] })
+    }
+  );
+}
+
+// src/components/Folder.tsx
+var import_jsx_runtime2 = require("react/jsx-runtime");
+function Folder({ title, children, defaultOpen = true, collapsible = true, isRoot = false, inline = false, onOpenChange, toolbar, tabs, hint, hintId, enabled, onEnabledChange }) {
   const [isOpen, setIsOpen] = (0, import_react3.useState)(collapsible ? defaultOpen : true);
   const [isCollapsed, setIsCollapsed] = (0, import_react3.useState)(collapsible ? !defaultOpen : false);
   const contentRef = (0, import_react3.useRef)(null);
@@ -2530,6 +2594,8 @@ function Folder({ title, children, defaultOpen = true, collapsible = true, isRoo
     ro.observe(el);
     return () => ro.disconnect();
   }, [isOpen]);
+  const isModule = isRoot && enabled !== void 0 && onEnabledChange !== void 0;
+  const bodyOpen = isOpen && (!isModule || enabled);
   const handleToggle = () => {
     if (!collapsible) return;
     if (inline && isRoot) return;
@@ -2542,8 +2608,8 @@ function Folder({ title, children, defaultOpen = true, collapsible = true, isRoo
     }
     onOpenChange?.(next);
   };
-  const folderContent = /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { ref: isRoot ? contentRef : void 0, className: `tweakers-folder ${isRoot ? "tweakers-folder-root" : ""}`, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
+  const folderContent = /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { ref: isRoot ? contentRef : void 0, className: `tweakers-folder ${isRoot ? "tweakers-folder-root" : ""}`, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
       "div",
       {
         className: `tweakers-folder-header ${isRoot ? "tweakers-panel-header" : ""} ${collapsible ? "" : "tweakers-folder-header-static"}`,
@@ -2551,22 +2617,32 @@ function Folder({ title, children, defaultOpen = true, collapsible = true, isRoo
         "data-hint": hint ? "true" : void 0,
         "aria-describedby": hint ? hintId : void 0,
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "tweakers-folder-header-top", children: [
-            isRoot ? isOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "tweakers-folder-title-row", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "tweakers-folder-title tweakers-folder-title-root", children: title }) }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "tweakers-folder-title-row", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "tweakers-folder-title", children: title }) }),
-            !isRoot && toolbar && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "tweakers-folder-toolbar", onClick: (e) => e.stopPropagation(), children: toolbar }),
-            isRoot && !inline && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "tweakers-folder-header-top", children: [
+            isRoot ? isOpen && /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { className: "tweakers-folder-title-row", children: [
+              isModule && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+                Checkbox,
+                {
+                  checked: enabled,
+                  onChange: onEnabledChange,
+                  label: title
+                }
+              ),
+              /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "tweakers-folder-title tweakers-folder-title-root", children: title })
+            ] }) : /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "tweakers-folder-title-row", children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "tweakers-folder-title", children: title }) }),
+            !isRoot && toolbar && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "tweakers-folder-toolbar", onClick: (e) => e.stopPropagation(), children: toolbar }),
+            isRoot && !inline && /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
               "svg",
               {
                 className: "tweakers-panel-icon",
                 viewBox: "0 0 16 16",
                 fill: "none",
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { opacity: "0.5", d: ICON_PANEL.path, fill: "currentColor" }),
-                  ICON_PANEL.circles.map((c, i) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { cx: c.cx, cy: c.cy, r: c.r, fill: "currentColor", stroke: "currentColor", strokeWidth: "1.25" }, i))
+                  /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("path", { opacity: "0.5", d: ICON_PANEL.path, fill: "currentColor" }),
+                  ICON_PANEL.circles.map((c, i) => /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("circle", { cx: c.cx, cy: c.cy, r: c.r, fill: "currentColor", stroke: "currentColor", strokeWidth: "1.25" }, i))
                 ]
               }
             ),
-            !isRoot && collapsible && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+            !isRoot && collapsible && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
               import_react4.motion.svg,
               {
                 className: "tweakers-folder-icon",
@@ -2579,17 +2655,17 @@ function Folder({ title, children, defaultOpen = true, collapsible = true, isRoo
                 initial: false,
                 animate: { rotate: isOpen ? 0 : 180 },
                 transition: { type: "spring", visualDuration: 0.35, bounce: 0.15 },
-                children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: ICON_CHEVRON })
+                children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("path", { d: ICON_CHEVRON })
               }
             )
           ] }),
-          isRoot && toolbar && isOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "tweakers-panel-toolbar", onClick: (e) => e.stopPropagation(), children: toolbar }),
-          isRoot && tabs && isOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "tweakers-panel-tabs", onClick: (e) => e.stopPropagation(), children: tabs }),
-          hint && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "tweakers-hint", id: hintId, role: "tooltip", children: hint })
+          isRoot && toolbar && isOpen && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "tweakers-panel-toolbar", onClick: (e) => e.stopPropagation(), children: toolbar }),
+          isRoot && tabs && isOpen && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "tweakers-panel-tabs", onClick: (e) => e.stopPropagation(), children: tabs }),
+          hint && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "tweakers-hint", id: hintId, role: "tooltip", children: hint })
         ]
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_react4.AnimatePresence, { initial: false, children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(import_react4.AnimatePresence, { initial: false, children: bodyOpen && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
       import_react4.motion.div,
       {
         className: "tweakers-folder-content",
@@ -2598,16 +2674,16 @@ function Folder({ title, children, defaultOpen = true, collapsible = true, isRoo
         exit: isRoot ? void 0 : { height: 0, opacity: 0 },
         transition: isRoot ? void 0 : { type: "spring", visualDuration: 0.35, bounce: 0.1 },
         style: isRoot ? void 0 : { clipPath: "inset(0 -20px)" },
-        children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "tweakers-folder-inner", children })
+        children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "tweakers-folder-inner", children })
       }
     ) })
   ] });
   if (isRoot) {
     if (inline) {
-      return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { className: "tweakers-panel-inner tweakers-panel-inline", children: folderContent });
+      return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { className: "tweakers-panel-inner tweakers-panel-inline", children: folderContent });
     }
     const panelStyle = isOpen ? { width: 280, height: contentHeight !== void 0 ? Math.min(contentHeight + 10, windowHeight - 32) : "auto", borderRadius: 14, boxShadow: "var(--tweak-shadow)", cursor: void 0, overflowY: "auto" } : { width: 42, height: 42, borderRadius: "50%", boxSizing: "border-box", boxShadow: "var(--tweak-shadow-collapsed)", overflow: "hidden", cursor: "pointer" };
-    return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
       import_react4.motion.div,
       {
         className: "tweakers-panel-inner",
@@ -2764,7 +2840,7 @@ function formatModifier(modifier) {
 }
 
 // src/components/ShortcutListener.tsx
-var import_jsx_runtime2 = require("react/jsx-runtime");
+var import_jsx_runtime3 = require("react/jsx-runtime");
 var ShortcutContext = (0, import_react5.createContext)({ activePanelId: null, activePath: null });
 function ShortcutListener({ children }) {
   const [activeShortcut, setActiveShortcut] = (0, import_react5.useState)({ activePanelId: null, activePath: null });
@@ -2947,41 +3023,11 @@ function ShortcutListener({ children }) {
       window.removeEventListener("blur", handleWindowBlur);
     };
   }, [resolveActiveTarget]);
-  return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(ShortcutContext.Provider, { value: activeShortcut, children });
+  return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(ShortcutContext.Provider, { value: activeShortcut, children });
 }
 
 // src/components/ModuleFolder.tsx
 var import_react6 = require("react");
-
-// src/components/Checkbox.tsx
-var import_jsx_runtime3 = require("react/jsx-runtime");
-function Checkbox({ checked, onChange, label, disabled = false, id }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-    "button",
-    {
-      type: "button",
-      id,
-      role: "checkbox",
-      "aria-checked": disabled ? "mixed" : checked,
-      "aria-label": label,
-      "aria-disabled": disabled || void 0,
-      className: "tweakers-checkbox",
-      "data-checked": checked && !disabled ? "true" : void 0,
-      "data-disabled": disabled ? "true" : void 0,
-      onClick: (e) => {
-        e.stopPropagation();
-        if (!disabled) onChange(!checked);
-      },
-      children: /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("svg", { viewBox: "0 0 22 22", width: "22", height: "22", "aria-hidden": "true", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("path", { className: "tweakers-checkbox-slash", d: "M6 16 16 6", fill: "none" }),
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("rect", { className: "tweakers-checkbox-chip", x: "5", y: "5", width: "12", height: "12", rx: "2" }),
-        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("path", { className: "tweakers-checkbox-dash", d: "M6 11h10", fill: "none" })
-      ] })
-    }
-  );
-}
-
-// src/components/ModuleFolder.tsx
 var import_jsx_runtime4 = require("react/jsx-runtime");
 function ModuleFolder({ title, enabled, onEnabledChange, defaultOpen = true, hint, hintId, children }) {
   const [isOpen, setIsOpen] = (0, import_react6.useState)(defaultOpen);
@@ -6799,7 +6845,8 @@ function CurvePreview({ panelId, control }) {
         className: "tweakers-curve-surface",
         viewBox: `0 0 ${VIEW_WIDTH} ${height}`,
         preserveAspectRatio: "none",
-        style: { height },
+        "data-aspect": control.aspect !== void 0 ? "" : void 0,
+        style: control.aspect !== void 0 ? { aspectRatio: control.aspect } : { height },
         role: "img",
         "aria-label": control.label,
         children: [
@@ -7380,7 +7427,8 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
     /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("div", { className: "tweakers-panel-tab-page", children: renderRows(pageControls) }, activeTab.path)
   ] }) : renderRows(pageControls);
   const iconTransition = { type: "spring", visualDuration: 0.4, bounce: 0.1 };
-  const toolbar = /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)(import_jsx_runtime34.Fragment, { children: [
+  const presetsHidden = TweakStore.arePresetsHidden(panel.id);
+  const toolbar = presetsHidden ? toolbarExtra : /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)(import_jsx_runtime34.Fragment, { children: [
     /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
       import_react37.motion.button,
       {
@@ -7450,7 +7498,21 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
     ),
     toolbarExtra
   ] });
-  return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("div", { className: "tweakers-panel-wrapper", children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(Folder, { title: panel.name, defaultOpen, isRoot: true, inline, onOpenChange: setIsPanelOpen, toolbar, tabs: tabBar, children: renderControls() }) });
+  return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("div", { className: "tweakers-panel-wrapper", children: /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+    Folder,
+    {
+      title: panel.name,
+      defaultOpen,
+      isRoot: true,
+      inline,
+      onOpenChange: setIsPanelOpen,
+      toolbar,
+      tabs: tabBar,
+      enabled: panel.module ? values["_enabled"] : void 0,
+      onEnabledChange: panel.module ? (v) => TweakStore.updateValue(panel.id, "_enabled", v) : void 0,
+      children: renderControls()
+    }
+  ) });
 }
 
 // src/components/Timeline/TimelineToggleButton.tsx
@@ -7547,7 +7609,7 @@ function TimelineToggleButton() {
 
 // src/components/TweakRoot.tsx
 var import_jsx_runtime36 = require("react/jsx-runtime");
-function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover", theme = "system", productionEnabled = isDevDefault }) {
+function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover", theme = "system", productionEnabled = isDevDefault, panels: only, chrome = "card" }) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = (0, import_react40.useState)([]);
   const [timelineCount, setTimelineCount] = (0, import_react40.useState)(0);
@@ -7560,12 +7622,17 @@ function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover
   const draggingRef = (0, import_react40.useRef)(false);
   const dragStartRef = (0, import_react40.useRef)(null);
   const didDragRef = (0, import_react40.useRef)(false);
+  const onlyKey = Array.isArray(only) ? only.join("\0") : only;
+  const read = (0, import_react40.useCallback)(
+    () => TweakStore.selectPanels(onlyKey === void 0 ? void 0 : onlyKey.split("\0")),
+    [onlyKey]
+  );
   (0, import_react40.useEffect)(() => {
     setMounted(true);
-    setPanels(TweakStore.getPanels("panel"));
+    setPanels(read());
     setTimelineCount(TimelineStore.getTimelines().length);
     const unsubscribePanels = TweakStore.subscribeGlobal(() => {
-      setPanels(TweakStore.getPanels("panel"));
+      setPanels(read());
     });
     const unsubscribeTimelines = TimelineStore.subscribeGlobal(() => {
       setTimelineCount(TimelineStore.getTimelines().length);
@@ -7641,7 +7708,7 @@ function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover
   if (!mounted || typeof window === "undefined") {
     return null;
   }
-  if (panels.length === 0 && timelineCount === 0) {
+  if (panels.length === 0 && (onlyKey !== void 0 || timelineCount === 0)) {
     return null;
   }
   const dragStyle = dragOffset ? {
@@ -7650,8 +7717,8 @@ function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover
     right: "auto",
     bottom: "auto"
   } : void 0;
-  const timelineToggle = timelineCount > 0 ? /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(TimelineToggleButton, {}) : null;
-  const content = /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(ShortcutListener, { children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("div", { className: "tweakers-root", "data-mode": mode, "data-theme": theme, children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
+  const timelineToggle = timelineCount > 0 && onlyKey === void 0 ? /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(TimelineToggleButton, {}) : null;
+  const content = /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(ShortcutListener, { children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("div", { className: "tweakers-root", "data-mode": mode, "data-theme": theme, "data-chrome": chrome, children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
     "div",
     {
       ref: panelRef,

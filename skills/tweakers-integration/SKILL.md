@@ -110,14 +110,32 @@ live outside the panel.
 
 ## Phase 3 — Layout doctrine
 
-**All controls live in the side panel.** Mount `TweakRoot mode="inline"` inside
-a fixed-width sidebar (~300px, full height, `overflow: hidden`). The inline
-panel keeps tweakers's card chrome — panel ground, cards, 2px corners — so give
-the sidebar container a little padding (~12px) and let the
-card float on the app ground; never strip the panel chrome to make it flush. The floating
-popover mode is for tweaking during development, not for a real app surface.
-Don't scatter individual controls across the app: one panel, one place to
-look, one consistent interaction grammar.
+**All controls live in panels.** Mount `TweakRoot mode="inline"` inside a
+fixed-width sidebar (~300px, full height, `overflow: hidden`). The inline panel
+keeps tweakers's card chrome — panel ground, cards, 2px corners — so give the
+sidebar container a little padding (~12px) and let the card float on the app
+ground. The floating popover mode is for tweaking during development, not for a
+real app surface. Don't scatter individual controls across the app: every
+control belongs to a panel, and every panel is a place to look with one
+consistent interaction grammar.
+
+One panel is the default and the right answer for most apps. An app whose
+domain is genuinely a *rack* — parallel voices, stages, channels the user
+compares side by side — may give each one its own panel and place them across
+the main pane. Two props make that work, and neither is for single-surface
+apps:
+
+- `TweakRoot panels={name | [names]}` draws only the panels it names, in the
+  order named, so four panels can stand in four places without two roots
+  fighting over the registry.
+- `presets: false` in `useTweakers` options leaves a panel's header bare of the
+  preset toolbar. A snapshot means the whole instrument, so the toolbar belongs
+  to one panel — the rack's columns don't each get one.
+
+Strip the card (`TweakRoot chrome="none"`) only when the host already owns the
+ground the rows sit on — a rack laid out on the app body, where a card per
+column would read as a second, competing frame. A panel floating on foreign app
+ground keeps its chrome.
 
 **The center pane is for domain artifacts, not controls.** Whatever the user
 *works on* — the loaded sample as an interactive waveform, the anatomy or
@@ -141,6 +159,9 @@ Within a group, the primary parameter comes first and stays visible.
   zero space and zero attention. Never add a separate "Enabled" toggle row
   inside a group; the switch belongs in the header. (The standalone `Module`
   component is the same idiom for hand-composed center-pane UI.)
+  `_enabled` at the **root** of a config does the same one level up: the whole
+  panel is a module, and its title carries the switch — for a rack whose
+  columns are each optional.
 - If control *visibility* depends on a mode (e.g. a `mode` select that changes
   which parameters exist), use dynamic configs: rebuild the config object from
   app state and let tweakers reconcile — values on surviving paths persist.
@@ -203,6 +224,8 @@ them wholesale. The panel's theme is the design anchor for the whole window:
 - A flat panel of 20+ ungrouped rows.
 - Auto-inferred slider ranges on real app parameters.
 - A hand-rolled divider, rule, or separator that no tweakers component drew.
+- An "Enabled" row at the top of a panel that should have declared root
+  `_enabled` and put the switch in its title.
 - App chrome styled with its own colors/radii instead of `--tweak-*` tokens,
   or a prototype accent color kept alive "for brand identity".
 - A hand-rolled component duplicating something the installed tweakers exports.

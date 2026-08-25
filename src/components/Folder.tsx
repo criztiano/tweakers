@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ICON_PANEL, ICON_CHEVRON } from '../icons';
+import { Checkbox } from './Checkbox';
 
 interface FolderProps {
   title: string;
@@ -17,9 +18,16 @@ interface FolderProps {
   /** One line of help for the section, revealed on hover over the header. */
   hint?: string;
   hintId?: string;
+  /**
+   * Root only — the panel declared `_enabled`, so the whole panel is a module:
+   * the title carries the switch and the body goes away when it is off. Same
+   * idiom as ModuleFolder, one level up.
+   */
+  enabled?: boolean;
+  onEnabledChange?: (enabled: boolean) => void;
 }
 
-export function Folder({ title, children, defaultOpen = true, collapsible = true, isRoot = false, inline = false, onOpenChange, toolbar, tabs, hint, hintId }: FolderProps) {
+export function Folder({ title, children, defaultOpen = true, collapsible = true, isRoot = false, inline = false, onOpenChange, toolbar, tabs, hint, hintId, enabled, onEnabledChange }: FolderProps) {
   const [isOpen, setIsOpen] = useState(collapsible ? defaultOpen : true);
   const [isCollapsed, setIsCollapsed] = useState(collapsible ? !defaultOpen : false);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -47,6 +55,11 @@ export function Folder({ title, children, defaultOpen = true, collapsible = true
     return () => ro.disconnect();
   }, [isOpen]);
 
+  // A module panel's switch is the only thing that shows or hides its body —
+  // the rows below the title belong to a feature that is either on or off.
+  const isModule = isRoot && enabled !== undefined && onEnabledChange !== undefined;
+  const bodyOpen = isOpen && (!isModule || enabled);
+
   const handleToggle = () => {
     if (!collapsible) return;
     if (inline && isRoot) return;
@@ -72,6 +85,13 @@ export function Folder({ title, children, defaultOpen = true, collapsible = true
           {isRoot ? (
             isOpen && (
               <div className="tweakers-folder-title-row">
+                {isModule && (
+                  <Checkbox
+                    checked={enabled!}
+                    onChange={onEnabledChange!}
+                    label={title}
+                  />
+                )}
                 <span className="tweakers-folder-title tweakers-folder-title-root">
                   {title}
                 </span>
@@ -139,7 +159,7 @@ export function Folder({ title, children, defaultOpen = true, collapsible = true
       </div>
 
       <AnimatePresence initial={false}>
-        {isOpen && (
+        {bodyOpen && (
           <motion.div
             className="tweakers-folder-content"
             initial={isRoot ? undefined : { height: 0, opacity: 0 }}

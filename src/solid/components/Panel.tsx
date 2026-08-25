@@ -129,7 +129,9 @@ export function Panel(props: PanelProps) {
     <ControlRenderer panelId={props.panel.id} controls={props.panel.controls} values={values()} />
   );
 
-  const toolbar = (
+  const presetsHidden = () => TweakStore.arePresetsHidden(props.panel.id);
+
+  const toolbar = presetsHidden() ? props.toolbarExtra : (
     <>
       <button
         ref={addButtonRef}
@@ -198,7 +200,20 @@ export function Panel(props: PanelProps) {
 
   return (
     <div class="tweakers-panel-wrapper">
-      <Folder title={props.panel.name} defaultOpen={props.defaultOpen ?? true} isRoot={true} inline={props.inline ?? false} onOpenChange={setIsPanelOpen} toolbar={toolbar}>
+      <Folder
+        title={props.panel.name}
+        defaultOpen={props.defaultOpen ?? true}
+        isRoot={true}
+        inline={props.inline ?? false}
+        onOpenChange={setIsPanelOpen}
+        toolbar={toolbar}
+        enabled={props.panel.module ? (values()['_enabled'] as boolean) : undefined}
+        onEnabledChange={
+          props.panel.module
+            ? (v) => TweakStore.updateValue(props.panel.id, '_enabled', v)
+            : undefined
+        }
+      >
         {renderControls()}
       </Folder>
     </div>

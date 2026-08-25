@@ -684,6 +684,8 @@ var TweakStoreClass = class {
     // replace the object on every host render so callbacks never go stale, and
     // only a data change should notify.
     this.presetProviders = /* @__PURE__ */ new Map();
+    /** Panels whose header carries no preset toolbar (see setPresetsHidden). */
+    this.presetsHidden = /* @__PURE__ */ new Set();
     this.baseValues = /* @__PURE__ */ new Map();
     // Resolved storage target per panel (null = persistence off). Absent = not
     // yet registered.
@@ -704,7 +706,7 @@ var TweakStoreClass = class {
     this.initTabValue(controls, values);
     this.initTransitionModes(config, "", values);
     this.overlayPersistedValues(target, values);
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, kind: options.kind });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, module: "_enabled" in config ? true : void 0, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -742,7 +744,7 @@ var TweakStoreClass = class {
         nextValues[path] = mode;
       }
     }
-    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, kind: options.kind ?? existing.kind };
+    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, module: "_enabled" in config ? true : void 0, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
     const previousBaseValues = this.baseValues.get(id) ?? {};
@@ -776,6 +778,7 @@ var TweakStoreClass = class {
     this.baseValues.delete(id);
     this.persistTargets.delete(id);
     this.presetProviders.delete(id);
+    this.presetsHidden.delete(id);
     this.notifyGlobal();
   }
   // Overlay saved values onto freshly-computed defaults, in place. Only keys
@@ -865,6 +868,19 @@ var TweakStoreClass = class {
     if (kind === "panel") return all.filter((panel) => panel.kind !== "timeline");
     if (kind === "timeline") return all.filter((panel) => panel.kind === "timeline");
     return all;
+  }
+  /**
+   * The settings panels a root should draw, given its optional `panels` filter.
+   * `undefined` means every panel — the single-surface default. A list means
+   * exactly those names, in the order named, so two roots never fight over the
+   * same panel and a panel that has not registered yet leaves a gap that fills
+   * when it does.
+   */
+  selectPanels(only) {
+    const registered = this.getPanels("panel");
+    if (only === void 0) return registered;
+    const names = typeof only === "string" ? [only] : only;
+    return names.map((name) => registered.find((panel) => panel.name === name)).filter((panel) => panel !== void 0);
   }
   getPanel(id) {
     return this.panels.get(id);
@@ -1104,6 +1120,23 @@ var TweakStoreClass = class {
   getPresetProvider(panelId) {
     return this.presetProviders.get(panelId)?.provider ?? null;
   }
+  /**
+   * Hide (or restore) a panel's preset toolbar. For the secondary panels of a
+   * multi-panel app — a rack of per-voice columns, say — where a snapshot
+   * means the whole instrument and so belongs to one panel only. Hiding the
+   * toolbar hides its add and copy buttons with it: the header of a panel that
+   * does not own presets is bare.
+   */
+  setPresetsHidden(panelId, hidden) {
+    const had = this.presetsHidden.has(panelId);
+    if (hidden === had) return;
+    if (hidden) this.presetsHidden.add(panelId);
+    else this.presetsHidden.delete(panelId);
+    this.notify(panelId);
+  }
+  arePresetsHidden(panelId) {
+    return this.presetsHidden.has(panelId);
+  }
   /** Provider mode hides the implicit "Version 1" base row — the host owns the whole list. */
   hasPresetProvider(panelId) {
     return this.presetProviders.has(panelId);
@@ -1327,7 +1360,8 @@ var TweakStoreClass = class {
           sample: value.sample,
           domain: value.domain,
           markers: value.markers,
-          height: value.height
+          height: value.height,
+          aspect: value.aspect
         });
       } else if (typeof value === "string") {
         if (this.isHexColor(value)) {
@@ -1794,7 +1828,8 @@ function useTweakers(name, config, options) {
       affordances: options?.affordances,
       labels: options?.labels
     });
-    TweakStore.setPresetProvider(panelId, options?.presets ?? null);
+    TweakStore.setPresetsHidden(panelId, options?.presets === false);
+    TweakStore.setPresetProvider(panelId, options?.presets === false ? null : options?.presets ?? null);
     values.value = TweakStore.getValues(panelId);
     unsubscribeValues = TweakStore.subscribe(panelId, () => {
       values.value = TweakStore.getValues(panelId);
@@ -1811,7 +1846,8 @@ function useTweakers(name, config, options) {
   });
   watch(() => JSON.stringify(options?.presets ?? null), () => {
     if (mounted.value) {
-      TweakStore.setPresetProvider(panelId, options?.presets ?? null);
+      TweakStore.setPresetsHidden(panelId, options?.presets === false);
+      TweakStore.setPresetProvider(panelId, options?.presets === false ? null : options?.presets ?? null);
     }
   });
   watch([serializedConfig, serializedShortcuts], () => {
@@ -2230,9 +2266,61 @@ var ICON_PANEL = {
 };
 
 // src/vue/components/Folder.ts
-import { defineComponent, h, onMounted as onMounted2, onUnmounted as onUnmounted2, ref as ref2 } from "vue";
+import { defineComponent as defineComponent2, h as h2, onMounted as onMounted2, onUnmounted as onUnmounted2, ref as ref2 } from "vue";
 import { AnimatePresence, motion } from "motion-v";
-var Folder = defineComponent({
+
+// src/vue/components/Checkbox.ts
+import { defineComponent, h } from "vue";
+var Checkbox = defineComponent({
+  name: "TweakersCheckbox",
+  props: {
+    checked: { type: Boolean, required: true },
+    /** Accessible name — the visible label is rendered by the caller. */
+    label: { type: String, default: void 0 },
+    /** The control exists but cannot act right now: reads as a dash, not a
+     *  blank box, so "unavailable" never looks like "off". */
+    disabled: { type: Boolean, default: false },
+    id: { type: String, default: void 0 }
+  },
+  emits: ["change"],
+  setup(props, { emit }) {
+    return () => h(
+      "button",
+      {
+        type: "button",
+        id: props.id,
+        role: "checkbox",
+        "aria-checked": props.disabled ? "mixed" : String(props.checked),
+        "aria-label": props.label,
+        "aria-disabled": props.disabled || void 0,
+        class: "tweakers-checkbox",
+        "data-checked": props.checked && !props.disabled ? "true" : void 0,
+        "data-disabled": props.disabled ? "true" : void 0,
+        onClick: (e) => {
+          e.stopPropagation();
+          if (!props.disabled) emit("change", !props.checked);
+        }
+      },
+      [
+        h("svg", { viewBox: "0 0 22 22", width: 22, height: 22, "aria-hidden": "true" }, [
+          h("path", { class: "tweakers-checkbox-slash", d: "M6 16 16 6", fill: "none" }),
+          h("rect", {
+            class: "tweakers-checkbox-chip",
+            x: 5,
+            y: 5,
+            width: 12,
+            height: 12,
+            rx: 2
+          }),
+          h("path", { class: "tweakers-checkbox-dash", d: "M6 11h10", fill: "none" })
+        ])
+      ]
+    );
+  }
+});
+
+// src/vue/components/Folder.ts
+var Folder = defineComponent2({
   name: "TweakersFolder",
   props: {
     title: { type: String, required: true },
@@ -2246,6 +2334,16 @@ var Folder = defineComponent({
       required: false,
       default: null
     },
+    /**
+     * Root only — the panel declared `_enabled`, so the whole panel is a
+     * module: the title carries the switch and the body goes away when it is
+     * off. Same idiom as ModuleFolder, one level up.
+     */
+    enabled: { type: Boolean, default: void 0 },
+    onEnabledChange: {
+      type: Function,
+      default: void 0
+    },
     /** One line of help for the section, revealed on hover over the header. */
     hint: { type: String, default: void 0 },
     hintId: { type: String, default: void 0 }
@@ -2253,6 +2351,8 @@ var Folder = defineComponent({
   emits: ["openChange"],
   setup(props, { emit, slots }) {
     const isOpen = ref2(props.collapsible ? props.defaultOpen : true);
+    const isModule = () => props.isRoot && props.enabled !== void 0 && props.onEnabledChange !== void 0;
+    const bodyOpen = () => isOpen.value && (!isModule() || !!props.enabled);
     const isCollapsed = ref2(props.collapsible ? !props.defaultOpen : false);
     const contentRef = ref2(null);
     const contentHeight = ref2(void 0);
@@ -2296,27 +2396,32 @@ var Folder = defineComponent({
     onUnmounted2(() => {
       ro?.disconnect();
     });
-    const renderHeader = () => h("div", {
+    const renderHeader = () => h2("div", {
       class: `tweakers-folder-header ${props.isRoot ? "tweakers-panel-header" : ""} ${props.collapsible ? "" : "tweakers-folder-header-static"}`,
       onClick: props.collapsible ? handleToggle : void 0,
       "data-hint": props.hint ? "true" : void 0,
       "aria-describedby": props.hint ? props.hintId : void 0
     }, [
-      h("div", { class: "tweakers-folder-header-top" }, [
-        props.isRoot ? isOpen.value ? h("div", { class: "tweakers-folder-title-row" }, [
-          h("span", { class: "tweakers-folder-title tweakers-folder-title-root" }, props.title)
-        ]) : null : h("div", { class: "tweakers-folder-title-row" }, [
-          h("span", { class: "tweakers-folder-title" }, props.title)
+      h2("div", { class: "tweakers-folder-header-top" }, [
+        props.isRoot ? isOpen.value ? h2("div", { class: "tweakers-folder-title-row" }, [
+          isModule() ? h2(Checkbox, {
+            checked: !!props.enabled,
+            onChange: props.onEnabledChange,
+            label: props.title
+          }) : null,
+          h2("span", { class: "tweakers-folder-title tweakers-folder-title-root" }, props.title)
+        ]) : null : h2("div", { class: "tweakers-folder-title-row" }, [
+          h2("span", { class: "tweakers-folder-title" }, props.title)
         ]),
-        props.isRoot && !props.inline ? h("svg", { class: "tweakers-panel-icon", viewBox: "0 0 16 16", fill: "none" }, [
-          h("path", {
+        props.isRoot && !props.inline ? h2("svg", { class: "tweakers-panel-icon", viewBox: "0 0 16 16", fill: "none" }, [
+          h2("path", {
             opacity: "0.5",
             d: ICON_PANEL.path,
             fill: "currentColor"
           }),
-          ...ICON_PANEL.circles.map((c) => h("circle", { cx: c.cx, cy: c.cy, r: c.r, fill: "currentColor", stroke: "currentColor", "stroke-width": "1.25" }))
+          ...ICON_PANEL.circles.map((c) => h2("circle", { cx: c.cx, cy: c.cy, r: c.r, fill: "currentColor", stroke: "currentColor", "stroke-width": "1.25" }))
         ]) : null,
-        !props.isRoot && props.collapsible ? h(motion.svg, {
+        !props.isRoot && props.collapsible ? h2(motion.svg, {
           class: "tweakers-folder-icon",
           viewBox: "0 0 24 24",
           fill: "none",
@@ -2327,18 +2432,18 @@ var Folder = defineComponent({
           initial: false,
           animate: { rotate: isOpen.value ? 0 : 180 },
           transition: { type: "spring", visualDuration: 0.35, bounce: 0.15 }
-        }, [h("path", { d: ICON_CHEVRON })]) : null
+        }, [h2("path", { d: ICON_CHEVRON })]) : null
       ]),
-      props.isRoot && props.toolbar && isOpen.value ? h("div", { class: "tweakers-panel-toolbar", onClick: (event) => event.stopPropagation() }, [props.toolbar()]) : null,
-      props.hint ? h("span", { class: "tweakers-hint", id: props.hintId, role: "tooltip" }, props.hint) : null
+      props.isRoot && props.toolbar && isOpen.value ? h2("div", { class: "tweakers-panel-toolbar", onClick: (event) => event.stopPropagation() }, [props.toolbar()]) : null,
+      props.hint ? h2("span", { class: "tweakers-hint", id: props.hintId, role: "tooltip" }, props.hint) : null
     ]);
-    const renderChildren = () => h("div", { class: "tweakers-folder-inner" }, slots.default ? slots.default() : []);
+    const renderChildren = () => h2("div", { class: "tweakers-folder-inner" }, slots.default ? slots.default() : []);
     const renderContent = () => {
       if (props.isRoot) {
-        return isOpen.value ? h("div", { class: "tweakers-folder-content" }, [renderChildren()]) : null;
+        return bodyOpen() ? h2("div", { class: "tweakers-folder-content" }, [renderChildren()]) : null;
       }
-      return h(AnimatePresence, { initial: false }, {
-        default: () => isOpen.value ? [h(motion.div, {
+      return h2(AnimatePresence, { initial: false }, {
+        default: () => isOpen.value ? [h2(motion.div, {
           key: "tweakers-folder-content",
           class: "tweakers-folder-content",
           initial: { height: 0, opacity: 0 },
@@ -2349,7 +2454,7 @@ var Folder = defineComponent({
         }, [renderChildren()])] : []
       });
     };
-    const folderContent = () => h("div", {
+    const folderContent = () => h2("div", {
       ref: props.isRoot ? contentRef : void 0,
       class: `tweakers-folder ${props.isRoot ? "tweakers-folder-root" : ""}`
     }, [
@@ -2359,7 +2464,7 @@ var Folder = defineComponent({
     return () => {
       if (props.isRoot) {
         if (props.inline) {
-          return h("div", { class: "tweakers-panel-inner tweakers-panel-inline" }, [folderContent()]);
+          return h2("div", { class: "tweakers-panel-inner tweakers-panel-inline" }, [folderContent()]);
         }
         const panelStyle = isOpen.value ? {
           width: 280,
@@ -2376,7 +2481,7 @@ var Folder = defineComponent({
           overflow: "hidden",
           cursor: "pointer"
         };
-        return h(motion.div, {
+        return h2(motion.div, {
           class: "tweakers-panel-inner",
           style: panelStyle,
           onClick: !isOpen.value ? handleToggle : void 0,
@@ -2394,16 +2499,16 @@ var Folder = defineComponent({
 import { Fragment, defineComponent as defineComponent24, h as h24, inject as inject2 } from "vue";
 
 // src/vue/components/ColorControl.ts
-import { Teleport, defineComponent as defineComponent4, h as h4, nextTick as nextTick2, onMounted as onMounted5, ref as ref5, watch as watch4 } from "vue";
+import { Teleport, defineComponent as defineComponent5, h as h5, nextTick as nextTick2, onMounted as onMounted5, ref as ref5, watch as watch4 } from "vue";
 import { AnimatePresence as AnimatePresence2, motion as motion2 } from "motion-v";
 
 // src/vue/components/ColorPickerPanel.ts
-import { computed as computed2, defineComponent as defineComponent3, h as h3, onBeforeUnmount, onMounted as onMounted4, ref as ref4, watch as watch3 } from "vue";
+import { computed as computed2, defineComponent as defineComponent4, h as h4, onBeforeUnmount, onMounted as onMounted4, ref as ref4, watch as watch3 } from "vue";
 
 // src/vue/components/SegmentedControl.ts
-import { defineComponent as defineComponent2, h as h2, nextTick, onMounted as onMounted3, onUnmounted as onUnmounted3, ref as ref3, watch as watch2 } from "vue";
+import { defineComponent as defineComponent3, h as h3, nextTick, onMounted as onMounted3, onUnmounted as onUnmounted3, ref as ref3, watch as watch2 } from "vue";
 import { animate } from "motion";
-var SegmentedControl = defineComponent2({
+var SegmentedControl = defineComponent3({
   name: "TweakersSegmentedControl",
   props: {
     options: {
@@ -2493,8 +2598,8 @@ var SegmentedControl = defineComponent2({
       },
       { flush: "post" }
     );
-    return () => h2("div", { ref: containerRef, class: "tweakers-segmented" }, [
-      h2("div", {
+    return () => h3("div", { ref: containerRef, class: "tweakers-segmented" }, [
+      h3("div", {
         ref: pillRef,
         class: "tweakers-segmented-pill",
         style: {
@@ -2503,7 +2608,7 @@ var SegmentedControl = defineComponent2({
           visibility: pillReady.value ? "visible" : "hidden"
         }
       }),
-      ...props.options.map((option) => h2("button", {
+      ...props.options.map((option) => h3("button", {
         ref: ((el) => {
           if (el instanceof HTMLElement) {
             buttonRefs.set(option.value, el);
@@ -2612,7 +2717,7 @@ function useAreaDrag(onPoint) {
   };
   return { elRef, handlers };
 }
-var ChannelField = defineComponent3({
+var ChannelField = defineComponent4({
   name: "TweakersColorChannelField",
   props: {
     spec: { type: Object, required: true },
@@ -2625,8 +2730,8 @@ var ChannelField = defineComponent3({
       if (draft.value !== null) emit("commit", Number(draft.value));
       draft.value = null;
     };
-    return () => h3("label", { class: "tweakers-color-field" }, [
-      h3("input", {
+    return () => h4("label", { class: "tweakers-color-field" }, [
+      h4("input", {
         type: "text",
         inputmode: "decimal",
         value: draft.value ?? String(props.value),
@@ -2649,11 +2754,11 @@ var ChannelField = defineComponent3({
           }
         }
       }),
-      h3("span", { class: "tweakers-color-field-label" }, props.spec.label)
+      h4("span", { class: "tweakers-color-field-label" }, props.spec.label)
     ]);
   }
 });
-var HexField = defineComponent3({
+var HexField = defineComponent4({
   name: "TweakersColorHexField",
   props: {
     value: { type: String, required: true },
@@ -2669,8 +2774,8 @@ var HexField = defineComponent3({
       }
       draft.value = null;
     };
-    return () => h3("label", { class: "tweakers-color-field tweakers-color-field-hex" }, [
-      h3("input", {
+    return () => h4("label", { class: "tweakers-color-field tweakers-color-field-hex" }, [
+      h4("input", {
         type: "text",
         spellcheck: false,
         value: (draft.value ?? props.value).toUpperCase(),
@@ -2693,11 +2798,11 @@ var HexField = defineComponent3({
           }
         }
       }),
-      h3("span", { class: "tweakers-color-field-label" }, "HEX")
+      h4("span", { class: "tweakers-color-field-label" }, "HEX")
     ]);
   }
 });
-var PaletteSlot = defineComponent3({
+var PaletteSlot = defineComponent4({
   name: "TweakersColorPaletteSlot",
   props: {
     color: { type: String, default: null }
@@ -2715,7 +2820,7 @@ var PaletteSlot = defineComponent3({
       holding.value = false;
     };
     onBeforeUnmount(cancelHold);
-    return () => h3("button", {
+    return () => h4("button", {
       class: "tweakers-color-palette-slot",
       "data-filled": String(props.color !== null),
       "data-holding": String(holding.value),
@@ -2753,7 +2858,7 @@ var PaletteSlot = defineComponent3({
     });
   }
 });
-var ColorPickerPanel = defineComponent3({
+var ColorPickerPanel = defineComponent4({
   name: "TweakersColorPickerPanel",
   props: {
     value: { type: String, required: true },
@@ -2813,16 +2918,16 @@ var ColorPickerPanel = defineComponent3({
       if (nextHsva.v === 0) nextHsva.s = hsva.value.s;
       emitColor(nextHsva);
     };
-    return () => h3("div", {
+    return () => h4("div", {
       class: "tweakers-color-picker",
       style: { "--picker-hue": String(hsva.value.h) }
     }, [
-      h3("div", {
+      h4("div", {
         class: "tweakers-color-sv",
         ref: svDrag.elRef,
         ...svDrag.handlers
       }, [
-        h3("div", {
+        h4("div", {
           class: "tweakers-color-sv-thumb",
           style: {
             left: `${hsva.value.s * 100}%`,
@@ -2831,12 +2936,12 @@ var ColorPickerPanel = defineComponent3({
           }
         })
       ]),
-      h3("div", {
+      h4("div", {
         class: "tweakers-color-slider tweakers-color-hue",
         ref: hueDrag.elRef,
         ...hueDrag.handlers
       }, [
-        h3("div", {
+        h4("div", {
           class: "tweakers-color-slider-thumb",
           style: {
             left: `${hsva.value.h / 360 * 100}%`,
@@ -2844,16 +2949,16 @@ var ColorPickerPanel = defineComponent3({
           }
         })
       ]),
-      props.alpha ? h3("div", {
+      props.alpha ? h4("div", {
         class: "tweakers-color-slider tweakers-color-alpha tweakers-checker",
         ref: alphaDrag.elRef,
         ...alphaDrag.handlers
       }, [
-        h3("div", {
+        h4("div", {
           class: "tweakers-color-alpha-gradient",
           style: { background: `linear-gradient(to right, transparent, ${opaqueHex.value})` }
         }),
-        h3("div", {
+        h4("div", {
           class: "tweakers-color-slider-thumb",
           style: {
             left: `${hsva.value.a * 100}%`,
@@ -2862,7 +2967,7 @@ var ColorPickerPanel = defineComponent3({
           }
         })
       ]) : null,
-      h3(SegmentedControl, {
+      h4(SegmentedControl, {
         options: FORMAT_OPTIONS,
         value: format.value,
         onChange: (f) => {
@@ -2870,24 +2975,24 @@ var ColorPickerPanel = defineComponent3({
           format.value = f;
         }
       }),
-      h3("div", { class: "tweakers-color-fields", "data-format": format.value }, format.value === "hex" ? [
-        h3(HexField, {
+      h4("div", { class: "tweakers-color-fields", "data-format": format.value }, format.value === "hex" ? [
+        h4(HexField, {
           value: currentHex.value,
           alpha: props.alpha,
           onCommit: (hex) => applyHex(hex)
         }),
-        props.alpha ? h3(ChannelField, {
+        props.alpha ? h4(ChannelField, {
           spec: HEX_ALPHA_SPEC,
           value: opacityPercent(rgba.value),
           onCommit: (n) => emitColor({ ...hsva.value, a: Math.min(1, Math.max(0, n / 100)) })
         }) : null
-      ] : channelSpecs.value.map((spec, i) => h3(ChannelField, {
+      ] : channelSpecs.value.map((spec, i) => h4(ChannelField, {
         key: `${format.value}-${spec.key}`,
         spec,
         value: channelValues.value[i],
         onCommit: (n) => commitChannel(i, n)
       }))),
-      props.palette ? h3("div", { class: "tweakers-color-palette" }, Array.from({ length: PALETTE_SIZE }, (_, i) => h3(PaletteSlot, {
+      props.palette ? h4("div", { class: "tweakers-color-palette" }, Array.from({ length: PALETTE_SIZE }, (_, i) => h4(PaletteSlot, {
         key: i,
         color: slots.value[i] ?? null,
         // Read the store at commit time — a 500ms hold is long enough for
@@ -2908,7 +3013,7 @@ var PICKER_WIDTH = 240;
 var PICKER_BASE_HEIGHT = 270;
 var PICKER_ALPHA_HEIGHT = 22;
 var PICKER_PALETTE_HEIGHT = 30;
-var ColorControl = defineComponent4({
+var ColorControl = defineComponent5({
   name: "TweakersColorControl",
   props: {
     label: { type: String, required: true },
@@ -3009,18 +3114,18 @@ var ColorControl = defineComponent4({
     };
     return () => {
       const rgba = parseHex(props.value);
-      return h4("div", { class: "tweakers-color-control" }, [
-        h4("span", { class: "tweakers-color-label" }, props.label),
-        h4("div", { class: "tweakers-color-inputs" }, [
+      return h5("div", { class: "tweakers-color-control" }, [
+        h5("span", { class: "tweakers-color-label" }, props.label),
+        h5("div", { class: "tweakers-color-inputs" }, [
           // The whole token (hash included) is the click target for editing.
-          h4("span", {
+          h5("span", {
             class: "tweakers-color-hex-wrap",
             onClick: () => {
               isEditing.value = true;
             }
           }, [
-            h4("span", { class: "tweakers-color-hash", "aria-hidden": "true" }, "#"),
-            isEditing.value ? h4("input", {
+            h5("span", { class: "tweakers-color-hash", "aria-hidden": "true" }, "#"),
+            isEditing.value ? h5("input", {
               ref: hexInputRef,
               type: "text",
               class: "tweakers-color-hex-input",
@@ -3039,19 +3144,19 @@ var ColorControl = defineComponent4({
                   editValue.value = bareHex(props.value);
                 }
               }
-            }) : h4("span", {
+            }) : h5("span", {
               class: "tweakers-color-hex",
               "aria-label": `Hex color for ${props.label}`
             }, bareHex(props.value))
           ]),
           ...props.alpha && rgba ? [
-            h4("span", { class: "tweakers-color-divider", "aria-hidden": "true" }),
-            h4("span", { class: "tweakers-color-opacity" }, [
+            h5("span", { class: "tweakers-color-divider", "aria-hidden": "true" }),
+            h5("span", { class: "tweakers-color-opacity" }, [
               `${opacityPercent(rgba)} `,
-              h4("span", { class: "tweakers-color-opacity-unit" }, "%")
+              h5("span", { class: "tweakers-color-opacity-unit" }, "%")
             ])
           ] : [],
-          h4("button", {
+          h5("button", {
             ref: swatchRef,
             class: "tweakers-color-swatch",
             style: { "--swatch-color": props.value },
@@ -3062,9 +3167,9 @@ var ColorControl = defineComponent4({
             onClick: togglePicker
           })
         ]),
-        portalTarget.value ? h4(Teleport, { to: portalTarget.value }, [
-          h4(AnimatePresence2, null, {
-            default: () => isOpen.value && pos.value ? [h4(motion2.div, {
+        portalTarget.value ? h5(Teleport, { to: portalTarget.value }, [
+          h5(AnimatePresence2, null, {
+            default: () => isOpen.value && pos.value ? [h5(motion2.div, {
               key: "tweakers-color-picker-popover",
               ref: setPickerRef,
               class: "tweakers-color-picker-popover",
@@ -3085,7 +3190,7 @@ var ColorControl = defineComponent4({
                 }
               }
             }, [
-              h4(ColorPickerPanel, {
+              h5(ColorPickerPanel, {
                 value: props.value,
                 alpha: props.alpha,
                 palette: props.palette,
@@ -3101,58 +3206,6 @@ var ColorControl = defineComponent4({
 
 // src/vue/components/ModuleFolder.ts
 import { defineComponent as defineComponent6, h as h6, ref as ref6 } from "vue";
-
-// src/vue/components/Checkbox.ts
-import { defineComponent as defineComponent5, h as h5 } from "vue";
-var Checkbox = defineComponent5({
-  name: "TweakersCheckbox",
-  props: {
-    checked: { type: Boolean, required: true },
-    /** Accessible name — the visible label is rendered by the caller. */
-    label: { type: String, default: void 0 },
-    /** The control exists but cannot act right now: reads as a dash, not a
-     *  blank box, so "unavailable" never looks like "off". */
-    disabled: { type: Boolean, default: false },
-    id: { type: String, default: void 0 }
-  },
-  emits: ["change"],
-  setup(props, { emit }) {
-    return () => h5(
-      "button",
-      {
-        type: "button",
-        id: props.id,
-        role: "checkbox",
-        "aria-checked": props.disabled ? "mixed" : String(props.checked),
-        "aria-label": props.label,
-        "aria-disabled": props.disabled || void 0,
-        class: "tweakers-checkbox",
-        "data-checked": props.checked && !props.disabled ? "true" : void 0,
-        "data-disabled": props.disabled ? "true" : void 0,
-        onClick: (e) => {
-          e.stopPropagation();
-          if (!props.disabled) emit("change", !props.checked);
-        }
-      },
-      [
-        h5("svg", { viewBox: "0 0 22 22", width: 22, height: 22, "aria-hidden": "true" }, [
-          h5("path", { class: "tweakers-checkbox-slash", d: "M6 16 16 6", fill: "none" }),
-          h5("rect", {
-            class: "tweakers-checkbox-chip",
-            x: 5,
-            y: 5,
-            width: 12,
-            height: 12,
-            rx: 2
-          }),
-          h5("path", { class: "tweakers-checkbox-dash", d: "M6 11h10", fill: "none" })
-        ])
-      ]
-    );
-  }
-});
-
-// src/vue/components/ModuleFolder.ts
 var ModuleFolder = defineComponent6({
   name: "TweakersModuleFolder",
   props: {
@@ -6617,7 +6670,9 @@ Apply these values as the new defaults in the useTweakers call.`;
           defaultOpen: props.defaultOpen,
           isRoot: true,
           inline: props.inline,
-          toolbar: () => toolbarNode
+          enabled: props.panel.module ? values.value["_enabled"] : void 0,
+          onEnabledChange: props.panel.module ? (v) => TweakStore.updateValue(props.panel.id, "_enabled", v) : void 0,
+          toolbar: () => TweakStore.arePresetsHidden(props.panel.id) ? h26(Fragment2, null, [props.toolbarExtra?.()]) : toolbarNode
         }, {
           default: () => [
             h26(ControlRenderer, {
@@ -6753,6 +6808,25 @@ var TweakRoot = defineComponent28({
     productionEnabled: {
       type: Boolean,
       default: isDevDefault
+    },
+    /**
+     * Render only the named panels, in the order given. For apps that place
+     * more than one panel surface in more than one place — a rack of per-voice
+     * columns beside a global panel, say. Omitted, a root renders every
+     * registered panel, which is the single-surface default.
+     */
+    panels: {
+      type: [String, Array],
+      default: void 0
+    },
+    /**
+     * `none` drops the panel card — no glass, no border, no radius, no padding —
+     * so the rows sit directly on the host's own surface. For app chrome that
+     * already provides the ground the panel would otherwise float on.
+     */
+    chrome: {
+      type: String,
+      default: "card"
     }
   },
   setup(props) {
@@ -6763,10 +6837,10 @@ var TweakRoot = defineComponent28({
     let unsubscribeTimelines;
     onMounted17(() => {
       mounted.value = true;
-      panels.value = TweakStore.getPanels("panel");
+      panels.value = TweakStore.selectPanels(props.panels);
       timelines.value = TimelineStore.getTimelines();
       unsubscribePanels = TweakStore.subscribeGlobal(() => {
-        panels.value = TweakStore.getPanels("panel");
+        panels.value = TweakStore.selectPanels(props.panels);
       });
       unsubscribeTimelines = TimelineStore.subscribeGlobal(() => {
         timelines.value = TimelineStore.getTimelines();
@@ -6776,7 +6850,7 @@ var TweakRoot = defineComponent28({
       unsubscribePanels?.();
       unsubscribeTimelines?.();
     });
-    const timelineToggle = () => timelines.value.length > 0 ? h28(TimelineToggleButton) : null;
+    const timelineToggle = () => timelines.value.length > 0 && props.panels === void 0 ? h28(TimelineToggleButton) : null;
     const renderPanels = () => {
       if (panels.value.length === 0) {
         return [h28("div", { class: "tweakers-panel-wrapper" }, [
@@ -6798,7 +6872,7 @@ var TweakRoot = defineComponent28({
       }));
     };
     const renderContent = () => h28(ShortcutListener, null, {
-      default: () => h28("div", { class: "tweakers-root", "data-mode": props.mode, "data-theme": props.theme }, [
+      default: () => h28("div", { class: "tweakers-root", "data-mode": props.mode, "data-theme": props.theme, "data-chrome": props.chrome }, [
         h28("div", {
           class: "tweakers-panel",
           "data-position": props.mode === "inline" ? void 0 : props.position,
@@ -6807,7 +6881,8 @@ var TweakRoot = defineComponent28({
       ])
     });
     return () => {
-      if (!props.productionEnabled || !mounted.value || typeof window === "undefined" || panels.value.length === 0 && timelines.value.length === 0) {
+      const empty = panels.value.length === 0 && (props.panels !== void 0 || timelines.value.length === 0);
+      if (!props.productionEnabled || !mounted.value || typeof window === "undefined" || empty) {
         return null;
       }
       if (props.mode === "inline") {

@@ -758,6 +758,8 @@ var TweakStoreClass = class {
     // replace the object on every host render so callbacks never go stale, and
     // only a data change should notify.
     this.presetProviders = /* @__PURE__ */ new Map();
+    /** Panels whose header carries no preset toolbar (see setPresetsHidden). */
+    this.presetsHidden = /* @__PURE__ */ new Set();
     this.baseValues = /* @__PURE__ */ new Map();
     // Resolved storage target per panel (null = persistence off). Absent = not
     // yet registered.
@@ -778,7 +780,7 @@ var TweakStoreClass = class {
     this.initTabValue(controls, values);
     this.initTransitionModes(config, "", values);
     this.overlayPersistedValues(target, values);
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, kind: options.kind });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, module: "_enabled" in config ? true : void 0, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -816,7 +818,7 @@ var TweakStoreClass = class {
         nextValues[path] = mode;
       }
     }
-    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, kind: options.kind ?? existing.kind };
+    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, module: "_enabled" in config ? true : void 0, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
     const previousBaseValues = this.baseValues.get(id) ?? {};
@@ -850,6 +852,7 @@ var TweakStoreClass = class {
     this.baseValues.delete(id);
     this.persistTargets.delete(id);
     this.presetProviders.delete(id);
+    this.presetsHidden.delete(id);
     this.notifyGlobal();
   }
   // Overlay saved values onto freshly-computed defaults, in place. Only keys
@@ -939,6 +942,19 @@ var TweakStoreClass = class {
     if (kind === "panel") return all.filter((panel) => panel.kind !== "timeline");
     if (kind === "timeline") return all.filter((panel) => panel.kind === "timeline");
     return all;
+  }
+  /**
+   * The settings panels a root should draw, given its optional `panels` filter.
+   * `undefined` means every panel — the single-surface default. A list means
+   * exactly those names, in the order named, so two roots never fight over the
+   * same panel and a panel that has not registered yet leaves a gap that fills
+   * when it does.
+   */
+  selectPanels(only) {
+    const registered = this.getPanels("panel");
+    if (only === void 0) return registered;
+    const names = typeof only === "string" ? [only] : only;
+    return names.map((name) => registered.find((panel) => panel.name === name)).filter((panel) => panel !== void 0);
   }
   getPanel(id) {
     return this.panels.get(id);
@@ -1178,6 +1194,23 @@ var TweakStoreClass = class {
   getPresetProvider(panelId) {
     return this.presetProviders.get(panelId)?.provider ?? null;
   }
+  /**
+   * Hide (or restore) a panel's preset toolbar. For the secondary panels of a
+   * multi-panel app — a rack of per-voice columns, say — where a snapshot
+   * means the whole instrument and so belongs to one panel only. Hiding the
+   * toolbar hides its add and copy buttons with it: the header of a panel that
+   * does not own presets is bare.
+   */
+  setPresetsHidden(panelId, hidden) {
+    const had = this.presetsHidden.has(panelId);
+    if (hidden === had) return;
+    if (hidden) this.presetsHidden.add(panelId);
+    else this.presetsHidden.delete(panelId);
+    this.notify(panelId);
+  }
+  arePresetsHidden(panelId) {
+    return this.presetsHidden.has(panelId);
+  }
   /** Provider mode hides the implicit "Version 1" base row — the host owns the whole list. */
   hasPresetProvider(panelId) {
     return this.presetProviders.has(panelId);
@@ -1401,7 +1434,8 @@ var TweakStoreClass = class {
           sample: value.sample,
           domain: value.domain,
           markers: value.markers,
-          height: value.height
+          height: value.height,
+          aspect: value.aspect
         });
       } else if (typeof value === "string") {
         if (this.isHexColor(value)) {
@@ -1874,7 +1908,9 @@ function createTweakers(name, config, options) {
     });
   });
   (0, import_solid_js.createEffect)(() => {
-    const provider = options?.presets ?? null;
+    const declared = options?.presets;
+    TweakStore.setPresetsHidden(panelId, declared === false);
+    const provider = declared === false ? null : declared ?? null;
     if (provider) JSON.stringify(provider);
     TweakStore.setPresetProvider(panelId, provider);
   });
@@ -3683,10 +3719,6 @@ var ICON_PANEL = {
 };
 
 // src/solid/components/Folder.tsx
-var import_web3 = require("solid-js/web");
-var import_web4 = require("solid-js/web");
-var import_web5 = require("solid-js/web");
-var import_web6 = require("solid-js/web");
 var import_web7 = require("solid-js/web");
 var import_web8 = require("solid-js/web");
 var import_web9 = require("solid-js/web");
@@ -3694,23 +3726,67 @@ var import_web10 = require("solid-js/web");
 var import_web11 = require("solid-js/web");
 var import_web12 = require("solid-js/web");
 var import_web13 = require("solid-js/web");
+var import_web14 = require("solid-js/web");
+var import_web15 = require("solid-js/web");
+var import_web16 = require("solid-js/web");
+var import_web17 = require("solid-js/web");
 var import_solid_js4 = require("solid-js");
 var import_motion = require("motion");
-var _tmpl$ = /* @__PURE__ */ (0, import_web3.template)(`<div class=tweakers-panel-toolbar>`);
-var _tmpl$2 = /* @__PURE__ */ (0, import_web3.template)(`<span class=tweakers-hint role=tooltip>`);
-var _tmpl$3 = /* @__PURE__ */ (0, import_web3.template)(`<div class=tweakers-folder-content><div class=tweakers-folder-inner>`);
-var _tmpl$4 = /* @__PURE__ */ (0, import_web3.template)(`<div><div><div class=tweakers-folder-header-top>`);
-var _tmpl$5 = /* @__PURE__ */ (0, import_web3.template)(`<div class=tweakers-folder-title-row><span class="tweakers-folder-title tweakers-folder-title-root">`);
-var _tmpl$6 = /* @__PURE__ */ (0, import_web3.template)(`<div class=tweakers-folder-title-row><span class=tweakers-folder-title>`);
-var _tmpl$7 = /* @__PURE__ */ (0, import_web3.template)(`<svg class=tweakers-panel-icon viewBox="0 0 16 16"fill=none><path opacity=0.5 fill=currentColor></path><circle fill=currentColor stroke=currentColor stroke-width=1.25></circle><circle fill=currentColor stroke=currentColor stroke-width=1.25></circle><circle fill=currentColor stroke=currentColor stroke-width=1.25>`);
-var _tmpl$8 = /* @__PURE__ */ (0, import_web3.template)(`<svg class=tweakers-folder-icon viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
-var _tmpl$9 = /* @__PURE__ */ (0, import_web3.template)(`<div class="tweakers-panel-inner tweakers-panel-inline">`);
-var _tmpl$0 = /* @__PURE__ */ (0, import_web3.template)(`<div class=tweakers-panel-inner>`);
+
+// src/solid/components/Checkbox.tsx
+var import_web3 = require("solid-js/web");
+var import_web4 = require("solid-js/web");
+var import_web5 = require("solid-js/web");
+var import_web6 = require("solid-js/web");
+var _tmpl$ = /* @__PURE__ */ (0, import_web3.template)(`<button type=button role=checkbox class=tweakers-checkbox><svg viewBox="0 0 22 22"width=22 height=22 aria-hidden=true><path class=tweakers-checkbox-slash d="M6 16 16 6"fill=none></path><rect class=tweakers-checkbox-chip x=5 y=5 width=12 height=12 rx=2></rect><path class=tweakers-checkbox-dash d="M6 11h10"fill=none>`);
+function Checkbox(props) {
+  const disabled = () => props.disabled ?? false;
+  return (() => {
+    var _el$ = _tmpl$();
+    _el$.$$click = (e) => {
+      e.stopPropagation();
+      if (!disabled()) props.onChange(!props.checked);
+    };
+    (0, import_web6.effect)((_p$) => {
+      var _v$ = props.id, _v$2 = disabled() ? "mixed" : props.checked, _v$3 = props.label, _v$4 = disabled() || void 0, _v$5 = props.checked && !disabled() ? "true" : void 0, _v$6 = disabled() ? "true" : void 0;
+      _v$ !== _p$.e && (0, import_web5.setAttribute)(_el$, "id", _p$.e = _v$);
+      _v$2 !== _p$.t && (0, import_web5.setAttribute)(_el$, "aria-checked", _p$.t = _v$2);
+      _v$3 !== _p$.a && (0, import_web5.setAttribute)(_el$, "aria-label", _p$.a = _v$3);
+      _v$4 !== _p$.o && (0, import_web5.setAttribute)(_el$, "aria-disabled", _p$.o = _v$4);
+      _v$5 !== _p$.i && (0, import_web5.setAttribute)(_el$, "data-checked", _p$.i = _v$5);
+      _v$6 !== _p$.n && (0, import_web5.setAttribute)(_el$, "data-disabled", _p$.n = _v$6);
+      return _p$;
+    }, {
+      e: void 0,
+      t: void 0,
+      a: void 0,
+      o: void 0,
+      i: void 0,
+      n: void 0
+    });
+    return _el$;
+  })();
+}
+(0, import_web4.delegateEvents)(["click"]);
+
+// src/solid/components/Folder.tsx
+var _tmpl$2 = /* @__PURE__ */ (0, import_web7.template)(`<div class=tweakers-panel-toolbar>`);
+var _tmpl$22 = /* @__PURE__ */ (0, import_web7.template)(`<span class=tweakers-hint role=tooltip>`);
+var _tmpl$3 = /* @__PURE__ */ (0, import_web7.template)(`<div class=tweakers-folder-content><div class=tweakers-folder-inner>`);
+var _tmpl$4 = /* @__PURE__ */ (0, import_web7.template)(`<div><div><div class=tweakers-folder-header-top>`);
+var _tmpl$5 = /* @__PURE__ */ (0, import_web7.template)(`<div class=tweakers-folder-title-row><span class="tweakers-folder-title tweakers-folder-title-root">`);
+var _tmpl$6 = /* @__PURE__ */ (0, import_web7.template)(`<div class=tweakers-folder-title-row><span class=tweakers-folder-title>`);
+var _tmpl$7 = /* @__PURE__ */ (0, import_web7.template)(`<svg class=tweakers-panel-icon viewBox="0 0 16 16"fill=none><path opacity=0.5 fill=currentColor></path><circle fill=currentColor stroke=currentColor stroke-width=1.25></circle><circle fill=currentColor stroke=currentColor stroke-width=1.25></circle><circle fill=currentColor stroke=currentColor stroke-width=1.25>`);
+var _tmpl$8 = /* @__PURE__ */ (0, import_web7.template)(`<svg class=tweakers-folder-icon viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
+var _tmpl$9 = /* @__PURE__ */ (0, import_web7.template)(`<div class="tweakers-panel-inner tweakers-panel-inline">`);
+var _tmpl$0 = /* @__PURE__ */ (0, import_web7.template)(`<div class=tweakers-panel-inner>`);
 function Folder(props) {
   const [isOpen, setIsOpen] = (0, import_solid_js4.createSignal)(props.defaultOpen ?? true);
   const [isCollapsed, setIsCollapsed] = (0, import_solid_js4.createSignal)(!(props.defaultOpen ?? true));
   const [contentHeight, setContentHeight] = (0, import_solid_js4.createSignal)(void 0);
   const [windowHeight, setWindowHeight] = (0, import_solid_js4.createSignal)(typeof window !== "undefined" ? window.innerHeight : 800);
+  const isModule = () => !!props.isRoot && props.enabled !== void 0 && props.onEnabledChange !== void 0;
+  const bodyOpen = () => isOpen() && (!isModule() || !!props.enabled);
   if (props.isRoot) {
     const onResize = () => setWindowHeight(window.innerHeight);
     window.addEventListener("resize", onResize);
@@ -3809,43 +3885,61 @@ function Folder(props) {
   };
   const folderContent = () => (() => {
     var _el$ = _tmpl$4(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild;
-    (0, import_web13.use)((el) => {
+    (0, import_web17.use)((el) => {
       if (props.isRoot) contentRef = el;
     }, _el$);
-    (0, import_web12.addEventListener)(_el$2, "click", props.collapsible === false ? void 0 : handleToggle, true);
-    (0, import_web10.insert)(_el$3, (() => {
-      var _c$ = (0, import_web11.memo)(() => !!props.isRoot);
-      return () => _c$() ? (0, import_web9.createComponent)(import_solid_js4.Show, {
+    (0, import_web16.addEventListener)(_el$2, "click", props.collapsible === false ? void 0 : handleToggle, true);
+    (0, import_web14.insert)(_el$3, (() => {
+      var _c$ = (0, import_web15.memo)(() => !!props.isRoot);
+      return () => _c$() ? (0, import_web13.createComponent)(import_solid_js4.Show, {
         get when() {
           return isOpen();
         },
         get children() {
           var _el$8 = _tmpl$5(), _el$9 = _el$8.firstChild;
-          (0, import_web10.insert)(_el$9, () => props.title);
+          (0, import_web14.insert)(_el$8, (0, import_web13.createComponent)(import_solid_js4.Show, {
+            get when() {
+              return isModule();
+            },
+            get children() {
+              return (0, import_web13.createComponent)(Checkbox, {
+                get checked() {
+                  return props.enabled;
+                },
+                get onChange() {
+                  return props.onEnabledChange;
+                },
+                get label() {
+                  return props.title;
+                }
+              });
+            }
+          }), _el$9);
+          (0, import_web14.insert)(_el$9, () => props.title);
           return _el$8;
         }
       }) : (() => {
         var _el$0 = _tmpl$6(), _el$1 = _el$0.firstChild;
-        (0, import_web10.insert)(_el$1, () => props.title);
+        (0, import_web14.insert)(_el$1, () => props.title);
         return _el$0;
       })();
     })(), null);
-    (0, import_web10.insert)(_el$3, (() => {
-      var _c$2 = (0, import_web11.memo)(() => !!(props.isRoot && !props.inline));
+    (0, import_web14.insert)(_el$3, (() => {
+      var _c$2 = (0, import_web15.memo)(() => !!(props.isRoot && !props.inline));
       return () => _c$2() && (() => {
         var _el$10 = _tmpl$7(), _el$11 = _el$10.firstChild, _el$12 = _el$11.nextSibling, _el$13 = _el$12.nextSibling, _el$14 = _el$13.nextSibling;
-        (0, import_web8.effect)((_p$) => {
+        (0, import_web12.effect)((_p$) => {
           var _v$5 = ICON_PANEL.path, _v$6 = ICON_PANEL.circles[0].cx, _v$7 = ICON_PANEL.circles[0].cy, _v$8 = ICON_PANEL.circles[0].r, _v$9 = ICON_PANEL.circles[1].cx, _v$0 = ICON_PANEL.circles[1].cy, _v$1 = ICON_PANEL.circles[1].r, _v$10 = ICON_PANEL.circles[2].cx, _v$11 = ICON_PANEL.circles[2].cy, _v$12 = ICON_PANEL.circles[2].r;
-          _v$5 !== _p$.e && (0, import_web7.setAttribute)(_el$11, "d", _p$.e = _v$5);
-          _v$6 !== _p$.t && (0, import_web7.setAttribute)(_el$12, "cx", _p$.t = _v$6);
-          _v$7 !== _p$.a && (0, import_web7.setAttribute)(_el$12, "cy", _p$.a = _v$7);
-          _v$8 !== _p$.o && (0, import_web7.setAttribute)(_el$12, "r", _p$.o = _v$8);
-          _v$9 !== _p$.i && (0, import_web7.setAttribute)(_el$13, "cx", _p$.i = _v$9);
-          _v$0 !== _p$.n && (0, import_web7.setAttribute)(_el$13, "cy", _p$.n = _v$0);
-          _v$1 !== _p$.s && (0, import_web7.setAttribute)(_el$13, "r", _p$.s = _v$1);
-          _v$10 !== _p$.h && (0, import_web7.setAttribute)(_el$14, "cx", _p$.h = _v$10);
-          _v$11 !== _p$.r && (0, import_web7.setAttribute)(_el$14, "cy", _p$.r = _v$11);
-          _v$12 !== _p$.d && (0, import_web7.setAttribute)(_el$14, "r", _p$.d = _v$12);
+          _v$5 !== _p$.e && (0, import_web11.setAttribute)(_el$11, "d", _p$.e = _v$5);
+          _v$6 !== _p$.t && (0, import_web11.setAttribute)(_el$12, "cx", _p$.t = _v$6);
+          _v$7 !== _p$.a && (0, import_web11.setAttribute)(_el$12, "cy", _p$.a = _v$7);
+          _v$8 !== _p$.o && (0, import_web11.setAttribute)(_el$12, "r", _p$.o = _v$8);
+          _v$9 !== _p$.i && (0, import_web11.setAttribute)(_el$13, "cx", _p$.i = _v$9);
+          _v$0 !== _p$.n && (0, import_web11.setAttribute)(_el$13, "cy", _p$.n = _v$0);
+          _v$1 !== _p$.s && (0, import_web11.setAttribute)(_el$13, "r", _p$.s = _v$1);
+          _v$10 !== _p$.h && (0, import_web11.setAttribute)(_el$14, "cx", _p$.h = _v$10);
+          _v$11 !== _p$.r && (0, import_web11.setAttribute)(_el$14, "cy", _p$.r = _v$11);
+          _v$12 !== _p$.d && (0, import_web11.setAttribute)(_el$14, "r", _p$.d = _v$12);
           return _p$;
         }, {
           e: void 0,
@@ -3862,45 +3956,45 @@ function Folder(props) {
         return _el$10;
       })();
     })(), null);
-    (0, import_web10.insert)(_el$3, (() => {
-      var _c$3 = (0, import_web11.memo)(() => !!(!props.isRoot && props.collapsible !== false));
+    (0, import_web14.insert)(_el$3, (() => {
+      var _c$3 = (0, import_web15.memo)(() => !!(!props.isRoot && props.collapsible !== false));
       return () => _c$3() && (() => {
         var _el$15 = _tmpl$8(), _el$16 = _el$15.firstChild;
         var _ref$ = folderChevronRef;
-        typeof _ref$ === "function" ? (0, import_web13.use)(_ref$, _el$15) : folderChevronRef = _el$15;
-        (0, import_web7.setAttribute)(_el$16, "d", ICON_CHEVRON);
+        typeof _ref$ === "function" ? (0, import_web17.use)(_ref$, _el$15) : folderChevronRef = _el$15;
+        (0, import_web11.setAttribute)(_el$16, "d", ICON_CHEVRON);
         return _el$15;
       })();
     })(), null);
-    (0, import_web10.insert)(_el$2, (0, import_web9.createComponent)(import_solid_js4.Show, {
+    (0, import_web14.insert)(_el$2, (0, import_web13.createComponent)(import_solid_js4.Show, {
       get when() {
-        return (0, import_web11.memo)(() => !!(props.isRoot && props.toolbar))() && isOpen();
+        return (0, import_web15.memo)(() => !!(props.isRoot && props.toolbar))() && isOpen();
       },
       get children() {
-        var _el$4 = _tmpl$();
+        var _el$4 = _tmpl$2();
         _el$4.$$click = (e) => e.stopPropagation();
-        (0, import_web10.insert)(_el$4, () => props.toolbar);
+        (0, import_web14.insert)(_el$4, () => props.toolbar);
         return _el$4;
       }
     }), null);
-    (0, import_web10.insert)(_el$2, (0, import_web9.createComponent)(import_solid_js4.Show, {
+    (0, import_web14.insert)(_el$2, (0, import_web13.createComponent)(import_solid_js4.Show, {
       get when() {
         return props.hint;
       },
       get children() {
-        var _el$5 = _tmpl$2();
-        (0, import_web10.insert)(_el$5, () => props.hint);
-        (0, import_web8.effect)(() => (0, import_web7.setAttribute)(_el$5, "id", props.hintId));
+        var _el$5 = _tmpl$22();
+        (0, import_web14.insert)(_el$5, () => props.hint);
+        (0, import_web12.effect)(() => (0, import_web11.setAttribute)(_el$5, "id", props.hintId));
         return _el$5;
       }
     }), null);
-    (0, import_web10.insert)(_el$, (0, import_web9.createComponent)(import_solid_js4.Show, {
+    (0, import_web14.insert)(_el$, (0, import_web13.createComponent)(import_solid_js4.Show, {
       get when() {
-        return (0, import_web11.memo)(() => !!props.isRoot)() ? isOpen() : contentMounted();
+        return (0, import_web15.memo)(() => !!props.isRoot)() ? bodyOpen() : contentMounted();
       },
       get children() {
         var _el$6 = _tmpl$3(), _el$7 = _el$6.firstChild;
-        (0, import_web13.use)((el) => {
+        (0, import_web17.use)((el) => {
           if (props.isRoot) return;
           sectionContentRef = el;
           if (skipFirstAnim) {
@@ -3922,19 +4016,19 @@ function Folder(props) {
             }
           });
         }, _el$6);
-        (0, import_web10.insert)(_el$7, () => props.children);
-        (0, import_web8.effect)((_$p) => (0, import_web6.style)(_el$6, !props.isRoot ? {
+        (0, import_web14.insert)(_el$7, () => props.children);
+        (0, import_web12.effect)((_$p) => (0, import_web10.style)(_el$6, !props.isRoot ? {
           "clip-path": "inset(0 -20px)"
         } : void 0, _$p));
         return _el$6;
       }
     }), null);
-    (0, import_web8.effect)((_p$) => {
+    (0, import_web12.effect)((_p$) => {
       var _v$ = `tweakers-folder ${props.isRoot ? "tweakers-folder-root" : ""}`, _v$2 = `tweakers-folder-header ${props.isRoot ? "tweakers-panel-header" : ""} ${props.collapsible === false ? "tweakers-folder-header-static" : ""}`, _v$3 = props.hint ? "true" : void 0, _v$4 = props.hint ? props.hintId : void 0;
-      _v$ !== _p$.e && (0, import_web5.className)(_el$, _p$.e = _v$);
-      _v$2 !== _p$.t && (0, import_web5.className)(_el$2, _p$.t = _v$2);
-      _v$3 !== _p$.a && (0, import_web7.setAttribute)(_el$2, "data-hint", _p$.a = _v$3);
-      _v$4 !== _p$.o && (0, import_web7.setAttribute)(_el$2, "aria-describedby", _p$.o = _v$4);
+      _v$ !== _p$.e && (0, import_web9.className)(_el$, _p$.e = _v$);
+      _v$2 !== _p$.t && (0, import_web9.className)(_el$2, _p$.t = _v$2);
+      _v$3 !== _p$.a && (0, import_web11.setAttribute)(_el$2, "data-hint", _p$.a = _v$3);
+      _v$4 !== _p$.o && (0, import_web11.setAttribute)(_el$2, "aria-describedby", _p$.o = _v$4);
       return _p$;
     }, {
       e: void 0,
@@ -3948,7 +4042,7 @@ function Folder(props) {
     if (props.inline) {
       return (() => {
         var _el$17 = _tmpl$9();
-        (0, import_web10.insert)(_el$17, folderContent);
+        (0, import_web14.insert)(_el$17, folderContent);
         return _el$17;
       })();
     }
@@ -4055,15 +4149,15 @@ function Folder(props) {
         });
       };
       var _ref$2 = panelRef;
-      typeof _ref$2 === "function" ? (0, import_web13.use)(_ref$2, _el$18) : panelRef = _el$18;
-      (0, import_web10.insert)(_el$18, folderContent);
-      (0, import_web8.effect)(() => (0, import_web7.setAttribute)(_el$18, "data-collapsed", String(isCollapsed())));
+      typeof _ref$2 === "function" ? (0, import_web17.use)(_ref$2, _el$18) : panelRef = _el$18;
+      (0, import_web14.insert)(_el$18, folderContent);
+      (0, import_web12.effect)(() => (0, import_web11.setAttribute)(_el$18, "data-collapsed", String(isCollapsed())));
       return _el$18;
     })();
   }
   return folderContent();
 }
-(0, import_web4.delegateEvents)(["click", "pointerdown", "pointerup"]);
+(0, import_web8.delegateEvents)(["click", "pointerdown", "pointerup"]);
 
 // src/solid/components/ControlRenderer.tsx
 var import_web168 = require("solid-js/web");
@@ -4082,46 +4176,8 @@ var import_web21 = require("solid-js/web");
 var import_web22 = require("solid-js/web");
 var import_web23 = require("solid-js/web");
 var import_solid_js5 = require("solid-js");
-
-// src/solid/components/Checkbox.tsx
-var import_web14 = require("solid-js/web");
-var import_web15 = require("solid-js/web");
-var import_web16 = require("solid-js/web");
-var import_web17 = require("solid-js/web");
-var _tmpl$10 = /* @__PURE__ */ (0, import_web14.template)(`<button type=button role=checkbox class=tweakers-checkbox><svg viewBox="0 0 22 22"width=22 height=22 aria-hidden=true><path class=tweakers-checkbox-slash d="M6 16 16 6"fill=none></path><rect class=tweakers-checkbox-chip x=5 y=5 width=12 height=12 rx=2></rect><path class=tweakers-checkbox-dash d="M6 11h10"fill=none>`);
-function Checkbox(props) {
-  const disabled = () => props.disabled ?? false;
-  return (() => {
-    var _el$ = _tmpl$10();
-    _el$.$$click = (e) => {
-      e.stopPropagation();
-      if (!disabled()) props.onChange(!props.checked);
-    };
-    (0, import_web17.effect)((_p$) => {
-      var _v$ = props.id, _v$2 = disabled() ? "mixed" : props.checked, _v$3 = props.label, _v$4 = disabled() || void 0, _v$5 = props.checked && !disabled() ? "true" : void 0, _v$6 = disabled() ? "true" : void 0;
-      _v$ !== _p$.e && (0, import_web16.setAttribute)(_el$, "id", _p$.e = _v$);
-      _v$2 !== _p$.t && (0, import_web16.setAttribute)(_el$, "aria-checked", _p$.t = _v$2);
-      _v$3 !== _p$.a && (0, import_web16.setAttribute)(_el$, "aria-label", _p$.a = _v$3);
-      _v$4 !== _p$.o && (0, import_web16.setAttribute)(_el$, "aria-disabled", _p$.o = _v$4);
-      _v$5 !== _p$.i && (0, import_web16.setAttribute)(_el$, "data-checked", _p$.i = _v$5);
-      _v$6 !== _p$.n && (0, import_web16.setAttribute)(_el$, "data-disabled", _p$.n = _v$6);
-      return _p$;
-    }, {
-      e: void 0,
-      t: void 0,
-      a: void 0,
-      o: void 0,
-      i: void 0,
-      n: void 0
-    });
-    return _el$;
-  })();
-}
-(0, import_web15.delegateEvents)(["click"]);
-
-// src/solid/components/ModuleFolder.tsx
-var _tmpl$11 = /* @__PURE__ */ (0, import_web18.template)(`<span class=tweakers-hint role=tooltip>`);
-var _tmpl$22 = /* @__PURE__ */ (0, import_web18.template)(`<div class="tweakers-module tweakers-module-folder"><div class="tweakers-module-header tweakers-module-header-toggle"><span class=tweakers-module-title></span></div><div class=tweakers-module-collapse><div class=tweakers-module-collapse-clip><div class=tweakers-module-inner>`);
+var _tmpl$10 = /* @__PURE__ */ (0, import_web18.template)(`<span class=tweakers-hint role=tooltip>`);
+var _tmpl$23 = /* @__PURE__ */ (0, import_web18.template)(`<div class="tweakers-module tweakers-module-folder"><div class="tweakers-module-header tweakers-module-header-toggle"><span class=tweakers-module-title></span></div><div class=tweakers-module-collapse><div class=tweakers-module-collapse-clip><div class=tweakers-module-inner>`);
 function ModuleFolder(props) {
   const [isOpen, setIsOpen] = (0, import_solid_js5.createSignal)(props.defaultOpen ?? true);
   const handleEnabledChange = (next) => {
@@ -4129,7 +4185,7 @@ function ModuleFolder(props) {
     if (next) setIsOpen(true);
   };
   return (() => {
-    var _el$ = _tmpl$22(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$5 = _el$2.nextSibling, _el$6 = _el$5.firstChild, _el$7 = _el$6.firstChild;
+    var _el$ = _tmpl$23(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$5 = _el$2.nextSibling, _el$6 = _el$5.firstChild, _el$7 = _el$6.firstChild;
     _el$2.$$click = () => {
       if (props.enabled) setIsOpen((open) => !open);
     };
@@ -4148,7 +4204,7 @@ function ModuleFolder(props) {
         return props.hint;
       },
       get children() {
-        var _el$4 = _tmpl$11();
+        var _el$4 = _tmpl$10();
         (0, import_web22.insert)(_el$4, () => props.hint);
         (0, import_web21.effect)(() => (0, import_web20.setAttribute)(_el$4, "id", props.hintId));
         return _el$4;
@@ -4204,8 +4260,8 @@ function placePopover(anchor, popoverHeight, viewportHeight, width = AFFORDANCE_
 }
 
 // src/solid/components/ControlShell.tsx
-var _tmpl$12 = /* @__PURE__ */ (0, import_web24.template)(`<span class=tweakers-hint role=tooltip>`);
-var _tmpl$23 = /* @__PURE__ */ (0, import_web24.template)(`<button type=button class=tweakers-affordance-dot>`);
+var _tmpl$11 = /* @__PURE__ */ (0, import_web24.template)(`<span class=tweakers-hint role=tooltip>`);
+var _tmpl$24 = /* @__PURE__ */ (0, import_web24.template)(`<button type=button class=tweakers-affordance-dot>`);
 var _tmpl$32 = /* @__PURE__ */ (0, import_web24.template)(`<div class=tweakers-control-tip>`);
 var _tmpl$42 = /* @__PURE__ */ (0, import_web24.template)(`<div class=tweakers-affordance-popover role=dialog tabindex=-1><span class=tweakers-affordance-popover-title>`);
 function ControlShell(props) {
@@ -4288,7 +4344,7 @@ function ControlShell(props) {
         return props.hint;
       },
       get children() {
-        var _el$2 = _tmpl$12();
+        var _el$2 = _tmpl$11();
         (0, import_web33.insert)(_el$2, () => props.hint);
         (0, import_web32.effect)(() => (0, import_web31.setAttribute)(_el$2, "id", props.id));
         return _el$2;
@@ -4299,7 +4355,7 @@ function ControlShell(props) {
         return hasAffordance();
       },
       get children() {
-        var _el$3 = _tmpl$23();
+        var _el$3 = _tmpl$24();
         _el$3.$$click = () => setOpen(!open());
         var _ref$ = dotEl;
         typeof _ref$ === "function" ? (0, import_web29.use)(_ref$, _el$3) : dotEl = _el$3;
@@ -4395,8 +4451,8 @@ var import_web43 = require("solid-js/web");
 var import_web44 = require("solid-js/web");
 var import_solid_js7 = require("solid-js");
 var import_motion2 = require("motion");
-var _tmpl$13 = /* @__PURE__ */ (0, import_web35.template)(`<div class=tweakers-slider-hashmark>`);
-var _tmpl$24 = /* @__PURE__ */ (0, import_web35.template)(`<span>`);
+var _tmpl$12 = /* @__PURE__ */ (0, import_web35.template)(`<div class=tweakers-slider-hashmark>`);
+var _tmpl$25 = /* @__PURE__ */ (0, import_web35.template)(`<span>`);
 var _tmpl$33 = /* @__PURE__ */ (0, import_web35.template)(`<div class=tweakers-slider-fill-area><div class=tweakers-slider-fill-vertical>`);
 var _tmpl$43 = /* @__PURE__ */ (0, import_web35.template)(`<span class=tweakers-slider-label-vertical>`);
 var _tmpl$52 = /* @__PURE__ */ (0, import_web35.template)(`<div><div>`);
@@ -4727,7 +4783,7 @@ function Slider(props) {
       }, (_, i) => {
         const pct = (i + 1) * step() / (max() - min()) * 100;
         return (() => {
-          var _el$ = _tmpl$13();
+          var _el$ = _tmpl$12();
           (0, import_web44.setStyleProperty)(_el$, "left", `${pct}%`);
           return _el$;
         })();
@@ -4738,7 +4794,7 @@ function Slider(props) {
     }, (_, i) => {
       const pct = (i + 1) * 10;
       return (() => {
-        var _el$2 = _tmpl$13();
+        var _el$2 = _tmpl$12();
         (0, import_web44.setStyleProperty)(_el$2, "left", `${pct}%`);
         return _el$2;
       })();
@@ -4750,7 +4806,7 @@ function Slider(props) {
       return props.shortcut;
     },
     get children() {
-      var _el$3 = _tmpl$24();
+      var _el$3 = _tmpl$25();
       (0, import_web43.insert)(_el$3, () => formatSliderShortcut(props.shortcut));
       (0, import_web42.effect)(() => (0, import_web41.className)(_el$3, `tweakers-shortcut-pill${props.shortcutActive ? " tweakers-shortcut-pill-active" : ""}`));
       return _el$3;
@@ -4819,7 +4875,7 @@ function Slider(props) {
           (0, import_web42.effect)(() => _el$13.value = inputValue());
           return _el$13;
         })() : (() => {
-          var _el$14 = _tmpl$24();
+          var _el$14 = _tmpl$25();
           _el$14.$$pointerdown = (e) => isValueEditable() && e.stopPropagation();
           _el$14.$$click = handleValueClick;
           _el$14.addEventListener("mouseleave", () => setIsValueHovered(false));
@@ -4874,7 +4930,7 @@ function Slider(props) {
           (0, import_web42.effect)(() => _el$16.value = inputValue());
           return _el$16;
         })() : (() => {
-          var _el$17 = _tmpl$24();
+          var _el$17 = _tmpl$25();
           _el$17.$$pointerdown = (e) => isValueEditable() && e.stopPropagation();
           _el$17.$$click = handleValueClick;
           _el$17.addEventListener("mouseleave", () => setIsValueHovered(false));
@@ -4933,8 +4989,8 @@ var import_web49 = require("solid-js/web");
 var import_web50 = require("solid-js/web");
 var import_web51 = require("solid-js/web");
 var import_solid_js8 = require("solid-js");
-var _tmpl$14 = /* @__PURE__ */ (0, import_web45.template)(`<div><span class=tweakers-number-label>`);
-var _tmpl$25 = /* @__PURE__ */ (0, import_web45.template)(`<input type=text class=tweakers-number-input>`);
+var _tmpl$13 = /* @__PURE__ */ (0, import_web45.template)(`<div><span class=tweakers-number-label>`);
+var _tmpl$26 = /* @__PURE__ */ (0, import_web45.template)(`<input type=text class=tweakers-number-input>`);
 var _tmpl$34 = /* @__PURE__ */ (0, import_web45.template)(`<span class=tweakers-number-value>`);
 var _tmpl$44 = /* @__PURE__ */ (0, import_web45.template)(`<span class=tweakers-number-unit>`);
 var CLICK_THRESHOLD2 = 3;
@@ -5017,7 +5073,7 @@ function NumberControl(props) {
   const displayValue = () => props.formatValue ? props.formatValue(props.value) : props.value.toFixed(decimalsForStep2(step()));
   const className = () => ["tweakers-number-control", isVertical() ? "tweakers-number-control-vertical" : "", isScrubbing() ? "tweakers-number-control-engaged" : ""].filter(Boolean).join(" ");
   return (() => {
-    var _el$ = _tmpl$14(), _el$2 = _el$.firstChild;
+    var _el$ = _tmpl$13(), _el$2 = _el$.firstChild;
     _el$.$$pointerup = handlePointerUp;
     _el$.$$pointermove = handlePointerMove;
     _el$.$$pointerdown = handlePointerDown;
@@ -5025,7 +5081,7 @@ function NumberControl(props) {
     (0, import_web51.insert)(_el$, (() => {
       var _c$ = (0, import_web50.memo)(() => !!showInput());
       return () => _c$() ? (() => {
-        var _el$3 = _tmpl$25();
+        var _el$3 = _tmpl$26();
         _el$3.$$pointerdown = (e) => e.stopPropagation();
         _el$3.$$click = (e) => e.stopPropagation();
         _el$3.addEventListener("blur", handleInputSubmit);
@@ -5066,8 +5122,8 @@ var import_web58 = require("solid-js/web");
 var import_web59 = require("solid-js/web");
 var import_solid_js9 = require("solid-js");
 var import_motion3 = require("motion");
-var _tmpl$15 = /* @__PURE__ */ (0, import_web52.template)(`<input type=text class=tweakers-range-slider-input>`);
-var _tmpl$26 = /* @__PURE__ */ (0, import_web52.template)(`<div class=tweakers-range-slider-wrapper><div><div class=tweakers-range-slider-fill></div><div class=tweakers-range-slider-handle style=transform:translateY(-50%);opacity:0.35></div><div class=tweakers-range-slider-handle style=transform:translateY(-50%);opacity:0.35></div><span class=tweakers-range-slider-label>`);
+var _tmpl$14 = /* @__PURE__ */ (0, import_web52.template)(`<input type=text class=tweakers-range-slider-input>`);
+var _tmpl$27 = /* @__PURE__ */ (0, import_web52.template)(`<div class=tweakers-range-slider-wrapper><div><div class=tweakers-range-slider-fill></div><div class=tweakers-range-slider-handle style=transform:translateY(-50%);opacity:0.35></div><div class=tweakers-range-slider-handle style=transform:translateY(-50%);opacity:0.35></div><span class=tweakers-range-slider-label>`);
 var _tmpl$35 = /* @__PURE__ */ (0, import_web52.template)(`<span class=tweakers-range-slider-value><span class=tweakers-range-slider-bound></span><span class=tweakers-range-slider-dash>\u2013</span><span class=tweakers-range-slider-bound>`);
 var CLICK_THRESHOLD3 = 3;
 var HANDLE_HIT_PX = 12;
@@ -5329,7 +5385,7 @@ function RangeSlider(props) {
   const lowText = () => value().min.toFixed(decimals());
   const highText = () => value().max.toFixed(decimals());
   return (() => {
-    var _el$ = _tmpl$26(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.nextSibling, _el$6 = _el$5.nextSibling;
+    var _el$ = _tmpl$27(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.nextSibling, _el$6 = _el$5.nextSibling;
     var _ref$ = wrapperRef;
     typeof _ref$ === "function" ? (0, import_web59.use)(_ref$, _el$) : wrapperRef = _el$;
     _el$2.addEventListener("mouseleave", () => setIsHovered(false));
@@ -5371,7 +5427,7 @@ function RangeSlider(props) {
         })();
       },
       get children() {
-        var _el$7 = _tmpl$15();
+        var _el$7 = _tmpl$14();
         _el$7.$$pointerdown = (e) => e.stopPropagation();
         _el$7.$$click = (e) => e.stopPropagation();
         _el$7.addEventListener("blur", commitEditor);
@@ -5410,11 +5466,11 @@ var import_web62 = require("solid-js/web");
 var import_web63 = require("solid-js/web");
 var import_web64 = require("solid-js/web");
 var import_solid_js10 = require("solid-js");
-var _tmpl$16 = /* @__PURE__ */ (0, import_web60.template)(`<span>`);
-var _tmpl$27 = /* @__PURE__ */ (0, import_web60.template)(`<div class="tweakers-labeled-control tweakers-labeled-control-check"><span class=tweakers-labeled-control-label>`);
+var _tmpl$15 = /* @__PURE__ */ (0, import_web60.template)(`<span>`);
+var _tmpl$28 = /* @__PURE__ */ (0, import_web60.template)(`<div class="tweakers-labeled-control tweakers-labeled-control-check"><span class=tweakers-labeled-control-label>`);
 function Toggle(props) {
   return (() => {
-    var _el$ = _tmpl$27(), _el$2 = _el$.firstChild;
+    var _el$ = _tmpl$28(), _el$2 = _el$.firstChild;
     (0, import_web63.insert)(_el$, (0, import_web64.createComponent)(Checkbox, {
       get checked() {
         return props.checked;
@@ -5432,7 +5488,7 @@ function Toggle(props) {
         return props.shortcut;
       },
       get children() {
-        var _el$3 = _tmpl$16();
+        var _el$3 = _tmpl$15();
         (0, import_web63.insert)(_el$3, () => formatToggleShortcut(props.shortcut));
         (0, import_web62.effect)(() => (0, import_web61.className)(_el$3, `tweakers-shortcut-pill${props.shortcutActive ? " tweakers-shortcut-pill-active" : ""}`));
         return _el$3;
@@ -5459,8 +5515,8 @@ var import_web70 = require("solid-js/web");
 var import_web71 = require("solid-js/web");
 var import_web72 = require("solid-js/web");
 var import_solid_js11 = require("solid-js");
-var _tmpl$17 = /* @__PURE__ */ (0, import_web65.template)(`<div class=tweakers-segmented>`);
-var _tmpl$28 = /* @__PURE__ */ (0, import_web65.template)(`<div class=tweakers-segmented-pill>`);
+var _tmpl$16 = /* @__PURE__ */ (0, import_web65.template)(`<div class=tweakers-segmented>`);
+var _tmpl$29 = /* @__PURE__ */ (0, import_web65.template)(`<div class=tweakers-segmented-pill>`);
 var _tmpl$36 = /* @__PURE__ */ (0, import_web65.template)(`<button class=tweakers-segmented-button>`);
 function SegmentedControl(props) {
   let containerRef;
@@ -5489,7 +5545,7 @@ function SegmentedControl(props) {
     return "left 0.2s cubic-bezier(0.25, 1, 0.5, 1), width 0.2s cubic-bezier(0.25, 1, 0.5, 1)";
   };
   return (() => {
-    var _el$ = _tmpl$17();
+    var _el$ = _tmpl$16();
     var _ref$ = containerRef;
     typeof _ref$ === "function" ? (0, import_web72.use)(_ref$, _el$) : containerRef = _el$;
     (0, import_web70.insert)(_el$, (0, import_web71.createComponent)(import_solid_js11.Show, {
@@ -5497,7 +5553,7 @@ function SegmentedControl(props) {
         return pillStyle();
       },
       children: (style) => (() => {
-        var _el$2 = _tmpl$28();
+        var _el$2 = _tmpl$29();
         (0, import_web69.effect)((_p$) => {
           var _v$ = `${style().left}px`, _v$2 = `${style().width}px`, _v$3 = transition();
           _v$ !== _p$.e && (0, import_web68.setStyleProperty)(_el$2, "left", _p$.e = _v$);
@@ -5534,8 +5590,8 @@ var import_web73 = require("solid-js/web");
 var import_web74 = require("solid-js/web");
 var import_web75 = require("solid-js/web");
 var import_web76 = require("solid-js/web");
-var _tmpl$18 = /* @__PURE__ */ (0, import_web73.template)(`<svg><line y1=0 y2=140 stroke="rgba(255, 255, 255, 0.08)"stroke-width=1></svg>`, false, true, false);
-var _tmpl$29 = /* @__PURE__ */ (0, import_web73.template)(`<svg><line x1=0 x2=256 stroke="rgba(255, 255, 255, 0.08)"stroke-width=1></svg>`, false, true, false);
+var _tmpl$17 = /* @__PURE__ */ (0, import_web73.template)(`<svg><line y1=0 y2=140 stroke="rgba(255, 255, 255, 0.08)"stroke-width=1></svg>`, false, true, false);
+var _tmpl$210 = /* @__PURE__ */ (0, import_web73.template)(`<svg><line x1=0 x2=256 stroke="rgba(255, 255, 255, 0.08)"stroke-width=1></svg>`, false, true, false);
 var _tmpl$37 = /* @__PURE__ */ (0, import_web73.template)(`<svg viewBox="0 0 256 140"class=tweakers-spring-viz><line x1=0 y1=70 x2=256 y2=70 stroke="rgba(255, 255, 255, 0.15)"stroke-width=1 stroke-dasharray=4,4></line><path fill=none stroke="rgba(255, 255, 255, 0.6)"stroke-width=2 stroke-linecap=round stroke-linejoin=round>`);
 function generateSpringCurve(stiffness, damping, mass, duration) {
   const points = [];
@@ -5594,12 +5650,12 @@ function SpringVisualization(props) {
       const x = width / 4 * i;
       const y = height / 4 * i;
       lines.push((() => {
-        var _el$ = _tmpl$18();
+        var _el$ = _tmpl$17();
         (0, import_web76.setAttribute)(_el$, "x1", x);
         (0, import_web76.setAttribute)(_el$, "x2", x);
         return _el$;
       })(), (() => {
-        var _el$2 = _tmpl$29();
+        var _el$2 = _tmpl$210();
         (0, import_web76.setAttribute)(_el$2, "y1", y);
         (0, import_web76.setAttribute)(_el$2, "y2", y);
         return _el$2;
@@ -5616,7 +5672,7 @@ function SpringVisualization(props) {
 }
 
 // src/solid/components/SpringControl.tsx
-var _tmpl$19 = /* @__PURE__ */ (0, import_web77.template)(`<div style=display:flex;flex-direction:column;gap:6px><div class=tweakers-labeled-control><span class=tweakers-labeled-control-label>Type`);
+var _tmpl$18 = /* @__PURE__ */ (0, import_web77.template)(`<div style=display:flex;flex-direction:column;gap:6px><div class=tweakers-labeled-control><span class=tweakers-labeled-control-label>Type`);
 function SpringControl(props) {
   const [mode, setMode] = (0, import_solid_js12.createSignal)(TweakStore.getSpringMode(props.panelId, props.path));
   (0, import_solid_js12.onMount)(() => {
@@ -5682,7 +5738,7 @@ function SpringControl(props) {
     },
     defaultOpen: true,
     get children() {
-      var _el$ = _tmpl$19(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild;
+      var _el$ = _tmpl$18(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild;
       (0, import_web79.insert)(_el$, (0, import_web80.createComponent)(SpringVisualization, {
         get spring() {
           return props.spring;
@@ -5785,7 +5841,7 @@ function fromStore(read, subscribe) {
 var import_web82 = require("solid-js/web");
 var import_web83 = require("solid-js/web");
 var import_web84 = require("solid-js/web");
-var _tmpl$20 = /* @__PURE__ */ (0, import_web82.template)(`<svg viewBox="0 0 200 200"preserveAspectRatio="xMidYMid slice"class="tweakers-spring-viz tweakers-easing-viz"><line stroke="rgba(255, 255, 255, 0.15)"stroke-width=1 stroke-dasharray=4,4></line><path fill=none stroke="rgba(255, 255, 255, 0.6)"stroke-width=2 stroke-linecap=round>`);
+var _tmpl$19 = /* @__PURE__ */ (0, import_web82.template)(`<svg viewBox="0 0 200 200"preserveAspectRatio="xMidYMid slice"class="tweakers-spring-viz tweakers-easing-viz"><line stroke="rgba(255, 255, 255, 0.15)"stroke-width=1 stroke-dasharray=4,4></line><path fill=none stroke="rgba(255, 255, 255, 0.6)"stroke-width=2 stroke-linecap=round>`);
 function EasingVisualization(props) {
   const size = 200;
   const pad = 10;
@@ -5803,7 +5859,7 @@ function EasingVisualization(props) {
     return `M ${start.x} ${start.y} C ${first.x} ${first.y}, ${second.x} ${second.y}, ${end.x} ${end.y}`;
   };
   return (() => {
-    var _el$ = _tmpl$20(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
+    var _el$ = _tmpl$19(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
     (0, import_web84.effect)((_p$) => {
       var _v$ = start.x, _v$2 = start.y, _v$3 = end.x, _v$4 = end.y, _v$5 = curvePath2();
       _v$ !== _p$.e && (0, import_web83.setAttribute)(_el$2, "x1", _p$.e = _v$);
@@ -5824,8 +5880,8 @@ function EasingVisualization(props) {
 }
 
 // src/solid/components/TransitionControl.tsx
-var _tmpl$21 = /* @__PURE__ */ (0, import_web85.template)(`<div class=tweakers-labeled-control><span class=tweakers-labeled-control-label>Ease</span><input type=text class=tweakers-text-input>`);
-var _tmpl$210 = /* @__PURE__ */ (0, import_web85.template)(`<div style=display:flex;flex-direction:column;gap:6px><div class=tweakers-labeled-control><span class=tweakers-labeled-control-label>Type`);
+var _tmpl$20 = /* @__PURE__ */ (0, import_web85.template)(`<div class=tweakers-labeled-control><span class=tweakers-labeled-control-label>Ease</span><input type=text class=tweakers-text-input>`);
+var _tmpl$211 = /* @__PURE__ */ (0, import_web85.template)(`<div style=display:flex;flex-direction:column;gap:6px><div class=tweakers-labeled-control><span class=tweakers-labeled-control-label>Type`);
 function TransitionControl(props) {
   const mode = fromStore(() => TweakStore.getTransitionMode(props.panelId, props.path), (notify2) => TweakStore.subscribe(props.panelId, notify2));
   const [editingEase, setEditingEase] = (0, import_solid_js14.createSignal)(false);
@@ -5949,7 +6005,7 @@ function TransitionControl(props) {
     },
     defaultOpen: true,
     get children() {
-      var _el$ = _tmpl$210(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild;
+      var _el$ = _tmpl$211(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild;
       (0, import_web89.insert)(_el$, (0, import_web90.createComponent)(import_solid_js14.Show, {
         get when() {
           return isEasing();
@@ -6030,7 +6086,7 @@ function TransitionControl(props) {
             max: 2,
             step: 0.01
           }), (() => {
-            var _el$4 = _tmpl$21(), _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling;
+            var _el$4 = _tmpl$20(), _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling;
             _el$6.$$keydown = (event) => {
               if (event.key === "Enter") event.currentTarget.blur();
             };
@@ -6112,11 +6168,11 @@ var import_web94 = require("solid-js/web");
 var import_web95 = require("solid-js/web");
 var import_web96 = require("solid-js/web");
 var import_solid_js15 = require("solid-js");
-var _tmpl$30 = /* @__PURE__ */ (0, import_web92.template)(`<div class=tweakers-text-control><label class=tweakers-text-label></label><input type=text class=tweakers-text-input>`);
+var _tmpl$21 = /* @__PURE__ */ (0, import_web92.template)(`<div class=tweakers-text-control><label class=tweakers-text-label></label><input type=text class=tweakers-text-input>`);
 function TextControl(props) {
   const inputId = (0, import_solid_js15.createUniqueId)();
   return (() => {
-    var _el$ = _tmpl$30(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
+    var _el$ = _tmpl$21(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
     (0, import_web96.setAttribute)(_el$2, "for", inputId);
     (0, import_web95.insert)(_el$2, () => props.label);
     _el$3.$$input = (e) => props.onChange(e.currentTarget.value);
@@ -6141,8 +6197,8 @@ var import_web105 = require("solid-js/web");
 var import_solid_js16 = require("solid-js");
 var import_web106 = require("solid-js/web");
 var import_motion4 = require("motion");
-var _tmpl$31 = /* @__PURE__ */ (0, import_web97.template)(`<div class=tweakers-select-dropdown>`);
-var _tmpl$211 = /* @__PURE__ */ (0, import_web97.template)(`<div class=tweakers-select-row><button class=tweakers-select-trigger><span class=tweakers-select-label></span><div class=tweakers-select-right><span class=tweakers-select-value></span><svg class=tweakers-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
+var _tmpl$30 = /* @__PURE__ */ (0, import_web97.template)(`<div class=tweakers-select-dropdown>`);
+var _tmpl$212 = /* @__PURE__ */ (0, import_web97.template)(`<div class=tweakers-select-row><button class=tweakers-select-trigger><span class=tweakers-select-label></span><div class=tweakers-select-right><span class=tweakers-select-value></span><svg class=tweakers-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
 var _tmpl$38 = /* @__PURE__ */ (0, import_web97.template)(`<button class=tweakers-select-option>`);
 function toTitleCase(s) {
   return s.replace(/\b\w/g, (c) => c.toUpperCase());
@@ -6266,7 +6322,7 @@ function SelectControl(props) {
     };
   };
   return (() => {
-    var _el$ = _tmpl$211(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild;
+    var _el$ = _tmpl$212(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild, _el$6 = _el$5.nextSibling, _el$7 = _el$6.firstChild;
     _el$2.$$click = () => isOpen() ? closeDropdown() : openDropdown();
     var _ref$ = triggerRef;
     typeof _ref$ === "function" ? (0, import_web105.use)(_ref$, _el$2) : triggerRef = _el$2;
@@ -6290,7 +6346,7 @@ function SelectControl(props) {
                 return (0, import_web103.memo)(() => !!mounted())() && pos();
               },
               get children() {
-                var _el$8 = _tmpl$31();
+                var _el$8 = _tmpl$30();
                 (0, import_web105.use)((el) => {
                   dropdownRef = el;
                   const above = pos()?.above ?? false;
@@ -6413,9 +6469,9 @@ function subscribePalette(cb) {
 }
 
 // src/solid/components/ColorPickerPanel.tsx
-var _tmpl$39 = /* @__PURE__ */ (0, import_web107.template)(`<label class=tweakers-color-field><input type=text inputmode=decimal><span class=tweakers-color-field-label>`);
-var _tmpl$212 = /* @__PURE__ */ (0, import_web107.template)(`<label class="tweakers-color-field tweakers-color-field-hex"><input type=text><span class=tweakers-color-field-label>HEX`);
-var _tmpl$310 = /* @__PURE__ */ (0, import_web107.template)(`<button class=tweakers-color-palette-slot>`);
+var _tmpl$31 = /* @__PURE__ */ (0, import_web107.template)(`<label class=tweakers-color-field><input type=text inputmode=decimal><span class=tweakers-color-field-label>`);
+var _tmpl$213 = /* @__PURE__ */ (0, import_web107.template)(`<label class="tweakers-color-field tweakers-color-field-hex"><input type=text><span class=tweakers-color-field-label>HEX`);
+var _tmpl$39 = /* @__PURE__ */ (0, import_web107.template)(`<button class=tweakers-color-palette-slot>`);
 var _tmpl$45 = /* @__PURE__ */ (0, import_web107.template)(`<div class="tweakers-color-slider tweakers-color-alpha tweakers-checker"><div class=tweakers-color-alpha-gradient></div><div class=tweakers-color-slider-thumb>`);
 var _tmpl$53 = /* @__PURE__ */ (0, import_web107.template)(`<div class=tweakers-color-palette>`);
 var _tmpl$63 = /* @__PURE__ */ (0, import_web107.template)(`<div class=tweakers-color-picker><div class=tweakers-color-sv><div class=tweakers-color-sv-thumb></div></div><div class="tweakers-color-slider tweakers-color-hue"><div class=tweakers-color-slider-thumb></div></div><div class=tweakers-color-fields>`);
@@ -6483,7 +6539,7 @@ function ChannelField(props) {
     setDraft(null);
   };
   return (() => {
-    var _el$ = _tmpl$39(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
+    var _el$ = _tmpl$31(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
     _el$2.$$keydown = (e) => {
       if (e.key === "Enter") {
         commit();
@@ -6516,7 +6572,7 @@ function HexField(props) {
     setDraft(null);
   };
   return (() => {
-    var _el$4 = _tmpl$212(), _el$5 = _el$4.firstChild;
+    var _el$4 = _tmpl$213(), _el$5 = _el$4.firstChild;
     _el$5.$$keydown = (e) => {
       if (e.key === "Enter") {
         commit();
@@ -6551,7 +6607,7 @@ function PaletteSlot(props) {
   };
   (0, import_solid_js17.onCleanup)(cancelHold);
   return (() => {
-    var _el$6 = _tmpl$310();
+    var _el$6 = _tmpl$39();
     _el$6.$$click = () => {
       if (fired) {
         fired = false;
@@ -6820,8 +6876,8 @@ function ColorPickerPanel(props) {
 
 // src/solid/components/ColorControl.tsx
 var _tmpl$40 = /* @__PURE__ */ (0, import_web118.template)(`<input type=text class=tweakers-color-hex-input>`);
-var _tmpl$213 = /* @__PURE__ */ (0, import_web118.template)(`<div class=tweakers-color-picker-popover>`);
-var _tmpl$311 = /* @__PURE__ */ (0, import_web118.template)(`<div class=tweakers-color-control><span class=tweakers-color-label></span><div class=tweakers-color-inputs><span class=tweakers-color-hex-wrap><span class=tweakers-color-hash aria-hidden=true>#</span></span><button class=tweakers-color-swatch title="Pick color">`);
+var _tmpl$214 = /* @__PURE__ */ (0, import_web118.template)(`<div class=tweakers-color-picker-popover>`);
+var _tmpl$310 = /* @__PURE__ */ (0, import_web118.template)(`<div class=tweakers-color-control><span class=tweakers-color-label></span><div class=tweakers-color-inputs><span class=tweakers-color-hex-wrap><span class=tweakers-color-hash aria-hidden=true>#</span></span><button class=tweakers-color-swatch title="Pick color">`);
 var _tmpl$46 = /* @__PURE__ */ (0, import_web118.template)(`<span class=tweakers-color-hex>`);
 var _tmpl$54 = /* @__PURE__ */ (0, import_web118.template)(`<span class=tweakers-color-divider aria-hidden=true>`);
 var _tmpl$64 = /* @__PURE__ */ (0, import_web118.template)(`<span class=tweakers-color-opacity> <span class=tweakers-color-opacity-unit>%`);
@@ -6969,7 +7025,7 @@ function ColorControl(props) {
     };
   };
   return (() => {
-    var _el$ = _tmpl$311(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$7 = _el$4.nextSibling;
+    var _el$ = _tmpl$310(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling, _el$4 = _el$3.firstChild, _el$5 = _el$4.firstChild, _el$7 = _el$4.nextSibling;
     (0, import_web127.insert)(_el$2, () => props.label);
     _el$4.$$click = () => setIsEditing(true);
     (0, import_web127.insert)(_el$4, (0, import_web123.createComponent)(import_solid_js18.Show, {
@@ -7026,7 +7082,7 @@ function ColorControl(props) {
                 return (0, import_web122.memo)(() => !!mounted())() && pos();
               },
               get children() {
-                var _el$8 = _tmpl$213();
+                var _el$8 = _tmpl$214();
                 (0, import_web126.use)((el) => {
                   pickerRef = el;
                   const above = pos()?.above ?? false;
@@ -7116,8 +7172,8 @@ var import_web136 = require("solid-js/web");
 var import_web137 = require("solid-js/web");
 var import_solid_js19 = require("solid-js");
 var _tmpl$41 = /* @__PURE__ */ (0, import_web129.template)(`<div class=tweakers-gradient-pad-line>`);
-var _tmpl$214 = /* @__PURE__ */ (0, import_web129.template)(`<button type=button class=tweakers-gradient-pad-handle data-kind=major aria-label="Gradient size and rotation">`);
-var _tmpl$312 = /* @__PURE__ */ (0, import_web129.template)(`<button type=button class=tweakers-gradient-pad-handle data-kind=minor aria-label="Gradient squash">`);
+var _tmpl$215 = /* @__PURE__ */ (0, import_web129.template)(`<button type=button class=tweakers-gradient-pad-handle data-kind=major aria-label="Gradient size and rotation">`);
+var _tmpl$311 = /* @__PURE__ */ (0, import_web129.template)(`<button type=button class=tweakers-gradient-pad-handle data-kind=minor aria-label="Gradient squash">`);
 var _tmpl$47 = /* @__PURE__ */ (0, import_web129.template)(`<button type=button class=tweakers-gradient-pad-handle data-kind=angle aria-label="Gradient angle">`);
 var _tmpl$55 = /* @__PURE__ */ (0, import_web129.template)(`<button type=button class=tweakers-gradient-pad-handle data-kind=center aria-label="Gradient center">`);
 var _tmpl$65 = /* @__PURE__ */ (0, import_web129.template)(`<div class="tweakers-gradient-pad tweakers-checker"><div class=tweakers-gradient-pad-fill>`);
@@ -7242,7 +7298,7 @@ function GradientTransformPad(props) {
           });
           return _el$3;
         })(), (() => {
-          var _el$4 = _tmpl$214();
+          var _el$4 = _tmpl$215();
           _el$4.addEventListener("lostpointercapture", onHandleUp);
           _el$4.addEventListener("pointercancel", onHandleUp);
           _el$4.$$pointerup = onHandleUp;
@@ -7259,7 +7315,7 @@ function GradientTransformPad(props) {
           });
           return _el$4;
         })(), (() => {
-          var _el$5 = _tmpl$312();
+          var _el$5 = _tmpl$311();
           _el$5.addEventListener("lostpointercapture", onHandleUp);
           _el$5.addEventListener("pointercancel", onHandleUp);
           _el$5.$$pointerup = onHandleUp;
@@ -7368,8 +7424,8 @@ function GradientTransformPad(props) {
 
 // src/solid/components/GradientPanel.tsx
 var _tmpl$48 = /* @__PURE__ */ (0, import_web138.template)(`<div class=tweakers-gradient-panel><div class=tweakers-gradient-toolbar><button type=button class=tweakers-gradient-grip aria-label="Drag to move"title="Drag to move"><svg viewBox="0 0 24 24"fill=currentColor aria-hidden=true></svg></button></div><div class=tweakers-gradient-strip></div><span class=tweakers-gradient-divider aria-hidden=true>`);
-var _tmpl$215 = /* @__PURE__ */ (0, import_web138.template)(`<svg><circle r=1.5></svg>`, false, true, false);
-var _tmpl$313 = /* @__PURE__ */ (0, import_web138.template)(`<button type=button class=tweakers-gradient-stop>`);
+var _tmpl$216 = /* @__PURE__ */ (0, import_web138.template)(`<svg><circle r=1.5></svg>`, false, true, false);
+var _tmpl$312 = /* @__PURE__ */ (0, import_web138.template)(`<button type=button class=tweakers-gradient-stop>`);
 var TYPE_OPTIONS = [{
   value: "linear",
   label: "Linear"
@@ -7553,7 +7609,7 @@ function GradientPanel(props) {
     (0, import_web143.insert)(_el$4, (0, import_web144.createComponent)(import_solid_js20.For, {
       each: ICON_GRIP,
       children: (c) => (() => {
-        var _el$7 = _tmpl$215();
+        var _el$7 = _tmpl$216();
         (0, import_web142.effect)((_p$) => {
           var _v$ = c.cx, _v$2 = c.cy;
           _v$ !== _p$.e && (0, import_web140.setAttribute)(_el$7, "cx", _p$.e = _v$);
@@ -7594,7 +7650,7 @@ function GradientPanel(props) {
       children: (stop, i) => {
         const detaching = () => detach()?.index === i();
         return (() => {
-          var _el$8 = _tmpl$313();
+          var _el$8 = _tmpl$312();
           (0, import_web142.effect)((_p$) => {
             var _v$3 = i(), _v$4 = String(i() === safeIndex()), _v$5 = String(i() === holdingIndex()), _v$6 = String(detaching()), _v$7 = `${stop.position * 100}%`, _v$8 = i() === safeIndex() ? 99 : i() + 1, _v$9 = stop.color, _v$0 = detaching() ? `${detach().y}px` : "0px", _v$1 = `Gradient stop ${i() + 1}`;
             _v$3 !== _p$.e && (0, import_web140.setAttribute)(_el$8, "data-index", _p$.e = _v$3);
@@ -7647,7 +7703,7 @@ function GradientPanel(props) {
 
 // src/solid/components/GradientControl.tsx
 var _tmpl$49 = /* @__PURE__ */ (0, import_web146.template)(`<div class=tweakers-gradient-popover>`);
-var _tmpl$216 = /* @__PURE__ */ (0, import_web146.template)(`<div class=tweakers-gradient-control><span class=tweakers-gradient-label></span><button class="tweakers-gradient-preview tweakers-checker"title="Edit gradient">`);
+var _tmpl$217 = /* @__PURE__ */ (0, import_web146.template)(`<div class=tweakers-gradient-control><span class=tweakers-gradient-label></span><button class="tweakers-gradient-preview tweakers-checker"title="Edit gradient">`);
 var PANEL_WIDTH = 240;
 var PANEL_HEIGHT_ANGLED = 470;
 var PANEL_HEIGHT_RADIAL = 430;
@@ -7791,7 +7847,7 @@ function GradientControl(props) {
     };
   };
   return (() => {
-    var _el$ = _tmpl$216(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
+    var _el$ = _tmpl$217(), _el$2 = _el$.firstChild, _el$3 = _el$2.nextSibling;
     (0, import_web155.insert)(_el$2, () => props.label);
     _el$3.$$click = () => isOpen() ? closePopover() : openPopover();
     var _ref$ = triggerRef;
@@ -7874,8 +7930,8 @@ var import_web165 = require("solid-js/web");
 var import_web166 = require("solid-js/web");
 var import_solid_js22 = require("solid-js");
 var _tmpl$50 = /* @__PURE__ */ (0, import_web157.template)(`<span>`);
-var _tmpl$217 = /* @__PURE__ */ (0, import_web157.template)(`<div class=tweakers-xy-grid aria-hidden=true>`);
-var _tmpl$314 = /* @__PURE__ */ (0, import_web157.template)(`<div class=tweakers-xy><div class=tweakers-xy-header><span class=tweakers-xy-label></span></div><div class=tweakers-xy-area role=application aria-roledescription="2D pad"><div class="tweakers-xy-axis tweakers-xy-axis-x"aria-hidden=true></div><div class="tweakers-xy-axis tweakers-xy-axis-y"aria-hidden=true></div><div class="tweakers-xy-guide tweakers-xy-guide-v"aria-hidden=true></div><div class="tweakers-xy-guide tweakers-xy-guide-h"aria-hidden=true></div><div class=tweakers-xy-thumb aria-hidden=true>`);
+var _tmpl$218 = /* @__PURE__ */ (0, import_web157.template)(`<div class=tweakers-xy-grid aria-hidden=true>`);
+var _tmpl$313 = /* @__PURE__ */ (0, import_web157.template)(`<div class=tweakers-xy><div class=tweakers-xy-header><span class=tweakers-xy-label></span></div><div class=tweakers-xy-area role=application aria-roledescription="2D pad"><div class="tweakers-xy-axis tweakers-xy-axis-x"aria-hidden=true></div><div class="tweakers-xy-axis tweakers-xy-axis-y"aria-hidden=true></div><div class="tweakers-xy-guide tweakers-xy-guide-v"aria-hidden=true></div><div class="tweakers-xy-guide tweakers-xy-guide-h"aria-hidden=true></div><div class=tweakers-xy-thumb aria-hidden=true>`);
 var DEFAULT_GRID_X = 5;
 var DEFAULT_GRID_Y = 5;
 var FINE_DRAG = 0.15;
@@ -8041,7 +8097,7 @@ function XYPad(props) {
   const leftPct = () => `${point().x * 100}%`;
   const topPct = () => `${point().y * 100}%`;
   return (() => {
-    var _el$ = _tmpl$314(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$5 = _el$2.nextSibling, _el$7 = _el$5.firstChild, _el$8 = _el$7.nextSibling, _el$9 = _el$8.nextSibling, _el$0 = _el$9.nextSibling, _el$1 = _el$0.nextSibling;
+    var _el$ = _tmpl$313(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$5 = _el$2.nextSibling, _el$7 = _el$5.firstChild, _el$8 = _el$7.nextSibling, _el$9 = _el$8.nextSibling, _el$0 = _el$9.nextSibling, _el$1 = _el$0.nextSibling;
     (0, import_web166.insert)(_el$3, () => props.label, null);
     (0, import_web166.insert)(_el$3, (0, import_web163.createComponent)(import_solid_js22.Show, {
       get when() {
@@ -8076,7 +8132,7 @@ function XYPad(props) {
         return showGrid();
       },
       get children() {
-        var _el$6 = _tmpl$217();
+        var _el$6 = _tmpl$218();
         (0, import_web165.effect)((_$p) => (0, import_web161.style)(_el$6, {
           "--tweak-xy-grid-step-x": `${100 / gridX()}%`,
           "--tweak-xy-grid-step-y": `${100 / gridY()}%`
@@ -8526,8 +8582,8 @@ var import_solid_js24 = require("solid-js");
 var import_web183 = require("solid-js/web");
 var import_motion7 = require("motion");
 var _tmpl$56 = /* @__PURE__ */ (0, import_web174.template)(`<div class=tweakers-preset-item><span class=tweakers-preset-name>Version 1`);
-var _tmpl$218 = /* @__PURE__ */ (0, import_web174.template)(`<div class="tweakers-root tweakers-preset-dropdown"style=position:fixed>`);
-var _tmpl$315 = /* @__PURE__ */ (0, import_web174.template)(`<div class=tweakers-preset-manager><button class=tweakers-preset-trigger><span class=tweakers-preset-label></span><svg class=tweakers-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
+var _tmpl$219 = /* @__PURE__ */ (0, import_web174.template)(`<div class="tweakers-root tweakers-preset-dropdown"style=position:fixed>`);
+var _tmpl$314 = /* @__PURE__ */ (0, import_web174.template)(`<div class=tweakers-preset-manager><button class=tweakers-preset-trigger><span class=tweakers-preset-label></span><svg class=tweakers-select-chevron viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
 var _tmpl$410 = /* @__PURE__ */ (0, import_web174.template)(`<button class=tweakers-preset-delete title="Delete preset"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round><path></path><path></path><path></path><path></path><path>`);
 var _tmpl$57 = /* @__PURE__ */ (0, import_web174.template)(`<div class=tweakers-preset-item><span class=tweakers-preset-name>`);
 function PresetManager(props) {
@@ -8641,7 +8697,7 @@ function PresetManager(props) {
     TweakStore.removePreset(props.panelId, presetId);
   };
   return (() => {
-    var _el$ = _tmpl$315(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild;
+    var _el$ = _tmpl$314(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.firstChild;
     _el$2.$$click = toggle;
     var _ref$ = triggerRef;
     typeof _ref$ === "function" ? (0, import_web182.use)(_ref$, _el$2) : triggerRef = _el$2;
@@ -8667,7 +8723,7 @@ function PresetManager(props) {
                 return mounted();
               },
               get children() {
-                var _el$6 = _tmpl$218();
+                var _el$6 = _tmpl$219();
                 (0, import_web182.use)((el) => {
                   dropdownRef = el;
                   (0, import_motion7.animate)(el, {
@@ -8764,8 +8820,8 @@ function PresetManager(props) {
 
 // src/solid/components/Panel.tsx
 var _tmpl$58 = /* @__PURE__ */ (0, import_web184.template)(`<button class=tweakers-toolbar-add title="Add preset"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path></path><path></path><path></path><path></path><path>`);
-var _tmpl$219 = /* @__PURE__ */ (0, import_web184.template)(`<button class=tweakers-toolbar-copy title="Copy parameters"><span class=tweakers-toolbar-copy-icon-wrap><span class=tweakers-toolbar-copy-icon style=opacity:1;transform:scale(1);filter:blur(0px)><svg viewBox="0 0 24 24"fill=none width=16 height=16><path stroke=currentColor stroke-width=2 stroke-linejoin=round></path><path fill=currentColor></path><path stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round></path></svg></span><span class=tweakers-toolbar-copy-icon style=opacity:0;transform:scale(0.5);filter:blur(4px)><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round width=16 height=16><path>`);
-var _tmpl$316 = /* @__PURE__ */ (0, import_web184.template)(`<div class=tweakers-panel-wrapper>`);
+var _tmpl$220 = /* @__PURE__ */ (0, import_web184.template)(`<button class=tweakers-toolbar-copy title="Copy parameters"><span class=tweakers-toolbar-copy-icon-wrap><span class=tweakers-toolbar-copy-icon style=opacity:1;transform:scale(1);filter:blur(0px)><svg viewBox="0 0 24 24"fill=none width=16 height=16><path stroke=currentColor stroke-width=2 stroke-linejoin=round></path><path fill=currentColor></path><path stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round></path></svg></span><span class=tweakers-toolbar-copy-icon style=opacity:0;transform:scale(0.5);filter:blur(4px)><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round stroke-linejoin=round width=16 height=16><path>`);
+var _tmpl$315 = /* @__PURE__ */ (0, import_web184.template)(`<div class=tweakers-panel-wrapper>`);
 function Panel(props) {
   const [copied, setCopied] = (0, import_solid_js25.createSignal)(false);
   const [isPanelOpen, setIsPanelOpen] = (0, import_solid_js25.createSignal)(props.defaultOpen ?? true);
@@ -8888,7 +8944,8 @@ Apply these values as the new defaults in the createTweakers call.`;
       return values();
     }
   });
-  const toolbar = [(() => {
+  const presetsHidden = () => TweakStore.arePresetsHidden(props.panel.id);
+  const toolbar = presetsHidden() ? props.toolbarExtra : [(() => {
     var _el$ = _tmpl$58(), _el$2 = _el$.firstChild, _el$3 = _el$2.firstChild, _el$4 = _el$3.nextSibling, _el$5 = _el$4.nextSibling, _el$6 = _el$5.nextSibling, _el$7 = _el$6.nextSibling;
     _el$.addEventListener("pointerleave", handleAddTapEnd);
     _el$.addEventListener("pointercancel", handleAddTapEnd);
@@ -8928,7 +8985,7 @@ Apply these values as the new defaults in the createTweakers call.`;
       return providerMode();
     }
   }), (() => {
-    var _el$8 = _tmpl$219(), _el$9 = _el$8.firstChild, _el$0 = _el$9.firstChild, _el$1 = _el$0.firstChild, _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$11.nextSibling, _el$13 = _el$0.nextSibling, _el$14 = _el$13.firstChild, _el$15 = _el$14.firstChild;
+    var _el$8 = _tmpl$220(), _el$9 = _el$8.firstChild, _el$0 = _el$9.firstChild, _el$1 = _el$0.firstChild, _el$10 = _el$1.firstChild, _el$11 = _el$10.nextSibling, _el$12 = _el$11.nextSibling, _el$13 = _el$0.nextSibling, _el$14 = _el$13.firstChild, _el$15 = _el$14.firstChild;
     _el$8.addEventListener("pointerleave", handleCopyTapEnd);
     _el$8.addEventListener("pointercancel", handleCopyTapEnd);
     _el$8.$$pointerup = handleCopyTapEnd;
@@ -8955,7 +9012,7 @@ Apply these values as the new defaults in the createTweakers call.`;
     return _el$8;
   })(), (0, import_web187.memo)(() => props.toolbarExtra)];
   return (() => {
-    var _el$16 = _tmpl$316();
+    var _el$16 = _tmpl$315();
     (0, import_web186.insert)(_el$16, (0, import_web191.createComponent)(Folder, {
       get title() {
         return props.panel.name;
@@ -8969,6 +9026,12 @@ Apply these values as the new defaults in the createTweakers call.`;
       },
       onOpenChange: setIsPanelOpen,
       toolbar,
+      get enabled() {
+        return (0, import_web187.memo)(() => !!props.panel.module)() ? values()["_enabled"] : void 0;
+      },
+      get onEnabledChange() {
+        return props.panel.module ? (v) => TweakStore.updateValue(props.panel.id, "_enabled", v) : void 0;
+      },
       get children() {
         return renderControls();
       }
@@ -8987,7 +9050,7 @@ var import_web196 = require("solid-js/web");
 var import_web197 = require("solid-js/web");
 var import_solid_js26 = require("solid-js");
 var _tmpl$59 = /* @__PURE__ */ (0, import_web192.template)(`<button class="tweakers-toolbar-add tweakers-timeline-toolbar-toggle"><svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
-var _tmpl$220 = /* @__PURE__ */ (0, import_web192.template)(`<svg><path fill=currentColor></svg>`, false, true, false);
+var _tmpl$221 = /* @__PURE__ */ (0, import_web192.template)(`<svg><path fill=currentColor></svg>`, false, true, false);
 function TimelineToggleButton() {
   const visible = fromStore(() => TimelineUiStore.getVisible(), (notify2) => TimelineUiStore.subscribe(notify2));
   const label = () => visible() ? "Hide timeline" : "Show timeline";
@@ -8997,7 +9060,7 @@ function TimelineToggleButton() {
     (0, import_web196.insert)(_el$2, (0, import_web197.createComponent)(import_solid_js26.For, {
       each: ICON_TIMELINE,
       children: (path) => (() => {
-        var _el$3 = _tmpl$220();
+        var _el$3 = _tmpl$221();
         (0, import_web194.setAttribute)(_el$3, "d", path);
         return _el$3;
       })()
@@ -9023,8 +9086,8 @@ function TimelineToggleButton() {
 // src/solid/components/TweakRoot.tsx
 var import_meta2 = {};
 var _tmpl$60 = /* @__PURE__ */ (0, import_web198.template)(`<div class=tweakers-root><div class=tweakers-panel>`);
-var _tmpl$221 = /* @__PURE__ */ (0, import_web198.template)(`<div class=tweakers-timeline-toolkit-only>Timeline`);
-var _tmpl$317 = /* @__PURE__ */ (0, import_web198.template)(`<div class=tweakers-panel-wrapper>`);
+var _tmpl$222 = /* @__PURE__ */ (0, import_web198.template)(`<div class=tweakers-timeline-toolkit-only>Timeline`);
+var _tmpl$316 = /* @__PURE__ */ (0, import_web198.template)(`<div class=tweakers-panel-wrapper>`);
 var isDevDefault2 = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import_meta2 !== "undefined" && import_meta2.env?.MODE ? import_meta2.env.MODE !== "production" : true;
 function TweakRoot(props) {
   if ((props.productionEnabled ?? isDevDefault2) === false) return null;
@@ -9032,12 +9095,13 @@ function TweakRoot(props) {
   const [timelineCount, setTimelineCount] = (0, import_solid_js27.createSignal)(0);
   const [mounted, setMounted] = (0, import_solid_js27.createSignal)(false);
   const inline = () => (props.mode ?? "popover") === "inline";
+  const read = () => TweakStore.selectPanels(props.panels);
   (0, import_solid_js27.onMount)(() => {
     setMounted(true);
-    setPanels(TweakStore.getPanels("panel"));
+    setPanels(read());
     setTimelineCount(TimelineStore.getTimelines().length);
     const unsubPanels = TweakStore.subscribeGlobal(() => {
-      setPanels(TweakStore.getPanels("panel"));
+      setPanels(read());
     });
     const unsubTimelines = TimelineStore.subscribeGlobal(() => {
       setTimelineCount(TimelineStore.getTimelines().length);
@@ -9047,7 +9111,7 @@ function TweakRoot(props) {
       unsubTimelines();
     });
   });
-  const timelineToggle = () => timelineCount() > 0 ? (0, import_web203.createComponent)(TimelineToggleButton, {}) : null;
+  const timelineToggle = () => timelineCount() > 0 && props.panels === void 0 ? (0, import_web203.createComponent)(TimelineToggleButton, {}) : null;
   const content = () => (0, import_web203.createComponent)(ShortcutListener, {
     get children() {
       var _el$ = _tmpl$60(), _el$2 = _el$.firstChild;
@@ -9057,7 +9121,7 @@ function TweakRoot(props) {
         },
         get fallback() {
           return (() => {
-            var _el$3 = _tmpl$317();
+            var _el$3 = _tmpl$316();
             (0, import_web202.insert)(_el$3, (0, import_web203.createComponent)(Folder, {
               title: "Tweakers",
               get defaultOpen() {
@@ -9071,7 +9135,7 @@ function TweakRoot(props) {
                 return timelineToggle();
               },
               get children() {
-                return _tmpl$221();
+                return _tmpl$222();
               }
             }));
             return _el$3;
@@ -9098,24 +9162,26 @@ function TweakRoot(props) {
         }
       }));
       (0, import_web201.effect)((_p$) => {
-        var _v$ = props.mode ?? "popover", _v$2 = props.theme ?? "system", _v$3 = inline() ? void 0 : props.position ?? "top-right", _v$4 = props.mode ?? "popover";
+        var _v$ = props.mode ?? "popover", _v$2 = props.theme ?? "system", _v$3 = props.chrome ?? "card", _v$4 = inline() ? void 0 : props.position ?? "top-right", _v$5 = props.mode ?? "popover";
         _v$ !== _p$.e && (0, import_web200.setAttribute)(_el$, "data-mode", _p$.e = _v$);
         _v$2 !== _p$.t && (0, import_web200.setAttribute)(_el$, "data-theme", _p$.t = _v$2);
-        _v$3 !== _p$.a && (0, import_web200.setAttribute)(_el$2, "data-position", _p$.a = _v$3);
-        _v$4 !== _p$.o && (0, import_web200.setAttribute)(_el$2, "data-mode", _p$.o = _v$4);
+        _v$3 !== _p$.a && (0, import_web200.setAttribute)(_el$, "data-chrome", _p$.a = _v$3);
+        _v$4 !== _p$.o && (0, import_web200.setAttribute)(_el$2, "data-position", _p$.o = _v$4);
+        _v$5 !== _p$.i && (0, import_web200.setAttribute)(_el$2, "data-mode", _p$.i = _v$5);
         return _p$;
       }, {
         e: void 0,
         t: void 0,
         a: void 0,
-        o: void 0
+        o: void 0,
+        i: void 0
       });
       return _el$;
     }
   });
   return (0, import_web203.createComponent)(import_solid_js27.Show, {
     get when() {
-      return (0, import_web199.memo)(() => !!(mounted() && typeof window !== "undefined"))() && (panels().length > 0 || timelineCount() > 0);
+      return (0, import_web199.memo)(() => !!(mounted() && typeof window !== "undefined"))() && (panels().length > 0 || props.panels === void 0 && timelineCount() > 0);
     },
     get children() {
       return (0, import_web203.createComponent)(import_solid_js27.Show, {
@@ -9155,8 +9221,8 @@ var import_web215 = require("solid-js/web");
 var import_solid_js28 = require("solid-js");
 var import_web216 = require("solid-js/web");
 var _tmpl$61 = /* @__PURE__ */ (0, import_web205.template)(`<div class="tweakers-root tweakers-timeline"><div class=tweakers-timeline-resize-handle role=separator aria-label="Resize timeline height"aria-orientation=horizontal title="Drag to resize timeline"></div><div class=tweakers-timeline-dock>`);
-var _tmpl$222 = /* @__PURE__ */ (0, import_web205.template)(`<svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
-var _tmpl$318 = /* @__PURE__ */ (0, import_web205.template)(`<button class=tweakers-toolbar-add><span style=position:relative;width:16px;height:16px>`);
+var _tmpl$223 = /* @__PURE__ */ (0, import_web205.template)(`<svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
+var _tmpl$317 = /* @__PURE__ */ (0, import_web205.template)(`<button class=tweakers-toolbar-add><span style=position:relative;width:16px;height:16px>`);
 var _tmpl$411 = /* @__PURE__ */ (0, import_web205.template)(`<svg viewBox="0 0 24 24"fill=none aria-hidden=true><path fill=currentColor>`);
 var _tmpl$510 = /* @__PURE__ */ (0, import_web205.template)(`<svg><path fill=currentColor></svg>`, false, true, false);
 var _tmpl$66 = /* @__PURE__ */ (0, import_web205.template)(`<button class=tweakers-toolbar-add title=Replay aria-label=Replay><svg viewBox="0 0 24 24"fill=none aria-hidden=true>`);
@@ -9177,7 +9243,7 @@ var _tmpl$182 = /* @__PURE__ */ (0, import_web205.template)(`<div class=tweakers
 var _tmpl$192 = /* @__PURE__ */ (0, import_web205.template)(`<div class=tweakers-timeline-loop-band>`);
 var _tmpl$202 = /* @__PURE__ */ (0, import_web205.template)(`<div class="tweakers-timeline-tick tweakers-timeline-tick-fine">`);
 var _tmpl$2110 = /* @__PURE__ */ (0, import_web205.template)(`<div class="tweakers-timeline-tick tweakers-timeline-tick-medium">`);
-var _tmpl$223 = /* @__PURE__ */ (0, import_web205.template)(`<div class=tweakers-timeline-tick><span class=tweakers-timeline-tick-label>`);
+var _tmpl$224 = /* @__PURE__ */ (0, import_web205.template)(`<div class=tweakers-timeline-tick><span class=tweakers-timeline-tick-label>`);
 var _tmpl$232 = /* @__PURE__ */ (0, import_web205.template)(`<svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2.5 stroke-linecap=round stroke-linejoin=round><path>`);
 var _tmpl$242 = /* @__PURE__ */ (0, import_web205.template)(`<div class=tweakers-root><div class=tweakers-timeline-popover role=dialog><div class=tweakers-timeline-popover-header><span class=tweakers-timeline-popover-title></span><button class=tweakers-timeline-popover-close title="Close editor"aria-label="Close editor"><svg viewBox="0 0 24 24"fill=none stroke=currentColor stroke-width=2 stroke-linecap=round><path d="M6 6L18 18M18 6L6 18"></path></svg></button></div><div class=tweakers-timeline-popover-body>`);
 var _tmpl$252 = /* @__PURE__ */ (0, import_web205.template)(`<div class=tweakers-timeline-clip-handle data-edge=start>`);
@@ -9186,7 +9252,7 @@ var _tmpl$272 = /* @__PURE__ */ (0, import_web205.template)(`<span class=tweaker
 var _tmpl$282 = /* @__PURE__ */ (0, import_web205.template)(`<div class=tweakers-timeline-clip-ghost aria-hidden=true>`);
 var _tmpl$292 = /* @__PURE__ */ (0, import_web205.template)(`<span class=tweakers-timeline-clip-ghost-segment>`);
 var _tmpl$302 = /* @__PURE__ */ (0, import_web205.template)(`<span class=tweakers-timeline-clip-duration>`);
-var _tmpl$319 = /* @__PURE__ */ (0, import_web205.template)(`<div class=tweakers-timeline-clip-handle data-edge=end>`);
+var _tmpl$318 = /* @__PURE__ */ (0, import_web205.template)(`<div class=tweakers-timeline-clip-handle data-edge=end>`);
 var _tmpl$322 = /* @__PURE__ */ (0, import_web205.template)(`<div class=tweakers-timeline-clip-segment>`);
 var _tmpl$332 = /* @__PURE__ */ (0, import_web205.template)(`<div class=tweakers-timeline-clip-handle>`);
 var DRAG_THRESHOLD_PX = 3;
@@ -9314,7 +9380,7 @@ function PlayPauseButton(props) {
   const playing = fromStore(() => TimelineStore.getTransport(props.id).playing, (notify2) => TimelineStore.subscribe(props.id, notify2));
   const label = () => playing() ? "Pause" : "Play";
   return (() => {
-    var _el$4 = _tmpl$318(), _el$5 = _el$4.firstChild;
+    var _el$4 = _tmpl$317(), _el$5 = _el$4.firstChild;
     _el$4.$$click = () => playing() ? TimelineStore.pause(props.id) : TimelineStore.play(props.id);
     (0, import_web212.insert)(_el$5, (0, import_web215.createComponent)(import_solid_js28.Show, {
       get when() {
@@ -9329,7 +9395,7 @@ function PlayPauseButton(props) {
         })();
       },
       get children() {
-        var _el$6 = _tmpl$222();
+        var _el$6 = _tmpl$223();
         (0, import_web212.insert)(_el$6, (0, import_web215.createComponent)(import_solid_js28.For, {
           each: ICON_PAUSE,
           children: (path) => (() => {
@@ -10067,7 +10133,7 @@ function TimelineSection(props) {
             return ticks().major;
           },
           children: (time) => (() => {
-            var _el$64 = _tmpl$223(), _el$65 = _el$64.firstChild;
+            var _el$64 = _tmpl$224(), _el$65 = _el$64.firstChild;
             (0, import_web212.insert)(_el$65, () => formatRulerSeconds(time, ticks().majorStep));
             (0, import_web211.effect)((_$p) => (0, import_web209.setStyleProperty)(_el$64, "left", `${(time - safeViewStart()) * pxPerSecond()}px`));
             return _el$64;
@@ -10526,7 +10592,7 @@ function TimelineClip(props) {
                 return resizable();
               },
               get children() {
-                return _tmpl$319();
+                return _tmpl$318();
               }
             })];
           },
@@ -10666,7 +10732,7 @@ var import_web225 = require("solid-js/web");
 var import_web226 = require("solid-js/web");
 var import_solid_js29 = require("solid-js");
 var _tmpl$68 = /* @__PURE__ */ (0, import_web222.template)(`<div class=tweakers-button-group>`);
-var _tmpl$224 = /* @__PURE__ */ (0, import_web222.template)(`<button class=tweakers-button>`);
+var _tmpl$225 = /* @__PURE__ */ (0, import_web222.template)(`<button class=tweakers-button>`);
 function ButtonGroup(props) {
   return (() => {
     var _el$ = _tmpl$68();
@@ -10675,7 +10741,7 @@ function ButtonGroup(props) {
         return props.buttons;
       },
       children: (button) => (() => {
-        var _el$2 = _tmpl$224();
+        var _el$2 = _tmpl$225();
         (0, import_web224.addEventListener)(_el$2, "click", button.onClick, true);
         (0, import_web225.insert)(_el$2, () => button.label);
         return _el$2;
@@ -11088,8 +11154,8 @@ function createWaveformEngine(canvas, get) {
 
 // src/solid/components/WaveformVisualization.tsx
 var _tmpl$69 = /* @__PURE__ */ (0, import_web227.template)(`<button type=button aria-label="Zoom out"><svg viewBox="0 0 16 16"fill=none><path d="M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
-var _tmpl$225 = /* @__PURE__ */ (0, import_web227.template)(`<div class=tweakers-waveform-zoom><button type=button aria-label="Zoom in"><svg viewBox="0 0 16 16"fill=none><path d="M8 3.5v9M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
-var _tmpl$320 = /* @__PURE__ */ (0, import_web227.template)(`<div class=tweakers-waveform-viz-wrap><canvas class=tweakers-waveform-viz>`);
+var _tmpl$226 = /* @__PURE__ */ (0, import_web227.template)(`<div class=tweakers-waveform-zoom><button type=button aria-label="Zoom in"><svg viewBox="0 0 16 16"fill=none><path d="M8 3.5v9M3.5 8h9"stroke=currentColor stroke-width=1.6 stroke-linecap=round>`);
+var _tmpl$319 = /* @__PURE__ */ (0, import_web227.template)(`<div class=tweakers-waveform-viz-wrap><canvas class=tweakers-waveform-viz>`);
 function WaveformVisualization(props) {
   const p = (0, import_solid_js30.mergeProps)({
     buffer: null,
@@ -11133,7 +11199,7 @@ function WaveformVisualization(props) {
   });
   const framingLoop = () => p.autoZoomOnLoop && !!p.loop;
   return (() => {
-    var _el$ = _tmpl$320(), _el$2 = _el$.firstChild;
+    var _el$ = _tmpl$319(), _el$2 = _el$.firstChild;
     var _ref$ = canvasEl;
     typeof _ref$ === "function" ? (0, import_web233.use)(_ref$, _el$2) : canvasEl = _el$2;
     (0, import_web231.insert)(_el$, (0, import_web232.createComponent)(import_solid_js30.Show, {
@@ -11141,7 +11207,7 @@ function WaveformVisualization(props) {
         return !framingLoop();
       },
       get children() {
-        var _el$3 = _tmpl$225(), _el$5 = _el$3.firstChild;
+        var _el$3 = _tmpl$226(), _el$5 = _el$3.firstChild;
         (0, import_web231.insert)(_el$3, (0, import_web232.createComponent)(import_solid_js30.Show, {
           get when() {
             return zoom() > 1;
@@ -11637,8 +11703,8 @@ function createAnalyserEngine(canvas, get) {
 
 // src/solid/components/AnalyserVisualization.tsx
 var _tmpl$70 = /* @__PURE__ */ (0, import_web234.template)(`<button type=button aria-label=Mute>M`);
-var _tmpl$226 = /* @__PURE__ */ (0, import_web234.template)(`<button type=button aria-label=Solo>S`);
-var _tmpl$321 = /* @__PURE__ */ (0, import_web234.template)(`<div class=tweakers-analyser-actions>`);
+var _tmpl$227 = /* @__PURE__ */ (0, import_web234.template)(`<button type=button aria-label=Solo>S`);
+var _tmpl$320 = /* @__PURE__ */ (0, import_web234.template)(`<div class=tweakers-analyser-actions>`);
 var _tmpl$412 = /* @__PURE__ */ (0, import_web234.template)(`<div class=tweakers-analyser-viz-wrap><canvas class=tweakers-analyser-viz>`);
 function AnalyserVisualization(props) {
   const p = (0, import_solid_js31.mergeProps)({
@@ -11686,7 +11752,7 @@ function AnalyserVisualization(props) {
         return p.onMuteChange || p.onSoloChange;
       },
       get children() {
-        var _el$3 = _tmpl$321();
+        var _el$3 = _tmpl$320();
         (0, import_web237.insert)(_el$3, (0, import_web238.createComponent)(import_solid_js31.Show, {
           get when() {
             return p.onMuteChange;
@@ -11703,7 +11769,7 @@ function AnalyserVisualization(props) {
             return p.onSoloChange;
           },
           get children() {
-            var _el$5 = _tmpl$226();
+            var _el$5 = _tmpl$227();
             _el$5.$$click = () => p.onSoloChange?.(!p.soloed);
             (0, import_web240.effect)(() => (0, import_web239.setAttribute)(_el$5, "aria-pressed", p.soloed));
             return _el$5;
@@ -12144,8 +12210,8 @@ function triggersCrossed(prevValue, curValue, steps) {
 
 // src/solid/components/CurveComposer.tsx
 var _tmpl$71 = /* @__PURE__ */ (0, import_web243.template)(`<div class=tweakers-cc-wrap><svg class=tweakers-cc><rect class=tweakers-cc-lane rx=8></rect><line class=tweakers-cc-playhead x1=0 x2=0></line><circle class=tweakers-cc-dot cx=0 r=3>`);
-var _tmpl$227 = /* @__PURE__ */ (0, import_web243.template)(`<svg><line class=tweakers-cc-grid></svg>`, false, true, false);
-var _tmpl$323 = /* @__PURE__ */ (0, import_web243.template)(`<svg><rect class=tweakers-cc-seg-selected rx=8></svg>`, false, true, false);
+var _tmpl$228 = /* @__PURE__ */ (0, import_web243.template)(`<svg><line class=tweakers-cc-grid></svg>`, false, true, false);
+var _tmpl$321 = /* @__PURE__ */ (0, import_web243.template)(`<svg><rect class=tweakers-cc-seg-selected rx=8></svg>`, false, true, false);
 var _tmpl$413 = /* @__PURE__ */ (0, import_web243.template)(`<svg><rect class=tweakers-cc-seg-hover rx=8></svg>`, false, true, false);
 var _tmpl$511 = /* @__PURE__ */ (0, import_web243.template)(`<svg><g><line class=tweakers-cc-diagonal></line><path class=tweakers-cc-curve></path><text class=tweakers-cc-label></svg>`, false, true, false);
 var _tmpl$610 = /* @__PURE__ */ (0, import_web243.template)(`<svg><path class=tweakers-cc-connector></svg>`, false, true, false);
@@ -12413,7 +12479,7 @@ function CurveComposer(props) {
         return laneGridLines(mainRect());
       },
       children: (g) => (() => {
-        var _el$6 = _tmpl$227();
+        var _el$6 = _tmpl$228();
         (0, import_web247.effect)((_p$) => {
           var _v$16 = g.gx, _v$17 = g.y1, _v$18 = g.gx, _v$19 = g.y2;
           _v$16 !== _p$.e && (0, import_web245.setAttribute)(_el$6, "x1", _p$.e = _v$16);
@@ -12439,7 +12505,7 @@ function CurveComposer(props) {
           const span = segmentSpan(p.segments, p.selectedIndex, p.gap);
           const mr = mainRect();
           return (() => {
-            var _el$7 = _tmpl$323();
+            var _el$7 = _tmpl$321();
             (0, import_web247.effect)((_p$) => {
               var _v$20 = span[0] * W(), _v$21 = mr.y, _v$22 = (span[1] - span[0]) * W(), _v$23 = mr.h;
               _v$20 !== _p$.e && (0, import_web245.setAttribute)(_el$7, "x", _p$.e = _v$20);
@@ -12597,7 +12663,7 @@ function CurveComposer(props) {
           return laneGridLines(dr());
         },
         children: (g) => (() => {
-          var _el$19 = _tmpl$227();
+          var _el$19 = _tmpl$228();
           (0, import_web247.effect)((_p$) => {
             var _v$52 = g.gx, _v$53 = g.y1, _v$54 = g.gx, _v$55 = g.y2;
             _v$52 !== _p$.e && (0, import_web245.setAttribute)(_el$19, "x1", _p$.e = _v$52);

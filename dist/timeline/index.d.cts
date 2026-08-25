@@ -203,8 +203,15 @@ type CurveConfig = {
     domain?: [number, number];
     /** Vertical reference lines at these x positions in [0,1]; invalid entries are skipped. */
     markers?: readonly number[];
-    /** Surface height in px, clamped to 32–160. Default 64. */
+    /** Surface height in px, clamped to 32–160. Default 64. Ignored when `aspect` is set. */
     height?: number;
+    /**
+     * Width ÷ height. Sizes the surface from its own width instead of `height`,
+     * so the plot holds its proportions at any column width — what a transfer
+     * curve wants, since its two axes share a scale. `1` is square, `4 / 3` a
+     * little wider than tall.
+     */
+    aspect?: number;
     /** `false` = full-bleed row without the label line; a string overrides the key-derived label. */
     label?: false | string;
 };

@@ -759,6 +759,8 @@ var TweakStoreClass = class {
     // replace the object on every host render so callbacks never go stale, and
     // only a data change should notify.
     this.presetProviders = /* @__PURE__ */ new Map();
+    /** Panels whose header carries no preset toolbar (see setPresetsHidden). */
+    this.presetsHidden = /* @__PURE__ */ new Set();
     this.baseValues = /* @__PURE__ */ new Map();
     // Resolved storage target per panel (null = persistence off). Absent = not
     // yet registered.
@@ -779,7 +781,7 @@ var TweakStoreClass = class {
     this.initTabValue(controls, values);
     this.initTransitionModes(config, "", values);
     this.overlayPersistedValues(target, values);
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, kind: options.kind });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, module: "_enabled" in config ? true : void 0, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -817,7 +819,7 @@ var TweakStoreClass = class {
         nextValues[path] = mode;
       }
     }
-    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, kind: options.kind ?? existing.kind };
+    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, module: "_enabled" in config ? true : void 0, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
     const previousBaseValues = this.baseValues.get(id) ?? {};
@@ -851,6 +853,7 @@ var TweakStoreClass = class {
     this.baseValues.delete(id);
     this.persistTargets.delete(id);
     this.presetProviders.delete(id);
+    this.presetsHidden.delete(id);
     this.notifyGlobal();
   }
   // Overlay saved values onto freshly-computed defaults, in place. Only keys
@@ -940,6 +943,19 @@ var TweakStoreClass = class {
     if (kind === "panel") return all.filter((panel) => panel.kind !== "timeline");
     if (kind === "timeline") return all.filter((panel) => panel.kind === "timeline");
     return all;
+  }
+  /**
+   * The settings panels a root should draw, given its optional `panels` filter.
+   * `undefined` means every panel — the single-surface default. A list means
+   * exactly those names, in the order named, so two roots never fight over the
+   * same panel and a panel that has not registered yet leaves a gap that fills
+   * when it does.
+   */
+  selectPanels(only) {
+    const registered = this.getPanels("panel");
+    if (only === void 0) return registered;
+    const names = typeof only === "string" ? [only] : only;
+    return names.map((name) => registered.find((panel) => panel.name === name)).filter((panel) => panel !== void 0);
   }
   getPanel(id) {
     return this.panels.get(id);
@@ -1179,6 +1195,23 @@ var TweakStoreClass = class {
   getPresetProvider(panelId) {
     return this.presetProviders.get(panelId)?.provider ?? null;
   }
+  /**
+   * Hide (or restore) a panel's preset toolbar. For the secondary panels of a
+   * multi-panel app — a rack of per-voice columns, say — where a snapshot
+   * means the whole instrument and so belongs to one panel only. Hiding the
+   * toolbar hides its add and copy buttons with it: the header of a panel that
+   * does not own presets is bare.
+   */
+  setPresetsHidden(panelId, hidden) {
+    const had = this.presetsHidden.has(panelId);
+    if (hidden === had) return;
+    if (hidden) this.presetsHidden.add(panelId);
+    else this.presetsHidden.delete(panelId);
+    this.notify(panelId);
+  }
+  arePresetsHidden(panelId) {
+    return this.presetsHidden.has(panelId);
+  }
   /** Provider mode hides the implicit "Version 1" base row — the host owns the whole list. */
   hasPresetProvider(panelId) {
     return this.presetProviders.has(panelId);
@@ -1402,7 +1435,8 @@ var TweakStoreClass = class {
           sample: value.sample,
           domain: value.domain,
           markers: value.markers,
-          height: value.height
+          height: value.height,
+          aspect: value.aspect
         });
       } else if (typeof value === "string") {
         if (this.isHexColor(value)) {
@@ -1869,7 +1903,8 @@ function useTweakers(name, config, options) {
       affordances: options?.affordances,
       labels: options?.labels
     });
-    TweakStore.setPresetProvider(panelId, options?.presets ?? null);
+    TweakStore.setPresetsHidden(panelId, options?.presets === false);
+    TweakStore.setPresetProvider(panelId, options?.presets === false ? null : options?.presets ?? null);
     values.value = TweakStore.getValues(panelId);
     unsubscribeValues = TweakStore.subscribe(panelId, () => {
       values.value = TweakStore.getValues(panelId);
@@ -1886,7 +1921,8 @@ function useTweakers(name, config, options) {
   });
   (0, import_vue.watch)(() => JSON.stringify(options?.presets ?? null), () => {
     if (mounted.value) {
-      TweakStore.setPresetProvider(panelId, options?.presets ?? null);
+      TweakStore.setPresetsHidden(panelId, options?.presets === false);
+      TweakStore.setPresetProvider(panelId, options?.presets === false ? null : options?.presets ?? null);
     }
   });
   (0, import_vue.watch)([serializedConfig, serializedShortcuts], () => {
@@ -2300,9 +2336,61 @@ var ICON_PANEL = {
 };
 
 // src/vue/components/Folder.ts
-var import_vue2 = require("vue");
+var import_vue3 = require("vue");
 var import_motion_v = require("motion-v");
-var Folder = (0, import_vue2.defineComponent)({
+
+// src/vue/components/Checkbox.ts
+var import_vue2 = require("vue");
+var Checkbox = (0, import_vue2.defineComponent)({
+  name: "TweakersCheckbox",
+  props: {
+    checked: { type: Boolean, required: true },
+    /** Accessible name — the visible label is rendered by the caller. */
+    label: { type: String, default: void 0 },
+    /** The control exists but cannot act right now: reads as a dash, not a
+     *  blank box, so "unavailable" never looks like "off". */
+    disabled: { type: Boolean, default: false },
+    id: { type: String, default: void 0 }
+  },
+  emits: ["change"],
+  setup(props, { emit }) {
+    return () => (0, import_vue2.h)(
+      "button",
+      {
+        type: "button",
+        id: props.id,
+        role: "checkbox",
+        "aria-checked": props.disabled ? "mixed" : String(props.checked),
+        "aria-label": props.label,
+        "aria-disabled": props.disabled || void 0,
+        class: "tweakers-checkbox",
+        "data-checked": props.checked && !props.disabled ? "true" : void 0,
+        "data-disabled": props.disabled ? "true" : void 0,
+        onClick: (e) => {
+          e.stopPropagation();
+          if (!props.disabled) emit("change", !props.checked);
+        }
+      },
+      [
+        (0, import_vue2.h)("svg", { viewBox: "0 0 22 22", width: 22, height: 22, "aria-hidden": "true" }, [
+          (0, import_vue2.h)("path", { class: "tweakers-checkbox-slash", d: "M6 16 16 6", fill: "none" }),
+          (0, import_vue2.h)("rect", {
+            class: "tweakers-checkbox-chip",
+            x: 5,
+            y: 5,
+            width: 12,
+            height: 12,
+            rx: 2
+          }),
+          (0, import_vue2.h)("path", { class: "tweakers-checkbox-dash", d: "M6 11h10", fill: "none" })
+        ])
+      ]
+    );
+  }
+});
+
+// src/vue/components/Folder.ts
+var Folder = (0, import_vue3.defineComponent)({
   name: "TweakersFolder",
   props: {
     title: { type: String, required: true },
@@ -2316,17 +2404,29 @@ var Folder = (0, import_vue2.defineComponent)({
       required: false,
       default: null
     },
+    /**
+     * Root only — the panel declared `_enabled`, so the whole panel is a
+     * module: the title carries the switch and the body goes away when it is
+     * off. Same idiom as ModuleFolder, one level up.
+     */
+    enabled: { type: Boolean, default: void 0 },
+    onEnabledChange: {
+      type: Function,
+      default: void 0
+    },
     /** One line of help for the section, revealed on hover over the header. */
     hint: { type: String, default: void 0 },
     hintId: { type: String, default: void 0 }
   },
   emits: ["openChange"],
   setup(props, { emit, slots }) {
-    const isOpen = (0, import_vue2.ref)(props.collapsible ? props.defaultOpen : true);
-    const isCollapsed = (0, import_vue2.ref)(props.collapsible ? !props.defaultOpen : false);
-    const contentRef = (0, import_vue2.ref)(null);
-    const contentHeight = (0, import_vue2.ref)(void 0);
-    const windowHeight = (0, import_vue2.ref)(typeof window !== "undefined" ? window.innerHeight : 800);
+    const isOpen = (0, import_vue3.ref)(props.collapsible ? props.defaultOpen : true);
+    const isModule = () => props.isRoot && props.enabled !== void 0 && props.onEnabledChange !== void 0;
+    const bodyOpen = () => isOpen.value && (!isModule() || !!props.enabled);
+    const isCollapsed = (0, import_vue3.ref)(props.collapsible ? !props.defaultOpen : false);
+    const contentRef = (0, import_vue3.ref)(null);
+    const contentHeight = (0, import_vue3.ref)(void 0);
+    const windowHeight = (0, import_vue3.ref)(typeof window !== "undefined" ? window.innerHeight : 800);
     let resizeHandler = null;
     if (props.isRoot) {
       resizeHandler = () => {
@@ -2334,7 +2434,7 @@ var Folder = (0, import_vue2.defineComponent)({
       };
       window.addEventListener("resize", resizeHandler);
     }
-    (0, import_vue2.onUnmounted)(() => {
+    (0, import_vue3.onUnmounted)(() => {
       if (resizeHandler) window.removeEventListener("resize", resizeHandler);
     });
     const handleToggle = () => {
@@ -2346,7 +2446,7 @@ var Folder = (0, import_vue2.defineComponent)({
       emit("openChange", next);
     };
     let ro = null;
-    (0, import_vue2.onMounted)(() => {
+    (0, import_vue3.onMounted)(() => {
       if (!props.isRoot || typeof ResizeObserver === "undefined") return;
       const el = contentRef.value;
       if (!el) return;
@@ -2363,30 +2463,35 @@ var Folder = (0, import_vue2.defineComponent)({
         contentHeight.value = el.offsetHeight;
       }
     });
-    (0, import_vue2.onUnmounted)(() => {
+    (0, import_vue3.onUnmounted)(() => {
       ro?.disconnect();
     });
-    const renderHeader = () => (0, import_vue2.h)("div", {
+    const renderHeader = () => (0, import_vue3.h)("div", {
       class: `tweakers-folder-header ${props.isRoot ? "tweakers-panel-header" : ""} ${props.collapsible ? "" : "tweakers-folder-header-static"}`,
       onClick: props.collapsible ? handleToggle : void 0,
       "data-hint": props.hint ? "true" : void 0,
       "aria-describedby": props.hint ? props.hintId : void 0
     }, [
-      (0, import_vue2.h)("div", { class: "tweakers-folder-header-top" }, [
-        props.isRoot ? isOpen.value ? (0, import_vue2.h)("div", { class: "tweakers-folder-title-row" }, [
-          (0, import_vue2.h)("span", { class: "tweakers-folder-title tweakers-folder-title-root" }, props.title)
-        ]) : null : (0, import_vue2.h)("div", { class: "tweakers-folder-title-row" }, [
-          (0, import_vue2.h)("span", { class: "tweakers-folder-title" }, props.title)
+      (0, import_vue3.h)("div", { class: "tweakers-folder-header-top" }, [
+        props.isRoot ? isOpen.value ? (0, import_vue3.h)("div", { class: "tweakers-folder-title-row" }, [
+          isModule() ? (0, import_vue3.h)(Checkbox, {
+            checked: !!props.enabled,
+            onChange: props.onEnabledChange,
+            label: props.title
+          }) : null,
+          (0, import_vue3.h)("span", { class: "tweakers-folder-title tweakers-folder-title-root" }, props.title)
+        ]) : null : (0, import_vue3.h)("div", { class: "tweakers-folder-title-row" }, [
+          (0, import_vue3.h)("span", { class: "tweakers-folder-title" }, props.title)
         ]),
-        props.isRoot && !props.inline ? (0, import_vue2.h)("svg", { class: "tweakers-panel-icon", viewBox: "0 0 16 16", fill: "none" }, [
-          (0, import_vue2.h)("path", {
+        props.isRoot && !props.inline ? (0, import_vue3.h)("svg", { class: "tweakers-panel-icon", viewBox: "0 0 16 16", fill: "none" }, [
+          (0, import_vue3.h)("path", {
             opacity: "0.5",
             d: ICON_PANEL.path,
             fill: "currentColor"
           }),
-          ...ICON_PANEL.circles.map((c) => (0, import_vue2.h)("circle", { cx: c.cx, cy: c.cy, r: c.r, fill: "currentColor", stroke: "currentColor", "stroke-width": "1.25" }))
+          ...ICON_PANEL.circles.map((c) => (0, import_vue3.h)("circle", { cx: c.cx, cy: c.cy, r: c.r, fill: "currentColor", stroke: "currentColor", "stroke-width": "1.25" }))
         ]) : null,
-        !props.isRoot && props.collapsible ? (0, import_vue2.h)(import_motion_v.motion.svg, {
+        !props.isRoot && props.collapsible ? (0, import_vue3.h)(import_motion_v.motion.svg, {
           class: "tweakers-folder-icon",
           viewBox: "0 0 24 24",
           fill: "none",
@@ -2397,18 +2502,18 @@ var Folder = (0, import_vue2.defineComponent)({
           initial: false,
           animate: { rotate: isOpen.value ? 0 : 180 },
           transition: { type: "spring", visualDuration: 0.35, bounce: 0.15 }
-        }, [(0, import_vue2.h)("path", { d: ICON_CHEVRON })]) : null
+        }, [(0, import_vue3.h)("path", { d: ICON_CHEVRON })]) : null
       ]),
-      props.isRoot && props.toolbar && isOpen.value ? (0, import_vue2.h)("div", { class: "tweakers-panel-toolbar", onClick: (event) => event.stopPropagation() }, [props.toolbar()]) : null,
-      props.hint ? (0, import_vue2.h)("span", { class: "tweakers-hint", id: props.hintId, role: "tooltip" }, props.hint) : null
+      props.isRoot && props.toolbar && isOpen.value ? (0, import_vue3.h)("div", { class: "tweakers-panel-toolbar", onClick: (event) => event.stopPropagation() }, [props.toolbar()]) : null,
+      props.hint ? (0, import_vue3.h)("span", { class: "tweakers-hint", id: props.hintId, role: "tooltip" }, props.hint) : null
     ]);
-    const renderChildren = () => (0, import_vue2.h)("div", { class: "tweakers-folder-inner" }, slots.default ? slots.default() : []);
+    const renderChildren = () => (0, import_vue3.h)("div", { class: "tweakers-folder-inner" }, slots.default ? slots.default() : []);
     const renderContent = () => {
       if (props.isRoot) {
-        return isOpen.value ? (0, import_vue2.h)("div", { class: "tweakers-folder-content" }, [renderChildren()]) : null;
+        return bodyOpen() ? (0, import_vue3.h)("div", { class: "tweakers-folder-content" }, [renderChildren()]) : null;
       }
-      return (0, import_vue2.h)(import_motion_v.AnimatePresence, { initial: false }, {
-        default: () => isOpen.value ? [(0, import_vue2.h)(import_motion_v.motion.div, {
+      return (0, import_vue3.h)(import_motion_v.AnimatePresence, { initial: false }, {
+        default: () => isOpen.value ? [(0, import_vue3.h)(import_motion_v.motion.div, {
           key: "tweakers-folder-content",
           class: "tweakers-folder-content",
           initial: { height: 0, opacity: 0 },
@@ -2419,7 +2524,7 @@ var Folder = (0, import_vue2.defineComponent)({
         }, [renderChildren()])] : []
       });
     };
-    const folderContent = () => (0, import_vue2.h)("div", {
+    const folderContent = () => (0, import_vue3.h)("div", {
       ref: props.isRoot ? contentRef : void 0,
       class: `tweakers-folder ${props.isRoot ? "tweakers-folder-root" : ""}`
     }, [
@@ -2429,7 +2534,7 @@ var Folder = (0, import_vue2.defineComponent)({
     return () => {
       if (props.isRoot) {
         if (props.inline) {
-          return (0, import_vue2.h)("div", { class: "tweakers-panel-inner tweakers-panel-inline" }, [folderContent()]);
+          return (0, import_vue3.h)("div", { class: "tweakers-panel-inner tweakers-panel-inline" }, [folderContent()]);
         }
         const panelStyle = isOpen.value ? {
           width: 280,
@@ -2446,7 +2551,7 @@ var Folder = (0, import_vue2.defineComponent)({
           overflow: "hidden",
           cursor: "pointer"
         };
-        return (0, import_vue2.h)(import_motion_v.motion.div, {
+        return (0, import_vue3.h)(import_motion_v.motion.div, {
           class: "tweakers-panel-inner",
           style: panelStyle,
           onClick: !isOpen.value ? handleToggle : void 0,
@@ -2464,16 +2569,16 @@ var Folder = (0, import_vue2.defineComponent)({
 var import_vue25 = require("vue");
 
 // src/vue/components/ColorControl.ts
-var import_vue5 = require("vue");
+var import_vue6 = require("vue");
 var import_motion_v2 = require("motion-v");
 
 // src/vue/components/ColorPickerPanel.ts
-var import_vue4 = require("vue");
+var import_vue5 = require("vue");
 
 // src/vue/components/SegmentedControl.ts
-var import_vue3 = require("vue");
+var import_vue4 = require("vue");
 var import_motion = require("motion");
-var SegmentedControl = (0, import_vue3.defineComponent)({
+var SegmentedControl = (0, import_vue4.defineComponent)({
   name: "TweakersSegmentedControl",
   props: {
     options: {
@@ -2487,10 +2592,10 @@ var SegmentedControl = (0, import_vue3.defineComponent)({
   },
   emits: ["change"],
   setup(props, { emit }) {
-    const containerRef = (0, import_vue3.ref)(null);
-    const pillRef = (0, import_vue3.ref)(null);
+    const containerRef = (0, import_vue4.ref)(null);
+    const pillRef = (0, import_vue4.ref)(null);
     const buttonRefs = /* @__PURE__ */ new Map();
-    const pillReady = (0, import_vue3.ref)(false);
+    const pillReady = (0, import_vue4.ref)(false);
     let hasAnimated = false;
     let pillAnim = null;
     const measurePill = () => {
@@ -2542,8 +2647,8 @@ var SegmentedControl = (0, import_vue3.defineComponent)({
       );
     };
     let ro;
-    (0, import_vue3.onMounted)(() => {
-      (0, import_vue3.nextTick)(() => {
+    (0, import_vue4.onMounted)(() => {
+      (0, import_vue4.nextTick)(() => {
         updatePill(false);
         hasAnimated = true;
       });
@@ -2552,19 +2657,19 @@ var SegmentedControl = (0, import_vue3.defineComponent)({
         ro.observe(containerRef.value);
       }
     });
-    (0, import_vue3.onUnmounted)(() => {
+    (0, import_vue4.onUnmounted)(() => {
       pillAnim?.stop();
       ro?.disconnect();
     });
-    (0, import_vue3.watch)(
+    (0, import_vue4.watch)(
       () => props.value,
       () => {
         updatePill(true);
       },
       { flush: "post" }
     );
-    return () => (0, import_vue3.h)("div", { ref: containerRef, class: "tweakers-segmented" }, [
-      (0, import_vue3.h)("div", {
+    return () => (0, import_vue4.h)("div", { ref: containerRef, class: "tweakers-segmented" }, [
+      (0, import_vue4.h)("div", {
         ref: pillRef,
         class: "tweakers-segmented-pill",
         style: {
@@ -2573,7 +2678,7 @@ var SegmentedControl = (0, import_vue3.defineComponent)({
           visibility: pillReady.value ? "visible" : "hidden"
         }
       }),
-      ...props.options.map((option) => (0, import_vue3.h)("button", {
+      ...props.options.map((option) => (0, import_vue4.h)("button", {
         ref: ((el) => {
           if (el instanceof HTMLElement) {
             buttonRefs.set(option.value, el);
@@ -2650,7 +2755,7 @@ var stickyFormat = "hex";
 var BLACK = { h: 0, s: 0, v: 0, a: 1 };
 var HEX_ALPHA_SPEC = { key: "a", label: "A", min: 0, max: 100, step: 1, precision: 0 };
 function useAreaDrag(onPoint) {
-  const elRef = (0, import_vue4.ref)(null);
+  const elRef = (0, import_vue5.ref)(null);
   let dragging = false;
   const readPoint = (e) => {
     const el = elRef.value;
@@ -2682,7 +2787,7 @@ function useAreaDrag(onPoint) {
   };
   return { elRef, handlers };
 }
-var ChannelField = (0, import_vue4.defineComponent)({
+var ChannelField = (0, import_vue5.defineComponent)({
   name: "TweakersColorChannelField",
   props: {
     spec: { type: Object, required: true },
@@ -2690,13 +2795,13 @@ var ChannelField = (0, import_vue4.defineComponent)({
   },
   emits: ["commit"],
   setup(props, { emit }) {
-    const draft = (0, import_vue4.ref)(null);
+    const draft = (0, import_vue5.ref)(null);
     const commit = () => {
       if (draft.value !== null) emit("commit", Number(draft.value));
       draft.value = null;
     };
-    return () => (0, import_vue4.h)("label", { class: "tweakers-color-field" }, [
-      (0, import_vue4.h)("input", {
+    return () => (0, import_vue5.h)("label", { class: "tweakers-color-field" }, [
+      (0, import_vue5.h)("input", {
         type: "text",
         inputmode: "decimal",
         value: draft.value ?? String(props.value),
@@ -2719,11 +2824,11 @@ var ChannelField = (0, import_vue4.defineComponent)({
           }
         }
       }),
-      (0, import_vue4.h)("span", { class: "tweakers-color-field-label" }, props.spec.label)
+      (0, import_vue5.h)("span", { class: "tweakers-color-field-label" }, props.spec.label)
     ]);
   }
 });
-var HexField = (0, import_vue4.defineComponent)({
+var HexField = (0, import_vue5.defineComponent)({
   name: "TweakersColorHexField",
   props: {
     value: { type: String, required: true },
@@ -2731,7 +2836,7 @@ var HexField = (0, import_vue4.defineComponent)({
   },
   emits: ["commit"],
   setup(props, { emit }) {
-    const draft = (0, import_vue4.ref)(null);
+    const draft = (0, import_vue5.ref)(null);
     const commit = () => {
       if (draft.value !== null) {
         const normalized = normalizeHex(draft.value, props.alpha);
@@ -2739,8 +2844,8 @@ var HexField = (0, import_vue4.defineComponent)({
       }
       draft.value = null;
     };
-    return () => (0, import_vue4.h)("label", { class: "tweakers-color-field tweakers-color-field-hex" }, [
-      (0, import_vue4.h)("input", {
+    return () => (0, import_vue5.h)("label", { class: "tweakers-color-field tweakers-color-field-hex" }, [
+      (0, import_vue5.h)("input", {
         type: "text",
         spellcheck: false,
         value: (draft.value ?? props.value).toUpperCase(),
@@ -2763,18 +2868,18 @@ var HexField = (0, import_vue4.defineComponent)({
           }
         }
       }),
-      (0, import_vue4.h)("span", { class: "tweakers-color-field-label" }, "HEX")
+      (0, import_vue5.h)("span", { class: "tweakers-color-field-label" }, "HEX")
     ]);
   }
 });
-var PaletteSlot = (0, import_vue4.defineComponent)({
+var PaletteSlot = (0, import_vue5.defineComponent)({
   name: "TweakersColorPaletteSlot",
   props: {
     color: { type: String, default: null }
   },
   emits: ["save", "apply", "clear"],
   setup(props, { emit }) {
-    const holding = (0, import_vue4.ref)(false);
+    const holding = (0, import_vue5.ref)(false);
     let timer = null;
     let origin = null;
     let fired = false;
@@ -2784,8 +2889,8 @@ var PaletteSlot = (0, import_vue4.defineComponent)({
       origin = null;
       holding.value = false;
     };
-    (0, import_vue4.onBeforeUnmount)(cancelHold);
-    return () => (0, import_vue4.h)("button", {
+    (0, import_vue5.onBeforeUnmount)(cancelHold);
+    return () => (0, import_vue5.h)("button", {
       class: "tweakers-color-palette-slot",
       "data-filled": String(props.color !== null),
       "data-holding": String(holding.value),
@@ -2823,7 +2928,7 @@ var PaletteSlot = (0, import_vue4.defineComponent)({
     });
   }
 });
-var ColorPickerPanel = (0, import_vue4.defineComponent)({
+var ColorPickerPanel = (0, import_vue5.defineComponent)({
   name: "TweakersColorPickerPanel",
   props: {
     value: { type: String, required: true },
@@ -2833,25 +2938,25 @@ var ColorPickerPanel = (0, import_vue4.defineComponent)({
   emits: ["change"],
   setup(props, { emit }) {
     const initialRgba = parseHex(props.value);
-    const hsva = (0, import_vue4.ref)(initialRgba ? rgbToHsv(initialRgba) : { ...BLACK });
-    const format = (0, import_vue4.ref)(stickyFormat);
-    const slots = (0, import_vue4.ref)(props.palette ? loadPalette() : emptyPalette());
+    const hsva = (0, import_vue5.ref)(initialRgba ? rgbToHsv(initialRgba) : { ...BLACK });
+    const format = (0, import_vue5.ref)(stickyFormat);
+    const slots = (0, import_vue5.ref)(props.palette ? loadPalette() : emptyPalette());
     let lastEmitted = props.value;
-    (0, import_vue4.watch)(() => props.value, (value) => {
+    (0, import_vue5.watch)(() => props.value, (value) => {
       if (value === lastEmitted) return;
       lastEmitted = value;
       const rgba2 = parseHex(value);
       if (rgba2) hsva.value = rgbToHsv(rgba2);
     });
     let unsubscribePalette;
-    (0, import_vue4.onMounted)(() => {
+    (0, import_vue5.onMounted)(() => {
       if (props.palette) {
         unsubscribePalette = subscribePalette((next) => {
           slots.value = next;
         });
       }
     });
-    (0, import_vue4.onBeforeUnmount)(() => unsubscribePalette?.());
+    (0, import_vue5.onBeforeUnmount)(() => unsubscribePalette?.());
     const emitColor = (next) => {
       hsva.value = next;
       const hex = formatHex(hsvToRgb(next), props.alpha);
@@ -2869,11 +2974,11 @@ var ColorPickerPanel = (0, import_vue4.defineComponent)({
     const svDrag = useAreaDrag((x, y) => emitColor({ ...hsva.value, s: x, v: 1 - y }));
     const hueDrag = useAreaDrag((x) => emitColor({ ...hsva.value, h: Math.min(x * 360, 359.999) }));
     const alphaDrag = useAreaDrag((x) => emitColor({ ...hsva.value, a: x }));
-    const rgba = (0, import_vue4.computed)(() => hsvToRgb(hsva.value));
-    const opaqueHex = (0, import_vue4.computed)(() => formatHex(rgba.value, false));
-    const currentHex = (0, import_vue4.computed)(() => formatHex(rgba.value, props.alpha));
-    const channelSpecs = (0, import_vue4.computed)(() => format.value === "hex" ? [] : getChannels(format.value, props.alpha));
-    const channelValues = (0, import_vue4.computed)(() => format.value === "hex" ? [] : rgbaToChannels(rgba.value, format.value, props.alpha));
+    const rgba = (0, import_vue5.computed)(() => hsvToRgb(hsva.value));
+    const opaqueHex = (0, import_vue5.computed)(() => formatHex(rgba.value, false));
+    const currentHex = (0, import_vue5.computed)(() => formatHex(rgba.value, props.alpha));
+    const channelSpecs = (0, import_vue5.computed)(() => format.value === "hex" ? [] : getChannels(format.value, props.alpha));
+    const channelValues = (0, import_vue5.computed)(() => format.value === "hex" ? [] : rgbaToChannels(rgba.value, format.value, props.alpha));
     const commitChannel = (index, n) => {
       const next = [...channelValues.value];
       next[index] = n;
@@ -2883,16 +2988,16 @@ var ColorPickerPanel = (0, import_vue4.defineComponent)({
       if (nextHsva.v === 0) nextHsva.s = hsva.value.s;
       emitColor(nextHsva);
     };
-    return () => (0, import_vue4.h)("div", {
+    return () => (0, import_vue5.h)("div", {
       class: "tweakers-color-picker",
       style: { "--picker-hue": String(hsva.value.h) }
     }, [
-      (0, import_vue4.h)("div", {
+      (0, import_vue5.h)("div", {
         class: "tweakers-color-sv",
         ref: svDrag.elRef,
         ...svDrag.handlers
       }, [
-        (0, import_vue4.h)("div", {
+        (0, import_vue5.h)("div", {
           class: "tweakers-color-sv-thumb",
           style: {
             left: `${hsva.value.s * 100}%`,
@@ -2901,12 +3006,12 @@ var ColorPickerPanel = (0, import_vue4.defineComponent)({
           }
         })
       ]),
-      (0, import_vue4.h)("div", {
+      (0, import_vue5.h)("div", {
         class: "tweakers-color-slider tweakers-color-hue",
         ref: hueDrag.elRef,
         ...hueDrag.handlers
       }, [
-        (0, import_vue4.h)("div", {
+        (0, import_vue5.h)("div", {
           class: "tweakers-color-slider-thumb",
           style: {
             left: `${hsva.value.h / 360 * 100}%`,
@@ -2914,16 +3019,16 @@ var ColorPickerPanel = (0, import_vue4.defineComponent)({
           }
         })
       ]),
-      props.alpha ? (0, import_vue4.h)("div", {
+      props.alpha ? (0, import_vue5.h)("div", {
         class: "tweakers-color-slider tweakers-color-alpha tweakers-checker",
         ref: alphaDrag.elRef,
         ...alphaDrag.handlers
       }, [
-        (0, import_vue4.h)("div", {
+        (0, import_vue5.h)("div", {
           class: "tweakers-color-alpha-gradient",
           style: { background: `linear-gradient(to right, transparent, ${opaqueHex.value})` }
         }),
-        (0, import_vue4.h)("div", {
+        (0, import_vue5.h)("div", {
           class: "tweakers-color-slider-thumb",
           style: {
             left: `${hsva.value.a * 100}%`,
@@ -2932,7 +3037,7 @@ var ColorPickerPanel = (0, import_vue4.defineComponent)({
           }
         })
       ]) : null,
-      (0, import_vue4.h)(SegmentedControl, {
+      (0, import_vue5.h)(SegmentedControl, {
         options: FORMAT_OPTIONS,
         value: format.value,
         onChange: (f) => {
@@ -2940,24 +3045,24 @@ var ColorPickerPanel = (0, import_vue4.defineComponent)({
           format.value = f;
         }
       }),
-      (0, import_vue4.h)("div", { class: "tweakers-color-fields", "data-format": format.value }, format.value === "hex" ? [
-        (0, import_vue4.h)(HexField, {
+      (0, import_vue5.h)("div", { class: "tweakers-color-fields", "data-format": format.value }, format.value === "hex" ? [
+        (0, import_vue5.h)(HexField, {
           value: currentHex.value,
           alpha: props.alpha,
           onCommit: (hex) => applyHex(hex)
         }),
-        props.alpha ? (0, import_vue4.h)(ChannelField, {
+        props.alpha ? (0, import_vue5.h)(ChannelField, {
           spec: HEX_ALPHA_SPEC,
           value: opacityPercent(rgba.value),
           onCommit: (n) => emitColor({ ...hsva.value, a: Math.min(1, Math.max(0, n / 100)) })
         }) : null
-      ] : channelSpecs.value.map((spec, i) => (0, import_vue4.h)(ChannelField, {
+      ] : channelSpecs.value.map((spec, i) => (0, import_vue5.h)(ChannelField, {
         key: `${format.value}-${spec.key}`,
         spec,
         value: channelValues.value[i],
         onCommit: (n) => commitChannel(i, n)
       }))),
-      props.palette ? (0, import_vue4.h)("div", { class: "tweakers-color-palette" }, Array.from({ length: PALETTE_SIZE }, (_, i) => (0, import_vue4.h)(PaletteSlot, {
+      props.palette ? (0, import_vue5.h)("div", { class: "tweakers-color-palette" }, Array.from({ length: PALETTE_SIZE }, (_, i) => (0, import_vue5.h)(PaletteSlot, {
         key: i,
         color: slots.value[i] ?? null,
         // Read the store at commit time — a 500ms hold is long enough for
@@ -2978,7 +3083,7 @@ var PICKER_WIDTH = 240;
 var PICKER_BASE_HEIGHT = 270;
 var PICKER_ALPHA_HEIGHT = 22;
 var PICKER_PALETTE_HEIGHT = 30;
-var ColorControl = (0, import_vue5.defineComponent)({
+var ColorControl = (0, import_vue6.defineComponent)({
   name: "TweakersColorControl",
   props: {
     label: { type: String, required: true },
@@ -2988,20 +3093,20 @@ var ColorControl = (0, import_vue5.defineComponent)({
   },
   emits: ["change"],
   setup(props, { emit }) {
-    const isEditing = (0, import_vue5.ref)(false);
-    const editValue = (0, import_vue5.ref)(bareHex(props.value));
-    const isOpen = (0, import_vue5.ref)(false);
-    const pos = (0, import_vue5.ref)(null);
-    const portalTarget = (0, import_vue5.ref)(null);
-    const swatchRef = (0, import_vue5.ref)(null);
-    const pickerRef = (0, import_vue5.ref)(null);
-    const hexInputRef = (0, import_vue5.ref)(null);
-    (0, import_vue5.watch)(() => props.value, (value) => {
+    const isEditing = (0, import_vue6.ref)(false);
+    const editValue = (0, import_vue6.ref)(bareHex(props.value));
+    const isOpen = (0, import_vue6.ref)(false);
+    const pos = (0, import_vue6.ref)(null);
+    const portalTarget = (0, import_vue6.ref)(null);
+    const swatchRef = (0, import_vue6.ref)(null);
+    const pickerRef = (0, import_vue6.ref)(null);
+    const hexInputRef = (0, import_vue6.ref)(null);
+    (0, import_vue6.watch)(() => props.value, (value) => {
       if (!isEditing.value) editValue.value = bareHex(value);
     });
-    (0, import_vue5.watch)(isEditing, async (editing) => {
+    (0, import_vue6.watch)(isEditing, async (editing) => {
       if (!editing) return;
-      await (0, import_vue5.nextTick)();
+      await (0, import_vue6.nextTick)();
       hexInputRef.value?.focus();
       hexInputRef.value?.select();
     });
@@ -3038,7 +3143,7 @@ var ColorControl = (0, import_vue5.defineComponent)({
       }
       pickerRef.value = null;
     };
-    (0, import_vue5.watch)(isOpen, (open, _, onCleanup) => {
+    (0, import_vue6.watch)(isOpen, (open, _, onCleanup) => {
       if (!open) return;
       const handleViewportChange = () => updatePos();
       const handleDocumentClick = (event) => {
@@ -3064,7 +3169,7 @@ var ColorControl = (0, import_vue5.defineComponent)({
         window.removeEventListener("scroll", handleViewportChange, true);
       });
     });
-    (0, import_vue5.onMounted)(() => {
+    (0, import_vue6.onMounted)(() => {
       const root = swatchRef.value?.closest(".tweakers-root");
       portalTarget.value = root ?? document.body;
     });
@@ -3079,18 +3184,18 @@ var ColorControl = (0, import_vue5.defineComponent)({
     };
     return () => {
       const rgba = parseHex(props.value);
-      return (0, import_vue5.h)("div", { class: "tweakers-color-control" }, [
-        (0, import_vue5.h)("span", { class: "tweakers-color-label" }, props.label),
-        (0, import_vue5.h)("div", { class: "tweakers-color-inputs" }, [
+      return (0, import_vue6.h)("div", { class: "tweakers-color-control" }, [
+        (0, import_vue6.h)("span", { class: "tweakers-color-label" }, props.label),
+        (0, import_vue6.h)("div", { class: "tweakers-color-inputs" }, [
           // The whole token (hash included) is the click target for editing.
-          (0, import_vue5.h)("span", {
+          (0, import_vue6.h)("span", {
             class: "tweakers-color-hex-wrap",
             onClick: () => {
               isEditing.value = true;
             }
           }, [
-            (0, import_vue5.h)("span", { class: "tweakers-color-hash", "aria-hidden": "true" }, "#"),
-            isEditing.value ? (0, import_vue5.h)("input", {
+            (0, import_vue6.h)("span", { class: "tweakers-color-hash", "aria-hidden": "true" }, "#"),
+            isEditing.value ? (0, import_vue6.h)("input", {
               ref: hexInputRef,
               type: "text",
               class: "tweakers-color-hex-input",
@@ -3109,19 +3214,19 @@ var ColorControl = (0, import_vue5.defineComponent)({
                   editValue.value = bareHex(props.value);
                 }
               }
-            }) : (0, import_vue5.h)("span", {
+            }) : (0, import_vue6.h)("span", {
               class: "tweakers-color-hex",
               "aria-label": `Hex color for ${props.label}`
             }, bareHex(props.value))
           ]),
           ...props.alpha && rgba ? [
-            (0, import_vue5.h)("span", { class: "tweakers-color-divider", "aria-hidden": "true" }),
-            (0, import_vue5.h)("span", { class: "tweakers-color-opacity" }, [
+            (0, import_vue6.h)("span", { class: "tweakers-color-divider", "aria-hidden": "true" }),
+            (0, import_vue6.h)("span", { class: "tweakers-color-opacity" }, [
               `${opacityPercent(rgba)} `,
-              (0, import_vue5.h)("span", { class: "tweakers-color-opacity-unit" }, "%")
+              (0, import_vue6.h)("span", { class: "tweakers-color-opacity-unit" }, "%")
             ])
           ] : [],
-          (0, import_vue5.h)("button", {
+          (0, import_vue6.h)("button", {
             ref: swatchRef,
             class: "tweakers-color-swatch",
             style: { "--swatch-color": props.value },
@@ -3132,9 +3237,9 @@ var ColorControl = (0, import_vue5.defineComponent)({
             onClick: togglePicker
           })
         ]),
-        portalTarget.value ? (0, import_vue5.h)(import_vue5.Teleport, { to: portalTarget.value }, [
-          (0, import_vue5.h)(import_motion_v2.AnimatePresence, null, {
-            default: () => isOpen.value && pos.value ? [(0, import_vue5.h)(import_motion_v2.motion.div, {
+        portalTarget.value ? (0, import_vue6.h)(import_vue6.Teleport, { to: portalTarget.value }, [
+          (0, import_vue6.h)(import_motion_v2.AnimatePresence, null, {
+            default: () => isOpen.value && pos.value ? [(0, import_vue6.h)(import_motion_v2.motion.div, {
               key: "tweakers-color-picker-popover",
               ref: setPickerRef,
               class: "tweakers-color-picker-popover",
@@ -3155,7 +3260,7 @@ var ColorControl = (0, import_vue5.defineComponent)({
                 }
               }
             }, [
-              (0, import_vue5.h)(ColorPickerPanel, {
+              (0, import_vue6.h)(ColorPickerPanel, {
                 value: props.value,
                 alpha: props.alpha,
                 palette: props.palette,
@@ -3171,58 +3276,6 @@ var ColorControl = (0, import_vue5.defineComponent)({
 
 // src/vue/components/ModuleFolder.ts
 var import_vue7 = require("vue");
-
-// src/vue/components/Checkbox.ts
-var import_vue6 = require("vue");
-var Checkbox = (0, import_vue6.defineComponent)({
-  name: "TweakersCheckbox",
-  props: {
-    checked: { type: Boolean, required: true },
-    /** Accessible name — the visible label is rendered by the caller. */
-    label: { type: String, default: void 0 },
-    /** The control exists but cannot act right now: reads as a dash, not a
-     *  blank box, so "unavailable" never looks like "off". */
-    disabled: { type: Boolean, default: false },
-    id: { type: String, default: void 0 }
-  },
-  emits: ["change"],
-  setup(props, { emit }) {
-    return () => (0, import_vue6.h)(
-      "button",
-      {
-        type: "button",
-        id: props.id,
-        role: "checkbox",
-        "aria-checked": props.disabled ? "mixed" : String(props.checked),
-        "aria-label": props.label,
-        "aria-disabled": props.disabled || void 0,
-        class: "tweakers-checkbox",
-        "data-checked": props.checked && !props.disabled ? "true" : void 0,
-        "data-disabled": props.disabled ? "true" : void 0,
-        onClick: (e) => {
-          e.stopPropagation();
-          if (!props.disabled) emit("change", !props.checked);
-        }
-      },
-      [
-        (0, import_vue6.h)("svg", { viewBox: "0 0 22 22", width: 22, height: 22, "aria-hidden": "true" }, [
-          (0, import_vue6.h)("path", { class: "tweakers-checkbox-slash", d: "M6 16 16 6", fill: "none" }),
-          (0, import_vue6.h)("rect", {
-            class: "tweakers-checkbox-chip",
-            x: 5,
-            y: 5,
-            width: 12,
-            height: 12,
-            rx: 2
-          }),
-          (0, import_vue6.h)("path", { class: "tweakers-checkbox-dash", d: "M6 11h10", fill: "none" })
-        ])
-      ]
-    );
-  }
-});
-
-// src/vue/components/ModuleFolder.ts
 var ModuleFolder = (0, import_vue7.defineComponent)({
   name: "TweakersModuleFolder",
   props: {
@@ -6687,7 +6740,9 @@ Apply these values as the new defaults in the useTweakers call.`;
           defaultOpen: props.defaultOpen,
           isRoot: true,
           inline: props.inline,
-          toolbar: () => toolbarNode
+          enabled: props.panel.module ? values.value["_enabled"] : void 0,
+          onEnabledChange: props.panel.module ? (v) => TweakStore.updateValue(props.panel.id, "_enabled", v) : void 0,
+          toolbar: () => TweakStore.arePresetsHidden(props.panel.id) ? (0, import_vue27.h)(import_vue27.Fragment, null, [props.toolbarExtra?.()]) : toolbarNode
         }, {
           default: () => [
             (0, import_vue27.h)(ControlRenderer, {
@@ -6824,6 +6879,25 @@ var TweakRoot = (0, import_vue29.defineComponent)({
     productionEnabled: {
       type: Boolean,
       default: isDevDefault
+    },
+    /**
+     * Render only the named panels, in the order given. For apps that place
+     * more than one panel surface in more than one place — a rack of per-voice
+     * columns beside a global panel, say. Omitted, a root renders every
+     * registered panel, which is the single-surface default.
+     */
+    panels: {
+      type: [String, Array],
+      default: void 0
+    },
+    /**
+     * `none` drops the panel card — no glass, no border, no radius, no padding —
+     * so the rows sit directly on the host's own surface. For app chrome that
+     * already provides the ground the panel would otherwise float on.
+     */
+    chrome: {
+      type: String,
+      default: "card"
     }
   },
   setup(props) {
@@ -6834,10 +6908,10 @@ var TweakRoot = (0, import_vue29.defineComponent)({
     let unsubscribeTimelines;
     (0, import_vue29.onMounted)(() => {
       mounted.value = true;
-      panels.value = TweakStore.getPanels("panel");
+      panels.value = TweakStore.selectPanels(props.panels);
       timelines.value = TimelineStore.getTimelines();
       unsubscribePanels = TweakStore.subscribeGlobal(() => {
-        panels.value = TweakStore.getPanels("panel");
+        panels.value = TweakStore.selectPanels(props.panels);
       });
       unsubscribeTimelines = TimelineStore.subscribeGlobal(() => {
         timelines.value = TimelineStore.getTimelines();
@@ -6847,7 +6921,7 @@ var TweakRoot = (0, import_vue29.defineComponent)({
       unsubscribePanels?.();
       unsubscribeTimelines?.();
     });
-    const timelineToggle = () => timelines.value.length > 0 ? (0, import_vue29.h)(TimelineToggleButton) : null;
+    const timelineToggle = () => timelines.value.length > 0 && props.panels === void 0 ? (0, import_vue29.h)(TimelineToggleButton) : null;
     const renderPanels = () => {
       if (panels.value.length === 0) {
         return [(0, import_vue29.h)("div", { class: "tweakers-panel-wrapper" }, [
@@ -6869,7 +6943,7 @@ var TweakRoot = (0, import_vue29.defineComponent)({
       }));
     };
     const renderContent = () => (0, import_vue29.h)(ShortcutListener, null, {
-      default: () => (0, import_vue29.h)("div", { class: "tweakers-root", "data-mode": props.mode, "data-theme": props.theme }, [
+      default: () => (0, import_vue29.h)("div", { class: "tweakers-root", "data-mode": props.mode, "data-theme": props.theme, "data-chrome": props.chrome }, [
         (0, import_vue29.h)("div", {
           class: "tweakers-panel",
           "data-position": props.mode === "inline" ? void 0 : props.position,
@@ -6878,7 +6952,8 @@ var TweakRoot = (0, import_vue29.defineComponent)({
       ])
     });
     return () => {
-      if (!props.productionEnabled || !mounted.value || typeof window === "undefined" || panels.value.length === 0 && timelines.value.length === 0) {
+      const empty = panels.value.length === 0 && (props.panels !== void 0 || timelines.value.length === 0);
+      if (!props.productionEnabled || !mounted.value || typeof window === "undefined" || empty) {
         return null;
       }
       if (props.mode === "inline") {

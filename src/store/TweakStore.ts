@@ -175,8 +175,15 @@ export type CurveConfig = {
   domain?: [number, number];
   /** Vertical reference lines at these x positions in [0,1]; invalid entries are skipped. */
   markers?: readonly number[];
-  /** Surface height in px, clamped to 32–160. Default 64. */
+  /** Surface height in px, clamped to 32–160. Default 64. Ignored when `aspect` is set. */
   height?: number;
+  /**
+   * Width ÷ height. Sizes the surface from its own width instead of `height`,
+   * so the plot holds its proportions at any column width — what a transfer
+   * curve wants, since its two axes share a scale. `1` is square, `4 / 3` a
+   * little wider than tall.
+   */
+  aspect?: number;
   /** `false` = full-bleed row without the label line; a string overrides the key-derived label. */
   label?: false | string;
 };
@@ -491,6 +498,8 @@ export type ControlMeta = {
   markers?: readonly number[];
   /** Curve preview's surface height in px (renderers clamp via clampCurveHeight). */
   height?: number;
+  /** Curve preview's width ÷ height — the surface follows its own width. */
+  aspect?: number;
   /** Curve preview declared `label: false` — full-bleed row without the label line. */
   hideLabel?: boolean;
   shortcut?: ShortcutConfig;
@@ -511,6 +520,11 @@ export type PanelConfig = {
   affordances?: Record<string, AffordanceConfig>;
   /** Label overrides by control path, retained on the same terms as `hints`. */
   labels?: Record<string, string>;
+  /**
+   * Config declared `_enabled` at its root — the whole panel is a module, and
+   * its title carries the switch. Same idiom as a module folder, one level up.
+   */
+  module?: boolean;
   kind?: 'timeline';
 };
 
@@ -734,6 +748,8 @@ class TweakStoreClass {
   // replace the object on every host render so callbacks never go stale, and
   // only a data change should notify.
   private presetProviders: Map<string, { provider: PresetProvider; serialized: string }> = new Map();
+  /** Panels whose header carries no preset toolbar (see setPresetsHidden). */
+  private presetsHidden: Set<string> = new Set();
   private baseValues: Map<string, Record<string, TweakValue>> = new Map();
   // Resolved storage target per panel (null = persistence off). Absent = not
   // yet registered.
@@ -764,7 +780,7 @@ class TweakStoreClass {
     // stale saved value instead of resurrecting it.
     this.overlayPersistedValues(target, values);
 
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, kind: options.kind });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, module: '_enabled' in config ? true : undefined, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -810,7 +826,7 @@ class TweakStoreClass {
       }
     }
 
-    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, kind: options.kind ?? existing.kind };
+    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, module: '_enabled' in config ? true : undefined, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
 
@@ -852,6 +868,7 @@ class TweakStoreClass {
     this.baseValues.delete(id);
     this.persistTargets.delete(id);
     this.presetProviders.delete(id);
+    this.presetsHidden.delete(id);
     this.notifyGlobal();
   }
 
@@ -965,6 +982,22 @@ class TweakStoreClass {
     if (kind === 'panel') return all.filter((panel) => panel.kind !== 'timeline');
     if (kind === 'timeline') return all.filter((panel) => panel.kind === 'timeline');
     return all;
+  }
+
+  /**
+   * The settings panels a root should draw, given its optional `panels` filter.
+   * `undefined` means every panel — the single-surface default. A list means
+   * exactly those names, in the order named, so two roots never fight over the
+   * same panel and a panel that has not registered yet leaves a gap that fills
+   * when it does.
+   */
+  selectPanels(only?: string | string[]): PanelConfig[] {
+    const registered = this.getPanels('panel');
+    if (only === undefined) return registered;
+    const names = typeof only === 'string' ? [only] : only;
+    return names
+      .map((name) => registered.find((panel) => panel.name === name))
+      .filter((panel): panel is PanelConfig => panel !== undefined);
   }
 
   getPanel(id: string): PanelConfig | undefined {
@@ -1255,6 +1288,25 @@ class TweakStoreClass {
     return this.presetProviders.get(panelId)?.provider ?? null;
   }
 
+  /**
+   * Hide (or restore) a panel's preset toolbar. For the secondary panels of a
+   * multi-panel app — a rack of per-voice columns, say — where a snapshot
+   * means the whole instrument and so belongs to one panel only. Hiding the
+   * toolbar hides its add and copy buttons with it: the header of a panel that
+   * does not own presets is bare.
+   */
+  setPresetsHidden(panelId: string, hidden: boolean): void {
+    const had = this.presetsHidden.has(panelId);
+    if (hidden === had) return;
+    if (hidden) this.presetsHidden.add(panelId);
+    else this.presetsHidden.delete(panelId);
+    this.notify(panelId);
+  }
+
+  arePresetsHidden(panelId: string): boolean {
+    return this.presetsHidden.has(panelId);
+  }
+
   /** Provider mode hides the implicit "Version 1" base row — the host owns the whole list. */
   hasPresetProvider(panelId: string): boolean {
     return this.presetProviders.has(panelId);
@@ -1507,6 +1559,7 @@ class TweakStoreClass {
           domain: value.domain,
           markers: value.markers,
           height: value.height,
+          aspect: value.aspect,
         });
       } else if (typeof value === 'string') {
         // Auto-detect: hex color vs text. Alpha digits in the default

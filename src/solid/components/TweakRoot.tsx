@@ -10,6 +10,8 @@ import { TimelineToggleButton } from './Timeline/TimelineToggleButton';
 
 export type TweakPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 export type TweakMode = 'popover' | 'inline';
+/** `card` is the panel's glass surface; `none` puts the rows straight on the host's ground. */
+export type TweakChrome = 'card' | 'none';
 export type TweakTheme = 'light' | 'dark' | 'system';
 
 declare const process: { env?: { NODE_ENV?: string } } | undefined;
@@ -26,6 +28,19 @@ interface TweakRootProps {
   mode?: TweakMode;
   theme?: TweakTheme;
   productionEnabled?: boolean;
+  /**
+   * Render only the named panels, in the order given. For apps that place
+   * more than one panel surface in more than one place — a rack of per-voice
+   * columns beside a global panel, say. Omitted, a root renders every
+   * registered panel, which is the single-surface default.
+   */
+  panels?: string | string[];
+  /**
+   * `none` drops the panel card — no glass, no border, no radius, no padding —
+   * so the rows sit directly on the host's own surface. For app chrome that
+   * already provides the ground the panel would otherwise float on.
+   */
+  chrome?: TweakChrome;
 }
 
 export function TweakRoot(props: TweakRootProps) {
@@ -35,12 +50,14 @@ export function TweakRoot(props: TweakRootProps) {
   const [mounted, setMounted] = createSignal(false);
   const inline = () => (props.mode ?? 'popover') === 'inline';
 
+  const read = () => TweakStore.selectPanels(props.panels);
+
   onMount(() => {
     setMounted(true);
-    setPanels(TweakStore.getPanels('panel'));
+    setPanels(read());
     setTimelineCount(TimelineStore.getTimelines().length);
     const unsubPanels = TweakStore.subscribeGlobal(() => {
-      setPanels(TweakStore.getPanels('panel'));
+      setPanels(read());
     });
     const unsubTimelines = TimelineStore.subscribeGlobal(() => {
       setTimelineCount(TimelineStore.getTimelines().length);
@@ -53,11 +70,12 @@ export function TweakRoot(props: TweakRootProps) {
 
   // Timeline-backed panels render in TweakTimeline, but their presence adds a
   // visibility toggle to the dock toolbar here.
-  const timelineToggle = () => (timelineCount() > 0 ? <TimelineToggleButton /> : null);
+  const timelineToggle = () =>
+    timelineCount() > 0 && props.panels === undefined ? <TimelineToggleButton /> : null;
 
   const content = () => (
     <ShortcutListener>
-      <div class="tweakers-root" data-mode={props.mode ?? 'popover'} data-theme={props.theme ?? 'system'}>
+      <div class="tweakers-root" data-mode={props.mode ?? 'popover'} data-theme={props.theme ?? 'system'} data-chrome={props.chrome ?? 'card'}>
         <div class="tweakers-panel" data-position={inline() ? undefined : (props.position ?? 'top-right')} data-mode={props.mode ?? 'popover'}>
           <Show
             when={panels().length > 0}
@@ -92,7 +110,13 @@ export function TweakRoot(props: TweakRootProps) {
   );
 
   return (
-    <Show when={mounted() && typeof window !== 'undefined' && (panels().length > 0 || timelineCount() > 0)}>
+    <Show
+      when={
+        mounted() &&
+        typeof window !== 'undefined' &&
+        (panels().length > 0 || (props.panels === undefined && timelineCount() > 0))
+      }
+    >
       <Show when={!inline()} fallback={content()}>
         <Portal mount={document.body}>
           {content()}

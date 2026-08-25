@@ -80,8 +80,21 @@
 </script>
 
 <div class="tweakers-panel-wrapper">
-  <Folder title={panel.name} {defaultOpen} isRoot={true} {inline} onOpenChange={(open) => (isPanelOpen = open)}>
+  <Folder
+    title={panel.name}
+    {defaultOpen}
+    isRoot={true}
+    {inline}
+    onOpenChange={(open) => (isPanelOpen = open)}
+    enabled={panel.module ? (values['_enabled'] as boolean) : undefined}
+    onEnabledChange={panel.module
+      ? (v) => TweakStore.updateValue(panel.id, '_enabled', v)
+      : undefined}
+  >
     {#snippet toolbar()}
+      {#if TweakStore.arePresetsHidden(panel.id)}
+        {@render toolbarExtra?.()}
+      {:else}
       <button
         class="tweakers-toolbar-add"
         onclick={handleAddPreset}
@@ -145,6 +158,7 @@
       </button>
 
       {@render toolbarExtra?.()}
+      {/if}
     {/snippet}
 
     {#each panel.controls as control (control.path)}

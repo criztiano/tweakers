@@ -10,6 +10,8 @@ import { TimelineToggleButton } from './Timeline/TimelineToggleButton';
 
 export type TweakPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 export type TweakMode = 'popover' | 'inline';
+/** `card` is the panel's glass surface; `none` puts the rows straight on the host's ground. */
+export type TweakChrome = 'card' | 'none';
 export type TweakTheme = 'light' | 'dark' | 'system';
 
 interface TweakRootProps {
@@ -18,9 +20,22 @@ interface TweakRootProps {
   mode?: TweakMode;
   theme?: TweakTheme;
   productionEnabled?: boolean;
+  /**
+   * Render only the named panels, in the order given. For apps that place
+   * more than one panel surface in more than one place — a rack of per-voice
+   * columns beside a global panel, say. Omitted, a root renders every
+   * registered panel, which is the single-surface default.
+   */
+  panels?: string | string[];
+  /**
+   * `none` drops the panel card — no glass, no border, no radius, no padding —
+   * so the rows sit directly on the host's own surface. For app chrome that
+   * already provides the ground the panel would otherwise float on.
+   */
+  chrome?: TweakChrome;
 }
 
-export function TweakRoot({ position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system', productionEnabled = isDevDefault }: TweakRootProps) {
+export function TweakRoot({ position = 'top-right', defaultOpen = true, mode = 'popover', theme = 'system', productionEnabled = isDevDefault, panels: only, chrome = 'card' }: TweakRootProps) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [timelineCount, setTimelineCount] = useState(0);
@@ -38,13 +53,21 @@ export function TweakRoot({ position = 'top-right', defaultOpen = true, mode = '
 
   // Subscribe to registered editing surfaces. Timeline-backed panels render
   // in TweakTimeline, but their presence adds a visibility toggle here.
+  // Joined to a scalar so the effect below re-runs on a changed filter but not
+  // on a new array with the same names.
+  const onlyKey = Array.isArray(only) ? only.join('\u0000') : only;
+  const read = useCallback(
+    () => TweakStore.selectPanels(onlyKey === undefined ? undefined : onlyKey.split('\u0000')),
+    [onlyKey]
+  );
+
   useEffect(() => {
     setMounted(true);
-    setPanels(TweakStore.getPanels('panel'));
+    setPanels(read());
     setTimelineCount(TimelineStore.getTimelines().length);
 
     const unsubscribePanels = TweakStore.subscribeGlobal(() => {
-      setPanels(TweakStore.getPanels('panel'));
+      setPanels(read());
     });
     const unsubscribeTimelines = TimelineStore.subscribeGlobal(() => {
       setTimelineCount(TimelineStore.getTimelines().length);
@@ -137,8 +160,10 @@ export function TweakRoot({ position = 'top-right', defaultOpen = true, mode = '
     return null;
   }
 
-  // Don't render if no editing surfaces are registered.
-  if (panels.length === 0 && timelineCount === 0) {
+  // Don't render if no editing surfaces are registered. A filtered root owns
+  // named panels only: with none of them present there is nothing to draw, and
+  // the timeline belongs to whichever root was left unfiltered.
+  if (panels.length === 0 && (onlyKey !== undefined || timelineCount === 0)) {
     return null;
   }
 
@@ -149,11 +174,11 @@ export function TweakRoot({ position = 'top-right', defaultOpen = true, mode = '
     bottom: 'auto' as const,
   } : undefined;
 
-  const timelineToggle = timelineCount > 0 ? <TimelineToggleButton /> : null;
+  const timelineToggle = timelineCount > 0 && onlyKey === undefined ? <TimelineToggleButton /> : null;
 
   const content = (
   <ShortcutListener>
-    <div className="tweakers-root" data-mode={mode} data-theme={theme}>
+    <div className="tweakers-root" data-mode={mode} data-theme={theme} data-chrome={chrome}>
       <div
         ref={panelRef}
         className="tweakers-panel"

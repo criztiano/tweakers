@@ -10,8 +10,9 @@ export interface UseTweakStorePanelOptions {
   affordances?: Record<string, AffordanceConfig>;
   /** Display label by control path, overriding the key-derived name. */
   labels?: Record<string, string>;
-  /** Host-owned backing for the toolbar's preset UI (see PresetProvider). */
-  presets?: PresetProvider;
+  /** Host-owned backing for the toolbar's preset UI (see PresetProvider), or
+   * `false` to leave this panel's header bare of the toolbar entirely. */
+  presets?: PresetProvider | false;
   kind?: 'timeline';
 }
 
@@ -87,7 +88,9 @@ export function useTweakStorePanel(
   // notifies when the visible data (list, active id) changed, so this is the
   // same reconciliation cost profile as the serialized config path above.
   useEffect(() => {
-    TweakStore.setPresetProvider(panelId, optionsRef.current.presets ?? null);
+    const presets = optionsRef.current.presets;
+    TweakStore.setPresetsHidden(panelId, presets === false);
+    TweakStore.setPresetProvider(panelId, presets === false ? null : presets ?? null);
   });
 
   // Curve rows' sample functions and markers get the same after-every-render

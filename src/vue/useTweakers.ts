@@ -30,7 +30,7 @@ export interface UseTweakersOptions {
    * Host-owned backing for the toolbar's preset UI (see PresetProvider).
    * Reactive `presets`/`activeId` sources are tracked through the watcher.
    */
-  presets?: PresetProvider;
+  presets?: PresetProvider | false;
 }
 
 let tweakKitInstance = 0;
@@ -55,7 +55,8 @@ export function useTweakers<T extends TweakConfig>(
   const register = () => {
     TweakStore.registerPanel(panelId, name, configRef.value, shortcutsRef.value, { hints: options?.hints, affordances: options?.affordances,
       labels: options?.labels });
-    TweakStore.setPresetProvider(panelId, options?.presets ?? null);
+    TweakStore.setPresetsHidden(panelId, options?.presets === false);
+    TweakStore.setPresetProvider(panelId, options?.presets === false ? null : options?.presets ?? null);
     values.value = TweakStore.getValues(panelId);
 
     unsubscribeValues = TweakStore.subscribe(panelId, () => {
@@ -79,7 +80,8 @@ export function useTweakers<T extends TweakConfig>(
   // setPresetProvider swaps the object and only notifies on a data change.
   watch(() => JSON.stringify(options?.presets ?? null), () => {
     if (mounted.value) {
-      TweakStore.setPresetProvider(panelId, options?.presets ?? null);
+      TweakStore.setPresetsHidden(panelId, options?.presets === false);
+      TweakStore.setPresetProvider(panelId, options?.presets === false ? null : options?.presets ?? null);
     }
   });
 

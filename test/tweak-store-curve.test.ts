@@ -200,3 +200,30 @@ describe('syncCurveConfigs', () => {
     expect(TweakStore.getValues(id)).toBe(before);
   });
 });
+
+// `aspect` sizes the surface from its own width instead of `height`, so a
+// transfer curve holds its proportions at any column width.
+describe('a curve with an aspect', () => {
+  const id = 'curve-square-panel';
+
+  afterEach(() => {
+    TweakStore.unregisterPanel(id);
+  });
+
+  const curve = (extra: Record<string, unknown>) => ({
+    shape: { type: 'curve' as const, sample: (t: number) => t, ...extra },
+  });
+
+  it('carries the ratio through to the control', () => {
+    TweakStore.registerPanel(id, id, curve({ aspect: 4 / 3 }));
+    const control = TweakStore.getPanels().find((p) => p.id === id)!.controls[0];
+    expect(control.aspect).toBeCloseTo(4 / 3);
+  });
+
+  it('leaves an ordinary curve without one', () => {
+    TweakStore.registerPanel(id, id, curve({ height: 48 }));
+    const control = TweakStore.getPanels().find((p) => p.id === id)!.controls[0];
+    expect(control.aspect).toBeUndefined();
+    expect(control.height).toBe(48);
+  });
+});

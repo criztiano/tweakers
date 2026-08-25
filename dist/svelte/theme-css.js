@@ -275,6 +275,19 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   overflow: hidden;
 }
 
+/* Chromeless: the host already owns the ground, so the panel adds no surface
+   of its own — no glass, no hairline, no radius, no padding. The rows sit on
+   the app's own body and read as part of it rather than as a card on top. */
+.tweakers-root[data-chrome="none"] .tweakers-panel-inner {
+  background: none;
+  border: none;
+  border-radius: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  padding: 0;
+}
+
 .tweakers-panel-inner {
   background: var(--tweak-glass-bg);
   border: 1px solid var(--tweak-border);
@@ -772,17 +785,20 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
    the row edge, and open or closed it is spaced, never ruled off. */
 .tweakers-module-folder {
   margin: 0;
-  padding-bottom: 6px;
+  padding-bottom: 2px;
 }
 
+/* The header is one row tall — the switch centred in it, no trailing space of
+   its own. A closed section then costs exactly what a control row costs, so a
+   stack of sections reads as one column rather than as blocks held apart. */
 .tweakers-module-folder > .tweakers-module-header {
   box-sizing: border-box;
   min-height: var(--tweak-row-height);
-  padding: 2px 10px 8px 4px;
+  padding: 3px 10px 3px 4px;
 }
 
 .tweakers-module-folder[data-open='true'] {
-  margin: 4px 0;
+  margin: 2px 0;
   padding-bottom: 0;
 }
 
@@ -1552,6 +1568,13 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   border-radius: var(--tweak-radius);
   background: var(--tweak-surface);
   border: 1px solid var(--tweak-border);
+}
+
+/* A curve that declared an aspect takes its height from its own width, so the
+   plot holds its proportions at any column width. The ratio itself rides an
+   inline style — it is per-control data, not a design constant. */
+.tweakers-curve-surface[data-aspect] {
+  height: auto;
 }
 
 .tweakers-curve-baseline {

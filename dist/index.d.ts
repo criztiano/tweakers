@@ -504,8 +504,15 @@ type CurveConfig = {
     domain?: [number, number];
     /** Vertical reference lines at these x positions in [0,1]; invalid entries are skipped. */
     markers?: readonly number[];
-    /** Surface height in px, clamped to 32–160. Default 64. */
+    /** Surface height in px, clamped to 32–160. Default 64. Ignored when `aspect` is set. */
     height?: number;
+    /**
+     * Width ÷ height. Sizes the surface from its own width instead of `height`,
+     * so the plot holds its proportions at any column width — what a transfer
+     * curve wants, since its two axes share a scale. `1` is square, `4 / 3` a
+     * little wider than tall.
+     */
+    aspect?: number;
     /** `false` = full-bleed row without the label line; a string overrides the key-derived label. */
     label?: false | string;
 };
@@ -752,6 +759,8 @@ type ControlMeta = {
     markers?: readonly number[];
     /** Curve preview's surface height in px (renderers clamp via clampCurveHeight). */
     height?: number;
+    /** Curve preview's width ÷ height — the surface follows its own width. */
+    aspect?: number;
     /** Curve preview declared `label: false` — full-bleed row without the label line. */
     hideLabel?: boolean;
     shortcut?: ShortcutConfig;
@@ -770,6 +779,11 @@ type PanelConfig = {
     affordances?: Record<string, AffordanceConfig>;
     /** Label overrides by control path, retained on the same terms as `hints`. */
     labels?: Record<string, string>;
+    /**
+     * Config declared `_enabled` at its root — the whole panel is a module, and
+     * its title carries the switch. Same idiom as a module folder, one level up.
+     */
+    module?: boolean;
     kind?: 'timeline';
 };
 type Listener$1 = () => void;
@@ -886,6 +900,8 @@ declare class TweakStoreClass {
     private presets;
     private activePreset;
     private presetProviders;
+    /** Panels whose header carries no preset toolbar (see setPresetsHidden). */
+    private presetsHidden;
     private baseValues;
     private persistTargets;
     registerPanel(id: string, name: string, config: TweakConfig, shortcuts?: Record<string, ShortcutConfig>, options?: TweakStorePanelOptions): void;
@@ -902,6 +918,14 @@ declare class TweakStoreClass {
     getValue(panelId: string, path: string): TweakValue | undefined;
     getValues(panelId: string): Record<string, TweakValue>;
     getPanels(kind?: 'panel' | 'timeline'): PanelConfig[];
+    /**
+     * The settings panels a root should draw, given its optional `panels` filter.
+     * `undefined` means every panel — the single-surface default. A list means
+     * exactly those names, in the order named, so two roots never fight over the
+     * same panel and a panel that has not registered yet leaves a gap that fills
+     * when it does.
+     */
+    selectPanels(only?: string | string[]): PanelConfig[];
     getPanel(id: string): PanelConfig | undefined;
     subscribe(panelId: string, listener: Listener$1): () => void;
     subscribeGlobal(listener: Listener$1): () => void;
@@ -954,6 +978,15 @@ declare class TweakStoreClass {
      */
     setPresetProvider(panelId: string, provider: PresetProvider | null | undefined): void;
     getPresetProvider(panelId: string): PresetProvider | null;
+    /**
+     * Hide (or restore) a panel's preset toolbar. For the secondary panels of a
+     * multi-panel app — a rack of per-voice columns, say — where a snapshot
+     * means the whole instrument and so belongs to one panel only. Hiding the
+     * toolbar hides its add and copy buttons with it: the header of a panel that
+     * does not own presets is bare.
+     */
+    setPresetsHidden(panelId: string, hidden: boolean): void;
+    arePresetsHidden(panelId: string): boolean;
     /** Provider mode hides the implicit "Version 1" base row — the host owns the whole list. */
     hasPresetProvider(panelId: string): boolean;
     /** The dropdown rows in host order, from the provider when one is set. */
@@ -1070,13 +1103,19 @@ interface UseTweakersOptions {
      * Host-owned backing for the toolbar's preset UI. The toolbar renders this
      * list instead of the built-in localStorage snapshots; the host applies
      * values in `onSelect` and owns persistence (see PresetProvider).
+     *
+     * `false` leaves this panel's header bare of the toolbar altogether — for
+     * the secondary panels of a multi-panel app, where a snapshot means the
+     * whole instrument and so belongs to one panel only.
      */
-    presets?: PresetProvider;
+    presets?: PresetProvider | false;
 }
 declare function useTweakers<T extends TweakConfig>(name: string, config: T, options?: UseTweakersOptions): ResolvedValues<T>;
 
 type TweakPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left';
 type TweakMode = 'popover' | 'inline';
+/** `card` is the panel's glass surface; `none` puts the rows straight on the host's ground. */
+type TweakChrome = 'card' | 'none';
 type TweakTheme = 'light' | 'dark' | 'system';
 interface TweakRootProps {
     position?: TweakPosition;
@@ -1084,8 +1123,21 @@ interface TweakRootProps {
     mode?: TweakMode;
     theme?: TweakTheme;
     productionEnabled?: boolean;
+    /**
+     * Render only the named panels, in the order given. For apps that place
+     * more than one panel surface in more than one place — a rack of per-voice
+     * columns beside a global panel, say. Omitted, a root renders every
+     * registered panel, which is the single-surface default.
+     */
+    panels?: string | string[];
+    /**
+     * `none` drops the panel card — no glass, no border, no radius, no padding —
+     * so the rows sit directly on the host's own surface. For app chrome that
+     * already provides the ground the panel would otherwise float on.
+     */
+    chrome?: TweakChrome;
 }
-declare function TweakRoot({ position, defaultOpen, mode, theme, productionEnabled }: TweakRootProps): react.JSX.Element | null;
+declare function TweakRoot({ position, defaultOpen, mode, theme, productionEnabled, panels: only, chrome }: TweakRootProps): react.JSX.Element | null;
 
 /**
  * Fail-soft browser persistence shared by TweakStore (panel values) and
@@ -1501,8 +1553,15 @@ interface FolderProps {
     /** One line of help for the section, revealed on hover over the header. */
     hint?: string;
     hintId?: string;
+    /**
+     * Root only — the panel declared `_enabled`, so the whole panel is a module:
+     * the title carries the switch and the body goes away when it is off. Same
+     * idiom as ModuleFolder, one level up.
+     */
+    enabled?: boolean;
+    onEnabledChange?: (enabled: boolean) => void;
 }
-declare function Folder({ title, children, defaultOpen, collapsible, isRoot, inline, onOpenChange, toolbar, tabs, hint, hintId }: FolderProps): react.JSX.Element;
+declare function Folder({ title, children, defaultOpen, collapsible, isRoot, inline, onOpenChange, toolbar, tabs, hint, hintId, enabled, onEnabledChange }: FolderProps): react.JSX.Element;
 
 interface ControlShellProps {
     /** Help text for this control. Without one the tooltip is not rendered. */
