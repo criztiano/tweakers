@@ -25,6 +25,7 @@ import { ChipsControl } from './ChipsControl';
 import { MultiSelectControl } from './MultiSelectControl';
 import { ListControl } from './ListControl';
 import { CurvePreview } from './CurvePreview';
+import { AnalyserRow } from './AnalyserRow';
 
 interface ControlRendererProps {
   panelId: string;
@@ -54,7 +55,7 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
     // list catches up (values ride the panel subscription, structure rides the
     // global one). A value-bearing control with no value is that gap — skip it
     // for the frame instead of handing undefined to a control.
-    if (value === undefined && control.type !== 'folder' && control.type !== 'action' && control.type !== 'curve') {
+    if (value === undefined && control.type !== 'folder' && control.type !== 'action' && control.type !== 'curve' && control.type !== 'analyser') {
       return null;
     }
 
@@ -347,6 +348,9 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
 
       case 'curve':
         return <CurvePreview key={control.path} panelId={panelId} control={control} />;
+
+      case 'analyser':
+        return <AnalyserRow key={control.path} panelId={panelId} control={control} />;
 
       case 'action': {
         const button = (

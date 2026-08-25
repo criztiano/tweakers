@@ -314,6 +314,37 @@ type CurveConfig = {
     /** `false` = full-bleed row without the label line; a string overrides the key-derived label. */
     label?: false | string;
 };
+/**
+ * A read-only live-analyser row: the panel-embedded form of the standalone
+ * `AnalyserVisualization`. Like the curve row it holds no value — nothing
+ * lands in ResolvedValues, presets, or persistence — and its function-valued
+ * fields (`analyser`, `marker`) are invisible to the serialized config diff,
+ * so adapters keep them fresh through `TweakStore.syncCurveConfigs`.
+ */
+type AnalyserConfig = {
+    type: 'analyser';
+    /** The live AnalyserNode, read at render — a getter so the host can hand it over late (audio contexts start on gesture). */
+    analyser: () => AnalyserNode | null;
+    /** 'frequency' (default) — live spectrum. 'waveform' — oscilloscope. */
+    source?: 'frequency' | 'waveform';
+    variant?: 'line' | 'area';
+    /** 'pixelated' (default here — the panel's block language) or 'smooth'. */
+    mode?: 'smooth' | 'pixelated';
+    pixelSize?: number;
+    scale?: 'log' | 'linear';
+    spring?: boolean | {
+        stiffness?: number;
+        damping?: number;
+    };
+    /** Spectrum only: confine the display to this frequency window in Hz. */
+    rangeHz?: readonly [number, number];
+    /** Spectrum only: a live vertical reference in Hz, read every frame. */
+    marker?: () => number | null;
+    /** Surface height in px, clamped like the curve row's. Default 56. */
+    height?: number;
+    /** `false` = full-bleed row without the label line; a string overrides the key-derived label. */
+    label?: false | string;
+};
 type FileConfig = {
     type: 'file';
     /** Native input `accept` filter, e.g. 'image/*' or '.svg,image/svg+xml'. */
@@ -420,7 +451,7 @@ type ListConfig = {
 };
 type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 type TweakConfig = {
-    [key: string]: TweakValue | [number, number, number, number?] | CurveConfig | TweakConfig;
+    [key: string]: TweakValue | [number, number, number, number?] | CurveConfig | AnalyserConfig | TweakConfig;
 };
 /** UI-only reserved keys: they shape the panel, never resolve to a value. */
 type ReservedKey = '_collapsed' | '_collapsible' | '_tabs';
@@ -466,7 +497,7 @@ type AffordanceConfig = {
     label?: string;
 };
 type ControlMeta = {
-    type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve';
+    type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser';
     path: string;
     label: string;
     /** One line of help, revealed on hover or when focus lands inside the control. */
@@ -538,6 +569,8 @@ type ControlMeta = {
     aspect?: number;
     /** Curve preview declared `label: false` — full-bleed row without the label line. */
     hideLabel?: boolean;
+    /** Analyser row's whole config — swapped in place by syncCurveConfigs, like `sample`. */
+    analyserRow?: AnalyserConfig;
     shortcut?: ShortcutConfig;
 };
 type PanelConfig = {
@@ -819,6 +852,7 @@ declare class TweakStoreClass {
     private isMultiSelectConfig;
     private isSliderConfig;
     private isNumberConfig;
+    private isAnalyserConfig;
     private isCurveConfig;
     private isListConfig;
     private isHexColor;

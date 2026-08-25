@@ -23,6 +23,18 @@ interface AnalyserRuntime {
     fillColor?: string;
     /** Dims the trace as feedback — the host owns the actual gain routing. */
     muted: boolean;
+    /**
+     * Spectrum only: confine the display to this frequency window in Hz — a
+     * zoomed-in analyser (a low-end monitor, a presence band). Null / absent is
+     * the full range. Nyquist comes from the analyser's own context.
+     */
+    rangeHz?: readonly [number, number] | null;
+    /**
+     * Spectrum only: a live vertical reference in Hz, read every frame — the
+     * host points it at whatever its own parameter says (a filter corner, a
+     * tracking focus). Null (or out of the window) draws nothing.
+     */
+    marker?: (() => number | null) | null;
     width: number;
     height: number;
 }

@@ -188,6 +188,35 @@ export type CurveConfig = {
   label?: false | string;
 };
 
+/**
+ * A read-only live-analyser row: the panel-embedded form of the standalone
+ * `AnalyserVisualization`. Like the curve row it holds no value — nothing
+ * lands in ResolvedValues, presets, or persistence — and its function-valued
+ * fields (`analyser`, `marker`) are invisible to the serialized config diff,
+ * so adapters keep them fresh through `TweakStore.syncCurveConfigs`.
+ */
+export type AnalyserConfig = {
+  type: 'analyser';
+  /** The live AnalyserNode, read at render — a getter so the host can hand it over late (audio contexts start on gesture). */
+  analyser: () => AnalyserNode | null;
+  /** 'frequency' (default) — live spectrum. 'waveform' — oscilloscope. */
+  source?: 'frequency' | 'waveform';
+  variant?: 'line' | 'area';
+  /** 'pixelated' (default here — the panel's block language) or 'smooth'. */
+  mode?: 'smooth' | 'pixelated';
+  pixelSize?: number;
+  scale?: 'log' | 'linear';
+  spring?: boolean | { stiffness?: number; damping?: number };
+  /** Spectrum only: confine the display to this frequency window in Hz. */
+  rangeHz?: readonly [number, number];
+  /** Spectrum only: a live vertical reference in Hz, read every frame. */
+  marker?: () => number | null;
+  /** Surface height in px, clamped like the curve row's. Default 56. */
+  height?: number;
+  /** `false` = full-bleed row without the label line; a string overrides the key-derived label. */
+  label?: false | string;
+};
+
 export type FileConfig = {
   type: 'file';
   /** Native input `accept` filter, e.g. 'image/*' or '.svg,image/svg+xml'. */
@@ -339,9 +368,9 @@ export type ListField = {
 export type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
 
 export type TweakConfig = {
-  // CurveConfig is not a TweakValue: it never enters the value layer, so it
-  // rides the config union directly instead.
-  [key: string]: TweakValue | [number, number, number, number?] | CurveConfig | TweakConfig;
+  // CurveConfig and AnalyserConfig are not TweakValues: they never enter the
+  // value layer, so they ride the config union directly instead.
+  [key: string]: TweakValue | [number, number, number, number?] | CurveConfig | AnalyserConfig | TweakConfig;
 };
 
 /** UI-only reserved keys: they shape the panel, never resolve to a value. */
@@ -433,7 +462,7 @@ export type AffordanceConfig = {
 };
 
 export type ControlMeta = {
-  type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve';
+  type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser';
   path: string;
   label: string;
   /** One line of help, revealed on hover or when focus lands inside the control. */
@@ -502,6 +531,8 @@ export type ControlMeta = {
   aspect?: number;
   /** Curve preview declared `label: false` — full-bleed row without the label line. */
   hideLabel?: boolean;
+  /** Analyser row's whole config — swapped in place by syncCurveConfigs, like `sample`. */
+  analyserRow?: AnalyserConfig;
   shortcut?: ShortcutConfig;
 };
 
@@ -717,8 +748,8 @@ function resolveConfigValues(
       result[key] = flatValues[path] ?? (configValue as ColorConfig).default ?? '#000000';
     } else if (resolveValueHasType(configValue, 'text')) {
       result[key] = flatValues[path] ?? (configValue as TextConfig).default ?? '';
-    } else if (resolveValueHasType(configValue, 'curve')) {
-      // Display-only row: no value to resolve.
+    } else if (resolveValueHasType(configValue, 'curve') || resolveValueHasType(configValue, 'analyser')) {
+      // Display-only rows: no value to resolve.
     } else if (typeof configValue === 'object' && configValue !== null) {
       result[key] = resolveConfigValues(configValue as TweakConfig, flatValues, path);
     }
@@ -1170,7 +1201,33 @@ class TweakStoreClass {
               changed = true;
             }
           }
-        } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value)) {
+        } else if (this.isAnalyserConfig(value)) {
+          const control = this.findControlByPath(panel.controls, path);
+          // The whole row config rides the sync as one object: its two
+          // closures go stale exactly the way `sample` does, and the scalars
+          // beside them are cheap to carry along rather than diff field by
+          // field. Identity of the closures is the change signal — a host
+          // that rebuilds its config per render notifies on the control-state
+          // channel only, same as the curve row, so no value churn.
+          if (control?.type === 'analyser' && control.analyserRow !== undefined) {
+            const prev = control.analyserRow;
+            const sameRange =
+              prev.rangeHz === value.rangeHz ||
+              (!!prev.rangeHz && !!value.rangeHz && prev.rangeHz[0] === value.rangeHz[0] && prev.rangeHz[1] === value.rangeHz[1]);
+            const sameScalars =
+              prev.source === value.source &&
+              prev.variant === value.variant &&
+              prev.mode === value.mode &&
+              prev.pixelSize === value.pixelSize &&
+              prev.scale === value.scale &&
+              prev.height === value.height &&
+              sameRange;
+            if (prev.analyser !== value.analyser || prev.marker !== value.marker || !sameScalars) {
+              control.analyserRow = value;
+              changed = true;
+            }
+          }
+        } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
           visit(value as TweakConfig, path);
         }
       }
@@ -1561,6 +1618,15 @@ class TweakStoreClass {
           height: value.height,
           aspect: value.aspect,
         });
+      } else if (this.isAnalyserConfig(value)) {
+        controls.push({
+          type: 'analyser',
+          path,
+          label: typeof value.label === 'string' ? value.label : label,
+          hideLabel: value.label === false || undefined,
+          height: value.height,
+          analyserRow: value,
+        });
       } else if (typeof value === 'string') {
         // Auto-detect: hex color vs text. Alpha digits in the default
         // (#rgba / #rrggbbaa) opt the control into the alpha slider.
@@ -1874,6 +1940,16 @@ class TweakStoreClass {
       'type' in value &&
       (value as NumberConfig).type === 'number' &&
       typeof (value as NumberConfig).default === 'number'
+    );
+  }
+
+  private isAnalyserConfig(value: unknown): value is AnalyserConfig {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'type' in value &&
+      (value as AnalyserConfig).type === 'analyser' &&
+      typeof (value as AnalyserConfig).analyser === 'function'
     );
   }
 

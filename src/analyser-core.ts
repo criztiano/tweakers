@@ -22,22 +22,72 @@ export function byteTimeToUnit(v: number): number {
 // Bin 0 (DC) is skipped; log spacing is anchored at bin 1 so the low end gets the
 // resolution a musical spectrum wants. Always spans at least one bin, and clamps
 // into range whether points outnumber bins or vice versa.
-export function binRange(point: number, points: number, bins: number, scale: AnalyserScale): { start: number; end: number } {
+//
+// `loBin`/`hiBin` confine the display to a bin window — the zoomed-in spectrum
+// (a low-end monitor, a presence band). Defaults reproduce the full-range
+// behaviour exactly: the original formula was this one with lo = 1, hi = bins.
+export function binRange(
+  point: number,
+  points: number,
+  bins: number,
+  scale: AnalyserScale,
+  loBin = 1,
+  hiBin = bins
+): { start: number; end: number } {
   if (bins <= 2) return { start: Math.max(0, bins - 1), end: Math.max(1, bins) };
-  const lo = 1;
-  const at = (t: number) => (scale === 'log' ? Math.pow(bins, t) * lo : lo + (bins - lo) * t);
+  const lo = Math.max(1, Math.min(bins - 1, loBin));
+  const hi = Math.max(lo + 1, Math.min(bins, hiBin));
+  const at = (t: number) => (scale === 'log' ? lo * Math.pow(hi / lo, t) : lo + (hi - lo) * t);
   let start = Math.floor(at(point / points));
-  start = Math.max(lo, Math.min(bins - 1, start));
-  const end = Math.max(start + 1, Math.min(bins, Math.floor(at((point + 1) / points))));
+  start = Math.max(lo, Math.min(hi - 1, start));
+  const end = Math.max(start + 1, Math.min(hi, Math.floor(at((point + 1) / points))));
   return { start, end };
+}
+
+// A frequency window in Hz → the bin window binRange consumes. `null` when the
+// range is unusable (non-finite, inverted, or entirely below bin 1 / above
+// Nyquist) — callers fall back to the full range.
+export function hzWindowToBins(
+  rangeHz: readonly [number, number],
+  nyquistHz: number,
+  bins: number
+): { loBin: number; hiBin: number } | null {
+  const [loHz, hiHz] = rangeHz;
+  if (!Number.isFinite(loHz) || !Number.isFinite(hiHz) || !(nyquistHz > 0) || bins <= 2) return null;
+  if (!(hiHz > loHz) || hiHz <= 0) return null;
+  const toBin = (hz: number) => (hz / nyquistHz) * bins;
+  const loBin = Math.max(1, Math.min(bins - 1, toBin(Math.max(0, loHz))));
+  const hiBin = Math.max(loBin + 1, Math.min(bins, toBin(hiHz)));
+  return { loBin, hiBin };
+}
+
+// Normalized x-position of `bin` inside the display's bin window under `scale`,
+// matching binRange's spacing exactly — so a marker drawn at this position sits
+// over the display points that carry that frequency. Outside 0..1 (or on bad
+// input) the marker has no place on this display: null.
+export function markerT(
+  bin: number,
+  scale: AnalyserScale,
+  loBin: number,
+  hiBin: number
+): number | null {
+  if (!Number.isFinite(bin) || !(hiBin > loBin) || loBin <= 0) return null;
+  const t = scale === 'log' ? Math.log(bin / loBin) / Math.log(hiBin / loBin) : (bin - loBin) / (hiBin - loBin);
+  return t >= 0 && t <= 1 && Number.isFinite(t) ? t : null;
 }
 
 // Fill one 0..1 magnitude per display point: the loudest bin in each point's band
 // (band max, not average — narrow peaks must survive the reduction).
-export function fillFrequencyTargets(data: Uint8Array, out: Float32Array, scale: AnalyserScale) {
+export function fillFrequencyTargets(
+  data: Uint8Array,
+  out: Float32Array,
+  scale: AnalyserScale,
+  loBin = 1,
+  hiBin = data.length
+) {
   const points = out.length;
   for (let i = 0; i < points; i++) {
-    const { start, end } = binRange(i, points, data.length, scale);
+    const { start, end } = binRange(i, points, data.length, scale, loBin, hiBin);
     let mx = 0;
     for (let b = start; b < end; b++) {
       if (data[b] > mx) mx = data[b];

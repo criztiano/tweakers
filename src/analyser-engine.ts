@@ -8,6 +8,8 @@
 import {
   fillFrequencyTargets,
   fillWaveformMinMax,
+  hzWindowToBins,
+  markerT,
   resampleWaveform,
   peakLevel,
   advanceSweep,
@@ -40,6 +42,18 @@ export interface AnalyserRuntime {
   fillColor?: string;
   /** Dims the trace as feedback — the host owns the actual gain routing. */
   muted: boolean;
+  /**
+   * Spectrum only: confine the display to this frequency window in Hz — a
+   * zoomed-in analyser (a low-end monitor, a presence band). Null / absent is
+   * the full range. Nyquist comes from the analyser's own context.
+   */
+  rangeHz?: readonly [number, number] | null;
+  /**
+   * Spectrum only: a live vertical reference in Hz, read every frame — the
+   * host points it at whatever its own parameter says (a filter corner, a
+   * tracking focus). Null (or out of the window) draws nothing.
+   */
+  marker?: (() => number | null) | null;
   width: number;
   height: number;
 }
@@ -452,11 +466,18 @@ export function createAnalyserEngine(canvas: HTMLCanvasElement, get: () => Analy
     const pixelated = rt.mode === 'pixelated';
     const n = pixelated ? Math.max(2, Math.ceil(W / columnWidth(rt.pixelSize))) : SMOOTH_POINTS;
     syncPoints(n);
+    // The spectrum's optional frequency window, in bins. Recomputed per frame:
+    // it depends on the analyser's sample rate, which can change with the host's
+    // audio context, and the mapping is a handful of arithmetic ops.
+    const win =
+      rt.source === 'frequency' && rt.rangeHz
+        ? hzWindowToBins(rt.rangeHz, an.context.sampleRate / 2, bytes.length)
+        : null;
     // The waveform's area (band) needs both envelopes; its smooth line is a single
     // resampled trace. `b` carries the min series whenever both are in play.
     const twoSeries = rt.source === 'waveform' && (pixelated || rt.variant === 'area');
     if (rt.source === 'frequency') {
-      fillFrequencyTargets(bytes, targetsA, rt.scale);
+      fillFrequencyTargets(bytes, targetsA, rt.scale, win?.loBin ?? 1, win?.hiBin ?? bytes.length);
     } else if (twoSeries) {
       fillWaveformMinMax(bytes, n, targetsB, targetsA); // A carries max, B min
     } else {
@@ -493,6 +514,31 @@ export function createAnalyserEngine(canvas: HTMLCanvasElement, get: () => Analy
         drawBand(values, springActive ? posB : targetsB, wave, fill, alpha);
       } else {
         drawSmooth(values, (v) => cy - v * (H * WAVE_AMP), cy, false, wave, fill, alpha);
+      }
+    }
+
+    // --- marker: a live vertical reference over the spectrum ---
+    if (rt.source === 'frequency' && rt.marker) {
+      const hz = rt.marker();
+      if (hz != null && Number.isFinite(hz)) {
+        const bins = bytes.length;
+        const bin = (hz / (an.context.sampleRate / 2)) * bins;
+        const t = markerT(bin, rt.scale, win?.loBin ?? 1, win?.hiBin ?? bins);
+        if (t !== null) {
+          // The curve preview's marker language: a hairline in the tertiary
+          // text weight, snapped to the block grid in pixelated mode so it
+          // lands between columns rather than through one.
+          let x = t * W;
+          if (pixelated) x = quantizeToGrid(x, columnWidth(rt.pixelSize));
+          ctx.strokeStyle = wave;
+          ctx.globalAlpha = 0.4 * alpha;
+          ctx.lineWidth = dpr;
+          ctx.beginPath();
+          ctx.moveTo(Math.round(x) + 0.5, 0);
+          ctx.lineTo(Math.round(x) + 0.5, H);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
       }
     }
   };

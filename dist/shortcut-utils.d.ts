@@ -36,6 +36,37 @@ type TextConfig = {
     default?: string;
     placeholder?: string;
 };
+/**
+ * A read-only live-analyser row: the panel-embedded form of the standalone
+ * `AnalyserVisualization`. Like the curve row it holds no value — nothing
+ * lands in ResolvedValues, presets, or persistence — and its function-valued
+ * fields (`analyser`, `marker`) are invisible to the serialized config diff,
+ * so adapters keep them fresh through `TweakStore.syncCurveConfigs`.
+ */
+type AnalyserConfig = {
+    type: 'analyser';
+    /** The live AnalyserNode, read at render — a getter so the host can hand it over late (audio contexts start on gesture). */
+    analyser: () => AnalyserNode | null;
+    /** 'frequency' (default) — live spectrum. 'waveform' — oscilloscope. */
+    source?: 'frequency' | 'waveform';
+    variant?: 'line' | 'area';
+    /** 'pixelated' (default here — the panel's block language) or 'smooth'. */
+    mode?: 'smooth' | 'pixelated';
+    pixelSize?: number;
+    scale?: 'log' | 'linear';
+    spring?: boolean | {
+        stiffness?: number;
+        damping?: number;
+    };
+    /** Spectrum only: confine the display to this frequency window in Hz. */
+    rangeHz?: readonly [number, number];
+    /** Spectrum only: a live vertical reference in Hz, read every frame. */
+    marker?: () => number | null;
+    /** Surface height in px, clamped like the curve row's. Default 56. */
+    height?: number;
+    /** `false` = full-bleed row without the label line; a string overrides the key-derived label. */
+    label?: false | string;
+};
 type SwatchOption = {
     value: string;
     label: string;
@@ -132,7 +163,7 @@ type AffordanceConfig = {
     label?: string;
 };
 type ControlMeta = {
-    type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve';
+    type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser';
     path: string;
     label: string;
     /** One line of help, revealed on hover or when focus lands inside the control. */
@@ -204,6 +235,8 @@ type ControlMeta = {
     aspect?: number;
     /** Curve preview declared `label: false` — full-bleed row without the label line. */
     hideLabel?: boolean;
+    /** Analyser row's whole config — swapped in place by syncCurveConfigs, like `sample`. */
+    analyserRow?: AnalyserConfig;
     shortcut?: ShortcutConfig;
 };
 

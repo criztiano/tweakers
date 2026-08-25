@@ -57,6 +57,10 @@ interface AnalyserVisualizationProps {
   soloed?: boolean;
   /** Shows the solo button; called with the requested state on click. */
   onSoloChange?: (soloed: boolean) => void;
+  /** Spectrum only: confine the display to this frequency window in Hz. */
+  rangeHz?: readonly [number, number] | null;
+  /** Spectrum only: a live vertical reference in Hz, read every frame. */
+  marker?: (() => number | null) | null;
   width?: number;
   height?: number;
 }
@@ -77,6 +81,8 @@ export function AnalyserVisualization({
   onMuteChange,
   soloed = false,
   onSoloChange,
+  rangeHz = null,
+  marker = null,
   width = 256,
   height = 140,
 }: AnalyserVisualizationProps) {
@@ -97,6 +103,8 @@ export function AnalyserVisualization({
     waveColor,
     fillColor,
     muted,
+    rangeHz,
+    marker,
     width,
     height,
   };

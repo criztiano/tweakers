@@ -3,6 +3,8 @@ import {
   byteFreqToUnit,
   byteTimeToUnit,
   binRange,
+  hzWindowToBins,
+  markerT,
   fillFrequencyTargets,
   fillWaveformMinMax,
   resampleWaveform,
@@ -271,5 +273,71 @@ describe('quantizeToGrid', () => {
     expect(quantizeToGrid(6, 4)).toBe(8);
     expect(quantizeToGrid(13, 4)).toBe(12);
     expect(quantizeToGrid(7, 1)).toBe(7);
+  });
+});
+
+describe('binRange with a bin window', () => {
+  it('defaults reproduce the full-range behaviour exactly', () => {
+    for (const scale of ['log', 'linear'] as const) {
+      for (let p = 0; p < 8; p++) {
+        expect(binRange(p, 8, 64, scale, 1, 64)).toEqual(binRange(p, 8, 64, scale));
+      }
+    }
+  });
+
+  it('confines every band to the window, without gaps', () => {
+    for (const scale of ['log', 'linear'] as const) {
+      let prevEnd = -1;
+      for (let p = 0; p < 8; p++) {
+        const { start, end } = binRange(p, 8, 512, scale, 4, 32);
+        expect(start).toBeGreaterThanOrEqual(4);
+        expect(end).toBeLessThanOrEqual(32);
+        expect(end).toBeGreaterThan(start);
+        if (prevEnd >= 0) expect(start).toBeLessThanOrEqual(prevEnd);
+        prevEnd = end;
+      }
+      expect(prevEnd).toBe(32);
+    }
+  });
+
+  it('survives a degenerate window by clamping it open', () => {
+    const { start, end } = binRange(0, 4, 64, 'log', 60, 60);
+    expect(end).toBeGreaterThan(start);
+  });
+});
+
+describe('hzWindowToBins', () => {
+  it('maps a low-end window onto the linear bin axis', () => {
+    // 24 kHz Nyquist over 1024 bins: 23.4375 Hz per bin.
+    const w = hzWindowToBins([30, 1200], 24000, 1024)!;
+    expect(w.loBin).toBeCloseTo((30 / 24000) * 1024, 6);
+    expect(w.hiBin).toBeCloseTo((1200 / 24000) * 1024, 6);
+  });
+
+  it('clamps below bin 1 and refuses nonsense', () => {
+    const w = hzWindowToBins([0, 100], 24000, 1024)!;
+    expect(w.loBin).toBe(1);
+    expect(hzWindowToBins([200, 100], 24000, 1024)).toBeNull();
+    expect(hzWindowToBins([Number.NaN, 100], 24000, 1024)).toBeNull();
+    expect(hzWindowToBins([30, 100], 0, 1024)).toBeNull();
+  });
+});
+
+describe('markerT', () => {
+  it('matches the log spacing binRange uses', () => {
+    // Halfway in log space between bins 4 and 64 is bin 16.
+    expect(markerT(16, 'log', 4, 64)).toBeCloseTo(0.5, 10);
+    expect(markerT(4, 'log', 4, 64)).toBeCloseTo(0, 10);
+    expect(markerT(64, 'log', 4, 64)).toBeCloseTo(1, 10);
+  });
+
+  it('is linear under the linear scale', () => {
+    expect(markerT(34, 'linear', 4, 64)).toBeCloseTo(0.5, 10);
+  });
+
+  it('returns null outside the window or on bad input', () => {
+    expect(markerT(2, 'log', 4, 64)).toBeNull();
+    expect(markerT(100, 'log', 4, 64)).toBeNull();
+    expect(markerT(Number.NaN, 'log', 4, 64)).toBeNull();
   });
 });

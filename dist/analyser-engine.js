@@ -5,19 +5,34 @@ function byteFreqToUnit(v) {
 function byteTimeToUnit(v) {
   return (v - 128) / 128;
 }
-function binRange(point, points, bins, scale) {
+function binRange(point, points, bins, scale, loBin = 1, hiBin = bins) {
   if (bins <= 2) return { start: Math.max(0, bins - 1), end: Math.max(1, bins) };
-  const lo = 1;
-  const at = (t) => scale === "log" ? Math.pow(bins, t) * lo : lo + (bins - lo) * t;
+  const lo = Math.max(1, Math.min(bins - 1, loBin));
+  const hi = Math.max(lo + 1, Math.min(bins, hiBin));
+  const at = (t) => scale === "log" ? lo * Math.pow(hi / lo, t) : lo + (hi - lo) * t;
   let start = Math.floor(at(point / points));
-  start = Math.max(lo, Math.min(bins - 1, start));
-  const end = Math.max(start + 1, Math.min(bins, Math.floor(at((point + 1) / points))));
+  start = Math.max(lo, Math.min(hi - 1, start));
+  const end = Math.max(start + 1, Math.min(hi, Math.floor(at((point + 1) / points))));
   return { start, end };
 }
-function fillFrequencyTargets(data, out, scale) {
+function hzWindowToBins(rangeHz, nyquistHz, bins) {
+  const [loHz, hiHz] = rangeHz;
+  if (!Number.isFinite(loHz) || !Number.isFinite(hiHz) || !(nyquistHz > 0) || bins <= 2) return null;
+  if (!(hiHz > loHz) || hiHz <= 0) return null;
+  const toBin = (hz) => hz / nyquistHz * bins;
+  const loBin = Math.max(1, Math.min(bins - 1, toBin(Math.max(0, loHz))));
+  const hiBin = Math.max(loBin + 1, Math.min(bins, toBin(hiHz)));
+  return { loBin, hiBin };
+}
+function markerT(bin, scale, loBin, hiBin) {
+  if (!Number.isFinite(bin) || !(hiBin > loBin) || loBin <= 0) return null;
+  const t = scale === "log" ? Math.log(bin / loBin) / Math.log(hiBin / loBin) : (bin - loBin) / (hiBin - loBin);
+  return t >= 0 && t <= 1 && Number.isFinite(t) ? t : null;
+}
+function fillFrequencyTargets(data, out, scale, loBin = 1, hiBin = data.length) {
   const points = out.length;
   for (let i = 0; i < points; i++) {
-    const { start, end } = binRange(i, points, data.length, scale);
+    const { start, end } = binRange(i, points, data.length, scale, loBin, hiBin);
     let mx = 0;
     for (let b = start; b < end; b++) {
       if (data[b] > mx) mx = data[b];
@@ -402,9 +417,10 @@ function createAnalyserEngine(canvas, get) {
     const pixelated = rt.mode === "pixelated";
     const n = pixelated ? Math.max(2, Math.ceil(W / columnWidth2(rt.pixelSize))) : SMOOTH_POINTS;
     syncPoints(n);
+    const win = rt.source === "frequency" && rt.rangeHz ? hzWindowToBins(rt.rangeHz, an.context.sampleRate / 2, bytes.length) : null;
     const twoSeries = rt.source === "waveform" && (pixelated || rt.variant === "area");
     if (rt.source === "frequency") {
-      fillFrequencyTargets(bytes, targetsA, rt.scale);
+      fillFrequencyTargets(bytes, targetsA, rt.scale, win?.loBin ?? 1, win?.hiBin ?? bytes.length);
     } else if (twoSeries) {
       fillWaveformMinMax(bytes, n, targetsB, targetsA);
     } else {
@@ -437,6 +453,26 @@ function createAnalyserEngine(canvas, get) {
         drawBand(values, springActive ? posB : targetsB, wave, fill, alpha);
       } else {
         drawSmooth(values, (v) => cy - v * (H * WAVE_AMP), cy, false, wave, fill, alpha);
+      }
+    }
+    if (rt.source === "frequency" && rt.marker) {
+      const hz = rt.marker();
+      if (hz != null && Number.isFinite(hz)) {
+        const bins = bytes.length;
+        const bin = hz / (an.context.sampleRate / 2) * bins;
+        const t = markerT(bin, rt.scale, win?.loBin ?? 1, win?.hiBin ?? bins);
+        if (t !== null) {
+          let x = t * W;
+          if (pixelated) x = quantizeToGrid(x, columnWidth2(rt.pixelSize));
+          ctx.strokeStyle = wave;
+          ctx.globalAlpha = 0.4 * alpha;
+          ctx.lineWidth = dpr;
+          ctx.beginPath();
+          ctx.moveTo(Math.round(x) + 0.5, 0);
+          ctx.lineTo(Math.round(x) + 0.5, H);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
       }
     }
   };

@@ -226,7 +226,7 @@ function resolveConfigValues(config, flatValues, prefix) {
       result[key] = flatValues[path] ?? configValue.default ?? "#000000";
     } else if (resolveValueHasType(configValue, "text")) {
       result[key] = flatValues[path] ?? configValue.default ?? "";
-    } else if (resolveValueHasType(configValue, "curve")) {
+    } else if (resolveValueHasType(configValue, "curve") || resolveValueHasType(configValue, "analyser")) {
     } else if (typeof configValue === "object" && configValue !== null) {
       result[key] = resolveConfigValues(configValue, flatValues, path);
     }
@@ -600,7 +600,18 @@ var TweakStoreClass = class {
               changed = true;
             }
           }
-        } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value)) {
+        } else if (this.isAnalyserConfig(value)) {
+          const control = this.findControlByPath(panel.controls, path);
+          if (control?.type === "analyser" && control.analyserRow !== void 0) {
+            const prev = control.analyserRow;
+            const sameRange = prev.rangeHz === value.rangeHz || !!prev.rangeHz && !!value.rangeHz && prev.rangeHz[0] === value.rangeHz[0] && prev.rangeHz[1] === value.rangeHz[1];
+            const sameScalars = prev.source === value.source && prev.variant === value.variant && prev.mode === value.mode && prev.pixelSize === value.pixelSize && prev.scale === value.scale && prev.height === value.height && sameRange;
+            if (prev.analyser !== value.analyser || prev.marker !== value.marker || !sameScalars) {
+              control.analyserRow = value;
+              changed = true;
+            }
+          }
+        } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
           visit(value, path);
         }
       }
@@ -934,6 +945,15 @@ var TweakStoreClass = class {
           height: value.height,
           aspect: value.aspect
         });
+      } else if (this.isAnalyserConfig(value)) {
+        controls.push({
+          type: "analyser",
+          path,
+          label: typeof value.label === "string" ? value.label : label,
+          hideLabel: value.label === false || void 0,
+          height: value.height,
+          analyserRow: value
+        });
       } else if (typeof value === "string") {
         if (this.isHexColor(value)) {
           const hasAlpha = value.length === 5 || value.length === 9;
@@ -1102,6 +1122,9 @@ var TweakStoreClass = class {
   }
   isNumberConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "number" && typeof value.default === "number";
+  }
+  isAnalyserConfig(value) {
+    return typeof value === "object" && value !== null && "type" in value && value.type === "analyser" && typeof value.analyser === "function";
   }
   isCurveConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "curve" && typeof value.sample === "function";

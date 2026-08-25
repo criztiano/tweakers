@@ -1655,6 +1655,21 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
 }
 
 /* Analyser Visualization — real-time canvas trace, themed via \`color\` (read per frame) */
+/* The panel-embedded analyser row — the curve row's layout with a live canvas */
+.tweakers-analyser-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+.tweakers-analyser-row .tweakers-analyser-viz-wrap {
+  width: 100%;
+}
+.tweakers-analyser-row .tweakers-analyser-viz {
+  display: block;
+  width: 100%;
+}
+
 .tweakers-analyser-viz-wrap {
   position: relative;
   display: inline-block;
