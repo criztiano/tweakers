@@ -206,11 +206,12 @@ type CurveConfig = {
     /** Surface height in px, clamped to 32–160. Default 64. Ignored when `aspect` is set. */
     height?: number;
     /**
-     * `square` sizes the surface from its own width instead of `height`, so the
-     * plot stays square at any column width — what a transfer curve wants, since
-     * only a square box draws unity at 45°.
+     * Width ÷ height. Sizes the surface from its own width instead of `height`,
+     * so the plot holds its proportions at any column width — what a transfer
+     * curve wants, since its two axes share a scale. `1` is square, `4 / 3` a
+     * little wider than tall.
      */
-    aspect?: 'square';
+    aspect?: number;
     /** `false` = full-bleed row without the label line; a string overrides the key-derived label. */
     label?: false | string;
 };

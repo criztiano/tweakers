@@ -200,8 +200,8 @@ type ControlMeta = {
     markers?: readonly number[];
     /** Curve preview's surface height in px (renderers clamp via clampCurveHeight). */
     height?: number;
-    /** Curve preview declared `aspect: 'square'` — the surface follows its own width. */
-    aspect?: 'square';
+    /** Curve preview's width ÷ height — the surface follows its own width. */
+    aspect?: number;
     /** Curve preview declared `label: false` — full-bleed row without the label line. */
     hideLabel?: boolean;
     shortcut?: ShortcutConfig;

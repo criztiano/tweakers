@@ -6678,8 +6678,8 @@ function CurvePreview({ panelId, control }) {
         className: "tweakers-curve-surface",
         viewBox: `0 0 ${VIEW_WIDTH} ${height}`,
         preserveAspectRatio: "none",
-        "data-aspect": control.aspect,
-        style: control.aspect === "square" ? void 0 : { height },
+        "data-aspect": control.aspect !== void 0 ? "" : void 0,
+        style: control.aspect !== void 0 ? { aspectRatio: control.aspect } : { height },
         role: "img",
         "aria-label": control.label,
         children: [
