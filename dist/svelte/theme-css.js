@@ -61,7 +61,7 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   --tweak-radius: 3px;
   --tweak-radius-inner: 1px;
   --tweak-panel-padding: 6px;
-  --tweak-panel-gap: 6px;
+  --tweak-panel-gap: 2px;
   --tweak-row-height: 28px;
   --tweak-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   --tweak-shadow-collapsed: 0 4px 16px rgba(0, 0, 0, 0.25);
@@ -1565,6 +1565,13 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   border-radius: var(--tweak-radius);
   background: var(--tweak-surface);
   border: 1px solid var(--tweak-border);
+}
+
+/* A square surface takes its height from its own width, so the plot holds its
+   aspect at any column width — the only box in which unity reads at 45°. */
+.tweakers-curve-surface[data-aspect="square"] {
+  height: auto;
+  aspect-ratio: 1;
 }
 
 .tweakers-curve-baseline {

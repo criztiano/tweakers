@@ -504,8 +504,14 @@ type CurveConfig = {
     domain?: [number, number];
     /** Vertical reference lines at these x positions in [0,1]; invalid entries are skipped. */
     markers?: readonly number[];
-    /** Surface height in px, clamped to 32–160. Default 64. */
+    /** Surface height in px, clamped to 32–160. Default 64. Ignored when `aspect` is set. */
     height?: number;
+    /**
+     * `square` sizes the surface from its own width instead of `height`, so the
+     * plot stays square at any column width — what a transfer curve wants, since
+     * only a square box draws unity at 45°.
+     */
+    aspect?: 'square';
     /** `false` = full-bleed row without the label line; a string overrides the key-derived label. */
     label?: false | string;
 };
@@ -752,6 +758,8 @@ type ControlMeta = {
     markers?: readonly number[];
     /** Curve preview's surface height in px (renderers clamp via clampCurveHeight). */
     height?: number;
+    /** Curve preview declared `aspect: 'square'` — the surface follows its own width. */
+    aspect?: 'square';
     /** Curve preview declared `label: false` — full-bleed row without the label line. */
     hideLabel?: boolean;
     shortcut?: ShortcutConfig;

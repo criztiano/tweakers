@@ -200,3 +200,30 @@ describe('syncCurveConfigs', () => {
     expect(TweakStore.getValues(id)).toBe(before);
   });
 });
+
+// `aspect: 'square'` sizes the surface from its own width instead of `height` —
+// the only box in which a transfer curve draws unity at 45°.
+describe('a square curve', () => {
+  const id = 'curve-square-panel';
+
+  afterEach(() => {
+    TweakStore.unregisterPanel(id);
+  });
+
+  const curve = (extra: Record<string, unknown>) => ({
+    shape: { type: 'curve' as const, sample: (t: number) => t, ...extra },
+  });
+
+  it('carries the aspect through to the control', () => {
+    TweakStore.registerPanel(id, id, curve({ aspect: 'square' }));
+    const control = TweakStore.getPanels().find((p) => p.id === id)!.controls[0];
+    expect(control.aspect).toBe('square');
+  });
+
+  it('leaves an ordinary curve without one', () => {
+    TweakStore.registerPanel(id, id, curve({ height: 48 }));
+    const control = TweakStore.getPanels().find((p) => p.id === id)!.controls[0];
+    expect(control.aspect).toBeUndefined();
+    expect(control.height).toBe(48);
+  });
+});

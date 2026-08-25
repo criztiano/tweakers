@@ -1381,7 +1381,8 @@ var TweakStoreClass = class {
           sample: value.sample,
           domain: value.domain,
           markers: value.markers,
-          height: value.height
+          height: value.height,
+          aspect: value.aspect
         });
       } else if (typeof value === "string") {
         if (this.isHexColor(value)) {
@@ -6677,7 +6678,8 @@ function CurvePreview({ panelId, control }) {
         className: "tweakers-curve-surface",
         viewBox: `0 0 ${VIEW_WIDTH} ${height}`,
         preserveAspectRatio: "none",
-        style: { height },
+        "data-aspect": control.aspect,
+        style: control.aspect === "square" ? void 0 : { height },
         role: "img",
         "aria-label": control.label,
         children: [

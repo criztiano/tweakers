@@ -43,7 +43,10 @@ export function CurvePreview({ panelId, control }: CurvePreviewProps) {
         className="tweakers-curve-surface"
         viewBox={`0 0 ${VIEW_WIDTH} ${height}`}
         preserveAspectRatio="none"
-        style={{ height }}
+        // A square surface takes its box from CSS (aspect-ratio: 1) — the
+        // viewBox still drives the plot, and the "none" stretch maps it on.
+        data-aspect={control.aspect}
+        style={control.aspect === 'square' ? undefined : { height }}
         role="img"
         aria-label={control.label}
       >
