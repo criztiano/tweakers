@@ -3,7 +3,8 @@ import { createPortal } from 'react-dom';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from './TweakRoot';
-import { buildMovePages, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, MOVE_TRACKS, MOVE_DIALS } from '../move-layout';
+import { buildMovePages, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, dialOrigin, MOVE_TRACKS, MOVE_DIALS } from '../move-layout';
+import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValue, applyDetentAxis, type XYValue } from '../xy-pad-core';
 
 interface MovePanelProps {
   theme?: TweakTheme;
@@ -21,6 +22,12 @@ const PAD_COLS = 8;
 
 /** The slider track's inset from the dial slot's edges (Figma 802:767). */
 const DIAL_TRACK_INSET = 10;
+
+/** The xy field's inset within its slot — must match .tweakers-move-xy. */
+const XY_INSET = { left: 8, top: 8, right: 9, bottom: 8 };
+
+/** Default grid when an xy control leaves `grid` on — the XYPad's 5×5. */
+const XY_GRID_DEFAULT = 5;
 
 /** Press shorter than this is a tap (latch); longer is a hold (peek). */
 const TAP_MS = 300;
@@ -54,6 +61,12 @@ export const MOVE_LATCH_EVENT = 'move-tweakers:latch';
  * label (no slider at the bottom) with crosshair lines meeting at the dot.
  * Dragging the slot sets both axes; on the hardware the column's knob
  * turns X, and the volume knob turns Y while that knob is touched.
+ *
+ * A range control keeps the slider look but its fill is the span between
+ * the two ends — dragging moves the nearer end, and on the hardware the
+ * column's knob moves the low end while the volume knob moves the high
+ * end while that knob is touched. Bipolar/origin sliders anchor their
+ * fill at the origin and read as a signed offset.
  */
 export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only }: MovePanelProps) {
   if (!productionEnabled) return null;
@@ -148,13 +161,46 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     TweakStore.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
   };
 
-  // An xy slot maps the pointer to both axes at once (screen y-down flips to
-  // the control's y-up, like the library XYPad).
+  // A range slot moves whichever end sits nearer to the pointer; the
+  // denormalizer keeps the pair ordered when a drag crosses over.
+  const rangeFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const span = rect.width - DIAL_TRACK_INSET * 2;
+    const t = Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
+    const r = normalizeRangeDial(meta, values[meta.path]);
+    const nearLo = Math.abs(t - r.lo) <= Math.abs(t - r.hi);
+    TweakStore.updateValue(
+      page.panel.id,
+      meta.path,
+      denormalizeRangeDial(meta, nearLo ? t : r.lo, nearLo ? r.hi : t)
+    );
+  };
+
+  // An xy slot maps the pointer through the same core as the library XYPad:
+  // value mapping, snap-to-grid, and the escapable centre detent all included.
   const xyFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const x01 = Math.min(1, Math.max(0, (e.clientX - rect.left) / (rect.width || 1)));
-    const y01 = Math.min(1, Math.max(0, 1 - (e.clientY - rect.top) / (rect.height || 1)));
-    TweakStore.updateValue(page.panel.id, meta.path, denormalizeXYDial(meta, x01, y01));
+    const w = rect.width - XY_INSET.left - XY_INSET.right;
+    const h = rect.height - XY_INSET.top - XY_INSET.bottom;
+    const px = Math.min(1, Math.max(0, (e.clientX - rect.left - XY_INSET.left) / (w || 1)));
+    const py = Math.min(1, Math.max(0, (e.clientY - rect.top - XY_INSET.top) / (h || 1)));
+    const xa = resolveAxis(meta.xAxis);
+    const ya = resolveAxis(meta.yAxis);
+    const raw = valueFromPoint({ x: px, y: py }, xa, ya, !!meta.snap);
+    const origin = pointFromValue(centerValue(xa, ya), xa, ya);
+    TweakStore.updateValue(page.panel.id, meta.path, {
+      x: applyDetentAxis(raw.x, xa, Math.abs(px - origin.x) * (w || 1)),
+      y: applyDetentAxis(raw.y, ya, Math.abs(py - origin.y) * (h || 1)),
+    });
+  };
+
+  // Joystick-style pads rest at their centre when the pointer lets go.
+  const xyRelease = (meta: ControlMeta) => {
+    setDragPath(null);
+    if (!meta.returnToCenter) return;
+    const xa = resolveAxis(meta.xAxis);
+    const ya = resolveAxis(meta.yAxis);
+    TweakStore.updateValue(page.panel.id, meta.path, normalizeValue(centerValue(xa, ya), xa, ya, !!meta.snap));
   };
 
   const chipLatched = (col: number, meta: ControlMeta) =>
@@ -223,7 +269,16 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 // An xy control fills its slot with the pad — the field draws
                 // behind the label and there is no slider at the bottom.
                 if (meta.type === 'xy') {
-                  const pos = normalizeXYDial(meta, values[meta.path]);
+                  const xa = resolveAxis(meta.xAxis);
+                  const ya = resolveAxis(meta.yAxis);
+                  const pos = pointFromValue(
+                    normalizeValue(values[meta.path] as Partial<XYValue>, xa, ya),
+                    xa, ya
+                  );
+                  // Grid semantics match the XYPad: on by default (5×5), a
+                  // number for N×N, density multiplies, false hides.
+                  const gridBase = meta.grid === false ? 0 : typeof meta.grid === 'number' ? meta.grid : XY_GRID_DEFAULT;
+                  const gridN = gridBase > 0 ? Math.round(gridBase * Math.max(0, meta.density ?? 1)) : 0;
                   return (
                     <div
                       key={meta.path}
@@ -238,21 +293,68 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerMove={(e) => {
                         if (dragPath === meta.path) xyFromPointer(e, meta);
                       }}
-                      onPointerUp={() => setDragPath(null)}
-                      onPointerCancel={() => setDragPath(null)}
+                      onPointerUp={() => xyRelease(meta)}
+                      onPointerCancel={() => xyRelease(meta)}
                     >
                       <div className="tweakers-move-xy">
-                        <span className="tweakers-move-xy-line" data-axis="x" style={{ top: `${(1 - pos.y) * 100}%` }} />
+                        {gridN > 0 && (
+                          <span
+                            className="tweakers-move-xy-grid"
+                            style={{
+                              '--tweak-xy-grid-step-x': `${100 / gridN}%`,
+                              '--tweak-xy-grid-step-y': `${100 / gridN}%`,
+                            } as React.CSSProperties}
+                          />
+                        )}
+                        <span className="tweakers-move-xy-line" data-axis="x" style={{ top: `${pos.y * 100}%` }} />
                         <span className="tweakers-move-xy-line" data-axis="y" style={{ left: `${pos.x * 100}%` }} />
-                        <span className="tweakers-move-xy-dot" style={{ left: `${pos.x * 100}%`, top: `${(1 - pos.y) * 100}%` }} />
+                        <span className="tweakers-move-xy-dot" style={{ left: `${pos.x * 100}%`, top: `${pos.y * 100}%` }} />
                       </div>
                       <div className="tweakers-move-dial-readout">
                         <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
                           {meta.label}
                         </span>
                         <span className="tweakers-move-dial-value">
-                          {Math.round(pos.x * 100)}·{Math.round(pos.y * 100)}
+                          {Math.round(pos.x * 100)}·{Math.round((1 - pos.y) * 100)}
                         </span>
+                      </div>
+                    </div>
+                  );
+                }
+                // A range control keeps the slider look but the fill is the
+                // span between its two ends; drag moves the nearer end.
+                if (meta.type === 'range') {
+                  const r = normalizeRangeDial(meta, values[meta.path]);
+                  return (
+                    <div
+                      key={meta.path}
+                      className="tweakers-move-dial"
+                      data-kind="range"
+                      data-active={active || undefined}
+                      onPointerDown={(e) => {
+                        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                        setDragPath(meta.path);
+                        rangeFromPointer(e, meta);
+                      }}
+                      onPointerMove={(e) => {
+                        if (dragPath === meta.path) rangeFromPointer(e, meta);
+                      }}
+                      onPointerUp={() => setDragPath(null)}
+                      onPointerCancel={() => setDragPath(null)}
+                    >
+                      <div className="tweakers-move-dial-readout">
+                        <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
+                          {meta.label}
+                        </span>
+                        <span className="tweakers-move-dial-value">
+                          {Math.round(r.lo * 100)}–{Math.round(r.hi * 100)}%
+                        </span>
+                      </div>
+                      <div className="tweakers-move-dial-bar">
+                        <div
+                          className="tweakers-move-dial-fill"
+                          style={{ marginLeft: `${r.lo * 100}%`, width: `${(r.hi - r.lo) * 100}%` }}
+                        />
                       </div>
                     </div>
                   );
@@ -260,6 +362,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 // The slot pulses with its chip while a latched value sits in it.
                 const latchedHere =
                   latched[i]?.path === meta.path || (page.values[i]?.path === meta.path && !!hwLatched[meta.path]);
+                // A bipolar/origin slider anchors its fill at the origin and
+                // reads as a signed offset instead of 0–100.
+                const o01 = dialOrigin(meta);
+                const v01 = normalizeDial(meta, values[meta.path]);
+                const signed = Math.round((v01 - o01) * 100);
                 return (
                   <div
                     key={meta.path}
@@ -281,10 +388,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
                         {meta.label}
                       </span>
-                      <span className="tweakers-move-dial-value">{dialPercent(meta)}%</span>
+                      <span className="tweakers-move-dial-value">
+                        {o01 > 0 ? `${signed > 0 ? '+' : ''}${signed}%` : `${dialPercent(meta)}%`}
+                      </span>
                     </div>
                     <div className="tweakers-move-dial-bar">
-                      <div className="tweakers-move-dial-fill" style={{ width: `${dialPercent(meta)}%` }} />
+                      <div
+                        className="tweakers-move-dial-fill"
+                        style={o01 > 0
+                          ? { marginLeft: `${Math.min(v01, o01) * 100}%`, width: `${Math.abs(v01 - o01) * 100}%` }
+                          : { width: `${dialPercent(meta)}%` }}
+                      />
                     </div>
                   </div>
                 );

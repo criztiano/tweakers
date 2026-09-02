@@ -6,8 +6,9 @@ import { resolveAxis, type XYValue } from './xy-pad-core';
  * the first 4 panels become pages behind the track buttons, sliders and
  * bounded numbers become the 8 dials, toggles become pads. An xy control
  * takes a dial slot too — the pad draws behind the label, its knob turns
- * the X axis, and the volume knob turns Y while that knob is touched.
- * Bounded params
+ * the X axis, and the volume knob turns Y while that knob is touched. A
+ * range control claims a slot the same way: its knob moves the low end,
+ * the volume knob the high end while touched. Bounded params
  * beyond the 8 dials overflow into the pad grid as value chips — each one
  * related, by column, to the dial above it, which it can substitute (hold
  * to peek, tap to latch). The on-screen MovePanel mirrors this mapping so
@@ -36,7 +37,11 @@ const flat = (controls: ControlMeta[], out: ControlMeta[] = []): ControlMeta[] =
 };
 
 const isDial = (c: ControlMeta) =>
-  c.type === 'slider' || c.type === 'xy' || (c.type === 'number' && c.min != null && c.max != null);
+  c.type === 'slider' || c.type === 'xy' || c.type === 'range' ||
+  (c.type === 'number' && c.min != null && c.max != null);
+
+/** Two-handed dials need a slot of their own, never a value chip. */
+const isTwoHanded = (c: ControlMeta) => c.type === 'xy' || c.type === 'range';
 
 export function buildMovePages(panels: PanelConfig[]): MovePage[] {
   return panels
@@ -49,8 +54,8 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         panel,
         dials: bounded.slice(0, MOVE_DIALS),
         toggles: controls.filter((c) => c.type === 'toggle').slice(0, MOVE_PADS),
-        /* xy pads need a dial slot — past the 8 dials they don't fit a chip */
-        values: bounded.slice(MOVE_DIALS).filter((c) => c.type !== 'xy').slice(0, MOVE_PADS),
+        /* xy pads and ranges need a dial slot — past the 8 dials they don't fit a chip */
+        values: bounded.slice(MOVE_DIALS).filter((c) => !isTwoHanded(c)).slice(0, MOVE_PADS),
       };
     });
 }
@@ -89,6 +94,29 @@ export function normalizeXYDial(meta: ControlMeta, value: unknown): { x: number;
   const yAxis = resolveAxis(meta.yAxis);
   const v = (value ?? {}) as Partial<XYValue>;
   return { x: norm01(v.x, xAxis.min, xAxis.max), y: norm01(v.y, yAxis.min, yAxis.max) };
+}
+
+/** A range dial's two ends, each 0..1 — the two numbers on the wire. */
+export function normalizeRangeDial(meta: ControlMeta, value: unknown): { lo: number; hi: number } {
+  const min = meta.min ?? 0;
+  const max = meta.max ?? 1;
+  const v = (value ?? {}) as Partial<{ min: number; max: number }>;
+  return { lo: norm01(v.min, min, max), hi: norm01(v.max, min, max) };
+}
+
+/** End positions 0..1 back to the control's real {min, max}, kit-identical. */
+export function denormalizeRangeDial(meta: ControlMeta, lo01: number, hi01: number): { min: number; max: number } {
+  const min = meta.min ?? 0;
+  const max = meta.max ?? 1;
+  const lo = denorm01(Math.min(lo01, hi01), min, max, meta.step ?? 0);
+  const hi = denorm01(Math.max(lo01, hi01), min, max, meta.step ?? 0);
+  return { min: lo, max: hi };
+}
+
+/** Where the fill anchors for a bipolar/origin slider, 0..1 (else 0). */
+export function dialOrigin(meta: ControlMeta): number {
+  const origin = meta.origin ?? (meta.bipolar ? 0 : undefined);
+  return origin === undefined ? 0 : normalizeDial(meta, origin);
 }
 
 /** Axis positions 0..1 back to the control's real {x, y}, kit-identical. */
