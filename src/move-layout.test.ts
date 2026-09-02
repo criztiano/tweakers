@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { TweakStore } from './store/TweakStore';
-import { buildMovePages, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
+import { buildMovePages, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, dialOrigin, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
 
 // The MovePanel mirrors the bridge kit's v0 mapping: first 4 panels are the
 // track pages, sliders and bounded numbers fill the 8 dials, toggles the
@@ -80,6 +80,39 @@ describe('move layout', () => {
     const v = denormalizeXYDial(meta as never, 0.75, 0.53);
     assert.equal(v.x, 0.5);
     assert.equal(v.y, 5.5);                     /* 5.3 snapped to the 0.5 step */
+  });
+
+  it('gives a range control a dial slot, never a value chip', () => {
+    const id = nextId();
+    const config: Record<string, unknown> = {
+      band: { type: 'range', min: 0, max: 100, default: { min: 20, max: 80 } },
+    };
+    for (let i = 0; i < 8; i++) config[`dial${i}`] = [0.5, 0, 1];
+    config.lateBand = { type: 'range', min: 0, max: 1 };
+    TweakStore.registerPanel(id, id, config as never);
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    assert.equal(page.dials[0].path, 'band');
+    assert.equal(page.dials[0].type, 'range');
+    /* the range takes a dial slot, so one scalar overflows; the late range never chips */
+    assert.deepEqual(page.values.map((v) => v.path), ['dial7']);
+  });
+
+  it('normalizes and denormalizes range ends, ordered and kit-identically', () => {
+    const meta = { type: 'range', path: 'band', label: 'Band', min: 0, max: 100, step: 5 } as const;
+    assert.deepEqual(normalizeRangeDial(meta as never, { min: 20, max: 80 }), { lo: 0.2, hi: 0.8 });
+    assert.deepEqual(normalizeRangeDial(meta as never, undefined), { lo: 0, hi: 0 });
+    assert.deepEqual(denormalizeRangeDial(meta as never, 0.33, 0.77), { min: 35, max: 75 });
+    /* crossed ends come back ordered */
+    assert.deepEqual(denormalizeRangeDial(meta as never, 0.9, 0.1), { min: 10, max: 90 });
+  });
+
+  it('anchors bipolar and origin sliders, and leaves plain ones at zero', () => {
+    const bipolar = { type: 'slider', path: 'pan', label: 'Pan', min: -1, max: 1, bipolar: true } as const;
+    assert.equal(dialOrigin(bipolar as never), 0.5);
+    const origined = { type: 'slider', path: 'trim', label: 'Trim', min: 0, max: 20, origin: 5 } as const;
+    assert.equal(dialOrigin(origined as never), 0.25);
+    const plain = { type: 'slider', path: 'gain', label: 'Gain', min: 0, max: 1 } as const;
+    assert.equal(dialOrigin(plain as never), 0);
   });
 
   it('normalizes dial values to 0..1 with clamping', () => {

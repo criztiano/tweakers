@@ -8212,7 +8212,8 @@ var flat = (controls, out = []) => {
   }
   return out;
 };
-var isDial = (c) => c.type === "slider" || c.type === "xy" || c.type === "number" && c.min != null && c.max != null;
+var isDial = (c) => c.type === "slider" || c.type === "xy" || c.type === "range" || c.type === "number" && c.min != null && c.max != null;
+var isTwoHanded = (c) => c.type === "xy" || c.type === "range";
 function buildMovePages(panels) {
   return panels.filter((p) => p.kind !== "timeline").slice(0, MOVE_TRACKS).map((panel) => {
     const controls = flat(panel.controls);
@@ -8221,8 +8222,8 @@ function buildMovePages(panels) {
       panel,
       dials: bounded.slice(0, MOVE_DIALS),
       toggles: controls.filter((c) => c.type === "toggle").slice(0, MOVE_PADS),
-      /* xy pads need a dial slot — past the 8 dials they don't fit a chip */
-      values: bounded.slice(MOVE_DIALS).filter((c) => c.type !== "xy").slice(0, MOVE_PADS)
+      /* xy pads and ranges need a dial slot — past the 8 dials they don't fit a chip */
+      values: bounded.slice(MOVE_DIALS).filter((c) => !isTwoHanded(c)).slice(0, MOVE_PADS)
     };
   });
 }
@@ -8254,13 +8255,22 @@ function normalizeXYDial(meta, value) {
   const v = value ?? {};
   return { x: norm01(v.x, xAxis.min, xAxis.max), y: norm01(v.y, yAxis.min, yAxis.max) };
 }
-function denormalizeXYDial(meta, x01, y01) {
-  const xAxis = resolveAxis(meta.xAxis);
-  const yAxis = resolveAxis(meta.yAxis);
-  return {
-    x: denorm01(x01, xAxis.min, xAxis.max, xAxis.step),
-    y: denorm01(y01, yAxis.min, yAxis.max, yAxis.step)
-  };
+function normalizeRangeDial(meta, value) {
+  const min = meta.min ?? 0;
+  const max = meta.max ?? 1;
+  const v = value ?? {};
+  return { lo: norm01(v.min, min, max), hi: norm01(v.max, min, max) };
+}
+function denormalizeRangeDial(meta, lo01, hi01) {
+  const min = meta.min ?? 0;
+  const max = meta.max ?? 1;
+  const lo = denorm01(Math.min(lo01, hi01), min, max, meta.step ?? 0);
+  const hi = denorm01(Math.max(lo01, hi01), min, max, meta.step ?? 0);
+  return { min: lo, max: hi };
+}
+function dialOrigin(meta) {
+  const origin = meta.origin ?? (meta.bipolar ? 0 : void 0);
+  return origin === void 0 ? 0 : normalizeDial(meta, origin);
 }
 
 // src/components/MovePanel.tsx
@@ -8269,6 +8279,8 @@ var MOVE_TRACK_COLORS = ["#4274f4", "#d83dff", "#ff4d07", "#52bd06"];
 var PAD_ROWS = 4;
 var PAD_COLS = 8;
 var DIAL_TRACK_INSET = 10;
+var XY_INSET = { left: 8, top: 8, right: 9, bottom: 8 };
+var XY_GRID_DEFAULT = 5;
 var TAP_MS = 300;
 var MOVE_TOUCH_EVENT = "move-tweakers:touch";
 var MOVE_OVERRIDE_EVENT = "move-tweakers:override";
@@ -8342,11 +8354,39 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     const v01 = Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
     TweakStore.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
   };
+  const rangeFromPointer = (e, meta) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const span = rect.width - DIAL_TRACK_INSET * 2;
+    const t = Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
+    const r = normalizeRangeDial(meta, values[meta.path]);
+    const nearLo = Math.abs(t - r.lo) <= Math.abs(t - r.hi);
+    TweakStore.updateValue(
+      page.panel.id,
+      meta.path,
+      denormalizeRangeDial(meta, nearLo ? t : r.lo, nearLo ? r.hi : t)
+    );
+  };
   const xyFromPointer = (e, meta) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const x01 = Math.min(1, Math.max(0, (e.clientX - rect.left) / (rect.width || 1)));
-    const y01 = Math.min(1, Math.max(0, 1 - (e.clientY - rect.top) / (rect.height || 1)));
-    TweakStore.updateValue(page.panel.id, meta.path, denormalizeXYDial(meta, x01, y01));
+    const w = rect.width - XY_INSET.left - XY_INSET.right;
+    const h = rect.height - XY_INSET.top - XY_INSET.bottom;
+    const px = Math.min(1, Math.max(0, (e.clientX - rect.left - XY_INSET.left) / (w || 1)));
+    const py = Math.min(1, Math.max(0, (e.clientY - rect.top - XY_INSET.top) / (h || 1)));
+    const xa = resolveAxis(meta.xAxis);
+    const ya = resolveAxis(meta.yAxis);
+    const raw = valueFromPoint({ x: px, y: py }, xa, ya, !!meta.snap);
+    const origin = pointFromValue(centerValue(xa, ya), xa, ya);
+    TweakStore.updateValue(page.panel.id, meta.path, {
+      x: applyDetentAxis(raw.x, xa, Math.abs(px - origin.x) * (w || 1)),
+      y: applyDetentAxis(raw.y, ya, Math.abs(py - origin.y) * (h || 1))
+    });
+  };
+  const xyRelease = (meta) => {
+    setDragPath(null);
+    if (!meta.returnToCenter) return;
+    const xa = resolveAxis(meta.xAxis);
+    const ya = resolveAxis(meta.yAxis);
+    TweakStore.updateValue(page.panel.id, meta.path, normalizeValue(centerValue(xa, ya), xa, ya, !!meta.snap));
   };
   const chipLatched = (col, meta) => latched[col]?.path === meta.path || !!hwLatched[meta.path];
   const dialAt = (col) => {
@@ -8397,7 +8437,15 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         if (!meta) return /* @__PURE__ */ jsx39("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
         const active = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
         if (meta.type === "xy") {
-          const pos = normalizeXYDial(meta, values[meta.path]);
+          const xa = resolveAxis(meta.xAxis);
+          const ya = resolveAxis(meta.yAxis);
+          const pos = pointFromValue(
+            normalizeValue(values[meta.path], xa, ya),
+            xa,
+            ya
+          );
+          const gridBase = meta.grid === false ? 0 : typeof meta.grid === "number" ? meta.grid : XY_GRID_DEFAULT;
+          const gridN = gridBase > 0 ? Math.round(gridBase * Math.max(0, meta.density ?? 1)) : 0;
           return /* @__PURE__ */ jsxs34(
             "div",
             {
@@ -8415,20 +8463,30 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
               onPointerMove: (e) => {
                 if (dragPath === meta.path) xyFromPointer(e, meta);
               },
-              onPointerUp: () => setDragPath(null),
-              onPointerCancel: () => setDragPath(null),
+              onPointerUp: () => xyRelease(meta),
+              onPointerCancel: () => xyRelease(meta),
               children: [
                 /* @__PURE__ */ jsxs34("div", { className: "tweakers-move-xy", children: [
-                  /* @__PURE__ */ jsx39("span", { className: "tweakers-move-xy-line", "data-axis": "x", style: { top: `${(1 - pos.y) * 100}%` } }),
+                  gridN > 0 && /* @__PURE__ */ jsx39(
+                    "span",
+                    {
+                      className: "tweakers-move-xy-grid",
+                      style: {
+                        "--tweak-xy-grid-step-x": `${100 / gridN}%`,
+                        "--tweak-xy-grid-step-y": `${100 / gridN}%`
+                      }
+                    }
+                  ),
+                  /* @__PURE__ */ jsx39("span", { className: "tweakers-move-xy-line", "data-axis": "x", style: { top: `${pos.y * 100}%` } }),
                   /* @__PURE__ */ jsx39("span", { className: "tweakers-move-xy-line", "data-axis": "y", style: { left: `${pos.x * 100}%` } }),
-                  /* @__PURE__ */ jsx39("span", { className: "tweakers-move-xy-dot", style: { left: `${pos.x * 100}%`, top: `${(1 - pos.y) * 100}%` } })
+                  /* @__PURE__ */ jsx39("span", { className: "tweakers-move-xy-dot", style: { left: `${pos.x * 100}%`, top: `${pos.y * 100}%` } })
                 ] }),
                 /* @__PURE__ */ jsxs34("div", { className: "tweakers-move-dial-readout", children: [
                   /* @__PURE__ */ jsx39("span", { className: "tweakers-move-dial-label", "data-long": meta.label.length > 9 || void 0, children: meta.label }),
                   /* @__PURE__ */ jsxs34("span", { className: "tweakers-move-dial-value", children: [
                     Math.round(pos.x * 100),
                     "\xB7",
-                    Math.round(pos.y * 100)
+                    Math.round((1 - pos.y) * 100)
                   ] })
                 ] })
               ]
@@ -8436,7 +8494,53 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             meta.path
           );
         }
+        if (meta.type === "range") {
+          const r = normalizeRangeDial(meta, values[meta.path]);
+          return /* @__PURE__ */ jsxs34(
+            "div",
+            {
+              className: "tweakers-move-dial",
+              "data-kind": "range",
+              "data-active": active || void 0,
+              onPointerDown: (e) => {
+                try {
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                } catch {
+                }
+                setDragPath(meta.path);
+                rangeFromPointer(e, meta);
+              },
+              onPointerMove: (e) => {
+                if (dragPath === meta.path) rangeFromPointer(e, meta);
+              },
+              onPointerUp: () => setDragPath(null),
+              onPointerCancel: () => setDragPath(null),
+              children: [
+                /* @__PURE__ */ jsxs34("div", { className: "tweakers-move-dial-readout", children: [
+                  /* @__PURE__ */ jsx39("span", { className: "tweakers-move-dial-label", "data-long": meta.label.length > 9 || void 0, children: meta.label }),
+                  /* @__PURE__ */ jsxs34("span", { className: "tweakers-move-dial-value", children: [
+                    Math.round(r.lo * 100),
+                    "\u2013",
+                    Math.round(r.hi * 100),
+                    "%"
+                  ] })
+                ] }),
+                /* @__PURE__ */ jsx39("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ jsx39(
+                  "div",
+                  {
+                    className: "tweakers-move-dial-fill",
+                    style: { marginLeft: `${r.lo * 100}%`, width: `${(r.hi - r.lo) * 100}%` }
+                  }
+                ) })
+              ]
+            },
+            meta.path
+          );
+        }
         const latchedHere = latched[i]?.path === meta.path || page.values[i]?.path === meta.path && !!hwLatched[meta.path];
+        const o01 = dialOrigin(meta);
+        const v01 = normalizeDial(meta, values[meta.path]);
+        const signed = Math.round((v01 - o01) * 100);
         return /* @__PURE__ */ jsxs34(
           "div",
           {
@@ -8459,12 +8563,15 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             children: [
               /* @__PURE__ */ jsxs34("div", { className: "tweakers-move-dial-readout", children: [
                 /* @__PURE__ */ jsx39("span", { className: "tweakers-move-dial-label", "data-long": meta.label.length > 9 || void 0, children: meta.label }),
-                /* @__PURE__ */ jsxs34("span", { className: "tweakers-move-dial-value", children: [
-                  dialPercent(meta),
-                  "%"
-                ] })
+                /* @__PURE__ */ jsx39("span", { className: "tweakers-move-dial-value", children: o01 > 0 ? `${signed > 0 ? "+" : ""}${signed}%` : `${dialPercent(meta)}%` })
               ] }),
-              /* @__PURE__ */ jsx39("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ jsx39("div", { className: "tweakers-move-dial-fill", style: { width: `${dialPercent(meta)}%` } }) })
+              /* @__PURE__ */ jsx39("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ jsx39(
+                "div",
+                {
+                  className: "tweakers-move-dial-fill",
+                  style: o01 > 0 ? { marginLeft: `${Math.min(v01, o01) * 100}%`, width: `${Math.abs(v01 - o01) * 100}%` } : { width: `${dialPercent(meta)}%` }
+                }
+              ) })
             ]
           },
           meta.path
@@ -12756,6 +12863,7 @@ export {
   cycleSegmentType,
   defaultComposition,
   defaultListItemParams,
+  dialOrigin,
   displayHex,
   flipDriver,
   flipDriverX,
@@ -12783,6 +12891,7 @@ export {
   normalizeGradient,
   normalizeHex,
   normalizeListItems,
+  normalizeRangeDial,
   normalizeValue,
   normalizeXYDial,
   nudge,

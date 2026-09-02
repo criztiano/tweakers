@@ -871,7 +871,9 @@ import('http://localhost:7787/kit.js')
 
 Panels become pages behind the track buttons (max 4), sliders and bounded numbers become the 8 dials, toggles become pads, and overflow bounded params become value chips (hold to peek, tap to latch).
 
-An `xy` control claims a dial slot as a 2D pad: the field draws behind the label (no slider at the bottom) and dragging it sets both axes. On the hardware, the column's knob turns the X axis — and while a finger rests on that knob, the volume knob turns Y.
+An `xy` control claims a dial slot as a 2D pad: the field draws behind the label (no slider at the bottom) and dragging it sets both axes. On the hardware, the column's knob turns the X axis — and while a finger rests on that knob, the volume knob turns Y. The pad honours the XYPad's options: `grid`/`density` draw the same grid overlay (on by default, 5×5), `snap` snaps drags to the grid, bipolar axes keep the escapable centre detent, and `returnToCenter` springs the pad back to its origin on release — on screen when the pointer lifts, and on the hardware when the finger leaves the knob.
+
+A `range` control claims a dial slot the same way: the fill becomes the span between its two ends and dragging moves the nearer end. On the hardware, the column's knob moves the low end — and while a finger rests on that knob, the volume knob moves the high end (the ends never cross). Bipolar and `origin` sliders keep their slot but anchor the fill at the origin and read as a signed offset (−50…+50) instead of 0–100.
 
 ### Function buttons
 

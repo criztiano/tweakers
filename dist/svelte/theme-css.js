@@ -5367,6 +5367,24 @@ input.tweakers-list-item-title:focus {
   pointer-events: none;
 }
 
+/* Grid overlay — the XYPad's pattern in the slot's identity: faint at
+   rest, a touch stronger while a finger or pointer is on the pad. */
+.tweakers-move-xy-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.07;
+  transition: opacity 0.15s ease;
+  background-image:
+    repeating-linear-gradient(to right, currentColor 0, currentColor 1px, transparent 1px, transparent var(--tweak-xy-grid-step-x, 20%)),
+    repeating-linear-gradient(to bottom, currentColor 0, currentColor 1px, transparent 1px, transparent var(--tweak-xy-grid-step-y, 20%));
+  color: var(--move-text);
+}
+
+.tweakers-move-dial[data-active] .tweakers-move-xy-grid {
+  opacity: 0.14;
+}
+
 .tweakers-move-xy-line {
   position: absolute;
   background: var(--move-text);
