@@ -8366,11 +8366,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         const meta = dialAt(i);
         if (!meta) return /* @__PURE__ */ jsx39("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
         const active = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
+        const latchedHere = latched[i]?.path === meta.path || page.values[i]?.path === meta.path && !!hwLatched[meta.path];
         return /* @__PURE__ */ jsxs34(
           "div",
           {
             className: "tweakers-move-dial",
             "data-active": active || void 0,
+            "data-latched": latchedHere || void 0,
             onPointerDown: (e) => {
               try {
                 e.currentTarget.setPointerCapture(e.pointerId);

@@ -5257,9 +5257,9 @@ input.tweakers-list-item-title:focus {
 }
 
 .tweakers-move-dials {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 4px;
-  align-items: center;
   height: 140px;
   width: 100%;
 }
@@ -5270,8 +5270,6 @@ input.tweakers-list-item-title:focus {
    dimmed socket from the panel frame, nothing inside. */
 .tweakers-move-dial {
   position: relative;
-  flex: 1 0 0;
-  min-width: 1px;
   height: 100%;
   background: var(--move-chip);
   border-radius: var(--move-radius);
@@ -5360,16 +5358,14 @@ input.tweakers-list-item-title:focus {
 
 /* Pad rows — 32px chips (800:1737). */
 .tweakers-move-pads {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 4px;
-  align-items: center;
   width: 100%;
 }
 
 .tweakers-move-pad {
   position: relative;
-  flex: 1 0 0;
-  min-width: 1px;
   height: 32px;
   display: flex;
   align-items: center;
@@ -5460,7 +5456,8 @@ input.tweakers-list-item-title:focus {
   color: var(--move-text-inverse);
 }
 
-.tweakers-move-pad[data-latched] {
+.tweakers-move-pad[data-latched],
+.tweakers-move-dial[data-latched] {
   animation: tweakers-move-latch 1.2s ease-in-out infinite;
 }
 
@@ -5469,7 +5466,8 @@ input.tweakers-list-item-title:focus {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tweakers-move-pad[data-latched] {
+  .tweakers-move-pad[data-latched],
+  .tweakers-move-dial[data-latched] {
     animation: none;
   }
 }

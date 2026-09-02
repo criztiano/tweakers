@@ -8540,11 +8540,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         const meta = dialAt(i);
         if (!meta) return /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
         const active = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
+        const latchedHere = latched[i]?.path === meta.path || page.values[i]?.path === meta.path && !!hwLatched[meta.path];
         return /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(
           "div",
           {
             className: "tweakers-move-dial",
             "data-active": active || void 0,
+            "data-latched": latchedHere || void 0,
             onPointerDown: (e) => {
               try {
                 e.currentTarget.setPointerCapture(e.pointerId);

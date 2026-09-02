@@ -206,11 +206,15 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   !!handTouch[meta.path] ||
                   !!hwHeld[meta.path] ||
                   (held !== null && held.col === i);
+                // The slot pulses with its chip while a latched value sits in it.
+                const latchedHere =
+                  latched[i]?.path === meta.path || (page.values[i]?.path === meta.path && !!hwLatched[meta.path]);
                 return (
                   <div
                     key={meta.path}
                     className="tweakers-move-dial"
                     data-active={active || undefined}
+                    data-latched={latchedHere || undefined}
                     onPointerDown={(e) => {
                       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
                       setDragPath(meta.path);
