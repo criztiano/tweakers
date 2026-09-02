@@ -5156,21 +5156,28 @@ input.tweakers-list-item-title:focus {
 
 /* ── Move panel ─────────────────────────────────────────────────────────
    The Move's control surface docked to the bottom edge, to Cri's Figma
-   spec (USU9CW2vC3SrvKsnHVnYGi node 802:319): coloured track markers, 8
-   tall dial slots with a large numeric readout, and the full 4×8 pad
-   grid. Colours and faces are the Move's own identity — fixed, not
-   themed — so they live here as local values, not root tokens. Fonts
-   (Ableton Sans Small, Sharp Grotesk 06) are host-provided, like
-   System85; without them the fallback stacks carry the layout. */
+   specs (USU9CW2vC3SrvKsnHVnYGi — panel 802:319, dial slider 802:756,
+   small slots 800:1737): coloured track markers, 8 dial slots hosting
+   slider ports, and the 4×8 pad grid hosting 32px chips. Colours and
+   faces are the Move's own identity — fixed, not themed — so they live
+   here as local values, not root tokens. Fonts (Ableton Sans Small,
+   Sharp Grotesk 06) are host-provided, like System85; without them the
+   fallback stacks carry the layout. */
+
+.tweakers-move,
+.tweakers-move * {
+  box-sizing: border-box;
+}
 
 .tweakers-move {
   --move-bg: #302e2e;
   --move-slot: rgba(222, 227, 201, 0.1);
+  --move-chip: #41403e;
   --move-text: #dee3c9;
+  --move-text-inverse: #31322f;
   --move-radius: 12px;
+  --move-radius-small: 8px;
   --move-font-label: 'Ableton Sans Small', system-ui, -apple-system, sans-serif;
-  --move-font-value: 'Sharp Grotesk 06', system-ui, -apple-system, sans-serif;
-  --move-font-pad: 'Inter', system-ui, -apple-system, sans-serif;
 
   position: fixed;
   bottom: 0;
@@ -5180,7 +5187,7 @@ input.tweakers-list-item-title:focus {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding: 68px 48px 14px;
+  padding: 16px 48px 14px;
   background: var(--move-bg);
   color: var(--move-text);
 }
@@ -5257,57 +5264,101 @@ input.tweakers-list-item-title:focus {
   width: 100%;
 }
 
-/* Dial slot — big slot, value huge in the middle, label at the foot
-   (802:520). Empty slots are the same socket at 30%, nothing inside. */
+/* Dial slot — the slider port (802:756). The whole slot is the hotspot;
+   the label sits centred, the value takes its place on hover/drag, and
+   the track is a pill pinned to the bottom edge. Empty slots are the
+   dimmed socket from the panel frame, nothing inside. */
 .tweakers-move-dial {
+  position: relative;
   flex: 1 0 0;
   min-width: 1px;
   height: 100%;
-  container-type: inline-size;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 0 10px;
-  background: var(--move-slot);
+  background: var(--move-chip);
   border-radius: var(--move-radius);
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .tweakers-move-dial[data-empty="true"] {
+  background: var(--move-slot);
   opacity: 0.3;
+  cursor: default;
 }
 
-.tweakers-move-dial-value {
+.tweakers-move-dial-readout {
+  position: absolute;
+  inset: 10px 8px 25px;
   display: flex;
   align-items: center;
-  gap: 1px;
-  height: 96px;
-  font-family: var(--move-font-value);
-  font-weight: 400;
-  /* 100px at the design's 1180px width; shrinks with its slot below that. */
-  font-size: min(100px, 68cqi);
-  letter-spacing: 0.02em;
-  line-height: 1.04;
-  text-align: center;
+  justify-content: center;
 }
 
-.tweakers-move-dial-unit {
-  font-weight: 600;
-  font-size: 0.4em;
-  letter-spacing: 0.02em;
+.tweakers-move-dial-label,
+.tweakers-move-dial-value {
+  position: absolute;
+  max-width: 100%;
+  font-family: var(--move-font-label);
+  line-height: normal;
+  text-align: center;
+  word-break: break-word;
+  transition: opacity 0.12s;
 }
 
 .tweakers-move-dial-label {
-  max-width: 100%;
+  font-size: 20px;
+  /* Two centred lines at most, then ellipsis (802:782). */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--move-font-label);
-  font-size: 12px;
-  line-height: normal;
 }
 
-/* Pad row — small slots, label left, value right (802:558). */
+.tweakers-move-dial-label[data-long] {
+  font-size: 16px;
+}
+
+.tweakers-move-dial-value {
+  font-size: 24px;
+  opacity: 0;
+}
+
+.tweakers-move-dial:hover .tweakers-move-dial-label,
+.tweakers-move-dial[data-active] .tweakers-move-dial-label {
+  opacity: 0;
+}
+
+.tweakers-move-dial:hover .tweakers-move-dial-value,
+.tweakers-move-dial[data-active] .tweakers-move-dial-value {
+  opacity: 1;
+}
+
+.tweakers-move-dial-bar {
+  position: absolute;
+  left: 8px;
+  right: 9px;
+  bottom: 8px;
+  height: 9px;
+  padding: 2px;
+  background: var(--move-bg);
+  border-radius: 8px;
+}
+
+.tweakers-move-dial-fill {
+  height: 100%;
+  min-width: 5px;
+  background: var(--move-text);
+  border-radius: 8px;
+  transition: box-shadow 0.12s;
+}
+
+/* The glow marks the touched dial — lit while held (802:773). */
+.tweakers-move-dial[data-active] .tweakers-move-dial-fill {
+  box-shadow: 0 0 12px 0 rgba(222, 227, 201, 0.7);
+}
+
+/* Pad rows — 32px chips (800:1737). */
 .tweakers-move-pads {
   display: flex;
   gap: 4px;
@@ -5316,54 +5367,97 @@ input.tweakers-list-item-title:focus {
 }
 
 .tweakers-move-pad {
+  position: relative;
   flex: 1 0 0;
   min-width: 1px;
   height: 32px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   padding: 0 8px;
-  background: var(--move-slot);
+  background: var(--move-chip);
   border: none;
-  border-radius: var(--move-radius);
+  border-radius: var(--move-radius-small);
   color: var(--move-text);
-  font-family: var(--move-font-pad);
-  font-size: 12px;
+  font-family: var(--move-font-label);
+  font-size: 14px;
+  font-weight: 700;
   line-height: normal;
   white-space: nowrap;
   cursor: pointer;
 }
 
 .tweakers-move-pad[data-empty="true"] {
+  background: var(--move-slot);
   cursor: default;
   opacity: 0.3;
 }
 
-.tweakers-move-pad-label {
+.tweakers-move-pad-title {
+  flex: 1 0 0;
+  min-width: 1px;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: center;
+}
+
+/* Toggle chip — the thin bar at the left inset is the state LED; the
+   whole chip inverts to sage when on (800:1781/1785). */
+.tweakers-move-pad[data-kind="toggle"] {
+  padding: 0 4px;
+}
+
+.tweakers-move-pad-indicator {
+  position: absolute;
+  left: 4px;
+  top: 5.5px;
+  bottom: 5.5px;
+  width: 5px;
+  border-radius: 4px;
+  background: var(--move-text);
+}
+
+.tweakers-move-pad[data-on="true"] {
+  background: var(--move-text);
+  color: var(--move-text-inverse);
+}
+
+.tweakers-move-pad[data-on="true"] .tweakers-move-pad-indicator {
+  background: var(--move-chip);
+}
+
+/* Ready chips from the small-slots sheet, for the next mappings. */
+
+/* Value chip — label left in Regular, number Bold + unit Regular right. */
+.tweakers-move-pad[data-kind="value"] {
+  justify-content: space-between;
+  padding: 0 10px;
+  font-size: 13px;
   font-weight: 400;
 }
 
-.tweakers-move-pad-value {
+.tweakers-move-pad-number {
   font-weight: 700;
-  flex-shrink: 0;
 }
 
-.tweakers-move-pad[data-on="false"] .tweakers-move-pad-value {
-  opacity: 0.4;
+/* Page chip — the stacked-card double shadow; inverts when active. */
+.tweakers-move-pad[data-kind="page"] {
+  box-shadow: -2px 2px 0 0 var(--move-bg), -3px 3px 0 0 var(--move-text);
 }
 
 /* Narrow hosts: keep the grid, pull in the frame's air. */
 @media (max-width: 720px) {
   .tweakers-move {
-    padding: 24px 12px 10px;
+    padding: 12px 12px 10px;
   }
   .tweakers-move-dials {
     height: 100px;
   }
+  .tweakers-move-dial-label {
+    font-size: 16px;
+  }
   .tweakers-move-dial-value {
-    height: 64px;
+    font-size: 18px;
   }
 }
 `;

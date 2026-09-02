@@ -42,6 +42,15 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
     });
 }
 
+/** Dial position 0..1 back to the control's real value, kit-identical. */
+export function denormalizeDial(meta: ControlMeta, v01: number): number {
+  const min = meta.min ?? 0;
+  const max = meta.max ?? 1;
+  let v = min + Math.min(1, Math.max(0, v01)) * (max - min);
+  if (meta.step) v = Math.round(v / meta.step) * meta.step;
+  return Number(v.toFixed(6));
+}
+
 /** Dial position 0..1, the same normalization the kit puts on the wire. */
 export function normalizeDial(meta: ControlMeta, value: unknown): number {
   const min = meta.min ?? 0;
