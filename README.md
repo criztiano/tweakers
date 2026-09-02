@@ -853,6 +853,49 @@ The visual's accessible alternative includes its label, mode, current clamped pe
 
 ---
 
+## Move controller
+
+tweakers apps can be driven by an Ableton Move over the bridge kit (the `move` repo's app server). The app binds once and both surfaces stay in sync:
+
+```tsx
+import { TweakStore, MovePanel } from 'tweakers';
+
+// Bind the hardware bridge when it's running (no-op otherwise).
+import('http://localhost:7787/kit.js')
+  .then(m => m.bindMove(TweakStore))
+  .catch(() => {});
+
+// Optional on-screen mirror of the Move surface, docked to the bottom edge.
+<MovePanel />
+```
+
+Panels become pages behind the track buttons (max 4), sliders and bounded numbers become the 8 dials, toggles become pads, and overflow bounded params become value chips (hold to peek, tap to latch).
+
+An `xy` control claims a dial slot as a 2D pad: the field draws behind the label (no slider at the bottom) and dragging it sets both axes. On the hardware, the column's knob turns the X axis — and while a finger rests on that knob, the volume knob turns Y.
+
+### Function buttons
+
+The Move's named function buttons attach to your app's own actions through the function library. Names match the printed hardware labels, and the manifest (`MOVE_FUNCTION_MANIFEST`) splits them in two groups:
+
+- **Standard** — `play`, `rec`, `mute`, `undo`, `copy`, `delete`, `up`, `down`, `left`, `right`. These should do what their printed label says (Undo undoes, Copy copies), so every app feels the same in the hand.
+- **Special** — `sample`, `loop`, `capture`, `menu`, `back`, `jog_click` (also exported as `MOVE_SPECIAL_BUTTONS`). These carry no fixed meaning; each app decides what they do — `sample` often acts as the confirm key.
+
+```tsx
+import { TweakStore, MoveFunctions } from 'tweakers';
+
+MoveFunctions.attach('undo', () => history.undo());
+MoveFunctions.attach('copy', ({ shift }) => (shift ? copyAll() : copySelection()));
+MoveFunctions.attach('sample', () => confirmSelection());
+
+import('http://localhost:7787/kit.js')
+  .then(m => m.bindMove(TweakStore, { functions: MoveFunctions }))
+  .catch(() => {});
+```
+
+Attached buttons light up on the hardware and every press runs your action, with `shift: true` when Shift is held — a free second-function layer per button. `attach` returns a detach function, and attaching again replaces the previous action, so bindings can follow your app's modes. Buttons you leave unattached keep the surface's built-in behavior (Undo resets the page's dials, Delete clears the sequencer, Play runs it); Shift and the four track buttons are reserved.
+
+---
+
 ## Full Example
 
 ```tsx

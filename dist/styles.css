@@ -5355,6 +5355,57 @@ input.tweakers-list-item-title:focus {
   box-shadow: 0 0 12px 0 rgba(222, 227, 201, 0.7);
 }
 
+/* XY slot — the pad fills the slot behind the label: crosshair lines meet
+   at the dot, no slider at the bottom. Same inset as the slider track. */
+.tweakers-move-xy {
+  position: absolute;
+  inset: 8px 9px 8px 8px;
+  background: var(--move-bg);
+  border-radius: 8px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.tweakers-move-xy-line {
+  position: absolute;
+  background: var(--move-text);
+  opacity: 0.18;
+}
+
+.tweakers-move-xy-line[data-axis="x"] {
+  left: 0;
+  right: 0;
+  height: 1px;
+  margin-top: -0.5px;
+}
+
+.tweakers-move-xy-line[data-axis="y"] {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  margin-left: -0.5px;
+}
+
+.tweakers-move-xy-dot {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  background: var(--move-text);
+  border-radius: 50%;
+  transition: box-shadow 0.12s;
+}
+
+/* The glow marks the touched pad — lit while held, like the dial fill. */
+.tweakers-move-dial[data-active] .tweakers-move-xy-dot {
+  box-shadow: 0 0 12px 0 rgba(222, 227, 201, 0.7);
+}
+
+/* The label floats over the field; the readout keeps clear of the edges. */
+.tweakers-move-dial[data-kind="xy"] .tweakers-move-dial-readout {
+  inset: 10px 12px;
+}
+
 /* Pad rows — 32px chips (800:1737). */
 .tweakers-move-pads {
   display: grid;
