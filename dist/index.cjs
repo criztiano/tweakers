@@ -8379,6 +8379,7 @@ var import_react_dom8 = require("react-dom");
 var MOVE_TRACKS = 4;
 var MOVE_DIALS = 8;
 var MOVE_PADS = 8;
+var MOVE_PAD_SLOTS = 32;
 var flat = (controls, out = []) => {
   for (const c of controls) {
     if (c.children) flat(c.children, out);
@@ -8390,11 +8391,12 @@ var isDial = (c) => c.type === "slider" || c.type === "number" && c.min != null 
 function buildMovePages(panels) {
   return panels.filter((p) => p.kind !== "timeline").slice(0, MOVE_TRACKS).map((panel) => {
     const controls = flat(panel.controls);
-    return {
-      panel,
-      dials: controls.filter(isDial).slice(0, MOVE_DIALS),
-      pads: controls.filter((c) => c.type === "toggle").slice(0, MOVE_PADS)
-    };
+    const bounded = controls.filter(isDial);
+    const pads = [
+      ...controls.filter((c) => c.type === "toggle").slice(0, MOVE_PADS).map((meta) => ({ kind: "toggle", meta })),
+      ...bounded.slice(MOVE_DIALS).map((meta) => ({ kind: "value", meta }))
+    ].slice(0, MOVE_PAD_SLOTS);
+    return { panel, dials: bounded.slice(0, MOVE_DIALS), pads };
   });
 }
 function denormalizeDial(meta, v01) {
@@ -8417,11 +8419,17 @@ var MOVE_TRACK_COLORS = ["#4274f4", "#d83dff", "#ff4d07", "#52bd06"];
 var PAD_ROWS = 4;
 var PAD_COLS = 8;
 var DIAL_TRACK_INSET = 10;
+var TAP_MS = 300;
+var MOVE_TOUCH_EVENT = "move-tweakers:touch";
 function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only }) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = (0, import_react43.useState)([]);
   const [track, setTrack] = (0, import_react43.useState)(0);
   const [dragPath, setDragPath] = (0, import_react43.useState)(null);
+  const [handTouch, setHandTouch] = (0, import_react43.useState)({});
+  const [held, setHeld] = (0, import_react43.useState)(null);
+  const [latched, setLatched] = (0, import_react43.useState)({});
+  const holdStart = (0, import_react43.useRef)(0);
   const [mounted, setMounted] = (0, import_react43.useState)(false);
   const onlyKey = Array.isArray(only) ? only.join(" ") : only;
   const read = (0, import_react43.useCallback)(
@@ -8442,9 +8450,28 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     () => pageId ? TweakStore.getValues(pageId) : void 0,
     () => void 0
   );
+  (0, import_react43.useEffect)(() => {
+    const onTouch = (e) => {
+      const detail = e.detail;
+      setHandTouch(detail && detail.pageId === pageId ? detail.touched ?? {} : {});
+    };
+    window.addEventListener(MOVE_TOUCH_EVENT, onTouch);
+    return () => window.removeEventListener(MOVE_TOUCH_EVENT, onTouch);
+  }, [pageId]);
+  (0, import_react43.useEffect)(() => {
+    setHeld(null);
+    setLatched({});
+  }, [pageId]);
   if (!mounted || typeof window === "undefined" || pages.length === 0 || !page || !values) return null;
   const slots = (items, count) => Array.from({ length: count }, (_, i) => items[i]);
   const dialPercent = (meta) => Math.round(normalizeDial(meta, values[meta.path]) * 100);
+  const chipValue = (meta) => {
+    const n = Number(values[meta.path]);
+    if (!Number.isFinite(n)) return { num: "" };
+    if (meta.formatValue) return { num: meta.formatValue(n) };
+    const num = Math.abs(n) >= 100 ? Math.round(n).toString() : Number(n.toFixed(2)).toString();
+    return { num, unit: meta.unit };
+  };
   const dialFromPointer = (e, meta) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const span = rect.width - DIAL_TRACK_INSET * 2;
@@ -8455,6 +8482,27 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     { length: PAD_ROWS },
     (_, row) => page.pads.slice(row * PAD_COLS, (row + 1) * PAD_COLS)
   );
+  const dialAt = (col) => {
+    if (held && held.col === col) return held.meta;
+    return latched[col] ?? page.dials[col];
+  };
+  const pressChip = (e, col, meta) => {
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+    }
+    holdStart.current = Date.now();
+    setHeld({ col, meta });
+  };
+  const releaseChip = (col, meta) => {
+    setHeld(null);
+    if (Date.now() - holdStart.current < TAP_MS) {
+      setLatched((prev) => ({
+        ...prev,
+        [col]: prev[col]?.path === meta.path ? void 0 : meta
+      }));
+    }
+  };
   const content = /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, children: /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move", children: /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)("div", { className: "tweakers-move-inner", children: [
     /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-tracks", children: slots(pages, MOVE_TRACKS).map((pg, i) => /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(
       "button",
@@ -8472,14 +8520,21 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       pg ? pg.panel.id : `empty-${i}`
     )) }),
     /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)("div", { className: "tweakers-move-grid", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-dials", children: slots(page.dials, MOVE_DIALS).map(
-        (meta, i) => meta ? /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-dials", children: Array.from({ length: MOVE_DIALS }, (_, i) => {
+        const meta = dialAt(i);
+        if (!meta) return /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
+        const active = dragPath === meta.path || !!handTouch[meta.path] || held !== null && held.col === i;
+        return /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(
           "div",
           {
             className: "tweakers-move-dial",
-            "data-active": dragPath === meta.path || void 0,
+            "data-active": active || void 0,
+            "data-substituted": latched[i] ? true : void 0,
             onPointerDown: (e) => {
-              e.currentTarget.setPointerCapture(e.pointerId);
+              try {
+                e.currentTarget.setPointerCapture(e.pointerId);
+              } catch {
+              }
               setDragPath(meta.path);
               dialFromPointer(e, meta);
             },
@@ -8500,24 +8555,52 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             ]
           },
           meta.path
-        ) : /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`)
-      ) }),
+        );
+      }) }),
       Array.from({ length: PAD_ROWS }, (_, row) => row).filter((row) => padRows.slice(row).some((r) => r.length > 0)).map((row) => /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-pads", children: Array.from({ length: PAD_COLS }, (_, col) => {
-        const meta = padRows[row][col];
-        return meta ? /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(
+        const slot = padRows[row][col];
+        if (!slot) return /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
+        if (slot.kind === "toggle") {
+          const meta2 = slot.meta;
+          return /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(
+            "button",
+            {
+              className: "tweakers-move-pad",
+              "data-kind": "toggle",
+              "data-on": !!values[meta2.path],
+              onClick: () => TweakStore.updateValue(page.panel.id, meta2.path, !values[meta2.path]),
+              children: [
+                /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-pad-indicator" }),
+                /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-pad-title", children: meta2.label })
+              ]
+            },
+            meta2.path
+          );
+        }
+        const meta = slot.meta;
+        const gridIndex = row * PAD_COLS + col;
+        const dialCol = gridIndex % MOVE_DIALS;
+        const value = chipValue(meta);
+        return /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(
           "button",
           {
             className: "tweakers-move-pad",
-            "data-kind": "toggle",
-            "data-on": !!values[meta.path],
-            onClick: () => TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path]),
+            "data-kind": "value",
+            "data-held": held !== null && held.meta.path === meta.path || void 0,
+            "data-latched": latched[dialCol]?.path === meta.path || void 0,
+            onPointerDown: (e) => pressChip(e, dialCol, meta),
+            onPointerUp: () => releaseChip(dialCol, meta),
+            onPointerCancel: () => setHeld(null),
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-pad-indicator" }),
-              /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-pad-title", children: meta.label })
+              /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-pad-title", children: meta.label }),
+              /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)("span", { className: "tweakers-move-pad-reading", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-pad-number", children: value.num }),
+                value.unit && /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { children: value.unit })
+              ] })
             ]
           },
           meta.path
-        ) : /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
+        );
       }) }, row))
     ] })
   ] }) }) });

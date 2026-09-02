@@ -5425,18 +5425,52 @@ input.tweakers-list-item-title:focus {
   background: var(--move-chip);
 }
 
-/* Ready chips from the small-slots sheet, for the next mappings. */
-
-/* Value chip — label left in Regular, number Bold + unit Regular right. */
+/* Value chip — label left in Regular, number Bold + unit Regular right
+   (800:1748). Hold to peek at it in the column's dial; tap to latch it
+   in — the chip inverts like a toggle and pulses while it holds the
+   dial's seat. */
 .tweakers-move-pad[data-kind="value"] {
   justify-content: space-between;
   padding: 0 10px;
   font-size: 13px;
   font-weight: 400;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tweakers-move-pad[data-kind="value"] .tweakers-move-pad-title {
+  text-align: left;
+}
+
+.tweakers-move-pad-reading {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .tweakers-move-pad-number {
   font-weight: 700;
+}
+
+.tweakers-move-pad[data-held],
+.tweakers-move-pad[data-latched] {
+  background: var(--move-text);
+  color: var(--move-text-inverse);
+}
+
+.tweakers-move-pad[data-latched] {
+  animation: tweakers-move-latch 1.2s ease-in-out infinite;
+}
+
+@keyframes tweakers-move-latch {
+  50% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-pad[data-latched] {
+    animation: none;
+  }
 }
 
 /* Page chip — the stacked-card double shadow; inverts when active. */

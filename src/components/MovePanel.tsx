@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore, useCallback } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { isDevDefault } from '../env';
@@ -22,19 +22,39 @@ const PAD_COLS = 8;
 /** The slider track's inset from the dial slot's edges (Figma 802:767). */
 const DIAL_TRACK_INSET = 10;
 
+/** Press shorter than this is a tap (latch); longer is a hold (peek). */
+const TAP_MS = 300;
+
+/**
+ * The bridge kit announces physical knob touches with this window event
+ * (detail: `{ pageId, touched: { [path]: boolean } }`), so the on-screen
+ * dial can light its active state when a finger lands on the hardware.
+ */
+export const MOVE_TOUCH_EVENT = 'move-tweakers:touch';
+
 /**
  * The Move's control surface docked to the bottom edge, laid out to Cri's
  * Figma spec (file USU9CW2vC3SrvKsnHVnYGi, node 802:319; slot components
  * 802:756 and 800:1737): a track row of four coloured markers, 8 dial
- * slots hosting slider ports, and the 4×8 pad grid hosting toggle chips.
- * Slot contents follow the bridge kit's mapping (move-layout), so screen
- * and hardware always agree. Pad rows past the last filled one collapse.
+ * slots hosting slider ports, and the 4×8 pad grid hosting toggle and
+ * value chips. Slot contents follow the bridge kit's mapping
+ * (move-layout), so screen and hardware always agree.
+ *
+ * Value chips substitute the dial in their column: hold one to peek at
+ * its value in the dial slot, tap to latch it in — the chip pulses while
+ * latched, and the dial edits the substituted param until tapped again.
  */
 export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only }: MovePanelProps) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [track, setTrack] = useState(0);
   const [dragPath, setDragPath] = useState<string | null>(null);
+  // Physical knob touches, by path — from the bridge kit's window event.
+  const [handTouch, setHandTouch] = useState<Record<string, boolean>>({});
+  // Value-chip substitution: a held chip peeks, a tapped chip latches.
+  const [held, setHeld] = useState<{ col: number; meta: ControlMeta } | null>(null);
+  const [latched, setLatched] = useState<Record<number, ControlMeta | undefined>>({});
+  const holdStart = useRef(0);
   const [mounted, setMounted] = useState(false);
 
   const onlyKey = Array.isArray(only) ? only.join(' ') : only;
@@ -60,6 +80,22 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     () => undefined
   );
 
+  // A physical finger on a knob shows as the dial's active state.
+  useEffect(() => {
+    const onTouch = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      setHandTouch(detail && detail.pageId === pageId ? detail.touched ?? {} : {});
+    };
+    window.addEventListener(MOVE_TOUCH_EVENT, onTouch);
+    return () => window.removeEventListener(MOVE_TOUCH_EVENT, onTouch);
+  }, [pageId]);
+
+  // Substitutions belong to their page — switching tracks releases them.
+  useEffect(() => {
+    setHeld(null);
+    setLatched({});
+  }, [pageId]);
+
   if (!mounted || typeof window === 'undefined' || pages.length === 0 || !page || !values) return null;
 
   const slots = <T,>(items: T[], count: number) =>
@@ -70,6 +106,15 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const dialPercent = (meta: ControlMeta) =>
     Math.round(normalizeDial(meta, values[meta.path]) * 100);
 
+  // The value chip shows the real value: number in bold, unit trailing.
+  const chipValue = (meta: ControlMeta): { num: string; unit?: string } => {
+    const n = Number(values[meta.path]);
+    if (!Number.isFinite(n)) return { num: '' };
+    if (meta.formatValue) return { num: meta.formatValue(n) };
+    const num = Math.abs(n) >= 100 ? Math.round(n).toString() : Number(n.toFixed(2)).toString();
+    return { num, unit: meta.unit };
+  };
+
   // Whole-slot hotspot, position-on-the-track sets the value — the same feel
   // as the library Slider's card.
   const dialFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) => {
@@ -79,10 +124,34 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     TweakStore.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
   };
 
-  // Pads laid into the grid row by row (the kit fills 8 today — row one).
+  // Pads laid into the grid row by row (toggles first — the kit's hardware
+  // pads — then the overflow value chips).
   const padRows = Array.from({ length: PAD_ROWS }, (_, row) =>
     page.pads.slice(row * PAD_COLS, (row + 1) * PAD_COLS)
   );
+
+  // What a dial column actually edits: a held chip wins, then a latched
+  // chip, then the column's own dial.
+  const dialAt = (col: number): ControlMeta | undefined => {
+    if (held && held.col === col) return held.meta;
+    return latched[col] ?? page.dials[col];
+  };
+
+  const pressChip = (e: React.PointerEvent<HTMLElement>, col: number, meta: ControlMeta) => {
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+    holdStart.current = Date.now();
+    setHeld({ col, meta });
+  };
+
+  const releaseChip = (col: number, meta: ControlMeta) => {
+    setHeld(null);
+    if (Date.now() - holdStart.current < TAP_MS) {
+      setLatched((prev) => ({
+        ...prev,
+        [col]: prev[col]?.path === meta.path ? undefined : meta,
+      }));
+    }
+  };
 
   const content = (
     <div className="tweakers-root tweakers-move-root" data-theme={theme}>
@@ -106,12 +175,16 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 
           <div className="tweakers-move-grid">
             <div className="tweakers-move-dials">
-              {slots(page.dials, MOVE_DIALS).map((meta, i) =>
-                meta ? (
+              {Array.from({ length: MOVE_DIALS }, (_, i) => {
+                const meta = dialAt(i);
+                if (!meta) return <div key={`empty-${i}`} className="tweakers-move-dial" data-empty="true" />;
+                const active = dragPath === meta.path || !!handTouch[meta.path] || (held !== null && held.col === i);
+                return (
                   <div
                     key={meta.path}
                     className="tweakers-move-dial"
-                    data-active={dragPath === meta.path || undefined}
+                    data-active={active || undefined}
+                    data-substituted={latched[i] ? true : undefined}
                     onPointerDown={(e) => {
                       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
                       setDragPath(meta.path);
@@ -133,10 +206,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       <div className="tweakers-move-dial-fill" style={{ width: `${dialPercent(meta)}%` }} />
                     </div>
                   </div>
-                ) : (
-                  <div key={`empty-${i}`} className="tweakers-move-dial" data-empty="true" />
-                )
-              )}
+                );
+              })}
             </div>
 
             {/* Trailing empty pad rows collapse: a row shows only if it, or any
@@ -147,20 +218,44 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               .map((row) => (
                 <div key={row} className="tweakers-move-pads">
                   {Array.from({ length: PAD_COLS }, (_, col) => {
-                    const meta = padRows[row][col];
-                    return meta ? (
+                    const slot = padRows[row][col];
+                    if (!slot) return <div key={`empty-${col}`} className="tweakers-move-pad" data-empty="true" />;
+                    if (slot.kind === 'toggle') {
+                      const meta = slot.meta;
+                      return (
+                        <button
+                          key={meta.path}
+                          className="tweakers-move-pad"
+                          data-kind="toggle"
+                          data-on={!!values[meta.path]}
+                          onClick={() => TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path])}
+                        >
+                          <span className="tweakers-move-pad-indicator" />
+                          <span className="tweakers-move-pad-title">{meta.label}</span>
+                        </button>
+                      );
+                    }
+                    const meta = slot.meta;
+                    const gridIndex = row * PAD_COLS + col;
+                    const dialCol = gridIndex % MOVE_DIALS;
+                    const value = chipValue(meta);
+                    return (
                       <button
                         key={meta.path}
                         className="tweakers-move-pad"
-                        data-kind="toggle"
-                        data-on={!!values[meta.path]}
-                        onClick={() => TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path])}
+                        data-kind="value"
+                        data-held={(held !== null && held.meta.path === meta.path) || undefined}
+                        data-latched={latched[dialCol]?.path === meta.path || undefined}
+                        onPointerDown={(e) => pressChip(e, dialCol, meta)}
+                        onPointerUp={() => releaseChip(dialCol, meta)}
+                        onPointerCancel={() => setHeld(null)}
                       >
-                        <span className="tweakers-move-pad-indicator" />
                         <span className="tweakers-move-pad-title">{meta.label}</span>
+                        <span className="tweakers-move-pad-reading">
+                          <span className="tweakers-move-pad-number">{value.num}</span>
+                          {value.unit && <span>{value.unit}</span>}
+                        </span>
                       </button>
-                    ) : (
-                      <div key={`empty-${col}`} className="tweakers-move-pad" data-empty="true" />
                     );
                   })}
                 </div>

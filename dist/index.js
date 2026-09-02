@@ -8198,13 +8198,14 @@ function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover
 }
 
 // src/components/MovePanel.tsx
-import { useEffect as useEffect20, useState as useState24, useSyncExternalStore as useSyncExternalStore9, useCallback as useCallback19 } from "react";
+import { useEffect as useEffect20, useRef as useRef27, useState as useState24, useSyncExternalStore as useSyncExternalStore9, useCallback as useCallback19 } from "react";
 import { createPortal as createPortal8 } from "react-dom";
 
 // src/move-layout.ts
 var MOVE_TRACKS = 4;
 var MOVE_DIALS = 8;
 var MOVE_PADS = 8;
+var MOVE_PAD_SLOTS = 32;
 var flat = (controls, out = []) => {
   for (const c of controls) {
     if (c.children) flat(c.children, out);
@@ -8216,11 +8217,12 @@ var isDial = (c) => c.type === "slider" || c.type === "number" && c.min != null 
 function buildMovePages(panels) {
   return panels.filter((p) => p.kind !== "timeline").slice(0, MOVE_TRACKS).map((panel) => {
     const controls = flat(panel.controls);
-    return {
-      panel,
-      dials: controls.filter(isDial).slice(0, MOVE_DIALS),
-      pads: controls.filter((c) => c.type === "toggle").slice(0, MOVE_PADS)
-    };
+    const bounded = controls.filter(isDial);
+    const pads = [
+      ...controls.filter((c) => c.type === "toggle").slice(0, MOVE_PADS).map((meta) => ({ kind: "toggle", meta })),
+      ...bounded.slice(MOVE_DIALS).map((meta) => ({ kind: "value", meta }))
+    ].slice(0, MOVE_PAD_SLOTS);
+    return { panel, dials: bounded.slice(0, MOVE_DIALS), pads };
   });
 }
 function denormalizeDial(meta, v01) {
@@ -8243,11 +8245,17 @@ var MOVE_TRACK_COLORS = ["#4274f4", "#d83dff", "#ff4d07", "#52bd06"];
 var PAD_ROWS = 4;
 var PAD_COLS = 8;
 var DIAL_TRACK_INSET = 10;
+var TAP_MS = 300;
+var MOVE_TOUCH_EVENT = "move-tweakers:touch";
 function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only }) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState24([]);
   const [track, setTrack] = useState24(0);
   const [dragPath, setDragPath] = useState24(null);
+  const [handTouch, setHandTouch] = useState24({});
+  const [held, setHeld] = useState24(null);
+  const [latched, setLatched] = useState24({});
+  const holdStart = useRef27(0);
   const [mounted, setMounted] = useState24(false);
   const onlyKey = Array.isArray(only) ? only.join(" ") : only;
   const read = useCallback19(
@@ -8268,9 +8276,28 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     () => pageId ? TweakStore.getValues(pageId) : void 0,
     () => void 0
   );
+  useEffect20(() => {
+    const onTouch = (e) => {
+      const detail = e.detail;
+      setHandTouch(detail && detail.pageId === pageId ? detail.touched ?? {} : {});
+    };
+    window.addEventListener(MOVE_TOUCH_EVENT, onTouch);
+    return () => window.removeEventListener(MOVE_TOUCH_EVENT, onTouch);
+  }, [pageId]);
+  useEffect20(() => {
+    setHeld(null);
+    setLatched({});
+  }, [pageId]);
   if (!mounted || typeof window === "undefined" || pages.length === 0 || !page || !values) return null;
   const slots = (items, count) => Array.from({ length: count }, (_, i) => items[i]);
   const dialPercent = (meta) => Math.round(normalizeDial(meta, values[meta.path]) * 100);
+  const chipValue = (meta) => {
+    const n = Number(values[meta.path]);
+    if (!Number.isFinite(n)) return { num: "" };
+    if (meta.formatValue) return { num: meta.formatValue(n) };
+    const num = Math.abs(n) >= 100 ? Math.round(n).toString() : Number(n.toFixed(2)).toString();
+    return { num, unit: meta.unit };
+  };
   const dialFromPointer = (e, meta) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const span = rect.width - DIAL_TRACK_INSET * 2;
@@ -8281,6 +8308,27 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     { length: PAD_ROWS },
     (_, row) => page.pads.slice(row * PAD_COLS, (row + 1) * PAD_COLS)
   );
+  const dialAt = (col) => {
+    if (held && held.col === col) return held.meta;
+    return latched[col] ?? page.dials[col];
+  };
+  const pressChip = (e, col, meta) => {
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+    }
+    holdStart.current = Date.now();
+    setHeld({ col, meta });
+  };
+  const releaseChip = (col, meta) => {
+    setHeld(null);
+    if (Date.now() - holdStart.current < TAP_MS) {
+      setLatched((prev) => ({
+        ...prev,
+        [col]: prev[col]?.path === meta.path ? void 0 : meta
+      }));
+    }
+  };
   const content = /* @__PURE__ */ jsx39("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, children: /* @__PURE__ */ jsx39("div", { className: "tweakers-move", children: /* @__PURE__ */ jsxs34("div", { className: "tweakers-move-inner", children: [
     /* @__PURE__ */ jsx39("div", { className: "tweakers-move-tracks", children: slots(pages, MOVE_TRACKS).map((pg, i) => /* @__PURE__ */ jsxs34(
       "button",
@@ -8298,14 +8346,21 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       pg ? pg.panel.id : `empty-${i}`
     )) }),
     /* @__PURE__ */ jsxs34("div", { className: "tweakers-move-grid", children: [
-      /* @__PURE__ */ jsx39("div", { className: "tweakers-move-dials", children: slots(page.dials, MOVE_DIALS).map(
-        (meta, i) => meta ? /* @__PURE__ */ jsxs34(
+      /* @__PURE__ */ jsx39("div", { className: "tweakers-move-dials", children: Array.from({ length: MOVE_DIALS }, (_, i) => {
+        const meta = dialAt(i);
+        if (!meta) return /* @__PURE__ */ jsx39("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
+        const active = dragPath === meta.path || !!handTouch[meta.path] || held !== null && held.col === i;
+        return /* @__PURE__ */ jsxs34(
           "div",
           {
             className: "tweakers-move-dial",
-            "data-active": dragPath === meta.path || void 0,
+            "data-active": active || void 0,
+            "data-substituted": latched[i] ? true : void 0,
             onPointerDown: (e) => {
-              e.currentTarget.setPointerCapture(e.pointerId);
+              try {
+                e.currentTarget.setPointerCapture(e.pointerId);
+              } catch {
+              }
               setDragPath(meta.path);
               dialFromPointer(e, meta);
             },
@@ -8326,24 +8381,52 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             ]
           },
           meta.path
-        ) : /* @__PURE__ */ jsx39("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`)
-      ) }),
+        );
+      }) }),
       Array.from({ length: PAD_ROWS }, (_, row) => row).filter((row) => padRows.slice(row).some((r) => r.length > 0)).map((row) => /* @__PURE__ */ jsx39("div", { className: "tweakers-move-pads", children: Array.from({ length: PAD_COLS }, (_, col) => {
-        const meta = padRows[row][col];
-        return meta ? /* @__PURE__ */ jsxs34(
+        const slot = padRows[row][col];
+        if (!slot) return /* @__PURE__ */ jsx39("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
+        if (slot.kind === "toggle") {
+          const meta2 = slot.meta;
+          return /* @__PURE__ */ jsxs34(
+            "button",
+            {
+              className: "tweakers-move-pad",
+              "data-kind": "toggle",
+              "data-on": !!values[meta2.path],
+              onClick: () => TweakStore.updateValue(page.panel.id, meta2.path, !values[meta2.path]),
+              children: [
+                /* @__PURE__ */ jsx39("span", { className: "tweakers-move-pad-indicator" }),
+                /* @__PURE__ */ jsx39("span", { className: "tweakers-move-pad-title", children: meta2.label })
+              ]
+            },
+            meta2.path
+          );
+        }
+        const meta = slot.meta;
+        const gridIndex = row * PAD_COLS + col;
+        const dialCol = gridIndex % MOVE_DIALS;
+        const value = chipValue(meta);
+        return /* @__PURE__ */ jsxs34(
           "button",
           {
             className: "tweakers-move-pad",
-            "data-kind": "toggle",
-            "data-on": !!values[meta.path],
-            onClick: () => TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path]),
+            "data-kind": "value",
+            "data-held": held !== null && held.meta.path === meta.path || void 0,
+            "data-latched": latched[dialCol]?.path === meta.path || void 0,
+            onPointerDown: (e) => pressChip(e, dialCol, meta),
+            onPointerUp: () => releaseChip(dialCol, meta),
+            onPointerCancel: () => setHeld(null),
             children: [
-              /* @__PURE__ */ jsx39("span", { className: "tweakers-move-pad-indicator" }),
-              /* @__PURE__ */ jsx39("span", { className: "tweakers-move-pad-title", children: meta.label })
+              /* @__PURE__ */ jsx39("span", { className: "tweakers-move-pad-title", children: meta.label }),
+              /* @__PURE__ */ jsxs34("span", { className: "tweakers-move-pad-reading", children: [
+                /* @__PURE__ */ jsx39("span", { className: "tweakers-move-pad-number", children: value.num }),
+                value.unit && /* @__PURE__ */ jsx39("span", { children: value.unit })
+              ] })
             ]
           },
           meta.path
-        ) : /* @__PURE__ */ jsx39("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
+        );
       }) }, row))
     ] })
   ] }) }) });
@@ -8351,7 +8434,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
 }
 
 // src/hooks/useTweakTimeline.ts
-import { useCallback as useCallback20, useEffect as useEffect21, useMemo, useRef as useRef27, useSyncExternalStore as useSyncExternalStore10 } from "react";
+import { useCallback as useCallback20, useEffect as useEffect21, useMemo, useRef as useRef28, useSyncExternalStore as useSyncExternalStore10 } from "react";
 
 // src/transition-math.ts
 function round22(value) {
@@ -9281,15 +9364,15 @@ function useTweakTimeline(name, config, options) {
   );
   const timelineDuration = staticTimeline.duration;
   const staticClips = staticTimeline.clips;
-  const parsedRef = useRef27(parsed);
+  const parsedRef = useRef28(parsed);
   parsedRef.current = parsed;
-  const optionsRef = useRef27(options);
+  const optionsRef = useRef28(options);
   optionsRef.current = options;
   const buildMeta = useCallback20(
     () => buildTimelineMeta(panelId, name, timelineDuration, parsedRef.current, options?.loop),
     [panelId, name, timelineDuration, options?.loop]
   );
-  const buildMetaRef = useRef27(buildMeta);
+  const buildMetaRef = useRef28(buildMeta);
   buildMetaRef.current = buildMeta;
   useEffect21(() => {
     TimelineStore.register(buildMetaRef.current(), {
@@ -9298,7 +9381,7 @@ function useTweakTimeline(name, config, options) {
     });
     return () => TimelineStore.unregister(panelId);
   }, [panelId, name]);
-  const mountedRef = useRef27(false);
+  const mountedRef = useRef28(false);
   useEffect21(() => {
     if (!mountedRef.current) {
       mountedRef.current = true;
@@ -9332,7 +9415,7 @@ function useTweakTimeline(name, config, options) {
 }
 
 // src/components/Timeline/TweakTimeline.tsx
-import { memo, useCallback as useCallback21, useEffect as useEffect22, useLayoutEffect as useLayoutEffect5, useRef as useRef28, useState as useState25, useSyncExternalStore as useSyncExternalStore11 } from "react";
+import { memo, useCallback as useCallback21, useEffect as useEffect22, useLayoutEffect as useLayoutEffect5, useRef as useRef29, useState as useState25, useSyncExternalStore as useSyncExternalStore11 } from "react";
 import { createPortal as createPortal9 } from "react-dom";
 import { AnimatePresence as AnimatePresence8, motion as motion12 } from "motion/react";
 import { Fragment as Fragment9, jsx as jsx40, jsxs as jsxs35 } from "react/jsx-runtime";
@@ -9401,9 +9484,9 @@ function TweakTimelineDock({
 }) {
   const [mounted, setMounted] = useState25(false);
   const [dockMaxHeight, setDockMaxHeight] = useState25(DEFAULT_DOCK_MAX_HEIGHT);
-  const visibilityControllerId = useRef28(/* @__PURE__ */ Symbol("tweakers-timeline-visibility"));
-  const dockRef = useRef28(null);
-  const resizeCleanupRef = useRef28(null);
+  const visibilityControllerId = useRef29(/* @__PURE__ */ Symbol("tweakers-timeline-visibility"));
+  const dockRef = useRef29(null);
+  const resizeCleanupRef = useRef29(null);
   useEffect22(() => TimelineUiStore.registerController(visibilityControllerId.current, {
     visible,
     defaultVisible,
@@ -9563,8 +9646,8 @@ function TimelinePlayheadFlag({
   const subscribe = useTransportSubscribe(id);
   const getTime = useCallback21(() => TimelineStore.getTransport(id).time, [id]);
   const time = useSyncExternalStore11(subscribe, getTime, getTime);
-  const scrubRef = useRef28(null);
-  const cleanupScrubRef = useRef28(null);
+  const scrubRef = useRef29(null);
+  const cleanupScrubRef = useRef29(null);
   const seekFromClientX = useCallback21((clientX) => {
     const rect = scrubRef.current?.rect;
     const scrub = scrubRef.current;
@@ -9657,7 +9740,7 @@ function TimelineOverview({
   const subscribe = useTransportSubscribe(id);
   const getTime = useCallback21(() => TimelineStore.getTransport(id).time, [id]);
   const time = useSyncExternalStore11(subscribe, getTime, getTime);
-  const scrubRef = useRef28(null);
+  const scrubRef = useRef29(null);
   const seekFromClientX = useCallback21((clientX) => {
     const rect = scrubRef.current?.rect;
     if (!rect || rect.width <= 0 || duration <= 0) return;
@@ -9746,8 +9829,8 @@ var TimelineSection = memo(function TimelineSection2({
   const getLoopRegion = useCallback21(() => TimelineStore.getLoopRegion(meta.id), [meta.id]);
   const loopRegion = useSyncExternalStore11(subscribeLoopRegion, getLoopRegion, getLoopRegion);
   const [loopDrag, setLoopDrag] = useState25(null);
-  const laneAreaRef = useRef28(null);
-  const horizontalScrollRef = useRef28(null);
+  const laneAreaRef = useRef29(null);
+  const horizontalScrollRef = useRef29(null);
   const [laneWidth, setLaneWidth] = useState25(0);
   useLayoutEffect5(() => {
     if (!open) return;
@@ -9816,8 +9899,8 @@ var TimelineSection = memo(function TimelineSection2({
     e.preventDefault();
     scroller.scrollLeft += horizontalDelta;
   }, [zoom]);
-  const zoomDragRef = useRef28(null);
-  const rulerGestureRef = useRef28(null);
+  const zoomDragRef = useRef29(null);
+  const rulerGestureRef = useRef29(null);
   const rulerTimeFromClientX = useCallback21(
     (clientX, rect, viewStartAt, visibleAt) => clamp5(
       viewStartAt + (clientX - rect.left) / rect.width * visibleAt,
@@ -9908,7 +9991,7 @@ var TimelineSection = memo(function TimelineSection2({
     zoomDragRef.current = null;
     setLoopDrag(null);
   }, []);
-  const trackScrubRef = useRef28(null);
+  const trackScrubRef = useRef29(null);
   const seekTrackFromClientX = useCallback21((clientX) => {
     const scrub = trackScrubRef.current;
     const contentWidth = scrub?.rect.width ?? 0;
@@ -10363,7 +10446,7 @@ function ClipPopover({
   theme,
   onClose
 }) {
-  const ref = useRef28(null);
+  const ref = useRef29(null);
   const [naturalHeight, setNaturalHeight] = useState25(0);
   const [viewport, setViewport] = useState25(() => ({
     width: window.visualViewport?.width ?? window.innerWidth,
@@ -10538,7 +10621,7 @@ function TimelineClip({
   onClick,
   onDrag
 }) {
-  const dragRef = useRef28(null);
+  const dragRef = useRef29(null);
   const [dragging, setDragging] = useState25(false);
   const isSteps = Boolean(steps?.length);
   const handlePointerDown = useCallback21(
@@ -10779,7 +10862,7 @@ function ButtonGroup({ buttons }) {
 }
 
 // src/components/WaveformVisualization.tsx
-import { useRef as useRef29, useEffect as useEffect23, useState as useState26 } from "react";
+import { useRef as useRef30, useEffect as useEffect23, useState as useState26 } from "react";
 
 // src/waveform-dsp.ts
 function mixToMono(buffer) {
@@ -11192,9 +11275,9 @@ function WaveformVisualization({
   width = 256,
   height = 140
 }) {
-  const canvasRef = useRef29(null);
+  const canvasRef = useRef30(null);
   const [zoom, setZoom] = useState26(1);
-  const runtimeRef = useRef29(null);
+  const runtimeRef = useRef30(null);
   runtimeRef.current = {
     buffer,
     progress,
@@ -11241,7 +11324,7 @@ function WaveformVisualization({
 }
 
 // src/components/CurveComposer.tsx
-import { useRef as useRef30, useEffect as useEffect24, useMemo as useMemo2, useState as useState27 } from "react";
+import { useRef as useRef31, useEffect as useEffect24, useMemo as useMemo2, useState as useState27 } from "react";
 
 // src/curve-composer-core.ts
 var CURVE_CYCLE = ["linear", "easeIn", "easeOut", "easeInOut", "spring"];
@@ -11761,18 +11844,18 @@ function CurveComposer({
     [segments, driver, direction, gap]
   );
   const samplers = useMemo2(() => buildSamplers(composition), [composition]);
-  const liveRef = useRef30({ composition, samplers, getPhase, phase, mode, triggerSteps });
+  const liveRef = useRef31({ composition, samplers, getPhase, phase, mode, triggerSteps });
   liveRef.current = { composition, samplers, getPhase, phase, mode, triggerSteps };
-  const onTriggerRef = useRef30(onTrigger);
+  const onTriggerRef = useRef31(onTrigger);
   onTriggerRef.current = onTrigger;
-  const svgRef = useRef30(null);
-  const seriesPlayheadRef = useRef30(null);
-  const seriesDotRef = useRef30(null);
-  const driverPlayheadRef = useRef30(null);
-  const prevTrigValue = useRef30(Number.NaN);
+  const svgRef = useRef31(null);
+  const seriesPlayheadRef = useRef31(null);
+  const seriesDotRef = useRef31(null);
+  const driverPlayheadRef = useRef31(null);
+  const prevTrigValue = useRef31(Number.NaN);
   const [drag, setDrag] = useState27(null);
   const [hover, setHover] = useState27(null);
-  const dragRef = useRef30(null);
+  const dragRef = useRef31(null);
   dragRef.current = drag;
   useEffect24(() => {
     let raf = 0;
@@ -12032,7 +12115,7 @@ function CurveComposer({
 }
 
 // src/components/ShortcutsMenu.tsx
-import { useState as useState28, useRef as useRef31, useEffect as useEffect25, useCallback as useCallback22 } from "react";
+import { useState as useState28, useRef as useRef32, useEffect as useEffect25, useCallback as useCallback22 } from "react";
 import { createPortal as createPortal10 } from "react-dom";
 import { motion as motion13, AnimatePresence as AnimatePresence9 } from "motion/react";
 import { Fragment as Fragment11, jsx as jsx45, jsxs as jsxs39 } from "react/jsx-runtime";
@@ -12056,8 +12139,8 @@ function formatInteraction(sc) {
 }
 function ShortcutsMenu({ panelId }) {
   const [isOpen, setIsOpen] = useState28(false);
-  const triggerRef = useRef31(null);
-  const dropdownRef = useRef31(null);
+  const triggerRef = useRef32(null);
+  const dropdownRef = useRef32(null);
   const [pos, setPos] = useState28({ top: 0, right: 0 });
   const open = useCallback22(() => {
     const rect = triggerRef.current?.getBoundingClientRect();
@@ -12150,7 +12233,7 @@ function ShortcutsMenu({ panelId }) {
 }
 
 // src/components/AudioLevelMeter.tsx
-import { useEffect as useEffect26, useRef as useRef32, useState as useState29 } from "react";
+import { useEffect as useEffect26, useRef as useRef33, useState as useState29 } from "react";
 import { jsx as jsx46 } from "react/jsx-runtime";
 var DEFAULT_CELL_COUNT = 10;
 var MIN_CELL_COUNT = 8;
@@ -12242,12 +12325,12 @@ function AudioLevelMeter(props) {
   const activeCellCounts = levels.map((level) => levelToCellCount(level, cellCount));
   const activeCellKey = activeCellCounts.join(":");
   const clippedBandKey = clippedBands.map(Number).join(":");
-  const currentTopCellsRef = useRef32(activeCellCounts.map((count) => count - 1));
-  const currentClippedBandsRef = useRef32(clippedBands);
-  const cellCountRef = useRef32(cellCount);
-  const peakStatesRef = useRef32([]);
-  const clipHoldUntilRef = useRef32(clippedBands.map(() => 0));
-  const animationFrameRef = useRef32(null);
+  const currentTopCellsRef = useRef33(activeCellCounts.map((count) => count - 1));
+  const currentClippedBandsRef = useRef33(clippedBands);
+  const cellCountRef = useRef33(cellCount);
+  const peakStatesRef = useRef33([]);
+  const clipHoldUntilRef = useRef33(clippedBands.map(() => 0));
+  const animationFrameRef = useRef33(null);
   const reducedMotion = usePrefersReducedMotion();
   const [peakIndices, setPeakIndices] = useState29(
     () => activeCellCounts.map((count) => count - 1)
