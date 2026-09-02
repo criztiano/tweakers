@@ -1180,11 +1180,12 @@ interface MovePanelProps {
     panels?: string | string[];
 }
 /**
- * The Move's control surface docked to the bottom edge: 8 dial slots, 8 pad
- * slots, and the 4 track buttons that page between panels. Slots follow the
- * bridge kit's mapping (move-layout), so what this panel shows is exactly
- * what the hardware has under its knobs. Dial slots are sockets for the
- * ported controls; until a port lands they show the mapped value read-only.
+ * The Move's control surface docked to the bottom edge, laid out to Cri's
+ * Figma spec (file USU9CW2vC3SrvKsnHVnYGi, node 802:319): a track row of
+ * four coloured markers, 8 tall dial slots with a large numeric readout,
+ * and the full 4×8 pad grid. Slot contents follow the bridge kit's mapping
+ * (move-layout), so screen and hardware always agree; the kit currently
+ * fills the first pad row (8 toggles), the rest stay empty sockets.
  */
 declare function MovePanel({ theme, productionEnabled, panels: only }: MovePanelProps): react.ReactPortal | null;
 

@@ -5155,204 +5155,215 @@ input.tweakers-list-item-title:focus {
 }
 
 /* ── Move panel ─────────────────────────────────────────────────────────
-   The Move's control surface docked to the bottom edge: a dial row, a pad
-   row, and the 4 track buttons, laid out like the hardware. Slots are
-   sockets — ported controls land inside them; empty ones stay as dimmed
-   hardware positions so the grid never reflows. Tokens only, so both
-   themes come for free. */
+   The Move's control surface docked to the bottom edge, to Cri's Figma
+   spec (USU9CW2vC3SrvKsnHVnYGi node 802:319): coloured track markers, 8
+   tall dial slots with a large numeric readout, and the full 4×8 pad
+   grid. Colours and faces are the Move's own identity — fixed, not
+   themed — so they live here as local values, not root tokens. Fonts
+   (Ableton Sans Small, Sharp Grotesk 06) are host-provided, like
+   System85; without them the fallback stacks carry the layout. */
 
 .tweakers-move {
+  --move-bg: #302e2e;
+  --move-slot: rgba(222, 227, 201, 0.1);
+  --move-text: #dee3c9;
+  --move-radius: 12px;
+  --move-font-label: 'Ableton Sans Small', system-ui, -apple-system, sans-serif;
+  --move-font-value: 'Sharp Grotesk 06', system-ui, -apple-system, sans-serif;
+  --move-font-pad: 'Inter', system-ui, -apple-system, sans-serif;
+
   position: fixed;
-  bottom: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(720px, calc(100vw - 24px));
-  z-index: 9999;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 9990;
   display: flex;
-  flex-direction: column;
-  gap: var(--tweak-panel-gap);
-  padding: var(--tweak-panel-padding);
-  background: var(--tweak-glass-bg);
-  border: 1px solid var(--tweak-border);
-  border-radius: var(--tweak-radius);
-  box-shadow: var(--tweak-shadow);
-}
-
-.tweakers-move-dials,
-.tweakers-move-pads {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: var(--tweak-panel-gap);
-}
-
-.tweakers-move-tracks {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--tweak-panel-gap);
-}
-
-/* Dial slot — round socket above its label, like a knob over a legend. */
-.tweakers-move-slot {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  padding: 6px 2px 4px;
-  background: var(--tweak-surface-subtle);
-  border-radius: var(--tweak-radius-inner);
-}
-
-.tweakers-move-slot[data-empty="true"] {
-  opacity: 0.4;
-}
-
-.tweakers-move-dial-face {
-  position: relative;
-  width: 62%;
-  max-width: 44px;
-  aspect-ratio: 1;
-}
-
-.tweakers-move-dial-face svg {
-  width: 100%;
-  height: 100%;
-  display: block;
-  /* The 270° sweep opens downward: start bottom-left, end bottom-right. */
-  transform: rotate(135deg);
-}
-
-.tweakers-move-slot[data-empty="true"] .tweakers-move-dial-face {
-  border: 1px solid var(--tweak-border);
-  border-radius: 50%;
-}
-
-.tweakers-move-dial-track,
-.tweakers-move-dial-fill {
-  fill: none;
-  stroke-width: 2.5;
-  stroke-linecap: round;
-}
-
-.tweakers-move-dial-track {
-  stroke: var(--tweak-track);
-  stroke-dasharray: 75 100;
-}
-
-.tweakers-move-dial-fill {
-  stroke: var(--tweak-track-fill-strong);
-}
-
-/* Value sits inside the ring, hover/interaction only — the standing rule. */
-.tweakers-move-dial-value {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  font-family: var(--tweak-font-value);
-  font-size: 9px;
-  color: var(--tweak-text-root);
-  opacity: 0;
+  padding: 68px 48px 14px;
+  background: var(--move-bg);
+  color: var(--move-text);
+}
+
+.tweakers-move-inner {
+  flex: 1 0 0;
+  min-width: 1px;
+  max-width: 1180px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+/* Track row — four coloured markers with the panel names (802:321). */
+.tweakers-move-tracks {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 4px;
+}
+
+.tweakers-move-track {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  border-radius: var(--move-radius);
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--move-text);
+}
+
+.tweakers-move-track[data-empty="true"] {
+  cursor: default;
+  opacity: 0.3;
+}
+
+.tweakers-move-track-marker {
+  width: 5px;
+  height: 21px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.tweakers-move-track-label {
+  font-family: var(--move-font-label);
+  font-size: 16px;
+  line-height: normal;
+  word-break: break-word;
+  text-align: left;
+  opacity: 0.22;
   transition: opacity 0.12s;
 }
 
-.tweakers-move-dial:hover .tweakers-move-dial-value {
-  opacity: var(--tweak-value-opacity);
+.tweakers-move-track[data-active="true"] .tweakers-move-track-label {
+  opacity: 1;
 }
 
-.tweakers-move-slot-label {
+/* Dial + pad grid — one column, 4px rhythm (802:334). */
+.tweakers-move-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.tweakers-move-dials {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  height: 140px;
+  width: 100%;
+}
+
+/* Dial slot — big slot, value huge in the middle, label at the foot
+   (802:520). Empty slots are the same socket at 30%, nothing inside. */
+.tweakers-move-dial {
+  flex: 1 0 0;
+  min-width: 1px;
+  height: 100%;
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0 10px;
+  background: var(--move-slot);
+  border-radius: var(--move-radius);
+}
+
+.tweakers-move-dial[data-empty="true"] {
+  opacity: 0.3;
+}
+
+.tweakers-move-dial-value {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  height: 96px;
+  font-family: var(--move-font-value);
+  font-weight: 400;
+  /* 100px at the design's 1180px width; shrinks with its slot below that. */
+  font-size: min(100px, 68cqi);
+  letter-spacing: 0.02em;
+  line-height: 1.04;
+  text-align: center;
+}
+
+.tweakers-move-dial-unit {
+  font-weight: 600;
+  font-size: 0.4em;
+  letter-spacing: 0.02em;
+}
+
+.tweakers-move-dial-label {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--tweak-font-label);
-  font-size: 9px;
-  font-weight: 400;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  color: var(--tweak-text-label);
+  font-family: var(--move-font-label);
+  font-size: 12px;
+  line-height: normal;
 }
 
-/* Pad slot — the square rubber pad; lit from within when its toggle is on. */
-.tweakers-move-pad {
-  aspect-ratio: 8 / 5;
-  min-width: 0;
+/* Pad row — small slots, label left, value right (802:558). */
+.tweakers-move-pads {
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding: 4px;
-  background: var(--tweak-surface);
-  border: 1px solid var(--tweak-border);
-  border-radius: var(--tweak-radius-inner);
+  gap: 4px;
+  align-items: center;
+  width: 100%;
+}
+
+.tweakers-move-pad {
+  flex: 1 0 0;
+  min-width: 1px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  background: var(--move-slot);
+  border: none;
+  border-radius: var(--move-radius);
+  color: var(--move-text);
+  font-family: var(--move-font-pad);
+  font-size: 12px;
+  line-height: normal;
+  white-space: nowrap;
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
-}
-
-.tweakers-move-pad:hover {
-  background: var(--tweak-surface-hover);
-}
-
-.tweakers-move-pad[data-on="true"] {
-  background: color-mix(in srgb, var(--tweak-accent) 28%, transparent);
-  border-color: var(--tweak-accent);
-  box-shadow: inset 0 0 12px color-mix(in srgb, var(--tweak-accent) 35%, transparent);
-}
-
-.tweakers-move-pad[data-on="true"] .tweakers-move-slot-label {
-  color: var(--tweak-text-focus);
 }
 
 .tweakers-move-pad[data-empty="true"] {
-  background: var(--tweak-surface-subtle);
-  border-color: transparent;
   cursor: default;
-  opacity: 0.4;
+  opacity: 0.3;
 }
 
-/* Track buttons — wide, low, labelled with their panel's name. */
-.tweakers-move-track {
-  height: 24px;
-  min-width: 0;
+.tweakers-move-pad-label {
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--tweak-font-label);
-  font-size: var(--tweak-font-size);
   font-weight: 400;
-  text-transform: uppercase;
-  color: var(--tweak-text-label);
-  background: var(--tweak-surface);
-  border: 1px solid var(--tweak-border);
-  border-radius: var(--tweak-radius-inner);
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
 
-.tweakers-move-track:hover {
-  background: var(--tweak-surface-hover);
+.tweakers-move-pad-value {
+  font-weight: 700;
+  flex-shrink: 0;
 }
 
-.tweakers-move-track[data-active="true"] {
-  color: var(--tweak-text-focus);
-  border-color: var(--tweak-accent);
-  background: color-mix(in srgb, var(--tweak-accent) 18%, transparent);
-}
-
-.tweakers-move-track[data-empty="true"] {
-  background: var(--tweak-surface-subtle);
-  border-color: transparent;
-  cursor: default;
+.tweakers-move-pad[data-on="false"] .tweakers-move-pad-value {
   opacity: 0.4;
 }
 
-/* Narrow hosts: keep all eight columns, shed the label row's air. */
-@media (max-width: 480px) {
-  .tweakers-move-slot-label {
-    font-size: 8px;
+/* Narrow hosts: keep the grid, pull in the frame's air. */
+@media (max-width: 720px) {
+  .tweakers-move {
+    padding: 24px 12px 10px;
   }
-  .tweakers-move-track {
-    font-size: 10px;
+  .tweakers-move-dials {
+    height: 100px;
+  }
+  .tweakers-move-dial-value {
+    height: 64px;
   }
 }
 `;
