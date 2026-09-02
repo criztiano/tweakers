@@ -6,6 +6,11 @@ export type { UseTweakersOptions } from './hooks/useTweakers';
 export { TweakRoot } from './components/TweakRoot';
 export type { TweakPosition, TweakMode, TweakTheme } from './components/TweakRoot';
 
+// Move surface mirror (docked bottom panel matching the bridge kit's mapping)
+export { MovePanel } from './components/MovePanel';
+export { buildMovePages, normalizeDial, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
+export type { MovePage } from './move-layout';
+
 // Timeline (prototype)
 export { useTweakTimeline } from './hooks/useTweakTimeline';
 export type {

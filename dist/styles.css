@@ -5152,3 +5152,205 @@ input.tweakers-list-item-title:focus {
 .tweakers-panel-inner {
   scroll-padding-bottom: 72px;
 }
+
+/* ── Move panel ─────────────────────────────────────────────────────────
+   The Move's control surface docked to the bottom edge: a dial row, a pad
+   row, and the 4 track buttons, laid out like the hardware. Slots are
+   sockets — ported controls land inside them; empty ones stay as dimmed
+   hardware positions so the grid never reflows. Tokens only, so both
+   themes come for free. */
+
+.tweakers-move {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(720px, calc(100vw - 24px));
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: var(--tweak-panel-gap);
+  padding: var(--tweak-panel-padding);
+  background: var(--tweak-glass-bg);
+  border: 1px solid var(--tweak-border);
+  border-radius: var(--tweak-radius);
+  box-shadow: var(--tweak-shadow);
+}
+
+.tweakers-move-dials,
+.tweakers-move-pads {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: var(--tweak-panel-gap);
+}
+
+.tweakers-move-tracks {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--tweak-panel-gap);
+}
+
+/* Dial slot — round socket above its label, like a knob over a legend. */
+.tweakers-move-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 6px 2px 4px;
+  background: var(--tweak-surface-subtle);
+  border-radius: var(--tweak-radius-inner);
+}
+
+.tweakers-move-slot[data-empty="true"] {
+  opacity: 0.4;
+}
+
+.tweakers-move-dial-face {
+  position: relative;
+  width: 62%;
+  max-width: 44px;
+  aspect-ratio: 1;
+}
+
+.tweakers-move-dial-face svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  /* The 270° sweep opens downward: start bottom-left, end bottom-right. */
+  transform: rotate(135deg);
+}
+
+.tweakers-move-slot[data-empty="true"] .tweakers-move-dial-face {
+  border: 1px solid var(--tweak-border);
+  border-radius: 50%;
+}
+
+.tweakers-move-dial-track,
+.tweakers-move-dial-fill {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.tweakers-move-dial-track {
+  stroke: var(--tweak-track);
+  stroke-dasharray: 75 100;
+}
+
+.tweakers-move-dial-fill {
+  stroke: var(--tweak-track-fill-strong);
+}
+
+/* Value sits inside the ring, hover/interaction only — the standing rule. */
+.tweakers-move-dial-value {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--tweak-font-value);
+  font-size: 9px;
+  color: var(--tweak-text-root);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.tweakers-move-dial:hover .tweakers-move-dial-value {
+  opacity: var(--tweak-value-opacity);
+}
+
+.tweakers-move-slot-label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--tweak-font-label);
+  font-size: 9px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--tweak-text-label);
+}
+
+/* Pad slot — the square rubber pad; lit from within when its toggle is on. */
+.tweakers-move-pad {
+  aspect-ratio: 8 / 5;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 4px;
+  background: var(--tweak-surface);
+  border: 1px solid var(--tweak-border);
+  border-radius: var(--tweak-radius-inner);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+
+.tweakers-move-pad:hover {
+  background: var(--tweak-surface-hover);
+}
+
+.tweakers-move-pad[data-on="true"] {
+  background: color-mix(in srgb, var(--tweak-accent) 28%, transparent);
+  border-color: var(--tweak-accent);
+  box-shadow: inset 0 0 12px color-mix(in srgb, var(--tweak-accent) 35%, transparent);
+}
+
+.tweakers-move-pad[data-on="true"] .tweakers-move-slot-label {
+  color: var(--tweak-text-focus);
+}
+
+.tweakers-move-pad[data-empty="true"] {
+  background: var(--tweak-surface-subtle);
+  border-color: transparent;
+  cursor: default;
+  opacity: 0.4;
+}
+
+/* Track buttons — wide, low, labelled with their panel's name. */
+.tweakers-move-track {
+  height: 24px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--tweak-font-label);
+  font-size: var(--tweak-font-size);
+  font-weight: 400;
+  text-transform: uppercase;
+  color: var(--tweak-text-label);
+  background: var(--tweak-surface);
+  border: 1px solid var(--tweak-border);
+  border-radius: var(--tweak-radius-inner);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.tweakers-move-track:hover {
+  background: var(--tweak-surface-hover);
+}
+
+.tweakers-move-track[data-active="true"] {
+  color: var(--tweak-text-focus);
+  border-color: var(--tweak-accent);
+  background: color-mix(in srgb, var(--tweak-accent) 18%, transparent);
+}
+
+.tweakers-move-track[data-empty="true"] {
+  background: var(--tweak-surface-subtle);
+  border-color: transparent;
+  cursor: default;
+  opacity: 0.4;
+}
+
+/* Narrow hosts: keep all eight columns, shed the label row's air. */
+@media (max-width: 480px) {
+  .tweakers-move-slot-label {
+    font-size: 8px;
+  }
+  .tweakers-move-track {
+    font-size: 10px;
+  }
+}
