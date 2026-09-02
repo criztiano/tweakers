@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from './TweakRoot';
-import { buildMovePages, normalizeDial, denormalizeDial, MOVE_TRACKS, MOVE_DIALS } from '../move-layout';
+import { buildMovePages, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, MOVE_TRACKS, MOVE_DIALS } from '../move-layout';
 
 interface MovePanelProps {
   theme?: TweakTheme;
@@ -49,6 +49,11 @@ export const MOVE_LATCH_EVENT = 'move-tweakers:latch';
  * its value in the dial slot, tap to latch it in — the chip inverts and
  * pulses until tapped again. The same gestures on the physical pads
  * arrive through the kit's override event and read identically here.
+ *
+ * An xy control takes a dial slot as a 2D pad: the field draws behind the
+ * label (no slider at the bottom) with crosshair lines meeting at the dot.
+ * Dragging the slot sets both axes; on the hardware the column's knob
+ * turns X, and the volume knob turns Y while that knob is touched.
  */
 export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only }: MovePanelProps) {
   if (!productionEnabled) return null;
@@ -143,6 +148,15 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     TweakStore.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
   };
 
+  // An xy slot maps the pointer to both axes at once (screen y-down flips to
+  // the control's y-up, like the library XYPad).
+  const xyFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x01 = Math.min(1, Math.max(0, (e.clientX - rect.left) / (rect.width || 1)));
+    const y01 = Math.min(1, Math.max(0, 1 - (e.clientY - rect.top) / (rect.height || 1)));
+    TweakStore.updateValue(page.panel.id, meta.path, denormalizeXYDial(meta, x01, y01));
+  };
+
   const chipLatched = (col: number, meta: ControlMeta) =>
     latched[col]?.path === meta.path || !!hwLatched[meta.path];
 
@@ -206,6 +220,43 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   !!handTouch[meta.path] ||
                   !!hwHeld[meta.path] ||
                   (held !== null && held.col === i);
+                // An xy control fills its slot with the pad — the field draws
+                // behind the label and there is no slider at the bottom.
+                if (meta.type === 'xy') {
+                  const pos = normalizeXYDial(meta, values[meta.path]);
+                  return (
+                    <div
+                      key={meta.path}
+                      className="tweakers-move-dial"
+                      data-kind="xy"
+                      data-active={active || undefined}
+                      onPointerDown={(e) => {
+                        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                        setDragPath(meta.path);
+                        xyFromPointer(e, meta);
+                      }}
+                      onPointerMove={(e) => {
+                        if (dragPath === meta.path) xyFromPointer(e, meta);
+                      }}
+                      onPointerUp={() => setDragPath(null)}
+                      onPointerCancel={() => setDragPath(null)}
+                    >
+                      <div className="tweakers-move-xy">
+                        <span className="tweakers-move-xy-line" data-axis="x" style={{ top: `${(1 - pos.y) * 100}%` }} />
+                        <span className="tweakers-move-xy-line" data-axis="y" style={{ left: `${pos.x * 100}%` }} />
+                        <span className="tweakers-move-xy-dot" style={{ left: `${pos.x * 100}%`, top: `${(1 - pos.y) * 100}%` }} />
+                      </div>
+                      <div className="tweakers-move-dial-readout">
+                        <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
+                          {meta.label}
+                        </span>
+                        <span className="tweakers-move-dial-value">
+                          {Math.round(pos.x * 100)}·{Math.round(pos.y * 100)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
                 // The slot pulses with its chip while a latched value sits in it.
                 const latchedHere =
                   latched[i]?.path === meta.path || (page.values[i]?.path === meta.path && !!hwLatched[meta.path]);

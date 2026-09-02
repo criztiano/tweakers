@@ -1191,13 +1191,21 @@ interface MovePanelProps {
  * its value in the dial slot, tap to latch it in — the chip inverts and
  * pulses until tapped again. The same gestures on the physical pads
  * arrive through the kit's override event and read identically here.
+ *
+ * An xy control takes a dial slot as a 2D pad: the field draws behind the
+ * label (no slider at the bottom) with crosshair lines meeting at the dot.
+ * Dragging the slot sets both axes; on the hardware the column's knob
+ * turns Y, and the volume knob turns X while that knob is touched.
  */
 declare function MovePanel({ theme, productionEnabled, panels: only }: MovePanelProps): react.ReactPortal | null;
 
 /**
  * The Move's control surface, as the bridge kit maps it (move-tweakers v0):
  * the first 4 panels become pages behind the track buttons, sliders and
- * bounded numbers become the 8 dials, toggles become pads. Bounded params
+ * bounded numbers become the 8 dials, toggles become pads. An xy control
+ * takes a dial slot too — the pad draws behind the label, its knob turns
+ * the Y axis, and the volume knob turns X while that knob is touched.
+ * Bounded params
  * beyond the 8 dials overflow into the pad grid as value chips — each one
  * related, by column, to the dial above it, which it can substitute (hold
  * to peek, tap to latch). The on-screen MovePanel mirrors this mapping so
@@ -1218,6 +1226,112 @@ interface MovePage {
 declare function buildMovePages(panels: PanelConfig[]): MovePage[];
 /** Dial position 0..1, the same normalization the kit puts on the wire. */
 declare function normalizeDial(meta: ControlMeta, value: unknown): number;
+/** An xy pad's position, each axis 0..1 — the two numbers on the wire. */
+declare function normalizeXYDial(meta: ControlMeta, value: unknown): {
+    x: number;
+    y: number;
+};
+
+/**
+ * The Move's function buttons, offered to the app as a function library.
+ *
+ * The hardware carries a row of named buttons — Undo, Copy, Delete, Mute,
+ * the arrows and friends. The app attaches its own actions to them:
+ *
+ *   import { MoveFunctions } from 'tweakers';
+ *
+ *   MoveFunctions.attach('undo', () => history.undo());
+ *   MoveFunctions.attach('copy', ({ shift }) => shift ? copyAll() : copySelection());
+ *   MoveFunctions.attach('sample', () => confirmSelection());
+ *
+ * and hands the registry to the bridge kit when binding:
+ *
+ *   import('http://localhost:7787/kit.js')
+ *     .then(m => m.bindMove(TweakStore, { functions: MoveFunctions }))
+ *     .catch(() => {});
+ *
+ * The kit tells the Move which buttons are attached (they light up on the
+ * hardware) and relays every press back here; `attach` returns a detach
+ * function. Buttons left unattached keep the surface's built-in behavior
+ * (Undo resets the page's dials, Delete clears the sequencer, Play runs it).
+ * Shift never appears here — it rides along as a flag on every press — and
+ * the four track buttons always switch pages.
+ */
+/**
+ * The manifest of attachable buttons — each named exactly as printed on the
+ * hardware, so integration talk stays unambiguous ("wire the sample button").
+ * `special` marks the Move-specific buttons that carry no fixed meaning —
+ * each app decides what they do (sample often acts as the confirm key). The
+ * rest should do what their printed label says (Undo undoes, Copy copies),
+ * so every app feels the same in the hand.
+ */
+declare const MOVE_FUNCTION_MANIFEST: readonly [{
+    readonly name: "play";
+}, {
+    readonly name: "rec";
+}, {
+    readonly name: "mute";
+}, {
+    readonly name: "undo";
+}, {
+    readonly name: "copy";
+}, {
+    readonly name: "delete";
+}, {
+    readonly name: "up";
+}, {
+    readonly name: "down";
+}, {
+    readonly name: "left";
+}, {
+    readonly name: "right";
+}, {
+    readonly name: "sample";
+    readonly special: true;
+}, {
+    readonly name: "loop";
+    readonly special: true;
+}, {
+    readonly name: "capture";
+    readonly special: true;
+}, {
+    readonly name: "menu";
+    readonly special: true;
+}, {
+    readonly name: "back";
+    readonly special: true;
+}, {
+    readonly name: "jog_click";
+    readonly special: true;
+}];
+/** The attachable function names, manifest order. */
+declare const MOVE_FUNCTION_BUTTONS: ("sample" | "menu" | "copy" | "play" | "left" | "right" | "capture" | "rec" | "mute" | "undo" | "delete" | "up" | "down" | "loop" | "back" | "jog_click")[];
+/** The special buttons — free for app-specific meanings. */
+declare const MOVE_SPECIAL_BUTTONS: ("sample" | "menu" | "copy" | "play" | "left" | "right" | "capture" | "rec" | "mute" | "undo" | "delete" | "up" | "down" | "loop" | "back" | "jog_click")[];
+type MoveFunctionButton = (typeof MOVE_FUNCTION_MANIFEST)[number]['name'];
+interface MoveFunctionPress {
+    name: MoveFunctionButton;
+    /** True when Shift was held on the hardware — a second-function layer. */
+    shift: boolean;
+}
+type MoveFunctionHandler = (press: MoveFunctionPress) => void;
+declare class MoveFunctionsClass {
+    private handlers;
+    private listeners;
+    /**
+     * Attach an action to a function button; returns a detach function.
+     * One action per button — attaching again replaces the previous one.
+     */
+    attach(name: MoveFunctionButton, handler: MoveFunctionHandler): () => void;
+    /** The attached button names — what the kit claims on the hardware. */
+    list(): MoveFunctionButton[];
+    /** Run the action attached to a button, if any. Called by the kit per press. */
+    run(name: MoveFunctionButton, press?: Partial<MoveFunctionPress>): void;
+    /** Notified when attachments change, so the kit can reconfigure the Move. */
+    subscribe(listener: () => void): () => void;
+    private notify;
+}
+declare const MoveFunctions: MoveFunctionsClass;
 
 /**
  * Fail-soft browser persistence shared by TweakStore (panel values) and
@@ -2412,4 +2526,4 @@ interface SpectrumAudioLevelMeterProps extends AudioLevelMeterBaseProps {
 type AudioLevelMeterProps = MonoAudioLevelMeterProps | StereoAudioLevelMeterProps | SpectrumAudioLevelMeterProps;
 declare function AudioLevelMeter(props: AudioLevelMeterProps): ReactElement;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AnalyserMode, AnalyserRow, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_MAX_HEIGHT, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, Checkbox, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, MIN_STOPS, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, Module, type MonoAudioLevelMeterProps, type MovePage, MovePanel, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type NumberConfig, NumberControl, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, TAB_PATH, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type TweakConfig, type TweakEvent, type TweakMode, type TweakPosition, TweakRoot, TweakStore, type TweakTheme, TweakTimeline, type TweakTimelineProps, type TweakTimelineValues, type TweakValue, type UseTweakTimelineOptions, type UseTweakersOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, buildMovePages, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, moveStop, nearestHandle, normToValue, normalizeCurveMarkers, normalizeDial, normalizeGradient, normalizeHex, normalizeListItems, normalizeValue, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, readComposition, redistributeWeight, removeDriver, removeSegment, removeStop, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useTweakTimeline, useTweakers, valueFromPoint, valueToNorm, valueToPercent };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AnalyserMode, AnalyserRow, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_MAX_HEIGHT, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, Checkbox, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, MIN_STOPS, MOVE_DIALS, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_PADS, MOVE_SPECIAL_BUTTONS, MOVE_TRACKS, Module, type MonoAudioLevelMeterProps, type MoveFunctionButton, type MoveFunctionHandler, type MoveFunctionPress, MoveFunctions, type MovePage, MovePanel, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type NumberConfig, NumberControl, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, TAB_PATH, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type TweakConfig, type TweakEvent, type TweakMode, type TweakPosition, TweakRoot, TweakStore, type TweakTheme, TweakTimeline, type TweakTimelineProps, type TweakTimelineValues, type TweakValue, type UseTweakTimelineOptions, type UseTweakersOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, buildMovePages, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, displayHex, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, moveStop, nearestHandle, normToValue, normalizeCurveMarkers, normalizeDial, normalizeGradient, normalizeHex, normalizeListItems, normalizeValue, normalizeXYDial, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, readComposition, redistributeWeight, removeDriver, removeSegment, removeStop, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useTweakTimeline, useTweakers, valueFromPoint, valueToNorm, valueToPercent };

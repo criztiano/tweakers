@@ -8212,7 +8212,7 @@ var flat = (controls, out = []) => {
   }
   return out;
 };
-var isDial = (c) => c.type === "slider" || c.type === "number" && c.min != null && c.max != null;
+var isDial = (c) => c.type === "slider" || c.type === "xy" || c.type === "number" && c.min != null && c.max != null;
 function buildMovePages(panels) {
   return panels.filter((p) => p.kind !== "timeline").slice(0, MOVE_TRACKS).map((panel) => {
     const controls = flat(panel.controls);
@@ -8221,7 +8221,8 @@ function buildMovePages(panels) {
       panel,
       dials: bounded.slice(0, MOVE_DIALS),
       toggles: controls.filter((c) => c.type === "toggle").slice(0, MOVE_PADS),
-      values: bounded.slice(MOVE_DIALS, MOVE_DIALS + MOVE_PADS)
+      /* xy pads need a dial slot — past the 8 dials they don't fit a chip */
+      values: bounded.slice(MOVE_DIALS).filter((c) => c.type !== "xy").slice(0, MOVE_PADS)
     };
   });
 }
@@ -8237,6 +8238,29 @@ function normalizeDial(meta, value) {
   const max = meta.max ?? 1;
   const v = (Number(value) - min) / (max - min || 1);
   return Math.min(1, Math.max(0, Number.isFinite(v) ? v : 0));
+}
+var norm01 = (v, min, max) => {
+  const n = (Number(v) - min) / (max - min || 1);
+  return Math.min(1, Math.max(0, Number.isFinite(n) ? n : 0));
+};
+var denorm01 = (v01, min, max, step) => {
+  let v = min + Math.min(1, Math.max(0, v01)) * (max - min);
+  if (step) v = Math.round(v / step) * step;
+  return Number(v.toFixed(6));
+};
+function normalizeXYDial(meta, value) {
+  const xAxis = resolveAxis(meta.xAxis);
+  const yAxis = resolveAxis(meta.yAxis);
+  const v = value ?? {};
+  return { x: norm01(v.x, xAxis.min, xAxis.max), y: norm01(v.y, yAxis.min, yAxis.max) };
+}
+function denormalizeXYDial(meta, x01, y01) {
+  const xAxis = resolveAxis(meta.xAxis);
+  const yAxis = resolveAxis(meta.yAxis);
+  return {
+    x: denorm01(x01, xAxis.min, xAxis.max, xAxis.step),
+    y: denorm01(y01, yAxis.min, yAxis.max, yAxis.step)
+  };
 }
 
 // src/components/MovePanel.tsx
@@ -8318,6 +8342,12 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     const v01 = Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
     TweakStore.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
   };
+  const xyFromPointer = (e, meta) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x01 = Math.min(1, Math.max(0, (e.clientX - rect.left) / (rect.width || 1)));
+    const y01 = Math.min(1, Math.max(0, 1 - (e.clientY - rect.top) / (rect.height || 1)));
+    TweakStore.updateValue(page.panel.id, meta.path, denormalizeXYDial(meta, x01, y01));
+  };
   const chipLatched = (col, meta) => latched[col]?.path === meta.path || !!hwLatched[meta.path];
   const dialAt = (col) => {
     if (held && held.col === col) return held.meta;
@@ -8366,6 +8396,46 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         const meta = dialAt(i);
         if (!meta) return /* @__PURE__ */ jsx39("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
         const active = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
+        if (meta.type === "xy") {
+          const pos = normalizeXYDial(meta, values[meta.path]);
+          return /* @__PURE__ */ jsxs34(
+            "div",
+            {
+              className: "tweakers-move-dial",
+              "data-kind": "xy",
+              "data-active": active || void 0,
+              onPointerDown: (e) => {
+                try {
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                } catch {
+                }
+                setDragPath(meta.path);
+                xyFromPointer(e, meta);
+              },
+              onPointerMove: (e) => {
+                if (dragPath === meta.path) xyFromPointer(e, meta);
+              },
+              onPointerUp: () => setDragPath(null),
+              onPointerCancel: () => setDragPath(null),
+              children: [
+                /* @__PURE__ */ jsxs34("div", { className: "tweakers-move-xy", children: [
+                  /* @__PURE__ */ jsx39("span", { className: "tweakers-move-xy-line", "data-axis": "x", style: { top: `${(1 - pos.y) * 100}%` } }),
+                  /* @__PURE__ */ jsx39("span", { className: "tweakers-move-xy-line", "data-axis": "y", style: { left: `${pos.x * 100}%` } }),
+                  /* @__PURE__ */ jsx39("span", { className: "tweakers-move-xy-dot", style: { left: `${pos.x * 100}%`, top: `${(1 - pos.y) * 100}%` } })
+                ] }),
+                /* @__PURE__ */ jsxs34("div", { className: "tweakers-move-dial-readout", children: [
+                  /* @__PURE__ */ jsx39("span", { className: "tweakers-move-dial-label", "data-long": meta.label.length > 9 || void 0, children: meta.label }),
+                  /* @__PURE__ */ jsxs34("span", { className: "tweakers-move-dial-value", children: [
+                    Math.round(pos.x * 100),
+                    "\xB7",
+                    Math.round(pos.y * 100)
+                  ] })
+                ] })
+              ]
+            },
+            meta.path
+          );
+        }
         const latchedHere = latched[i]?.path === meta.path || page.values[i]?.path === meta.path && !!hwLatched[meta.path];
         return /* @__PURE__ */ jsxs34(
           "div",
@@ -8445,6 +8515,70 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   ] }) }) });
   return createPortal8(content, document.body);
 }
+
+// src/move-functions.ts
+var MOVE_FUNCTION_MANIFEST = [
+  { name: "play" },
+  { name: "rec" },
+  { name: "mute" },
+  { name: "undo" },
+  { name: "copy" },
+  { name: "delete" },
+  { name: "up" },
+  { name: "down" },
+  { name: "left" },
+  { name: "right" },
+  { name: "sample", special: true },
+  { name: "loop", special: true },
+  { name: "capture", special: true },
+  { name: "menu", special: true },
+  { name: "back", special: true },
+  { name: "jog_click", special: true }
+];
+var MOVE_FUNCTION_BUTTONS = MOVE_FUNCTION_MANIFEST.map((b) => b.name);
+var MOVE_SPECIAL_BUTTONS = MOVE_FUNCTION_MANIFEST.filter((b) => "special" in b && b.special).map((b) => b.name);
+var MoveFunctionsClass = class {
+  constructor() {
+    this.handlers = /* @__PURE__ */ new Map();
+    this.listeners = /* @__PURE__ */ new Set();
+  }
+  /**
+   * Attach an action to a function button; returns a detach function.
+   * One action per button — attaching again replaces the previous one.
+   */
+  attach(name, handler) {
+    if (!MOVE_FUNCTION_BUTTONS.includes(name)) {
+      console.warn(`[tweakers] "${name}" is not a Move function button; expected one of: ${MOVE_FUNCTION_BUTTONS.join(", ")}`);
+      return () => {
+      };
+    }
+    this.handlers.set(name, handler);
+    this.notify();
+    return () => {
+      if (this.handlers.get(name) === handler) {
+        this.handlers.delete(name);
+        this.notify();
+      }
+    };
+  }
+  /** The attached button names — what the kit claims on the hardware. */
+  list() {
+    return [...this.handlers.keys()];
+  }
+  /** Run the action attached to a button, if any. Called by the kit per press. */
+  run(name, press) {
+    this.handlers.get(name)?.({ name, shift: !!press?.shift });
+  }
+  /** Notified when attachments change, so the kit can reconfigure the Move. */
+  subscribe(listener) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+  notify() {
+    for (const l of this.listeners) l();
+  }
+};
+var MoveFunctions = new MoveFunctionsClass();
 
 // src/hooks/useTweakTimeline.ts
 import { useCallback as useCallback20, useEffect as useEffect21, useMemo, useRef as useRef28, useSyncExternalStore as useSyncExternalStore10 } from "react";
@@ -12573,9 +12707,13 @@ export {
   ListControl,
   MIN_STOPS,
   MOVE_DIALS,
+  MOVE_FUNCTION_BUTTONS,
+  MOVE_FUNCTION_MANIFEST,
   MOVE_PADS,
+  MOVE_SPECIAL_BUTTONS,
   MOVE_TRACKS,
   Module,
+  MoveFunctions,
   MovePanel,
   MultiSelectControl,
   NumberControl,
@@ -12646,6 +12784,7 @@ export {
   normalizeHex,
   normalizeListItems,
   normalizeValue,
+  normalizeXYDial,
   nudge,
   oklchToRgb,
   opacityPercent,

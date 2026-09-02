@@ -1,9 +1,13 @@
 import type { PanelConfig, ControlMeta } from './store/TweakStore';
+import { resolveAxis, type XYValue } from './xy-pad-core';
 
 /**
  * The Move's control surface, as the bridge kit maps it (move-tweakers v0):
  * the first 4 panels become pages behind the track buttons, sliders and
- * bounded numbers become the 8 dials, toggles become pads. Bounded params
+ * bounded numbers become the 8 dials, toggles become pads. An xy control
+ * takes a dial slot too — the pad draws behind the label, its knob turns
+ * the X axis, and the volume knob turns Y while that knob is touched.
+ * Bounded params
  * beyond the 8 dials overflow into the pad grid as value chips — each one
  * related, by column, to the dial above it, which it can substitute (hold
  * to peek, tap to latch). The on-screen MovePanel mirrors this mapping so
@@ -32,7 +36,7 @@ const flat = (controls: ControlMeta[], out: ControlMeta[] = []): ControlMeta[] =
 };
 
 const isDial = (c: ControlMeta) =>
-  c.type === 'slider' || (c.type === 'number' && c.min != null && c.max != null);
+  c.type === 'slider' || c.type === 'xy' || (c.type === 'number' && c.min != null && c.max != null);
 
 export function buildMovePages(panels: PanelConfig[]): MovePage[] {
   return panels
@@ -45,7 +49,8 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         panel,
         dials: bounded.slice(0, MOVE_DIALS),
         toggles: controls.filter((c) => c.type === 'toggle').slice(0, MOVE_PADS),
-        values: bounded.slice(MOVE_DIALS, MOVE_DIALS + MOVE_PADS),
+        /* xy pads need a dial slot — past the 8 dials they don't fit a chip */
+        values: bounded.slice(MOVE_DIALS).filter((c) => c.type !== 'xy').slice(0, MOVE_PADS),
       };
     });
 }
@@ -65,4 +70,33 @@ export function normalizeDial(meta: ControlMeta, value: unknown): number {
   const max = meta.max ?? 1;
   const v = (Number(value) - min) / (max - min || 1);
   return Math.min(1, Math.max(0, Number.isFinite(v) ? v : 0));
+}
+
+const norm01 = (v: unknown, min: number, max: number) => {
+  const n = (Number(v) - min) / (max - min || 1);
+  return Math.min(1, Math.max(0, Number.isFinite(n) ? n : 0));
+};
+
+const denorm01 = (v01: number, min: number, max: number, step: number) => {
+  let v = min + Math.min(1, Math.max(0, v01)) * (max - min);
+  if (step) v = Math.round(v / step) * step;
+  return Number(v.toFixed(6));
+};
+
+/** An xy pad's position, each axis 0..1 — the two numbers on the wire. */
+export function normalizeXYDial(meta: ControlMeta, value: unknown): { x: number; y: number } {
+  const xAxis = resolveAxis(meta.xAxis);
+  const yAxis = resolveAxis(meta.yAxis);
+  const v = (value ?? {}) as Partial<XYValue>;
+  return { x: norm01(v.x, xAxis.min, xAxis.max), y: norm01(v.y, yAxis.min, yAxis.max) };
+}
+
+/** Axis positions 0..1 back to the control's real {x, y}, kit-identical. */
+export function denormalizeXYDial(meta: ControlMeta, x01: number, y01: number): XYValue {
+  const xAxis = resolveAxis(meta.xAxis);
+  const yAxis = resolveAxis(meta.yAxis);
+  return {
+    x: denorm01(x01, xAxis.min, xAxis.max, xAxis.step),
+    y: denorm01(y01, yAxis.min, yAxis.max, yAxis.step),
+  };
 }

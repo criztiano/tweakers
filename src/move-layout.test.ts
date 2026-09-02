@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { TweakStore } from './store/TweakStore';
-import { buildMovePages, normalizeDial, denormalizeDial, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
+import { buildMovePages, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
 
 // The MovePanel mirrors the bridge kit's v0 mapping: first 4 panels are the
 // track pages, sliders and bounded numbers fill the 8 dials, toggles the
@@ -52,6 +52,34 @@ describe('move layout', () => {
     assert.equal(pages[0].dials.length, MOVE_DIALS);
     assert.equal(pages[0].toggles.length, MOVE_PADS);
     assert.equal(pages[0].values.length, 4);
+  });
+
+  it('gives an xy control a dial slot, never a value chip', () => {
+    const id = nextId();
+    const config: Record<string, unknown> = {
+      pad: { type: 'xy', x: { min: -1, max: 1 }, y: { min: 0, max: 10 }, default: { x: 0, y: 5 } },
+    };
+    for (let i = 0; i < 9; i++) config[`dial${i}`] = [0.5, 0, 1];
+    config.late = { type: 'xy', default: { x: 0.5, y: 0.5 } };
+    TweakStore.registerPanel(id, id, config as never);
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    assert.equal(page.dials[0].path, 'pad');
+    assert.equal(page.dials[0].type, 'xy');
+    /* the xy takes a dial slot, so two scalars overflow; the late xy never chips */
+    assert.deepEqual(page.values.map((v) => v.path), ['dial7', 'dial8']);
+  });
+
+  it('normalizes and denormalizes xy pads per axis, kit-identically', () => {
+    const meta = {
+      type: 'xy', path: 'pad', label: 'Pad',
+      xAxis: { min: -1, max: 1 }, yAxis: { min: 0, max: 10, step: 0.5 },
+    } as const;
+    assert.deepEqual(normalizeXYDial(meta as never, { x: 0, y: 7.5 }), { x: 0.5, y: 0.75 });
+    assert.deepEqual(normalizeXYDial(meta as never, { x: -4, y: 99 }), { x: 0, y: 1 });
+    assert.deepEqual(normalizeXYDial(meta as never, undefined), { x: 0, y: 0 });
+    const v = denormalizeXYDial(meta as never, 0.75, 0.53);
+    assert.equal(v.x, 0.5);
+    assert.equal(v.y, 5.5);                     /* 5.3 snapped to the 0.5 step */
   });
 
   it('normalizes dial values to 0..1 with clamping', () => {
