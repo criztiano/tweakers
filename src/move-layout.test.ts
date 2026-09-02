@@ -23,13 +23,11 @@ describe('move layout', () => {
     });
     const [page] = buildMovePages([TweakStore.getPanel(id)!]);
     assert.deepEqual(page.dials.map((d) => d.path), ['gain', 'count', 'nested.depth']);
-    assert.deepEqual(page.pads.map((p) => [p.kind, p.meta.path]), [
-      ['toggle', 'mute'],
-      ['toggle', 'nested.wet'],
-    ]);
+    assert.deepEqual(page.toggles.map((t) => t.path), ['mute', 'nested.wet']);
+    assert.deepEqual(page.values, []);
   });
 
-  it('overflows bounded params past the 8 dials into value chips, after the toggles', () => {
+  it('overflows bounded params past the 8 dials into the value row', () => {
     const id = nextId();
     const config: Record<string, unknown> = {};
     for (let i = 0; i < 11; i++) config[`dial${i}`] = [0.5, 0, 1];
@@ -37,12 +35,8 @@ describe('move layout', () => {
     TweakStore.registerPanel(id, id, config as never);
     const [page] = buildMovePages([TweakStore.getPanel(id)!]);
     assert.equal(page.dials.length, MOVE_DIALS);
-    assert.deepEqual(page.pads.map((p) => [p.kind, p.meta.path]), [
-      ['toggle', 'mute'],
-      ['value', 'dial8'],
-      ['value', 'dial9'],
-      ['value', 'dial10'],
-    ]);
+    assert.deepEqual(page.toggles.map((t) => t.path), ['mute']);
+    assert.deepEqual(page.values.map((v) => v.path), ['dial8', 'dial9', 'dial10']);
   });
 
   it('caps pages at 4 tracks and toggles at the 8 hardware pads', () => {
@@ -56,8 +50,8 @@ describe('move layout', () => {
     const pages = buildMovePages(ids.map((id) => TweakStore.getPanel(id)!));
     assert.equal(pages.length, MOVE_TRACKS);
     assert.equal(pages[0].dials.length, MOVE_DIALS);
-    assert.equal(pages[0].pads.filter((p) => p.kind === 'toggle').length, MOVE_PADS);
-    assert.equal(pages[0].pads.filter((p) => p.kind === 'value').length, 4);
+    assert.equal(pages[0].toggles.length, MOVE_PADS);
+    assert.equal(pages[0].values.length, 4);
   });
 
   it('normalizes dial values to 0..1 with clamping', () => {

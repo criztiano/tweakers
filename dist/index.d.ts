@@ -1183,13 +1183,14 @@ interface MovePanelProps {
  * The Move's control surface docked to the bottom edge, laid out to Cri's
  * Figma spec (file USU9CW2vC3SrvKsnHVnYGi, node 802:319; slot components
  * 802:756 and 800:1737): a track row of four coloured markers, 8 dial
- * slots hosting slider ports, and the 4×8 pad grid hosting toggle and
- * value chips. Slot contents follow the bridge kit's mapping
- * (move-layout), so screen and hardware always agree.
+ * slots hosting slider ports, and the pad grid — toggle chips on the
+ * first row, value chips on the second, at the same columns as their
+ * hardware pads (move-layout keeps both surfaces in agreement).
  *
  * Value chips substitute the dial in their column: hold one to peek at
- * its value in the dial slot, tap to latch it in — the chip pulses while
- * latched, and the dial edits the substituted param until tapped again.
+ * its value in the dial slot, tap to latch it in — the chip inverts and
+ * pulses until tapped again. The same gestures on the physical pads
+ * arrive through the kit's override event and read identically here.
  */
 declare function MovePanel({ theme, productionEnabled, panels: only }: MovePanelProps): react.ReactPortal | null;
 
@@ -1205,16 +1206,14 @@ declare function MovePanel({ theme, productionEnabled, panels: only }: MovePanel
 declare const MOVE_TRACKS = 4;
 declare const MOVE_DIALS = 8;
 declare const MOVE_PADS = 8;
-interface MovePadSlot {
-    /** `toggle` — a switch chip (kit-mapped to the hardware pads today);
-     *  `value` — an overflow bounded param chip that can substitute a dial. */
-    kind: 'toggle' | 'value';
-    meta: ControlMeta;
-}
 interface MovePage {
     panel: PanelConfig;
     dials: ControlMeta[];
-    pads: MovePadSlot[];
+    /** Switch chips — the hardware's toggle pad row (y=3 on the device). */
+    toggles: ControlMeta[];
+    /** Overflow value chips — the hardware's value pad row (y=1). Value i sits
+     *  at column i on both surfaces, pairing it with the dial in that column. */
+    values: ControlMeta[];
 }
 declare function buildMovePages(panels: PanelConfig[]): MovePage[];
 /** Dial position 0..1, the same normalization the kit puts on the wire. */

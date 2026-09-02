@@ -12,20 +12,15 @@ import type { PanelConfig, ControlMeta } from './store/TweakStore';
 export const MOVE_TRACKS = 4;
 export const MOVE_DIALS = 8;
 export const MOVE_PADS = 8;
-/** The full on-screen pad grid: 4 rows of 8 (Figma 802:319). */
-export const MOVE_PAD_SLOTS = 32;
-
-export interface MovePadSlot {
-  /** `toggle` — a switch chip (kit-mapped to the hardware pads today);
-   *  `value` — an overflow bounded param chip that can substitute a dial. */
-  kind: 'toggle' | 'value';
-  meta: ControlMeta;
-}
 
 export interface MovePage {
   panel: PanelConfig;
   dials: ControlMeta[];
-  pads: MovePadSlot[];
+  /** Switch chips — the hardware's toggle pad row (y=3 on the device). */
+  toggles: ControlMeta[];
+  /** Overflow value chips — the hardware's value pad row (y=1). Value i sits
+   *  at column i on both surfaces, pairing it with the dial in that column. */
+  values: ControlMeta[];
 }
 
 const flat = (controls: ControlMeta[], out: ControlMeta[] = []): ControlMeta[] => {
@@ -46,16 +41,12 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
     .map((panel) => {
       const controls = flat(panel.controls);
       const bounded = controls.filter(isDial);
-      // Toggles first — they are what the kit puts on the hardware pads —
-      // then the overflow params, until the grid is full.
-      const pads: MovePadSlot[] = [
-        ...controls
-          .filter((c) => c.type === 'toggle')
-          .slice(0, MOVE_PADS)
-          .map((meta): MovePadSlot => ({ kind: 'toggle', meta })),
-        ...bounded.slice(MOVE_DIALS).map((meta): MovePadSlot => ({ kind: 'value', meta })),
-      ].slice(0, MOVE_PAD_SLOTS);
-      return { panel, dials: bounded.slice(0, MOVE_DIALS), pads };
+      return {
+        panel,
+        dials: bounded.slice(0, MOVE_DIALS),
+        toggles: controls.filter((c) => c.type === 'toggle').slice(0, MOVE_PADS),
+        values: bounded.slice(MOVE_DIALS, MOVE_DIALS + MOVE_PADS),
+      };
     });
 }
 

@@ -132,6 +132,11 @@ export function PhotoStack() {
       blur: [14, 0, 60],
       yOffset: [8, 0, 60],
     },
+    finish: {
+      _collapsed: true,
+      fan: [0, -15, 15],
+      cornerRadius: [2, 0, 24],
+    },
     transitionSpring: {
       type: 'spring' as const,
       visualDuration: 0.5,
@@ -353,6 +358,7 @@ export function PhotoStack() {
                     x: targetX,
                     y: targetY,
                     scale: targetScale,
+                    rotate: stackIndex * params.finish.fan,
                     zIndex: visibleCount - stackIndex,
                   }}
                   exit={{
@@ -418,6 +424,7 @@ export function PhotoStack() {
                     x: targetX,
                     y: targetY,
                     scale: targetScale,
+                    rotate: stackIndex * params.finish.fan,
                     zIndex: visibleCount - stackIndex,
                   }}
                   exit={{
@@ -441,7 +448,7 @@ export function PhotoStack() {
                   <div style={{
                     position: 'absolute',
                     inset: 0,
-                    borderRadius: 2,
+                    borderRadius: params.finish.cornerRadius,
                     overflow: 'hidden',
                     background: photo.color,
                   }}>

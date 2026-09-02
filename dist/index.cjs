@@ -8379,7 +8379,6 @@ var import_react_dom8 = require("react-dom");
 var MOVE_TRACKS = 4;
 var MOVE_DIALS = 8;
 var MOVE_PADS = 8;
-var MOVE_PAD_SLOTS = 32;
 var flat = (controls, out = []) => {
   for (const c of controls) {
     if (c.children) flat(c.children, out);
@@ -8392,11 +8391,12 @@ function buildMovePages(panels) {
   return panels.filter((p) => p.kind !== "timeline").slice(0, MOVE_TRACKS).map((panel) => {
     const controls = flat(panel.controls);
     const bounded = controls.filter(isDial);
-    const pads = [
-      ...controls.filter((c) => c.type === "toggle").slice(0, MOVE_PADS).map((meta) => ({ kind: "toggle", meta })),
-      ...bounded.slice(MOVE_DIALS).map((meta) => ({ kind: "value", meta }))
-    ].slice(0, MOVE_PAD_SLOTS);
-    return { panel, dials: bounded.slice(0, MOVE_DIALS), pads };
+    return {
+      panel,
+      dials: bounded.slice(0, MOVE_DIALS),
+      toggles: controls.filter((c) => c.type === "toggle").slice(0, MOVE_PADS),
+      values: bounded.slice(MOVE_DIALS, MOVE_DIALS + MOVE_PADS)
+    };
   });
 }
 function denormalizeDial(meta, v01) {
@@ -8421,12 +8421,16 @@ var PAD_COLS = 8;
 var DIAL_TRACK_INSET = 10;
 var TAP_MS = 300;
 var MOVE_TOUCH_EVENT = "move-tweakers:touch";
+var MOVE_OVERRIDE_EVENT = "move-tweakers:override";
+var MOVE_LATCH_EVENT = "move-tweakers:latch";
 function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only }) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = (0, import_react43.useState)([]);
   const [track, setTrack] = (0, import_react43.useState)(0);
   const [dragPath, setDragPath] = (0, import_react43.useState)(null);
   const [handTouch, setHandTouch] = (0, import_react43.useState)({});
+  const [hwHeld, setHwHeld] = (0, import_react43.useState)({});
+  const [hwLatched, setHwLatched] = (0, import_react43.useState)({});
   const [held, setHeld] = (0, import_react43.useState)(null);
   const [latched, setLatched] = (0, import_react43.useState)({});
   const holdStart = (0, import_react43.useRef)(0);
@@ -8451,12 +8455,22 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     () => void 0
   );
   (0, import_react43.useEffect)(() => {
+    const forPage = (detail, map) => detail && detail.pageId === pageId ? map ?? {} : {};
     const onTouch = (e) => {
-      const detail = e.detail;
-      setHandTouch(detail && detail.pageId === pageId ? detail.touched ?? {} : {});
+      const d = e.detail;
+      setHandTouch(forPage(d, d?.touched));
+    };
+    const onOverride = (e) => {
+      const d = e.detail;
+      setHwHeld(forPage(d, d?.held));
+      setHwLatched(forPage(d, d?.latched));
     };
     window.addEventListener(MOVE_TOUCH_EVENT, onTouch);
-    return () => window.removeEventListener(MOVE_TOUCH_EVENT, onTouch);
+    window.addEventListener(MOVE_OVERRIDE_EVENT, onOverride);
+    return () => {
+      window.removeEventListener(MOVE_TOUCH_EVENT, onTouch);
+      window.removeEventListener(MOVE_OVERRIDE_EVENT, onOverride);
+    };
   }, [pageId]);
   (0, import_react43.useEffect)(() => {
     setHeld(null);
@@ -8478,13 +8492,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     const v01 = Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
     TweakStore.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
   };
-  const padRows = Array.from(
-    { length: PAD_ROWS },
-    (_, row) => page.pads.slice(row * PAD_COLS, (row + 1) * PAD_COLS)
-  );
+  const chipLatched = (col, meta) => latched[col]?.path === meta.path || !!hwLatched[meta.path];
   const dialAt = (col) => {
     if (held && held.col === col) return held.meta;
-    return latched[col] ?? page.dials[col];
+    const hw = page.values[col];
+    if (hw && hwHeld[hw.path]) return hw;
+    if (latched[col]) return latched[col];
+    if (hw && hwLatched[hw.path]) return hw;
+    return page.dials[col];
   };
   const pressChip = (e, col, meta) => {
     try {
@@ -8496,13 +8511,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   };
   const releaseChip = (col, meta) => {
     setHeld(null);
-    if (Date.now() - holdStart.current < TAP_MS) {
-      setLatched((prev) => ({
-        ...prev,
-        [col]: prev[col]?.path === meta.path ? void 0 : meta
-      }));
-    }
+    if (Date.now() - holdStart.current >= TAP_MS) return;
+    const wasLatched = chipLatched(col, meta);
+    setLatched((prev) => ({ ...prev, [col]: wasLatched ? void 0 : meta }));
+    window.dispatchEvent(new CustomEvent(MOVE_LATCH_EVENT, {
+      detail: { pageId: page.panel.id, path: meta.path, latched: !wasLatched }
+    }));
   };
+  const padRows = [page.toggles, page.values, [], []];
   const content = /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, children: /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move", children: /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)("div", { className: "tweakers-move-inner", children: [
     /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-tracks", children: slots(pages, MOVE_TRACKS).map((pg, i) => /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(
       "button",
@@ -8523,13 +8539,12 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-dials", children: Array.from({ length: MOVE_DIALS }, (_, i) => {
         const meta = dialAt(i);
         if (!meta) return /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
-        const active = dragPath === meta.path || !!handTouch[meta.path] || held !== null && held.col === i;
+        const active = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
         return /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(
           "div",
           {
             className: "tweakers-move-dial",
             "data-active": active || void 0,
-            "data-substituted": latched[i] ? true : void 0,
             onPointerDown: (e) => {
               try {
                 e.currentTarget.setPointerCapture(e.pointerId);
@@ -8558,38 +8573,34 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         );
       }) }),
       Array.from({ length: PAD_ROWS }, (_, row) => row).filter((row) => padRows.slice(row).some((r) => r.length > 0)).map((row) => /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-pads", children: Array.from({ length: PAD_COLS }, (_, col) => {
-        const slot = padRows[row][col];
-        if (!slot) return /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
-        if (slot.kind === "toggle") {
-          const meta2 = slot.meta;
+        const meta = padRows[row][col];
+        if (!meta) return /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
+        if (row === 0) {
           return /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(
             "button",
             {
               className: "tweakers-move-pad",
               "data-kind": "toggle",
-              "data-on": !!values[meta2.path],
-              onClick: () => TweakStore.updateValue(page.panel.id, meta2.path, !values[meta2.path]),
+              "data-on": !!values[meta.path],
+              onClick: () => TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path]),
               children: [
                 /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-pad-indicator" }),
-                /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-pad-title", children: meta2.label })
+                /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-pad-title", children: meta.label })
               ]
             },
-            meta2.path
+            meta.path
           );
         }
-        const meta = slot.meta;
-        const gridIndex = row * PAD_COLS + col;
-        const dialCol = gridIndex % MOVE_DIALS;
         const value = chipValue(meta);
         return /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(
           "button",
           {
             className: "tweakers-move-pad",
             "data-kind": "value",
-            "data-held": held !== null && held.meta.path === meta.path || void 0,
-            "data-latched": latched[dialCol]?.path === meta.path || void 0,
-            onPointerDown: (e) => pressChip(e, dialCol, meta),
-            onPointerUp: () => releaseChip(dialCol, meta),
+            "data-held": held !== null && held.meta.path === meta.path || hwHeld[meta.path] || void 0,
+            "data-latched": chipLatched(col, meta) || void 0,
+            onPointerDown: (e) => pressChip(e, col, meta),
+            onPointerUp: () => releaseChip(col, meta),
             onPointerCancel: () => setHeld(null),
             children: [
               /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-pad-title", children: meta.label }),
