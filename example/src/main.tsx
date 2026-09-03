@@ -43,7 +43,7 @@ MoveFunctions.attach('copy', () => {
 // Physical controls: bind the Ableton Move bridge when it's running (no-op otherwise).
 // @ts-ignore — remote module, no types
 import(/* @vite-ignore */ 'http://localhost:7787/kit.js')
-  .then(m => m.bindMove(TweakStore, { functions: MoveFunctions }))
+  .then(m => m.bindMove(TweakStore, { functions: MoveFunctions, modulation: ModulationStore }))
   .catch(() => {});
 
 createRoot(document.getElementById('root')!).render(
