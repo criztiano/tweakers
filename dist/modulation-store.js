@@ -1,0 +1,464 @@
+// src/store/ModulationStore.ts
+import { TweakStore } from "tweakers/store";
+
+// src/store/persist.ts
+var STORAGE_VERSION = "v1";
+function resolvePersistTarget(kind, id, persist) {
+  if (!persist) return null;
+  const config = persist === true ? {} : persist;
+  const base = config.key ?? id;
+  if (!base) return null;
+  return {
+    key: `tweakers:${STORAGE_VERSION}:${kind}:${base}`,
+    storage: config.storage ?? "localStorage"
+  };
+}
+function getStorage(name) {
+  try {
+    if (typeof window === "undefined") return null;
+    return name === "sessionStorage" ? window.sessionStorage : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+function loadPersisted(target) {
+  if (!target) return null;
+  try {
+    const storage = getStorage(target.storage);
+    if (!storage) return null;
+    const raw = storage.getItem(target.key);
+    if (raw == null) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+function savePersisted(target, value) {
+  if (!target) return;
+  try {
+    const storage = getStorage(target.storage);
+    if (!storage) return;
+    storage.setItem(target.key, JSON.stringify(value));
+  } catch {
+  }
+}
+function clearPersisted(target) {
+  if (!target) return;
+  try {
+    const storage = getStorage(target.storage);
+    if (!storage) return;
+    storage.removeItem(target.key);
+  } catch {
+  }
+}
+
+// src/modulation-core.ts
+var MOD_SLOTS = 16;
+var registry = /* @__PURE__ */ new Map();
+function registerModType(def) {
+  registry.set(def.type, def);
+}
+var getModType = (type) => registry.get(type);
+var modKey = (panelId, path) => `${panelId}\0${path}`;
+var clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+var clamp01 = (v) => clamp(Number(v) || 0, 0, 1);
+function applyModulation(base, signal, amount, min, max) {
+  const offset = clamp(signal, -1, 1) * clamp01(amount) * (max - min) / 2;
+  return clamp(base + offset, min, max);
+}
+var LFO_SYNC_DIVISIONS = [
+  { label: "4", beats: 16 },
+  { label: "2", beats: 8 },
+  { label: "1", beats: 4 },
+  { label: "1/2", beats: 2 },
+  { label: "1/4", beats: 1 },
+  { label: "1/8", beats: 0.5 },
+  { label: "1/16", beats: 0.25 },
+  { label: "1/32", beats: 0.125 }
+];
+function lfoSyncedHz(division, bpm) {
+  const i = clamp(Math.round(Number(division) || 0), 0, LFO_SYNC_DIVISIONS.length - 1);
+  return (Number(bpm) || 120) / 60 / LFO_SYNC_DIVISIONS[i].beats;
+}
+var LFO_DEF = {
+  type: "lfo",
+  label: "LFO",
+  defaults: { rate: 1, division: 4, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false },
+  controls: [
+    { type: "slider", path: "rate", label: "Rate", min: 0.02, max: 20, step: 0.01, unit: "Hz" },
+    { type: "toggle", path: "sync", label: "Sync" },
+    { type: "slider", path: "phase", label: "Phase", min: 0, max: 1, step: 0.01 },
+    { type: "slider", path: "width", label: "Width", min: 0, max: 1, step: 0.01 },
+    {
+      type: "xy",
+      path: "texture",
+      label: "Texture",
+      xParam: "jitter",
+      yParam: "smooth",
+      xAxis: { min: 0, max: 1, step: 0.01, label: "Jitter" },
+      yAxis: { min: 0, max: 1, step: 0.01, label: "Smooth" }
+    }
+  ],
+  createState: () => ({ phase: 0, drift: 0, driftTarget: 0, out: null }),
+  tick(state, params, dt, bpm) {
+    const s = state;
+    const hz = params.sync ? lfoSyncedHz(Number(params.division) || 0, bpm) : Math.max(0, Number(params.rate) || 0);
+    const before = s.phase;
+    s.phase = (s.phase + dt * hz) % 1;
+    if (s.phase < before) s.driftTarget = (Math.random() * 2 - 1) * clamp01(params.jitter);
+    if (!clamp01(params.jitter)) {
+      s.drift = 0;
+      s.driftTarget = 0;
+    } else s.drift += (s.driftTarget - s.drift) * Math.min(1, dt * hz * 4);
+    const w = clamp(Number(params.width) || 0, 0.01, 0.99);
+    const ph = (s.phase + clamp01(params.phase)) % 1;
+    const tri = ph < w ? ph / w : 1 - (ph - w) / (1 - w);
+    let v = clamp(tri * 2 - 1 + s.drift, -1, 1);
+    const smooth = clamp01(params.smooth);
+    if (smooth > 0 && s.out !== null) {
+      const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
+      v = s.out + (v - s.out) * k;
+    }
+    s.out = v;
+    return v;
+  }
+};
+registerModType(LFO_DEF);
+
+// src/store/ModulationStore.ts
+var MOD_TOUCH_GRACE_MS = 4e3;
+var PERSIST_TARGET = resolvePersistTarget("modulation", "global", true);
+var clamp2 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+var ModulationStoreClass = class {
+  constructor() {
+    this.slots = Array(MOD_SLOTS).fill(null);
+    this.assignments = /* @__PURE__ */ new Map();
+    this.states = /* @__PURE__ */ new Map();
+    this.signals = Array(MOD_SLOTS).fill(0);
+    this.sources = /* @__PURE__ */ new Map();
+    this.sourceValues = /* @__PURE__ */ new Map();
+    this.metas = /* @__PURE__ */ new Map();
+    this.bpm = 120;
+    this.touched = null;
+    this.structListeners = /* @__PURE__ */ new Set();
+    this.frameListeners = /* @__PURE__ */ new Set();
+    this.version = 0;
+    this.rafId = null;
+    this.lastTick = 0;
+    this.loop = (now) => {
+      this.tick(Math.max(0, (now - this.lastTick) / 1e3));
+      this.lastTick = now;
+      this.rafId = this.slots.some(Boolean) ? window.requestAnimationFrame(this.loop) : null;
+    };
+    const saved = loadPersisted(PERSIST_TARGET);
+    if (saved) {
+      for (const slot of saved.slots ?? []) {
+        const i = Math.round(Number(slot?.index));
+        if (i >= 0 && i < MOD_SLOTS && slot.type && slot.params) {
+          this.slots[i] = { ...slot, index: i, params: { ...slot.params } };
+        }
+      }
+      for (const a of saved.assignments ?? []) {
+        if (a?.panelId && a.path && this.slots[a.slot]) {
+          this.assignments.set(modKey(a.panelId, a.path), { ...a });
+        }
+      }
+    }
+    TweakStore.subscribeGlobal(() => this.metas.clear());
+    this.ensureLoop();
+  }
+  /* ── slots ────────────────────────────────────────────────────────── */
+  /** Create a modulation in a step's slot; an occupied slot is returned as-is. */
+  createSlot(index, type = "lfo") {
+    if (!Number.isInteger(index) || index < 0 || index >= MOD_SLOTS) return null;
+    const existing = this.slots[index];
+    if (existing) return existing;
+    const def = getModType(type);
+    if (!def) {
+      console.warn(`[tweakers] modulator type "${type}" is not registered`);
+      return null;
+    }
+    const slot = { index, type, params: { ...def.defaults } };
+    this.slots[index] = slot;
+    this.states.set(index, def.createState());
+    this.changed();
+    this.ensureLoop();
+    return slot;
+  }
+  getSlot(index) {
+    return this.slots[index] ?? null;
+  }
+  /** The occupied slots, index order — the track row's circles. */
+  getSlots() {
+    return this.slots.filter((s) => s !== null);
+  }
+  updateSlotParams(index, patch) {
+    const slot = this.slots[index];
+    if (!slot) return;
+    slot.params = { ...slot.params, ...patch };
+    this.changed();
+  }
+  /** Switch a slot's modulator type — fresh defaults, fresh state. */
+  setSlotType(index, type) {
+    const slot = this.slots[index];
+    const def = getModType(type);
+    if (!slot || !def) return;
+    slot.type = type;
+    slot.params = { ...def.defaults };
+    this.states.set(index, def.createState());
+    this.changed();
+  }
+  /** Point a slot at an external source (null returns it to the engine). */
+  setSlotSource(index, sourceId) {
+    const slot = this.slots[index];
+    if (!slot) return;
+    slot.source = sourceId;
+    this.changed();
+  }
+  /** Remove a slot's modulation and every assignment wired to it. */
+  removeSlot(index) {
+    if (!this.slots[index]) return;
+    this.slots[index] = null;
+    this.states.delete(index);
+    this.signals[index] = 0;
+    for (const [key, a] of this.assignments) {
+      if (a.slot === index) this.assignments.delete(key);
+    }
+    this.changed();
+  }
+  /* ── assignments ──────────────────────────────────────────────────── */
+  /**
+   * Wire a control to a slot. Only bounded numeric controls (slider, number
+   * with min/max) can be modulated; anything else is refused. A control not
+   * yet registered is accepted on trust and resolves when its panel appears.
+   */
+  assign(panelId, path, slot, amount = 0.5) {
+    if (!this.slots[slot]) return false;
+    if (TweakStore.getPanel(panelId) && !this.resolveMeta(panelId, path)) {
+      console.warn(`[tweakers] "${path}" is not a bounded numeric control; it cannot take a modulation`);
+      return false;
+    }
+    this.assignments.set(modKey(panelId, path), {
+      panelId,
+      path,
+      slot,
+      amount: clamp2(Number(amount) || 0, 0, 1)
+    });
+    this.changed();
+    return true;
+  }
+  unassign(panelId, path) {
+    if (this.assignments.delete(modKey(panelId, path))) this.changed();
+  }
+  getAssignment(panelId, path) {
+    return this.assignments.get(modKey(panelId, path));
+  }
+  getAssignments() {
+    return [...this.assignments.values()];
+  }
+  assignmentsForSlot(index) {
+    return this.getAssignments().filter((a) => a.slot === index);
+  }
+  setAmount(panelId, path, amount) {
+    const a = this.assignments.get(modKey(panelId, path));
+    if (!a) return;
+    a.amount = clamp2(Number(amount) || 0, 0, 1);
+    this.changed();
+  }
+  /* ── the assignment gesture ───────────────────────────────────────── */
+  /** A finger on a control — panel pointer, hardware knob. Arms assignment. */
+  noteTouch(panelId, path) {
+    this.touched = { panelId, path, at: Date.now() };
+  }
+  /**
+   * A step-button press (hardware step or on-screen circle): with a control
+   * armed, create the slot's modulation if needed and toggle the control
+   * onto it. Returns what happened, for lights and readouts.
+   */
+  assignFromStep(index) {
+    const t = this.touched;
+    const armed = t && Date.now() - t.at < MOD_TOUCH_GRACE_MS;
+    if (!armed) return { action: "none", slot: this.getSlot(index) };
+    const existing = this.assignments.get(modKey(t.panelId, t.path));
+    if (this.slots[index] && existing?.slot === index) {
+      this.unassign(t.panelId, t.path);
+      return { action: "unassigned", slot: this.getSlot(index) };
+    }
+    const created = !this.slots[index];
+    const slot = this.createSlot(index);
+    if (!slot) return { action: "none", slot: null };
+    if (!this.assign(t.panelId, t.path, index)) {
+      if (created) this.removeSlot(index);
+      return { action: "none", slot: this.getSlot(index) };
+    }
+    return { action: created ? "created" : "assigned", slot };
+  }
+  /* ── external sources ─────────────────────────────────────────────── */
+  /** Offer an app-side modulator to the slots; returns an unregister fn. */
+  registerSource(id, config = {}) {
+    this.sources.set(id, config);
+    this.changed();
+    return () => {
+      if (this.sources.get(id) === config) {
+        this.sources.delete(id);
+        this.sourceValues.delete(id);
+        this.changed();
+      }
+    };
+  }
+  /** Push a source's signal (-1..1) at any rate; the engine mirrors the latest. */
+  setSourceValue(id, value) {
+    this.sourceValues.set(id, clamp2(Number(value) || 0, -1, 1));
+  }
+  getSources() {
+    return [...this.sources.keys()];
+  }
+  /* ── tempo ────────────────────────────────────────────────────────── */
+  setTempo(bpm) {
+    const next = clamp2(Number(bpm) || 0, 20, 999);
+    if (next === this.bpm) return;
+    this.bpm = next;
+    this.changed();
+  }
+  getTempo() {
+    return this.bpm;
+  }
+  /* ── reading the modulated layer ──────────────────────────────────── */
+  /** A slot's live signal, -1..1. */
+  getSignal(index) {
+    return this.signals[index] ?? 0;
+  }
+  /** The modulation's contribution to one control, in the control's units. */
+  getOffset(panelId, path) {
+    const a = this.assignments.get(modKey(panelId, path));
+    if (!a) return 0;
+    const slot = this.slots[a.slot];
+    if (!slot) return 0;
+    if (slot.source && !this.sources.get(slot.source)?.applies) return 0;
+    const meta = this.resolveMeta(panelId, path);
+    if (!meta) return 0;
+    const base = Number(TweakStore.getValue(panelId, path));
+    if (!Number.isFinite(base)) return 0;
+    return applyModulation(base, this.signals[a.slot], a.amount, meta.min, meta.max) - base;
+  }
+  /** One control's value with its modulation applied — the frame-time read. */
+  getValue(panelId, path) {
+    const base = Number(TweakStore.getValue(panelId, path));
+    return base + this.getOffset(panelId, path);
+  }
+  /**
+   * A panel's values with every modulation applied — a fresh snapshot per
+   * call, meant to be pulled once per frame in place of `TweakStore.getValues`.
+   */
+  getValues(panelId) {
+    const out = { ...TweakStore.getValues(panelId) };
+    for (const a of this.assignments.values()) {
+      if (a.panelId !== panelId) continue;
+      const offset = this.getOffset(panelId, a.path);
+      if (offset !== 0) out[a.path] = Number(out[a.path]) + offset;
+    }
+    return out;
+  }
+  /* ── subscriptions ────────────────────────────────────────────────── */
+  /** Structural changes: slots, assignments, sources, tempo. */
+  subscribe(listener) {
+    this.structListeners.add(listener);
+    return () => this.structListeners.delete(listener);
+  }
+  /** Every engine frame — for pulsing circles, dots, and step lights. */
+  subscribeFrames(listener) {
+    this.frameListeners.add(listener);
+    return () => this.frameListeners.delete(listener);
+  }
+  /** Bumped on every structural change — a stable snapshot for UI stores. */
+  getVersion() {
+    return this.version;
+  }
+  /* ── the engine ───────────────────────────────────────────────────── */
+  /**
+   * Advance every slot by `dt` seconds and refresh the signals. The RAF
+   * loop calls this per frame; headless hosts and tests may drive it
+   * directly with their own clock.
+   */
+  tick(dt) {
+    const step = clamp2(Number(dt) || 0, 0, 1);
+    for (const slot of this.slots) {
+      if (!slot) continue;
+      if (slot.source) {
+        const src = this.sources.get(slot.source);
+        let v = this.sourceValues.get(slot.source) ?? 0;
+        if (src?.sample) {
+          try {
+            v = clamp2(Number(src.sample(slot)) || 0, -1, 1);
+          } catch {
+            v = 0;
+          }
+        }
+        this.signals[slot.index] = v;
+        continue;
+      }
+      const def = getModType(slot.type);
+      if (!def) continue;
+      let state = this.states.get(slot.index);
+      if (state === void 0) {
+        state = def.createState();
+        this.states.set(slot.index, state);
+      }
+      this.signals[slot.index] = clamp2(def.tick(state, slot.params, step, this.bpm), -1, 1);
+    }
+    this.frameListeners.forEach((fn) => fn());
+  }
+  /** Wipe every slot, assignment, and the persisted shelf. */
+  clear() {
+    this.slots.fill(null);
+    this.assignments.clear();
+    this.states.clear();
+    this.signals.fill(0);
+    this.touched = null;
+    clearPersisted(PERSIST_TARGET);
+    this.changed();
+  }
+  ensureLoop() {
+    if (this.rafId !== null || typeof window === "undefined") return;
+    if (!this.slots.some(Boolean)) return;
+    this.lastTick = performance.now();
+    this.rafId = window.requestAnimationFrame(this.loop);
+  }
+  resolveMeta(panelId, path) {
+    const key = modKey(panelId, path);
+    const cached = this.metas.get(key);
+    if (cached !== void 0) return cached;
+    const panel = TweakStore.getPanel(panelId);
+    if (!panel) return null;
+    const meta = findControl(panel.controls, path);
+    const numeric = meta && (meta.type === "slider" || meta.type === "number") && Number.isFinite(meta.min) && Number.isFinite(meta.max) ? { min: meta.min, max: meta.max } : null;
+    this.metas.set(key, numeric);
+    return numeric;
+  }
+  changed() {
+    this.version++;
+    savePersisted(PERSIST_TARGET, {
+      slots: this.getSlots(),
+      assignments: this.getAssignments()
+    });
+    this.structListeners.forEach((fn) => fn());
+    this.ensureLoop();
+  }
+};
+function findControl(controls, path) {
+  for (const c of controls) {
+    if (c.children) {
+      const hit = findControl(c.children, path);
+      if (hit) return hit;
+    } else if (c.path === path) {
+      return c;
+    }
+  }
+  return null;
+}
+var ModulationStore = /* @__PURE__ */ new ModulationStoreClass();
+export {
+  MOD_TOUCH_GRACE_MS,
+  ModulationStore
+};
+//# sourceMappingURL=modulation-store.js.map

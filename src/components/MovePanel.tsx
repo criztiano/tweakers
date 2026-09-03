@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, useSyncExternalStore, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
+import { ModulationStore } from '../store/ModulationStore';
+import { modColor, type ModulationSlot } from '../modulation-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from './TweakRoot';
 import { buildMovePages, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, dialOrigin, isEnumDial, enumOptionValue, enumOptionLabel, enumIndex, MOVE_TRACKS, MOVE_DIALS } from '../move-layout';
@@ -108,6 +110,13 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     useCallback((cb) => (pageId ? TweakStore.subscribe(pageId, cb) : () => {}), [pageId]),
     () => (pageId ? TweakStore.getValues(pageId) : undefined),
     () => undefined
+  );
+
+  // Modulation structure (slots, assignments) — the circles and the dots.
+  useSyncExternalStore(
+    useCallback((cb) => ModulationStore.subscribe(cb), []),
+    () => ModulationStore.getVersion(),
+    () => 0
   );
 
   // Hardware presence: a finger on a knob, a held or latched value pad.
@@ -223,6 +232,22 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const chipLatched = (col: number, meta: ControlMeta) =>
     latched[col]?.path === meta.path || !!hwLatched[meta.path];
 
+  // A wired control wears its slot's palette colour as a dot.
+  const modColorFor = (path: string): string | null => {
+    const a = ModulationStore.getAssignment(page.panel.id, path);
+    return a && ModulationStore.getSlot(a.slot) ? modColor(a.slot) : null;
+  };
+
+  // Touching a control arms it for the assignment gesture (step press).
+  const armMod = (path: string) => ModulationStore.noteTouch(page.panel.id, path);
+
+  // The dot itself: absolute in a dial slot, inline on a pad chip.
+  const ModDot = ({ path, pad }: { path: string; pad?: boolean }) => {
+    const c = modColorFor(path);
+    if (!c) return null;
+    return <span className={pad ? 'tweakers-move-pad-mod' : 'tweakers-move-dial-mod'} style={{ background: c }} />;
+  };
+
   // What a dial column actually edits: a held chip wins (screen or pad),
   // then a latched one, then the column's own dial.
   const dialAt = (col: number): ControlMeta | undefined => {
@@ -237,6 +262,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const pressChip = (e: React.PointerEvent<HTMLElement>, col: number, meta: ControlMeta) => {
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
     holdStart.current = Date.now();
+    armMod(meta.path);
     setHeld({ col, meta });
   };
 
@@ -258,23 +284,33 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       <div className="tweakers-move">
         <div className="tweakers-move-inner">
           <div className="tweakers-move-tracks">
-            {slots(pages, MOVE_TRACKS).map((pg, i) => (
-              <button
-                key={pg ? pg.panel.id : `empty-${i}`}
-                className="tweakers-move-track"
-                data-active={pg ? pg === page : undefined}
-                data-empty={pg ? undefined : true}
-                disabled={!pg}
-                onClick={() => {
-                  setTrack(i);
-                  // Tell the hardware side; the kit relays it when the bridge is up.
-                  if (pg) window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
-                }}
-              >
-                <span className="tweakers-move-track-marker" style={{ background: MOVE_TRACK_COLORS[i] }} />
-                {pg && <span className="tweakers-move-track-label">{pg.panel.name}</span>}
-              </button>
-            ))}
+            <div className="tweakers-move-tracks-group">
+              {slots(pages, MOVE_TRACKS).map((pg, i) => (
+                <button
+                  key={pg ? pg.panel.id : `empty-${i}`}
+                  className="tweakers-move-track"
+                  data-active={pg ? pg === page : undefined}
+                  data-empty={pg ? undefined : true}
+                  disabled={!pg}
+                  onClick={() => {
+                    setTrack(i);
+                    // Tell the hardware side; the kit relays it when the bridge is up.
+                    if (pg) window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
+                  }}
+                >
+                  <span className="tweakers-move-track-marker" style={{ background: MOVE_TRACK_COLORS[i] }} />
+                  {pg && <span className="tweakers-move-track-label">{pg.panel.name}</span>}
+                </button>
+              ))}
+            </div>
+            {/* The modulations, centred between the track labels and the
+                (future) volume readout — one circle per occupied slot. */}
+            <div className="tweakers-move-mods">
+              {ModulationStore.getSlots().map((slot) => (
+                <MoveModCircle key={slot.index} slot={slot} />
+              ))}
+            </div>
+            <span className="tweakers-move-tracks-spacer" />
           </div>
 
           <div className="tweakers-move-grid">
@@ -309,6 +345,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerDown={(e) => {
                         try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
                         setDragPath(meta.path);
+                        armMod(meta.path);
                         xyFromPointer(e, meta);
                       }}
                       onPointerMove={(e) => {
@@ -317,6 +354,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerUp={() => xyRelease(meta)}
                       onPointerCancel={() => xyRelease(meta)}
                     >
+                      <ModDot path={meta.path} />
                       <div className="tweakers-move-xy">
                         {gridN > 0 && (
                           <span
@@ -366,6 +404,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerDown={(e) => {
                         try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
                         setDragPath(meta.path);
+                        armMod(meta.path);
                         pick(e);
                       }}
                       onPointerMove={(e) => {
@@ -374,6 +413,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerUp={() => setDragPath(null)}
                       onPointerCancel={() => setDragPath(null)}
                     >
+                      <ModDot path={meta.path} />
                       <div className="tweakers-move-dial-readout">
                         <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
                           {meta.label}
@@ -401,6 +441,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerDown={(e) => {
                         try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
                         setDragPath(meta.path);
+                        armMod(meta.path);
                         rangeFromPointer(e, meta);
                       }}
                       onPointerMove={(e) => {
@@ -409,6 +450,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerUp={() => setDragPath(null)}
                       onPointerCancel={() => setDragPath(null)}
                     >
+                      <ModDot path={meta.path} />
                       <div className="tweakers-move-dial-readout">
                         <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
                           {meta.label}
@@ -449,6 +491,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     onPointerDown={(e) => {
                       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
                       setDragPath(meta.path);
+                      armMod(meta.path);
                       dialFromPointer(e, meta);
                     }}
                     onPointerMove={(e) => {
@@ -458,6 +501,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     onPointerCancel={() => setDragPath(null)}
                   >
                     {subbed && <span className="tweakers-move-dial-sub">{meta.label}</span>}
+                    <ModDot path={meta.path} />
                     <div className="tweakers-move-dial-readout">
                       <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
                         {meta.label}
@@ -517,6 +561,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                         onPointerUp={() => releaseChip(col, meta)}
                         onPointerCancel={() => setHeld(null)}
                       >
+                        <ModDot path={meta.path} pad />
                         <span className="tweakers-move-pad-title">{meta.label}</span>
                         <span className="tweakers-move-pad-reading">
                           <span className="tweakers-move-pad-number">{value.num}</span>
@@ -534,4 +579,41 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   );
 
   return createPortal(content, document.body);
+}
+
+/**
+ * One modulation circle (spec: a 24px ring holding a 12px dot in the slot's
+ * palette colour). The dot breathes with the slot's live signal — the same
+ * motion the hardware step light shows — written straight to style per
+ * frame so the panel never re-renders for it. A click is the on-screen
+ * step press: with a control armed (just touched), it toggles the wire.
+ */
+function MoveModCircle({ slot }: { slot: ModulationSlot }) {
+  const dotRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    return ModulationStore.subscribeFrames(() => {
+      const el = dotRef.current;
+      if (!el) return;
+      const level = (ModulationStore.getSignal(slot.index) + 1) / 2;
+      el.style.transform = `scale(${(0.66 + 0.34 * level).toFixed(3)})`;
+    });
+  }, [slot.index]);
+
+  return (
+    <button
+      type="button"
+      className="tweakers-move-mod"
+      title={`${slot.type.toUpperCase()} · step ${slot.index + 1}`}
+      onClick={() => ModulationStore.assignFromStep(slot.index)}
+    >
+      <span
+        ref={dotRef}
+        className="tweakers-move-mod-dot"
+        style={{ background: modColor(slot.index) }}
+      />
+    </button>
+  );
 }

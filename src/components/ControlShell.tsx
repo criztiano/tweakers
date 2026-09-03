@@ -3,6 +3,8 @@ import type { ComponentType, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { TweakStore } from '../store/TweakStore';
 import type { AffordanceConfig, AffordanceContext } from '../store/TweakStore';
+import { ModulationStore } from '../store/ModulationStore';
+import { modColor } from '../modulation-core';
 import { AFFORDANCE_POPOVER_WIDTH, placePopover } from '../affordance-core';
 
 interface ControlShellProps {
@@ -39,6 +41,18 @@ export function ControlShell({ hint, title, id, affordance, panelId, path, child
     readDisabled
   );
 
+  // A control wired to a modulation slot wears the slot's colour as a dot;
+  // pressing anywhere on the control arms it for the step-button gesture.
+  const readMod = useCallback(
+    () => (panelId && path ? ModulationStore.getAssignment(panelId, path) : undefined),
+    [panelId, path]
+  );
+  const modAssignment = useSyncExternalStore(
+    useCallback((cb) => ModulationStore.subscribe(cb), []),
+    readMod,
+    readMod
+  );
+
   return (
     <div
       className="tweakers-control-tip"
@@ -46,12 +60,24 @@ export function ControlShell({ hint, title, id, affordance, panelId, path, child
       data-affordance={affordance ? 'true' : undefined}
       data-affordance-open={open ? 'true' : undefined}
       data-disabled={disabled ? 'true' : undefined}
+      data-mod={modAssignment ? 'true' : undefined}
       aria-disabled={disabled ? true : undefined}
       role={hint ? 'group' : undefined}
       aria-describedby={hint ? id : undefined}
       title={hint ? undefined : title}
+      onPointerDownCapture={
+        panelId && path ? () => ModulationStore.noteTouch(panelId, path) : undefined
+      }
     >
       {children}
+
+      {modAssignment && (
+        <span
+          className="tweakers-mod-dot"
+          style={{ background: modColor(modAssignment.slot) }}
+          aria-hidden="true"
+        />
+      )}
 
       {/* Kept mounted rather than conditional on hover so the id
           `aria-describedby` points at always resolves. */}

@@ -48,14 +48,20 @@ __export(index_exports, {
   GalleryControl: () => GalleryControl,
   GradientControl: () => GradientControl,
   GradientPanel: () => GradientPanel,
+  LFO_DEF: () => LFO_DEF,
+  LFO_SYNC_DIVISIONS: () => LFO_SYNC_DIVISIONS,
   ListControl: () => ListControl,
   MIN_STOPS: () => MIN_STOPS,
+  MOD_COLORS: () => MOD_COLORS,
+  MOD_SLOTS: () => MOD_SLOTS,
+  MOD_TOUCH_GRACE_MS: () => MOD_TOUCH_GRACE_MS,
   MOVE_DIALS: () => MOVE_DIALS,
   MOVE_FUNCTION_BUTTONS: () => MOVE_FUNCTION_BUTTONS,
   MOVE_FUNCTION_MANIFEST: () => MOVE_FUNCTION_MANIFEST,
   MOVE_PADS: () => MOVE_PADS,
   MOVE_SPECIAL_BUTTONS: () => MOVE_SPECIAL_BUTTONS,
   MOVE_TRACKS: () => MOVE_TRACKS,
+  ModulationStore: () => ModulationStore,
   Module: () => Module,
   MoveFunctions: () => MoveFunctions,
   MovePanel: () => MovePanel,
@@ -86,6 +92,7 @@ __export(index_exports, {
   addDriver: () => addDriver,
   addStop: () => addStop,
   applyDetentAxis: () => applyDetentAxis,
+  applyModulation: () => applyModulation,
   buildMovePages: () => buildMovePages,
   buildSamplers: () => buildSamplers,
   centerValue: () => centerValue,
@@ -110,6 +117,7 @@ __export(index_exports, {
   flipSegmentY: () => flipSegmentY,
   formatClock: () => formatClock,
   formatHex: () => formatHex,
+  getModType: () => getModType,
   gradientFillBox: () => gradientFillBox,
   gradientToCss: () => gradientToCss,
   gradientToTransform: () => gradientToTransform,
@@ -120,6 +128,10 @@ __export(index_exports, {
   hsvToRgb: () => hsvToRgb,
   invertY: () => invertY,
   isOutsideSpan: () => isOutsideSpan,
+  lfoSyncedHz: () => lfoSyncedHz,
+  listModTypes: () => listModTypes,
+  modColor: () => modColor,
+  modKey: () => modKey,
   moveStop: () => moveStop,
   nearestHandle: () => nearestHandle,
   normToValue: () => normToValue,
@@ -143,6 +155,7 @@ __export(index_exports, {
   pointFromValue: () => pointFromValue,
   readComposition: () => readComposition,
   redistributeWeight: () => redistributeWeight,
+  registerModType: () => registerModType,
   removeDriver: () => removeDriver,
   removeSegment: () => removeSegment,
   removeStop: () => removeStop,
@@ -3098,6 +3111,448 @@ function ModuleFolder({ title, enabled, onEnabledChange, defaultOpen = true, hin
 var import_react7 = require("react");
 var import_react_dom = require("react-dom");
 
+// src/modulation-core.ts
+var MOD_SLOTS = 16;
+var MOD_COLORS = [
+  "#ff5f45",
+  // 0  coral
+  "#ff8a2b",
+  // 1  orange
+  "#ffb61e",
+  // 2  amber
+  "#f4d942",
+  // 3  yellow
+  "#b8e03c",
+  // 4  lime
+  "#6fd435",
+  // 5  green
+  "#3bcf6d",
+  // 6  emerald
+  "#2ed3ab",
+  // 7  teal
+  "#33c6e8",
+  // 8  cyan
+  "#3d9bff",
+  // 9  azure
+  "#5f7bff",
+  // 10 blue
+  "#8a6bff",
+  // 11 violet
+  "#b45cff",
+  // 12 purple
+  "#e04ef0",
+  // 13 magenta
+  "#ff4fb0",
+  // 14 pink
+  "#ff4f6e"
+  // 15 rose
+];
+var modColor = (index) => MOD_COLORS[(index % MOD_SLOTS + MOD_SLOTS) % MOD_SLOTS];
+var registry = /* @__PURE__ */ new Map();
+function registerModType(def) {
+  registry.set(def.type, def);
+}
+var getModType = (type) => registry.get(type);
+var listModTypes = () => [...registry.values()];
+var modKey = (panelId, path) => `${panelId}\0${path}`;
+var clamp4 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+var clamp013 = (v) => clamp4(Number(v) || 0, 0, 1);
+function applyModulation(base, signal, amount, min, max) {
+  const offset = clamp4(signal, -1, 1) * clamp013(amount) * (max - min) / 2;
+  return clamp4(base + offset, min, max);
+}
+var LFO_SYNC_DIVISIONS = [
+  { label: "4", beats: 16 },
+  { label: "2", beats: 8 },
+  { label: "1", beats: 4 },
+  { label: "1/2", beats: 2 },
+  { label: "1/4", beats: 1 },
+  { label: "1/8", beats: 0.5 },
+  { label: "1/16", beats: 0.25 },
+  { label: "1/32", beats: 0.125 }
+];
+function lfoSyncedHz(division, bpm) {
+  const i = clamp4(Math.round(Number(division) || 0), 0, LFO_SYNC_DIVISIONS.length - 1);
+  return (Number(bpm) || 120) / 60 / LFO_SYNC_DIVISIONS[i].beats;
+}
+var LFO_DEF = {
+  type: "lfo",
+  label: "LFO",
+  defaults: { rate: 1, division: 4, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false },
+  controls: [
+    { type: "slider", path: "rate", label: "Rate", min: 0.02, max: 20, step: 0.01, unit: "Hz" },
+    { type: "toggle", path: "sync", label: "Sync" },
+    { type: "slider", path: "phase", label: "Phase", min: 0, max: 1, step: 0.01 },
+    { type: "slider", path: "width", label: "Width", min: 0, max: 1, step: 0.01 },
+    {
+      type: "xy",
+      path: "texture",
+      label: "Texture",
+      xParam: "jitter",
+      yParam: "smooth",
+      xAxis: { min: 0, max: 1, step: 0.01, label: "Jitter" },
+      yAxis: { min: 0, max: 1, step: 0.01, label: "Smooth" }
+    }
+  ],
+  createState: () => ({ phase: 0, drift: 0, driftTarget: 0, out: null }),
+  tick(state, params, dt, bpm) {
+    const s = state;
+    const hz = params.sync ? lfoSyncedHz(Number(params.division) || 0, bpm) : Math.max(0, Number(params.rate) || 0);
+    const before = s.phase;
+    s.phase = (s.phase + dt * hz) % 1;
+    if (s.phase < before) s.driftTarget = (Math.random() * 2 - 1) * clamp013(params.jitter);
+    if (!clamp013(params.jitter)) {
+      s.drift = 0;
+      s.driftTarget = 0;
+    } else s.drift += (s.driftTarget - s.drift) * Math.min(1, dt * hz * 4);
+    const w = clamp4(Number(params.width) || 0, 0.01, 0.99);
+    const ph = (s.phase + clamp013(params.phase)) % 1;
+    const tri = ph < w ? ph / w : 1 - (ph - w) / (1 - w);
+    let v = clamp4(tri * 2 - 1 + s.drift, -1, 1);
+    const smooth = clamp013(params.smooth);
+    if (smooth > 0 && s.out !== null) {
+      const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
+      v = s.out + (v - s.out) * k;
+    }
+    s.out = v;
+    return v;
+  }
+};
+registerModType(LFO_DEF);
+
+// src/store/ModulationStore.ts
+var MOD_TOUCH_GRACE_MS = 4e3;
+var PERSIST_TARGET = resolvePersistTarget("modulation", "global", true);
+var clamp5 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+var ModulationStoreClass = class {
+  constructor() {
+    this.slots = Array(MOD_SLOTS).fill(null);
+    this.assignments = /* @__PURE__ */ new Map();
+    this.states = /* @__PURE__ */ new Map();
+    this.signals = Array(MOD_SLOTS).fill(0);
+    this.sources = /* @__PURE__ */ new Map();
+    this.sourceValues = /* @__PURE__ */ new Map();
+    this.metas = /* @__PURE__ */ new Map();
+    this.bpm = 120;
+    this.touched = null;
+    this.structListeners = /* @__PURE__ */ new Set();
+    this.frameListeners = /* @__PURE__ */ new Set();
+    this.version = 0;
+    this.rafId = null;
+    this.lastTick = 0;
+    this.loop = (now) => {
+      this.tick(Math.max(0, (now - this.lastTick) / 1e3));
+      this.lastTick = now;
+      this.rafId = this.slots.some(Boolean) ? window.requestAnimationFrame(this.loop) : null;
+    };
+    const saved = loadPersisted(PERSIST_TARGET);
+    if (saved) {
+      for (const slot of saved.slots ?? []) {
+        const i = Math.round(Number(slot?.index));
+        if (i >= 0 && i < MOD_SLOTS && slot.type && slot.params) {
+          this.slots[i] = { ...slot, index: i, params: { ...slot.params } };
+        }
+      }
+      for (const a of saved.assignments ?? []) {
+        if (a?.panelId && a.path && this.slots[a.slot]) {
+          this.assignments.set(modKey(a.panelId, a.path), { ...a });
+        }
+      }
+    }
+    TweakStore.subscribeGlobal(() => this.metas.clear());
+    this.ensureLoop();
+  }
+  /* ── slots ────────────────────────────────────────────────────────── */
+  /** Create a modulation in a step's slot; an occupied slot is returned as-is. */
+  createSlot(index, type = "lfo") {
+    if (!Number.isInteger(index) || index < 0 || index >= MOD_SLOTS) return null;
+    const existing = this.slots[index];
+    if (existing) return existing;
+    const def = getModType(type);
+    if (!def) {
+      console.warn(`[tweakers] modulator type "${type}" is not registered`);
+      return null;
+    }
+    const slot = { index, type, params: { ...def.defaults } };
+    this.slots[index] = slot;
+    this.states.set(index, def.createState());
+    this.changed();
+    this.ensureLoop();
+    return slot;
+  }
+  getSlot(index) {
+    return this.slots[index] ?? null;
+  }
+  /** The occupied slots, index order — the track row's circles. */
+  getSlots() {
+    return this.slots.filter((s) => s !== null);
+  }
+  updateSlotParams(index, patch) {
+    const slot = this.slots[index];
+    if (!slot) return;
+    slot.params = { ...slot.params, ...patch };
+    this.changed();
+  }
+  /** Switch a slot's modulator type — fresh defaults, fresh state. */
+  setSlotType(index, type) {
+    const slot = this.slots[index];
+    const def = getModType(type);
+    if (!slot || !def) return;
+    slot.type = type;
+    slot.params = { ...def.defaults };
+    this.states.set(index, def.createState());
+    this.changed();
+  }
+  /** Point a slot at an external source (null returns it to the engine). */
+  setSlotSource(index, sourceId) {
+    const slot = this.slots[index];
+    if (!slot) return;
+    slot.source = sourceId;
+    this.changed();
+  }
+  /** Remove a slot's modulation and every assignment wired to it. */
+  removeSlot(index) {
+    if (!this.slots[index]) return;
+    this.slots[index] = null;
+    this.states.delete(index);
+    this.signals[index] = 0;
+    for (const [key, a] of this.assignments) {
+      if (a.slot === index) this.assignments.delete(key);
+    }
+    this.changed();
+  }
+  /* ── assignments ──────────────────────────────────────────────────── */
+  /**
+   * Wire a control to a slot. Only bounded numeric controls (slider, number
+   * with min/max) can be modulated; anything else is refused. A control not
+   * yet registered is accepted on trust and resolves when its panel appears.
+   */
+  assign(panelId, path, slot, amount = 0.5) {
+    if (!this.slots[slot]) return false;
+    if (TweakStore.getPanel(panelId) && !this.resolveMeta(panelId, path)) {
+      console.warn(`[tweakers] "${path}" is not a bounded numeric control; it cannot take a modulation`);
+      return false;
+    }
+    this.assignments.set(modKey(panelId, path), {
+      panelId,
+      path,
+      slot,
+      amount: clamp5(Number(amount) || 0, 0, 1)
+    });
+    this.changed();
+    return true;
+  }
+  unassign(panelId, path) {
+    if (this.assignments.delete(modKey(panelId, path))) this.changed();
+  }
+  getAssignment(panelId, path) {
+    return this.assignments.get(modKey(panelId, path));
+  }
+  getAssignments() {
+    return [...this.assignments.values()];
+  }
+  assignmentsForSlot(index) {
+    return this.getAssignments().filter((a) => a.slot === index);
+  }
+  setAmount(panelId, path, amount) {
+    const a = this.assignments.get(modKey(panelId, path));
+    if (!a) return;
+    a.amount = clamp5(Number(amount) || 0, 0, 1);
+    this.changed();
+  }
+  /* ── the assignment gesture ───────────────────────────────────────── */
+  /** A finger on a control — panel pointer, hardware knob. Arms assignment. */
+  noteTouch(panelId, path) {
+    this.touched = { panelId, path, at: Date.now() };
+  }
+  /**
+   * A step-button press (hardware step or on-screen circle): with a control
+   * armed, create the slot's modulation if needed and toggle the control
+   * onto it. Returns what happened, for lights and readouts.
+   */
+  assignFromStep(index) {
+    const t = this.touched;
+    const armed = t && Date.now() - t.at < MOD_TOUCH_GRACE_MS;
+    if (!armed) return { action: "none", slot: this.getSlot(index) };
+    const existing = this.assignments.get(modKey(t.panelId, t.path));
+    if (this.slots[index] && existing?.slot === index) {
+      this.unassign(t.panelId, t.path);
+      return { action: "unassigned", slot: this.getSlot(index) };
+    }
+    const created = !this.slots[index];
+    const slot = this.createSlot(index);
+    if (!slot) return { action: "none", slot: null };
+    if (!this.assign(t.panelId, t.path, index)) {
+      if (created) this.removeSlot(index);
+      return { action: "none", slot: this.getSlot(index) };
+    }
+    return { action: created ? "created" : "assigned", slot };
+  }
+  /* ── external sources ─────────────────────────────────────────────── */
+  /** Offer an app-side modulator to the slots; returns an unregister fn. */
+  registerSource(id, config = {}) {
+    this.sources.set(id, config);
+    this.changed();
+    return () => {
+      if (this.sources.get(id) === config) {
+        this.sources.delete(id);
+        this.sourceValues.delete(id);
+        this.changed();
+      }
+    };
+  }
+  /** Push a source's signal (-1..1) at any rate; the engine mirrors the latest. */
+  setSourceValue(id, value) {
+    this.sourceValues.set(id, clamp5(Number(value) || 0, -1, 1));
+  }
+  getSources() {
+    return [...this.sources.keys()];
+  }
+  /* ── tempo ────────────────────────────────────────────────────────── */
+  setTempo(bpm) {
+    const next = clamp5(Number(bpm) || 0, 20, 999);
+    if (next === this.bpm) return;
+    this.bpm = next;
+    this.changed();
+  }
+  getTempo() {
+    return this.bpm;
+  }
+  /* ── reading the modulated layer ──────────────────────────────────── */
+  /** A slot's live signal, -1..1. */
+  getSignal(index) {
+    return this.signals[index] ?? 0;
+  }
+  /** The modulation's contribution to one control, in the control's units. */
+  getOffset(panelId, path) {
+    const a = this.assignments.get(modKey(panelId, path));
+    if (!a) return 0;
+    const slot = this.slots[a.slot];
+    if (!slot) return 0;
+    if (slot.source && !this.sources.get(slot.source)?.applies) return 0;
+    const meta = this.resolveMeta(panelId, path);
+    if (!meta) return 0;
+    const base = Number(TweakStore.getValue(panelId, path));
+    if (!Number.isFinite(base)) return 0;
+    return applyModulation(base, this.signals[a.slot], a.amount, meta.min, meta.max) - base;
+  }
+  /** One control's value with its modulation applied — the frame-time read. */
+  getValue(panelId, path) {
+    const base = Number(TweakStore.getValue(panelId, path));
+    return base + this.getOffset(panelId, path);
+  }
+  /**
+   * A panel's values with every modulation applied — a fresh snapshot per
+   * call, meant to be pulled once per frame in place of `TweakStore.getValues`.
+   */
+  getValues(panelId) {
+    const out = { ...TweakStore.getValues(panelId) };
+    for (const a of this.assignments.values()) {
+      if (a.panelId !== panelId) continue;
+      const offset = this.getOffset(panelId, a.path);
+      if (offset !== 0) out[a.path] = Number(out[a.path]) + offset;
+    }
+    return out;
+  }
+  /* ── subscriptions ────────────────────────────────────────────────── */
+  /** Structural changes: slots, assignments, sources, tempo. */
+  subscribe(listener) {
+    this.structListeners.add(listener);
+    return () => this.structListeners.delete(listener);
+  }
+  /** Every engine frame — for pulsing circles, dots, and step lights. */
+  subscribeFrames(listener) {
+    this.frameListeners.add(listener);
+    return () => this.frameListeners.delete(listener);
+  }
+  /** Bumped on every structural change — a stable snapshot for UI stores. */
+  getVersion() {
+    return this.version;
+  }
+  /* ── the engine ───────────────────────────────────────────────────── */
+  /**
+   * Advance every slot by `dt` seconds and refresh the signals. The RAF
+   * loop calls this per frame; headless hosts and tests may drive it
+   * directly with their own clock.
+   */
+  tick(dt) {
+    const step = clamp5(Number(dt) || 0, 0, 1);
+    for (const slot of this.slots) {
+      if (!slot) continue;
+      if (slot.source) {
+        const src = this.sources.get(slot.source);
+        let v = this.sourceValues.get(slot.source) ?? 0;
+        if (src?.sample) {
+          try {
+            v = clamp5(Number(src.sample(slot)) || 0, -1, 1);
+          } catch {
+            v = 0;
+          }
+        }
+        this.signals[slot.index] = v;
+        continue;
+      }
+      const def = getModType(slot.type);
+      if (!def) continue;
+      let state = this.states.get(slot.index);
+      if (state === void 0) {
+        state = def.createState();
+        this.states.set(slot.index, state);
+      }
+      this.signals[slot.index] = clamp5(def.tick(state, slot.params, step, this.bpm), -1, 1);
+    }
+    this.frameListeners.forEach((fn) => fn());
+  }
+  /** Wipe every slot, assignment, and the persisted shelf. */
+  clear() {
+    this.slots.fill(null);
+    this.assignments.clear();
+    this.states.clear();
+    this.signals.fill(0);
+    this.touched = null;
+    clearPersisted(PERSIST_TARGET);
+    this.changed();
+  }
+  ensureLoop() {
+    if (this.rafId !== null || typeof window === "undefined") return;
+    if (!this.slots.some(Boolean)) return;
+    this.lastTick = performance.now();
+    this.rafId = window.requestAnimationFrame(this.loop);
+  }
+  resolveMeta(panelId, path) {
+    const key = modKey(panelId, path);
+    const cached = this.metas.get(key);
+    if (cached !== void 0) return cached;
+    const panel = TweakStore.getPanel(panelId);
+    if (!panel) return null;
+    const meta = findControl2(panel.controls, path);
+    const numeric = meta && (meta.type === "slider" || meta.type === "number") && Number.isFinite(meta.min) && Number.isFinite(meta.max) ? { min: meta.min, max: meta.max } : null;
+    this.metas.set(key, numeric);
+    return numeric;
+  }
+  changed() {
+    this.version++;
+    savePersisted(PERSIST_TARGET, {
+      slots: this.getSlots(),
+      assignments: this.getAssignments()
+    });
+    this.structListeners.forEach((fn) => fn());
+    this.ensureLoop();
+  }
+};
+function findControl2(controls, path) {
+  for (const c of controls) {
+    if (c.children) {
+      const hit = findControl2(c.children, path);
+      if (hit) return hit;
+    } else if (c.path === path) {
+      return c;
+    }
+  }
+  return null;
+}
+var ModulationStore = /* @__PURE__ */ new ModulationStoreClass();
+
 // src/affordance-core.ts
 var AFFORDANCE_POPOVER_WIDTH = 200;
 var GAP = 6;
@@ -3128,6 +3583,15 @@ function ControlShell({ hint, title, id, affordance, panelId, path, children }) 
     readDisabled,
     readDisabled
   );
+  const readMod = (0, import_react7.useCallback)(
+    () => panelId && path ? ModulationStore.getAssignment(panelId, path) : void 0,
+    [panelId, path]
+  );
+  const modAssignment = (0, import_react7.useSyncExternalStore)(
+    (0, import_react7.useCallback)((cb) => ModulationStore.subscribe(cb), []),
+    readMod,
+    readMod
+  );
   return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(
     "div",
     {
@@ -3136,12 +3600,22 @@ function ControlShell({ hint, title, id, affordance, panelId, path, children }) 
       "data-affordance": affordance ? "true" : void 0,
       "data-affordance-open": open ? "true" : void 0,
       "data-disabled": disabled ? "true" : void 0,
+      "data-mod": modAssignment ? "true" : void 0,
       "aria-disabled": disabled ? true : void 0,
       role: hint ? "group" : void 0,
       "aria-describedby": hint ? id : void 0,
       title: hint ? void 0 : title,
+      onPointerDownCapture: panelId && path ? () => ModulationStore.noteTouch(panelId, path) : void 0,
       children: [
         children,
+        modAssignment && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+          "span",
+          {
+            className: "tweakers-mod-dot",
+            style: { background: modColor(modAssignment.slot) },
+            "aria-hidden": "true"
+          }
+        ),
         hint && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "tweakers-hint", id, role: "tooltip", children: hint }),
         affordance && panelId && path && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
           Affordance,
@@ -3786,7 +4260,7 @@ function NumberControl({
   const isClickRef = (0, import_react10.useRef)(true);
   const scrubStartValue = (0, import_react10.useRef)(0);
   const isPointerHeld = (0, import_react10.useRef)(false);
-  const clamp6 = (0, import_react10.useCallback)(
+  const clamp8 = (0, import_react10.useCallback)(
     (v) => {
       let out = v;
       if (min != null) out = Math.max(min, out);
@@ -3821,11 +4295,11 @@ function NumberControl({
       if (!isClickRef.current) {
         const travel = isVertical ? -dy : dx;
         const perPixel = step * (e.shiftKey ? 10 : e.altKey ? 0.1 : 1);
-        const next = clamp6(scrubStartValue.current + travel * perPixel);
+        const next = clamp8(scrubStartValue.current + travel * perPixel);
         onChange(roundValue(next, step));
       }
     },
-    [isVertical, step, clamp6, onChange]
+    [isVertical, step, clamp8, onChange]
   );
   const handlePointerUp = (0, import_react10.useCallback)(() => {
     if (!isPointerHeld.current) return;
@@ -3846,7 +4320,7 @@ function NumberControl({
   const handleInputSubmit = () => {
     const parsed = parseFloat(inputValue);
     if (!isNaN(parsed)) {
-      onChange(roundValue(clamp6(parsed), step));
+      onChange(roundValue(clamp8(parsed), step));
     }
     setShowInput(false);
   };
@@ -5389,7 +5863,7 @@ var import_react23 = require("react");
 // src/components/GradientTransformPad.tsx
 var import_react22 = require("react");
 var import_jsx_runtime20 = require("react/jsx-runtime");
-var clamp4 = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+var clamp6 = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 var wrap360 = (deg) => (deg % 360 + 360) % 360;
 var RAD = Math.PI / 180;
 var vectorToAngle = (dx, dy) => wrap360(Math.atan2(dx, -dy) / RAD);
@@ -5418,7 +5892,7 @@ function GradientTransformPad({ value, onChange }) {
   const rxPx = scale / 100 * w;
   const ryPx = Math.max(10, (value.squash ?? scale) / 100 * h);
   const theta = rotation * RAD;
-  const pin = (x, y) => ({ x: clamp4(x, 5, w - 5), y: clamp4(y, 5, h - 5) });
+  const pin = (x, y) => ({ x: clamp6(x, 5, w - 5), y: clamp6(y, 5, h - 5) });
   const major = pin(cxPx + Math.cos(theta) * rxPx, cyPx + Math.sin(theta) * rxPx);
   const minor = pin(cxPx - Math.sin(theta) * ryPx, cyPx + Math.cos(theta) * ryPx);
   const majorLineLen = Math.hypot(major.x - cxPx, major.y - cyPx);
@@ -5556,7 +6030,7 @@ function GradientTransformPad({ value, onChange }) {
         className: "tweakers-gradient-pad-handle",
         "data-kind": "center",
         "aria-label": "Gradient center",
-        style: { left: clamp4(cxPx, 5, w - 5), top: clamp4(cyPx, 5, h - 5) },
+        style: { left: clamp6(cxPx, 5, w - 5), top: clamp6(cyPx, 5, h - 5) },
         ...handleProps("center")
       }
     )
@@ -8506,6 +8980,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     () => pageId ? TweakStore.getValues(pageId) : void 0,
     () => void 0
   );
+  (0, import_react43.useSyncExternalStore)(
+    (0, import_react43.useCallback)((cb) => ModulationStore.subscribe(cb), []),
+    () => ModulationStore.getVersion(),
+    () => 0
+  );
   (0, import_react43.useEffect)(() => {
     const forPage = (detail, map) => detail && detail.pageId === pageId ? map ?? {} : {};
     const onTouch = (e) => {
@@ -8590,6 +9069,16 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     TweakStore.updateValue(page.panel.id, meta.path, normalizeValue(centerValue(xa, ya), xa, ya, !!meta.snap));
   };
   const chipLatched = (col, meta) => latched[col]?.path === meta.path || !!hwLatched[meta.path];
+  const modColorFor = (path) => {
+    const a = ModulationStore.getAssignment(page.panel.id, path);
+    return a && ModulationStore.getSlot(a.slot) ? modColor(a.slot) : null;
+  };
+  const armMod = (path) => ModulationStore.noteTouch(page.panel.id, path);
+  const ModDot = ({ path, pad }) => {
+    const c = modColorFor(path);
+    if (!c) return null;
+    return /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: pad ? "tweakers-move-pad-mod" : "tweakers-move-dial-mod", style: { background: c } });
+  };
   const dialAt = (col) => {
     if (held && held.col === col) return held.meta;
     const hw = page.values[col];
@@ -8604,6 +9093,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     } catch {
     }
     holdStart.current = Date.now();
+    armMod(meta.path);
     setHeld({ col, meta });
   };
   const releaseChip = (col, meta) => {
@@ -8617,24 +9107,28 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   };
   const padRows = [page.toggles, page.values, [], []];
   const content = /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, children: /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move", children: /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)("div", { className: "tweakers-move-inner", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-tracks", children: slots(pages, MOVE_TRACKS).map((pg, i) => /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(
-      "button",
-      {
-        className: "tweakers-move-track",
-        "data-active": pg ? pg === page : void 0,
-        "data-empty": pg ? void 0 : true,
-        disabled: !pg,
-        onClick: () => {
-          setTrack(i);
-          if (pg) window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
+    /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)("div", { className: "tweakers-move-tracks", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-tracks-group", children: slots(pages, MOVE_TRACKS).map((pg, i) => /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(
+        "button",
+        {
+          className: "tweakers-move-track",
+          "data-active": pg ? pg === page : void 0,
+          "data-empty": pg ? void 0 : true,
+          disabled: !pg,
+          onClick: () => {
+            setTrack(i);
+            if (pg) window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
+          },
+          children: [
+            /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
+            pg && /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-track-label", children: pg.panel.name })
+          ]
         },
-        children: [
-          /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
-          pg && /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-track-label", children: pg.panel.name })
-        ]
-      },
-      pg ? pg.panel.id : `empty-${i}`
-    )) }),
+        pg ? pg.panel.id : `empty-${i}`
+      )) }),
+      /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-mods", children: ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(MoveModCircle, { slot }, slot.index)) }),
+      /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-tracks-spacer" })
+    ] }),
     /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)("div", { className: "tweakers-move-grid", children: [
       /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-dials", children: Array.from({ length: MOVE_DIALS }, (_, i) => {
         const meta = dialAt(i);
@@ -8662,6 +9156,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 } catch {
                 }
                 setDragPath(meta.path);
+                armMod(meta.path);
                 xyFromPointer(e, meta);
               },
               onPointerMove: (e) => {
@@ -8670,6 +9165,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
               onPointerUp: () => xyRelease(meta),
               onPointerCancel: () => xyRelease(meta),
               children: [
+                /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(ModDot, { path: meta.path }),
                 /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)("div", { className: "tweakers-move-xy", children: [
                   gridN > 0 && /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(
                     "span",
@@ -8721,6 +9217,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 } catch {
                 }
                 setDragPath(meta.path);
+                armMod(meta.path);
                 pick(e);
               },
               onPointerMove: (e) => {
@@ -8729,6 +9226,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
               onPointerUp: () => setDragPath(null),
               onPointerCancel: () => setDragPath(null),
               children: [
+                /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(ModDot, { path: meta.path }),
                 /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)("div", { className: "tweakers-move-dial-readout", children: [
                   /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-label", "data-long": meta.label.length > 9 || void 0, children: meta.label }),
                   /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-value", children: enumOptionLabel(options[idx]) })
@@ -8753,6 +9251,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 } catch {
                 }
                 setDragPath(meta.path);
+                armMod(meta.path);
                 rangeFromPointer(e, meta);
               },
               onPointerMove: (e) => {
@@ -8761,6 +9260,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
               onPointerUp: () => setDragPath(null),
               onPointerCancel: () => setDragPath(null),
               children: [
+                /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(ModDot, { path: meta.path }),
                 /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)("div", { className: "tweakers-move-dial-readout", children: [
                   /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-label", "data-long": meta.label.length > 9 || void 0, children: meta.label }),
                   /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)("span", { className: "tweakers-move-dial-value", children: [
@@ -8801,6 +9301,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
               } catch {
               }
               setDragPath(meta.path);
+              armMod(meta.path);
               dialFromPointer(e, meta);
             },
             onPointerMove: (e) => {
@@ -8810,6 +9311,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             onPointerCancel: () => setDragPath(null),
             children: [
               subbed && /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-sub", children: meta.label }),
+              /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(ModDot, { path: meta.path }),
               /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)("div", { className: "tweakers-move-dial-readout", children: [
                 /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-label", "data-long": meta.label.length > 9 || void 0, children: meta.label }),
                 /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-value", children: subValue ? `${subValue.num}${subValue.unit ? ` ${subValue.unit}` : ""}` : o01 > 0 ? `${signed > 0 ? "+" : ""}${signed}%` : `${dialPercent(meta)}%` })
@@ -8857,6 +9359,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             onPointerUp: () => releaseChip(col, meta),
             onPointerCancel: () => setHeld(null),
             children: [
+              /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(ModDot, { path: meta.path, pad: true }),
               /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-pad-title", children: meta.label }),
               /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)("span", { className: "tweakers-move-pad-reading", children: [
                 /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-pad-number", children: value.num }),
@@ -8870,6 +9373,36 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     ] })
   ] }) }) });
   return (0, import_react_dom8.createPortal)(content, document.body);
+}
+function MoveModCircle({ slot }) {
+  const dotRef = (0, import_react43.useRef)(null);
+  (0, import_react43.useEffect)(() => {
+    if (typeof window === "undefined") return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    return ModulationStore.subscribeFrames(() => {
+      const el = dotRef.current;
+      if (!el) return;
+      const level = (ModulationStore.getSignal(slot.index) + 1) / 2;
+      el.style.transform = `scale(${(0.66 + 0.34 * level).toFixed(3)})`;
+    });
+  }, [slot.index]);
+  return /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(
+    "button",
+    {
+      type: "button",
+      className: "tweakers-move-mod",
+      title: `${slot.type.toUpperCase()} \xB7 step ${slot.index + 1}`,
+      onClick: () => ModulationStore.assignFromStep(slot.index),
+      children: /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(
+        "span",
+        {
+          ref: dotRef,
+          className: "tweakers-move-mod-dot",
+          style: { background: modColor(slot.index) }
+        }
+      )
+    }
+  );
 }
 
 // src/move-functions.ts
@@ -8943,7 +9476,7 @@ var import_react44 = require("react");
 function round22(value) {
   return Math.round(value * 100) / 100;
 }
-function clamp5(value, min, max) {
+function clamp7(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 function isTransitionConfig(value) {
@@ -8984,7 +9517,7 @@ function springSettleDuration(params) {
   const zeta = params.damping / (2 * Math.sqrt(params.stiffness * params.mass));
   const decay = zeta >= 1 ? zeta * w0 - w0 * Math.sqrt(Math.max(0, zeta * zeta - 1)) : zeta * w0;
   const duration = Math.log(200) / Math.max(decay, 1e-6);
-  return round22(clamp5(duration, 0.05, 10));
+  return round22(clamp7(duration, 0.05, 10));
 }
 function cubicBezierProgress(p, [x1, y1, x2, y2]) {
   if (p <= 0) return 0;
@@ -9361,7 +9894,7 @@ function sampleCurve(curve, elapsed) {
     return springProgress(elapsed, curve.spring);
   }
   if (curve.ease) {
-    return cubicBezierProgress(clamp5(curve.duration > 0 ? elapsed / curve.duration : 1, 0, 1), curve.ease);
+    return cubicBezierProgress(clamp7(curve.duration > 0 ? elapsed / curve.duration : 1, 0, 1), curve.ease);
   }
   return curve.duration > 0 ? Math.min(1, elapsed / curve.duration) : 1;
 }
@@ -9595,7 +10128,7 @@ function computeClipState(clip, time, cycleTime = time) {
   const phaseElapsed = looping ? cycleTime - clip.at : elapsed;
   const fold = (e) => looping ? e % total : e;
   const basePos = started ? fold(Math.max(0, phaseElapsed)) : 0;
-  const progress = total > 0 ? clamp5(basePos / total, 0, 1) : started ? 1 : 0;
+  const progress = total > 0 ? clamp7(basePos / total, 0, 1) : started ? 1 : 0;
   let current;
   let stepIndex = 0;
   if (clip.tracks.length && clip.props?.length) {
@@ -9675,7 +10208,7 @@ function mixHexColors(a, b, p) {
   const ca = parseHex2(a);
   const cb = parseHex2(b);
   if (!ca || !cb) return null;
-  const t = clamp5(p, 0, 1);
+  const t = clamp7(p, 0, 1);
   const mixed = ca.map((v, i) => Math.round(v + (cb[i] - v) * t));
   const hex = (n) => n.toString(16).padStart(2, "0");
   const rgb = `#${hex(mixed[0])}${hex(mixed[1])}${hex(mixed[2])}`;
@@ -9737,21 +10270,21 @@ function cloneTimelineValue(value) {
   );
 }
 function clampTrackDelay(delay, at, trackDuration, timelineDuration) {
-  return clamp5(round22(delay), 0, Math.max(0, round22(timelineDuration - at - trackDuration)));
+  return clamp7(round22(delay), 0, Math.max(0, round22(timelineDuration - at - trackDuration)));
 }
 function clampClipMove(at, duration, timelineDuration) {
-  return clamp5(round22(at), 0, Math.max(0, timelineDuration - duration));
+  return clamp7(round22(at), 0, Math.max(0, timelineDuration - duration));
 }
 function clampClipResizeEnd(duration, at, timelineDuration) {
-  return clamp5(round22(duration), TIMELINE_MIN_CLIP_DURATION, timelineDuration - at);
+  return clamp7(round22(duration), TIMELINE_MIN_CLIP_DURATION, timelineDuration - at);
 }
 function clampClipResizeStart(newAt, at, duration) {
-  const clampedAt = clamp5(round22(newAt), 0, at + duration - TIMELINE_MIN_CLIP_DURATION);
+  const clampedAt = clamp7(round22(newAt), 0, at + duration - TIMELINE_MIN_CLIP_DURATION);
   return { at: clampedAt, duration: round22(at + duration - clampedAt) };
 }
 function clampStepResize(duration, at, otherStepsTotal, timelineDuration) {
   const max = Math.max(TIMELINE_MIN_CLIP_DURATION, timelineDuration - at - otherStepsTotal);
-  return clamp5(round22(duration), TIMELINE_MIN_CLIP_DURATION, max);
+  return clamp7(round22(duration), TIMELINE_MIN_CLIP_DURATION, max);
 }
 function normalizeTimelineValuesForCopy(values, clips) {
   const normalized = { ...values };
@@ -10017,7 +10550,7 @@ function TweakTimelineDock({
     const handlePointerMove = (event) => {
       event.preventDefault();
       const viewportMax = Math.max(MIN_DOCK_MAX_HEIGHT, window.innerHeight - 24);
-      setDockMaxHeight(clamp5(startHeight + pointerY - event.clientY, MIN_DOCK_MAX_HEIGHT, viewportMax));
+      setDockMaxHeight(clamp7(startHeight + pointerY - event.clientY, MIN_DOCK_MAX_HEIGHT, viewportMax));
     };
     const finishResize = () => {
       window.removeEventListener("pointermove", handlePointerMove);
@@ -10156,7 +10689,7 @@ function TimelinePlayheadFlag({
     const scrub = scrubRef.current;
     const contentWidth = rect?.width ?? 0;
     if (!rect || !scrub || contentWidth <= 0) return;
-    const nextTime = clamp5(
+    const nextTime = clamp7(
       scrub.viewStart + (clientX - rect.left) / contentWidth * (scrub.viewEnd - scrub.viewStart),
       scrub.viewStart,
       scrub.viewEnd
@@ -10198,12 +10731,12 @@ function TimelinePlayheadFlag({
   }, [duration, id, onResetView, rulerRef, seekFromClientX, viewEnd, viewStart]);
   (0, import_react45.useEffect)(() => () => cleanupScrubRef.current?.(), []);
   if (time < viewStart || time > viewEnd || laneWidth <= 0) return null;
-  const x = clamp5(
+  const x = clamp7(
     (time - viewStart) * pxPerSecond,
     0,
     laneWidth
   );
-  const flagCenter = clamp5(
+  const flagCenter = clamp7(
     x,
     PLAYHEAD_FLAG_WIDTH / 2 - PLAYHEAD_FLAG_EDGE_OVERHANG,
     laneWidth - PLAYHEAD_FLAG_WIDTH / 2 + PLAYHEAD_FLAG_EDGE_OVERHANG
@@ -10247,7 +10780,7 @@ function TimelineOverview({
   const seekFromClientX = (0, import_react45.useCallback)((clientX) => {
     const rect = scrubRef.current?.rect;
     if (!rect || rect.width <= 0 || duration <= 0) return;
-    const nextTime = clamp5((clientX - rect.left) / rect.width * duration, 0, duration);
+    const nextTime = clamp7((clientX - rect.left) / rect.width * duration, 0, duration);
     TimelineStore.seek(id, nextTime);
     onNavigate(nextTime);
   }, [duration, id, onNavigate]);
@@ -10297,7 +10830,7 @@ function TimelineOverview({
   );
 }
 function clampViewStart(start, duration, visibleDuration) {
-  return clamp5(start, 0, Math.max(0, duration - visibleDuration));
+  return clamp7(start, 0, Math.max(0, duration - visibleDuration));
 }
 function formatRulerSeconds(time, step) {
   if (step >= 1 && Number.isInteger(time)) return formatClock(time);
@@ -10354,7 +10887,7 @@ var TimelineSection = (0, import_react45.memo)(function TimelineSection2({
   const millisecondReadableZoom = laneWidth > 0 && meta.duration > 0 ? MAJOR_TICK_TARGET_PX * meta.duration / (MILLISECOND_STEP * 10 * laneWidth) : MIN_TIMELINE_MAX_ZOOM;
   const maxZoom = Math.max(MIN_TIMELINE_MAX_ZOOM, millisecondReadableZoom);
   (0, import_react45.useEffect)(() => {
-    setZoom((current) => clamp5(current, 1, maxZoom));
+    setZoom((current) => clamp7(current, 1, maxZoom));
   }, [maxZoom]);
   (0, import_react45.useEffect)(() => {
     setViewStart((current) => clampViewStart(current, meta.duration, meta.duration / zoom));
@@ -10405,7 +10938,7 @@ var TimelineSection = (0, import_react45.memo)(function TimelineSection2({
   const zoomDragRef = (0, import_react45.useRef)(null);
   const rulerGestureRef = (0, import_react45.useRef)(null);
   const rulerTimeFromClientX = (0, import_react45.useCallback)(
-    (clientX, rect, viewStartAt, visibleAt) => clamp5(
+    (clientX, rect, viewStartAt, visibleAt) => clamp7(
       viewStartAt + (clientX - rect.left) / rect.width * visibleAt,
       viewStartAt,
       viewStartAt + visibleAt
@@ -10437,7 +10970,7 @@ var TimelineSection = (0, import_react45.memo)(function TimelineSection2({
       };
       return;
     }
-    const anchorRatio = clamp5((e.clientX - rect.left) / contentWidth, 0, 1);
+    const anchorRatio = clamp7((e.clientX - rect.left) / contentWidth, 0, 1);
     zoomDragRef.current = {
       pointerX: e.clientX,
       rect,
@@ -10466,7 +10999,7 @@ var TimelineSection = (0, import_react45.memo)(function TimelineSection2({
     const dx = e.clientX - drag.pointerX;
     if (!drag.moved && Math.abs(dx) <= DRAG_THRESHOLD_PX) return;
     drag.moved = true;
-    const nextZoom = clamp5(drag.zoom * Math.exp(dx / ZOOM_DRAG_DISTANCE), 1, maxZoom);
+    const nextZoom = clamp7(drag.zoom * Math.exp(dx / ZOOM_DRAG_DISTANCE), 1, maxZoom);
     const nextVisibleDuration = meta.duration / nextZoom;
     const nextStart = clampViewStart(
       drag.anchorTime - drag.anchorRatio * nextVisibleDuration,
@@ -10499,7 +11032,7 @@ var TimelineSection = (0, import_react45.memo)(function TimelineSection2({
     const scrub = trackScrubRef.current;
     const contentWidth = scrub?.rect.width ?? 0;
     if (!scrub || contentWidth <= 0) return;
-    const nextTime = clamp5(
+    const nextTime = clamp7(
       scrub.viewStart + (clientX - scrub.rect.left) / contentWidth * scrub.visibleDuration,
       scrub.viewStart,
       scrub.viewStart + scrub.visibleDuration
@@ -11033,7 +11566,7 @@ function ClipPopover({
   const viewportRight = viewport.offsetLeft + viewport.width;
   const viewportBottom = viewport.offsetTop + viewport.height;
   const popoverWidth = Math.min(POPOVER_WIDTH, Math.max(220, viewport.width - 24));
-  const left = clamp5(
+  const left = clamp7(
     popover.anchor.left + popover.anchor.width / 2 - popoverWidth / 2,
     viewport.offsetLeft + 12,
     Math.max(viewport.offsetLeft + 12, viewportRight - popoverWidth - 12)
@@ -11044,7 +11577,7 @@ function ClipPopover({
   const availableHeight = placeAbove ? spaceAbove : spaceBelow;
   const renderedHeight = Math.min(naturalHeight || availableHeight, availableHeight);
   const unclampedTop = placeAbove ? popover.anchor.top - 10 - renderedHeight : popover.anchor.bottom + 10;
-  const top = clamp5(
+  const top = clamp7(
     unclampedTop,
     viewport.offsetTop + 12,
     Math.max(viewport.offsetTop + 12, viewportBottom - renderedHeight - 12)
@@ -11841,7 +12374,7 @@ var DRAG_THRESHOLD2 = 3;
 var EDGE_HIT2 = 6;
 var CURVE_MIN_WEIGHT_FRAC = 0.06;
 var lerp = (a, b, t) => a + (b - a) * t;
-var clamp013 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+var clamp014 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
 var clampBipolar = (v) => v < -1 ? -1 : v > 1 ? 1 : v;
 var SKEW_MAX = 0.45;
 var BACK_MAX = 0.8;
@@ -11864,10 +12397,10 @@ function deriveEase(type, curvature, steepness = 0, overshoot = 0, anticipate = 
   const pts = s >= 0 ? lerp4(base, easingExtremes[key], s) : lerp4(easingPresets.linear, base, s + 1);
   let [x1, y1, x2, y2] = pts;
   const shift = clampBipolar(curvature) * SKEW_MAX;
-  x1 = clamp013(x1 + shift);
-  x2 = clamp013(x2 + shift);
-  y2 += clamp013(overshoot) * BACK_MAX;
-  y1 -= clamp013(anticipate) * BACK_MAX;
+  x1 = clamp014(x1 + shift);
+  x2 = clamp014(x2 + shift);
+  y2 += clamp014(overshoot) * BACK_MAX;
+  y1 -= clamp014(anticipate) * BACK_MAX;
   return [x1, y1, x2, y2];
 }
 function bezierAxis2(p1, p2, s) {
@@ -11879,21 +12412,21 @@ function bezierAxisDeriv(p1, p2, s) {
   return 3 * u * u * p1 + 6 * u * s * (p2 - p1) + 3 * s * s * (1 - p2);
 }
 function bezierY(ease, x) {
-  const tx = clamp013(x);
+  const tx = clamp014(x);
   let s = tx;
   for (let i = 0; i < 6; i++) {
     const xs = bezierAxis2(ease[0], ease[2], s) - tx;
     if (Math.abs(xs) < 1e-5) break;
     const d = bezierAxisDeriv(ease[0], ease[2], s);
     if (Math.abs(d) < 1e-6) break;
-    s = clamp013(s - xs / d);
+    s = clamp014(s - xs / d);
   }
   return bezierAxis2(ease[1], ease[3], s);
 }
 var SPRING_SAMPLES = 72;
 function springPoints(curvature, steepness = 0) {
   const visualDuration = 1;
-  const bounce = clamp013((clampBipolar(curvature) + 1) / 2) * 0.6;
+  const bounce = clamp014((clampBipolar(curvature) + 1) / 2) * 0.6;
   const mass = 1;
   let stiffness = 2 * Math.PI / visualDuration;
   stiffness = stiffness * stiffness;
@@ -11914,7 +12447,7 @@ function springPoints(curvature, steepness = 0) {
   return raw;
 }
 function interp(points, t) {
-  const x = clamp013(t) * (points.length - 1);
+  const x = clamp014(t) * (points.length - 1);
   const i = Math.floor(x);
   if (i >= points.length - 1) return points[points.length - 1];
   return lerp(points[i], points[i + 1], x - i);
@@ -11942,7 +12475,7 @@ function totalWeight(segments) {
 }
 function timelineSlots(segments, gap = 0) {
   const n = segments.length;
-  const g = n > 1 ? clamp013(gap) : 0;
+  const g = n > 1 ? clamp014(gap) : 0;
   const total = totalWeight(segments);
   const content = 1 - g;
   const gapW = n > 1 ? g / (n - 1) : 0;
@@ -11982,13 +12515,13 @@ function segmentSpan(segments, index, gap = 0) {
 }
 function segmentIndexAt(xNorm, segments, gap = 0) {
   if (gap > 0) {
-    const x2 = clamp013(xNorm);
+    const x2 = clamp014(xNorm);
     const slots = timelineSlots(segments, gap);
     for (const s of slots) if (x2 < s.b) return s.index;
     return segments.length - 1;
   }
   const total = totalWeight(segments);
-  const x = clamp013(xNorm) * total;
+  const x = clamp014(xNorm) * total;
   let acc = 0;
   for (let i = 0; i < segments.length; i++) {
     acc += segments[i].weight;
@@ -12011,7 +12544,7 @@ function boundaryAt(xNorm, segments, edgeHitNorm, gap = 0) {
   return best;
 }
 function smootherstep(t) {
-  const x = clamp013(t);
+  const x = clamp014(t);
   return x * x * x * (x * (x * 6 - 15) + 10);
 }
 function cloneSegments(comp, segments) {
@@ -12091,14 +12624,14 @@ function setSegmentOvershoot(comp, index, overshoot) {
   const src = comp.segments[index];
   if (!src) return comp;
   const next = comp.segments.slice();
-  next[index] = { ...src, overshoot: clamp013(overshoot) };
+  next[index] = { ...src, overshoot: clamp014(overshoot) };
   return cloneSegments(comp, next);
 }
 function setSegmentAnticipate(comp, index, anticipate) {
   const src = comp.segments[index];
   if (!src) return comp;
   const next = comp.segments.slice();
-  next[index] = { ...src, anticipate: clamp013(anticipate) };
+  next[index] = { ...src, anticipate: clamp014(anticipate) };
   return cloneSegments(comp, next);
 }
 function redistributeWeight(comp, boundaryIndex, deltaFrac) {
@@ -12137,11 +12670,11 @@ function setDriverSteepness(comp, steepness) {
 }
 function setDriverOvershoot(comp, overshoot) {
   if (!comp.driver) return comp;
-  return { ...comp, driver: { ...comp.driver, overshoot: clamp013(overshoot) } };
+  return { ...comp, driver: { ...comp.driver, overshoot: clamp014(overshoot) } };
 }
 function setDriverAnticipate(comp, anticipate) {
   if (!comp.driver) return comp;
-  return { ...comp, driver: { ...comp.driver, anticipate: clamp013(anticipate) } };
+  return { ...comp, driver: { ...comp.driver, anticipate: clamp014(anticipate) } };
 }
 var DRAG_ENERGY_GAIN = 0.6;
 var DRAG_STEEP_GAIN = 0.6;
@@ -12152,7 +12685,7 @@ function headerHit(xN, py, segments, layout) {
   return null;
 }
 function toLocalCoords(clientX, clientY, rect, totalH) {
-  const xN = clamp013((clientX - rect.left) / (rect.width || 1));
+  const xN = clamp014((clientX - rect.left) / (rect.width || 1));
   const py = (clientY - rect.top) / (rect.height || 1) * totalH;
   return { xN, py };
 }
@@ -12178,14 +12711,14 @@ function buildSamplers(comp) {
   };
 }
 function directionPhase(u, dir) {
-  const x = clamp013(u);
+  const x = clamp014(u);
   if (dir === "reverse") return 1 - x;
   if (dir === "mirror") return 1 - Math.abs(1 - 2 * x);
   return x;
 }
 function readComposition(comp, u, s) {
   const inputPhase = directionPhase(u, comp.direction);
-  const warpedPhase = s.driver ? clamp013(s.driver(inputPhase)) : inputPhase;
+  const warpedPhase = s.driver ? clamp014(s.driver(inputPhase)) : inputPhase;
   const gap = comp.gap ?? 0;
   if (gap > 0 && comp.segments.length > 1) {
     const slots = timelineSlots(comp.segments, gap);
@@ -12287,8 +12820,8 @@ var TRIGGER_FLYBACK = 0.5;
 function triggersCrossed(prevValue, curValue, steps) {
   const n = Math.max(2, Math.floor(steps));
   const seg = 1 / (n - 1);
-  const p = clamp013(prevValue);
-  const c = clamp013(curValue);
+  const p = clamp014(prevValue);
+  const c = clamp014(curValue);
   const delta = c - p;
   const fired = [];
   if (Math.abs(delta) > TRIGGER_FLYBACK) {
@@ -13061,14 +13594,20 @@ function AudioLevelMeter(props) {
   GalleryControl,
   GradientControl,
   GradientPanel,
+  LFO_DEF,
+  LFO_SYNC_DIVISIONS,
   ListControl,
   MIN_STOPS,
+  MOD_COLORS,
+  MOD_SLOTS,
+  MOD_TOUCH_GRACE_MS,
   MOVE_DIALS,
   MOVE_FUNCTION_BUTTONS,
   MOVE_FUNCTION_MANIFEST,
   MOVE_PADS,
   MOVE_SPECIAL_BUTTONS,
   MOVE_TRACKS,
+  ModulationStore,
   Module,
   MoveFunctions,
   MovePanel,
@@ -13099,6 +13638,7 @@ function AudioLevelMeter(props) {
   addDriver,
   addStop,
   applyDetentAxis,
+  applyModulation,
   buildMovePages,
   buildSamplers,
   centerValue,
@@ -13123,6 +13663,7 @@ function AudioLevelMeter(props) {
   flipSegmentY,
   formatClock,
   formatHex,
+  getModType,
   gradientFillBox,
   gradientToCss,
   gradientToTransform,
@@ -13133,6 +13674,10 @@ function AudioLevelMeter(props) {
   hsvToRgb,
   invertY,
   isOutsideSpan,
+  lfoSyncedHz,
+  listModTypes,
+  modColor,
+  modKey,
   moveStop,
   nearestHandle,
   normToValue,
@@ -13156,6 +13701,7 @@ function AudioLevelMeter(props) {
   pointFromValue,
   readComposition,
   redistributeWeight,
+  registerModType,
   removeDriver,
   removeSegment,
   removeStop,

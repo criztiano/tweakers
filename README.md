@@ -896,6 +896,42 @@ import('http://localhost:7787/kit.js')
 
 Attached buttons light up on the hardware and every press runs your action, with `shift: true` when Shift is held — a free second-function layer per button. `attach` returns a detach function, and attaching again replaces the previous action, so bindings can follow your app's modes. Buttons you leave unattached keep the surface's built-in behavior (Undo resets the page's dials, Delete clears the sequencer, Play runs it); Shift and the four track buttons are reserved.
 
+## Modulation
+
+Any bounded numeric control (slider, `number` with min/max) can be driven by a modulation — an LFO today; envelope follower, curve, S&H, and step sequencer plug into the same registry. Modulations live in 16 slots, one per Move sequencer step button: **touch a control, press a step** and the modulation is created there and wired to the control (press again to unwire). Each slot keeps a palette colour; the track row shows a circle per slot with a pulsing dot of that colour, and the same dot marks every control the slot drives — in the Move panel and the side panel both.
+
+The modulated value **never enters the TweakStore.** The control keeps the value you set (the base); the modulation is a live layer your app pulls at frame time:
+
+```tsx
+import { ModulationStore } from 'tweakers';
+
+// In your frame loop — base values with the live modulation applied on top,
+// clamped to each control's own bounds:
+const speed = ModulationStore.getValue('fx', 'blob.speed');   // one path
+const params = ModulationStore.getValues('fx');               // whole panel
+```
+
+Because the stored value never moves, presets, persistence, and the bridge kit's diffing all stay quiet — no loops, no thrash. Slots and assignments persist to localStorage (fail-soft), so a prototype's modulation setup survives a reload.
+
+Everything the gesture does is also plain API — `createSlot(step, 'lfo')`, `assign(panelId, path, step, amount)`, `updateSlotParams`, `setSlotType`, `removeSlot` — and `subscribe` / `subscribeFrames` cover structure and per-frame signals (`getSignal(step)` is the slot's raw −1..1).
+
+### External modulation sources
+
+DSP apps whose modulators run on the audio side (a native LFO, an envelope follower) register them instead of using the internal engine:
+
+```tsx
+// Pull: sampled once per frame by the engine…
+ModulationStore.registerSource('env-follow', { sample: () => native.envelope });
+// …or push at whatever rate the app has:
+ModulationStore.setSourceValue('env-follow', v);   // -1..1
+
+ModulationStore.setSlotSource(step, 'env-follow');
+```
+
+A slot on a source shows its signal (circle, dots, step light) but applies nothing to values — the app's own engine already did, at audio rate. A source that wants the library to apply for it passes `applies: true`. Tempo-synced modulators follow `ModulationStore.setTempo(bpm)` (the bridge kit feeds it the Move's tempo).
+
+New modulator types register a `ModTypeDef` — defaults, the settings-page controls, and a stateful `tick(state, params, dt, bpm)` returning −1..1 — via `registerModType`; the LFO (`LFO_DEF`) is the reference implementation.
+
 ---
 
 ## Full Example

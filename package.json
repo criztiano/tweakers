@@ -67,6 +67,14 @@
       "types": "./dist/curve-composer-core.d.ts",
       "default": "./dist/curve-composer-core.js"
     },
+    "./modulation-core": {
+      "types": "./dist/modulation-core.d.ts",
+      "default": "./dist/modulation-core.js"
+    },
+    "./modulation-store": {
+      "types": "./dist/modulation-store.d.ts",
+      "default": "./dist/modulation-store.js"
+    },
     "./styles.css": "./dist/styles.css"
   },
   "files": [
