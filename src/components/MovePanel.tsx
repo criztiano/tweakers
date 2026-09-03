@@ -606,9 +606,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
  * palette colour). The dot breathes with the slot's live signal — the same
  * motion the hardware step light shows — written straight to style per
  * frame so the panel never re-renders for it. The circle is the on-screen
- * step button: a tap runs the assignment gesture (a just-touched control
- * wires on or off), a hold opens the modulator's settings page — the same
- * two moves as the hardware step.
+ * step button, with the hardware step's gestures: a tap with a control
+ * armed (just touched) wires it on or off; a tap with nothing armed opens
+ * the modulator's settings page (tap again to close); a hold opens it too.
  */
 function MoveModCircle({ slot }: { slot: ModulationSlot }) {
   const dotRef = useRef<HTMLSpanElement>(null);
@@ -634,7 +634,10 @@ function MoveModCircle({ slot }: { slot: ModulationSlot }) {
         pressAt.current = Date.now();
       }}
       onPointerUp={() => {
-        if (Date.now() - pressAt.current < TAP_MS) ModulationStore.assignFromStep(slot.index);
+        const tapped = Date.now() - pressAt.current < TAP_MS;
+        if (tapped && ModulationStore.assignFromStep(slot.index).action !== 'none') return;
+        const open = ModulationStore.getSettings();
+        if (tapped && open && open.index === slot.index) ModulationStore.closeSettings();
         else ModulationStore.openSettings(slot.index);
       }}
     >
