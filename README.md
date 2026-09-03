@@ -999,7 +999,7 @@ Time-style strings (`0:00:00`) render with bold separators so the digit groups r
 
 ## Modulation
 
-Any bounded numeric control (slider, `number` with min/max) can be driven by a modulation — an LFO today; envelope follower, curve, S&H, and step sequencer plug into the same registry. Modulations live in 16 slots, one per Move sequencer step button: **touch a control, press a step** and the modulation is created there and wired to the control (press again to unwire). Each slot keeps a palette colour; the track row shows a circle per slot with a pulsing dot of that colour, and the same dot marks every control the slot drives — in the Move panel and the side panel both.
+Any bounded numeric control (slider, `number` with min/max) can be driven by a modulation — an LFO, a sample & hold, and an ADSR today; envelope follower, curve, and step sequencer plug into the same registry. Modulations live in 16 slots, one per Move sequencer step button: **touch a control, press a step** and the modulation is created there and wired to the control (press again to unwire). Each slot keeps a palette colour; the track row shows a circle per slot with a pulsing dot of that colour, and the same dot marks every control the slot drives — in the Move panel and the side panel both.
 
 The modulated value **never enters the TweakStore.** The control keeps the value you set (the base); the modulation is a live layer your app pulls at frame time:
 
@@ -1018,6 +1018,23 @@ Because the stored value never moves, presets, persistence, and the bridge kit's
 
 Everything the gesture does is also plain API — `createSlot(step, 'lfo')`, `assign(panelId, path, step, amount)`, `updateSlotParams`, `setSlotType`, `removeSlot`, `openSettings(step)` / `closeSettings()` — and `subscribe` / `subscribeFrames` cover structure and per-frame signals (`getSignal(step)` is the slot's raw −1..1).
 
+### Envelopes and the gate
+
+The ADSR (`createSlot(step, 'adsr')`) is a shaped envelope: attack up to full, decay down to the sustain level, sustain held while the gate is on, release back to rest. Its signal is unipolar 0..1 — at rest the control sits on its base value, and the envelope lifts it up to `amount` of the span.
+
+A fresh envelope rests at zero and **waits for a trigger** — the host plays it:
+
+```tsx
+ModulationStore.gate(step, true);    // note on
+ModulationStore.gate(step, false);   // note off — the release runs
+```
+
+That is what an app integrates against: your notes, pads, or hardware steps gate the slot, and the panel shows the shape they make. A DSP app whose envelope already runs at audio rate does the opposite — it points the slot at a [source](#external-modulation-sources), and the kit becomes a visual control passing values through, applying nothing of its own.
+
+**Loop** is the exception, for demos and for prototyping with no host: with it on the envelope plays its own gate — attack, decay, release, over and over, no sustain hold. The example turns it on so the slot moves on its own; the library ships it off.
+
+Free-running types (LFO, S&H) ignore the gate, and so do slots pointed at an external source. Gates are live state, never persisted.
+
 ### External modulation sources
 
 DSP apps whose modulators run on the audio side (a native LFO, an envelope follower) register them instead of using the internal engine:
@@ -1033,7 +1050,7 @@ ModulationStore.setSlotSource(step, 'env-follow');
 
 A slot on a source shows its signal (circle, dots, step light) but applies nothing to values — the app's own engine already did, at audio rate. A source that wants the library to apply for it passes `applies: true`. Tempo-synced modulators follow `ModulationStore.setTempo(bpm)` (the bridge kit feeds it the Move's tempo).
 
-New modulator types register a `ModTypeDef` — defaults, the settings-page controls, and a stateful `tick(state, params, dt, bpm)` returning −1..1 — via `registerModType`; the LFO (`LFO_DEF`) is the reference implementation.
+New modulator types register a `ModTypeDef` — defaults, the settings-page controls, a stateful `tick(state, params, dt, bpm)` returning −1..1, and an optional `gate(state, on)` for the types that take one — via `registerModType`; the LFO (`LFO_DEF`) is the reference implementation, with `SH_DEF` and `ADSR_DEF` beside it.
 
 ---
 

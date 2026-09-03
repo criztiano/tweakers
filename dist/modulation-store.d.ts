@@ -102,6 +102,17 @@ declare class ModulationStoreClass {
         slot: ModulationSlot | null;
     };
     /**
+     * Note on / note off for a slot — what drives a gated modulator like the
+     * ADSR:
+     *
+     *   ModulationStore.gate(0, true);    // key down
+     *   ModulationStore.gate(0, false);   // key up — the release runs
+     *
+     * Free-running types (LFO, S&H) and slots on an external source ignore
+     * it. The gate is live state, not a param: it is never persisted.
+     */
+    gate(index: number, on: boolean): void;
+    /**
      * Open a slot's settings (hold its step button): registers one hidden
      * TweakStore panel (`mod-settings`, kind 'modulation') built from the
      * modulator's own control list, with the type enum ahead of it. Every
