@@ -913,7 +913,9 @@ const params = ModulationStore.getValues('fx');               // whole panel
 
 Because the stored value never moves, presets, persistence, and the bridge kit's diffing all stay quiet — no loops, no thrash. Slots and assignments persist to localStorage (fail-soft), so a prototype's modulation setup survives a reload.
 
-Everything the gesture does is also plain API — `createSlot(step, 'lfo')`, `assign(panelId, path, step, amount)`, `updateSlotParams`, `setSlotType`, `removeSlot` — and `subscribe` / `subscribeFrames` cover structure and per-frame signals (`getSignal(step)` is the slot's raw −1..1).
+**Settings.** Hold an occupied step (or hold its circle on-screen) and the modulator's settings page takes the surface over: the type enum in the first big slot, then the modulator's own controls — for the LFO: rate (its tempo-sync pad directly below), phase, width, and a jitter/smooth XY. A track button puts a regular page back. Under the hood the page is one hidden TweakStore panel (`MOD_SETTINGS_PANEL`, kind `'modulation'` — never in the dock, never on a track), so the bridge kit syncs it to the hardware like any page and every edit flows into the slot's params.
+
+Everything the gesture does is also plain API — `createSlot(step, 'lfo')`, `assign(panelId, path, step, amount)`, `updateSlotParams`, `setSlotType`, `removeSlot`, `openSettings(step)` / `closeSettings()` — and `subscribe` / `subscribeFrames` cover structure and per-frame signals (`getSignal(step)` is the slot's raw −1..1).
 
 ### External modulation sources
 

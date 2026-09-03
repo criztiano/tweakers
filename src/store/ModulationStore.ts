@@ -3,9 +3,12 @@ import type { ControlMeta } from './TweakStore';
 import { resolvePersistTarget, loadPersisted, savePersisted, clearPersisted } from './persist';
 import {
   MOD_SLOTS,
+  MOD_SETTINGS_PANEL,
   modKey,
   getModType,
+  listModTypes,
   applyModulation,
+  type ModTypeDef,
   type ModulationSlot,
   type ModulationType,
   type ModulationParams,
@@ -83,6 +86,9 @@ class ModulationStoreClass {
   private metas = new Map<string, NumericMeta | null>();
   private bpm = 120;
   private touched: { panelId: string; path: string; at: number } | null = null;
+  private settingsIndex: number | null = null;
+  private settingsUnsub: (() => void) | null = null;
+  private applyingSettings = false;
   private structListeners = new Set<Listener>();
   private frameListeners = new Set<Listener>();
   private version = 0;
@@ -168,6 +174,7 @@ class ModulationStoreClass {
   /** Remove a slot's modulation and every assignment wired to it. */
   removeSlot(index: number): void {
     if (!this.slots[index]) return;
+    if (this.settingsIndex === index) this.closeSettings();
     this.slots[index] = null;
     this.states.delete(index);
     this.signals[index] = 0;
@@ -186,6 +193,8 @@ class ModulationStoreClass {
    */
   assign(panelId: string, path: string, slot: number, amount = 0.5): boolean {
     if (!this.slots[slot]) return false;
+    if (panelId === MOD_SETTINGS_PANEL) return false;   // a modulator can't modulate its own page
+
     if (TweakStore.getPanel(panelId) && !this.resolveMeta(panelId, path)) {
       console.warn(`[tweakers] "${path}" is not a bounded numeric control; it cannot take a modulation`);
       return false;
@@ -254,6 +263,119 @@ class ModulationStoreClass {
       return { action: 'none', slot: this.getSlot(index) };
     }
     return { action: created ? 'created' : 'assigned', slot };
+  }
+
+  /* ── the settings page ────────────────────────────────────────────── */
+
+  /**
+   * Open a slot's settings (hold its step button): registers one hidden
+   * TweakStore panel (`mod-settings`, kind 'modulation') built from the
+   * modulator's own control list, with the type enum ahead of it. Every
+   * edit on that panel — screen or hardware, the kit syncs it like any
+   * page — flows back into the slot's params. Returns the panel id.
+   */
+  openSettings(index: number): string | null {
+    const slot = this.slots[index];
+    const def = slot && getModType(slot.type);
+    if (!slot || !def) return null;
+    this.closeSettings();
+    this.settingsIndex = index;
+    this.registerSettingsPanel(slot, def);
+    this.settingsUnsub = TweakStore.subscribe(MOD_SETTINGS_PANEL, () => this.onSettingsChange());
+    this.changed();
+    return MOD_SETTINGS_PANEL;
+  }
+
+  closeSettings(): void {
+    if (this.settingsIndex === null) return;
+    this.settingsUnsub?.();
+    this.settingsUnsub = null;
+    this.settingsIndex = null;
+    TweakStore.unregisterPanel(MOD_SETTINGS_PANEL);
+    this.changed();
+  }
+
+  /** The open settings page, or null — the panel to render as the Move page. */
+  getSettings(): { index: number; panelId: string } | null {
+    return this.settingsIndex === null ? null : { index: this.settingsIndex, panelId: MOD_SETTINGS_PANEL };
+  }
+
+  private registerSettingsPanel(slot: ModulationSlot, def: ModTypeDef): void {
+    const config: Record<string, unknown> = {
+      type: {
+        type: 'select',
+        options: listModTypes().map((d) => ({ value: d.type, label: d.label })),
+        default: slot.type,
+      },
+    };
+    for (const c of def.controls) {
+      if (c.type === 'slider') {
+        config[c.path] = {
+          type: 'slider',
+          min: c.min ?? 0,
+          max: c.max ?? 1,
+          step: c.step,
+          unit: c.unit,
+          default: Number(slot.params[c.path]) || 0,
+        };
+      } else if (c.type === 'toggle') {
+        config[c.path] = !!slot.params[c.path];
+      } else if (c.type === 'xy' && c.xParam && c.yParam) {
+        config[c.path] = {
+          type: 'xy',
+          x: c.xAxis,
+          y: c.yAxis,
+          default: { x: Number(slot.params[c.xParam]) || 0, y: Number(slot.params[c.yParam]) || 0 },
+        };
+      }
+    }
+    // Registering writes the panel's values, which pings our own
+    // subscription — the guard keeps that echo from re-writing the params.
+    this.applyingSettings = true;
+    TweakStore.registerPanel(
+      MOD_SETTINGS_PANEL,
+      `${def.label} ${slot.index + 1}`,
+      config as Parameters<typeof TweakStore.registerPanel>[2],
+      undefined,
+      { kind: 'modulation' }
+    );
+    this.applyingSettings = false;
+  }
+
+  /** A settings-panel edit — screen or hardware — lands in the slot's params. */
+  private onSettingsChange(): void {
+    if (this.applyingSettings || this.settingsIndex === null) return;
+    const slot = this.slots[this.settingsIndex];
+    if (!slot) return;
+    const values = TweakStore.getValues(MOD_SETTINGS_PANEL);
+
+    // A type switch swaps the params and rebuilds the page for the new
+    // modulator's controls.
+    const nextType = values.type as ModulationType;
+    if (nextType && nextType !== slot.type && getModType(nextType)) {
+      this.setSlotType(slot.index, nextType);
+      this.registerSettingsPanel(this.slots[slot.index]!, getModType(nextType)!);
+      return;
+    }
+
+    const def = getModType(slot.type);
+    if (!def) return;
+    const patch: ModulationParams = {};
+    for (const c of def.controls) {
+      const v = values[c.path];
+      if (c.type === 'xy' && c.xParam && c.yParam) {
+        const xy = v as { x?: number; y?: number } | undefined;
+        if (xy && typeof xy === 'object') {
+          patch[c.xParam] = Number(xy.x) || 0;
+          patch[c.yParam] = Number(xy.y) || 0;
+        }
+      } else if (c.type === 'toggle') {
+        patch[c.path] = !!v;
+      } else if (typeof v === 'number' && Number.isFinite(v)) {
+        patch[c.path] = v;
+      }
+    }
+    this.updateSlotParams(slot.index, patch);
   }
 
   /* ── external sources ─────────────────────────────────────────────── */
@@ -387,6 +509,7 @@ class ModulationStoreClass {
 
   /** Wipe every slot, assignment, and the persisted shelf. */
   clear(): void {
+    this.closeSettings();
     this.slots.fill(null);
     this.assignments.clear();
     this.states.clear();

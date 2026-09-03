@@ -939,7 +939,7 @@ var TweakStoreClass = class {
   }
   getPanels(kind) {
     const all = Array.from(this.panels.values());
-    if (kind === "panel") return all.filter((panel) => panel.kind !== "timeline");
+    if (kind === "panel") return all.filter((panel) => panel.kind === void 0);
     if (kind === "timeline") return all.filter((panel) => panel.kind === "timeline");
     return all;
   }

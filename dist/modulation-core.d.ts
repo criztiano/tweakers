@@ -83,6 +83,8 @@ declare function registerModType(def: ModTypeDef): void;
 declare const getModType: (type: ModulationType) => ModTypeDef | undefined;
 /** The registered types, registration order — the settings page's type enum. */
 declare const listModTypes: () => ModTypeDef[];
+/** The one modulator-settings panel, registered by `ModulationStore.openSettings`. */
+declare const MOD_SETTINGS_PANEL = "mod-settings";
 /** Assignment map key — panel and path, joined on a character paths can't hold. */
 declare const modKey: (panelId: string, path: string) => string;
 /**
@@ -105,4 +107,4 @@ declare function lfoSyncedHz(division: number, bpm: number): number;
  */
 declare const LFO_DEF: ModTypeDef;
 
-export { LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_SLOTS, type ModControlMeta, type ModTypeDef, type ModulationAssignment, type ModulationParams, type ModulationSlot, type ModulationType, applyModulation, getModType, lfoSyncedHz, listModTypes, modColor, modKey, registerModType };
+export { LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModTypeDef, type ModulationAssignment, type ModulationParams, type ModulationSlot, type ModulationType, applyModulation, getModType, lfoSyncedHz, listModTypes, modColor, modKey, registerModType };

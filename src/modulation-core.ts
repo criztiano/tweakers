@@ -114,6 +114,9 @@ export const getModType = (type: ModulationType): ModTypeDef | undefined => regi
 /** The registered types, registration order — the settings page's type enum. */
 export const listModTypes = (): ModTypeDef[] => [...registry.values()];
 
+/** The one modulator-settings panel, registered by `ModulationStore.openSettings`. */
+export const MOD_SETTINGS_PANEL = 'mod-settings';
+
 /** Assignment map key — panel and path, joined on a character paths can't hold. */
 export const modKey = (panelId: string, path: string) => `${panelId}\u0000${path}`;
 
