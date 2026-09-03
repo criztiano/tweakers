@@ -53,6 +53,8 @@ __export(index_exports, {
   ListControl: () => ListControl,
   MIN_STOPS: () => MIN_STOPS,
   MOD_COLORS: () => MOD_COLORS,
+  MOD_RING_CIRCUMFERENCE: () => MOD_RING_CIRCUMFERENCE,
+  MOD_RING_RADIUS: () => MOD_RING_RADIUS,
   MOD_SETTINGS_PANEL: () => MOD_SETTINGS_PANEL,
   MOD_SLOTS: () => MOD_SLOTS,
   MOD_TOUCH_GRACE_MS: () => MOD_TOUCH_GRACE_MS,
@@ -70,6 +72,7 @@ __export(index_exports, {
   NumberControl: () => NumberControl,
   PresetManager: () => PresetManager,
   RangeSlider: () => RangeSlider,
+  SH_DEF: () => SH_DEF,
   SegmentedControl: () => SegmentedControl,
   SelectControl: () => SelectControl,
   ShortcutsMenu: () => ShortcutsMenu,
@@ -134,6 +137,7 @@ __export(index_exports, {
   listModTypes: () => listModTypes,
   modColor: () => modColor,
   modKey: () => modKey,
+  modRingArc: () => modRingArc,
   moveStop: () => moveStop,
   nearestHandle: () => nearestHandle,
   normToValue: () => normToValue,
@@ -3164,6 +3168,18 @@ function applyModulation(base, signal, amount, min, max) {
   const offset = clamp4(signal, -1, 1) * clamp013(amount) * (max - min) / 2;
   return clamp4(base + offset, min, max);
 }
+var MOD_RING_RADIUS = 6;
+var MOD_RING_CIRCUMFERENCE = 2 * Math.PI * MOD_RING_RADIUS;
+var RING_SWEEP_START = 135 / 360;
+var RING_SWEEP_LEN = 270 / 360;
+function modRingArc(from01, to01) {
+  const a = RING_SWEEP_START + clamp013(from01) * RING_SWEEP_LEN;
+  const b = RING_SWEEP_START + clamp013(to01) * RING_SWEEP_LEN;
+  return {
+    length: Math.abs(b - a) * MOD_RING_CIRCUMFERENCE,
+    offset: -Math.min(a, b) * MOD_RING_CIRCUMFERENCE
+  };
+}
 var LFO_SYNC_DIVISIONS = [
   { label: "4", beats: 16 },
   { label: "2", beats: 8 },
@@ -3222,6 +3238,46 @@ var LFO_DEF = {
   }
 };
 registerModType(LFO_DEF);
+var SH_DEF = {
+  type: "sh",
+  label: "S&H",
+  defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0 },
+  controls: [
+    { type: "slider", path: "rate", label: "Rate", min: 0.1, max: 30, step: 0.01, unit: "Hz" },
+    { type: "slider", path: "depth", label: "Depth", min: 0, max: 1, step: 0.01 },
+    { type: "slider", path: "offset", label: "Offset", min: -1, max: 1, step: 0.01 },
+    {
+      type: "xy",
+      path: "texture",
+      label: "Texture",
+      xParam: "jitter",
+      yParam: "smooth",
+      xAxis: { min: 0, max: 1, step: 0.01, label: "Jitter" },
+      yAxis: { min: 0, max: 1, step: 0.01, label: "Smooth" }
+    }
+  ],
+  createState: () => ({ wait: 0, held: 0, out: null }),
+  tick(state, params, dt) {
+    const s = state;
+    s.wait -= dt;
+    if (s.out === null || s.wait <= 0) {
+      s.held = Math.random() * 2 - 1;
+      const hz = Math.max(0.01, Number(params.rate) || 0);
+      const len = 1 / hz * (1 + (Math.random() * 2 - 1) * clamp013(params.jitter) * 0.9);
+      s.wait = Math.max(5e-3, len);
+    }
+    const offset = clamp4(Number(params.offset) || 0, -1, 1);
+    let v = clamp4(s.held * clamp013(params.depth) + offset, -1, 1);
+    const smooth = clamp013(params.smooth);
+    if (smooth > 0 && s.out !== null) {
+      const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
+      v = s.out + (v - s.out) * k;
+    }
+    s.out = v;
+    return v;
+  }
+};
+registerModType(SH_DEF);
 
 // src/store/ModulationStore.ts
 var MOD_TOUCH_GRACE_MS = 4e3;
@@ -3545,6 +3601,15 @@ var ModulationStoreClass = class {
     if (!Number.isFinite(base)) return 0;
     return applyModulation(base, this.signals[a.slot], a.amount, meta.min, meta.max) - base;
   }
+  /**
+   * A modulatable control's bounds, or null when it has none (or its panel
+   * has not registered yet) — what a display needs to draw the modulation
+   * against the control's own span.
+   */
+  getBounds(panelId, path) {
+    const meta = this.resolveMeta(panelId, path);
+    return meta ? { min: meta.min, max: meta.max } : null;
+  }
   /** One control's value with its modulation applied — the frame-time read. */
   getValue(panelId, path) {
     const base = Number(TweakStore.getValue(panelId, path));
@@ -3718,14 +3783,7 @@ function ControlShell({ hint, title, id, affordance, panelId, path, children }) 
       onPointerDownCapture: panelId && path ? () => ModulationStore.noteTouch(panelId, path) : void 0,
       children: [
         children,
-        modAssignment && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
-          "span",
-          {
-            className: "tweakers-mod-dot",
-            style: { background: modColor(modAssignment.slot) },
-            "aria-hidden": "true"
-          }
-        ),
+        modAssignment && panelId && path && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(ModRing, { panelId, path, assignment: modAssignment }),
         hint && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "tweakers-hint", id, role: "tooltip", children: hint }),
         affordance && panelId && path && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
           Affordance,
@@ -3740,6 +3798,53 @@ function ControlShell({ hint, title, id, affordance, panelId, path, children }) 
       ]
     }
   );
+}
+function ModRing({
+  panelId,
+  path,
+  assignment
+}) {
+  const arcRef = (0, import_react7.useRef)(null);
+  const color = modColor(assignment.slot);
+  (0, import_react7.useEffect)(() => {
+    const el = arcRef.current;
+    if (!el) return;
+    const draw = (from, to) => {
+      const { length, offset } = modRingArc(from, to);
+      el.setAttribute("stroke-dasharray", `${length.toFixed(2)} ${MOD_RING_CIRCUMFERENCE.toFixed(2)}`);
+      el.setAttribute("stroke-dashoffset", offset.toFixed(2));
+    };
+    const bounds = ModulationStore.getBounds(panelId, path);
+    const span = bounds ? bounds.max - bounds.min : 0;
+    const base01 = () => span ? (Number(TweakStore.getValue(panelId, path)) - bounds.min) / span : 0;
+    if (!span) return;
+    const still = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (still) {
+      const reach = assignment.amount / 2;
+      const drawReach = () => draw(base01() - reach, base01() + reach);
+      drawReach();
+      return TweakStore.subscribe(panelId, drawReach);
+    }
+    return ModulationStore.subscribeFrames(() => {
+      const b = base01();
+      draw(b, b + ModulationStore.getOffset(panelId, path) / span);
+    });
+  }, [panelId, path, assignment.slot, assignment.amount]);
+  return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("svg", { className: "tweakers-mod-ring", viewBox: "0 0 16 16", "aria-hidden": "true", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("circle", { className: "tweakers-mod-ring-track", cx: "8", cy: "8", r: MOD_RING_RADIUS }),
+    /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+      "circle",
+      {
+        ref: arcRef,
+        className: "tweakers-mod-ring-arc",
+        cx: "8",
+        cy: "8",
+        r: MOD_RING_RADIUS,
+        stroke: color,
+        strokeDasharray: `0 ${MOD_RING_CIRCUMFERENCE}`
+      }
+    )
+  ] });
 }
 function Affordance({ affordance, panelId, path, open, onOpenChange }) {
   const dotRef = (0, import_react7.useRef)(null);
@@ -13741,6 +13846,8 @@ function AudioLevelMeter(props) {
   ListControl,
   MIN_STOPS,
   MOD_COLORS,
+  MOD_RING_CIRCUMFERENCE,
+  MOD_RING_RADIUS,
   MOD_SETTINGS_PANEL,
   MOD_SLOTS,
   MOD_TOUCH_GRACE_MS,
@@ -13758,6 +13865,7 @@ function AudioLevelMeter(props) {
   NumberControl,
   PresetManager,
   RangeSlider,
+  SH_DEF,
   SegmentedControl,
   SelectControl,
   ShortcutsMenu,
@@ -13822,6 +13930,7 @@ function AudioLevelMeter(props) {
   listModTypes,
   modColor,
   modKey,
+  modRingArc,
   moveStop,
   nearestHandle,
   normToValue,

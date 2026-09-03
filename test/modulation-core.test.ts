@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   MOD_SLOTS,
   MOD_COLORS,
@@ -11,6 +11,9 @@ import {
   lfoSyncedHz,
   LFO_DEF,
   LFO_SYNC_DIVISIONS,
+  SH_DEF,
+  modRingArc,
+  MOD_RING_CIRCUMFERENCE,
   type ModTypeDef,
 } from '../src/modulation-core';
 
@@ -45,19 +48,70 @@ describe('applyModulation', () => {
   });
 });
 
+describe('the modulation ring', () => {
+  // The dash pattern rides the circle's path: SVG draws it clockwise from 3
+  // o'clock, so a fraction f of the circumference sits at 360f° round from there.
+  const at = (length: number, offset: number) => ({
+    length: length * MOD_RING_CIRCUMFERENCE,
+    offset: offset * MOD_RING_CIRCUMFERENCE,
+  });
+  const close = (got: { length: number; offset: number }, want: { length: number; offset: number }) => {
+    expect(got.length).toBeCloseTo(want.length, 5);
+    expect(got.offset).toBeCloseTo(want.offset, 5);
+  };
+
+  it('draws nothing when the modulation is not moving the value', () => {
+    expect(modRingArc(0.5, 0.5).length).toBe(0);
+  });
+
+  it('spans the sweep between two values, a knob 270° from the bottom-left', () => {
+    // The whole travel: bottom-left round to bottom-right, starting 135° in.
+    close(modRingArc(0, 1), at(270 / 360, -135 / 360));
+    // Base at mid (top) up to the maximum: the last quarter of the sweep.
+    close(modRingArc(0.5, 1), at(135 / 360, -270 / 360));
+  });
+
+  it('draws the same arc whichever end it is given first', () => {
+    close(modRingArc(0.8, 0.3), modRingArc(0.3, 0.8));
+  });
+
+  it('clamps values that run past the control bounds', () => {
+    // A base near the ceiling with a big modulation must not wrap the ring.
+    close(modRingArc(0.9, 1.6), modRingArc(0.9, 1));
+    close(modRingArc(0.1, -0.6), modRingArc(0.1, 0));
+    expect(modRingArc(-3, 4).length).toBeCloseTo(MOD_RING_CIRCUMFERENCE * (270 / 360), 5);
+  });
+
+  it('never draws more than the ring holds', () => {
+    for (let i = 0; i <= 20; i++) {
+      for (let j = 0; j <= 20; j++) {
+        const arc = modRingArc(i / 20, j / 20);
+        expect(arc.length).toBeGreaterThanOrEqual(0);
+        expect(arc.length).toBeLessThanOrEqual(MOD_RING_CIRCUMFERENCE);
+        expect(arc.offset).toBeLessThanOrEqual(0);
+      }
+    }
+  });
+});
+
 describe('the type registry', () => {
-  it('ships the LFO and accepts new types', () => {
+  it('ships the LFO and the S&H, in that order', () => {
     expect(getModType('lfo')).toBe(LFO_DEF);
+    expect(getModType('sh')).toBe(SH_DEF);
+    expect(listModTypes().map((d) => d.type)).toEqual(['lfo', 'sh']);
+  });
+
+  it('accepts new types', () => {
     const def: ModTypeDef = {
-      type: 'sh',
-      label: 'S&H',
+      type: 'curve',
+      label: 'Curve',
       defaults: { rate: 1 },
       controls: [],
       createState: () => ({}),
       tick: () => 0,
     };
     registerModType(def);
-    expect(getModType('sh')).toBe(def);
+    expect(getModType('curve')).toBe(def);
     expect(listModTypes()).toContain(def);
   });
 });
@@ -113,6 +167,72 @@ describe('the LFO', () => {
     const p = { ...LFO_DEF.defaults, rate: 8, jitter: 1 };
     for (let i = 0; i < 200; i++) {
       const v = LFO_DEF.tick(state, p, 0.016, 120);
+      expect(v).toBeGreaterThanOrEqual(-1);
+      expect(v).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
+describe('the S&H', () => {
+  const run = (params: Record<string, number | boolean>, steps: number, dt = 0.01) => {
+    const state = SH_DEF.createState();
+    const p = { ...SH_DEF.defaults, ...params };
+    return Array.from({ length: steps }, () => SH_DEF.tick(state, p, dt, 120));
+  };
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('lays out rate, depth, offset dials and the jitter/smooth texture pad', () => {
+    expect(SH_DEF.controls.map((c) => c.path)).toEqual(['rate', 'depth', 'offset', 'texture']);
+    const xy = SH_DEF.controls.find((c) => c.type === 'xy')!;
+    expect([xy.xParam, xy.yParam]).toEqual(['jitter', 'smooth']);
+  });
+
+  it('holds a value between samples and redraws at the rate', () => {
+    // Each sample draws twice: the held value, then the hold length.
+    const draws = [0.9, 0.5, 0.1, 0.5];
+    let i = 0;
+    vi.spyOn(Math, 'random').mockImplementation(() => draws[Math.min(i++, draws.length - 1)]);
+    // 2 Hz → a fresh draw every 0.5 s; dt 0.01 → 50 ticks per hold.
+    const out = run({ rate: 2 }, 60);
+    expect(out[0]).toBeCloseTo(0.8, 5);                     // 0.9 mapped to -1..1
+    expect(new Set(out.slice(0, 50)).size).toBe(1);         // held flat
+    expect(out[55]).toBeCloseTo(-0.8, 5);                   // the next draw landed
+  });
+
+  it('scales the throw with depth and biases with offset, clamped', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(1);            // every draw = +1
+    expect(run({ rate: 1, depth: 0.25 }, 1)[0]).toBeCloseTo(0.25, 5);
+    expect(run({ rate: 1, depth: 0, offset: -0.5 }, 1)[0]).toBeCloseTo(-0.5, 5);
+    expect(run({ rate: 1, depth: 1, offset: 1 }, 1)[0]).toBe(1);
+  });
+
+  it('slews with smooth instead of stepping', () => {
+    const draws = [1, 0.5, 0, 0.5];                          // held +1, then held -1
+    let i = 0;
+    vi.spyOn(Math, 'random').mockImplementation(() => draws[Math.min(i++, draws.length - 1)]);
+    const out = run({ rate: 2, smooth: 1 }, 60);
+    expect(Math.abs(out[51] - out[50])).toBeLessThan(0.1);  // gliding after the redraw…
+    expect(out[55]).toBeLessThan(out[50]);                  // …in the right direction
+  });
+
+  it('varies the hold lengths with jitter', () => {
+    // Per sample: held draw (ignored), then length draw — short, then long.
+    const seq = [0.5, 0, 0.5, 1];
+    let i = 0;
+    vi.spyOn(Math, 'random').mockImplementation(() => seq[i++ % seq.length]);
+    const state = SH_DEF.createState() as { wait: number };
+    const p = { ...SH_DEF.defaults, rate: 1, jitter: 1 };
+    SH_DEF.tick(state, p, 0.01, 120);
+    const first = state.wait;
+    state.wait = 0;
+    SH_DEF.tick(state, p, 0.01, 120);
+    expect(state.wait).toBeGreaterThan(first);
+  });
+
+  it('stays inside -1..1 with everything cranked', () => {
+    const out = run({ rate: 30, jitter: 1, smooth: 0.3, offset: 0.8 }, 500, 0.016);
+    for (const v of out) {
       expect(v).toBeGreaterThanOrEqual(-1);
       expect(v).toBeLessThanOrEqual(1);
     }

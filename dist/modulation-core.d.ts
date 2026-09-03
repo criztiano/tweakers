@@ -93,6 +93,24 @@ declare const modKey: (panelId: string, path: string) => string;
  * base, the modulation dances around it.
  */
 declare function applyModulation(base: number, signal: number, amount: number, min: number, max: number): number;
+/**
+ * The ring a modulated control wears: a dial drawn as an SVG circle of this
+ * radius, sweeping a knob's 270° from the bottom-left so a value sits at the
+ * angle the control's own dial would point.
+ */
+declare const MOD_RING_RADIUS = 6;
+declare const MOD_RING_CIRCUMFERENCE: number;
+/**
+ * The arc between two values (each 0..1 of the control's span), as the dash
+ * pattern that draws it: SVG lays a circle's path clockwise from 3 o'clock,
+ * so a dash of `length` pushed to `offset` lands exactly on the arc.
+ * Feed it base and modulated value and the ring shows where the modulation
+ * is holding the control right now.
+ */
+declare function modRingArc(from01: number, to01: number): {
+    length: number;
+    offset: number;
+};
 /** Tempo-sync divisions, cycle length in beats (4/4 bars down to 1/32). */
 declare const LFO_SYNC_DIVISIONS: {
     label: string;
@@ -106,5 +124,12 @@ declare function lfoSyncedHz(division: number, bpm: number): number;
  * smooth (a slew that rounds corners toward sine and softens jitter steps).
  */
 declare const LFO_DEF: ModTypeDef;
+/**
+ * Sample & hold: a new random value at every rate tick, held until the
+ * next. Depth scales the throw, offset biases the whole signal, jitter
+ * randomizes each hold's length (drunken clock), and smooth is the same
+ * slew as the LFO's — at 0 hard steps, up high a wandering drift.
+ */
+declare const SH_DEF: ModTypeDef;
 
-export { LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModTypeDef, type ModulationAssignment, type ModulationParams, type ModulationSlot, type ModulationType, applyModulation, getModType, lfoSyncedHz, listModTypes, modColor, modKey, registerModType };
+export { LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModTypeDef, type ModulationAssignment, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, getModType, lfoSyncedHz, listModTypes, modColor, modKey, modRingArc, registerModType };

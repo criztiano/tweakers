@@ -139,6 +139,35 @@ export function applyModulation(
   return clamp(base + offset, min, max);
 }
 
+/* ── the modulation ring ──────────────────────────────────────────────── */
+
+/**
+ * The ring a modulated control wears: a dial drawn as an SVG circle of this
+ * radius, sweeping a knob's 270° from the bottom-left so a value sits at the
+ * angle the control's own dial would point.
+ */
+export const MOD_RING_RADIUS = 6;
+export const MOD_RING_CIRCUMFERENCE = 2 * Math.PI * MOD_RING_RADIUS;
+
+const RING_SWEEP_START = 135 / 360;
+const RING_SWEEP_LEN = 270 / 360;
+
+/**
+ * The arc between two values (each 0..1 of the control's span), as the dash
+ * pattern that draws it: SVG lays a circle's path clockwise from 3 o'clock,
+ * so a dash of `length` pushed to `offset` lands exactly on the arc.
+ * Feed it base and modulated value and the ring shows where the modulation
+ * is holding the control right now.
+ */
+export function modRingArc(from01: number, to01: number): { length: number; offset: number } {
+  const a = RING_SWEEP_START + clamp01(from01) * RING_SWEEP_LEN;
+  const b = RING_SWEEP_START + clamp01(to01) * RING_SWEEP_LEN;
+  return {
+    length: Math.abs(b - a) * MOD_RING_CIRCUMFERENCE,
+    offset: -Math.min(a, b) * MOD_RING_CIRCUMFERENCE,
+  };
+}
+
 /* ── LFO — the kit's built-in modulator type ──────────────────────────── */
 
 /** Tempo-sync divisions, cycle length in beats (4/4 bars down to 1/32). */
@@ -224,3 +253,66 @@ export const LFO_DEF: ModTypeDef = {
 };
 
 registerModType(LFO_DEF);
+
+/* ── S&H — stepped random, the second built-in type ───────────────────── */
+
+interface ShState {
+  /** Seconds left on the current hold; expiring draws the next sample. */
+  wait: number;
+  /** The held random value, -1..1 before depth. */
+  held: number;
+  /** Last output, for the smooth (slew) filter; null until the first tick. */
+  out: number | null;
+}
+
+/**
+ * Sample & hold: a new random value at every rate tick, held until the
+ * next. Depth scales the throw, offset biases the whole signal, jitter
+ * randomizes each hold's length (drunken clock), and smooth is the same
+ * slew as the LFO's — at 0 hard steps, up high a wandering drift.
+ */
+export const SH_DEF: ModTypeDef = {
+  type: 'sh',
+  label: 'S&H',
+  defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0 },
+  controls: [
+    { type: 'slider', path: 'rate', label: 'Rate', min: 0.1, max: 30, step: 0.01, unit: 'Hz' },
+    { type: 'slider', path: 'depth', label: 'Depth', min: 0, max: 1, step: 0.01 },
+    { type: 'slider', path: 'offset', label: 'Offset', min: -1, max: 1, step: 0.01 },
+    {
+      type: 'xy',
+      path: 'texture',
+      label: 'Texture',
+      xParam: 'jitter',
+      yParam: 'smooth',
+      xAxis: { min: 0, max: 1, step: 0.01, label: 'Jitter' },
+      yAxis: { min: 0, max: 1, step: 0.01, label: 'Smooth' },
+    },
+  ],
+  createState: (): ShState => ({ wait: 0, held: 0, out: null }),
+  tick(state, params, dt) {
+    const s = state as ShState;
+    s.wait -= dt;
+    if (s.out === null || s.wait <= 0) {
+      s.held = Math.random() * 2 - 1;
+      // Jitter stretches or shrinks each hold at random, up to ±90%.
+      const hz = Math.max(0.01, Number(params.rate) || 0);
+      const len = (1 / hz) * (1 + (Math.random() * 2 - 1) * clamp01(params.jitter) * 0.9);
+      s.wait = Math.max(0.005, len);
+    }
+
+    const offset = clamp(Number(params.offset) || 0, -1, 1);
+    let v = clamp(s.held * clamp01(params.depth) + offset, -1, 1);
+
+    const smooth = clamp01(params.smooth);
+    if (smooth > 0 && s.out !== null) {
+      // One-pole slew; tau grows with the square so the low half stays subtle.
+      const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
+      v = s.out + (v - s.out) * k;
+    }
+    s.out = v;
+    return v;
+  },
+};
+
+registerModType(SH_DEF);

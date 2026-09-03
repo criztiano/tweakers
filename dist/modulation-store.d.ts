@@ -129,6 +129,15 @@ declare class ModulationStoreClass {
     getSignal(index: number): number;
     /** The modulation's contribution to one control, in the control's units. */
     getOffset(panelId: string, path: string): number;
+    /**
+     * A modulatable control's bounds, or null when it has none (or its panel
+     * has not registered yet) — what a display needs to draw the modulation
+     * against the control's own span.
+     */
+    getBounds(panelId: string, path: string): {
+        min: number;
+        max: number;
+    } | null;
     /** One control's value with its modulation applied — the frame-time read. */
     getValue(panelId: string, path: string): number;
     /**

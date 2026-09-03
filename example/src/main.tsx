@@ -24,8 +24,9 @@ TweakStore.registerPanel('move-xy', 'Move Demo', {
 });
 
 // Modulation demo: an LFO in the first step slot breathing the Move demo's
-// Amount slider — a pulsing circle in the track row, the slot's colour
-// dotted on the control. The slider keeps its base value; read the live
+// Amount slider — a pulsing circle in the track row, and a ring on the
+// control whose arc runs from the slider's own value to where the
+// modulation is holding it. The slider keeps its base value; read the live
 // number with ModulationStore.getValue('move-xy', 'amount'). (Slots
 // persist across reloads, hence the guard.)
 if (!ModulationStore.getSlot(0)) {

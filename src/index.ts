@@ -27,6 +27,10 @@ export {
   getModType,
   listModTypes,
   LFO_DEF,
+  SH_DEF,
+  modRingArc,
+  MOD_RING_RADIUS,
+  MOD_RING_CIRCUMFERENCE,
   LFO_SYNC_DIVISIONS,
   lfoSyncedHz,
 } from './modulation-core';
