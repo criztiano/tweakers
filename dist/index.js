@@ -9333,7 +9333,10 @@ function MoveModCircle({ slot }) {
         pressAt.current = Date.now();
       },
       onPointerUp: () => {
-        if (Date.now() - pressAt.current < TAP_MS) ModulationStore.assignFromStep(slot.index);
+        const tapped = Date.now() - pressAt.current < TAP_MS;
+        if (tapped && ModulationStore.assignFromStep(slot.index).action !== "none") return;
+        const open = ModulationStore.getSettings();
+        if (tapped && open && open.index === slot.index) ModulationStore.closeSettings();
         else ModulationStore.openSettings(slot.index);
       },
       children: /* @__PURE__ */ jsx39(
