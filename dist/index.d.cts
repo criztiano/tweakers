@@ -1,5 +1,5 @@
 import * as react from 'react';
-import { ReactNode, CSSProperties, ReactElement } from 'react';
+import react__default, { CSSProperties, ReactElement, ReactNode } from 'react';
 
 /**
  * color-core — DOM-free color math shared by every framework port of the
@@ -1179,14 +1179,33 @@ interface MovePanelProps {
     productionEnabled?: boolean;
     /** Mirror only the named panels, in the order given — same option the bridge kit takes. */
     panels?: string | string[];
+    /**
+     * Where the panel sits. `viewport` (the default) portals it to `<body>` and
+     * pins it to the window's bottom edge — for apps whose content fills the
+     * screen. `flow` renders it inline, in normal document flow, wherever the
+     * host puts it — for sparse apps that want the content and the panel to
+     * read as one group instead of leaving a dead gap between them.
+     */
+    dock?: 'viewport' | 'flow';
 }
 /**
- * The Move's control surface docked to the bottom edge, laid out to Cri's
- * Figma spec (file USU9CW2vC3SrvKsnHVnYGi, node 802:319; slot components
- * 802:756 and 800:1737): a track row of four coloured markers, 8 dial
- * slots hosting slider ports, and the pad grid — toggle chips on the
- * first row, value chips on the second, at the same columns as their
- * hardware pads (move-layout keeps both surfaces in agreement).
+ * The Move's control surface, laid out to Cri's Figma spec (file
+ * USU9CW2vC3SrvKsnHVnYGi, node 802:319; slot components 802:756 and
+ * 800:1737): a track row of coloured markers — one per page, so an app
+ * with a single panel gets a single tick and name — 8 dial slots hosting
+ * slider ports, and the pad grid — toggle chips on the first row, value
+ * chips on the second, at the same columns as their hardware pads
+ * (move-layout keeps both surfaces in agreement).
+ *
+ * `dock` decides where it lives: `viewport` portals it to `<body>` and pins
+ * it to the window's bottom edge; `flow` leaves it inline where the host
+ * placed it. Both wear the same surface, padding and slot geometry.
+ *
+ * Only occupied slots/columns are shown: a column renders when it holds a
+ * dial, a toggle chip, or a value chip, at its full 8-wide slot size; the
+ * visible cluster centres in the panel and the header row shares its width,
+ * so the page name lines up with the first visible slot. Hidden columns
+ * are skipped, never renumbered — column i is still hardware knob i.
  *
  * Value chips substitute the dial in their column: hold one to peek at
  * its value in the dial slot, tap to latch it in — the chip inverts and
@@ -1198,13 +1217,57 @@ interface MovePanelProps {
  * Dragging the slot sets both axes; on the hardware the column's knob
  * turns X, and the volume knob turns Y while that knob is touched.
  *
- * A range control keeps the slider look but its fill is the span between
- * the two ends — dragging moves the nearer end, and on the hardware the
- * column's knob moves the low end while the volume knob moves the high
- * end while that knob is touched. Bipolar/origin sliders anchor their
- * fill at the origin and read as a signed offset.
+ * A range control takes a dial slot too: the bar fills between two handle
+ * ticks, and a drag grabs the nearest handle. On the hardware the column's
+ * knob edits the low handle and the volume knob edits the high one while
+ * that knob is touched — the xy pad's two-handed concept on one axis.
+ * Bipolar/origin sliders anchor their fill at the origin mark.
+ *
+ * A select with options takes a dial slot as a stepped enum dial: the bar
+ * splits into one cell per option, the active cell filled, and the readout
+ * shows the option's label. A drag picks the nearest cell.
+ *
+ * Holding Shift mid-drag switches any slot to fine mode: pointer travel
+ * applies at 0.1× relative to where shift went down, and releasing shift
+ * rebases at 1× so the value never jumps.
+ *
+ * Controls wired to a modulation slot wear that slot's colour as a dot, and
+ * the track row carries one circle per slot — the on-screen step button.
  */
-declare function MovePanel({ theme, productionEnabled, panels: only }: MovePanelProps): react.ReactPortal | null;
+declare function MovePanel({ theme, productionEnabled, panels: only, dock }: MovePanelProps): react.JSX.Element | null;
+
+interface MoveActionButtonProps {
+    /**
+     * The hardware button this action rides, which fixes the styling:
+     * `enter` is the wheel's click — track 4's green with the dot glyph —
+     * `capture` is the capture button — track 1's blue with the
+     * four-corners glyph — and `shift` is the shift key — the surface's
+     * light neutral, wearing the same dot in the pill's dark text colour.
+     * The pairing matches the physical Move, so the on-screen button
+     * always looks like the key that triggers it.
+     * Shift is reserved on the hardware and never claimable, so
+     * `kind="shift"` is purely visual: it runs no Move function, only its
+     * own `onPress` — the app wires the hardware gesture (a shift tap)
+     * itself.
+     */
+    kind: 'enter' | 'capture' | 'shift';
+    /** The label. */
+    children: react__default.ReactNode;
+    /** Runs after the attached Move function, on a screen click. */
+    onPress?: () => void;
+    disabled?: boolean;
+    className?: string;
+}
+/**
+ * A free-standing Move action button, placed wherever the view wants it —
+ * the same pill the panel header used to carry. Clicking it runs whatever
+ * the app attached to the matching hardware button (`jog_click` for enter,
+ * `capture` for capture) through MoveFunctions, and both screen clicks and
+ * hardware presses flash it briefly. Disabled buttons dim to 40% and run
+ * nothing. Every kind carries its hardware glyph — the shift pill wears the
+ * enter dot in black, since a shift tap confirms the same way.
+ */
+declare function MoveActionButton({ kind, children, onPress, disabled, className }: MoveActionButtonProps): react__default.JSX.Element;
 
 /**
  * The Move's control surface, as the bridge kit maps it (move-tweakers v0):
@@ -1213,7 +1276,9 @@ declare function MovePanel({ theme, productionEnabled, panels: only }: MovePanel
  * takes a dial slot too — the pad draws behind the label, its knob turns
  * the X axis, and the volume knob turns Y while that knob is touched. A
  * range control claims a slot the same way: its knob moves the low end,
- * the volume knob the high end while touched. Bounded params
+ * the volume knob the high end while touched. A select with real choices
+ * claims one as a stepped enum dial — the knob's 0..1 position maps to an
+ * option index, step 1/(count-1). Bounded params
  * beyond the 8 dials overflow into the pad grid as value chips — each one
  * related, by column, to the dial above it, which it can substitute (hold
  * to peek, tap to latch). The on-screen MovePanel mirrors this mapping so
@@ -1252,6 +1317,15 @@ declare function normalizeRangeDial(meta: ControlMeta, value: unknown): {
     lo: number;
     hi: number;
 };
+/** End positions 0..1 back to the control's real {min, max}, kit-identical —
+ *  clamped into the bounds and ordered, so crossed ends never come back reversed. */
+declare function denormalizeRangeDial(meta: ControlMeta, lo01: number, hi01: number): RangeValue;
+/** An enum dial's position 0..1 — the option's index over the last index.
+ *  An unknown (or missing) value reads as the first option, position 0. */
+declare function normalizeEnumDial(meta: ControlMeta, value: unknown): number;
+/** Dial position 0..1 back to the option at that step, kit-identical:
+ *  round(v01 * (count-1)), clamped into the options list. */
+declare function denormalizeEnumDial(meta: ControlMeta, v01: number): string;
 /** Where the fill anchors for a bipolar/origin slider, 0..1 (else 0). */
 declare function dialOrigin(meta: ControlMeta): number;
 
@@ -1338,23 +1412,126 @@ interface MoveFunctionPress {
     shift: boolean;
 }
 type MoveFunctionHandler = (press: MoveFunctionPress) => void;
+interface MoveFunctionOptions {
+    /**
+     * A screen name for the action, readable back via `label(name)`. The
+     * screen-side pills are MoveActionButtons now, which carry their own
+     * labels — this stays for kits and views that want a registry name.
+     */
+    label?: string;
+}
+type MoveFunctionRunListener = (name: MoveFunctionButton, press: MoveFunctionPress) => void;
 declare class MoveFunctionsClass {
     private handlers;
+    private labels;
     private listeners;
+    private runListeners;
     /**
      * Attach an action to a function button; returns a detach function.
      * One action per button — attaching again replaces the previous one.
      */
-    attach(name: MoveFunctionButton, handler: MoveFunctionHandler): () => void;
+    attach(name: MoveFunctionButton, handler: MoveFunctionHandler, options?: MoveFunctionOptions): () => void;
     /** The attached button names — what the kit claims on the hardware. */
     list(): MoveFunctionButton[];
+    /** The screen name an attachment carries, if any. */
+    label(name: MoveFunctionButton): string | undefined;
     /** Run the action attached to a button, if any. Called by the kit per press. */
     run(name: MoveFunctionButton, press?: Partial<MoveFunctionPress>): void;
     /** Notified when attachments change, so the kit can reconfigure the Move. */
     subscribe(listener: () => void): () => void;
+    /** Notified on every run — the MovePanel flashes its pills on hardware presses. */
+    subscribeRuns(listener: MoveFunctionRunListener): () => void;
     private notify;
 }
 declare const MoveFunctions: MoveFunctionsClass;
+
+/**
+ * The Move's volume-dial readout, offered to the app as a tiny display slot.
+ *
+ * The MovePanel keeps a dark pill in its header for whatever the volume
+ * dial currently means in the app — a playhead time, a zoom level, a gain.
+ * The app fills it:
+ *
+ *   import { MoveVolumeDisplay } from 'tweakers';
+ *
+ *   MoveVolumeDisplay.set({ label: 'gain', value: '-6.0 dB' });        // static
+ *   MoveVolumeDisplay.set({ getValue: () => formatTime(playhead) });   // live
+ *   MoveVolumeDisplay.clear();
+ *
+ * A static `value` renders as-is; a `getValue` is polled every frame while
+ * the panel is on screen, for readouts that move (a waveform playhead).
+ * When nothing is set, the pill disappears.
+ */
+interface MoveVolumeDisplayState {
+    /** A short name for what the dial edits — dimmed ahead of the value. */
+    label?: string;
+    /** A static readout string. */
+    value?: string;
+    /** A live readout, polled per animation frame while the panel is mounted. */
+    getValue?: () => string;
+}
+declare class MoveVolumeDisplayClass {
+    private state;
+    private listeners;
+    /** Show the pill with this readout — replaces any previous one. */
+    set(state: MoveVolumeDisplayState): void;
+    /** Hide the pill. */
+    clear(): void;
+    /** The current readout, or null when the pill is hidden. */
+    get(): MoveVolumeDisplayState | null;
+    /** Notified when the readout is set or cleared. */
+    subscribe(listener: () => void): () => void;
+    private notify;
+}
+declare const MoveVolumeDisplay: MoveVolumeDisplayClass;
+
+declare const ICON_MOVE_CAPTURE: {
+    viewBox: string;
+    path: string;
+};
+declare const ICON_MOVE_ENTER: {
+    viewBox: string;
+    circle: {
+        cx: string;
+        cy: string;
+        r: string;
+    };
+};
+
+/** A row: a plain string, or a value with a separate display label and an
+ * optional inline tag pinned to the row's right end. `muted` marks a row the
+ * host has nothing to act on — it still walks and selects, it just never
+ * brightens, so a list can carry information alongside its choices. */
+type ListScreenItem = string | {
+    value: string;
+    label?: string;
+    tag?: string;
+    muted?: boolean;
+};
+interface ListScreenProps {
+    /** Rows in display order. */
+    items: ListScreenItem[];
+    /** The selected item's value. */
+    value?: string;
+    /** Called with a row's value when it is clicked. */
+    onSelect?: (value: string) => void;
+    /** 400px with left-aligned rows, instead of the 200px centered default. */
+    wide?: boolean;
+    className?: string;
+    style?: CSSProperties;
+}
+/**
+ * The Move's dark list screen (Figma node "list screen"): a column of
+ * single-line rows on the display surface. Unselected rows sit dim at 22%
+ * text opacity; the selected row reads at full brightness on a soft
+ * highlight. Ten and a half rows show before the screen scrolls — the cut
+ * row is the hint that there's more below — and the view follows the
+ * selection as it moves. A `muted` row stays dim even when it is the
+ * selection: it is information the list carries, not a choice. Purely
+ * presentational: the host owns the selection state and any wheel or
+ * arrow-key stepping.
+ */
+declare function ListScreen({ items, value, onSelect, wide, className, style, }: ListScreenProps): ReactElement;
 
 /**
  * The modulation layer's shared ground — types, palette, math, and the
@@ -2844,4 +3021,4 @@ interface SpectrumAudioLevelMeterProps extends AudioLevelMeterBaseProps {
 type AudioLevelMeterProps = MonoAudioLevelMeterProps | StereoAudioLevelMeterProps | SpectrumAudioLevelMeterProps;
 declare function AudioLevelMeter(props: AudioLevelMeterProps): ReactElement;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AnalyserMode, AnalyserRow, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_MAX_HEIGHT, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, Checkbox, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, MIN_STOPS, MOD_COLORS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_DIALS, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_PADS, MOVE_SPECIAL_BUTTONS, MOVE_TRACKS, type ModControlMeta, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, Module, type MonoAudioLevelMeterProps, type MoveFunctionButton, type MoveFunctionHandler, type MoveFunctionPress, MoveFunctions, type MovePage, MovePanel, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type NumberConfig, NumberControl, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, TAB_PATH, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type TweakConfig, type TweakEvent, type TweakMode, type TweakPosition, TweakRoot, TweakStore, type TweakTheme, TweakTimeline, type TweakTimelineProps, type TweakTimelineValues, type TweakValue, type UseTweakTimelineOptions, type UseTweakersOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, applyModulation, buildModMovePage, buildMovePages, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, dialOrigin, displayHex, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, lfoSyncedHz, listModTypes, modColor, modKey, modRingArc, moveStop, nearestHandle, normToValue, normalizeCurveMarkers, normalizeDial, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeValue, normalizeXYDial, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, readComposition, redistributeWeight, registerModType, removeDriver, removeSegment, removeStop, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useTweakTimeline, useTweakers, valueFromPoint, valueToNorm, valueToPercent };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AnalyserMode, AnalyserRow, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_MAX_HEIGHT, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, Checkbox, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_DIALS, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_PADS, MOVE_SPECIAL_BUTTONS, MOVE_TRACKS, type ModControlMeta, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, Module, type MonoAudioLevelMeterProps, MoveActionButton, type MoveActionButtonProps, type MoveFunctionButton, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, type MovePage, MovePanel, MoveVolumeDisplay, type MoveVolumeDisplayState, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type NumberConfig, NumberControl, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, TAB_PATH, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type TweakConfig, type TweakEvent, type TweakMode, type TweakPosition, TweakRoot, TweakStore, type TweakTheme, TweakTimeline, type TweakTimelineProps, type TweakTimelineValues, type TweakValue, type UseTweakTimelineOptions, type UseTweakersOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, applyModulation, buildModMovePage, buildMovePages, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, denormalizeEnumDial, denormalizeRangeDial, dialOrigin, displayHex, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, lfoSyncedHz, listModTypes, modColor, modKey, modRingArc, moveStop, nearestHandle, normToValue, normalizeCurveMarkers, normalizeDial, normalizeEnumDial, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeValue, normalizeXYDial, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, readComposition, redistributeWeight, registerModType, removeDriver, removeSegment, removeStop, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useTweakTimeline, useTweakers, valueFromPoint, valueToNorm, valueToPercent };

@@ -8,6 +8,15 @@ export declare function isInputFocused(): boolean;
 export declare function getActiveModifier(e: KeyboardEvent | WheelEvent | MouseEvent): 'alt' | 'shift' | 'meta' | undefined;
 export declare function findControl(controls: ControlMeta[], path: string): ControlMeta | null;
 export declare const DRAG_SENSITIVITY = 4;
+export declare function fineDragValue(opts: {
+    startValue: number;
+    startPos: number;
+    pos: number;
+    extentPx: number;
+    min: number;
+    max: number;
+    factor?: number;
+}): number;
 export declare function formatInteractionLabel(interaction: string): string;
 export declare function formatSliderShortcut(sc: ShortcutConfig): string;
 export declare function formatToggleShortcut(sc: ShortcutConfig): string;

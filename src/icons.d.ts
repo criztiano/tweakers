@@ -27,4 +27,16 @@ export declare const ICON_PANEL: {
         r: string;
     }[];
 };
+export declare const ICON_MOVE_CAPTURE: {
+    viewBox: string;
+    path: string;
+};
+export declare const ICON_MOVE_ENTER: {
+    viewBox: string;
+    circle: {
+        cx: string;
+        cy: string;
+        r: string;
+    };
+};
 //# sourceMappingURL=icons.d.ts.map
