@@ -913,6 +913,25 @@ Panels become pages behind the track buttons (max 4), sliders and bounded number
 
 The on-screen panel shows only occupied slots: a column renders only when it has a dial, a toggle pad, or a value chip. Visible columns keep their full 8-wide slot size and centre in the panel, with the header aligned to the first one — an app with two dials gets a tight two-column cluster, not six empty sockets. Hidden columns are skipped, never renumbered, so each on-screen column still matches its hardware knob; an empty page shows the header alone. The track row follows the same rule: only tracks that carry a page get a tick and a name, so a one-panel app shows one label instead of three blank coloured lines. Each page keeps its own track colour whichever tracks are missing.
 
+### Pad columns
+
+By default pads pack left to right, which is right only when a page's pads happen to belong to its leftmost dials. `movePads` gives a page its own hardware layout — the column each pad sits in, by control path:
+
+```tsx
+useTweakers('Playback', config, {
+  movePads: {
+    'scan': 4, 'scanSpeed': 4,      // the scan switch and its rate, under the Speed dial
+    'reverse': 6,                   // under Play Mode
+    'sync': 7, 'rate': 7,           // under Tempo
+    'comb': 0,                      // an action: the row under the values
+  },
+});
+```
+
+A toggle takes the toggle row, a bounded number the value row, an action the row below those. Naming a column for a bounded number makes it a chip wherever it was declared, so it stops competing for a dial slot — a page can spend all 8 dials on the controls it wants big, whatever else it carries. Controls with no column keep packing left around the named ones, and a column already spoken for falls back to packing rather than dropping the control.
+
+Actions reach the pads **only** through `movePads` — every app has buttons, and none of them expect a hardware pad. Two-handed dials (`xy`, `range`) and enums can't be chips, so a column on one of those is ignored and it keeps its dial slot.
+
 ### Where the panel sits
 
 `dock` decides how the panel joins the page:

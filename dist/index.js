@@ -727,7 +727,7 @@ var TweakStoreClass = class {
     this.initTabValue(controls, values);
     this.initTransitionModes(config, "", values);
     this.overlayPersistedValues(target, values);
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, module: "_enabled" in config ? true : void 0, kind: options.kind });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, module: "_enabled" in config ? true : void 0, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -741,6 +741,7 @@ var TweakStoreClass = class {
     const hints = options.hints ?? existing.hints;
     const affordances = options.affordances ?? existing.affordances;
     const labels = options.labels ?? existing.labels;
+    const movePads = options.movePads ?? existing.movePads;
     const controls = this.parseConfig(config, "", shortcuts);
     this.applyControlExtras(controls, hints, affordances, labels);
     const controlsByPath = this.mapControlsByPath(controls);
@@ -765,7 +766,7 @@ var TweakStoreClass = class {
         nextValues[path] = mode;
       }
     }
-    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, module: "_enabled" in config ? true : void 0, kind: options.kind ?? existing.kind };
+    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, module: "_enabled" in config ? true : void 0, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
     const previousBaseValues = this.baseValues.get(id) ?? {};
@@ -1894,6 +1895,7 @@ function useTweakStorePanel(name, config, options = {}) {
   const serializedPersist = useSerialized(options.persist);
   const serializedHints = useSerialized(options.hints);
   const serializedLabels = useSerialized(options.labels);
+  const serializedMovePads = useSerialized(options.movePads);
   useEffect(() => {
     TweakStore.registerPanel(panelId, name, configRef.current, optionsRef.current.shortcuts, {
       retainOnUnmount: hasStableId,
@@ -1901,6 +1903,7 @@ function useTweakStorePanel(name, config, options = {}) {
       hints: optionsRef.current.hints,
       affordances: optionsRef.current.affordances,
       labels: optionsRef.current.labels,
+      movePads: optionsRef.current.movePads,
       kind: optionsRef.current.kind
     });
     return () => TweakStore.unregisterPanel(panelId);
@@ -1917,9 +1920,10 @@ function useTweakStorePanel(name, config, options = {}) {
       hints: optionsRef.current.hints,
       affordances: optionsRef.current.affordances,
       labels: optionsRef.current.labels,
+      movePads: optionsRef.current.movePads,
       kind: optionsRef.current.kind
     });
-  }, [hasStableId, panelId, name, serializedConfig, serializedShortcuts, serializedPersist, serializedHints, serializedLabels]);
+  }, [hasStableId, panelId, name, serializedConfig, serializedShortcuts, serializedPersist, serializedHints, serializedLabels, serializedMovePads]);
   useEffect(() => {
     const presets = optionsRef.current.presets;
     TweakStore.setPresetsHidden(panelId, presets === false);
@@ -1948,6 +1952,7 @@ function useTweakers(name, config, options) {
     hints: options?.hints,
     affordances: options?.affordances,
     labels: options?.labels,
+    movePads: options?.movePads,
     presets: options?.presets
   });
   useEffect2(() => {
@@ -9055,25 +9060,52 @@ function buildModMovePage(panel) {
     if (c.type === "toggle") toggles[Math.max(0, dials.length - 1)] = c;
     else if (c.type === "select" || isDial(c)) dials.push(c);
   }
-  return { panel, dials: dials.slice(0, MOVE_DIALS), toggles: toggles.slice(0, MOVE_PADS), values: [] };
+  return { panel, dials: dials.slice(0, MOVE_DIALS), toggles: toggles.slice(0, MOVE_PADS), values: [], actions: [] };
 }
+var padColumn = (panel, c) => {
+  const col = panel.movePads?.[c.path];
+  return typeof col === "number" && Number.isInteger(col) && col >= 0 && col < MOVE_PADS ? col : null;
+};
 function buildMovePages(panels) {
   return panels.filter((p) => p.kind === void 0).slice(0, MOVE_TRACKS).map((panel) => {
     const controls = flat(panel.controls);
-    const bounded = controls.filter(isDial);
+    const chipPlaced = (c) => padColumn(panel, c) !== null && !noChip(c);
+    const dials = controls.filter((c) => isDial(c) && !chipPlaced(c)).slice(0, MOVE_DIALS);
+    const toggles = [];
+    const values = [];
+    const actions = [];
+    const place = (row, c, col) => {
+      if (col !== null && row[col] === void 0) {
+        row[col] = c;
+        return;
+      }
+      for (let i = 0; i < MOVE_PADS; i++) {
+        if (row[i] === void 0) {
+          row[i] = c;
+          return;
+        }
+      }
+    };
+    for (const c of controls) {
+      const col = padColumn(panel, c);
+      if (c.type === "toggle") place(toggles, c, col);
+      else if (c.type === "action") {
+        if (col !== null) place(actions, c, col);
+      } else if (isDial(c) && !noChip(c) && !dials.includes(c)) place(values, c, col);
+    }
     return {
       panel,
-      dials: bounded.slice(0, MOVE_DIALS),
-      toggles: controls.filter((c) => c.type === "toggle").slice(0, MOVE_PADS),
-      /* xy pads, ranges and enums need a dial slot — past the 8 dials they don't fit a chip */
-      values: bounded.slice(MOVE_DIALS).filter((c) => !noChip(c)).slice(0, MOVE_PADS)
+      dials,
+      toggles: toggles.slice(0, MOVE_PADS),
+      values: values.slice(0, MOVE_PADS),
+      actions: actions.slice(0, MOVE_PADS)
     };
   });
 }
 function visibleColumns(page) {
   const cols = [];
   for (let i = 0; i < MOVE_DIALS; i++) {
-    if (page.dials[i] || page.toggles[i] || page.values[i]) cols.push(i);
+    if (page.dials[i] || page.toggles[i] || page.values[i] || page.actions[i]) cols.push(i);
   }
   return cols;
 }
@@ -9433,7 +9465,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       detail: { pageId: page.panel.id, path: meta.path, latched: !wasLatched }
     }));
   };
-  const padRows = [page.toggles, page.values, [], []];
+  const padRows = [page.toggles, page.values, page.actions, []];
   const visibleCols = visibleColumns(page);
   const volumeReading = liveValue ?? volume?.value;
   const headerCluster = volume && /* @__PURE__ */ jsx39("div", { className: "tweakers-move-actions", children: /* @__PURE__ */ jsxs34("div", { className: "tweakers-move-volume", children: [
@@ -9700,6 +9732,18 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 /* @__PURE__ */ jsx39("span", { className: "tweakers-move-pad-indicator" }),
                 /* @__PURE__ */ jsx39("span", { className: "tweakers-move-pad-title", children: meta.label })
               ]
+            },
+            meta.path
+          );
+        }
+        if (row === 2) {
+          return /* @__PURE__ */ jsx39(
+            "button",
+            {
+              className: "tweakers-move-pad",
+              "data-kind": "action",
+              onClick: () => TweakStore.triggerAction(page.panel.id, meta.path),
+              children: /* @__PURE__ */ jsx39("span", { className: "tweakers-move-pad-title", children: meta.label })
             },
             meta.path
           );

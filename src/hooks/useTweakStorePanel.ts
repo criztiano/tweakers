@@ -10,6 +10,8 @@ export interface UseTweakStorePanelOptions {
   affordances?: Record<string, AffordanceConfig>;
   /** Display label by control path, overriding the key-derived name. */
   labels?: Record<string, string>;
+  /** Move pad column by control path (see TweakStorePanelOptions.movePads). */
+  movePads?: Record<string, number>;
   /** Host-owned backing for the toolbar's preset UI (see PresetProvider), or
    * `false` to leave this panel's header bare of the toolbar entirely. */
   presets?: PresetProvider | false;
@@ -51,6 +53,7 @@ export function useTweakStorePanel(
   const serializedPersist = useSerialized(options.persist);
   const serializedHints = useSerialized(options.hints);
   const serializedLabels = useSerialized(options.labels);
+  const serializedMovePads = useSerialized(options.movePads);
 
   // Register on mount
   useEffect(() => {
@@ -60,6 +63,7 @@ export function useTweakStorePanel(
       hints: optionsRef.current.hints,
       affordances: optionsRef.current.affordances,
       labels: optionsRef.current.labels,
+      movePads: optionsRef.current.movePads,
       kind: optionsRef.current.kind,
     });
     return () => TweakStore.unregisterPanel(panelId);
@@ -78,10 +82,11 @@ export function useTweakStorePanel(
       hints: optionsRef.current.hints,
       affordances: optionsRef.current.affordances,
       labels: optionsRef.current.labels,
+      movePads: optionsRef.current.movePads,
       kind: optionsRef.current.kind,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasStableId, panelId, name, serializedConfig, serializedShortcuts, serializedPersist, serializedHints, serializedLabels]);
+  }, [hasStableId, panelId, name, serializedConfig, serializedShortcuts, serializedPersist, serializedHints, serializedLabels, serializedMovePads]);
 
   // Swap the preset provider after every render on purpose: its callbacks
   // close over host state and must never go stale. setPresetProvider only

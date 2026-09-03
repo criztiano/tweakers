@@ -69,6 +69,63 @@ describe('move layout', () => {
     assert.deepEqual(page.values.map((v) => v.path), ['dial7', 'dial8']);
   });
 
+  it('seats hand-placed pads in their own column, packing the rest around them', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, {
+      density: [0.5, 0, 1],
+      size: [0.5, 0, 1],
+      speed: [0.5, 0, 1],
+      tempo: [120, 30, 300],
+      scan: false,
+      scanSpeed: [0.5, 0, 2],
+      sync: false,
+      loose: false,
+    } as never, undefined, { movePads: { scan: 2, scanSpeed: 2, sync: 3 } });
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    // The placed chip leaves the dial pool even though slots were free.
+    assert.deepEqual(page.dials.map((d) => d.path), ['density', 'size', 'speed', 'tempo']);
+    assert.equal(page.toggles[2].path, 'scan');
+    assert.equal(page.toggles[3].path, 'sync');
+    assert.equal(page.toggles[0].path, 'loose');   /* unplaced: leftmost free */
+    assert.equal(page.toggles[1], undefined);
+    assert.equal(page.values[2].path, 'scanSpeed');
+    assert.equal(page.values[0], undefined);
+  });
+
+  it('puts hand-placed actions on the action row and leaves the rest off the surface', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, {
+      gain: [0.5, 0, 1],
+      comb: { type: 'action' },
+      randomize: { type: 'action' },
+    } as never, undefined, { movePads: { comb: 5 } });
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    assert.equal(page.actions[5].path, 'comb');
+    assert.equal(page.actions.filter(Boolean).length, 1);
+  });
+
+  it('ignores a pad column on a control that cannot be a chip', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, {
+      shape: { type: 'select', options: ['a', 'b'], default: 'a' },
+      band: { type: 'range', min: 0, max: 1 },
+    } as never, undefined, { movePads: { shape: 4, band: 5 } });
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    assert.deepEqual(page.dials.map((d) => d.path), ['shape', 'band']);
+    assert.equal(page.values.filter(Boolean).length, 0);
+  });
+
+  it('packs a pad whose column is taken rather than dropping it', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, {
+      first: false,
+      second: false,
+    } as never, undefined, { movePads: { first: 3, second: 3 } });
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    assert.equal(page.toggles[3].path, 'first');
+    assert.equal(page.toggles[0].path, 'second');
+  });
+
   it('normalizes and denormalizes xy pads per axis, kit-identically', () => {
     const meta = {
       type: 'xy', path: 'pad', label: 'Pad',
@@ -252,8 +309,18 @@ describe('move layout', () => {
     const late = { type: 'number', path: 'z', label: 'Z' } as never;
     const values: (typeof late)[] = [];
     values[3] = late;                           /* a chip alone at column 3 */
-    const page = { panel: {} as never, dials: [dial], toggles: [], values } as MovePage;
+    const page = { panel: {} as never, dials: [dial], toggles: [], values, actions: [] } as MovePage;
     assert.deepEqual(visibleColumns(page), [0, 3]);
+  });
+
+  it('counts an action pad as an occupied column', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, {
+      gain: [0.5, 0, 1],
+      comb: { type: 'action' },
+    } as never, undefined, { movePads: { comb: 4 } });
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    assert.deepEqual(visibleColumns(page), [0, 4]);
   });
 
   it('returns no visible columns for an empty page', () => {

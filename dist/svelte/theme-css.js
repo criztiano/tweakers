@@ -5871,8 +5871,11 @@ input.tweakers-list-item-title:focus {
   }
 }
 
-/* Page chip — the stacked-card double shadow; inverts when active. */
-.tweakers-move-pad[data-kind="page"] {
+/* Page chip — the stacked-card double shadow; inverts when active. An action
+   pad wears it too: on this surface a button is nearly always a way through
+   to somewhere, and the shadow is what tells it apart from a switch. */
+.tweakers-move-pad[data-kind="page"],
+.tweakers-move-pad[data-kind="action"] {
   box-shadow: -2px 2px 0 0 var(--move-bg), -3px 3px 0 0 var(--move-text);
 }
 

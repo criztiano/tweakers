@@ -435,7 +435,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     }));
   };
 
-  const padRows: (ControlMeta[])[] = [page.toggles, page.values, [], []];
+  const padRows: (ControlMeta[])[] = [page.toggles, page.values, page.actions, []];
 
   // Only occupied columns render — a column with a dial, a toggle chip, or a
   // value chip at its index. Indices stay the hardware knob numbers (hidden
@@ -741,6 +741,20 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           onClick={() => TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path])}
                         >
                           <span className="tweakers-move-pad-indicator" />
+                          <span className="tweakers-move-pad-title">{meta.label}</span>
+                        </button>
+                      );
+                    }
+                    // Action pads carry no value — a press just runs the
+                    // app's action, the same as the row's button on screen.
+                    if (row === 2) {
+                      return (
+                        <button
+                          key={meta.path}
+                          className="tweakers-move-pad"
+                          data-kind="action"
+                          onClick={() => TweakStore.triggerAction(page.panel.id, meta.path)}
+                        >
                           <span className="tweakers-move-pad-title">{meta.label}</span>
                         </button>
                       );

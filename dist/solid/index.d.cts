@@ -585,6 +585,8 @@ type PanelConfig = {
     affordances?: Record<string, AffordanceConfig>;
     /** Label overrides by control path, retained on the same terms as `hints`. */
     labels?: Record<string, string>;
+    /** Move pad columns by control path, retained on the same terms as `hints`. */
+    movePads?: Record<string, number>;
     /**
      * Config declared `_enabled` at its root — the whole panel is a module, and
      * its title carries the switch. Same idiom as a module folder, one level up.
@@ -684,6 +686,16 @@ type TweakStorePanelOptions = {
      * persisted entry and its shortcut binding.
      */
     labels?: Record<string, string>;
+    /**
+     * Which Move pad column a control sits in, by control path (0-7) — the
+     * page's hand-authored hardware layout. Without it the surface packs pads
+     * left to right, which is fine for a page whose pads happen to belong to
+     * the leftmost dials and wrong for every other page. With it, a pad sits
+     * under the dial it belongs to: toggles take the toggle row, bounded
+     * numbers the value row (leaving the dial pool however few dials the page
+     * has), actions the row under those.
+     */
+    movePads?: Record<string, number>;
     /** Timeline panels render in TweakTimeline; modulation panels are the Move's
      * modulator settings pages — both are filtered out of the panel dock. */
     kind?: 'timeline' | 'modulation';
