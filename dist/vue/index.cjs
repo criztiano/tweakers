@@ -781,7 +781,7 @@ var TweakStoreClass = class {
     this.initTabValue(controls, values);
     this.initTransitionModes(config, "", values);
     this.overlayPersistedValues(target, values);
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, module: "_enabled" in config ? true : void 0, kind: options.kind });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, module: "_enabled" in config ? true : void 0, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -795,6 +795,7 @@ var TweakStoreClass = class {
     const hints = options.hints ?? existing.hints;
     const affordances = options.affordances ?? existing.affordances;
     const labels = options.labels ?? existing.labels;
+    const movePads = options.movePads ?? existing.movePads;
     const controls = this.parseConfig(config, "", shortcuts);
     this.applyControlExtras(controls, hints, affordances, labels);
     const controlsByPath = this.mapControlsByPath(controls);
@@ -819,7 +820,7 @@ var TweakStoreClass = class {
         nextValues[path] = mode;
       }
     }
-    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, module: "_enabled" in config ? true : void 0, kind: options.kind ?? existing.kind };
+    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, module: "_enabled" in config ? true : void 0, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
     const previousBaseValues = this.baseValues.get(id) ?? {};

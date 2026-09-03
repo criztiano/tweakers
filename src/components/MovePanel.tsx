@@ -296,7 +296,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     }));
   };
 
-  const padRows: (ControlMeta[])[] = [page.toggles, page.values, [], []];
+  const padRows: (ControlMeta[])[] = [page.toggles, page.values, page.actions, []];
 
   const content = (
     <div className="tweakers-root tweakers-move-root" data-theme={theme}>
@@ -565,6 +565,20 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           onClick={() => TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path])}
                         >
                           <span className="tweakers-move-pad-indicator" />
+                          <span className="tweakers-move-pad-title">{meta.label}</span>
+                        </button>
+                      );
+                    }
+                    // Action pads carry no value — a press just runs the
+                    // app's action, the same as the row's button on screen.
+                    if (row === 2) {
+                      return (
+                        <button
+                          key={meta.path}
+                          className="tweakers-move-pad"
+                          data-kind="action"
+                          onClick={() => TweakStore.triggerAction(page.panel.id, meta.path)}
+                        >
                           <span className="tweakers-move-pad-title">{meta.label}</span>
                         </button>
                       );

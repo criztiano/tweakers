@@ -871,6 +871,25 @@ import('http://localhost:7787/kit.js')
 
 Panels become pages behind the track buttons (max 4), sliders and bounded numbers become the 8 dials, toggles become pads, and overflow bounded params become value chips (hold to peek, tap to latch).
 
+### Pad columns
+
+By default pads pack left to right, which is right only when a page's pads happen to belong to its leftmost dials. `movePads` gives a page its own hardware layout — the column each pad sits in, by control path:
+
+```tsx
+useTweakers('Playback', config, {
+  movePads: {
+    'scan': 4, 'scanSpeed': 4,      // the scan switch and its rate, under the Speed dial
+    'reverse': 6,                   // under Play Mode
+    'sync': 7, 'rate': 7,           // under Tempo
+    'comb': 0,                      // an action: the row under the values
+  },
+});
+```
+
+A toggle takes the toggle row, a bounded number the value row, an action the row below those. Naming a column for a bounded number makes it a chip wherever it was declared, so it stops competing for a dial slot — a page can spend all 8 dials on the controls it wants big, whatever else it carries. Controls with no column keep packing left around the named ones, and a column already spoken for falls back to packing rather than dropping the control.
+
+Actions reach the pads **only** through `movePads` — every app has buttons, and none of them expect a hardware pad. Two-handed dials (`xy`, `range`) and enums can't be chips, so a column on one of those is ignored and it keeps its dial slot.
+
 An `xy` control claims a dial slot as a 2D pad: the field draws behind the label (no slider at the bottom) and dragging it sets both axes. On the hardware, the column's knob turns the X axis — and while a finger rests on that knob, the volume knob turns Y. The pad honours the XYPad's options: `grid`/`density` draw the same grid overlay (on by default, 5×5), `snap` snaps drags to the grid, bipolar axes keep the escapable centre detent, and `returnToCenter` springs the pad back to its origin on release — on screen when the pointer lifts, and on the hardware when the finger leaves the knob.
 
 A `range` control claims a dial slot the same way: the fill becomes the span between its two ends and dragging moves the nearer end. On the hardware, the column's knob moves the low end — and while a finger rests on that knob, the volume knob moves the high end (the ends never cross). Bipolar and `origin` sliders keep their slot but anchor the fill at the origin and read as a signed offset (−50…+50) instead of 0–100.

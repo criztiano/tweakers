@@ -26,6 +26,9 @@ export interface MovePage {
   /** Overflow value chips — the hardware's value pad row (y=1). Value i sits
    *  at column i on both surfaces, pairing it with the dial in that column. */
   values: ControlMeta[];
+  /** Action pads — the row under the values (the device's bottom pad row).
+   *  Placed by hand only, through the panel's `movePads` map. */
+  actions: ControlMeta[];
 }
 
 const flat = (controls: ControlMeta[], out: ControlMeta[] = []): ControlMeta[] => {
@@ -64,8 +67,21 @@ export function buildModMovePage(panel: PanelConfig): MovePage {
     if (c.type === 'toggle') toggles[Math.max(0, dials.length - 1)] = c;
     else if (c.type === 'select' || isDial(c)) dials.push(c);
   }
-  return { panel, dials: dials.slice(0, MOVE_DIALS), toggles: toggles.slice(0, MOVE_PADS), values: [] };
+  return { panel, dials: dials.slice(0, MOVE_DIALS), toggles: toggles.slice(0, MOVE_PADS), values: [], actions: [] };
 }
+
+/**
+ * A hand-placed pad's column, or null when the panel leaves the control to
+ * the automatic packing. Out-of-range columns are ignored rather than
+ * clamped: silently stacking two pads on column 7 would read as a layout
+ * that works until you look at the hardware.
+ */
+const padColumn = (panel: PanelConfig, c: ControlMeta): number | null => {
+  const col = panel.movePads?.[c.path];
+  return typeof col === 'number' && Number.isInteger(col) && col >= 0 && col < MOVE_PADS
+    ? col
+    : null;
+};
 
 export function buildMovePages(panels: PanelConfig[]): MovePage[] {
   return panels
@@ -73,13 +89,46 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
     .slice(0, MOVE_TRACKS)
     .map((panel) => {
       const controls = flat(panel.controls);
-      const bounded = controls.filter(isDial);
+      // A bounded control sent to a pad is a value chip wherever it was
+      // declared, so it must not eat a dial slot on the way past. Two-handed
+      // dials and enums can't be chips at all, so a pad column on one of
+      // those is ignored and it keeps its slot.
+      const chipPlaced = (c: ControlMeta) => padColumn(panel, c) !== null && !noChip(c);
+      const dials = controls.filter((c) => isDial(c) && !chipPlaced(c)).slice(0, MOVE_DIALS);
+
+      const toggles: ControlMeta[] = [];
+      const values: ControlMeta[] = [];
+      const actions: ControlMeta[] = [];
+      // A named column is taken as read; everything else — and anything whose
+      // column is already spoken for — packs into the leftmost free one, which
+      // is the whole rule for a panel that names no columns at all.
+      const place = (row: ControlMeta[], c: ControlMeta, col: number | null) => {
+        if (col !== null && row[col] === undefined) {
+          row[col] = c;
+          return;
+        }
+        for (let i = 0; i < MOVE_PADS; i++) {
+          if (row[i] === undefined) {
+            row[i] = c;
+            return;
+          }
+        }
+      };
+      for (const c of controls) {
+        const col = padColumn(panel, c);
+        if (c.type === 'toggle') place(toggles, c, col);
+        // Actions reach the pads only when the page asks for them by column —
+        // every app has buttons, and none of them expect a hardware pad.
+        else if (c.type === 'action') { if (col !== null) place(actions, c, col); }
+        /* xy pads and ranges need a dial slot — past the 8 dials they don't fit a chip */
+        else if (isDial(c) && !noChip(c) && !dials.includes(c)) place(values, c, col);
+      }
       return {
         panel,
-        dials: bounded.slice(0, MOVE_DIALS),
-        toggles: controls.filter((c) => c.type === 'toggle').slice(0, MOVE_PADS),
-        /* xy pads and ranges need a dial slot — past the 8 dials they don't fit a chip */
-        values: bounded.slice(MOVE_DIALS).filter((c) => !noChip(c)).slice(0, MOVE_PADS),
+        dials,
+        toggles: toggles.slice(0, MOVE_PADS),
+        values: values.slice(0, MOVE_PADS),
+        actions: actions.slice(0, MOVE_PADS),
       };
     });
 }
