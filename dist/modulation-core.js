@@ -41,6 +41,7 @@ function registerModType(def) {
 }
 var getModType = (type) => registry.get(type);
 var listModTypes = () => [...registry.values()];
+var MOD_SETTINGS_PANEL = "mod-settings";
 var modKey = (panelId, path) => `${panelId}\0${path}`;
 var clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 var clamp01 = (v) => clamp(Number(v) || 0, 0, 1);
@@ -110,6 +111,7 @@ export {
   LFO_DEF,
   LFO_SYNC_DIVISIONS,
   MOD_COLORS,
+  MOD_SETTINGS_PANEL,
   MOD_SLOTS,
   applyModulation,
   getModType,

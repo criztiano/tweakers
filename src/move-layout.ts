@@ -47,9 +47,29 @@ const isDial = (c: ControlMeta) =>
 /** Two-handed dials and enums need a slot of their own, never a value chip. */
 const noChip = (c: ControlMeta) => c.type === 'xy' || c.type === 'range' || isEnumDial(c);
 
+/**
+ * The modulator-settings page (hold a step button): the type enum takes the
+ * first big slot, the modulator's own controls follow, and a toggle drops
+ * into the pad row under the dial declared just before it — that puts the
+ * LFO's tempo-sync pad directly below its rate dial. The kit mirrors this
+ * rule for the hardware page.
+ */
+export function buildModMovePage(panel: PanelConfig): MovePage {
+  const controls = flat(panel.controls);
+  const dials: ControlMeta[] = [];
+  const toggles: ControlMeta[] = [];
+  for (const c of controls) {
+    // The type select keeps its slot even while only one modulator type is
+    // registered (a 1-option select is not an enum dial by the kit's rule).
+    if (c.type === 'toggle') toggles[Math.max(0, dials.length - 1)] = c;
+    else if (c.type === 'select' || isDial(c)) dials.push(c);
+  }
+  return { panel, dials: dials.slice(0, MOVE_DIALS), toggles: toggles.slice(0, MOVE_PADS), values: [] };
+}
+
 export function buildMovePages(panels: PanelConfig[]): MovePage[] {
   return panels
-    .filter((p) => p.kind !== 'timeline')
+    .filter((p) => p.kind === undefined)
     .slice(0, MOVE_TRACKS)
     .map((panel) => {
       const controls = flat(panel.controls);

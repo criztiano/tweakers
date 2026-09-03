@@ -590,7 +590,7 @@ type PanelConfig = {
      * its title carries the switch. Same idiom as a module folder, one level up.
      */
     module?: boolean;
-    kind?: 'timeline';
+    kind?: 'timeline' | 'modulation';
 };
 type Listener = () => void;
 type ActionListener = (action: string) => void;
@@ -684,8 +684,9 @@ type TweakStorePanelOptions = {
      * persisted entry and its shortcut binding.
      */
     labels?: Record<string, string>;
-    /** Timeline panels render in TweakTimeline and are filtered out of the panel dock. */
-    kind?: 'timeline';
+    /** Timeline panels render in TweakTimeline; modulation panels are the Move's
+     * modulator settings pages — both are filtered out of the panel dock. */
+    kind?: 'timeline' | 'modulation';
 };
 declare class TweakStoreClass {
     private panels;

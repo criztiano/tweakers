@@ -886,7 +886,7 @@ var TweakStoreClass = class {
   }
   getPanels(kind) {
     const all = Array.from(this.panels.values());
-    if (kind === "panel") return all.filter((panel) => panel.kind !== "timeline");
+    if (kind === "panel") return all.filter((panel) => panel.kind === void 0);
     if (kind === "timeline") return all.filter((panel) => panel.kind === "timeline");
     return all;
   }
@@ -2960,6 +2960,7 @@ function registerModType(def) {
 }
 var getModType = (type) => registry.get(type);
 var listModTypes = () => [...registry.values()];
+var MOD_SETTINGS_PANEL = "mod-settings";
 var modKey = (panelId, path) => `${panelId}\0${path}`;
 var clamp4 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 var clamp013 = (v) => clamp4(Number(v) || 0, 0, 1);
@@ -3041,6 +3042,9 @@ var ModulationStoreClass = class {
     this.metas = /* @__PURE__ */ new Map();
     this.bpm = 120;
     this.touched = null;
+    this.settingsIndex = null;
+    this.settingsUnsub = null;
+    this.applyingSettings = false;
     this.structListeners = /* @__PURE__ */ new Set();
     this.frameListeners = /* @__PURE__ */ new Set();
     this.version = 0;
@@ -3119,6 +3123,7 @@ var ModulationStoreClass = class {
   /** Remove a slot's modulation and every assignment wired to it. */
   removeSlot(index) {
     if (!this.slots[index]) return;
+    if (this.settingsIndex === index) this.closeSettings();
     this.slots[index] = null;
     this.states.delete(index);
     this.signals[index] = 0;
@@ -3135,6 +3140,7 @@ var ModulationStoreClass = class {
    */
   assign(panelId, path, slot, amount = 0.5) {
     if (!this.slots[slot]) return false;
+    if (panelId === MOD_SETTINGS_PANEL) return false;
     if (TweakStore.getPanel(panelId) && !this.resolveMeta(panelId, path)) {
       console.warn(`[tweakers] "${path}" is not a bounded numeric control; it cannot take a modulation`);
       return false;
@@ -3193,6 +3199,107 @@ var ModulationStoreClass = class {
       return { action: "none", slot: this.getSlot(index) };
     }
     return { action: created ? "created" : "assigned", slot };
+  }
+  /* ── the settings page ────────────────────────────────────────────── */
+  /**
+   * Open a slot's settings (hold its step button): registers one hidden
+   * TweakStore panel (`mod-settings`, kind 'modulation') built from the
+   * modulator's own control list, with the type enum ahead of it. Every
+   * edit on that panel — screen or hardware, the kit syncs it like any
+   * page — flows back into the slot's params. Returns the panel id.
+   */
+  openSettings(index) {
+    const slot = this.slots[index];
+    const def = slot && getModType(slot.type);
+    if (!slot || !def) return null;
+    this.closeSettings();
+    this.settingsIndex = index;
+    this.registerSettingsPanel(slot, def);
+    this.settingsUnsub = TweakStore.subscribe(MOD_SETTINGS_PANEL, () => this.onSettingsChange());
+    this.changed();
+    return MOD_SETTINGS_PANEL;
+  }
+  closeSettings() {
+    if (this.settingsIndex === null) return;
+    this.settingsUnsub?.();
+    this.settingsUnsub = null;
+    this.settingsIndex = null;
+    TweakStore.unregisterPanel(MOD_SETTINGS_PANEL);
+    this.changed();
+  }
+  /** The open settings page, or null — the panel to render as the Move page. */
+  getSettings() {
+    return this.settingsIndex === null ? null : { index: this.settingsIndex, panelId: MOD_SETTINGS_PANEL };
+  }
+  registerSettingsPanel(slot, def) {
+    const config = {
+      type: {
+        type: "select",
+        options: listModTypes().map((d) => ({ value: d.type, label: d.label })),
+        default: slot.type
+      }
+    };
+    for (const c of def.controls) {
+      if (c.type === "slider") {
+        config[c.path] = {
+          type: "slider",
+          min: c.min ?? 0,
+          max: c.max ?? 1,
+          step: c.step,
+          unit: c.unit,
+          default: Number(slot.params[c.path]) || 0
+        };
+      } else if (c.type === "toggle") {
+        config[c.path] = !!slot.params[c.path];
+      } else if (c.type === "xy" && c.xParam && c.yParam) {
+        config[c.path] = {
+          type: "xy",
+          x: c.xAxis,
+          y: c.yAxis,
+          default: { x: Number(slot.params[c.xParam]) || 0, y: Number(slot.params[c.yParam]) || 0 }
+        };
+      }
+    }
+    this.applyingSettings = true;
+    TweakStore.registerPanel(
+      MOD_SETTINGS_PANEL,
+      `${def.label} ${slot.index + 1}`,
+      config,
+      void 0,
+      { kind: "modulation" }
+    );
+    this.applyingSettings = false;
+  }
+  /** A settings-panel edit — screen or hardware — lands in the slot's params. */
+  onSettingsChange() {
+    if (this.applyingSettings || this.settingsIndex === null) return;
+    const slot = this.slots[this.settingsIndex];
+    if (!slot) return;
+    const values = TweakStore.getValues(MOD_SETTINGS_PANEL);
+    const nextType = values.type;
+    if (nextType && nextType !== slot.type && getModType(nextType)) {
+      this.setSlotType(slot.index, nextType);
+      this.registerSettingsPanel(this.slots[slot.index], getModType(nextType));
+      return;
+    }
+    const def = getModType(slot.type);
+    if (!def) return;
+    const patch = {};
+    for (const c of def.controls) {
+      const v = values[c.path];
+      if (c.type === "xy" && c.xParam && c.yParam) {
+        const xy = v;
+        if (xy && typeof xy === "object") {
+          patch[c.xParam] = Number(xy.x) || 0;
+          patch[c.yParam] = Number(xy.y) || 0;
+        }
+      } else if (c.type === "toggle") {
+        patch[c.path] = !!v;
+      } else if (typeof v === "number" && Number.isFinite(v)) {
+        patch[c.path] = v;
+      }
+    }
+    this.updateSlotParams(slot.index, patch);
   }
   /* ── external sources ─────────────────────────────────────────────── */
   /** Offer an app-side modulator to the slots; returns an unregister fn. */
@@ -3311,6 +3418,7 @@ var ModulationStoreClass = class {
   }
   /** Wipe every slot, assignment, and the persisted shelf. */
   clear() {
+    this.closeSettings();
     this.slots.fill(null);
     this.assignments.clear();
     this.states.clear();
@@ -8676,8 +8784,18 @@ var flat = (controls, out = []) => {
 var isEnumDial = (c) => c.type === "select" && Array.isArray(c.options) && c.options.length > 1;
 var isDial = (c) => c.type === "slider" || c.type === "xy" || c.type === "range" || isEnumDial(c) || c.type === "number" && c.min != null && c.max != null;
 var noChip = (c) => c.type === "xy" || c.type === "range" || isEnumDial(c);
+function buildModMovePage(panel) {
+  const controls = flat(panel.controls);
+  const dials = [];
+  const toggles = [];
+  for (const c of controls) {
+    if (c.type === "toggle") toggles[Math.max(0, dials.length - 1)] = c;
+    else if (c.type === "select" || isDial(c)) dials.push(c);
+  }
+  return { panel, dials: dials.slice(0, MOVE_DIALS), toggles: toggles.slice(0, MOVE_PADS), values: [] };
+}
 function buildMovePages(panels) {
-  return panels.filter((p) => p.kind !== "timeline").slice(0, MOVE_TRACKS).map((panel) => {
+  return panels.filter((p) => p.kind === void 0).slice(0, MOVE_TRACKS).map((panel) => {
     const controls = flat(panel.controls);
     const bounded = controls.filter(isDial);
     return {
@@ -8778,7 +8896,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     return TweakStore.subscribeGlobal(() => setPanels(read()));
   }, [read]);
   const pages = buildMovePages(panels);
-  const page = pages[Math.min(track, Math.max(0, pages.length - 1))];
+  const modSettings = ModulationStore.getSettings();
+  const settingsPanel = modSettings ? TweakStore.getPanel(modSettings.panelId) : void 0;
+  const page = settingsPanel ? buildModMovePage(settingsPanel) : pages[Math.min(track, Math.max(0, pages.length - 1))];
   const pageId = page?.panel.id;
   const values = useSyncExternalStore9(
     useCallback19((cb) => pageId ? TweakStore.subscribe(pageId, cb) : () => {
@@ -8811,9 +8931,18 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   }, [pageId]);
   const pagesRef = useRef27(pages);
   pagesRef.current = pages;
+  const sawSettings = useRef27(false);
   useEffect20(() => {
     const onPage = (e) => {
       const id = e.detail?.pageId;
+      if (id === MOD_SETTINGS_PANEL) {
+        sawSettings.current = true;
+        return;
+      }
+      if (sawSettings.current) {
+        sawSettings.current = false;
+        ModulationStore.closeSettings();
+      }
       const i = pagesRef.current.findIndex((pg) => pg.panel.id === id);
       if (i >= 0) setTrack(i);
     };
@@ -8922,6 +9051,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
           "data-empty": pg ? void 0 : true,
           disabled: !pg,
           onClick: () => {
+            ModulationStore.closeSettings();
             setTrack(i);
             if (pg) window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
           },
@@ -9182,6 +9312,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
 }
 function MoveModCircle({ slot }) {
   const dotRef = useRef27(null);
+  const pressAt = useRef27(0);
   useEffect20(() => {
     if (typeof window === "undefined") return;
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
@@ -9198,7 +9329,13 @@ function MoveModCircle({ slot }) {
       type: "button",
       className: "tweakers-move-mod",
       title: `${slot.type.toUpperCase()} \xB7 step ${slot.index + 1}`,
-      onClick: () => ModulationStore.assignFromStep(slot.index),
+      onPointerDown: () => {
+        pressAt.current = Date.now();
+      },
+      onPointerUp: () => {
+        if (Date.now() - pressAt.current < TAP_MS) ModulationStore.assignFromStep(slot.index);
+        else ModulationStore.openSettings(slot.index);
+      },
       children: /* @__PURE__ */ jsx39(
         "span",
         {
@@ -13404,6 +13541,7 @@ export {
   ListControl,
   MIN_STOPS,
   MOD_COLORS,
+  MOD_SETTINGS_PANEL,
   MOD_SLOTS,
   MOD_TOUCH_GRACE_MS,
   MOVE_DIALS,
@@ -13444,6 +13582,7 @@ export {
   addStop,
   applyDetentAxis,
   applyModulation,
+  buildModMovePage,
   buildMovePages,
   buildSamplers,
   centerValue,

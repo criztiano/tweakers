@@ -5,7 +5,8 @@ import { ModulationStore } from '../store/ModulationStore';
 import { modColor, type ModulationSlot } from '../modulation-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from './TweakRoot';
-import { buildMovePages, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, dialOrigin, isEnumDial, enumOptionValue, enumOptionLabel, enumIndex, MOVE_TRACKS, MOVE_DIALS } from '../move-layout';
+import { buildMovePages, buildModMovePage, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, dialOrigin, isEnumDial, enumOptionValue, enumOptionLabel, enumIndex, MOVE_TRACKS, MOVE_DIALS } from '../move-layout';
+import { MOD_SETTINGS_PANEL } from '../modulation-core';
 import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValue, applyDetentAxis, type XYValue } from '../xy-pad-core';
 
 interface MovePanelProps {
@@ -102,7 +103,13 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   }, [read]);
 
   const pages = buildMovePages(panels);
-  const page = pages[Math.min(track, Math.max(0, pages.length - 1))];
+  // An open modulator-settings page takes the surface over; the track
+  // buttons put a regular page back (and close the settings with it).
+  const modSettings = ModulationStore.getSettings();
+  const settingsPanel = modSettings ? TweakStore.getPanel(modSettings.panelId) : undefined;
+  const page = settingsPanel
+    ? buildModMovePage(settingsPanel)
+    : pages[Math.min(track, Math.max(0, pages.length - 1))];
   const pageId = page?.panel.id;
 
   // Subscribe to the active page's value changes (per-panel channel only).
@@ -141,11 +148,23 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   }, [pageId]);
 
   // Hardware page switches steer the panel: the surfaces show one page.
+  // A settings page counts only after it has actually shown — page events
+  // stream continuously, so the old page's frames must not close a
+  // just-opened settings view before the hardware gets there.
   const pagesRef = useRef(pages);
   pagesRef.current = pages;
+  const sawSettings = useRef(false);
   useEffect(() => {
     const onPage = (e: Event) => {
       const id = (e as CustomEvent).detail?.pageId;
+      if (id === MOD_SETTINGS_PANEL) {
+        sawSettings.current = true;
+        return;
+      }
+      if (sawSettings.current) {
+        sawSettings.current = false;
+        ModulationStore.closeSettings();
+      }
       const i = pagesRef.current.findIndex((pg) => pg.panel.id === id);
       if (i >= 0) setTrack(i);
     };
@@ -293,6 +312,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   data-empty={pg ? undefined : true}
                   disabled={!pg}
                   onClick={() => {
+                    ModulationStore.closeSettings();
                     setTrack(i);
                     // Tell the hardware side; the kit relays it when the bridge is up.
                     if (pg) window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
@@ -585,11 +605,14 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
  * One modulation circle (spec: a 24px ring holding a 12px dot in the slot's
  * palette colour). The dot breathes with the slot's live signal — the same
  * motion the hardware step light shows — written straight to style per
- * frame so the panel never re-renders for it. A click is the on-screen
- * step press: with a control armed (just touched), it toggles the wire.
+ * frame so the panel never re-renders for it. The circle is the on-screen
+ * step button: a tap runs the assignment gesture (a just-touched control
+ * wires on or off), a hold opens the modulator's settings page — the same
+ * two moves as the hardware step.
  */
 function MoveModCircle({ slot }: { slot: ModulationSlot }) {
   const dotRef = useRef<HTMLSpanElement>(null);
+  const pressAt = useRef(0);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -607,7 +630,13 @@ function MoveModCircle({ slot }: { slot: ModulationSlot }) {
       type="button"
       className="tweakers-move-mod"
       title={`${slot.type.toUpperCase()} · step ${slot.index + 1}`}
-      onClick={() => ModulationStore.assignFromStep(slot.index)}
+      onPointerDown={() => {
+        pressAt.current = Date.now();
+      }}
+      onPointerUp={() => {
+        if (Date.now() - pressAt.current < TAP_MS) ModulationStore.assignFromStep(slot.index);
+        else ModulationStore.openSettings(slot.index);
+      }}
     >
       <span
         ref={dotRef}

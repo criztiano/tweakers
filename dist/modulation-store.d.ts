@@ -58,6 +58,9 @@ declare class ModulationStoreClass {
     private metas;
     private bpm;
     private touched;
+    private settingsIndex;
+    private settingsUnsub;
+    private applyingSettings;
     private structListeners;
     private frameListeners;
     private version;
@@ -98,6 +101,23 @@ declare class ModulationStoreClass {
         action: ModStepAction;
         slot: ModulationSlot | null;
     };
+    /**
+     * Open a slot's settings (hold its step button): registers one hidden
+     * TweakStore panel (`mod-settings`, kind 'modulation') built from the
+     * modulator's own control list, with the type enum ahead of it. Every
+     * edit on that panel — screen or hardware, the kit syncs it like any
+     * page — flows back into the slot's params. Returns the panel id.
+     */
+    openSettings(index: number): string | null;
+    closeSettings(): void;
+    /** The open settings page, or null — the panel to render as the Move page. */
+    getSettings(): {
+        index: number;
+        panelId: string;
+    } | null;
+    private registerSettingsPanel;
+    /** A settings-panel edit — screen or hardware — lands in the slot's params. */
+    private onSettingsChange;
     /** Offer an app-side modulator to the slots; returns an unregister fn. */
     registerSource(id: string, config?: ModulationSourceConfig): () => void;
     /** Push a source's signal (-1..1) at any rate; the engine mirrors the latest. */
