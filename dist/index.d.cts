@@ -819,7 +819,7 @@ type PanelConfig = {
     module?: boolean;
     kind?: 'timeline';
 };
-type Listener$1 = () => void;
+type Listener$2 = () => void;
 type ActionListener = (action: string) => void;
 /**
  * Non-value events emitted by controls (file picked, chip removed, list mutated).
@@ -960,8 +960,8 @@ declare class TweakStoreClass {
      */
     selectPanels(only?: string | string[]): PanelConfig[];
     getPanel(id: string): PanelConfig | undefined;
-    subscribe(panelId: string, listener: Listener$1): () => void;
-    subscribeGlobal(listener: Listener$1): () => void;
+    subscribe(panelId: string, listener: Listener$2): () => void;
+    subscribeGlobal(listener: Listener$2): () => void;
     subscribeActions(panelId: string, listener: ActionListener): () => void;
     triggerAction(panelId: string, path: string): void;
     subscribeEvents(panelId: string, listener: EventListener): () => void;
@@ -981,7 +981,7 @@ declare class TweakStoreClass {
     setDisabled(panelId: string, path: string, disabled: boolean): void;
     isDisabled(panelId: string, path: string): boolean;
     /** One channel for every app-pushed presentation change on a panel. */
-    subscribeControlState(panelId: string, listener: Listener$1): () => void;
+    subscribeControlState(panelId: string, listener: Listener$2): () => void;
     private notifyControlState;
     /**
      * Refresh curve rows' host-supplied presentation (sample function + markers)
@@ -1346,6 +1346,245 @@ declare class MoveFunctionsClass {
     private notify;
 }
 declare const MoveFunctions: MoveFunctionsClass;
+
+/**
+ * The modulation layer's shared ground — types, palette, math, and the
+ * modulator-type registry, all framework-neutral.
+ *
+ * A modulation lives in one of 16 slots, one per Move sequencer step button:
+ * touch a control and press a step to create the modulation there and wire
+ * the control to it. Each slot carries a modulator (an LFO, an envelope
+ * follower, a curve...) and a palette colour; the same colour marks the
+ * slot's circle in the track row and a dot on every control it drives.
+ *
+ * The modulated value NEVER enters the TweakStore: a control keeps the
+ * number the user set (the base), and the modulation is a live layer read
+ * at frame time through the ModulationStore. That keeps presets, the
+ * persistence shelf, and the bridge kit's diffing on the stored value —
+ * nothing loops, nothing thrashes — the same shape Pixture's audio mods
+ * proved out.
+ *
+ * Modulator types register through `registerModType`, so each type (LFO,
+ * envelope, curve, S&H, sequencer) plugs in independently: defaults, the
+ * settings-page controls, and a stateful `tick` that advances the signal.
+ * A slot can instead point at an external source (a DSP app's own LFO or
+ * follower) registered on the ModulationStore — same slot, same colours,
+ * but the engine only mirrors the signal it is given.
+ */
+/** One slot per Move sequencer step button. */
+declare const MOD_SLOTS = 16;
+/**
+ * The modulation palette, one colour per slot — sixteen hues around the
+ * wheel, tuned to sit with the Move's track colours on the dark panel.
+ */
+declare const MOD_COLORS: string[];
+/** A slot's palette colour — the one constant identity it keeps. */
+declare const modColor: (index: number) => string;
+type ModulationType = 'lfo' | 'envelope' | 'curve' | 'sh' | 'sequencer';
+/** Modulator settings — flat and JSON-safe, like TweakStore values. */
+type ModulationParams = Record<string, number | boolean>;
+interface ModulationSlot {
+    /** 0..15 — the Move step button that created it, and its palette index. */
+    index: number;
+    type: ModulationType;
+    params: ModulationParams;
+    /** External source id (a DSP app's own modulator); null = internal engine. */
+    source?: string | null;
+}
+interface ModulationAssignment {
+    panelId: string;
+    path: string;
+    /** The slot driving this control. */
+    slot: number;
+    /** Sweep depth 0..1 — at 1 the signal swings the control's full span. */
+    amount: number;
+}
+/**
+ * Settings-page control metadata — ControlMeta plus the xy mapping: an xy
+ * control on a modulator page edits two scalar params (xParam/yParam)
+ * rather than storing an {x, y} object.
+ */
+type ModControlMeta = ControlMeta & {
+    xParam?: string;
+    yParam?: string;
+};
+/**
+ * One modulator type, pluggable: LFO ships with the kit, the others
+ * (envelope, curve, S&H, sequencer) register through the same door.
+ * `tick` advances the modulator by `dt` seconds and returns the signal,
+ * always -1..1; `state` is whatever `createState` returned — the engine
+ * never looks inside it.
+ */
+interface ModTypeDef {
+    type: ModulationType;
+    label: string;
+    defaults: ModulationParams;
+    /** The settings-page layout, in slot order: dials, toggles, the xy pad. */
+    controls: ModControlMeta[];
+    createState(): unknown;
+    tick(state: unknown, params: ModulationParams, dt: number, bpm: number): number;
+}
+/** Plug a modulator type in; registering a type again replaces it. */
+declare function registerModType(def: ModTypeDef): void;
+declare const getModType: (type: ModulationType) => ModTypeDef | undefined;
+/** The registered types, registration order — the settings page's type enum. */
+declare const listModTypes: () => ModTypeDef[];
+/** Assignment map key — panel and path, joined on a character paths can't hold. */
+declare const modKey: (panelId: string, path: string) => string;
+/**
+ * A signal applied to a control: a bipolar sweep around the base value in
+ * the control's own units, clamped to its bounds — the control keeps its
+ * base, the modulation dances around it.
+ */
+declare function applyModulation(base: number, signal: number, amount: number, min: number, max: number): number;
+/** Tempo-sync divisions, cycle length in beats (4/4 bars down to 1/32). */
+declare const LFO_SYNC_DIVISIONS: {
+    label: string;
+    beats: number;
+}[];
+/** A synced LFO's frequency: the division's cycle length at this tempo. */
+declare function lfoSyncedHz(division: number, bpm: number): number;
+/**
+ * The LFO: a width-skewed triangle (0.5 symmetric, toward 0/1 a saw either
+ * way), phase-offset, with jitter (a random offset renewed each cycle) and
+ * smooth (a slew that rounds corners toward sine and softens jitter steps).
+ */
+declare const LFO_DEF: ModTypeDef;
+
+/**
+ * The modulation layer's runtime — a singleton beside the TweakStore.
+ *
+ * It owns the 16 slots, the control assignments, and the engine: one
+ * self-halting requestAnimationFrame loop (the TimelineStore's pattern)
+ * that advances every internal modulator and mirrors every external
+ * source once per frame. Modulated values NEVER enter the TweakStore —
+ * consumers pull them at frame time:
+ *
+ *   const speed = ModulationStore.getValue('fx', 'blob.speed');   // one path
+ *   const params = ModulationStore.getValues('fx');               // whole panel
+ *
+ * Both return the stored base values with the live modulation applied on
+ * top, clamped to each control's own bounds. Reading per frame is the
+ * contract — nothing is pushed, so frame ordering stays in the app's hands.
+ *
+ * DSP apps whose modulators live on the audio side register them instead:
+ *
+ *   ModulationStore.registerSource('lfo-1', { sample: () => native.lfo1 });
+ *   // or push at any rate: ModulationStore.setSourceValue('lfo-1', v);
+ *
+ * A slot pointing at a source shows its signal (circle, dots, step light)
+ * but applies nothing to values unless the source says `applies: true` —
+ * the app's own engine already did, at audio rate.
+ *
+ * The assignment gesture: touching a control (`noteTouch`, wired into the
+ * panel and the bridge kit) arms it for a few seconds; a step-button press
+ * (`assignFromStep`) then creates the slot's modulation if needed and
+ * toggles the control onto it.
+ *
+ * Slots and assignments persist to localStorage (fail-soft, like panel
+ * values), so a prototype's modulation setup survives a reload.
+ */
+/** A touched control stays armed for assignment this long. */
+declare const MOD_TOUCH_GRACE_MS = 4000;
+interface ModulationSourceConfig {
+    /** Pulled once per frame by the engine; omit it to push with `setSourceValue`. */
+    sample?: (slot: ModulationSlot) => number;
+    /**
+     * When true the library applies this source's signal to assigned values.
+     * DSP apps that modulate on their own side leave it false (display only).
+     */
+    applies?: boolean;
+}
+type ModStepAction = 'created' | 'assigned' | 'unassigned' | 'none';
+type Listener$1 = () => void;
+declare class ModulationStoreClass {
+    private slots;
+    private assignments;
+    private states;
+    private signals;
+    private sources;
+    private sourceValues;
+    private metas;
+    private bpm;
+    private touched;
+    private structListeners;
+    private frameListeners;
+    private version;
+    private rafId;
+    private lastTick;
+    constructor();
+    /** Create a modulation in a step's slot; an occupied slot is returned as-is. */
+    createSlot(index: number, type?: ModulationType): ModulationSlot | null;
+    getSlot(index: number): ModulationSlot | null;
+    /** The occupied slots, index order — the track row's circles. */
+    getSlots(): ModulationSlot[];
+    updateSlotParams(index: number, patch: ModulationParams): void;
+    /** Switch a slot's modulator type — fresh defaults, fresh state. */
+    setSlotType(index: number, type: ModulationType): void;
+    /** Point a slot at an external source (null returns it to the engine). */
+    setSlotSource(index: number, sourceId: string | null): void;
+    /** Remove a slot's modulation and every assignment wired to it. */
+    removeSlot(index: number): void;
+    /**
+     * Wire a control to a slot. Only bounded numeric controls (slider, number
+     * with min/max) can be modulated; anything else is refused. A control not
+     * yet registered is accepted on trust and resolves when its panel appears.
+     */
+    assign(panelId: string, path: string, slot: number, amount?: number): boolean;
+    unassign(panelId: string, path: string): void;
+    getAssignment(panelId: string, path: string): ModulationAssignment | undefined;
+    getAssignments(): ModulationAssignment[];
+    assignmentsForSlot(index: number): ModulationAssignment[];
+    setAmount(panelId: string, path: string, amount: number): void;
+    /** A finger on a control — panel pointer, hardware knob. Arms assignment. */
+    noteTouch(panelId: string, path: string): void;
+    /**
+     * A step-button press (hardware step or on-screen circle): with a control
+     * armed, create the slot's modulation if needed and toggle the control
+     * onto it. Returns what happened, for lights and readouts.
+     */
+    assignFromStep(index: number): {
+        action: ModStepAction;
+        slot: ModulationSlot | null;
+    };
+    /** Offer an app-side modulator to the slots; returns an unregister fn. */
+    registerSource(id: string, config?: ModulationSourceConfig): () => void;
+    /** Push a source's signal (-1..1) at any rate; the engine mirrors the latest. */
+    setSourceValue(id: string, value: number): void;
+    getSources(): string[];
+    setTempo(bpm: number): void;
+    getTempo(): number;
+    /** A slot's live signal, -1..1. */
+    getSignal(index: number): number;
+    /** The modulation's contribution to one control, in the control's units. */
+    getOffset(panelId: string, path: string): number;
+    /** One control's value with its modulation applied — the frame-time read. */
+    getValue(panelId: string, path: string): number;
+    /**
+     * A panel's values with every modulation applied — a fresh snapshot per
+     * call, meant to be pulled once per frame in place of `TweakStore.getValues`.
+     */
+    getValues(panelId: string): Record<string, unknown>;
+    /** Structural changes: slots, assignments, sources, tempo. */
+    subscribe(listener: Listener$1): () => void;
+    /** Every engine frame — for pulsing circles, dots, and step lights. */
+    subscribeFrames(listener: Listener$1): () => void;
+    /** Bumped on every structural change — a stable snapshot for UI stores. */
+    getVersion(): number;
+    /**
+     * Advance every slot by `dt` seconds and refresh the signals. The RAF
+     * loop calls this per frame; headless hosts and tests may drive it
+     * directly with their own clock.
+     */
+    tick(dt: number): void;
+    /** Wipe every slot, assignment, and the persisted shelf. */
+    clear(): void;
+    private ensureLoop;
+    private loop;
+    private resolveMeta;
+    private changed;
+}
+declare const ModulationStore: ModulationStoreClass;
 
 /**
  * Fail-soft browser persistence shared by TweakStore (panel values) and
@@ -2540,4 +2779,4 @@ interface SpectrumAudioLevelMeterProps extends AudioLevelMeterBaseProps {
 type AudioLevelMeterProps = MonoAudioLevelMeterProps | StereoAudioLevelMeterProps | SpectrumAudioLevelMeterProps;
 declare function AudioLevelMeter(props: AudioLevelMeterProps): ReactElement;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AnalyserMode, AnalyserRow, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_MAX_HEIGHT, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, Checkbox, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, MIN_STOPS, MOVE_DIALS, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_PADS, MOVE_SPECIAL_BUTTONS, MOVE_TRACKS, Module, type MonoAudioLevelMeterProps, type MoveFunctionButton, type MoveFunctionHandler, type MoveFunctionPress, MoveFunctions, type MovePage, MovePanel, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type NumberConfig, NumberControl, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, TAB_PATH, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type TweakConfig, type TweakEvent, type TweakMode, type TweakPosition, TweakRoot, TweakStore, type TweakTheme, TweakTimeline, type TweakTimelineProps, type TweakTimelineValues, type TweakValue, type UseTweakTimelineOptions, type UseTweakersOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, buildMovePages, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, dialOrigin, displayHex, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, moveStop, nearestHandle, normToValue, normalizeCurveMarkers, normalizeDial, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeValue, normalizeXYDial, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, readComposition, redistributeWeight, removeDriver, removeSegment, removeStop, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useTweakTimeline, useTweakers, valueFromPoint, valueToNorm, valueToPercent };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AnalyserMode, AnalyserRow, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_MAX_HEIGHT, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, Checkbox, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, MIN_STOPS, MOD_COLORS, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_DIALS, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_PADS, MOVE_SPECIAL_BUTTONS, MOVE_TRACKS, type ModControlMeta, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, Module, type MonoAudioLevelMeterProps, type MoveFunctionButton, type MoveFunctionHandler, type MoveFunctionPress, MoveFunctions, type MovePage, MovePanel, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type NumberConfig, NumberControl, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, TAB_PATH, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type TweakConfig, type TweakEvent, type TweakMode, type TweakPosition, TweakRoot, TweakStore, type TweakTheme, TweakTimeline, type TweakTimelineProps, type TweakTimelineValues, type TweakValue, type UseTweakTimelineOptions, type UseTweakersOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, applyModulation, buildMovePages, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, dialOrigin, displayHex, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, lfoSyncedHz, listModTypes, modColor, modKey, moveStop, nearestHandle, normToValue, normalizeCurveMarkers, normalizeDial, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeValue, normalizeXYDial, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, readComposition, redistributeWeight, registerModType, removeDriver, removeSegment, removeStop, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useTweakTimeline, useTweakers, valueFromPoint, valueToNorm, valueToPercent };

@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { TweakRoot, TweakStore, MovePanel, MoveFunctions } from 'tweakers';
+import { TweakRoot, TweakStore, MovePanel, MoveFunctions, ModulationStore } from 'tweakers';
 import 'tweakers/styles.css';
 import { PhotoStack } from './PhotoStack';
 import { Release } from './Release';
@@ -22,6 +22,16 @@ TweakStore.registerPanel('move-xy', 'Move Demo', {
   bias: { type: 'slider', min: -1, max: 1, default: 0, bipolar: true },
   amount: [0.5, 0, 1],
 });
+
+// Modulation demo: an LFO in the first step slot breathing the Move demo's
+// Amount slider — a pulsing circle in the track row, the slot's colour
+// dotted on the control. The slider keeps its base value; read the live
+// number with ModulationStore.getValue('move-xy', 'amount'). (Slots
+// persist across reloads, hence the guard.)
+if (!ModulationStore.getSlot(0)) {
+  ModulationStore.createSlot(0);
+  ModulationStore.assign('move-xy', 'amount', 0, 0.6);
+}
 
 // Function buttons: the Move's Copy puts every panel's current values on the
 // clipboard as JSON. Unattached buttons keep the surface built-ins.

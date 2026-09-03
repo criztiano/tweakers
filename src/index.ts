@@ -13,6 +13,31 @@ export type { MovePage } from './move-layout';
 export { MoveFunctions, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_SPECIAL_BUTTONS } from './move-functions';
 export type { MoveFunctionButton, MoveFunctionPress, MoveFunctionHandler } from './move-functions';
 
+// Modulation layer — slots, assignments, the engine, and the type registry
+export { ModulationStore, MOD_TOUCH_GRACE_MS } from './store/ModulationStore';
+export type { ModulationSourceConfig, ModStepAction } from './store/ModulationStore';
+export {
+  MOD_SLOTS,
+  MOD_COLORS,
+  modColor,
+  modKey,
+  applyModulation,
+  registerModType,
+  getModType,
+  listModTypes,
+  LFO_DEF,
+  LFO_SYNC_DIVISIONS,
+  lfoSyncedHz,
+} from './modulation-core';
+export type {
+  ModulationType,
+  ModulationParams,
+  ModulationSlot,
+  ModulationAssignment,
+  ModTypeDef,
+  ModControlMeta,
+} from './modulation-core';
+
 // Timeline (prototype)
 export { useTweakTimeline } from './hooks/useTweakTimeline';
 export type {

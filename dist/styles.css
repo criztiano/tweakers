@@ -563,6 +563,24 @@
   transform: scale(1.75);
 }
 
+/* ── Modulation dot ──────────────────────────────────────────────────────
+   A control wired to a modulation slot wears the slot's palette colour in
+   its top-right corner — panel-scaled (6px) beside the Move panel's 12px,
+   clear of the affordance dot's bottom-right spot. */
+.tweakers-control-tip[data-mod] {
+  position: relative;
+}
+
+.tweakers-mod-dot {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
 /* On the dot, not the button: outlining the 16px hotspot would read as a box
    floating in the control's corner. */
 .tweakers-affordance-dot:focus-visible {
@@ -5201,12 +5219,21 @@ input.tweakers-list-item-title:focus {
   align-items: flex-start;
 }
 
-/* Track row — four coloured markers with the panel names (802:321). */
+/* Track row — four coloured markers with the panel names (802:321), the
+   modulation circles dead-centre, and room on the right for the volume
+   readout to come. The 1fr flanks keep the circles centred on the row. */
 .tweakers-move-tracks {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  width: 100%;
+  padding: 4px;
+}
+
+.tweakers-move-tracks-group {
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  padding: 4px;
 }
 
 .tweakers-move-track {
@@ -5245,6 +5272,60 @@ input.tweakers-list-item-title:focus {
 
 .tweakers-move-track[data-active="true"] .tweakers-move-track-label {
   opacity: 1;
+}
+
+/* Modulation circles — one per occupied slot: a 24px ring holding a 12px
+   dot in the slot's palette colour. The dot's scale follows the live
+   signal (written per frame from JS); the ring stays put. The same dot
+   marks every control the slot drives: absolute in a dial slot's corner,
+   inline ahead of a pad chip's title. */
+.tweakers-move-mods {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.tweakers-move-mod {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--move-slot);
+  border: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.tweakers-move-mod-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-mod-dot {
+    transform: none !important;
+  }
+}
+
+.tweakers-move-dial-mod {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.tweakers-move-pad-mod {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  pointer-events: none;
 }
 
 /* Dial + pad grid — one column, 4px rhythm (802:334). */
