@@ -1062,6 +1062,12 @@ var TweakStoreClass = class {
               changed = true;
             }
           }
+        } else if (this.isSelectConfig(value) && value.preview) {
+          const control = this.findControlByPath(panel.controls, path);
+          if (control?.type === "select" && control.preview !== value.preview) {
+            control.preview = value.preview;
+            changed = true;
+          }
         } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
           visit(value, path);
         }
@@ -1353,7 +1359,7 @@ var TweakStoreClass = class {
       } else if (this.isActionConfig(value)) {
         controls.push({ type: "action", path, label: value.label || label, caption: value.caption });
       } else if (this.isSelectConfig(value)) {
-        controls.push({ type: "select", path, label, options: value.options, display: value.display });
+        controls.push({ type: "select", path, label, options: value.options, display: value.display, preview: value.preview });
       } else if (this.isColorConfig(value)) {
         controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {
@@ -9139,6 +9145,7 @@ function normalizeXYDial(meta, value) {
 }
 var enumOptionValue = (o) => typeof o === "string" ? o : o.value;
 var enumOptionLabel = (o) => typeof o === "string" ? o : o.label ?? o.value;
+var enumOptionIcon = (o) => typeof o === "string" ? null : o.icon ?? null;
 function enumIndex(meta, value) {
   const i = (meta.options ?? []).findIndex((o) => enumOptionValue(o) === value);
   return Math.max(0, i);
@@ -14213,6 +14220,7 @@ export {
   denormalizeRangeDial,
   dialOrigin,
   displayHex,
+  enumOptionIcon,
   flipDriver,
   flipDriverX,
   flipDriverY,

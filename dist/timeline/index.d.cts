@@ -90,13 +90,29 @@ type ActionConfig = {
 };
 type SelectConfig = {
     type: 'select';
+    /**
+     * An option may name an `icon` from `LUCIDE_ICONS` — the Move slot draws it
+     * instead of making you read the mode name off a controller.
+     */
     options: (string | {
         value: string;
         label: string;
+        icon?: string;
     })[];
     default?: string;
     /** 'segmented' renders the options as an inline segmented control instead of a dropdown. Suits 2–4 short options. */
     display?: 'dropdown' | 'segmented';
+    /**
+     * The shape an option stands for: `t` in [0,1] → y, auto-fitted and drawn
+     * in the Move slot in place of the option's name, which moves to a small
+     * tag at the top. Return `null` for options that have no shape.
+     *
+     * A closure, so — like a curve row's `sample` — it is invisible to the
+     * serialized config diff and is refreshed through `syncCurveConfigs`. That
+     * is what lets the drawing follow the app's other controls: a pitch arc's
+     * preview tracks its bell and flip while the picker stays a picker.
+     */
+    preview?: (value: string) => ((t: number) => number) | null | undefined;
 };
 type ColorConfig = {
     type: 'color';

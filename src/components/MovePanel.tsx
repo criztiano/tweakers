@@ -5,7 +5,9 @@ import { ModulationStore } from '../store/ModulationStore';
 import { modColor, MOD_SETTINGS_PANEL, type ModulationSlot } from '../modulation-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from './TweakRoot';
-import { buildMovePages, buildModMovePage, visibleColumns, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, dialOrigin, isEnumDial, enumOptionLabel, enumIndex, MOVE_DIALS } from '../move-layout';
+import { buildMovePages, buildModMovePage, visibleColumns, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, dialOrigin, isEnumDial, enumOptionLabel, enumOptionIcon, enumIndex, MOVE_DIALS } from '../move-layout';
+import { plotCurve } from '../curve-preview-core';
+import { LUCIDE_ICONS } from '../icons';
 import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValue, applyDetentAxis, type XYValue } from '../xy-pad-core';
 import { nearestHandle, type RangeValue } from '../range-slider-core';
 import { fineDragValue } from '../shortcut-utils';
@@ -791,6 +793,53 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // Flow docking stays in the host's tree, so the app can centre content and
   // panel as one group; viewport docking portals out and pins to the edge.
   return dock === 'flow' ? content : createPortal(content, document.body);
+}
+
+/** Enough points to read a bell or a bounce at slot width, and no more. */
+const MOVE_SHAPE_SAMPLES = 64;
+
+/**
+ * The selected option's shape as an SVG path, or null when the select has no
+ * `preview` — or that option has no shape. Auto-fitted through the same core
+ * the curve row uses, so a bipolar arc and a 0..1 envelope both fill the box.
+ */
+function optionOutline(meta: ControlMeta, value: string): string | null {
+  if (!meta.preview) return null;
+  let sample: ((t: number) => number) | null | undefined;
+  try {
+    sample = meta.preview(value);
+  } catch {
+    return null;                    /* a throwing preview draws nothing */
+  }
+  if (typeof sample !== 'function') return null;
+  const d = plotCurve(sample, { count: MOVE_SHAPE_SAMPLES })
+    .segments
+    .map((seg) =>
+      seg
+        .map((pt, i) => `${i ? 'L' : 'M'} ${(pt.t * 100).toFixed(2)} ${((1 - pt.v) * 100).toFixed(2)}`)
+        .join(' '))
+    .join(' ');
+  return d || null;
+}
+
+/** One glyph from the bundled lucide subset; an unknown name draws nothing. */
+function LucideGlyph({ name }: { name: string }) {
+  const paths = LUCIDE_ICONS[name];
+  if (!paths) return null;
+  return (
+    <svg
+      className="tweakers-move-glyph"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {paths.map((d) => <path key={d} d={d} />)}
+    </svg>
+  );
 }
 
 /**

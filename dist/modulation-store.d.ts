@@ -1,5 +1,5 @@
 import { ModulationSlot, ModulationType, ModulationParams, ModulationAssignment } from './modulation-core.js';
-import './TweakStore-DJZN26nW.js';
+import './TweakStore-BRgese49.js';
 import './range-slider-core.js';
 
 /**
