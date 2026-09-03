@@ -5594,6 +5594,77 @@ input.tweakers-list-item-title:focus {
   text-overflow: ellipsis;
 }
 
+/* An enum slot's current option, named on a tag at the top: with the shape
+   drawn below — or a glyph standing in for the mode — the name is a caption,
+   not the headline. Same pill as the substitution tag, sat on the darker
+   ground so it reads over the drawing. */
+.tweakers-move-dial-tag {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 16px);
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--move-bg);
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.tweakers-move-dial-tag-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Option glyph — lucide at caption size, on the tag. */
+.tweakers-move-glyph {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+/* The shape itself, filling the slot between the tag and the track: faint at
+   rest so the slot still reads as a row of names, full strength under a
+   finger — the same rise the xy pad's preview makes. */
+.tweakers-move-dial-shape {
+  position: absolute;
+  inset: 26px 10px 24px;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.tweakers-move-dial-shape path {
+  fill: none;
+  stroke: var(--move-text);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.5;
+  transition: opacity 0.12s;
+}
+
+.tweakers-move-dial:hover .tweakers-move-dial-shape path,
+.tweakers-move-dial[data-active] .tweakers-move-dial-shape path {
+  opacity: 1;
+}
+
+/* The drawing IS the value, so the centred name gets out of its way as soon
+   as the slot is touched — and never returns as a second copy of the tag. */
+.tweakers-move-dial[data-shape] .tweakers-move-dial-label {
+  z-index: 1;
+  text-shadow: 0 0 6px var(--move-chip), 0 0 6px var(--move-chip);
+}
+
 .tweakers-move-dial-bar {
   position: absolute;
   left: 8px;

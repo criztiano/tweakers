@@ -187,11 +187,14 @@ export function normalizeXYDial(meta: ControlMeta, value: unknown): { x: number;
   return { x: norm01(v.x, xAxis.min, xAxis.max), y: norm01(v.y, yAxis.min, yAxis.max) };
 }
 
-/** Enum dial helpers — options may be strings or { value, label }. */
+/** Enum dial helpers — options may be strings or { value, label, icon }. */
 export const enumOptionValue = (o: string | { value: string; label?: string }) =>
   typeof o === 'string' ? o : o.value;
 export const enumOptionLabel = (o: string | { value: string; label?: string }) =>
   typeof o === 'string' ? o : (o.label ?? o.value);
+/** The option's glyph name, or null — a bare string option never has one. */
+export const enumOptionIcon = (o: string | { icon?: string }): string | null =>
+  typeof o === 'string' ? null : (o.icon ?? null);
 export function enumIndex(meta: ControlMeta, value: unknown): number {
   const i = (meta.options ?? []).findIndex((o) => enumOptionValue(o as never) === value);
   return Math.max(0, i);

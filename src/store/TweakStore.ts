@@ -57,10 +57,25 @@ export type ActionConfig = {
 
 export type SelectConfig = {
   type: 'select';
-  options: (string | { value: string; label: string })[];
+  /**
+   * An option may name an `icon` from `LUCIDE_ICONS` — the Move slot draws it
+   * instead of making you read the mode name off a controller.
+   */
+  options: (string | { value: string; label: string; icon?: string })[];
   default?: string;
   /** 'segmented' renders the options as an inline segmented control instead of a dropdown. Suits 2–4 short options. */
   display?: 'dropdown' | 'segmented';
+  /**
+   * The shape an option stands for: `t` in [0,1] → y, auto-fitted and drawn
+   * in the Move slot in place of the option's name, which moves to a small
+   * tag at the top. Return `null` for options that have no shape.
+   *
+   * A closure, so — like a curve row's `sample` — it is invisible to the
+   * serialized config diff and is refreshed through `syncCurveConfigs`. That
+   * is what lets the drawing follow the app's other controls: a pitch arc's
+   * preview tracks its bell and flip while the picker stays a picker.
+   */
+  preview?: (value: string) => ((t: number) => number) | null | undefined;
 };
 
 export type ColorConfig = {
@@ -486,7 +501,9 @@ export type ControlMeta = {
   tab?: boolean;
   /** The synthetic segmented select driving `_tab` — it renders as the panel's tab bar, never as a row. */
   tabBar?: boolean;
-  options?: (string | { value: string; label: string })[];
+  options?: (string | { value: string; label: string; icon?: string })[];
+  /** Select's per-option shape sampler — swapped in place by syncCurveConfigs. */
+  preview?: (value: string) => ((t: number) => number) | null | undefined;
   /** Select's rendering mode, from the SelectConfig form. */
   display?: 'dropdown' | 'segmented';
   placeholder?: string;
@@ -1241,6 +1258,14 @@ class TweakStoreClass {
               changed = true;
             }
           }
+        } else if (this.isSelectConfig(value) && value.preview) {
+          // A select's preview closes over the app's other controls exactly
+          // as a curve row's sample does, so it goes stale the same way.
+          const control = this.findControlByPath(panel.controls, path);
+          if (control?.type === 'select' && control.preview !== value.preview) {
+            control.preview = value.preview;
+            changed = true;
+          }
         } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
           visit(value as TweakConfig, path);
         }
@@ -1593,7 +1618,7 @@ class TweakStoreClass {
       } else if (this.isActionConfig(value)) {
         controls.push({ type: 'action', path, label: (value as ActionConfig).label || label, caption: (value as ActionConfig).caption });
       } else if (this.isSelectConfig(value)) {
-        controls.push({ type: 'select', path, label, options: value.options, display: value.display });
+        controls.push({ type: 'select', path, label, options: value.options, display: value.display, preview: value.preview });
       } else if (this.isColorConfig(value)) {
         controls.push({ type: 'color', path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {

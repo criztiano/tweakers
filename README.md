@@ -966,6 +966,32 @@ A `range` control claims a dial slot too: the bar fills between two handle ticks
 
 A `select` with options becomes a stepped enum dial: the bar splits into one cell per option, the active cell filled, and the readout shows the option's label. Dragging the slot — or turning the column's knob — steps through the options in order.
 
+An option can name an `icon` from the bundled [lucide](https://lucide.dev) subset (`LUCIDE_ICONS`), and the slot draws the glyph on a tag at the top — reading four mode names off a controller at arm's length is exactly what a glyph is for.
+
+```tsx
+playMode: {
+  type: 'select',
+  options: [
+    { value: 'forward', label: 'Forward', icon: 'arrow-right' },
+    { value: 'pingPong', label: 'Ping-Pong', icon: 'arrow-left-right' },
+  ],
+  default: 'forward',
+},
+```
+
+A select whose options *are* shapes takes `preview` instead: `t` in `[0, 1]` → y for the given option, or `null` for options with no shape. The slot draws that curve in place of the option's big name, which moves to the tag — the picture is the value. It is auto-fitted like a curve row, so a bipolar arc and a 0–1 envelope both fill the slot.
+
+```tsx
+pitchShape: {
+  type: 'select',
+  options: ARC_SHAPES,
+  default: shape,
+  preview: (name) => (t) => arcCurve(name, bell, t, flip),   // follows bell and flip
+},
+```
+
+`preview` is a closure, so — like a curve row's `sample` — it is invisible to the serialized config diff and is refreshed through the same sync. That is what lets the drawing track the app's other controls while the picker stays a picker.
+
 Bipolar sliders (`bipolar: true` or an `origin`) keep their character on the dial: the fill anchors at an origin tick and grows toward the handle on either side, and the readout shows the real signed value (`+12`, `-8`) instead of the 0–100 position.
 
 ### Function buttons

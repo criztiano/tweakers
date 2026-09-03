@@ -1,4 +1,4 @@
-import { C as ControlMeta, S as ShortcutConfig } from './TweakStore-DJZN26nW.js';
+import { C as ControlMeta, S as ShortcutConfig } from './TweakStore-BRgese49.js';
 import './range-slider-core.js';
 
 declare function decimalsForStep(step: number): number;

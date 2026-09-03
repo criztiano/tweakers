@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { TweakStore } from './store/TweakStore';
-import { buildMovePages, visibleColumns, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from './move-layout';
+import { buildMovePages, visibleColumns, enumOptionIcon, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from './move-layout';
 
 // The MovePanel mirrors the bridge kit's v0 mapping: first 4 panels are the
 // track pages, sliders and bounded numbers fill the 8 dials, toggles the
@@ -321,6 +321,37 @@ describe('move layout', () => {
     } as never, undefined, { movePads: { comb: 4 } });
     const [page] = buildMovePages([TweakStore.getPanel(id)!]);
     assert.deepEqual(visibleColumns(page), [0, 4]);
+  });
+
+  it('carries an option glyph and a shape sampler through to the slot', () => {
+    const id = nextId();
+    const preview = (v: string) => (v === 'flat' ? null : (t: number) => Math.sin(Math.PI * t));
+    TweakStore.registerPanel(id, id, {
+      mode: {
+        type: 'select',
+        options: [
+          { value: 'forward', label: 'Forward', icon: 'arrow-right' },
+          { value: 'pingPong', label: 'Ping-Pong', icon: 'arrow-left-right' },
+        ],
+        default: 'forward',
+      },
+      shape: {
+        type: 'select',
+        options: ['arc', 'flat'],
+        default: 'arc',
+        preview,
+      },
+    } as never);
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    const [mode, shape] = page.dials;
+    assert.equal(enumOptionIcon(mode!.options![1] as never), 'arrow-left-right');
+    assert.equal(enumOptionIcon('bare' as never), null, 'a bare string option has no glyph');
+    // The sampler reaches the meta, and answers per option — a shapeless
+    // option draws nothing rather than a flat line through the slot.
+    assert.equal(typeof shape!.preview, 'function');
+    assert.equal(typeof shape!.preview!('arc'), 'function');
+    assert.equal(shape!.preview!('flat'), null);
+    assert.equal(mode!.preview, undefined, 'a select without one stays a plain picker');
   });
 
   it('returns no visible columns for an empty page', () => {
