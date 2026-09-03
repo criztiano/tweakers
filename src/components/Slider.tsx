@@ -2,7 +2,7 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { motion, useMotionValue, useTransform, animate } from 'motion/react';
 import type { ShortcutConfig } from '../store/TweakStore';
-import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut } from '../shortcut-utils';
+import { decimalsForStep, roundValue, snapToDecile, formatSliderShortcut, fineDragValue } from '../shortcut-utils';
 
 interface SliderProps {
   label: string;
@@ -93,6 +93,13 @@ export function Slider({
   /** Running value for wheel notches, which arrive faster than React renders. */
   const wheelValueRef = useRef(value);
   wheelValueRef.current = value;
+  // Shift mid-drag = fine mode: pointer travel applies at 0.1× relative to the
+  // value where shift went down; releasing shift rebases at 1× so the value
+  // never jumps back to the cursor's absolute position. (Wheel keeps its own
+  // shift=coarse convention — this is drag-only.)
+  const fineRef = useRef<{ shift: boolean; anchorValue: number; anchorPos: number } | null>(null);
+  /** Last value emitted during the drag — the fine anchor rebases from it. */
+  const dragValueRef = useRef(value);
 
   const percentage = ((value - min) / (max - min)) * 100;
   const isActive = isInteracting || isHovered;
@@ -199,6 +206,8 @@ export function Slider({
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
       pointerDownPos.current = { x: e.clientX, y: e.clientY };
       isClickRef.current = true;
+      fineRef.current = null;
+      dragValueRef.current = value;
       setIsInteracting(true);
 
       // Capture wrapper rect at pointer down for stable reference
@@ -211,7 +220,7 @@ export function Slider({
         scaleRef.current = nativeExtent > 0 ? rectExtent / nativeExtent : 1;
       }
     },
-    [showInput, isVertical, trackExtent]
+    [showInput, isVertical, trackExtent, value]
   );
 
   const handlePointerMove = useCallback(
@@ -243,14 +252,33 @@ export function Slider({
           }
         }
 
-        const newValue = applyDetent(positionToValue(e.clientX, e.clientY));
+        // Rebase the fine anchor on every shift transition: press mid-drag
+        // snapshots the current value + pointer; release snapshots again so
+        // tracking continues at 1× from there instead of jumping to the cursor.
+        const pos = isVertical ? -e.clientY : e.clientX;
+        if (e.shiftKey ? !fineRef.current?.shift : fineRef.current?.shift) {
+          fineRef.current = { shift: e.shiftKey, anchorValue: dragValueRef.current, anchorPos: pos };
+        }
+        const newValue = fineRef.current
+          ? fineDragValue({
+              startValue: fineRef.current.anchorValue,
+              startPos: fineRef.current.anchorPos,
+              pos,
+              extentPx: trackExtent() || 1,
+              min,
+              max,
+              factor: fineRef.current.shift ? 0.1 : 1,
+            })
+          : applyDetent(positionToValue(e.clientX, e.clientY));
         const newPct = percentFromValue(newValue);
         if (animRef.current) {
           animRef.current.stop();
           animRef.current = null;
         }
         fillPercent.jump(newPct);
-        onChange(roundValue(newValue, step));
+        const rounded = roundValue(newValue, step);
+        dragValueRef.current = rounded;
+        onChange(rounded);
       }
     },
     [
@@ -264,6 +292,9 @@ export function Slider({
       rubberStretchPx,
       computeRubberStretch,
       step,
+      min,
+      max,
+      trackExtent,
     ]
   );
 
@@ -307,6 +338,7 @@ export function Slider({
       setIsInteracting(false);
       setIsDragging(false);
       pointerDownPos.current = null;
+      fineRef.current = null;
     },
     [
       isInteracting,

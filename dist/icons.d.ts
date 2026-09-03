@@ -27,5 +27,17 @@ declare const ICON_PANEL: {
         r: string;
     }[];
 };
+declare const ICON_MOVE_CAPTURE: {
+    viewBox: string;
+    path: string;
+};
+declare const ICON_MOVE_ENTER: {
+    viewBox: string;
+    circle: {
+        cx: string;
+        cy: string;
+        r: string;
+    };
+};
 
-export { ICON_ADD_PRESET, ICON_CHECK, ICON_CHEVRON, ICON_CLIPBOARD, ICON_CLOSE, ICON_FILE, ICON_GRIP, ICON_LOOP, ICON_PANEL, ICON_PAUSE, ICON_PLAY, ICON_PLUS, ICON_REPLAY, ICON_TIMELINE, ICON_TRASH };
+export { ICON_ADD_PRESET, ICON_CHECK, ICON_CHEVRON, ICON_CLIPBOARD, ICON_CLOSE, ICON_FILE, ICON_GRIP, ICON_LOOP, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, ICON_PANEL, ICON_PAUSE, ICON_PLAY, ICON_PLUS, ICON_REPLAY, ICON_TIMELINE, ICON_TRASH };

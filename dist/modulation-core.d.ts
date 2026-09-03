@@ -34,7 +34,7 @@ declare const MOD_SLOTS = 16;
 declare const MOD_COLORS: string[];
 /** A slot's palette colour — the one constant identity it keeps. */
 declare const modColor: (index: number) => string;
-type ModulationType = 'lfo' | 'envelope' | 'curve' | 'sh' | 'sequencer';
+type ModulationType = 'lfo' | 'adsr' | 'envelope' | 'curve' | 'sh' | 'sequencer';
 /** Modulator settings — flat and JSON-safe, like TweakStore values. */
 type ModulationParams = Record<string, number | boolean>;
 interface ModulationSlot {
@@ -77,6 +77,12 @@ interface ModTypeDef {
     controls: ModControlMeta[];
     createState(): unknown;
     tick(state: unknown, params: ModulationParams, dt: number, bpm: number): number;
+    /**
+     * Note on / note off, for the types that take a gate (the ADSR). The
+     * store's `gate(slot, on)` lands here; free-running types (LFO, S&H)
+     * leave it out and the store ignores the call.
+     */
+    gate?(state: unknown, on: boolean): void;
 }
 /** Plug a modulator type in; registering a type again replaces it. */
 declare function registerModType(def: ModTypeDef): void;
@@ -131,5 +137,22 @@ declare const LFO_DEF: ModTypeDef;
  * slew as the LFO's — at 0 hard steps, up high a wandering drift.
  */
 declare const SH_DEF: ModTypeDef;
+/**
+ * The ADSR: attack up to full, decay down to the sustain level, sustain
+ * held while the gate is on, release back to rest. The signal is unipolar
+ * 0..1 — at rest the control sits on its base value, and the envelope
+ * lifts it up to `amount` of the span.
+ *
+ * A gate drives it — `ModulationStore.gate(slot, on)`, from a note, a pad,
+ * a hardware step — and a fresh slot rests at zero until the host sends
+ * one. That is the shape an app integrates against; a DSP app whose own
+ * envelope already runs at audio rate points the slot at a source instead
+ * and the kit just shows the signal.
+ *
+ * Loop is the exception, for demos and for prototyping with no host: with
+ * it on the envelope plays its own gate, running attack → decay → release
+ * over and over.
+ */
+declare const ADSR_DEF: ModTypeDef;
 
-export { LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModTypeDef, type ModulationAssignment, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, getModType, lfoSyncedHz, listModTypes, modColor, modKey, modRingArc, registerModType };
+export { ADSR_DEF, LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModTypeDef, type ModulationAssignment, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, getModType, lfoSyncedHz, listModTypes, modColor, modKey, modRingArc, registerModType };

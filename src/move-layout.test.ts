@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { TweakStore } from './store/TweakStore';
-import { buildMovePages, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, dialOrigin, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
+import { buildMovePages, visibleColumns, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from './move-layout';
 
 // The MovePanel mirrors the bridge kit's v0 mapping: first 4 panels are the
 // track pages, sliders and bounded numbers fill the 8 dials, toggles the
@@ -142,16 +142,93 @@ describe('move layout', () => {
   it('gives a range control a dial slot, never a value chip', () => {
     const id = nextId();
     const config: Record<string, unknown> = {
-      band: { type: 'range', min: 0, max: 100, default: { min: 20, max: 80 } },
+      band: { type: 'range', min: 0, max: 100, default: { min: 20, max: 60 } },
     };
-    for (let i = 0; i < 8; i++) config[`dial${i}`] = [0.5, 0, 1];
-    config.lateBand = { type: 'range', min: 0, max: 1 };
+    for (let i = 0; i < 9; i++) config[`dial${i}`] = [0.5, 0, 1];
+    config.late = { type: 'range', min: 0, max: 1 };
     TweakStore.registerPanel(id, id, config as never);
     const [page] = buildMovePages([TweakStore.getPanel(id)!]);
     assert.equal(page.dials[0].path, 'band');
     assert.equal(page.dials[0].type, 'range');
-    /* the range takes a dial slot, so one scalar overflows; the late range never chips */
-    assert.deepEqual(page.values.map((v) => v.path), ['dial7']);
+    /* the range takes a dial slot, so two scalars overflow; the late range never chips */
+    assert.deepEqual(page.values.map((v) => v.path), ['dial7', 'dial8']);
+  });
+
+  it('normalizes and denormalizes range pairs, kit-identically', () => {
+    const meta = { type: 'range', path: 'band', label: 'Band', min: 0, max: 100, step: 5 } as const;
+    assert.deepEqual(normalizeRangeDial(meta as never, { min: 25, max: 75 }), { lo: 0.25, hi: 0.75 });
+    assert.deepEqual(normalizeRangeDial(meta as never, { min: -40, max: 900 }), { lo: 0, hi: 1 });
+    assert.deepEqual(normalizeRangeDial(meta as never, undefined), { lo: 0, hi: 0 });
+    const v = denormalizeRangeDial(meta as never, 0.23, 0.87);
+    assert.equal(v.min, 25);                    /* 23 snapped to the 5 step */
+    assert.equal(v.max, 85);
+    /* crossed handles come back ordered, never a reversed pair */
+    const crossed = denormalizeRangeDial(meta as never, 0.8, 0.2);
+    assert.deepEqual(crossed, { min: 20, max: 80 });
+  });
+
+  it('gives a select with options a dial slot, never a value chip', () => {
+    const id = nextId();
+    const config: Record<string, unknown> = {
+      wave: { type: 'select', options: ['sine', 'saw', 'square'], default: 'saw' },
+    };
+    for (let i = 0; i < 9; i++) config[`dial${i}`] = [0.5, 0, 1];
+    config.late = { type: 'select', options: ['a', 'b'], default: 'a' };
+    TweakStore.registerPanel(id, id, config as never);
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    assert.equal(page.dials[0].path, 'wave');
+    assert.equal(page.dials[0].type, 'select');
+    /* the enum takes a dial slot, so two scalars overflow; the late enum never chips */
+    assert.deepEqual(page.values.map((v) => v.path), ['dial7', 'dial8']);
+  });
+
+  it('keeps a select without options out of the dials', () => {
+    const panel = {
+      id: 'enum-optless', name: 'enum-optless',
+      controls: [{ type: 'select', path: 'mode', label: 'Mode' }],
+      values: {}, shortcuts: {},
+    };
+    const [page] = buildMovePages([panel as never]);
+    assert.deepEqual(page.dials, []);
+    assert.deepEqual(page.values, []);
+  });
+
+  it('normalizes and denormalizes enum options, kit-identically', () => {
+    const meta = {
+      type: 'select', path: 'wave', label: 'Wave',
+      options: ['sine', 'saw', { value: 'sq', label: 'Square' }, 'noise'],
+    } as const;
+    assert.equal(normalizeEnumDial(meta as never, 'sine'), 0);
+    assert.equal(normalizeEnumDial(meta as never, 'sq'), 2 / 3);
+    assert.equal(normalizeEnumDial(meta as never, 'noise'), 1);
+    assert.equal(normalizeEnumDial(meta as never, 'junk'), 0);   /* unknown reads as 0 */
+    assert.equal(normalizeEnumDial(meta as never, undefined), 0);
+    assert.equal(denormalizeEnumDial(meta as never, 0.4), 'saw'); /* round(1.2) = 1 */
+    assert.equal(denormalizeEnumDial(meta as never, -3), 'sine'); /* clamped */
+    assert.equal(denormalizeEnumDial(meta as never, 9), 'noise'); /* clamped */
+    /* every option round-trips through its 0..1 position */
+    for (const v of ['sine', 'saw', 'sq', 'noise']) {
+      assert.equal(denormalizeEnumDial(meta as never, normalizeEnumDial(meta as never, v)), v);
+    }
+    /* a single-option enum pins to that option at every position */
+    const one = { type: 'select', path: 'x', label: 'X', options: ['only'] } as const;
+    assert.equal(normalizeEnumDial(one as never, 'only'), 0);
+    assert.equal(denormalizeEnumDial(one as never, 1), 'only');
+  });
+
+  it('keeps origin/bipolar on a dial meta, and resolves its anchor', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, {
+      trim: { type: 'slider', default: 0, min: -12, max: 12, bipolar: true },
+    } as never);
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    assert.equal(page.dials[0].path, 'trim');
+    assert.equal(page.dials[0].bipolar, true);
+    assert.equal(dialOrigin(page.dials[0]), 0.5);
+    /* an explicit origin anchors there; no origin (or origin at min) = 0 */
+    assert.equal(dialOrigin({ type: 'slider', path: 'x', label: 'X', min: 0, max: 10, origin: 5 } as never), 0.5);
+    assert.equal(dialOrigin({ type: 'slider', path: 'x', label: 'X', min: 0, max: 10 } as never), 0);
+    assert.equal(dialOrigin({ type: 'slider', path: 'x', label: 'X', min: 0, max: 10, origin: 0 } as never), 0);
   });
 
   it('gives a select an enum dial slot in column order, never a chip — the kit rule', () => {
@@ -201,5 +278,55 @@ describe('move layout', () => {
     assert.equal(denormalizeDial(meta as never, 0.52), 5);
     assert.equal(denormalizeDial(meta as never, -1), 0);
     assert.equal(denormalizeDial(meta as never, 2), 10);
+  });
+
+  it('marks a column visible when a dial, toggle, or value chip occupies it', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, {
+      gain: [0.5, 0, 1],
+      depth: [0.2, 0, 1],
+      mute: false,
+      solo: true,
+      link: false,
+      free: { type: 'number', default: 3 },
+    } as never);
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    /* 2 dials + 3 toggles: the union covers columns 0-2, nothing past them */
+    assert.deepEqual(visibleColumns(page), [0, 1, 2]);
+  });
+
+  it('counts value chips as occupancy, and never a column past the 8', () => {
+    const id = nextId();
+    const config: Record<string, unknown> = {};
+    for (let i = 0; i < 11; i++) config[`dial${i}`] = [0.5, 0, 1];
+    TweakStore.registerPanel(id, id, config as never);
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    assert.deepEqual(visibleColumns(page), [0, 1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it('keeps hardware column numbers across a gap — hidden, never renumbered', () => {
+    const dial = { type: 'slider', path: 'a', label: 'A' } as never;
+    const late = { type: 'number', path: 'z', label: 'Z' } as never;
+    const values: (typeof late)[] = [];
+    values[3] = late;                           /* a chip alone at column 3 */
+    const page = { panel: {} as never, dials: [dial], toggles: [], values, actions: [] } as MovePage;
+    assert.deepEqual(visibleColumns(page), [0, 3]);
+  });
+
+  it('counts an action pad as an occupied column', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, {
+      gain: [0.5, 0, 1],
+      comb: { type: 'action' },
+    } as never, undefined, { movePads: { comb: 4 } });
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    assert.deepEqual(visibleColumns(page), [0, 4]);
+  });
+
+  it('returns no visible columns for an empty page', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, { free: { type: 'number', default: 3 } } as never);
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    assert.deepEqual(visibleColumns(page), []);
   });
 });

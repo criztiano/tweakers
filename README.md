@@ -797,6 +797,8 @@ For sliders, the `mode` controls how much each scroll tick or drag pixel changes
 | `normal` | step &times; 1 | Default behavior |
 | `coarse` | step &times; 10 | Big sweeps |
 
+Fine mode also works mid-drag, no shortcut config needed: while dragging any slider, range slider, or Move panel dial, hold **Shift** to switch pointer movement to 0.1&times; — the handle stops chasing the cursor and creeps relative to where Shift went down. Release Shift and tracking resumes at full rate from that point, with no value jump either way. (Scroll-wheel modifiers are unchanged: Shift is still coarse, Alt fine.)
+
 ### Nested paths
 
 For controls inside folders, use dot notation:
@@ -853,6 +855,44 @@ The visual's accessible alternative includes its label, mode, current clamped pe
 
 ---
 
+## ListScreen
+
+`ListScreen` is the Move's dark display list: single-line rows on the screen surface, unselected rows dim, the selected row bright on a soft highlight. Ten and a half rows show before the list scrolls (the cut row hints there's more), and the view follows the selection as it moves. It is purely presentational — the host owns the selection state and any wheel or arrow-key stepping:
+
+```tsx
+import { ListScreen } from 'tweakers';
+
+<ListScreen
+  items={['Drums', 'Bass', 'Vocals', { value: 'other', label: 'Everything else' }]}
+  value={selected}
+  onSelect={setSelected}
+/>
+```
+
+An item may also carry a `tag` — a short note pinned to the row's right end (a status, a category), rendered smaller and dimmer than the label, slightly brighter on the selected row. The centered default keeps the label centered regardless (the tag never shifts it), the wide variant puts the tag at the natural flex end, and both sides ellipsize before they can collide:
+
+```tsx
+<ListScreen
+  wide
+  items={rips.map(r => ({ value: r.id, label: r.title, tag: r.status }))}
+  value={selected}
+  onSelect={setSelected}
+/>
+```
+
+Mark an item `muted` when the row is information rather than a choice — a job still queued, a tag that produced nothing. It walks and selects like any row, so nothing disappears from the list, but it never comes up to full brightness; keep the actions beside the list disabled while such a row is the one reached.
+
+| Prop | Type | Default |
+|------|------|---------|
+| `items` | `(string \| { value: string; label?: string; tag?: string; muted?: boolean })[]` | Required |
+| `value` | `string` — the selected item's value | — |
+| `onSelect` | `(value: string) => void` | — |
+| `wide` | `boolean` — 400px with left-aligned rows, instead of the 200px centered default | `false` |
+| `className` | `string` | — |
+| `style` | `React.CSSProperties` | — |
+
+---
+
 ## Move controller
 
 tweakers apps can be driven by an Ableton Move over the bridge kit (the `move` repo's app server). The app binds once and both surfaces stay in sync:
@@ -870,6 +910,8 @@ import('http://localhost:7787/kit.js')
 ```
 
 Panels become pages behind the track buttons (max 4), sliders and bounded numbers become the 8 dials, toggles become pads, and overflow bounded params become value chips (hold to peek, tap to latch).
+
+The on-screen panel shows only occupied slots: a column renders only when it has a dial, a toggle pad, or a value chip. Visible columns keep their full 8-wide slot size and centre in the panel, with the header aligned to the first one — an app with two dials gets a tight two-column cluster, not six empty sockets. Hidden columns are skipped, never renumbered, so each on-screen column still matches its hardware knob; an empty page shows the header alone. The track row follows the same rule: only tracks that carry a page get a tick and a name, so a one-panel app shows one label instead of three blank coloured lines. Each page keeps its own track colour whichever tracks are missing.
 
 ### Pad columns
 
@@ -890,9 +932,41 @@ A toggle takes the toggle row, a bounded number the value row, an action the row
 
 Actions reach the pads **only** through `movePads` — every app has buttons, and none of them expect a hardware pad. Two-handed dials (`xy`, `range`) and enums can't be chips, so a column on one of those is ignored and it keeps its dial slot.
 
+### Where the panel sits
+
+`dock` decides how the panel joins the page:
+
+| `dock` | Behaviour | Use it for |
+|--------|-----------|------------|
+| `viewport` (default) | Portals to `<body>` and pins to the window's bottom edge, over the page. | Apps whose content fills the screen — a tracker, a video tool. Leave room for it with your own bottom padding. |
+| `flow` | Renders inline, in normal document flow, exactly where you put it. | Sparse apps. Make it the last child of your centred column and the content and the panel read as one instrument, with no dead gap between them. |
+
+```tsx
+// A sparse app: content and panel centre together as one group.
+<div className="app-column">
+  <MyContent />
+  <MovePanel dock="flow" />
+</div>
+```
+
+```css
+.app-column {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100vh;
+}
+```
+
+Both variants wear the same surface, padding and slot geometry; only the placement differs. The panel carries `data-dock="viewport" | "flow"` if your own CSS needs to branch on it.
+
 An `xy` control claims a dial slot as a 2D pad: the field draws behind the label (no slider at the bottom) and dragging it sets both axes. On the hardware, the column's knob turns the X axis — and while a finger rests on that knob, the volume knob turns Y. The pad honours the XYPad's options: `grid`/`density` draw the same grid overlay (on by default, 5×5), `snap` snaps drags to the grid, bipolar axes keep the escapable centre detent, and `returnToCenter` springs the pad back to its origin on release — on screen when the pointer lifts, and on the hardware when the finger leaves the knob.
 
-A `range` control claims a dial slot the same way: the fill becomes the span between its two ends and dragging moves the nearer end. On the hardware, the column's knob moves the low end — and while a finger rests on that knob, the volume knob moves the high end (the ends never cross). Bipolar and `origin` sliders keep their slot but anchor the fill at the origin and read as a signed offset (−50…+50) instead of 0–100.
+A `range` control claims a dial slot too: the bar fills between two handle ticks, and dragging grabs the nearest handle. On the hardware it uses the same two-handed idea as the xy pad — the column's knob edits the low handle, and while a finger rests on that knob, the volume knob edits the high one (the ends never cross).
+
+A `select` with options becomes a stepped enum dial: the bar splits into one cell per option, the active cell filled, and the readout shows the option's label. Dragging the slot — or turning the column's knob — steps through the options in order.
+
+Bipolar sliders (`bipolar: true` or an `origin`) keep their character on the dial: the fill anchors at an origin tick and grows toward the handle on either side, and the readout shows the real signed value (`+12`, `-8`) instead of the 0–100 position.
 
 ### Function buttons
 
@@ -915,9 +989,36 @@ import('http://localhost:7787/kit.js')
 
 Attached buttons light up on the hardware and every press runs your action, with `shift: true` when Shift is held — a free second-function layer per button. `attach` returns a detach function, and attaching again replaces the previous action, so bindings can follow your app's modes. Buttons you leave unattached keep the surface's built-in behavior (Undo resets the page's dials, Delete clears the sequencer, Play runs it); Shift and the four track buttons are reserved.
 
+### Action buttons & volume display
+
+`MoveActionButton` is a free-standing pill your views place anywhere — next to a list, under a form, wherever the action lives. Its look is fixed to the hardware key it rides, so the on-screen button always matches the physical one: `kind="enter"` is the wheel's click (track 4's green, dot glyph), `kind="capture"` is the capture button (track 1's blue, four-corners glyph), and `kind="shift"` is the shift key (the surface's light neutral, wearing the same dot glyph in black). Clicking an enter or capture pill runs whatever you attached to that hardware button through `MoveFunctions` (`jog_click` for enter, `capture` for capture), plus an optional `onPress` of its own — and both screen clicks and hardware presses flash the pill. Shift is reserved on the hardware and never claimable, so a shift pill is purely visual: same geometry, no attached function, only its `onPress` — the app wires the hardware gesture itself:
+
+```tsx
+import { MoveActionButton, MoveFunctions } from 'tweakers';
+
+MoveFunctions.attach('capture', () => addMarker());
+MoveFunctions.attach('jog_click', () => confirm());
+
+<MoveActionButton kind="capture">Add marker</MoveActionButton>
+<MoveActionButton kind="enter" disabled={!canConfirm}>Confirm</MoveActionButton>
+<MoveActionButton kind="shift" onPress={() => polish()}>Polish</MoveActionButton>
+```
+
+A disabled button dims to 40% and runs nothing. `MoveFunctions.subscribeRuns((name, press) => ...)` observes every run — that's the channel the button uses to flash on hardware presses.
+
+The `MovePanel` header keeps one right-aligned pill: the dark volume-dial readout — whatever the volume dial currently means in your app:
+
+```tsx
+MoveVolumeDisplay.set({ label: 'gain', value: '-6.0 dB' });      // static
+MoveVolumeDisplay.set({ getValue: () => formatTime(playhead) }); // polled per frame
+MoveVolumeDisplay.clear();                                       // pill disappears
+```
+
+Time-style strings (`0:00:00`) render with bold separators so the digit groups read apart. When nothing is registered, the whole cluster stays hidden and the header looks as it always did.
+
 ## Modulation
 
-Any bounded numeric control (slider, `number` with min/max) can be driven by a modulation — an LFO today; envelope follower, curve, S&H, and step sequencer plug into the same registry. Modulations live in 16 slots, one per Move sequencer step button: **touch a control, press a step** and the modulation is created there and wired to the control (press again to unwire). Each slot keeps a palette colour; the track row shows a circle per slot with a pulsing dot of that colour, and the same dot marks every control the slot drives — in the Move panel and the side panel both.
+Any bounded numeric control (slider, `number` with min/max) can be driven by a modulation — an LFO, a sample & hold, and an ADSR today; envelope follower, curve, and step sequencer plug into the same registry. Modulations live in 16 slots, one per Move sequencer step button: **touch a control, press a step** and the modulation is created there and wired to the control (press again to unwire). Each slot keeps a palette colour; the track row shows a circle per slot with a pulsing dot of that colour, and the same dot marks every control the slot drives — in the Move panel and the side panel both.
 
 The modulated value **never enters the TweakStore.** The control keeps the value you set (the base); the modulation is a live layer your app pulls at frame time:
 
@@ -936,6 +1037,23 @@ Because the stored value never moves, presets, persistence, and the bridge kit's
 
 Everything the gesture does is also plain API — `createSlot(step, 'lfo')`, `assign(panelId, path, step, amount)`, `updateSlotParams`, `setSlotType`, `removeSlot`, `openSettings(step)` / `closeSettings()` — and `subscribe` / `subscribeFrames` cover structure and per-frame signals (`getSignal(step)` is the slot's raw −1..1).
 
+### Envelopes and the gate
+
+The ADSR (`createSlot(step, 'adsr')`) is a shaped envelope: attack up to full, decay down to the sustain level, sustain held while the gate is on, release back to rest. Its signal is unipolar 0..1 — at rest the control sits on its base value, and the envelope lifts it up to `amount` of the span.
+
+A fresh envelope rests at zero and **waits for a trigger** — the host plays it:
+
+```tsx
+ModulationStore.gate(step, true);    // note on
+ModulationStore.gate(step, false);   // note off — the release runs
+```
+
+That is what an app integrates against: your notes, pads, or hardware steps gate the slot, and the panel shows the shape they make. A DSP app whose envelope already runs at audio rate does the opposite — it points the slot at a [source](#external-modulation-sources), and the kit becomes a visual control passing values through, applying nothing of its own.
+
+**Loop** is the exception, for demos and for prototyping with no host: with it on the envelope plays its own gate — attack, decay, release, over and over, no sustain hold. The example turns it on so the slot moves on its own; the library ships it off.
+
+Free-running types (LFO, S&H) ignore the gate, and so do slots pointed at an external source. Gates are live state, never persisted.
+
 ### External modulation sources
 
 DSP apps whose modulators run on the audio side (a native LFO, an envelope follower) register them instead of using the internal engine:
@@ -951,7 +1069,7 @@ ModulationStore.setSlotSource(step, 'env-follow');
 
 A slot on a source shows its signal (circle, dots, step light) but applies nothing to values — the app's own engine already did, at audio rate. A source that wants the library to apply for it passes `applies: true`. Tempo-synced modulators follow `ModulationStore.setTempo(bpm)` (the bridge kit feeds it the Move's tempo).
 
-New modulator types register a `ModTypeDef` — defaults, the settings-page controls, and a stateful `tick(state, params, dt, bpm)` returning −1..1 — via `registerModType`; the LFO (`LFO_DEF`) is the reference implementation.
+New modulator types register a `ModTypeDef` — defaults, the settings-page controls, a stateful `tick(state, params, dt, bpm)` returning −1..1, and an optional `gate(state, on)` for the types that take one — via `registerModType`; the LFO (`LFO_DEF`) is the reference implementation, with `SH_DEF` and `ADSR_DEF` beside it.
 
 ---
 

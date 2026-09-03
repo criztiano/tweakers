@@ -34,6 +34,19 @@ if (!ModulationStore.getSlot(0)) {
   ModulationStore.assign('move-xy', 'amount', 0, 0.6);
 }
 
+// The second slot holds an ADSR pumping the Bias slider. An ADSR rests until
+// something gates it — a real app calls ModulationStore.gate(1, true/false)
+// on its notes — so this demo turns Loop on to let it play its own gate and
+// show the shape. Hold the slot's circle (or step 2) for its Attack / Decay
+// / Sustain / Release page.
+if (!ModulationStore.getSlot(1)) {
+  ModulationStore.createSlot(1, 'adsr');
+  ModulationStore.updateSlotParams(1, {
+    attack: 40, decay: 250, sustain: 0.4, release: 700, loop: true,
+  });
+  ModulationStore.assign('move-xy', 'bias', 1, 0.8);
+}
+
 // Function buttons: the Move's Copy puts every panel's current values on the
 // clipboard as JSON. Unattached buttons keep the surface built-ins.
 MoveFunctions.attach('copy', () => {
