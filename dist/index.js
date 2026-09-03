@@ -3091,6 +3091,76 @@ var SH_DEF = {
   }
 };
 registerModType(SH_DEF);
+var secs = (ms) => Math.max(0, Number(ms) || 0) / 1e3;
+var adsrEase = (p) => 1 - (1 - p) * (1 - p);
+function adsrStageLength(stage, params) {
+  if (stage === "attack") return secs(params.attack);
+  if (stage === "decay") return secs(params.decay);
+  if (stage === "release") return secs(params.release);
+  return Infinity;
+}
+var ADSR_DEF = {
+  type: "adsr",
+  label: "ADSR",
+  defaults: { attack: 10, decay: 300, sustain: 0.6, release: 600, loop: false },
+  controls: [
+    { type: "slider", path: "attack", label: "Attack", min: 0, max: 2e3, step: 1, unit: "ms" },
+    { type: "slider", path: "decay", label: "Decay", min: 0, max: 2e3, step: 1, unit: "ms" },
+    { type: "slider", path: "sustain", label: "Sustain", min: 0, max: 1, step: 0.01 },
+    { type: "slider", path: "release", label: "Release", min: 0, max: 4e3, step: 1, unit: "ms" },
+    { type: "toggle", path: "loop", label: "Loop" }
+  ],
+  createState: () => ({ stage: "idle", t: 0, from: 0, env: 0, gate: false }),
+  gate(state, on) {
+    const s = state;
+    s.gate = on;
+    if (on) {
+      s.stage = "attack";
+      s.t = 0;
+      s.from = s.env;
+    } else if (s.stage !== "idle") {
+      s.stage = "release";
+      s.t = 0;
+      s.from = s.env;
+    }
+  },
+  tick(state, params, dt) {
+    const s = state;
+    const loop = !!params.loop;
+    const sustain = clamp013(params.sustain);
+    if (s.stage === "idle") {
+      if (!loop) return s.env = 0;
+      s.stage = "attack";
+      s.t = 0;
+      s.from = 0;
+    }
+    s.t += dt;
+    for (let guard = 0; guard < 4; guard++) {
+      const len2 = adsrStageLength(s.stage, params);
+      if (s.t < len2) break;
+      s.t -= len2;
+      if (s.stage === "attack") {
+        s.stage = "decay";
+        s.from = 1;
+      } else if (s.stage === "decay") {
+        s.stage = s.gate ? "sustain" : "release";
+        s.from = sustain;
+      } else {
+        s.stage = loop ? "attack" : "idle";
+        s.from = 0;
+      }
+    }
+    const len = adsrStageLength(s.stage, params);
+    const shaped = adsrEase(len > 0 && Number.isFinite(len) ? Math.min(1, s.t / len) : 1);
+    if (s.stage === "attack") s.env = s.from + (1 - s.from) * shaped;
+    else if (s.stage === "decay") s.env = s.from + (sustain - s.from) * shaped;
+    else if (s.stage === "sustain") s.env = sustain;
+    else if (s.stage === "release") s.env = s.from * (1 - shaped);
+    else s.env = 0;
+    return clamp013(s.env);
+  }
+};
+registerModType(ADSR_DEF);
 
 // src/store/ModulationStore.ts
 var MOD_TOUCH_GRACE_MS = 4e3;
@@ -3264,6 +3334,29 @@ var ModulationStoreClass = class {
       return { action: "none", slot: this.getSlot(index) };
     }
     return { action: created ? "created" : "assigned", slot };
+  }
+  /* ── gates ────────────────────────────────────────────────────────── */
+  /**
+   * Note on / note off for a slot — what drives a gated modulator like the
+   * ADSR:
+   *
+   *   ModulationStore.gate(0, true);    // key down
+   *   ModulationStore.gate(0, false);   // key up — the release runs
+   *
+   * Free-running types (LFO, S&H) and slots on an external source ignore
+   * it. The gate is live state, not a param: it is never persisted.
+   */
+  gate(index, on) {
+    const slot = this.slots[index];
+    const def = slot && getModType(slot.type);
+    if (!slot || slot.source || !def?.gate) return;
+    let state = this.states.get(index);
+    if (state === void 0) {
+      state = def.createState();
+      this.states.set(index, state);
+    }
+    def.gate(state, on);
+    this.ensureLoop();
   }
   /* ── the settings page ────────────────────────────────────────────── */
   /**
@@ -13975,6 +14068,7 @@ function AudioLevelMeter(props) {
   );
 }
 export {
+  ADSR_DEF,
   AnalyserRow,
   AnalyserVisualization,
   AudioLevelMeter,

@@ -12,6 +12,7 @@ import {
   LFO_DEF,
   LFO_SYNC_DIVISIONS,
   SH_DEF,
+  ADSR_DEF,
   modRingArc,
   MOD_RING_CIRCUMFERENCE,
   type ModTypeDef,
@@ -95,10 +96,11 @@ describe('the modulation ring', () => {
 });
 
 describe('the type registry', () => {
-  it('ships the LFO and the S&H, in that order', () => {
+  it('ships the LFO, the S&H, and the ADSR, in that order', () => {
     expect(getModType('lfo')).toBe(LFO_DEF);
     expect(getModType('sh')).toBe(SH_DEF);
-    expect(listModTypes().map((d) => d.type)).toEqual(['lfo', 'sh']);
+    expect(getModType('adsr')).toBe(ADSR_DEF);
+    expect(listModTypes().map((d) => d.type)).toEqual(['lfo', 'sh', 'adsr']);
   });
 
   it('accepts new types', () => {
@@ -236,5 +238,96 @@ describe('the S&H', () => {
       expect(v).toBeGreaterThanOrEqual(-1);
       expect(v).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+describe('the ADSR', () => {
+  // A gated run: hold for `holdMs`, then let go and keep ticking, sampling
+  // the envelope every `dt` (ms, for readability against the dials).
+  const run = (
+    params: Record<string, number | boolean>,
+    steps: number,
+    dtMs = 10,
+    gate: { on?: number; off?: number } = {}
+  ) => {
+    const state = ADSR_DEF.createState();
+    const p = { ...ADSR_DEF.defaults, ...params };
+    const out: number[] = [];
+    for (let i = 0; i < steps; i++) {
+      const at = i * dtMs;
+      if (gate.on !== undefined && at === gate.on) ADSR_DEF.gate!(state, true);
+      if (gate.off !== undefined && at === gate.off) ADSR_DEF.gate!(state, false);
+      out.push(ADSR_DEF.tick(state, p, dtMs / 1000, 120));
+    }
+    return out;
+  };
+
+  const held = { attack: 100, decay: 100, sustain: 0.5, release: 200, loop: false };
+
+  it('lays out the four dials and the loop switch', () => {
+    expect(ADSR_DEF.controls.map((c) => c.path)).toEqual([
+      'attack', 'decay', 'sustain', 'release', 'loop',
+    ]);
+    expect(ADSR_DEF.controls.find((c) => c.path === 'loop')!.type).toBe('toggle');
+  });
+
+  it('rests at zero until something gates it', () => {
+    const out = run(held, 40);
+    expect(out.every((v) => v === 0)).toBe(true);
+  });
+
+  it('ships waiting for a trigger — Loop is the demo mode, off by default', () => {
+    expect(ADSR_DEF.defaults.loop).toBe(false);
+    expect(run({}, 60, 16).every((v) => v === 0)).toBe(true);
+  });
+
+  it('climbs, falls to sustain, holds, then releases', () => {
+    // Gate on at 0, off at 400 ms: 100 attack + 100 decay + 200 held.
+    const out = run(held, 90, 10, { on: 0, off: 400 });
+    expect(out[9]).toBeCloseTo(1, 5);          // 100 ms — the peak
+    expect(out[4]).toBeGreaterThan(0);         // rising through the attack
+    expect(out[4]).toBeLessThan(1);
+    expect(out[19]).toBeCloseTo(0.5, 5);       // 200 ms — decayed to sustain
+    expect(out[39]).toBeCloseTo(0.5, 5);       // 400 ms — still holding
+    expect(out[49]).toBeLessThan(0.5);         // released, on the way down
+    expect(out[59]).toBeCloseTo(0, 5);         // 600 ms — back to rest
+    expect(out[80]).toBe(0);                   // and it stays there
+  });
+
+  it('never leaves 0..1, whatever the dials say', () => {
+    const out = run({ attack: 0, decay: 0, sustain: 1, release: 0, loop: true }, 200, 16);
+    for (const v of out) {
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('retriggers from where it stands instead of snapping to zero', () => {
+    const state = ADSR_DEF.createState();
+    const p = { ...ADSR_DEF.defaults, ...held };
+    ADSR_DEF.gate!(state, true);
+    for (let i = 0; i < 30; i++) ADSR_DEF.tick(state, p, 0.01, 120);   // sitting on sustain
+    ADSR_DEF.gate!(state, false);
+    const falling = ADSR_DEF.tick(state, p, 0.05, 120);
+    ADSR_DEF.gate!(state, true);
+    expect(ADSR_DEF.tick(state, p, 0.001, 120)).toBeGreaterThanOrEqual(falling);
+  });
+
+  it('loops on its own gate — attack, decay, release, again', () => {
+    // No sustain hold in loop mode: the cycle is 100 + 100 + 200 = 400 ms.
+    const out = run({ ...held, loop: true }, 100);
+    expect(out[9]).toBeCloseTo(1, 5);          // first peak
+    expect(out[19]).toBeCloseTo(0.5, 5);       // decayed
+    expect(out[39]).toBeCloseTo(0, 5);         // released to rest
+    expect(out[49]).toBeCloseTo(1, 5);         // and away again
+    expect(out[59]).toBeCloseTo(0.5, 5);
+  });
+
+  it('passes through stages shorter than a frame', () => {
+    // 1 ms attack and decay inside a 16 ms frame: one tick must already be
+    // through to the release, not stuck at the top.
+    const out = run({ attack: 1, decay: 1, sustain: 0.5, release: 500, loop: true }, 2, 16);
+    expect(out[0]).toBeLessThan(0.5);
+    expect(out[0]).toBeGreaterThan(0);
   });
 });

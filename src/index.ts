@@ -37,6 +37,7 @@ export {
   listModTypes,
   LFO_DEF,
   SH_DEF,
+  ADSR_DEF,
   modRingArc,
   MOD_RING_RADIUS,
   MOD_RING_CIRCUMFERENCE,
