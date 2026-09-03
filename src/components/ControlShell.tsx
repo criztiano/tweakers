@@ -3,6 +3,14 @@ import type { ComponentType, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { TweakStore } from '../store/TweakStore';
 import type { AffordanceConfig, AffordanceContext } from '../store/TweakStore';
+import { ModulationStore } from '../store/ModulationStore';
+import {
+  modColor,
+  modRingArc,
+  MOD_RING_RADIUS,
+  MOD_RING_CIRCUMFERENCE,
+  type ModulationAssignment,
+} from '../modulation-core';
 import { AFFORDANCE_POPOVER_WIDTH, placePopover } from '../affordance-core';
 
 interface ControlShellProps {
@@ -39,6 +47,18 @@ export function ControlShell({ hint, title, id, affordance, panelId, path, child
     readDisabled
   );
 
+  // A control wired to a modulation slot wears the slot's colour as a dot;
+  // pressing anywhere on the control arms it for the step-button gesture.
+  const readMod = useCallback(
+    () => (panelId && path ? ModulationStore.getAssignment(panelId, path) : undefined),
+    [panelId, path]
+  );
+  const modAssignment = useSyncExternalStore(
+    useCallback((cb) => ModulationStore.subscribe(cb), []),
+    readMod,
+    readMod
+  );
+
   return (
     <div
       className="tweakers-control-tip"
@@ -46,12 +66,20 @@ export function ControlShell({ hint, title, id, affordance, panelId, path, child
       data-affordance={affordance ? 'true' : undefined}
       data-affordance-open={open ? 'true' : undefined}
       data-disabled={disabled ? 'true' : undefined}
+      data-mod={modAssignment ? 'true' : undefined}
       aria-disabled={disabled ? true : undefined}
       role={hint ? 'group' : undefined}
       aria-describedby={hint ? id : undefined}
       title={hint ? undefined : title}
+      onPointerDownCapture={
+        panelId && path ? () => ModulationStore.noteTouch(panelId, path) : undefined
+      }
     >
       {children}
+
+      {modAssignment && panelId && path && (
+        <ModRing panelId={panelId} path={path} assignment={modAssignment} />
+      )}
 
       {/* Kept mounted rather than conditional on hover so the id
           `aria-describedby` points at always resolves. */}
@@ -71,6 +99,84 @@ export function ControlShell({ hint, title, id, affordance, panelId, path, child
         />
       )}
     </div>
+  );
+}
+
+/**
+ * The modulation ring: a control wired to a slot wears a small dial in the
+ * slot's palette colour, and an arc running from the control's own value to
+ * where the modulation is holding it right now. The arc dances at the
+ * modulator's rate — the value the app reads, shown where it is edited,
+ * while the control itself keeps the base the user set.
+ *
+ * Drawn straight to the arc's dash attributes per frame, the MovePanel
+ * circle's pattern, so the panel never re-renders for it. Under reduced
+ * motion it holds still at the modulation's full reach instead, which says
+ * the same thing about depth without the movement.
+ */
+function ModRing({
+  panelId,
+  path,
+  assignment,
+}: {
+  panelId: string;
+  path: string;
+  assignment: ModulationAssignment;
+}) {
+  const arcRef = useRef<SVGCircleElement>(null);
+  const color = modColor(assignment.slot);
+
+  useEffect(() => {
+    const el = arcRef.current;
+    if (!el) return;
+
+    // Anchored on the base and the live value, both as fractions of the
+    // control's span — the arc is the gap between them.
+    const draw = (from: number, to: number) => {
+      const { length, offset } = modRingArc(from, to);
+      el.setAttribute('stroke-dasharray', `${length.toFixed(2)} ${MOD_RING_CIRCUMFERENCE.toFixed(2)}`);
+      el.setAttribute('stroke-dashoffset', offset.toFixed(2));
+    };
+
+    const bounds = ModulationStore.getBounds(panelId, path);
+    const span = bounds ? bounds.max - bounds.min : 0;
+    const base01 = () =>
+      span ? (Number(TweakStore.getValue(panelId, path)) - bounds!.min) / span : 0;
+
+    if (!span) return;
+
+    const still =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (still) {
+      // The reach: half the span each way at full amount, the same geometry
+      // applyModulation sweeps through. It follows the base the user drags,
+      // just not the signal.
+      const reach = assignment.amount / 2;
+      const drawReach = () => draw(base01() - reach, base01() + reach);
+      drawReach();
+      return TweakStore.subscribe(panelId, drawReach);
+    }
+
+    return ModulationStore.subscribeFrames(() => {
+      const b = base01();
+      draw(b, b + (ModulationStore.getOffset(panelId, path) / span));
+    });
+  }, [panelId, path, assignment.slot, assignment.amount]);
+
+  return (
+    <svg className="tweakers-mod-ring" viewBox="0 0 16 16" aria-hidden="true">
+      <circle className="tweakers-mod-ring-track" cx="8" cy="8" r={MOD_RING_RADIUS} />
+      <circle
+        ref={arcRef}
+        className="tweakers-mod-ring-arc"
+        cx="8"
+        cy="8"
+        r={MOD_RING_RADIUS}
+        stroke={color}
+        strokeDasharray={`0 ${MOD_RING_CIRCUMFERENCE}`}
+      />
+    </svg>
   );
 }
 

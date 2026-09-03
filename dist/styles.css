@@ -563,6 +563,37 @@
   transform: scale(1.75);
 }
 
+/* ── Modulation ring ─────────────────────────────────────────────────────
+   A control wired to a modulation slot wears a small dial in its top-right
+   corner, clear of the affordance dot's bottom-right spot: a faint track
+   with a live arc in the slot's palette colour running from the control's
+   own value to where the modulation is holding it. */
+.tweakers-control-tip[data-mod] {
+  position: relative;
+}
+
+.tweakers-mod-ring {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.tweakers-mod-ring-track {
+  fill: none;
+  stroke: var(--tweak-border-hover, rgba(255, 255, 255, 0.15));
+  stroke-width: 2;
+}
+
+.tweakers-mod-ring-arc {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
 /* On the dot, not the button: outlining the 16px hotspot would read as a box
    floating in the control's corner. */
 .tweakers-affordance-dot:focus-visible {
@@ -5218,17 +5249,26 @@ input.tweakers-list-item-title:focus {
   align-items: flex-start;
 }
 
-/* Track row — one coloured marker per page, with the panel's name (802:321).
-   Tracks without a page are not drawn at all. */
+/* Track row — one coloured marker per page, with the panel's name (802:321);
+   tracks without a page are not drawn at all. The modulation circles sit
+   dead-centre and the volume readout at the right end. The 1fr flanks keep
+   the circles centred, and the row takes the same width as the column
+   cluster below it, so both ends line up with the visible columns. */
 .tweakers-move-tracks {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  width: var(--move-cluster-w, 100%);
+  align-self: center;
+  padding: 4px;
+}
+
+.tweakers-move-tracks-group {
   display: flex;
   gap: 12px;
   /* the readout pill is taller than a track tick: centring puts every name in
      the row on one line with it */
   align-items: center;
-  padding: 4px;
-  width: var(--move-cluster-w, 100%);
-  align-self: center;
 }
 
 .tweakers-move-track {
@@ -5264,11 +5304,63 @@ input.tweakers-list-item-title:focus {
   opacity: 1;
 }
 
-/* Header cluster — the volume-dial readout. Pinned to the panel's right
-   edge (matching the track row's 4px inset), not to the centred column
-   cluster, so it holds its corner however narrow the page gets. */
-/* The readout rides the end of the track row, so it lands on the right edge of
-   the last visible column rather than the panel's own far edge. */
+/* Modulation circles — one per occupied slot: a 24px ring holding a 12px
+   dot in the slot's palette colour. The dot's scale follows the live
+   signal (written per frame from JS); the ring stays put. The same dot
+   marks every control the slot drives: absolute in a dial slot's corner,
+   inline ahead of a pad chip's title. */
+.tweakers-move-mods {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.tweakers-move-mod {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--move-slot);
+  border: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.tweakers-move-mod-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-mod-dot {
+    transform: none !important;
+  }
+}
+
+.tweakers-move-dial-mod {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.tweakers-move-pad-mod {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+/* Header cluster — the volume-dial readout. The readout rides the end of the
+   track row, so it lands on the right edge of the last visible column rather
+   than the panel's own far edge. */
 .tweakers-move-actions {
   margin-left: auto;
   /* cancel the track row's own padding: the grid below it has none, so this
@@ -5471,6 +5563,36 @@ input.tweakers-list-item-title:focus {
   -webkit-line-clamp: 1;
 }
 
+/* A substituted slot always reads name-on-tag + live value — the centred
+   label would double the tag, so it stays hidden. */
+.tweakers-move-dial[data-sub] .tweakers-move-dial-label {
+  opacity: 0;
+}
+
+.tweakers-move-dial[data-sub] .tweakers-move-dial-value {
+  opacity: 1;
+}
+
+/* While a value chip substitutes the dial (held or latched), a small tag
+   at the top of the slot names what the knob is controlling; the big
+   number below matches the chip's own readout exactly. */
+.tweakers-move-dial-sub {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 16px);
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--move-chip);
+  font-family: var(--move-font-label);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .tweakers-move-dial-bar {
   position: absolute;
   left: 8px;
@@ -5572,6 +5694,24 @@ input.tweakers-list-item-title:focus {
   border-radius: 8px;
   overflow: hidden;
   pointer-events: none;
+}
+
+/* Grid overlay — the XYPad's pattern in the slot's identity: faint at
+   rest, a touch stronger while a finger or pointer is on the pad. */
+.tweakers-move-xy-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.07;
+  transition: opacity 0.15s ease;
+  background-image:
+    repeating-linear-gradient(to right, currentColor 0, currentColor 1px, transparent 1px, transparent var(--tweak-xy-grid-step-x, 20%)),
+    repeating-linear-gradient(to bottom, currentColor 0, currentColor 1px, transparent 1px, transparent var(--tweak-xy-grid-step-y, 20%));
+  color: var(--move-text);
+}
+
+.tweakers-move-dial[data-active] .tweakers-move-xy-grid {
+  opacity: 0.14;
 }
 
 .tweakers-move-xy-line {

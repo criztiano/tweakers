@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { TweakStore } from './store/TweakStore';
-import { buildMovePages, visibleColumns, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOriginPercent, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from './move-layout';
+import { buildMovePages, visibleColumns, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from './move-layout';
 
 // The MovePanel mirrors the bridge kit's v0 mapping: first 4 panels are the
 // track pages, sliders and bounded numbers fill the 8 dials, toggles the
@@ -159,7 +159,7 @@ describe('move layout', () => {
     assert.equal(denormalizeEnumDial(one as never, 1), 'only');
   });
 
-  it('keeps origin/bipolar on a dial meta, and resolves the origin percent', () => {
+  it('keeps origin/bipolar on a dial meta, and resolves its anchor', () => {
     const id = nextId();
     TweakStore.registerPanel(id, id, {
       trim: { type: 'slider', default: 0, min: -12, max: 12, bipolar: true },
@@ -167,11 +167,45 @@ describe('move layout', () => {
     const [page] = buildMovePages([TweakStore.getPanel(id)!]);
     assert.equal(page.dials[0].path, 'trim');
     assert.equal(page.dials[0].bipolar, true);
-    assert.equal(dialOriginPercent(page.dials[0]), 50);
-    /* an explicit origin anchors there; no origin (or origin at min) = null */
-    assert.equal(dialOriginPercent({ type: 'slider', path: 'x', label: 'X', min: 0, max: 10, origin: 5 } as never), 50);
-    assert.equal(dialOriginPercent({ type: 'slider', path: 'x', label: 'X', min: 0, max: 10 } as never), null);
-    assert.equal(dialOriginPercent({ type: 'slider', path: 'x', label: 'X', min: 0, max: 10, origin: 0 } as never), null);
+    assert.equal(dialOrigin(page.dials[0]), 0.5);
+    /* an explicit origin anchors there; no origin (or origin at min) = 0 */
+    assert.equal(dialOrigin({ type: 'slider', path: 'x', label: 'X', min: 0, max: 10, origin: 5 } as never), 0.5);
+    assert.equal(dialOrigin({ type: 'slider', path: 'x', label: 'X', min: 0, max: 10 } as never), 0);
+    assert.equal(dialOrigin({ type: 'slider', path: 'x', label: 'X', min: 0, max: 10, origin: 0 } as never), 0);
+  });
+
+  it('gives a select an enum dial slot in column order, never a chip — the kit rule', () => {
+    const id = nextId();
+    const config: Record<string, unknown> = {
+      shape: { type: 'select', options: ['solid', 'outline'], default: 'solid' },
+    };
+    for (let i = 0; i < 8; i++) config[`dial${i}`] = [0.5, 0, 1];
+    config.mode = { type: 'select', options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }], default: 'a' };
+    TweakStore.registerPanel(id, id, config as never);
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    /* the select claims dial slot 1 exactly like the kit maps it — the two
+       surfaces must agree on columns (regression: PhotoStack off-by-one) */
+    assert.equal(page.dials[0].path, 'shape');
+    assert.equal(page.dials[0].type, 'select');
+    assert.deepEqual(page.values.map((v) => v.path), ['dial7']);
+  });
+
+  it('normalizes and denormalizes range ends, ordered and kit-identically', () => {
+    const meta = { type: 'range', path: 'band', label: 'Band', min: 0, max: 100, step: 5 } as const;
+    assert.deepEqual(normalizeRangeDial(meta as never, { min: 20, max: 80 }), { lo: 0.2, hi: 0.8 });
+    assert.deepEqual(normalizeRangeDial(meta as never, undefined), { lo: 0, hi: 0 });
+    assert.deepEqual(denormalizeRangeDial(meta as never, 0.33, 0.77), { min: 35, max: 75 });
+    /* crossed ends come back ordered */
+    assert.deepEqual(denormalizeRangeDial(meta as never, 0.9, 0.1), { min: 10, max: 90 });
+  });
+
+  it('anchors bipolar and origin sliders, and leaves plain ones at zero', () => {
+    const bipolar = { type: 'slider', path: 'pan', label: 'Pan', min: -1, max: 1, bipolar: true } as const;
+    assert.equal(dialOrigin(bipolar as never), 0.5);
+    const origined = { type: 'slider', path: 'trim', label: 'Trim', min: 0, max: 20, origin: 5 } as const;
+    assert.equal(dialOrigin(origined as never), 0.25);
+    const plain = { type: 'slider', path: 'gain', label: 'Gain', min: 0, max: 1 } as const;
+    assert.equal(dialOrigin(plain as never), 0);
   });
 
   it('normalizes dial values to 0..1 with clamping', () => {

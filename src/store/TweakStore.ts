@@ -556,7 +556,7 @@ export type PanelConfig = {
    * its title carries the switch. Same idiom as a module folder, one level up.
    */
   module?: boolean;
-  kind?: 'timeline';
+  kind?: 'timeline' | 'modulation';
 };
 
 type Listener = () => void;
@@ -656,8 +656,9 @@ export type TweakStorePanelOptions = {
    * persisted entry and its shortcut binding.
    */
   labels?: Record<string, string>;
-  /** Timeline panels render in TweakTimeline and are filtered out of the panel dock. */
-  kind?: 'timeline';
+  /** Timeline panels render in TweakTimeline; modulation panels are the Move's
+   * modulator settings pages — both are filtered out of the panel dock. */
+  kind?: 'timeline' | 'modulation';
 };
 
 /** camelCase → Title Case, the label rule used everywhere a key becomes UI text. */
@@ -1010,7 +1011,7 @@ class TweakStoreClass {
 
   getPanels(kind?: 'panel' | 'timeline'): PanelConfig[] {
     const all = Array.from(this.panels.values());
-    if (kind === 'panel') return all.filter((panel) => panel.kind !== 'timeline');
+    if (kind === 'panel') return all.filter((panel) => panel.kind === undefined);
     if (kind === 'timeline') return all.filter((panel) => panel.kind === 'timeline');
     return all;
   }

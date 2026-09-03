@@ -103,6 +103,10 @@ export default defineConfig([
       'gradient-core': 'src/gradient-core.ts',
       'xy-pad-core': 'src/xy-pad-core.ts',
       'affordance-core': 'src/affordance-core.ts',
+      'modulation-core': 'src/modulation-core.ts',
+      // ModulationStore sits in src/store, so its TweakStore import is the
+      // bare sibling './TweakStore' — the widened filter below catches it.
+      'modulation-store': 'src/store/ModulationStore.ts',
     },
     outDir: 'dist',
     format: ['esm'],
@@ -113,7 +117,7 @@ export default defineConfig([
       {
         name: 'externalize-tweakstore',
         setup(build) {
-          build.onResolve({ filter: /store\/TweakStore$/ }, () => ({
+          build.onResolve({ filter: /(store\/TweakStore|^\.\/TweakStore)$/ }, () => ({
             path: 'tweakers/store',
             external: true,
           }));

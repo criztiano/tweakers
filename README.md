@@ -941,9 +941,9 @@ The on-screen panel shows only occupied slots: a column renders only when it has
 
 Both variants wear the same surface, padding and slot geometry; only the placement differs. The panel carries `data-dock="viewport" | "flow"` if your own CSS needs to branch on it.
 
-An `xy` control claims a dial slot as a 2D pad: the field draws behind the label (no slider at the bottom) and dragging it sets both axes. On the hardware, the column's knob turns the X axis — and while a finger rests on that knob, the volume knob turns Y.
+An `xy` control claims a dial slot as a 2D pad: the field draws behind the label (no slider at the bottom) and dragging it sets both axes. On the hardware, the column's knob turns the X axis — and while a finger rests on that knob, the volume knob turns Y. The pad honours the XYPad's options: `grid`/`density` draw the same grid overlay (on by default, 5×5), `snap` snaps drags to the grid, bipolar axes keep the escapable centre detent, and `returnToCenter` springs the pad back to its origin on release — on screen when the pointer lifts, and on the hardware when the finger leaves the knob.
 
-A `range` control claims a dial slot too: the bar fills between two handle ticks, and dragging grabs the nearest handle. On the hardware it uses the same two-handed idea as the xy pad — the column's knob edits the low handle, and while a finger rests on that knob, the volume knob edits the high one.
+A `range` control claims a dial slot too: the bar fills between two handle ticks, and dragging grabs the nearest handle. On the hardware it uses the same two-handed idea as the xy pad — the column's knob edits the low handle, and while a finger rests on that knob, the volume knob edits the high one (the ends never cross).
 
 A `select` with options becomes a stepped enum dial: the bar splits into one cell per option, the active cell filled, and the readout shows the option's label. Dragging the slot — or turning the column's knob — steps through the options in order.
 
@@ -996,6 +996,44 @@ MoveVolumeDisplay.clear();                                       // pill disappe
 ```
 
 Time-style strings (`0:00:00`) render with bold separators so the digit groups read apart. When nothing is registered, the whole cluster stays hidden and the header looks as it always did.
+
+## Modulation
+
+Any bounded numeric control (slider, `number` with min/max) can be driven by a modulation — an LFO today; envelope follower, curve, S&H, and step sequencer plug into the same registry. Modulations live in 16 slots, one per Move sequencer step button: **touch a control, press a step** and the modulation is created there and wired to the control (press again to unwire). Each slot keeps a palette colour; the track row shows a circle per slot with a pulsing dot of that colour, and the same dot marks every control the slot drives — in the Move panel and the side panel both.
+
+The modulated value **never enters the TweakStore.** The control keeps the value you set (the base); the modulation is a live layer your app pulls at frame time:
+
+```tsx
+import { ModulationStore } from 'tweakers';
+
+// In your frame loop — base values with the live modulation applied on top,
+// clamped to each control's own bounds:
+const speed = ModulationStore.getValue('fx', 'blob.speed');   // one path
+const params = ModulationStore.getValues('fx');               // whole panel
+```
+
+Because the stored value never moves, presets, persistence, and the bridge kit's diffing all stay quiet — no loops, no thrash. Slots and assignments persist to localStorage (fail-soft), so a prototype's modulation setup survives a reload.
+
+**Settings.** Hold an occupied step (or hold its circle on-screen) and the modulator's settings page takes the surface over: the type enum in the first big slot, then the modulator's own controls — for the LFO: rate (its tempo-sync pad directly below), phase, width, and a jitter/smooth XY. A track button puts a regular page back. Under the hood the page is one hidden TweakStore panel (`MOD_SETTINGS_PANEL`, kind `'modulation'` — never in the dock, never on a track), so the bridge kit syncs it to the hardware like any page and every edit flows into the slot's params.
+
+Everything the gesture does is also plain API — `createSlot(step, 'lfo')`, `assign(panelId, path, step, amount)`, `updateSlotParams`, `setSlotType`, `removeSlot`, `openSettings(step)` / `closeSettings()` — and `subscribe` / `subscribeFrames` cover structure and per-frame signals (`getSignal(step)` is the slot's raw −1..1).
+
+### External modulation sources
+
+DSP apps whose modulators run on the audio side (a native LFO, an envelope follower) register them instead of using the internal engine:
+
+```tsx
+// Pull: sampled once per frame by the engine…
+ModulationStore.registerSource('env-follow', { sample: () => native.envelope });
+// …or push at whatever rate the app has:
+ModulationStore.setSourceValue('env-follow', v);   // -1..1
+
+ModulationStore.setSlotSource(step, 'env-follow');
+```
+
+A slot on a source shows its signal (circle, dots, step light) but applies nothing to values — the app's own engine already did, at audio rate. A source that wants the library to apply for it passes `applies: true`. Tempo-synced modulators follow `ModulationStore.setTempo(bpm)` (the bridge kit feeds it the Move's tempo).
+
+New modulator types register a `ModTypeDef` — defaults, the settings-page controls, and a stateful `tick(state, params, dt, bpm)` returning −1..1 — via `registerModType`; the LFO (`LFO_DEF`) is the reference implementation.
 
 ---
 

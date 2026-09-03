@@ -10,7 +10,7 @@ export type { TweakPosition, TweakMode, TweakTheme } from './components/TweakRoo
 export { MovePanel } from './components/MovePanel';
 export { MoveActionButton } from './components/MoveActionButton';
 export type { MoveActionButtonProps } from './components/MoveActionButton';
-export { buildMovePages, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOriginPercent, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
+export { buildMovePages, buildModMovePage, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
 export type { MovePage } from './move-layout';
 export { MoveFunctions, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_SPECIAL_BUTTONS } from './move-functions';
 export type { MoveFunctionButton, MoveFunctionPress, MoveFunctionHandler, MoveFunctionOptions, MoveFunctionRunListener } from './move-functions';
@@ -21,6 +21,36 @@ export { ICON_MOVE_CAPTURE, ICON_MOVE_ENTER } from './icons';
 // List screen (the Move's dark display list, standalone)
 export { ListScreen } from './components/ListScreen';
 export type { ListScreenProps, ListScreenItem } from './components/ListScreen';
+
+// Modulation layer — slots, assignments, the engine, and the type registry
+export { ModulationStore, MOD_TOUCH_GRACE_MS } from './store/ModulationStore';
+export type { ModulationSourceConfig, ModStepAction } from './store/ModulationStore';
+export {
+  MOD_SLOTS,
+  MOD_COLORS,
+  MOD_SETTINGS_PANEL,
+  modColor,
+  modKey,
+  applyModulation,
+  registerModType,
+  getModType,
+  listModTypes,
+  LFO_DEF,
+  SH_DEF,
+  modRingArc,
+  MOD_RING_RADIUS,
+  MOD_RING_CIRCUMFERENCE,
+  LFO_SYNC_DIVISIONS,
+  lfoSyncedHz,
+} from './modulation-core';
+export type {
+  ModulationType,
+  ModulationParams,
+  ModulationSlot,
+  ModulationAssignment,
+  ModTypeDef,
+  ModControlMeta,
+} from './modulation-core';
 
 // Timeline (prototype)
 export { useTweakTimeline } from './hooks/useTweakTimeline';
