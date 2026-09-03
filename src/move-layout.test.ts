@@ -97,6 +97,22 @@ describe('move layout', () => {
     assert.deepEqual(page.values.map((v) => v.path), ['dial7']);
   });
 
+  it('gives a select an enum dial slot in column order, never a chip — the kit rule', () => {
+    const id = nextId();
+    const config: Record<string, unknown> = {
+      shape: { type: 'select', options: ['solid', 'outline'], default: 'solid' },
+    };
+    for (let i = 0; i < 8; i++) config[`dial${i}`] = [0.5, 0, 1];
+    config.mode = { type: 'select', options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }], default: 'a' };
+    TweakStore.registerPanel(id, id, config as never);
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    /* the select claims dial slot 1 exactly like the kit maps it — the two
+       surfaces must agree on columns (regression: PhotoStack off-by-one) */
+    assert.equal(page.dials[0].path, 'shape');
+    assert.equal(page.dials[0].type, 'select');
+    assert.deepEqual(page.values.map((v) => v.path), ['dial7']);
+  });
+
   it('normalizes and denormalizes range ends, ordered and kit-identically', () => {
     const meta = { type: 'range', path: 'band', label: 'Band', min: 0, max: 100, step: 5 } as const;
     assert.deepEqual(normalizeRangeDial(meta as never, { min: 20, max: 80 }), { lo: 0.2, hi: 0.8 });

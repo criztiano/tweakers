@@ -5332,6 +5332,36 @@ input.tweakers-list-item-title:focus {
   opacity: 1;
 }
 
+/* A substituted slot always reads name-on-tag + live value — the centred
+   label would double the tag, so it stays hidden. */
+.tweakers-move-dial[data-sub] .tweakers-move-dial-label {
+  opacity: 0;
+}
+
+.tweakers-move-dial[data-sub] .tweakers-move-dial-value {
+  opacity: 1;
+}
+
+/* While a value chip substitutes the dial (held or latched), a small tag
+   at the top of the slot names what the knob is controlling; the big
+   number below matches the chip's own readout exactly. */
+.tweakers-move-dial-sub {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 16px);
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--move-chip);
+  font-family: var(--move-font-label);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .tweakers-move-dial-bar {
   position: absolute;
   left: 8px;

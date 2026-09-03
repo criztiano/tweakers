@@ -36,12 +36,16 @@ const flat = (controls: ControlMeta[], out: ControlMeta[] = []): ControlMeta[] =
   return out;
 };
 
+/** A select with real choices becomes an enum dial — the kit's exact rule. */
+export const isEnumDial = (c: ControlMeta) =>
+  c.type === 'select' && Array.isArray(c.options) && c.options.length > 1;
+
 const isDial = (c: ControlMeta) =>
-  c.type === 'slider' || c.type === 'xy' || c.type === 'range' ||
+  c.type === 'slider' || c.type === 'xy' || c.type === 'range' || isEnumDial(c) ||
   (c.type === 'number' && c.min != null && c.max != null);
 
-/** Two-handed dials need a slot of their own, never a value chip. */
-const isTwoHanded = (c: ControlMeta) => c.type === 'xy' || c.type === 'range';
+/** Two-handed dials and enums need a slot of their own, never a value chip. */
+const noChip = (c: ControlMeta) => c.type === 'xy' || c.type === 'range' || isEnumDial(c);
 
 export function buildMovePages(panels: PanelConfig[]): MovePage[] {
   return panels
@@ -55,7 +59,7 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         dials: bounded.slice(0, MOVE_DIALS),
         toggles: controls.filter((c) => c.type === 'toggle').slice(0, MOVE_PADS),
         /* xy pads and ranges need a dial slot — past the 8 dials they don't fit a chip */
-        values: bounded.slice(MOVE_DIALS).filter((c) => !isTwoHanded(c)).slice(0, MOVE_PADS),
+        values: bounded.slice(MOVE_DIALS).filter((c) => !noChip(c)).slice(0, MOVE_PADS),
       };
     });
 }
@@ -94,6 +98,16 @@ export function normalizeXYDial(meta: ControlMeta, value: unknown): { x: number;
   const yAxis = resolveAxis(meta.yAxis);
   const v = (value ?? {}) as Partial<XYValue>;
   return { x: norm01(v.x, xAxis.min, xAxis.max), y: norm01(v.y, yAxis.min, yAxis.max) };
+}
+
+/** Enum dial helpers — options may be strings or { value, label }. */
+export const enumOptionValue = (o: string | { value: string; label?: string }) =>
+  typeof o === 'string' ? o : o.value;
+export const enumOptionLabel = (o: string | { value: string; label?: string }) =>
+  typeof o === 'string' ? o : (o.label ?? o.value);
+export function enumIndex(meta: ControlMeta, value: unknown): number {
+  const i = (meta.options ?? []).findIndex((o) => enumOptionValue(o as never) === value);
+  return Math.max(0, i);
 }
 
 /** A range dial's two ends, each 0..1 — the two numbers on the wire. */
