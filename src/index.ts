@@ -8,10 +8,19 @@ export type { TweakPosition, TweakMode, TweakTheme } from './components/TweakRoo
 
 // Move surface mirror (docked bottom panel matching the bridge kit's mapping)
 export { MovePanel } from './components/MovePanel';
-export { buildMovePages, normalizeDial, normalizeXYDial, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
+export { MoveActionButton } from './components/MoveActionButton';
+export type { MoveActionButtonProps } from './components/MoveActionButton';
+export { buildMovePages, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOriginPercent, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
 export type { MovePage } from './move-layout';
 export { MoveFunctions, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_SPECIAL_BUTTONS } from './move-functions';
-export type { MoveFunctionButton, MoveFunctionPress, MoveFunctionHandler } from './move-functions';
+export type { MoveFunctionButton, MoveFunctionPress, MoveFunctionHandler, MoveFunctionOptions, MoveFunctionRunListener } from './move-functions';
+export { MoveVolumeDisplay } from './move-volume';
+export type { MoveVolumeDisplayState } from './move-volume';
+export { ICON_MOVE_CAPTURE, ICON_MOVE_ENTER } from './icons';
+
+// List screen (the Move's dark display list, standalone)
+export { ListScreen } from './components/ListScreen';
+export type { ListScreenProps, ListScreenItem } from './components/ListScreen';
 
 // Timeline (prototype)
 export { useTweakTimeline } from './hooks/useTweakTimeline';

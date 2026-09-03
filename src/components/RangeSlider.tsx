@@ -11,7 +11,7 @@ import {
   handleLeftStyles,
   type RangeValue,
 } from '../range-slider-core';
-import { decimalsForStep, roundValue } from '../shortcut-utils';
+import { decimalsForStep, roundValue, fineDragValue } from '../shortcut-utils';
 
 export type { RangeValue };
 
@@ -76,6 +76,12 @@ export function RangeSlider({
   // overwritten on every pointer-down.
   const dragStartValueRef = useRef<RangeValue>(rawValue);
   const dragStartValueAtRef = useRef(0);
+  // Shift mid-drag = fine mode: pointer travel applies at 0.1× relative to the
+  // range where shift went down; releasing shift rebases at 1× so neither
+  // handle jumps back to the cursor's absolute position. Drag-only.
+  const fineRef = useRef<{ shift: boolean; anchorRange: RangeValue; anchorPos: number } | null>(null);
+  /** Last range emitted during the drag — the fine anchor rebases from it. */
+  const dragValueRef = useRef<RangeValue>(rawValue);
   // A settle/reset can animate BOTH springs (double-click resets both handles),
   // so track them separately and stop BOTH before a drag or a new animation.
   // Leaving the low reset spring untracked let it keep writing the motion value
@@ -193,6 +199,8 @@ export function RangeSlider({
       clickMovesRef.current = target !== 'span' && isOutsideSpan(atValue, value);
       dragStartValueRef.current = value;
       dragStartValueAtRef.current = atValue;
+      fineRef.current = null;
+      dragValueRef.current = value;
     },
     [editing, positionToValue, value, min, max]
   );
@@ -212,23 +220,56 @@ export function RangeSlider({
 
       if (isClickRef.current) return;
 
+      // Rebase the fine anchor on every shift transition: press mid-drag
+      // snapshots the current range + pointer; release snapshots again so
+      // tracking continues at 1× from there instead of jumping to the cursor.
+      if (e.shiftKey ? !fineRef.current?.shift : fineRef.current?.shift) {
+        fineRef.current = { shift: e.shiftKey, anchorRange: dragValueRef.current, anchorPos: e.clientX };
+      }
+
       // Drag mode — instant update through the core helpers.
-      const raw = roundValue(positionToValue(e.clientX), step);
       const target = dragTargetRef.current;
       let next: RangeValue;
-      if (target === 'span') {
-        // Shift relative to the gesture's start snapshot so width is preserved
-        // exactly and rounding can't accumulate drift.
-        const delta = raw - roundValue(dragStartValueAtRef.current, step);
-        next = shiftSpan(delta, dragStartValueRef.current, min, max);
-      } else if (target === 'min') {
-        next = setLow(raw, value, min);
+      if (fineRef.current) {
+        const f = fineRef.current;
+        const extent = wrapperRef.current?.offsetWidth ?? 1;
+        const fineAt = (start: number) =>
+          roundValue(
+            fineDragValue({
+              startValue: start,
+              startPos: f.anchorPos,
+              pos: e.clientX,
+              extentPx: extent,
+              min,
+              max,
+              factor: f.shift ? 0.1 : 1,
+            }),
+            step
+          );
+        if (target === 'span') {
+          next = shiftSpan(fineAt(f.anchorRange.min) - f.anchorRange.min, f.anchorRange, min, max);
+        } else if (target === 'min') {
+          next = setLow(fineAt(f.anchorRange.min), value, min);
+        } else {
+          next = setHigh(fineAt(f.anchorRange.max), value, max);
+        }
       } else {
-        next = setHigh(raw, value, max);
+        const raw = roundValue(positionToValue(e.clientX), step);
+        if (target === 'span') {
+          // Shift relative to the gesture's start snapshot so width is preserved
+          // exactly and rounding can't accumulate drift.
+          const delta = raw - roundValue(dragStartValueAtRef.current, step);
+          next = shiftSpan(delta, dragStartValueRef.current, min, max);
+        } else if (target === 'min') {
+          next = setLow(raw, value, min);
+        } else {
+          next = setHigh(raw, value, max);
+        }
       }
 
       stopAnims();
       syncMotion(next);
+      dragValueRef.current = next;
       onChange(next);
     },
     [isInteracting, positionToValue, step, min, max, value, syncMotion, onChange, stopAnims]
@@ -272,6 +313,7 @@ export function RangeSlider({
       setIsDragging(false);
       pointerDownPos.current = null;
       dragTargetRef.current = null;
+      fineRef.current = null;
     },
     [isInteracting, positionToValue, step, value, min, max, lowMotion, highMotion, percentFromValue, onChange, stopAnims]
   );
@@ -286,6 +328,7 @@ export function RangeSlider({
     setIsDragging(false);
     pointerDownPos.current = null;
     dragTargetRef.current = null;
+    fineRef.current = null;
   }, [isInteracting]);
 
   // Double-click the track resets BOTH handles to the configured default (else the

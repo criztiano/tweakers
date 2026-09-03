@@ -3,27 +3,50 @@ import { createPortal } from 'react-dom';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from './TweakRoot';
-import { buildMovePages, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, MOVE_TRACKS, MOVE_DIALS } from '../move-layout';
+import { buildMovePages, visibleColumns, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOriginPercent, MOVE_DIALS } from '../move-layout';
+import { nearestHandle, type RangeValue } from '../range-slider-core';
+import { fineDragValue } from '../shortcut-utils';
+import { MoveVolumeDisplay, type MoveVolumeDisplayState } from '../move-volume';
 
 interface MovePanelProps {
   theme?: TweakTheme;
   productionEnabled?: boolean;
   /** Mirror only the named panels, in the order given — same option the bridge kit takes. */
   panels?: string | string[];
+  /**
+   * Where the panel sits. `viewport` (the default) portals it to `<body>` and
+   * pins it to the window's bottom edge — for apps whose content fills the
+   * screen. `flow` renders it inline, in normal document flow, wherever the
+   * host puts it — for sparse apps that want the content and the panel to
+   * read as one group instead of leaving a dead gap between them.
+   */
+  dock?: 'viewport' | 'flow';
 }
 
 /** The Move's four track colours, in track order (Figma node 802:321). */
 export const MOVE_TRACK_COLORS = ['#4274f4', '#d83dff', '#ff4d07', '#52bd06'];
 
-/** The on-screen pad grid is the full Move grid: 4 rows of 8 (Figma 802:319). */
+/** The on-screen pad grid mirrors the Move grid's 4 rows (Figma 802:319);
+ *  columns follow the occupied set, never the full 8. */
 const PAD_ROWS = 4;
-const PAD_COLS = 8;
 
 /** The slider track's inset from the dial slot's edges (Figma 802:767). */
 const DIAL_TRACK_INSET = 10;
 
 /** Press shorter than this is a tap (latch); longer is a hold (peek). */
 const TAP_MS = 300;
+
+/**
+ * A readout string with any `:` separators pulled out and rendered bold at
+ * 14px — a `0:00:00` time reads as digit groups, not a colon soup. Strings
+ * without colons pass through untouched.
+ */
+function boldColons(text: string) {
+  if (!text.includes(':')) return text;
+  return text.split(':').flatMap((part, i) =>
+    i === 0 ? [part] : [<span key={`sep-${i}`} className="tweakers-move-volume-sep">:</span>, part]
+  );
+}
 
 /**
  * The bridge kit's window events, keyed by control path:
@@ -38,12 +61,23 @@ export const MOVE_OVERRIDE_EVENT = 'move-tweakers:override';
 export const MOVE_LATCH_EVENT = 'move-tweakers:latch';
 
 /**
- * The Move's control surface docked to the bottom edge, laid out to Cri's
- * Figma spec (file USU9CW2vC3SrvKsnHVnYGi, node 802:319; slot components
- * 802:756 and 800:1737): a track row of four coloured markers, 8 dial
- * slots hosting slider ports, and the pad grid — toggle chips on the
- * first row, value chips on the second, at the same columns as their
- * hardware pads (move-layout keeps both surfaces in agreement).
+ * The Move's control surface, laid out to Cri's Figma spec (file
+ * USU9CW2vC3SrvKsnHVnYGi, node 802:319; slot components 802:756 and
+ * 800:1737): a track row of coloured markers — one per page, so an app
+ * with a single panel gets a single tick and name — 8 dial slots hosting
+ * slider ports, and the pad grid — toggle chips on the first row, value
+ * chips on the second, at the same columns as their hardware pads
+ * (move-layout keeps both surfaces in agreement).
+ *
+ * `dock` decides where it lives: `viewport` portals it to `<body>` and pins
+ * it to the window's bottom edge; `flow` leaves it inline where the host
+ * placed it. Both wear the same surface, padding and slot geometry.
+ *
+ * Only occupied slots/columns are shown: a column renders when it holds a
+ * dial, a toggle chip, or a value chip, at its full 8-wide slot size; the
+ * visible cluster centres in the panel and the header row shares its width,
+ * so the page name lines up with the first visible slot. Hidden columns
+ * are skipped, never renumbered — column i is still hardware knob i.
  *
  * Value chips substitute the dial in their column: hold one to peek at
  * its value in the dial slot, tap to latch it in — the chip inverts and
@@ -54,8 +88,21 @@ export const MOVE_LATCH_EVENT = 'move-tweakers:latch';
  * label (no slider at the bottom) with crosshair lines meeting at the dot.
  * Dragging the slot sets both axes; on the hardware the column's knob
  * turns X, and the volume knob turns Y while that knob is touched.
+ *
+ * A range control takes a dial slot too: the bar fills between two handle
+ * ticks, and a drag grabs the nearest handle. On the hardware the column's
+ * knob edits the low handle and the volume knob edits the high one while
+ * that knob is touched — the xy pad's two-handed concept on one axis.
+ *
+ * A select with options takes a dial slot as a stepped enum dial: the bar
+ * splits into one cell per option, the active cell filled, and the readout
+ * shows the option's label. A drag picks the nearest cell.
+ *
+ * Holding Shift mid-drag switches any slot to fine mode: pointer travel
+ * applies at 0.1× relative to where shift went down, and releasing shift
+ * rebases at 1× so the value never jumps.
  */
-export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only }: MovePanelProps) {
+export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport' }: MovePanelProps) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [track, setTrack] = useState(0);
@@ -69,6 +116,33 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const [latched, setLatched] = useState<Record<number, ControlMeta | undefined>>({});
   const holdStart = useRef(0);
   const [mounted, setMounted] = useState(false);
+  // Shift mid-drag = fine mode: pointer travel applies at 0.1× relative to the
+  // value snapshot where shift went down; releasing shift rebases at 1× so the
+  // value never jumps back to the cursor's absolute position.
+  const fineRef = useRef<{ shift: boolean; x: number; y: number; v: unknown } | null>(null);
+  // Which range handle a gesture grabbed — locked at pointer-down.
+  const rangeHandleRef = useRef<'min' | 'max'>('min');
+
+  // Volume-dial readout: a static value renders as set; a getValue is polled
+  // per animation frame while mounted, for readouts that move (a playhead).
+  const [volume, setVolume] = useState<MoveVolumeDisplayState | null>(() => MoveVolumeDisplay.get());
+  const [liveValue, setLiveValue] = useState<string | null>(null);
+  useEffect(() => {
+    setVolume(MoveVolumeDisplay.get());
+    return MoveVolumeDisplay.subscribe(() => setVolume(MoveVolumeDisplay.get()));
+  }, []);
+  useEffect(() => {
+    const poll = volume?.getValue;
+    if (!poll) {
+      setLiveValue(null);
+      return;
+    }
+    let raf = requestAnimationFrame(function tick() {
+      setLiveValue(poll());
+      raf = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [volume]);
 
   const onlyKey = Array.isArray(only) ? only.join(' ') : only;
   const read = useCallback(
@@ -122,9 +196,6 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 
   if (!mounted || typeof window === 'undefined' || pages.length === 0 || !page || !values) return null;
 
-  const slots = <T,>(items: T[], count: number) =>
-    Array.from({ length: count }, (_, i) => items[i]);
-
   // The readout is the dial's position, 0–100 — the same normalized number
   // the Move itself works in.
   const dialPercent = (meta: ControlMeta) =>
@@ -139,12 +210,25 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     return { num, unit: meta.unit };
   };
 
+  // Rebase the fine anchor on every shift transition: press mid-drag snapshots
+  // the value and pointer there; release snapshots again so tracking continues
+  // at 1× from the release point instead of jumping to the cursor.
+  const fineAnchor = (e: React.PointerEvent, snapshot: () => unknown) => {
+    if (e.shiftKey ? !fineRef.current?.shift : fineRef.current?.shift) {
+      fineRef.current = { shift: e.shiftKey, x: e.clientX, y: e.clientY, v: snapshot() };
+    }
+    return fineRef.current;
+  };
+
   // Whole-slot hotspot, position-on-the-track sets the value — the same feel
   // as the library Slider's card.
   const dialFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const span = rect.width - DIAL_TRACK_INSET * 2;
-    const v01 = Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
+    const fine = fineAnchor(e, () => normalizeDial(meta, values[meta.path]));
+    const v01 = fine
+      ? fineDragValue({ startValue: fine.v as number, startPos: fine.x, pos: e.clientX, extentPx: span || 1, min: 0, max: 1, factor: fine.shift ? 0.1 : 1 })
+      : Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
     TweakStore.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
   };
 
@@ -152,9 +236,85 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // the control's y-up, like the library XYPad).
   const xyFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const x01 = Math.min(1, Math.max(0, (e.clientX - rect.left) / (rect.width || 1)));
-    const y01 = Math.min(1, Math.max(0, 1 - (e.clientY - rect.top) / (rect.height || 1)));
+    const fine = fineAnchor(e, () => normalizeXYDial(meta, values[meta.path]));
+    let x01: number, y01: number;
+    if (fine) {
+      const a = fine.v as { x: number; y: number };
+      const factor = fine.shift ? 0.1 : 1;
+      x01 = fineDragValue({ startValue: a.x, startPos: fine.x, pos: e.clientX, extentPx: rect.width || 1, min: 0, max: 1, factor });
+      // Negated positions flip screen y-down to the control's y-up.
+      y01 = fineDragValue({ startValue: a.y, startPos: -fine.y, pos: -e.clientY, extentPx: rect.height || 1, min: 0, max: 1, factor });
+    } else {
+      x01 = Math.min(1, Math.max(0, (e.clientX - rect.left) / (rect.width || 1)));
+      y01 = Math.min(1, Math.max(0, 1 - (e.clientY - rect.top) / (rect.height || 1)));
+    }
     TweakStore.updateValue(page.panel.id, meta.path, denormalizeXYDial(meta, x01, y01));
+  };
+
+  // A range slot grabs the nearest handle at pointer-down (locked for the
+  // gesture) and drags it; the untouched handle pins the other bound so the
+  // pair stays ordered, exactly like the RangeSlider's setLow/setHigh.
+  const rangeFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, down: boolean) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const span = rect.width - DIAL_TRACK_INSET * 2;
+    const cur = normalizeRangeDial(meta, values[meta.path]);
+    let p01 = Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
+    if (down) rangeHandleRef.current = nearestHandle(p01, { min: cur.lo, max: cur.hi });
+    const fine = fineAnchor(e, () => cur);
+    if (fine) {
+      const a = fine.v as { lo: number; hi: number };
+      p01 = fineDragValue({
+        startValue: rangeHandleRef.current === 'min' ? a.lo : a.hi,
+        startPos: fine.x,
+        pos: e.clientX,
+        extentPx: span || 1,
+        min: 0,
+        max: 1,
+        factor: fine.shift ? 0.1 : 1,
+      });
+    }
+    const next = rangeHandleRef.current === 'min'
+      ? { lo: Math.min(p01, cur.hi), hi: cur.hi }
+      : { lo: cur.lo, hi: Math.max(p01, cur.lo) };
+    TweakStore.updateValue(page.panel.id, meta.path, denormalizeRangeDial(meta, next.lo, next.hi));
+  };
+
+  // An enum slot steps between the options: the pointer's position on the
+  // track maps to 0..1, and denormalizeEnumDial snaps it to the nearest option.
+  const enumFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const span = rect.width - DIAL_TRACK_INSET * 2;
+    const v01 = Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
+    TweakStore.updateValue(page.panel.id, meta.path, denormalizeEnumDial(meta, v01));
+  };
+
+  // A bipolar (origin-anchored) dial reads out its real signed value; plain
+  // dials keep the 0–100 position the Move itself works in.
+  const dialReading = (meta: ControlMeta): string => {
+    if (dialOriginPercent(meta) == null) return `${dialPercent(meta)}%`;
+    const n = Number(values[meta.path]);
+    if (!Number.isFinite(n)) return '';
+    if (meta.formatValue) return meta.formatValue(n);
+    const num = Math.abs(n) >= 100 ? Math.round(n).toString() : Number(n.toFixed(2)).toString();
+    return n > 0 ? `+${num}` : num;
+  };
+
+  // An enum slot reads out the active option's label, as declared.
+  const enumReading = (meta: ControlMeta): string => {
+    const cur = String(values[meta.path] ?? '');
+    const opt = meta.options?.find((o) => (typeof o === 'string' ? o : o.value) === cur);
+    return opt == null || typeof opt === 'string' ? cur : opt.label;
+  };
+
+  // A range slot reads out `lo–hi`, each bound formatted like a value chip.
+  const rangeReading = (meta: ControlMeta): string => {
+    const v = (values[meta.path] ?? {}) as Partial<RangeValue>;
+    const fmt = (n: number | undefined): string => {
+      if (n == null || !Number.isFinite(n)) return '';
+      if (meta.formatValue) return meta.formatValue(n);
+      return Math.abs(n) >= 100 ? Math.round(n).toString() : Number(n.toFixed(2)).toString();
+    };
+    return `${fmt(v.min)}–${fmt(v.max)}`;
   };
 
   const chipLatched = (col: number, meta: ControlMeta) =>
@@ -190,29 +350,54 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 
   const padRows: (ControlMeta[])[] = [page.toggles, page.values, [], []];
 
+  // Only occupied columns render — a column with a dial, a toggle chip, or a
+  // value chip at its index. Indices stay the hardware knob numbers (hidden
+  // columns are skipped, never renumbered), the visible cluster centres in
+  // the panel, and each slot keeps the exact 8-wide grid's slot size. An
+  // empty page shows the header alone.
+  const visibleCols = visibleColumns(page);
+
+  // The header cluster: the volume-dial readout, right-aligned. (Action
+  // buttons live in the views now — see MoveActionButton.) Nothing
+  // registered = no cluster, header unchanged.
+  const volumeReading = liveValue ?? volume?.value;
+  const headerCluster = volume && (
+    <div className="tweakers-move-actions">
+      <div className="tweakers-move-volume">
+        <span className="tweakers-move-volume-tick" style={{ background: MOVE_TRACK_COLORS[0] }} />
+        {volume.label && volumeReading != null && (
+          <span className="tweakers-move-volume-label">{volume.label}</span>
+        )}
+        <span className="tweakers-move-volume-value">{boldColons(volumeReading ?? volume.label ?? '')}</span>
+      </div>
+    </div>
+  );
+
   const content = (
-    <div className="tweakers-root tweakers-move-root" data-theme={theme}>
-      <div className="tweakers-move">
-        <div className="tweakers-move-inner">
+    <div className="tweakers-root tweakers-move-root" data-theme={theme} data-dock={dock}>
+      <div className="tweakers-move" data-dock={dock}>
+        <div className="tweakers-move-inner" style={{ '--move-cols': visibleCols.length || MOVE_DIALS } as React.CSSProperties}>
+          {/* Only tracks that carry a page render — a bare coloured marker with
+              no name says nothing. The index is still the real track index, so
+              the colour never shifts with the visible position. */}
           <div className="tweakers-move-tracks">
-            {slots(pages, MOVE_TRACKS).map((pg, i) => (
+            {pages.map((pg, i) => (
               <button
-                key={pg ? pg.panel.id : `empty-${i}`}
+                key={pg.panel.id}
                 className="tweakers-move-track"
-                data-active={pg ? pg === page : undefined}
-                data-empty={pg ? undefined : true}
-                disabled={!pg}
+                data-active={pg === page}
                 onClick={() => setTrack(i)}
               >
                 <span className="tweakers-move-track-marker" style={{ background: MOVE_TRACK_COLORS[i] }} />
-                {pg && <span className="tweakers-move-track-label">{pg.panel.name}</span>}
+                <span className="tweakers-move-track-label">{pg.panel.name}</span>
               </button>
             ))}
+            {headerCluster}
           </div>
 
-          <div className="tweakers-move-grid">
+          {visibleCols.length > 0 && <div className="tweakers-move-grid">
             <div className="tweakers-move-dials">
-              {Array.from({ length: MOVE_DIALS }, (_, i) => {
+              {visibleCols.map((i) => {
                 const meta = dialAt(i);
                 if (!meta) return <div key={`empty-${i}`} className="tweakers-move-dial" data-empty="true" />;
                 const active =
@@ -232,14 +417,15 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       data-active={active || undefined}
                       onPointerDown={(e) => {
                         try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                        fineRef.current = null;
                         setDragPath(meta.path);
                         xyFromPointer(e, meta);
                       }}
                       onPointerMove={(e) => {
                         if (dragPath === meta.path) xyFromPointer(e, meta);
                       }}
-                      onPointerUp={() => setDragPath(null)}
-                      onPointerCancel={() => setDragPath(null)}
+                      onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
+                      onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
                     >
                       <div className="tweakers-move-xy">
                         <span className="tweakers-move-xy-line" data-axis="x" style={{ top: `${(1 - pos.y) * 100}%` }} />
@@ -257,9 +443,101 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     </div>
                   );
                 }
+                // A range control keeps the dial bar but fills BETWEEN two
+                // handles; on the hardware the column's knob edits the low
+                // handle and the volume knob edits the high one while that
+                // knob is touched — the xy pad's two-handed concept, one axis.
+                if (meta.type === 'range') {
+                  const pos = normalizeRangeDial(meta, values[meta.path]);
+                  return (
+                    <div
+                      key={meta.path}
+                      className="tweakers-move-dial"
+                      data-kind="range"
+                      data-active={active || undefined}
+                      onPointerDown={(e) => {
+                        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                        fineRef.current = null;
+                        setDragPath(meta.path);
+                        rangeFromPointer(e, meta, true);
+                      }}
+                      onPointerMove={(e) => {
+                        if (dragPath === meta.path) rangeFromPointer(e, meta, false);
+                      }}
+                      onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
+                      onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                    >
+                      <div className="tweakers-move-dial-readout">
+                        <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
+                          {meta.label}
+                        </span>
+                        <span className="tweakers-move-dial-value">{rangeReading(meta)}</span>
+                      </div>
+                      <div className="tweakers-move-dial-bar">
+                        <div className="tweakers-move-dial-range">
+                          <div
+                            className="tweakers-move-dial-span"
+                            style={{ left: `${pos.lo * 100}%`, width: `${(pos.hi - pos.lo) * 100}%` }}
+                          />
+                          <span className="tweakers-move-dial-handle" style={{ left: `${pos.lo * 100}%` }} />
+                          <span className="tweakers-move-dial-handle" style={{ left: `${pos.hi * 100}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                // A select with options is a stepped enum dial: the bar splits
+                // into one cell per option, the active cell filled. A drag
+                // picks the nearest cell; on the hardware the column's knob
+                // steps through the options the same way.
+                if (meta.type === 'select' && meta.options && meta.options.length > 0) {
+                  const optionCount = meta.options.length;
+                  const activeIdx = Math.round(normalizeEnumDial(meta, values[meta.path]) * (optionCount - 1));
+                  return (
+                    <div
+                      key={meta.path}
+                      className="tweakers-move-dial"
+                      data-kind="enum"
+                      data-active={active || undefined}
+                      onPointerDown={(e) => {
+                        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                        fineRef.current = null;
+                        setDragPath(meta.path);
+                        enumFromPointer(e, meta);
+                      }}
+                      onPointerMove={(e) => {
+                        if (dragPath === meta.path) enumFromPointer(e, meta);
+                      }}
+                      onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
+                      onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                    >
+                      <div className="tweakers-move-dial-readout">
+                        <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
+                          {meta.label}
+                        </span>
+                        <span className="tweakers-move-dial-value">{enumReading(meta)}</span>
+                      </div>
+                      <div className="tweakers-move-dial-bar">
+                        <div className="tweakers-move-dial-enum">
+                          {meta.options.map((opt, j) => (
+                            <span
+                              key={typeof opt === 'string' ? opt : opt.value}
+                              className="tweakers-move-dial-enum-cell"
+                              data-on={j === activeIdx || undefined}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
                 // The slot pulses with its chip while a latched value sits in it.
                 const latchedHere =
                   latched[i]?.path === meta.path || (page.values[i]?.path === meta.path && !!hwLatched[meta.path]);
+                // A bipolar/origin dial anchors the fill at the origin mark and
+                // grows toward the handle on either side, like the Slider.
+                const originPct = dialOriginPercent(meta);
+                const pct = dialPercent(meta);
                 return (
                   <div
                     key={meta.path}
@@ -268,23 +546,32 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     data-latched={latchedHere || undefined}
                     onPointerDown={(e) => {
                       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                      fineRef.current = null;
                       setDragPath(meta.path);
                       dialFromPointer(e, meta);
                     }}
                     onPointerMove={(e) => {
                       if (dragPath === meta.path) dialFromPointer(e, meta);
                     }}
-                    onPointerUp={() => setDragPath(null)}
-                    onPointerCancel={() => setDragPath(null)}
+                    onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
+                    onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
                   >
                     <div className="tweakers-move-dial-readout">
                       <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
                         {meta.label}
                       </span>
-                      <span className="tweakers-move-dial-value">{dialPercent(meta)}%</span>
+                      <span className="tweakers-move-dial-value">{dialReading(meta)}</span>
                     </div>
                     <div className="tweakers-move-dial-bar">
-                      <div className="tweakers-move-dial-fill" style={{ width: `${dialPercent(meta)}%` }} />
+                      {originPct != null && (
+                        <span className="tweakers-move-dial-origin" style={{ left: `${originPct}%` }} />
+                      )}
+                      <div
+                        className="tweakers-move-dial-fill"
+                        style={originPct != null
+                          ? { marginLeft: `${Math.min(pct, originPct)}%`, width: `${Math.abs(pct - originPct)}%` }
+                          : { width: `${pct}%` }}
+                      />
                     </div>
                   </div>
                 );
@@ -293,12 +580,14 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 
             {/* Trailing empty pad rows collapse: a row shows only if it, or any
                 row after it, has something in it — so gaps inside the grid hold
-                their place, but the panel never ends on dead rows. */}
+                their place, but the panel never ends on dead rows. Columns
+                collapse the same way: cells render only for visible columns,
+                blank pads filling the gaps to keep the grid rectangular. */}
             {Array.from({ length: PAD_ROWS }, (_, row) => row)
               .filter((row) => padRows.slice(row).some((r) => r.length > 0))
               .map((row) => (
                 <div key={row} className="tweakers-move-pads">
-                  {Array.from({ length: PAD_COLS }, (_, col) => {
+                  {visibleCols.map((col) => {
                     const meta = padRows[row][col];
                     if (!meta) return <div key={`empty-${col}`} className="tweakers-move-pad" data-empty="true" />;
                     if (row === 0) {
@@ -337,11 +626,13 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   })}
                 </div>
               ))}
-          </div>
+          </div>}
         </div>
       </div>
     </div>
   );
 
-  return createPortal(content, document.body);
+  // Flow docking stays in the host's tree, so the app can centre content and
+  // panel as one group; viewport docking portals out and pins to the edge.
+  return dock === 'flow' ? content : createPortal(content, document.body);
 }
