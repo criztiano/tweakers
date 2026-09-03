@@ -563,22 +563,35 @@
   transform: scale(1.75);
 }
 
-/* ── Modulation dot ──────────────────────────────────────────────────────
-   A control wired to a modulation slot wears the slot's palette colour in
-   its top-right corner — panel-scaled (6px) beside the Move panel's 12px,
-   clear of the affordance dot's bottom-right spot. */
+/* ── Modulation ring ─────────────────────────────────────────────────────
+   A control wired to a modulation slot wears a small dial in its top-right
+   corner, clear of the affordance dot's bottom-right spot: a faint track
+   with a live arc in the slot's palette colour running from the control's
+   own value to where the modulation is holding it. */
 .tweakers-control-tip[data-mod] {
   position: relative;
 }
 
-.tweakers-mod-dot {
+.tweakers-mod-ring {
   position: absolute;
-  top: 2px;
+  top: 0;
   right: 0;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  overflow: visible;
   pointer-events: none;
+}
+
+.tweakers-mod-ring-track {
+  fill: none;
+  stroke: var(--tweak-border-hover, rgba(255, 255, 255, 0.15));
+  stroke-width: 2;
+}
+
+.tweakers-mod-ring-arc {
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
 }
 
 /* On the dot, not the button: outlining the 16px hotspot would read as a box

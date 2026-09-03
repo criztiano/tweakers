@@ -436,6 +436,16 @@ class ModulationStoreClass {
     return applyModulation(base, this.signals[a.slot], a.amount, meta.min, meta.max) - base;
   }
 
+  /**
+   * A modulatable control's bounds, or null when it has none (or its panel
+   * has not registered yet) — what a display needs to draw the modulation
+   * against the control's own span.
+   */
+  getBounds(panelId: string, path: string): { min: number; max: number } | null {
+    const meta = this.resolveMeta(panelId, path);
+    return meta ? { min: meta.min, max: meta.max } : null;
+  }
+
   /** One control's value with its modulation applied — the frame-time read. */
   getValue(panelId: string, path: string): number {
     const base = Number(TweakStore.getValue(panelId, path));

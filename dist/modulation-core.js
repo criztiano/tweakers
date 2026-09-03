@@ -49,6 +49,18 @@ function applyModulation(base, signal, amount, min, max) {
   const offset = clamp(signal, -1, 1) * clamp01(amount) * (max - min) / 2;
   return clamp(base + offset, min, max);
 }
+var MOD_RING_RADIUS = 6;
+var MOD_RING_CIRCUMFERENCE = 2 * Math.PI * MOD_RING_RADIUS;
+var RING_SWEEP_START = 135 / 360;
+var RING_SWEEP_LEN = 270 / 360;
+function modRingArc(from01, to01) {
+  const a = RING_SWEEP_START + clamp01(from01) * RING_SWEEP_LEN;
+  const b = RING_SWEEP_START + clamp01(to01) * RING_SWEEP_LEN;
+  return {
+    length: Math.abs(b - a) * MOD_RING_CIRCUMFERENCE,
+    offset: -Math.min(a, b) * MOD_RING_CIRCUMFERENCE
+  };
+}
 var LFO_SYNC_DIVISIONS = [
   { label: "4", beats: 16 },
   { label: "2", beats: 8 },
@@ -107,18 +119,62 @@ var LFO_DEF = {
   }
 };
 registerModType(LFO_DEF);
+var SH_DEF = {
+  type: "sh",
+  label: "S&H",
+  defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0 },
+  controls: [
+    { type: "slider", path: "rate", label: "Rate", min: 0.1, max: 30, step: 0.01, unit: "Hz" },
+    { type: "slider", path: "depth", label: "Depth", min: 0, max: 1, step: 0.01 },
+    { type: "slider", path: "offset", label: "Offset", min: -1, max: 1, step: 0.01 },
+    {
+      type: "xy",
+      path: "texture",
+      label: "Texture",
+      xParam: "jitter",
+      yParam: "smooth",
+      xAxis: { min: 0, max: 1, step: 0.01, label: "Jitter" },
+      yAxis: { min: 0, max: 1, step: 0.01, label: "Smooth" }
+    }
+  ],
+  createState: () => ({ wait: 0, held: 0, out: null }),
+  tick(state, params, dt) {
+    const s = state;
+    s.wait -= dt;
+    if (s.out === null || s.wait <= 0) {
+      s.held = Math.random() * 2 - 1;
+      const hz = Math.max(0.01, Number(params.rate) || 0);
+      const len = 1 / hz * (1 + (Math.random() * 2 - 1) * clamp01(params.jitter) * 0.9);
+      s.wait = Math.max(5e-3, len);
+    }
+    const offset = clamp(Number(params.offset) || 0, -1, 1);
+    let v = clamp(s.held * clamp01(params.depth) + offset, -1, 1);
+    const smooth = clamp01(params.smooth);
+    if (smooth > 0 && s.out !== null) {
+      const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
+      v = s.out + (v - s.out) * k;
+    }
+    s.out = v;
+    return v;
+  }
+};
+registerModType(SH_DEF);
 export {
   LFO_DEF,
   LFO_SYNC_DIVISIONS,
   MOD_COLORS,
+  MOD_RING_CIRCUMFERENCE,
+  MOD_RING_RADIUS,
   MOD_SETTINGS_PANEL,
   MOD_SLOTS,
+  SH_DEF,
   applyModulation,
   getModType,
   lfoSyncedHz,
   listModTypes,
   modColor,
   modKey,
+  modRingArc,
   registerModType
 };
 //# sourceMappingURL=modulation-core.js.map
