@@ -8393,8 +8393,9 @@ var flat = (controls, out = []) => {
   }
   return out;
 };
-var isDial = (c) => c.type === "slider" || c.type === "xy" || c.type === "range" || c.type === "number" && c.min != null && c.max != null;
-var isTwoHanded = (c) => c.type === "xy" || c.type === "range";
+var isEnumDial = (c) => c.type === "select" && Array.isArray(c.options) && c.options.length > 1;
+var isDial = (c) => c.type === "slider" || c.type === "xy" || c.type === "range" || isEnumDial(c) || c.type === "number" && c.min != null && c.max != null;
+var noChip = (c) => c.type === "xy" || c.type === "range" || isEnumDial(c);
 function buildMovePages(panels) {
   return panels.filter((p) => p.kind !== "timeline").slice(0, MOVE_TRACKS).map((panel) => {
     const controls = flat(panel.controls);
@@ -8404,7 +8405,7 @@ function buildMovePages(panels) {
       dials: bounded.slice(0, MOVE_DIALS),
       toggles: controls.filter((c) => c.type === "toggle").slice(0, MOVE_PADS),
       /* xy pads and ranges need a dial slot — past the 8 dials they don't fit a chip */
-      values: bounded.slice(MOVE_DIALS).filter((c) => !isTwoHanded(c)).slice(0, MOVE_PADS)
+      values: bounded.slice(MOVE_DIALS).filter((c) => !noChip(c)).slice(0, MOVE_PADS)
     };
   });
 }
@@ -8436,6 +8437,12 @@ function normalizeXYDial(meta, value) {
   const v = value ?? {};
   return { x: norm01(v.x, xAxis.min, xAxis.max), y: norm01(v.y, yAxis.min, yAxis.max) };
 }
+var enumOptionValue = (o) => typeof o === "string" ? o : o.value;
+var enumOptionLabel = (o) => typeof o === "string" ? o : o.label ?? o.value;
+function enumIndex(meta, value) {
+  const i = (meta.options ?? []).findIndex((o) => enumOptionValue(o) === value);
+  return Math.max(0, i);
+}
 function normalizeRangeDial(meta, value) {
   const min = meta.min ?? 0;
   const max = meta.max ?? 1;
@@ -8466,6 +8473,8 @@ var TAP_MS = 300;
 var MOVE_TOUCH_EVENT = "move-tweakers:touch";
 var MOVE_OVERRIDE_EVENT = "move-tweakers:override";
 var MOVE_LATCH_EVENT = "move-tweakers:latch";
+var MOVE_PAGE_EVENT = "move-tweakers:page";
+var MOVE_PAGE_SELECT_EVENT = "move-tweakers:page-select";
 function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only }) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = (0, import_react43.useState)([]);
@@ -8515,6 +8524,17 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       window.removeEventListener(MOVE_OVERRIDE_EVENT, onOverride);
     };
   }, [pageId]);
+  const pagesRef = (0, import_react43.useRef)(pages);
+  pagesRef.current = pages;
+  (0, import_react43.useEffect)(() => {
+    const onPage = (e) => {
+      const id = e.detail?.pageId;
+      const i = pagesRef.current.findIndex((pg) => pg.panel.id === id);
+      if (i >= 0) setTrack(i);
+    };
+    window.addEventListener(MOVE_PAGE_EVENT, onPage);
+    return () => window.removeEventListener(MOVE_PAGE_EVENT, onPage);
+  }, []);
   (0, import_react43.useEffect)(() => {
     setHeld(null);
     setLatched({});
@@ -8604,7 +8624,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         "data-active": pg ? pg === page : void 0,
         "data-empty": pg ? void 0 : true,
         disabled: !pg,
-        onClick: () => setTrack(i),
+        onClick: () => {
+          setTrack(i);
+          if (pg) window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
+        },
         children: [
           /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
           pg && /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-track-label", children: pg.panel.name })
@@ -8675,6 +8698,47 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             meta.path
           );
         }
+        if (isEnumDial(meta)) {
+          const options = meta.options ?? [];
+          const idx = enumIndex(meta, values[meta.path]);
+          const fill = options.length > 1 ? idx / (options.length - 1) : 0;
+          const pick = (e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const span = rect.width - DIAL_TRACK_INSET * 2;
+            const t = Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
+            const next = Math.round(t * (options.length - 1));
+            if (next !== idx) TweakStore.updateValue(page.panel.id, meta.path, enumOptionValue(options[next]));
+          };
+          return /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(
+            "div",
+            {
+              className: "tweakers-move-dial",
+              "data-kind": "enum",
+              "data-active": active || void 0,
+              onPointerDown: (e) => {
+                try {
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                } catch {
+                }
+                setDragPath(meta.path);
+                pick(e);
+              },
+              onPointerMove: (e) => {
+                if (dragPath === meta.path) pick(e);
+              },
+              onPointerUp: () => setDragPath(null),
+              onPointerCancel: () => setDragPath(null),
+              children: [
+                /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)("div", { className: "tweakers-move-dial-readout", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-label", "data-long": meta.label.length > 9 || void 0, children: meta.label }),
+                  /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-value", children: enumOptionLabel(options[idx]) })
+                ] }),
+                /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-dial-fill", style: { width: `${fill * 100}%` } }) })
+              ]
+            },
+            meta.path
+          );
+        }
         if (meta.type === "range") {
           const r = normalizeRangeDial(meta, values[meta.path]);
           return /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(
@@ -8722,12 +8786,15 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         const o01 = dialOrigin(meta);
         const v01 = normalizeDial(meta, values[meta.path]);
         const signed = Math.round((v01 - o01) * 100);
+        const subbed = meta !== page.dials[i];
+        const subValue = subbed ? chipValue(meta) : null;
         return /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(
           "div",
           {
             className: "tweakers-move-dial",
             "data-active": active || void 0,
             "data-latched": latchedHere || void 0,
+            "data-sub": subbed || void 0,
             onPointerDown: (e) => {
               try {
                 e.currentTarget.setPointerCapture(e.pointerId);
@@ -8742,9 +8809,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             onPointerUp: () => setDragPath(null),
             onPointerCancel: () => setDragPath(null),
             children: [
+              subbed && /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-sub", children: meta.label }),
               /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)("div", { className: "tweakers-move-dial-readout", children: [
                 /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-label", "data-long": meta.label.length > 9 || void 0, children: meta.label }),
-                /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-value", children: o01 > 0 ? `${signed > 0 ? "+" : ""}${signed}%` : `${dialPercent(meta)}%` })
+                /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-value", children: subValue ? `${subValue.num}${subValue.unit ? ` ${subValue.unit}` : ""}` : o01 > 0 ? `${signed > 0 ? "+" : ""}${signed}%` : `${dialPercent(meta)}%` })
               ] }),
               /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(
                 "div",

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from './TweakRoot';
-import { buildMovePages, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, dialOrigin, MOVE_TRACKS, MOVE_DIALS } from '../move-layout';
+import { buildMovePages, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, dialOrigin, isEnumDial, enumOptionValue, enumOptionLabel, enumIndex, MOVE_TRACKS, MOVE_DIALS } from '../move-layout';
 import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValue, applyDetentAxis, type XYValue } from '../xy-pad-core';
 
 interface MovePanelProps {
@@ -43,6 +43,10 @@ const TAP_MS = 300;
 export const MOVE_TOUCH_EVENT = 'move-tweakers:touch';
 export const MOVE_OVERRIDE_EVENT = 'move-tweakers:override';
 export const MOVE_LATCH_EVENT = 'move-tweakers:latch';
+/** In: `{ pageId }` — the page the hardware is showing; the panel follows. */
+export const MOVE_PAGE_EVENT = 'move-tweakers:page';
+/** Out: `{ pageId }` — a screen track tap, for the kit to switch the hardware. */
+export const MOVE_PAGE_SELECT_EVENT = 'move-tweakers:page-select';
 
 /**
  * The Move's control surface docked to the bottom edge, laid out to Cri's
@@ -126,6 +130,19 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       window.removeEventListener(MOVE_OVERRIDE_EVENT, onOverride);
     };
   }, [pageId]);
+
+  // Hardware page switches steer the panel: the surfaces show one page.
+  const pagesRef = useRef(pages);
+  pagesRef.current = pages;
+  useEffect(() => {
+    const onPage = (e: Event) => {
+      const id = (e as CustomEvent).detail?.pageId;
+      const i = pagesRef.current.findIndex((pg) => pg.panel.id === id);
+      if (i >= 0) setTrack(i);
+    };
+    window.addEventListener(MOVE_PAGE_EVENT, onPage);
+    return () => window.removeEventListener(MOVE_PAGE_EVENT, onPage);
+  }, []);
 
   // Substitutions belong to their page — switching tracks releases them.
   useEffect(() => {
@@ -248,7 +265,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 data-active={pg ? pg === page : undefined}
                 data-empty={pg ? undefined : true}
                 disabled={!pg}
-                onClick={() => setTrack(i)}
+                onClick={() => {
+                  setTrack(i);
+                  // Tell the hardware side; the kit relays it when the bridge is up.
+                  if (pg) window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
+                }}
               >
                 <span className="tweakers-move-track-marker" style={{ background: MOVE_TRACK_COLORS[i] }} />
                 {pg && <span className="tweakers-move-track-label">{pg.panel.name}</span>}
@@ -321,6 +342,52 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     </div>
                   );
                 }
+                // An enum (select) keeps the slider look: the value line shows
+                // the current option, the fill steps at index/(count-1), and
+                // pointer position picks the nearest option — matching the
+                // hardware, where the knob steps through the options.
+                if (isEnumDial(meta)) {
+                  const options = meta.options ?? [];
+                  const idx = enumIndex(meta, values[meta.path]);
+                  const fill = options.length > 1 ? idx / (options.length - 1) : 0;
+                  const pick = (e: React.PointerEvent<HTMLElement>) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const span = rect.width - DIAL_TRACK_INSET * 2;
+                    const t = Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
+                    const next = Math.round(t * (options.length - 1));
+                    if (next !== idx) TweakStore.updateValue(page.panel.id, meta.path, enumOptionValue(options[next] as never));
+                  };
+                  return (
+                    <div
+                      key={meta.path}
+                      className="tweakers-move-dial"
+                      data-kind="enum"
+                      data-active={active || undefined}
+                      onPointerDown={(e) => {
+                        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                        setDragPath(meta.path);
+                        pick(e);
+                      }}
+                      onPointerMove={(e) => {
+                        if (dragPath === meta.path) pick(e);
+                      }}
+                      onPointerUp={() => setDragPath(null)}
+                      onPointerCancel={() => setDragPath(null)}
+                    >
+                      <div className="tweakers-move-dial-readout">
+                        <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
+                          {meta.label}
+                        </span>
+                        <span className="tweakers-move-dial-value">
+                          {enumOptionLabel(options[idx] as never)}
+                        </span>
+                      </div>
+                      <div className="tweakers-move-dial-bar">
+                        <div className="tweakers-move-dial-fill" style={{ width: `${fill * 100}%` }} />
+                      </div>
+                    </div>
+                  );
+                }
                 // A range control keeps the slider look but the fill is the
                 // span between its two ends; drag moves the nearer end.
                 if (meta.type === 'range') {
@@ -367,12 +434,18 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 const o01 = dialOrigin(meta);
                 const v01 = normalizeDial(meta, values[meta.path]);
                 const signed = Math.round((v01 - o01) * 100);
+                // A substituted chip (held or latched into the slot) reads as
+                // its real value — the same number its chip shows below — and
+                // a small tag names what the slot is controlling.
+                const subbed = meta !== page.dials[i];
+                const subValue = subbed ? chipValue(meta) : null;
                 return (
                   <div
                     key={meta.path}
                     className="tweakers-move-dial"
                     data-active={active || undefined}
                     data-latched={latchedHere || undefined}
+                    data-sub={subbed || undefined}
                     onPointerDown={(e) => {
                       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
                       setDragPath(meta.path);
@@ -384,12 +457,15 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     onPointerUp={() => setDragPath(null)}
                     onPointerCancel={() => setDragPath(null)}
                   >
+                    {subbed && <span className="tweakers-move-dial-sub">{meta.label}</span>}
                     <div className="tweakers-move-dial-readout">
                       <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
                         {meta.label}
                       </span>
                       <span className="tweakers-move-dial-value">
-                        {o01 > 0 ? `${signed > 0 ? '+' : ''}${signed}%` : `${dialPercent(meta)}%`}
+                        {subValue
+                          ? `${subValue.num}${subValue.unit ? ` ${subValue.unit}` : ''}`
+                          : o01 > 0 ? `${signed > 0 ? '+' : ''}${signed}%` : `${dialPercent(meta)}%`}
                       </span>
                     </div>
                     <div className="tweakers-move-dial-bar">
