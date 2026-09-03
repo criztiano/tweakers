@@ -126,6 +126,67 @@ var LFO_DEF = {
   }
 };
 registerModType(LFO_DEF);
+var ENV_HZ_MIN = 20;
+var ENV_HZ_MAX = 2e4;
+var envHz = (t) => ENV_HZ_MIN * Math.pow(ENV_HZ_MAX / ENV_HZ_MIN, clamp01(t));
+var fmtHz = (t) => {
+  const hz = envHz(t);
+  return hz >= 1e3 ? `${(hz / 1e3).toFixed(1)} kHz` : `${Math.round(hz)} Hz`;
+};
+var ENVELOPE_DEF = {
+  type: "envelope",
+  label: "Envelope",
+  defaults: { gain: 0, rise: 20, fall: 250, delay: 0, source: "", lo: 0, hi: 1 },
+  controls: [
+    { type: "slider", path: "gain", label: "Gain", min: -24, max: 24, step: 0.1, unit: "dB", bipolar: true },
+    { type: "slider", path: "rise", label: "Rise", min: 0, max: 1e3, step: 1, unit: "ms" },
+    { type: "slider", path: "fall", label: "Fall", min: 0, max: 2e3, step: 1, unit: "ms" },
+    { type: "slider", path: "delay", label: "Delay", min: 0, max: 1e3, step: 1, unit: "ms" },
+    { type: "select", path: "source", label: "Source", sourceOptions: true },
+    { type: "slider", path: "lo", label: "Lo Cut", min: 0, max: 1, step: 0.01, formatValue: fmtHz },
+    { type: "slider", path: "hi", label: "Hi Cut", min: 0, max: 1, step: 0.01, formatValue: fmtHz }
+  ],
+  createState: () => ({ now: 0, line: [], env: 0 }),
+  tick(state, params, dt, _bpm, input) {
+    const s = state;
+    s.now += dt;
+    const lo = clamp01(params.lo);
+    const hi = clamp01(params.hi);
+    const raw = input ? clamp01(input(envHz(Math.min(lo, hi)), envHz(Math.max(lo, hi)))) : 0;
+    const gainDb = clamp(Number(params.gain) || 0, -24, 24);
+    const level = clamp01(raw * Math.pow(10, gainDb / 20));
+    const delayS = clamp(Number(params.delay) || 0, 0, 2e3) / 1e3;
+    let target = level;
+    if (delayS > 0) {
+      s.line.push({ t: s.now, v: level });
+      const readAt = s.now - delayS;
+      while (s.line.length > 1 && s.line[1].t <= readAt) s.line.shift();
+      target = s.line[0].t <= readAt ? s.line[0].v : 0;
+    } else if (s.line.length) {
+      s.line.length = 0;
+    }
+    const tauS = Math.max(0, Number(target > s.env ? params.rise : params.fall) || 0) / 1e3;
+    const k = tauS > 0 ? 1 - Math.exp(-dt / tauS) : 1;
+    s.env = clamp01(s.env + (target - s.env) * k);
+    return s.env;
+  }
+};
+registerModType(ENVELOPE_DEF);
+
+// src/analyser-core.ts
+function byteFreqToUnit(v) {
+  return v / 255;
+}
+function hzWindowToBins(rangeHz, nyquistHz, bins) {
+  const [loHz, hiHz] = rangeHz;
+  if (!Number.isFinite(loHz) || !Number.isFinite(hiHz) || !(nyquistHz > 0) || bins <= 2) return null;
+  if (!(hiHz > loHz) || hiHz <= 0) return null;
+  const toBin = (hz) => hz / nyquistHz * bins;
+  const loBin = Math.max(1, Math.min(bins - 1, toBin(Math.max(0, loHz))));
+  const hiBin = Math.max(loBin + 1, Math.min(bins, toBin(hiHz)));
+  return { loBin, hiBin };
+}
+var SPRING_MAX_STEP = 1 / 240;
 
 // src/store/ModulationStore.ts
 var MOD_TOUCH_GRACE_MS = 4e3;
@@ -139,6 +200,9 @@ var ModulationStoreClass = class {
     this.signals = Array(MOD_SLOTS).fill(0);
     this.sources = /* @__PURE__ */ new Map();
     this.sourceValues = /* @__PURE__ */ new Map();
+    this.audioInputs = /* @__PURE__ */ new Map();
+    /** Reused per-input spectrum buffers — one read per input per tick. */
+    this.freqData = /* @__PURE__ */ new Map();
     this.metas = /* @__PURE__ */ new Map();
     this.bpm = 120;
     this.touched = null;
@@ -347,7 +411,18 @@ var ModulationStoreClass = class {
           max: c.max ?? 1,
           step: c.step,
           unit: c.unit,
+          formatValue: c.formatValue,
+          bipolar: c.bipolar,
           default: Number(slot.params[c.path]) || 0
+        };
+      } else if (c.type === "select" && c.sourceOptions) {
+        const inputs = this.getAudioInputs();
+        if (inputs.length < 2) continue;
+        const current = slot.params[c.path];
+        config[c.path] = {
+          type: "select",
+          options: inputs,
+          default: typeof current === "string" && inputs.includes(current) ? current : inputs[0]
         };
       } else if (c.type === "toggle") {
         config[c.path] = !!slot.params[c.path];
@@ -369,6 +444,13 @@ var ModulationStoreClass = class {
       { kind: "modulation" }
     );
     this.applyingSettings = false;
+  }
+  /** Rebuild the open settings page in place — the source select tracks the inputs. */
+  refreshSettingsPanel() {
+    if (this.settingsIndex === null) return;
+    const slot = this.slots[this.settingsIndex];
+    const def = slot && getModType(slot.type);
+    if (slot && def) this.registerSettingsPanel(slot, def);
   }
   /** A settings-panel edit — screen or hardware — lands in the slot's params. */
   onSettingsChange() {
@@ -393,6 +475,8 @@ var ModulationStoreClass = class {
           patch[c.xParam] = Number(xy.x) || 0;
           patch[c.yParam] = Number(xy.y) || 0;
         }
+      } else if (c.type === "select") {
+        if (typeof v === "string") patch[c.path] = v;
       } else if (c.type === "toggle") {
         patch[c.path] = !!v;
       } else if (typeof v === "number" && Number.isFinite(v)) {
@@ -420,6 +504,61 @@ var ModulationStoreClass = class {
   }
   getSources() {
     return [...this.sources.keys()];
+  }
+  /* ── audio inputs — what the envelope follower hears ──────────────── */
+  /**
+   * Hand over live audio as a named input: an AnalyserNode getter, read at
+   * frame time (a getter, so the node can exist only after the app's audio
+   * starts on a user gesture). Returns an unregister fn. Registering while
+   * a follower's settings page is open refreshes its source select.
+   */
+  registerAudioInput(id, get) {
+    this.audioInputs.set(id, get);
+    this.refreshSettingsPanel();
+    this.changed();
+    return () => {
+      if (this.audioInputs.get(id) === get) {
+        this.audioInputs.delete(id);
+        this.freqData.delete(id);
+        this.refreshSettingsPanel();
+        this.changed();
+      }
+    };
+  }
+  getAudioInputs() {
+    return [...this.audioInputs.keys()];
+  }
+  /**
+   * The band sampler served to a slot's modulator: its chosen source when
+   * that input is registered, else the first registered input, else null
+   * (the follower hears silence). Levels are the band's spectral peak —
+   * the same reduction the analyser visualizer draws.
+   */
+  audioInputFor(slot) {
+    const chosen = typeof slot.params.source === "string" ? slot.params.source : "";
+    const id = this.audioInputs.has(chosen) ? chosen : this.getAudioInputs()[0];
+    if (id === void 0) return null;
+    const analyser = this.audioInputs.get(id)?.();
+    if (!analyser) return null;
+    return (loHz, hiHz) => {
+      const bins = analyser.frequencyBinCount;
+      if (!bins) return 0;
+      let data = this.freqData.get(id);
+      if (!data || data.length !== bins) {
+        data = new Uint8Array(bins);
+        this.freqData.set(id, data);
+      }
+      analyser.getByteFrequencyData(data);
+      const nyquist = (analyser.context?.sampleRate ?? 44100) / 2;
+      const w = hzWindowToBins([loHz, hiHz], nyquist, bins);
+      const start = w ? Math.floor(w.loBin) : 1;
+      const end = Math.min(bins, w ? Math.ceil(w.hiBin) : bins);
+      let mx = 0;
+      for (let b = start; b < end; b++) {
+        if (data[b] > mx) mx = data[b];
+      }
+      return byteFreqToUnit(mx);
+    };
   }
   /* ── tempo ────────────────────────────────────────────────────────── */
   setTempo(bpm) {
@@ -512,7 +651,11 @@ var ModulationStoreClass = class {
         state = def.createState();
         this.states.set(slot.index, state);
       }
-      this.signals[slot.index] = clamp2(def.tick(state, slot.params, step, this.bpm), -1, 1);
+      this.signals[slot.index] = clamp2(
+        def.tick(state, slot.params, step, this.bpm, this.audioInputFor(slot)),
+        -1,
+        1
+      );
     }
     this.frameListeners.forEach((fn) => fn());
   }

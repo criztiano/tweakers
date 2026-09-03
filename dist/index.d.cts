@@ -1391,7 +1391,7 @@ declare const MOD_COLORS: string[];
 declare const modColor: (index: number) => string;
 type ModulationType = 'lfo' | 'envelope' | 'curve' | 'sh' | 'sequencer';
 /** Modulator settings — flat and JSON-safe, like TweakStore values. */
-type ModulationParams = Record<string, number | boolean>;
+type ModulationParams = Record<string, number | boolean | string>;
 interface ModulationSlot {
     /** 0..15 — the Move step button that created it, and its palette index. */
     index: number;
@@ -1409,20 +1409,29 @@ interface ModulationAssignment {
     amount: number;
 }
 /**
- * Settings-page control metadata — ControlMeta plus the xy mapping: an xy
- * control on a modulator page edits two scalar params (xParam/yParam)
- * rather than storing an {x, y} object.
+ * Settings-page control metadata — ControlMeta plus the xy mapping (an xy
+ * control on a modulator page edits two scalar params, xParam/yParam, rather
+ * than storing an {x, y} object) and the source marker: a select flagged
+ * `sourceOptions` lists the ModulationStore's registered audio inputs, and
+ * only appears when there is a real choice to make.
  */
 type ModControlMeta = ControlMeta & {
     xParam?: string;
     yParam?: string;
+    sourceOptions?: boolean;
 };
+/**
+ * Live audio handed to a modulator by the engine: the band level 0..1
+ * inside a frequency window — an envelope follower's raw material.
+ */
+type ModAudioInput = (loHz: number, hiHz: number) => number;
 /**
  * One modulator type, pluggable: LFO ships with the kit, the others
  * (envelope, curve, S&H, sequencer) register through the same door.
  * `tick` advances the modulator by `dt` seconds and returns the signal,
  * always -1..1; `state` is whatever `createState` returned — the engine
- * never looks inside it.
+ * never looks inside it. Types that listen to audio (the envelope follower)
+ * read the engine-provided `input`; the others ignore it.
  */
 interface ModTypeDef {
     type: ModulationType;
@@ -1431,7 +1440,7 @@ interface ModTypeDef {
     /** The settings-page layout, in slot order: dials, toggles, the xy pad. */
     controls: ModControlMeta[];
     createState(): unknown;
-    tick(state: unknown, params: ModulationParams, dt: number, bpm: number): number;
+    tick(state: unknown, params: ModulationParams, dt: number, bpm: number, input?: ModAudioInput | null): number;
 }
 /** Plug a modulator type in; registering a type again replaces it. */
 declare function registerModType(def: ModTypeDef): void;
@@ -1461,6 +1470,24 @@ declare function lfoSyncedHz(division: number, bpm: number): number;
  * smooth (a slew that rounds corners toward sine and softens jitter steps).
  */
 declare const LFO_DEF: ModTypeDef;
+/** The filter dials' frequency span — the audible band. */
+declare const ENV_HZ_MIN = 20;
+declare const ENV_HZ_MAX = 20000;
+/**
+ * A filter dial's position 0..1 → Hz, exponential across the audible band —
+ * equal knob travel covers equal musical distance (20·1000^t).
+ */
+declare const envHz: (t: number) => number;
+/**
+ * The envelope follower: the band level of an audio input (lo/hi confine it
+ * to a frequency window — follow just the kick, just the hiss), through
+ * gain, an optional delay, and rise/fall smoothing. The signal is unipolar
+ * 0..1: silence rests the control at its base value, level pushes it up to
+ * `amount` of the span. Which audio it follows comes from the engine — apps
+ * register inputs on the ModulationStore (`registerAudioInput`), and the
+ * source select appears once there is more than one to choose from.
+ */
+declare const ENVELOPE_DEF: ModTypeDef;
 
 /**
  * The modulation layer's runtime — a singleton beside the TweakStore.
@@ -1482,6 +1509,16 @@ declare const LFO_DEF: ModTypeDef;
  *
  *   ModulationStore.registerSource('lfo-1', { sample: () => native.lfo1 });
  *   // or push at any rate: ModulationStore.setSourceValue('lfo-1', v);
+ *
+ * Audio-listening modulators (the envelope follower) need something to
+ * hear. Apps hand over live audio as named inputs — the same late-getter
+ * pattern the analyser rows use, since audio contexts start on a gesture:
+ *
+ *   ModulationStore.registerAudioInput('drums', () => analyser);   // an AnalyserNode
+ *
+ * The engine reads each input's spectrum once per frame and serves band
+ * levels to whichever slots follow it; a follower's source select lists
+ * the registered inputs (and only appears when there is more than one).
  *
  * A slot pointing at a source shows its signal (circle, dots, step light)
  * but applies nothing to values unless the source says `applies: true` —
@@ -1515,6 +1552,9 @@ declare class ModulationStoreClass {
     private signals;
     private sources;
     private sourceValues;
+    private audioInputs;
+    /** Reused per-input spectrum buffers — one read per input per tick. */
+    private freqData;
     private metas;
     private bpm;
     private touched;
@@ -1576,6 +1616,8 @@ declare class ModulationStoreClass {
         panelId: string;
     } | null;
     private registerSettingsPanel;
+    /** Rebuild the open settings page in place — the source select tracks the inputs. */
+    private refreshSettingsPanel;
     /** A settings-panel edit — screen or hardware — lands in the slot's params. */
     private onSettingsChange;
     /** Offer an app-side modulator to the slots; returns an unregister fn. */
@@ -1583,6 +1625,21 @@ declare class ModulationStoreClass {
     /** Push a source's signal (-1..1) at any rate; the engine mirrors the latest. */
     setSourceValue(id: string, value: number): void;
     getSources(): string[];
+    /**
+     * Hand over live audio as a named input: an AnalyserNode getter, read at
+     * frame time (a getter, so the node can exist only after the app's audio
+     * starts on a user gesture). Returns an unregister fn. Registering while
+     * a follower's settings page is open refreshes its source select.
+     */
+    registerAudioInput(id: string, get: () => AnalyserNode | null): () => void;
+    getAudioInputs(): string[];
+    /**
+     * The band sampler served to a slot's modulator: its chosen source when
+     * that input is registered, else the first registered input, else null
+     * (the follower hears silence). Levels are the band's spectral peak —
+     * the same reduction the analyser visualizer draws.
+     */
+    private audioInputFor;
     setTempo(bpm: number): void;
     getTempo(): number;
     /** A slot's live signal, -1..1. */
@@ -2810,4 +2867,4 @@ interface SpectrumAudioLevelMeterProps extends AudioLevelMeterBaseProps {
 type AudioLevelMeterProps = MonoAudioLevelMeterProps | StereoAudioLevelMeterProps | SpectrumAudioLevelMeterProps;
 declare function AudioLevelMeter(props: AudioLevelMeterProps): ReactElement;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AnalyserMode, AnalyserRow, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_MAX_HEIGHT, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, Checkbox, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, MIN_STOPS, MOD_COLORS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_DIALS, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_PADS, MOVE_SPECIAL_BUTTONS, MOVE_TRACKS, type ModControlMeta, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, Module, type MonoAudioLevelMeterProps, type MoveFunctionButton, type MoveFunctionHandler, type MoveFunctionPress, MoveFunctions, type MovePage, MovePanel, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type NumberConfig, NumberControl, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, TAB_PATH, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type TweakConfig, type TweakEvent, type TweakMode, type TweakPosition, TweakRoot, TweakStore, type TweakTheme, TweakTimeline, type TweakTimelineProps, type TweakTimelineValues, type TweakValue, type UseTweakTimelineOptions, type UseTweakersOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, applyModulation, buildModMovePage, buildMovePages, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, dialOrigin, displayHex, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, lfoSyncedHz, listModTypes, modColor, modKey, moveStop, nearestHandle, normToValue, normalizeCurveMarkers, normalizeDial, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeValue, normalizeXYDial, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, readComposition, redistributeWeight, registerModType, removeDriver, removeSegment, removeStop, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useTweakTimeline, useTweakers, valueFromPoint, valueToNorm, valueToPercent };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AnalyserMode, AnalyserRow, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_MAX_HEIGHT, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, Checkbox, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DriverDirection, ENVELOPE_DEF, ENV_HZ_MAX, ENV_HZ_MIN, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, MIN_STOPS, MOD_COLORS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_DIALS, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_PADS, MOVE_SPECIAL_BUTTONS, MOVE_TRACKS, type ModAudioInput, type ModControlMeta, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, Module, type MonoAudioLevelMeterProps, type MoveFunctionButton, type MoveFunctionHandler, type MoveFunctionPress, MoveFunctions, type MovePage, MovePanel, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type NumberConfig, NumberControl, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, TAB_PATH, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type TweakConfig, type TweakEvent, type TweakMode, type TweakPosition, TweakRoot, TweakStore, type TweakTheme, TweakTimeline, type TweakTimelineProps, type TweakTimelineValues, type TweakValue, type UseTweakTimelineOptions, type UseTweakersOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, applyModulation, buildModMovePage, buildMovePages, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, dialOrigin, displayHex, envHz, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, lfoSyncedHz, listModTypes, modColor, modKey, moveStop, nearestHandle, normToValue, normalizeCurveMarkers, normalizeDial, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeValue, normalizeXYDial, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, readComposition, redistributeWeight, registerModType, removeDriver, removeSegment, removeStop, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useTweakTimeline, useTweakers, valueFromPoint, valueToNorm, valueToPercent };

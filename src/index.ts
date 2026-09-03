@@ -29,6 +29,10 @@ export {
   LFO_DEF,
   LFO_SYNC_DIVISIONS,
   lfoSyncedHz,
+  ENVELOPE_DEF,
+  ENV_HZ_MIN,
+  ENV_HZ_MAX,
+  envHz,
 } from './modulation-core';
 export type {
   ModulationType,
@@ -37,6 +41,7 @@ export type {
   ModulationAssignment,
   ModTypeDef,
   ModControlMeta,
+  ModAudioInput,
 } from './modulation-core';
 
 // Timeline (prototype)

@@ -898,7 +898,7 @@ Attached buttons light up on the hardware and every press runs your action, with
 
 ## Modulation
 
-Any bounded numeric control (slider, `number` with min/max) can be driven by a modulation — an LFO today; envelope follower, curve, S&H, and step sequencer plug into the same registry. Modulations live in 16 slots, one per Move sequencer step button: **touch a control, press a step** and the modulation is created there and wired to the control (press again to unwire). Each slot keeps a palette colour; the track row shows a circle per slot with a pulsing dot of that colour, and the same dot marks every control the slot drives — in the Move panel and the side panel both.
+Any bounded numeric control (slider, `number` with min/max) can be driven by a modulation — an LFO and an envelope follower today; curve, S&H, and step sequencer plug into the same registry. Modulations live in 16 slots, one per Move sequencer step button: **touch a control, press a step** and the modulation is created there and wired to the control (press again to unwire). Each slot keeps a palette colour; the track row shows a circle per slot with a pulsing dot of that colour, and the same dot marks every control the slot drives — in the Move panel and the side panel both.
 
 The modulated value **never enters the TweakStore.** The control keeps the value you set (the base); the modulation is a live layer your app pulls at frame time:
 
@@ -913,7 +913,7 @@ const params = ModulationStore.getValues('fx');               // whole panel
 
 Because the stored value never moves, presets, persistence, and the bridge kit's diffing all stay quiet — no loops, no thrash. Slots and assignments persist to localStorage (fail-soft), so a prototype's modulation setup survives a reload.
 
-**Settings.** Hold an occupied step (or hold its circle on-screen) and the modulator's settings page takes the surface over: the type enum in the first big slot, then the modulator's own controls — for the LFO: rate (its tempo-sync pad directly below), phase, width, and a jitter/smooth XY. A track button puts a regular page back. Under the hood the page is one hidden TweakStore panel (`MOD_SETTINGS_PANEL`, kind `'modulation'` — never in the dock, never on a track), so the bridge kit syncs it to the hardware like any page and every edit flows into the slot's params.
+**Settings.** Hold an occupied step (or hold its circle on-screen) and the modulator's settings page takes the surface over: the type enum in the first big slot, then the modulator's own controls — for the LFO: rate (its tempo-sync pad directly below), phase, width, and a jitter/smooth XY; for the envelope follower: gain, rise, fall, delay, the source select, and the lo/hi filter dials. A track button puts a regular page back. Under the hood the page is one hidden TweakStore panel (`MOD_SETTINGS_PANEL`, kind `'modulation'` — never in the dock, never on a track), so the bridge kit syncs it to the hardware like any page and every edit flows into the slot's params.
 
 Everything the gesture does is also plain API — `createSlot(step, 'lfo')`, `assign(panelId, path, step, amount)`, `updateSlotParams`, `setSlotType`, `removeSlot`, `openSettings(step)` / `closeSettings()` — and `subscribe` / `subscribeFrames` cover structure and per-frame signals (`getSignal(step)` is the slot's raw −1..1).
 
@@ -932,7 +932,17 @@ ModulationStore.setSlotSource(step, 'env-follow');
 
 A slot on a source shows its signal (circle, dots, step light) but applies nothing to values — the app's own engine already did, at audio rate. A source that wants the library to apply for it passes `applies: true`. Tempo-synced modulators follow `ModulationStore.setTempo(bpm)` (the bridge kit feeds it the Move's tempo).
 
-New modulator types register a `ModTypeDef` — defaults, the settings-page controls, and a stateful `tick(state, params, dt, bpm)` returning −1..1 — via `registerModType`; the LFO (`LFO_DEF`) is the reference implementation.
+### The envelope follower
+
+The second built-in type (`ENVELOPE_DEF`) rides live audio instead of a clock. Hand the store your audio as named inputs — an `AnalyserNode` getter, so the node can exist only after the app's audio starts on a user gesture:
+
+```tsx
+const off = ModulationStore.registerAudioInput('drums', () => analyser);
+```
+
+Its controls: **gain** (dB trim into the detector), **rise** and **fall** (the attack/release smoothing, in ms), **delay** (the follower hears the audio late, for staggered layers), a **source** select (which registered input to follow — it appears only when there is more than one; with one input, or none chosen, the first is followed), and **lo/hi filter** dials that confine the detector to a frequency window — follow just the kick, or just the hiss. The signal is unipolar 0..1: silence rests a wired control at its base value, level pushes it up to `amount` of the span.
+
+New modulator types register a `ModTypeDef` — defaults, the settings-page controls, and a stateful `tick(state, params, dt, bpm, input?)` returning −1..1 (`input` is the engine-served audio band sampler; clock-driven types ignore it) — via `registerModType`; the LFO (`LFO_DEF`) is the reference implementation.
 
 ---
 

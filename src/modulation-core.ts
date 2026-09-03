@@ -58,7 +58,7 @@ export const modColor = (index: number) =>
 export type ModulationType = 'lfo' | 'envelope' | 'curve' | 'sh' | 'sequencer';
 
 /** Modulator settings — flat and JSON-safe, like TweakStore values. */
-export type ModulationParams = Record<string, number | boolean>;
+export type ModulationParams = Record<string, number | boolean | string>;
 
 export interface ModulationSlot {
   /** 0..15 — the Move step button that created it, and its palette index. */
@@ -79,18 +79,31 @@ export interface ModulationAssignment {
 }
 
 /**
- * Settings-page control metadata — ControlMeta plus the xy mapping: an xy
- * control on a modulator page edits two scalar params (xParam/yParam)
- * rather than storing an {x, y} object.
+ * Settings-page control metadata — ControlMeta plus the xy mapping (an xy
+ * control on a modulator page edits two scalar params, xParam/yParam, rather
+ * than storing an {x, y} object) and the source marker: a select flagged
+ * `sourceOptions` lists the ModulationStore's registered audio inputs, and
+ * only appears when there is a real choice to make.
  */
-export type ModControlMeta = ControlMeta & { xParam?: string; yParam?: string };
+export type ModControlMeta = ControlMeta & {
+  xParam?: string;
+  yParam?: string;
+  sourceOptions?: boolean;
+};
+
+/**
+ * Live audio handed to a modulator by the engine: the band level 0..1
+ * inside a frequency window — an envelope follower's raw material.
+ */
+export type ModAudioInput = (loHz: number, hiHz: number) => number;
 
 /**
  * One modulator type, pluggable: LFO ships with the kit, the others
  * (envelope, curve, S&H, sequencer) register through the same door.
  * `tick` advances the modulator by `dt` seconds and returns the signal,
  * always -1..1; `state` is whatever `createState` returned — the engine
- * never looks inside it.
+ * never looks inside it. Types that listen to audio (the envelope follower)
+ * read the engine-provided `input`; the others ignore it.
  */
 export interface ModTypeDef {
   type: ModulationType;
@@ -99,7 +112,13 @@ export interface ModTypeDef {
   /** The settings-page layout, in slot order: dials, toggles, the xy pad. */
   controls: ModControlMeta[];
   createState(): unknown;
-  tick(state: unknown, params: ModulationParams, dt: number, bpm: number): number;
+  tick(
+    state: unknown,
+    params: ModulationParams,
+    dt: number,
+    bpm: number,
+    input?: ModAudioInput | null
+  ): number;
 }
 
 const registry = new Map<ModulationType, ModTypeDef>();
@@ -224,3 +243,87 @@ export const LFO_DEF: ModTypeDef = {
 };
 
 registerModType(LFO_DEF);
+
+/* ── Envelope follower — rides the app's audio ────────────────────────── */
+
+/** The filter dials' frequency span — the audible band. */
+export const ENV_HZ_MIN = 20;
+export const ENV_HZ_MAX = 20000;
+
+/**
+ * A filter dial's position 0..1 → Hz, exponential across the audible band —
+ * equal knob travel covers equal musical distance (20·1000^t).
+ */
+export const envHz = (t: number) =>
+  ENV_HZ_MIN * Math.pow(ENV_HZ_MAX / ENV_HZ_MIN, clamp01(t));
+
+const fmtHz = (t: number) => {
+  const hz = envHz(t);
+  return hz >= 1000 ? `${(hz / 1000).toFixed(1)} kHz` : `${Math.round(hz)} Hz`;
+};
+
+interface EnvState {
+  /** The follower's own clock, the delay line's time base. */
+  now: number;
+  /** Time-tagged input history — the delay line, trimmed to the delay. */
+  line: { t: number; v: number }[];
+  /** The followed level 0..1 — the signal itself. */
+  env: number;
+}
+
+/**
+ * The envelope follower: the band level of an audio input (lo/hi confine it
+ * to a frequency window — follow just the kick, just the hiss), through
+ * gain, an optional delay, and rise/fall smoothing. The signal is unipolar
+ * 0..1: silence rests the control at its base value, level pushes it up to
+ * `amount` of the span. Which audio it follows comes from the engine — apps
+ * register inputs on the ModulationStore (`registerAudioInput`), and the
+ * source select appears once there is more than one to choose from.
+ */
+export const ENVELOPE_DEF: ModTypeDef = {
+  type: 'envelope',
+  label: 'Envelope',
+  defaults: { gain: 0, rise: 20, fall: 250, delay: 0, source: '', lo: 0, hi: 1 },
+  controls: [
+    { type: 'slider', path: 'gain', label: 'Gain', min: -24, max: 24, step: 0.1, unit: 'dB', bipolar: true },
+    { type: 'slider', path: 'rise', label: 'Rise', min: 0, max: 1000, step: 1, unit: 'ms' },
+    { type: 'slider', path: 'fall', label: 'Fall', min: 0, max: 2000, step: 1, unit: 'ms' },
+    { type: 'slider', path: 'delay', label: 'Delay', min: 0, max: 1000, step: 1, unit: 'ms' },
+    { type: 'select', path: 'source', label: 'Source', sourceOptions: true },
+    { type: 'slider', path: 'lo', label: 'Lo Cut', min: 0, max: 1, step: 0.01, formatValue: fmtHz },
+    { type: 'slider', path: 'hi', label: 'Hi Cut', min: 0, max: 1, step: 0.01, formatValue: fmtHz },
+  ],
+  createState: (): EnvState => ({ now: 0, line: [], env: 0 }),
+  tick(state, params, dt, _bpm, input) {
+    const s = state as EnvState;
+    s.now += dt;
+
+    // The band window; crossed dials just swap so the window never inverts.
+    const lo = clamp01(params.lo);
+    const hi = clamp01(params.hi);
+    const raw = input ? clamp01(input(envHz(Math.min(lo, hi)), envHz(Math.max(lo, hi)))) : 0;
+    const gainDb = clamp(Number(params.gain) || 0, -24, 24);
+    const level = clamp01(raw * Math.pow(10, gainDb / 20));
+
+    // The delay line: read `delay` ms behind the head; until history reaches
+    // that far back (startup), the follower hears silence.
+    const delayS = clamp(Number(params.delay) || 0, 0, 2000) / 1000;
+    let target = level;
+    if (delayS > 0) {
+      s.line.push({ t: s.now, v: level });
+      const readAt = s.now - delayS;
+      while (s.line.length > 1 && s.line[1].t <= readAt) s.line.shift();
+      target = s.line[0].t <= readAt ? s.line[0].v : 0;
+    } else if (s.line.length) {
+      s.line.length = 0;
+    }
+
+    // Rise/fall one-pole, picked by direction; 0 ms is instant.
+    const tauS = Math.max(0, Number(target > s.env ? params.rise : params.fall) || 0) / 1000;
+    const k = tauS > 0 ? 1 - Math.exp(-dt / tauS) : 1;
+    s.env = clamp01(s.env + (target - s.env) * k);
+    return s.env;
+  },
+};
+
+registerModType(ENVELOPE_DEF);

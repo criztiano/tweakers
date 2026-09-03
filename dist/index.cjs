@@ -42,6 +42,9 @@ __export(index_exports, {
   CurvePreview: () => CurvePreview,
   DEFAULT_GRADIENT: () => DEFAULT_GRADIENT,
   DEFAULT_TRIGGER_STEPS: () => DEFAULT_TRIGGER_STEPS,
+  ENVELOPE_DEF: () => ENVELOPE_DEF,
+  ENV_HZ_MAX: () => ENV_HZ_MAX,
+  ENV_HZ_MIN: () => ENV_HZ_MIN,
   EasingVisualization: () => EasingVisualization,
   FileControl: () => FileControl,
   Folder: () => Folder,
@@ -111,6 +114,7 @@ __export(index_exports, {
   defaultListItemParams: () => defaultListItemParams,
   dialOrigin: () => dialOrigin,
   displayHex: () => displayHex,
+  envHz: () => envHz,
   flipDriver: () => flipDriver,
   flipDriverX: () => flipDriverX,
   flipDriverY: () => flipDriverY,
@@ -3222,6 +3226,179 @@ var LFO_DEF = {
   }
 };
 registerModType(LFO_DEF);
+var ENV_HZ_MIN = 20;
+var ENV_HZ_MAX = 2e4;
+var envHz = (t) => ENV_HZ_MIN * Math.pow(ENV_HZ_MAX / ENV_HZ_MIN, clamp013(t));
+var fmtHz = (t) => {
+  const hz = envHz(t);
+  return hz >= 1e3 ? `${(hz / 1e3).toFixed(1)} kHz` : `${Math.round(hz)} Hz`;
+};
+var ENVELOPE_DEF = {
+  type: "envelope",
+  label: "Envelope",
+  defaults: { gain: 0, rise: 20, fall: 250, delay: 0, source: "", lo: 0, hi: 1 },
+  controls: [
+    { type: "slider", path: "gain", label: "Gain", min: -24, max: 24, step: 0.1, unit: "dB", bipolar: true },
+    { type: "slider", path: "rise", label: "Rise", min: 0, max: 1e3, step: 1, unit: "ms" },
+    { type: "slider", path: "fall", label: "Fall", min: 0, max: 2e3, step: 1, unit: "ms" },
+    { type: "slider", path: "delay", label: "Delay", min: 0, max: 1e3, step: 1, unit: "ms" },
+    { type: "select", path: "source", label: "Source", sourceOptions: true },
+    { type: "slider", path: "lo", label: "Lo Cut", min: 0, max: 1, step: 0.01, formatValue: fmtHz },
+    { type: "slider", path: "hi", label: "Hi Cut", min: 0, max: 1, step: 0.01, formatValue: fmtHz }
+  ],
+  createState: () => ({ now: 0, line: [], env: 0 }),
+  tick(state, params, dt, _bpm, input) {
+    const s = state;
+    s.now += dt;
+    const lo = clamp013(params.lo);
+    const hi = clamp013(params.hi);
+    const raw = input ? clamp013(input(envHz(Math.min(lo, hi)), envHz(Math.max(lo, hi)))) : 0;
+    const gainDb = clamp4(Number(params.gain) || 0, -24, 24);
+    const level = clamp013(raw * Math.pow(10, gainDb / 20));
+    const delayS = clamp4(Number(params.delay) || 0, 0, 2e3) / 1e3;
+    let target = level;
+    if (delayS > 0) {
+      s.line.push({ t: s.now, v: level });
+      const readAt = s.now - delayS;
+      while (s.line.length > 1 && s.line[1].t <= readAt) s.line.shift();
+      target = s.line[0].t <= readAt ? s.line[0].v : 0;
+    } else if (s.line.length) {
+      s.line.length = 0;
+    }
+    const tauS = Math.max(0, Number(target > s.env ? params.rise : params.fall) || 0) / 1e3;
+    const k = tauS > 0 ? 1 - Math.exp(-dt / tauS) : 1;
+    s.env = clamp013(s.env + (target - s.env) * k);
+    return s.env;
+  }
+};
+registerModType(ENVELOPE_DEF);
+
+// src/analyser-core.ts
+function byteFreqToUnit(v) {
+  return v / 255;
+}
+function byteTimeToUnit(v) {
+  return (v - 128) / 128;
+}
+function binRange(point, points, bins, scale, loBin = 1, hiBin = bins) {
+  if (bins <= 2) return { start: Math.max(0, bins - 1), end: Math.max(1, bins) };
+  const lo = Math.max(1, Math.min(bins - 1, loBin));
+  const hi = Math.max(lo + 1, Math.min(bins, hiBin));
+  const at = (t) => scale === "log" ? lo * Math.pow(hi / lo, t) : lo + (hi - lo) * t;
+  let start = Math.floor(at(point / points));
+  start = Math.max(lo, Math.min(hi - 1, start));
+  const end = Math.max(start + 1, Math.min(hi, Math.floor(at((point + 1) / points))));
+  return { start, end };
+}
+function hzWindowToBins(rangeHz, nyquistHz, bins) {
+  const [loHz, hiHz] = rangeHz;
+  if (!Number.isFinite(loHz) || !Number.isFinite(hiHz) || !(nyquistHz > 0) || bins <= 2) return null;
+  if (!(hiHz > loHz) || hiHz <= 0) return null;
+  const toBin = (hz) => hz / nyquistHz * bins;
+  const loBin = Math.max(1, Math.min(bins - 1, toBin(Math.max(0, loHz))));
+  const hiBin = Math.max(loBin + 1, Math.min(bins, toBin(hiHz)));
+  return { loBin, hiBin };
+}
+function markerT(bin, scale, loBin, hiBin) {
+  if (!Number.isFinite(bin) || !(hiBin > loBin) || loBin <= 0) return null;
+  const t = scale === "log" ? Math.log(bin / loBin) / Math.log(hiBin / loBin) : (bin - loBin) / (hiBin - loBin);
+  return t >= 0 && t <= 1 && Number.isFinite(t) ? t : null;
+}
+function fillFrequencyTargets(data, out, scale, loBin = 1, hiBin = data.length) {
+  const points = out.length;
+  for (let i = 0; i < points; i++) {
+    const { start, end } = binRange(i, points, data.length, scale, loBin, hiBin);
+    let mx = 0;
+    for (let b = start; b < end; b++) {
+      if (data[b] > mx) mx = data[b];
+    }
+    out[i] = byteFreqToUnit(mx);
+  }
+}
+function fillWaveformMinMax(data, cols, min, max) {
+  const step = data.length / cols;
+  for (let x = 0; x < cols; x++) {
+    const start = Math.floor(x * step);
+    const end = Math.max(start + 1, Math.min(data.length, Math.floor((x + 1) * step)));
+    let mn = 1;
+    let mx = -1;
+    for (let i = start; i < end; i++) {
+      const v = byteTimeToUnit(data[i]);
+      if (v < mn) mn = v;
+      if (v > mx) mx = v;
+    }
+    min[x] = mn;
+    max[x] = mx;
+  }
+}
+function resampleWaveform(data, out) {
+  const n = out.length;
+  if (!n) return;
+  if (!data.length) {
+    out.fill(0);
+    return;
+  }
+  if (n === 1 || data.length === 1) {
+    out.fill(byteTimeToUnit(data[0]));
+    return;
+  }
+  const step = (data.length - 1) / (n - 1);
+  for (let i = 0; i < n; i++) {
+    const x = i * step;
+    const j = Math.floor(x);
+    const a = byteTimeToUnit(data[j]);
+    const b = byteTimeToUnit(data[Math.min(data.length - 1, j + 1)]);
+    out[i] = a + (b - a) * (x - j);
+  }
+}
+function peakLevel(data) {
+  let mx = 0;
+  for (let i = 0; i < data.length; i++) {
+    const v = Math.abs(byteTimeToUnit(data[i]));
+    if (v > mx) mx = v;
+  }
+  return mx;
+}
+function advanceSweep(history, head, prevLevel, level, dtCols) {
+  const n = history.length;
+  if (!n) return 0;
+  const d = Math.min(dtCols, n);
+  const next = head + d;
+  for (let c = Math.floor(head) + 1; c <= Math.floor(next); c++) {
+    const t = d > 0 ? (c - head) / d : 1;
+    history[(c % n + n) % n] = prevLevel + (level - prevLevel) * t;
+  }
+  return (next % n + n) % n;
+}
+var SPRING_MAX_STEP = 1 / 240;
+function stepSprings(pos, vel, targets, stiffness, damping, dt) {
+  let remaining = dt;
+  while (remaining > 0) {
+    const h = Math.min(remaining, SPRING_MAX_STEP);
+    remaining -= h;
+    for (let i = 0; i < pos.length; i++) {
+      const accel = -stiffness * (pos[i] - targets[i]) - damping * vel[i];
+      vel[i] += accel * h;
+      pos[i] += vel[i] * h;
+    }
+  }
+}
+var SPRING_DEFAULT_STIFFNESS = 120;
+var SPRING_DEFAULT_DAMPING = 14;
+function normalizeSpring(spring) {
+  if (!spring) return null;
+  const raw = spring === true ? {} : spring;
+  return {
+    stiffness: Math.min(1e3, Math.max(1, raw.stiffness ?? SPRING_DEFAULT_STIFFNESS)),
+    damping: Math.min(100, Math.max(1, raw.damping ?? SPRING_DEFAULT_DAMPING))
+  };
+}
+function columnWidth(dpr, pixelSize) {
+  return Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSize)));
+}
+function quantizeToGrid(v, colW) {
+  return Math.round(v / colW) * colW;
+}
 
 // src/store/ModulationStore.ts
 var MOD_TOUCH_GRACE_MS = 4e3;
@@ -3235,6 +3412,9 @@ var ModulationStoreClass = class {
     this.signals = Array(MOD_SLOTS).fill(0);
     this.sources = /* @__PURE__ */ new Map();
     this.sourceValues = /* @__PURE__ */ new Map();
+    this.audioInputs = /* @__PURE__ */ new Map();
+    /** Reused per-input spectrum buffers — one read per input per tick. */
+    this.freqData = /* @__PURE__ */ new Map();
     this.metas = /* @__PURE__ */ new Map();
     this.bpm = 120;
     this.touched = null;
@@ -3443,7 +3623,18 @@ var ModulationStoreClass = class {
           max: c.max ?? 1,
           step: c.step,
           unit: c.unit,
+          formatValue: c.formatValue,
+          bipolar: c.bipolar,
           default: Number(slot.params[c.path]) || 0
+        };
+      } else if (c.type === "select" && c.sourceOptions) {
+        const inputs = this.getAudioInputs();
+        if (inputs.length < 2) continue;
+        const current = slot.params[c.path];
+        config[c.path] = {
+          type: "select",
+          options: inputs,
+          default: typeof current === "string" && inputs.includes(current) ? current : inputs[0]
         };
       } else if (c.type === "toggle") {
         config[c.path] = !!slot.params[c.path];
@@ -3465,6 +3656,13 @@ var ModulationStoreClass = class {
       { kind: "modulation" }
     );
     this.applyingSettings = false;
+  }
+  /** Rebuild the open settings page in place — the source select tracks the inputs. */
+  refreshSettingsPanel() {
+    if (this.settingsIndex === null) return;
+    const slot = this.slots[this.settingsIndex];
+    const def = slot && getModType(slot.type);
+    if (slot && def) this.registerSettingsPanel(slot, def);
   }
   /** A settings-panel edit — screen or hardware — lands in the slot's params. */
   onSettingsChange() {
@@ -3489,6 +3687,8 @@ var ModulationStoreClass = class {
           patch[c.xParam] = Number(xy.x) || 0;
           patch[c.yParam] = Number(xy.y) || 0;
         }
+      } else if (c.type === "select") {
+        if (typeof v === "string") patch[c.path] = v;
       } else if (c.type === "toggle") {
         patch[c.path] = !!v;
       } else if (typeof v === "number" && Number.isFinite(v)) {
@@ -3516,6 +3716,61 @@ var ModulationStoreClass = class {
   }
   getSources() {
     return [...this.sources.keys()];
+  }
+  /* ── audio inputs — what the envelope follower hears ──────────────── */
+  /**
+   * Hand over live audio as a named input: an AnalyserNode getter, read at
+   * frame time (a getter, so the node can exist only after the app's audio
+   * starts on a user gesture). Returns an unregister fn. Registering while
+   * a follower's settings page is open refreshes its source select.
+   */
+  registerAudioInput(id, get) {
+    this.audioInputs.set(id, get);
+    this.refreshSettingsPanel();
+    this.changed();
+    return () => {
+      if (this.audioInputs.get(id) === get) {
+        this.audioInputs.delete(id);
+        this.freqData.delete(id);
+        this.refreshSettingsPanel();
+        this.changed();
+      }
+    };
+  }
+  getAudioInputs() {
+    return [...this.audioInputs.keys()];
+  }
+  /**
+   * The band sampler served to a slot's modulator: its chosen source when
+   * that input is registered, else the first registered input, else null
+   * (the follower hears silence). Levels are the band's spectral peak —
+   * the same reduction the analyser visualizer draws.
+   */
+  audioInputFor(slot) {
+    const chosen = typeof slot.params.source === "string" ? slot.params.source : "";
+    const id = this.audioInputs.has(chosen) ? chosen : this.getAudioInputs()[0];
+    if (id === void 0) return null;
+    const analyser = this.audioInputs.get(id)?.();
+    if (!analyser) return null;
+    return (loHz, hiHz) => {
+      const bins = analyser.frequencyBinCount;
+      if (!bins) return 0;
+      let data = this.freqData.get(id);
+      if (!data || data.length !== bins) {
+        data = new Uint8Array(bins);
+        this.freqData.set(id, data);
+      }
+      analyser.getByteFrequencyData(data);
+      const nyquist = (analyser.context?.sampleRate ?? 44100) / 2;
+      const w = hzWindowToBins([loHz, hiHz], nyquist, bins);
+      const start = w ? Math.floor(w.loBin) : 1;
+      const end = Math.min(bins, w ? Math.ceil(w.hiBin) : bins);
+      let mx = 0;
+      for (let b = start; b < end; b++) {
+        if (data[b] > mx) mx = data[b];
+      }
+      return byteFreqToUnit(mx);
+    };
   }
   /* ── tempo ────────────────────────────────────────────────────────── */
   setTempo(bpm) {
@@ -3608,7 +3863,11 @@ var ModulationStoreClass = class {
         state = def.createState();
         this.states.set(slot.index, state);
       }
-      this.signals[slot.index] = clamp5(def.tick(state, slot.params, step, this.bpm), -1, 1);
+      this.signals[slot.index] = clamp5(
+        def.tick(state, slot.params, step, this.bpm, this.audioInputFor(slot)),
+        -1,
+        1
+      );
     }
     this.frameListeners.forEach((fn) => fn());
   }
@@ -7506,133 +7765,6 @@ var import_react34 = require("react");
 
 // src/components/AnalyserVisualization.tsx
 var import_react33 = require("react");
-
-// src/analyser-core.ts
-function byteFreqToUnit(v) {
-  return v / 255;
-}
-function byteTimeToUnit(v) {
-  return (v - 128) / 128;
-}
-function binRange(point, points, bins, scale, loBin = 1, hiBin = bins) {
-  if (bins <= 2) return { start: Math.max(0, bins - 1), end: Math.max(1, bins) };
-  const lo = Math.max(1, Math.min(bins - 1, loBin));
-  const hi = Math.max(lo + 1, Math.min(bins, hiBin));
-  const at = (t) => scale === "log" ? lo * Math.pow(hi / lo, t) : lo + (hi - lo) * t;
-  let start = Math.floor(at(point / points));
-  start = Math.max(lo, Math.min(hi - 1, start));
-  const end = Math.max(start + 1, Math.min(hi, Math.floor(at((point + 1) / points))));
-  return { start, end };
-}
-function hzWindowToBins(rangeHz, nyquistHz, bins) {
-  const [loHz, hiHz] = rangeHz;
-  if (!Number.isFinite(loHz) || !Number.isFinite(hiHz) || !(nyquistHz > 0) || bins <= 2) return null;
-  if (!(hiHz > loHz) || hiHz <= 0) return null;
-  const toBin = (hz) => hz / nyquistHz * bins;
-  const loBin = Math.max(1, Math.min(bins - 1, toBin(Math.max(0, loHz))));
-  const hiBin = Math.max(loBin + 1, Math.min(bins, toBin(hiHz)));
-  return { loBin, hiBin };
-}
-function markerT(bin, scale, loBin, hiBin) {
-  if (!Number.isFinite(bin) || !(hiBin > loBin) || loBin <= 0) return null;
-  const t = scale === "log" ? Math.log(bin / loBin) / Math.log(hiBin / loBin) : (bin - loBin) / (hiBin - loBin);
-  return t >= 0 && t <= 1 && Number.isFinite(t) ? t : null;
-}
-function fillFrequencyTargets(data, out, scale, loBin = 1, hiBin = data.length) {
-  const points = out.length;
-  for (let i = 0; i < points; i++) {
-    const { start, end } = binRange(i, points, data.length, scale, loBin, hiBin);
-    let mx = 0;
-    for (let b = start; b < end; b++) {
-      if (data[b] > mx) mx = data[b];
-    }
-    out[i] = byteFreqToUnit(mx);
-  }
-}
-function fillWaveformMinMax(data, cols, min, max) {
-  const step = data.length / cols;
-  for (let x = 0; x < cols; x++) {
-    const start = Math.floor(x * step);
-    const end = Math.max(start + 1, Math.min(data.length, Math.floor((x + 1) * step)));
-    let mn = 1;
-    let mx = -1;
-    for (let i = start; i < end; i++) {
-      const v = byteTimeToUnit(data[i]);
-      if (v < mn) mn = v;
-      if (v > mx) mx = v;
-    }
-    min[x] = mn;
-    max[x] = mx;
-  }
-}
-function resampleWaveform(data, out) {
-  const n = out.length;
-  if (!n) return;
-  if (!data.length) {
-    out.fill(0);
-    return;
-  }
-  if (n === 1 || data.length === 1) {
-    out.fill(byteTimeToUnit(data[0]));
-    return;
-  }
-  const step = (data.length - 1) / (n - 1);
-  for (let i = 0; i < n; i++) {
-    const x = i * step;
-    const j = Math.floor(x);
-    const a = byteTimeToUnit(data[j]);
-    const b = byteTimeToUnit(data[Math.min(data.length - 1, j + 1)]);
-    out[i] = a + (b - a) * (x - j);
-  }
-}
-function peakLevel(data) {
-  let mx = 0;
-  for (let i = 0; i < data.length; i++) {
-    const v = Math.abs(byteTimeToUnit(data[i]));
-    if (v > mx) mx = v;
-  }
-  return mx;
-}
-function advanceSweep(history, head, prevLevel, level, dtCols) {
-  const n = history.length;
-  if (!n) return 0;
-  const d = Math.min(dtCols, n);
-  const next = head + d;
-  for (let c = Math.floor(head) + 1; c <= Math.floor(next); c++) {
-    const t = d > 0 ? (c - head) / d : 1;
-    history[(c % n + n) % n] = prevLevel + (level - prevLevel) * t;
-  }
-  return (next % n + n) % n;
-}
-var SPRING_MAX_STEP = 1 / 240;
-function stepSprings(pos, vel, targets, stiffness, damping, dt) {
-  let remaining = dt;
-  while (remaining > 0) {
-    const h = Math.min(remaining, SPRING_MAX_STEP);
-    remaining -= h;
-    for (let i = 0; i < pos.length; i++) {
-      const accel = -stiffness * (pos[i] - targets[i]) - damping * vel[i];
-      vel[i] += accel * h;
-      pos[i] += vel[i] * h;
-    }
-  }
-}
-var SPRING_DEFAULT_STIFFNESS = 120;
-var SPRING_DEFAULT_DAMPING = 14;
-function normalizeSpring(spring) {
-  if (!spring) return null;
-  const raw = spring === true ? {} : spring;
-  return {
-    stiffness: Math.min(1e3, Math.max(1, raw.stiffness ?? SPRING_DEFAULT_STIFFNESS)),
-    damping: Math.min(100, Math.max(1, raw.damping ?? SPRING_DEFAULT_DAMPING))
-  };
-}
-function columnWidth(dpr, pixelSize) {
-  return Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSize)));
-}
-function quantizeToGrid(v, colW) {
-  return Math.round(v / colW) * colW;
-}
 
 // src/analyser-engine.ts
 var SMOOTH_POINTS = 64;
@@ -13727,6 +13859,9 @@ function AudioLevelMeter(props) {
   CurvePreview,
   DEFAULT_GRADIENT,
   DEFAULT_TRIGGER_STEPS,
+  ENVELOPE_DEF,
+  ENV_HZ_MAX,
+  ENV_HZ_MIN,
   EasingVisualization,
   FileControl,
   Folder,
@@ -13796,6 +13931,7 @@ function AudioLevelMeter(props) {
   defaultListItemParams,
   dialOrigin,
   displayHex,
+  envHz,
   flipDriver,
   flipDriverX,
   flipDriverY,

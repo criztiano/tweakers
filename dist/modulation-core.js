@@ -107,13 +107,63 @@ var LFO_DEF = {
   }
 };
 registerModType(LFO_DEF);
+var ENV_HZ_MIN = 20;
+var ENV_HZ_MAX = 2e4;
+var envHz = (t) => ENV_HZ_MIN * Math.pow(ENV_HZ_MAX / ENV_HZ_MIN, clamp01(t));
+var fmtHz = (t) => {
+  const hz = envHz(t);
+  return hz >= 1e3 ? `${(hz / 1e3).toFixed(1)} kHz` : `${Math.round(hz)} Hz`;
+};
+var ENVELOPE_DEF = {
+  type: "envelope",
+  label: "Envelope",
+  defaults: { gain: 0, rise: 20, fall: 250, delay: 0, source: "", lo: 0, hi: 1 },
+  controls: [
+    { type: "slider", path: "gain", label: "Gain", min: -24, max: 24, step: 0.1, unit: "dB", bipolar: true },
+    { type: "slider", path: "rise", label: "Rise", min: 0, max: 1e3, step: 1, unit: "ms" },
+    { type: "slider", path: "fall", label: "Fall", min: 0, max: 2e3, step: 1, unit: "ms" },
+    { type: "slider", path: "delay", label: "Delay", min: 0, max: 1e3, step: 1, unit: "ms" },
+    { type: "select", path: "source", label: "Source", sourceOptions: true },
+    { type: "slider", path: "lo", label: "Lo Cut", min: 0, max: 1, step: 0.01, formatValue: fmtHz },
+    { type: "slider", path: "hi", label: "Hi Cut", min: 0, max: 1, step: 0.01, formatValue: fmtHz }
+  ],
+  createState: () => ({ now: 0, line: [], env: 0 }),
+  tick(state, params, dt, _bpm, input) {
+    const s = state;
+    s.now += dt;
+    const lo = clamp01(params.lo);
+    const hi = clamp01(params.hi);
+    const raw = input ? clamp01(input(envHz(Math.min(lo, hi)), envHz(Math.max(lo, hi)))) : 0;
+    const gainDb = clamp(Number(params.gain) || 0, -24, 24);
+    const level = clamp01(raw * Math.pow(10, gainDb / 20));
+    const delayS = clamp(Number(params.delay) || 0, 0, 2e3) / 1e3;
+    let target = level;
+    if (delayS > 0) {
+      s.line.push({ t: s.now, v: level });
+      const readAt = s.now - delayS;
+      while (s.line.length > 1 && s.line[1].t <= readAt) s.line.shift();
+      target = s.line[0].t <= readAt ? s.line[0].v : 0;
+    } else if (s.line.length) {
+      s.line.length = 0;
+    }
+    const tauS = Math.max(0, Number(target > s.env ? params.rise : params.fall) || 0) / 1e3;
+    const k = tauS > 0 ? 1 - Math.exp(-dt / tauS) : 1;
+    s.env = clamp01(s.env + (target - s.env) * k);
+    return s.env;
+  }
+};
+registerModType(ENVELOPE_DEF);
 export {
+  ENVELOPE_DEF,
+  ENV_HZ_MAX,
+  ENV_HZ_MIN,
   LFO_DEF,
   LFO_SYNC_DIVISIONS,
   MOD_COLORS,
   MOD_SETTINGS_PANEL,
   MOD_SLOTS,
   applyModulation,
+  envHz,
   getModType,
   lfoSyncedHz,
   listModTypes,

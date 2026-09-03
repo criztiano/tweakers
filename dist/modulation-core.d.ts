@@ -36,7 +36,7 @@ declare const MOD_COLORS: string[];
 declare const modColor: (index: number) => string;
 type ModulationType = 'lfo' | 'envelope' | 'curve' | 'sh' | 'sequencer';
 /** Modulator settings — flat and JSON-safe, like TweakStore values. */
-type ModulationParams = Record<string, number | boolean>;
+type ModulationParams = Record<string, number | boolean | string>;
 interface ModulationSlot {
     /** 0..15 — the Move step button that created it, and its palette index. */
     index: number;
@@ -54,20 +54,29 @@ interface ModulationAssignment {
     amount: number;
 }
 /**
- * Settings-page control metadata — ControlMeta plus the xy mapping: an xy
- * control on a modulator page edits two scalar params (xParam/yParam)
- * rather than storing an {x, y} object.
+ * Settings-page control metadata — ControlMeta plus the xy mapping (an xy
+ * control on a modulator page edits two scalar params, xParam/yParam, rather
+ * than storing an {x, y} object) and the source marker: a select flagged
+ * `sourceOptions` lists the ModulationStore's registered audio inputs, and
+ * only appears when there is a real choice to make.
  */
 type ModControlMeta = ControlMeta & {
     xParam?: string;
     yParam?: string;
+    sourceOptions?: boolean;
 };
+/**
+ * Live audio handed to a modulator by the engine: the band level 0..1
+ * inside a frequency window — an envelope follower's raw material.
+ */
+type ModAudioInput = (loHz: number, hiHz: number) => number;
 /**
  * One modulator type, pluggable: LFO ships with the kit, the others
  * (envelope, curve, S&H, sequencer) register through the same door.
  * `tick` advances the modulator by `dt` seconds and returns the signal,
  * always -1..1; `state` is whatever `createState` returned — the engine
- * never looks inside it.
+ * never looks inside it. Types that listen to audio (the envelope follower)
+ * read the engine-provided `input`; the others ignore it.
  */
 interface ModTypeDef {
     type: ModulationType;
@@ -76,7 +85,7 @@ interface ModTypeDef {
     /** The settings-page layout, in slot order: dials, toggles, the xy pad. */
     controls: ModControlMeta[];
     createState(): unknown;
-    tick(state: unknown, params: ModulationParams, dt: number, bpm: number): number;
+    tick(state: unknown, params: ModulationParams, dt: number, bpm: number, input?: ModAudioInput | null): number;
 }
 /** Plug a modulator type in; registering a type again replaces it. */
 declare function registerModType(def: ModTypeDef): void;
@@ -106,5 +115,23 @@ declare function lfoSyncedHz(division: number, bpm: number): number;
  * smooth (a slew that rounds corners toward sine and softens jitter steps).
  */
 declare const LFO_DEF: ModTypeDef;
+/** The filter dials' frequency span — the audible band. */
+declare const ENV_HZ_MIN = 20;
+declare const ENV_HZ_MAX = 20000;
+/**
+ * A filter dial's position 0..1 → Hz, exponential across the audible band —
+ * equal knob travel covers equal musical distance (20·1000^t).
+ */
+declare const envHz: (t: number) => number;
+/**
+ * The envelope follower: the band level of an audio input (lo/hi confine it
+ * to a frequency window — follow just the kick, just the hiss), through
+ * gain, an optional delay, and rise/fall smoothing. The signal is unipolar
+ * 0..1: silence rests the control at its base value, level pushes it up to
+ * `amount` of the span. Which audio it follows comes from the engine — apps
+ * register inputs on the ModulationStore (`registerAudioInput`), and the
+ * source select appears once there is more than one to choose from.
+ */
+declare const ENVELOPE_DEF: ModTypeDef;
 
-export { LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModTypeDef, type ModulationAssignment, type ModulationParams, type ModulationSlot, type ModulationType, applyModulation, getModType, lfoSyncedHz, listModTypes, modColor, modKey, registerModType };
+export { ENVELOPE_DEF, ENV_HZ_MAX, ENV_HZ_MIN, LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModAudioInput, type ModControlMeta, type ModTypeDef, type ModulationAssignment, type ModulationParams, type ModulationSlot, type ModulationType, applyModulation, envHz, getModType, lfoSyncedHz, listModTypes, modColor, modKey, registerModType };

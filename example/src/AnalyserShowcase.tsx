@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { AnalyserVisualization, Slider, ColorControl } from 'tweakers';
+import { AnalyserVisualization, Slider, ColorControl, ModulationStore } from 'tweakers';
 import type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale } from 'tweakers';
 
 const PIXEL_SIZES = [1, 2, 4, 6]; // pixelated block-size multipliers
@@ -75,10 +75,18 @@ function buildRig(): Rig {
     step++;
   }, 420);
 
+  // While the rig plays, its channels double as modulation audio inputs —
+  // an envelope-follower slot can ride the drone or the blips.
+  const channels = [drone, blips];
+  const unregisterInputs = CHANNEL_NAMES.map((name, i) =>
+    ModulationStore.registerAudioInput(name, () => channels[i].analyser)
+  );
+
   return {
     ctx,
-    channels: [drone, blips],
+    channels,
     stop: () => {
+      unregisterInputs.forEach((off) => off());
       window.clearInterval(interval);
       saws.forEach((o) => o.stop());
       lfo.stop();

@@ -13,7 +13,9 @@ import {
   type ModulationType,
   type ModulationParams,
   type ModulationAssignment,
+  type ModAudioInput,
 } from '../modulation-core';
+import { hzWindowToBins, byteFreqToUnit } from '../analyser-core';
 
 /**
  * The modulation layer's runtime — a singleton beside the TweakStore.
@@ -35,6 +37,16 @@ import {
  *
  *   ModulationStore.registerSource('lfo-1', { sample: () => native.lfo1 });
  *   // or push at any rate: ModulationStore.setSourceValue('lfo-1', v);
+ *
+ * Audio-listening modulators (the envelope follower) need something to
+ * hear. Apps hand over live audio as named inputs — the same late-getter
+ * pattern the analyser rows use, since audio contexts start on a gesture:
+ *
+ *   ModulationStore.registerAudioInput('drums', () => analyser);   // an AnalyserNode
+ *
+ * The engine reads each input's spectrum once per frame and serves band
+ * levels to whichever slots follow it; a follower's source select lists
+ * the registered inputs (and only appears when there is more than one).
  *
  * A slot pointing at a source shows its signal (circle, dots, step light)
  * but applies nothing to values unless the source says `applies: true` —
@@ -83,6 +95,9 @@ class ModulationStoreClass {
   private signals: number[] = Array(MOD_SLOTS).fill(0);
   private sources = new Map<string, ModulationSourceConfig>();
   private sourceValues = new Map<string, number>();
+  private audioInputs = new Map<string, () => AnalyserNode | null>();
+  /** Reused per-input spectrum buffers — one read per input per tick. */
+  private freqData = new Map<string, Uint8Array<ArrayBuffer>>();
   private metas = new Map<string, NumericMeta | null>();
   private bpm = 120;
   private touched: { panelId: string; path: string; at: number } | null = null;
@@ -316,7 +331,20 @@ class ModulationStoreClass {
           max: c.max ?? 1,
           step: c.step,
           unit: c.unit,
+          formatValue: c.formatValue,
+          bipolar: c.bipolar,
           default: Number(slot.params[c.path]) || 0,
+        };
+      } else if (c.type === 'select' && c.sourceOptions) {
+        // The source select lists the registered audio inputs — and only
+        // exists while there is a real choice to make.
+        const inputs = this.getAudioInputs();
+        if (inputs.length < 2) continue;
+        const current = slot.params[c.path];
+        config[c.path] = {
+          type: 'select',
+          options: inputs,
+          default: typeof current === 'string' && inputs.includes(current) ? current : inputs[0],
         };
       } else if (c.type === 'toggle') {
         config[c.path] = !!slot.params[c.path];
@@ -340,6 +368,14 @@ class ModulationStoreClass {
       { kind: 'modulation' }
     );
     this.applyingSettings = false;
+  }
+
+  /** Rebuild the open settings page in place — the source select tracks the inputs. */
+  private refreshSettingsPanel(): void {
+    if (this.settingsIndex === null) return;
+    const slot = this.slots[this.settingsIndex];
+    const def = slot && getModType(slot.type);
+    if (slot && def) this.registerSettingsPanel(slot, def);
   }
 
   /** A settings-panel edit — screen or hardware — lands in the slot's params. */
@@ -369,6 +405,8 @@ class ModulationStoreClass {
           patch[c.xParam] = Number(xy.x) || 0;
           patch[c.yParam] = Number(xy.y) || 0;
         }
+      } else if (c.type === 'select') {
+        if (typeof v === 'string') patch[c.path] = v;
       } else if (c.type === 'toggle') {
         patch[c.path] = !!v;
       } else if (typeof v === 'number' && Number.isFinite(v)) {
@@ -400,6 +438,65 @@ class ModulationStoreClass {
 
   getSources(): string[] {
     return [...this.sources.keys()];
+  }
+
+  /* ── audio inputs — what the envelope follower hears ──────────────── */
+
+  /**
+   * Hand over live audio as a named input: an AnalyserNode getter, read at
+   * frame time (a getter, so the node can exist only after the app's audio
+   * starts on a user gesture). Returns an unregister fn. Registering while
+   * a follower's settings page is open refreshes its source select.
+   */
+  registerAudioInput(id: string, get: () => AnalyserNode | null): () => void {
+    this.audioInputs.set(id, get);
+    this.refreshSettingsPanel();
+    this.changed();
+    return () => {
+      if (this.audioInputs.get(id) === get) {
+        this.audioInputs.delete(id);
+        this.freqData.delete(id);
+        this.refreshSettingsPanel();
+        this.changed();
+      }
+    };
+  }
+
+  getAudioInputs(): string[] {
+    return [...this.audioInputs.keys()];
+  }
+
+  /**
+   * The band sampler served to a slot's modulator: its chosen source when
+   * that input is registered, else the first registered input, else null
+   * (the follower hears silence). Levels are the band's spectral peak —
+   * the same reduction the analyser visualizer draws.
+   */
+  private audioInputFor(slot: ModulationSlot): ModAudioInput | null {
+    const chosen = typeof slot.params.source === 'string' ? slot.params.source : '';
+    const id = this.audioInputs.has(chosen) ? chosen : this.getAudioInputs()[0];
+    if (id === undefined) return null;
+    const analyser = this.audioInputs.get(id)?.();
+    if (!analyser) return null;
+    return (loHz, hiHz) => {
+      const bins = analyser.frequencyBinCount;
+      if (!bins) return 0;
+      let data = this.freqData.get(id);
+      if (!data || data.length !== bins) {
+        data = new Uint8Array(bins);
+        this.freqData.set(id, data);
+      }
+      analyser.getByteFrequencyData(data);
+      const nyquist = (analyser.context?.sampleRate ?? 44100) / 2;
+      const w = hzWindowToBins([loHz, hiHz], nyquist, bins);
+      const start = w ? Math.floor(w.loBin) : 1;
+      const end = Math.min(bins, w ? Math.ceil(w.hiBin) : bins);
+      let mx = 0;
+      for (let b = start; b < end; b++) {
+        if (data[b] > mx) mx = data[b];
+      }
+      return byteFreqToUnit(mx);
+    };
   }
 
   /* ── tempo ────────────────────────────────────────────────────────── */
@@ -502,7 +599,11 @@ class ModulationStoreClass {
         state = def.createState();
         this.states.set(slot.index, state);
       }
-      this.signals[slot.index] = clamp(def.tick(state, slot.params, step, this.bpm), -1, 1);
+      this.signals[slot.index] = clamp(
+        def.tick(state, slot.params, step, this.bpm, this.audioInputFor(slot)),
+        -1,
+        1
+      );
     }
     this.frameListeners.forEach((fn) => fn());
   }

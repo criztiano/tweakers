@@ -23,6 +23,16 @@ import './range-slider-core.js';
  *   ModulationStore.registerSource('lfo-1', { sample: () => native.lfo1 });
  *   // or push at any rate: ModulationStore.setSourceValue('lfo-1', v);
  *
+ * Audio-listening modulators (the envelope follower) need something to
+ * hear. Apps hand over live audio as named inputs — the same late-getter
+ * pattern the analyser rows use, since audio contexts start on a gesture:
+ *
+ *   ModulationStore.registerAudioInput('drums', () => analyser);   // an AnalyserNode
+ *
+ * The engine reads each input's spectrum once per frame and serves band
+ * levels to whichever slots follow it; a follower's source select lists
+ * the registered inputs (and only appears when there is more than one).
+ *
  * A slot pointing at a source shows its signal (circle, dots, step light)
  * but applies nothing to values unless the source says `applies: true` —
  * the app's own engine already did, at audio rate.
@@ -55,6 +65,9 @@ declare class ModulationStoreClass {
     private signals;
     private sources;
     private sourceValues;
+    private audioInputs;
+    /** Reused per-input spectrum buffers — one read per input per tick. */
+    private freqData;
     private metas;
     private bpm;
     private touched;
@@ -116,6 +129,8 @@ declare class ModulationStoreClass {
         panelId: string;
     } | null;
     private registerSettingsPanel;
+    /** Rebuild the open settings page in place — the source select tracks the inputs. */
+    private refreshSettingsPanel;
     /** A settings-panel edit — screen or hardware — lands in the slot's params. */
     private onSettingsChange;
     /** Offer an app-side modulator to the slots; returns an unregister fn. */
@@ -123,6 +138,21 @@ declare class ModulationStoreClass {
     /** Push a source's signal (-1..1) at any rate; the engine mirrors the latest. */
     setSourceValue(id: string, value: number): void;
     getSources(): string[];
+    /**
+     * Hand over live audio as a named input: an AnalyserNode getter, read at
+     * frame time (a getter, so the node can exist only after the app's audio
+     * starts on a user gesture). Returns an unregister fn. Registering while
+     * a follower's settings page is open refreshes its source select.
+     */
+    registerAudioInput(id: string, get: () => AnalyserNode | null): () => void;
+    getAudioInputs(): string[];
+    /**
+     * The band sampler served to a slot's modulator: its chosen source when
+     * that input is registered, else the first registered input, else null
+     * (the follower hears silence). Levels are the band's spectral peak —
+     * the same reduction the analyser visualizer draws.
+     */
+    private audioInputFor;
     setTempo(bpm: number): void;
     getTempo(): number;
     /** A slot's live signal, -1..1. */
