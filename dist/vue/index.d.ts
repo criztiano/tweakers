@@ -78,6 +78,19 @@ type XYValue = {
     y: number;
 };
 
+interface FilterAxisConfig {
+    min?: number;
+    max?: number;
+    step?: number;
+    default?: number;
+    label?: string;
+    formatValue?: (value: number) => string;
+}
+interface FilterValue {
+    cutoff: number;
+    resonance: number;
+}
+
 /** A resolved range value. Invariant (upheld by the helpers): min <= max. */
 type RangeValue = {
     min: number;
@@ -183,6 +196,22 @@ type TextConfig = {
     type: 'text';
     default?: string;
     placeholder?: string;
+};
+/**
+ * The 2-slot filter control: one value, two hands — cutoff on the left,
+ * resonance on the right. On the Move it claims two dial slots and draws
+ * its magnitude response across both; inline it is one row for the same
+ * pair. `response` is a closure like a curve row's `sample` (refreshed
+ * through `syncCurveConfigs`); without one the kit draws its own lowpass.
+ */
+type FilterConfig = {
+    type: 'filter';
+    /** Starting point. Missing hands open the filter: cutoff max, resonance min. */
+    default?: Partial<FilterValue>;
+    cutoff?: FilterAxisConfig;
+    resonance?: FilterAxisConfig;
+    /** The drawn magnitude response, from each hand's 0..1 position. */
+    response?: (cutoff01: number, resonance01: number) => (t: number) => number;
 };
 type RangeConfig = {
     type: 'range';
@@ -401,14 +430,14 @@ type ListConfig = {
     /** Label for the add affordance. Defaults to 'Add'. */
     addLabel?: string;
 };
-type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
+type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue | FilterConfig | FilterValue;
 type TweakConfig = {
     [key: string]: TweakValue | [number, number, number, number?] | CurveConfig | AnalyserConfig | TweakConfig;
 };
 /** UI-only reserved keys: they shape the panel, never resolve to a value. */
 type ReservedKey = '_collapsed' | '_collapsible' | '_tabs';
 type ResolvedValues<T extends TweakConfig> = {
-    [K in keyof T as T[K] extends CurveConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends NumberConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends TweakConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T as T[K] extends CurveConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends NumberConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends FilterConfig ? FilterValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends TweakConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -449,7 +478,7 @@ type AffordanceConfig = {
     label?: string;
 };
 type ControlMeta = {
-    type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser';
+    type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser' | 'filter';
     path: string;
     label: string;
     /** One line of help, revealed on hover or when focus lands inside the control. */
@@ -512,6 +541,11 @@ type ControlMeta = {
     snap?: boolean;
     returnToCenter?: boolean;
     showValues?: boolean;
+    /** Filter control's per-hand range/step/label/format. */
+    cutoffAxis?: FilterAxisConfig;
+    resonanceAxis?: FilterAxisConfig;
+    /** Filter control's drawn magnitude response — swapped in place by syncCurveConfigs. */
+    response?: (cutoff01: number, resonance01: number) => (t: number) => number;
     /** Curve preview's host-supplied sampler — swapped in place by syncCurveConfigs. */
     sample?: (t: number) => number;
     /** Curve preview's fixed y-range; absent = auto-fit per draw. */
@@ -810,6 +844,7 @@ declare class TweakStoreClass {
     private isColorConfig;
     private isGradientConfig;
     private isXYConfig;
+    private isFilterConfig;
     private isRangeConfig;
     private isRangeValue;
     private isTextConfig;
@@ -1605,8 +1640,8 @@ declare const NumberControl: vue.DefineComponent<vue.ExtractPropTypes<{
 }>, {
     min: number;
     max: number;
-    orientation: "horizontal" | "vertical";
     formatValue: (value: number) => string;
+    orientation: "horizontal" | "vertical";
 }, {}, {}, {}, string, vue.ComponentProvideOptions, true, {}, any>;
 
 declare const RangeSlider: vue.DefineComponent<vue.ExtractPropTypes<{
@@ -3110,10 +3145,10 @@ declare const XYPad: vue.DefineComponent<vue.ExtractPropTypes<{
     x: XYAxis;
     y: XYAxis;
     shortcut: ShortcutConfig;
+    formatValue: (value: XYValue) => string;
     disabled: boolean;
     size: number;
     grid: number | boolean;
-    formatValue: (value: XYValue) => string;
     shortcutActive: boolean;
     density: number;
     snap: boolean;

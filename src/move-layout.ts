@@ -1,7 +1,9 @@
 import type { PanelConfig, ControlMeta } from './store/TweakStore';
+import type { ModPageLayout } from './modulation-core';
 import { resolveAxis, type XYValue } from './xy-pad-core';
 import { plotCurve } from './curve-preview-core';
 import { clampRange, type RangeValue } from './range-slider-core';
+import { resolveFilterAxis, normalizeFilterValue, filterHand01, filterHandValue, defaultFilterResponse, filterResponsePath, type FilterValue } from './filter-core';
 
 /**
  * The Move's control surface, as the bridge kit maps it (move-tweakers v0):
@@ -48,25 +50,52 @@ export const isEnumDial = (c: ControlMeta) =>
   c.type === 'select' && Array.isArray(c.options) && c.options.length > 1;
 
 const isDial = (c: ControlMeta) =>
-  c.type === 'slider' || c.type === 'xy' || c.type === 'range' || isEnumDial(c) ||
+  c.type === 'slider' || c.type === 'xy' || c.type === 'range' || c.type === 'filter' || isEnumDial(c) ||
   (c.type === 'number' && c.min != null && c.max != null);
 
 /** Two-handed dials and enums need a slot of their own, never a value chip. */
-const noChip = (c: ControlMeta) => c.type === 'xy' || c.type === 'range' || isEnumDial(c);
+const noChip = (c: ControlMeta) => c.type === 'xy' || c.type === 'range' || c.type === 'filter' || isEnumDial(c);
 
 /**
- * The modulator-settings page (hold a step button): the type enum takes the
- * first big slot, the modulator's own controls follow, and a toggle drops
- * into the pad row under the dial declared just before it — that puts the
- * LFO's tempo-sync pad directly below its rate dial. The kit mirrors this
- * rule for the hardware page.
+ * How many dial columns a control claims. The filter is the kit's first
+ * 2-slot control: its picture spans two columns, and on the hardware the
+ * left column's knob turns cutoff while the right column's turns resonance.
  */
-export function buildModMovePage(panel: PanelConfig): MovePage {
+export const dialSpan = (c: ControlMeta | undefined): number =>
+  c?.type === 'filter' ? 2 : 1;
+
+/** True when column i only continues the span-2 dial sitting at i-1. */
+export const isSpanContinuation = (page: MovePage, i: number): boolean =>
+  i > 0 && page.dials[i] !== undefined && page.dials[i] === page.dials[i - 1];
+
+/**
+ * The modulator-settings page (hold a step button): the kind picker takes
+ * the first big slot, the modulator's own controls follow, and everything
+ * else drops into the column of the dial declared just before it — the
+ * LFO's tempo-sync pad below its rate dial, the curve's sync and signal
+ * below its duration dial.
+ *
+ * `layout` is the ModulationStore's own placement (`getSettingsLayout`), the
+ * single list both surfaces read; without it the same rule is re-derived
+ * from the panel, which is enough for a modulator with no small slots.
+ */
+export function buildModMovePage(panel: PanelConfig, layout?: ModPageLayout | null): MovePage {
   const controls = flat(panel.controls);
+  if (layout) {
+    const at = (slot: { path: string } | null) =>
+      slot ? controls.find((c) => c.path === slot.path) : undefined;
+    return {
+      panel,
+      dials: layout.dials.slice(0, MOVE_DIALS).map(at).filter((c): c is ControlMeta => !!c),
+      toggles: layout.toggles.slice(0, MOVE_PADS).map(at) as ControlMeta[],
+      values: layout.values.slice(0, MOVE_PADS).map(at) as ControlMeta[],
+      actions: [],
+    };
+  }
   const dials: ControlMeta[] = [];
   const toggles: ControlMeta[] = [];
   for (const c of controls) {
-    // The type select keeps its slot even while only one modulator type is
+    // The kind picker keeps its slot even while only one modulator type is
     // registered (a 1-option select is not an enum dial by the kit's rule).
     if (c.type === 'toggle') toggles[Math.max(0, dials.length - 1)] = c;
     else if (c.type === 'select' || isDial(c)) dials.push(c);
@@ -98,7 +127,22 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
       // dials and enums can't be chips at all, so a pad column on one of
       // those is ignored and it keeps its slot.
       const chipPlaced = (c: ControlMeta) => padColumn(panel, c) !== null && !noChip(c);
-      const dials = controls.filter((c) => isDial(c) && !chipPlaced(c)).slice(0, MOVE_DIALS);
+      // Dials pack left to right, each claiming its span of columns — a
+      // span-2 control sits in both of its columns, so occupancy checks and
+      // the knob-number rule need no second bookkeeping. A wide control that
+      // no longer fits is passed over; a narrow one behind it may still land.
+      const dials: ControlMeta[] = [];
+      let nextCol = 0;
+      for (const c of controls) {
+        if (!isDial(c) || chipPlaced(c)) continue;
+        const span = dialSpan(c);
+        if (nextCol + span > MOVE_DIALS) {
+          if (nextCol >= MOVE_DIALS) break;
+          continue;
+        }
+        for (let s = 0; s < span; s++) dials[nextCol + s] = c;
+        nextCol += span;
+      }
 
       const toggles: ControlMeta[] = [];
       const values: ControlMeta[] = [];
@@ -135,6 +179,36 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         actions: actions.slice(0, MOVE_PADS),
       };
     });
+}
+
+/**
+ * The pad grid's four rows, top to bottom, exactly as the hardware stacks
+ * them — screen row 0 is the row nearest the knobs.
+ *
+ * Plain: y=3 is the dial-slot indicator (the dials draw it, so it is not a
+ * row here), y=2 the switches, y=1 the value chips, y=0 the ALT pad. An app
+ * that claims both bottom rows takes y=1 and y=0, and the chips move up above
+ * the switches — the same shuffle the surface makes, so a dial column keeps
+ * its chip AND its switch underneath it (see PROTOCOL.md).
+ *
+ * Hand-placed action pads take the row under the values. A single-row claim
+ * is the bottom row alone, so the actions keep theirs; a two-row claim takes
+ * both bottom rows, and the actions have nowhere left to sit.
+ */
+export function movePadRows(page: MovePage, claimedRows: number): ControlMeta[][] {
+  if (claimedRows >= 2) return [page.values, page.toggles, [], []];
+  return [page.toggles, page.values, page.actions, []];
+}
+
+/**
+ * Which claimed hardware row a screen row shows, or null when it is a control
+ * row. Two claimed rows fill screen rows 2 and 3 (y=1 then y=0); one claimed
+ * row is the bottom row alone, and lands on screen row 3 — below the action
+ * pads, exactly where the hardware puts it.
+ */
+export function moveAppPadRow(row: number, claimedRows: number): 0 | 1 | null {
+  if (claimedRows >= 2) return row === 2 ? 1 : row === 3 ? 0 : null;
+  return claimedRows === 1 && row === 3 ? 0 : null;
 }
 
 /**
@@ -201,10 +275,10 @@ export const enumOptionIcon = (o: string | { icon?: string }): string | null =>
 export const ENUM_SHAPE_SAMPLES = 64;
 
 /**
- * The shape an enum option stands for, as an SVG path across a 100×100 box
+ * The shape an enum option stands for, as an SVG path filling a 100×100 box
  * with y pointing up — or null when the select declares no `preview`, or that
- * option has no shape. Auto-fitted through the curve row's own core, so a
- * bipolar arc and a 0..1 envelope both fill the box.
+ * option has no shape. Fitted through the curve row's own core, so a bipolar
+ * arc and a 0..1 envelope both fill the box edge to edge.
  *
  * Lives here rather than in the panel so the "what does this slot draw"
  * question has one answer both surfaces can be tested against.
@@ -218,12 +292,29 @@ export function enumShapePath(meta: ControlMeta, value: unknown): string | null 
     return null;                      /* a throwing preview draws nothing */
   }
   if (typeof sample !== 'function') return null;
-  const d = plotCurve(sample, { count: ENUM_SHAPE_SAMPLES })
-    .segments
+  const segments = plotCurve(sample, { count: ENUM_SHAPE_SAMPLES }).segments;
+
+  // The curve row fits with headroom so a thick stroke never clips at the
+  // edge of a tall surface. A slot is not tall, and that headroom reads as a
+  // gap the layout did not ask for — so the ink is re-fitted to fill the box
+  // and the CSS band alone decides how much air the drawing gets.
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const seg of segments) {
+    for (const pt of seg) {
+      if (pt.v < lo) lo = pt.v;
+      if (pt.v > hi) hi = pt.v;
+    }
+  }
+  if (lo > hi) return null;                        /* nothing was plotted */
+  const span = hi - lo;
+  const fill = (v: number) => (span > 0 ? (v - lo) / span : 0.5);
+
+  const d = segments
     .map((seg) =>
       seg
         .map((pt, i) =>
-          `${i ? 'L' : 'M'} ${(pt.t * 100).toFixed(2)} ${((1 - pt.v) * 100).toFixed(2)}`)
+          `${i ? 'L' : 'M'} ${(pt.t * 100).toFixed(2)} ${((1 - fill(pt.v)) * 100).toFixed(2)}`)
         .join(' '))
     .join(' ');
   return d || null;
@@ -270,6 +361,61 @@ export function denormalizeEnumDial(meta: ControlMeta, v01: number): string {
   if (opts.length === 0) return '';
   const i = Math.round(Math.min(1, Math.max(0, v01)) * (opts.length - 1));
   return opts[i];
+}
+
+/** A filter dial's two hands, each 0..1 — the two numbers on the wire.
+ *  The left column's knob is cutoff, the right column's is resonance. */
+export function normalizeFilterDial(meta: ControlMeta, value: unknown): { cutoff: number; resonance: number } {
+  const ca = resolveFilterAxis(meta.cutoffAxis, 'cutoff');
+  const ra = resolveFilterAxis(meta.resonanceAxis, 'resonance');
+  const v = normalizeFilterValue(value, ca, ra);
+  return { cutoff: filterHand01(v.cutoff, ca), resonance: filterHand01(v.resonance, ra) };
+}
+
+/** Hand positions 0..1 back to the control's real pair, kit-identical. */
+export function denormalizeFilterDial(meta: ControlMeta, cutoff01: number, resonance01: number): FilterValue {
+  const ca = resolveFilterAxis(meta.cutoffAxis, 'cutoff');
+  const ra = resolveFilterAxis(meta.resonanceAxis, 'resonance');
+  return { cutoff: filterHandValue(cutoff01, ca), resonance: filterHandValue(resonance01, ra) };
+}
+
+/**
+ * The 2-slot picture: the filter's magnitude response as an SVG path filling
+ * a 100×100 box, y pointing up — through the app's own `response` when the
+ * config brought one, else the kit's lowpass. One answer both surfaces can
+ * be tested against, like `enumShapePath`.
+ */
+export function filterShapePath(meta: ControlMeta, value: unknown): string | null {
+  const pos = normalizeFilterDial(meta, value);
+  let response: ((t: number) => number) | null | undefined;
+  try {
+    response = (meta.response ?? defaultFilterResponse)(pos.cutoff, pos.resonance);
+  } catch {
+    return null;                      /* a throwing response draws nothing */
+  }
+  if (typeof response !== 'function') return null;
+  return filterResponsePath(response);
+}
+
+/**
+ * A meter history as an SVG trace across the 100×100 picture box, oldest
+ * sample at the left and newest at the right, y pointing up. Fewer than two
+ * samples draw nothing — a single point is not yet a trace.
+ */
+export function scopeLinePath(samples: readonly number[]): string {
+  if (samples.length < 2) return '';
+  const x = (i: number) => ((i / (samples.length - 1)) * 100).toFixed(2);
+  const y = (v: number) => ((1 - Math.min(1, Math.max(0, v))) * 100).toFixed(2);
+  return samples.map((v, i) => `${i ? 'L' : 'M'} ${x(i)} ${y(v)}`).join(' ');
+}
+
+/**
+ * The same trace closed down to the baseline, so the incoming signal reads
+ * as a filled body under the follower's line rather than a second stroke.
+ */
+export function scopeAreaPath(samples: readonly number[]): string {
+  const line = scopeLinePath(samples);
+  return line ? `${line} L 100 100 L 0 100 Z` : '';
 }
 
 /** Where the fill anchors for a bipolar/origin slider, 0..1 (else 0). */

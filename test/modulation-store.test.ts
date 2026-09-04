@@ -38,7 +38,7 @@ describe('slots', () => {
     expect(ModulationStore.getSlots()).toHaveLength(1);
     expect(ModulationStore.createSlot(16)).toBeNull();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    expect(ModulationStore.createSlot(4, 'curve')).toBeNull();   // not registered
+    expect(ModulationStore.createSlot(4, 'sequencer')).toBeNull();   // not registered
     warn.mockRestore();
   });
 

@@ -1,5 +1,14 @@
 import { RangeValue } from './range-slider-core.js';
 
+interface FilterAxisConfig {
+    min?: number;
+    max?: number;
+    step?: number;
+    default?: number;
+    label?: string;
+    formatValue?: (value: number) => string;
+}
+
 /**
  * One axis of an XY pad control. Partial — every field falls back through
  * `resolveAxis` (min 0, max 1, step 0.01). `origin`/`bipolar` mirror the
@@ -179,7 +188,7 @@ type AffordanceConfig = {
     label?: string;
 };
 type ControlMeta = {
-    type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser';
+    type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser' | 'filter';
     path: string;
     label: string;
     /** One line of help, revealed on hover or when focus lands inside the control. */
@@ -242,6 +251,11 @@ type ControlMeta = {
     snap?: boolean;
     returnToCenter?: boolean;
     showValues?: boolean;
+    /** Filter control's per-hand range/step/label/format. */
+    cutoffAxis?: FilterAxisConfig;
+    resonanceAxis?: FilterAxisConfig;
+    /** Filter control's drawn magnitude response — swapped in place by syncCurveConfigs. */
+    response?: (cutoff01: number, resonance01: number) => (t: number) => number;
     /** Curve preview's host-supplied sampler — swapped in place by syncCurveConfigs. */
     sample?: (t: number) => number;
     /** Curve preview's fixed y-range; absent = auto-fit per draw. */

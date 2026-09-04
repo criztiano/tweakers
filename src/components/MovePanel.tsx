@@ -2,11 +2,15 @@ import { useEffect, useRef, useState, useSyncExternalStore, useCallback } from '
 import { createPortal } from 'react-dom';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { ModulationStore } from '../store/ModulationStore';
-import { modColor, MOD_SETTINGS_PANEL, type ModulationSlot } from '../modulation-core';
+import { modColor, curveComposition, MOD_SETTINGS_PANEL, type ModulationSlot } from '../modulation-core';
+import { CurveComposer } from './CurveComposer';
+import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from './TweakRoot';
-import { buildMovePages, buildModMovePage, visibleColumns, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, dialOrigin, isEnumDial, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_DIALS } from '../move-layout';
-import { LUCIDE_ICONS } from '../icons';
+import { buildMovePages, buildModMovePage, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, scopeLinePath, scopeAreaPath, dialOrigin, isEnumDial, isSpanContinuation, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_DIALS, MOVE_PADS } from '../move-layout';
+import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
+import { MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotScopeBody } from './move-slots';
+import { MoveSurfaceStore, type MovePadCell } from '../move-surface-store';
 import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValue, applyDetentAxis, type XYValue } from '../xy-pad-core';
 import { nearestHandle, type RangeValue } from '../range-slider-core';
 import { fineDragValue } from '../shortcut-utils';
@@ -140,6 +144,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const fineRef = useRef<{ shift: boolean; x: number; y: number; v: unknown } | null>(null);
   // Which range handle a gesture grabbed — locked at pointer-down.
   const rangeHandleRef = useRef<'min' | 'max'>('min');
+  // Which filter hand a gesture grabbed (left half = cutoff, right half =
+  // resonance) — locked at pointer-down, like the range handle.
+  const filterHandRef = useRef<'cutoff' | 'resonance'>('cutoff');
 
   // Volume-dial readout: a static value renders as set; a getValue is polled
   // per animation frame while mounted, for readouts that move (a playhead).
@@ -179,10 +186,23 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // buttons put a regular page back (and close the settings with it).
   const modSettings = ModulationStore.getSettings();
   const settingsPanel = modSettings ? TweakStore.getPanel(modSettings.panelId) : undefined;
+  const modLayout = settingsPanel ? ModulationStore.getSettingsLayout() : null;
   const page = settingsPanel
-    ? buildModMovePage(settingsPanel)
+    ? buildModMovePage(settingsPanel, modLayout)
     : pages[Math.min(track, Math.max(0, pages.length - 1))];
   const pageId = page?.panel.id;
+
+  // A curve modulator's page brings its composition with it: the composer
+  // floats above the panel, and its selected clip is what the shape dials
+  // are editing — the dial that draws the preview shows that same clip.
+  const modSlot = modSettings ? ModulationStore.getSlot(modSettings.index) : null;
+  const composition = modSlot?.type === 'curve' ? curveComposition(modSlot.params) : null;
+  const clipIndex = composition
+    ? Math.min(composition.segments.length - 1, Math.max(0, Math.round(Number(modSlot!.params.selected) || 0)))
+    : 0;
+  const previewPath = modLayout?.dials.find((d) => d.preview)?.path ?? null;
+  // The dial wearing the modulator's live meter — the follower's Gain.
+  const scopePath = modLayout?.dials.find((d) => d.scope)?.path ?? null;
 
   // Subscribe to the active page's value changes (per-panel channel only).
   const values = useSyncExternalStore(
@@ -196,6 +216,14 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     useCallback((cb) => ModulationStore.subscribe(cb), []),
     () => ModulationStore.getVersion(),
     () => 0
+  );
+
+  // The raw hardware an app claimed for itself: the bottom pad rows, the step
+  // buttons, the device screen. Empty unless a host fills it in.
+  const surface = useSyncExternalStore(
+    useCallback((cb) => MoveSurfaceStore.subscribe(cb), []),
+    () => MoveSurfaceStore.getState(),
+    () => MoveSurfaceStore.getState()
   );
 
   // Hardware presence: a finger on a knob, a held or latched value pad.
@@ -257,8 +285,13 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const dialPercent = (meta: ControlMeta) =>
     Math.round(normalizeDial(meta, values[meta.path]) * 100);
 
-  // The value chip shows the real value: number in bold, unit trailing.
+  // The value chip shows the real value: number in bold, unit trailing —
+  // or, for a chip that picks between options, the option it is on.
   const chipValue = (meta: ControlMeta): { num: string; unit?: string } => {
+    if (isEnumDial(meta)) {
+      const options = meta.options ?? [];
+      return { num: String(enumOptionLabel(options[enumIndex(meta, values[meta.path])] as never)) };
+    }
     const n = Number(values[meta.path]);
     if (!Number.isFinite(n)) return { num: '' };
     if (meta.formatValue) return { num: meta.formatValue(n) };
@@ -357,6 +390,41 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     TweakStore.updateValue(page.panel.id, meta.path, denormalizeRangeDial(meta, next.lo, next.hi));
   };
 
+  // A filter slot is two dials wearing one picture: the half the gesture
+  // starts in picks the hand (left = cutoff, right = resonance, locked for
+  // the drag), and the pointer's travel across that half turns it. On the
+  // hardware the left column's knob is cutoff and the right column's is
+  // resonance — two ordinary one-column dials to the bridge.
+  const filterFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, down: boolean) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const half = rect.width / 2;
+    if (down) filterHandRef.current = e.clientX - rect.left < half ? 'cutoff' : 'resonance';
+    const hand = filterHandRef.current;
+    const left = hand === 'cutoff' ? rect.left + DIAL_TRACK_INSET : rect.left + half;
+    const span = half - DIAL_TRACK_INSET;
+    const cur = normalizeFilterDial(meta, values[meta.path]);
+    const fine = fineAnchor(e, () => cur);
+    let v01: number;
+    if (fine) {
+      const a = fine.v as { cutoff: number; resonance: number };
+      v01 = fineDragValue({
+        startValue: hand === 'cutoff' ? a.cutoff : a.resonance,
+        startPos: fine.x,
+        pos: e.clientX,
+        extentPx: span || 1,
+        min: 0,
+        max: 1,
+        factor: fine.shift ? 0.1 : 1,
+      });
+    } else {
+      v01 = Math.min(1, Math.max(0, (e.clientX - left) / (span || 1)));
+    }
+    const next = hand === 'cutoff'
+      ? denormalizeFilterDial(meta, v01, cur.resonance)
+      : denormalizeFilterDial(meta, cur.cutoff, v01);
+    TweakStore.updateValue(page.panel.id, meta.path, next);
+  };
+
   // An enum slot steps between the options: the pointer's position on the
   // track maps to 0..1, and denormalizeEnumDial snaps it to the nearest option.
   const enumFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) => {
@@ -436,14 +504,24 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     }));
   };
 
-  const padRows: (ControlMeta[])[] = [page.toggles, page.values, page.actions, []];
+  // An app that claimed the bottom pad rows takes them over — movePadRows
+  // shuffles the control rows around the claim, exactly as the hardware does.
+  const appRows = surface.rows;
+  const padRows = movePadRows(page, appRows);
+  const appRowAt = (row: number) => moveAppPadRow(row, appRows);
+  const padAt = (x: number, y: 0 | 1): MovePadCell | undefined =>
+    surface.pads.find((p) => p.x === x && p.y === y);
 
   // Only occupied columns render — a column with a dial, a toggle chip, or a
   // value chip at its index. Indices stay the hardware knob numbers (hidden
   // columns are skipped, never renumbered), the visible cluster centres in
   // the panel, and each slot keeps the exact 8-wide grid's slot size. An
   // empty page shows the header alone.
-  const visibleCols = visibleColumns(page);
+  // With app rows claimed the app owns whole hardware rows, so all 8 columns
+  // stay on screen — its pads sit at real hardware coordinates.
+  const visibleCols = appRows > 0
+    ? Array.from({ length: MOVE_PADS }, (_, i) => i)
+    : visibleColumns(page);
 
   // The header cluster: the volume-dial readout, right-aligned. (Action
   // buttons live in the views now — see MoveActionButton.) Nothing
@@ -463,7 +541,18 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 
   const content = (
     <div className="tweakers-root tweakers-move-root" data-theme={theme} data-dock={dock}>
-      <div className="tweakers-move" data-dock={dock}>
+      {/* While a composer floats above it the whole instrument comes forward,
+          over the app's own panels — you are working in it. */}
+      <div className="tweakers-move" data-dock={dock} data-overlay={composition ? true : undefined}>
+        {composition && modSettings && (
+          <MoveCurveComposer
+            index={modSettings.index}
+            segments={composition.segments}
+            direction={composition.direction}
+            gap={composition.gap ?? 0}
+            selected={clipIndex}
+          />
+        )}
         <div className="tweakers-move-inner" style={{ '--move-cols': visibleCols.length || MOVE_DIALS } as React.CSSProperties}>
           {/* Only tracks that carry a page render — a bare coloured marker with
               no name says nothing. The index is still the real track index, so
@@ -487,12 +576,23 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 </button>
               ))}
             </div>
-            {/* The modulations, centred between the track labels and the
-                volume readout — one circle per occupied slot. */}
+            {/* The step buttons, centred between the track labels and the
+                volume readout — one circle each. Normally the modulation
+                slots; an app that claimed the row paints them itself, and
+                its picture wins. */}
             <div className="tweakers-move-mods">
-              {ModulationStore.getSlots().map((slot) => (
-                <MoveModCircle key={slot.index} slot={slot} />
-              ))}
+              {surface.steps
+                ? surface.steps.map((s) => (
+                    <span key={s.step} className="tweakers-move-mod" title={`step ${s.step + 1}`}>
+                      <span
+                        className="tweakers-move-mod-dot"
+                        style={{ background: s.color ?? 'var(--move-text)', opacity: s.lit ? 1 : 0.25 }}
+                      />
+                    </span>
+                  ))
+                : ModulationStore.getSlots().map((slot) => (
+                    <MoveModCircle key={slot.index} slot={slot} />
+                  ))}
             </div>
             {headerCluster}
           </div>
@@ -500,13 +600,63 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
           {visibleCols.length > 0 && <div className="tweakers-move-grid">
             <div className="tweakers-move-dials">
               {visibleCols.map((i) => {
-                const meta = dialAt(i);
+                // A 2-slot dial's second column renders nothing of its own —
+                // the base column's slot spans across it. And a 2-slot dial
+                // keeps its slot against chip substitution: a chip landing in
+                // half a picture would break the span.
+                if (isSpanContinuation(page, i)) return null;
+                const meta = page.dials[i]?.type === 'filter' ? page.dials[i] : dialAt(i);
                 if (!meta) return <div key={`empty-${i}`} className="tweakers-move-dial" data-empty="true" />;
                 const active =
                   dragPath === meta.path ||
                   !!handTouch[meta.path] ||
                   !!hwHeld[meta.path] ||
                   (held !== null && held.col === i);
+                // A modulator dial whose value already says what it is — two
+                // seconds, three clips, Forward, the clip the curve is on —
+                // reads the other way round: the name shrinks to the tag on
+                // top and the value takes the slot. Plain 0..1 amounts keep
+                // the big name, since "40%" on its own says nothing.
+                // A settings dial leads with its value, except a plain 0..1
+                // knob whose honest reading is the percentage. A control that
+                // declares its own formatter has said how it wants to read —
+                // the follower's cut dials are 0..1 but speak in Hz.
+                const valueFirst = !!settingsPanel &&
+                  !(meta.min === 0 && meta.max === 1 && !meta.formatValue);
+                // The filter takes two slots as one picture: the magnitude
+                // response maximised across both, each hand's small label
+                // sitting where its own slot's label would have been.
+                if (meta.type === 'filter') {
+                  const fv = normalizeFilterValue(
+                    values[meta.path],
+                    resolveFilterAxis(meta.cutoffAxis, 'cutoff'),
+                    resolveFilterAxis(meta.resonanceAxis, 'resonance')
+                  );
+                  const shape = filterShapePath(meta, values[meta.path]);
+                  return (
+                    <div
+                      key={meta.path}
+                      className="tweakers-move-dial"
+                      data-kind="filter"
+                      data-active={active || undefined}
+                      onPointerDown={(e) => {
+                        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                        fineRef.current = null;
+                        setDragPath(meta.path);
+                        armMod(meta.path);
+                        filterFromPointer(e, meta, true);
+                      }}
+                      onPointerMove={(e) => {
+                        if (dragPath === meta.path) filterFromPointer(e, meta, false);
+                      }}
+                      onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
+                      onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                    >
+                      <ModDot path={meta.path} />
+                      <MoveSlotFilterBody meta={meta} value={fv} shape={shape} />
+                    </div>
+                  );
+                }
                 // An xy control fills its slot with the pad — the field draws
                 // behind the label and there is no slider at the bottom.
                 if (meta.type === 'xy') {
@@ -516,6 +666,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     normalizeValue(values[meta.path] as Partial<XYValue>, xa, ya),
                     xa, ya
                   );
+                  // A preview dial draws what the two axes are shaping —
+                  // the curve modulator's selected clip — in place of the
+                  // crosshair, and names it where the numbers would sit.
+                  const preview = meta.path === previewPath ? ModulationStore.getSettingsPreview() : null;
                   // Grid semantics match the XYPad: on by default (5×5), a
                   // number for N×N, density multiplies, false hides.
                   const gridBase = meta.grid === false ? 0 : typeof meta.grid === 'number' ? meta.grid : XY_GRID_DEFAULT;
@@ -525,6 +679,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       key={meta.path}
                       className="tweakers-move-dial"
                       data-kind="xy"
+                      data-preview={preview ? true : undefined}
+                      data-sub={valueFirst || undefined}
                       data-active={active || undefined}
                       onPointerDown={(e) => {
                         try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
@@ -539,27 +695,43 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerUp={() => xyRelease(meta)}
                       onPointerCancel={() => xyRelease(meta)}
                     >
+                      {valueFirst && <span className="tweakers-move-dial-sub">{meta.label}</span>}
                       <ModDot path={meta.path} />
                       <div className="tweakers-move-xy">
-                        {gridN > 0 && (
-                          <span
-                            className="tweakers-move-xy-grid"
-                            style={{
-                              '--tweak-xy-grid-step-x': `${100 / gridN}%`,
-                              '--tweak-xy-grid-step-y': `${100 / gridN}%`,
-                            } as React.CSSProperties}
-                          />
+                        {preview ? (
+                          <svg
+                            className="tweakers-move-xy-curve"
+                            viewBox="0 0 100 100"
+                            preserveAspectRatio="none"
+                            aria-hidden="true"
+                          >
+                            <path d={previewPathData(preview.points)} />
+                          </svg>
+                        ) : (
+                          <>
+                            {gridN > 0 && (
+                              <span
+                                className="tweakers-move-xy-grid"
+                                style={{
+                                  '--tweak-xy-grid-step-x': `${100 / gridN}%`,
+                                  '--tweak-xy-grid-step-y': `${100 / gridN}%`,
+                                } as React.CSSProperties}
+                              />
+                            )}
+                            <span className="tweakers-move-xy-line" data-axis="x" style={{ top: `${pos.y * 100}%` }} />
+                            <span className="tweakers-move-xy-line" data-axis="y" style={{ left: `${pos.x * 100}%` }} />
+                            <span className="tweakers-move-xy-dot" style={{ left: `${pos.x * 100}%`, top: `${pos.y * 100}%` }} />
+                          </>
                         )}
-                        <span className="tweakers-move-xy-line" data-axis="x" style={{ top: `${pos.y * 100}%` }} />
-                        <span className="tweakers-move-xy-line" data-axis="y" style={{ left: `${pos.x * 100}%` }} />
-                        <span className="tweakers-move-xy-dot" style={{ left: `${pos.x * 100}%`, top: `${pos.y * 100}%` }} />
                       </div>
                       <div className="tweakers-move-dial-readout">
                         <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
                           {meta.label}
                         </span>
                         <span className="tweakers-move-dial-value">
-                          {Math.round(pos.x * 100)}·{Math.round((1 - pos.y) * 100)}
+                          {preview
+                            ? preview.label
+                            : `${Math.round(pos.x * 100)}·${Math.round((1 - pos.y) * 100)}`}
                         </span>
                       </div>
                     </div>
@@ -591,22 +763,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
                     >
                       <ModDot path={meta.path} />
-                      <div className="tweakers-move-dial-readout">
-                        <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
-                          {meta.label}
-                        </span>
-                        <span className="tweakers-move-dial-value">{rangeReading(meta)}</span>
-                      </div>
-                      <div className="tweakers-move-dial-bar">
-                        <div className="tweakers-move-dial-range">
-                          <div
-                            className="tweakers-move-dial-span"
-                            style={{ left: `${pos.lo * 100}%`, width: `${(pos.hi - pos.lo) * 100}%` }}
-                          />
-                          <span className="tweakers-move-dial-handle" style={{ left: `${pos.lo * 100}%` }} />
-                          <span className="tweakers-move-dial-handle" style={{ left: `${pos.hi * 100}%` }} />
-                        </div>
-                      </div>
+                      <MoveSlotRangeBody label={meta.label} value={rangeReading(meta)} lo={pos.lo} hi={pos.hi} />
                     </div>
                   );
                 }
@@ -643,44 +800,19 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
                       onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
                     >
-                      {(shape || glyph) && (
-                        <span className="tweakers-move-dial-tag">
-                          {glyph && <LucideGlyph name={glyph} />}
-                          <span className="tweakers-move-dial-tag-text">{optionLabel}</span>
-                        </span>
-                      )}
+                      {/* A slot with a picture in it reads top down: what the
+                          knob is on the chip, the picture between, what it is
+                          set to underneath. No crossfade — with the name out
+                          of the way there is nothing for the value to replace. */}
                       <ModDot path={meta.path} />
-                      {shape && (
-                        <svg
-                          className="tweakers-move-dial-shape"
-                          viewBox="0 0 100 100"
-                          preserveAspectRatio="none"
-                          aria-hidden="true"
-                        >
-                          <path d={shape} />
-                        </svg>
-                      )}
-                      <div className="tweakers-move-dial-readout">
-                        <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
-                          {meta.label}
-                        </span>
-                        {/* With the shape drawn, its name lives on the tag —
-                            the big line would only repeat it over the drawing. */}
-                        {!shape && (
-                          <span className="tweakers-move-dial-value">{optionLabel}</span>
-                        )}
-                      </div>
-                      <div className="tweakers-move-dial-bar">
-                        <div className="tweakers-move-dial-enum">
-                          {options.map((opt, j) => (
-                            <span
-                              key={typeof opt === 'string' ? opt : opt.value}
-                              className="tweakers-move-dial-enum-cell"
-                              data-on={j === activeIdx || undefined}
-                            />
-                          ))}
-                        </div>
-                      </div>
+                      <MoveSlotEnumBody
+                        label={meta.label}
+                        optionLabel={optionLabel}
+                        options={options}
+                        activeIdx={activeIdx}
+                        shape={shape}
+                        glyph={glyph}
+                      />
                     </div>
                   );
                 }
@@ -692,18 +824,25 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 const origin01 = dialOrigin(meta);
                 const originPct = origin01 > 0 ? origin01 * 100 : null;
                 const pct = dialPercent(meta);
+                // Parked on the origin exactly — the dial's zero, which the
+                // ring states outright instead of leaving you to read a stub
+                // against a tick.
+                const atOrigin =
+                  originPct != null &&
+                  Math.abs(normalizeDial(meta, values[meta.path]) - origin01) < 1e-6;
                 // A substituted chip (held or latched into the slot) reads as
                 // its real value — the same number its chip shows below — and
                 // a small tag names what the slot is controlling.
                 const subbed = meta !== page.dials[i];
-                const subValue = subbed ? chipValue(meta) : null;
+                const subValue = subbed || valueFirst ? chipValue(meta) : null;
                 return (
                   <div
                     key={meta.path}
                     className="tweakers-move-dial"
+                    data-kind={meta.path === scopePath && !subbed ? 'scope' : undefined}
                     data-active={active || undefined}
                     data-latched={latchedHere || undefined}
-                    data-sub={subbed || undefined}
+                    data-sub={subbed || valueFirst || undefined}
                     onPointerDown={(e) => {
                       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
                       fineRef.current = null;
@@ -717,29 +856,28 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
                     onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
                   >
-                    {subbed && <span className="tweakers-move-dial-sub">{meta.label}</span>}
+                    {(subbed || valueFirst) && <span className="tweakers-move-dial-sub">{meta.label}</span>}
                     <ModDot path={meta.path} />
-                    <div className="tweakers-move-dial-readout">
-                      <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
-                        {meta.label}
-                      </span>
-                      <span className="tweakers-move-dial-value">
-                        {subValue
+                    {meta.path === scopePath && !subbed ? (
+                      <MoveDialScope
+                        label={meta.label}
+                        value={dialReading(meta)}
+                        pct={pct}
+                        originPct={originPct}
+                        atOrigin={atOrigin}
+                      />
+                    ) : (
+                      <MoveSlotDefaultBody
+                        label={meta.label}
+                        value={subValue
                           ? `${subValue.num}${subValue.unit ? ` ${subValue.unit}` : ''}`
                           : dialReading(meta)}
-                      </span>
-                    </div>
-                    <div className="tweakers-move-dial-bar">
-                      {originPct != null && (
-                        <span className="tweakers-move-dial-origin" style={{ left: `${originPct}%` }} />
-                      )}
-                      <div
-                        className="tweakers-move-dial-fill"
-                        style={originPct != null
-                          ? { marginLeft: `${Math.min(pct, originPct)}%`, width: `${Math.abs(pct - originPct)}%` }
-                          : { width: `${pct}%` }}
+                        pct={pct}
+                        originPct={originPct}
+                        atOrigin={atOrigin}
                       />
-                    </div>
+                    )}
+
                   </div>
                 );
               })}
@@ -751,13 +889,38 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 collapse the same way: cells render only for visible columns,
                 blank pads filling the gaps to keep the grid rectangular. */}
             {Array.from({ length: PAD_ROWS }, (_, row) => row)
-              .filter((row) => padRows.slice(row).some((r) => r.length > 0))
+              .filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0))
               .map((row) => (
                 <div key={row} className="tweakers-move-pads">
                   {visibleCols.map((col) => {
+                    // A claimed row is the app's: it paints these, we only show them.
+                    const appRow = appRowAt(row);
+                    if (appRow !== null) {
+                      const cell = padAt(col, appRow);
+                      if (!cell || cell.empty) {
+                        return <div key={`app-${col}`} className="tweakers-move-pad" data-empty="true" />;
+                      }
+                      return (
+                        <button
+                          key={`app-${col}`}
+                          className="tweakers-move-pad"
+                          data-kind="app"
+                          data-on={cell.lit || undefined}
+                          onClick={() => MoveSurfaceStore.press(col, appRow)}
+                        >
+                          {/* the colour is the app's own — a track, a slot, a
+                              slice — so it rides inline, like a mod dot does */}
+                          <span
+                            className="tweakers-move-pad-indicator"
+                            style={cell.color ? { background: cell.color } : undefined}
+                          />
+                          {cell.label && <span className="tweakers-move-pad-title">{cell.label}</span>}
+                        </button>
+                      );
+                    }
                     const meta = padRows[row][col];
                     if (!meta) return <div key={`empty-${col}`} className="tweakers-move-pad" data-empty="true" />;
-                    if (row === 0) {
+                    if (padRows[row] === page.toggles) {
                       return (
                         <button
                           key={meta.path}
@@ -773,7 +936,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     }
                     // Action pads carry no value — a press just runs the
                     // app's action, the same as the row's button on screen.
-                    if (row === 2) {
+                    if (padRows[row] === page.actions) {
                       return (
                         <button
                           key={meta.path}
@@ -819,23 +982,81 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   return dock === 'flow' ? content : createPortal(content, document.body);
 }
 
-/** One glyph from the bundled lucide subset; an unknown name draws nothing. */
-function LucideGlyph({ name }: { name: string }) {
-  const paths = LUCIDE_ICONS[name];
-  if (!paths) return null;
+/**
+ * The follower's Gain slot, redrawn every engine frame: the incoming level
+ * as a filled body with the follower's own line over it. Only this subtree
+ * re-renders — the panel around it never hears the frame — and the slot's
+ * face itself stays the pure `MoveSlotScopeBody`.
+ */
+function MoveDialScope(props: {
+  label: string;
+  value: React.ReactNode;
+  pct: number;
+  originPct: number | null;
+  atOrigin?: boolean;
+}) {
+  const [paths, setPaths] = useState({ input: '', output: '' });
+
+  useEffect(() => {
+    const draw = () => {
+      const scope = ModulationStore.getSettingsScope();
+      setPaths(scope
+        ? { input: scopeAreaPath(scope.input), output: scopeLinePath(scope.output) }
+        : { input: '', output: '' });
+    };
+    draw();
+    return ModulationStore.subscribeFrames(draw);
+  }, []);
+
+  return <MoveSlotScopeBody {...props} inputPath={paths.input} outputPath={paths.output} />;
+}
+
+/** A preview's samples as an SVG path across a 100×100 box, y pointing up. */
+function previewPathData(points: number[]): string {
+  if (points.length < 2) return '';
+  return points
+    .map((v, i) =>
+      `${i ? 'L' : 'M'} ${((i / (points.length - 1)) * 100).toFixed(2)} ${((1 - v) * 100).toFixed(2)}`)
+    .join(' ');
+}
+
+/** The floating composer's size — a Move-sized read of the whole pass. */
+const MOVE_CURVE_WIDTH = 320;
+const MOVE_CURVE_HEIGHT = 84;
+
+/**
+ * A curve modulator's composition, floating just above the panel while its
+ * settings page is open — the same composer the app writes curves with, at
+ * Move size and in the slot's own colour. Screen and hardware edit one
+ * thing: the highlighted clip is the one the page's shape dials are on, and
+ * the playhead runs on the modulator's own phase.
+ */
+function MoveCurveComposer({
+  index, segments, direction, gap, selected,
+}: {
+  index: number;
+  segments: CurveSegment[];
+  direction: 'forward' | 'mirror' | 'reverse';
+  gap: number;
+  selected: number;
+}) {
+  // No colours passed: the composer strokes in currentColor, which the panel
+  // sets to its own text colour — the shape reads as part of the instrument.
   return (
-    <svg
-      className="tweakers-move-glyph"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      {paths.map((d) => <path key={d} d={d} />)}
-    </svg>
+    <div className="tweakers-move-curve">
+      <CurveComposer
+        segments={segments}
+        direction={direction}
+        gap={gap}
+        selectedIndex={selected}
+        getPhase={() => ModulationStore.getSlotPhase(index)}
+        onSelect={(i) => ModulationStore.updateSlotParams(index, { selected: i })}
+        onSegmentsChange={(next) =>
+          ModulationStore.updateSlotParams(index, { clips: next as never })}
+        width={MOVE_CURVE_WIDTH}
+        height={MOVE_CURVE_HEIGHT}
+      />
+    </div>
   );
 }
 

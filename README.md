@@ -966,7 +966,7 @@ A `range` control claims a dial slot too: the bar fills between two handle ticks
 
 A `select` with options becomes a stepped enum dial: the bar splits into one cell per option, the active cell filled, and the readout shows the option's label. Dragging the slot — or turning the column's knob — steps through the options in order.
 
-An option can name an `icon` from the bundled [lucide](https://lucide.dev) subset (`LUCIDE_ICONS`), and the slot draws the glyph on a tag at the top — reading four mode names off a controller at arm's length is exactly what a glyph is for.
+An option can name an `icon` from the bundled [lucide](https://lucide.dev) subset (`LUCIDE_ICONS`). The glyph takes the middle of the slot, in place of the name — at arm's length you read a picture, not a word.
 
 ```tsx
 playMode: {
@@ -979,7 +979,7 @@ playMode: {
 },
 ```
 
-A select whose options *are* shapes takes `preview` instead: `t` in `[0, 1]` → y for the given option, or `null` for options with no shape. The slot draws that curve in place of the option's big name, which moves to the tag — the picture is the value. It is auto-fitted like a curve row, so a bipolar arc and a 0–1 envelope both fill the slot.
+A select whose options *are* shapes takes `preview` instead: `t` in `[0, 1]` → y for the given option, or `null` for options with no shape. The slot draws that curve in place of the option's big name — the picture is the value. It is auto-fitted like a curve row, so a bipolar arc and a 0–1 envelope both fill the slot.
 
 ```tsx
 pitchShape: {
@@ -990,9 +990,41 @@ pitchShape: {
 },
 ```
 
+A slot showing a picture reads top down and drops the label/value crossfade, which has nothing left to swap: the control's name sits on a small chip at the top, the picture fills every pixel between the two labels (8px clear of each, edge to edge across the slot), and the option's name captions it above the pagination cells. Glyph weight is one knob, `--move-glyph-stroke` (1.25 by default) — lucide draws at 2, which reads heavy against this surface's chrome.
+
 `preview` is a closure, so — like a curve row's `sample` — it is invisible to the serialized config diff and is refreshed through the same sync. That is what lets the drawing track the app's other controls while the picker stays a picker.
 
 Bipolar sliders (`bipolar: true` or an `origin`) keep their character on the dial: the fill anchors at an origin tick and grows toward the handle on either side, and the readout shows the real signed value (`+12`, `-8`) instead of the 0–100 position.
+
+### Waveform
+
+The panel gives an app its knobs; `MoveWaveform` gives it the sample they are acting on, on the same surface and driven by the same hardware.
+
+```tsx
+import { MoveWaveform, MoveWaveformStore } from 'tweakers';
+
+<MoveWaveform buffer={buffer} getProgress={() => playhead} onSeek={setPosition} onLoopChange={setLoop} />
+
+import('http://localhost:7787/kit.js')
+  .then(m => m.bindMove(TweakStore, { waveform: MoveWaveformStore }))
+  .catch(() => {});
+```
+
+The hardware follows the shape of the gesture, not the shape of the API: the **big wheel zooms** (it is a scrub-and-zoom wheel on every deck ever built), the **volume knob scrubs** (the one continuous control a hand finds without looking, Shift for fine), and the **step row marks the loop** — first press the in point, second the out, the same step twice to cancel.
+
+The steps are shared politely with [modulation](#modulation): a slot keeps any step it holds, and the loop takes only the gesture the modulation layer declines — an empty step tapped with nothing armed, which did nothing before. No modifier, and neither feature has to explain itself. The lit span shows on the row.
+
+Rendering one claims the wheel, the volume knob and the steps for as long as it is mounted; unmount it and the volume knob goes back to being the tempo.
+
+Three placements, one look — all of them on the hardware's own display surface (`#1e1e1e`, no border), like the list screen:
+
+| `variant` | Where it sits |
+|---|---|
+| `page` (default) | A card in the app's own layout, wherever you put it. |
+| `slot` | Dial-sized, the playhead pinned at the centre and the sample running past it — a tape head, not a cursor. |
+| `dock` | Floating above the Move panel, the width of the surface it belongs to. |
+
+`children` render over the waveform, so an app can lay its own markers on top without fighting the canvas's sizing. Every prop `WaveformVisualization` takes is passed through; `WaveformVisualization` itself now also accepts a controlled `zoom`, which is how the wheel drives it.
 
 ### Function buttons
 
@@ -1044,7 +1076,7 @@ Time-style strings (`0:00:00`) render with bold separators so the digit groups r
 
 ## Modulation
 
-Any bounded numeric control (slider, `number` with min/max) can be driven by a modulation — an LFO, a sample & hold, an ADSR, and an envelope follower today; curve and step sequencer plug into the same registry. Modulations live in 16 slots, one per Move sequencer step button: **touch a control, press a step** and the modulation is created there and wired to the control (press again to unwire). Each slot keeps a palette colour; the track row shows a circle per slot with a pulsing dot of that colour, and the same dot marks every control the slot drives — in the Move panel and the side panel both.
+Any bounded numeric control (slider, `number` with min/max) can be driven by a modulation — an LFO, a sample & hold, an ADSR, a curve, and a follower today; the step sequencer plugs into the same registry. Modulations live in 16 slots, one per Move sequencer step button: **touch a control, press a step** and the modulation is created there and wired to the control (press again to unwire). Each slot keeps a palette colour; the track row shows a circle per slot with a pulsing dot of that colour, and the same dot marks every control the slot drives — in the Move panel and the side panel both.
 
 The modulated value **never enters the TweakStore.** The control keeps the value you set (the base); the modulation is a live layer your app pulls at frame time:
 
@@ -1059,7 +1091,7 @@ const params = ModulationStore.getValues('fx');               // whole panel
 
 Because the stored value never moves, presets, persistence, and the bridge kit's diffing all stay quiet — no loops, no thrash. Slots and assignments persist to localStorage (fail-soft), so a prototype's modulation setup survives a reload.
 
-**Settings.** Hold an occupied step (or hold its circle on-screen) and the modulator's settings page takes the surface over: the type enum in the first big slot, then the modulator's own controls — for the LFO: rate (its tempo-sync pad directly below), phase, width, and a jitter/smooth XY; for the envelope follower: gain, rise, fall, delay, the source select, and the lo/hi filter dials. A track button puts a regular page back. Under the hood the page is one hidden TweakStore panel (`MOD_SETTINGS_PANEL`, kind `'modulation'` — never in the dock, never on a track), so the bridge kit syncs it to the hardware like any page and every edit flows into the slot's params.
+**Settings.** Hold an occupied step (or hold its circle on-screen) and the modulator's settings page takes the surface over: the type enum in the first big slot, then the modulator's own controls — for the LFO: rate (its tempo-sync pad directly below), phase, width, and a jitter/smooth XY; for the follower: a live gain meter, rise, fall, delay, the source select, and the lo/hi cut dials. A track button puts a regular page back. Under the hood the page is one hidden TweakStore panel (`MOD_SETTINGS_PANEL`, kind `'modulation'` — never in the dock, never on a track), so the bridge kit syncs it to the hardware like any page and every edit flows into the slot's params.
 
 Everything the gesture does is also plain API — `createSlot(step, 'lfo')`, `assign(panelId, path, step, amount)`, `updateSlotParams`, `setSlotType`, `removeSlot`, `openSettings(step)` / `closeSettings()` — and `subscribe` / `subscribeFrames` cover structure and per-frame signals (`getSignal(step)` is the slot's raw −1..1).
 
@@ -1082,7 +1114,7 @@ Free-running types (LFO, S&H) ignore the gate, and so do slots pointed at an ext
 
 ### External modulation sources
 
-DSP apps whose modulators run on the audio side (a native LFO, an envelope follower) register them instead of using the internal engine:
+DSP apps whose modulators run on the audio side (a native LFO, a native follower) register them instead of using the internal engine:
 
 ```tsx
 // Pull: sampled once per frame by the engine…
@@ -1095,17 +1127,21 @@ ModulationStore.setSlotSource(step, 'env-follow');
 
 A slot on a source shows its signal (circle, dots, step light) but applies nothing to values — the app's own engine already did, at audio rate. A source that wants the library to apply for it passes `applies: true`. Tempo-synced modulators follow `ModulationStore.setTempo(bpm)` (the bridge kit feeds it the Move's tempo).
 
-### The envelope follower
+### The follower
 
-`ENVELOPE_DEF` rides live audio instead of a clock. Hand the store your audio as named inputs — an `AnalyserNode` getter, so the node can exist only after the app's audio starts on a user gesture:
+`FOLLOWER_DEF` rides live audio instead of a clock. Hand the store your audio as named inputs — an `AnalyserNode` getter, so the node can exist only after the app's audio starts on a user gesture:
 
 ```tsx
 const off = ModulationStore.registerAudioInput('drums', () => analyser);
 ```
 
-Its controls: **gain** (dB trim into the detector), **rise** and **fall** (the attack/release smoothing, in ms), **delay** (the follower hears the audio late, for staggered layers), a **source** select (which registered input to follow — it appears only when there is more than one; with one input, or none chosen, the first is followed), and **lo/hi filter** dials that confine the detector to a frequency window — follow just the kick, or just the hiss. The signal is unipolar 0..1: silence rests a wired control at its base value, level pushes it up to `amount` of the span.
+Its controls: **gain** (dB trim into the detector), **rise** and **fall** (the attack/release smoothing, in ms), **delay** (the follower hears the audio late, for staggered layers), a **source** select (which registered input to follow — it appears only when there is more than one; with one input, or none chosen, the first is followed), and **lo/hi cut** dials that confine the detector to a frequency window — follow just the kick, or just the hiss. The signal is unipolar 0..1: silence rests a wired control at its base value, level pushes it up to `amount` of the span.
 
-New modulator types register a `ModTypeDef` — defaults, the settings-page controls, a stateful `tick(state, params, dt, bpm, input?)` returning −1..1 (`input` is the engine-served audio band sampler; clock-driven types ignore it), and an optional `gate(state, on)` for the types that take one — via `registerModType`; the LFO (`LFO_DEF`) is the reference implementation, with `SH_DEF`, `ADSR_DEF`, and `ENVELOPE_DEF` beside it.
+**Gain shows its work.** The Gain slot is a live meter: the incoming level (after gain) fills as a body, and the follower's own line rides over it, about two seconds of history scrolling right to left. So the dial you turn to set the drive is the one that shows what the drive is doing — turn gain up and watch the body swell under the line, turn rise and fall and watch the line lag or snap to it.
+
+A type gets that for free by declaring a `meter(state)` returning `{ input, output }`, each 0..1, and marking one control `drawsScope`. The store keeps the rolling history (`MOD_SCOPE_SAMPLES` frames), and both surfaces read it through `ModulationStore.getSettingsScope()`; `scopeLinePath` / `scopeAreaPath` turn a history into the SVG traces the slot draws.
+
+New modulator types register a `ModTypeDef` — defaults, the settings-page controls, a stateful `tick(state, params, dt, bpm, input?)` returning −1..1 (`input` is the engine-served audio band sampler; clock-driven types ignore it), and the optional `gate(state, on)`, `preview(params, count)` and `meter(state)` for the types that want them — via `registerModType`; the LFO (`LFO_DEF`) is the reference implementation, with `SH_DEF`, `ADSR_DEF`, `CURVE_DEF` and `FOLLOWER_DEF` beside it.
 
 ---
 

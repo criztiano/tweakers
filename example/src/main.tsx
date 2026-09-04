@@ -21,6 +21,7 @@ TweakStore.registerPanel('move-xy', 'Move Demo', {
   band: { type: 'range', min: 0, max: 100, default: { min: 20, max: 80 } },
   bias: { type: 'slider', min: -1, max: 1, default: 0, bipolar: true },
   amount: [0.5, 0, 1],
+  sweep: [0, 0, 1],
   drive: [0.3, 0, 1],
 });
 
@@ -48,16 +49,25 @@ if (!ModulationStore.getSlot(1)) {
   ModulationStore.assign('move-xy', 'bias', 1, 0.8);
 }
 
-// The third slot holds an envelope follower riding the demo beat below, so
-// Drive breathes with the audio's own shape — a hard hit and a tail, not a
-// clock. Hold its circle (or step 3) for the Gain / Rise / Fall / Delay /
-// Lo / Hi page.
+// The third slot holds a curve on the Sweep slider: a series of eased clips
+// read once per pass. Tap its circle (or step 3) to open the page — the
+// composer floats above the panel, the arrows walk its clips, Delete drops
+// one, and a tap on the Curve knob moves a clip to the next shape.
 if (!ModulationStore.getSlot(2)) {
-  ModulationStore.createSlot(2, 'envelope');
+  ModulationStore.createSlot(2, 'curve');
+  ModulationStore.assign('move-xy', 'sweep', 2, 0.8);
+}
+
+// The fourth slot holds a follower riding the demo beat below, so Drive
+// breathes with the audio's own shape — a hard hit and a tail, not a clock.
+// Hold its circle (or step 4) for the Gain / Rise / Fall / Delay / Lo / Hi
+// page, where the Gain slot shows the incoming signal live.
+if (!ModulationStore.getSlot(3)) {
+  ModulationStore.createSlot(3, 'follower');
   // Lo/Hi keep it on the thud's own band, so the follower tracks the kick
   // and lets the ticks through — the point of the two filter dials.
-  ModulationStore.updateSlotParams(2, { gain: 0, rise: 8, fall: 160, lo: 0, hi: 0.3 });
-  ModulationStore.assign('move-xy', 'drive', 2, 0.9);
+  ModulationStore.updateSlotParams(3, { gain: 0, rise: 8, fall: 160, lo: 0, hi: 0.3 });
+  ModulationStore.assign('move-xy', 'drive', 3, 0.9);
 }
 
 /**

@@ -1593,6 +1593,14 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   color: var(--tweak-text-label);
 }
 
+/* Filter row — the response curve with its two hands stacked under it,
+   reading as one control the way the Move's 2-slot picture does. */
+.tweakers-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .tweakers-curve-surface {
   display: block;
   width: 100%;
@@ -5210,6 +5218,7 @@ input.tweakers-list-item-title:focus {
   --move-text: #dee3c9;
   --move-text-inverse: #31322f;
   --move-radius: 12px;
+  --move-glyph-stroke: 1.25;
   --move-radius-small: 8px;
   --move-font-label: 'Ableton Sans Small', system-ui, -apple-system, sans-serif;
 
@@ -5579,6 +5588,8 @@ input.tweakers-list-item-title:focus {
    number below matches the chip's own readout exactly. */
 .tweakers-move-dial-sub {
   position: absolute;
+  /* over the xy field, which is painted after it and would swallow it */
+  z-index: 1;
   top: 6px;
   left: 50%;
   transform: translateX(-50%);
@@ -5604,9 +5615,6 @@ input.tweakers-list-item-title:focus {
   left: 50%;
   transform: translateX(-50%);
   z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 4px;
   max-width: calc(100% - 16px);
   padding: 1px 8px;
   border-radius: 999px;
@@ -5616,28 +5624,65 @@ input.tweakers-list-item-title:focus {
   font-size: 11px;
   line-height: 16px;
   white-space: nowrap;
-}
-
-.tweakers-move-dial-tag-text {
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Option glyph — lucide at caption size, on the tag. */
-.tweakers-move-glyph {
-  width: 12px;
-  height: 12px;
-  flex-shrink: 0;
+/* Option glyph — lucide in the middle of the slot, where the name would be:
+   at arm's length you read a picture, not a word. It shares the shape's band
+   and keeps its own proportions inside it (the viewBox meets, not stretches),
+   so a glyph and a curve sit on the same line across a page. */
+.tweakers-move-dial-icon {
+  position: absolute;
+  top: var(--move-shape-top);
+  left: 10px;
+  width: calc(100% - 20px);
+  height: calc(100% - var(--move-shape-top) - var(--move-shape-bottom));
+  stroke-width: var(--move-glyph-stroke);
+  color: var(--move-text);
+  pointer-events: none;
 }
 
-/* The shape itself, filling the slot between the tag and the track: faint at
-   rest so the slot still reads as a row of names, full strength under a
-   finger — the same rise the xy pad's preview makes. */
+/* What the slot is set to, under the picture and clear of the pagination
+   cells. Smaller than the dial's own big readout: the picture is the
+   headline, this is its caption. */
+.tweakers-move-dial-option {
+  position: absolute;
+  left: 8px;
+  right: 9px;
+  bottom: var(--move-option-bottom);
+  font-family: var(--move-font-label);
+  font-size: 13px;
+  line-height: 16px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The picture takes every pixel between the two labels and nothing either of
+   them needs: 8px clear of the chip above and of the caption below, which is
+   itself clear of the pagination cells.
+
+   Band arithmetic, from the slot's own edges:
+     top    = chip top (6) + chip height (18) + 8
+     bottom = option bottom + option line (20) + 8 */
+.tweakers-move-dial {
+  --move-option-bottom: 23px;   /* the track's 8 + 9, plus 6 of air */
+  --move-shape-top: 32px;       /* chip top (6) + chip height (18) + 8 */
+  --move-shape-bottom: 47px;    /* option bottom (23) + option line (16) + 8 */
+}
+
+/* Height, not a bottom edge: an <svg> is a replaced element, so top+bottom
+   with height:auto is over-constrained — the browser keeps the intrinsic
+   height and drops \`bottom\`, and the drawing runs straight over the caption
+   and the pagination cells. Stating the height leaves nothing to resolve. */
 .tweakers-move-dial-shape {
   position: absolute;
-  inset: 26px 10px 24px;
-  width: auto;
-  height: auto;
+  top: var(--move-shape-top);
+  left: 10px;
+  width: calc(100% - 20px);
+  height: calc(100% - var(--move-shape-top) - var(--move-shape-bottom));
   overflow: visible;
   pointer-events: none;
 }
@@ -5645,7 +5690,7 @@ input.tweakers-list-item-title:focus {
 .tweakers-move-dial-shape path {
   fill: none;
   stroke: var(--move-text);
-  stroke-width: 2;
+  stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
@@ -5677,14 +5722,25 @@ input.tweakers-list-item-title:focus {
 }
 
 /* Origin tick — an anchored (bipolar) dial fills out from this mark. */
-.tweakers-move-dial-origin {
+/* Sitting exactly at the origin, a bipolar dial says so with a ring around
+   its dot rather than a tick it happens to be standing on — and the dot is
+   centred on the origin, not grown from it, so zero looks like zero. */
+.tweakers-move-dial-zero {
   position: absolute;
-  top: -2px;
-  bottom: -2px;
-  width: 1px;
-  margin-left: -0.5px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
   background: var(--move-text);
-  opacity: 0.3;
+  box-shadow: 0 0 0 2px var(--move-bg), 0 0 0 3px var(--move-text);
+  pointer-events: none;
+}
+
+/* The fill's stub is what reads as the dot everywhere else; at the origin the
+   ring above takes over, and a stub beside it would double the mark. */
+.tweakers-move-dial-fill[data-zero] {
+  min-width: 0;
 }
 
 .tweakers-move-dial-fill {
@@ -5698,6 +5754,135 @@ input.tweakers-list-item-title:focus {
 /* The glow marks the touched dial — lit while held (802:773). */
 .tweakers-move-dial[data-active] .tweakers-move-dial-fill {
   box-shadow: 0 0 12px 0 rgba(222, 227, 201, 0.7);
+}
+
+/* Filter slot — the kit's first 2-slot control. The slot claims two grid
+   tracks; the magnitude response takes every pixel it can, and each hand
+   keeps only a small label, sitting inline where its own single slot's
+   label band would have been — cutoff over the left column, resonance over
+   the right. Each label gives way to its hand's value on touch. */
+.tweakers-move-dial[data-kind="filter"] {
+  grid-column: span 2;
+}
+
+.tweakers-move-filter-shape {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: calc(100% - 20px);
+  height: calc(100% - 10px - 30px);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.tweakers-move-filter-shape path {
+  fill: none;
+  stroke: var(--move-text);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.5;
+  transition: opacity 0.12s;
+}
+
+.tweakers-move-dial[data-kind="filter"]:hover .tweakers-move-filter-shape path,
+.tweakers-move-dial[data-kind="filter"][data-active] .tweakers-move-filter-shape path {
+  opacity: 1;
+}
+
+.tweakers-move-filter-readout {
+  position: absolute;
+  bottom: 6px;
+  width: 50%;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tweakers-move-filter-readout[data-side="cutoff"] { left: 0; }
+.tweakers-move-filter-readout[data-side="resonance"] { right: 0; }
+
+/* The hand labels are captions, not headlines — the picture is the value. */
+.tweakers-move-filter-readout .tweakers-move-dial-label {
+  font-size: 13px;
+  line-height: 16px;
+  white-space: nowrap;
+  -webkit-line-clamp: 1;
+}
+
+.tweakers-move-filter-readout .tweakers-move-dial-value {
+  font-size: 13px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+/* Scope slot — a dial that draws what it is doing. The meter fills the
+   picture band above the bar (the same band the filter's response uses), so
+   the slot still reads as a dial: name centred, value on touch, fill at the
+   bottom. The incoming signal is a quiet body; the modulator's own line
+   rides over it at full strength, because the line is the point. */
+.tweakers-move-scope {
+  position: absolute;
+  top: 24px;
+  left: 8px;
+  width: calc(100% - 17px);
+  height: calc(100% - 24px - 42px);
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: 4px;
+}
+
+/* The trace is the headline here, so the dB reading drops to a caption
+   under it — the filter slot's move, where the picture is the value. */
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-readout {
+  inset: auto 8px 23px;
+  height: 16px;
+  align-items: flex-end;
+}
+
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-value,
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-label {
+  font-size: 13px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.tweakers-move-scope-in {
+  fill: var(--move-text);
+  stroke: none;
+  opacity: 0.16;
+  transition: opacity 0.12s;
+}
+
+.tweakers-move-scope-out {
+  fill: none;
+  stroke: var(--move-text);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.55;
+  transition: opacity 0.12s;
+}
+
+.tweakers-move-dial[data-kind="scope"]:hover .tweakers-move-scope-in,
+.tweakers-move-dial[data-kind="scope"][data-active] .tweakers-move-scope-in {
+  opacity: 0.26;
+}
+
+.tweakers-move-dial[data-kind="scope"]:hover .tweakers-move-scope-out,
+.tweakers-move-dial[data-kind="scope"][data-active] .tweakers-move-scope-out {
+  opacity: 1;
+}
+
+/* The trace runs behind the name, so the name gets a halo to stay legible —
+   the same move the shape slots make. */
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-label,
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-value {
+  z-index: 1;
+  text-shadow: 0 0 6px var(--move-chip), 0 0 6px var(--move-chip);
 }
 
 /* Range slot — the bar fills BETWEEN two handle ticks (the span), and the
@@ -5821,9 +6006,102 @@ input.tweakers-list-item-title:focus {
   box-shadow: 0 0 12px 0 rgba(222, 227, 201, 0.7);
 }
 
+/* A preview dial draws the shape its two axes are editing — the curve
+   modulator's selected clip — filling the field in place of the crosshair. */
+/* An <svg> is a replaced element: \`auto\` sizing falls back to its intrinsic
+   300×150 and spills out of the slot, so the box is stated outright. */
+.tweakers-move-xy-curve {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: calc(100% - 12px);
+  height: calc(100% - 12px);
+  overflow: visible;
+}
+
+.tweakers-move-xy-curve path {
+  fill: none;
+  stroke: var(--move-text);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.55;
+  vector-effect: non-scaling-stroke;
+  transition: opacity 0.15s ease;
+}
+
+.tweakers-move-dial[data-active] .tweakers-move-xy-curve path {
+  opacity: 1;
+}
+
 /* The label floats over the field; the readout keeps clear of the edges. */
 .tweakers-move-dial[data-kind="xy"] .tweakers-move-dial-readout {
   inset: 10px 12px;
+}
+
+/* A preview slot stacks: the name on its tag, the shape across the middle,
+   the clip it is on underneath — so nothing sits over the drawing. */
+/* Room for the tag above the shape and the clip name below it. */
+.tweakers-move-dial[data-preview] .tweakers-move-xy-curve {
+  top: 20px;
+  height: calc(100% - 44px);
+}
+
+.tweakers-move-dial[data-preview] .tweakers-move-dial-readout {
+  inset: auto 10px 8px;
+  height: 20px;
+}
+
+.tweakers-move-dial[data-preview] .tweakers-move-dial-value {
+  left: 0;
+  right: 0;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* The curve modulator's composition, floating clear of the panel's top edge
+   while its settings page is open — the whole pass at a glance, above the
+   dials that shape it. */
+.tweakers-move[data-overlay] {
+  z-index: 10001;
+}
+
+.tweakers-move-curve {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 12px;
+  border-radius: var(--move-radius);
+  background: var(--move-bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  color: var(--move-text);
+  line-height: 0;
+}
+
+/* The composer strokes in the instrument's own colour, and loses its boxes:
+   the card behind it is frame enough, and the selected clip reads as a lift
+   in the surface rather than a rectangle drawn around it. */
+.tweakers-move-curve .tweakers-cc {
+  color: var(--move-text);
+}
+
+.tweakers-move-curve .tweakers-cc-lane {
+  fill: transparent;
+}
+
+.tweakers-move-curve .tweakers-cc-seg-selected {
+  fill: rgba(222, 227, 201, 0.06);
+  stroke: none;
+}
+
+/* The playhead sits behind the curve it is reading: same colour, less of it. */
+.tweakers-move-curve .tweakers-cc-playhead {
+  stroke-opacity: 0.3;
+}
+
+.tweakers-move-curve .tweakers-cc-dot {
+  fill-opacity: 0.45;
 }
 
 /* Pad rows — 32px chips (800:1737). */
@@ -5890,6 +6168,19 @@ input.tweakers-list-item-title:focus {
 
 .tweakers-move-pad[data-on="true"] .tweakers-move-pad-indicator {
   background: var(--move-chip);
+}
+
+/* App pad — a row the app claimed for itself: a step, a slice, a note. It
+   borrows the toggle chip's shape and inversion, but its colour is the
+   app's own and rides inline on the indicator bar. Unlit pads stay
+   readable, so the row shows what is there before you play it. */
+.tweakers-move-pad[data-kind="app"] {
+  padding: 0 4px;
+  font-weight: 400;
+}
+
+.tweakers-move-pad[data-kind="app"]:not([data-on="true"]) .tweakers-move-pad-indicator {
+  opacity: 0.35;
 }
 
 /* Value chip — label left in Regular, number Bold + unit Regular right
@@ -5964,6 +6255,81 @@ input.tweakers-list-item-title:focus {
   .tweakers-move-dial-value {
     font-size: 18px;
   }
+  .tweakers-move-dial {
+    --move-option-bottom: 22px;
+    --move-shape-top: 32px;
+    --move-shape-bottom: 44px;
+  }
+  .tweakers-move-dial-option {
+    font-size: 12px;
+    line-height: 14px;
+  }
+}
+
+/* ==========================================================================
+   Move waveform — the sample the panel's knobs are acting on.
+
+   It wears the same surface as the list screen (#1e1e1e, the hardware's own
+   display) with no border: on this instrument a display is a dark hole in the
+   face, not a framed picture. Three placements, one look.
+   ========================================================================== */
+
+.tweakers-move-wave {
+  --move-display: #1e1e1e;
+  width: 100%;
+  border-radius: var(--move-radius, 12px);
+  background: var(--move-display);
+  color: var(--move-text, #dee3c9);
+  overflow: hidden;
+}
+
+/* The canvas sits in its own box so an app can lay markers over the sample
+   without fighting the waveform's own sizing. */
+.tweakers-move-wave-canvas {
+  position: relative;
+  width: 100%;
+}
+
+.tweakers-move-wave .tweakers-waveform-viz-wrap {
+  display: block;
+  width: 100% !important;
+}
+
+/* The stock canvas paints the panel surface behind the wave, which on this
+   dark face would sit a shade of grey on top of the display it is meant to be
+   cut into. Here the wrapper IS the display, so the canvas draws on nothing. */
+.tweakers-move-wave .tweakers-waveform-viz {
+  display: block;
+  width: 100% !important;
+  background: transparent;
+  border-radius: 0;
+}
+
+/* Slot placement — the dial row's own footprint and radius, so a waveform
+   dropped beside the knobs reads as one of them. */
+.tweakers-move-wave[data-variant='slot'] {
+  border-radius: var(--move-radius-small, 8px);
+}
+
+/* Docked — floating above the panel, matching its width and its shadow. */
+.tweakers-move-root[data-wave-dock] {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10000;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.tweakers-move-wave[data-variant='dock'] {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(1180px, calc(100vw - 40px));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
 }
 
 /* ==========================================================================

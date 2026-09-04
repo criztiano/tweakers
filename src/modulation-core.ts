@@ -1,4 +1,17 @@
 import type { ControlMeta } from './store/TweakStore';
+import {
+  buildSampler,
+  buildSamplers,
+  cycleSegmentType,
+  readComposition,
+  triggersCrossed,
+  DEFAULT_TRIGGER_STEPS,
+  type CompositionSamplers,
+  type CurveComposition,
+  type CurveSegment,
+  type CurveType,
+  type DriverDirection,
+} from './curve-composer-core';
 
 /**
  * The modulation layer's shared ground — types, palette, math, and the
@@ -55,10 +68,22 @@ export const MOD_COLORS = [
 export const modColor = (index: number) =>
   MOD_COLORS[((index % MOD_SLOTS) + MOD_SLOTS) % MOD_SLOTS];
 
-export type ModulationType = 'lfo' | 'adsr' | 'envelope' | 'curve' | 'sh' | 'sequencer';
+export type ModulationType = 'lfo' | 'adsr' | 'follower' | 'curve' | 'sh' | 'sequencer';
 
-/** Modulator settings — flat and JSON-safe, like TweakStore values. */
-export type ModulationParams = Record<string, number | boolean | string>;
+/**
+ * A settings value: the scalars a dial or a pad edits, plus the structures a
+ * richer modulator carries (the curve's clip list). JSON-safe throughout, so
+ * a slot's whole setup still rides the persistence shelf as it is.
+ */
+export type ModulationParamValue =
+  | number
+  | boolean
+  | string
+  | ModulationParamValue[]
+  | { [key: string]: ModulationParamValue };
+
+/** Modulator settings — JSON-safe, like TweakStore values. */
+export type ModulationParams = Record<string, ModulationParamValue>;
 
 export interface ModulationSlot {
   /** 0..15 — the Move step button that created it, and its palette index. */
@@ -79,21 +104,33 @@ export interface ModulationAssignment {
 }
 
 /**
- * Settings-page control metadata — ControlMeta plus the xy mapping (an xy
- * control on a modulator page edits two scalar params, xParam/yParam, rather
- * than storing an {x, y} object) and the source marker: a select flagged
- * `sourceOptions` lists the ModulationStore's registered audio inputs, and
- * only appears when there is a real choice to make.
+ * Settings-page control metadata — ControlMeta plus what the Move page needs:
+ * the xy mapping (an xy control edits two scalar params, xParam/yParam,
+ * rather than storing an {x, y} object), the placement and gestures the two
+ * surfaces read through {@link modPageLayout}, and the source marker: a
+ * select flagged `sourceOptions` lists the ModulationStore's registered
+ * audio inputs, and only appears when there is a real choice to make.
  */
 export type ModControlMeta = ControlMeta & {
   xParam?: string;
   yParam?: string;
+  /** Lists the ModulationStore's registered audio inputs (the follower's source). */
   sourceOptions?: boolean;
+  /** Sits in a small slot under its dial's column instead of taking a big one. */
+  chip?: boolean;
+  /** Shown only when this says so — a control that belongs to one mode. */
+  when?: (params: ModulationParams) => boolean;
+  /** This dial draws the modulator's own shape (the type's `preview`). */
+  drawsPreview?: boolean;
+  /** This dial draws the modulator's live meter (the type's `meter`). */
+  drawsScope?: boolean;
+  /** A knob tap on this dial runs this, returning the params it changes. */
+  cycle?: (params: ModulationParams) => ModulationParams;
 };
 
 /**
  * Live audio handed to a modulator by the engine: the band level 0..1
- * inside a frequency window — an envelope follower's raw material.
+ * inside a frequency window — a follower's raw material.
  */
 export type ModAudioInput = (loHz: number, hiHz: number) => number;
 
@@ -120,12 +157,108 @@ export interface ModTypeDef {
     input?: ModAudioInput | null
   ): number;
   /**
+   * Fold an incoming patch into the type's own structure — the curve writes
+   * the shape dials into the clip they belong to, and reads the next clip's
+   * shape back out when the selection moves. Returns the params to store;
+   * without it a patch is simply merged.
+   */
+  normalize?(current: ModulationParams, patch: ModulationParams): ModulationParams;
+  /**
+   * Hardware buttons this modulator's settings page claims (`left`, `right`,
+   * `delete`...). A press runs the action, whose patch lands in the params.
+   */
+  buttons?: Record<string, (params: ModulationParams) => ModulationParams | void>;
+  /**
+   * What the modulator is shaped like right now: `count` samples, each 0..1,
+   * and what that shape is called. Both small screens draw it.
+   */
+  preview?(params: ModulationParams, count: number): { points: number[]; label: string };
+  /**
+   * What the modulator is hearing and doing right now, each 0..1 — the
+   * follower's incoming level and its own output. A type that declares this
+   * gets a rolling history kept for it, which the scope dial draws.
+   */
+  meter?(state: unknown): { input: number; output: number };
+  /** Where the modulator sits in its cycle, 0..1 — a composer's playhead. */
+  phase?(state: unknown): number;
+  /**
    * Note on / note off, for the types that take a gate (the ADSR). The
    * store's `gate(slot, on)` lands here; free-running types (LFO, S&H)
    * leave it out and the store ignores the call.
    */
   gate?(state: unknown, on: boolean): void;
 }
+
+/* ── the settings page's layout ───────────────────────────────────────── */
+
+/** One control's place on the Move page, with the gestures it answers to. */
+export interface ModPageSlot {
+  path: string;
+  /** The dial draws the modulator's preview instead of a bar. */
+  preview?: boolean;
+  /** The dial draws the modulator's live meter behind its bar. */
+  scope?: boolean;
+  /** A knob tap on this dial cycles it. */
+  cycle?: boolean;
+}
+
+/**
+ * A modulator's page: the eight big dial slots, and the small slots under
+ * them — a switch row and a chip row, both column-aligned with the dial
+ * above. Empty slots ride as nulls so a column stays open.
+ */
+export interface ModPageLayout {
+  dials: ModPageSlot[];
+  toggles: (ModPageSlot | null)[];
+  values: (ModPageSlot | null)[];
+}
+
+export const MOD_PAGE_DIALS = 8;
+
+const isModDial = (c: ModControlMeta) =>
+  !c.chip &&
+  (c.type === 'select' || c.type === 'slider' || c.type === 'xy' || c.type === 'range' ||
+    (c.type === 'number' && c.min != null && c.max != null));
+
+const slotOf = (c: ModControlMeta): ModPageSlot => ({
+  path: c.path,
+  ...(c.drawsPreview ? { preview: true } : {}),
+  ...(c.drawsScope ? { scope: true } : {}),
+  ...(c.cycle ? { cycle: true } : {}),
+});
+
+/**
+ * Place a modulator's controls, in declaration order: each dial takes the
+ * next big slot, and everything else drops into the column of the dial just
+ * declared — a switch to the switch row, a chip (or a second switch) to the
+ * chip row below it. That is what stacks the LFO's sync pad under its rate
+ * dial, and the curve's sync and signal under its duration dial.
+ *
+ * Both surfaces read this one list, so the screen and the hardware never
+ * disagree about which knob a pad belongs to.
+ */
+export function modPageLayout(controls: ModControlMeta[], params: ModulationParams = {}): ModPageLayout {
+  const dials: ModPageSlot[] = [];
+  const toggles: (ModPageSlot | null)[] = [];
+  const values: (ModPageSlot | null)[] = [];
+  for (const c of controls) {
+    if (c.when && !c.when(params)) continue;
+    if (isModDial(c)) {
+      if (dials.length < MOD_PAGE_DIALS) dials.push(slotOf(c));
+      continue;
+    }
+    const col = Math.max(0, dials.length - 1);
+    const row = c.type === 'toggle' && !toggles[col] ? toggles : values;
+    if (!row[col]) row[col] = slotOf(c);
+  }
+  const pad = (row: (ModPageSlot | null)[]) =>
+    Array.from({ length: row.length }, (_, i) => row[i] ?? null);
+  return { dials, toggles: pad(toggles), values: pad(values) };
+}
+
+/** The controls a page actually shows — the mode-specific ones filtered out. */
+export const visibleModControls = (def: ModTypeDef, params: ModulationParams): ModControlMeta[] =>
+  def.controls.filter((c) => !c.when || c.when(params));
 
 const registry = new Map<ModulationType, ModTypeDef>();
 
@@ -147,6 +280,7 @@ export const modKey = (panelId: string, path: string) => `${panelId}\u0000${path
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const clamp01 = (v: unknown) => clamp(Number(v) || 0, 0, 1);
+const clampSigned = (v: unknown) => clamp(Number(v) || 0, -1, 1);
 
 /**
  * A signal applied to a control: a bipolar sweep around the base value in
@@ -457,49 +591,306 @@ export const ADSR_DEF: ModTypeDef = {
 };
 
 registerModType(ADSR_DEF);
-
-/* ── Envelope follower — rides the app's audio ────────────────────────── */
-
-/** The filter dials' frequency span — the audible band. */
-export const ENV_HZ_MIN = 20;
-export const ENV_HZ_MAX = 20000;
+/* ── Curve — the composer's own shapes, as a modulator ────────────────── */
 
 /**
- * A filter dial's position 0..1 → Hz, exponential across the audible band —
+ * The curve modulator plays a composition from the Curve Composer: a series
+ * of clips, each an eased or springy walk, read once per pass. The page is
+ * the composer laid onto the Move — the arrows walk the clips, Delete drops
+ * the selected one, and the shape dials edit whichever clip is selected, so
+ * one page sculpts a whole series without ever leaving the hardware.
+ *
+ * The composition lives in the slot's params (`clips`), so it persists with
+ * everything else; the shape dials are a live projection of the selected
+ * clip, kept in step by `normalize`.
+ */
+
+/** How many clips one pass may hold — one per shape dial's worth of patience. */
+export const CURVE_MAX_CLIPS = 8;
+/** A pass lasts between these, in seconds. */
+export const CURVE_MIN_DURATION = 0.05;
+export const CURVE_MAX_DURATION = 60;
+/** A fired trigger decays over this many seconds — a pulse, not a step. */
+const CURVE_PULSE_DECAY = 0.04;
+/** The band the preview maps onto 0..1, so a spring's overshoot still shows. */
+const CURVE_PREVIEW_BAND = { lo: -0.25, hi: 1.25 };
+
+const DIRECTIONS: DriverDirection[] = ['forward', 'mirror', 'reverse'];
+
+/** What each curve in the vocabulary is called on the two small screens. */
+export const CURVE_LABELS: Record<CurveType, string> = {
+  linear: 'Linear',
+  easeIn: 'Ease In',
+  easeOut: 'Ease Out',
+  easeInOut: 'Ease InOut',
+  spring: 'Spring',
+};
+
+/** The shape dials — the four that edit the selected clip, not the pass. */
+const SHAPE_PARAMS = ['curvature', 'steepness', 'anticipate', 'overshoot'] as const;
+
+const newClip = (): CurveSegment => ({
+  type: 'easeInOut', weight: 1, curvature: 0, steepness: 0, overshoot: 0, anticipate: 0,
+});
+
+/** The stored clip series — always at least one, cloned for safe editing. */
+function readClips(params: ModulationParams): CurveSegment[] {
+  const raw = Array.isArray(params.clips) ? (params.clips as unknown as CurveSegment[]) : [];
+  const list = raw.filter((c) => c && typeof c === 'object').map((c) => ({ ...newClip(), ...c }));
+  return list.length ? list.slice(0, CURVE_MAX_CLIPS) : [newClip()];
+}
+
+const writeClips = (list: CurveSegment[]) => list as unknown as ModulationParamValue;
+
+/** Which clip the arrows landed on, always inside the series. */
+const selectedClip = (params: ModulationParams, count: number) =>
+  clamp(Math.round(Number(params.selected) || 0), 0, Math.max(0, count - 1));
+
+/** The slot's params read as a composition the composer core can play. */
+export function curveComposition(params: ModulationParams): CurveComposition {
+  const i = DIRECTIONS.indexOf(params.direction as DriverDirection);
+  return {
+    segments: readClips(params),
+    driver: null,
+    direction: DIRECTIONS[i < 0 ? 0 : i],
+    gap: clamp01(params.gap),
+  };
+}
+
+/**
+ * One pass in seconds. Synced, the dial's duration snaps to the nearest
+ * tempo division, so a pass locks to the Move's clock without a second dial.
+ */
+export function curveDuration(params: ModulationParams, bpm: number): number {
+  const want = clamp(Number(params.duration) || 0, CURVE_MIN_DURATION, CURVE_MAX_DURATION);
+  if (!params.sync) return want;
+  const beat = 60 / (Number(bpm) || 120);
+  let best = LFO_SYNC_DIVISIONS[0].beats * beat;
+  for (const div of LFO_SYNC_DIVISIONS) {
+    const secs = div.beats * beat;
+    if (Math.abs(secs - want) < Math.abs(best - want)) best = secs;
+  }
+  return Math.max(CURVE_MIN_DURATION, best);
+}
+
+interface CurveState {
+  phase: number;
+  /** Samplers, rebuilt only when the clips or the gap actually change. */
+  signature: string;
+  samplers: CompositionSamplers | null;
+  /** Last composed value, for trigger crossings; null until the first tick. */
+  prev: number | null;
+  /** Trigger mode's decaying pulse. */
+  pulse: number;
+}
+
+export const CURVE_DEF: ModTypeDef = {
+  type: 'curve',
+  label: 'Curve',
+  defaults: {
+    duration: 2, sync: false, signal: 'continuous', triggers: DEFAULT_TRIGGER_STEPS,
+    direction: 'forward', flip: false, gap: 0, segments: 1, selected: 0,
+    curvature: 0, steepness: 0, anticipate: 0, overshoot: 0,
+    clips: writeClips([newClip()]),
+  },
+  controls: [
+    /* The selected clip's shape: the knob leans its energy one way or the
+       other, the volume knob makes the ease gentle or explosive — the same
+       two-axis drag the composer answers to on screen. A knob tap cycles
+       the clip through the curve vocabulary. */
+    {
+      type: 'xy', path: 'curve', label: 'Curve',
+      xParam: 'curvature', yParam: 'steepness',
+      xAxis: { min: -1, max: 1, bipolar: true, label: 'Energy' },
+      yAxis: { min: -1, max: 1, bipolar: true, label: 'Steep' },
+      drawsPreview: true,
+      cycle: (params) => {
+        const comp = curveComposition(params);
+        const i = selectedClip(params, comp.segments.length);
+        return { clips: writeClips(cycleSegmentType(comp, i).segments) };
+      },
+    },
+    { type: 'slider', path: 'duration', label: 'Duration', min: CURVE_MIN_DURATION, max: CURVE_MAX_DURATION, step: 0.01, unit: 's' },
+    { type: 'toggle', path: 'sync', label: 'Sync' },
+    {
+      type: 'select', path: 'signal', label: 'Signal', chip: true,
+      options: [{ value: 'continuous', label: 'Cont' }, { value: 'trigger', label: 'Trig' }],
+    },
+    {
+      type: 'select', path: 'direction', label: 'Direction',
+      options: [
+        { value: 'forward', label: 'Forward' },
+        { value: 'mirror', label: 'Mirror' },
+        { value: 'reverse', label: 'Reverse' },
+      ],
+    },
+    { type: 'toggle', path: 'flip', label: 'Flip' },
+    /* The trigger count only means anything in trigger mode, so the chip
+       only appears there — the column stays clear the rest of the time. */
+    {
+      type: 'slider', path: 'triggers', label: 'Triggers', chip: true,
+      min: 2, max: 16, step: 1,
+      when: (params) => params.signal === 'trigger',
+    },
+    { type: 'slider', path: 'gap', label: 'Gap', min: 0, max: 1, step: 0.01 },
+    { type: 'slider', path: 'anticipate', label: 'Anticipate', min: 0, max: 1, step: 0.01 },
+    { type: 'slider', path: 'overshoot', label: 'Overshoot', min: 0, max: 1, step: 0.01 },
+    { type: 'slider', path: 'segments', label: 'Segments', min: 1, max: CURVE_MAX_CLIPS, step: 1 },
+  ],
+  createState: (): CurveState => ({ phase: 0, signature: '', samplers: null, prev: null, pulse: 0 }),
+  tick(state, params, dt, bpm) {
+    const s = state as CurveState;
+    const comp = curveComposition(params);
+    // Springs integrate 72 steps to build a sampler, so rebuild only when
+    // the shape behind them actually moved.
+    const signature = JSON.stringify(comp.segments) + `|${comp.gap}`;
+    if (signature !== s.signature || !s.samplers) {
+      s.signature = signature;
+      s.samplers = buildSamplers(comp);
+    }
+    s.phase = (s.phase + dt / curveDuration(params, bpm)) % 1;
+
+    let v = clamp01(readComposition(comp, s.phase, s.samplers).value);
+    if (params.flip) v = 1 - v;                 // the pass falls instead of rising
+
+    if (params.signal !== 'trigger') {
+      s.prev = v;
+      return v * 2 - 1;                         // bipolar: the curve sweeps around the base
+    }
+    // Trigger: every level the value crosses fires a pulse that decays away,
+    // so a non-linear curve fires unevenly in time — the pacing is the point.
+    const fired = triggersCrossed(s.prev ?? v, v, Number(params.triggers) || DEFAULT_TRIGGER_STEPS);
+    s.prev = v;
+    if (fired.length) s.pulse = 1;
+    else s.pulse *= Math.exp(-dt / CURVE_PULSE_DECAY);
+    return s.pulse;
+  },
+  /**
+   * Keep the projection and the series in step. A shape dial writes into the
+   * selected clip; anything else — a new selection, a deleted clip, a cycled
+   * curve — reads that clip's shape back out, so the dials always show the
+   * clip the composer is highlighting.
+   */
+  normalize(current, patch) {
+    const next = { ...current, ...patch };
+    const changed = (key: string) => key in patch && patch[key] !== current[key];
+
+    let list = 'clips' in patch ? readClips(patch) : readClips(current);
+    if (!('clips' in patch) && changed('segments')) {
+      // The count dial adds clips at the end and drops them from the end,
+      // then re-divides the pass evenly — the composer's own split rule.
+      const want = clamp(Math.round(Number(patch.segments) || 1), 1, CURVE_MAX_CLIPS);
+      while (list.length > want) list.pop();
+      while (list.length < want) list.push(newClip());
+      list = list.map((c) => ({ ...c, weight: 1 }));
+    }
+
+    const sel = selectedClip(next, list.length);
+    if (SHAPE_PARAMS.some(changed)) {
+      list[sel] = {
+        ...list[sel],
+        curvature: clampSigned(next.curvature),
+        steepness: clampSigned(next.steepness),
+        anticipate: clamp01(next.anticipate),
+        overshoot: clamp01(next.overshoot),
+      };
+    } else {
+      const clip = list[sel];
+      next.curvature = clip.curvature;
+      next.steepness = clip.steepness;
+      next.anticipate = clip.anticipate ?? 0;
+      next.overshoot = clip.overshoot ?? 0;
+    }
+
+    next.selected = sel;
+    next.segments = list.length;
+    next.clips = writeClips(list);
+    return next;
+  },
+  buttons: {
+    /* The arrows walk the clips (wrapping), Delete drops the selected one —
+       the last clip stays, since a pass with nothing in it plays nothing. */
+    left: (params) => {
+      const n = readClips(params).length;
+      return { selected: (selectedClip(params, n) + n - 1) % n };
+    },
+    right: (params) => {
+      const n = readClips(params).length;
+      return { selected: (selectedClip(params, n) + 1) % n };
+    },
+    delete: (params) => {
+      const list = readClips(params);
+      if (list.length <= 1) return;
+      const sel = selectedClip(params, list.length);
+      list.splice(sel, 1);
+      return { clips: writeClips(list), selected: Math.min(sel, list.length - 1) };
+    },
+  },
+  phase: (state) => (state as CurveState).phase,
+  preview(params, count) {
+    const list = readClips(params);
+    const sel = selectedClip(params, list.length);
+    const sampler = buildSampler(list[sel]);
+    const span = CURVE_PREVIEW_BAND.hi - CURVE_PREVIEW_BAND.lo;
+    const n = Math.max(2, count);
+    return {
+      points: Array.from({ length: n }, (_, i) =>
+        clamp01((sampler(i / (n - 1)) - CURVE_PREVIEW_BAND.lo) / span)),
+      label: `${CURVE_LABELS[list[sel].type]} ${sel + 1}/${list.length}`,
+    };
+  },
+};
+
+registerModType(CURVE_DEF);
+
+/* ── Follower — rides the app's audio ─────────────────────────────────── */
+
+/** The cut dials' frequency span — the audible band. */
+export const FOLLOWER_HZ_MIN = 20;
+export const FOLLOWER_HZ_MAX = 20000;
+
+/**
+ * A cut dial's position 0..1 → Hz, exponential across the audible band —
  * equal knob travel covers equal musical distance (20·1000^t).
  */
-export const envHz = (t: number) =>
-  ENV_HZ_MIN * Math.pow(ENV_HZ_MAX / ENV_HZ_MIN, clamp01(t));
+export const followerHz = (t: number) =>
+  FOLLOWER_HZ_MIN * Math.pow(FOLLOWER_HZ_MAX / FOLLOWER_HZ_MIN, clamp01(t));
 
 const fmtHz = (t: number) => {
-  const hz = envHz(t);
+  const hz = followerHz(t);
   return hz >= 1000 ? `${(hz / 1000).toFixed(1)} kHz` : `${Math.round(hz)} Hz`;
 };
 
-interface EnvState {
+interface FollowerState {
   /** The follower's own clock, the delay line's time base. */
   now: number;
   /** Time-tagged input history — the delay line, trimmed to the delay. */
   line: { t: number; v: number }[];
+  /** The level going in, after gain — what the meter draws as the signal. */
+  in: number;
   /** The followed level 0..1 — the signal itself. */
   env: number;
 }
 
 /**
- * The envelope follower: the band level of an audio input (lo/hi confine it
- * to a frequency window — follow just the kick, just the hiss), through
- * gain, an optional delay, and rise/fall smoothing. The signal is unipolar
- * 0..1: silence rests the control at its base value, level pushes it up to
+ * The follower: the band level of an audio input (lo/hi confine it to a
+ * frequency window — follow just the kick, just the hiss), through gain, an
+ * optional delay, and rise/fall smoothing. The signal is unipolar 0..1:
+ * silence rests the control at its base value, level pushes it up to
  * `amount` of the span. Which audio it follows comes from the engine — apps
  * register inputs on the ModulationStore (`registerAudioInput`), and the
  * source select appears once there is more than one to choose from.
+ *
+ * Gain draws the meter (`drawsScope`): the incoming level as a filled trace
+ * with the follower's own line riding over it, so the dial you turn to set
+ * the drive is the one that shows what the drive is doing.
  */
-export const ENVELOPE_DEF: ModTypeDef = {
-  type: 'envelope',
-  label: 'Envelope',
+export const FOLLOWER_DEF: ModTypeDef = {
+  type: 'follower',
+  label: 'Follower',
   defaults: { gain: 0, rise: 20, fall: 250, delay: 0, source: '', lo: 0, hi: 1 },
   controls: [
-    { type: 'slider', path: 'gain', label: 'Gain', min: -24, max: 24, step: 0.1, unit: 'dB', bipolar: true },
+    { type: 'slider', path: 'gain', label: 'Gain', min: -24, max: 24, step: 0.1, unit: 'dB', bipolar: true, drawsScope: true },
     { type: 'slider', path: 'rise', label: 'Rise', min: 0, max: 1000, step: 1, unit: 'ms' },
     { type: 'slider', path: 'fall', label: 'Fall', min: 0, max: 2000, step: 1, unit: 'ms' },
     { type: 'slider', path: 'delay', label: 'Delay', min: 0, max: 1000, step: 1, unit: 'ms' },
@@ -507,17 +898,20 @@ export const ENVELOPE_DEF: ModTypeDef = {
     { type: 'slider', path: 'lo', label: 'Lo Cut', min: 0, max: 1, step: 0.01, formatValue: fmtHz },
     { type: 'slider', path: 'hi', label: 'Hi Cut', min: 0, max: 1, step: 0.01, formatValue: fmtHz },
   ],
-  createState: (): EnvState => ({ now: 0, line: [], env: 0 }),
+  createState: (): FollowerState => ({ now: 0, line: [], in: 0, env: 0 }),
   tick(state, params, dt, _bpm, input) {
-    const s = state as EnvState;
+    const s = state as FollowerState;
     s.now += dt;
 
     // The band window; crossed dials just swap so the window never inverts.
     const lo = clamp01(params.lo);
     const hi = clamp01(params.hi);
-    const raw = input ? clamp01(input(envHz(Math.min(lo, hi)), envHz(Math.max(lo, hi)))) : 0;
+    const raw = input
+      ? clamp01(input(followerHz(Math.min(lo, hi)), followerHz(Math.max(lo, hi))))
+      : 0;
     const gainDb = clamp(Number(params.gain) || 0, -24, 24);
     const level = clamp01(raw * Math.pow(10, gainDb / 20));
+    s.in = level;
 
     // The delay line: read `delay` ms behind the head; until history reaches
     // that far back (startup), the follower hears silence.
@@ -538,6 +932,10 @@ export const ENVELOPE_DEF: ModTypeDef = {
     s.env = clamp01(s.env + (target - s.env) * k);
     return s.env;
   },
+  meter(state) {
+    const s = state as FollowerState;
+    return { input: s.in, output: s.env };
+  },
 };
 
-registerModType(ENVELOPE_DEF);
+registerModType(FOLLOWER_DEF);
