@@ -1,5 +1,5 @@
 import * as react_jsx_runtime from 'react/jsx-runtime';
-import * as React from 'react';
+import * as React$1 from 'react';
 import React__default, { CSSProperties, ReactElement, ReactNode } from 'react';
 
 /**
@@ -841,7 +841,7 @@ type PanelConfig = {
     module?: boolean;
     kind?: 'timeline' | 'modulation';
 };
-type Listener$3 = () => void;
+type Listener$4 = () => void;
 type ActionListener = (action: string) => void;
 /**
  * Non-value events emitted by controls (file picked, chip removed, list mutated).
@@ -993,8 +993,8 @@ declare class TweakStoreClass {
      */
     selectPanels(only?: string | string[]): PanelConfig[];
     getPanel(id: string): PanelConfig | undefined;
-    subscribe(panelId: string, listener: Listener$3): () => void;
-    subscribeGlobal(listener: Listener$3): () => void;
+    subscribe(panelId: string, listener: Listener$4): () => void;
+    subscribeGlobal(listener: Listener$4): () => void;
     subscribeActions(panelId: string, listener: ActionListener): () => void;
     triggerAction(panelId: string, path: string): void;
     subscribeEvents(panelId: string, listener: EventListener): () => void;
@@ -1014,7 +1014,7 @@ declare class TweakStoreClass {
     setDisabled(panelId: string, path: string, disabled: boolean): void;
     isDisabled(panelId: string, path: string): boolean;
     /** One channel for every app-pushed presentation change on a panel. */
-    subscribeControlState(panelId: string, listener: Listener$3): () => void;
+    subscribeControlState(panelId: string, listener: Listener$4): () => void;
     private notifyControlState;
     /**
      * Refresh curve rows' host-supplied presentation (sample function + markers)
@@ -1954,6 +1954,128 @@ declare class MoveFunctionsClass {
 }
 declare const MoveFunctions: MoveFunctionsClass;
 
+type WaveformMode = 'smooth' | 'pixelated';
+/** A loop region over the sample, as normalized 0..1 positions. */
+type WaveformLoop = {
+    start: number;
+    end: number;
+};
+
+/**
+ * A waveform on the Move surface.
+ *
+ * The panel gives an app its knobs; this gives it the sample they are acting
+ * on. The hardware split follows the shape of the gesture rather than the
+ * shape of the API: the big wheel is a scrub-and-zoom wheel on every deck ever
+ * built, so it zooms; the volume knob is the one continuous control a hand
+ * finds without looking, so it scrubs; and the step row is sixteen positions
+ * along a bar, so it marks the loop.
+ *
+ * Everything here is pure but for the registry — the maths is what decides how
+ * the instrument feels, so it is testable on its own.
+ */
+/** Placements. All three draw the same waveform; they differ in where it sits. */
+type MoveWaveformVariant = 
+/** In the page, wherever the app puts it — a card on the app's own surface. */
+'page'
+/** Slot-sized, playhead pinned at the centre and the wave running past it. */
+ | 'slot'
+/** Floating above the Move panel, the width of the surface it belongs to. */
+ | 'dock';
+/** The view state the hardware drives, shared by every surface showing it. */
+type MoveWaveformView = {
+    /** Play position, 0..1. */
+    position: number;
+    /** 1 = whole sample. */
+    zoom: number;
+    loop: WaveformLoop | null;
+    /** The step a pending loop started from, or null when no loop is being drawn. */
+    loopAnchor: number | null;
+};
+declare const MOVE_WAVEFORM_STEPS = 16;
+declare function defaultView(): MoveWaveformView;
+/** The volume knob scrubs: a signed detent count moves the play position. */
+declare function scrubBy(position: number, delta: number, fine?: boolean): number;
+/**
+ * The wheel zooms, proportionally — each detent is a percentage of where you
+ * already are, so ten clicks out undo ten clicks in.
+ */
+declare function zoomBy(zoom: number, delta: number): number;
+/** Where step `index` sits along the sample, 0..1. */
+declare const stepPosition: (index: number, steps?: number) => number;
+/**
+ * The step row as a loop bar: the first press drops the in point, the second
+ * the out point, and a press with a loop already set starts a new one. Pressing
+ * the anchor twice cancels rather than making a zero-length loop — a loop you
+ * cannot hear is never what the second press meant.
+ */
+declare function loopFromStep(view: MoveWaveformView, index: number, steps?: number): Pick<MoveWaveformView, 'loop' | 'loopAnchor'>;
+/** Which steps light: the loop's span, or the lone anchor while one is pending. */
+declare function loopSteps(view: MoveWaveformView, steps?: number): number[];
+type Listener$3 = () => void;
+declare class MoveWaveformStoreClass {
+    private view;
+    private registered;
+    private listeners;
+    private version;
+    /** Claim the wheel, the volume knob and the step row. Returns the release. */
+    register(): () => void;
+    isRegistered(): boolean;
+    getView(): MoveWaveformView;
+    getVersion(): number;
+    /** Patch the view. A patch that changes nothing notifies nobody. */
+    setView(patch: Partial<MoveWaveformView>): void;
+    scrub(delta: number, fine?: boolean): void;
+    zoom(delta: number): void;
+    pressStep(index: number): void;
+    clearLoop(): void;
+    /** The steps the loop covers — what the hardware lights. */
+    loopSteps(): number[];
+    subscribe(fn: Listener$3): () => void;
+    private notify;
+}
+declare const MoveWaveformStore: MoveWaveformStoreClass;
+
+interface MoveWaveformProps {
+    /** Decoded sample. */
+    buffer?: AudioBuffer | null;
+    /**
+     * Where it sits. `page` is a card on the app's own surface, `slot` is
+     * dial-sized with the playhead pinned at the centre, `dock` floats above
+     * the Move panel.
+     */
+    variant?: MoveWaveformVariant;
+    /** Read every frame for the playhead, exactly as WaveformVisualization takes it. */
+    getProgress?: () => number;
+    progress?: number;
+    /** Reports a new play position — from a click, the volume knob, or the wheel. */
+    onSeek?: (position: number) => void;
+    /** Reports the loop the step row (or a drag) set, or null when it is cleared. */
+    onLoopChange?: (loop: WaveformLoop | null) => void;
+    mode?: WaveformMode;
+    pixelSize?: number;
+    grid?: boolean;
+    bands?: boolean;
+    waveColor?: string;
+    playheadColor?: string;
+    height?: number;
+    /** Anything the app draws over the waveform — grain ticks, markers. */
+    children?: React.ReactNode;
+    theme?: TweakTheme;
+    productionEnabled?: boolean;
+    className?: string;
+}
+/**
+ * The sample the Move's knobs are acting on, drawn on the same surface as the
+ * panel and driven by the same hardware: the wheel zooms, the volume knob
+ * scrubs, the step row marks the loop.
+ *
+ * Rendering one claims those controls for as long as it is mounted — there is
+ * one wheel, so there is one waveform. The app keeps its own state; this
+ * reports moves through `onSeek` / `onLoopChange` like any control.
+ */
+declare function MoveWaveform({ buffer, variant, getProgress, progress, onSeek, onLoopChange, mode, pixelSize, grid, bands, waveColor, playheadColor, height, children, theme, productionEnabled, className, }: MoveWaveformProps): react_jsx_runtime.JSX.Element | null;
+
 /**
  * The Move's volume-dial readout, offered to the app as a tiny display slot.
  *
@@ -2600,7 +2722,7 @@ interface TweakTimelineProps {
     defaultOpen?: boolean;
     productionEnabled?: boolean;
 }
-declare const TweakTimeline: React.NamedExoticComponent<TweakTimelineProps>;
+declare const TweakTimeline: React$1.NamedExoticComponent<TweakTimelineProps>;
 
 interface ControlRendererProps {
     panelId: string;
@@ -2844,13 +2966,6 @@ interface EasingVisualizationProps {
 }
 declare function EasingVisualization({ easing }: EasingVisualizationProps): react_jsx_runtime.JSX.Element;
 
-type WaveformMode = 'smooth' | 'pixelated';
-/** A loop region over the sample, as normalized 0..1 positions. */
-type WaveformLoop = {
-    start: number;
-    end: number;
-};
-
 interface WaveformVisualizationProps {
     /** Decoded audio sample. Its full waveform is drawn once (fixed). */
     buffer?: AudioBuffer | null;
@@ -2901,10 +3016,16 @@ interface WaveformVisualizationProps {
     playheadColor?: string;
     /** When true, selecting a loop auto-zooms to frame it (manual zoom resumes once the loop is cleared). */
     autoZoomOnLoop?: boolean;
+    /**
+     * Magnification, 1 = the whole sample. Passing it takes the zoom over — the
+     * buttons stand down and the host drives it (the Move's wheel, say). Left
+     * out, the component keeps its own zoom and its own buttons.
+     */
+    zoom?: number;
     width?: number;
     height?: number;
 }
-declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, grid, gridSubdivisions, onSeek, loop, onLoopChange, waveColor, playheadColor, autoZoomOnLoop, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
+declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, grid, gridSubdivisions, onSeek, loop, onLoopChange, waveColor, playheadColor, autoZoomOnLoop, zoom: zoomProp, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
 
 type AnalyserScale = 'log' | 'linear';
 /** `true` enables the default spring; an object overrides stiffness/damping. */
@@ -3339,4 +3460,4 @@ interface SpectrumAudioLevelMeterProps extends AudioLevelMeterBaseProps {
 type AudioLevelMeterProps = MonoAudioLevelMeterProps | StereoAudioLevelMeterProps | SpectrumAudioLevelMeterProps;
 declare function AudioLevelMeter(props: AudioLevelMeterProps): ReactElement;
 
-export { ADSR_DEF, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AnalyserMode, AnalyserRow, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, Checkbox, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_DIALS, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_PADS, MOVE_SPECIAL_BUTTONS, MOVE_TRACKS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, Module, type MonoAudioLevelMeterProps, MoveActionButton, type MoveActionButtonProps, type MoveFunctionButton, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, type MovePadCell, type MovePage, MovePanel, type MoveScreenList, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, MoveVolumeDisplay, type MoveVolumeDisplayState, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type NumberConfig, NumberControl, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, TAB_PATH, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type TweakConfig, type TweakEvent, type TweakMode, type TweakPosition, TweakRoot, TweakStore, type TweakTheme, TweakTimeline, type TweakTimelineProps, type TweakTimelineValues, type TweakValue, type UseTweakTimelineOptions, type UseTweakersOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, applyModulation, buildModMovePage, buildMovePages, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, denormalizeEnumDial, denormalizeRangeDial, dialOrigin, displayHex, enumOptionIcon, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modRingArc, moveAppPadRow, movePadRows, moveStop, nearestHandle, normToValue, normalizeCurveMarkers, normalizeDial, normalizeEnumDial, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeValue, normalizeXYDial, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, readComposition, redistributeWeight, registerModType, removeDriver, removeSegment, removeStop, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useTweakTimeline, useTweakers, valueFromPoint, valueToNorm, valueToPercent, visibleColumns, visibleModControls };
+export { ADSR_DEF, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AnalyserMode, AnalyserRow, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, Checkbox, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_DIALS, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_PADS, MOVE_SPECIAL_BUTTONS, MOVE_TRACKS, MOVE_WAVEFORM_STEPS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, Module, type MonoAudioLevelMeterProps, MoveActionButton, type MoveActionButtonProps, type MoveFunctionButton, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, type MovePadCell, type MovePage, MovePanel, type MoveScreenList, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, MoveVolumeDisplay, type MoveVolumeDisplayState, MoveWaveform, type MoveWaveformProps, MoveWaveformStore, type MoveWaveformVariant, type MoveWaveformView, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type NumberConfig, NumberControl, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, TAB_PATH, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type TweakConfig, type TweakEvent, type TweakMode, type TweakPosition, TweakRoot, TweakStore, type TweakTheme, TweakTimeline, type TweakTimelineProps, type TweakTimelineValues, type TweakValue, type UseTweakTimelineOptions, type UseTweakersOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, applyModulation, buildModMovePage, buildMovePages, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, denormalizeEnumDial, denormalizeRangeDial, dialOrigin, displayHex, enumOptionIcon, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, lfoSyncedHz, listModTypes, loopFromStep, loopSteps, modColor, modKey, modPageLayout, modRingArc, moveAppPadRow, movePadRows, moveStop, defaultView as moveWaveformDefaultView, nearestHandle, normToValue, normalizeCurveMarkers, normalizeDial, normalizeEnumDial, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeValue, normalizeXYDial, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, readComposition, redistributeWeight, registerModType, removeDriver, removeSegment, removeStop, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, scrubBy, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, stepPosition, triggerLevels, triggersCrossed, useTweakTimeline, useTweakers, valueFromPoint, valueToNorm, valueToPercent, visibleColumns, visibleModControls, zoomBy };

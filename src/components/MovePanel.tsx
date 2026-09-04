@@ -781,6 +781,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 const origin01 = dialOrigin(meta);
                 const originPct = origin01 > 0 ? origin01 * 100 : null;
                 const pct = dialPercent(meta);
+                // Parked on the origin exactly — the dial's zero, which the
+                // ring states outright instead of leaving you to read a stub
+                // against a tick.
+                const atOrigin =
+                  originPct != null &&
+                  Math.abs(normalizeDial(meta, values[meta.path]) - origin01) < 1e-6;
                 // A substituted chip (held or latched into the slot) reads as
                 // its real value — the same number its chip shows below — and
                 // a small tag names what the slot is controlling.
@@ -819,15 +825,16 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       </span>
                     </div>
                     <div className="tweakers-move-dial-bar">
-                      {originPct != null && (
-                        <span className="tweakers-move-dial-origin" style={{ left: `${originPct}%` }} />
-                      )}
                       <div
                         className="tweakers-move-dial-fill"
+                        data-zero={atOrigin || undefined}
                         style={originPct != null
                           ? { marginLeft: `${Math.min(pct, originPct)}%`, width: `${Math.abs(pct - originPct)}%` }
                           : { width: `${pct}%` }}
                       />
+                      {atOrigin && (
+                        <span className="tweakers-move-dial-zero" style={{ left: `${originPct}%` }} />
+                      )}
                     </div>
                   </div>
                 );

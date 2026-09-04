@@ -10992,6 +10992,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
           const origin01 = dialOrigin(meta);
           const originPct = origin01 > 0 ? origin01 * 100 : null;
           const pct = dialPercent(meta);
+          const atOrigin = originPct != null && Math.abs(normalizeDial(meta, values[meta.path]) - origin01) < 1e-6;
           const subbed = meta !== page.dials[i];
           const subValue = subbed || valueFirst ? chipValue(meta) : null;
           return /* @__PURE__ */ jsxs35(
@@ -11030,14 +11031,15 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                   /* @__PURE__ */ jsx40("span", { className: "tweakers-move-dial-value", children: subValue ? `${subValue.num}${subValue.unit ? ` ${subValue.unit}` : ""}` : dialReading(meta) })
                 ] }),
                 /* @__PURE__ */ jsxs35("div", { className: "tweakers-move-dial-bar", children: [
-                  originPct != null && /* @__PURE__ */ jsx40("span", { className: "tweakers-move-dial-origin", style: { left: `${originPct}%` } }),
                   /* @__PURE__ */ jsx40(
                     "div",
                     {
                       className: "tweakers-move-dial-fill",
+                      "data-zero": atOrigin || void 0,
                       style: originPct != null ? { marginLeft: `${Math.min(pct, originPct)}%`, width: `${Math.abs(pct - originPct)}%` } : { width: `${pct}%` }
                     }
-                  )
+                  ),
+                  atOrigin && /* @__PURE__ */ jsx40("span", { className: "tweakers-move-dial-zero", style: { left: `${originPct}%` } })
                 ] })
               ]
             },
@@ -11352,9 +11354,709 @@ function MoveActionButton({ kind, children, onPress, disabled, className }) {
   );
 }
 
-// src/components/ListScreen.tsx
-import { useEffect as useEffect23, useRef as useRef30 } from "react";
+// src/components/MoveWaveform.tsx
+import { useCallback as useCallback20, useEffect as useEffect24, useRef as useRef31, useState as useState28, useSyncExternalStore as useSyncExternalStore10 } from "react";
+import { createPortal as createPortal9 } from "react-dom";
+
+// src/components/WaveformVisualization.tsx
+import { useRef as useRef30, useEffect as useEffect23, useState as useState27 } from "react";
+
+// src/waveform-dsp.ts
+function mixToMono(buffer) {
+  if (buffer.numberOfChannels === 1) return buffer.getChannelData(0);
+  const len = buffer.length;
+  const out = new Float32Array(len);
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const data = buffer.getChannelData(c);
+    for (let i = 0; i < len; i++) out[i] += data[i] / buffer.numberOfChannels;
+  }
+  return out;
+}
+function fillPeaks(data, cols, min, max) {
+  const step = data.length / cols;
+  for (let x = 0; x < cols; x++) {
+    const start = Math.floor(x * step);
+    const end = Math.max(start + 1, Math.min(data.length, Math.floor((x + 1) * step)));
+    let mn = 1;
+    let mx = -1;
+    for (let i = start; i < end; i++) {
+      const v = data[i];
+      if (v < mn) mn = v;
+      if (v > mx) mx = v;
+    }
+    min[x] = mn;
+    max[x] = mx;
+  }
+}
+function envelope(p, cols, n) {
+  const out = new Array(n);
+  const seg = cols / n;
+  for (let k = 0; k < n; k++) {
+    const start = Math.floor(k * seg);
+    const end = Math.max(start + 1, Math.min(cols, Math.floor((k + 1) * seg)));
+    let a = 0;
+    for (let x = start; x < end; x++) {
+      const m = Math.max(Math.abs(p.min[x]), Math.abs(p.max[x]));
+      if (m > a) a = m;
+    }
+    out[k] = a;
+  }
+  return out;
+}
+
+// src/waveform-engine.ts
+var WAVEFORM_MAX_ZOOM = 8;
+var BANDS = [
+  { type: "lowpass", freq: 250 },
+  { type: "bandpass", freq: 1100, q: 0.6 },
+  { type: "highpass", freq: 4200 }
+];
+var BAND_COLORS = ["#a855f7", "#22d3ee", "#a3e635"];
+var SIMPLE_POINTS = 46;
+var BORDER_FILL_ALPHA = 0.2;
+var DRAG_THRESHOLD2 = 3;
+var EDGE_HIT2 = 6;
+var MIN_LOOP = 1e-3;
+function smoothThrough2(ctx, pts) {
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    ctx.bezierCurveTo(
+      p1.x + (p2.x - p0.x) / 6,
+      p1.y + (p2.y - p0.y) / 6,
+      p2.x - (p3.x - p1.x) / 6,
+      p2.y - (p3.y - p1.y) / 6,
+      p2.x,
+      p2.y
+    );
+  }
+}
+async function filterBuffer(buffer, band) {
+  const off = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+  const src = off.createBufferSource();
+  src.buffer = buffer;
+  const filter = off.createBiquadFilter();
+  filter.type = band.type;
+  filter.frequency.value = band.freq;
+  if (band.q != null) filter.Q.value = band.q;
+  src.connect(filter);
+  filter.connect(off.destination);
+  src.start();
+  return off.startRendering();
+}
+function createWaveformEngine(canvas, get) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return { destroy() {
+  } };
+  const readDpr = () => Math.min(Math.max(window.devicePixelRatio || 1, 1), 3);
+  let dpr = readDpr();
+  let W = 0;
+  let H = 0;
+  let cy = 0;
+  let amp = 0;
+  let pk = { min: new Float32Array(1), max: new Float32Array(1) };
+  const syncSize = (width, height) => {
+    dpr = readDpr();
+    const nw = Math.round(width * dpr);
+    const nh = Math.round(height * dpr);
+    if (nw === W && nh === H) return;
+    W = canvas.width = nw;
+    H = canvas.height = nh;
+    cy = H / 2;
+    amp = H * 0.42;
+    pk = { min: new Float32Array(W), max: new Float32Array(W) };
+  };
+  let monos = [];
+  let monoToken = 0;
+  let lastBuffer;
+  let lastBands = false;
+  const syncMonos = (buffer, bands) => {
+    if (buffer === lastBuffer && bands === lastBands) return;
+    lastBuffer = buffer;
+    lastBands = bands;
+    const token = ++monoToken;
+    if (!buffer) {
+      monos = [];
+      return;
+    }
+    if (!bands) {
+      monos = [mixToMono(buffer)];
+      return;
+    }
+    (async () => {
+      try {
+        const bufs = await Promise.all(BANDS.map((b) => filterBuffer(buffer, b)));
+        if (token !== monoToken) return;
+        monos = bufs.map((b) => mixToMono(b));
+      } catch {
+      }
+    })();
+  };
+  const columnWidth2 = (pixelSize) => Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSize)));
+  const windowState = { start: 0, win: 1 };
+  let drag = null;
+  const drawColumns = (p, color, pixelSize) => {
+    const colW = columnWidth2(pixelSize);
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 1;
+    for (let x = 0; x < W; x += colW) {
+      let mn = 1;
+      let mx = -1;
+      for (let i = x; i < x + colW && i < W; i++) {
+        if (p.min[i] < mn) mn = p.min[i];
+        if (p.max[i] > mx) mx = p.max[i];
+      }
+      const yTop = Math.round(cy - mx * amp);
+      const yBot = Math.round(cy - mn * amp);
+      ctx.fillRect(x, yTop, colW, Math.max(1, yBot - yTop));
+    }
+  };
+  const drawSimplified = (env, color, outline) => {
+    const n = env.length;
+    if (n < 2) return;
+    const px = (k) => k / (n - 1) * W;
+    const top = env.map((a, k) => ({ x: px(k), y: cy - a * amp }));
+    const bot = [];
+    for (let k = n - 1; k >= 0; k--) bot.push({ x: px(k), y: cy + env[k] * amp });
+    ctx.beginPath();
+    ctx.moveTo(top[0].x, top[0].y);
+    smoothThrough2(ctx, top);
+    ctx.lineTo(bot[0].x, bot[0].y);
+    smoothThrough2(ctx, bot);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    if (outline) {
+      ctx.globalAlpha = BORDER_FILL_ALPHA;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.6 * dpr;
+      ctx.lineJoin = "round";
+      ctx.stroke();
+    } else {
+      ctx.globalAlpha = 1;
+      ctx.fill();
+    }
+  };
+  const drawGrid = (base, subs) => {
+    const n = Math.max(1, Math.round(subs));
+    ctx.strokeStyle = base;
+    ctx.globalAlpha = 0.1;
+    ctx.lineWidth = dpr;
+    ctx.beginPath();
+    for (let i = 1; i < n; i++) {
+      const x = Math.round(i / n * W) + 0.5;
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, H);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+  const drawRegion = (a, b, start, win, color) => {
+    const x0 = (a - start) / win * W;
+    const x1 = (b - start) / win * W;
+    const cx0 = Math.max(0, x0);
+    const cx1 = Math.min(W, x1);
+    if (cx1 <= cx0) return;
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.14;
+    ctx.fillRect(cx0, 0, cx1 - cx0, H);
+    ctx.globalAlpha = 0.55;
+    ctx.lineWidth = dpr;
+    ctx.strokeStyle = color;
+    ctx.beginPath();
+    if (x0 >= 0 && x0 <= W) {
+      const xe = Math.round(x0) + 0.5;
+      ctx.moveTo(xe, 0);
+      ctx.lineTo(xe, H);
+    }
+    if (x1 >= 0 && x1 <= W) {
+      const xe = Math.round(x1) + 0.5;
+      ctx.moveTo(xe, 0);
+      ctx.lineTo(xe, H);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+  let raf = 0;
+  const frame = () => {
+    raf = requestAnimationFrame(frame);
+    const rt = get();
+    syncSize(rt.width, rt.height);
+    syncMonos(rt.buffer, rt.bands);
+    const base = getComputedStyle(canvas).color || "rgb(255,255,255)";
+    ctx.globalAlpha = 1;
+    ctx.clearRect(0, 0, W, H);
+    ctx.imageSmoothingEnabled = rt.mode === "smooth";
+    if (rt.grid) drawGrid(base, rt.gridSubdivisions);
+    ctx.strokeStyle = base;
+    ctx.globalAlpha = 0.15;
+    ctx.lineWidth = dpr;
+    ctx.beginPath();
+    ctx.moveTo(0, Math.round(cy) + 0.5);
+    ctx.lineTo(W, Math.round(cy) + 0.5);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    const wave = rt.waveColor || base;
+    const ph = rt.playheadColor || base;
+    const prog = Math.max(0, Math.min(1, (rt.getProgress ? rt.getProgress() : rt.progress) || 0));
+    let win;
+    let start;
+    const activeLoop = rt.autoZoomOnLoop ? rt.loop : null;
+    if (activeLoop) {
+      const span = Math.max(1e-4, activeLoop.end - activeLoop.start);
+      win = Math.min(1, Math.max(1 / WAVEFORM_MAX_ZOOM, span * 1.2));
+      start = (activeLoop.start + activeLoop.end) / 2 - win / 2;
+    } else {
+      win = 1 / Math.max(1, rt.zoom);
+      start = prog - win / 2;
+    }
+    if (start < 0) start = 0;
+    else if (start > 1 - win) start = 1 - win;
+    const end = start + win;
+    windowState.start = start;
+    windowState.win = win;
+    const count = monos.length;
+    if (count) {
+      for (let i = 0; i < count; i++) {
+        const mono = monos[i];
+        const s0 = Math.max(0, Math.floor(start * mono.length));
+        const s1 = Math.min(mono.length, Math.ceil(end * mono.length));
+        const slice = s1 > s0 ? mono.subarray(s0, s1) : mono;
+        fillPeaks(slice, W, pk.min, pk.max);
+        const color = count === 3 ? BAND_COLORS[i] : wave;
+        if (rt.mode === "pixelated") drawColumns(pk, color, rt.pixelSize);
+        else drawSimplified(envelope(pk, W, SIMPLE_POINTS), color, rt.border);
+      }
+    }
+    if (drag && drag.moved) {
+      drawRegion(Math.min(drag.anchor, drag.curProg), Math.max(drag.anchor, drag.curProg), start, win, ph);
+    } else if (rt.loop) {
+      drawRegion(rt.loop.start, rt.loop.end, start, win, ph);
+    }
+    if (count) {
+      const playX = (prog - start) / win * W;
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = ph;
+      ctx.lineWidth = 1.5 * dpr;
+      const cxp = Math.round(Math.max(0, Math.min(W, playX))) + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(cxp, 0);
+      ctx.lineTo(cxp, H);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  };
+  const xToProgress = (clientX) => {
+    const rect = canvas.getBoundingClientRect();
+    const fx = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const { start, win } = windowState;
+    return Math.min(1, Math.max(0, start + fx * win));
+  };
+  const edgeAt = (clientX) => {
+    const rt = get();
+    const loop = rt.loop;
+    if (!loop || !rt.onLoopChange) return null;
+    const rect = canvas.getBoundingClientRect();
+    const { start, win } = windowState;
+    const xOf = (t) => (t - start) / win * rect.width;
+    const px = clientX - rect.left;
+    const sx = xOf(loop.start);
+    const ex = xOf(loop.end);
+    const dS = Math.abs(px - sx);
+    const dE = Math.abs(px - ex);
+    if (dS <= EDGE_HIT2 && dS <= dE && sx >= 0 && sx <= rect.width) return "start";
+    if (dE <= EDGE_HIT2 && ex >= 0 && ex <= rect.width) return "end";
+    return null;
+  };
+  const setCursor = (c) => {
+    canvas.style.cursor = c;
+  };
+  const onPointerDown = (e) => {
+    const rt = get();
+    if (!rt.onSeek && !rt.onLoopChange) return;
+    try {
+      canvas.setPointerCapture(e.pointerId);
+    } catch {
+    }
+    const p = xToProgress(e.clientX);
+    const edge = edgeAt(e.clientX);
+    if (edge && rt.loop) {
+      const anchor = edge === "start" ? rt.loop.end : rt.loop.start;
+      drag = { mode: "resize", anchor, curProg: p, startX: e.clientX, moved: false };
+      setCursor("ew-resize");
+    } else {
+      drag = { mode: "create", anchor: p, curProg: p, startX: e.clientX, moved: false };
+    }
+  };
+  const onPointerMove = (e) => {
+    if (drag) {
+      drag.curProg = xToProgress(e.clientX);
+      if (Math.abs(e.clientX - drag.startX) > DRAG_THRESHOLD2) drag.moved = true;
+      return;
+    }
+    const rt = get();
+    if (!rt.onSeek && !rt.onLoopChange) return;
+    setCursor(edgeAt(e.clientX) ? "ew-resize" : "crosshair");
+  };
+  const onPointerUp = (e) => {
+    const d = drag;
+    drag = null;
+    if (!d) return;
+    try {
+      if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+    } catch {
+    }
+    setCursor("crosshair");
+    const rt = get();
+    const a = Math.min(d.anchor, d.curProg);
+    const b = Math.max(d.anchor, d.curProg);
+    const wide = b - a >= MIN_LOOP;
+    if (d.mode === "resize") {
+      if (d.moved && wide) rt.onLoopChange?.({ start: a, end: b });
+    } else if (d.moved && wide) {
+      if (rt.onLoopChange) rt.onLoopChange({ start: a, end: b });
+      else rt.onSeek?.(d.curProg);
+    } else {
+      rt.onSeek?.(d.anchor);
+      if (rt.loop && rt.onLoopChange) rt.onLoopChange(null);
+    }
+  };
+  const onPointerCancel = () => {
+    drag = null;
+  };
+  canvas.addEventListener("pointerdown", onPointerDown);
+  canvas.addEventListener("pointermove", onPointerMove);
+  canvas.addEventListener("pointerup", onPointerUp);
+  canvas.addEventListener("pointercancel", onPointerCancel);
+  canvas.addEventListener("lostpointercapture", onPointerCancel);
+  const rt0 = get();
+  if (rt0.onSeek || rt0.onLoopChange) {
+    canvas.style.cursor = "crosshair";
+    canvas.style.touchAction = "none";
+  }
+  frame();
+  return {
+    destroy() {
+      cancelAnimationFrame(raf);
+      monoToken++;
+      canvas.removeEventListener("pointerdown", onPointerDown);
+      canvas.removeEventListener("pointermove", onPointerMove);
+      canvas.removeEventListener("pointerup", onPointerUp);
+      canvas.removeEventListener("pointercancel", onPointerCancel);
+      canvas.removeEventListener("lostpointercapture", onPointerCancel);
+    }
+  };
+}
+
+// src/components/WaveformVisualization.tsx
 import { jsx as jsx42, jsxs as jsxs37 } from "react/jsx-runtime";
+function WaveformVisualization({
+  buffer = null,
+  progress = 0,
+  getProgress,
+  mode = "smooth",
+  border = false,
+  bands = false,
+  pixelSize = 1,
+  grid = false,
+  gridSubdivisions = 8,
+  onSeek,
+  loop = null,
+  onLoopChange,
+  waveColor,
+  playheadColor,
+  autoZoomOnLoop = false,
+  zoom: zoomProp,
+  width = 256,
+  height = 140
+}) {
+  const canvasRef = useRef30(null);
+  const [ownZoom, setOwnZoom] = useState27(1);
+  const controlled = zoomProp !== void 0;
+  const zoom = controlled ? Math.max(1, zoomProp) : ownZoom;
+  const setZoom = setOwnZoom;
+  const runtimeRef = useRef30(null);
+  runtimeRef.current = {
+    buffer,
+    progress,
+    getProgress,
+    mode,
+    border,
+    bands,
+    pixelSize,
+    grid,
+    gridSubdivisions,
+    waveColor,
+    playheadColor,
+    autoZoomOnLoop,
+    loop,
+    zoom,
+    width,
+    height,
+    onSeek,
+    onLoopChange
+  };
+  useEffect23(() => {
+    if (!canvasRef.current) return;
+    const engine = createWaveformEngine(canvasRef.current, () => runtimeRef.current);
+    return () => engine.destroy();
+  }, []);
+  const atMaxZoom = zoom >= WAVEFORM_MAX_ZOOM;
+  const framingLoop = autoZoomOnLoop && !!loop || controlled;
+  return /* @__PURE__ */ jsxs37("div", { className: "tweakers-waveform-viz-wrap", style: { width }, children: [
+    /* @__PURE__ */ jsx42("canvas", { ref: canvasRef, className: "tweakers-waveform-viz", style: { width, height } }),
+    !framingLoop && /* @__PURE__ */ jsxs37("div", { className: "tweakers-waveform-zoom", children: [
+      zoom > 1 && /* @__PURE__ */ jsx42("button", { type: "button", "aria-label": "Zoom out", onClick: () => setZoom((z) => Math.max(1, z / 2)), children: /* @__PURE__ */ jsx42("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ jsx42("path", { d: "M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) }) }),
+      /* @__PURE__ */ jsx42(
+        "button",
+        {
+          type: "button",
+          "aria-label": "Zoom in",
+          disabled: atMaxZoom,
+          onClick: () => setZoom((z) => Math.min(WAVEFORM_MAX_ZOOM, z * 2)),
+          children: /* @__PURE__ */ jsx42("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ jsx42("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) })
+        }
+      )
+    ] })
+  ] });
+}
+
+// src/move-waveform.ts
+var MOVE_WAVEFORM_STEPS = 16;
+var SCRUB_PER_DETENT = 0.01;
+var SCRUB_FINE = 2e-3;
+var ZOOM_PER_DETENT = 0.08;
+var clamp015 = (v) => Math.min(1, Math.max(0, v));
+function defaultView() {
+  return { position: 0, zoom: 1, loop: null, loopAnchor: null };
+}
+function scrubBy(position, delta, fine = false) {
+  const step = fine ? SCRUB_FINE : SCRUB_PER_DETENT;
+  const next = clamp015(position + delta * step);
+  return Number(next.toFixed(6));
+}
+function zoomBy(zoom, delta) {
+  const next = zoom * Math.pow(1 + ZOOM_PER_DETENT, delta);
+  return Number(Math.min(WAVEFORM_MAX_ZOOM, Math.max(1, next)).toFixed(6));
+}
+var stepPosition = (index, steps = MOVE_WAVEFORM_STEPS) => Math.min(1, Math.max(0, index / Math.max(1, steps)));
+function loopFromStep(view, index, steps = MOVE_WAVEFORM_STEPS) {
+  if (view.loopAnchor === null || view.loop) {
+    return { loop: null, loopAnchor: index };
+  }
+  if (index === view.loopAnchor) {
+    return { loop: null, loopAnchor: null };
+  }
+  const a = Math.min(view.loopAnchor, index);
+  const b = Math.max(view.loopAnchor, index);
+  return {
+    loop: { start: stepPosition(a, steps), end: stepPosition(b + 1, steps) },
+    loopAnchor: null
+  };
+}
+function loopSteps(view, steps = MOVE_WAVEFORM_STEPS) {
+  if (view.loop) {
+    const from = Math.floor(view.loop.start * steps);
+    const to = Math.ceil(view.loop.end * steps) - 1;
+    const lit = [];
+    for (let i = Math.max(0, from); i <= Math.min(steps - 1, to); i++) lit.push(i);
+    return lit;
+  }
+  return view.loopAnchor === null ? [] : [view.loopAnchor];
+}
+var MoveWaveformStoreClass = class {
+  constructor() {
+    this.view = defaultView();
+    this.registered = false;
+    this.listeners = /* @__PURE__ */ new Set();
+    this.version = 0;
+  }
+  /** Claim the wheel, the volume knob and the step row. Returns the release. */
+  register() {
+    this.registered = true;
+    this.notify();
+    return () => {
+      this.registered = false;
+      this.view = defaultView();
+      this.notify();
+    };
+  }
+  isRegistered() {
+    return this.registered;
+  }
+  getView() {
+    return this.view;
+  }
+  getVersion() {
+    return this.version;
+  }
+  /** Patch the view. A patch that changes nothing notifies nobody. */
+  setView(patch2) {
+    const next = { ...this.view, ...patch2 };
+    if (next.position === this.view.position && next.zoom === this.view.zoom && next.loopAnchor === this.view.loopAnchor && next.loop?.start === this.view.loop?.start && next.loop?.end === this.view.loop?.end) {
+      return;
+    }
+    this.view = next;
+    this.notify();
+  }
+  scrub(delta, fine = false) {
+    this.setView({ position: scrubBy(this.view.position, delta, fine) });
+  }
+  zoom(delta) {
+    this.setView({ zoom: zoomBy(this.view.zoom, delta) });
+  }
+  pressStep(index) {
+    this.setView(loopFromStep(this.view, index));
+  }
+  clearLoop() {
+    this.setView({ loop: null, loopAnchor: null });
+  }
+  /** The steps the loop covers — what the hardware lights. */
+  loopSteps() {
+    return loopSteps(this.view);
+  }
+  subscribe(fn) {
+    this.listeners.add(fn);
+    return () => {
+      this.listeners.delete(fn);
+    };
+  }
+  notify() {
+    this.version += 1;
+    for (const fn of this.listeners) fn();
+  }
+};
+var MoveWaveformStore = new MoveWaveformStoreClass();
+
+// src/components/MoveWaveform.tsx
+import { jsx as jsx43, jsxs as jsxs38 } from "react/jsx-runtime";
+var SLOT_HEIGHT = 140;
+var SLOT_ZOOM = 4;
+var DOCK_GAP = 10;
+function MoveWaveform({
+  buffer = null,
+  variant = "page",
+  getProgress,
+  progress,
+  onSeek,
+  onLoopChange,
+  mode = "pixelated",
+  pixelSize = 2,
+  grid = false,
+  bands = false,
+  waveColor,
+  playheadColor,
+  height,
+  children,
+  theme = "system",
+  productionEnabled = isDevDefault,
+  className
+}) {
+  const hostRef = useRef31(null);
+  const [width, setWidth] = useState28(0);
+  const [dockBottom, setDockBottom] = useState28(0);
+  const [mounted, setMounted] = useState28(false);
+  const seekRef = useRef31(onSeek);
+  seekRef.current = onSeek;
+  const loopRef = useRef31(onLoopChange);
+  loopRef.current = onLoopChange;
+  useEffect24(() => {
+    if (!productionEnabled) return;
+    setMounted(true);
+    return MoveWaveformStore.register();
+  }, [productionEnabled]);
+  const view = useSyncExternalStore10(
+    useCallback20((cb) => MoveWaveformStore.subscribe(cb), []),
+    () => MoveWaveformStore.getVersion(),
+    () => 0
+  );
+  const state2 = MoveWaveformStore.getView();
+  const lastSent = useRef31({ position: state2.position, loop: state2.loop });
+  useEffect24(() => {
+    if (state2.position !== lastSent.current.position) {
+      lastSent.current.position = state2.position;
+      seekRef.current?.(state2.position);
+    }
+    if (state2.loop !== lastSent.current.loop) {
+      lastSent.current.loop = state2.loop;
+      loopRef.current?.(state2.loop);
+    }
+  }, [view, state2.position, state2.loop]);
+  useEffect24(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = Math.floor(entries[0]?.contentRect.width ?? 0);
+      setWidth((prev) => prev === w ? prev : w);
+    });
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, [mounted, variant]);
+  useEffect24(() => {
+    if (variant !== "dock" || typeof window === "undefined") return;
+    const measure = () => {
+      const panel2 = document.querySelector(".tweakers-move-root .tweakers-move");
+      const h = panel2 ? panel2.getBoundingClientRect().height : 0;
+      setDockBottom(h > 0 ? h + DOCK_GAP : DOCK_GAP);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    const panel = document.querySelector(".tweakers-move-root .tweakers-move");
+    if (panel) ro.observe(panel);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [variant, mounted]);
+  if (!productionEnabled) return null;
+  const boxHeight = height ?? (variant === "slot" ? SLOT_HEIGHT : 180);
+  const wave = /* @__PURE__ */ jsx43(
+    WaveformVisualization,
+    {
+      buffer,
+      ...getProgress ? { getProgress } : { progress: progress ?? state2.position },
+      mode,
+      pixelSize,
+      grid,
+      bands,
+      ...waveColor ? { waveColor } : {},
+      ...playheadColor ? { playheadColor } : {},
+      loop: state2.loop,
+      zoom: variant === "slot" ? Math.max(SLOT_ZOOM, state2.zoom) : state2.zoom,
+      onSeek: (p) => MoveWaveformStore.setView({ position: p }),
+      onLoopChange: (l) => MoveWaveformStore.setView({ loop: l, loopAnchor: null }),
+      width: Math.max(1, width),
+      height: boxHeight
+    }
+  );
+  const body = /* @__PURE__ */ jsx43(
+    "div",
+    {
+      ref: hostRef,
+      className: `tweakers-move-wave${className ? ` ${className}` : ""}`,
+      "data-variant": variant,
+      style: variant === "dock" ? { bottom: `${dockBottom}px` } : void 0,
+      children: /* @__PURE__ */ jsxs38("div", { className: "tweakers-move-wave-canvas", style: { height: `${boxHeight}px` }, children: [
+        width > 0 && wave,
+        children
+      ] })
+    }
+  );
+  if (variant !== "dock") return body;
+  if (!mounted || typeof document === "undefined") return null;
+  return createPortal9(
+    /* @__PURE__ */ jsx43("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-wave-dock": "true", children: body }),
+    document.body
+  );
+}
+
+// src/components/ListScreen.tsx
+import { useEffect as useEffect25, useRef as useRef32 } from "react";
+import { jsx as jsx44, jsxs as jsxs39 } from "react/jsx-runtime";
 function itemValue(item) {
   return typeof item === "string" ? item : item.value;
 }
@@ -11375,13 +12077,13 @@ function ListScreen({
   className,
   style
 }) {
-  const rootRef = useRef30(null);
-  useEffect23(() => {
+  const rootRef = useRef32(null);
+  useEffect25(() => {
     const row = rootRef.current?.querySelector("[data-selected]");
     row?.scrollIntoView?.({ block: "nearest" });
   }, [value]);
   const rootClassName = ["tweakers-list-screen", className].filter(Boolean).join(" ");
-  return /* @__PURE__ */ jsx42(
+  return /* @__PURE__ */ jsx44(
     "div",
     {
       ref: rootRef,
@@ -11393,7 +12095,7 @@ function ListScreen({
         const rowValue = itemValue(item);
         const selected = rowValue === value;
         const tag = itemTag(item);
-        return /* @__PURE__ */ jsxs37(
+        return /* @__PURE__ */ jsxs39(
           "button",
           {
             type: "button",
@@ -11405,8 +12107,8 @@ function ListScreen({
             "data-muted": itemMuted(item) || void 0,
             onClick: () => onSelect?.(rowValue),
             children: [
-              /* @__PURE__ */ jsx42("span", { className: "tweakers-list-screen-label", children: itemLabel(item) }),
-              tag && /* @__PURE__ */ jsx42("span", { className: "tweakers-list-screen-tag", children: tag })
+              /* @__PURE__ */ jsx44("span", { className: "tweakers-list-screen-label", children: itemLabel(item) }),
+              tag && /* @__PURE__ */ jsx44("span", { className: "tweakers-list-screen-tag", children: tag })
             ]
           },
           rowValue
@@ -11417,7 +12119,7 @@ function ListScreen({
 }
 
 // src/hooks/useTweakTimeline.ts
-import { useCallback as useCallback20, useEffect as useEffect24, useMemo as useMemo2, useRef as useRef31, useSyncExternalStore as useSyncExternalStore10 } from "react";
+import { useCallback as useCallback21, useEffect as useEffect26, useMemo as useMemo2, useRef as useRef33, useSyncExternalStore as useSyncExternalStore11 } from "react";
 
 // src/transition-math.ts
 function round22(value) {
@@ -12347,45 +13049,45 @@ function useTweakTimeline(name, config, options) {
   );
   const timelineDuration = staticTimeline.duration;
   const staticClips = staticTimeline.clips;
-  const parsedRef = useRef31(parsed);
+  const parsedRef = useRef33(parsed);
   parsedRef.current = parsed;
-  const optionsRef = useRef31(options);
+  const optionsRef = useRef33(options);
   optionsRef.current = options;
-  const buildMeta = useCallback20(
+  const buildMeta = useCallback21(
     () => buildTimelineMeta(panelId, name, timelineDuration, parsedRef.current, options?.loop),
     [panelId, name, timelineDuration, options?.loop]
   );
-  const buildMetaRef = useRef31(buildMeta);
+  const buildMetaRef = useRef33(buildMeta);
   buildMetaRef.current = buildMeta;
-  useEffect24(() => {
+  useEffect26(() => {
     TimelineStore.register(buildMetaRef.current(), {
       autoplay: optionsRef.current?.autoplay ?? true,
       persist: optionsRef.current?.persist
     });
     return () => TimelineStore.unregister(panelId);
   }, [panelId, name]);
-  const mountedRef = useRef31(false);
-  useEffect24(() => {
+  const mountedRef = useRef33(false);
+  useEffect26(() => {
     if (!mountedRef.current) {
       mountedRef.current = true;
       return;
     }
     TimelineStore.update(buildMeta());
   }, [buildMeta, parsed]);
-  const subscribeTransport = useCallback20(
+  const subscribeTransport = useCallback21(
     (callback) => TimelineStore.subscribe(panelId, callback),
     [panelId]
   );
-  const getTransport = useCallback20(() => TimelineStore.getTransport(panelId), [panelId]);
-  const transport = useSyncExternalStore10(subscribeTransport, getTransport, getTransport);
-  const getLoopRegion = useCallback20(() => TimelineStore.getLoopRegion(panelId), [panelId]);
-  const loopRegion = useSyncExternalStore10(subscribeTransport, getLoopRegion, getLoopRegion);
+  const getTransport = useCallback21(() => TimelineStore.getTransport(panelId), [panelId]);
+  const transport = useSyncExternalStore11(subscribeTransport, getTransport, getTransport);
+  const getLoopRegion = useCallback21(() => TimelineStore.getLoopRegion(panelId), [panelId]);
+  const loopRegion = useSyncExternalStore11(subscribeTransport, getLoopRegion, getLoopRegion);
   const loopStart = loopRegion ? loopRegion.start : 0;
   const loopEnd = loopRegion ? loopRegion.end : timelineDuration;
-  const play = useCallback20(() => TimelineStore.play(panelId), [panelId]);
-  const pause = useCallback20(() => TimelineStore.pause(panelId), [panelId]);
-  const replay = useCallback20(() => TimelineStore.replay(panelId), [panelId]);
-  const seek = useCallback20((time) => TimelineStore.seek(panelId, time), [panelId]);
+  const play = useCallback21(() => TimelineStore.play(panelId), [panelId]);
+  const pause = useCallback21(() => TimelineStore.pause(panelId), [panelId]);
+  const replay = useCallback21(() => TimelineStore.replay(panelId), [panelId]);
+  const seek = useCallback21((time) => TimelineStore.seek(panelId, time), [panelId]);
   return useMemo2(
     () => buildTimelineValues(staticClips, transport, timelineDuration, loopStart, loopEnd, {
       play,
@@ -12398,10 +13100,10 @@ function useTweakTimeline(name, config, options) {
 }
 
 // src/components/Timeline/TweakTimeline.tsx
-import { memo, useCallback as useCallback21, useEffect as useEffect25, useLayoutEffect as useLayoutEffect5, useRef as useRef32, useState as useState27, useSyncExternalStore as useSyncExternalStore11 } from "react";
-import { createPortal as createPortal9 } from "react-dom";
+import { memo, useCallback as useCallback22, useEffect as useEffect27, useLayoutEffect as useLayoutEffect5, useRef as useRef34, useState as useState29, useSyncExternalStore as useSyncExternalStore12 } from "react";
+import { createPortal as createPortal10 } from "react-dom";
 import { AnimatePresence as AnimatePresence8, motion as motion12 } from "motion/react";
-import { Fragment as Fragment11, jsx as jsx43, jsxs as jsxs38 } from "react/jsx-runtime";
+import { Fragment as Fragment11, jsx as jsx45, jsxs as jsxs40 } from "react/jsx-runtime";
 var DRAG_THRESHOLD_PX = 3;
 var LOOP_DRAG_THRESHOLD_PX = 4;
 var MAJOR_TICK_TARGET_PX = 140;
@@ -12447,7 +13149,7 @@ var TweakTimeline = memo(function TweakTimeline2({
   productionEnabled = isDevDefault
 }) {
   if (!productionEnabled) return null;
-  return /* @__PURE__ */ jsx43(
+  return /* @__PURE__ */ jsx45(
     TweakTimelineDock,
     {
       theme,
@@ -12465,28 +13167,28 @@ function TweakTimelineDock({
   onVisibilityChange,
   defaultOpen
 }) {
-  const [mounted, setMounted] = useState27(false);
-  const [dockMaxHeight, setDockMaxHeight] = useState27(DEFAULT_DOCK_MAX_HEIGHT);
-  const visibilityControllerId = useRef32(/* @__PURE__ */ Symbol("tweakers-timeline-visibility"));
-  const dockRef = useRef32(null);
-  const resizeCleanupRef = useRef32(null);
-  useEffect25(() => TimelineUiStore.registerController(visibilityControllerId.current, {
+  const [mounted, setMounted] = useState29(false);
+  const [dockMaxHeight, setDockMaxHeight] = useState29(DEFAULT_DOCK_MAX_HEIGHT);
+  const visibilityControllerId = useRef34(/* @__PURE__ */ Symbol("tweakers-timeline-visibility"));
+  const dockRef = useRef34(null);
+  const resizeCleanupRef = useRef34(null);
+  useEffect27(() => TimelineUiStore.registerController(visibilityControllerId.current, {
     visible,
     defaultVisible,
     onVisibilityChange
   }), []);
-  useEffect25(() => {
+  useEffect27(() => {
     TimelineUiStore.updateController(visibilityControllerId.current, {
       visible,
       defaultVisible,
       onVisibilityChange
     });
   }, [defaultVisible, onVisibilityChange, visible]);
-  useEffect25(() => {
+  useEffect27(() => {
     setMounted(true);
   }, []);
-  useEffect25(() => () => resizeCleanupRef.current?.(), []);
-  const handleResizePointerDown = useCallback21((e) => {
+  useEffect27(() => () => resizeCleanupRef.current?.(), []);
+  const handleResizePointerDown = useCallback22((e) => {
     const dock = dockRef.current;
     if (!dock) return;
     e.preventDefault();
@@ -12510,8 +13212,8 @@ function TweakTimelineDock({
     window.addEventListener("pointercancel", finishResize);
     resizeCleanupRef.current = finishResize;
   }, []);
-  const timelines = useSyncExternalStore11(subscribeGlobalTimelines, getTimelines, getTimelines);
-  const dockVisible = useSyncExternalStore11(
+  const timelines = useSyncExternalStore12(subscribeGlobalTimelines, getTimelines, getTimelines);
+  const dockVisible = useSyncExternalStore12(
     subscribeTimelineVisibility,
     getTimelineVisibility,
     getTimelineVisibility
@@ -12519,9 +13221,9 @@ function TweakTimelineDock({
   if (!mounted || typeof window === "undefined" || timelines.length === 0) {
     return null;
   }
-  return createPortal9(
-    /* @__PURE__ */ jsxs38("div", { className: "tweakers-root tweakers-timeline", "data-theme": theme, hidden: !dockVisible, children: [
-      /* @__PURE__ */ jsx43(
+  return createPortal10(
+    /* @__PURE__ */ jsxs40("div", { className: "tweakers-root tweakers-timeline", "data-theme": theme, hidden: !dockVisible, children: [
+      /* @__PURE__ */ jsx45(
         "div",
         {
           className: "tweakers-timeline-resize-handle",
@@ -12532,13 +13234,13 @@ function TweakTimelineDock({
           title: "Drag to resize timeline"
         }
       ),
-      /* @__PURE__ */ jsx43(
+      /* @__PURE__ */ jsx45(
         "div",
         {
           ref: dockRef,
           className: "tweakers-timeline-dock",
           style: { maxHeight: `min(${dockMaxHeight}px, calc(100vh - 24px))` },
-          children: timelines.map((timeline) => /* @__PURE__ */ jsx43(
+          children: timelines.map((timeline) => /* @__PURE__ */ jsx45(
             TimelineSection,
             {
               meta: timeline,
@@ -12555,13 +13257,13 @@ function TweakTimelineDock({
   );
 }
 function useTransportSubscribe(id) {
-  return useCallback21((callback) => TimelineStore.subscribe(id, callback), [id]);
+  return useCallback22((callback) => TimelineStore.subscribe(id, callback), [id]);
 }
 function PlayPauseButton({ id }) {
   const subscribe = useTransportSubscribe(id);
-  const getPlaying = useCallback21(() => TimelineStore.getTransport(id).playing, [id]);
-  const playing = useSyncExternalStore11(subscribe, getPlaying, getPlaying);
-  return /* @__PURE__ */ jsx43(
+  const getPlaying = useCallback22(() => TimelineStore.getTransport(id).playing, [id]);
+  const playing = useSyncExternalStore12(subscribe, getPlaying, getPlaying);
+  return /* @__PURE__ */ jsx45(
     motion12.button,
     {
       className: "tweakers-toolbar-add",
@@ -12570,7 +13272,7 @@ function PlayPauseButton({ id }) {
       "aria-label": playing ? "Pause" : "Play",
       whileTap: { scale: 0.9 },
       transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-      children: /* @__PURE__ */ jsx43("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ jsx43(AnimatePresence8, { initial: false, mode: "wait", children: playing ? /* @__PURE__ */ jsx43(
+      children: /* @__PURE__ */ jsx45("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ jsx45(AnimatePresence8, { initial: false, mode: "wait", children: playing ? /* @__PURE__ */ jsx45(
         motion12.svg,
         {
           viewBox: "0 0 24 24",
@@ -12581,10 +13283,10 @@ function PlayPauseButton({ id }) {
           animate: { scale: 1, opacity: 1 },
           exit: { scale: 0.8, opacity: 0 },
           transition: { duration: 0.08 },
-          children: ICON_PAUSE.map((d, i) => /* @__PURE__ */ jsx43("path", { d, fill: "currentColor" }, i))
+          children: ICON_PAUSE.map((d, i) => /* @__PURE__ */ jsx45("path", { d, fill: "currentColor" }, i))
         },
         "pause"
-      ) : /* @__PURE__ */ jsx43(
+      ) : /* @__PURE__ */ jsx45(
         motion12.svg,
         {
           viewBox: "0 0 24 24",
@@ -12595,7 +13297,7 @@ function PlayPauseButton({ id }) {
           animate: { scale: 1, opacity: 1 },
           exit: { scale: 0.8, opacity: 0 },
           transition: { duration: 0.08 },
-          children: /* @__PURE__ */ jsx43("path", { d: ICON_PLAY, fill: "currentColor" })
+          children: /* @__PURE__ */ jsx45("path", { d: ICON_PLAY, fill: "currentColor" })
         },
         "play"
       ) }) })
@@ -12603,7 +13305,7 @@ function PlayPauseButton({ id }) {
   );
 }
 function ReplayButton({ onReplay }) {
-  return /* @__PURE__ */ jsx43(
+  return /* @__PURE__ */ jsx45(
     motion12.button,
     {
       className: "tweakers-toolbar-add",
@@ -12612,7 +13314,7 @@ function ReplayButton({ onReplay }) {
       "aria-label": "Replay",
       whileTap: { scale: 0.9 },
       transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-      children: /* @__PURE__ */ jsx43("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: ICON_REPLAY.map((d, i) => /* @__PURE__ */ jsx43("path", { d, fill: "currentColor" }, i)) })
+      children: /* @__PURE__ */ jsx45("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: ICON_REPLAY.map((d, i) => /* @__PURE__ */ jsx45("path", { d, fill: "currentColor" }, i)) })
     }
   );
 }
@@ -12627,11 +13329,11 @@ function TimelinePlayheadFlag({
   onResetView
 }) {
   const subscribe = useTransportSubscribe(id);
-  const getTime = useCallback21(() => TimelineStore.getTransport(id).time, [id]);
-  const time = useSyncExternalStore11(subscribe, getTime, getTime);
-  const scrubRef = useRef32(null);
-  const cleanupScrubRef = useRef32(null);
-  const seekFromClientX = useCallback21((clientX) => {
+  const getTime = useCallback22(() => TimelineStore.getTransport(id).time, [id]);
+  const time = useSyncExternalStore12(subscribe, getTime, getTime);
+  const scrubRef = useRef34(null);
+  const cleanupScrubRef = useRef34(null);
+  const seekFromClientX = useCallback22((clientX) => {
     const rect = scrubRef.current?.rect;
     const scrub = scrubRef.current;
     const contentWidth = rect?.width ?? 0;
@@ -12643,7 +13345,7 @@ function TimelinePlayheadFlag({
     );
     TimelineStore.seek(id, nextTime);
   }, [id]);
-  const handlePointerDown = useCallback21((e) => {
+  const handlePointerDown = useCallback22((e) => {
     const rect = rulerRef.current?.getBoundingClientRect();
     if (!rect) return;
     e.preventDefault();
@@ -12676,7 +13378,7 @@ function TimelinePlayheadFlag({
     window.addEventListener("pointercancel", finishWindowScrub);
     cleanupScrubRef.current = finishWindowScrub;
   }, [duration, id, onResetView, rulerRef, seekFromClientX, viewEnd, viewStart]);
-  useEffect25(() => () => cleanupScrubRef.current?.(), []);
+  useEffect27(() => () => cleanupScrubRef.current?.(), []);
   if (time < viewStart || time > viewEnd || laneWidth <= 0) return null;
   const x = clamp7(
     (time - viewStart) * pxPerSecond,
@@ -12690,7 +13392,7 @@ function TimelinePlayheadFlag({
   );
   const flagOffset = flagCenter - x;
   const edge = flagOffset > 0.5 ? "start" : flagOffset < -0.5 ? "end" : "center";
-  return /* @__PURE__ */ jsxs38(
+  return /* @__PURE__ */ jsxs40(
     "div",
     {
       className: "tweakers-timeline-playhead-control",
@@ -12707,8 +13409,8 @@ function TimelinePlayheadFlag({
       "aria-valuenow": time,
       title: "Drag to scrub the timeline",
       children: [
-        /* @__PURE__ */ jsx43("div", { className: "tweakers-timeline-playhead-stem" }),
-        /* @__PURE__ */ jsx43("div", { className: "tweakers-timeline-playhead-anchor", children: /* @__PURE__ */ jsx43("div", { className: "tweakers-timeline-playhead-flag", children: time.toFixed(2) }) })
+        /* @__PURE__ */ jsx45("div", { className: "tweakers-timeline-playhead-stem" }),
+        /* @__PURE__ */ jsx45("div", { className: "tweakers-timeline-playhead-anchor", children: /* @__PURE__ */ jsx45("div", { className: "tweakers-timeline-playhead-flag", children: time.toFixed(2) }) })
       ]
     }
   );
@@ -12721,17 +13423,17 @@ function TimelineOverview({
   onNavigate
 }) {
   const subscribe = useTransportSubscribe(id);
-  const getTime = useCallback21(() => TimelineStore.getTransport(id).time, [id]);
-  const time = useSyncExternalStore11(subscribe, getTime, getTime);
-  const scrubRef = useRef32(null);
-  const seekFromClientX = useCallback21((clientX) => {
+  const getTime = useCallback22(() => TimelineStore.getTransport(id).time, [id]);
+  const time = useSyncExternalStore12(subscribe, getTime, getTime);
+  const scrubRef = useRef34(null);
+  const seekFromClientX = useCallback22((clientX) => {
     const rect = scrubRef.current?.rect;
     if (!rect || rect.width <= 0 || duration <= 0) return;
     const nextTime = clamp7((clientX - rect.left) / rect.width * duration, 0, duration);
     TimelineStore.seek(id, nextTime);
     onNavigate(nextTime);
   }, [duration, id, onNavigate]);
-  const handlePointerDown = useCallback21((e) => {
+  const handlePointerDown = useCallback22((e) => {
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     scrubRef.current = {
@@ -12741,17 +13443,17 @@ function TimelineOverview({
     TimelineStore.pause(id);
     seekFromClientX(e.clientX);
   }, [id, seekFromClientX]);
-  const handlePointerMove = useCallback21((e) => {
+  const handlePointerMove = useCallback22((e) => {
     if (scrubRef.current) seekFromClientX(e.clientX);
   }, [seekFromClientX]);
-  const finishScrub = useCallback21(() => {
+  const finishScrub = useCallback22(() => {
     if (scrubRef.current?.wasPlaying) TimelineStore.play(id);
     scrubRef.current = null;
   }, [id]);
   const viewportLeft = duration > 0 ? viewStart / duration * 100 : 0;
   const viewportWidth = duration > 0 ? (viewEnd - viewStart) / duration * 100 : 100;
   const playheadLeft = duration > 0 ? time / duration * 100 : 0;
-  return /* @__PURE__ */ jsxs38(
+  return /* @__PURE__ */ jsxs40(
     "div",
     {
       className: "tweakers-timeline-overview",
@@ -12762,7 +13464,7 @@ function TimelineOverview({
       onLostPointerCapture: finishScrub,
       title: "Drag to scrub the full timeline",
       children: [
-        /* @__PURE__ */ jsx43(
+        /* @__PURE__ */ jsx45(
           "div",
           {
             className: "tweakers-timeline-overview-viewport",
@@ -12770,8 +13472,8 @@ function TimelineOverview({
             style: { left: `${viewportLeft}%`, width: `${viewportWidth}%` }
           }
         ),
-        /* @__PURE__ */ jsx43("div", { className: "tweakers-timeline-overview-progress", style: { width: `${playheadLeft}%` } }),
-        /* @__PURE__ */ jsx43("div", { className: "tweakers-timeline-overview-playhead", style: { left: `${playheadLeft}%` } })
+        /* @__PURE__ */ jsx45("div", { className: "tweakers-timeline-overview-progress", style: { width: `${playheadLeft}%` } }),
+        /* @__PURE__ */ jsx45("div", { className: "tweakers-timeline-overview-playhead", style: { left: `${playheadLeft}%` } })
       ]
     }
   );
@@ -12790,31 +13492,31 @@ var TimelineSection = memo(function TimelineSection2({
   theme,
   dockVisible
 }) {
-  const [open, setOpen] = useState27(defaultOpen);
-  const [copied, setCopied] = useState27(false);
-  const [popover, setPopover] = useState27(null);
-  const [collapsedGroups, setCollapsedGroups] = useState27(() => /* @__PURE__ */ new Set());
-  const [expandedTracks, setExpandedTracks] = useState27(() => /* @__PURE__ */ new Set());
-  const [zoom, setZoom] = useState27(1);
-  const [viewStart, setViewStart] = useState27(0);
-  const subscribeValues = useCallback21(
+  const [open, setOpen] = useState29(defaultOpen);
+  const [copied, setCopied] = useState29(false);
+  const [popover, setPopover] = useState29(null);
+  const [collapsedGroups, setCollapsedGroups] = useState29(() => /* @__PURE__ */ new Set());
+  const [expandedTracks, setExpandedTracks] = useState29(() => /* @__PURE__ */ new Set());
+  const [zoom, setZoom] = useState29(1);
+  const [viewStart, setViewStart] = useState29(0);
+  const subscribeValues = useCallback22(
     (callback) => TweakStore.subscribe(meta.id, callback),
     [meta.id]
   );
-  const getValues = useCallback21(() => TweakStore.getValues(meta.id), [meta.id]);
-  const values = useSyncExternalStore11(subscribeValues, getValues, getValues);
+  const getValues = useCallback22(() => TweakStore.getValues(meta.id), [meta.id]);
+  const values = useSyncExternalStore12(subscribeValues, getValues, getValues);
   const presets = TweakStore.getPresets(meta.id);
   const activePresetId = TweakStore.getActivePresetId(meta.id);
-  const subscribeLoopRegion = useCallback21(
+  const subscribeLoopRegion = useCallback22(
     (callback) => TimelineStore.subscribe(meta.id, callback),
     [meta.id]
   );
-  const getLoopRegion = useCallback21(() => TimelineStore.getLoopRegion(meta.id), [meta.id]);
-  const loopRegion = useSyncExternalStore11(subscribeLoopRegion, getLoopRegion, getLoopRegion);
-  const [loopDrag, setLoopDrag] = useState27(null);
-  const laneAreaRef = useRef32(null);
-  const horizontalScrollRef = useRef32(null);
-  const [laneWidth, setLaneWidth] = useState27(0);
+  const getLoopRegion = useCallback22(() => TimelineStore.getLoopRegion(meta.id), [meta.id]);
+  const loopRegion = useSyncExternalStore12(subscribeLoopRegion, getLoopRegion, getLoopRegion);
+  const [loopDrag, setLoopDrag] = useState29(null);
+  const laneAreaRef = useRef34(null);
+  const horizontalScrollRef = useRef34(null);
+  const [laneWidth, setLaneWidth] = useState29(0);
   useLayoutEffect5(() => {
     if (!open) return;
     const ruler = laneAreaRef.current;
@@ -12833,10 +13535,10 @@ var TimelineSection = memo(function TimelineSection2({
   const pxPerSecond = visibleDuration > 0 && laneWidth > 0 ? laneWidth / visibleDuration : 0;
   const millisecondReadableZoom = laneWidth > 0 && meta.duration > 0 ? MAJOR_TICK_TARGET_PX * meta.duration / (MILLISECOND_STEP * 10 * laneWidth) : MIN_TIMELINE_MAX_ZOOM;
   const maxZoom = Math.max(MIN_TIMELINE_MAX_ZOOM, millisecondReadableZoom);
-  useEffect25(() => {
+  useEffect27(() => {
     setZoom((current) => clamp7(current, 1, maxZoom));
   }, [maxZoom]);
-  useEffect25(() => {
+  useEffect27(() => {
     setViewStart((current) => clampViewStart(current, meta.duration, meta.duration / zoom));
   }, [meta.duration, zoom]);
   useLayoutEffect5(() => {
@@ -12847,26 +13549,26 @@ var TimelineSection = memo(function TimelineSection2({
       scroller.scrollLeft = nextScrollLeft;
     }
   }, [open, pxPerSecond, safeViewStart]);
-  useEffect25(() => {
+  useEffect27(() => {
     if (!dockVisible) setPopover(null);
   }, [dockVisible]);
-  const centerViewAt = useCallback21((time) => {
+  const centerViewAt = useCallback22((time) => {
     if (zoom <= 1 || meta.duration <= 0) return;
     const windowDuration = meta.duration / zoom;
     setViewStart(clampViewStart(time - windowDuration / 2, meta.duration, windowDuration));
   }, [meta.duration, zoom]);
-  const resetView = useCallback21(() => {
+  const resetView = useCallback22(() => {
     setZoom(1);
     setViewStart(0);
   }, []);
-  const handleReplay = useCallback21(() => {
+  const handleReplay = useCallback22(() => {
     setViewStart(0);
     TimelineStore.replay(meta.id);
   }, [meta.id]);
-  const handleClearLoopRegion = useCallback21(() => {
+  const handleClearLoopRegion = useCallback22(() => {
     TimelineStore.clearLoopRegion(meta.id);
   }, [meta.id]);
-  const handleHorizontalScroll = useCallback21((e) => {
+  const handleHorizontalScroll = useCallback22((e) => {
     if (pxPerSecond <= 0) return;
     setViewStart(clampViewStart(
       e.currentTarget.scrollLeft / pxPerSecond,
@@ -12874,7 +13576,7 @@ var TimelineSection = memo(function TimelineSection2({
       visibleDuration
     ));
   }, [meta.duration, pxPerSecond, visibleDuration]);
-  const handleTimelineWheel = useCallback21((e) => {
+  const handleTimelineWheel = useCallback22((e) => {
     const scroller = horizontalScrollRef.current;
     if (!scroller || zoom <= 1) return;
     const horizontalDelta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.shiftKey ? e.deltaY : 0;
@@ -12882,9 +13584,9 @@ var TimelineSection = memo(function TimelineSection2({
     e.preventDefault();
     scroller.scrollLeft += horizontalDelta;
   }, [zoom]);
-  const zoomDragRef = useRef32(null);
-  const rulerGestureRef = useRef32(null);
-  const rulerTimeFromClientX = useCallback21(
+  const zoomDragRef = useRef34(null);
+  const rulerGestureRef = useRef34(null);
+  const rulerTimeFromClientX = useCallback22(
     (clientX, rect, viewStartAt, visibleAt) => clamp7(
       viewStartAt + (clientX - rect.left) / rect.width * visibleAt,
       viewStartAt,
@@ -12892,7 +13594,7 @@ var TimelineSection = memo(function TimelineSection2({
     ),
     []
   );
-  const handleRulerPointerDown = useCallback21((e) => {
+  const handleRulerPointerDown = useCallback22((e) => {
     e.preventDefault();
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
@@ -12928,7 +13630,7 @@ var TimelineSection = memo(function TimelineSection2({
       moved: false
     };
   }, [meta.duration, rulerTimeFromClientX, safeViewStart, visibleDuration, zoom]);
-  const handleRulerPointerMove = useCallback21((e) => {
+  const handleRulerPointerMove = useCallback22((e) => {
     const gesture = rulerGestureRef.current;
     if (gesture) {
       const dx2 = e.clientX - gesture.downClientX;
@@ -12956,7 +13658,7 @@ var TimelineSection = memo(function TimelineSection2({
     setZoom(nextZoom);
     setViewStart(nextStart);
   }, [maxZoom, meta.duration, rulerTimeFromClientX]);
-  const handleRulerPointerUp = useCallback21(() => {
+  const handleRulerPointerUp = useCallback22(() => {
     const gesture = rulerGestureRef.current;
     rulerGestureRef.current = null;
     zoomDragRef.current = null;
@@ -12969,13 +13671,13 @@ var TimelineSection = memo(function TimelineSection2({
       setLoopDrag(null);
     }
   }, [loopDrag, meta.id]);
-  const handleRulerPointerCancel = useCallback21(() => {
+  const handleRulerPointerCancel = useCallback22(() => {
     rulerGestureRef.current = null;
     zoomDragRef.current = null;
     setLoopDrag(null);
   }, []);
-  const trackScrubRef = useRef32(null);
-  const seekTrackFromClientX = useCallback21((clientX) => {
+  const trackScrubRef = useRef34(null);
+  const seekTrackFromClientX = useCallback22((clientX) => {
     const scrub = trackScrubRef.current;
     const contentWidth = scrub?.rect.width ?? 0;
     if (!scrub || contentWidth <= 0) return;
@@ -12986,7 +13688,7 @@ var TimelineSection = memo(function TimelineSection2({
     );
     TimelineStore.seek(meta.id, nextTime);
   }, [meta.id]);
-  const handleTrackPointerDown = useCallback21((e) => {
+  const handleTrackPointerDown = useCallback22((e) => {
     const target = e.target;
     if (target.closest(".tweakers-timeline-label, button")) return;
     if (!e.shiftKey && target.closest(".tweakers-timeline-clip")) return;
@@ -13009,24 +13711,24 @@ var TimelineSection = memo(function TimelineSection2({
     TimelineStore.pause(meta.id);
     seekTrackFromClientX(e.clientX);
   }, [meta.duration, meta.id, safeViewStart, seekTrackFromClientX, visibleDuration]);
-  const handleTrackPointerMove = useCallback21((e) => {
+  const handleTrackPointerMove = useCallback22((e) => {
     if (trackScrubRef.current) seekTrackFromClientX(e.clientX);
   }, [seekTrackFromClientX]);
-  const finishTrackScrub = useCallback21(() => {
+  const finishTrackScrub = useCallback22(() => {
     if (trackScrubRef.current?.wasPlaying) TimelineStore.play(meta.id);
     trackScrubRef.current = null;
   }, [meta.id]);
-  const handleCopy = useCallback21(() => {
+  const handleCopy = useCallback22(() => {
     const normalized = normalizeTimelineValuesForCopy(TweakStore.getValues(meta.id), meta.clips);
     navigator.clipboard.writeText(buildCopyInstruction("useTweakTimeline", meta.name, normalized));
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }, [meta.clips, meta.id, meta.name]);
-  const handleAddPreset = useCallback21(() => {
+  const handleAddPreset = useCallback22(() => {
     TweakStore.savePreset(meta.id, `Version ${presets.length + 2}`);
   }, [meta.id, presets.length]);
-  const closePopover = useCallback21(() => setPopover(null), []);
-  const openClipPopover = useCallback21(
+  const closePopover = useCallback22(() => setPopover(null), []);
+  const openClipPopover = useCallback22(
     (clip, rect, stepKey) => {
       const targetPath = stepKey ? `${clip.key}.${stepKey}` : clip.key;
       const exclude = stepKey ? void 0 : clipPopoverExclusions(clip);
@@ -13048,7 +13750,7 @@ var TimelineSection = memo(function TimelineSection2({
     },
     [meta.id]
   );
-  const toggleTracks = useCallback21((clipKey) => {
+  const toggleTracks = useCallback22((clipKey) => {
     setExpandedTracks((prev) => {
       const next = new Set(prev);
       if (next.has(clipKey)) next.delete(clipKey);
@@ -13056,7 +13758,7 @@ var TimelineSection = memo(function TimelineSection2({
       return next;
     });
   }, []);
-  const handleBarClick = useCallback21(
+  const handleBarClick = useCallback22(
     (clip, rect, stepKey) => {
       if (!stepKey && clip.tracks?.length) {
         toggleTracks(clip.key);
@@ -13066,7 +13768,7 @@ var TimelineSection = memo(function TimelineSection2({
     },
     [openClipPopover, toggleTracks]
   );
-  const toggleGroup = useCallback21((group) => {
+  const toggleGroup = useCallback22((group) => {
     setCollapsedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(group)) next.delete(group);
@@ -13102,21 +13804,21 @@ var TimelineSection = memo(function TimelineSection2({
         const group = clip.group;
         const isCollapsed = collapsedGroups.has(group);
         rows.push(
-          /* @__PURE__ */ jsxs38("div", { className: "tweakers-timeline-row tweakers-timeline-group-row", children: [
-            /* @__PURE__ */ jsxs38("div", { className: "tweakers-timeline-label", children: [
-              /* @__PURE__ */ jsx43(
+          /* @__PURE__ */ jsxs40("div", { className: "tweakers-timeline-row tweakers-timeline-group-row", children: [
+            /* @__PURE__ */ jsxs40("div", { className: "tweakers-timeline-label", children: [
+              /* @__PURE__ */ jsx45(
                 "button",
                 {
                   className: "tweakers-timeline-group-toggle",
                   "data-open": !isCollapsed,
                   onClick: () => toggleGroup(group),
                   title: isCollapsed ? "Expand layer" : "Collapse layer",
-                  children: /* @__PURE__ */ jsx43("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsx43("path", { d: ICON_CHEVRON }) })
+                  children: /* @__PURE__ */ jsx45("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsx45("path", { d: ICON_CHEVRON }) })
                 }
               ),
-              /* @__PURE__ */ jsx43("span", { children: formatLabel(group) })
+              /* @__PURE__ */ jsx45("span", { children: formatLabel(group) })
             ] }),
-            /* @__PURE__ */ jsx43("div", { className: "tweakers-timeline-lane" })
+            /* @__PURE__ */ jsx45("div", { className: "tweakers-timeline-lane" })
           ] }, `group:${group}`)
         );
       }
@@ -13126,9 +13828,9 @@ var TimelineSection = memo(function TimelineSection2({
     const tracksOpen = isProps && expandedTracks.has(clip.key);
     const stat = computeClipStaticFromValues(values, clip, meta.duration);
     rows.push(
-      /* @__PURE__ */ jsxs38("div", { className: "tweakers-timeline-row", "data-grouped": clip.group ? "" : void 0, children: [
-        /* @__PURE__ */ jsxs38("div", { className: "tweakers-timeline-label", children: [
-          isProps ? /* @__PURE__ */ jsx43(
+      /* @__PURE__ */ jsxs40("div", { className: "tweakers-timeline-row", "data-grouped": clip.group ? "" : void 0, children: [
+        /* @__PURE__ */ jsxs40("div", { className: "tweakers-timeline-label", children: [
+          isProps ? /* @__PURE__ */ jsx45(
             "button",
             {
               className: "tweakers-timeline-group-toggle",
@@ -13138,12 +13840,12 @@ var TimelineSection = memo(function TimelineSection2({
                 toggleTracks(clip.key);
               },
               title: tracksOpen ? "Collapse properties" : "Expand properties",
-              children: /* @__PURE__ */ jsx43("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsx43("path", { d: ICON_CHEVRON }) })
+              children: /* @__PURE__ */ jsx45("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsx45("path", { d: ICON_CHEVRON }) })
             }
           ) : null,
           clip.label
         ] }),
-        /* @__PURE__ */ jsx43("div", { className: "tweakers-timeline-lane", children: /* @__PURE__ */ jsx43(
+        /* @__PURE__ */ jsx45("div", { className: "tweakers-timeline-lane", children: /* @__PURE__ */ jsx45(
           TimelineClip,
           {
             timelineId: meta.id,
@@ -13179,14 +13881,14 @@ var TimelineSection = memo(function TimelineSection2({
           stepKeys: trackRef.stepKeys
         };
         rows.push(
-          /* @__PURE__ */ jsxs38(
+          /* @__PURE__ */ jsxs40(
             "div",
             {
               className: "tweakers-timeline-row tweakers-timeline-track-row",
               "data-grouped": clip.group ? "" : void 0,
               children: [
-                /* @__PURE__ */ jsx43("div", { className: "tweakers-timeline-label", children: formatLabel(trackRef.prop) }),
-                /* @__PURE__ */ jsx43("div", { className: "tweakers-timeline-lane", children: /* @__PURE__ */ jsx43(
+                /* @__PURE__ */ jsx45("div", { className: "tweakers-timeline-label", children: formatLabel(trackRef.prop) }),
+                /* @__PURE__ */ jsx45("div", { className: "tweakers-timeline-lane", children: /* @__PURE__ */ jsx45(
                   TimelineClip,
                   {
                     timelineId: meta.id,
@@ -13215,10 +13917,10 @@ var TimelineSection = memo(function TimelineSection2({
       }
     }
   }
-  return /* @__PURE__ */ jsxs38("div", { className: "tweakers-timeline-section", children: [
-    /* @__PURE__ */ jsxs38("div", { className: "tweakers-timeline-header", "data-open": open || void 0, children: [
-      /* @__PURE__ */ jsx43("div", { className: "tweakers-timeline-identity", children: /* @__PURE__ */ jsx43("span", { className: "tweakers-timeline-title", children: meta.name }) }),
-      !open && /* @__PURE__ */ jsx43(
+  return /* @__PURE__ */ jsxs40("div", { className: "tweakers-timeline-section", children: [
+    /* @__PURE__ */ jsxs40("div", { className: "tweakers-timeline-header", "data-open": open || void 0, children: [
+      /* @__PURE__ */ jsx45("div", { className: "tweakers-timeline-identity", children: /* @__PURE__ */ jsx45("span", { className: "tweakers-timeline-title", children: meta.name }) }),
+      !open && /* @__PURE__ */ jsx45(
         TimelineOverview,
         {
           id: meta.id,
@@ -13228,8 +13930,8 @@ var TimelineSection = memo(function TimelineSection2({
           onNavigate: centerViewAt
         }
       ),
-      /* @__PURE__ */ jsxs38("div", { className: "tweakers-timeline-actions", children: [
-        /* @__PURE__ */ jsx43(
+      /* @__PURE__ */ jsxs40("div", { className: "tweakers-timeline-actions", children: [
+        /* @__PURE__ */ jsx45(
           motion12.button,
           {
             className: "tweakers-timeline-loop-toggle",
@@ -13241,12 +13943,12 @@ var TimelineSection = memo(function TimelineSection2({
             "aria-pressed": loopRegion ? true : false,
             whileTap: loopRegion ? { scale: 0.9 } : void 0,
             transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-            children: /* @__PURE__ */ jsx43("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true", children: ICON_LOOP.map((d, i) => /* @__PURE__ */ jsx43("path", { d }, i)) })
+            children: /* @__PURE__ */ jsx45("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true", children: ICON_LOOP.map((d, i) => /* @__PURE__ */ jsx45("path", { d }, i)) })
           }
         ),
-        /* @__PURE__ */ jsx43(PlayPauseButton, { id: meta.id }),
-        /* @__PURE__ */ jsx43(ReplayButton, { onReplay: handleReplay }),
-        /* @__PURE__ */ jsx43(
+        /* @__PURE__ */ jsx45(PlayPauseButton, { id: meta.id }),
+        /* @__PURE__ */ jsx45(ReplayButton, { onReplay: handleReplay }),
+        /* @__PURE__ */ jsx45(
           motion12.button,
           {
             className: "tweakers-toolbar-add",
@@ -13255,10 +13957,10 @@ var TimelineSection = memo(function TimelineSection2({
             "aria-label": "Add timeline version",
             whileTap: { scale: 0.9 },
             transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-            children: /* @__PURE__ */ jsx43("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true", children: ICON_ADD_PRESET.map((d, i) => /* @__PURE__ */ jsx43("path", { d }, i)) })
+            children: /* @__PURE__ */ jsx45("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true", children: ICON_ADD_PRESET.map((d, i) => /* @__PURE__ */ jsx45("path", { d }, i)) })
           }
         ),
-        /* @__PURE__ */ jsx43(
+        /* @__PURE__ */ jsx45(
           PresetManager,
           {
             panelId: meta.id,
@@ -13267,7 +13969,7 @@ var TimelineSection = memo(function TimelineSection2({
             onAdd: handleAddPreset
           }
         ),
-        /* @__PURE__ */ jsx43(
+        /* @__PURE__ */ jsx45(
           motion12.button,
           {
             className: "tweakers-toolbar-add",
@@ -13276,7 +13978,7 @@ var TimelineSection = memo(function TimelineSection2({
             "aria-label": copied ? "Copied parameters" : "Copy parameters",
             whileTap: { scale: 0.9 },
             transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-            children: /* @__PURE__ */ jsx43("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ jsx43(AnimatePresence8, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ jsx43(
+            children: /* @__PURE__ */ jsx45("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ jsx45(AnimatePresence8, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ jsx45(
               motion12.svg,
               {
                 viewBox: "0 0 24 24",
@@ -13291,10 +13993,10 @@ var TimelineSection = memo(function TimelineSection2({
                 animate: { scale: 1, opacity: 1 },
                 exit: { scale: 0.8, opacity: 0 },
                 transition: { duration: 0.08 },
-                children: /* @__PURE__ */ jsx43("path", { d: ICON_CHECK })
+                children: /* @__PURE__ */ jsx45("path", { d: ICON_CHECK })
               },
               "check"
-            ) : /* @__PURE__ */ jsxs38(
+            ) : /* @__PURE__ */ jsxs40(
               motion12.svg,
               {
                 viewBox: "0 0 24 24",
@@ -13306,16 +14008,16 @@ var TimelineSection = memo(function TimelineSection2({
                 exit: { scale: 0.8, opacity: 0 },
                 transition: { duration: 0.08 },
                 children: [
-                  /* @__PURE__ */ jsx43("path", { d: ICON_CLIPBOARD.board, stroke: "currentColor", strokeWidth: "2", strokeLinejoin: "round" }),
-                  /* @__PURE__ */ jsx43("path", { d: ICON_CLIPBOARD.sparkle, fill: "currentColor" }),
-                  /* @__PURE__ */ jsx43("path", { d: ICON_CLIPBOARD.body, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" })
+                  /* @__PURE__ */ jsx45("path", { d: ICON_CLIPBOARD.board, stroke: "currentColor", strokeWidth: "2", strokeLinejoin: "round" }),
+                  /* @__PURE__ */ jsx45("path", { d: ICON_CLIPBOARD.sparkle, fill: "currentColor" }),
+                  /* @__PURE__ */ jsx45("path", { d: ICON_CLIPBOARD.body, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" })
                 ]
               },
               "clipboard"
             ) }) })
           }
         ),
-        /* @__PURE__ */ jsx43(
+        /* @__PURE__ */ jsx45(
           "button",
           {
             className: "tweakers-timeline-chevron",
@@ -13323,12 +14025,12 @@ var TimelineSection = memo(function TimelineSection2({
             "aria-expanded": open,
             onClick: () => setOpen(!open),
             title: open ? "Collapse timeline" : "Expand timeline",
-            children: /* @__PURE__ */ jsx43("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsx43("path", { d: ICON_CHEVRON }) })
+            children: /* @__PURE__ */ jsx45("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ jsx45("path", { d: ICON_CHEVRON }) })
           }
         )
       ] })
     ] }),
-    open && /* @__PURE__ */ jsxs38(
+    open && /* @__PURE__ */ jsxs40(
       "div",
       {
         className: "tweakers-timeline-body",
@@ -13339,10 +14041,10 @@ var TimelineSection = memo(function TimelineSection2({
         onPointerCancel: finishTrackScrub,
         onLostPointerCapture: finishTrackScrub,
         children: [
-          /* @__PURE__ */ jsxs38("div", { className: "tweakers-timeline-grid", children: [
-            /* @__PURE__ */ jsxs38("div", { className: "tweakers-timeline-row tweakers-timeline-ruler-row", children: [
-              /* @__PURE__ */ jsx43("div", { className: "tweakers-timeline-label" }),
-              /* @__PURE__ */ jsxs38(
+          /* @__PURE__ */ jsxs40("div", { className: "tweakers-timeline-grid", children: [
+            /* @__PURE__ */ jsxs40("div", { className: "tweakers-timeline-row tweakers-timeline-ruler-row", children: [
+              /* @__PURE__ */ jsx45("div", { className: "tweakers-timeline-label" }),
+              /* @__PURE__ */ jsxs40(
                 "div",
                 {
                   ref: laneAreaRef,
@@ -13359,10 +14061,10 @@ var TimelineSection = memo(function TimelineSection2({
                       if (!activeLoop || pxPerSecond <= 0) return null;
                       const left = (activeLoop.start - safeViewStart) * pxPerSecond;
                       const width = Math.max(0, (activeLoop.end - activeLoop.start) * pxPerSecond);
-                      return /* @__PURE__ */ jsxs38(Fragment11, { children: [
-                        /* @__PURE__ */ jsx43("div", { className: "tweakers-timeline-loop-dim", style: { left: 0, width: Math.max(0, left) } }),
-                        /* @__PURE__ */ jsx43("div", { className: "tweakers-timeline-loop-dim", style: { left: left + width, right: 0 } }),
-                        /* @__PURE__ */ jsx43(
+                      return /* @__PURE__ */ jsxs40(Fragment11, { children: [
+                        /* @__PURE__ */ jsx45("div", { className: "tweakers-timeline-loop-dim", style: { left: 0, width: Math.max(0, left) } }),
+                        /* @__PURE__ */ jsx45("div", { className: "tweakers-timeline-loop-dim", style: { left: left + width, right: 0 } }),
+                        /* @__PURE__ */ jsx45(
                           "div",
                           {
                             className: "tweakers-timeline-loop-band",
@@ -13372,15 +14074,15 @@ var TimelineSection = memo(function TimelineSection2({
                         )
                       ] });
                     })(),
-                    fineTicks.map((t) => /* @__PURE__ */ jsx43("div", { className: "tweakers-timeline-tick tweakers-timeline-tick-fine", style: { left: (t - safeViewStart) * pxPerSecond } }, `fine:${t}`)),
-                    mediumTicks.map((t) => /* @__PURE__ */ jsx43("div", { className: "tweakers-timeline-tick tweakers-timeline-tick-medium", style: { left: (t - safeViewStart) * pxPerSecond } }, `medium:${t}`)),
-                    majorTicks.map((t) => /* @__PURE__ */ jsx43("div", { className: "tweakers-timeline-tick", style: { left: (t - safeViewStart) * pxPerSecond }, children: /* @__PURE__ */ jsx43("span", { className: "tweakers-timeline-tick-label", children: formatRulerSeconds(t, majorStep) }) }, t))
+                    fineTicks.map((t) => /* @__PURE__ */ jsx45("div", { className: "tweakers-timeline-tick tweakers-timeline-tick-fine", style: { left: (t - safeViewStart) * pxPerSecond } }, `fine:${t}`)),
+                    mediumTicks.map((t) => /* @__PURE__ */ jsx45("div", { className: "tweakers-timeline-tick tweakers-timeline-tick-medium", style: { left: (t - safeViewStart) * pxPerSecond } }, `medium:${t}`)),
+                    majorTicks.map((t) => /* @__PURE__ */ jsx45("div", { className: "tweakers-timeline-tick", style: { left: (t - safeViewStart) * pxPerSecond }, children: /* @__PURE__ */ jsx45("span", { className: "tweakers-timeline-tick-label", children: formatRulerSeconds(t, majorStep) }) }, t))
                   ]
                 }
               )
             ] }),
             rows,
-            pxPerSecond > 0 && /* @__PURE__ */ jsx43(
+            pxPerSecond > 0 && /* @__PURE__ */ jsx45(
               TimelinePlayheadFlag,
               {
                 id: meta.id,
@@ -13394,23 +14096,23 @@ var TimelineSection = memo(function TimelineSection2({
               }
             )
           ] }),
-          zoom > 1 && /* @__PURE__ */ jsxs38("div", { className: "tweakers-timeline-scroll-row", children: [
-            /* @__PURE__ */ jsx43("div", { className: "tweakers-timeline-label" }),
-            /* @__PURE__ */ jsx43(
+          zoom > 1 && /* @__PURE__ */ jsxs40("div", { className: "tweakers-timeline-scroll-row", children: [
+            /* @__PURE__ */ jsx45("div", { className: "tweakers-timeline-label" }),
+            /* @__PURE__ */ jsx45(
               "div",
               {
                 ref: horizontalScrollRef,
                 className: "tweakers-timeline-horizontal-scroll",
                 onScroll: handleHorizontalScroll,
                 "aria-label": "Timeline horizontal scroll",
-                children: /* @__PURE__ */ jsx43("div", { style: { width: laneWidth * zoom } })
+                children: /* @__PURE__ */ jsx45("div", { style: { width: laneWidth * zoom } })
               }
             )
           ] })
         ]
       }
     ),
-    popover && /* @__PURE__ */ jsx43(
+    popover && /* @__PURE__ */ jsx45(
       ClipPopover,
       {
         panelId: meta.id,
@@ -13429,9 +14131,9 @@ function ClipPopover({
   theme,
   onClose
 }) {
-  const ref = useRef32(null);
-  const [naturalHeight, setNaturalHeight] = useState27(0);
-  const [viewport, setViewport] = useState27(() => ({
+  const ref = useRef34(null);
+  const [naturalHeight, setNaturalHeight] = useState29(0);
+  const [viewport, setViewport] = useState29(() => ({
     width: window.visualViewport?.width ?? window.innerWidth,
     height: window.visualViewport?.height ?? window.innerHeight,
     offsetLeft: window.visualViewport?.offsetLeft ?? 0,
@@ -13447,7 +14149,7 @@ function ClipPopover({
     observer.observe(body ?? element);
     return () => observer.disconnect();
   }, [popover.clip.key, popover.stepKey]);
-  useEffect25(() => {
+  useEffect27(() => {
     const updateViewport = () => setViewport({
       width: window.visualViewport?.width ?? window.innerWidth,
       height: window.visualViewport?.height ?? window.innerHeight,
@@ -13463,7 +14165,7 @@ function ClipPopover({
       window.visualViewport?.removeEventListener("scroll", updateViewport);
     };
   }, []);
-  useEffect25(() => {
+  useEffect27(() => {
     const handlePointerDown = (e) => {
       const target = e.target;
       if (ref.current?.contains(target)) return;
@@ -13529,8 +14231,8 @@ function ClipPopover({
     viewport.offsetTop + 12,
     Math.max(viewport.offsetTop + 12, viewportBottom - renderedHeight - 12)
   );
-  return createPortal9(
-    /* @__PURE__ */ jsx43("div", { className: "tweakers-root", "data-theme": theme, children: /* @__PURE__ */ jsxs38(
+  return createPortal10(
+    /* @__PURE__ */ jsx45("div", { className: "tweakers-root", "data-theme": theme, children: /* @__PURE__ */ jsxs40(
       "div",
       {
         ref,
@@ -13546,11 +14248,11 @@ function ClipPopover({
         role: "dialog",
         "aria-label": `Edit ${title}`,
         children: [
-          /* @__PURE__ */ jsxs38("div", { className: "tweakers-timeline-popover-header", children: [
-            /* @__PURE__ */ jsx43("span", { className: "tweakers-timeline-popover-title", children: title }),
-            /* @__PURE__ */ jsx43("button", { className: "tweakers-timeline-popover-close", onClick: onClose, title: "Close editor", "aria-label": "Close editor", children: /* @__PURE__ */ jsx43("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", children: /* @__PURE__ */ jsx43("path", { d: "M6 6L18 18M18 6L6 18" }) }) })
+          /* @__PURE__ */ jsxs40("div", { className: "tweakers-timeline-popover-header", children: [
+            /* @__PURE__ */ jsx45("span", { className: "tweakers-timeline-popover-title", children: title }),
+            /* @__PURE__ */ jsx45("button", { className: "tweakers-timeline-popover-close", onClick: onClose, title: "Close editor", "aria-label": "Close editor", children: /* @__PURE__ */ jsx45("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", children: /* @__PURE__ */ jsx45("path", { d: "M6 6L18 18M18 6L6 18" }) }) })
           ] }),
-          /* @__PURE__ */ jsx43("div", { className: "tweakers-timeline-popover-body", children: /* @__PURE__ */ jsx43(
+          /* @__PURE__ */ jsx45("div", { className: "tweakers-timeline-popover-body", children: /* @__PURE__ */ jsx45(
             ControlRenderer,
             {
               panelId,
@@ -13604,10 +14306,10 @@ function TimelineClip({
   onClick,
   onDrag
 }) {
-  const dragRef = useRef32(null);
-  const [dragging, setDragging] = useState27(false);
+  const dragRef = useRef34(null);
+  const [dragging, setDragging] = useState29(false);
   const isSteps = Boolean(steps?.length);
-  const handlePointerDown = useCallback21(
+  const handlePointerDown = useCallback22(
     (e) => {
       if (e.shiftKey) return;
       e.stopPropagation();
@@ -13636,7 +14338,7 @@ function TimelineClip({
     },
     [at, duration, fixedDuration, steps]
   );
-  const handlePointerMove = useCallback21(
+  const handlePointerMove = useCallback22(
     (e) => {
       const drag = dragRef.current;
       if (!drag || pxPerSecond <= 0) return;
@@ -13690,7 +14392,7 @@ function TimelineClip({
     },
     [baseAt, clip.key, delayMode, onDrag, pxPerSecond, steps, timelineId, timelineDuration]
   );
-  const handlePointerUp = useCallback21(
+  const handlePointerUp = useCallback22(
     (e) => {
       const drag = dragRef.current;
       dragRef.current = null;
@@ -13703,7 +14405,7 @@ function TimelineClip({
     },
     [clip, onClick]
   );
-  const handlePointerCancel = useCallback21(() => {
+  const handlePointerCancel = useCallback22(() => {
     dragRef.current = null;
     setDragging(false);
   }, []);
@@ -13735,10 +14437,10 @@ function TimelineClip({
     }
   }
   const barTitle = composite ? `${clip.label} \u2014 composite of its property tracks${looping ? " \xB7 repeats through timeline" : ""} \xB7 click to expand` : `${clip.label} \u2014 ${formatSeconds(at)} for ${durationText}${fixedDuration ? " (duration set by spring physics)" : ""}${looping ? " \xB7 repeats through timeline" : ""}${delayMode ? " \xB7 drag to phase-shift" : ""}`;
-  return /* @__PURE__ */ jsxs38(Fragment11, { children: [
+  return /* @__PURE__ */ jsxs40(Fragment11, { children: [
     ghostCycles.map((cycle) => {
       const ghostWidth = Math.max(1, cycle.duration * pxPerSecond - 2);
-      return /* @__PURE__ */ jsx43(
+      return /* @__PURE__ */ jsx45(
         "div",
         {
           className: "tweakers-timeline-clip-ghost",
@@ -13749,7 +14451,7 @@ function TimelineClip({
             width: ghostWidth,
             background: clip.color
           },
-          children: steps?.map((step, stepIndex) => /* @__PURE__ */ jsx43(
+          children: steps?.map((step, stepIndex) => /* @__PURE__ */ jsx45(
             "span",
             {
               className: "tweakers-timeline-clip-ghost-segment",
@@ -13761,7 +14463,7 @@ function TimelineClip({
         `ghost:${cycle.index}`
       );
     }),
-    /* @__PURE__ */ jsx43(
+    /* @__PURE__ */ jsx45(
       "div",
       {
         className: "tweakers-timeline-clip",
@@ -13780,23 +14482,23 @@ function TimelineClip({
         onPointerCancel: handlePointerCancel,
         onLostPointerCapture: handlePointerCancel,
         title: barTitle,
-        children: composite ? /* @__PURE__ */ jsx43(Fragment11, { children: width > 56 && /* @__PURE__ */ jsx43("span", { className: "tweakers-timeline-clip-duration", children: durationText }) }) : isSteps ? /* @__PURE__ */ jsxs38(Fragment11, { children: [
+        children: composite ? /* @__PURE__ */ jsx45(Fragment11, { children: width > 56 && /* @__PURE__ */ jsx45("span", { className: "tweakers-timeline-clip-duration", children: durationText }) }) : isSteps ? /* @__PURE__ */ jsxs40(Fragment11, { children: [
           steps.map((step) => {
             const segmentWidth = step.duration * pxPerSecond;
-            return /* @__PURE__ */ jsx43(
+            return /* @__PURE__ */ jsx45(
               "div",
               {
                 className: "tweakers-timeline-clip-segment",
                 "data-step": step.key ?? void 0,
                 "data-selected": selectedStepKey === step.key || void 0,
                 style: { width: segmentWidth },
-                children: segmentWidth > 52 && /* @__PURE__ */ jsx43("span", { className: "tweakers-timeline-clip-duration", children: formatSeconds(step.duration) })
+                children: segmentWidth > 52 && /* @__PURE__ */ jsx45("span", { className: "tweakers-timeline-clip-duration", children: formatSeconds(step.duration) })
               },
               step.key ?? "step"
             );
           }),
           steps.map(
-            (step, index) => step.isPhysics ? null : /* @__PURE__ */ jsx43(
+            (step, index) => step.isPhysics ? null : /* @__PURE__ */ jsx45(
               "div",
               {
                 className: "tweakers-timeline-clip-handle",
@@ -13806,34 +14508,34 @@ function TimelineClip({
               `boundary:${step.key}`
             )
           ),
-          !steps[0].isPhysics && /* @__PURE__ */ jsx43("div", { className: "tweakers-timeline-clip-handle", "data-edge": "start" })
-        ] }) : /* @__PURE__ */ jsxs38(Fragment11, { children: [
-          resizable && /* @__PURE__ */ jsx43("div", { className: "tweakers-timeline-clip-handle", "data-edge": "start" }),
-          width > 56 && /* @__PURE__ */ jsx43("span", { className: "tweakers-timeline-clip-duration", children: durationText }),
-          resizable && /* @__PURE__ */ jsx43("div", { className: "tweakers-timeline-clip-handle", "data-edge": "end" })
+          !steps[0].isPhysics && /* @__PURE__ */ jsx45("div", { className: "tweakers-timeline-clip-handle", "data-edge": "start" })
+        ] }) : /* @__PURE__ */ jsxs40(Fragment11, { children: [
+          resizable && /* @__PURE__ */ jsx45("div", { className: "tweakers-timeline-clip-handle", "data-edge": "start" }),
+          width > 56 && /* @__PURE__ */ jsx45("span", { className: "tweakers-timeline-clip-duration", children: durationText }),
+          resizable && /* @__PURE__ */ jsx45("div", { className: "tweakers-timeline-clip-handle", "data-edge": "end" })
         ] })
       }
     ),
-    looping && /* @__PURE__ */ jsx43("span", { className: "tweakers-timeline-loop-infinity", "aria-hidden": "true", title: "Repeats indefinitely", children: "\u221E" })
+    looping && /* @__PURE__ */ jsx45("span", { className: "tweakers-timeline-loop-infinity", "aria-hidden": "true", title: "Repeats indefinitely", children: "\u221E" })
   ] });
 }
 
 // src/components/Module.tsx
-import { jsx as jsx44, jsxs as jsxs39 } from "react/jsx-runtime";
+import { jsx as jsx46, jsxs as jsxs41 } from "react/jsx-runtime";
 function Module({ title, enabled, onEnabledChange, children }) {
-  return /* @__PURE__ */ jsxs39("div", { className: "tweakers-module", children: [
-    /* @__PURE__ */ jsxs39("div", { className: "tweakers-module-header", children: [
-      /* @__PURE__ */ jsx44(Checkbox, { checked: enabled, onChange: onEnabledChange, label: title }),
-      /* @__PURE__ */ jsx44("span", { className: "tweakers-module-title", children: title })
+  return /* @__PURE__ */ jsxs41("div", { className: "tweakers-module", children: [
+    /* @__PURE__ */ jsxs41("div", { className: "tweakers-module-header", children: [
+      /* @__PURE__ */ jsx46(Checkbox, { checked: enabled, onChange: onEnabledChange, label: title }),
+      /* @__PURE__ */ jsx46("span", { className: "tweakers-module-title", children: title })
     ] }),
-    /* @__PURE__ */ jsx44("div", { className: "tweakers-module-collapse", "data-open": enabled, children: /* @__PURE__ */ jsx44("div", { className: "tweakers-module-collapse-clip", children: /* @__PURE__ */ jsx44("div", { className: "tweakers-module-inner", children }) }) })
+    /* @__PURE__ */ jsx46("div", { className: "tweakers-module-collapse", "data-open": enabled, children: /* @__PURE__ */ jsx46("div", { className: "tweakers-module-collapse-clip", children: /* @__PURE__ */ jsx46("div", { className: "tweakers-module-inner", children }) }) })
   ] });
 }
 
 // src/components/ButtonGroup.tsx
-import { jsx as jsx45 } from "react/jsx-runtime";
+import { jsx as jsx47 } from "react/jsx-runtime";
 function ButtonGroup({ buttons }) {
-  return /* @__PURE__ */ jsx45("div", { className: "tweakers-button-group", children: buttons.map((button, index) => /* @__PURE__ */ jsx45(
+  return /* @__PURE__ */ jsx47("div", { className: "tweakers-button-group", children: buttons.map((button, index) => /* @__PURE__ */ jsx47(
     "button",
     {
       className: "tweakers-button",
@@ -13844,473 +14546,11 @@ function ButtonGroup({ buttons }) {
   )) });
 }
 
-// src/components/WaveformVisualization.tsx
-import { useRef as useRef33, useEffect as useEffect26, useState as useState28 } from "react";
-
-// src/waveform-dsp.ts
-function mixToMono(buffer) {
-  if (buffer.numberOfChannels === 1) return buffer.getChannelData(0);
-  const len = buffer.length;
-  const out = new Float32Array(len);
-  for (let c = 0; c < buffer.numberOfChannels; c++) {
-    const data = buffer.getChannelData(c);
-    for (let i = 0; i < len; i++) out[i] += data[i] / buffer.numberOfChannels;
-  }
-  return out;
-}
-function fillPeaks(data, cols, min, max) {
-  const step = data.length / cols;
-  for (let x = 0; x < cols; x++) {
-    const start = Math.floor(x * step);
-    const end = Math.max(start + 1, Math.min(data.length, Math.floor((x + 1) * step)));
-    let mn = 1;
-    let mx = -1;
-    for (let i = start; i < end; i++) {
-      const v = data[i];
-      if (v < mn) mn = v;
-      if (v > mx) mx = v;
-    }
-    min[x] = mn;
-    max[x] = mx;
-  }
-}
-function envelope(p, cols, n) {
-  const out = new Array(n);
-  const seg = cols / n;
-  for (let k = 0; k < n; k++) {
-    const start = Math.floor(k * seg);
-    const end = Math.max(start + 1, Math.min(cols, Math.floor((k + 1) * seg)));
-    let a = 0;
-    for (let x = start; x < end; x++) {
-      const m = Math.max(Math.abs(p.min[x]), Math.abs(p.max[x]));
-      if (m > a) a = m;
-    }
-    out[k] = a;
-  }
-  return out;
-}
-
-// src/waveform-engine.ts
-var WAVEFORM_MAX_ZOOM = 8;
-var BANDS = [
-  { type: "lowpass", freq: 250 },
-  { type: "bandpass", freq: 1100, q: 0.6 },
-  { type: "highpass", freq: 4200 }
-];
-var BAND_COLORS = ["#a855f7", "#22d3ee", "#a3e635"];
-var SIMPLE_POINTS = 46;
-var BORDER_FILL_ALPHA = 0.2;
-var DRAG_THRESHOLD2 = 3;
-var EDGE_HIT2 = 6;
-var MIN_LOOP = 1e-3;
-function smoothThrough2(ctx, pts) {
-  for (let i = 0; i < pts.length - 1; i++) {
-    const p0 = pts[i - 1] || pts[i];
-    const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const p3 = pts[i + 2] || p2;
-    ctx.bezierCurveTo(
-      p1.x + (p2.x - p0.x) / 6,
-      p1.y + (p2.y - p0.y) / 6,
-      p2.x - (p3.x - p1.x) / 6,
-      p2.y - (p3.y - p1.y) / 6,
-      p2.x,
-      p2.y
-    );
-  }
-}
-async function filterBuffer(buffer, band) {
-  const off = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
-  const src = off.createBufferSource();
-  src.buffer = buffer;
-  const filter = off.createBiquadFilter();
-  filter.type = band.type;
-  filter.frequency.value = band.freq;
-  if (band.q != null) filter.Q.value = band.q;
-  src.connect(filter);
-  filter.connect(off.destination);
-  src.start();
-  return off.startRendering();
-}
-function createWaveformEngine(canvas, get) {
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return { destroy() {
-  } };
-  const readDpr = () => Math.min(Math.max(window.devicePixelRatio || 1, 1), 3);
-  let dpr = readDpr();
-  let W = 0;
-  let H = 0;
-  let cy = 0;
-  let amp = 0;
-  let pk = { min: new Float32Array(1), max: new Float32Array(1) };
-  const syncSize = (width, height) => {
-    dpr = readDpr();
-    const nw = Math.round(width * dpr);
-    const nh = Math.round(height * dpr);
-    if (nw === W && nh === H) return;
-    W = canvas.width = nw;
-    H = canvas.height = nh;
-    cy = H / 2;
-    amp = H * 0.42;
-    pk = { min: new Float32Array(W), max: new Float32Array(W) };
-  };
-  let monos = [];
-  let monoToken = 0;
-  let lastBuffer;
-  let lastBands = false;
-  const syncMonos = (buffer, bands) => {
-    if (buffer === lastBuffer && bands === lastBands) return;
-    lastBuffer = buffer;
-    lastBands = bands;
-    const token = ++monoToken;
-    if (!buffer) {
-      monos = [];
-      return;
-    }
-    if (!bands) {
-      monos = [mixToMono(buffer)];
-      return;
-    }
-    (async () => {
-      try {
-        const bufs = await Promise.all(BANDS.map((b) => filterBuffer(buffer, b)));
-        if (token !== monoToken) return;
-        monos = bufs.map((b) => mixToMono(b));
-      } catch {
-      }
-    })();
-  };
-  const columnWidth2 = (pixelSize) => Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSize)));
-  const windowState = { start: 0, win: 1 };
-  let drag = null;
-  const drawColumns = (p, color, pixelSize) => {
-    const colW = columnWidth2(pixelSize);
-    ctx.fillStyle = color;
-    ctx.globalAlpha = 1;
-    for (let x = 0; x < W; x += colW) {
-      let mn = 1;
-      let mx = -1;
-      for (let i = x; i < x + colW && i < W; i++) {
-        if (p.min[i] < mn) mn = p.min[i];
-        if (p.max[i] > mx) mx = p.max[i];
-      }
-      const yTop = Math.round(cy - mx * amp);
-      const yBot = Math.round(cy - mn * amp);
-      ctx.fillRect(x, yTop, colW, Math.max(1, yBot - yTop));
-    }
-  };
-  const drawSimplified = (env, color, outline) => {
-    const n = env.length;
-    if (n < 2) return;
-    const px = (k) => k / (n - 1) * W;
-    const top = env.map((a, k) => ({ x: px(k), y: cy - a * amp }));
-    const bot = [];
-    for (let k = n - 1; k >= 0; k--) bot.push({ x: px(k), y: cy + env[k] * amp });
-    ctx.beginPath();
-    ctx.moveTo(top[0].x, top[0].y);
-    smoothThrough2(ctx, top);
-    ctx.lineTo(bot[0].x, bot[0].y);
-    smoothThrough2(ctx, bot);
-    ctx.closePath();
-    ctx.fillStyle = color;
-    if (outline) {
-      ctx.globalAlpha = BORDER_FILL_ALPHA;
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.6 * dpr;
-      ctx.lineJoin = "round";
-      ctx.stroke();
-    } else {
-      ctx.globalAlpha = 1;
-      ctx.fill();
-    }
-  };
-  const drawGrid = (base, subs) => {
-    const n = Math.max(1, Math.round(subs));
-    ctx.strokeStyle = base;
-    ctx.globalAlpha = 0.1;
-    ctx.lineWidth = dpr;
-    ctx.beginPath();
-    for (let i = 1; i < n; i++) {
-      const x = Math.round(i / n * W) + 0.5;
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, H);
-    }
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  };
-  const drawRegion = (a, b, start, win, color) => {
-    const x0 = (a - start) / win * W;
-    const x1 = (b - start) / win * W;
-    const cx0 = Math.max(0, x0);
-    const cx1 = Math.min(W, x1);
-    if (cx1 <= cx0) return;
-    ctx.fillStyle = color;
-    ctx.globalAlpha = 0.14;
-    ctx.fillRect(cx0, 0, cx1 - cx0, H);
-    ctx.globalAlpha = 0.55;
-    ctx.lineWidth = dpr;
-    ctx.strokeStyle = color;
-    ctx.beginPath();
-    if (x0 >= 0 && x0 <= W) {
-      const xe = Math.round(x0) + 0.5;
-      ctx.moveTo(xe, 0);
-      ctx.lineTo(xe, H);
-    }
-    if (x1 >= 0 && x1 <= W) {
-      const xe = Math.round(x1) + 0.5;
-      ctx.moveTo(xe, 0);
-      ctx.lineTo(xe, H);
-    }
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  };
-  let raf = 0;
-  const frame = () => {
-    raf = requestAnimationFrame(frame);
-    const rt = get();
-    syncSize(rt.width, rt.height);
-    syncMonos(rt.buffer, rt.bands);
-    const base = getComputedStyle(canvas).color || "rgb(255,255,255)";
-    ctx.globalAlpha = 1;
-    ctx.clearRect(0, 0, W, H);
-    ctx.imageSmoothingEnabled = rt.mode === "smooth";
-    if (rt.grid) drawGrid(base, rt.gridSubdivisions);
-    ctx.strokeStyle = base;
-    ctx.globalAlpha = 0.15;
-    ctx.lineWidth = dpr;
-    ctx.beginPath();
-    ctx.moveTo(0, Math.round(cy) + 0.5);
-    ctx.lineTo(W, Math.round(cy) + 0.5);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-    const wave = rt.waveColor || base;
-    const ph = rt.playheadColor || base;
-    const prog = Math.max(0, Math.min(1, (rt.getProgress ? rt.getProgress() : rt.progress) || 0));
-    let win;
-    let start;
-    const activeLoop = rt.autoZoomOnLoop ? rt.loop : null;
-    if (activeLoop) {
-      const span = Math.max(1e-4, activeLoop.end - activeLoop.start);
-      win = Math.min(1, Math.max(1 / WAVEFORM_MAX_ZOOM, span * 1.2));
-      start = (activeLoop.start + activeLoop.end) / 2 - win / 2;
-    } else {
-      win = 1 / Math.max(1, rt.zoom);
-      start = prog - win / 2;
-    }
-    if (start < 0) start = 0;
-    else if (start > 1 - win) start = 1 - win;
-    const end = start + win;
-    windowState.start = start;
-    windowState.win = win;
-    const count = monos.length;
-    if (count) {
-      for (let i = 0; i < count; i++) {
-        const mono = monos[i];
-        const s0 = Math.max(0, Math.floor(start * mono.length));
-        const s1 = Math.min(mono.length, Math.ceil(end * mono.length));
-        const slice = s1 > s0 ? mono.subarray(s0, s1) : mono;
-        fillPeaks(slice, W, pk.min, pk.max);
-        const color = count === 3 ? BAND_COLORS[i] : wave;
-        if (rt.mode === "pixelated") drawColumns(pk, color, rt.pixelSize);
-        else drawSimplified(envelope(pk, W, SIMPLE_POINTS), color, rt.border);
-      }
-    }
-    if (drag && drag.moved) {
-      drawRegion(Math.min(drag.anchor, drag.curProg), Math.max(drag.anchor, drag.curProg), start, win, ph);
-    } else if (rt.loop) {
-      drawRegion(rt.loop.start, rt.loop.end, start, win, ph);
-    }
-    if (count) {
-      const playX = (prog - start) / win * W;
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = ph;
-      ctx.lineWidth = 1.5 * dpr;
-      const cxp = Math.round(Math.max(0, Math.min(W, playX))) + 0.5;
-      ctx.beginPath();
-      ctx.moveTo(cxp, 0);
-      ctx.lineTo(cxp, H);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-  };
-  const xToProgress = (clientX) => {
-    const rect = canvas.getBoundingClientRect();
-    const fx = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
-    const { start, win } = windowState;
-    return Math.min(1, Math.max(0, start + fx * win));
-  };
-  const edgeAt = (clientX) => {
-    const rt = get();
-    const loop = rt.loop;
-    if (!loop || !rt.onLoopChange) return null;
-    const rect = canvas.getBoundingClientRect();
-    const { start, win } = windowState;
-    const xOf = (t) => (t - start) / win * rect.width;
-    const px = clientX - rect.left;
-    const sx = xOf(loop.start);
-    const ex = xOf(loop.end);
-    const dS = Math.abs(px - sx);
-    const dE = Math.abs(px - ex);
-    if (dS <= EDGE_HIT2 && dS <= dE && sx >= 0 && sx <= rect.width) return "start";
-    if (dE <= EDGE_HIT2 && ex >= 0 && ex <= rect.width) return "end";
-    return null;
-  };
-  const setCursor = (c) => {
-    canvas.style.cursor = c;
-  };
-  const onPointerDown = (e) => {
-    const rt = get();
-    if (!rt.onSeek && !rt.onLoopChange) return;
-    try {
-      canvas.setPointerCapture(e.pointerId);
-    } catch {
-    }
-    const p = xToProgress(e.clientX);
-    const edge = edgeAt(e.clientX);
-    if (edge && rt.loop) {
-      const anchor = edge === "start" ? rt.loop.end : rt.loop.start;
-      drag = { mode: "resize", anchor, curProg: p, startX: e.clientX, moved: false };
-      setCursor("ew-resize");
-    } else {
-      drag = { mode: "create", anchor: p, curProg: p, startX: e.clientX, moved: false };
-    }
-  };
-  const onPointerMove = (e) => {
-    if (drag) {
-      drag.curProg = xToProgress(e.clientX);
-      if (Math.abs(e.clientX - drag.startX) > DRAG_THRESHOLD2) drag.moved = true;
-      return;
-    }
-    const rt = get();
-    if (!rt.onSeek && !rt.onLoopChange) return;
-    setCursor(edgeAt(e.clientX) ? "ew-resize" : "crosshair");
-  };
-  const onPointerUp = (e) => {
-    const d = drag;
-    drag = null;
-    if (!d) return;
-    try {
-      if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
-    } catch {
-    }
-    setCursor("crosshair");
-    const rt = get();
-    const a = Math.min(d.anchor, d.curProg);
-    const b = Math.max(d.anchor, d.curProg);
-    const wide = b - a >= MIN_LOOP;
-    if (d.mode === "resize") {
-      if (d.moved && wide) rt.onLoopChange?.({ start: a, end: b });
-    } else if (d.moved && wide) {
-      if (rt.onLoopChange) rt.onLoopChange({ start: a, end: b });
-      else rt.onSeek?.(d.curProg);
-    } else {
-      rt.onSeek?.(d.anchor);
-      if (rt.loop && rt.onLoopChange) rt.onLoopChange(null);
-    }
-  };
-  const onPointerCancel = () => {
-    drag = null;
-  };
-  canvas.addEventListener("pointerdown", onPointerDown);
-  canvas.addEventListener("pointermove", onPointerMove);
-  canvas.addEventListener("pointerup", onPointerUp);
-  canvas.addEventListener("pointercancel", onPointerCancel);
-  canvas.addEventListener("lostpointercapture", onPointerCancel);
-  const rt0 = get();
-  if (rt0.onSeek || rt0.onLoopChange) {
-    canvas.style.cursor = "crosshair";
-    canvas.style.touchAction = "none";
-  }
-  frame();
-  return {
-    destroy() {
-      cancelAnimationFrame(raf);
-      monoToken++;
-      canvas.removeEventListener("pointerdown", onPointerDown);
-      canvas.removeEventListener("pointermove", onPointerMove);
-      canvas.removeEventListener("pointerup", onPointerUp);
-      canvas.removeEventListener("pointercancel", onPointerCancel);
-      canvas.removeEventListener("lostpointercapture", onPointerCancel);
-    }
-  };
-}
-
-// src/components/WaveformVisualization.tsx
-import { jsx as jsx46, jsxs as jsxs40 } from "react/jsx-runtime";
-function WaveformVisualization({
-  buffer = null,
-  progress = 0,
-  getProgress,
-  mode = "smooth",
-  border = false,
-  bands = false,
-  pixelSize = 1,
-  grid = false,
-  gridSubdivisions = 8,
-  onSeek,
-  loop = null,
-  onLoopChange,
-  waveColor,
-  playheadColor,
-  autoZoomOnLoop = false,
-  width = 256,
-  height = 140
-}) {
-  const canvasRef = useRef33(null);
-  const [zoom, setZoom] = useState28(1);
-  const runtimeRef = useRef33(null);
-  runtimeRef.current = {
-    buffer,
-    progress,
-    getProgress,
-    mode,
-    border,
-    bands,
-    pixelSize,
-    grid,
-    gridSubdivisions,
-    waveColor,
-    playheadColor,
-    autoZoomOnLoop,
-    loop,
-    zoom,
-    width,
-    height,
-    onSeek,
-    onLoopChange
-  };
-  useEffect26(() => {
-    if (!canvasRef.current) return;
-    const engine = createWaveformEngine(canvasRef.current, () => runtimeRef.current);
-    return () => engine.destroy();
-  }, []);
-  const atMaxZoom = zoom >= WAVEFORM_MAX_ZOOM;
-  const framingLoop = autoZoomOnLoop && !!loop;
-  return /* @__PURE__ */ jsxs40("div", { className: "tweakers-waveform-viz-wrap", style: { width }, children: [
-    /* @__PURE__ */ jsx46("canvas", { ref: canvasRef, className: "tweakers-waveform-viz", style: { width, height } }),
-    !framingLoop && /* @__PURE__ */ jsxs40("div", { className: "tweakers-waveform-zoom", children: [
-      zoom > 1 && /* @__PURE__ */ jsx46("button", { type: "button", "aria-label": "Zoom out", onClick: () => setZoom((z) => Math.max(1, z / 2)), children: /* @__PURE__ */ jsx46("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ jsx46("path", { d: "M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) }) }),
-      /* @__PURE__ */ jsx46(
-        "button",
-        {
-          type: "button",
-          "aria-label": "Zoom in",
-          disabled: atMaxZoom,
-          onClick: () => setZoom((z) => Math.min(WAVEFORM_MAX_ZOOM, z * 2)),
-          children: /* @__PURE__ */ jsx46("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ jsx46("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) })
-        }
-      )
-    ] })
-  ] });
-}
-
 // src/components/ShortcutsMenu.tsx
-import { useState as useState29, useRef as useRef34, useEffect as useEffect27, useCallback as useCallback22 } from "react";
-import { createPortal as createPortal10 } from "react-dom";
+import { useState as useState30, useRef as useRef35, useEffect as useEffect28, useCallback as useCallback23 } from "react";
+import { createPortal as createPortal11 } from "react-dom";
 import { motion as motion13, AnimatePresence as AnimatePresence9 } from "motion/react";
-import { Fragment as Fragment12, jsx as jsx47, jsxs as jsxs41 } from "react/jsx-runtime";
+import { Fragment as Fragment12, jsx as jsx48, jsxs as jsxs42 } from "react/jsx-runtime";
 function formatShortcutKey(sc) {
   if (!sc.key) return "\u2014";
   const mod = sc.modifier === "alt" ? "\u2325" : sc.modifier === "shift" ? "\u21E7" : sc.modifier === "meta" ? "\u2318" : "";
@@ -14330,23 +14570,23 @@ function formatInteraction(sc) {
   }
 }
 function ShortcutsMenu({ panelId }) {
-  const [isOpen, setIsOpen] = useState29(false);
-  const triggerRef = useRef34(null);
-  const dropdownRef = useRef34(null);
-  const [pos, setPos] = useState29({ top: 0, right: 0 });
-  const open = useCallback22(() => {
+  const [isOpen, setIsOpen] = useState30(false);
+  const triggerRef = useRef35(null);
+  const dropdownRef = useRef35(null);
+  const [pos, setPos] = useState30({ top: 0, right: 0 });
+  const open = useCallback23(() => {
     const rect = triggerRef.current?.getBoundingClientRect();
     if (rect) {
       setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
     }
     setIsOpen(true);
   }, []);
-  const close = useCallback22(() => setIsOpen(false), []);
-  const toggle2 = useCallback22(() => {
+  const close = useCallback23(() => setIsOpen(false), []);
+  const toggle2 = useCallback23(() => {
     if (isOpen) close();
     else open();
   }, [isOpen, open, close]);
-  useEffect27(() => {
+  useEffect28(() => {
     if (!isOpen) return;
     const handler = (e) => {
       const target = e.target;
@@ -14377,8 +14617,8 @@ function ShortcutsMenu({ panelId }) {
       label: findLabel(panel.controls)
     };
   });
-  return /* @__PURE__ */ jsxs41(Fragment12, { children: [
-    /* @__PURE__ */ jsx47(
+  return /* @__PURE__ */ jsxs42(Fragment12, { children: [
+    /* @__PURE__ */ jsx48(
       motion13.button,
       {
         ref: triggerRef,
@@ -14387,18 +14627,18 @@ function ShortcutsMenu({ panelId }) {
         title: "Keyboard shortcuts",
         whileTap: { scale: 0.9 },
         transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-        children: /* @__PURE__ */ jsxs41("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
-          /* @__PURE__ */ jsx47("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
-          /* @__PURE__ */ jsx47("path", { d: "M6 10H6.01" }),
-          /* @__PURE__ */ jsx47("path", { d: "M10 10H10.01" }),
-          /* @__PURE__ */ jsx47("path", { d: "M14 10H14.01" }),
-          /* @__PURE__ */ jsx47("path", { d: "M18 10H18.01" }),
-          /* @__PURE__ */ jsx47("path", { d: "M8 14H16" })
+        children: /* @__PURE__ */ jsxs42("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+          /* @__PURE__ */ jsx48("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
+          /* @__PURE__ */ jsx48("path", { d: "M6 10H6.01" }),
+          /* @__PURE__ */ jsx48("path", { d: "M10 10H10.01" }),
+          /* @__PURE__ */ jsx48("path", { d: "M14 10H14.01" }),
+          /* @__PURE__ */ jsx48("path", { d: "M18 10H18.01" }),
+          /* @__PURE__ */ jsx48("path", { d: "M8 14H16" })
         ] })
       }
     ),
-    createPortal10(
-      /* @__PURE__ */ jsx47(AnimatePresence9, { children: isOpen && /* @__PURE__ */ jsxs41(
+    createPortal11(
+      /* @__PURE__ */ jsx48(AnimatePresence9, { children: isOpen && /* @__PURE__ */ jsxs42(
         PresenceMotionDiv,
         {
           divRef: dropdownRef,
@@ -14409,13 +14649,13 @@ function ShortcutsMenu({ panelId }) {
           exit: { opacity: 0, y: 4, scale: 0.97, pointerEvents: "none" },
           transition: { type: "spring", visualDuration: 0.15, bounce: 0 },
           children: [
-            /* @__PURE__ */ jsx47("div", { className: "tweakers-shortcuts-title", children: "Keyboard Shortcuts" }),
-            /* @__PURE__ */ jsx47("div", { className: "tweakers-shortcuts-list", children: rows.map((row) => /* @__PURE__ */ jsxs41("div", { className: "tweakers-shortcuts-row", children: [
-              /* @__PURE__ */ jsx47("span", { className: "tweakers-shortcuts-row-key", children: formatShortcutKey(row.shortcut) }),
-              /* @__PURE__ */ jsx47("span", { className: "tweakers-shortcuts-row-label", children: row.label }),
-              /* @__PURE__ */ jsx47("span", { className: "tweakers-shortcuts-row-mode", children: formatInteraction(row.shortcut) })
+            /* @__PURE__ */ jsx48("div", { className: "tweakers-shortcuts-title", children: "Keyboard Shortcuts" }),
+            /* @__PURE__ */ jsx48("div", { className: "tweakers-shortcuts-list", children: rows.map((row) => /* @__PURE__ */ jsxs42("div", { className: "tweakers-shortcuts-row", children: [
+              /* @__PURE__ */ jsx48("span", { className: "tweakers-shortcuts-row-key", children: formatShortcutKey(row.shortcut) }),
+              /* @__PURE__ */ jsx48("span", { className: "tweakers-shortcuts-row-label", children: row.label }),
+              /* @__PURE__ */ jsx48("span", { className: "tweakers-shortcuts-row-mode", children: formatInteraction(row.shortcut) })
             ] }, row.path)) }),
-            /* @__PURE__ */ jsx47("div", { className: "tweakers-shortcuts-hint", children: "See pill badges on controls for keys" })
+            /* @__PURE__ */ jsx48("div", { className: "tweakers-shortcuts-hint", children: "See pill badges on controls for keys" })
           ]
         }
       ) }),
@@ -14425,8 +14665,8 @@ function ShortcutsMenu({ panelId }) {
 }
 
 // src/components/AudioLevelMeter.tsx
-import { useEffect as useEffect28, useRef as useRef35, useState as useState30 } from "react";
-import { jsx as jsx48 } from "react/jsx-runtime";
+import { useEffect as useEffect29, useRef as useRef36, useState as useState31 } from "react";
+import { jsx as jsx49 } from "react/jsx-runtime";
 var DEFAULT_CELL_COUNT = 10;
 var MIN_CELL_COUNT = 8;
 var MAX_CELL_COUNT = 12;
@@ -14474,8 +14714,8 @@ function getCellColor(colors, indexFromBottom, cellCount) {
   return colors[colorIndex];
 }
 function usePrefersReducedMotion() {
-  const [reducedMotion, setReducedMotion] = useState30(false);
-  useEffect28(() => {
+  const [reducedMotion, setReducedMotion] = useState31(false);
+  useEffect29(() => {
     const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     const updatePreference = () => setReducedMotion(mediaQuery.matches);
     updatePreference();
@@ -14517,17 +14757,17 @@ function AudioLevelMeter(props) {
   const activeCellCounts = levels.map((level) => levelToCellCount(level, cellCount));
   const activeCellKey = activeCellCounts.join(":");
   const clippedBandKey = clippedBands.map(Number).join(":");
-  const currentTopCellsRef = useRef35(activeCellCounts.map((count) => count - 1));
-  const currentClippedBandsRef = useRef35(clippedBands);
-  const cellCountRef = useRef35(cellCount);
-  const peakStatesRef = useRef35([]);
-  const clipHoldUntilRef = useRef35(clippedBands.map(() => 0));
-  const animationFrameRef = useRef35(null);
+  const currentTopCellsRef = useRef36(activeCellCounts.map((count) => count - 1));
+  const currentClippedBandsRef = useRef36(clippedBands);
+  const cellCountRef = useRef36(cellCount);
+  const peakStatesRef = useRef36([]);
+  const clipHoldUntilRef = useRef36(clippedBands.map(() => 0));
+  const animationFrameRef = useRef36(null);
   const reducedMotion = usePrefersReducedMotion();
-  const [peakIndices, setPeakIndices] = useState30(
+  const [peakIndices, setPeakIndices] = useState31(
     () => activeCellCounts.map((count) => count - 1)
   );
-  const [heldClippedBands, setHeldClippedBands] = useState30(clippedBands.map(() => false));
+  const [heldClippedBands, setHeldClippedBands] = useState31(clippedBands.map(() => false));
   const displayedClippedBands = heldClippedBands.map(
     (isHeld, index) => isHeld || clippedBands[index]
   );
@@ -14537,7 +14777,7 @@ function AudioLevelMeter(props) {
   const colors = (props.colors ?? []).slice(0, 3).filter(
     (color) => typeof color === "string" && color.trim().length > 0
   );
-  useEffect28(() => {
+  useEffect29(() => {
     const timestamp = performance.now();
     const currentTopCells = activeCellKey.split(":").map(Number).map((count) => count - 1);
     const currentClippedBands = clippedBandKey.split(":").map((value) => value === "1");
@@ -14664,7 +14904,7 @@ function AudioLevelMeter(props) {
     };
     animationFrameRef.current = requestAnimationFrame(animatePeaks);
   }, [activeCellKey, cellCount, clippedBandKey, reducedMotion]);
-  useEffect28(
+  useEffect29(
     () => () => {
       if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
     },
@@ -14690,7 +14930,7 @@ function AudioLevelMeter(props) {
     "--tweak-meter-band-count": levels.length,
     "--tweak-meter-cell-count": cellCount
   };
-  return /* @__PURE__ */ jsx48(
+  return /* @__PURE__ */ jsx49(
     "div",
     {
       className: rootClassName,
@@ -14699,14 +14939,14 @@ function AudioLevelMeter(props) {
       "data-clipping": hasClipping || void 0,
       role: "img",
       "aria-label": accessibleSummary,
-      children: /* @__PURE__ */ jsx48("div", { className: "tweakers-audio-meter__bands", "aria-hidden": "true", children: activeCellCounts.map((activeCellCount, bandIndex) => /* @__PURE__ */ jsx48("div", { className: "tweakers-audio-meter__band", children: Array.from({ length: cellCount }, (_, visualIndex) => {
+      children: /* @__PURE__ */ jsx49("div", { className: "tweakers-audio-meter__bands", "aria-hidden": "true", children: activeCellCounts.map((activeCellCount, bandIndex) => /* @__PURE__ */ jsx49("div", { className: "tweakers-audio-meter__band", children: Array.from({ length: cellCount }, (_, visualIndex) => {
         const indexFromBottom = cellCount - visualIndex - 1;
         const isActive = indexFromBottom < activeCellCount;
         const isPeak = indexFromBottom === displayedPeakIndices[bandIndex];
         const isClipped = displayedClippedBands[bandIndex] && indexFromBottom === cellCount - 1;
         const color = getCellColor(colors, indexFromBottom, cellCount);
         const cellStyle = color ? { "--tweak-meter-cell-color": color } : void 0;
-        return /* @__PURE__ */ jsx48(
+        return /* @__PURE__ */ jsx49(
           "span",
           {
             className: "tweakers-audio-meter__cell",
@@ -14775,6 +15015,7 @@ export {
   MOVE_PADS,
   MOVE_SPECIAL_BUTTONS,
   MOVE_TRACKS,
+  MOVE_WAVEFORM_STEPS,
   ModulationStore,
   Module,
   MoveActionButton,
@@ -14782,6 +15023,8 @@ export {
   MovePanel,
   MoveSurfaceStore,
   MoveVolumeDisplay,
+  MoveWaveform,
+  MoveWaveformStore,
   MultiSelectControl,
   NumberControl,
   PresetManager,
@@ -14854,6 +15097,8 @@ export {
   isOutsideSpan,
   lfoSyncedHz,
   listModTypes,
+  loopFromStep,
+  loopSteps,
   modColor,
   modKey,
   modPageLayout,
@@ -14861,6 +15106,7 @@ export {
   moveAppPadRow,
   movePadRows,
   moveStop,
+  defaultView as moveWaveformDefaultView,
   nearestHandle,
   normToValue,
   normalizeCurveMarkers,
@@ -14892,6 +15138,7 @@ export {
   rgbToHsl,
   rgbToHsv,
   rgbToOklch,
+  scrubBy,
   setDriverAnticipate,
   setDriverCurvature,
   setDriverOvershoot,
@@ -14912,6 +15159,7 @@ export {
   shiftSpan,
   snapToStep,
   splitSegment,
+  stepPosition,
   triggerLevels,
   triggersCrossed,
   useTweakTimeline,
@@ -14920,6 +15168,7 @@ export {
   valueToNorm,
   valueToPercent,
   visibleColumns,
-  visibleModControls
+  visibleModControls,
+  zoomBy
 };
 //# sourceMappingURL=index.js.map
