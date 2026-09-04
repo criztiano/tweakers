@@ -6,7 +6,9 @@ import {
   filterHand01,
   filterHandValue,
   defaultFilterResponse,
+  filterShapeResponse,
   filterResponsePath,
+  type FilterResponse,
 } from './filter-core';
 import { TweakStore } from './store/TweakStore';
 import { buildMovePages, visibleColumns, dialSpan, isSpanContinuation, normalizeFilterDial, denormalizeFilterDial, filterShapePath, MOVE_DIALS } from './move-layout';
@@ -55,6 +57,24 @@ describe('filter core', () => {
     // A constant response draws flat at its own height, not mid-air.
     const open = filterResponsePath(() => 1)!;
     assert.ok([...open.matchAll(/[ML] [\d.]+ ([\d.]+)/g)].every((m) => Number(m[1]) === 0));
+  });
+
+  it('draws every biquad shape as its own magnitude, not a lowpass remix', () => {
+    const at = (r: FilterResponse, t: number) => r(t);
+    const lp = filterShapeResponse('lowpass', 0.5, 0);
+    const hp = filterShapeResponse('highpass', 0.5, 0);
+    const bp = filterShapeResponse('bandpass', 0.5, 0.5);
+    const notch = filterShapeResponse('notch', 0.5, 0.5);
+    const peak = filterShapeResponse('peak', 0.5, 0.8);
+    // Passbands pass at unity, stopbands fall away.
+    assert.ok(at(lp, 0) > 0.55 && at(lp, 1) < at(lp, 0));
+    assert.ok(at(hp, 1) > 0.55 && at(hp, 0) < at(hp, 1));
+    // The bandpass crests at the knee and falls off both ways.
+    assert.ok(at(bp, 0.5) > at(bp, 0.1) && at(bp, 0.5) > at(bp, 0.9));
+    // The notch is the opposite: unity at the edges, a dip at the knee.
+    assert.ok(at(notch, 0.5) < at(notch, 0.05) && at(notch, 0.5) < at(notch, 0.95));
+    // The peak boosts above its own unity shelf at the knee.
+    assert.ok(at(peak, 0.5) > at(peak, 0.05) && at(peak, 0.05) > 0.5);
   });
 
   it('a throwing response draws nothing', () => {

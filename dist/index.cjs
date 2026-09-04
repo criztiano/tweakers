@@ -49,6 +49,8 @@ __export(index_exports, {
   DEFAULT_GRADIENT: () => DEFAULT_GRADIENT,
   DEFAULT_TRIGGER_STEPS: () => DEFAULT_TRIGGER_STEPS,
   EasingVisualization: () => EasingVisualization,
+  FILTER_DB_CEIL: () => FILTER_DB_CEIL,
+  FILTER_DB_FLOOR: () => FILTER_DB_FLOOR,
   FileControl: () => FileControl,
   FilterControl: () => FilterControl,
   Folder: () => Folder,
@@ -151,6 +153,7 @@ __export(index_exports, {
   filterHandValue: () => filterHandValue,
   filterResponsePath: () => filterResponsePath,
   filterShapePath: () => filterShapePath,
+  filterShapeResponse: () => filterShapeResponse,
   flipDriver: () => flipDriver,
   flipDriverX: () => flipDriverX,
   flipDriverY: () => flipDriverY,
@@ -854,15 +857,37 @@ var filterHand01 = (v, axis) => {
   return clamp4(Number.isFinite(n) ? n : 0, 0, 1);
 };
 var filterHandValue = (v01, axis) => snap(axis.min + clamp4(v01, 0, 1) * (axis.max - axis.min), axis);
-function defaultFilterResponse(cutoff01, resonance01) {
+function filterShapeResponse(type, cutoff01, resonance01) {
   const fc = Math.pow(10, -3 + 3 * clamp4(cutoff01, 0, 1));
   const q = 0.707 * Math.pow(14, clamp4(resonance01, 0, 1));
+  const a = Math.pow(10, clamp4(resonance01, 0, 1) * 18 / 40);
   return (t) => {
     const f = Math.pow(10, -3 + 3 * clamp4(t, 0, 1));
     const w = f / fc;
-    const mag = 1 / Math.sqrt(Math.pow(1 - w * w, 2) + Math.pow(w / q, 2));
+    const w2 = w * w;
+    const den = Math.sqrt(Math.pow(1 - w2, 2) + Math.pow(w / q, 2));
+    let mag;
+    switch (type) {
+      case "highpass":
+        mag = w2 / den;
+        break;
+      case "bandpass":
+        mag = w / q / den;
+        break;
+      case "notch":
+        mag = Math.abs(1 - w2) / den;
+        break;
+      case "peak":
+        mag = Math.sqrt(Math.pow(1 - w2, 2) + Math.pow(w * a / q, 2)) / Math.sqrt(Math.pow(1 - w2, 2) + Math.pow(w / (a * q), 2));
+        break;
+      default:
+        mag = 1 / den;
+    }
     return clamp4((20 * Math.log10(Math.max(mag, 1e-6)) + FILTER_DB_FLOOR) / (FILTER_DB_FLOOR + FILTER_DB_CEIL), 0, 1);
   };
+}
+function defaultFilterResponse(cutoff01, resonance01) {
+  return filterShapeResponse("lowpass", cutoff01, resonance01);
 }
 var FILTER_DB_FLOOR = 36;
 var FILTER_DB_CEIL = 24;
@@ -15579,6 +15604,8 @@ function AudioLevelMeter(props) {
   DEFAULT_GRADIENT,
   DEFAULT_TRIGGER_STEPS,
   EasingVisualization,
+  FILTER_DB_CEIL,
+  FILTER_DB_FLOOR,
   FileControl,
   FilterControl,
   Folder,
@@ -15681,6 +15708,7 @@ function AudioLevelMeter(props) {
   filterHandValue,
   filterResponsePath,
   filterShapePath,
+  filterShapeResponse,
   flipDriver,
   flipDriverX,
   flipDriverY,
