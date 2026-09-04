@@ -52,8 +52,262 @@ function clearPersisted(target) {
   }
 }
 
+// src/curve-composer-core.ts
+var CURVE_CYCLE = ["linear", "easeIn", "easeOut", "easeInOut", "spring"];
+var easingPresets = {
+  linear: [0, 0, 1, 1],
+  easeIn: [0.42, 0, 1, 1],
+  easeOut: [0, 0, 0.58, 1],
+  easeInOut: [0.42, 0, 0.58, 1]
+};
+var lerp = (a, b, t) => a + (b - a) * t;
+var clamp01 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+var clampBipolar = (v) => v < -1 ? -1 : v > 1 ? 1 : v;
+var SKEW_MAX = 0.45;
+var BACK_MAX = 0.8;
+var easingExtremes = {
+  linear: [0, 0, 1, 1],
+  easeIn: [0.7, 0, 0.84, 0],
+  easeOut: [0.16, 1, 0.3, 1],
+  easeInOut: [0.87, 0, 0.13, 1]
+};
+var lerp4 = (a, b, t) => [
+  lerp(a[0], b[0], t),
+  lerp(a[1], b[1], t),
+  lerp(a[2], b[2], t),
+  lerp(a[3], b[3], t)
+];
+function deriveEase(type, curvature, steepness = 0, overshoot = 0, anticipate = 0) {
+  const key = type === "spring" ? "linear" : type;
+  const base = easingPresets[key];
+  const s = clampBipolar(steepness);
+  const pts = s >= 0 ? lerp4(base, easingExtremes[key], s) : lerp4(easingPresets.linear, base, s + 1);
+  let [x1, y1, x2, y2] = pts;
+  const shift = clampBipolar(curvature) * SKEW_MAX;
+  x1 = clamp01(x1 + shift);
+  x2 = clamp01(x2 + shift);
+  y2 += clamp01(overshoot) * BACK_MAX;
+  y1 -= clamp01(anticipate) * BACK_MAX;
+  return [x1, y1, x2, y2];
+}
+function bezierAxis(p1, p2, s) {
+  const u = 1 - s;
+  return 3 * u * u * s * p1 + 3 * u * s * s * p2 + s * s * s;
+}
+function bezierAxisDeriv(p1, p2, s) {
+  const u = 1 - s;
+  return 3 * u * u * p1 + 6 * u * s * (p2 - p1) + 3 * s * s * (1 - p2);
+}
+function bezierY(ease, x) {
+  const tx = clamp01(x);
+  let s = tx;
+  for (let i = 0; i < 6; i++) {
+    const xs = bezierAxis(ease[0], ease[2], s) - tx;
+    if (Math.abs(xs) < 1e-5) break;
+    const d = bezierAxisDeriv(ease[0], ease[2], s);
+    if (Math.abs(d) < 1e-6) break;
+    s = clamp01(s - xs / d);
+  }
+  return bezierAxis(ease[1], ease[3], s);
+}
+var SPRING_SAMPLES = 72;
+function springPoints(curvature, steepness = 0) {
+  const visualDuration = 1;
+  const bounce = clamp01((clampBipolar(curvature) + 1) / 2) * 0.6;
+  const mass = 1;
+  let stiffness = 2 * Math.PI / visualDuration;
+  stiffness = stiffness * stiffness;
+  stiffness *= Math.max(0.2, 1 + clampBipolar(steepness) * 0.9);
+  const dampingRatio = 1 - bounce;
+  const damping = 2 * dampingRatio * Math.sqrt(stiffness * mass);
+  const raw = [];
+  const steps = SPRING_SAMPLES;
+  const dt = visualDuration / steps;
+  let position = 0;
+  let velocity = 0;
+  for (let i = 0; i <= steps; i++) {
+    raw.push(position);
+    const acceleration = (-stiffness * (position - 1) - damping * velocity) / mass;
+    velocity += acceleration * dt;
+    position += velocity * dt;
+  }
+  return raw;
+}
+function interp(points, t) {
+  const x = clamp01(t) * (points.length - 1);
+  const i = Math.floor(x);
+  if (i >= points.length - 1) return points[points.length - 1];
+  return lerp(points[i], points[i + 1], x - i);
+}
+function buildSampler(curve) {
+  let base;
+  if (curve.type === "spring") {
+    const pts = springPoints(curve.curvature, curve.steepness);
+    base = (t) => interp(pts, t);
+  } else {
+    const ease = deriveEase(curve.type, curve.curvature, curve.steepness, curve.overshoot, curve.anticipate);
+    base = (t) => bezierY(ease, t);
+  }
+  const { flipX, flipY } = curve;
+  if (!flipX && !flipY) return base;
+  return (t) => {
+    const v = base(flipX ? 1 - t : t);
+    return flipY ? 1 - v : v;
+  };
+}
+function totalWeight(segments) {
+  let t = 0;
+  for (const s of segments) t += Math.max(0, s.weight);
+  return t || 1;
+}
+function timelineSlots(segments, gap = 0) {
+  const n = segments.length;
+  const g = n > 1 ? clamp01(gap) : 0;
+  const total = totalWeight(segments);
+  const content = 1 - g;
+  const gapW = n > 1 ? g / (n - 1) : 0;
+  const slots = [];
+  let acc = 0;
+  for (let i = 0; i < n; i++) {
+    const sw = Math.max(0, segments[i].weight) / total * content;
+    slots.push({ kind: "segment", index: i, a: acc, b: acc + sw });
+    acc += sw;
+    if (i < n - 1) {
+      slots.push({ kind: "gap", index: i, a: acc, b: acc + gapW });
+      acc += gapW;
+    }
+  }
+  return slots;
+}
+function segmentSpan(segments, index, gap = 0) {
+  if (gap > 0) {
+    const slot = timelineSlots(segments, gap).find((s) => s.kind === "segment" && s.index === index);
+    if (slot) return [slot.a, slot.b];
+  }
+  const total = totalWeight(segments);
+  let acc = 0;
+  for (let i = 0; i < index; i++) acc += segments[i].weight;
+  return [acc / total, (acc + segments[index].weight) / total];
+}
+function segmentIndexAt(xNorm, segments, gap = 0) {
+  if (gap > 0) {
+    const x2 = clamp01(xNorm);
+    const slots = timelineSlots(segments, gap);
+    for (const s of slots) if (x2 < s.b) return s.index;
+    return segments.length - 1;
+  }
+  const total = totalWeight(segments);
+  const x = clamp01(xNorm) * total;
+  let acc = 0;
+  for (let i = 0; i < segments.length; i++) {
+    acc += segments[i].weight;
+    if (x <= acc) return i;
+  }
+  return segments.length - 1;
+}
+function smootherstep(t) {
+  const x = clamp01(t);
+  return x * x * x * (x * (x * 6 - 15) + 10);
+}
+function cloneSegments(comp, segments) {
+  return { ...comp, segments };
+}
+function cycleSegmentType(comp, index) {
+  const src = comp.segments[index];
+  if (!src) return comp;
+  const type = CURVE_CYCLE[(CURVE_CYCLE.indexOf(src.type) + 1) % CURVE_CYCLE.length];
+  const next = comp.segments.slice();
+  next[index] = { ...src, type, curvature: 0, steepness: 0, overshoot: 0, anticipate: 0 };
+  return cloneSegments(comp, next);
+}
+function buildSamplers(comp) {
+  return {
+    segments: comp.segments.map(buildSampler),
+    driver: comp.driver ? buildSampler(comp.driver) : null
+  };
+}
+function directionPhase(u, dir) {
+  const x = clamp01(u);
+  if (dir === "reverse") return 1 - x;
+  if (dir === "mirror") return 1 - Math.abs(1 - 2 * x);
+  return x;
+}
+function readComposition(comp, u, s) {
+  const inputPhase = directionPhase(u, comp.direction);
+  const warpedPhase = s.driver ? clamp01(s.driver(inputPhase)) : inputPhase;
+  const gap = comp.gap ?? 0;
+  if (gap > 0 && comp.segments.length > 1) {
+    const slots = timelineSlots(comp.segments, gap);
+    const slot = slots.find((sl) => warpedPhase < sl.b) ?? slots[slots.length - 1];
+    const localT2 = slot.b > slot.a ? (warpedPhase - slot.a) / (slot.b - slot.a) : 0;
+    if (slot.kind === "segment") {
+      const value3 = s.segments[slot.index] ? s.segments[slot.index](localT2) : 0;
+      return { inputPhase, warpedPhase, value: value3, segIndex: slot.index, localT: localT2 };
+    }
+    const n = comp.segments.length;
+    const endVal = s.segments[slot.index] ? s.segments[slot.index](1) : 0;
+    const startVal = s.segments[(slot.index + 1) % n] ? s.segments[(slot.index + 1) % n](0) : 0;
+    const value2 = lerp(endVal, startVal, smootherstep(localT2));
+    return { inputPhase, warpedPhase, value: value2, segIndex: slot.index, localT: localT2 };
+  }
+  const segIndex = segmentIndexAt(warpedPhase, comp.segments);
+  const [a, b] = segmentSpan(comp.segments, segIndex);
+  const localT = b > a ? (warpedPhase - a) / (b - a) : 0;
+  const value = s.segments[segIndex] ? s.segments[segIndex](localT) : 0;
+  return { inputPhase, warpedPhase, value, segIndex, localT };
+}
+var DEFAULT_TRIGGER_STEPS = 5;
+var TRIGGER_FLYBACK = 0.5;
+function triggersCrossed(prevValue, curValue, steps) {
+  const n = Math.max(2, Math.floor(steps));
+  const seg = 1 / (n - 1);
+  const p = clamp01(prevValue);
+  const c = clamp01(curValue);
+  const delta = c - p;
+  const fired = [];
+  if (Math.abs(delta) > TRIGGER_FLYBACK) {
+    fired.push(delta < 0 ? n - 1 : 0);
+  } else if (delta > 0) {
+    for (let k = 1; k <= n - 2; k++) {
+      const level = k * seg;
+      if (p < level && level <= c) fired.push(k);
+    }
+  } else if (delta < 0) {
+    for (let k = n - 2; k >= 1; k--) {
+      const level = k * seg;
+      if (c <= level && level < p) fired.push(k);
+    }
+  }
+  return fired;
+}
+
 // src/modulation-core.ts
 var MOD_SLOTS = 16;
+var MOD_PAGE_DIALS = 8;
+var isModDial = (c) => !c.chip && (c.type === "select" || c.type === "slider" || c.type === "xy" || c.type === "range" || c.type === "number" && c.min != null && c.max != null);
+var slotOf = (c) => ({
+  path: c.path,
+  ...c.preview ? { preview: true } : {},
+  ...c.cycle ? { cycle: true } : {}
+});
+function modPageLayout(controls, params = {}) {
+  const dials = [];
+  const toggles = [];
+  const values = [];
+  for (const c of controls) {
+    if (c.when && !c.when(params)) continue;
+    if (isModDial(c)) {
+      if (dials.length < MOD_PAGE_DIALS) dials.push(slotOf(c));
+      continue;
+    }
+    const col = Math.max(0, dials.length - 1);
+    const row = c.type === "toggle" && !toggles[col] ? toggles : values;
+    if (!row[col]) row[col] = slotOf(c);
+  }
+  const pad = (row) => Array.from({ length: row.length }, (_, i) => row[i] ?? null);
+  return { dials, toggles: pad(toggles), values: pad(values) };
+}
+var visibleModControls = (def, params) => def.controls.filter((c) => !c.when || c.when(params));
 var registry = /* @__PURE__ */ new Map();
 function registerModType(def) {
   registry.set(def.type, def);
@@ -63,9 +317,10 @@ var listModTypes = () => [...registry.values()];
 var MOD_SETTINGS_PANEL = "mod-settings";
 var modKey = (panelId, path) => `${panelId}\0${path}`;
 var clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-var clamp01 = (v) => clamp(Number(v) || 0, 0, 1);
+var clamp012 = (v) => clamp(Number(v) || 0, 0, 1);
+var clampSigned = (v) => clamp(Number(v) || 0, -1, 1);
 function applyModulation(base, signal, amount, min, max) {
-  const offset = clamp(signal, -1, 1) * clamp01(amount) * (max - min) / 2;
+  const offset = clamp(signal, -1, 1) * clamp012(amount) * (max - min) / 2;
   return clamp(base + offset, min, max);
 }
 var MOD_RING_RADIUS = 6;
@@ -111,16 +366,16 @@ var LFO_DEF = {
     const hz = params.sync ? lfoSyncedHz(Number(params.division) || 0, bpm) : Math.max(0, Number(params.rate) || 0);
     const before = s.phase;
     s.phase = (s.phase + dt * hz) % 1;
-    if (s.phase < before) s.driftTarget = (Math.random() * 2 - 1) * clamp01(params.jitter);
-    if (!clamp01(params.jitter)) {
+    if (s.phase < before) s.driftTarget = (Math.random() * 2 - 1) * clamp012(params.jitter);
+    if (!clamp012(params.jitter)) {
       s.drift = 0;
       s.driftTarget = 0;
     } else s.drift += (s.driftTarget - s.drift) * Math.min(1, dt * hz * 4);
     const w = clamp(Number(params.width) || 0, 0.01, 0.99);
-    const ph = (s.phase + clamp01(params.phase)) % 1;
+    const ph = (s.phase + clamp012(params.phase)) % 1;
     const tri = ph < w ? ph / w : 1 - (ph - w) / (1 - w);
     let v = clamp(tri * 2 - 1 + s.drift, -1, 1);
-    const smooth = clamp01(params.smooth);
+    const smooth = clamp012(params.smooth);
     if (smooth > 0 && s.out !== null) {
       const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
       v = s.out + (v - s.out) * k;
@@ -155,12 +410,12 @@ var SH_DEF = {
     if (s.out === null || s.wait <= 0) {
       s.held = Math.random() * 2 - 1;
       const hz = Math.max(0.01, Number(params.rate) || 0);
-      const len = 1 / hz * (1 + (Math.random() * 2 - 1) * clamp01(params.jitter) * 0.9);
+      const len = 1 / hz * (1 + (Math.random() * 2 - 1) * clamp012(params.jitter) * 0.9);
       s.wait = Math.max(5e-3, len);
     }
     const offset = clamp(Number(params.offset) || 0, -1, 1);
-    let v = clamp(s.held * clamp01(params.depth) + offset, -1, 1);
-    const smooth = clamp01(params.smooth);
+    let v = clamp(s.held * clamp012(params.depth) + offset, -1, 1);
+    const smooth = clamp012(params.smooth);
     if (smooth > 0 && s.out !== null) {
       const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
       v = s.out + (v - s.out) * k;
@@ -170,11 +425,229 @@ var SH_DEF = {
   }
 };
 registerModType(SH_DEF);
+var CURVE_MAX_CLIPS = 8;
+var CURVE_MIN_DURATION = 0.05;
+var CURVE_MAX_DURATION = 60;
+var CURVE_PULSE_DECAY = 0.04;
+var CURVE_PREVIEW_BAND = { lo: -0.25, hi: 1.25 };
+var DIRECTIONS = ["forward", "mirror", "reverse"];
+var CURVE_LABELS = {
+  linear: "Linear",
+  easeIn: "Ease In",
+  easeOut: "Ease Out",
+  easeInOut: "Ease InOut",
+  spring: "Spring"
+};
+var SHAPE_PARAMS = ["curvature", "steepness", "anticipate", "overshoot"];
+var newClip = () => ({
+  type: "easeInOut",
+  weight: 1,
+  curvature: 0,
+  steepness: 0,
+  overshoot: 0,
+  anticipate: 0
+});
+function readClips(params) {
+  const raw = Array.isArray(params.clips) ? params.clips : [];
+  const list = raw.filter((c) => c && typeof c === "object").map((c) => ({ ...newClip(), ...c }));
+  return list.length ? list.slice(0, CURVE_MAX_CLIPS) : [newClip()];
+}
+var writeClips = (list) => list;
+var selectedClip = (params, count) => clamp(Math.round(Number(params.selected) || 0), 0, Math.max(0, count - 1));
+function curveComposition(params) {
+  const i = DIRECTIONS.indexOf(params.direction);
+  return {
+    segments: readClips(params),
+    driver: null,
+    direction: DIRECTIONS[i < 0 ? 0 : i],
+    gap: clamp012(params.gap)
+  };
+}
+function curveDuration(params, bpm) {
+  const want = clamp(Number(params.duration) || 0, CURVE_MIN_DURATION, CURVE_MAX_DURATION);
+  if (!params.sync) return want;
+  const beat = 60 / (Number(bpm) || 120);
+  let best = LFO_SYNC_DIVISIONS[0].beats * beat;
+  for (const div of LFO_SYNC_DIVISIONS) {
+    const secs = div.beats * beat;
+    if (Math.abs(secs - want) < Math.abs(best - want)) best = secs;
+  }
+  return Math.max(CURVE_MIN_DURATION, best);
+}
+var CURVE_DEF = {
+  type: "curve",
+  label: "Curve",
+  defaults: {
+    duration: 2,
+    sync: false,
+    signal: "continuous",
+    triggers: DEFAULT_TRIGGER_STEPS,
+    direction: "forward",
+    flip: false,
+    gap: 0,
+    segments: 1,
+    selected: 0,
+    curvature: 0,
+    steepness: 0,
+    anticipate: 0,
+    overshoot: 0,
+    clips: writeClips([newClip()])
+  },
+  controls: [
+    /* The selected clip's shape: the knob leans its energy one way or the
+       other, the volume knob makes the ease gentle or explosive — the same
+       two-axis drag the composer answers to on screen. A knob tap cycles
+       the clip through the curve vocabulary. */
+    {
+      type: "xy",
+      path: "curve",
+      label: "Curve",
+      xParam: "curvature",
+      yParam: "steepness",
+      xAxis: { min: -1, max: 1, bipolar: true, label: "Energy" },
+      yAxis: { min: -1, max: 1, bipolar: true, label: "Steep" },
+      preview: true,
+      cycle: (params) => {
+        const comp = curveComposition(params);
+        const i = selectedClip(params, comp.segments.length);
+        return { clips: writeClips(cycleSegmentType(comp, i).segments) };
+      }
+    },
+    { type: "slider", path: "duration", label: "Duration", min: CURVE_MIN_DURATION, max: CURVE_MAX_DURATION, step: 0.01, unit: "s" },
+    { type: "toggle", path: "sync", label: "Sync" },
+    {
+      type: "select",
+      path: "signal",
+      label: "Signal",
+      chip: true,
+      options: [{ value: "continuous", label: "Cont" }, { value: "trigger", label: "Trig" }]
+    },
+    {
+      type: "select",
+      path: "direction",
+      label: "Direction",
+      options: [
+        { value: "forward", label: "Forward" },
+        { value: "mirror", label: "Mirror" },
+        { value: "reverse", label: "Reverse" }
+      ]
+    },
+    { type: "toggle", path: "flip", label: "Flip" },
+    /* The trigger count only means anything in trigger mode, so the chip
+       only appears there — the column stays clear the rest of the time. */
+    {
+      type: "slider",
+      path: "triggers",
+      label: "Triggers",
+      chip: true,
+      min: 2,
+      max: 16,
+      step: 1,
+      when: (params) => params.signal === "trigger"
+    },
+    { type: "slider", path: "gap", label: "Gap", min: 0, max: 1, step: 0.01 },
+    { type: "slider", path: "anticipate", label: "Anticipate", min: 0, max: 1, step: 0.01 },
+    { type: "slider", path: "overshoot", label: "Overshoot", min: 0, max: 1, step: 0.01 },
+    { type: "slider", path: "segments", label: "Segments", min: 1, max: CURVE_MAX_CLIPS, step: 1 }
+  ],
+  createState: () => ({ phase: 0, signature: "", samplers: null, prev: null, pulse: 0 }),
+  tick(state, params, dt, bpm) {
+    const s = state;
+    const comp = curveComposition(params);
+    const signature = JSON.stringify(comp.segments) + `|${comp.gap}`;
+    if (signature !== s.signature || !s.samplers) {
+      s.signature = signature;
+      s.samplers = buildSamplers(comp);
+    }
+    s.phase = (s.phase + dt / curveDuration(params, bpm)) % 1;
+    let v = clamp012(readComposition(comp, s.phase, s.samplers).value);
+    if (params.flip) v = 1 - v;
+    if (params.signal !== "trigger") {
+      s.prev = v;
+      return v * 2 - 1;
+    }
+    const fired = triggersCrossed(s.prev ?? v, v, Number(params.triggers) || DEFAULT_TRIGGER_STEPS);
+    s.prev = v;
+    if (fired.length) s.pulse = 1;
+    else s.pulse *= Math.exp(-dt / CURVE_PULSE_DECAY);
+    return s.pulse;
+  },
+  /**
+   * Keep the projection and the series in step. A shape dial writes into the
+   * selected clip; anything else — a new selection, a deleted clip, a cycled
+   * curve — reads that clip's shape back out, so the dials always show the
+   * clip the composer is highlighting.
+   */
+  normalize(current, patch) {
+    const next = { ...current, ...patch };
+    const changed = (key) => key in patch && patch[key] !== current[key];
+    let list = "clips" in patch ? readClips(patch) : readClips(current);
+    if (!("clips" in patch) && changed("segments")) {
+      const want = clamp(Math.round(Number(patch.segments) || 1), 1, CURVE_MAX_CLIPS);
+      while (list.length > want) list.pop();
+      while (list.length < want) list.push(newClip());
+      list = list.map((c) => ({ ...c, weight: 1 }));
+    }
+    const sel = selectedClip(next, list.length);
+    if (SHAPE_PARAMS.some(changed)) {
+      list[sel] = {
+        ...list[sel],
+        curvature: clampSigned(next.curvature),
+        steepness: clampSigned(next.steepness),
+        anticipate: clamp012(next.anticipate),
+        overshoot: clamp012(next.overshoot)
+      };
+    } else {
+      const clip = list[sel];
+      next.curvature = clip.curvature;
+      next.steepness = clip.steepness;
+      next.anticipate = clip.anticipate ?? 0;
+      next.overshoot = clip.overshoot ?? 0;
+    }
+    next.selected = sel;
+    next.segments = list.length;
+    next.clips = writeClips(list);
+    return next;
+  },
+  buttons: {
+    /* The arrows walk the clips (wrapping), Delete drops the selected one —
+       the last clip stays, since a pass with nothing in it plays nothing. */
+    left: (params) => {
+      const n = readClips(params).length;
+      return { selected: (selectedClip(params, n) + n - 1) % n };
+    },
+    right: (params) => {
+      const n = readClips(params).length;
+      return { selected: (selectedClip(params, n) + 1) % n };
+    },
+    delete: (params) => {
+      const list = readClips(params);
+      if (list.length <= 1) return;
+      const sel = selectedClip(params, list.length);
+      list.splice(sel, 1);
+      return { clips: writeClips(list), selected: Math.min(sel, list.length - 1) };
+    }
+  },
+  phase: (state) => state.phase,
+  preview(params, count) {
+    const list = readClips(params);
+    const sel = selectedClip(params, list.length);
+    const sampler = buildSampler(list[sel]);
+    const span = CURVE_PREVIEW_BAND.hi - CURVE_PREVIEW_BAND.lo;
+    const n = Math.max(2, count);
+    return {
+      points: Array.from({ length: n }, (_, i) => clamp012((sampler(i / (n - 1)) - CURVE_PREVIEW_BAND.lo) / span)),
+      label: `${CURVE_LABELS[list[sel].type]} ${sel + 1}/${list.length}`
+    };
+  }
+};
+registerModType(CURVE_DEF);
 
 // src/store/ModulationStore.ts
 var MOD_TOUCH_GRACE_MS = 4e3;
 var PERSIST_TARGET = resolvePersistTarget("modulation", "global", true);
 var clamp2 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+var freshParams = (def) => JSON.parse(JSON.stringify(def.defaults));
 var ModulationStoreClass = class {
   constructor() {
     this.slots = Array(MOD_SLOTS).fill(null);
@@ -188,6 +661,8 @@ var ModulationStoreClass = class {
     this.touched = null;
     this.settingsIndex = null;
     this.settingsUnsub = null;
+    /** The control set the open page was built from — see `shapeOf`. */
+    this.settingsShape = "";
     this.applyingSettings = false;
     this.structListeners = /* @__PURE__ */ new Set();
     this.frameListeners = /* @__PURE__ */ new Set();
@@ -227,7 +702,7 @@ var ModulationStoreClass = class {
       console.warn(`[tweakers] modulator type "${type}" is not registered`);
       return null;
     }
-    const slot = { index, type, params: { ...def.defaults } };
+    const slot = { index, type, params: freshParams(def) };
     this.slots[index] = slot;
     this.states.set(index, def.createState());
     this.changed();
@@ -241,10 +716,17 @@ var ModulationStoreClass = class {
   getSlots() {
     return this.slots.filter((s) => s !== null);
   }
+  /**
+   * Change a slot's settings. A modulator with its own structure folds the
+   * patch in its own way (`normalize`) — the curve writes a shape dial into
+   * the clip it belongs to — and the open settings page follows.
+   */
   updateSlotParams(index, patch) {
     const slot = this.slots[index];
     if (!slot) return;
-    slot.params = { ...slot.params, ...patch };
+    const def = getModType(slot.type);
+    slot.params = def?.normalize ? def.normalize(slot.params, patch) : { ...slot.params, ...patch };
+    if (this.settingsIndex === index) this.refreshSettings();
     this.changed();
   }
   /** Switch a slot's modulator type — fresh defaults, fresh state. */
@@ -253,7 +735,7 @@ var ModulationStoreClass = class {
     const def = getModType(type);
     if (!slot || !def) return;
     slot.type = type;
-    slot.params = { ...def.defaults };
+    slot.params = freshParams(def);
     this.states.set(index, def.createState());
     this.changed();
   }
@@ -368,12 +850,59 @@ var ModulationStoreClass = class {
     this.settingsUnsub?.();
     this.settingsUnsub = null;
     this.settingsIndex = null;
+    this.settingsShape = "";
     TweakStore.unregisterPanel(MOD_SETTINGS_PANEL);
     this.changed();
   }
   /** The open settings page, or null — the panel to render as the Move page. */
   getSettings() {
     return this.settingsIndex === null ? null : { index: this.settingsIndex, panelId: MOD_SETTINGS_PANEL };
+  }
+  /**
+   * Where the open page's controls sit — the eight dial slots and the small
+   * slots under them. Both surfaces lay the page out from this one list, so
+   * they never disagree about which knob a pad belongs to.
+   */
+  getSettingsLayout() {
+    const slot = this.settingsIndex === null ? null : this.slots[this.settingsIndex];
+    const def = slot && getModType(slot.type);
+    if (!slot || !def) return null;
+    const layout = modPageLayout(def.controls, slot.params);
+    return {
+      dials: [{ path: "type" }, ...layout.dials].slice(0, 8),
+      toggles: [null, ...layout.toggles].slice(0, 8),
+      values: [null, ...layout.values].slice(0, 8)
+    };
+  }
+  /** The open page's curve, sampled 0..1, and its name — the preview dial. */
+  getSettingsPreview(count = 32) {
+    const slot = this.settingsIndex === null ? null : this.slots[this.settingsIndex];
+    const def = slot && getModType(slot.type);
+    return slot && def?.preview ? def.preview(slot.params, count) : null;
+  }
+  /** Hardware buttons the open page claims (the curve's arrows and Delete). */
+  getSettingsButtons() {
+    const slot = this.settingsIndex === null ? null : this.slots[this.settingsIndex];
+    const def = slot && getModType(slot.type);
+    return def?.buttons ? Object.keys(def.buttons) : [];
+  }
+  /** Run a claimed button. False when the page does not claim that name. */
+  pressSettingsButton(name) {
+    const slot = this.settingsIndex === null ? null : this.slots[this.settingsIndex];
+    const action = slot && getModType(slot.type)?.buttons?.[name];
+    if (!slot || !action) return false;
+    const patch = action(slot.params);
+    if (patch) this.updateSlotParams(slot.index, patch);
+    return true;
+  }
+  /** A knob tap on a page dial that cycles (the curve's clip vocabulary). */
+  tapSettingsControl(path) {
+    const slot = this.settingsIndex === null ? null : this.slots[this.settingsIndex];
+    const def = slot && getModType(slot.type);
+    const cycle = def?.controls.find((c) => c.path === path)?.cycle;
+    if (!slot || !cycle) return false;
+    this.updateSlotParams(slot.index, cycle(slot.params));
+    return true;
   }
   registerSettingsPanel(slot, def) {
     const config = {
@@ -383,8 +912,15 @@ var ModulationStoreClass = class {
         default: slot.type
       }
     };
-    for (const c of def.controls) {
-      if (c.type === "slider") {
+    this.settingsShape = this.shapeOf(slot, def);
+    for (const c of visibleModControls(def, slot.params)) {
+      if (c.type === "select") {
+        config[c.path] = {
+          type: "select",
+          options: c.options ?? [],
+          default: String(slot.params[c.path] ?? "")
+        };
+      } else if (c.type === "slider") {
         config[c.path] = {
           type: "slider",
           min: c.min ?? 0,
@@ -429,7 +965,7 @@ var ModulationStoreClass = class {
     const def = getModType(slot.type);
     if (!def) return;
     const patch = {};
-    for (const c of def.controls) {
+    for (const c of visibleModControls(def, slot.params)) {
       const v = values[c.path];
       if (c.type === "xy" && c.xParam && c.yParam) {
         const xy = v;
@@ -439,11 +975,47 @@ var ModulationStoreClass = class {
         }
       } else if (c.type === "toggle") {
         patch[c.path] = !!v;
+      } else if (c.type === "select") {
+        if (typeof v === "string") patch[c.path] = v;
       } else if (typeof v === "number" && Number.isFinite(v)) {
         patch[c.path] = v;
       }
     }
     this.updateSlotParams(slot.index, patch);
+  }
+  /**
+   * The open page, after the params moved under it. A change that alters
+   * which controls the page shows (the curve's trigger chip appearing) or
+   * what they read (an arrow selecting another clip) has to reach the panel
+   * — hardware edits arrive there, and the screen renders from it.
+   */
+  refreshSettings() {
+    if (this.settingsIndex === null) return;
+    const slot = this.slots[this.settingsIndex];
+    const def = slot && getModType(slot.type);
+    if (!slot || !def) return;
+    if (this.shapeOf(slot, def) !== this.settingsShape) {
+      this.registerSettingsPanel(slot, def);
+      return;
+    }
+    const values = TweakStore.getValues(MOD_SETTINGS_PANEL);
+    const guarded = this.applyingSettings;
+    this.applyingSettings = true;
+    for (const c of visibleModControls(def, slot.params)) {
+      if (c.type === "xy" && c.xParam && c.yParam) {
+        const xy = values[c.path] ?? {};
+        const x = Number(slot.params[c.xParam]) || 0;
+        const y = Number(slot.params[c.yParam]) || 0;
+        if (xy.x !== x || xy.y !== y) TweakStore.updateValue(MOD_SETTINGS_PANEL, c.path, { x, y });
+      } else if (values[c.path] !== slot.params[c.path]) {
+        TweakStore.updateValue(MOD_SETTINGS_PANEL, c.path, slot.params[c.path]);
+      }
+    }
+    this.applyingSettings = guarded;
+  }
+  /** Which controls the page is built from — a rebuild when this changes. */
+  shapeOf(slot, def) {
+    return `${slot.type}:${visibleModControls(def, slot.params).map((c) => c.path).join(",")}`;
   }
   /* ── external sources ─────────────────────────────────────────────── */
   /** Offer an app-side modulator to the slots; returns an unregister fn. */
@@ -479,6 +1051,13 @@ var ModulationStoreClass = class {
   /** A slot's live signal, -1..1. */
   getSignal(index) {
     return this.signals[index] ?? 0;
+  }
+  /** Where a slot sits in its cycle, 0..1 — a curve composer's playhead. */
+  getSlotPhase(index) {
+    const slot = this.slots[index];
+    const def = slot && getModType(slot.type);
+    const state = this.states.get(index);
+    return slot && def?.phase && state !== void 0 ? def.phase(state) : 0;
   }
   /** The modulation's contribution to one control, in the control's units. */
   getOffset(panelId, path) {

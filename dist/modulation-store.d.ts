@@ -1,6 +1,7 @@
-import { ModulationSlot, ModulationType, ModulationParams, ModulationAssignment } from './modulation-core.js';
+import { ModulationSlot, ModulationType, ModulationParams, ModulationAssignment, ModPageLayout } from './modulation-core.js';
 import './TweakStore-DJZN26nW.js';
 import './range-slider-core.js';
+import './curve-composer-core.js';
 
 /**
  * The modulation layer's runtime — a singleton beside the TweakStore.
@@ -60,6 +61,8 @@ declare class ModulationStoreClass {
     private touched;
     private settingsIndex;
     private settingsUnsub;
+    /** The control set the open page was built from — see `shapeOf`. */
+    private settingsShape;
     private applyingSettings;
     private structListeners;
     private frameListeners;
@@ -72,6 +75,11 @@ declare class ModulationStoreClass {
     getSlot(index: number): ModulationSlot | null;
     /** The occupied slots, index order — the track row's circles. */
     getSlots(): ModulationSlot[];
+    /**
+     * Change a slot's settings. A modulator with its own structure folds the
+     * patch in its own way (`normalize`) — the curve writes a shape dial into
+     * the clip it belongs to — and the open settings page follows.
+     */
     updateSlotParams(index: number, patch: ModulationParams): void;
     /** Switch a slot's modulator type — fresh defaults, fresh state. */
     setSlotType(index: number, type: ModulationType): void;
@@ -115,9 +123,35 @@ declare class ModulationStoreClass {
         index: number;
         panelId: string;
     } | null;
+    /**
+     * Where the open page's controls sit — the eight dial slots and the small
+     * slots under them. Both surfaces lay the page out from this one list, so
+     * they never disagree about which knob a pad belongs to.
+     */
+    getSettingsLayout(): ModPageLayout | null;
+    /** The open page's curve, sampled 0..1, and its name — the preview dial. */
+    getSettingsPreview(count?: number): {
+        points: number[];
+        label: string;
+    } | null;
+    /** Hardware buttons the open page claims (the curve's arrows and Delete). */
+    getSettingsButtons(): string[];
+    /** Run a claimed button. False when the page does not claim that name. */
+    pressSettingsButton(name: string): boolean;
+    /** A knob tap on a page dial that cycles (the curve's clip vocabulary). */
+    tapSettingsControl(path: string): boolean;
     private registerSettingsPanel;
     /** A settings-panel edit — screen or hardware — lands in the slot's params. */
     private onSettingsChange;
+    /**
+     * The open page, after the params moved under it. A change that alters
+     * which controls the page shows (the curve's trigger chip appearing) or
+     * what they read (an arrow selecting another clip) has to reach the panel
+     * — hardware edits arrive there, and the screen renders from it.
+     */
+    private refreshSettings;
+    /** Which controls the page is built from — a rebuild when this changes. */
+    private shapeOf;
     /** Offer an app-side modulator to the slots; returns an unregister fn. */
     registerSource(id: string, config?: ModulationSourceConfig): () => void;
     /** Push a source's signal (-1..1) at any rate; the engine mirrors the latest. */
@@ -127,6 +161,8 @@ declare class ModulationStoreClass {
     getTempo(): number;
     /** A slot's live signal, -1..1. */
     getSignal(index: number): number;
+    /** Where a slot sits in its cycle, 0..1 — a curve composer's playhead. */
+    getSlotPhase(index: number): number;
     /** The modulation's contribution to one control, in the control's units. */
     getOffset(panelId: string, path: string): number;
     /**

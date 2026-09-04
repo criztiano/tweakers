@@ -34,6 +34,15 @@ if (!ModulationStore.getSlot(0)) {
   ModulationStore.assign('move-xy', 'amount', 0, 0.6);
 }
 
+// ...and a curve in the second slot, driving the bipolar slider: a series of
+// eased clips read once per pass. Tap its step button (or its circle) to open
+// the page — the composer floats above the panel, the arrows walk its clips,
+// Delete drops one, and a tap on the Curve knob moves a clip to the next shape.
+if (!ModulationStore.getSlot(1)) {
+  ModulationStore.createSlot(1, 'curve');
+  ModulationStore.assign('move-xy', 'bias', 1, 0.8);
+}
+
 // Function buttons: the Move's Copy puts every panel's current values on the
 // clipboard as JSON. Unattached buttons keep the surface built-ins.
 MoveFunctions.attach('copy', () => {
