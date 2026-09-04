@@ -201,10 +201,10 @@ export const enumOptionIcon = (o: string | { icon?: string }): string | null =>
 export const ENUM_SHAPE_SAMPLES = 64;
 
 /**
- * The shape an enum option stands for, as an SVG path across a 100×100 box
+ * The shape an enum option stands for, as an SVG path filling a 100×100 box
  * with y pointing up — or null when the select declares no `preview`, or that
- * option has no shape. Auto-fitted through the curve row's own core, so a
- * bipolar arc and a 0..1 envelope both fill the box.
+ * option has no shape. Fitted through the curve row's own core, so a bipolar
+ * arc and a 0..1 envelope both fill the box edge to edge.
  *
  * Lives here rather than in the panel so the "what does this slot draw"
  * question has one answer both surfaces can be tested against.
@@ -218,12 +218,29 @@ export function enumShapePath(meta: ControlMeta, value: unknown): string | null 
     return null;                      /* a throwing preview draws nothing */
   }
   if (typeof sample !== 'function') return null;
-  const d = plotCurve(sample, { count: ENUM_SHAPE_SAMPLES })
-    .segments
+  const segments = plotCurve(sample, { count: ENUM_SHAPE_SAMPLES }).segments;
+
+  // The curve row fits with headroom so a thick stroke never clips at the
+  // edge of a tall surface. A slot is not tall, and that headroom reads as a
+  // gap the layout did not ask for — so the ink is re-fitted to fill the box
+  // and the CSS band alone decides how much air the drawing gets.
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const seg of segments) {
+    for (const pt of seg) {
+      if (pt.v < lo) lo = pt.v;
+      if (pt.v > hi) hi = pt.v;
+    }
+  }
+  if (lo > hi) return null;                        /* nothing was plotted */
+  const span = hi - lo;
+  const fill = (v: number) => (span > 0 ? (v - lo) / span : 0.5);
+
+  const d = segments
     .map((seg) =>
       seg
         .map((pt, i) =>
-          `${i ? 'L' : 'M'} ${(pt.t * 100).toFixed(2)} ${((1 - pt.v) * 100).toFixed(2)}`)
+          `${i ? 'L' : 'M'} ${(pt.t * 100).toFixed(2)} ${((1 - fill(pt.v)) * 100).toFixed(2)}`)
         .join(' '))
     .join(' ');
   return d || null;

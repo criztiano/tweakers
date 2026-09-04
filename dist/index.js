@@ -9185,7 +9185,19 @@ function enumShapePath(meta, value) {
     return null;
   }
   if (typeof sample !== "function") return null;
-  const d = plotCurve(sample, { count: ENUM_SHAPE_SAMPLES }).segments.map((seg) => seg.map((pt, i) => `${i ? "L" : "M"} ${(pt.t * 100).toFixed(2)} ${((1 - pt.v) * 100).toFixed(2)}`).join(" ")).join(" ");
+  const segments = plotCurve(sample, { count: ENUM_SHAPE_SAMPLES }).segments;
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const seg of segments) {
+    for (const pt of seg) {
+      if (pt.v < lo) lo = pt.v;
+      if (pt.v > hi) hi = pt.v;
+    }
+  }
+  if (lo > hi) return null;
+  const span = hi - lo;
+  const fill = (v) => span > 0 ? (v - lo) / span : 0.5;
+  const d = segments.map((seg) => seg.map((pt, i) => `${i ? "L" : "M"} ${(pt.t * 100).toFixed(2)} ${((1 - fill(pt.v)) * 100).toFixed(2)}`).join(" ")).join(" ");
   return d || null;
 }
 function enumIndex(meta, value) {

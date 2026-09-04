@@ -360,7 +360,10 @@ describe('move layout', () => {
     const ys = [...d!.matchAll(/[ML] ([\d.]+) ([\d.]+)/g)].map((m) => Number(m[2]));
     assert.equal(Math.min(...xs), 0);
     assert.equal(Math.max(...xs), 100);
-    assert.ok(Math.max(...ys) - Math.min(...ys) > 50, 'the fit should use the box');
+    // Edge to edge, both ways: the CSS band decides the drawing's air, and
+    // fit headroom left inside the box would read as a gap nobody asked for.
+    assert.equal(Math.min(...ys), 0);
+    assert.equal(Math.max(...ys), 100);
 
     // No preview, no drawing — the slot keeps its big name instead.
     assert.equal(enumShapePath(mode!, 'forward'), null);
@@ -375,6 +378,10 @@ describe('move layout', () => {
     assert.equal(enumShapePath(junk, 'a'), null);
     const nan = { ...(meta as object), preview: () => () => NaN } as never;
     assert.equal(enumShapePath(nan, 'a'), null, 'an all-NaN curve leaves nothing to stroke');
+    // A flat curve has no span to stretch; it rides the middle of the box.
+    const flat = { ...(meta as object), preview: () => () => 0.5 } as never;
+    const ys = [...enumShapePath(flat, 'a')!.matchAll(/[ML] [\d.]+ ([\d.]+)/g)].map((m) => Number(m[1]));
+    assert.deepEqual([...new Set(ys)], [50]);
   });
 
   it('returns no visible columns for an empty page', () => {
