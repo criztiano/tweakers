@@ -154,6 +154,36 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
 }
 
 /**
+ * The pad grid's four rows, top to bottom, exactly as the hardware stacks
+ * them — screen row 0 is the row nearest the knobs.
+ *
+ * Plain: y=3 is the dial-slot indicator (the dials draw it, so it is not a
+ * row here), y=2 the switches, y=1 the value chips, y=0 the ALT pad. An app
+ * that claims both bottom rows takes y=1 and y=0, and the chips move up above
+ * the switches — the same shuffle the surface makes, so a dial column keeps
+ * its chip AND its switch underneath it (see PROTOCOL.md).
+ *
+ * Hand-placed action pads take the row under the values. A single-row claim
+ * is the bottom row alone, so the actions keep theirs; a two-row claim takes
+ * both bottom rows, and the actions have nowhere left to sit.
+ */
+export function movePadRows(page: MovePage, claimedRows: number): ControlMeta[][] {
+  if (claimedRows >= 2) return [page.values, page.toggles, [], []];
+  return [page.toggles, page.values, page.actions, []];
+}
+
+/**
+ * Which claimed hardware row a screen row shows, or null when it is a control
+ * row. Two claimed rows fill screen rows 2 and 3 (y=1 then y=0); one claimed
+ * row is the bottom row alone, and lands on screen row 3 — below the action
+ * pads, exactly where the hardware puts it.
+ */
+export function moveAppPadRow(row: number, claimedRows: number): 0 | 1 | null {
+  if (claimedRows >= 2) return row === 2 ? 1 : row === 3 ? 0 : null;
+  return claimedRows === 1 && row === 3 ? 0 : null;
+}
+
+/**
  * The columns the on-screen panel actually shows: a column is occupied when
  * it has a dial, a toggle chip, or a value chip at that index. The indices
  * stay the hardware knob numbers — callers hide the unoccupied columns,
