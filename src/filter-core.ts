@@ -90,26 +90,53 @@ export const filterHand01 = (v: number, axis: FilterAxis): number => {
 export const filterHandValue = (v01: number, axis: FilterAxis): number =>
   snap(axis.min + clamp(v01, 0, 1) * (axis.max - axis.min), axis);
 
+/** The filter shapes the built-in response can draw — the biquad family. */
+export type FilterShapeType = 'lowpass' | 'highpass' | 'bandpass' | 'notch' | 'peak';
+
 /**
- * The built-in response — a 2-pole lowpass magnitude over a log frequency
- * sweep, with the resonance peak riding the knee. Apps with a real DSP
- * engine pass their own `response` so the drawing tells no lies; this one
- * is for configs that just want the picture.
+ * The built-in response — a true 2-pole biquad magnitude over a log
+ * frequency sweep, on a dB ruler with headroom above unity: the biggest
+ * peak Q allows (+20 dB) still fits under the ceiling, so a rising
+ * resonance grows the bump instead of flattening it against the top of the
+ * band; only the stopband tail meets a hard edge — the floor, where a
+ * rolloff belongs. Every shape is its analog prototype's own magnitude,
+ * not a lowpass mirrored or averaged into an approximation. Apps with a
+ * real DSP engine pass their own `response` so the drawing tells no lies;
+ * this one is for configs that just want an honest picture.
  */
-export function defaultFilterResponse(cutoff01: number, resonance01: number): FilterResponse {
+export function filterShapeResponse(
+  type: FilterShapeType,
+  cutoff01: number,
+  resonance01: number
+): FilterResponse {
   // The knee sweeps 3 decades; Q sweeps ~0.7 (no bump) to ~10 (a real peak).
   const fc = Math.pow(10, -3 + 3 * clamp(cutoff01, 0, 1));
   const q = 0.707 * Math.pow(14, clamp(resonance01, 0, 1));
+  // The peak shape's boost rides resonance instead of Q: up to +18 dB.
+  const a = Math.pow(10, (clamp(resonance01, 0, 1) * 18) / 40);
   return (t: number) => {
     const f = Math.pow(10, -3 + 3 * clamp(t, 0, 1));
     const w = f / fc;
-    const mag = 1 / Math.sqrt(Math.pow(1 - w * w, 2) + Math.pow(w / q, 2));
-    // On a dB ruler with headroom above unity: the biggest peak Q allows
-    // (+20 dB) still fits under the ceiling, so a rising resonance grows the
-    // bump instead of flattening it against the top of the band. Only the
-    // stopband tail meets a hard edge — the floor, where a rolloff belongs.
+    const w2 = w * w;
+    const den = Math.sqrt(Math.pow(1 - w2, 2) + Math.pow(w / q, 2));
+    let mag: number;
+    switch (type) {
+      case 'highpass': mag = w2 / den; break;
+      case 'bandpass': mag = (w / q) / den; break;
+      case 'notch': mag = Math.abs(1 - w2) / den; break;
+      case 'peak':
+        mag = Math.sqrt(Math.pow(1 - w2, 2) + Math.pow((w * a) / q, 2)) /
+              Math.sqrt(Math.pow(1 - w2, 2) + Math.pow(w / (a * q), 2));
+        break;
+      default: mag = 1 / den;
+    }
     return clamp((20 * Math.log10(Math.max(mag, 1e-6)) + FILTER_DB_FLOOR) / (FILTER_DB_FLOOR + FILTER_DB_CEIL), 0, 1);
   };
+}
+
+/** The lowpass face of `filterShapeResponse` — the shape a bare config gets. */
+export function defaultFilterResponse(cutoff01: number, resonance01: number): FilterResponse {
+  return filterShapeResponse('lowpass', cutoff01, resonance01);
 }
 
 /** The default response's dB window: floor 36 below unity, ceiling 24 above. */
