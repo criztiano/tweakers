@@ -10886,6 +10886,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     () => pageId ? TweakStore.getValues(pageId) : void 0,
     () => void 0
   );
+  const [, bumpControlState] = useState25(0);
+  useEffect21(
+    () => pageId ? TweakStore.subscribeControlState(pageId, () => bumpControlState((n) => n + 1)) : void 0,
+    [pageId]
+  );
   useSyncExternalStore9(
     useCallback19((cb) => ModulationStore.subscribe(cb), []),
     () => ModulationStore.getVersion(),

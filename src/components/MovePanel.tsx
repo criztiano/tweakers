@@ -209,6 +209,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     () => undefined
   );
 
+  // Presentation repoints — a curve sampler, a select's preview, the
+  // filter's response — land on the control-state channel after the host's
+  // own render, one beat behind the value change that caused them. The
+  // inline rows subscribe there; the Move surface must too, or a type
+  // switch keeps drawing the shape it had before the switch, forever.
+  const [, bumpControlState] = useState(0);
+  useEffect(
+    () => (pageId ? TweakStore.subscribeControlState(pageId, () => bumpControlState((n) => n + 1)) : undefined),
+    [pageId]
+  );
+
   // Modulation structure (slots, assignments) — the circles and the dots.
   useSyncExternalStore(
     useCallback((cb) => ModulationStore.subscribe(cb), []),
