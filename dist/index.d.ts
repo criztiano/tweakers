@@ -331,9 +331,12 @@ declare const filterHandValue: (v01: number, axis: FilterAxis) => number;
  */
 declare function defaultFilterResponse(cutoff01: number, resonance01: number): FilterResponse;
 /**
- * The response drawn as an SVG path filling a 100×100 box, y pointing up —
- * the 2-slot picture. Peaks are fitted so the tallest point touches the top
- * and the floor touches the bottom; the CSS band alone decides the air.
+ * The response drawn as an SVG path across a 100×100 box, y pointing up —
+ * the 2-slot picture. The sampler's 0..1 gain is taken at its word, never
+ * refitted: the window is the sampler's own calibration, so an open filter
+ * draws as a line near the top, a rolloff reaches the floor, and a rising
+ * resonance grows its peak into real headroom instead of being stretched
+ * (or clipped) to the band. Out-of-range samples clamp to the box edges.
  */
 declare function filterResponsePath(response: FilterResponse, samples?: number): string | null;
 
