@@ -7,6 +7,7 @@ export declare const ICON_LOOP: string[];
 export declare const ICON_TIMELINE: string[];
 export declare const ICON_CLOSE = "M6 6L18 18M6 18L18 6";
 export declare const ICON_PLUS = "M12 5V19M5 12H19";
+export declare const ICON_PENCIL: string[];
 export declare const ICON_GRIP: {
     cx: string;
     cy: string;
@@ -19,14 +20,6 @@ export declare const ICON_CLIPBOARD: {
 };
 export declare const ICON_ADD_PRESET: string[];
 export declare const ICON_TRASH: string[];
-export declare const ICON_PANEL: {
-    path: string;
-    circles: {
-        cx: string;
-        cy: string;
-        r: string;
-    }[];
-};
 export declare const ICON_MOVE_CAPTURE: {
     viewBox: string;
     path: string;
@@ -39,4 +32,22 @@ export declare const ICON_MOVE_ENTER: {
         r: string;
     };
 };
+export declare const ICON_PANEL: {
+    path: string;
+    circles: {
+        cx: string;
+        cy: string;
+        r: string;
+    }[];
+};
+/**
+ * Option glyphs — a small [lucide](https://lucide.dev) subset (ISC), drawn as
+ * stroked 24×24 paths so they read at slot size. An enum option names one of
+ * these in its `icon` field and the Move slot shows it, which beats reading
+ * four mode names off a controller at arm's length.
+ *
+ * Keep this a subset, not a mirror: an icon earns its place by being clearer
+ * than the word it stands next to.
+ */
+export declare const LUCIDE_ICONS: Record<string, string[]>;
 //# sourceMappingURL=icons.d.ts.map

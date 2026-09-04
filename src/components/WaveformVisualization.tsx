@@ -55,6 +55,12 @@ interface WaveformVisualizationProps {
   playheadColor?: string;
   /** When true, selecting a loop auto-zooms to frame it (manual zoom resumes once the loop is cleared). */
   autoZoomOnLoop?: boolean;
+  /**
+   * Magnification, 1 = the whole sample. Passing it takes the zoom over — the
+   * buttons stand down and the host drives it (the Move's wheel, say). Left
+   * out, the component keeps its own zoom and its own buttons.
+   */
+  zoom?: number;
   width?: number;
   height?: number;
 }
@@ -75,11 +81,15 @@ export function WaveformVisualization({
   waveColor,
   playheadColor,
   autoZoomOnLoop = false,
+  zoom: zoomProp,
   width = 256,
   height = 140,
 }: WaveformVisualizationProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [zoom, setZoom] = useState(1);
+  const [ownZoom, setOwnZoom] = useState(1);
+  const controlled = zoomProp !== undefined;
+  const zoom = controlled ? Math.max(1, zoomProp) : ownZoom;
+  const setZoom = setOwnZoom;
 
   // Latest props, read by the engine each frame so a prop change never restarts it.
   const runtimeRef = useRef<WaveformRuntime>(null as unknown as WaveformRuntime);
@@ -112,7 +122,7 @@ export function WaveformVisualization({
 
   const atMaxZoom = zoom >= WAVEFORM_MAX_ZOOM;
   // While auto-zoom frames a loop, manual zoom is suspended — hide its controls.
-  const framingLoop = autoZoomOnLoop && !!loop;
+  const framingLoop = (autoZoomOnLoop && !!loop) || controlled;
 
   return (
     <div className="tweakers-waveform-viz-wrap" style={{ width }}>

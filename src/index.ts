@@ -10,7 +10,7 @@ export type { TweakPosition, TweakMode, TweakTheme } from './components/TweakRoo
 export { MovePanel } from './components/MovePanel';
 export { MoveActionButton } from './components/MoveActionButton';
 export type { MoveActionButtonProps } from './components/MoveActionButton';
-export { buildMovePages, buildModMovePage, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
+export { buildMovePages, buildModMovePage, movePadRows, moveAppPadRow, visibleColumns, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
 export type { MovePage } from './move-layout';
 
 // The big-slot library — the dictionary of what a Move dial slot can be
@@ -23,9 +23,26 @@ export type { FilterAxis, FilterAxisConfig, FilterValue, FilterResponse } from '
 export { FilterControl } from './components/FilterControl';
 export { MoveFunctions, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_SPECIAL_BUTTONS } from './move-functions';
 export type { MoveFunctionButton, MoveFunctionPress, MoveFunctionHandler, MoveFunctionOptions, MoveFunctionRunListener } from './move-functions';
+export { MoveWaveform } from './components/MoveWaveform';
+export type { MoveWaveformProps } from './components/MoveWaveform';
+export {
+  MoveWaveformStore,
+  defaultView as moveWaveformDefaultView,
+  scrubBy,
+  zoomBy,
+  stepPosition,
+  loopFromStep,
+  loopSteps,
+  MOVE_WAVEFORM_STEPS,
+} from './move-waveform';
+export type { MoveWaveformVariant, MoveWaveformView } from './move-waveform';
 export { MoveVolumeDisplay } from './move-volume';
 export type { MoveVolumeDisplayState } from './move-volume';
 export { ICON_MOVE_CAPTURE, ICON_MOVE_ENTER } from './icons';
+// Raw hardware an app claims for itself — the bottom pad rows, the step
+// buttons, the device screen — kept for the on-screen mirror.
+export { MoveSurfaceStore } from './move-surface-store';
+export type { MovePadCell, MoveStepCell, MoveScreenList, MoveSurfaceState } from './move-surface-store';
 
 // List screen (the Move's dark display list, standalone)
 export { ListScreen } from './components/ListScreen';

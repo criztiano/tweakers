@@ -101,9 +101,11 @@ export function MoveSlotShape({ d, className = 'tweakers-move-dial-shape' }: { d
   );
 }
 
-/** The basic slot and its value-first twin — readout plus fill bar. */
+/** The basic slot and its value-first twin — readout plus fill bar. A
+ *  bipolar dial parked exactly on its origin states the zero outright
+ *  (the marker) instead of leaving a stub to read against a tick. */
 export function MoveSlotDefaultBody({
-  label, value, pct, originPct,
+  label, value, pct, originPct, atOrigin,
 }: {
   label: string;
   value: ReactNode;
@@ -111,20 +113,23 @@ export function MoveSlotDefaultBody({
   pct: number;
   /** Bipolar/origin anchor position, 0–100 — null for a plain fill. */
   originPct: number | null;
+  /** Parked on the origin exactly — the dial's zero. */
+  atOrigin?: boolean;
 }) {
   return (
     <>
       <MoveSlotReadout label={label} value={value} />
       <div className="tweakers-move-dial-bar">
-        {originPct != null && (
-          <span className="tweakers-move-dial-origin" style={{ left: `${originPct}%` }} />
-        )}
         <div
           className="tweakers-move-dial-fill"
+          data-zero={atOrigin || undefined}
           style={originPct != null
             ? { marginLeft: `${Math.min(pct, originPct)}%`, width: `${Math.abs(pct - originPct)}%` }
             : { width: `${pct}%` }}
         />
+        {atOrigin && (
+          <span className="tweakers-move-dial-zero" style={{ left: `${originPct}%` }} />
+        )}
       </div>
     </>
   );

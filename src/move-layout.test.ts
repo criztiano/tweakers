@@ -384,6 +384,37 @@ describe('move layout', () => {
     assert.deepEqual([...new Set(ys)], [50]);
   });
 
+  /* THE shared fixture — the kit's test/kit-pad-columns.test.mjs lays out the
+     identical panel and must land the identical columns. Change one, change
+     both. */
+  it('lays out the shared fixture panel kit-identically', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, {
+      d1: [0.5, 0, 1],
+      t1: false,
+      d2: [0.5, 0, 1],
+      s1: { type: 'slider', default: 0, min: 0, max: 1 },
+      s2: { type: 'number', default: 0, min: 0, max: 1 },
+      e1: [0.5, 0, 1], e2: [0.5, 0, 1], e3: [0.5, 0, 1],
+      e4: [0.5, 0, 1], e5: [0.5, 0, 1], e6: [0.5, 0, 1], e7: [0.5, 0, 1],
+      act: { type: 'action' },
+      t2: false,
+    } as never, undefined, { movePads: { s1: 6, s2: 2, act: 3, t2: 5 } });
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    /* chip-placed s1/s2 never eat a dial slot on the way past */
+    assert.deepEqual(page.dials.map((d) => d.path), ['d1', 'd2', 'e1', 'e2', 'e3', 'e4', 'e5', 'e6']);
+    /* named columns win; the unnamed pack leftmost-free */
+    assert.equal(page.toggles[0]?.path, 't1');
+    assert.equal(page.toggles[5]?.path, 't2');
+    assert.equal(page.values[6]?.path, 's1');
+    assert.equal(page.values[2]?.path, 's2');
+    assert.equal(page.values[0]?.path, 'e7');      /* past the dial budget */
+    assert.equal(page.values.filter(Boolean).length, 3);
+    /* an action reaches the pads only through a named column */
+    assert.equal(page.actions[3]?.path, 'act');
+    assert.equal(page.actions.filter(Boolean).length, 1);
+  });
+
   it('returns no visible columns for an empty page', () => {
     const id = nextId();
     TweakStore.registerPanel(id, id, { free: { type: 'number', default: 3 } } as never);

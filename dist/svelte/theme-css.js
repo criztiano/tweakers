@@ -5668,9 +5668,9 @@ input.tweakers-list-item-title:focus {
      top    = chip top (6) + chip height (18) + 8
      bottom = option bottom + option line (20) + 8 */
 .tweakers-move-dial {
-  --move-option-bottom: 21px;   /* the track's 8 + 9, plus 4 of air */
+  --move-option-bottom: 23px;   /* the track's 8 + 9, plus 6 of air */
   --move-shape-top: 32px;       /* chip top (6) + chip height (18) + 8 */
-  --move-shape-bottom: 45px;    /* option bottom (21) + option line (16) + 8 */
+  --move-shape-bottom: 47px;    /* option bottom (23) + option line (16) + 8 */
 }
 
 /* Height, not a bottom edge: an <svg> is a replaced element, so top+bottom
@@ -5690,7 +5690,7 @@ input.tweakers-list-item-title:focus {
 .tweakers-move-dial-shape path {
   fill: none;
   stroke: var(--move-text);
-  stroke-width: 2;
+  stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
@@ -5722,14 +5722,25 @@ input.tweakers-list-item-title:focus {
 }
 
 /* Origin tick — an anchored (bipolar) dial fills out from this mark. */
-.tweakers-move-dial-origin {
+/* Sitting exactly at the origin, a bipolar dial says so with a ring around
+   its dot rather than a tick it happens to be standing on — and the dot is
+   centred on the origin, not grown from it, so zero looks like zero. */
+.tweakers-move-dial-zero {
   position: absolute;
-  top: -2px;
-  bottom: -2px;
-  width: 1px;
-  margin-left: -0.5px;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  margin: -2.5px 0 0 -2.5px;
+  border-radius: 50%;
   background: var(--move-text);
-  opacity: 0.3;
+  box-shadow: 0 0 0 2px var(--move-bg), 0 0 0 3px var(--move-text);
+  pointer-events: none;
+}
+
+/* The fill's stub is what reads as the dot everywhere else; at the origin the
+   ring above takes over, and a stub beside it would double the mark. */
+.tweakers-move-dial-fill[data-zero] {
+  min-width: 0;
 }
 
 .tweakers-move-dial-fill {
@@ -6092,6 +6103,19 @@ input.tweakers-list-item-title:focus {
   background: var(--move-chip);
 }
 
+/* App pad — a row the app claimed for itself: a step, a slice, a note. It
+   borrows the toggle chip's shape and inversion, but its colour is the
+   app's own and rides inline on the indicator bar. Unlit pads stay
+   readable, so the row shows what is there before you play it. */
+.tweakers-move-pad[data-kind="app"] {
+  padding: 0 4px;
+  font-weight: 400;
+}
+
+.tweakers-move-pad[data-kind="app"]:not([data-on="true"]) .tweakers-move-pad-indicator {
+  opacity: 0.35;
+}
+
 /* Value chip — label left in Regular, number Bold + unit Regular right
    (800:1748). Hold to peek at it in the column's dial; tap to latch it
    in — the chip inverts like a toggle and pulses while it holds the
@@ -6165,14 +6189,80 @@ input.tweakers-list-item-title:focus {
     font-size: 18px;
   }
   .tweakers-move-dial {
-    --move-option-bottom: 20px;
+    --move-option-bottom: 22px;
     --move-shape-top: 32px;
-    --move-shape-bottom: 42px;
+    --move-shape-bottom: 44px;
   }
   .tweakers-move-dial-option {
     font-size: 12px;
     line-height: 14px;
   }
+}
+
+/* ==========================================================================
+   Move waveform — the sample the panel's knobs are acting on.
+
+   It wears the same surface as the list screen (#1e1e1e, the hardware's own
+   display) with no border: on this instrument a display is a dark hole in the
+   face, not a framed picture. Three placements, one look.
+   ========================================================================== */
+
+.tweakers-move-wave {
+  --move-display: #1e1e1e;
+  width: 100%;
+  border-radius: var(--move-radius, 12px);
+  background: var(--move-display);
+  color: var(--move-text, #dee3c9);
+  overflow: hidden;
+}
+
+/* The canvas sits in its own box so an app can lay markers over the sample
+   without fighting the waveform's own sizing. */
+.tweakers-move-wave-canvas {
+  position: relative;
+  width: 100%;
+}
+
+.tweakers-move-wave .tweakers-waveform-viz-wrap {
+  display: block;
+  width: 100% !important;
+}
+
+/* The stock canvas paints the panel surface behind the wave, which on this
+   dark face would sit a shade of grey on top of the display it is meant to be
+   cut into. Here the wrapper IS the display, so the canvas draws on nothing. */
+.tweakers-move-wave .tweakers-waveform-viz {
+  display: block;
+  width: 100% !important;
+  background: transparent;
+  border-radius: 0;
+}
+
+/* Slot placement — the dial row's own footprint and radius, so a waveform
+   dropped beside the knobs reads as one of them. */
+.tweakers-move-wave[data-variant='slot'] {
+  border-radius: var(--move-radius-small, 8px);
+}
+
+/* Docked — floating above the panel, matching its width and its shadow. */
+.tweakers-move-root[data-wave-dock] {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10000;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.tweakers-move-wave[data-variant='dock'] {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(1180px, calc(100vw - 40px));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
 }
 
 /* ==========================================================================
