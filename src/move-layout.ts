@@ -3,6 +3,7 @@ import type { ModPageLayout } from './modulation-core';
 import { resolveAxis, type XYValue } from './xy-pad-core';
 import { plotCurve } from './curve-preview-core';
 import { clampRange, type RangeValue } from './range-slider-core';
+import { resolveFilterAxis, normalizeFilterValue, filterHand01, filterHandValue, defaultFilterResponse, filterResponsePath, type FilterValue } from './filter-core';
 
 /**
  * The Move's control surface, as the bridge kit maps it (move-tweakers v0):
@@ -49,11 +50,23 @@ export const isEnumDial = (c: ControlMeta) =>
   c.type === 'select' && Array.isArray(c.options) && c.options.length > 1;
 
 const isDial = (c: ControlMeta) =>
-  c.type === 'slider' || c.type === 'xy' || c.type === 'range' || isEnumDial(c) ||
+  c.type === 'slider' || c.type === 'xy' || c.type === 'range' || c.type === 'filter' || isEnumDial(c) ||
   (c.type === 'number' && c.min != null && c.max != null);
 
 /** Two-handed dials and enums need a slot of their own, never a value chip. */
-const noChip = (c: ControlMeta) => c.type === 'xy' || c.type === 'range' || isEnumDial(c);
+const noChip = (c: ControlMeta) => c.type === 'xy' || c.type === 'range' || c.type === 'filter' || isEnumDial(c);
+
+/**
+ * How many dial columns a control claims. The filter is the kit's first
+ * 2-slot control: its picture spans two columns, and on the hardware the
+ * left column's knob turns cutoff while the right column's turns resonance.
+ */
+export const dialSpan = (c: ControlMeta | undefined): number =>
+  c?.type === 'filter' ? 2 : 1;
+
+/** True when column i only continues the span-2 dial sitting at i-1. */
+export const isSpanContinuation = (page: MovePage, i: number): boolean =>
+  i > 0 && page.dials[i] !== undefined && page.dials[i] === page.dials[i - 1];
 
 /**
  * The modulator-settings page (hold a step button): the kind picker takes
@@ -114,7 +127,22 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
       // dials and enums can't be chips at all, so a pad column on one of
       // those is ignored and it keeps its slot.
       const chipPlaced = (c: ControlMeta) => padColumn(panel, c) !== null && !noChip(c);
-      const dials = controls.filter((c) => isDial(c) && !chipPlaced(c)).slice(0, MOVE_DIALS);
+      // Dials pack left to right, each claiming its span of columns — a
+      // span-2 control sits in both of its columns, so occupancy checks and
+      // the knob-number rule need no second bookkeeping. A wide control that
+      // no longer fits is passed over; a narrow one behind it may still land.
+      const dials: ControlMeta[] = [];
+      let nextCol = 0;
+      for (const c of controls) {
+        if (!isDial(c) || chipPlaced(c)) continue;
+        const span = dialSpan(c);
+        if (nextCol + span > MOVE_DIALS) {
+          if (nextCol >= MOVE_DIALS) break;
+          continue;
+        }
+        for (let s = 0; s < span; s++) dials[nextCol + s] = c;
+        nextCol += span;
+      }
 
       const toggles: ControlMeta[] = [];
       const values: ControlMeta[] = [];
@@ -333,6 +361,40 @@ export function denormalizeEnumDial(meta: ControlMeta, v01: number): string {
   if (opts.length === 0) return '';
   const i = Math.round(Math.min(1, Math.max(0, v01)) * (opts.length - 1));
   return opts[i];
+}
+
+/** A filter dial's two hands, each 0..1 — the two numbers on the wire.
+ *  The left column's knob is cutoff, the right column's is resonance. */
+export function normalizeFilterDial(meta: ControlMeta, value: unknown): { cutoff: number; resonance: number } {
+  const ca = resolveFilterAxis(meta.cutoffAxis, 'cutoff');
+  const ra = resolveFilterAxis(meta.resonanceAxis, 'resonance');
+  const v = normalizeFilterValue(value, ca, ra);
+  return { cutoff: filterHand01(v.cutoff, ca), resonance: filterHand01(v.resonance, ra) };
+}
+
+/** Hand positions 0..1 back to the control's real pair, kit-identical. */
+export function denormalizeFilterDial(meta: ControlMeta, cutoff01: number, resonance01: number): FilterValue {
+  const ca = resolveFilterAxis(meta.cutoffAxis, 'cutoff');
+  const ra = resolveFilterAxis(meta.resonanceAxis, 'resonance');
+  return { cutoff: filterHandValue(cutoff01, ca), resonance: filterHandValue(resonance01, ra) };
+}
+
+/**
+ * The 2-slot picture: the filter's magnitude response as an SVG path filling
+ * a 100×100 box, y pointing up — through the app's own `response` when the
+ * config brought one, else the kit's lowpass. One answer both surfaces can
+ * be tested against, like `enumShapePath`.
+ */
+export function filterShapePath(meta: ControlMeta, value: unknown): string | null {
+  const pos = normalizeFilterDial(meta, value);
+  let response: ((t: number) => number) | null | undefined;
+  try {
+    response = (meta.response ?? defaultFilterResponse)(pos.cutoff, pos.resonance);
+  } catch {
+    return null;                      /* a throwing response draws nothing */
+  }
+  if (typeof response !== 'function') return null;
+  return filterResponsePath(response);
 }
 
 /** Where the fill anchors for a bipolar/origin slider, 0..1 (else 0). */

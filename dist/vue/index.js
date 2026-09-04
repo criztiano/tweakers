@@ -449,10 +449,10 @@ function normToValue(n, axis) {
 function invertY(n) {
   return 1 - n;
 }
-function valueFromPoint(point, xAxis, yAxis, snap = false) {
+function valueFromPoint(point, xAxis, yAxis, snap2 = false) {
   let x = clamp2(normToValue(point.x, xAxis), xAxis.min, xAxis.max);
   let y = clamp2(normToValue(invertY(point.y), yAxis), yAxis.min, yAxis.max);
-  if (snap) {
+  if (snap2) {
     x = snapToStep(x, xAxis.step, xAxis.min);
     y = snapToStep(y, yAxis.step, yAxis.min);
   }
@@ -486,10 +486,10 @@ function centerValue(xAxis, yAxis) {
 function coerceComponent(v, axis) {
   return typeof v === "number" && Number.isFinite(v) ? v : axis.origin;
 }
-function normalizeValue(value, xAxis, yAxis, snap = false) {
+function normalizeValue(value, xAxis, yAxis, snap2 = false) {
   const resolve = (raw, axis) => {
     let v = clamp2(coerceComponent(raw, axis), axis.min, axis.max);
-    if (snap) v = snapToStep(v, axis.step, axis.min);
+    if (snap2) v = snapToStep(v, axis.step, axis.min);
     return v + 0;
   };
   return {
@@ -544,6 +544,35 @@ function handleLeftStyles(lowPercent, highPercent) {
   return {
     low: `max(0px, min(calc(100% - 2px), calc(${lowPercent}% - 1px - ${ramp})))`,
     high: `min(calc(100% - 2px), max(0px, calc(${highPercent}% - 1px + ${ramp})))`
+  };
+}
+
+// src/filter-core.ts
+var FILTER_AXIS_DEFAULTS = {
+  cutoff: { min: 0, max: 1, step: 0, label: "Freq" },
+  resonance: { min: 0, max: 1, step: 0, label: "Res" }
+};
+function resolveFilterAxis(axis, hand) {
+  const base = FILTER_AXIS_DEFAULTS[hand];
+  return {
+    min: axis?.min ?? base.min,
+    max: axis?.max ?? base.max,
+    step: axis?.step ?? base.step,
+    label: axis?.label ?? base.label,
+    formatValue: axis?.formatValue
+  };
+}
+var clamp4 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+var snap = (v, axis) => {
+  let out = clamp4(Number.isFinite(v) ? v : axis.min, axis.min, axis.max);
+  if (axis.step > 0) out = clamp4(axis.min + Math.round((out - axis.min) / axis.step) * axis.step, axis.min, axis.max);
+  return Number(out.toFixed(6));
+};
+function normalizeFilterValue(value, cutoffAxis, resonanceAxis) {
+  const v = typeof value === "object" && value !== null ? value : {};
+  return {
+    cutoff: snap(typeof v.cutoff === "number" ? v.cutoff : cutoffAxis.max, cutoffAxis),
+    resonance: snap(typeof v.resonance === "number" ? v.resonance : resonanceAxis.min, resonanceAxis)
   };
 }
 
@@ -1041,13 +1070,19 @@ var TweakStoreClass = class {
               changed = true;
             }
           }
+        } else if (this.isFilterConfig(value) && value.response) {
+          const control = this.findControlByPath(panel.controls, path);
+          if (control?.type === "filter" && control.response !== value.response) {
+            control.response = value.response;
+            changed = true;
+          }
         } else if (this.isSelectConfig(value) && value.preview) {
           const control = this.findControlByPath(panel.controls, path);
           if (control?.type === "select" && control.preview !== value.preview) {
             control.preview = value.preview;
             changed = true;
           }
-        } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
+        } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
           visit(value, path);
         }
       }
@@ -1277,7 +1312,7 @@ var TweakStoreClass = class {
         const hasPhysics = value.stiffness !== void 0 || value.damping !== void 0 || value.mass !== void 0;
         const hasTime = value.visualDuration !== void 0 || value.bounce !== void 0;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? "advanced" : "simple";
-      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isCurveConfig(value)) {
+      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isCurveConfig(value)) {
         this.initTransitionModes(value, path, values);
       }
     }
@@ -1345,6 +1380,8 @@ var TweakStoreClass = class {
         controls.push({ type: "gradient", path, label });
       } else if (this.isXYConfig(value)) {
         controls.push({ type: "xy", path, label, xAxis: value.x, yAxis: value.y, grid: value.grid, density: value.density, snap: value.snap, returnToCenter: value.returnToCenter, showValues: value.showValues });
+      } else if (this.isFilterConfig(value)) {
+        controls.push({ type: "filter", path, label, cutoffAxis: value.cutoff, resonanceAxis: value.resonance, response: value.response });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: "text", path, label, placeholder: value.placeholder });
       } else if (this.isRangeConfig(value)) {
@@ -1485,6 +1522,12 @@ var TweakStoreClass = class {
         values[path] = value.default ?? "";
       } else if (this.isRangeConfig(value)) {
         values[path] = value.default ?? { min: value.min, max: value.max };
+      } else if (this.isFilterConfig(value)) {
+        values[path] = normalizeFilterValue(
+          value.default,
+          resolveFilterAxis(value.cutoff, "cutoff"),
+          resolveFilterAxis(value.resonance, "resonance")
+        );
       } else if (this.isGalleryConfig(value)) {
         values[path] = value.default ?? value.items[0]?.id ?? "";
       } else if (this.isFileConfig(value)) {
@@ -1526,6 +1569,9 @@ var TweakStoreClass = class {
   // "nested object → folder" fallback, so the shorthand is deliberately unsupported.
   isXYConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "xy";
+  }
+  isFilterConfig(value) {
+    return typeof value === "object" && value !== null && "type" in value && value.type === "filter";
   }
   isRangeConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "range";
@@ -1672,6 +1718,20 @@ var TweakStoreClass = class {
         const xAxis = resolveAxis(control.xAxis);
         const yAxis = resolveAxis(control.yAxis);
         return normalizeValue(candidate, xAxis, yAxis, false);
+      }
+      case "filter": {
+        if (typeof existingValue !== "object" || existingValue === null || Array.isArray(existingValue)) {
+          return defaultValue;
+        }
+        const candidate = existingValue;
+        if (typeof candidate.cutoff !== "number" || typeof candidate.resonance !== "number") {
+          return defaultValue;
+        }
+        return normalizeFilterValue(
+          candidate,
+          resolveFilterAxis(control.cutoffAxis, "cutoff"),
+          resolveFilterAxis(control.resonanceAxis, "resonance")
+        );
       }
       case "text":
       case "file":
@@ -3399,7 +3459,7 @@ var NumberControl = defineComponent7({
     let isClickFlag = true;
     let scrubStartValue = 0;
     let isPointerHeld = false;
-    const clamp6 = (v) => {
+    const clamp7 = (v) => {
       let out = v;
       if (props.min != null) out = Math.max(props.min, out);
       if (props.max != null) out = Math.min(props.max, out);
@@ -3427,7 +3487,7 @@ var NumberControl = defineComponent7({
       if (!isClickFlag) {
         const travel = isVertical.value ? -dy : dx;
         const perPixel = step.value * (event.shiftKey ? 10 : event.altKey ? 0.1 : 1);
-        const next = clamp6(scrubStartValue + travel * perPixel);
+        const next = clamp7(scrubStartValue + travel * perPixel);
         emit("change", roundValue(next, step.value));
       }
     };
@@ -3450,7 +3510,7 @@ var NumberControl = defineComponent7({
     const handleInputSubmit = () => {
       const parsed = parseFloat(inputValue.value);
       if (!Number.isNaN(parsed)) {
-        emit("change", roundValue(clamp6(parsed), step.value));
+        emit("change", roundValue(clamp7(parsed), step.value));
       }
       showInput.value = false;
     };
@@ -3678,7 +3738,7 @@ import { computed as computed5, defineComponent as defineComponent10, h as h10, 
 
 // src/vue/components/GradientTransformPad.ts
 import { defineComponent as defineComponent9, h as h9, onBeforeUnmount as onBeforeUnmount3, onMounted as onMounted7, ref as ref9 } from "vue";
-var clamp4 = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+var clamp5 = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 var wrap360 = (deg) => (deg % 360 + 360) % 360;
 var RAD = Math.PI / 180;
 var vectorToAngle = (dx, dy) => wrap360(Math.atan2(dx, -dy) / RAD);
@@ -3776,7 +3836,7 @@ var GradientTransformPad = defineComponent9({
       const majorY = cyPx + Math.sin(theta) * rxPx;
       const minorX = cxPx - Math.sin(theta) * ryPx;
       const minorY = cyPx + Math.cos(theta) * ryPx;
-      const pin = (x, y) => ({ x: clamp4(x, 5, w - 5), y: clamp4(y, 5, hh - 5) });
+      const pin = (x, y) => ({ x: clamp5(x, 5, w - 5), y: clamp5(y, 5, hh - 5) });
       const major = pin(majorX, majorY);
       const minor = pin(minorX, minorY);
       const majorLineLen = Math.hypot(major.x - cxPx, major.y - cyPx);
@@ -3853,7 +3913,7 @@ var GradientTransformPad = defineComponent9({
             class: "tweakers-gradient-pad-handle",
             "data-kind": "center",
             "aria-label": "Gradient center",
-            style: { left: `${clamp4(cxPx, 5, w - 5)}px`, top: `${clamp4(cyPx, 5, hh - 5)}px` },
+            style: { left: `${clamp5(cxPx, 5, w - 5)}px`, top: `${clamp5(cyPx, 5, hh - 5)}px` },
             ...handleProps("center")
           })
         ] : []
@@ -6978,7 +7038,7 @@ import { computed as computed11, onMounted as onMounted18, onUnmounted as onUnmo
 function round22(value) {
   return Math.round(value * 100) / 100;
 }
-function clamp5(value, min, max) {
+function clamp6(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 function isTransitionConfig(value) {
@@ -7019,7 +7079,7 @@ function springSettleDuration(params) {
   const zeta = params.damping / (2 * Math.sqrt(params.stiffness * params.mass));
   const decay = zeta >= 1 ? zeta * w0 - w0 * Math.sqrt(Math.max(0, zeta * zeta - 1)) : zeta * w0;
   const duration = Math.log(200) / Math.max(decay, 1e-6);
-  return round22(clamp5(duration, 0.05, 10));
+  return round22(clamp6(duration, 0.05, 10));
 }
 function cubicBezierProgress(p, [x1, y1, x2, y2]) {
   if (p <= 0) return 0;
@@ -7396,7 +7456,7 @@ function sampleCurve(curve, elapsed) {
     return springProgress(elapsed, curve.spring);
   }
   if (curve.ease) {
-    return cubicBezierProgress(clamp5(curve.duration > 0 ? elapsed / curve.duration : 1, 0, 1), curve.ease);
+    return cubicBezierProgress(clamp6(curve.duration > 0 ? elapsed / curve.duration : 1, 0, 1), curve.ease);
   }
   return curve.duration > 0 ? Math.min(1, elapsed / curve.duration) : 1;
 }
@@ -7630,7 +7690,7 @@ function computeClipState(clip, time, cycleTime = time) {
   const phaseElapsed = looping ? cycleTime - clip.at : elapsed;
   const fold = (e) => looping ? e % total : e;
   const basePos = started ? fold(Math.max(0, phaseElapsed)) : 0;
-  const progress = total > 0 ? clamp5(basePos / total, 0, 1) : started ? 1 : 0;
+  const progress = total > 0 ? clamp6(basePos / total, 0, 1) : started ? 1 : 0;
   let current;
   let stepIndex = 0;
   if (clip.tracks.length && clip.props?.length) {
@@ -7710,7 +7770,7 @@ function mixHexColors(a, b, p) {
   const ca = parseHex2(a);
   const cb = parseHex2(b);
   if (!ca || !cb) return null;
-  const t = clamp5(p, 0, 1);
+  const t = clamp6(p, 0, 1);
   const mixed = ca.map((v, i) => Math.round(v + (cb[i] - v) * t));
   const hex = (n) => n.toString(16).padStart(2, "0");
   const rgb = `#${hex(mixed[0])}${hex(mixed[1])}${hex(mixed[2])}`;
@@ -7772,21 +7832,21 @@ function cloneTimelineValue(value) {
   );
 }
 function clampTrackDelay(delay, at, trackDuration, timelineDuration) {
-  return clamp5(round22(delay), 0, Math.max(0, round22(timelineDuration - at - trackDuration)));
+  return clamp6(round22(delay), 0, Math.max(0, round22(timelineDuration - at - trackDuration)));
 }
 function clampClipMove(at, duration, timelineDuration) {
-  return clamp5(round22(at), 0, Math.max(0, timelineDuration - duration));
+  return clamp6(round22(at), 0, Math.max(0, timelineDuration - duration));
 }
 function clampClipResizeEnd(duration, at, timelineDuration) {
-  return clamp5(round22(duration), TIMELINE_MIN_CLIP_DURATION, timelineDuration - at);
+  return clamp6(round22(duration), TIMELINE_MIN_CLIP_DURATION, timelineDuration - at);
 }
 function clampClipResizeStart(newAt, at, duration) {
-  const clampedAt = clamp5(round22(newAt), 0, at + duration - TIMELINE_MIN_CLIP_DURATION);
+  const clampedAt = clamp6(round22(newAt), 0, at + duration - TIMELINE_MIN_CLIP_DURATION);
   return { at: clampedAt, duration: round22(at + duration - clampedAt) };
 }
 function clampStepResize(duration, at, otherStepsTotal, timelineDuration) {
   const max = Math.max(TIMELINE_MIN_CLIP_DURATION, timelineDuration - at - otherStepsTotal);
-  return clamp5(round22(duration), TIMELINE_MIN_CLIP_DURATION, max);
+  return clamp6(round22(duration), TIMELINE_MIN_CLIP_DURATION, max);
 }
 function normalizeTimelineValuesForCopy(values, clips) {
   const normalized = { ...values };
@@ -8085,7 +8145,7 @@ var TweakTimeline = defineComponent30({
       const move = (next) => {
         next.preventDefault();
         const viewportMax = Math.max(MIN_DOCK_MAX_HEIGHT, window.innerHeight - 24);
-        dockMaxHeight.value = clamp5(startHeight + pointerY - next.clientY, MIN_DOCK_MAX_HEIGHT, viewportMax);
+        dockMaxHeight.value = clamp6(startHeight + pointerY - next.clientY, MIN_DOCK_MAX_HEIGHT, viewportMax);
       };
       const finish = () => {
         window.removeEventListener("pointermove", move);
@@ -8231,7 +8291,7 @@ var TimelineOverview = defineComponent30({
     onUnmounted13(() => unsubscribe?.());
     const seek = (clientX) => {
       if (!scrub || scrub.rect.width <= 0 || props.duration <= 0) return;
-      const next = clamp5((clientX - scrub.rect.left) / scrub.rect.width * props.duration, 0, props.duration);
+      const next = clamp6((clientX - scrub.rect.left) / scrub.rect.width * props.duration, 0, props.duration);
       TimelineStore.seek(props.id, next);
       props.onNavigate(next);
     };
@@ -8298,7 +8358,7 @@ var TimelinePlayheadFlag = defineComponent30({
     });
     const seek = (clientX) => {
       if (!scrub || scrub.rect.width <= 0) return;
-      TimelineStore.seek(props.id, clamp5(
+      TimelineStore.seek(props.id, clamp6(
         scrub.viewStart + (clientX - scrub.rect.left) / scrub.rect.width * (scrub.viewEnd - scrub.viewStart),
         scrub.viewStart,
         scrub.viewEnd
@@ -8306,8 +8366,8 @@ var TimelinePlayheadFlag = defineComponent30({
     };
     return () => {
       if (time.value < props.viewStart || time.value > props.viewEnd || props.laneWidth <= 0) return null;
-      const x = clamp5((time.value - props.viewStart) * props.pxPerSecond, 0, props.laneWidth);
-      const flagCenter = clamp5(
+      const x = clamp6((time.value - props.viewStart) * props.pxPerSecond, 0, props.laneWidth);
+      const flagCenter = clamp6(
         x,
         PLAYHEAD_FLAG_WIDTH / 2 - PLAYHEAD_FLAG_EDGE_OVERHANG,
         props.laneWidth - PLAYHEAD_FLAG_WIDTH / 2 + PLAYHEAD_FLAG_EDGE_OVERHANG
@@ -8370,7 +8430,7 @@ var TimelinePlayheadFlag = defineComponent30({
   }
 });
 function clampViewStart(start, duration, visibleDuration) {
-  return clamp5(start, 0, Math.max(0, duration - visibleDuration));
+  return clamp6(start, 0, Math.max(0, duration - visibleDuration));
 }
 function formatRulerSeconds(time, step) {
   if (step >= 1 && Number.isInteger(time)) return formatClock(time);
@@ -8445,7 +8505,7 @@ var TimelineSection = defineComponent30({
       laneWidth.value > 0 && props.meta.duration > 0 ? MAJOR_TICK_TARGET_PX * props.meta.duration / (MILLISECOND_STEP * 10 * laneWidth.value) : MIN_TIMELINE_MAX_ZOOM
     ));
     watch13(maxZoom, (next) => {
-      zoom.value = clamp5(zoom.value, 1, next);
+      zoom.value = clamp6(zoom.value, 1, next);
     }, { immediate: true });
     watch13([() => props.meta.duration, zoom], () => {
       viewStart.value = clampViewStart(viewStart.value, props.meta.duration, props.meta.duration / zoom.value);
@@ -8489,14 +8549,14 @@ var TimelineSection = defineComponent30({
     let zoomDrag = null;
     let rulerGesture = null;
     let trackScrub = null;
-    const rulerTimeFromClientX = (clientX, rect, viewStartAt, visibleAt) => clamp5(
+    const rulerTimeFromClientX = (clientX, rect, viewStartAt, visibleAt) => clamp6(
       viewStartAt + (clientX - rect.left) / rect.width * visibleAt,
       viewStartAt,
       viewStartAt + visibleAt
     );
     const seekTrack = (clientX) => {
       if (!trackScrub || trackScrub.rect.width <= 0) return;
-      TimelineStore.seek(props.meta.id, clamp5(
+      TimelineStore.seek(props.meta.id, clamp6(
         trackScrub.viewStart + (clientX - trackScrub.rect.left) / trackScrub.rect.width * trackScrub.visibleDuration,
         trackScrub.viewStart,
         trackScrub.viewStart + trackScrub.visibleDuration
@@ -8793,7 +8853,7 @@ var TimelineSection = defineComponent30({
                 };
                 return;
               }
-              const ratio = clamp5((event.clientX - rect.left) / rect.width, 0, 1);
+              const ratio = clamp6((event.clientX - rect.left) / rect.width, 0, 1);
               zoomDrag = {
                 pointerX: event.clientX,
                 zoom: zoom.value,
@@ -8819,7 +8879,7 @@ var TimelineSection = defineComponent30({
               const dx = event.clientX - zoomDrag.pointerX;
               if (!zoomDrag.moved && Math.abs(dx) <= DRAG_THRESHOLD_PX) return;
               zoomDrag.moved = true;
-              const nextZoom = clamp5(zoomDrag.zoom * Math.exp(dx / ZOOM_DRAG_DISTANCE), 1, maxZoom.value);
+              const nextZoom = clamp6(zoomDrag.zoom * Math.exp(dx / ZOOM_DRAG_DISTANCE), 1, maxZoom.value);
               const duration = props.meta.duration / nextZoom;
               zoom.value = nextZoom;
               viewStart.value = clampViewStart(zoomDrag.anchorTime - zoomDrag.anchorRatio * duration, props.meta.duration, duration);
@@ -8959,14 +9019,14 @@ var ClipPopover = defineComponent30({
       const right = current.offsetLeft + current.width;
       const bottom = current.offsetTop + current.height;
       const width = Math.min(POPOVER_WIDTH, Math.max(220, current.width - 24));
-      const left = clamp5(props.popover.anchor.left + props.popover.anchor.width / 2 - width / 2, current.offsetLeft + 12, Math.max(current.offsetLeft + 12, right - width - 12));
+      const left = clamp6(props.popover.anchor.left + props.popover.anchor.width / 2 - width / 2, current.offsetLeft + 12, Math.max(current.offsetLeft + 12, right - width - 12));
       const above = Math.max(0, props.popover.anchor.top - current.offsetTop - 22);
       const below = Math.max(0, bottom - props.popover.anchor.bottom - 22);
       const placeAbove = naturalHeight.value === 0 ? above >= below : naturalHeight.value <= above || naturalHeight.value > below && above >= below;
       const availableHeight = placeAbove ? above : below;
       const renderedHeight = Math.min(naturalHeight.value || availableHeight, availableHeight);
       const rawTop = placeAbove ? props.popover.anchor.top - 10 - renderedHeight : props.popover.anchor.bottom + 10;
-      const top = clamp5(rawTop, current.offsetTop + 12, Math.max(current.offsetTop + 12, bottom - renderedHeight - 12));
+      const top = clamp6(rawTop, current.offsetTop + 12, Math.max(current.offsetTop + 12, bottom - renderedHeight - 12));
       return h29(Teleport7, { to: "body" }, [h29("div", { class: "tweakers-root", "data-theme": props.theme }, [
         h29("div", {
           ref: element,

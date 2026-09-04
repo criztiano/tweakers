@@ -50,6 +50,7 @@ __export(index_exports, {
   DEFAULT_TRIGGER_STEPS: () => DEFAULT_TRIGGER_STEPS,
   EasingVisualization: () => EasingVisualization,
   FileControl: () => FileControl,
+  FilterControl: () => FilterControl,
   Folder: () => Folder,
   GalleryControl: () => GalleryControl,
   GradientControl: () => GradientControl,
@@ -72,6 +73,7 @@ __export(index_exports, {
   MOVE_FUNCTION_BUTTONS: () => MOVE_FUNCTION_BUTTONS,
   MOVE_FUNCTION_MANIFEST: () => MOVE_FUNCTION_MANIFEST,
   MOVE_PADS: () => MOVE_PADS,
+  MOVE_SLOT_LIBRARY: () => MOVE_SLOT_LIBRARY,
   MOVE_SPECIAL_BUTTONS: () => MOVE_SPECIAL_BUTTONS,
   MOVE_TRACKS: () => MOVE_TRACKS,
   MOVE_WAVEFORM_STEPS: () => MOVE_WAVEFORM_STEPS,
@@ -80,6 +82,13 @@ __export(index_exports, {
   MoveActionButton: () => MoveActionButton,
   MoveFunctions: () => MoveFunctions,
   MovePanel: () => MovePanel,
+  MoveSlotDefaultBody: () => MoveSlotDefaultBody,
+  MoveSlotEnumBody: () => MoveSlotEnumBody,
+  MoveSlotFilterBody: () => MoveSlotFilterBody,
+  MoveSlotGlyph: () => MoveSlotGlyph,
+  MoveSlotRangeBody: () => MoveSlotRangeBody,
+  MoveSlotReadout: () => MoveSlotReadout,
+  MoveSlotShape: () => MoveSlotShape,
   MoveSurfaceStore: () => MoveSurfaceStore,
   MoveVolumeDisplay: () => MoveVolumeDisplay,
   MoveWaveform: () => MoveWaveform,
@@ -129,12 +138,19 @@ __export(index_exports, {
   cycleDriverType: () => cycleDriverType,
   cycleSegmentType: () => cycleSegmentType,
   defaultComposition: () => defaultComposition,
+  defaultFilterResponse: () => defaultFilterResponse,
   defaultListItemParams: () => defaultListItemParams,
   denormalizeEnumDial: () => denormalizeEnumDial,
+  denormalizeFilterDial: () => denormalizeFilterDial,
   denormalizeRangeDial: () => denormalizeRangeDial,
   dialOrigin: () => dialOrigin,
+  dialSpan: () => dialSpan,
   displayHex: () => displayHex,
   enumOptionIcon: () => enumOptionIcon,
+  filterHand01: () => filterHand01,
+  filterHandValue: () => filterHandValue,
+  filterResponsePath: () => filterResponsePath,
+  filterShapePath: () => filterShapePath,
   flipDriver: () => flipDriver,
   flipDriverX: () => flipDriverX,
   flipDriverY: () => flipDriverY,
@@ -154,6 +170,7 @@ __export(index_exports, {
   hsvToRgb: () => hsvToRgb,
   invertY: () => invertY,
   isOutsideSpan: () => isOutsideSpan,
+  isSpanContinuation: () => isSpanContinuation,
   lfoSyncedHz: () => lfoSyncedHz,
   listModTypes: () => listModTypes,
   loopFromStep: () => loopFromStep,
@@ -164,6 +181,7 @@ __export(index_exports, {
   modRingArc: () => modRingArc,
   moveAppPadRow: () => moveAppPadRow,
   movePadRows: () => movePadRows,
+  moveSlotKind: () => moveSlotKind,
   moveStop: () => moveStop,
   moveWaveformDefaultView: () => defaultView,
   nearestHandle: () => nearestHandle,
@@ -171,6 +189,8 @@ __export(index_exports, {
   normalizeCurveMarkers: () => normalizeCurveMarkers,
   normalizeDial: () => normalizeDial,
   normalizeEnumDial: () => normalizeEnumDial,
+  normalizeFilterDial: () => normalizeFilterDial,
+  normalizeFilterValue: () => normalizeFilterValue,
   normalizeGradient: () => normalizeGradient,
   normalizeHex: () => normalizeHex,
   normalizeListItems: () => normalizeListItems,
@@ -194,6 +214,7 @@ __export(index_exports, {
   removeSegment: () => removeSegment,
   removeStop: () => removeStop,
   resolveAxis: () => resolveAxis,
+  resolveFilterAxis: () => resolveFilterAxis,
   rgbToHsl: () => rgbToHsl,
   rgbToHsv: () => rgbToHsv,
   rgbToOklch: () => rgbToOklch,
@@ -695,10 +716,10 @@ function normToValue(n, axis) {
 function invertY(n) {
   return 1 - n;
 }
-function valueFromPoint(point, xAxis, yAxis, snap = false) {
+function valueFromPoint(point, xAxis, yAxis, snap2 = false) {
   let x = clamp2(normToValue(point.x, xAxis), xAxis.min, xAxis.max);
   let y = clamp2(normToValue(invertY(point.y), yAxis), yAxis.min, yAxis.max);
-  if (snap) {
+  if (snap2) {
     x = snapToStep(x, xAxis.step, xAxis.min);
     y = snapToStep(y, yAxis.step, yAxis.min);
   }
@@ -732,10 +753,10 @@ function centerValue(xAxis, yAxis) {
 function coerceComponent(v, axis) {
   return typeof v === "number" && Number.isFinite(v) ? v : axis.origin;
 }
-function normalizeValue(value, xAxis, yAxis, snap = false) {
+function normalizeValue(value, xAxis, yAxis, snap2 = false) {
   const resolve = (raw, axis) => {
     let v = clamp2(coerceComponent(raw, axis), axis.min, axis.max);
-    if (snap) v = snapToStep(v, axis.step, axis.min);
+    if (snap2) v = snapToStep(v, axis.step, axis.min);
     return v + 0;
   };
   return {
@@ -798,6 +819,71 @@ function handleLeftStyles(lowPercent, highPercent) {
     low: `max(0px, min(calc(100% - 2px), calc(${lowPercent}% - 1px - ${ramp})))`,
     high: `min(calc(100% - 2px), max(0px, calc(${highPercent}% - 1px + ${ramp})))`
   };
+}
+
+// src/filter-core.ts
+var FILTER_AXIS_DEFAULTS = {
+  cutoff: { min: 0, max: 1, step: 0, label: "Freq" },
+  resonance: { min: 0, max: 1, step: 0, label: "Res" }
+};
+function resolveFilterAxis(axis, hand) {
+  const base = FILTER_AXIS_DEFAULTS[hand];
+  return {
+    min: axis?.min ?? base.min,
+    max: axis?.max ?? base.max,
+    step: axis?.step ?? base.step,
+    label: axis?.label ?? base.label,
+    formatValue: axis?.formatValue
+  };
+}
+var clamp4 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+var snap = (v, axis) => {
+  let out = clamp4(Number.isFinite(v) ? v : axis.min, axis.min, axis.max);
+  if (axis.step > 0) out = clamp4(axis.min + Math.round((out - axis.min) / axis.step) * axis.step, axis.min, axis.max);
+  return Number(out.toFixed(6));
+};
+function normalizeFilterValue(value, cutoffAxis, resonanceAxis) {
+  const v = typeof value === "object" && value !== null ? value : {};
+  return {
+    cutoff: snap(typeof v.cutoff === "number" ? v.cutoff : cutoffAxis.max, cutoffAxis),
+    resonance: snap(typeof v.resonance === "number" ? v.resonance : resonanceAxis.min, resonanceAxis)
+  };
+}
+var filterHand01 = (v, axis) => {
+  const n = (v - axis.min) / (axis.max - axis.min || 1);
+  return clamp4(Number.isFinite(n) ? n : 0, 0, 1);
+};
+var filterHandValue = (v01, axis) => snap(axis.min + clamp4(v01, 0, 1) * (axis.max - axis.min), axis);
+function defaultFilterResponse(cutoff01, resonance01) {
+  const fc = Math.pow(10, -3 + 3 * clamp4(cutoff01, 0, 1));
+  const q = 0.707 * Math.pow(14, clamp4(resonance01, 0, 1));
+  return (t) => {
+    const f = Math.pow(10, -3 + 3 * clamp4(t, 0, 1));
+    const w = f / fc;
+    const mag = 1 / Math.sqrt(Math.pow(1 - w * w, 2) + Math.pow(w / q, 2));
+    return clamp4(mag / Math.max(1, q), 0, 1);
+  };
+}
+var FILTER_SHAPE_SAMPLES = 96;
+function filterResponsePath(response, samples = FILTER_SHAPE_SAMPLES) {
+  const pts = [];
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (let i = 0; i < samples; i++) {
+    let y;
+    try {
+      y = response(i / (samples - 1));
+    } catch {
+      return null;
+    }
+    if (!Number.isFinite(y)) return null;
+    pts.push(y);
+    if (y < lo) lo = y;
+    if (y > hi) hi = y;
+  }
+  const span = hi - lo;
+  const fit = (y) => span > 0 ? (y - lo) / span : 0.5;
+  return pts.map((y, i) => `${i ? "L" : "M"} ${(i / (samples - 1) * 100).toFixed(2)} ${((1 - fit(y)) * 100).toFixed(2)}`).join(" ");
 }
 
 // src/store/persist.ts
@@ -1294,13 +1380,19 @@ var TweakStoreClass = class {
               changed = true;
             }
           }
+        } else if (this.isFilterConfig(value) && value.response) {
+          const control = this.findControlByPath(panel.controls, path);
+          if (control?.type === "filter" && control.response !== value.response) {
+            control.response = value.response;
+            changed = true;
+          }
         } else if (this.isSelectConfig(value) && value.preview) {
           const control = this.findControlByPath(panel.controls, path);
           if (control?.type === "select" && control.preview !== value.preview) {
             control.preview = value.preview;
             changed = true;
           }
-        } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
+        } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
           visit(value, path);
         }
       }
@@ -1530,7 +1622,7 @@ var TweakStoreClass = class {
         const hasPhysics = value.stiffness !== void 0 || value.damping !== void 0 || value.mass !== void 0;
         const hasTime = value.visualDuration !== void 0 || value.bounce !== void 0;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? "advanced" : "simple";
-      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isCurveConfig(value)) {
+      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isCurveConfig(value)) {
         this.initTransitionModes(value, path, values);
       }
     }
@@ -1598,6 +1690,8 @@ var TweakStoreClass = class {
         controls.push({ type: "gradient", path, label });
       } else if (this.isXYConfig(value)) {
         controls.push({ type: "xy", path, label, xAxis: value.x, yAxis: value.y, grid: value.grid, density: value.density, snap: value.snap, returnToCenter: value.returnToCenter, showValues: value.showValues });
+      } else if (this.isFilterConfig(value)) {
+        controls.push({ type: "filter", path, label, cutoffAxis: value.cutoff, resonanceAxis: value.resonance, response: value.response });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: "text", path, label, placeholder: value.placeholder });
       } else if (this.isRangeConfig(value)) {
@@ -1738,6 +1832,12 @@ var TweakStoreClass = class {
         values[path] = value.default ?? "";
       } else if (this.isRangeConfig(value)) {
         values[path] = value.default ?? { min: value.min, max: value.max };
+      } else if (this.isFilterConfig(value)) {
+        values[path] = normalizeFilterValue(
+          value.default,
+          resolveFilterAxis(value.cutoff, "cutoff"),
+          resolveFilterAxis(value.resonance, "resonance")
+        );
       } else if (this.isGalleryConfig(value)) {
         values[path] = value.default ?? value.items[0]?.id ?? "";
       } else if (this.isFileConfig(value)) {
@@ -1779,6 +1879,9 @@ var TweakStoreClass = class {
   // "nested object → folder" fallback, so the shorthand is deliberately unsupported.
   isXYConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "xy";
+  }
+  isFilterConfig(value) {
+    return typeof value === "object" && value !== null && "type" in value && value.type === "filter";
   }
   isRangeConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "range";
@@ -1925,6 +2028,20 @@ var TweakStoreClass = class {
         const xAxis = resolveAxis(control.xAxis);
         const yAxis = resolveAxis(control.yAxis);
         return normalizeValue(candidate, xAxis, yAxis, false);
+      }
+      case "filter": {
+        if (typeof existingValue !== "object" || existingValue === null || Array.isArray(existingValue)) {
+          return defaultValue;
+        }
+        const candidate = existingValue;
+        if (typeof candidate.cutoff !== "number" || typeof candidate.resonance !== "number") {
+          return defaultValue;
+        }
+        return normalizeFilterValue(
+          candidate,
+          resolveFilterAxis(control.cutoffAxis, "cutoff"),
+          resolveFilterAxis(control.resonanceAxis, "resonance")
+        );
       }
       case "text":
       case "file":
@@ -3763,12 +3880,12 @@ var getModType = (type) => registry.get(type);
 var listModTypes = () => [...registry.values()];
 var MOD_SETTINGS_PANEL = "mod-settings";
 var modKey = (panelId, path) => `${panelId}\0${path}`;
-var clamp4 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-var clamp014 = (v) => clamp4(Number(v) || 0, 0, 1);
-var clampSigned = (v) => clamp4(Number(v) || 0, -1, 1);
+var clamp5 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+var clamp014 = (v) => clamp5(Number(v) || 0, 0, 1);
+var clampSigned = (v) => clamp5(Number(v) || 0, -1, 1);
 function applyModulation(base, signal, amount, min, max) {
-  const offset = clamp4(signal, -1, 1) * clamp014(amount) * (max - min) / 2;
-  return clamp4(base + offset, min, max);
+  const offset = clamp5(signal, -1, 1) * clamp014(amount) * (max - min) / 2;
+  return clamp5(base + offset, min, max);
 }
 var MOD_RING_RADIUS = 6;
 var MOD_RING_CIRCUMFERENCE = 2 * Math.PI * MOD_RING_RADIUS;
@@ -3793,7 +3910,7 @@ var LFO_SYNC_DIVISIONS = [
   { label: "1/32", beats: 0.125 }
 ];
 function lfoSyncedHz(division, bpm) {
-  const i = clamp4(Math.round(Number(division) || 0), 0, LFO_SYNC_DIVISIONS.length - 1);
+  const i = clamp5(Math.round(Number(division) || 0), 0, LFO_SYNC_DIVISIONS.length - 1);
   return (Number(bpm) || 120) / 60 / LFO_SYNC_DIVISIONS[i].beats;
 }
 var LFO_DEF = {
@@ -3826,10 +3943,10 @@ var LFO_DEF = {
       s.drift = 0;
       s.driftTarget = 0;
     } else s.drift += (s.driftTarget - s.drift) * Math.min(1, dt * hz * 4);
-    const w = clamp4(Number(params.width) || 0, 0.01, 0.99);
+    const w = clamp5(Number(params.width) || 0, 0.01, 0.99);
     const ph = (s.phase + clamp014(params.phase)) % 1;
     const tri = ph < w ? ph / w : 1 - (ph - w) / (1 - w);
-    let v = clamp4(tri * 2 - 1 + s.drift, -1, 1);
+    let v = clamp5(tri * 2 - 1 + s.drift, -1, 1);
     const smooth = clamp014(params.smooth);
     if (smooth > 0 && s.out !== null) {
       const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
@@ -3868,8 +3985,8 @@ var SH_DEF = {
       const len = 1 / hz * (1 + (Math.random() * 2 - 1) * clamp014(params.jitter) * 0.9);
       s.wait = Math.max(5e-3, len);
     }
-    const offset = clamp4(Number(params.offset) || 0, -1, 1);
-    let v = clamp4(s.held * clamp014(params.depth) + offset, -1, 1);
+    const offset = clamp5(Number(params.offset) || 0, -1, 1);
+    let v = clamp5(s.held * clamp014(params.depth) + offset, -1, 1);
     const smooth = clamp014(params.smooth);
     if (smooth > 0 && s.out !== null) {
       const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
@@ -3978,7 +4095,7 @@ function readClips(params) {
   return list.length ? list.slice(0, CURVE_MAX_CLIPS) : [newClip()];
 }
 var writeClips = (list) => list;
-var selectedClip = (params, count) => clamp4(Math.round(Number(params.selected) || 0), 0, Math.max(0, count - 1));
+var selectedClip = (params, count) => clamp5(Math.round(Number(params.selected) || 0), 0, Math.max(0, count - 1));
 function curveComposition(params) {
   const i = DIRECTIONS.indexOf(params.direction);
   return {
@@ -3989,7 +4106,7 @@ function curveComposition(params) {
   };
 }
 function curveDuration(params, bpm) {
-  const want = clamp4(Number(params.duration) || 0, CURVE_MIN_DURATION, CURVE_MAX_DURATION);
+  const want = clamp5(Number(params.duration) || 0, CURVE_MIN_DURATION, CURVE_MAX_DURATION);
   if (!params.sync) return want;
   const beat = 60 / (Number(bpm) || 120);
   let best = LFO_SYNC_DIVISIONS[0].beats * beat;
@@ -4108,7 +4225,7 @@ var CURVE_DEF = {
     const changed = (key) => key in patch2 && patch2[key] !== current[key];
     let list = "clips" in patch2 ? readClips(patch2) : readClips(current);
     if (!("clips" in patch2) && changed("segments")) {
-      const want = clamp4(Math.round(Number(patch2.segments) || 1), 1, CURVE_MAX_CLIPS);
+      const want = clamp5(Math.round(Number(patch2.segments) || 1), 1, CURVE_MAX_CLIPS);
       while (list.length > want) list.pop();
       while (list.length < want) list.push(newClip());
       list = list.map((c) => ({ ...c, weight: 1 }));
@@ -4171,7 +4288,7 @@ registerModType(CURVE_DEF);
 // src/store/ModulationStore.ts
 var MOD_TOUCH_GRACE_MS = 4e3;
 var PERSIST_TARGET = resolvePersistTarget("modulation", "global", true);
-var clamp5 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+var clamp6 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 var freshParams = (def) => JSON.parse(JSON.stringify(def.defaults));
 var ModulationStoreClass = class {
   constructor() {
@@ -4300,7 +4417,7 @@ var ModulationStoreClass = class {
       panelId,
       path,
       slot,
-      amount: clamp5(Number(amount) || 0, 0, 1)
+      amount: clamp6(Number(amount) || 0, 0, 1)
     });
     this.changed();
     return true;
@@ -4320,7 +4437,7 @@ var ModulationStoreClass = class {
   setAmount(panelId, path, amount) {
     const a = this.assignments.get(modKey(panelId, path));
     if (!a) return;
-    a.amount = clamp5(Number(amount) || 0, 0, 1);
+    a.amount = clamp6(Number(amount) || 0, 0, 1);
     this.changed();
   }
   /* ── the assignment gesture ───────────────────────────────────────── */
@@ -4580,14 +4697,14 @@ var ModulationStoreClass = class {
   }
   /** Push a source's signal (-1..1) at any rate; the engine mirrors the latest. */
   setSourceValue(id, value) {
-    this.sourceValues.set(id, clamp5(Number(value) || 0, -1, 1));
+    this.sourceValues.set(id, clamp6(Number(value) || 0, -1, 1));
   }
   getSources() {
     return [...this.sources.keys()];
   }
   /* ── tempo ────────────────────────────────────────────────────────── */
   setTempo(bpm) {
-    const next = clamp5(Number(bpm) || 0, 20, 999);
+    const next = clamp6(Number(bpm) || 0, 20, 999);
     if (next === this.bpm) return;
     this.bpm = next;
     this.changed();
@@ -4669,7 +4786,7 @@ var ModulationStoreClass = class {
    * directly with their own clock.
    */
   tick(dt) {
-    const step = clamp5(Number(dt) || 0, 0, 1);
+    const step = clamp6(Number(dt) || 0, 0, 1);
     for (const slot of this.slots) {
       if (!slot) continue;
       if (slot.source) {
@@ -4677,7 +4794,7 @@ var ModulationStoreClass = class {
         let v = this.sourceValues.get(slot.source) ?? 0;
         if (src?.sample) {
           try {
-            v = clamp5(Number(src.sample(slot)) || 0, -1, 1);
+            v = clamp6(Number(src.sample(slot)) || 0, -1, 1);
           } catch {
             v = 0;
           }
@@ -4692,7 +4809,7 @@ var ModulationStoreClass = class {
         state2 = def.createState();
         this.states.set(slot.index, state2);
       }
-      this.signals[slot.index] = clamp5(def.tick(state2, slot.params, step, this.bpm), -1, 1);
+      this.signals[slot.index] = clamp6(def.tick(state2, slot.params, step, this.bpm), -1, 1);
     }
     this.frameListeners.forEach((fn) => fn());
   }
@@ -5516,7 +5633,7 @@ function NumberControl({
   const isClickRef = (0, import_react10.useRef)(true);
   const scrubStartValue = (0, import_react10.useRef)(0);
   const isPointerHeld = (0, import_react10.useRef)(false);
-  const clamp8 = (0, import_react10.useCallback)(
+  const clamp9 = (0, import_react10.useCallback)(
     (v) => {
       let out = v;
       if (min != null) out = Math.max(min, out);
@@ -5551,11 +5668,11 @@ function NumberControl({
       if (!isClickRef.current) {
         const travel = isVertical ? -dy : dx;
         const perPixel = step * (e.shiftKey ? 10 : e.altKey ? 0.1 : 1);
-        const next = clamp8(scrubStartValue.current + travel * perPixel);
+        const next = clamp9(scrubStartValue.current + travel * perPixel);
         onChange(roundValue(next, step));
       }
     },
-    [isVertical, step, clamp8, onChange]
+    [isVertical, step, clamp9, onChange]
   );
   const handlePointerUp = (0, import_react10.useCallback)(() => {
     if (!isPointerHeld.current) return;
@@ -5576,7 +5693,7 @@ function NumberControl({
   const handleInputSubmit = () => {
     const parsed = parseFloat(inputValue);
     if (!isNaN(parsed)) {
-      onChange(roundValue(clamp8(parsed), step));
+      onChange(roundValue(clamp9(parsed), step));
     }
     setShowInput(false);
   };
@@ -7153,7 +7270,7 @@ var import_react23 = require("react");
 // src/components/GradientTransformPad.tsx
 var import_react22 = require("react");
 var import_jsx_runtime20 = require("react/jsx-runtime");
-var clamp6 = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+var clamp7 = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 var wrap360 = (deg) => (deg % 360 + 360) % 360;
 var RAD = Math.PI / 180;
 var vectorToAngle = (dx, dy) => wrap360(Math.atan2(dx, -dy) / RAD);
@@ -7182,7 +7299,7 @@ function GradientTransformPad({ value, onChange }) {
   const rxPx = scale / 100 * w;
   const ryPx = Math.max(10, (value.squash ?? scale) / 100 * h);
   const theta = rotation * RAD;
-  const pin = (x, y) => ({ x: clamp6(x, 5, w - 5), y: clamp6(y, 5, h - 5) });
+  const pin = (x, y) => ({ x: clamp7(x, 5, w - 5), y: clamp7(y, 5, h - 5) });
   const major = pin(cxPx + Math.cos(theta) * rxPx, cyPx + Math.sin(theta) * rxPx);
   const minor = pin(cxPx - Math.sin(theta) * ryPx, cyPx + Math.cos(theta) * ryPx);
   const majorLineLen = Math.hypot(major.x - cxPx, major.y - cyPx);
@@ -7320,7 +7437,7 @@ function GradientTransformPad({ value, onChange }) {
         className: "tweakers-gradient-pad-handle",
         "data-kind": "center",
         "aria-label": "Gradient center",
-        style: { left: clamp6(cxPx, 5, w - 5), top: clamp6(cyPx, 5, h - 5) },
+        style: { left: clamp7(cxPx, 5, w - 5), top: clamp7(cyPx, 5, h - 5) },
         ...handleProps("center")
       }
     )
@@ -7680,7 +7797,7 @@ function XYPad({
   size = 160,
   grid,
   density = 1,
-  snap = false,
+  snap: snap2 = false,
   returnToCenter = false,
   showValues = false,
   disabled = false,
@@ -7710,7 +7827,7 @@ function XYPad({
       }
       px = Math.min(1, Math.max(0, px));
       py = Math.min(1, Math.max(0, py));
-      const next = valueFromPoint({ x: px, y: py }, xAxis, yAxis, snap);
+      const next = valueFromPoint({ x: px, y: py }, xAxis, yAxis, snap2);
       const originPoint = pointFromValue({ x: xAxis.origin, y: yAxis.origin }, xAxis, yAxis);
       const dxPx = Math.abs(px - originPoint.x) * rect.width;
       const dyPx = Math.abs(py - originPoint.y) * rect.height;
@@ -7719,7 +7836,7 @@ function XYPad({
         y: applyDetentAxis(next.y, yAxis, dyPx)
       };
     },
-    [xAxis, yAxis, snap]
+    [xAxis, yAxis, snap2]
   );
   const emit2 = (0, import_react26.useCallback)(
     (next) => {
@@ -7762,7 +7879,7 @@ function XYPad({
     const el = areaRef.current;
     const stillActive = (el?.matches(":hover") ?? false) || el === (el?.ownerDocument ?? document).activeElement;
     if (!stillActive) setActive(false);
-    if (returnToCenter) emit2(normalizeValue(centerValue(xAxis, yAxis), xAxis, yAxis, snap));
+    if (returnToCenter) emit2(normalizeValue(centerValue(xAxis, yAxis), xAxis, yAxis, snap2));
   };
   const handleKeyDown = (e) => {
     if (disabled) return;
@@ -7803,7 +7920,7 @@ function XYPad({
   };
   const reset = () => {
     if (disabled) return;
-    emit2(normalizeValue(centerValue(xAxis, yAxis), xAxis, yAxis, snap));
+    emit2(normalizeValue(centerValue(xAxis, yAxis), xAxis, yAxis, snap2));
   };
   const xLabel = x?.label ?? "X";
   const yLabel = y?.label ?? "Y";
@@ -7893,7 +8010,7 @@ function XYPad({
 
 // src/components/XYControl.tsx
 var import_jsx_runtime24 = require("react/jsx-runtime");
-function XYControl({ label, value, onChange, x, y, grid, density, snap, returnToCenter, showValues, shortcut, shortcutActive }) {
+function XYControl({ label, value, onChange, x, y, grid, density, snap: snap2, returnToCenter, showValues, shortcut, shortcutActive }) {
   return /* @__PURE__ */ (0, import_jsx_runtime24.jsx)(
     XYPad,
     {
@@ -7904,7 +8021,7 @@ function XYControl({ label, value, onChange, x, y, grid, density, snap, returnTo
       y,
       grid,
       density,
-      snap,
+      snap: snap2,
       returnToCenter,
       showValues,
       shortcut,
@@ -8681,6 +8798,263 @@ function CurvePreview({ panelId, control }) {
   ] });
 }
 
+// src/move-layout.ts
+var MOVE_TRACKS = 4;
+var MOVE_DIALS = 8;
+var MOVE_PADS = 8;
+var flat = (controls, out = []) => {
+  for (const c of controls) {
+    if (c.children) flat(c.children, out);
+    else out.push(c);
+  }
+  return out;
+};
+var isEnumDial = (c) => c.type === "select" && Array.isArray(c.options) && c.options.length > 1;
+var isDial = (c) => c.type === "slider" || c.type === "xy" || c.type === "range" || c.type === "filter" || isEnumDial(c) || c.type === "number" && c.min != null && c.max != null;
+var noChip = (c) => c.type === "xy" || c.type === "range" || c.type === "filter" || isEnumDial(c);
+var dialSpan = (c) => c?.type === "filter" ? 2 : 1;
+var isSpanContinuation = (page, i) => i > 0 && page.dials[i] !== void 0 && page.dials[i] === page.dials[i - 1];
+function buildModMovePage(panel, layout) {
+  const controls = flat(panel.controls);
+  if (layout) {
+    const at = (slot) => slot ? controls.find((c) => c.path === slot.path) : void 0;
+    return {
+      panel,
+      dials: layout.dials.slice(0, MOVE_DIALS).map(at).filter((c) => !!c),
+      toggles: layout.toggles.slice(0, MOVE_PADS).map(at),
+      values: layout.values.slice(0, MOVE_PADS).map(at),
+      actions: []
+    };
+  }
+  const dials = [];
+  const toggles = [];
+  for (const c of controls) {
+    if (c.type === "toggle") toggles[Math.max(0, dials.length - 1)] = c;
+    else if (c.type === "select" || isDial(c)) dials.push(c);
+  }
+  return { panel, dials: dials.slice(0, MOVE_DIALS), toggles: toggles.slice(0, MOVE_PADS), values: [], actions: [] };
+}
+var padColumn = (panel, c) => {
+  const col = panel.movePads?.[c.path];
+  return typeof col === "number" && Number.isInteger(col) && col >= 0 && col < MOVE_PADS ? col : null;
+};
+function buildMovePages(panels) {
+  return panels.filter((p) => p.kind === void 0).slice(0, MOVE_TRACKS).map((panel) => {
+    const controls = flat(panel.controls);
+    const chipPlaced = (c) => padColumn(panel, c) !== null && !noChip(c);
+    const dials = [];
+    let nextCol = 0;
+    for (const c of controls) {
+      if (!isDial(c) || chipPlaced(c)) continue;
+      const span = dialSpan(c);
+      if (nextCol + span > MOVE_DIALS) {
+        if (nextCol >= MOVE_DIALS) break;
+        continue;
+      }
+      for (let s = 0; s < span; s++) dials[nextCol + s] = c;
+      nextCol += span;
+    }
+    const toggles = [];
+    const values = [];
+    const actions = [];
+    const place = (row, c, col) => {
+      if (col !== null && row[col] === void 0) {
+        row[col] = c;
+        return;
+      }
+      for (let i = 0; i < MOVE_PADS; i++) {
+        if (row[i] === void 0) {
+          row[i] = c;
+          return;
+        }
+      }
+    };
+    for (const c of controls) {
+      const col = padColumn(panel, c);
+      if (c.type === "toggle") place(toggles, c, col);
+      else if (c.type === "action") {
+        if (col !== null) place(actions, c, col);
+      } else if (isDial(c) && !noChip(c) && !dials.includes(c)) place(values, c, col);
+    }
+    return {
+      panel,
+      dials,
+      toggles: toggles.slice(0, MOVE_PADS),
+      values: values.slice(0, MOVE_PADS),
+      actions: actions.slice(0, MOVE_PADS)
+    };
+  });
+}
+function movePadRows(page, claimedRows) {
+  if (claimedRows >= 2) return [page.values, page.toggles, [], []];
+  return [page.toggles, page.values, page.actions, []];
+}
+function moveAppPadRow(row, claimedRows) {
+  if (claimedRows >= 2) return row === 2 ? 1 : row === 3 ? 0 : null;
+  return claimedRows === 1 && row === 3 ? 0 : null;
+}
+function visibleColumns(page) {
+  const cols = [];
+  for (let i = 0; i < MOVE_DIALS; i++) {
+    if (page.dials[i] || page.toggles[i] || page.values[i] || page.actions[i]) cols.push(i);
+  }
+  return cols;
+}
+function denormalizeDial(meta, v01) {
+  const min = meta.min ?? 0;
+  const max = meta.max ?? 1;
+  let v = min + Math.min(1, Math.max(0, v01)) * (max - min);
+  if (meta.step) v = Math.round(v / meta.step) * meta.step;
+  return Number(v.toFixed(6));
+}
+function normalizeDial(meta, value) {
+  const min = meta.min ?? 0;
+  const max = meta.max ?? 1;
+  const v = (Number(value) - min) / (max - min || 1);
+  return Math.min(1, Math.max(0, Number.isFinite(v) ? v : 0));
+}
+var norm01 = (v, min, max) => {
+  const n = (Number(v) - min) / (max - min || 1);
+  return Math.min(1, Math.max(0, Number.isFinite(n) ? n : 0));
+};
+var denorm01 = (v01, min, max, step) => {
+  let v = min + Math.min(1, Math.max(0, v01)) * (max - min);
+  if (step) v = Math.round(v / step) * step;
+  return Number(v.toFixed(6));
+};
+function normalizeXYDial(meta, value) {
+  const xAxis = resolveAxis(meta.xAxis);
+  const yAxis = resolveAxis(meta.yAxis);
+  const v = value ?? {};
+  return { x: norm01(v.x, xAxis.min, xAxis.max), y: norm01(v.y, yAxis.min, yAxis.max) };
+}
+var enumOptionValue = (o) => typeof o === "string" ? o : o.value;
+var enumOptionLabel = (o) => typeof o === "string" ? o : o.label ?? o.value;
+var enumOptionIcon = (o) => typeof o === "string" ? null : o.icon ?? null;
+var ENUM_SHAPE_SAMPLES = 64;
+function enumShapePath(meta, value) {
+  if (!meta.preview) return null;
+  let sample;
+  try {
+    sample = meta.preview(String(value ?? ""));
+  } catch {
+    return null;
+  }
+  if (typeof sample !== "function") return null;
+  const segments = plotCurve(sample, { count: ENUM_SHAPE_SAMPLES }).segments;
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const seg of segments) {
+    for (const pt of seg) {
+      if (pt.v < lo) lo = pt.v;
+      if (pt.v > hi) hi = pt.v;
+    }
+  }
+  if (lo > hi) return null;
+  const span = hi - lo;
+  const fill = (v) => span > 0 ? (v - lo) / span : 0.5;
+  const d = segments.map((seg) => seg.map((pt, i) => `${i ? "L" : "M"} ${(pt.t * 100).toFixed(2)} ${((1 - fill(pt.v)) * 100).toFixed(2)}`).join(" ")).join(" ");
+  return d || null;
+}
+function enumIndex(meta, value) {
+  const i = (meta.options ?? []).findIndex((o) => enumOptionValue(o) === value);
+  return Math.max(0, i);
+}
+function normalizeRangeDial(meta, value) {
+  const min = meta.min ?? 0;
+  const max = meta.max ?? 1;
+  const v = value ?? {};
+  return { lo: norm01(v.min, min, max), hi: norm01(v.max, min, max) };
+}
+function denormalizeRangeDial(meta, lo01, hi01) {
+  const min = meta.min ?? 0;
+  const max = meta.max ?? 1;
+  const step = meta.step ?? 0;
+  return clampRange(
+    { min: denorm01(lo01, min, max, step), max: denorm01(hi01, min, max, step) },
+    min,
+    max
+  );
+}
+function normalizeEnumDial(meta, value) {
+  const opts = (meta.options ?? []).map((o) => enumOptionValue(o));
+  if (opts.length < 2) return 0;
+  const i = opts.indexOf(String(value));
+  return i <= 0 ? 0 : i / (opts.length - 1);
+}
+function denormalizeEnumDial(meta, v01) {
+  const opts = (meta.options ?? []).map((o) => enumOptionValue(o));
+  if (opts.length === 0) return "";
+  const i = Math.round(Math.min(1, Math.max(0, v01)) * (opts.length - 1));
+  return opts[i];
+}
+function normalizeFilterDial(meta, value) {
+  const ca = resolveFilterAxis(meta.cutoffAxis, "cutoff");
+  const ra = resolveFilterAxis(meta.resonanceAxis, "resonance");
+  const v = normalizeFilterValue(value, ca, ra);
+  return { cutoff: filterHand01(v.cutoff, ca), resonance: filterHand01(v.resonance, ra) };
+}
+function denormalizeFilterDial(meta, cutoff01, resonance01) {
+  const ca = resolveFilterAxis(meta.cutoffAxis, "cutoff");
+  const ra = resolveFilterAxis(meta.resonanceAxis, "resonance");
+  return { cutoff: filterHandValue(cutoff01, ca), resonance: filterHandValue(resonance01, ra) };
+}
+function filterShapePath(meta, value) {
+  const pos = normalizeFilterDial(meta, value);
+  let response;
+  try {
+    response = (meta.response ?? defaultFilterResponse)(pos.cutoff, pos.resonance);
+  } catch {
+    return null;
+  }
+  if (typeof response !== "function") return null;
+  return filterResponsePath(response);
+}
+function dialOrigin(meta) {
+  const origin = meta.origin ?? (meta.bipolar ? 0 : void 0);
+  return origin === void 0 ? 0 : normalizeDial(meta, origin);
+}
+
+// src/components/FilterControl.tsx
+var import_jsx_runtime32 = require("react/jsx-runtime");
+var FILTER_SURFACE_HEIGHT = 56;
+function FilterControl({ control, value, onChange }) {
+  const ca = resolveFilterAxis(control.cutoffAxis, "cutoff");
+  const ra = resolveFilterAxis(control.resonanceAxis, "resonance");
+  const v = normalizeFilterValue(value, ca, ra);
+  const shape = filterShapePath(control, v);
+  return /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "tweakers-filter", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "tweakers-curve", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("span", { className: "tweakers-curve-label", children: control.label }),
+      /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("div", { className: "tweakers-curve-surface", style: { height: FILTER_SURFACE_HEIGHT }, children: shape && /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("svg", { viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": "true", style: { display: "block", width: "100%", height: "100%" }, children: /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("path", { className: "tweakers-curve-stroke", d: shape, fill: "none", vectorEffect: "non-scaling-stroke" }) }) })
+    ] }),
+    /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(
+      Slider,
+      {
+        label: ca.label,
+        value: v.cutoff,
+        min: ca.min,
+        max: ca.max,
+        step: ca.step || void 0,
+        formatValue: ca.formatValue,
+        onChange: (cutoff) => onChange({ ...v, cutoff })
+      }
+    ),
+    /* @__PURE__ */ (0, import_jsx_runtime32.jsx)(
+      Slider,
+      {
+        label: ra.label,
+        value: v.resonance,
+        min: ra.min,
+        max: ra.max,
+        step: ra.step || void 0,
+        formatValue: ra.formatValue,
+        onChange: (resonance) => onChange({ ...v, resonance })
+      }
+    )
+  ] });
+}
+
 // src/components/AnalyserRow.tsx
 var import_react34 = require("react");
 
@@ -9174,7 +9548,7 @@ function createAnalyserEngine(canvas, get) {
 }
 
 // src/components/AnalyserVisualization.tsx
-var import_jsx_runtime32 = require("react/jsx-runtime");
+var import_jsx_runtime33 = require("react/jsx-runtime");
 function AnalyserVisualization({
   analyser = null,
   source = "frequency",
@@ -9221,17 +9595,17 @@ function AnalyserVisualization({
     const engine = createAnalyserEngine(canvasRef.current, () => runtimeRef.current);
     return () => engine.destroy();
   }, []);
-  return /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "tweakers-analyser-viz-wrap", style: { width }, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("canvas", { ref: canvasRef, className: "tweakers-analyser-viz", style: { width, height } }),
-    (onMuteChange || onSoloChange) && /* @__PURE__ */ (0, import_jsx_runtime32.jsxs)("div", { className: "tweakers-analyser-actions", children: [
-      onMuteChange && /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("button", { type: "button", "aria-label": "Mute", "aria-pressed": muted, onClick: () => onMuteChange(!muted), children: "M" }),
-      onSoloChange && /* @__PURE__ */ (0, import_jsx_runtime32.jsx)("button", { type: "button", "aria-label": "Solo", "aria-pressed": soloed, onClick: () => onSoloChange(!soloed), children: "S" })
+  return /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { className: "tweakers-analyser-viz-wrap", style: { width }, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("canvas", { ref: canvasRef, className: "tweakers-analyser-viz", style: { width, height } }),
+    (onMuteChange || onSoloChange) && /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { className: "tweakers-analyser-actions", children: [
+      onMuteChange && /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("button", { type: "button", "aria-label": "Mute", "aria-pressed": muted, onClick: () => onMuteChange(!muted), children: "M" }),
+      onSoloChange && /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("button", { type: "button", "aria-label": "Solo", "aria-pressed": soloed, onClick: () => onSoloChange(!soloed), children: "S" })
     ] })
   ] });
 }
 
 // src/components/AnalyserRow.tsx
-var import_jsx_runtime33 = require("react/jsx-runtime");
+var import_jsx_runtime34 = require("react/jsx-runtime");
 var DEFAULT_HEIGHT = 56;
 function AnalyserRow({ panelId, control }) {
   const subscribe = (0, import_react34.useCallback)(
@@ -9251,9 +9625,9 @@ function AnalyserRow({ panelId, control }) {
     return () => ro.disconnect();
   }, []);
   const height = clampCurveHeight(row?.height ?? DEFAULT_HEIGHT);
-  return /* @__PURE__ */ (0, import_jsx_runtime33.jsxs)("div", { className: "tweakers-analyser-row", ref: wrapRef, children: [
-    !control.hideLabel && /* @__PURE__ */ (0, import_jsx_runtime33.jsx)("span", { className: "tweakers-curve-label", children: control.label }),
-    row && width > 0 && /* @__PURE__ */ (0, import_jsx_runtime33.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("div", { className: "tweakers-analyser-row", ref: wrapRef, children: [
+    !control.hideLabel && /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "tweakers-curve-label", children: control.label }),
+    row && width > 0 && /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
       AnalyserVisualization,
       {
         analyser: row.analyser() ?? null,
@@ -9273,7 +9647,7 @@ function AnalyserRow({ panelId, control }) {
 }
 
 // src/components/ControlRenderer.tsx
-var import_jsx_runtime34 = require("react/jsx-runtime");
+var import_jsx_runtime35 = require("react/jsx-runtime");
 function ControlRenderer({ panelId, controls, values, transitionDuration }) {
   const shortcutCtx = (0, import_react35.useContext)(ShortcutContext);
   const renderControlNode = (control) => {
@@ -9283,7 +9657,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
     }
     switch (control.type) {
       case "slider":
-        return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
           Slider,
           {
             label: control.label,
@@ -9303,7 +9677,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "number":
-        return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
           NumberControl,
           {
             label: control.label,
@@ -9319,7 +9693,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "range":
-        return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
           RangeSlider,
           {
             label: control.label,
@@ -9333,7 +9707,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "toggle":
-        return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
           Toggle,
           {
             label: control.label,
@@ -9345,7 +9719,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "spring":
-        return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
           SpringControl,
           {
             panelId,
@@ -9357,7 +9731,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "transition":
-        return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
           TransitionControl,
           {
             panelId,
@@ -9372,7 +9746,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
       case "folder": {
         if (control.module) {
           const enabledPath = `${control.path}._enabled`;
-          return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+          return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
             ModuleFolder,
             {
               title: control.label,
@@ -9388,7 +9762,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
         }
         const [first, ...rest] = control.children ?? [];
         const headerTabs = first && first.type === "select" && first.display === "segmented" ? first : null;
-        return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
           Folder,
           {
             title: control.label,
@@ -9396,7 +9770,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
             collapsible: control.collapsible ?? true,
             hint: control.hint,
             hintId: hintDomId(panelId, control.path),
-            toolbar: headerTabs ? /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+            toolbar: headerTabs ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
               SegmentedControl,
               {
                 options: (headerTabs.options ?? []).map(
@@ -9412,7 +9786,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
         );
       }
       case "text":
-        return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
           TextControl,
           {
             label: control.label,
@@ -9424,9 +9798,9 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
         );
       case "select":
         if (control.display === "segmented") {
-          return /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("div", { className: "tweakers-labeled-control", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "tweakers-labeled-control-label", children: control.label }),
-            /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+          return /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("div", { className: "tweakers-labeled-control", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { className: "tweakers-labeled-control-label", children: control.label }),
+            /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
               SegmentedControl,
               {
                 options: (control.options ?? []).map(
@@ -9438,7 +9812,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
             )
           ] }, control.path);
         }
-        return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
           SelectControl,
           {
             label: control.label,
@@ -9449,7 +9823,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "color":
-        return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
           ColorControl,
           {
             label: control.label,
@@ -9461,7 +9835,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "gradient":
-        return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
           GradientControl,
           {
             label: control.label,
@@ -9471,7 +9845,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "xy":
-        return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
           XYControl,
           {
             label: control.label,
@@ -9490,7 +9864,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "gallery":
-        return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
           GalleryControl,
           {
             label: control.label,
@@ -9502,7 +9876,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "file":
-        return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
           FileControl,
           {
             label: control.label,
@@ -9515,7 +9889,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "swatch":
-        return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
           SwatchControl,
           {
             label: control.label,
@@ -9526,7 +9900,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "chips":
-        return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
           ChipsControl,
           {
             label: control.label,
@@ -9538,7 +9912,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "multiselect":
-        return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
           MultiSelectControl,
           {
             label: control.label,
@@ -9549,7 +9923,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
       case "list":
-        return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
           ListControl,
           {
             label: control.label,
@@ -9562,12 +9936,22 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           },
           control.path
         );
+      case "filter":
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
+          FilterControl,
+          {
+            control,
+            value,
+            onChange: (v) => TweakStore.updateValue(panelId, control.path, v)
+          },
+          control.path
+        );
       case "curve":
-        return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(CurvePreview, { panelId, control }, control.path);
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(CurvePreview, { panelId, control }, control.path);
       case "analyser":
-        return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(AnalyserRow, { panelId, control }, control.path);
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(AnalyserRow, { panelId, control }, control.path);
       case "action": {
-        const button = /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+        const button = /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
           "button",
           {
             className: "tweakers-button",
@@ -9578,8 +9962,8 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
           control.path
         );
         if (control.caption === void 0) return button;
-        return /* @__PURE__ */ (0, import_jsx_runtime34.jsxs)("div", { className: "tweakers-labeled-control tweakers-captioned-action", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime34.jsx)("span", { className: "tweakers-labeled-control-label", children: control.caption }),
+        return /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("div", { className: "tweakers-labeled-control tweakers-captioned-action", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { className: "tweakers-labeled-control-label", children: control.caption }),
           button
         ] }, control.path);
       }
@@ -9590,7 +9974,7 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
   const renderControl = (control) => {
     const node = renderControlNode(control);
     if (control.type === "folder") return node;
-    return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(
+    return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
       ControlShell,
       {
         hint: control.hint,
@@ -9604,14 +9988,14 @@ function ControlRenderer({ panelId, controls, values, transitionDuration }) {
       control.path
     );
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime34.jsx)(import_jsx_runtime34.Fragment, { children: controls.map(renderControl) });
+  return /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(import_jsx_runtime35.Fragment, { children: controls.map(renderControl) });
 }
 
 // src/components/PresetManager.tsx
 var import_react36 = require("react");
 var import_react_dom6 = require("react-dom");
 var import_react37 = require("motion/react");
-var import_jsx_runtime35 = require("react/jsx-runtime");
+var import_jsx_runtime36 = require("react/jsx-runtime");
 function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode = false, editSignal = 0 }) {
   const [isOpen, setIsOpen] = (0, import_react36.useState)(false);
   const triggerRef = (0, import_react36.useRef)(null);
@@ -9675,8 +10059,8 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
   (0, import_react36.useEffect)(() => {
     if (editingId) editInputRef.current?.select();
   }, [editingId]);
-  return /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)("div", { className: "tweakers-preset-manager", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)("div", { className: "tweakers-preset-manager", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)(
       "button",
       {
         ref: triggerRef,
@@ -9686,8 +10070,8 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
         "data-has-preset": String(!!activePreset),
         "data-disabled": String(!hasPresets),
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { className: "tweakers-preset-label", children: activePreset ? activePreset.name : providerMode ? "Presets" : "Version 1" }),
-          /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("span", { className: "tweakers-preset-label", children: activePreset ? activePreset.name : providerMode ? "Presets" : "Version 1" }),
+          /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
             import_react37.motion.svg,
             {
               className: "tweakers-select-chevron",
@@ -9699,14 +10083,14 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
               strokeLinejoin: "round",
               animate: { rotate: isOpen ? 180 : 0, opacity: hasPresets ? 0.6 : 0.25 },
               transition: { type: "spring", visualDuration: 0.2, bounce: 0.15 },
-              children: /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("path", { d: ICON_CHEVRON })
+              children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("path", { d: ICON_CHEVRON })
             }
           )
         ]
       }
     ),
     (0, import_react_dom6.createPortal)(
-      /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(import_react37.AnimatePresence, { children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(import_react37.AnimatePresence, { children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)(
         PresenceMotionDiv,
         {
           divRef: dropdownRef,
@@ -9717,23 +10101,23 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
           exit: { opacity: 0, y: 4, scale: 0.97, pointerEvents: "none" },
           transition: { type: "spring", visualDuration: 0.15, bounce: 0 },
           children: [
-            !providerMode && /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
+            !providerMode && /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
               "div",
               {
                 className: "tweakers-preset-item",
                 "data-active": String(!activePresetId),
                 onClick: () => handleSelect(null),
-                children: /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { className: "tweakers-preset-name", children: "Version 1" })
+                children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("span", { className: "tweakers-preset-name", children: "Version 1" })
               }
             ),
-            presets.map((preset) => /* @__PURE__ */ (0, import_jsx_runtime35.jsxs)(
+            presets.map((preset) => /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)(
               "div",
               {
                 className: "tweakers-preset-item",
                 "data-active": String(preset.id === activePresetId),
                 onClick: editingId === preset.id ? void 0 : () => handleSelect(preset.id),
                 children: [
-                  editingId === preset.id ? /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
+                  editingId === preset.id ? /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
                     "input",
                     {
                       ref: editInputRef,
@@ -9748,8 +10132,8 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
                         e.stopPropagation();
                       }
                     }
-                  ) : /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("span", { className: "tweakers-preset-name", children: preset.name }),
-                  editingId !== preset.id && (preset.renamable ?? true) && /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
+                  ) : /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("span", { className: "tweakers-preset-name", children: preset.name }),
+                  editingId !== preset.id && (preset.renamable ?? true) && /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
                     "button",
                     {
                       className: "tweakers-preset-rename",
@@ -9758,16 +10142,16 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
                         startEditing(preset.id, preset.name);
                       },
                       title: "Rename preset",
-                      children: /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: ICON_PENCIL.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("path", { d }, i)) })
+                      children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: ICON_PENCIL.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("path", { d }, i)) })
                     }
                   ),
-                  editingId !== preset.id && (preset.deletable ?? true) && /* @__PURE__ */ (0, import_jsx_runtime35.jsx)(
+                  editingId !== preset.id && (preset.deletable ?? true) && /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
                     "button",
                     {
                       className: "tweakers-preset-delete",
                       onClick: (e) => handleDelete(e, preset.id),
                       title: "Delete preset",
-                      children: /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: ICON_TRASH.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime35.jsx)("path", { d }, i)) })
+                      children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: ICON_TRASH.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("path", { d }, i)) })
                     }
                   )
                 ]
@@ -9783,7 +10167,7 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
 }
 
 // src/components/Panel.tsx
-var import_jsx_runtime36 = require("react/jsx-runtime");
+var import_jsx_runtime37 = require("react/jsx-runtime");
 function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
   const [copied, setCopied] = (0, import_react38.useState)(false);
   const [, setIsPanelOpen] = (0, import_react38.useState)(defaultOpen);
@@ -9806,7 +10190,7 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
     setTimeout(() => setCopied(false), 1500);
   };
   const { tabs, activeTab, looseControls, pageControls } = splitPanelTabs(panel.controls, values[TAB_PATH]);
-  const tabBar = activeTab ? /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
+  const tabBar = activeTab ? /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
     SegmentedControl,
     {
       options: tabs.map((tab) => ({ value: tab.path, label: tab.label })),
@@ -9814,14 +10198,14 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
       onChange: (v) => TweakStore.updateValue(panel.id, TAB_PATH, v)
     }
   ) : void 0;
-  const renderRows = (controls) => /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(ControlRenderer, { panelId: panel.id, controls, values });
-  const renderControls = () => activeTab ? /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)(import_jsx_runtime36.Fragment, { children: [
+  const renderRows = (controls) => /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(ControlRenderer, { panelId: panel.id, controls, values });
+  const renderControls = () => activeTab ? /* @__PURE__ */ (0, import_jsx_runtime37.jsxs)(import_jsx_runtime37.Fragment, { children: [
     renderRows(looseControls),
-    /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("div", { className: "tweakers-panel-tab-page", children: renderRows(pageControls) }, activeTab.path)
+    /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("div", { className: "tweakers-panel-tab-page", children: renderRows(pageControls) }, activeTab.path)
   ] }) : renderRows(pageControls);
   const presetsHidden = TweakStore.arePresetsHidden(panel.id);
-  const toolbar = presetsHidden ? toolbarExtra : /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)(import_jsx_runtime36.Fragment, { children: [
-    /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
+  const toolbar = presetsHidden ? toolbarExtra : /* @__PURE__ */ (0, import_jsx_runtime37.jsxs)(import_jsx_runtime37.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
       import_react39.motion.button,
       {
         className: "tweakers-toolbar-add",
@@ -9829,10 +10213,10 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
         title: "Add preset",
         whileTap: { scale: 0.9 },
         transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-        children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: ICON_ADD_PRESET.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("path", { d }, i)) })
+        children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: ICON_ADD_PRESET.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("path", { d }, i)) })
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
       PresetManager,
       {
         panelId: panel.id,
@@ -9843,7 +10227,7 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
         editSignal: presetEditSignal
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
       import_react39.motion.button,
       {
         className: "tweakers-toolbar-add",
@@ -9851,7 +10235,7 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
         title: "Copy parameters",
         whileTap: { scale: 0.9 },
         transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-        children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("span", { style: { position: "relative", width: 14, height: 14 }, children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(import_react39.AnimatePresence, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
+        children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("span", { style: { position: "relative", width: 14, height: 14 }, children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(import_react39.AnimatePresence, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
           import_react39.motion.svg,
           {
             viewBox: "0 0 24 24",
@@ -9865,10 +10249,10 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
             animate: { scale: 1, opacity: 1 },
             exit: { scale: 0.8, opacity: 0 },
             transition: { duration: 0.08 },
-            children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("path", { d: ICON_CHECK })
+            children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("path", { d: ICON_CHECK })
           },
           "check"
-        ) : /* @__PURE__ */ (0, import_jsx_runtime36.jsxs)(
+        ) : /* @__PURE__ */ (0, import_jsx_runtime37.jsxs)(
           import_react39.motion.svg,
           {
             viewBox: "0 0 24 24",
@@ -9879,9 +10263,9 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
             exit: { scale: 0.8, opacity: 0 },
             transition: { duration: 0.08 },
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("path", { d: ICON_CLIPBOARD.board, stroke: "currentColor", strokeWidth: "2", strokeLinejoin: "round" }),
-              /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("path", { d: ICON_CLIPBOARD.sparkle, fill: "currentColor" }),
-              /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("path", { d: ICON_CLIPBOARD.body, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" })
+              /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("path", { d: ICON_CLIPBOARD.board, stroke: "currentColor", strokeWidth: "2", strokeLinejoin: "round" }),
+              /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("path", { d: ICON_CLIPBOARD.sparkle, fill: "currentColor" }),
+              /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("path", { d: ICON_CLIPBOARD.body, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" })
             ]
           },
           "clipboard"
@@ -9890,7 +10274,7 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
     ),
     toolbarExtra
   ] });
-  return /* @__PURE__ */ (0, import_jsx_runtime36.jsx)("div", { className: "tweakers-panel-wrapper", children: /* @__PURE__ */ (0, import_jsx_runtime36.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("div", { className: "tweakers-panel-wrapper", children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
     Folder,
     {
       title: panel.name,
@@ -9974,7 +10358,7 @@ var TimelineUiStoreClass = class {
 var TimelineUiStore = /* @__PURE__ */ new TimelineUiStoreClass();
 
 // src/components/Timeline/TimelineToggleButton.tsx
-var import_jsx_runtime37 = require("react/jsx-runtime");
+var import_jsx_runtime38 = require("react/jsx-runtime");
 function TimelineToggleButton() {
   const subscribe = (0, import_react40.useCallback)(
     (listener) => TimelineUiStore.subscribe(listener),
@@ -9983,7 +10367,7 @@ function TimelineToggleButton() {
   const getVisible = (0, import_react40.useCallback)(() => TimelineUiStore.getVisible(), []);
   const visible = (0, import_react40.useSyncExternalStore)(subscribe, getVisible, getVisible);
   const label = visible ? "Hide timeline" : "Show timeline";
-  return /* @__PURE__ */ (0, import_jsx_runtime37.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(
     import_react41.motion.button,
     {
       className: "tweakers-toolbar-add tweakers-timeline-toolbar-toggle",
@@ -9994,13 +10378,13 @@ function TimelineToggleButton() {
       onClick: () => TimelineUiStore.toggle(),
       whileTap: { scale: 0.9 },
       transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-      children: /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: ICON_TIMELINE.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime37.jsx)("path", { d, fill: "currentColor" }, i)) })
+      children: /* @__PURE__ */ (0, import_jsx_runtime38.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: ICON_TIMELINE.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime38.jsx)("path", { d, fill: "currentColor" }, i)) })
     }
   );
 }
 
 // src/components/TweakRoot.tsx
-var import_jsx_runtime38 = require("react/jsx-runtime");
+var import_jsx_runtime39 = require("react/jsx-runtime");
 function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover", theme = "system", productionEnabled = isDevDefault, panels: only, chrome = "card" }) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = (0, import_react42.useState)([]);
@@ -10109,8 +10493,8 @@ function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover
     right: "auto",
     bottom: "auto"
   } : void 0;
-  const timelineToggle = timelineCount > 0 && onlyKey === void 0 ? /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(TimelineToggleButton, {}) : null;
-  const content = /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(ShortcutListener, { children: /* @__PURE__ */ (0, import_jsx_runtime38.jsx)("div", { className: "tweakers-root", "data-mode": mode, "data-theme": theme, "data-chrome": chrome, children: /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(
+  const timelineToggle = timelineCount > 0 && onlyKey === void 0 ? /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(TimelineToggleButton, {}) : null;
+  const content = /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(ShortcutListener, { children: /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-root", "data-mode": mode, "data-theme": theme, "data-chrome": chrome, children: /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(
     "div",
     {
       ref: panelRef,
@@ -10121,7 +10505,7 @@ function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover
       onPointerDown: !inline ? handlePointerDown : void 0,
       onPointerMove: !inline ? handlePointerMove : void 0,
       onPointerUp: !inline ? handlePointerUp : void 0,
-      children: panels.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime38.jsx)("div", { className: "tweakers-panel-wrapper", children: /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(
+      children: panels.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-panel-wrapper", children: /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(
         Folder,
         {
           title: "Tweakers",
@@ -10129,9 +10513,9 @@ function TweakRoot({ position = "top-right", defaultOpen = true, mode = "popover
           isRoot: true,
           inline,
           toolbar: timelineToggle,
-          children: /* @__PURE__ */ (0, import_jsx_runtime38.jsx)("div", { className: "tweakers-timeline-toolkit-only", children: "Timeline" })
+          children: /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-timeline-toolkit-only", children: "Timeline" })
         }
-      ) }) : panels.map((panel) => /* @__PURE__ */ (0, import_jsx_runtime38.jsx)(Panel, { panel, defaultOpen: inline || defaultOpen, inline, toolbarExtra: timelineToggle }, panel.id))
+      ) }) : panels.map((panel) => /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(Panel, { panel, defaultOpen: inline || defaultOpen, inline, toolbarExtra: timelineToggle }, panel.id))
     }
   ) }) });
   if (inline) {
@@ -10146,7 +10530,7 @@ var import_react_dom8 = require("react-dom");
 
 // src/components/CurveComposer.tsx
 var import_react43 = require("react");
-var import_jsx_runtime39 = require("react/jsx-runtime");
+var import_jsx_runtime40 = require("react/jsx-runtime");
 function CurveComposer({
   segments,
   driver = null,
@@ -10340,17 +10724,17 @@ function CurveComposer({
     for (let i = 1; i < n; i++) {
       const gx = i / n * W;
       lines.push(
-        /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("line", { x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h, className: "tweakers-cc-grid" }, `g-${rect.y}-${i}`)
+        /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("line", { x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h, className: "tweakers-cc-grid" }, `g-${rect.y}-${i}`)
       );
     }
     return lines;
   };
-  const renderLaneBg = (rect, key) => /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("rect", { className: "tweakers-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 }, key);
+  const renderLaneBg = (rect, key) => /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("rect", { className: "tweakers-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 }, key);
   const diagonal = (rect, span, key) => {
     const d = diagonalLine(rect, span, W);
-    return /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("line", { className: "tweakers-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 }, key);
+    return /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("line", { className: "tweakers-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 }, key);
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-cc-wrap", style: { width: W }, children: /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("div", { className: "tweakers-cc-wrap", style: { width: W }, children: /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)(
     "svg",
     {
       ref: svgRef,
@@ -10370,7 +10754,7 @@ function CurveComposer({
         renderLaneGrid(mainRect),
         selectedIndex != null && selectedIndex >= 0 && selectedIndex < segments.length && (() => {
           const span = segmentSpan(segments, selectedIndex, gap);
-          return /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(
+          return /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
             "rect",
             {
               className: "tweakers-cc-seg-selected",
@@ -10384,7 +10768,7 @@ function CurveComposer({
         })(),
         hover?.kind === "segment" && !drag && (() => {
           const span = segmentSpan(segments, hover.index, gap);
-          return /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(
+          return /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
             "rect",
             {
               className: "tweakers-cc-seg-hover",
@@ -10398,13 +10782,13 @@ function CurveComposer({
         })(),
         segments.map((seg, i) => {
           const span = segmentSpan(segments, i, gap);
-          return /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)("g", { children: [
+          return /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)("g", { children: [
             diagonal(mainRect, span, `diag-${i}`),
-            /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("path", { className: "tweakers-cc-curve", d: curvePath(seg, mainRect, span, W) }),
-            /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("text", { className: "tweakers-cc-label", x: (span[0] + span[1]) * 0.5 * W, y: mainRect.y + 13, children: seg.type })
+            /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("path", { className: "tweakers-cc-curve", d: curvePath(seg, mainRect, span, W) }),
+            /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("text", { className: "tweakers-cc-label", x: (span[0] + span[1]) * 0.5 * W, y: mainRect.y + 13, children: seg.type })
           ] }, `seg-${i}`);
         }),
-        gap > 0 && timelineSlots(segments, gap).filter((slot) => slot.kind === "gap" && slot.b > slot.a).map((slot) => /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(
+        gap > 0 && timelineSlots(segments, gap).filter((slot) => slot.kind === "gap" && slot.b > slot.a).map((slot) => /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
           "path",
           {
             className: "tweakers-cc-connector",
@@ -10412,7 +10796,7 @@ function CurveComposer({
           },
           `conn-${slot.index}`
         )),
-        interior.map((bx, i) => /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(
+        interior.map((bx, i) => /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
           "line",
           {
             className: "tweakers-cc-boundary",
@@ -10426,206 +10810,160 @@ function CurveComposer({
           },
           `b-${i}`
         )),
-        /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("line", { ref: seriesPlayheadRef, className: "tweakers-cc-playhead", x1: 0, y1: mainRect.y, x2: 0, y2: mainRect.y + mainRect.h, style: { stroke: playheadColor } }),
-        /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("circle", { ref: seriesDotRef, className: "tweakers-cc-dot", cx: 0, cy: mapY(mainRect, 0), r: 3, style: { fill: playheadColor } }),
-        driverRect && /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(import_jsx_runtime39.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("line", { ref: seriesPlayheadRef, className: "tweakers-cc-playhead", x1: 0, y1: mainRect.y, x2: 0, y2: mainRect.y + mainRect.h, style: { stroke: playheadColor } }),
+        /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("circle", { ref: seriesDotRef, className: "tweakers-cc-dot", cx: 0, cy: mapY(mainRect, 0), r: 3, style: { fill: playheadColor } }),
+        driverRect && /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)(import_jsx_runtime40.Fragment, { children: [
           renderLaneBg(driverRect, "driver-bg"),
           renderLaneGrid(driverRect),
-          hover?.kind === "driver" && !drag && /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("rect", { className: "tweakers-cc-seg-hover", x: 0, y: driverRect.y, width: W, height: driverRect.h, rx: 8 }),
+          hover?.kind === "driver" && !drag && /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("rect", { className: "tweakers-cc-seg-hover", x: 0, y: driverRect.y, width: W, height: driverRect.h, rx: 8 }),
           diagonal(driverRect, [0, 1], "driver-diag"),
-          /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("path", { className: "tweakers-cc-curve tweakers-cc-curve-driver", d: curvePath(driver, driverRect, [0, 1], W) }),
-          /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)("text", { className: "tweakers-cc-label", x: W * 0.5, y: driverRect.y + 13, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("path", { className: "tweakers-cc-curve tweakers-cc-curve-driver", d: curvePath(driver, driverRect, [0, 1], W) }),
+          /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)("text", { className: "tweakers-cc-label", x: W * 0.5, y: driverRect.y + 13, children: [
             "driver \xB7 ",
             driver.type
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("line", { ref: driverPlayheadRef, className: "tweakers-cc-playhead", x1: 0, y1: driverRect.y, x2: 0, y2: driverRect.y + driverRect.h, style: { stroke: playheadColor } })
+          /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("line", { ref: driverPlayheadRef, className: "tweakers-cc-playhead", x1: 0, y1: driverRect.y, x2: 0, y2: driverRect.y + driverRect.h, style: { stroke: playheadColor } })
         ] })
       ]
     }
   ) });
 }
 
-// src/move-layout.ts
-var MOVE_TRACKS = 4;
-var MOVE_DIALS = 8;
-var MOVE_PADS = 8;
-var flat = (controls, out = []) => {
-  for (const c of controls) {
-    if (c.children) flat(c.children, out);
-    else out.push(c);
+// src/components/move-slots.tsx
+var import_jsx_runtime41 = require("react/jsx-runtime");
+function moveSlotKind(meta, opts = {}) {
+  if (meta.type === "filter") return "filter";
+  if (meta.type === "xy") return "xy";
+  if (meta.type === "range") return "range";
+  if (opts.enum) {
+    if (opts.shape) return "curve";
+    if (opts.glyph) return "icon";
+    return "enum";
   }
-  return out;
-};
-var isEnumDial = (c) => c.type === "select" && Array.isArray(c.options) && c.options.length > 1;
-var isDial = (c) => c.type === "slider" || c.type === "xy" || c.type === "range" || isEnumDial(c) || c.type === "number" && c.min != null && c.max != null;
-var noChip = (c) => c.type === "xy" || c.type === "range" || isEnumDial(c);
-function buildModMovePage(panel, layout) {
-  const controls = flat(panel.controls);
-  if (layout) {
-    const at = (slot) => slot ? controls.find((c) => c.path === slot.path) : void 0;
-    return {
-      panel,
-      dials: layout.dials.slice(0, MOVE_DIALS).map(at).filter((c) => !!c),
-      toggles: layout.toggles.slice(0, MOVE_PADS).map(at),
-      values: layout.values.slice(0, MOVE_PADS).map(at),
-      actions: []
-    };
-  }
-  const dials = [];
-  const toggles = [];
-  for (const c of controls) {
-    if (c.type === "toggle") toggles[Math.max(0, dials.length - 1)] = c;
-    else if (c.type === "select" || isDial(c)) dials.push(c);
-  }
-  return { panel, dials: dials.slice(0, MOVE_DIALS), toggles: toggles.slice(0, MOVE_PADS), values: [], actions: [] };
+  return opts.valueFirst ? "value" : "default";
 }
-var padColumn = (panel, c) => {
-  const col = panel.movePads?.[c.path];
-  return typeof col === "number" && Number.isInteger(col) && col >= 0 && col < MOVE_PADS ? col : null;
-};
-function buildMovePages(panels) {
-  return panels.filter((p) => p.kind === void 0).slice(0, MOVE_TRACKS).map((panel) => {
-    const controls = flat(panel.controls);
-    const chipPlaced = (c) => padColumn(panel, c) !== null && !noChip(c);
-    const dials = controls.filter((c) => isDial(c) && !chipPlaced(c)).slice(0, MOVE_DIALS);
-    const toggles = [];
-    const values = [];
-    const actions = [];
-    const place = (row, c, col) => {
-      if (col !== null && row[col] === void 0) {
-        row[col] = c;
-        return;
-      }
-      for (let i = 0; i < MOVE_PADS; i++) {
-        if (row[i] === void 0) {
-          row[i] = c;
-          return;
-        }
-      }
-    };
-    for (const c of controls) {
-      const col = padColumn(panel, c);
-      if (c.type === "toggle") place(toggles, c, col);
-      else if (c.type === "action") {
-        if (col !== null) place(actions, c, col);
-      } else if (isDial(c) && !noChip(c) && !dials.includes(c)) place(values, c, col);
+function MoveSlotGlyph({ name, className }) {
+  const paths = LUCIDE_ICONS[name];
+  if (!paths) return null;
+  return /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(
+    "svg",
+    {
+      className,
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
+      "aria-hidden": "true",
+      children: paths.map((d) => /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("path", { d }, d))
     }
-    return {
-      panel,
-      dials,
-      toggles: toggles.slice(0, MOVE_PADS),
-      values: values.slice(0, MOVE_PADS),
-      actions: actions.slice(0, MOVE_PADS)
-    };
-  });
-}
-function movePadRows(page, claimedRows) {
-  if (claimedRows >= 2) return [page.values, page.toggles, [], []];
-  return [page.toggles, page.values, page.actions, []];
-}
-function moveAppPadRow(row, claimedRows) {
-  if (claimedRows >= 2) return row === 2 ? 1 : row === 3 ? 0 : null;
-  return claimedRows === 1 && row === 3 ? 0 : null;
-}
-function visibleColumns(page) {
-  const cols = [];
-  for (let i = 0; i < MOVE_DIALS; i++) {
-    if (page.dials[i] || page.toggles[i] || page.values[i] || page.actions[i]) cols.push(i);
-  }
-  return cols;
-}
-function denormalizeDial(meta, v01) {
-  const min = meta.min ?? 0;
-  const max = meta.max ?? 1;
-  let v = min + Math.min(1, Math.max(0, v01)) * (max - min);
-  if (meta.step) v = Math.round(v / meta.step) * meta.step;
-  return Number(v.toFixed(6));
-}
-function normalizeDial(meta, value) {
-  const min = meta.min ?? 0;
-  const max = meta.max ?? 1;
-  const v = (Number(value) - min) / (max - min || 1);
-  return Math.min(1, Math.max(0, Number.isFinite(v) ? v : 0));
-}
-var norm01 = (v, min, max) => {
-  const n = (Number(v) - min) / (max - min || 1);
-  return Math.min(1, Math.max(0, Number.isFinite(n) ? n : 0));
-};
-var denorm01 = (v01, min, max, step) => {
-  let v = min + Math.min(1, Math.max(0, v01)) * (max - min);
-  if (step) v = Math.round(v / step) * step;
-  return Number(v.toFixed(6));
-};
-function normalizeXYDial(meta, value) {
-  const xAxis = resolveAxis(meta.xAxis);
-  const yAxis = resolveAxis(meta.yAxis);
-  const v = value ?? {};
-  return { x: norm01(v.x, xAxis.min, xAxis.max), y: norm01(v.y, yAxis.min, yAxis.max) };
-}
-var enumOptionValue = (o) => typeof o === "string" ? o : o.value;
-var enumOptionLabel = (o) => typeof o === "string" ? o : o.label ?? o.value;
-var enumOptionIcon = (o) => typeof o === "string" ? null : o.icon ?? null;
-var ENUM_SHAPE_SAMPLES = 64;
-function enumShapePath(meta, value) {
-  if (!meta.preview) return null;
-  let sample;
-  try {
-    sample = meta.preview(String(value ?? ""));
-  } catch {
-    return null;
-  }
-  if (typeof sample !== "function") return null;
-  const segments = plotCurve(sample, { count: ENUM_SHAPE_SAMPLES }).segments;
-  let lo = Infinity;
-  let hi = -Infinity;
-  for (const seg of segments) {
-    for (const pt of seg) {
-      if (pt.v < lo) lo = pt.v;
-      if (pt.v > hi) hi = pt.v;
-    }
-  }
-  if (lo > hi) return null;
-  const span = hi - lo;
-  const fill = (v) => span > 0 ? (v - lo) / span : 0.5;
-  const d = segments.map((seg) => seg.map((pt, i) => `${i ? "L" : "M"} ${(pt.t * 100).toFixed(2)} ${((1 - fill(pt.v)) * 100).toFixed(2)}`).join(" ")).join(" ");
-  return d || null;
-}
-function enumIndex(meta, value) {
-  const i = (meta.options ?? []).findIndex((o) => enumOptionValue(o) === value);
-  return Math.max(0, i);
-}
-function normalizeRangeDial(meta, value) {
-  const min = meta.min ?? 0;
-  const max = meta.max ?? 1;
-  const v = value ?? {};
-  return { lo: norm01(v.min, min, max), hi: norm01(v.max, min, max) };
-}
-function denormalizeRangeDial(meta, lo01, hi01) {
-  const min = meta.min ?? 0;
-  const max = meta.max ?? 1;
-  const step = meta.step ?? 0;
-  return clampRange(
-    { min: denorm01(lo01, min, max, step), max: denorm01(hi01, min, max, step) },
-    min,
-    max
   );
 }
-function normalizeEnumDial(meta, value) {
-  const opts = (meta.options ?? []).map((o) => enumOptionValue(o));
-  if (opts.length < 2) return 0;
-  const i = opts.indexOf(String(value));
-  return i <= 0 ? 0 : i / (opts.length - 1);
+function MoveSlotReadout({ label, value }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)("div", { className: "tweakers-move-dial-readout", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-label", "data-long": label.length > 9 || void 0, children: label }),
+    /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-value", children: value })
+  ] });
 }
-function denormalizeEnumDial(meta, v01) {
-  const opts = (meta.options ?? []).map((o) => enumOptionValue(o));
-  if (opts.length === 0) return "";
-  const i = Math.round(Math.min(1, Math.max(0, v01)) * (opts.length - 1));
-  return opts[i];
+function MoveSlotShape({ d, className = "tweakers-move-dial-shape" }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("svg", { className, viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("path", { d }) });
 }
-function dialOrigin(meta) {
-  const origin = meta.origin ?? (meta.bipolar ? 0 : void 0);
-  return origin === void 0 ? 0 : normalizeDial(meta, origin);
+function MoveSlotDefaultBody({
+  label,
+  value,
+  pct,
+  originPct,
+  atOrigin
+}) {
+  return /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)(import_jsx_runtime41.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(MoveSlotReadout, { label, value }),
+    /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)("div", { className: "tweakers-move-dial-bar", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(
+        "div",
+        {
+          className: "tweakers-move-dial-fill",
+          "data-zero": atOrigin || void 0,
+          style: originPct != null ? { marginLeft: `${Math.min(pct, originPct)}%`, width: `${Math.abs(pct - originPct)}%` } : { width: `${pct}%` }
+        }
+      ),
+      atOrigin && /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-zero", style: { left: `${originPct}%` } })
+    ] })
+  ] });
 }
+function MoveSlotEnumBody({
+  label,
+  optionLabel,
+  options,
+  activeIdx,
+  shape,
+  glyph
+}) {
+  return /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)(import_jsx_runtime41.Fragment, { children: [
+    (shape || glyph) && /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-tag", children: label }),
+    shape && /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(MoveSlotShape, { d: shape }),
+    glyph && /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(MoveSlotGlyph, { name: glyph, className: "tweakers-move-dial-icon" }),
+    shape || glyph ? /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-option", children: optionLabel }) : /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(MoveSlotReadout, { label, value: optionLabel }),
+    /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("div", { className: "tweakers-move-dial-enum", children: options.map((opt, j) => /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(
+      "span",
+      {
+        className: "tweakers-move-dial-enum-cell",
+        "data-on": j === activeIdx || void 0
+      },
+      enumOptionValue(opt)
+    )) }) })
+  ] });
+}
+function MoveSlotRangeBody({
+  label,
+  value,
+  lo,
+  hi
+}) {
+  return /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)(import_jsx_runtime41.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(MoveSlotReadout, { label, value }),
+    /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)("div", { className: "tweakers-move-dial-range", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(
+        "div",
+        {
+          className: "tweakers-move-dial-span",
+          style: { left: `${lo * 100}%`, width: `${(hi - lo) * 100}%` }
+        }
+      ),
+      /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-handle", style: { left: `${lo * 100}%` } }),
+      /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-handle", style: { left: `${hi * 100}%` } })
+    ] }) })
+  ] });
+}
+function MoveSlotFilterBody({
+  meta,
+  value,
+  shape
+}) {
+  const ca = resolveFilterAxis(meta.cutoffAxis, "cutoff");
+  const ra = resolveFilterAxis(meta.resonanceAxis, "resonance");
+  const fmt = (v, f) => f ? f(v) : Math.abs(v) >= 100 ? Math.round(v).toString() : Number(v.toFixed(2)).toString();
+  return /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)(import_jsx_runtime41.Fragment, { children: [
+    shape && /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(MoveSlotShape, { d: shape, className: "tweakers-move-filter-shape" }),
+    /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)("div", { className: "tweakers-move-filter-readout", "data-side": "cutoff", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-label", children: ca.label }),
+      /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-value", children: fmt(value.cutoff, ca.formatValue) })
+    ] }),
+    /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)("div", { className: "tweakers-move-filter-readout", "data-side": "resonance", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-label", children: ra.label }),
+      /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-value", children: fmt(value.resonance, ra.formatValue) })
+    ] })
+  ] });
+}
+var MOVE_SLOT_LIBRARY = {
+  default: { description: "name centred, value on touch, fill bar", component: MoveSlotDefaultBody },
+  value: { description: "value-first: the value is the headline, the name a tag on top", component: MoveSlotDefaultBody },
+  icon: { description: "option picker showing the current option as a glyph", component: MoveSlotEnumBody },
+  curve: { description: "option picker drawing the current option\u2019s shape \u2014 curve selection", component: MoveSlotEnumBody },
+  enum: { description: "stepped option picker, one pagination cell per option", component: MoveSlotEnumBody },
+  range: { description: "two handles on one bar; volume knob is the second hand", component: MoveSlotRangeBody },
+  filter: { description: "2 slots: cutoff + resonance as one response picture", component: MoveSlotFilterBody }
+};
 
 // src/move-surface-store.ts
 var EMPTY = { rows: 0, pads: [], steps: null, screen: null };
@@ -10707,7 +11045,7 @@ var MoveVolumeDisplayClass = class {
 var MoveVolumeDisplay = new MoveVolumeDisplayClass();
 
 // src/components/MovePanel.tsx
-var import_jsx_runtime40 = require("react/jsx-runtime");
+var import_jsx_runtime42 = require("react/jsx-runtime");
 var MOVE_TRACK_COLORS = ["#4274f4", "#d83dff", "#ff4d07", "#52bd06"];
 var PAD_ROWS = 4;
 var DIAL_TRACK_INSET = 10;
@@ -10717,7 +11055,7 @@ var TAP_MS = 300;
 function boldColons(text) {
   if (!text.includes(":")) return text;
   return text.split(":").flatMap(
-    (part, i) => i === 0 ? [part] : [/* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-volume-sep", children: ":" }, `sep-${i}`), part]
+    (part, i) => i === 0 ? [part] : [/* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-volume-sep", children: ":" }, `sep-${i}`), part]
   );
 }
 var MOVE_TOUCH_EVENT = "move-tweakers:touch";
@@ -10739,6 +11077,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const [mounted, setMounted] = (0, import_react44.useState)(false);
   const fineRef = (0, import_react44.useRef)(null);
   const rangeHandleRef = (0, import_react44.useRef)("min");
+  const filterHandRef = (0, import_react44.useRef)("cutoff");
   const [volume, setVolume] = (0, import_react44.useState)(() => MoveVolumeDisplay.get());
   const [liveValue, setLiveValue] = (0, import_react44.useState)(null);
   (0, import_react44.useEffect)(() => {
@@ -10918,6 +11257,33 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     const next = rangeHandleRef.current === "min" ? { lo: Math.min(p01, cur.hi), hi: cur.hi } : { lo: cur.lo, hi: Math.max(p01, cur.lo) };
     TweakStore.updateValue(page.panel.id, meta.path, denormalizeRangeDial(meta, next.lo, next.hi));
   };
+  const filterFromPointer = (e, meta, down) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const half = rect.width / 2;
+    if (down) filterHandRef.current = e.clientX - rect.left < half ? "cutoff" : "resonance";
+    const hand = filterHandRef.current;
+    const left = hand === "cutoff" ? rect.left + DIAL_TRACK_INSET : rect.left + half;
+    const span = half - DIAL_TRACK_INSET;
+    const cur = normalizeFilterDial(meta, values[meta.path]);
+    const fine = fineAnchor(e, () => cur);
+    let v01;
+    if (fine) {
+      const a = fine.v;
+      v01 = fineDragValue({
+        startValue: hand === "cutoff" ? a.cutoff : a.resonance,
+        startPos: fine.x,
+        pos: e.clientX,
+        extentPx: span || 1,
+        min: 0,
+        max: 1,
+        factor: fine.shift ? 0.1 : 1
+      });
+    } else {
+      v01 = Math.min(1, Math.max(0, (e.clientX - left) / (span || 1)));
+    }
+    const next = hand === "cutoff" ? denormalizeFilterDial(meta, v01, cur.resonance) : denormalizeFilterDial(meta, cur.cutoff, v01);
+    TweakStore.updateValue(page.panel.id, meta.path, next);
+  };
   const enumFromPointer = (e, meta) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const span = rect.width - DIAL_TRACK_INSET * 2;
@@ -10950,7 +11316,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const ModDot = ({ path, pad }) => {
     const c = modColorFor(path);
     if (!c) return null;
-    return /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: pad ? "tweakers-move-pad-mod" : "tweakers-move-dial-mod", style: { background: c } });
+    return /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: pad ? "tweakers-move-pad-mod" : "tweakers-move-dial-mod", style: { background: c } });
   };
   const dialAt = (col) => {
     if (held && held.col === col) return held.meta;
@@ -10984,13 +11350,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const padAt = (x, y) => surface.pads.find((p) => p.x === x && p.y === y);
   const visibleCols = appRows > 0 ? Array.from({ length: MOVE_PADS }, (_, i) => i) : visibleColumns(page);
   const volumeReading = liveValue ?? volume?.value;
-  const headerCluster = volume && /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("div", { className: "tweakers-move-actions", children: /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)("div", { className: "tweakers-move-volume", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-volume-tick", style: { background: MOVE_TRACK_COLORS[0] } }),
-    volume.label && volumeReading != null && /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-volume-label", children: volume.label }),
-    /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-volume-value", children: boldColons(volumeReading ?? volume.label ?? "") })
+  const headerCluster = volume && /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("div", { className: "tweakers-move-actions", children: /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("div", { className: "tweakers-move-volume", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-volume-tick", style: { background: MOVE_TRACK_COLORS[0] } }),
+    volume.label && volumeReading != null && /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-volume-label", children: volume.label }),
+    /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-volume-value", children: boldColons(volumeReading ?? volume.label ?? "") })
   ] }) });
-  const content = /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)("div", { className: "tweakers-move", "data-dock": dock, "data-overlay": composition ? true : void 0, children: [
-    composition && modSettings && /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
+  const content = /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("div", { className: "tweakers-move", "data-dock": dock, "data-overlay": composition ? true : void 0, children: [
+    composition && modSettings && /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
       MoveCurveComposer,
       {
         index: modSettings.index,
@@ -11000,9 +11366,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         selected: clipIndex
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)("div", { className: "tweakers-move-inner", style: { "--move-cols": visibleCols.length || MOVE_DIALS }, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)("div", { className: "tweakers-move-tracks", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("div", { className: "tweakers-move-tracks-group", children: pages.map((pg, i) => /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)(
+    /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("div", { className: "tweakers-move-inner", style: { "--move-cols": visibleCols.length || MOVE_DIALS }, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("div", { className: "tweakers-move-tracks", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("div", { className: "tweakers-move-tracks-group", children: pages.map((pg, i) => /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)(
           "button",
           {
             className: "tweakers-move-track",
@@ -11013,27 +11379,70 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
               window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
             },
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
-              /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-track-label", children: pg.panel.name })
+              /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
+              /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-track-label", children: pg.panel.name })
             ]
           },
           pg.panel.id
         )) }),
-        /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("div", { className: "tweakers-move-mods", children: surface.steps ? surface.steps.map((s) => /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-mod", title: `step ${s.step + 1}`, children: /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("div", { className: "tweakers-move-mods", children: surface.steps ? surface.steps.map((s) => /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-mod", title: `step ${s.step + 1}`, children: /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
           "span",
           {
             className: "tweakers-move-mod-dot",
             style: { background: s.color ?? "var(--move-text)", opacity: s.lit ? 1 : 0.25 }
           }
-        ) }, s.step)) : ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(MoveModCircle, { slot }, slot.index)) }),
+        ) }, s.step)) : ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(MoveModCircle, { slot }, slot.index)) }),
         headerCluster
       ] }),
-      visibleCols.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)("div", { className: "tweakers-move-grid", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("div", { className: "tweakers-move-dials", children: visibleCols.map((i) => {
-          const meta = dialAt(i);
-          if (!meta) return /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
+      visibleCols.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("div", { className: "tweakers-move-grid", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("div", { className: "tweakers-move-dials", children: visibleCols.map((i) => {
+          if (isSpanContinuation(page, i)) return null;
+          const meta = page.dials[i]?.type === "filter" ? page.dials[i] : dialAt(i);
+          if (!meta) return /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
           const active = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
           const valueFirst = !!settingsPanel && !(meta.min === 0 && meta.max === 1);
+          if (meta.type === "filter") {
+            const fv = normalizeFilterValue(
+              values[meta.path],
+              resolveFilterAxis(meta.cutoffAxis, "cutoff"),
+              resolveFilterAxis(meta.resonanceAxis, "resonance")
+            );
+            const shape = filterShapePath(meta, values[meta.path]);
+            return /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)(
+              "div",
+              {
+                className: "tweakers-move-dial",
+                "data-kind": "filter",
+                "data-active": active || void 0,
+                onPointerDown: (e) => {
+                  try {
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                  } catch {
+                  }
+                  fineRef.current = null;
+                  setDragPath(meta.path);
+                  armMod(meta.path);
+                  filterFromPointer(e, meta, true);
+                },
+                onPointerMove: (e) => {
+                  if (dragPath === meta.path) filterFromPointer(e, meta, false);
+                },
+                onPointerUp: () => {
+                  setDragPath(null);
+                  fineRef.current = null;
+                },
+                onPointerCancel: () => {
+                  setDragPath(null);
+                  fineRef.current = null;
+                },
+                children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(ModDot, { path: meta.path }),
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(MoveSlotFilterBody, { meta, value: fv, shape })
+                ]
+              },
+              meta.path
+            );
+          }
           if (meta.type === "xy") {
             const xa = resolveAxis(meta.xAxis);
             const ya = resolveAxis(meta.yAxis);
@@ -11045,7 +11454,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             const preview = meta.path === previewPath ? ModulationStore.getSettingsPreview() : null;
             const gridBase = meta.grid === false ? 0 : typeof meta.grid === "number" ? meta.grid : XY_GRID_DEFAULT;
             const gridN = gridBase > 0 ? Math.round(gridBase * Math.max(0, meta.density ?? 1)) : 0;
-            return /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)(
+            return /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)(
               "div",
               {
                 className: "tweakers-move-dial",
@@ -11069,19 +11478,19 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 onPointerUp: () => xyRelease(meta),
                 onPointerCancel: () => xyRelease(meta),
                 children: [
-                  valueFirst && /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-dial-sub", children: meta.label }),
-                  /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(ModDot, { path: meta.path }),
-                  /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("div", { className: "tweakers-move-xy", children: preview ? /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
+                  valueFirst && /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-dial-sub", children: meta.label }),
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(ModDot, { path: meta.path }),
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("div", { className: "tweakers-move-xy", children: preview ? /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
                     "svg",
                     {
                       className: "tweakers-move-xy-curve",
                       viewBox: "0 0 100 100",
                       preserveAspectRatio: "none",
                       "aria-hidden": "true",
-                      children: /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("path", { d: previewPathData(preview.points) })
+                      children: /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("path", { d: previewPathData(preview.points) })
                     }
-                  ) : /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)(import_jsx_runtime40.Fragment, { children: [
-                    gridN > 0 && /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
+                  ) : /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)(import_jsx_runtime42.Fragment, { children: [
+                    gridN > 0 && /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
                       "span",
                       {
                         className: "tweakers-move-xy-grid",
@@ -11091,13 +11500,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                         }
                       }
                     ),
-                    /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-xy-line", "data-axis": "x", style: { top: `${pos.y * 100}%` } }),
-                    /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-xy-line", "data-axis": "y", style: { left: `${pos.x * 100}%` } }),
-                    /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-xy-dot", style: { left: `${pos.x * 100}%`, top: `${pos.y * 100}%` } })
+                    /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-xy-line", "data-axis": "x", style: { top: `${pos.y * 100}%` } }),
+                    /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-xy-line", "data-axis": "y", style: { left: `${pos.x * 100}%` } }),
+                    /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-xy-dot", style: { left: `${pos.x * 100}%`, top: `${pos.y * 100}%` } })
                   ] }) }),
-                  /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)("div", { className: "tweakers-move-dial-readout", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-dial-label", "data-long": meta.label.length > 9 || void 0, children: meta.label }),
-                    /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-dial-value", children: preview ? preview.label : `${Math.round(pos.x * 100)}\xB7${Math.round((1 - pos.y) * 100)}` })
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("div", { className: "tweakers-move-dial-readout", children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-dial-label", "data-long": meta.label.length > 9 || void 0, children: meta.label }),
+                    /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-dial-value", children: preview ? preview.label : `${Math.round(pos.x * 100)}\xB7${Math.round((1 - pos.y) * 100)}` })
                   ] })
                 ]
               },
@@ -11106,7 +11515,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
           }
           if (meta.type === "range") {
             const pos = normalizeRangeDial(meta, values[meta.path]);
-            return /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)(
+            return /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)(
               "div",
               {
                 className: "tweakers-move-dial",
@@ -11134,22 +11543,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                   fineRef.current = null;
                 },
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(ModDot, { path: meta.path }),
-                  /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)("div", { className: "tweakers-move-dial-readout", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-dial-label", "data-long": meta.label.length > 9 || void 0, children: meta.label }),
-                    /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-dial-value", children: rangeReading(meta) })
-                  ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)("div", { className: "tweakers-move-dial-range", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
-                      "div",
-                      {
-                        className: "tweakers-move-dial-span",
-                        style: { left: `${pos.lo * 100}%`, width: `${(pos.hi - pos.lo) * 100}%` }
-                      }
-                    ),
-                    /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-dial-handle", style: { left: `${pos.lo * 100}%` } }),
-                    /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-dial-handle", style: { left: `${pos.hi * 100}%` } })
-                  ] }) })
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(ModDot, { path: meta.path }),
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(MoveSlotRangeBody, { label: meta.label, value: rangeReading(meta), lo: pos.lo, hi: pos.hi })
                 ]
               },
               meta.path
@@ -11162,7 +11557,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             const optionLabel = enumOptionLabel(option);
             const shape = enumShapePath(meta, values[meta.path]);
             const glyph = enumOptionIcon(option);
-            return /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)(
+            return /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)(
               "div",
               {
                 className: "tweakers-move-dial",
@@ -11191,31 +11586,18 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                   fineRef.current = null;
                 },
                 children: [
-                  (shape || glyph) && /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-dial-tag", children: meta.label }),
-                  /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(ModDot, { path: meta.path }),
-                  shape && /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
-                    "svg",
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(ModDot, { path: meta.path }),
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
+                    MoveSlotEnumBody,
                     {
-                      className: "tweakers-move-dial-shape",
-                      viewBox: "0 0 100 100",
-                      preserveAspectRatio: "none",
-                      "aria-hidden": "true",
-                      children: /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("path", { d: shape })
+                      label: meta.label,
+                      optionLabel,
+                      options,
+                      activeIdx,
+                      shape,
+                      glyph
                     }
-                  ),
-                  glyph && /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(LucideGlyph, { name: glyph, className: "tweakers-move-dial-icon" }),
-                  shape || glyph ? /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-dial-option", children: optionLabel }) : /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)("div", { className: "tweakers-move-dial-readout", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-dial-label", "data-long": meta.label.length > 9 || void 0, children: meta.label }),
-                    /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-dial-value", children: optionLabel })
-                  ] }),
-                  /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("div", { className: "tweakers-move-dial-enum", children: options.map((opt, j) => /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
-                    "span",
-                    {
-                      className: "tweakers-move-dial-enum-cell",
-                      "data-on": j === activeIdx || void 0
-                    },
-                    typeof opt === "string" ? opt : opt.value
-                  )) }) })
+                  )
                 ]
               },
               meta.path
@@ -11228,7 +11610,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
           const atOrigin = originPct != null && Math.abs(normalizeDial(meta, values[meta.path]) - origin01) < 1e-6;
           const subbed = meta !== page.dials[i];
           const subValue = subbed || valueFirst ? chipValue(meta) : null;
-          return /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)(
+          return /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)(
             "div",
             {
               className: "tweakers-move-dial",
@@ -11257,36 +11639,31 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 fineRef.current = null;
               },
               children: [
-                (subbed || valueFirst) && /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-dial-sub", children: meta.label }),
-                /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(ModDot, { path: meta.path }),
-                /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)("div", { className: "tweakers-move-dial-readout", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-dial-label", "data-long": meta.label.length > 9 || void 0, children: meta.label }),
-                  /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-dial-value", children: subValue ? `${subValue.num}${subValue.unit ? ` ${subValue.unit}` : ""}` : dialReading(meta) })
-                ] }),
-                /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)("div", { className: "tweakers-move-dial-bar", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
-                    "div",
-                    {
-                      className: "tweakers-move-dial-fill",
-                      "data-zero": atOrigin || void 0,
-                      style: originPct != null ? { marginLeft: `${Math.min(pct, originPct)}%`, width: `${Math.abs(pct - originPct)}%` } : { width: `${pct}%` }
-                    }
-                  ),
-                  atOrigin && /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-dial-zero", style: { left: `${originPct}%` } })
-                ] })
+                (subbed || valueFirst) && /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-dial-sub", children: meta.label }),
+                /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(ModDot, { path: meta.path }),
+                /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
+                  MoveSlotDefaultBody,
+                  {
+                    label: meta.label,
+                    value: subValue ? `${subValue.num}${subValue.unit ? ` ${subValue.unit}` : ""}` : dialReading(meta),
+                    pct,
+                    originPct,
+                    atOrigin
+                  }
+                )
               ]
             },
             meta.path
           );
         }) }),
-        Array.from({ length: PAD_ROWS }, (_, row) => row).filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0)).map((row) => /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("div", { className: "tweakers-move-pads", children: visibleCols.map((col) => {
+        Array.from({ length: PAD_ROWS }, (_, row) => row).filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0)).map((row) => /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("div", { className: "tweakers-move-pads", children: visibleCols.map((col) => {
           const appRow = appRowAt(row);
           if (appRow !== null) {
             const cell = padAt(col, appRow);
             if (!cell || cell.empty) {
-              return /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("div", { className: "tweakers-move-pad", "data-empty": "true" }, `app-${col}`);
+              return /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("div", { className: "tweakers-move-pad", "data-empty": "true" }, `app-${col}`);
             }
-            return /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)(
+            return /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)(
               "button",
               {
                 className: "tweakers-move-pad",
@@ -11294,23 +11671,23 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 "data-on": cell.lit || void 0,
                 onClick: () => MoveSurfaceStore.press(col, appRow),
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
                     "span",
                     {
                       className: "tweakers-move-pad-indicator",
                       style: cell.color ? { background: cell.color } : void 0
                     }
                   ),
-                  cell.label && /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-pad-title", children: cell.label })
+                  cell.label && /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-pad-title", children: cell.label })
                 ]
               },
               `app-${col}`
             );
           }
           const meta = padRows[row][col];
-          if (!meta) return /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
+          if (!meta) return /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
           if (padRows[row] === page.toggles) {
-            return /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)(
+            return /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)(
               "button",
               {
                 className: "tweakers-move-pad",
@@ -11318,27 +11695,27 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 "data-on": !!values[meta.path],
                 onClick: () => TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path]),
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-pad-indicator" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-pad-title", children: meta.label })
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-pad-indicator" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-pad-title", children: meta.label })
                 ]
               },
               meta.path
             );
           }
           if (padRows[row] === page.actions) {
-            return /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
+            return /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
               "button",
               {
                 className: "tweakers-move-pad",
                 "data-kind": "action",
                 onClick: () => TweakStore.triggerAction(page.panel.id, meta.path),
-                children: /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-pad-title", children: meta.label })
+                children: /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-pad-title", children: meta.label })
               },
               meta.path
             );
           }
           const value = chipValue(meta);
-          return /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)(
+          return /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)(
             "button",
             {
               className: "tweakers-move-pad",
@@ -11349,11 +11726,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
               onPointerUp: () => releaseChip(col, meta),
               onPointerCancel: () => setHeld(null),
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(ModDot, { path: meta.path, pad: true }),
-                /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-pad-title", children: meta.label }),
-                /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)("span", { className: "tweakers-move-pad-reading", children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-pad-number", children: value.num }),
-                  value.unit && /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { children: value.unit })
+                /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(ModDot, { path: meta.path, pad: true }),
+                /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-pad-title", children: meta.label }),
+                /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("span", { className: "tweakers-move-pad-reading", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { className: "tweakers-move-pad-number", children: value.num }),
+                  value.unit && /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("span", { children: value.unit })
                 ] })
               ]
             },
@@ -11364,24 +11741,6 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     ] })
   ] }) });
   return dock === "flow" ? content : (0, import_react_dom8.createPortal)(content, document.body);
-}
-function LucideGlyph({ name, className }) {
-  const paths = LUCIDE_ICONS[name];
-  if (!paths) return null;
-  return /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
-    "svg",
-    {
-      className,
-      viewBox: "0 0 24 24",
-      fill: "none",
-      stroke: "currentColor",
-      strokeWidth: "2",
-      strokeLinecap: "round",
-      strokeLinejoin: "round",
-      "aria-hidden": "true",
-      children: paths.map((d) => /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("path", { d }, d))
-    }
-  );
 }
 function previewPathData(points) {
   if (points.length < 2) return "";
@@ -11396,7 +11755,7 @@ function MoveCurveComposer({
   gap,
   selected
 }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("div", { className: "tweakers-move-curve", children: /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("div", { className: "tweakers-move-curve", children: /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
     CurveComposer,
     {
       segments,
@@ -11424,7 +11783,7 @@ function MoveModCircle({ slot }) {
       el.style.transform = `scale(${(0.66 + 0.34 * level).toFixed(3)})`;
     });
   }, [slot.index]);
-  return /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
     "button",
     {
       type: "button",
@@ -11440,7 +11799,7 @@ function MoveModCircle({ slot }) {
         if (tapped && open && open.index === slot.index) ModulationStore.closeSettings();
         else ModulationStore.openSettings(slot.index);
       },
-      children: /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
+      children: /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
         "span",
         {
           ref: dotRef,
@@ -11536,7 +11895,7 @@ var MoveFunctionsClass = class {
 var MoveFunctions = new MoveFunctionsClass();
 
 // src/components/MoveActionButton.tsx
-var import_jsx_runtime41 = require("react/jsx-runtime");
+var import_jsx_runtime43 = require("react/jsx-runtime");
 var PRESS_FLASH_MS = 160;
 var KIND_FUNCTION = {
   enter: "jog_click",
@@ -11561,7 +11920,7 @@ function MoveActionButton({ kind, children, onPress, disabled, className }) {
       clearTimeout(flashTimer.current);
     };
   }, [name]);
-  return /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)(
     "button",
     {
       className: className ? `tweakers-move-action ${className}` : "tweakers-move-action",
@@ -11575,11 +11934,11 @@ function MoveActionButton({ kind, children, onPress, disabled, className }) {
         onPress?.();
       },
       children: [
-        kind === "capture" ? /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("svg", { className: "tweakers-move-action-icon", width: "14", height: "14", viewBox: ICON_MOVE_CAPTURE.viewBox, fill: "none", children: /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("path", { d: ICON_MOVE_CAPTURE.path, fill: "currentColor" }) }) : (
+        kind === "capture" ? /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("svg", { className: "tweakers-move-action-icon", width: "14", height: "14", viewBox: ICON_MOVE_CAPTURE.viewBox, fill: "none", children: /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("path", { d: ICON_MOVE_CAPTURE.path, fill: "currentColor" }) }) : (
           // Enter and shift share the dot: it is drawn with currentColor, so it
           // comes out light-on-green on the enter pill and black on the light
           // shift pill without a second asset.
-          /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("svg", { className: "tweakers-move-action-icon", width: "12", height: "12", viewBox: ICON_MOVE_ENTER.viewBox, fill: "none", children: /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("circle", { ...ICON_MOVE_ENTER.circle, fill: "currentColor" }) })
+          /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("svg", { className: "tweakers-move-action-icon", width: "12", height: "12", viewBox: ICON_MOVE_ENTER.viewBox, fill: "none", children: /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("circle", { ...ICON_MOVE_ENTER.circle, fill: "currentColor" }) })
         ),
         children
       ]
@@ -11985,7 +12344,7 @@ function createWaveformEngine(canvas, get) {
 }
 
 // src/components/WaveformVisualization.tsx
-var import_jsx_runtime42 = require("react/jsx-runtime");
+var import_jsx_runtime44 = require("react/jsx-runtime");
 function WaveformVisualization({
   buffer = null,
   progress = 0,
@@ -12039,18 +12398,18 @@ function WaveformVisualization({
   }, []);
   const atMaxZoom = zoom >= WAVEFORM_MAX_ZOOM;
   const framingLoop = autoZoomOnLoop && !!loop || controlled;
-  return /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("div", { className: "tweakers-waveform-viz-wrap", style: { width }, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("canvas", { ref: canvasRef, className: "tweakers-waveform-viz", style: { width, height } }),
-    !framingLoop && /* @__PURE__ */ (0, import_jsx_runtime42.jsxs)("div", { className: "tweakers-waveform-zoom", children: [
-      zoom > 1 && /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("button", { type: "button", "aria-label": "Zoom out", onClick: () => setZoom((z) => Math.max(1, z / 2)), children: /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("path", { d: "M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) }) }),
-      /* @__PURE__ */ (0, import_jsx_runtime42.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime44.jsxs)("div", { className: "tweakers-waveform-viz-wrap", style: { width }, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime44.jsx)("canvas", { ref: canvasRef, className: "tweakers-waveform-viz", style: { width, height } }),
+    !framingLoop && /* @__PURE__ */ (0, import_jsx_runtime44.jsxs)("div", { className: "tweakers-waveform-zoom", children: [
+      zoom > 1 && /* @__PURE__ */ (0, import_jsx_runtime44.jsx)("button", { type: "button", "aria-label": "Zoom out", onClick: () => setZoom((z) => Math.max(1, z / 2)), children: /* @__PURE__ */ (0, import_jsx_runtime44.jsx)("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ (0, import_jsx_runtime44.jsx)("path", { d: "M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime44.jsx)(
         "button",
         {
           type: "button",
           "aria-label": "Zoom in",
           disabled: atMaxZoom,
           onClick: () => setZoom((z) => Math.min(WAVEFORM_MAX_ZOOM, z * 2)),
-          children: /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ (0, import_jsx_runtime42.jsx)("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) })
+          children: /* @__PURE__ */ (0, import_jsx_runtime44.jsx)("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ (0, import_jsx_runtime44.jsx)("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) })
         }
       )
     ] })
@@ -12165,7 +12524,7 @@ var MoveWaveformStoreClass = class {
 var MoveWaveformStore = new MoveWaveformStoreClass();
 
 // src/components/MoveWaveform.tsx
-var import_jsx_runtime43 = require("react/jsx-runtime");
+var import_jsx_runtime45 = require("react/jsx-runtime");
 var SLOT_HEIGHT = 140;
 var SLOT_ZOOM = 4;
 var DOCK_GAP = 10;
@@ -12247,7 +12606,7 @@ function MoveWaveform({
   }, [variant, mounted]);
   if (!productionEnabled) return null;
   const boxHeight = height ?? (variant === "slot" ? SLOT_HEIGHT : 180);
-  const wave = /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(
+  const wave = /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
     WaveformVisualization,
     {
       buffer,
@@ -12266,14 +12625,14 @@ function MoveWaveform({
       height: boxHeight
     }
   );
-  const body = /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(
+  const body = /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
     "div",
     {
       ref: hostRef,
       className: `tweakers-move-wave${className ? ` ${className}` : ""}`,
       "data-variant": variant,
       style: variant === "dock" ? { bottom: `${dockBottom}px` } : void 0,
-      children: /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)("div", { className: "tweakers-move-wave-canvas", style: { height: `${boxHeight}px` }, children: [
+      children: /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)("div", { className: "tweakers-move-wave-canvas", style: { height: `${boxHeight}px` }, children: [
         width > 0 && wave,
         children
       ] })
@@ -12282,14 +12641,14 @@ function MoveWaveform({
   if (variant !== "dock") return body;
   if (!mounted || typeof document === "undefined") return null;
   return (0, import_react_dom9.createPortal)(
-    /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-wave-dock": "true", children: body }),
+    /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-wave-dock": "true", children: body }),
     document.body
   );
 }
 
 // src/components/ListScreen.tsx
 var import_react48 = require("react");
-var import_jsx_runtime44 = require("react/jsx-runtime");
+var import_jsx_runtime46 = require("react/jsx-runtime");
 function itemValue(item) {
   return typeof item === "string" ? item : item.value;
 }
@@ -12316,7 +12675,7 @@ function ListScreen({
     row?.scrollIntoView?.({ block: "nearest" });
   }, [value]);
   const rootClassName = ["tweakers-list-screen", className].filter(Boolean).join(" ");
-  return /* @__PURE__ */ (0, import_jsx_runtime44.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime46.jsx)(
     "div",
     {
       ref: rootRef,
@@ -12328,7 +12687,7 @@ function ListScreen({
         const rowValue = itemValue(item);
         const selected = rowValue === value;
         const tag = itemTag(item);
-        return /* @__PURE__ */ (0, import_jsx_runtime44.jsxs)(
+        return /* @__PURE__ */ (0, import_jsx_runtime46.jsxs)(
           "button",
           {
             type: "button",
@@ -12340,8 +12699,8 @@ function ListScreen({
             "data-muted": itemMuted(item) || void 0,
             onClick: () => onSelect?.(rowValue),
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime44.jsx)("span", { className: "tweakers-list-screen-label", children: itemLabel(item) }),
-              tag && /* @__PURE__ */ (0, import_jsx_runtime44.jsx)("span", { className: "tweakers-list-screen-tag", children: tag })
+              /* @__PURE__ */ (0, import_jsx_runtime46.jsx)("span", { className: "tweakers-list-screen-label", children: itemLabel(item) }),
+              tag && /* @__PURE__ */ (0, import_jsx_runtime46.jsx)("span", { className: "tweakers-list-screen-tag", children: tag })
             ]
           },
           rowValue
@@ -12358,7 +12717,7 @@ var import_react49 = require("react");
 function round22(value) {
   return Math.round(value * 100) / 100;
 }
-function clamp7(value, min, max) {
+function clamp8(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 function isTransitionConfig(value) {
@@ -12399,7 +12758,7 @@ function springSettleDuration(params) {
   const zeta = params.damping / (2 * Math.sqrt(params.stiffness * params.mass));
   const decay = zeta >= 1 ? zeta * w0 - w0 * Math.sqrt(Math.max(0, zeta * zeta - 1)) : zeta * w0;
   const duration = Math.log(200) / Math.max(decay, 1e-6);
-  return round22(clamp7(duration, 0.05, 10));
+  return round22(clamp8(duration, 0.05, 10));
 }
 function cubicBezierProgress(p, [x1, y1, x2, y2]) {
   if (p <= 0) return 0;
@@ -12776,7 +13135,7 @@ function sampleCurve(curve, elapsed) {
     return springProgress(elapsed, curve.spring);
   }
   if (curve.ease) {
-    return cubicBezierProgress(clamp7(curve.duration > 0 ? elapsed / curve.duration : 1, 0, 1), curve.ease);
+    return cubicBezierProgress(clamp8(curve.duration > 0 ? elapsed / curve.duration : 1, 0, 1), curve.ease);
   }
   return curve.duration > 0 ? Math.min(1, elapsed / curve.duration) : 1;
 }
@@ -13010,7 +13369,7 @@ function computeClipState(clip, time, cycleTime = time) {
   const phaseElapsed = looping ? cycleTime - clip.at : elapsed;
   const fold = (e) => looping ? e % total : e;
   const basePos = started ? fold(Math.max(0, phaseElapsed)) : 0;
-  const progress = total > 0 ? clamp7(basePos / total, 0, 1) : started ? 1 : 0;
+  const progress = total > 0 ? clamp8(basePos / total, 0, 1) : started ? 1 : 0;
   let current;
   let stepIndex = 0;
   if (clip.tracks.length && clip.props?.length) {
@@ -13090,7 +13449,7 @@ function mixHexColors(a, b, p) {
   const ca = parseHex2(a);
   const cb = parseHex2(b);
   if (!ca || !cb) return null;
-  const t = clamp7(p, 0, 1);
+  const t = clamp8(p, 0, 1);
   const mixed = ca.map((v, i) => Math.round(v + (cb[i] - v) * t));
   const hex = (n) => n.toString(16).padStart(2, "0");
   const rgb = `#${hex(mixed[0])}${hex(mixed[1])}${hex(mixed[2])}`;
@@ -13152,21 +13511,21 @@ function cloneTimelineValue(value) {
   );
 }
 function clampTrackDelay(delay, at, trackDuration, timelineDuration) {
-  return clamp7(round22(delay), 0, Math.max(0, round22(timelineDuration - at - trackDuration)));
+  return clamp8(round22(delay), 0, Math.max(0, round22(timelineDuration - at - trackDuration)));
 }
 function clampClipMove(at, duration, timelineDuration) {
-  return clamp7(round22(at), 0, Math.max(0, timelineDuration - duration));
+  return clamp8(round22(at), 0, Math.max(0, timelineDuration - duration));
 }
 function clampClipResizeEnd(duration, at, timelineDuration) {
-  return clamp7(round22(duration), TIMELINE_MIN_CLIP_DURATION, timelineDuration - at);
+  return clamp8(round22(duration), TIMELINE_MIN_CLIP_DURATION, timelineDuration - at);
 }
 function clampClipResizeStart(newAt, at, duration) {
-  const clampedAt = clamp7(round22(newAt), 0, at + duration - TIMELINE_MIN_CLIP_DURATION);
+  const clampedAt = clamp8(round22(newAt), 0, at + duration - TIMELINE_MIN_CLIP_DURATION);
   return { at: clampedAt, duration: round22(at + duration - clampedAt) };
 }
 function clampStepResize(duration, at, otherStepsTotal, timelineDuration) {
   const max = Math.max(TIMELINE_MIN_CLIP_DURATION, timelineDuration - at - otherStepsTotal);
-  return clamp7(round22(duration), TIMELINE_MIN_CLIP_DURATION, max);
+  return clamp8(round22(duration), TIMELINE_MIN_CLIP_DURATION, max);
 }
 function normalizeTimelineValuesForCopy(values, clips) {
   const normalized = { ...values };
@@ -13336,7 +13695,7 @@ function useTweakTimeline(name, config, options) {
 var import_react50 = require("react");
 var import_react_dom10 = require("react-dom");
 var import_react51 = require("motion/react");
-var import_jsx_runtime45 = require("react/jsx-runtime");
+var import_jsx_runtime47 = require("react/jsx-runtime");
 var DRAG_THRESHOLD_PX = 3;
 var LOOP_DRAG_THRESHOLD_PX = 4;
 var MAJOR_TICK_TARGET_PX = 140;
@@ -13382,7 +13741,7 @@ var TweakTimeline = (0, import_react50.memo)(function TweakTimeline2({
   productionEnabled = isDevDefault
 }) {
   if (!productionEnabled) return null;
-  return /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
     TweakTimelineDock,
     {
       theme,
@@ -13432,7 +13791,7 @@ function TweakTimelineDock({
     const handlePointerMove = (event) => {
       event.preventDefault();
       const viewportMax = Math.max(MIN_DOCK_MAX_HEIGHT, window.innerHeight - 24);
-      setDockMaxHeight(clamp7(startHeight + pointerY - event.clientY, MIN_DOCK_MAX_HEIGHT, viewportMax));
+      setDockMaxHeight(clamp8(startHeight + pointerY - event.clientY, MIN_DOCK_MAX_HEIGHT, viewportMax));
     };
     const finishResize = () => {
       window.removeEventListener("pointermove", handlePointerMove);
@@ -13455,8 +13814,8 @@ function TweakTimelineDock({
     return null;
   }
   return (0, import_react_dom10.createPortal)(
-    /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)("div", { className: "tweakers-root tweakers-timeline", "data-theme": theme, hidden: !dockVisible, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)("div", { className: "tweakers-root tweakers-timeline", "data-theme": theme, hidden: !dockVisible, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
         "div",
         {
           className: "tweakers-timeline-resize-handle",
@@ -13467,13 +13826,13 @@ function TweakTimelineDock({
           title: "Drag to resize timeline"
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
         "div",
         {
           ref: dockRef,
           className: "tweakers-timeline-dock",
           style: { maxHeight: `min(${dockMaxHeight}px, calc(100vh - 24px))` },
-          children: timelines.map((timeline) => /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+          children: timelines.map((timeline) => /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
             TimelineSection,
             {
               meta: timeline,
@@ -13496,7 +13855,7 @@ function PlayPauseButton({ id }) {
   const subscribe = useTransportSubscribe(id);
   const getPlaying = (0, import_react50.useCallback)(() => TimelineStore.getTransport(id).playing, [id]);
   const playing = (0, import_react50.useSyncExternalStore)(subscribe, getPlaying, getPlaying);
-  return /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
     import_react51.motion.button,
     {
       className: "tweakers-toolbar-add",
@@ -13505,7 +13864,7 @@ function PlayPauseButton({ id }) {
       "aria-label": playing ? "Pause" : "Play",
       whileTap: { scale: 0.9 },
       transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-      children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(import_react51.AnimatePresence, { initial: false, mode: "wait", children: playing ? /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+      children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(import_react51.AnimatePresence, { initial: false, mode: "wait", children: playing ? /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
         import_react51.motion.svg,
         {
           viewBox: "0 0 24 24",
@@ -13516,10 +13875,10 @@ function PlayPauseButton({ id }) {
           animate: { scale: 1, opacity: 1 },
           exit: { scale: 0.8, opacity: 0 },
           transition: { duration: 0.08 },
-          children: ICON_PAUSE.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("path", { d, fill: "currentColor" }, i))
+          children: ICON_PAUSE.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("path", { d, fill: "currentColor" }, i))
         },
         "pause"
-      ) : /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+      ) : /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
         import_react51.motion.svg,
         {
           viewBox: "0 0 24 24",
@@ -13530,7 +13889,7 @@ function PlayPauseButton({ id }) {
           animate: { scale: 1, opacity: 1 },
           exit: { scale: 0.8, opacity: 0 },
           transition: { duration: 0.08 },
-          children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("path", { d: ICON_PLAY, fill: "currentColor" })
+          children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("path", { d: ICON_PLAY, fill: "currentColor" })
         },
         "play"
       ) }) })
@@ -13538,7 +13897,7 @@ function PlayPauseButton({ id }) {
   );
 }
 function ReplayButton({ onReplay }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
     import_react51.motion.button,
     {
       className: "tweakers-toolbar-add",
@@ -13547,7 +13906,7 @@ function ReplayButton({ onReplay }) {
       "aria-label": "Replay",
       whileTap: { scale: 0.9 },
       transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-      children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: ICON_REPLAY.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("path", { d, fill: "currentColor" }, i)) })
+      children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: ICON_REPLAY.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("path", { d, fill: "currentColor" }, i)) })
     }
   );
 }
@@ -13571,7 +13930,7 @@ function TimelinePlayheadFlag({
     const scrub = scrubRef.current;
     const contentWidth = rect?.width ?? 0;
     if (!rect || !scrub || contentWidth <= 0) return;
-    const nextTime = clamp7(
+    const nextTime = clamp8(
       scrub.viewStart + (clientX - rect.left) / contentWidth * (scrub.viewEnd - scrub.viewStart),
       scrub.viewStart,
       scrub.viewEnd
@@ -13613,19 +13972,19 @@ function TimelinePlayheadFlag({
   }, [duration, id, onResetView, rulerRef, seekFromClientX, viewEnd, viewStart]);
   (0, import_react50.useEffect)(() => () => cleanupScrubRef.current?.(), []);
   if (time < viewStart || time > viewEnd || laneWidth <= 0) return null;
-  const x = clamp7(
+  const x = clamp8(
     (time - viewStart) * pxPerSecond,
     0,
     laneWidth
   );
-  const flagCenter = clamp7(
+  const flagCenter = clamp8(
     x,
     PLAYHEAD_FLAG_WIDTH / 2 - PLAYHEAD_FLAG_EDGE_OVERHANG,
     laneWidth - PLAYHEAD_FLAG_WIDTH / 2 + PLAYHEAD_FLAG_EDGE_OVERHANG
   );
   const flagOffset = flagCenter - x;
   const edge = flagOffset > 0.5 ? "start" : flagOffset < -0.5 ? "end" : "center";
-  return /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)(
     "div",
     {
       className: "tweakers-timeline-playhead-control",
@@ -13642,8 +14001,8 @@ function TimelinePlayheadFlag({
       "aria-valuenow": time,
       title: "Drag to scrub the timeline",
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-timeline-playhead-stem" }),
-        /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-timeline-playhead-anchor", children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-timeline-playhead-flag", children: time.toFixed(2) }) })
+        /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-timeline-playhead-stem" }),
+        /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-timeline-playhead-anchor", children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-timeline-playhead-flag", children: time.toFixed(2) }) })
       ]
     }
   );
@@ -13662,7 +14021,7 @@ function TimelineOverview({
   const seekFromClientX = (0, import_react50.useCallback)((clientX) => {
     const rect = scrubRef.current?.rect;
     if (!rect || rect.width <= 0 || duration <= 0) return;
-    const nextTime = clamp7((clientX - rect.left) / rect.width * duration, 0, duration);
+    const nextTime = clamp8((clientX - rect.left) / rect.width * duration, 0, duration);
     TimelineStore.seek(id, nextTime);
     onNavigate(nextTime);
   }, [duration, id, onNavigate]);
@@ -13686,7 +14045,7 @@ function TimelineOverview({
   const viewportLeft = duration > 0 ? viewStart / duration * 100 : 0;
   const viewportWidth = duration > 0 ? (viewEnd - viewStart) / duration * 100 : 100;
   const playheadLeft = duration > 0 ? time / duration * 100 : 0;
-  return /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)(
+  return /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)(
     "div",
     {
       className: "tweakers-timeline-overview",
@@ -13697,7 +14056,7 @@ function TimelineOverview({
       onLostPointerCapture: finishScrub,
       title: "Drag to scrub the full timeline",
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
           "div",
           {
             className: "tweakers-timeline-overview-viewport",
@@ -13705,14 +14064,14 @@ function TimelineOverview({
             style: { left: `${viewportLeft}%`, width: `${viewportWidth}%` }
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-timeline-overview-progress", style: { width: `${playheadLeft}%` } }),
-        /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-timeline-overview-playhead", style: { left: `${playheadLeft}%` } })
+        /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-timeline-overview-progress", style: { width: `${playheadLeft}%` } }),
+        /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-timeline-overview-playhead", style: { left: `${playheadLeft}%` } })
       ]
     }
   );
 }
 function clampViewStart(start, duration, visibleDuration) {
-  return clamp7(start, 0, Math.max(0, duration - visibleDuration));
+  return clamp8(start, 0, Math.max(0, duration - visibleDuration));
 }
 function formatRulerSeconds(time, step) {
   if (step >= 1 && Number.isInteger(time)) return formatClock(time);
@@ -13769,7 +14128,7 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
   const millisecondReadableZoom = laneWidth > 0 && meta.duration > 0 ? MAJOR_TICK_TARGET_PX * meta.duration / (MILLISECOND_STEP * 10 * laneWidth) : MIN_TIMELINE_MAX_ZOOM;
   const maxZoom = Math.max(MIN_TIMELINE_MAX_ZOOM, millisecondReadableZoom);
   (0, import_react50.useEffect)(() => {
-    setZoom((current) => clamp7(current, 1, maxZoom));
+    setZoom((current) => clamp8(current, 1, maxZoom));
   }, [maxZoom]);
   (0, import_react50.useEffect)(() => {
     setViewStart((current) => clampViewStart(current, meta.duration, meta.duration / zoom));
@@ -13820,7 +14179,7 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
   const zoomDragRef = (0, import_react50.useRef)(null);
   const rulerGestureRef = (0, import_react50.useRef)(null);
   const rulerTimeFromClientX = (0, import_react50.useCallback)(
-    (clientX, rect, viewStartAt, visibleAt) => clamp7(
+    (clientX, rect, viewStartAt, visibleAt) => clamp8(
       viewStartAt + (clientX - rect.left) / rect.width * visibleAt,
       viewStartAt,
       viewStartAt + visibleAt
@@ -13852,7 +14211,7 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
       };
       return;
     }
-    const anchorRatio = clamp7((e.clientX - rect.left) / contentWidth, 0, 1);
+    const anchorRatio = clamp8((e.clientX - rect.left) / contentWidth, 0, 1);
     zoomDragRef.current = {
       pointerX: e.clientX,
       rect,
@@ -13881,7 +14240,7 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
     const dx = e.clientX - drag.pointerX;
     if (!drag.moved && Math.abs(dx) <= DRAG_THRESHOLD_PX) return;
     drag.moved = true;
-    const nextZoom = clamp7(drag.zoom * Math.exp(dx / ZOOM_DRAG_DISTANCE), 1, maxZoom);
+    const nextZoom = clamp8(drag.zoom * Math.exp(dx / ZOOM_DRAG_DISTANCE), 1, maxZoom);
     const nextVisibleDuration = meta.duration / nextZoom;
     const nextStart = clampViewStart(
       drag.anchorTime - drag.anchorRatio * nextVisibleDuration,
@@ -13914,7 +14273,7 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
     const scrub = trackScrubRef.current;
     const contentWidth = scrub?.rect.width ?? 0;
     if (!scrub || contentWidth <= 0) return;
-    const nextTime = clamp7(
+    const nextTime = clamp8(
       scrub.viewStart + (clientX - scrub.rect.left) / contentWidth * scrub.visibleDuration,
       scrub.viewStart,
       scrub.viewStart + scrub.visibleDuration
@@ -14037,21 +14396,21 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
         const group = clip.group;
         const isCollapsed = collapsedGroups.has(group);
         rows.push(
-          /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)("div", { className: "tweakers-timeline-row tweakers-timeline-group-row", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)("div", { className: "tweakers-timeline-label", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)("div", { className: "tweakers-timeline-row tweakers-timeline-group-row", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)("div", { className: "tweakers-timeline-label", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
                 "button",
                 {
                   className: "tweakers-timeline-group-toggle",
                   "data-open": !isCollapsed,
                   onClick: () => toggleGroup(group),
                   title: isCollapsed ? "Expand layer" : "Collapse layer",
-                  children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("path", { d: ICON_CHEVRON }) })
+                  children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("path", { d: ICON_CHEVRON }) })
                 }
               ),
-              /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("span", { children: formatLabel(group) })
+              /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("span", { children: formatLabel(group) })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-timeline-lane" })
+            /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-timeline-lane" })
           ] }, `group:${group}`)
         );
       }
@@ -14061,9 +14420,9 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
     const tracksOpen = isProps && expandedTracks.has(clip.key);
     const stat = computeClipStaticFromValues(values, clip, meta.duration);
     rows.push(
-      /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)("div", { className: "tweakers-timeline-row", "data-grouped": clip.group ? "" : void 0, children: [
-        /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)("div", { className: "tweakers-timeline-label", children: [
-          isProps ? /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)("div", { className: "tweakers-timeline-row", "data-grouped": clip.group ? "" : void 0, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)("div", { className: "tweakers-timeline-label", children: [
+          isProps ? /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
             "button",
             {
               className: "tweakers-timeline-group-toggle",
@@ -14073,12 +14432,12 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
                 toggleTracks(clip.key);
               },
               title: tracksOpen ? "Collapse properties" : "Expand properties",
-              children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("path", { d: ICON_CHEVRON }) })
+              children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("path", { d: ICON_CHEVRON }) })
             }
           ) : null,
           clip.label
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-timeline-lane", children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-timeline-lane", children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
           TimelineClip,
           {
             timelineId: meta.id,
@@ -14114,14 +14473,14 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
           stepKeys: trackRef.stepKeys
         };
         rows.push(
-          /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)(
             "div",
             {
               className: "tweakers-timeline-row tweakers-timeline-track-row",
               "data-grouped": clip.group ? "" : void 0,
               children: [
-                /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-timeline-label", children: formatLabel(trackRef.prop) }),
-                /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-timeline-lane", children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+                /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-timeline-label", children: formatLabel(trackRef.prop) }),
+                /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-timeline-lane", children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
                   TimelineClip,
                   {
                     timelineId: meta.id,
@@ -14150,10 +14509,10 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
       }
     }
   }
-  return /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)("div", { className: "tweakers-timeline-section", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)("div", { className: "tweakers-timeline-header", "data-open": open || void 0, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-timeline-identity", children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("span", { className: "tweakers-timeline-title", children: meta.name }) }),
-      !open && /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)("div", { className: "tweakers-timeline-section", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)("div", { className: "tweakers-timeline-header", "data-open": open || void 0, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-timeline-identity", children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("span", { className: "tweakers-timeline-title", children: meta.name }) }),
+      !open && /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
         TimelineOverview,
         {
           id: meta.id,
@@ -14163,8 +14522,8 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
           onNavigate: centerViewAt
         }
       ),
-      /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)("div", { className: "tweakers-timeline-actions", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+      /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)("div", { className: "tweakers-timeline-actions", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
           import_react51.motion.button,
           {
             className: "tweakers-timeline-loop-toggle",
@@ -14176,12 +14535,12 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
             "aria-pressed": loopRegion ? true : false,
             whileTap: loopRegion ? { scale: 0.9 } : void 0,
             transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-            children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true", children: ICON_LOOP.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("path", { d }, i)) })
+            children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true", children: ICON_LOOP.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("path", { d }, i)) })
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(PlayPauseButton, { id: meta.id }),
-        /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(ReplayButton, { onReplay: handleReplay }),
-        /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(PlayPauseButton, { id: meta.id }),
+        /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(ReplayButton, { onReplay: handleReplay }),
+        /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
           import_react51.motion.button,
           {
             className: "tweakers-toolbar-add",
@@ -14190,10 +14549,10 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
             "aria-label": "Add timeline version",
             whileTap: { scale: 0.9 },
             transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-            children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true", children: ICON_ADD_PRESET.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("path", { d }, i)) })
+            children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", "aria-hidden": "true", children: ICON_ADD_PRESET.map((d, i) => /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("path", { d }, i)) })
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
           PresetManager,
           {
             panelId: meta.id,
@@ -14202,7 +14561,7 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
             onAdd: handleAddPreset
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
           import_react51.motion.button,
           {
             className: "tweakers-toolbar-add",
@@ -14211,7 +14570,7 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
             "aria-label": copied ? "Copied parameters" : "Copy parameters",
             whileTap: { scale: 0.9 },
             transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-            children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(import_react51.AnimatePresence, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+            children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("span", { style: { position: "relative", width: 16, height: 16 }, children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(import_react51.AnimatePresence, { initial: false, mode: "wait", children: copied ? /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
               import_react51.motion.svg,
               {
                 viewBox: "0 0 24 24",
@@ -14226,10 +14585,10 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
                 animate: { scale: 1, opacity: 1 },
                 exit: { scale: 0.8, opacity: 0 },
                 transition: { duration: 0.08 },
-                children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("path", { d: ICON_CHECK })
+                children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("path", { d: ICON_CHECK })
               },
               "check"
-            ) : /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)(
+            ) : /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)(
               import_react51.motion.svg,
               {
                 viewBox: "0 0 24 24",
@@ -14241,16 +14600,16 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
                 exit: { scale: 0.8, opacity: 0 },
                 transition: { duration: 0.08 },
                 children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("path", { d: ICON_CLIPBOARD.board, stroke: "currentColor", strokeWidth: "2", strokeLinejoin: "round" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("path", { d: ICON_CLIPBOARD.sparkle, fill: "currentColor" }),
-                  /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("path", { d: ICON_CLIPBOARD.body, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" })
+                  /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("path", { d: ICON_CLIPBOARD.board, stroke: "currentColor", strokeWidth: "2", strokeLinejoin: "round" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("path", { d: ICON_CLIPBOARD.sparkle, fill: "currentColor" }),
+                  /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("path", { d: ICON_CLIPBOARD.body, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" })
                 ]
               },
               "clipboard"
             ) }) })
           }
         ),
-        /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
           "button",
           {
             className: "tweakers-timeline-chevron",
@@ -14258,12 +14617,12 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
             "aria-expanded": open,
             onClick: () => setOpen(!open),
             title: open ? "Collapse timeline" : "Expand timeline",
-            children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("path", { d: ICON_CHEVRON }) })
+            children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round", children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("path", { d: ICON_CHEVRON }) })
           }
         )
       ] })
     ] }),
-    open && /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)(
+    open && /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)(
       "div",
       {
         className: "tweakers-timeline-body",
@@ -14274,10 +14633,10 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
         onPointerCancel: finishTrackScrub,
         onLostPointerCapture: finishTrackScrub,
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)("div", { className: "tweakers-timeline-grid", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)("div", { className: "tweakers-timeline-row tweakers-timeline-ruler-row", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-timeline-label" }),
-              /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)(
+          /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)("div", { className: "tweakers-timeline-grid", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)("div", { className: "tweakers-timeline-row tweakers-timeline-ruler-row", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-timeline-label" }),
+              /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)(
                 "div",
                 {
                   ref: laneAreaRef,
@@ -14294,10 +14653,10 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
                       if (!activeLoop || pxPerSecond <= 0) return null;
                       const left = (activeLoop.start - safeViewStart) * pxPerSecond;
                       const width = Math.max(0, (activeLoop.end - activeLoop.start) * pxPerSecond);
-                      return /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)(import_jsx_runtime45.Fragment, { children: [
-                        /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-timeline-loop-dim", style: { left: 0, width: Math.max(0, left) } }),
-                        /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-timeline-loop-dim", style: { left: left + width, right: 0 } }),
-                        /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+                      return /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)(import_jsx_runtime47.Fragment, { children: [
+                        /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-timeline-loop-dim", style: { left: 0, width: Math.max(0, left) } }),
+                        /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-timeline-loop-dim", style: { left: left + width, right: 0 } }),
+                        /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
                           "div",
                           {
                             className: "tweakers-timeline-loop-band",
@@ -14307,15 +14666,15 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
                         )
                       ] });
                     })(),
-                    fineTicks.map((t) => /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-timeline-tick tweakers-timeline-tick-fine", style: { left: (t - safeViewStart) * pxPerSecond } }, `fine:${t}`)),
-                    mediumTicks.map((t) => /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-timeline-tick tweakers-timeline-tick-medium", style: { left: (t - safeViewStart) * pxPerSecond } }, `medium:${t}`)),
-                    majorTicks.map((t) => /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-timeline-tick", style: { left: (t - safeViewStart) * pxPerSecond }, children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("span", { className: "tweakers-timeline-tick-label", children: formatRulerSeconds(t, majorStep) }) }, t))
+                    fineTicks.map((t) => /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-timeline-tick tweakers-timeline-tick-fine", style: { left: (t - safeViewStart) * pxPerSecond } }, `fine:${t}`)),
+                    mediumTicks.map((t) => /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-timeline-tick tweakers-timeline-tick-medium", style: { left: (t - safeViewStart) * pxPerSecond } }, `medium:${t}`)),
+                    majorTicks.map((t) => /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-timeline-tick", style: { left: (t - safeViewStart) * pxPerSecond }, children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("span", { className: "tweakers-timeline-tick-label", children: formatRulerSeconds(t, majorStep) }) }, t))
                   ]
                 }
               )
             ] }),
             rows,
-            pxPerSecond > 0 && /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+            pxPerSecond > 0 && /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
               TimelinePlayheadFlag,
               {
                 id: meta.id,
@@ -14329,23 +14688,23 @@ var TimelineSection = (0, import_react50.memo)(function TimelineSection2({
               }
             )
           ] }),
-          zoom > 1 && /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)("div", { className: "tweakers-timeline-scroll-row", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-timeline-label" }),
-            /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+          zoom > 1 && /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)("div", { className: "tweakers-timeline-scroll-row", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-timeline-label" }),
+            /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
               "div",
               {
                 ref: horizontalScrollRef,
                 className: "tweakers-timeline-horizontal-scroll",
                 onScroll: handleHorizontalScroll,
                 "aria-label": "Timeline horizontal scroll",
-                children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { style: { width: laneWidth * zoom } })
+                children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { style: { width: laneWidth * zoom } })
               }
             )
           ] })
         ]
       }
     ),
-    popover && /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+    popover && /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
       ClipPopover,
       {
         panelId: meta.id,
@@ -14448,7 +14807,7 @@ function ClipPopover({
   const viewportRight = viewport.offsetLeft + viewport.width;
   const viewportBottom = viewport.offsetTop + viewport.height;
   const popoverWidth = Math.min(POPOVER_WIDTH, Math.max(220, viewport.width - 24));
-  const left = clamp7(
+  const left = clamp8(
     popover.anchor.left + popover.anchor.width / 2 - popoverWidth / 2,
     viewport.offsetLeft + 12,
     Math.max(viewport.offsetLeft + 12, viewportRight - popoverWidth - 12)
@@ -14459,13 +14818,13 @@ function ClipPopover({
   const availableHeight = placeAbove ? spaceAbove : spaceBelow;
   const renderedHeight = Math.min(naturalHeight || availableHeight, availableHeight);
   const unclampedTop = placeAbove ? popover.anchor.top - 10 - renderedHeight : popover.anchor.bottom + 10;
-  const top = clamp7(
+  const top = clamp8(
     unclampedTop,
     viewport.offsetTop + 12,
     Math.max(viewport.offsetTop + 12, viewportBottom - renderedHeight - 12)
   );
   return (0, import_react_dom10.createPortal)(
-    /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-root", "data-theme": theme, children: /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)(
+    /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-root", "data-theme": theme, children: /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)(
       "div",
       {
         ref,
@@ -14481,11 +14840,11 @@ function ClipPopover({
         role: "dialog",
         "aria-label": `Edit ${title}`,
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)("div", { className: "tweakers-timeline-popover-header", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("span", { className: "tweakers-timeline-popover-title", children: title }),
-            /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("button", { className: "tweakers-timeline-popover-close", onClick: onClose, title: "Close editor", "aria-label": "Close editor", children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("path", { d: "M6 6L18 18M18 6L6 18" }) }) })
+          /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)("div", { className: "tweakers-timeline-popover-header", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("span", { className: "tweakers-timeline-popover-title", children: title }),
+            /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("button", { className: "tweakers-timeline-popover-close", onClick: onClose, title: "Close editor", "aria-label": "Close editor", children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("path", { d: "M6 6L18 18M18 6L6 18" }) }) })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-timeline-popover-body", children: /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+          /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-timeline-popover-body", children: /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
             ControlRenderer,
             {
               panelId,
@@ -14670,10 +15029,10 @@ function TimelineClip({
     }
   }
   const barTitle = composite ? `${clip.label} \u2014 composite of its property tracks${looping ? " \xB7 repeats through timeline" : ""} \xB7 click to expand` : `${clip.label} \u2014 ${formatSeconds(at)} for ${durationText}${fixedDuration ? " (duration set by spring physics)" : ""}${looping ? " \xB7 repeats through timeline" : ""}${delayMode ? " \xB7 drag to phase-shift" : ""}`;
-  return /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)(import_jsx_runtime45.Fragment, { children: [
+  return /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)(import_jsx_runtime47.Fragment, { children: [
     ghostCycles.map((cycle) => {
       const ghostWidth = Math.max(1, cycle.duration * pxPerSecond - 2);
-      return /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+      return /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
         "div",
         {
           className: "tweakers-timeline-clip-ghost",
@@ -14684,7 +15043,7 @@ function TimelineClip({
             width: ghostWidth,
             background: clip.color
           },
-          children: steps?.map((step, stepIndex) => /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+          children: steps?.map((step, stepIndex) => /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
             "span",
             {
               className: "tweakers-timeline-clip-ghost-segment",
@@ -14696,7 +15055,7 @@ function TimelineClip({
         `ghost:${cycle.index}`
       );
     }),
-    /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+    /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
       "div",
       {
         className: "tweakers-timeline-clip",
@@ -14715,23 +15074,23 @@ function TimelineClip({
         onPointerCancel: handlePointerCancel,
         onLostPointerCapture: handlePointerCancel,
         title: barTitle,
-        children: composite ? /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(import_jsx_runtime45.Fragment, { children: width > 56 && /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("span", { className: "tweakers-timeline-clip-duration", children: durationText }) }) : isSteps ? /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)(import_jsx_runtime45.Fragment, { children: [
+        children: composite ? /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(import_jsx_runtime47.Fragment, { children: width > 56 && /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("span", { className: "tweakers-timeline-clip-duration", children: durationText }) }) : isSteps ? /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)(import_jsx_runtime47.Fragment, { children: [
           steps.map((step) => {
             const segmentWidth = step.duration * pxPerSecond;
-            return /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+            return /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
               "div",
               {
                 className: "tweakers-timeline-clip-segment",
                 "data-step": step.key ?? void 0,
                 "data-selected": selectedStepKey === step.key || void 0,
                 style: { width: segmentWidth },
-                children: segmentWidth > 52 && /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("span", { className: "tweakers-timeline-clip-duration", children: formatSeconds(step.duration) })
+                children: segmentWidth > 52 && /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("span", { className: "tweakers-timeline-clip-duration", children: formatSeconds(step.duration) })
               },
               step.key ?? "step"
             );
           }),
           steps.map(
-            (step, index) => step.isPhysics ? null : /* @__PURE__ */ (0, import_jsx_runtime45.jsx)(
+            (step, index) => step.isPhysics ? null : /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
               "div",
               {
                 className: "tweakers-timeline-clip-handle",
@@ -14741,34 +15100,34 @@ function TimelineClip({
               `boundary:${step.key}`
             )
           ),
-          !steps[0].isPhysics && /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-timeline-clip-handle", "data-edge": "start" })
-        ] }) : /* @__PURE__ */ (0, import_jsx_runtime45.jsxs)(import_jsx_runtime45.Fragment, { children: [
-          resizable && /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-timeline-clip-handle", "data-edge": "start" }),
-          width > 56 && /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("span", { className: "tweakers-timeline-clip-duration", children: durationText }),
-          resizable && /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("div", { className: "tweakers-timeline-clip-handle", "data-edge": "end" })
+          !steps[0].isPhysics && /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-timeline-clip-handle", "data-edge": "start" })
+        ] }) : /* @__PURE__ */ (0, import_jsx_runtime47.jsxs)(import_jsx_runtime47.Fragment, { children: [
+          resizable && /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-timeline-clip-handle", "data-edge": "start" }),
+          width > 56 && /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("span", { className: "tweakers-timeline-clip-duration", children: durationText }),
+          resizable && /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-timeline-clip-handle", "data-edge": "end" })
         ] })
       }
     ),
-    looping && /* @__PURE__ */ (0, import_jsx_runtime45.jsx)("span", { className: "tweakers-timeline-loop-infinity", "aria-hidden": "true", title: "Repeats indefinitely", children: "\u221E" })
+    looping && /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("span", { className: "tweakers-timeline-loop-infinity", "aria-hidden": "true", title: "Repeats indefinitely", children: "\u221E" })
   ] });
 }
 
 // src/components/Module.tsx
-var import_jsx_runtime46 = require("react/jsx-runtime");
+var import_jsx_runtime48 = require("react/jsx-runtime");
 function Module({ title, enabled, onEnabledChange, children }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime46.jsxs)("div", { className: "tweakers-module", children: [
-    /* @__PURE__ */ (0, import_jsx_runtime46.jsxs)("div", { className: "tweakers-module-header", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime46.jsx)(Checkbox, { checked: enabled, onChange: onEnabledChange, label: title }),
-      /* @__PURE__ */ (0, import_jsx_runtime46.jsx)("span", { className: "tweakers-module-title", children: title })
+  return /* @__PURE__ */ (0, import_jsx_runtime48.jsxs)("div", { className: "tweakers-module", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime48.jsxs)("div", { className: "tweakers-module-header", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime48.jsx)(Checkbox, { checked: enabled, onChange: onEnabledChange, label: title }),
+      /* @__PURE__ */ (0, import_jsx_runtime48.jsx)("span", { className: "tweakers-module-title", children: title })
     ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime46.jsx)("div", { className: "tweakers-module-collapse", "data-open": enabled, children: /* @__PURE__ */ (0, import_jsx_runtime46.jsx)("div", { className: "tweakers-module-collapse-clip", children: /* @__PURE__ */ (0, import_jsx_runtime46.jsx)("div", { className: "tweakers-module-inner", children }) }) })
+    /* @__PURE__ */ (0, import_jsx_runtime48.jsx)("div", { className: "tweakers-module-collapse", "data-open": enabled, children: /* @__PURE__ */ (0, import_jsx_runtime48.jsx)("div", { className: "tweakers-module-collapse-clip", children: /* @__PURE__ */ (0, import_jsx_runtime48.jsx)("div", { className: "tweakers-module-inner", children }) }) })
   ] });
 }
 
 // src/components/ButtonGroup.tsx
-var import_jsx_runtime47 = require("react/jsx-runtime");
+var import_jsx_runtime49 = require("react/jsx-runtime");
 function ButtonGroup({ buttons }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime47.jsx)("div", { className: "tweakers-button-group", children: buttons.map((button, index) => /* @__PURE__ */ (0, import_jsx_runtime47.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime49.jsx)("div", { className: "tweakers-button-group", children: buttons.map((button, index) => /* @__PURE__ */ (0, import_jsx_runtime49.jsx)(
     "button",
     {
       className: "tweakers-button",
@@ -14783,7 +15142,7 @@ function ButtonGroup({ buttons }) {
 var import_react52 = require("react");
 var import_react_dom11 = require("react-dom");
 var import_react53 = require("motion/react");
-var import_jsx_runtime48 = require("react/jsx-runtime");
+var import_jsx_runtime50 = require("react/jsx-runtime");
 function formatShortcutKey(sc) {
   if (!sc.key) return "\u2014";
   const mod = sc.modifier === "alt" ? "\u2325" : sc.modifier === "shift" ? "\u21E7" : sc.modifier === "meta" ? "\u2318" : "";
@@ -14850,8 +15209,8 @@ function ShortcutsMenu({ panelId }) {
       label: findLabel(panel.controls)
     };
   });
-  return /* @__PURE__ */ (0, import_jsx_runtime48.jsxs)(import_jsx_runtime48.Fragment, { children: [
-    /* @__PURE__ */ (0, import_jsx_runtime48.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime50.jsxs)(import_jsx_runtime50.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime50.jsx)(
       import_react53.motion.button,
       {
         ref: triggerRef,
@@ -14860,18 +15219,18 @@ function ShortcutsMenu({ panelId }) {
         title: "Keyboard shortcuts",
         whileTap: { scale: 0.9 },
         transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 },
-        children: /* @__PURE__ */ (0, import_jsx_runtime48.jsxs)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime48.jsx)("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
-          /* @__PURE__ */ (0, import_jsx_runtime48.jsx)("path", { d: "M6 10H6.01" }),
-          /* @__PURE__ */ (0, import_jsx_runtime48.jsx)("path", { d: "M10 10H10.01" }),
-          /* @__PURE__ */ (0, import_jsx_runtime48.jsx)("path", { d: "M14 10H14.01" }),
-          /* @__PURE__ */ (0, import_jsx_runtime48.jsx)("path", { d: "M18 10H18.01" }),
-          /* @__PURE__ */ (0, import_jsx_runtime48.jsx)("path", { d: "M8 14H16" })
+        children: /* @__PURE__ */ (0, import_jsx_runtime50.jsxs)("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime50.jsx)("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
+          /* @__PURE__ */ (0, import_jsx_runtime50.jsx)("path", { d: "M6 10H6.01" }),
+          /* @__PURE__ */ (0, import_jsx_runtime50.jsx)("path", { d: "M10 10H10.01" }),
+          /* @__PURE__ */ (0, import_jsx_runtime50.jsx)("path", { d: "M14 10H14.01" }),
+          /* @__PURE__ */ (0, import_jsx_runtime50.jsx)("path", { d: "M18 10H18.01" }),
+          /* @__PURE__ */ (0, import_jsx_runtime50.jsx)("path", { d: "M8 14H16" })
         ] })
       }
     ),
     (0, import_react_dom11.createPortal)(
-      /* @__PURE__ */ (0, import_jsx_runtime48.jsx)(import_react53.AnimatePresence, { children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime48.jsxs)(
+      /* @__PURE__ */ (0, import_jsx_runtime50.jsx)(import_react53.AnimatePresence, { children: isOpen && /* @__PURE__ */ (0, import_jsx_runtime50.jsxs)(
         PresenceMotionDiv,
         {
           divRef: dropdownRef,
@@ -14882,13 +15241,13 @@ function ShortcutsMenu({ panelId }) {
           exit: { opacity: 0, y: 4, scale: 0.97, pointerEvents: "none" },
           transition: { type: "spring", visualDuration: 0.15, bounce: 0 },
           children: [
-            /* @__PURE__ */ (0, import_jsx_runtime48.jsx)("div", { className: "tweakers-shortcuts-title", children: "Keyboard Shortcuts" }),
-            /* @__PURE__ */ (0, import_jsx_runtime48.jsx)("div", { className: "tweakers-shortcuts-list", children: rows.map((row) => /* @__PURE__ */ (0, import_jsx_runtime48.jsxs)("div", { className: "tweakers-shortcuts-row", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime48.jsx)("span", { className: "tweakers-shortcuts-row-key", children: formatShortcutKey(row.shortcut) }),
-              /* @__PURE__ */ (0, import_jsx_runtime48.jsx)("span", { className: "tweakers-shortcuts-row-label", children: row.label }),
-              /* @__PURE__ */ (0, import_jsx_runtime48.jsx)("span", { className: "tweakers-shortcuts-row-mode", children: formatInteraction(row.shortcut) })
+            /* @__PURE__ */ (0, import_jsx_runtime50.jsx)("div", { className: "tweakers-shortcuts-title", children: "Keyboard Shortcuts" }),
+            /* @__PURE__ */ (0, import_jsx_runtime50.jsx)("div", { className: "tweakers-shortcuts-list", children: rows.map((row) => /* @__PURE__ */ (0, import_jsx_runtime50.jsxs)("div", { className: "tweakers-shortcuts-row", children: [
+              /* @__PURE__ */ (0, import_jsx_runtime50.jsx)("span", { className: "tweakers-shortcuts-row-key", children: formatShortcutKey(row.shortcut) }),
+              /* @__PURE__ */ (0, import_jsx_runtime50.jsx)("span", { className: "tweakers-shortcuts-row-label", children: row.label }),
+              /* @__PURE__ */ (0, import_jsx_runtime50.jsx)("span", { className: "tweakers-shortcuts-row-mode", children: formatInteraction(row.shortcut) })
             ] }, row.path)) }),
-            /* @__PURE__ */ (0, import_jsx_runtime48.jsx)("div", { className: "tweakers-shortcuts-hint", children: "See pill badges on controls for keys" })
+            /* @__PURE__ */ (0, import_jsx_runtime50.jsx)("div", { className: "tweakers-shortcuts-hint", children: "See pill badges on controls for keys" })
           ]
         }
       ) }),
@@ -14899,7 +15258,7 @@ function ShortcutsMenu({ panelId }) {
 
 // src/components/AudioLevelMeter.tsx
 var import_react54 = require("react");
-var import_jsx_runtime49 = require("react/jsx-runtime");
+var import_jsx_runtime51 = require("react/jsx-runtime");
 var DEFAULT_CELL_COUNT = 10;
 var MIN_CELL_COUNT = 8;
 var MAX_CELL_COUNT = 12;
@@ -15163,7 +15522,7 @@ function AudioLevelMeter(props) {
     "--tweak-meter-band-count": levels.length,
     "--tweak-meter-cell-count": cellCount
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime49.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(
     "div",
     {
       className: rootClassName,
@@ -15172,14 +15531,14 @@ function AudioLevelMeter(props) {
       "data-clipping": hasClipping || void 0,
       role: "img",
       "aria-label": accessibleSummary,
-      children: /* @__PURE__ */ (0, import_jsx_runtime49.jsx)("div", { className: "tweakers-audio-meter__bands", "aria-hidden": "true", children: activeCellCounts.map((activeCellCount, bandIndex) => /* @__PURE__ */ (0, import_jsx_runtime49.jsx)("div", { className: "tweakers-audio-meter__band", children: Array.from({ length: cellCount }, (_, visualIndex) => {
+      children: /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { className: "tweakers-audio-meter__bands", "aria-hidden": "true", children: activeCellCounts.map((activeCellCount, bandIndex) => /* @__PURE__ */ (0, import_jsx_runtime51.jsx)("div", { className: "tweakers-audio-meter__band", children: Array.from({ length: cellCount }, (_, visualIndex) => {
         const indexFromBottom = cellCount - visualIndex - 1;
         const isActive = indexFromBottom < activeCellCount;
         const isPeak = indexFromBottom === displayedPeakIndices[bandIndex];
         const isClipped = displayedClippedBands[bandIndex] && indexFromBottom === cellCount - 1;
         const color = getCellColor(colors, indexFromBottom, cellCount);
         const cellStyle = color ? { "--tweak-meter-cell-color": color } : void 0;
-        return /* @__PURE__ */ (0, import_jsx_runtime49.jsx)(
+        return /* @__PURE__ */ (0, import_jsx_runtime51.jsx)(
           "span",
           {
             className: "tweakers-audio-meter__cell",
@@ -15225,6 +15584,7 @@ function AudioLevelMeter(props) {
   DEFAULT_TRIGGER_STEPS,
   EasingVisualization,
   FileControl,
+  FilterControl,
   Folder,
   GalleryControl,
   GradientControl,
@@ -15247,6 +15607,7 @@ function AudioLevelMeter(props) {
   MOVE_FUNCTION_BUTTONS,
   MOVE_FUNCTION_MANIFEST,
   MOVE_PADS,
+  MOVE_SLOT_LIBRARY,
   MOVE_SPECIAL_BUTTONS,
   MOVE_TRACKS,
   MOVE_WAVEFORM_STEPS,
@@ -15255,6 +15616,13 @@ function AudioLevelMeter(props) {
   MoveActionButton,
   MoveFunctions,
   MovePanel,
+  MoveSlotDefaultBody,
+  MoveSlotEnumBody,
+  MoveSlotFilterBody,
+  MoveSlotGlyph,
+  MoveSlotRangeBody,
+  MoveSlotReadout,
+  MoveSlotShape,
   MoveSurfaceStore,
   MoveVolumeDisplay,
   MoveWaveform,
@@ -15304,12 +15672,19 @@ function AudioLevelMeter(props) {
   cycleDriverType,
   cycleSegmentType,
   defaultComposition,
+  defaultFilterResponse,
   defaultListItemParams,
   denormalizeEnumDial,
+  denormalizeFilterDial,
   denormalizeRangeDial,
   dialOrigin,
+  dialSpan,
   displayHex,
   enumOptionIcon,
+  filterHand01,
+  filterHandValue,
+  filterResponsePath,
+  filterShapePath,
   flipDriver,
   flipDriverX,
   flipDriverY,
@@ -15329,6 +15704,7 @@ function AudioLevelMeter(props) {
   hsvToRgb,
   invertY,
   isOutsideSpan,
+  isSpanContinuation,
   lfoSyncedHz,
   listModTypes,
   loopFromStep,
@@ -15339,6 +15715,7 @@ function AudioLevelMeter(props) {
   modRingArc,
   moveAppPadRow,
   movePadRows,
+  moveSlotKind,
   moveStop,
   moveWaveformDefaultView,
   nearestHandle,
@@ -15346,6 +15723,8 @@ function AudioLevelMeter(props) {
   normalizeCurveMarkers,
   normalizeDial,
   normalizeEnumDial,
+  normalizeFilterDial,
+  normalizeFilterValue,
   normalizeGradient,
   normalizeHex,
   normalizeListItems,
@@ -15369,6 +15748,7 @@ function AudioLevelMeter(props) {
   removeSegment,
   removeStop,
   resolveAxis,
+  resolveFilterAxis,
   rgbToHsl,
   rgbToHsv,
   rgbToOklch,
