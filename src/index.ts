@@ -14,6 +14,19 @@ export { buildMovePages, buildModMovePage, normalizeDial, normalizeXYDial, norma
 export type { MovePage } from './move-layout';
 export { MoveFunctions, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_SPECIAL_BUTTONS } from './move-functions';
 export type { MoveFunctionButton, MoveFunctionPress, MoveFunctionHandler, MoveFunctionOptions, MoveFunctionRunListener } from './move-functions';
+export { MoveWaveform } from './components/MoveWaveform';
+export type { MoveWaveformProps } from './components/MoveWaveform';
+export {
+  MoveWaveformStore,
+  defaultView as moveWaveformDefaultView,
+  scrubBy,
+  zoomBy,
+  stepPosition,
+  loopFromStep,
+  loopSteps,
+  MOVE_WAVEFORM_STEPS,
+} from './move-waveform';
+export type { MoveWaveformVariant, MoveWaveformView } from './move-waveform';
 export { MoveVolumeDisplay } from './move-volume';
 export type { MoveVolumeDisplayState } from './move-volume';
 export { ICON_MOVE_CAPTURE, ICON_MOVE_ENTER } from './icons';

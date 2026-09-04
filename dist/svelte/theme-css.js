@@ -6117,6 +6117,67 @@ input.tweakers-list-item-title:focus {
 }
 
 /* ==========================================================================
+   Move waveform — the sample the panel's knobs are acting on.
+
+   It wears the same surface as the list screen (#1e1e1e, the hardware's own
+   display) with no border: on this instrument a display is a dark hole in the
+   face, not a framed picture. Three placements, one look.
+   ========================================================================== */
+
+.tweakers-move-wave {
+  --move-display: #1e1e1e;
+  width: 100%;
+  border-radius: var(--move-radius, 12px);
+  background: var(--move-display);
+  color: var(--move-text, #dee3c9);
+  overflow: hidden;
+}
+
+/* The canvas sits in its own box so an app can lay markers over the sample
+   without fighting the waveform's own sizing. */
+.tweakers-move-wave-canvas {
+  position: relative;
+  width: 100%;
+}
+
+.tweakers-move-wave .tweakers-waveform-viz-wrap {
+  display: block;
+  width: 100% !important;
+}
+
+.tweakers-move-wave .tweakers-waveform-viz {
+  display: block;
+  width: 100% !important;
+}
+
+/* Slot placement — the dial row's own footprint and radius, so a waveform
+   dropped beside the knobs reads as one of them. */
+.tweakers-move-wave[data-variant='slot'] {
+  border-radius: var(--move-radius-small, 8px);
+}
+
+/* Docked — floating above the panel, matching its width and its shadow. */
+.tweakers-move-root[data-wave-dock] {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10000;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.tweakers-move-wave[data-variant='dock'] {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(1180px, calc(100vw - 40px));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+}
+
+/* ==========================================================================
    List screen — the Move's dark display list (Figma node "list screen").
    Same fixed identity as the panel: the screen surface (#1e1e1e, the volume
    pill's dark display) and label ink (#dee3c9) are the hardware's own, held
