@@ -644,10 +644,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
                     >
                       {(shape || glyph) && (
-                        <span className="tweakers-move-dial-tag">
-                          {glyph && <LucideGlyph name={glyph} />}
-                          <span className="tweakers-move-dial-tag-text">{optionLabel}</span>
-                        </span>
+                        <span className="tweakers-move-dial-tag">{optionLabel}</span>
                       )}
                       <ModDot path={meta.path} />
                       {shape && (
@@ -661,13 +658,22 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                         </svg>
                       )}
                       <div className="tweakers-move-dial-readout">
-                        <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
-                          {meta.label}
-                        </span>
-                        {/* With the shape drawn, its name lives on the tag —
-                            the big line would only repeat it over the drawing. */}
-                        {!shape && (
-                          <span className="tweakers-move-dial-value">{optionLabel}</span>
+                        {/* The glyph takes the middle of the slot, where the
+                            name would be: a picture is what you read at arm's
+                            length. The name keeps the tag above it. */}
+                        {glyph ? (
+                          <LucideGlyph name={glyph} className="tweakers-move-dial-icon" />
+                        ) : (
+                          <>
+                            <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
+                              {meta.label}
+                            </span>
+                            {/* With the shape drawn, its name lives on the tag —
+                                the big line would only repeat it over the drawing. */}
+                            {!shape && (
+                              <span className="tweakers-move-dial-value">{optionLabel}</span>
+                            )}
+                          </>
                         )}
                       </div>
                       <div className="tweakers-move-dial-bar">
@@ -820,12 +826,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 }
 
 /** One glyph from the bundled lucide subset; an unknown name draws nothing. */
-function LucideGlyph({ name }: { name: string }) {
+function LucideGlyph({ name, className }: { name: string; className: string }) {
   const paths = LUCIDE_ICONS[name];
   if (!paths) return null;
   return (
     <svg
-      className="tweakers-move-glyph"
+      className={className}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"

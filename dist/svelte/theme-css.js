@@ -5604,9 +5604,6 @@ input.tweakers-list-item-title:focus {
   left: 50%;
   transform: translateX(-50%);
   z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 4px;
   max-width: calc(100% - 16px);
   padding: 1px 8px;
   border-radius: 999px;
@@ -5616,18 +5613,18 @@ input.tweakers-list-item-title:focus {
   font-size: 11px;
   line-height: 16px;
   white-space: nowrap;
-}
-
-.tweakers-move-dial-tag-text {
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Option glyph — lucide at caption size, on the tag. */
-.tweakers-move-glyph {
-  width: 12px;
-  height: 12px;
-  flex-shrink: 0;
+/* Option glyph — lucide in the middle of the slot, where the name would be:
+   at arm's length you read a picture, not a word. Sized to the label it
+   stands in for, and drawn a touch lighter so it sits at label weight. */
+.tweakers-move-dial-icon {
+  width: 36px;
+  height: 36px;
+  stroke-width: 1.5;
+  color: var(--move-text);
 }
 
 /* The shape itself, filling the slot between the tag and the track: faint at
