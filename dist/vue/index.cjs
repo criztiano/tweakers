@@ -88,12 +88,12 @@ function parseHex(input) {
   let s = input.trim();
   if (!s.startsWith("#")) s = `#${s}`;
   if (!HEX_COLOR_REGEX.test(s)) return null;
-  let h37 = s.slice(1);
-  if (h37.length <= 4) h37 = h37.split("").map((c) => c + c).join("");
-  const r = parseInt(h37.slice(0, 2), 16);
-  const g = parseInt(h37.slice(2, 4), 16);
-  const b = parseInt(h37.slice(4, 6), 16);
-  const a = h37.length === 8 ? parseInt(h37.slice(6, 8), 16) / 255 : 1;
+  let h36 = s.slice(1);
+  if (h36.length <= 4) h36 = h36.split("").map((c) => c + c).join("");
+  const r = parseInt(h36.slice(0, 2), 16);
+  const g = parseInt(h36.slice(2, 4), 16);
+  const b = parseInt(h36.slice(4, 6), 16);
+  const a = h36.length === 8 ? parseInt(h36.slice(6, 8), 16) / 255 : 1;
   return { r, g, b, a };
 }
 function formatHex(rgba, alphaEnabled) {
@@ -127,36 +127,36 @@ function rgbToHsv(rgba) {
   const r = rgba.r / 255, g = rgba.g / 255, b = rgba.b / 255;
   const max = Math.max(r, g, b), min = Math.min(r, g, b);
   const d = max - min;
-  let h37 = 0;
+  let h36 = 0;
   if (d !== 0) {
-    if (max === r) h37 = (g - b) / d % 6;
-    else if (max === g) h37 = (b - r) / d + 2;
-    else h37 = (r - g) / d + 4;
-    h37 *= 60;
-    if (h37 < 0) h37 += 360;
+    if (max === r) h36 = (g - b) / d % 6;
+    else if (max === g) h36 = (b - r) / d + 2;
+    else h36 = (r - g) / d + 4;
+    h36 *= 60;
+    if (h36 < 0) h36 += 360;
   }
-  return { h: h37, s: max === 0 ? 0 : d / max, v: max, a: rgba.a };
+  return { h: h36, s: max === 0 ? 0 : d / max, v: max, a: rgba.a };
 }
 function hsvToRgb(hsva) {
-  const h37 = (hsva.h % 360 + 360) % 360;
+  const h36 = (hsva.h % 360 + 360) % 360;
   const s = clamp01(hsva.s), v = clamp01(hsva.v);
   const c = v * s;
-  const x = c * (1 - Math.abs(h37 / 60 % 2 - 1));
+  const x = c * (1 - Math.abs(h36 / 60 % 2 - 1));
   const m = v - c;
   let r = 0, g = 0, b = 0;
-  if (h37 < 60) [r, g, b] = [c, x, 0];
-  else if (h37 < 120) [r, g, b] = [x, c, 0];
-  else if (h37 < 180) [r, g, b] = [0, c, x];
-  else if (h37 < 240) [r, g, b] = [0, x, c];
-  else if (h37 < 300) [r, g, b] = [x, 0, c];
+  if (h36 < 60) [r, g, b] = [c, x, 0];
+  else if (h36 < 120) [r, g, b] = [x, c, 0];
+  else if (h36 < 180) [r, g, b] = [0, c, x];
+  else if (h36 < 240) [r, g, b] = [0, x, c];
+  else if (h36 < 300) [r, g, b] = [x, 0, c];
   else [r, g, b] = [c, 0, x];
   return { r: byte((r + m) * 255), g: byte((g + m) * 255), b: byte((b + m) * 255), a: hsva.a };
 }
 function rgbToHsl(rgba) {
-  const { h: h37, s, v, a } = rgbToHsv(rgba);
+  const { h: h36, s, v, a } = rgbToHsv(rgba);
   const l = v * (1 - s / 2);
   const sl = l === 0 || l === 1 ? 0 : (v - l) / Math.min(l, 1 - l);
-  return { h: h37, s: sl, l, a };
+  return { h: h36, s: sl, l, a };
 }
 function hslToRgb(hsla) {
   const l = clamp01(hsla.l), s = clamp01(hsla.s);
@@ -192,32 +192,32 @@ function oklabToLinearRgb(L, A, B) {
 function rgbToOklch(rgba) {
   const { L, A, B } = rgbToOklab(rgba);
   const c = Math.sqrt(A * A + B * B);
-  let h37 = Math.atan2(B, A) * 180 / Math.PI;
-  if (h37 < 0) h37 += 360;
-  return { l: L, c, h: c < 1e-6 ? 0 : h37, a: rgba.a };
+  let h36 = Math.atan2(B, A) * 180 / Math.PI;
+  if (h36 < 0) h36 += 360;
+  return { l: L, c, h: c < 1e-6 ? 0 : h36, a: rgba.a };
 }
 var GAMUT_EPS = 1e-4;
-function inSrgbGamut(l, c, h37) {
-  const rad = h37 * Math.PI / 180;
+function inSrgbGamut(l, c, h36) {
+  const rad = h36 * Math.PI / 180;
   const { r, g, b } = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
   return r >= -GAMUT_EPS && r <= 1 + GAMUT_EPS && g >= -GAMUT_EPS && g <= 1 + GAMUT_EPS && b >= -GAMUT_EPS && b <= 1 + GAMUT_EPS;
 }
 function clampOklchToSrgb(oklch) {
   const l = clamp01(oklch.l);
-  const h37 = (oklch.h % 360 + 360) % 360;
+  const h36 = (oklch.h % 360 + 360) % 360;
   const c = Math.max(0, oklch.c);
-  if (inSrgbGamut(l, c, h37)) return { l, c, h: h37, a: clamp01(oklch.a) };
+  if (inSrgbGamut(l, c, h36)) return { l, c, h: h36, a: clamp01(oklch.a) };
   let lo = 0, hi = c;
   for (let i = 0; i < 24; i++) {
     const mid = (lo + hi) / 2;
-    if (inSrgbGamut(l, mid, h37)) lo = mid;
+    if (inSrgbGamut(l, mid, h36)) lo = mid;
     else hi = mid;
   }
-  return { l, c: lo, h: h37, a: clamp01(oklch.a) };
+  return { l, c: lo, h: h36, a: clamp01(oklch.a) };
 }
 function oklchToRgb(oklch) {
-  const { l, c, h: h37, a } = clampOklchToSrgb(oklch);
-  const rad = h37 * Math.PI / 180;
+  const { l, c, h: h36, a } = clampOklchToSrgb(oklch);
+  const rad = h36 * Math.PI / 180;
   const lin = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
   return {
     r: byte(linearToSrgb(clamp01(lin.r)) * 255),
@@ -256,11 +256,11 @@ function rgbaToChannels(rgba, format, alphaEnabled) {
   if (format === "rgb") {
     values = [rgba.r, rgba.g, rgba.b];
   } else if (format === "hsl") {
-    const { h: h37, s, l } = rgbToHsl(rgba);
-    values = [round(h37, 0), round(s * 100, 0), round(l * 100, 0)];
+    const { h: h36, s, l } = rgbToHsl(rgba);
+    values = [round(h36, 0), round(s * 100, 0), round(l * 100, 0)];
   } else {
-    const { l, c, h: h37 } = rgbToOklch(rgba);
-    values = [round(l, 2), round(c, 3), round(h37, 0)];
+    const { l, c, h: h36 } = rgbToOklch(rgba);
+    values = [round(l, 2), round(c, 3), round(h36, 0)];
   }
   if (alphaEnabled) values.push(opacityPercent(rgba));
   return values;
@@ -781,7 +781,7 @@ var TweakStoreClass = class {
     this.initTabValue(controls, values);
     this.initTransitionModes(config, "", values);
     this.overlayPersistedValues(target, values);
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, module: "_enabled" in config ? true : void 0, kind: options.kind });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, module: "_enabled" in config ? true : void 0, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -795,6 +795,7 @@ var TweakStoreClass = class {
     const hints = options.hints ?? existing.hints;
     const affordances = options.affordances ?? existing.affordances;
     const labels = options.labels ?? existing.labels;
+    const movePads = options.movePads ?? existing.movePads;
     const controls = this.parseConfig(config, "", shortcuts);
     this.applyControlExtras(controls, hints, affordances, labels);
     const controlsByPath = this.mapControlsByPath(controls);
@@ -819,7 +820,7 @@ var TweakStoreClass = class {
         nextValues[path] = mode;
       }
     }
-    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, module: "_enabled" in config ? true : void 0, kind: options.kind ?? existing.kind };
+    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, module: "_enabled" in config ? true : void 0, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
     const previousBaseValues = this.baseValues.get(id) ?? {};
@@ -1115,6 +1116,12 @@ var TweakStoreClass = class {
               changed = true;
             }
           }
+        } else if (this.isSelectConfig(value) && value.preview) {
+          const control = this.findControlByPath(panel.controls, path);
+          if (control?.type === "select" && control.preview !== value.preview) {
+            control.preview = value.preview;
+            changed = true;
+          }
         } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
           visit(value, path);
         }
@@ -1406,7 +1413,7 @@ var TweakStoreClass = class {
       } else if (this.isActionConfig(value)) {
         controls.push({ type: "action", path, label: value.label || label, caption: value.caption });
       } else if (this.isSelectConfig(value)) {
-        controls.push({ type: "select", path, label, options: value.options, display: value.display });
+        controls.push({ type: "select", path, label, options: value.options, display: value.display, preview: value.preview });
       } else if (this.isColorConfig(value)) {
         controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {
@@ -7761,13 +7768,13 @@ function interpolateResolved(from, to, p) {
 }
 function parseHex2(hex) {
   if (!isHexColor(hex)) return null;
-  let h37 = hex.slice(1);
-  if (h37.length === 3) h37 = h37.split("").map((c) => c + c).join("");
+  let h36 = hex.slice(1);
+  if (h36.length === 3) h36 = h36.split("").map((c) => c + c).join("");
   return [
-    parseInt(h37.slice(0, 2), 16),
-    parseInt(h37.slice(2, 4), 16),
-    parseInt(h37.slice(4, 6), 16),
-    h37.length === 8 ? parseInt(h37.slice(6, 8), 16) : 255
+    parseInt(h36.slice(0, 2), 16),
+    parseInt(h36.slice(2, 4), 16),
+    parseInt(h36.slice(4, 6), 16),
+    h36.length === 8 ? parseInt(h36.slice(6, 8), 16) : 255
   ];
 }
 function mixHexColors(a, b, p) {
@@ -10027,12 +10034,12 @@ var SPRING_MAX_STEP = 1 / 240;
 function stepSprings(pos, vel, targets, stiffness, damping, dt) {
   let remaining = dt;
   while (remaining > 0) {
-    const h37 = Math.min(remaining, SPRING_MAX_STEP);
-    remaining -= h37;
+    const h36 = Math.min(remaining, SPRING_MAX_STEP);
+    remaining -= h36;
     for (let i = 0; i < pos.length; i++) {
       const accel = -stiffness * (pos[i] - targets[i]) - damping * vel[i];
-      vel[i] += accel * h37;
-      pos[i] += vel[i] * h37;
+      vel[i] += accel * h36;
+      pos[i] += vel[i] * h36;
     }
   }
 }

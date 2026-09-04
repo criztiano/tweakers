@@ -5186,14 +5186,17 @@ input.tweakers-list-item-title:focus {
 }
 
 /* ── Move panel ─────────────────────────────────────────────────────────
-   The Move's control surface docked to the bottom edge, to Cri's Figma
-   specs (USU9CW2vC3SrvKsnHVnYGi — panel 802:319, dial slider 802:756,
-   small slots 800:1737): coloured track markers, 8 dial slots hosting
-   slider ports, and the 4×8 pad grid hosting 32px chips. Colours and
-   faces are the Move's own identity — fixed, not themed — so they live
-   here as local values, not root tokens. Fonts (Ableton Sans Small,
-   Sharp Grotesk 06) are host-provided, like System85; without them the
-   fallback stacks carry the layout. */
+   The Move's control surface, to Cri's Figma specs (USU9CW2vC3SrvKsnHVnYGi
+   — panel 802:319, dial slider 802:756, small slots 800:1737): coloured
+   track markers, 8 dial slots hosting slider ports, and the 4×8 pad grid
+   hosting 32px chips. Colours and faces are the Move's own identity —
+   fixed, not themed — so they live here as local values, not root tokens.
+   Fonts (Ableton Sans Small, Sharp Grotesk 06) are host-provided, like
+   System85; without them the fallback stacks carry the layout.
+
+   [data-dock] says where the strip sits: "viewport" pins it to the window's
+   bottom edge over the page, "flow" leaves it in the host's own layout.
+   Everything else — surface, padding, slot geometry — is shared. */
 
 .tweakers-move,
 .tweakers-move * {
@@ -5207,14 +5210,10 @@ input.tweakers-list-item-title:focus {
   --move-text: #dee3c9;
   --move-text-inverse: #31322f;
   --move-radius: 12px;
+  --move-glyph-stroke: 1.25;
   --move-radius-small: 8px;
   --move-font-label: 'Ableton Sans Small', system-ui, -apple-system, sans-serif;
 
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 9990;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -5223,7 +5222,26 @@ input.tweakers-list-item-title:focus {
   color: var(--move-text);
 }
 
+/* Viewport docking — the strip spans the window's bottom edge, above the
+   page. Flow docking declares nothing here: it simply stays where the host
+   put it, at the width its container gives it. */
+.tweakers-move[data-dock="viewport"] {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 9990;
+}
+
 .tweakers-move-inner {
+  /* Only occupied columns show: --move-cols (set inline by MovePanel) is
+     how many. The header row and the grid share this width — N slots at
+     the fixed 8-wide slot size plus the 4px gaps — and centre in the
+     panel, so the page name lines up with the first visible slot and a
+     slot never changes size; the panel just shows fewer of them. */
+  --move-cluster-w: calc((100% - 28px) / 8 * var(--move-cols, 8) + 4px * (var(--move-cols, 8) - 1));
+
+  position: relative;
   flex: 1 0 0;
   min-width: 1px;
   max-width: 1180px;
@@ -5233,21 +5251,26 @@ input.tweakers-list-item-title:focus {
   align-items: flex-start;
 }
 
-/* Track row — four coloured markers with the panel names (802:321), the
-   modulation circles dead-centre, and room on the right for the volume
-   readout to come. The 1fr flanks keep the circles centred on the row. */
+/* Track row — one coloured marker per page, with the panel's name (802:321);
+   tracks without a page are not drawn at all. The modulation circles sit
+   dead-centre and the volume readout at the right end. The 1fr flanks keep
+   the circles centred, and the row takes the same width as the column
+   cluster below it, so both ends line up with the visible columns. */
 .tweakers-move-tracks {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  width: 100%;
+  width: var(--move-cluster-w, 100%);
+  align-self: center;
   padding: 4px;
 }
 
 .tweakers-move-tracks-group {
   display: flex;
   gap: 12px;
-  align-items: flex-start;
+  /* the readout pill is taller than a track tick: centring puts every name in
+     the row on one line with it */
+  align-items: center;
 }
 
 .tweakers-move-track {
@@ -5260,11 +5283,6 @@ input.tweakers-list-item-title:focus {
   border: none;
   cursor: pointer;
   color: var(--move-text);
-}
-
-.tweakers-move-track[data-empty="true"] {
-  cursor: default;
-  opacity: 0.3;
 }
 
 .tweakers-move-track-marker {
@@ -5342,17 +5360,123 @@ input.tweakers-list-item-title:focus {
   pointer-events: none;
 }
 
+/* Header cluster — the volume-dial readout. The readout rides the end of the
+   track row, so it lands on the right edge of the last visible column rather
+   than the panel's own far edge. */
+.tweakers-move-actions {
+  margin-left: auto;
+  /* cancel the track row's own padding: the grid below it has none, so this
+     is what puts the two right edges on the same line */
+  margin-right: -4px;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+/* MoveActionButton — the free-standing action pill views place anywhere.
+   Colours are fixed to the hardware key it rides: enter is track 4's green
+   with the dot glyph, capture track 1's blue with the four-corners glyph.
+   Tokens carry fallbacks because the button lives outside .tweakers-move. */
+.tweakers-move-action {
+  position: relative;
+  height: 28px;
+  min-width: 108px;
+  padding: 0 26px;
+  border: none;
+  border-radius: var(--move-radius-small, 8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-family: var(--move-font-label, 'Ableton Sans Small', system-ui, -apple-system, sans-serif);
+  font-size: 16px;
+  line-height: normal;
+  color: #1e1e1e;
+  transition: filter 0.12s, transform 0.12s;
+}
+
+.tweakers-move-action[data-kind="enter"] {
+  background: #52bd06;
+}
+
+.tweakers-move-action[data-kind="capture"] {
+  background: #4274f4;
+}
+
+/* The shift key is the surface's light one — neutral pill, and the dot glyph
+   comes out black on it because the icon is drawn with currentColor. */
+.tweakers-move-action[data-kind="shift"] {
+  background: #dee3c9;
+}
+
+.tweakers-move-action[data-pressed] {
+  filter: brightness(1.25);
+  transform: scale(0.96);
+  transition-duration: 0.04s;
+}
+
+.tweakers-move-action:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tweakers-move-action-icon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.tweakers-move-volume {
+  height: 28px;
+  min-width: 108px;
+  padding: 0 8px;
+  border-radius: var(--move-radius-small);
+  background: #1e1e1e;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tweakers-move-volume-tick {
+  width: 4px;
+  height: 20px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.tweakers-move-volume-label,
+.tweakers-move-volume-value {
+  font-family: var(--move-font-label);
+  font-size: 16px;
+  line-height: normal;
+  color: var(--move-text);
+  white-space: nowrap;
+}
+
+.tweakers-move-volume-label {
+  opacity: 0.5;
+}
+
+/* In a time readout (0:00:00) the colons set bold and a step smaller, so
+   the digit groups read apart. */
+.tweakers-move-volume-sep {
+  font-weight: 700;
+  font-size: 14px;
+}
+
 /* Dial + pad grid — one column, 4px rhythm (802:334). */
 .tweakers-move-grid {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  width: 100%;
+  width: var(--move-cluster-w, 100%);
+  align-self: center;
 }
 
 .tweakers-move-dials {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--move-cols, 8), minmax(0, 1fr));
   gap: 4px;
   height: 140px;
   width: 100%;
@@ -5426,6 +5550,21 @@ input.tweakers-list-item-title:focus {
   opacity: 1;
 }
 
+/* Enum slots keep the option value centred in place; the control's own
+   label shrinks and sits just above the option cells. */
+.tweakers-move-dial[data-kind="enum"] .tweakers-move-dial-value {
+  opacity: 1;
+}
+
+.tweakers-move-dial[data-kind="enum"] .tweakers-move-dial-label,
+.tweakers-move-dial[data-kind="enum"]:hover .tweakers-move-dial-label,
+.tweakers-move-dial[data-kind="enum"][data-active] .tweakers-move-dial-label {
+  font-size: 14px;
+  bottom: -2px;
+  opacity: 0.55;
+  -webkit-line-clamp: 1;
+}
+
 /* A substituted slot always reads name-on-tag + live value — the centred
    label would double the tag, so it stays hidden. */
 .tweakers-move-dial[data-sub] .tweakers-move-dial-label {
@@ -5458,6 +5597,111 @@ input.tweakers-list-item-title:focus {
   text-overflow: ellipsis;
 }
 
+/* An enum slot's current option, named on a tag at the top: with the shape
+   drawn below — or a glyph standing in for the mode — the name is a caption,
+   not the headline. Same pill as the substitution tag, sat on the darker
+   ground so it reads over the drawing. */
+.tweakers-move-dial-tag {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  max-width: calc(100% - 16px);
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--move-bg);
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Option glyph — lucide in the middle of the slot, where the name would be:
+   at arm's length you read a picture, not a word. It shares the shape's band
+   and keeps its own proportions inside it (the viewBox meets, not stretches),
+   so a glyph and a curve sit on the same line across a page. */
+.tweakers-move-dial-icon {
+  position: absolute;
+  top: var(--move-shape-top);
+  left: 10px;
+  width: calc(100% - 20px);
+  height: calc(100% - var(--move-shape-top) - var(--move-shape-bottom));
+  stroke-width: var(--move-glyph-stroke);
+  color: var(--move-text);
+  pointer-events: none;
+}
+
+/* What the slot is set to, under the picture and clear of the pagination
+   cells. Smaller than the dial's own big readout: the picture is the
+   headline, this is its caption. */
+.tweakers-move-dial-option {
+  position: absolute;
+  left: 8px;
+  right: 9px;
+  bottom: var(--move-option-bottom);
+  font-family: var(--move-font-label);
+  font-size: 13px;
+  line-height: 16px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The picture takes every pixel between the two labels and nothing either of
+   them needs: 8px clear of the chip above and of the caption below, which is
+   itself clear of the pagination cells.
+
+   Band arithmetic, from the slot's own edges:
+     top    = chip top (6) + chip height (18) + 8
+     bottom = option bottom + option line (20) + 8 */
+.tweakers-move-dial {
+  --move-option-bottom: 21px;   /* the track's 8 + 9, plus 4 of air */
+  --move-shape-top: 32px;       /* chip top (6) + chip height (18) + 8 */
+  --move-shape-bottom: 45px;    /* option bottom (21) + option line (16) + 8 */
+}
+
+/* Height, not a bottom edge: an <svg> is a replaced element, so top+bottom
+   with height:auto is over-constrained — the browser keeps the intrinsic
+   height and drops \`bottom\`, and the drawing runs straight over the caption
+   and the pagination cells. Stating the height leaves nothing to resolve. */
+.tweakers-move-dial-shape {
+  position: absolute;
+  top: var(--move-shape-top);
+  left: 10px;
+  width: calc(100% - 20px);
+  height: calc(100% - var(--move-shape-top) - var(--move-shape-bottom));
+  overflow: visible;
+  pointer-events: none;
+}
+
+.tweakers-move-dial-shape path {
+  fill: none;
+  stroke: var(--move-text);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.5;
+  transition: opacity 0.12s;
+}
+
+.tweakers-move-dial:hover .tweakers-move-dial-shape path,
+.tweakers-move-dial[data-active] .tweakers-move-dial-shape path {
+  opacity: 1;
+}
+
+/* The drawing IS the value, so the centred name gets out of its way as soon
+   as the slot is touched — and never returns as a second copy of the tag. */
+.tweakers-move-dial[data-shape] .tweakers-move-dial-label {
+  z-index: 1;
+  text-shadow: 0 0 6px var(--move-chip), 0 0 6px var(--move-chip);
+}
+
 .tweakers-move-dial-bar {
   position: absolute;
   left: 8px;
@@ -5467,6 +5711,17 @@ input.tweakers-list-item-title:focus {
   padding: 2px;
   background: var(--move-bg);
   border-radius: 8px;
+}
+
+/* Origin tick — an anchored (bipolar) dial fills out from this mark. */
+.tweakers-move-dial-origin {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  margin-left: -0.5px;
+  background: var(--move-text);
+  opacity: 0.3;
 }
 
 .tweakers-move-dial-fill {
@@ -5479,6 +5734,63 @@ input.tweakers-list-item-title:focus {
 
 /* The glow marks the touched dial — lit while held (802:773). */
 .tweakers-move-dial[data-active] .tweakers-move-dial-fill {
+  box-shadow: 0 0 12px 0 rgba(222, 227, 201, 0.7);
+}
+
+/* Range slot — the bar fills BETWEEN two handle ticks (the span), and the
+   ticks poke past the bar so a collapsed range still reads as two hands. */
+.tweakers-move-dial-range {
+  position: relative;
+  height: 100%;
+}
+
+.tweakers-move-dial-span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 5px;
+  background: var(--move-text);
+  opacity: 0.45;
+  border-radius: 8px;
+}
+
+.tweakers-move-dial-handle {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--move-text);
+  border-radius: 1px;
+  transition: box-shadow 0.12s;
+}
+
+.tweakers-move-dial[data-active] .tweakers-move-dial-handle {
+  box-shadow: 0 0 12px 0 rgba(222, 227, 201, 0.7);
+}
+
+/* Enum slot — the bar splits into one cell per option, the active cell
+   filled, so the dial reads as a position among N discrete choices. */
+.tweakers-move-dial-enum {
+  display: flex;
+  gap: 2px;
+  height: 100%;
+}
+
+.tweakers-move-dial-enum-cell {
+  flex: 1;
+  min-width: 0;
+  background: var(--move-text);
+  opacity: 0.14;
+  border-radius: 8px;
+  transition: opacity 0.12s, box-shadow 0.12s;
+}
+
+.tweakers-move-dial-enum-cell[data-on] {
+  opacity: 1;
+}
+
+.tweakers-move-dial[data-active] .tweakers-move-dial-enum-cell[data-on] {
   box-shadow: 0 0 12px 0 rgba(222, 227, 201, 0.7);
 }
 
@@ -5647,7 +5959,7 @@ input.tweakers-list-item-title:focus {
 /* Pad rows — 32px chips (800:1737). */
 .tweakers-move-pads {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--move-cols, 8), minmax(0, 1fr));
   gap: 4px;
   width: 100%;
 }
@@ -5760,8 +6072,11 @@ input.tweakers-list-item-title:focus {
   }
 }
 
-/* Page chip — the stacked-card double shadow; inverts when active. */
-.tweakers-move-pad[data-kind="page"] {
+/* Page chip — the stacked-card double shadow; inverts when active. An action
+   pad wears it too: on this surface a button is nearly always a way through
+   to somewhere, and the shadow is what tells it apart from a switch. */
+.tweakers-move-pad[data-kind="page"],
+.tweakers-move-pad[data-kind="action"] {
   box-shadow: -2px 2px 0 0 var(--move-bg), -3px 3px 0 0 var(--move-text);
 }
 
@@ -5779,5 +6094,158 @@ input.tweakers-list-item-title:focus {
   .tweakers-move-dial-value {
     font-size: 18px;
   }
+  .tweakers-move-dial {
+    --move-option-bottom: 20px;
+    --move-shape-top: 32px;
+    --move-shape-bottom: 42px;
+  }
+  .tweakers-move-dial-option {
+    font-size: 12px;
+    line-height: 14px;
+  }
+}
+
+/* ==========================================================================
+   List screen — the Move's dark display list (Figma node "list screen").
+   Same fixed identity as the panel: the screen surface (#1e1e1e, the volume
+   pill's dark display) and label ink (#dee3c9) are the hardware's own, held
+   as local values so the component stands alone; nested in .tweakers-move
+   it inherits the panel's font var instead of the fallback stack. */
+
+.tweakers-list-screen,
+.tweakers-list-screen * {
+  box-sizing: border-box;
+}
+
+.tweakers-list-screen {
+  --move-list-row: 24px;
+  --move-list-gap: 7px;
+  --move-list-pad: 16px;
+  width: 200px;
+  padding: var(--move-list-pad) 4px;
+  background: #1e1e1e;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--move-list-gap);
+  /* Ten and a half rows, then scroll — the cut row says there's more:
+     top pad + 10.5 rows + the 10 gaps between the visible rows. */
+  max-height: calc(
+    var(--move-list-pad) + 10.5 * var(--move-list-row) + 10 * var(--move-list-gap)
+  );
+  overflow-y: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.tweakers-list-screen::-webkit-scrollbar {
+  display: none;
+}
+
+.tweakers-list-screen[data-wide] {
+  width: 400px;
+}
+
+.tweakers-list-screen-row {
+  flex-shrink: 0;
+  width: 100%;
+  height: var(--move-list-row);
+  padding: 2px 0;
+  border: none;
+  background: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: var(--move-font-label, 'Ableton Sans Small', system-ui, -apple-system, sans-serif);
+  font-size: 16px;
+  line-height: 20px;
+  color: #dee3c9;
+  text-align: center;
+  transition: background 0.12s;
+}
+
+.tweakers-list-screen[data-wide] .tweakers-list-screen-row {
+  padding: 2px 10px;
+  text-align: left;
+}
+
+.tweakers-list-screen-label {
+  display: block;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.22;
+  transition: opacity 0.12s;
+}
+
+/* The optional inline tag, pinned to the row's right end: smaller, dimmer,
+   the same face. Centered rows keep their label centered with a flex spacer —
+   an empty ::before and the tag split the leftover space evenly, so the label
+   never shifts and both sides ellipsize before they can collide. Wide rows
+   are left-aligned already, so the tag just takes the natural flex end. */
+.tweakers-list-screen-row[data-tagged] {
+  display: flex;
+  align-items: center;
+}
+
+.tweakers-list-screen-row[data-tagged]::before {
+  content: '';
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.tweakers-list-screen-row[data-tagged] .tweakers-list-screen-label {
+  flex: 0 1 auto;
+  width: auto;
+  min-width: 0;
+}
+
+.tweakers-list-screen-tag {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-left: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+  font-size: 12px;
+  line-height: 20px;
+  opacity: 0.22;
+  transition: opacity 0.12s;
+}
+
+.tweakers-list-screen[data-wide] .tweakers-list-screen-row[data-tagged]::before {
+  display: none;
+}
+
+.tweakers-list-screen[data-wide] .tweakers-list-screen-row[data-tagged] .tweakers-list-screen-label {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.tweakers-list-screen[data-wide] .tweakers-list-screen-tag {
+  flex: 0 1 auto;
+}
+
+.tweakers-list-screen-row[data-selected] {
+  background: rgba(222, 227, 201, 0.1);
+}
+
+.tweakers-list-screen-row[data-selected] .tweakers-list-screen-label {
+  opacity: 1;
+}
+
+.tweakers-list-screen-row[data-selected] .tweakers-list-screen-tag {
+  opacity: 0.5;
+}
+
+/* A muted row is information, not a choice: reaching it still shows where the
+   selection is, but the row never comes up to full brightness. */
+.tweakers-list-screen-row[data-muted][data-selected] .tweakers-list-screen-label {
+  opacity: 0.45;
+}
+
+.tweakers-list-screen-row[data-muted][data-selected] .tweakers-list-screen-tag {
+  opacity: 0.3;
 }
 `;

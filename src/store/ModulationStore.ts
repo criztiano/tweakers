@@ -282,6 +282,31 @@ class ModulationStoreClass {
     return { action: created ? 'created' : 'assigned', slot };
   }
 
+  /* ── gates ────────────────────────────────────────────────────────── */
+
+  /**
+   * Note on / note off for a slot — what drives a gated modulator like the
+   * ADSR:
+   *
+   *   ModulationStore.gate(0, true);    // key down
+   *   ModulationStore.gate(0, false);   // key up — the release runs
+   *
+   * Free-running types (LFO, S&H) and slots on an external source ignore
+   * it. The gate is live state, not a param: it is never persisted.
+   */
+  gate(index: number, on: boolean): void {
+    const slot = this.slots[index];
+    const def = slot && getModType(slot.type);
+    if (!slot || slot.source || !def?.gate) return;
+    let state = this.states.get(index);
+    if (state === undefined) {
+      state = def.createState();
+      this.states.set(index, state);
+    }
+    def.gate(state, on);
+    this.ensureLoop();
+  }
+
   /* ── the settings page ────────────────────────────────────────────── */
 
   /**

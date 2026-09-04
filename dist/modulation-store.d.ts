@@ -1,5 +1,5 @@
 import { ModulationSlot, ModulationType, ModulationParams, ModulationAssignment, ModPageLayout } from './modulation-core.js';
-import './TweakStore-DJZN26nW.js';
+import './TweakStore-BRgese49.js';
 import './range-slider-core.js';
 import './curve-composer-core.js';
 
@@ -109,6 +109,17 @@ declare class ModulationStoreClass {
         action: ModStepAction;
         slot: ModulationSlot | null;
     };
+    /**
+     * Note on / note off for a slot — what drives a gated modulator like the
+     * ADSR:
+     *
+     *   ModulationStore.gate(0, true);    // key down
+     *   ModulationStore.gate(0, false);   // key up — the release runs
+     *
+     * Free-running types (LFO, S&H) and slots on an external source ignore
+     * it. The gate is live state, not a param: it is never persisted.
+     */
+    gate(index: number, on: boolean): void;
     /**
      * Open a slot's settings (hold its step button): registers one hidden
      * TweakStore panel (`mod-settings`, kind 'modulation') built from the

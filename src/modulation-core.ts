@@ -68,7 +68,7 @@ export const MOD_COLORS = [
 export const modColor = (index: number) =>
   MOD_COLORS[((index % MOD_SLOTS) + MOD_SLOTS) % MOD_SLOTS];
 
-export type ModulationType = 'lfo' | 'envelope' | 'curve' | 'sh' | 'sequencer';
+export type ModulationType = 'lfo' | 'adsr' | 'envelope' | 'curve' | 'sh' | 'sequencer';
 
 /**
  * A settings value: the scalars a dial or a pad edits, plus the structures a
@@ -116,8 +116,8 @@ export type ModControlMeta = ControlMeta & {
   chip?: boolean;
   /** Shown only when this says so — a control that belongs to one mode. */
   when?: (params: ModulationParams) => boolean;
-  /** This dial draws the modulator's own preview (the type's `preview`). */
-  preview?: boolean;
+  /** This dial draws the modulator's own shape (the type's `preview`). */
+  drawsPreview?: boolean;
   /** A knob tap on this dial runs this, returning the params it changes. */
   cycle?: (params: ModulationParams) => ModulationParams;
 };
@@ -156,6 +156,12 @@ export interface ModTypeDef {
   preview?(params: ModulationParams, count: number): { points: number[]; label: string };
   /** Where the modulator sits in its cycle, 0..1 — a composer's playhead. */
   phase?(state: unknown): number;
+  /**
+   * Note on / note off, for the types that take a gate (the ADSR). The
+   * store's `gate(slot, on)` lands here; free-running types (LFO, S&H)
+   * leave it out and the store ignores the call.
+   */
+  gate?(state: unknown, on: boolean): void;
 }
 
 /* ── the settings page's layout ───────────────────────────────────────── */
@@ -189,7 +195,7 @@ const isModDial = (c: ModControlMeta) =>
 
 const slotOf = (c: ModControlMeta): ModPageSlot => ({
   path: c.path,
-  ...(c.preview ? { preview: true } : {}),
+  ...(c.drawsPreview ? { preview: true } : {}),
   ...(c.cycle ? { cycle: true } : {}),
 });
 
@@ -442,6 +448,121 @@ export const SH_DEF: ModTypeDef = {
 
 registerModType(SH_DEF);
 
+/* ── ADSR — the shaped envelope, the third built-in type ──────────────── */
+
+type AdsrStage = 'idle' | 'attack' | 'decay' | 'sustain' | 'release';
+
+interface AdsrState {
+  stage: AdsrStage;
+  /** Seconds into the current stage. */
+  t: number;
+  /** The level the stage started from — a retrigger ramps from where it is. */
+  from: number;
+  /** The signal, 0..1. */
+  env: number;
+  /** Gate held (note on). Loop mode runs without one. */
+  gate: boolean;
+}
+
+const secs = (ms: unknown) => Math.max(0, Number(ms) || 0) / 1000;
+
+/** An analog ramp's ease: quick off the mark, tapering into the target. */
+const adsrEase = (p: number) => 1 - (1 - p) * (1 - p);
+
+/** A stage's length in seconds; a held sustain never ends on its own. */
+function adsrStageLength(stage: AdsrStage, params: ModulationParams): number {
+  if (stage === 'attack') return secs(params.attack);
+  if (stage === 'decay') return secs(params.decay);
+  if (stage === 'release') return secs(params.release);
+  return Infinity;
+}
+
+/**
+ * The ADSR: attack up to full, decay down to the sustain level, sustain
+ * held while the gate is on, release back to rest. The signal is unipolar
+ * 0..1 — at rest the control sits on its base value, and the envelope
+ * lifts it up to `amount` of the span.
+ *
+ * A gate drives it — `ModulationStore.gate(slot, on)`, from a note, a pad,
+ * a hardware step — and a fresh slot rests at zero until the host sends
+ * one. That is the shape an app integrates against; a DSP app whose own
+ * envelope already runs at audio rate points the slot at a source instead
+ * and the kit just shows the signal.
+ *
+ * Loop is the exception, for demos and for prototyping with no host: with
+ * it on the envelope plays its own gate, running attack → decay → release
+ * over and over.
+ */
+export const ADSR_DEF: ModTypeDef = {
+  type: 'adsr',
+  label: 'ADSR',
+  defaults: { attack: 10, decay: 300, sustain: 0.6, release: 600, loop: false },
+  controls: [
+    { type: 'slider', path: 'attack', label: 'Attack', min: 0, max: 2000, step: 1, unit: 'ms' },
+    { type: 'slider', path: 'decay', label: 'Decay', min: 0, max: 2000, step: 1, unit: 'ms' },
+    { type: 'slider', path: 'sustain', label: 'Sustain', min: 0, max: 1, step: 0.01 },
+    { type: 'slider', path: 'release', label: 'Release', min: 0, max: 4000, step: 1, unit: 'ms' },
+    { type: 'toggle', path: 'loop', label: 'Loop' },
+  ],
+  createState: (): AdsrState => ({ stage: 'idle', t: 0, from: 0, env: 0, gate: false }),
+  gate(state, on) {
+    const s = state as AdsrState;
+    s.gate = on;
+    if (on) {
+      s.stage = 'attack';
+      s.t = 0;
+      s.from = s.env;                         // a retrigger climbs from here
+    } else if (s.stage !== 'idle') {
+      s.stage = 'release';
+      s.t = 0;
+      s.from = s.env;
+    }
+  },
+  tick(state, params, dt) {
+    const s = state as AdsrState;
+    const loop = !!params.loop;
+    const sustain = clamp01(params.sustain);
+
+    if (s.stage === 'idle') {
+      if (!loop) return (s.env = 0);
+      s.stage = 'attack';                     // loop mode gates itself
+      s.t = 0;
+      s.from = 0;
+    }
+
+    s.t += dt;
+    // Each stage hands its overflow to the next, so a stage shorter than a
+    // frame still passes through instead of holding the envelope up.
+    for (let guard = 0; guard < 4; guard++) {
+      const len = adsrStageLength(s.stage, params);
+      if (s.t < len) break;
+      s.t -= len;
+      if (s.stage === 'attack') {
+        s.stage = 'decay';
+        s.from = 1;
+      } else if (s.stage === 'decay') {
+        // The gate holds the sustain; without one, decay falls straight on
+        // into the release — an AD shape, and the loop's whole cycle.
+        s.stage = s.gate ? 'sustain' : 'release';
+        s.from = sustain;
+      } else {
+        s.stage = loop ? 'attack' : 'idle';   // release ended
+        s.from = 0;
+      }
+    }
+
+    const len = adsrStageLength(s.stage, params);
+    const shaped = adsrEase(len > 0 && Number.isFinite(len) ? Math.min(1, s.t / len) : 1);
+    if (s.stage === 'attack') s.env = s.from + (1 - s.from) * shaped;
+    else if (s.stage === 'decay') s.env = s.from + (sustain - s.from) * shaped;
+    else if (s.stage === 'sustain') s.env = sustain;
+    else if (s.stage === 'release') s.env = s.from * (1 - shaped);
+    else s.env = 0;
+    return clamp01(s.env);
+  },
+};
+
+registerModType(ADSR_DEF);
 /* ── Curve — the composer's own shapes, as a modulator ────────────────── */
 
 /**
@@ -554,7 +675,7 @@ export const CURVE_DEF: ModTypeDef = {
       xParam: 'curvature', yParam: 'steepness',
       xAxis: { min: -1, max: 1, bipolar: true, label: 'Energy' },
       yAxis: { min: -1, max: 1, bipolar: true, label: 'Steep' },
-      preview: true,
+      drawsPreview: true,
       cycle: (params) => {
         const comp = curveComposition(params);
         const i = selectedClip(params, comp.segments.length);

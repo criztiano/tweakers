@@ -227,3 +227,51 @@ describe('a curve with an aspect', () => {
     expect(control.height).toBe(48);
   });
 });
+
+// A select's `preview` closes over the app's other controls exactly as a
+// curve row's `sample` does — a pitch arc's drawing has to follow its bell —
+// so it rides the same sync and must not be left holding the first closure.
+describe('a select with a shape preview', () => {
+  const id = 'select-preview-panel';
+
+  afterEach(() => {
+    TweakStore.unregisterPanel(id);
+  });
+
+  const config = (bell: number) => ({
+    shape: {
+      type: 'select' as const,
+      options: ['arc', 'ramp'],
+      default: 'arc',
+      preview: () => (t: number) => t * bell,
+    },
+  });
+
+  const control = () => TweakStore.getPanels().find((p) => p.id === id)!.controls[0];
+
+  it('refreshes the closure on sync, so the drawing tracks the app', () => {
+    TweakStore.registerPanel(id, id, config(1));
+    expect(control().preview!('arc')!(1)).toBe(1);
+
+    // A re-render with a new bell: the config is structurally identical, so
+    // only the sync can carry the new closure across.
+    TweakStore.syncCurveConfigs(id, config(0.25));
+    expect(control().preview!('arc')!(1)).toBe(0.25);
+  });
+
+  it('notifies once per change, and stays quiet when nothing moved', () => {
+    TweakStore.registerPanel(id, id, config(1));
+    let hits = 0;
+    const stop = TweakStore.subscribeControlState(id, () => { hits += 1; });
+
+    const same = config(1).shape.preview;
+    TweakStore.syncCurveConfigs(id, { shape: { ...config(1).shape, preview: same } });
+    const quiet = hits;
+    TweakStore.syncCurveConfigs(id, { shape: { ...config(1).shape, preview: same } });
+    expect(hits).toBe(quiet);
+
+    TweakStore.syncCurveConfigs(id, config(2));
+    expect(hits).toBe(quiet + 1);
+    stop();
+  });
+});

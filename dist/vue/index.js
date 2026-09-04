@@ -13,12 +13,12 @@ function parseHex(input) {
   let s = input.trim();
   if (!s.startsWith("#")) s = `#${s}`;
   if (!HEX_COLOR_REGEX.test(s)) return null;
-  let h37 = s.slice(1);
-  if (h37.length <= 4) h37 = h37.split("").map((c) => c + c).join("");
-  const r = parseInt(h37.slice(0, 2), 16);
-  const g = parseInt(h37.slice(2, 4), 16);
-  const b = parseInt(h37.slice(4, 6), 16);
-  const a = h37.length === 8 ? parseInt(h37.slice(6, 8), 16) / 255 : 1;
+  let h36 = s.slice(1);
+  if (h36.length <= 4) h36 = h36.split("").map((c) => c + c).join("");
+  const r = parseInt(h36.slice(0, 2), 16);
+  const g = parseInt(h36.slice(2, 4), 16);
+  const b = parseInt(h36.slice(4, 6), 16);
+  const a = h36.length === 8 ? parseInt(h36.slice(6, 8), 16) / 255 : 1;
   return { r, g, b, a };
 }
 function formatHex(rgba, alphaEnabled) {
@@ -52,36 +52,36 @@ function rgbToHsv(rgba) {
   const r = rgba.r / 255, g = rgba.g / 255, b = rgba.b / 255;
   const max = Math.max(r, g, b), min = Math.min(r, g, b);
   const d = max - min;
-  let h37 = 0;
+  let h36 = 0;
   if (d !== 0) {
-    if (max === r) h37 = (g - b) / d % 6;
-    else if (max === g) h37 = (b - r) / d + 2;
-    else h37 = (r - g) / d + 4;
-    h37 *= 60;
-    if (h37 < 0) h37 += 360;
+    if (max === r) h36 = (g - b) / d % 6;
+    else if (max === g) h36 = (b - r) / d + 2;
+    else h36 = (r - g) / d + 4;
+    h36 *= 60;
+    if (h36 < 0) h36 += 360;
   }
-  return { h: h37, s: max === 0 ? 0 : d / max, v: max, a: rgba.a };
+  return { h: h36, s: max === 0 ? 0 : d / max, v: max, a: rgba.a };
 }
 function hsvToRgb(hsva) {
-  const h37 = (hsva.h % 360 + 360) % 360;
+  const h36 = (hsva.h % 360 + 360) % 360;
   const s = clamp01(hsva.s), v = clamp01(hsva.v);
   const c = v * s;
-  const x = c * (1 - Math.abs(h37 / 60 % 2 - 1));
+  const x = c * (1 - Math.abs(h36 / 60 % 2 - 1));
   const m = v - c;
   let r = 0, g = 0, b = 0;
-  if (h37 < 60) [r, g, b] = [c, x, 0];
-  else if (h37 < 120) [r, g, b] = [x, c, 0];
-  else if (h37 < 180) [r, g, b] = [0, c, x];
-  else if (h37 < 240) [r, g, b] = [0, x, c];
-  else if (h37 < 300) [r, g, b] = [x, 0, c];
+  if (h36 < 60) [r, g, b] = [c, x, 0];
+  else if (h36 < 120) [r, g, b] = [x, c, 0];
+  else if (h36 < 180) [r, g, b] = [0, c, x];
+  else if (h36 < 240) [r, g, b] = [0, x, c];
+  else if (h36 < 300) [r, g, b] = [x, 0, c];
   else [r, g, b] = [c, 0, x];
   return { r: byte((r + m) * 255), g: byte((g + m) * 255), b: byte((b + m) * 255), a: hsva.a };
 }
 function rgbToHsl(rgba) {
-  const { h: h37, s, v, a } = rgbToHsv(rgba);
+  const { h: h36, s, v, a } = rgbToHsv(rgba);
   const l = v * (1 - s / 2);
   const sl = l === 0 || l === 1 ? 0 : (v - l) / Math.min(l, 1 - l);
-  return { h: h37, s: sl, l, a };
+  return { h: h36, s: sl, l, a };
 }
 function hslToRgb(hsla) {
   const l = clamp01(hsla.l), s = clamp01(hsla.s);
@@ -117,32 +117,32 @@ function oklabToLinearRgb(L, A, B) {
 function rgbToOklch(rgba) {
   const { L, A, B } = rgbToOklab(rgba);
   const c = Math.sqrt(A * A + B * B);
-  let h37 = Math.atan2(B, A) * 180 / Math.PI;
-  if (h37 < 0) h37 += 360;
-  return { l: L, c, h: c < 1e-6 ? 0 : h37, a: rgba.a };
+  let h36 = Math.atan2(B, A) * 180 / Math.PI;
+  if (h36 < 0) h36 += 360;
+  return { l: L, c, h: c < 1e-6 ? 0 : h36, a: rgba.a };
 }
 var GAMUT_EPS = 1e-4;
-function inSrgbGamut(l, c, h37) {
-  const rad = h37 * Math.PI / 180;
+function inSrgbGamut(l, c, h36) {
+  const rad = h36 * Math.PI / 180;
   const { r, g, b } = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
   return r >= -GAMUT_EPS && r <= 1 + GAMUT_EPS && g >= -GAMUT_EPS && g <= 1 + GAMUT_EPS && b >= -GAMUT_EPS && b <= 1 + GAMUT_EPS;
 }
 function clampOklchToSrgb(oklch) {
   const l = clamp01(oklch.l);
-  const h37 = (oklch.h % 360 + 360) % 360;
+  const h36 = (oklch.h % 360 + 360) % 360;
   const c = Math.max(0, oklch.c);
-  if (inSrgbGamut(l, c, h37)) return { l, c, h: h37, a: clamp01(oklch.a) };
+  if (inSrgbGamut(l, c, h36)) return { l, c, h: h36, a: clamp01(oklch.a) };
   let lo = 0, hi = c;
   for (let i = 0; i < 24; i++) {
     const mid = (lo + hi) / 2;
-    if (inSrgbGamut(l, mid, h37)) lo = mid;
+    if (inSrgbGamut(l, mid, h36)) lo = mid;
     else hi = mid;
   }
-  return { l, c: lo, h: h37, a: clamp01(oklch.a) };
+  return { l, c: lo, h: h36, a: clamp01(oklch.a) };
 }
 function oklchToRgb(oklch) {
-  const { l, c, h: h37, a } = clampOklchToSrgb(oklch);
-  const rad = h37 * Math.PI / 180;
+  const { l, c, h: h36, a } = clampOklchToSrgb(oklch);
+  const rad = h36 * Math.PI / 180;
   const lin = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
   return {
     r: byte(linearToSrgb(clamp01(lin.r)) * 255),
@@ -181,11 +181,11 @@ function rgbaToChannels(rgba, format, alphaEnabled) {
   if (format === "rgb") {
     values = [rgba.r, rgba.g, rgba.b];
   } else if (format === "hsl") {
-    const { h: h37, s, l } = rgbToHsl(rgba);
-    values = [round(h37, 0), round(s * 100, 0), round(l * 100, 0)];
+    const { h: h36, s, l } = rgbToHsl(rgba);
+    values = [round(h36, 0), round(s * 100, 0), round(l * 100, 0)];
   } else {
-    const { l, c, h: h37 } = rgbToOklch(rgba);
-    values = [round(l, 2), round(c, 3), round(h37, 0)];
+    const { l, c, h: h36 } = rgbToOklch(rgba);
+    values = [round(l, 2), round(c, 3), round(h36, 0)];
   }
   if (alphaEnabled) values.push(opacityPercent(rgba));
   return values;
@@ -706,7 +706,7 @@ var TweakStoreClass = class {
     this.initTabValue(controls, values);
     this.initTransitionModes(config, "", values);
     this.overlayPersistedValues(target, values);
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, module: "_enabled" in config ? true : void 0, kind: options.kind });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, module: "_enabled" in config ? true : void 0, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -720,6 +720,7 @@ var TweakStoreClass = class {
     const hints = options.hints ?? existing.hints;
     const affordances = options.affordances ?? existing.affordances;
     const labels = options.labels ?? existing.labels;
+    const movePads = options.movePads ?? existing.movePads;
     const controls = this.parseConfig(config, "", shortcuts);
     this.applyControlExtras(controls, hints, affordances, labels);
     const controlsByPath = this.mapControlsByPath(controls);
@@ -744,7 +745,7 @@ var TweakStoreClass = class {
         nextValues[path] = mode;
       }
     }
-    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, module: "_enabled" in config ? true : void 0, kind: options.kind ?? existing.kind };
+    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, module: "_enabled" in config ? true : void 0, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
     const previousBaseValues = this.baseValues.get(id) ?? {};
@@ -1040,6 +1041,12 @@ var TweakStoreClass = class {
               changed = true;
             }
           }
+        } else if (this.isSelectConfig(value) && value.preview) {
+          const control = this.findControlByPath(panel.controls, path);
+          if (control?.type === "select" && control.preview !== value.preview) {
+            control.preview = value.preview;
+            changed = true;
+          }
         } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
           visit(value, path);
         }
@@ -1331,7 +1338,7 @@ var TweakStoreClass = class {
       } else if (this.isActionConfig(value)) {
         controls.push({ type: "action", path, label: value.label || label, caption: value.caption });
       } else if (this.isSelectConfig(value)) {
-        controls.push({ type: "select", path, label, options: value.options, display: value.display });
+        controls.push({ type: "select", path, label, options: value.options, display: value.display, preview: value.preview });
       } else if (this.isColorConfig(value)) {
         controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {
@@ -1957,12 +1964,12 @@ function getFirstOptionValue(options) {
 import {
   createApp,
   defineComponent as defineComponent29,
-  h as h29,
+  h as h28,
   shallowRef as shallowRef2
 } from "vue";
 
 // src/vue/components/TweakRoot.ts
-import { defineComponent as defineComponent28, h as h28, onMounted as onMounted17, onUnmounted as onUnmounted11, ref as ref23, Teleport as Teleport6 } from "vue";
+import { defineComponent as defineComponent28, h as h27, onMounted as onMounted17, onUnmounted as onUnmounted11, ref as ref23, Teleport as Teleport6 } from "vue";
 
 // src/store/TimelineStore.ts
 var MIN_LOOP_REGION = 0.02;
@@ -2226,7 +2233,7 @@ var TimelineStoreClass = class {
 var TimelineStore = /* @__PURE__ */ new TimelineStoreClass();
 
 // src/vue/components/Panel.ts
-import { Fragment as Fragment2, defineComponent as defineComponent26, h as h26, onMounted as onMounted15, onUnmounted as onUnmounted9, ref as ref21 } from "vue";
+import { Fragment as Fragment2, defineComponent as defineComponent26, h as h25, onMounted as onMounted15, onUnmounted as onUnmounted9, ref as ref21 } from "vue";
 import { AnimatePresence as AnimatePresence6, motion as motion6 } from "motion-v";
 
 // src/icons.ts
@@ -2519,7 +2526,7 @@ var Folder = defineComponent2({
 });
 
 // src/vue/components/ControlRenderer.ts
-import { Fragment, defineComponent as defineComponent24, h as h24, inject as inject2 } from "vue";
+import { Fragment, defineComponent as defineComponent24, h as h23, inject as inject2 } from "vue";
 
 // src/vue/components/ColorControl.ts
 import { Teleport, defineComponent as defineComponent5, h as h5, nextTick as nextTick2, onMounted as onMounted5, ref as ref5, watch as watch4 } from "vue";
@@ -4907,7 +4914,7 @@ var ShortcutListener = defineComponent14({
 });
 
 // src/vue/components/Slider.ts
-import { defineComponent as defineComponent15, h as h15, computed as computed7, nextTick as nextTick5, onMounted as onMounted12, onUnmounted as onUnmounted6, ref as ref15, watch as watch10 } from "vue";
+import { defineComponent as defineComponent15, h as h14, computed as computed7, nextTick as nextTick5, onMounted as onMounted12, onUnmounted as onUnmounted6, ref as ref15, watch as watch10 } from "vue";
 import { animate as animate3, motionValue as motionValue2 } from "motion-v";
 var CLICK_THRESHOLD3 = 3;
 var DEAD_ZONE = 32;
@@ -5228,13 +5235,13 @@ var Slider = defineComponent15({
         const count = Math.max(0, Math.floor(discreteSteps.value) - 1);
         for (let i = 0; i < count; i += 1) {
           const pct = (i + 1) * step.value / (max.value - min.value) * 100;
-          marks.push(h15("div", { class: "tweakers-slider-hashmark", style: { left: `${pct}%` } }));
+          marks.push(h14("div", { class: "tweakers-slider-hashmark", style: { left: `${pct}%` } }));
         }
         return marks;
       }
       for (let i = 0; i < 9; i += 1) {
         const pct = (i + 1) * 10;
-        marks.push(h15("div", { class: "tweakers-slider-hashmark", style: { left: `${pct}%` } }));
+        marks.push(h14("div", { class: "tweakers-slider-hashmark", style: { left: `${pct}%` } }));
       }
       return marks;
     });
@@ -5288,7 +5295,7 @@ var Slider = defineComponent15({
         isHovered.value = false;
       }
     });
-    const renderInput = (className) => h15("input", {
+    const renderInput = (className) => h14("input", {
       ref: inputRef,
       type: "text",
       class: className,
@@ -5301,7 +5308,7 @@ var Slider = defineComponent15({
       onClick: (event) => event.stopPropagation(),
       onPointerdown: (event) => event.stopPropagation()
     });
-    const renderValueSpan = (className) => h15("span", {
+    const renderValueSpan = (className) => h14("span", {
       class: `${className} ${isValueEditable.value ? "tweakers-slider-value-editable" : ""}`,
       onMouseenter: () => {
         isValueHovered.value = true;
@@ -5316,20 +5323,20 @@ var Slider = defineComponent15({
       style: { cursor: isValueEditable.value || isMetaHeld.value ? "text" : "default" }
     }, [
       displayValue.value,
-      props.unit ? h15("span", { class: "tweakers-slider-unit" }, props.unit) : null
+      props.unit ? h14("span", { class: "tweakers-slider-unit" }, props.unit) : null
     ]);
-    const renderLabel = (className) => h15("span", { class: className }, [
+    const renderLabel = (className) => h14("span", { class: className }, [
       props.label,
-      props.shortcut ? h15("span", {
+      props.shortcut ? h14("span", {
         class: `tweakers-shortcut-pill${props.shortcutActive ? " tweakers-shortcut-pill-active" : ""}`
       }, formatSliderShortcut(props.shortcut)) : null
     ]);
     return () => {
       if (isVertical.value) {
-        return h15("div", { ref: wrapperRef, class: "tweakers-slider-wrapper tweakers-slider-wrapper-vertical" }, [
-          h15("div", cardProps(), [
-            h15("div", { class: "tweakers-slider-fill-area" }, [
-              h15("div", {
+        return h14("div", { ref: wrapperRef, class: "tweakers-slider-wrapper tweakers-slider-wrapper-vertical" }, [
+          h14("div", cardProps(), [
+            h14("div", { class: "tweakers-slider-fill-area" }, [
+              h14("div", {
                 ref: fillRef,
                 class: "tweakers-slider-fill-vertical",
                 style: {
@@ -5343,10 +5350,10 @@ var Slider = defineComponent15({
           ])
         ]);
       }
-      return h15("div", { ref: wrapperRef, class: "tweakers-slider-wrapper" }, [
-        h15("div", cardProps(), [
-          h15("div", { class: "tweakers-slider-track" }, [
-            h15("div", {
+      return h14("div", { ref: wrapperRef, class: "tweakers-slider-wrapper" }, [
+        h14("div", cardProps(), [
+          h14("div", { class: "tweakers-slider-track" }, [
+            h14("div", {
               ref: fillRef,
               class: "tweakers-slider-fill",
               style: {
@@ -5354,7 +5361,7 @@ var Slider = defineComponent15({
                 width: fillExtent(fillPercent.get())
               }
             }),
-            h15("div", {
+            h14("div", {
               ref: handleRef,
               class: "tweakers-slider-handle",
               style: {
@@ -5363,7 +5370,7 @@ var Slider = defineComponent15({
               }
             })
           ]),
-          h15("div", { class: "tweakers-slider-hashmarks" }, hashMarks.value),
+          h14("div", { class: "tweakers-slider-hashmarks" }, hashMarks.value),
           renderLabel("tweakers-slider-label"),
           showInput.value ? renderInput("tweakers-slider-input") : renderValueSpan("tweakers-slider-value")
         ])
@@ -5373,10 +5380,10 @@ var Slider = defineComponent15({
 });
 
 // src/vue/components/SpringControl.ts
-import { defineComponent as defineComponent17, h as h17, onMounted as onMounted13, onUnmounted as onUnmounted7, ref as ref16 } from "vue";
+import { defineComponent as defineComponent17, h as h16, onMounted as onMounted13, onUnmounted as onUnmounted7, ref as ref16 } from "vue";
 
 // src/vue/components/SpringVisualization.ts
-import { defineComponent as defineComponent16, h as h16, computed as computed8 } from "vue";
+import { defineComponent as defineComponent16, h as h15, computed as computed8 } from "vue";
 function generateSpringCurve(stiffness, damping, mass, duration) {
   const points = [];
   const steps = 100;
@@ -5439,17 +5446,17 @@ var SpringVisualization = defineComponent16({
         return `${index === 0 ? "M" : "L"} ${x} ${y}`;
       }).join(" ");
     });
-    return () => h16("svg", { viewBox: `0 0 ${width} ${height}`, class: "tweakers-spring-viz" }, [
+    return () => h15("svg", { viewBox: `0 0 ${width} ${height}`, class: "tweakers-spring-viz" }, [
       ...Array.from({ length: 3 }).flatMap((_, index) => {
         const lineIndex = index + 1;
         const x = width / 4 * lineIndex;
         const y = height / 4 * lineIndex;
         return [
-          h16("line", { x1: x, y1: 0, x2: x, y2: height, stroke: "rgba(255, 255, 255, 0.08)", "stroke-width": 1 }),
-          h16("line", { x1: 0, y1: y, x2: width, y2: y, stroke: "rgba(255, 255, 255, 0.08)", "stroke-width": 1 })
+          h15("line", { x1: x, y1: 0, x2: x, y2: height, stroke: "rgba(255, 255, 255, 0.08)", "stroke-width": 1 }),
+          h15("line", { x1: 0, y1: y, x2: width, y2: y, stroke: "rgba(255, 255, 255, 0.08)", "stroke-width": 1 })
         ];
       }),
-      h16("line", {
+      h15("line", {
         x1: 0,
         y1: height / 2,
         x2: width,
@@ -5458,7 +5465,7 @@ var SpringVisualization = defineComponent16({
         "stroke-width": 1,
         "stroke-dasharray": "4,4"
       }),
-      h16("path", {
+      h15("path", {
         d: pathData.value,
         fill: "none",
         stroke: "rgba(255, 255, 255, 0.6)",
@@ -5521,13 +5528,13 @@ var SpringControl = defineComponent17({
         emit("change", { ...rest, [key]: value });
       }
     };
-    return () => h17(Folder, { title: props.label, defaultOpen: true }, {
+    return () => h16(Folder, { title: props.label, defaultOpen: true }, {
       default: () => [
-        h17("div", { style: { display: "flex", flexDirection: "column", gap: "6px" } }, [
-          h17(SpringVisualization, { spring: props.spring, isSimpleMode: isSimpleMode() }),
-          h17("div", { class: "tweakers-labeled-control" }, [
-            h17("span", { class: "tweakers-labeled-control-label" }, "Type"),
-            h17(SegmentedControl, {
+        h16("div", { style: { display: "flex", flexDirection: "column", gap: "6px" } }, [
+          h16(SpringVisualization, { spring: props.spring, isSimpleMode: isSimpleMode() }),
+          h16("div", { class: "tweakers-labeled-control" }, [
+            h16("span", { class: "tweakers-labeled-control-label" }, "Type"),
+            h16(SegmentedControl, {
               options: [
                 { value: "simple", label: "Time" },
                 { value: "advanced", label: "Physics" }
@@ -5537,7 +5544,7 @@ var SpringControl = defineComponent17({
             })
           ]),
           ...isSimpleMode() ? [
-            h17(Slider, {
+            h16(Slider, {
               label: "Duration",
               value: props.spring.visualDuration ?? 0.3,
               min: 0.1,
@@ -5546,7 +5553,7 @@ var SpringControl = defineComponent17({
               unit: "s",
               onChange: (next) => handleUpdate("visualDuration", next)
             }),
-            h17(Slider, {
+            h16(Slider, {
               label: "Bounce",
               value: props.spring.bounce ?? 0.2,
               min: 0,
@@ -5555,7 +5562,7 @@ var SpringControl = defineComponent17({
               onChange: (next) => handleUpdate("bounce", next)
             })
           ] : [
-            h17(Slider, {
+            h16(Slider, {
               label: "Stiffness",
               value: props.spring.stiffness ?? 400,
               min: 1,
@@ -5563,7 +5570,7 @@ var SpringControl = defineComponent17({
               step: 10,
               onChange: (next) => handleUpdate("stiffness", next)
             }),
-            h17(Slider, {
+            h16(Slider, {
               label: "Damping",
               value: props.spring.damping ?? 17,
               min: 1,
@@ -5571,7 +5578,7 @@ var SpringControl = defineComponent17({
               step: 1,
               onChange: (next) => handleUpdate("damping", next)
             }),
-            h17(Slider, {
+            h16(Slider, {
               label: "Mass",
               value: props.spring.mass ?? 1,
               min: 0.1,
@@ -5587,7 +5594,7 @@ var SpringControl = defineComponent17({
 });
 
 // src/vue/components/TextControl.ts
-import { defineComponent as defineComponent18, h as h18, ref as ref17 } from "vue";
+import { defineComponent as defineComponent18, h as h17, ref as ref17 } from "vue";
 var textControlInstance = 0;
 var TextControl = defineComponent18({
   name: "TweakersTextControl",
@@ -5599,9 +5606,9 @@ var TextControl = defineComponent18({
   emits: ["change"],
   setup(props, { emit }) {
     const inputId = ref17(`tweakers-text-${++textControlInstance}`);
-    return () => h18("div", { class: "tweakers-text-control" }, [
-      h18("label", { class: "tweakers-text-label", for: inputId.value }, props.label),
-      h18("input", {
+    return () => h17("div", { class: "tweakers-text-control" }, [
+      h17("label", { class: "tweakers-text-label", for: inputId.value }, props.label),
+      h17("input", {
         id: inputId.value,
         type: "text",
         class: "tweakers-text-input",
@@ -5614,7 +5621,7 @@ var TextControl = defineComponent18({
 });
 
 // src/vue/components/Toggle.ts
-import { defineComponent as defineComponent19, h as h19 } from "vue";
+import { defineComponent as defineComponent19, h as h18 } from "vue";
 var Toggle = defineComponent19({
   name: "TweakersToggle",
   props: {
@@ -5625,15 +5632,15 @@ var Toggle = defineComponent19({
   },
   emits: ["change"],
   setup(props, { emit }) {
-    return () => h19("div", { class: "tweakers-labeled-control tweakers-labeled-control-check" }, [
-      h19(Checkbox, {
+    return () => h18("div", { class: "tweakers-labeled-control tweakers-labeled-control-check" }, [
+      h18(Checkbox, {
         checked: props.checked,
         label: props.label,
         onChange: (next) => emit("change", next)
       }),
-      h19("span", { class: "tweakers-labeled-control-label" }, [
+      h18("span", { class: "tweakers-labeled-control-label" }, [
         props.label,
-        props.shortcut ? h19("span", {
+        props.shortcut ? h18("span", {
           class: `tweakers-shortcut-pill${props.shortcutActive ? " tweakers-shortcut-pill-active" : ""}`
         }, formatToggleShortcut(props.shortcut)) : null
       ])
@@ -5642,10 +5649,10 @@ var Toggle = defineComponent19({
 });
 
 // src/vue/components/TransitionControl.ts
-import { defineComponent as defineComponent21, h as h21, onMounted as onMounted14, onUnmounted as onUnmounted8, ref as ref18 } from "vue";
+import { defineComponent as defineComponent21, h as h20, onMounted as onMounted14, onUnmounted as onUnmounted8, ref as ref18 } from "vue";
 
 // src/vue/components/EasingVisualization.ts
-import { defineComponent as defineComponent20, h as h20, computed as computed9 } from "vue";
+import { defineComponent as defineComponent20, h as h19, computed as computed9 } from "vue";
 var EasingVisualization = defineComponent20({
   name: "TweakersEasingVisualization",
   props: {
@@ -5671,12 +5678,12 @@ var EasingVisualization = defineComponent20({
       const p2 = toSvg(x2, y2);
       return `M ${start.x} ${start.y} C ${p1.x} ${p1.y}, ${p2.x} ${p2.y}, ${end.x} ${end.y}`;
     });
-    return () => h20("svg", {
+    return () => h19("svg", {
       viewBox: `0 0 ${size} ${size}`,
       preserveAspectRatio: "xMidYMid slice",
       class: "tweakers-spring-viz tweakers-easing-viz"
     }, [
-      h20("line", {
+      h19("line", {
         x1: pad + (0 + 0.5) * unit,
         y1: pad + (1.5 - 0) * unit,
         x2: pad + (1 + 0.5) * unit,
@@ -5685,7 +5692,7 @@ var EasingVisualization = defineComponent20({
         "stroke-width": 1,
         "stroke-dasharray": "4,4"
       }),
-      h20("path", {
+      h19("path", {
         d: curve.value,
         fill: "none",
         stroke: "rgba(255, 255, 255, 0.6)",
@@ -5736,9 +5743,9 @@ var EaseTextInput = defineComponent21({
         event.target.blur();
       }
     };
-    return () => h21("div", { class: "tweakers-labeled-control" }, [
-      h21("span", { class: "tweakers-labeled-control-label" }, "Ease"),
-      h21("input", {
+    return () => h20("div", { class: "tweakers-labeled-control" }, [
+      h20("span", { class: "tweakers-labeled-control-label" }, "Ease"),
+      h20("input", {
         type: "text",
         class: "tweakers-text-input",
         value: editing.value ? draft.value : formatEase(props.ease),
@@ -5827,7 +5834,7 @@ var TransitionControl = defineComponent21({
       const isSimpleSpring = mode.value === "simple";
       const currentSpring = spring();
       const currentEasing = easing();
-      const durationSlider = !props.hideDuration && (isEasing || isSimpleSpring) ? h21(Slider, {
+      const durationSlider = !props.hideDuration && (isEasing || isSimpleSpring) ? h20(Slider, {
         label: "Duration",
         value: props.durationControl?.value ?? (isEasing ? currentEasing.duration : currentSpring.visualDuration ?? 0.3),
         min: props.durationControl?.min ?? 0.1,
@@ -5839,13 +5846,13 @@ var TransitionControl = defineComponent21({
           else handleSpringUpdate("visualDuration", next);
         })
       }) : null;
-      return h21(Folder, { title: props.label, defaultOpen: true }, {
+      return h20(Folder, { title: props.label, defaultOpen: true }, {
         default: () => [
-          h21("div", { style: { display: "flex", flexDirection: "column", gap: "6px" } }, [
-            isEasing ? h21(EasingVisualization, { easing: currentEasing }) : h21(SpringVisualization, { spring: currentSpring, isSimpleMode: isSimpleSpring }),
-            h21("div", { class: "tweakers-labeled-control" }, [
-              h21("span", { class: "tweakers-labeled-control-label" }, "Type"),
-              h21(SegmentedControl, {
+          h20("div", { style: { display: "flex", flexDirection: "column", gap: "6px" } }, [
+            isEasing ? h20(EasingVisualization, { easing: currentEasing }) : h20(SpringVisualization, { spring: currentSpring, isSimpleMode: isSimpleSpring }),
+            h20("div", { class: "tweakers-labeled-control" }, [
+              h20("span", { class: "tweakers-labeled-control-label" }, "Type"),
+              h20(SegmentedControl, {
                 options: [
                   { value: "easing", label: "Easing" },
                   { value: "simple", label: "Time" },
@@ -5856,16 +5863,16 @@ var TransitionControl = defineComponent21({
               })
             ]),
             ...isEasing ? [
-              h21(Slider, { label: "x1", value: currentEasing.ease[0], min: 0, max: 1, step: 0.01, onChange: (next) => updateEase(0, next) }),
-              h21(Slider, { label: "y1", value: currentEasing.ease[1], min: -1, max: 2, step: 0.01, onChange: (next) => updateEase(1, next) }),
-              h21(Slider, { label: "x2", value: currentEasing.ease[2], min: 0, max: 1, step: 0.01, onChange: (next) => updateEase(2, next) }),
-              h21(Slider, { label: "y2", value: currentEasing.ease[3], min: -1, max: 2, step: 0.01, onChange: (next) => updateEase(3, next) }),
-              h21(EaseTextInput, {
+              h20(Slider, { label: "x1", value: currentEasing.ease[0], min: 0, max: 1, step: 0.01, onChange: (next) => updateEase(0, next) }),
+              h20(Slider, { label: "y1", value: currentEasing.ease[1], min: -1, max: 2, step: 0.01, onChange: (next) => updateEase(1, next) }),
+              h20(Slider, { label: "x2", value: currentEasing.ease[2], min: 0, max: 1, step: 0.01, onChange: (next) => updateEase(2, next) }),
+              h20(Slider, { label: "y2", value: currentEasing.ease[3], min: -1, max: 2, step: 0.01, onChange: (next) => updateEase(3, next) }),
+              h20(EaseTextInput, {
                 ease: currentEasing.ease,
                 onChange: (next) => emit("change", { ...currentEasing, ease: next })
               })
             ] : isSimpleSpring ? [
-              h21(Slider, {
+              h20(Slider, {
                 label: "Bounce",
                 value: currentSpring.bounce ?? 0.2,
                 min: 0,
@@ -5874,7 +5881,7 @@ var TransitionControl = defineComponent21({
                 onChange: (next) => handleSpringUpdate("bounce", next)
               })
             ] : [
-              h21(Slider, {
+              h20(Slider, {
                 label: "Stiffness",
                 value: currentSpring.stiffness ?? 400,
                 min: 1,
@@ -5882,7 +5889,7 @@ var TransitionControl = defineComponent21({
                 step: 10,
                 onChange: (next) => handleSpringUpdate("stiffness", next)
               }),
-              h21(Slider, {
+              h20(Slider, {
                 label: "Damping",
                 value: currentSpring.damping ?? 17,
                 min: 1,
@@ -5890,7 +5897,7 @@ var TransitionControl = defineComponent21({
                 step: 1,
                 onChange: (next) => handleSpringUpdate("damping", next)
               }),
-              h21(Slider, {
+              h20(Slider, {
                 label: "Mass",
                 value: currentSpring.mass ?? 1,
                 min: 0.1,
@@ -5908,10 +5915,10 @@ var TransitionControl = defineComponent21({
 });
 
 // src/vue/components/XYControl.ts
-import { defineComponent as defineComponent23, h as h23 } from "vue";
+import { defineComponent as defineComponent23, h as h22 } from "vue";
 
 // src/vue/components/XYPad.ts
-import { computed as computed10, defineComponent as defineComponent22, h as h22, ref as ref19 } from "vue";
+import { computed as computed10, defineComponent as defineComponent22, h as h21, ref as ref19 } from "vue";
 var DEFAULT_GRID_X = 5;
 var DEFAULT_GRID_Y = 5;
 var FINE_DRAG = 0.15;
@@ -6099,20 +6106,20 @@ var XYPad = defineComponent22({
       const point = pointFromValue(value, xa, ya);
       const leftPct = `${point.x * 100}%`;
       const topPct = `${point.y * 100}%`;
-      return h22("div", {
+      return h21("div", {
         class: "tweakers-xy",
         "data-active": String(active.value),
         "data-disabled": String(props.disabled)
       }, [
-        h22("div", { class: "tweakers-xy-header" }, [
-          h22("span", { class: "tweakers-xy-label" }, [
+        h21("div", { class: "tweakers-xy-header" }, [
+          h21("span", { class: "tweakers-xy-label" }, [
             props.label,
-            props.shortcut ? h22("span", {
+            props.shortcut ? h21("span", {
               class: `tweakers-shortcut-pill${props.shortcutActive ? " tweakers-shortcut-pill-active" : ""}`
             }, formatSliderShortcut(props.shortcut)) : null
           ])
         ]),
-        h22("div", {
+        h21("div", {
           ref: areaRef,
           class: "tweakers-xy-area",
           // Only the height is fixed (from `size`); width is fluid (CSS width:100%),
@@ -6152,7 +6159,7 @@ var XYPad = defineComponent22({
             if (!dragging) active.value = false;
           }
         }, [
-          showGrid ? h22("div", {
+          showGrid ? h21("div", {
             class: "tweakers-xy-grid",
             "aria-hidden": "true",
             style: {
@@ -6162,12 +6169,12 @@ var XYPad = defineComponent22({
           }) : null,
           // Live axis labels, decorative (aria-valuetext owns the accessible string):
           // X along the bottom edge, Y up the left edge.
-          h22("div", { class: "tweakers-xy-axis tweakers-xy-axis-x", "aria-hidden": "true" }, xVisual),
-          h22("div", { class: "tweakers-xy-axis tweakers-xy-axis-y", "aria-hidden": "true" }, yVisual),
+          h21("div", { class: "tweakers-xy-axis tweakers-xy-axis-x", "aria-hidden": "true" }, xVisual),
+          h21("div", { class: "tweakers-xy-axis tweakers-xy-axis-y", "aria-hidden": "true" }, yVisual),
           // Crosshair guides tracking the thumb, revealed on data-active.
-          h22("div", { class: "tweakers-xy-guide tweakers-xy-guide-v", "aria-hidden": "true", style: { left: leftPct } }),
-          h22("div", { class: "tweakers-xy-guide tweakers-xy-guide-h", "aria-hidden": "true", style: { top: topPct } }),
-          h22("div", { class: "tweakers-xy-thumb", "aria-hidden": "true", style: { left: leftPct, top: topPct } })
+          h21("div", { class: "tweakers-xy-guide tweakers-xy-guide-v", "aria-hidden": "true", style: { left: leftPct } }),
+          h21("div", { class: "tweakers-xy-guide tweakers-xy-guide-h", "aria-hidden": "true", style: { top: topPct } }),
+          h21("div", { class: "tweakers-xy-thumb", "aria-hidden": "true", style: { left: leftPct, top: topPct } })
         ])
       ]);
     };
@@ -6192,7 +6199,7 @@ var XYControl = defineComponent23({
   },
   emits: ["change"],
   setup(props, { emit }) {
-    return () => h23(XYPad, {
+    return () => h22(XYPad, {
       label: props.label,
       value: props.value,
       x: props.x,
@@ -6226,7 +6233,7 @@ var ControlRenderer = defineComponent24({
       const value = props.values[control.path];
       switch (control.type) {
         case "slider":
-          return h24(Slider, {
+          return h23(Slider, {
             key: control.path,
             label: control.label,
             value,
@@ -6239,7 +6246,7 @@ var ControlRenderer = defineComponent24({
             onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next)
           });
         case "number":
-          return h24(NumberControl, {
+          return h23(NumberControl, {
             key: control.path,
             label: control.label,
             value,
@@ -6252,7 +6259,7 @@ var ControlRenderer = defineComponent24({
             onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next)
           });
         case "range":
-          return h24(RangeSlider, {
+          return h23(RangeSlider, {
             key: control.path,
             label: control.label,
             value,
@@ -6263,7 +6270,7 @@ var ControlRenderer = defineComponent24({
             onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next)
           });
         case "toggle":
-          return h24(Toggle, {
+          return h23(Toggle, {
             key: control.path,
             label: control.label,
             checked: value,
@@ -6272,7 +6279,7 @@ var ControlRenderer = defineComponent24({
             onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next)
           });
         case "spring":
-          return h24(SpringControl, {
+          return h23(SpringControl, {
             key: control.path,
             panelId: props.panelId,
             path: control.path,
@@ -6281,7 +6288,7 @@ var ControlRenderer = defineComponent24({
             onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next)
           });
         case "transition":
-          return h24(TransitionControl, {
+          return h23(TransitionControl, {
             key: control.path,
             panelId: props.panelId,
             path: control.path,
@@ -6293,7 +6300,7 @@ var ControlRenderer = defineComponent24({
         case "folder":
           if (control.module) {
             const enabledPath = `${control.path}._enabled`;
-            return h24(ModuleFolder, {
+            return h23(ModuleFolder, {
               key: control.path,
               title: control.label,
               enabled: props.values[enabledPath],
@@ -6303,7 +6310,7 @@ var ControlRenderer = defineComponent24({
               hintId: hintId(control)
             }, { default: () => (control.children ?? []).map(renderControl) });
           }
-          return h24(Folder, {
+          return h23(Folder, {
             key: control.path,
             title: control.label,
             defaultOpen: control.defaultOpen ?? true,
@@ -6312,7 +6319,7 @@ var ControlRenderer = defineComponent24({
             hintId: hintId(control)
           }, { default: () => (control.children ?? []).map(renderControl) });
         case "text":
-          return h24(TextControl, {
+          return h23(TextControl, {
             key: control.path,
             label: control.label,
             value,
@@ -6320,7 +6327,7 @@ var ControlRenderer = defineComponent24({
             onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next)
           });
         case "select":
-          return h24(SelectControl, {
+          return h23(SelectControl, {
             key: control.path,
             label: control.label,
             value,
@@ -6328,7 +6335,7 @@ var ControlRenderer = defineComponent24({
             onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next)
           });
         case "color":
-          return h24(ColorControl, {
+          return h23(ColorControl, {
             key: control.path,
             label: control.label,
             value,
@@ -6337,14 +6344,14 @@ var ControlRenderer = defineComponent24({
             onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next)
           });
         case "gradient":
-          return h24(GradientControl, {
+          return h23(GradientControl, {
             key: control.path,
             label: control.label,
             value,
             onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next)
           });
         case "xy":
-          return h24(XYControl, {
+          return h23(XYControl, {
             key: control.path,
             label: control.label,
             value,
@@ -6360,7 +6367,7 @@ var ControlRenderer = defineComponent24({
             onChange: (next) => TweakStore.updateValue(props.panelId, control.path, next)
           });
         case "action":
-          return h24("button", {
+          return h23("button", {
             key: control.path,
             class: "tweakers-button",
             // The wrapper greys every control out, but only a real `disabled`
@@ -6375,7 +6382,7 @@ var ControlRenderer = defineComponent24({
     const renderControl = (control) => {
       const node = renderControlNode(control);
       if (control.type === "folder") return node;
-      return h24(ControlShell, {
+      return h23(ControlShell, {
         key: control.path,
         hint: control.hint,
         title: control.path,
@@ -6385,12 +6392,12 @@ var ControlRenderer = defineComponent24({
         path: control.path
       }, { default: () => node });
     };
-    return () => h24(Fragment, null, props.controls.map(renderControl));
+    return () => h23(Fragment, null, props.controls.map(renderControl));
   }
 });
 
 // src/vue/components/PresetManager.ts
-import { Teleport as Teleport5, defineComponent as defineComponent25, h as h25, ref as ref20, watch as watch11 } from "vue";
+import { Teleport as Teleport5, defineComponent as defineComponent25, h as h24, ref as ref20, watch as watch11 } from "vue";
 import { AnimatePresence as AnimatePresence5, motion as motion5 } from "motion-v";
 var PresetManager = defineComponent25({
   name: "TweakersPresetManager",
@@ -6462,8 +6469,8 @@ var PresetManager = defineComponent25({
       event.stopPropagation();
       TweakStore.removePreset(props.panelId, presetId);
     };
-    return () => h25("div", { class: "tweakers-preset-manager" }, [
-      h25("button", {
+    return () => h24("div", { class: "tweakers-preset-manager" }, [
+      h24("button", {
         ref: triggerRef,
         class: "tweakers-preset-trigger",
         onClick: toggle,
@@ -6471,8 +6478,8 @@ var PresetManager = defineComponent25({
         "data-has-preset": String(!!activePreset()),
         "data-disabled": String(!hasPresets())
       }, [
-        h25("span", { class: "tweakers-preset-label" }, activePreset()?.name ?? (props.providerMode ? "Presets" : "Version 1")),
-        h25(motion5.svg, {
+        h24("span", { class: "tweakers-preset-label" }, activePreset()?.name ?? (props.providerMode ? "Presets" : "Version 1")),
+        h24(motion5.svg, {
           class: "tweakers-select-chevron",
           viewBox: "0 0 24 24",
           fill: "none",
@@ -6482,11 +6489,11 @@ var PresetManager = defineComponent25({
           "stroke-linejoin": "round",
           animate: { rotate: isOpen.value ? 180 : 0, opacity: hasPresets() ? 0.6 : 0.25 },
           transition: { type: "spring", visualDuration: 0.2, bounce: 0.15 }
-        }, [h25("path", { d: ICON_CHEVRON })])
+        }, [h24("path", { d: ICON_CHEVRON })])
       ]),
-      h25(Teleport5, { to: "body" }, [
-        h25(AnimatePresence5, null, {
-          default: () => isOpen.value ? [h25(motion5.div, {
+      h24(Teleport5, { to: "body" }, [
+        h24(AnimatePresence5, null, {
+          default: () => isOpen.value ? [h24(motion5.div, {
             key: "tweakers-preset-dropdown",
             ref: setDropdownRef,
             class: "tweakers-root tweakers-preset-dropdown",
@@ -6501,31 +6508,31 @@ var PresetManager = defineComponent25({
             exit: { opacity: 0, y: 4, scale: 0.97, pointerEvents: "none" },
             transition: { type: "spring", visualDuration: 0.15, bounce: 0 }
           }, [
-            ...props.providerMode ? [] : [h25("div", {
+            ...props.providerMode ? [] : [h24("div", {
               class: "tweakers-preset-item",
               "data-active": String(!props.activePresetId),
               onClick: () => handleSelect(null)
-            }, [h25("span", { class: "tweakers-preset-name" }, "Version 1")])],
-            ...props.presets.map((preset) => h25("div", {
+            }, [h24("span", { class: "tweakers-preset-name" }, "Version 1")])],
+            ...props.presets.map((preset) => h24("div", {
               key: preset.id,
               class: "tweakers-preset-item",
               "data-active": String(preset.id === props.activePresetId),
               onClick: () => handleSelect(preset.id)
             }, [
-              h25("span", { class: "tweakers-preset-name" }, preset.name),
-              ...preset.deletable ?? true ? [h25("button", {
+              h24("span", { class: "tweakers-preset-name" }, preset.name),
+              ...preset.deletable ?? true ? [h24("button", {
                 class: "tweakers-preset-delete",
                 onClick: (event) => handleDelete(event, preset.id),
                 title: "Delete preset"
               }, [
-                h25("svg", {
+                h24("svg", {
                   viewBox: "0 0 24 24",
                   fill: "none",
                   stroke: "currentColor",
                   "stroke-width": "2",
                   "stroke-linecap": "round",
                   "stroke-linejoin": "round"
-                }, ICON_TRASH.map((d) => h25("path", { d })))
+                }, ICON_TRASH.map((d) => h24("path", { d })))
               ])] : []
             ]))
           ])] : []
@@ -6602,58 +6609,58 @@ Apply these values as the new defaults in the useTweakers call.`;
       }, 1500);
     };
     return () => {
-      const toolbarNode = h26(Fragment2, null, [
-        h26(motion6.button, {
+      const toolbarNode = h25(Fragment2, null, [
+        h25(motion6.button, {
           class: "tweakers-toolbar-add",
           onClick: handleAddPreset,
           title: "Add preset",
           whilePress: { scale: 0.9 },
           transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 }
         }, [
-          h26("svg", {
+          h25("svg", {
             viewBox: "0 0 24 24",
             fill: "none",
             stroke: "currentColor",
             "stroke-width": "2.5",
             "stroke-linecap": "round",
             "stroke-linejoin": "round"
-          }, ICON_ADD_PRESET.map((d) => h26("path", { d })))
+          }, ICON_ADD_PRESET.map((d) => h25("path", { d })))
         ]),
-        h26(PresetManager, {
+        h25(PresetManager, {
           panelId: props.panel.id,
           presets: presets.value,
           activePresetId: activePresetId.value,
           providerMode: providerMode.value
         }),
-        h26(motion6.button, {
+        h25(motion6.button, {
           class: "tweakers-toolbar-copy",
           onClick: handleCopy,
           title: "Copy parameters",
           whilePress: { scale: 0.95 },
           transition: { type: "spring", visualDuration: 0.15, bounce: 0.3 }
         }, [
-          h26("span", { class: "tweakers-toolbar-copy-icon-wrap" }, [
-            h26("span", {
+          h25("span", { class: "tweakers-toolbar-copy-icon-wrap" }, [
+            h25("span", {
               class: "tweakers-toolbar-copy-icon",
               style: { opacity: copied.value ? 0 : 1, transition: "opacity 120ms ease" }
             }, [
-              h26("svg", {
+              h25("svg", {
                 viewBox: "0 0 24 24",
                 fill: "none",
                 width: 16,
                 height: 16
               }, [
-                h26("path", {
+                h25("path", {
                   d: ICON_CLIPBOARD.board,
                   stroke: "currentColor",
                   "stroke-width": 2,
                   "stroke-linejoin": "round"
                 }),
-                h26("path", {
+                h25("path", {
                   d: ICON_CLIPBOARD.sparkle,
                   fill: "currentColor"
                 }),
-                h26("path", {
+                h25("path", {
                   d: ICON_CLIPBOARD.body,
                   stroke: "currentColor",
                   "stroke-width": 2,
@@ -6662,8 +6669,8 @@ Apply these values as the new defaults in the useTweakers call.`;
                 })
               ])
             ]),
-            h26(AnimatePresence6, { initial: false, mode: "popLayout" }, {
-              default: () => copied.value ? [h26(motion6.span, {
+            h25(AnimatePresence6, { initial: false, mode: "popLayout" }, {
+              default: () => copied.value ? [h25(motion6.span, {
                 key: "check",
                 class: "tweakers-toolbar-copy-icon",
                 initial: { scale: 0.5, opacity: 0 },
@@ -6671,7 +6678,7 @@ Apply these values as the new defaults in the useTweakers call.`;
                 exit: { scale: 0.5, opacity: 0 },
                 transition: { type: "spring", visualDuration: 0.3, bounce: 0.2 }
               }, [
-                h26("svg", {
+                h25("svg", {
                   viewBox: "0 0 24 24",
                   fill: "none",
                   stroke: "currentColor",
@@ -6680,25 +6687,25 @@ Apply these values as the new defaults in the useTweakers call.`;
                   "stroke-linejoin": "round",
                   width: 16,
                   height: 16
-                }, [h26("path", { d: ICON_CHECK })])
+                }, [h25("path", { d: ICON_CHECK })])
               ])] : []
             })
           ])
         ]),
         props.toolbarExtra?.()
       ]);
-      return h26("div", { class: "tweakers-panel-wrapper" }, [
-        h26(Folder, {
+      return h25("div", { class: "tweakers-panel-wrapper" }, [
+        h25(Folder, {
           title: props.panel.name,
           defaultOpen: props.defaultOpen,
           isRoot: true,
           inline: props.inline,
           enabled: props.panel.module ? values.value["_enabled"] : void 0,
           onEnabledChange: props.panel.module ? (v) => TweakStore.updateValue(props.panel.id, "_enabled", v) : void 0,
-          toolbar: () => TweakStore.arePresetsHidden(props.panel.id) ? h26(Fragment2, null, [props.toolbarExtra?.()]) : toolbarNode
+          toolbar: () => TweakStore.arePresetsHidden(props.panel.id) ? h25(Fragment2, null, [props.toolbarExtra?.()]) : toolbarNode
         }, {
           default: () => [
-            h26(ControlRenderer, {
+            h25(ControlRenderer, {
               panelId: props.panel.id,
               controls: props.panel.controls,
               values: values.value
@@ -6711,7 +6718,7 @@ Apply these values as the new defaults in the useTweakers call.`;
 });
 
 // src/vue/components/Timeline/TimelineToggleButton.ts
-import { defineComponent as defineComponent27, h as h27, onMounted as onMounted16, onUnmounted as onUnmounted10, ref as ref22 } from "vue";
+import { defineComponent as defineComponent27, h as h26, onMounted as onMounted16, onUnmounted as onUnmounted10, ref as ref22 } from "vue";
 
 // src/store/TimelineUiStore.ts
 var TimelineUiStoreClass = class {
@@ -6789,7 +6796,7 @@ var TimelineToggleButton = defineComponent27({
     onUnmounted10(() => unsubscribe?.());
     return () => {
       const label = visible.value ? "Hide timeline" : "Show timeline";
-      return h27("button", {
+      return h26("button", {
         class: "tweakers-toolbar-add tweakers-timeline-toolbar-toggle",
         "data-active": visible.value || void 0,
         "aria-pressed": visible.value,
@@ -6797,10 +6804,10 @@ var TimelineToggleButton = defineComponent27({
         title: label,
         onClick: () => TimelineUiStore.toggle()
       }, [
-        h27(
+        h26(
           "svg",
           { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true" },
-          ICON_TIMELINE.map((path) => h27("path", { d: path, fill: "currentColor" }))
+          ICON_TIMELINE.map((path) => h26("path", { d: path, fill: "currentColor" }))
         )
       ]);
     };
@@ -6873,20 +6880,20 @@ var TweakRoot = defineComponent28({
       unsubscribePanels?.();
       unsubscribeTimelines?.();
     });
-    const timelineToggle = () => timelines.value.length > 0 && props.panels === void 0 ? h28(TimelineToggleButton) : null;
+    const timelineToggle = () => timelines.value.length > 0 && props.panels === void 0 ? h27(TimelineToggleButton) : null;
     const renderPanels = () => {
       if (panels.value.length === 0) {
-        return [h28("div", { class: "tweakers-panel-wrapper" }, [
-          h28(Folder, {
+        return [h27("div", { class: "tweakers-panel-wrapper" }, [
+          h27(Folder, {
             title: "Tweakers",
             defaultOpen: props.mode === "inline" || props.defaultOpen,
             isRoot: true,
             inline: props.mode === "inline",
-            toolbar: () => h28(TimelineToggleButton)
-          }, { default: () => [h28("div", { class: "tweakers-timeline-toolkit-only" }, "Timeline")] })
+            toolbar: () => h27(TimelineToggleButton)
+          }, { default: () => [h27("div", { class: "tweakers-timeline-toolkit-only" }, "Timeline")] })
         ])];
       }
-      return panels.value.map((panel) => h28(Panel, {
+      return panels.value.map((panel) => h27(Panel, {
         key: panel.id,
         panel,
         defaultOpen: props.mode === "inline" || props.defaultOpen,
@@ -6894,9 +6901,9 @@ var TweakRoot = defineComponent28({
         toolbarExtra: timelineToggle
       }));
     };
-    const renderContent = () => h28(ShortcutListener, null, {
-      default: () => h28("div", { class: "tweakers-root", "data-mode": props.mode, "data-theme": props.theme, "data-chrome": props.chrome }, [
-        h28("div", {
+    const renderContent = () => h27(ShortcutListener, null, {
+      default: () => h27("div", { class: "tweakers-root", "data-mode": props.mode, "data-theme": props.theme, "data-chrome": props.chrome }, [
+        h27("div", {
           class: "tweakers-panel",
           "data-position": props.mode === "inline" ? void 0 : props.position,
           "data-mode": props.mode
@@ -6911,7 +6918,7 @@ var TweakRoot = defineComponent28({
       if (props.mode === "inline") {
         return renderContent();
       }
-      return h28(Teleport6, { to: "body" }, renderContent());
+      return h27(Teleport6, { to: "body" }, renderContent());
     };
   }
 });
@@ -6933,7 +6940,7 @@ function mountTweakRoot(el, value) {
   const RootHost = defineComponent29({
     name: "TweakersDirectiveHost",
     setup() {
-      return () => h29(TweakRoot, props.value);
+      return () => h28(TweakRoot, props.value);
     }
   });
   const app = createApp(RootHost);
@@ -7690,13 +7697,13 @@ function interpolateResolved(from, to, p) {
 }
 function parseHex2(hex) {
   if (!isHexColor(hex)) return null;
-  let h37 = hex.slice(1);
-  if (h37.length === 3) h37 = h37.split("").map((c) => c + c).join("");
+  let h36 = hex.slice(1);
+  if (h36.length === 3) h36 = h36.split("").map((c) => c + c).join("");
   return [
-    parseInt(h37.slice(0, 2), 16),
-    parseInt(h37.slice(2, 4), 16),
-    parseInt(h37.slice(4, 6), 16),
-    h37.length === 8 ? parseInt(h37.slice(6, 8), 16) : 255
+    parseInt(h36.slice(0, 2), 16),
+    parseInt(h36.slice(2, 4), 16),
+    parseInt(h36.slice(4, 6), 16),
+    h36.length === 8 ? parseInt(h36.slice(6, 8), 16) : 255
   ];
 }
 function mixHexColors(a, b, p) {
@@ -8005,7 +8012,7 @@ import {
   Teleport as Teleport7,
   computed as computed12,
   defineComponent as defineComponent30,
-  h as h30,
+  h as h29,
   nextTick as nextTick6,
   onMounted as onMounted19,
   onUnmounted as onUnmounted13,
@@ -8121,13 +8128,13 @@ var TweakTimeline = defineComponent30({
     });
     return () => {
       if (!props.productionEnabled || !mounted.value || timelines.value.length === 0) return null;
-      return h30(Teleport7, { to: "body" }, [
-        h30("div", {
+      return h29(Teleport7, { to: "body" }, [
+        h29("div", {
           class: "tweakers-root tweakers-timeline",
           "data-theme": props.theme,
           hidden: !dockVisible.value
         }, [
-          h30("div", {
+          h29("div", {
             class: "tweakers-timeline-resize-handle",
             role: "separator",
             "aria-label": "Resize timeline height",
@@ -8135,11 +8142,11 @@ var TweakTimeline = defineComponent30({
             title: "Drag to resize timeline",
             onPointerdown: handleResizePointerDown
           }),
-          h30("div", {
+          h29("div", {
             ref: dockRef,
             class: "tweakers-timeline-dock",
             style: { maxHeight: `min(${dockMaxHeight.value}px, calc(100vh - 24px))` }
-          }, timelines.value.map((meta) => h30(TimelineSection, {
+          }, timelines.value.map((meta) => h29(TimelineSection, {
             key: meta.id,
             meta,
             defaultOpen: props.defaultOpen,
@@ -8164,35 +8171,35 @@ var PlayPauseButton = defineComponent30({
     onUnmounted13(() => unsubscribe?.());
     return () => {
       const label = playing.value ? "Pause" : "Play";
-      const icon = playing.value ? h30(
+      const icon = playing.value ? h29(
         "svg",
         { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", style: iconStyle },
-        ICON_PAUSE.map((path) => h30("path", { d: path, fill: "currentColor" }))
-      ) : h30("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", style: iconStyle }, [
-        h30("path", { d: ICON_PLAY, fill: "currentColor" })
+        ICON_PAUSE.map((path) => h29("path", { d: path, fill: "currentColor" }))
+      ) : h29("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", style: iconStyle }, [
+        h29("path", { d: ICON_PLAY, fill: "currentColor" })
       ]);
-      return h30("button", {
+      return h29("button", {
         class: "tweakers-toolbar-add",
         title: label,
         "aria-label": label,
         onClick: () => playing.value ? TimelineStore.pause(props.id) : TimelineStore.play(props.id)
-      }, [h30("span", { style: { position: "relative", width: "16px", height: "16px" } }, [icon])]);
+      }, [h29("span", { style: { position: "relative", width: "16px", height: "16px" } }, [icon])]);
     };
   }
 });
 var ReplayButton = defineComponent30({
   props: { onReplay: { type: Function, required: true } },
   setup(props) {
-    return () => h30("button", {
+    return () => h29("button", {
       class: "tweakers-toolbar-add",
       title: "Replay",
       "aria-label": "Replay",
       onClick: props.onReplay
     }, [
-      h30(
+      h29(
         "svg",
         { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true" },
-        ICON_REPLAY.map((path) => h30("path", { d: path, fill: "currentColor" }))
+        ICON_REPLAY.map((path) => h29("path", { d: path, fill: "currentColor" }))
       )
     ]);
   }
@@ -8235,7 +8242,7 @@ var TimelineOverview = defineComponent30({
     return () => {
       const viewportWidth = props.duration > 0 ? (props.viewEnd - props.viewStart) / props.duration * 100 : 100;
       const playhead = props.duration > 0 ? time.value / props.duration * 100 : 0;
-      return h30("div", {
+      return h29("div", {
         class: "tweakers-timeline-overview",
         title: "Drag to scrub the full timeline",
         onPointerdown: (event) => {
@@ -8253,13 +8260,13 @@ var TimelineOverview = defineComponent30({
         onPointercancel: finish,
         onLostpointercapture: finish
       }, [
-        h30("div", {
+        h29("div", {
           class: "tweakers-timeline-overview-viewport",
           "data-zoomed": viewportWidth < 99.999 || void 0,
           style: { left: `${props.duration > 0 ? props.viewStart / props.duration * 100 : 0}%`, width: `${viewportWidth}%` }
         }),
-        h30("div", { class: "tweakers-timeline-overview-progress", style: { width: `${playhead}%` } }),
-        h30("div", { class: "tweakers-timeline-overview-playhead", style: { left: `${playhead}%` } })
+        h29("div", { class: "tweakers-timeline-overview-progress", style: { width: `${playhead}%` } }),
+        h29("div", { class: "tweakers-timeline-overview-playhead", style: { left: `${playhead}%` } })
       ]);
     };
   }
@@ -8307,7 +8314,7 @@ var TimelinePlayheadFlag = defineComponent30({
       );
       const flagOffset = flagCenter - x;
       const edge = flagOffset > 0.5 ? "start" : flagOffset < -0.5 ? "end" : "center";
-      return h30("div", {
+      return h29("div", {
         class: "tweakers-timeline-playhead-control",
         "data-edge": edge,
         style: {
@@ -8354,9 +8361,9 @@ var TimelinePlayheadFlag = defineComponent30({
           cleanup = finish;
         }
       }, [
-        h30("div", { class: "tweakers-timeline-playhead-stem" }),
-        h30("div", { class: "tweakers-timeline-playhead-anchor" }, [
-          h30("div", { class: "tweakers-timeline-playhead-flag" }, time.value.toFixed(2))
+        h29("div", { class: "tweakers-timeline-playhead-stem" }),
+        h29("div", { class: "tweakers-timeline-playhead-anchor" }, [
+          h29("div", { class: "tweakers-timeline-playhead-flag" }, time.value.toFixed(2))
         ])
       ]);
     };
@@ -8581,17 +8588,17 @@ var TimelineSection = defineComponent30({
           if (clip.group) {
             const group = clip.group;
             const collapsed = collapsedGroups.value.has(group);
-            rows.push(h30("div", { key: `group:${group}`, class: "tweakers-timeline-row tweakers-timeline-group-row" }, [
-              h30("div", { class: "tweakers-timeline-label" }, [
-                h30("button", {
+            rows.push(h29("div", { key: `group:${group}`, class: "tweakers-timeline-row tweakers-timeline-group-row" }, [
+              h29("div", { class: "tweakers-timeline-label" }, [
+                h29("button", {
                   class: "tweakers-timeline-group-toggle",
                   "data-open": !collapsed,
                   title: collapsed ? "Expand layer" : "Collapse layer",
                   onClick: () => toggleGroup(group)
                 }, [chevronIcon()]),
-                h30("span", formatLabel(group))
+                h29("span", formatLabel(group))
               ]),
-              h30("div", { class: "tweakers-timeline-lane" })
+              h29("div", { class: "tweakers-timeline-lane" })
             ]));
           }
         }
@@ -8600,9 +8607,9 @@ var TimelineSection = defineComponent30({
         const tracksOpen = isProps && expandedTracks.value.has(clip.key);
         const stat = computeClipStaticFromValues(values.value, clip, props.meta.duration);
         const selected = popover.value?.clip.key === clip.key;
-        rows.push(h30("div", { key: clip.key, class: "tweakers-timeline-row", "data-grouped": clip.group ? "" : void 0 }, [
-          h30("div", { class: "tweakers-timeline-label" }, [
-            isProps ? h30("button", {
+        rows.push(h29("div", { key: clip.key, class: "tweakers-timeline-row", "data-grouped": clip.group ? "" : void 0 }, [
+          h29("div", { class: "tweakers-timeline-label" }, [
+            isProps ? h29("button", {
               class: "tweakers-timeline-group-toggle",
               "data-open": tracksOpen,
               title: tracksOpen ? "Collapse properties" : "Expand properties",
@@ -8613,7 +8620,7 @@ var TimelineSection = defineComponent30({
             }, [chevronIcon()]) : null,
             clip.label
           ]),
-          h30("div", { class: "tweakers-timeline-lane" }, [h30(TimelineClip, {
+          h29("div", { class: "tweakers-timeline-lane" }, [h29(TimelineClip, {
             timelineId: props.meta.id,
             clip,
             at: stat.at,
@@ -8645,9 +8652,9 @@ var TimelineSection = defineComponent30({
             stepKeys: trackRef.stepKeys
           };
           const trackSelected = popover.value?.clip.key === trackKey;
-          rows.push(h30("div", { key: trackKey, class: "tweakers-timeline-row tweakers-timeline-track-row", "data-grouped": clip.group ? "" : void 0 }, [
-            h30("div", { class: "tweakers-timeline-label" }, formatLabel(trackRef.prop)),
-            h30("div", { class: "tweakers-timeline-lane" }, [h30(TimelineClip, {
+          rows.push(h29("div", { key: trackKey, class: "tweakers-timeline-row tweakers-timeline-track-row", "data-grouped": clip.group ? "" : void 0 }, [
+            h29("div", { class: "tweakers-timeline-label" }, formatLabel(trackRef.prop)),
+            h29("div", { class: "tweakers-timeline-lane" }, [h29(TimelineClip, {
               timelineId: props.meta.id,
               clip: trackMeta,
               at: stat.at + track.delay,
@@ -8670,20 +8677,20 @@ var TimelineSection = defineComponent30({
       }
       return rows;
     };
-    return () => h30("div", { class: "tweakers-timeline-section" }, [
-      h30("div", { class: "tweakers-timeline-header", "data-open": open.value || void 0 }, [
-        h30("div", { class: "tweakers-timeline-identity" }, [
-          h30("span", { class: "tweakers-timeline-title" }, props.meta.name)
+    return () => h29("div", { class: "tweakers-timeline-section" }, [
+      h29("div", { class: "tweakers-timeline-header", "data-open": open.value || void 0 }, [
+        h29("div", { class: "tweakers-timeline-identity" }, [
+          h29("span", { class: "tweakers-timeline-title" }, props.meta.name)
         ]),
-        !open.value ? h30(TimelineOverview, {
+        !open.value ? h29(TimelineOverview, {
           id: props.meta.id,
           duration: props.meta.duration,
           viewStart: safeViewStart.value,
           viewEnd: viewEnd.value,
           onNavigate: centerViewAt
         }) : null,
-        h30("div", { class: "tweakers-timeline-actions" }, [
-          h30("button", {
+        h29("div", { class: "tweakers-timeline-actions" }, [
+          h29("button", {
             class: "tweakers-timeline-loop-toggle",
             "data-active": loopRegion.value ? "true" : void 0,
             disabled: !loopRegion.value,
@@ -8692,35 +8699,35 @@ var TimelineSection = defineComponent30({
             "aria-pressed": loopRegion.value ? "true" : "false",
             onClick: handleClearLoopRegion
           }, [
-            h30(
+            h29(
               "svg",
               { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true" },
-              ICON_LOOP.map((d) => h30("path", { d }))
+              ICON_LOOP.map((d) => h29("path", { d }))
             )
           ]),
-          h30(PlayPauseButton, { id: props.meta.id }),
-          h30(ReplayButton, { onReplay: handleReplay }),
-          h30("button", { class: "tweakers-toolbar-add", title: "Add timeline version", "aria-label": "Add timeline version", onClick: handleAddPreset }, [
-            h30(
+          h29(PlayPauseButton, { id: props.meta.id }),
+          h29(ReplayButton, { onReplay: handleReplay }),
+          h29("button", { class: "tweakers-toolbar-add", title: "Add timeline version", "aria-label": "Add timeline version", onClick: handleAddPreset }, [
+            h29(
               "svg",
               { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2.5", "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true" },
-              ICON_ADD_PRESET.map((path) => h30("path", { d: path }))
+              ICON_ADD_PRESET.map((path) => h29("path", { d: path }))
             )
           ]),
-          h30(PresetManager, { panelId: props.meta.id, presets: presets.value, activePresetId: activePresetId.value }),
-          h30("button", {
+          h29(PresetManager, { panelId: props.meta.id, presets: presets.value, activePresetId: activePresetId.value }),
+          h29("button", {
             class: "tweakers-toolbar-add",
             title: "Copy parameters",
             "aria-label": copied.value ? "Copied parameters" : "Copy parameters",
             onClick: handleCopy
-          }, [h30("span", { style: { position: "relative", width: "16px", height: "16px" } }, [
-            copied.value ? h30("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", style: iconStyle }, [h30("path", { d: ICON_CHECK })]) : h30("svg", { viewBox: "0 0 24 24", fill: "none", style: iconStyle }, [
-              h30("path", { d: ICON_CLIPBOARD.board, stroke: "currentColor", "stroke-width": "2", "stroke-linejoin": "round" }),
-              h30("path", { d: ICON_CLIPBOARD.sparkle, fill: "currentColor" }),
-              h30("path", { d: ICON_CLIPBOARD.body, stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round" })
+          }, [h29("span", { style: { position: "relative", width: "16px", height: "16px" } }, [
+            copied.value ? h29("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", style: iconStyle }, [h29("path", { d: ICON_CHECK })]) : h29("svg", { viewBox: "0 0 24 24", fill: "none", style: iconStyle }, [
+              h29("path", { d: ICON_CLIPBOARD.board, stroke: "currentColor", "stroke-width": "2", "stroke-linejoin": "round" }),
+              h29("path", { d: ICON_CLIPBOARD.sparkle, fill: "currentColor" }),
+              h29("path", { d: ICON_CLIPBOARD.body, stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round" })
             ])
           ])]),
-          h30("button", {
+          h29("button", {
             class: "tweakers-timeline-chevron",
             "data-open": open.value,
             "aria-expanded": open.value,
@@ -8731,7 +8738,7 @@ var TimelineSection = defineComponent30({
           }, [chevronIcon()])
         ])
       ]),
-      open.value ? h30("div", {
+      open.value ? h29("div", {
         class: "tweakers-timeline-body",
         onWheel: handleTimelineWheel,
         onPointerdown: (event) => {
@@ -8758,10 +8765,10 @@ var TimelineSection = defineComponent30({
         onPointerup: finishTrack,
         onPointercancel: finishTrack,
         onLostpointercapture: finishTrack
-      }, [h30("div", { class: "tweakers-timeline-grid" }, [
-        h30("div", { class: "tweakers-timeline-row tweakers-timeline-ruler-row" }, [
-          h30("div", { class: "tweakers-timeline-label" }),
-          h30("div", {
+      }, [h29("div", { class: "tweakers-timeline-grid" }, [
+        h29("div", { class: "tweakers-timeline-row tweakers-timeline-ruler-row" }, [
+          h29("div", { class: "tweakers-timeline-label" }),
+          h29("div", {
             ref: laneAreaRef,
             class: "tweakers-timeline-ruler",
             title: "Click to seek \xB7 drag to set a loop region \xB7 Option-drag to zoom \xB7 Shift-drag to reset zoom",
@@ -8827,20 +8834,20 @@ var TimelineSection = defineComponent30({
               const left = (activeLoop.start - safeViewStart.value) * pxPerSecond.value;
               const width = Math.max(0, (activeLoop.end - activeLoop.start) * pxPerSecond.value);
               return [
-                h30("div", { key: "loop-dim-before", class: "tweakers-timeline-loop-dim", style: { left: "0px", width: `${Math.max(0, left)}px` } }),
-                h30("div", { key: "loop-dim-after", class: "tweakers-timeline-loop-dim", style: { left: `${left + width}px`, right: "0px" } }),
-                h30("div", { key: "loop-band", class: "tweakers-timeline-loop-band", "data-live": loopDrag.value ? "true" : void 0, style: { left: `${left}px`, width: `${width}px` } })
+                h29("div", { key: "loop-dim-before", class: "tweakers-timeline-loop-dim", style: { left: "0px", width: `${Math.max(0, left)}px` } }),
+                h29("div", { key: "loop-dim-after", class: "tweakers-timeline-loop-dim", style: { left: `${left + width}px`, right: "0px" } }),
+                h29("div", { key: "loop-band", class: "tweakers-timeline-loop-band", "data-live": loopDrag.value ? "true" : void 0, style: { left: `${left}px`, width: `${width}px` } })
               ];
             })(),
-            ...ticks.value.fine.map((time) => h30("div", { key: `fine:${time}`, class: "tweakers-timeline-tick tweakers-timeline-tick-fine", style: { left: `${(time - safeViewStart.value) * pxPerSecond.value}px` } })),
-            ...ticks.value.medium.map((time) => h30("div", { key: `medium:${time}`, class: "tweakers-timeline-tick tweakers-timeline-tick-medium", style: { left: `${(time - safeViewStart.value) * pxPerSecond.value}px` } })),
-            ...ticks.value.major.map((time) => h30("div", { key: time, class: "tweakers-timeline-tick", style: { left: `${(time - safeViewStart.value) * pxPerSecond.value}px` } }, [
-              h30("span", { class: "tweakers-timeline-tick-label" }, formatRulerSeconds(time, ticks.value.majorStep))
+            ...ticks.value.fine.map((time) => h29("div", { key: `fine:${time}`, class: "tweakers-timeline-tick tweakers-timeline-tick-fine", style: { left: `${(time - safeViewStart.value) * pxPerSecond.value}px` } })),
+            ...ticks.value.medium.map((time) => h29("div", { key: `medium:${time}`, class: "tweakers-timeline-tick tweakers-timeline-tick-medium", style: { left: `${(time - safeViewStart.value) * pxPerSecond.value}px` } })),
+            ...ticks.value.major.map((time) => h29("div", { key: time, class: "tweakers-timeline-tick", style: { left: `${(time - safeViewStart.value) * pxPerSecond.value}px` } }, [
+              h29("span", { class: "tweakers-timeline-tick-label" }, formatRulerSeconds(time, ticks.value.majorStep))
             ]))
           ])
         ]),
         ...renderRows(),
-        pxPerSecond.value > 0 ? h30(TimelinePlayheadFlag, {
+        pxPerSecond.value > 0 ? h29(TimelinePlayheadFlag, {
           id: props.meta.id,
           duration: props.meta.duration,
           pxPerSecond: pxPerSecond.value,
@@ -8850,16 +8857,16 @@ var TimelineSection = defineComponent30({
           ruler: laneAreaRef.value ?? void 0,
           onResetView: resetView
         }) : null
-      ]), zoom.value > 1 ? h30("div", { class: "tweakers-timeline-scroll-row" }, [
-        h30("div", { class: "tweakers-timeline-label" }),
-        h30("div", {
+      ]), zoom.value > 1 ? h29("div", { class: "tweakers-timeline-scroll-row" }, [
+        h29("div", { class: "tweakers-timeline-label" }),
+        h29("div", {
           ref: horizontalScrollRef,
           class: "tweakers-timeline-horizontal-scroll",
           "aria-label": "Timeline horizontal scroll",
           onScroll: handleHorizontalScroll
-        }, [h30("div", { style: { width: `${laneWidth.value * zoom.value}px` } })])
+        }, [h29("div", { style: { width: `${laneWidth.value * zoom.value}px` } })])
       ]) : null]) : null,
-      popover.value ? h30(ClipPopover, {
+      popover.value ? h29(ClipPopover, {
         panelId: props.meta.id,
         popover: popover.value,
         values: values.value,
@@ -8870,8 +8877,8 @@ var TimelineSection = defineComponent30({
   }
 });
 function chevronIcon() {
-  return h30("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2.5", "stroke-linecap": "round", "stroke-linejoin": "round" }, [
-    h30("path", { d: ICON_CHEVRON })
+  return h29("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2.5", "stroke-linecap": "round", "stroke-linejoin": "round" }, [
+    h29("path", { d: ICON_CHEVRON })
   ]);
 }
 var ClipPopover = defineComponent30({
@@ -8960,8 +8967,8 @@ var ClipPopover = defineComponent30({
       const renderedHeight = Math.min(naturalHeight.value || availableHeight, availableHeight);
       const rawTop = placeAbove ? props.popover.anchor.top - 10 - renderedHeight : props.popover.anchor.bottom + 10;
       const top = clamp5(rawTop, current.offsetTop + 12, Math.max(current.offsetTop + 12, bottom - renderedHeight - 12));
-      return h30(Teleport7, { to: "body" }, [h30("div", { class: "tweakers-root", "data-theme": props.theme }, [
-        h30("div", {
+      return h29(Teleport7, { to: "body" }, [h29("div", { class: "tweakers-root", "data-theme": props.theme }, [
+        h29("div", {
           ref: element,
           class: "tweakers-timeline-popover",
           "data-placement": placeAbove ? "above" : "below",
@@ -8969,13 +8976,13 @@ var ClipPopover = defineComponent30({
           role: "dialog",
           "aria-label": `Edit ${title}`
         }, [
-          h30("div", { class: "tweakers-timeline-popover-header" }, [
-            h30("span", { class: "tweakers-timeline-popover-title" }, title),
-            h30("button", { class: "tweakers-timeline-popover-close", title: "Close editor", "aria-label": "Close editor", onClick: props.onClose }, [
-              h30("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round" }, [h30("path", { d: "M6 6L18 18M18 6L6 18" })])
+          h29("div", { class: "tweakers-timeline-popover-header" }, [
+            h29("span", { class: "tweakers-timeline-popover-title" }, title),
+            h29("button", { class: "tweakers-timeline-popover-close", title: "Close editor", "aria-label": "Close editor", onClick: props.onClose }, [
+              h29("svg", { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", "stroke-width": "2", "stroke-linecap": "round" }, [h29("path", { d: "M6 6L18 18M18 6L6 18" })])
             ])
           ]),
-          h30("div", { class: "tweakers-timeline-popover-body" }, [h30(ControlRenderer, {
+          h29("div", { class: "tweakers-timeline-popover-body" }, [h29(ControlRenderer, {
             panelId: props.panelId,
             controls,
             values: timelinePopoverDisplayValues(props.values, clip.key, clip.stepKeys, stepKey),
@@ -9056,42 +9063,42 @@ var TimelineClip = defineComponent30({
           const start = props.at + props.duration * index;
           if (start >= props.timelineDuration - 1e-6) break;
           const duration = Math.min(props.duration, props.timelineDuration - start);
-          ghosts.push(h30("div", {
+          ghosts.push(h29("div", {
             key: `ghost:${index}`,
             class: "tweakers-timeline-clip-ghost",
             "data-steps": isSteps || void 0,
             "aria-hidden": "true",
             style: { left: `${(start - props.viewStart) * props.pxPerSecond + 1}px`, width: `${Math.max(1, duration * props.pxPerSecond - 2)}px`, background: props.clip.color }
-          }, props.steps?.map((step) => h30("span", { class: "tweakers-timeline-clip-ghost-segment", style: { width: `${step.duration * props.pxPerSecond}px` } }))));
+          }, props.steps?.map((step) => h29("span", { class: "tweakers-timeline-clip-ghost-segment", style: { width: `${step.duration * props.pxPerSecond}px` } }))));
         }
       }
       let cumulative = 0;
       const boundaries2 = props.steps?.map((step) => cumulative += step.duration) ?? [];
       const children = [];
       if (props.composite) {
-        if (width > 56) children.push(h30("span", { class: "tweakers-timeline-clip-duration" }, durationText));
+        if (width > 56) children.push(h29("span", { class: "tweakers-timeline-clip-duration" }, durationText));
       } else if (isSteps) {
         for (const step of props.steps ?? []) {
           const segmentWidth = step.duration * props.pxPerSecond;
-          children.push(h30("div", {
+          children.push(h29("div", {
             key: step.key ?? "step",
             class: "tweakers-timeline-clip-segment",
             "data-step": step.key,
             "data-selected": props.selectedStepKey === step.key || void 0,
             style: { width: `${segmentWidth}px` }
-          }, segmentWidth > 52 ? [h30("span", { class: "tweakers-timeline-clip-duration" }, formatSeconds(step.duration))] : []));
+          }, segmentWidth > 52 ? [h29("span", { class: "tweakers-timeline-clip-duration" }, formatSeconds(step.duration))] : []));
         }
         (props.steps ?? []).forEach((step, index) => {
-          if (!step.isPhysics) children.push(h30("div", { key: `boundary:${step.key}`, class: "tweakers-timeline-clip-handle", "data-boundary": index, style: { left: `${boundaries2[index] * props.pxPerSecond - 4}px` } }));
+          if (!step.isPhysics) children.push(h29("div", { key: `boundary:${step.key}`, class: "tweakers-timeline-clip-handle", "data-boundary": index, style: { left: `${boundaries2[index] * props.pxPerSecond - 4}px` } }));
         });
-        if (!props.steps?.[0]?.isPhysics) children.push(h30("div", { class: "tweakers-timeline-clip-handle", "data-edge": "start" }));
+        if (!props.steps?.[0]?.isPhysics) children.push(h29("div", { class: "tweakers-timeline-clip-handle", "data-edge": "start" }));
       } else {
-        if (resizable) children.push(h30("div", { class: "tweakers-timeline-clip-handle", "data-edge": "start" }));
-        if (width > 56) children.push(h30("span", { class: "tweakers-timeline-clip-duration" }, durationText));
-        if (resizable) children.push(h30("div", { class: "tweakers-timeline-clip-handle", "data-edge": "end" }));
+        if (resizable) children.push(h29("div", { class: "tweakers-timeline-clip-handle", "data-edge": "start" }));
+        if (width > 56) children.push(h29("span", { class: "tweakers-timeline-clip-duration" }, durationText));
+        if (resizable) children.push(h29("div", { class: "tweakers-timeline-clip-handle", "data-edge": "end" }));
       }
       const title = props.composite ? `${props.clip.label} \u2014 composite of its property tracks${looping ? " \xB7 repeats through timeline" : ""} \xB7 click to expand` : `${props.clip.label} \u2014 ${formatSeconds(props.at)} for ${durationText}${props.fixedDuration ? " (duration set by spring physics)" : ""}${looping ? " \xB7 repeats through timeline" : ""}${props.delayMode ? " \xB7 drag to phase-shift" : ""}`;
-      return [...ghosts, h30("div", {
+      return [...ghosts, h29("div", {
         class: "tweakers-timeline-clip",
         "data-steps": isSteps || void 0,
         "data-composite": props.composite || void 0,
@@ -9160,13 +9167,13 @@ var TimelineClip = defineComponent30({
         onPointerup: finish,
         onPointercancel: () => finish(),
         onLostpointercapture: () => finish()
-      }, children), looping ? h30("span", { class: "tweakers-timeline-loop-infinity", "aria-hidden": "true", title: "Repeats indefinitely" }, "\u221E") : null];
+      }, children), looping ? h29("span", { class: "tweakers-timeline-loop-infinity", "aria-hidden": "true", title: "Repeats indefinitely" }, "\u221E") : null];
     };
   }
 });
 
 // src/vue/components/ShortcutsMenu.ts
-import { defineComponent as defineComponent31, h as h31, onUnmounted as onUnmounted14, ref as ref25, Teleport as Teleport8 } from "vue";
+import { defineComponent as defineComponent31, h as h30, onUnmounted as onUnmounted14, ref as ref25, Teleport as Teleport8 } from "vue";
 function formatShortcutKey(sc) {
   if (!sc.key) return "\u2014";
   const mod = sc.modifier === "alt" ? "\u2325" : sc.modifier === "shift" ? "\u21E7" : sc.modifier === "meta" ? "\u2318" : "";
@@ -9256,13 +9263,13 @@ var ShortcutsMenu = defineComponent31({
         removeOutsideClickListener();
       }
       return [
-        h31("button", {
+        h30("button", {
           ref: triggerRef,
           class: "tweakers-shortcuts-trigger",
           onClick: toggle,
           title: "Keyboard shortcuts"
         }, [
-          h31("svg", {
+          h30("svg", {
             viewBox: "0 0 24 24",
             fill: "none",
             stroke: "currentColor",
@@ -9270,16 +9277,16 @@ var ShortcutsMenu = defineComponent31({
             "stroke-linecap": "round",
             "stroke-linejoin": "round"
           }, [
-            h31("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
-            h31("path", { d: "M6 10H6.01" }),
-            h31("path", { d: "M10 10H10.01" }),
-            h31("path", { d: "M14 10H14.01" }),
-            h31("path", { d: "M18 10H18.01" }),
-            h31("path", { d: "M8 14H16" })
+            h30("rect", { x: "2", y: "6", width: "20", height: "12", rx: "2" }),
+            h30("path", { d: "M6 10H6.01" }),
+            h30("path", { d: "M10 10H10.01" }),
+            h30("path", { d: "M14 10H14.01" }),
+            h30("path", { d: "M18 10H18.01" }),
+            h30("path", { d: "M8 14H16" })
           ])
         ]),
-        isOpen.value ? h31(Teleport8, { to: "body" }, [
-          h31("div", {
+        isOpen.value ? h30(Teleport8, { to: "body" }, [
+          h30("div", {
             ref: dropdownRef,
             class: "tweakers-root tweakers-shortcuts-dropdown",
             style: {
@@ -9288,19 +9295,19 @@ var ShortcutsMenu = defineComponent31({
               right: `${pos.value.right}px`
             }
           }, [
-            h31("div", { class: "tweakers-shortcuts-title" }, "Keyboard Shortcuts"),
-            h31(
+            h30("div", { class: "tweakers-shortcuts-title" }, "Keyboard Shortcuts"),
+            h30(
               "div",
               { class: "tweakers-shortcuts-list" },
               rows.map(
-                (row) => h31("div", { key: row.path, class: "tweakers-shortcuts-row" }, [
-                  h31("span", { class: "tweakers-shortcuts-row-key" }, formatShortcutKey(row.shortcut)),
-                  h31("span", { class: "tweakers-shortcuts-row-label" }, row.label),
-                  h31("span", { class: "tweakers-shortcuts-row-mode" }, formatInteraction(row.shortcut))
+                (row) => h30("div", { key: row.path, class: "tweakers-shortcuts-row" }, [
+                  h30("span", { class: "tweakers-shortcuts-row-key" }, formatShortcutKey(row.shortcut)),
+                  h30("span", { class: "tweakers-shortcuts-row-label" }, row.label),
+                  h30("span", { class: "tweakers-shortcuts-row-mode" }, formatInteraction(row.shortcut))
                 ])
               )
             ),
-            h31("div", { class: "tweakers-shortcuts-hint" }, "See pill badges on controls for keys")
+            h30("div", { class: "tweakers-shortcuts-hint" }, "See pill badges on controls for keys")
           ])
         ]) : null
       ];
@@ -9309,7 +9316,7 @@ var ShortcutsMenu = defineComponent31({
 });
 
 // src/vue/components/Module.ts
-import { defineComponent as defineComponent32, h as h32 } from "vue";
+import { defineComponent as defineComponent32, h as h31 } from "vue";
 var Module = defineComponent32({
   name: "TweakersModule",
   props: {
@@ -9323,18 +9330,18 @@ var Module = defineComponent32({
       props.onEnabledChange?.(enabled);
       emit("enabledChange", enabled);
     };
-    return () => h32("div", { class: "tweakers-module" }, [
-      h32("div", { class: "tweakers-module-header" }, [
-        h32(Checkbox, {
+    return () => h31("div", { class: "tweakers-module" }, [
+      h31("div", { class: "tweakers-module-header" }, [
+        h31(Checkbox, {
           checked: props.enabled,
           label: props.title,
           onChange: (next) => setEnabled(next)
         }),
-        h32("span", { class: "tweakers-module-title" }, props.title)
+        h31("span", { class: "tweakers-module-title" }, props.title)
       ]),
-      h32("div", { class: "tweakers-module-collapse", "data-open": props.enabled }, [
-        h32("div", { class: "tweakers-module-collapse-clip" }, [
-          h32("div", { class: "tweakers-module-inner" }, slots.default ? slots.default() : [])
+      h31("div", { class: "tweakers-module-collapse", "data-open": props.enabled }, [
+        h31("div", { class: "tweakers-module-collapse-clip" }, [
+          h31("div", { class: "tweakers-module-inner" }, slots.default ? slots.default() : [])
         ])
       ])
     ]);
@@ -9342,7 +9349,7 @@ var Module = defineComponent32({
 });
 
 // src/vue/components/ButtonGroup.ts
-import { defineComponent as defineComponent33, h as h33 } from "vue";
+import { defineComponent as defineComponent33, h as h32 } from "vue";
 var ButtonGroup = defineComponent33({
   name: "TweakersButtonGroup",
   props: {
@@ -9352,18 +9359,18 @@ var ButtonGroup = defineComponent33({
     }
   },
   setup(props) {
-    return () => h33(
+    return () => h32(
       "div",
       { class: "tweakers-button-group" },
       props.buttons.map(
-        (button) => h33("button", { class: "tweakers-button", onClick: button.onClick }, button.label)
+        (button) => h32("button", { class: "tweakers-button", onClick: button.onClick }, button.label)
       )
     );
   }
 });
 
 // src/vue/components/WaveformVisualization.ts
-import { defineComponent as defineComponent34, h as h34, ref as ref26, onMounted as onMounted21, onBeforeUnmount as onBeforeUnmount5 } from "vue";
+import { defineComponent as defineComponent34, h as h33, ref as ref26, onMounted as onMounted20, onBeforeUnmount as onBeforeUnmount5 } from "vue";
 
 // src/waveform-dsp.ts
 function mixToMono(buffer) {
@@ -9781,7 +9788,7 @@ var WaveformVisualization = defineComponent34({
     const canvasRef = ref26(null);
     const zoom = ref26(1);
     let engine = null;
-    onMounted21(() => {
+    onMounted20(() => {
       if (!canvasRef.value) return;
       engine = createWaveformEngine(
         canvasRef.value,
@@ -9808,16 +9815,16 @@ var WaveformVisualization = defineComponent34({
       );
     });
     onBeforeUnmount5(() => engine?.destroy());
-    const minusIcon = () => h34("svg", { viewBox: "0 0 16 16", fill: "none" }, [
-      h34("path", { d: "M3.5 8h9", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" })
+    const minusIcon = () => h33("svg", { viewBox: "0 0 16 16", fill: "none" }, [
+      h33("path", { d: "M3.5 8h9", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" })
     ]);
-    const plusIcon = () => h34("svg", { viewBox: "0 0 16 16", fill: "none" }, [
-      h34("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" })
+    const plusIcon = () => h33("svg", { viewBox: "0 0 16 16", fill: "none" }, [
+      h33("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round" })
     ]);
     return () => {
       const framingLoop = props.autoZoomOnLoop && !!props.loop;
       const children = [
-        h34("canvas", {
+        h33("canvas", {
           ref: canvasRef,
           class: "tweakers-waveform-viz",
           style: { width: `${props.width}px`, height: `${props.height}px` }
@@ -9827,7 +9834,7 @@ var WaveformVisualization = defineComponent34({
         const buttons = [];
         if (zoom.value > 1) {
           buttons.push(
-            h34(
+            h33(
               "button",
               {
                 type: "button",
@@ -9841,7 +9848,7 @@ var WaveformVisualization = defineComponent34({
           );
         }
         buttons.push(
-          h34(
+          h33(
             "button",
             {
               type: "button",
@@ -9854,15 +9861,15 @@ var WaveformVisualization = defineComponent34({
             [plusIcon()]
           )
         );
-        children.push(h34("div", { class: "tweakers-waveform-zoom" }, buttons));
+        children.push(h33("div", { class: "tweakers-waveform-zoom" }, buttons));
       }
-      return h34("div", { class: "tweakers-waveform-viz-wrap", style: { width: `${props.width}px` } }, children);
+      return h33("div", { class: "tweakers-waveform-viz-wrap", style: { width: `${props.width}px` } }, children);
     };
   }
 });
 
 // src/vue/components/AnalyserVisualization.ts
-import { defineComponent as defineComponent35, h as h35, ref as ref27, onMounted as onMounted22, onBeforeUnmount as onBeforeUnmount6 } from "vue";
+import { defineComponent as defineComponent35, h as h34, ref as ref27, onMounted as onMounted21, onBeforeUnmount as onBeforeUnmount6 } from "vue";
 
 // src/analyser-core.ts
 function byteFreqToUnit(v) {
@@ -9965,12 +9972,12 @@ var SPRING_MAX_STEP = 1 / 240;
 function stepSprings(pos, vel, targets, stiffness, damping, dt) {
   let remaining = dt;
   while (remaining > 0) {
-    const h37 = Math.min(remaining, SPRING_MAX_STEP);
-    remaining -= h37;
+    const h36 = Math.min(remaining, SPRING_MAX_STEP);
+    remaining -= h36;
     for (let i = 0; i < pos.length; i++) {
       const accel = -stiffness * (pos[i] - targets[i]) - damping * vel[i];
-      vel[i] += accel * h37;
-      pos[i] += vel[i] * h37;
+      vel[i] += accel * h36;
+      pos[i] += vel[i] * h36;
     }
   }
 }
@@ -10375,7 +10382,7 @@ var AnalyserVisualization = defineComponent35({
   setup(props) {
     const canvasRef = ref27(null);
     let engine = null;
-    onMounted22(() => {
+    onMounted21(() => {
       if (!canvasRef.value) return;
       engine = createAnalyserEngine(
         canvasRef.value,
@@ -10400,7 +10407,7 @@ var AnalyserVisualization = defineComponent35({
     onBeforeUnmount6(() => engine?.destroy());
     return () => {
       const children = [
-        h35("canvas", {
+        h34("canvas", {
           ref: canvasRef,
           class: "tweakers-analyser-viz",
           style: { width: `${props.width}px`, height: `${props.height}px` }
@@ -10410,7 +10417,7 @@ var AnalyserVisualization = defineComponent35({
         const buttons = [];
         if (props.onMuteChange) {
           buttons.push(
-            h35(
+            h34(
               "button",
               {
                 type: "button",
@@ -10424,7 +10431,7 @@ var AnalyserVisualization = defineComponent35({
         }
         if (props.onSoloChange) {
           buttons.push(
-            h35(
+            h34(
               "button",
               {
                 type: "button",
@@ -10436,9 +10443,9 @@ var AnalyserVisualization = defineComponent35({
             )
           );
         }
-        children.push(h35("div", { class: "tweakers-analyser-actions" }, buttons));
+        children.push(h34("div", { class: "tweakers-analyser-actions" }, buttons));
       }
-      return h35("div", { class: "tweakers-analyser-viz-wrap", style: { width: `${props.width}px` } }, children);
+      return h34("div", { class: "tweakers-analyser-viz-wrap", style: { width: `${props.width}px` } }, children);
     };
   }
 });
@@ -10446,10 +10453,10 @@ var AnalyserVisualization = defineComponent35({
 // src/vue/components/CurveComposer.ts
 import {
   defineComponent as defineComponent36,
-  h as h36,
+  h as h35,
   ref as ref28,
   computed as computed13,
-  onMounted as onMounted23,
+  onMounted as onMounted22,
   onBeforeUnmount as onBeforeUnmount7
 } from "vue";
 
@@ -10953,7 +10960,7 @@ var CurveComposer = defineComponent36({
         prevTrigValue = Number.NaN;
       }
     };
-    onMounted23(() => {
+    onMounted22(() => {
       raf = requestAnimationFrame(tick);
     });
     onBeforeUnmount7(() => cancelAnimationFrame(raf));
@@ -11082,15 +11089,15 @@ var CurveComposer = defineComponent36({
       for (let i = 1; i < n; i++) {
         const gx = i / n * W.value;
         lines.push(
-          h36("line", { key: `g-${rect.y}-${i}`, class: "tweakers-cc-grid", x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h })
+          h35("line", { key: `g-${rect.y}-${i}`, class: "tweakers-cc-grid", x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h })
         );
       }
       return lines;
     };
-    const renderLaneBg = (rect, key) => h36("rect", { key, class: "tweakers-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 });
+    const renderLaneBg = (rect, key) => h35("rect", { key, class: "tweakers-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 });
     const diagonal = (rect, span, key) => {
       const d = diagonalLine(rect, span, W.value);
-      return h36("line", { key, class: "tweakers-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 });
+      return h35("line", { key, class: "tweakers-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 });
     };
     return () => {
       const main = mainRect.value;
@@ -11104,7 +11111,7 @@ var CurveComposer = defineComponent36({
       if (props.selectedIndex != null && props.selectedIndex >= 0 && props.selectedIndex < props.segments.length) {
         const span = segmentSpan(props.segments, props.selectedIndex, props.gap);
         children.push(
-          h36("rect", {
+          h35("rect", {
             class: "tweakers-cc-seg-selected",
             x: span[0] * W.value,
             y: main.y,
@@ -11117,7 +11124,7 @@ var CurveComposer = defineComponent36({
       if (hover.value?.kind === "segment" && !drag.value) {
         const span = segmentSpan(props.segments, hover.value.index, props.gap);
         children.push(
-          h36("rect", {
+          h35("rect", {
             class: "tweakers-cc-seg-hover",
             x: span[0] * W.value,
             y: main.y,
@@ -11130,10 +11137,10 @@ var CurveComposer = defineComponent36({
       children.push(
         props.segments.map((seg, i) => {
           const span = segmentSpan(props.segments, i, props.gap);
-          return h36("g", { key: `seg-${i}` }, [
+          return h35("g", { key: `seg-${i}` }, [
             diagonal(main, span, `diag-${i}`),
-            h36("path", { class: "tweakers-cc-curve", d: curvePath(seg, main, span, W.value) }),
-            h36(
+            h35("path", { class: "tweakers-cc-curve", d: curvePath(seg, main, span, W.value) }),
+            h35(
               "text",
               { class: "tweakers-cc-label", x: (span[0] + span[1]) * 0.5 * W.value, y: main.y + 13 },
               seg.type
@@ -11144,7 +11151,7 @@ var CurveComposer = defineComponent36({
       if (props.gap > 0) {
         children.push(
           timelineSlots(props.segments, props.gap).filter((slot) => slot.kind === "gap" && slot.b > slot.a).map(
-            (slot) => h36("path", {
+            (slot) => h35("path", {
               key: `conn-${slot.index}`,
               class: "tweakers-cc-connector",
               d: connectorPath(slot, samplers.value, props.segments.length, main, W.value)
@@ -11154,7 +11161,7 @@ var CurveComposer = defineComponent36({
       }
       children.push(
         interior.map(
-          (bx, i) => h36("line", {
+          (bx, i) => h35("line", {
             key: `b-${i}`,
             class: "tweakers-cc-boundary",
             "data-active": String(
@@ -11168,7 +11175,7 @@ var CurveComposer = defineComponent36({
         )
       );
       children.push(
-        h36("line", {
+        h35("line", {
           ref: seriesPlayheadRef,
           class: "tweakers-cc-playhead",
           x1: 0,
@@ -11179,7 +11186,7 @@ var CurveComposer = defineComponent36({
         })
       );
       children.push(
-        h36("circle", {
+        h35("circle", {
           ref: seriesDotRef,
           class: "tweakers-cc-dot",
           cx: 0,
@@ -11193,18 +11200,18 @@ var CurveComposer = defineComponent36({
         children.push(renderLaneGrid(dr));
         if (hover.value?.kind === "driver" && !drag.value) {
           children.push(
-            h36("rect", { class: "tweakers-cc-seg-hover", x: 0, y: dr.y, width: W.value, height: dr.h, rx: 8 })
+            h35("rect", { class: "tweakers-cc-seg-hover", x: 0, y: dr.y, width: W.value, height: dr.h, rx: 8 })
           );
         }
         children.push(diagonal(dr, [0, 1], "driver-diag"));
         children.push(
-          h36("path", { class: "tweakers-cc-curve tweakers-cc-curve-driver", d: curvePath(props.driver, dr, [0, 1], W.value) })
+          h35("path", { class: "tweakers-cc-curve tweakers-cc-curve-driver", d: curvePath(props.driver, dr, [0, 1], W.value) })
         );
         children.push(
-          h36("text", { class: "tweakers-cc-label", x: W.value * 0.5, y: dr.y + 13 }, `driver \xB7 ${props.driver.type}`)
+          h35("text", { class: "tweakers-cc-label", x: W.value * 0.5, y: dr.y + 13 }, `driver \xB7 ${props.driver.type}`)
         );
         children.push(
-          h36("line", {
+          h35("line", {
             ref: driverPlayheadRef,
             class: "tweakers-cc-playhead",
             x1: 0,
@@ -11215,8 +11222,8 @@ var CurveComposer = defineComponent36({
           })
         );
       }
-      return h36("div", { class: "tweakers-cc-wrap", style: { width: `${W.value}px` } }, [
-        h36(
+      return h35("div", { class: "tweakers-cc-wrap", style: { width: `${W.value}px` } }, [
+        h35(
           "svg",
           {
             ref: svgRef,

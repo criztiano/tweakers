@@ -6,6 +6,9 @@
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "strict": true,
+    // A helper written but never wired up is the failure mode this library
+    // is most prone to: the renderers are big, and dead code typechecks.
+    "noUnusedLocals": true,
     "noEmit": true,
     "esModuleInterop": true,
     "skipLibCheck": true,

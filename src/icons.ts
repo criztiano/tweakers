@@ -68,6 +68,19 @@ export const ICON_TRASH = [
   'M8.07092 5.74621C8.42348 3.89745 10.0485 2.5 12 2.5C13.9515 2.5 15.5765 3.89745 15.9291 5.74621',
 ];
 
+// Move header action glyphs — geometry transplanted verbatim from the Figma
+// assets (e12ebbaa / 80878b91); only the fixed #1E1E1E fill was swapped for
+// currentColor so the pills tint them. Both render at their native size.
+export const ICON_MOVE_CAPTURE = {
+  viewBox: '0 0 14 14',
+  path: 'M1 0H5V2H2V5H0V0H1ZM2 10V12H5V14H0V9H2V10ZM10 0H14V5H12V2H9V0H10ZM14 10V14H9V12H12V9H14V10Z',
+};
+
+export const ICON_MOVE_ENTER = {
+  viewBox: '0 0 12 12',
+  circle: { cx: '6', cy: '6', r: '6' },
+};
+
 export const ICON_PANEL = {
   path: 'M6.84766 11.75C6.78583 11.9899 6.75 12.2408 6.75 12.5C6.75 12.7592 6.78583 13.0101 6.84766 13.25H2C1.58579 13.25 1.25 12.9142 1.25 12.5C1.25 12.0858 1.58579 11.75 2 11.75H6.84766ZM14 11.75C14.4142 11.75 14.75 12.0858 14.75 12.5C14.75 12.9142 14.4142 13.25 14 13.25H12.6523C12.7142 13.0101 12.75 12.7592 12.75 12.5C12.75 12.2408 12.7142 11.9899 12.6523 11.75H14ZM3.09766 7.25C3.03583 7.48994 3 7.74075 3 8C3 8.25925 3.03583 8.51006 3.09766 8.75H2C1.58579 8.75 1.25 8.41421 1.25 8C1.25 7.58579 1.58579 7.25 2 7.25H3.09766ZM14 7.25C14.4142 7.25 14.75 7.58579 14.75 8C14.75 8.41421 14.4142 8.75 14 8.75H8.90234C8.96417 8.51006 9 8.25925 9 8C9 7.74075 8.96417 7.48994 8.90234 7.25H14ZM7.59766 2.75C7.53583 2.98994 7.5 3.24075 7.5 3.5C7.5 3.75925 7.53583 4.01006 7.59766 4.25H2C1.58579 4.25 1.25 3.91421 1.25 3.5C1.25 3.08579 1.58579 2.75 2 2.75H7.59766ZM14 2.75C14.4142 2.75 14.75 3.08579 14.75 3.5C14.75 3.91421 14.4142 4.25 14 4.25H13.4023C13.4642 4.01006 13.5 3.75925 13.5 3.5C13.5 3.24075 13.4642 2.98994 13.4023 2.75H14Z',
   circles: [
@@ -75,4 +88,36 @@ export const ICON_PANEL = {
     { cx: '10.4999', cy: '3.5', r: '0.998657' },
     { cx: '9.75015', cy: '12.5', r: '0.997986' },
   ],
+};
+
+/**
+ * Option glyphs — a small [lucide](https://lucide.dev) subset (ISC), drawn as
+ * stroked 24×24 paths so they read at slot size. An enum option names one of
+ * these in its `icon` field and the Move slot shows it, which beats reading
+ * four mode names off a controller at arm's length.
+ *
+ * Keep this a subset, not a mirror: an icon earns its place by being clearer
+ * than the word it stands next to.
+ */
+export const LUCIDE_ICONS: Record<string, string[]> = {
+  /* directions and traversal */
+  'arrow-right': ['M5 12h14', 'm12 5 7 7-7 7'],
+  'arrow-left-right': ['M8 3 4 7l4 4', 'M4 7h16', 'm16 21 4-4-4-4', 'M20 17H4'],
+  'fold-horizontal': [
+    'M2 12h6', 'M22 12h-6', 'M12 2v2', 'M12 8v2', 'M12 14v2', 'M12 20v2',
+    'm19 9-3 3 3 3', 'm5 15 3-3-3-3',
+  ],
+  scissors: [
+    'M20 4 8.12 15.88', 'M14.47 14.48 20 20', 'M8.12 8.12 12 12',
+    'M6 3a3 3 0 1 0 0 6 3 3 0 1 0 0-6', 'M6 15a3 3 0 1 0 0 6 3 3 0 1 0 0-6',
+  ],
+  /* signal character */
+  'grid-2x2': ['M12 3v18', 'M3 12h18', 'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z'],
+  activity: ['M22 12h-4l-3 9L9 3l-3 9H2'],
+  waves: [
+    'M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1',
+    'M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1',
+    'M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1',
+  ],
+  'audio-lines': ['M2 10v3', 'M6 6v11', 'M10 3v18', 'M14 8v7', 'M18 5v13', 'M22 10v3'],
 };
