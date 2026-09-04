@@ -9907,7 +9907,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 fineRef.current = null;
               },
               children: [
-                (shape || glyph) && /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-tag", children: optionLabel }),
+                (shape || glyph) && /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-tag", children: meta.label }),
                 /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(ModDot, { path: meta.path }),
                 shape && /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(
                   "svg",
@@ -9919,10 +9919,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                     children: /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("path", { d: shape })
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-dial-readout", children: glyph ? /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(LucideGlyph, { name: glyph, className: "tweakers-move-dial-icon" }) : /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(import_jsx_runtime39.Fragment, { children: [
+                glyph && /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(LucideGlyph, { name: glyph, className: "tweakers-move-dial-icon" }),
+                shape || glyph ? /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-option", children: optionLabel }) : /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)("div", { className: "tweakers-move-dial-readout", children: [
                   /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-label", "data-long": meta.label.length > 9 || void 0, children: meta.label }),
-                  !shape && /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-value", children: optionLabel })
-                ] }) }),
+                  /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-value", children: optionLabel })
+                ] }),
                 /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-dial-enum", children: options.map((opt, j) => /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(
                   "span",
                   {
