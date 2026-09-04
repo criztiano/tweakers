@@ -6144,9 +6144,14 @@ input.tweakers-list-item-title:focus {
   width: 100% !important;
 }
 
+/* The stock canvas paints the panel surface behind the wave, which on this
+   dark face would sit a shade of grey on top of the display it is meant to be
+   cut into. Here the wrapper IS the display, so the canvas draws on nothing. */
 .tweakers-move-wave .tweakers-waveform-viz {
   display: block;
   width: 100% !important;
+  background: transparent;
+  border-radius: 0;
 }
 
 /* Slot placement — the dial row's own footprint and radius, so a waveform
