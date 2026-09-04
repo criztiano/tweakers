@@ -11143,6 +11143,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     () => pageId ? TweakStore.getValues(pageId) : void 0,
     () => void 0
   );
+  const [, bumpControlState] = (0, import_react44.useState)(0);
+  (0, import_react44.useEffect)(
+    () => pageId ? TweakStore.subscribeControlState(pageId, () => bumpControlState((n) => n + 1)) : void 0,
+    [pageId]
+  );
   (0, import_react44.useSyncExternalStore)(
     (0, import_react44.useCallback)((cb) => ModulationStore.subscribe(cb), []),
     () => ModulationStore.getVersion(),
