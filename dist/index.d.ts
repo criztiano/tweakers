@@ -331,9 +331,12 @@ declare const filterHandValue: (v01: number, axis: FilterAxis) => number;
  */
 declare function defaultFilterResponse(cutoff01: number, resonance01: number): FilterResponse;
 /**
- * The response drawn as an SVG path filling a 100×100 box, y pointing up —
- * the 2-slot picture. Peaks are fitted so the tallest point touches the top
- * and the floor touches the bottom; the CSS band alone decides the air.
+ * The response drawn as an SVG path across a 100×100 box, y pointing up —
+ * the 2-slot picture. The sampler's 0..1 gain is taken at its word, never
+ * refitted: the window is the sampler's own calibration, so an open filter
+ * draws as a line near the top, a rolloff reaches the floor, and a rising
+ * resonance grows its peak into real headroom instead of being stretched
+ * (or clipped) to the band. Out-of-range samples clamp to the box edges.
  */
 declare function filterResponsePath(response: FilterResponse, samples?: number): string | null;
 
@@ -1599,7 +1602,7 @@ declare const MOD_SLOTS = 16;
 declare const MOD_COLORS: string[];
 /** A slot's palette colour — the one constant identity it keeps. */
 declare const modColor: (index: number) => string;
-type ModulationType = 'lfo' | 'adsr' | 'envelope' | 'curve' | 'sh' | 'sequencer';
+type ModulationType = 'lfo' | 'adsr' | 'follower' | 'curve' | 'sh' | 'sequencer';
 /**
  * A settings value: the scalars a dial or a pad edits, plus the structures a
  * richer modulator carries (the curve's clip list). JSON-safe throughout, so
@@ -1629,27 +1632,39 @@ interface ModulationAssignment {
 /**
  * Settings-page control metadata — ControlMeta plus what the Move page needs:
  * the xy mapping (an xy control edits two scalar params, xParam/yParam,
- * rather than storing an {x, y} object), and the placement and gestures the
- * two surfaces read through {@link modPageLayout}.
+ * rather than storing an {x, y} object), the placement and gestures the two
+ * surfaces read through {@link modPageLayout}, and the source marker: a
+ * select flagged `sourceOptions` lists the ModulationStore's registered
+ * audio inputs, and only appears when there is a real choice to make.
  */
 type ModControlMeta = ControlMeta & {
     xParam?: string;
     yParam?: string;
+    /** Lists the ModulationStore's registered audio inputs (the follower's source). */
+    sourceOptions?: boolean;
     /** Sits in a small slot under its dial's column instead of taking a big one. */
     chip?: boolean;
     /** Shown only when this says so — a control that belongs to one mode. */
     when?: (params: ModulationParams) => boolean;
     /** This dial draws the modulator's own shape (the type's `preview`). */
     drawsPreview?: boolean;
+    /** This dial draws the modulator's live meter (the type's `meter`). */
+    drawsScope?: boolean;
     /** A knob tap on this dial runs this, returning the params it changes. */
     cycle?: (params: ModulationParams) => ModulationParams;
 };
+/**
+ * Live audio handed to a modulator by the engine: the band level 0..1
+ * inside a frequency window — a follower's raw material.
+ */
+type ModAudioInput = (loHz: number, hiHz: number) => number;
 /**
  * One modulator type, pluggable: LFO ships with the kit, the others
  * (envelope, curve, S&H, sequencer) register through the same door.
  * `tick` advances the modulator by `dt` seconds and returns the signal,
  * always -1..1; `state` is whatever `createState` returned — the engine
- * never looks inside it.
+ * never looks inside it. Types that listen to audio (the envelope follower)
+ * read the engine-provided `input`; the others ignore it.
  */
 interface ModTypeDef {
     type: ModulationType;
@@ -1658,7 +1673,7 @@ interface ModTypeDef {
     /** The settings-page layout, in slot order: dials, toggles, the xy pad. */
     controls: ModControlMeta[];
     createState(): unknown;
-    tick(state: unknown, params: ModulationParams, dt: number, bpm: number): number;
+    tick(state: unknown, params: ModulationParams, dt: number, bpm: number, input?: ModAudioInput | null): number;
     /**
      * Fold an incoming patch into the type's own structure — the curve writes
      * the shape dials into the clip they belong to, and reads the next clip's
@@ -1679,6 +1694,15 @@ interface ModTypeDef {
         points: number[];
         label: string;
     };
+    /**
+     * What the modulator is hearing and doing right now, each 0..1 — the
+     * follower's incoming level and its own output. A type that declares this
+     * gets a rolling history kept for it, which the scope dial draws.
+     */
+    meter?(state: unknown): {
+        input: number;
+        output: number;
+    };
     /** Where the modulator sits in its cycle, 0..1 — a composer's playhead. */
     phase?(state: unknown): number;
     /**
@@ -1693,6 +1717,8 @@ interface ModPageSlot {
     path: string;
     /** The dial draws the modulator's preview instead of a bar. */
     preview?: boolean;
+    /** The dial draws the modulator's live meter behind its bar. */
+    scope?: boolean;
     /** A knob tap on this dial cycles it. */
     cycle?: boolean;
 }
@@ -1816,6 +1842,28 @@ declare function curveComposition(params: ModulationParams): CurveComposition;
  */
 declare function curveDuration(params: ModulationParams, bpm: number): number;
 declare const CURVE_DEF: ModTypeDef;
+/** The cut dials' frequency span — the audible band. */
+declare const FOLLOWER_HZ_MIN = 20;
+declare const FOLLOWER_HZ_MAX = 20000;
+/**
+ * A cut dial's position 0..1 → Hz, exponential across the audible band —
+ * equal knob travel covers equal musical distance (20·1000^t).
+ */
+declare const followerHz: (t: number) => number;
+/**
+ * The follower: the band level of an audio input (lo/hi confine it to a
+ * frequency window — follow just the kick, just the hiss), through gain, an
+ * optional delay, and rise/fall smoothing. The signal is unipolar 0..1:
+ * silence rests the control at its base value, level pushes it up to
+ * `amount` of the span. Which audio it follows comes from the engine — apps
+ * register inputs on the ModulationStore (`registerAudioInput`), and the
+ * source select appears once there is more than one to choose from.
+ *
+ * Gain draws the meter (`drawsScope`): the incoming level as a filled trace
+ * with the follower's own line riding over it, so the dial you turn to set
+ * the drive is the one that shows what the drive is doing.
+ */
+declare const FOLLOWER_DEF: ModTypeDef;
 
 /**
  * The Move's control surface, as the bridge kit maps it (move-tweakers v0):
@@ -1938,6 +1986,17 @@ declare function denormalizeFilterDial(meta: ControlMeta, cutoff01: number, reso
  * be tested against, like `enumShapePath`.
  */
 declare function filterShapePath(meta: ControlMeta, value: unknown): string | null;
+/**
+ * A meter history as an SVG trace across the 100×100 picture box, oldest
+ * sample at the left and newest at the right, y pointing up. Fewer than two
+ * samples draw nothing — a single point is not yet a trace.
+ */
+declare function scopeLinePath(samples: readonly number[]): string;
+/**
+ * The same trace closed down to the baseline, so the incoming signal reads
+ * as a filled body under the follower's line rather than a second stroke.
+ */
+declare function scopeAreaPath(samples: readonly number[]): string;
 /** Where the fill anchors for a bipolar/origin slider, 0..1 (else 0). */
 declare function dialOrigin(meta: ControlMeta): number;
 
@@ -1970,14 +2029,18 @@ declare function dialOrigin(meta: ControlMeta): number;
  * - `filter`  — the 2-slot control: cutoff and resonance as one picture,
  *   the magnitude response maximised across both columns, each hand's
  *   small label sitting where its own slot's label would have been.
+ * - `scope`   — a dial that draws its modulator's live meter behind it: the
+ *   incoming signal filled, the modulator's own line over it. The
+ *   follower's Gain wears this.
  */
-type MoveSlotKind = 'default' | 'value' | 'icon' | 'curve' | 'enum' | 'xy' | 'range' | 'filter';
+type MoveSlotKind = 'default' | 'value' | 'icon' | 'curve' | 'enum' | 'xy' | 'range' | 'filter' | 'scope';
 /** Which face a control wears in its slot, from its meta and moment. */
 declare function moveSlotKind(meta: ControlMeta, opts?: {
     enum?: boolean;
     shape?: string | null;
     glyph?: string | null;
     valueFirst?: boolean;
+    scope?: boolean;
 }): MoveSlotKind;
 /** One glyph from the bundled lucide subset; an unknown name draws nothing. */
 declare function MoveSlotGlyph({ name, className }: {
@@ -2006,6 +2069,28 @@ declare function MoveSlotDefaultBody({ label, value, pct, originPct, atOrigin, }
     originPct: number | null;
     /** Parked on the origin exactly — the dial's zero. */
     atOrigin?: boolean;
+}): react_jsx_runtime.JSX.Element;
+/**
+ * The meter slot: a dial you turn that also shows what it is doing. The
+ * incoming level fills as a body, the modulator's own line rides over it,
+ * and the dial keeps its readout and fill bar — so Gain still reads and
+ * drags like any other slot, with the evidence drawn behind it.
+ *
+ * Pure, like every other face: the caller hands over the two traces, and
+ * whoever wants them live re-renders this with fresh ones each frame.
+ */
+declare function MoveSlotScopeBody({ label, value, pct, originPct, atOrigin, inputPath, outputPath, }: {
+    label: string;
+    value: ReactNode;
+    /** Fill extent, 0–100. */
+    pct: number;
+    /** Bipolar/origin anchor position, 0–100 — null for a plain fill. */
+    originPct: number | null;
+    atOrigin?: boolean;
+    /** The incoming signal, closed to the baseline. */
+    inputPath: string;
+    /** The modulator's own output line. */
+    outputPath: string;
 }): react_jsx_runtime.JSX.Element;
 /** The option picker's three faces — name, glyph, or drawn shape — plus the
  *  pagination cells. A slot with a picture reads top down: what the knob is
@@ -2072,6 +2157,10 @@ declare const MOVE_SLOT_LIBRARY: {
     readonly filter: {
         readonly description: "2 slots: cutoff + resonance as one response picture";
         readonly component: typeof MoveSlotFilterBody;
+    };
+    readonly scope: {
+        readonly description: "a dial drawing its modulator’s live meter behind it";
+        readonly component: typeof MoveSlotScopeBody;
     };
 };
 
@@ -2508,6 +2597,16 @@ declare function ListScreen({ items, value, onSelect, wide, className, style, }:
  *   ModulationStore.registerSource('lfo-1', { sample: () => native.lfo1 });
  *   // or push at any rate: ModulationStore.setSourceValue('lfo-1', v);
  *
+ * Audio-listening modulators (the envelope follower) need something to
+ * hear. Apps hand over live audio as named inputs — the same late-getter
+ * pattern the analyser rows use, since audio contexts start on a gesture:
+ *
+ *   ModulationStore.registerAudioInput('drums', () => analyser);   // an AnalyserNode
+ *
+ * The engine reads each input's spectrum once per frame and serves band
+ * levels to whichever slots follow it; a follower's source select lists
+ * the registered inputs (and only appears when there is more than one).
+ *
  * A slot pointing at a source shows its signal (circle, dots, step light)
  * but applies nothing to values unless the source says `applies: true` —
  * the app's own engine already did, at audio rate.
@@ -2522,6 +2621,11 @@ declare function ListScreen({ items, value, onSelect, wide, className, style, }:
  */
 /** A touched control stays armed for assignment this long. */
 declare const MOD_TOUCH_GRACE_MS = 4000;
+/**
+ * How many frames of meter history a metering slot keeps — about two
+ * seconds at 60fps, enough for a hit and its tail to stay on screen.
+ */
+declare const MOD_SCOPE_SAMPLES = 128;
 interface ModulationSourceConfig {
     /** Pulled once per frame by the engine; omit it to push with `setSourceValue`. */
     sample?: (slot: ModulationSlot) => number;
@@ -2540,6 +2644,11 @@ declare class ModulationStoreClass {
     private signals;
     private sources;
     private sourceValues;
+    private audioInputs;
+    /** Reused per-input spectrum buffers — one read per input per tick. */
+    private freqData;
+    /** Rolling meter history per slot, for the types that declare a `meter`. */
+    private scopes;
     private metas;
     private bpm;
     private touched;
@@ -2629,6 +2738,20 @@ declare class ModulationStoreClass {
         points: number[];
         label: string;
     } | null;
+    /**
+     * The open page's meter history, oldest sample first — what the scope dial
+     * draws. `input` is the level going in (after gain), `output` the
+     * follower's own line over it. Null unless the open modulator meters.
+     */
+    getSettingsScope(): {
+        input: number[];
+        output: number[];
+    } | null;
+    /** A metering slot's rolling history, oldest first (zeros before it runs). */
+    getSlotScope(index: number): {
+        input: number[];
+        output: number[];
+    };
     /** Hardware buttons the open page claims (the curve's arrows and Delete). */
     getSettingsButtons(): string[];
     /** Run a claimed button. False when the page does not claim that name. */
@@ -2636,6 +2759,8 @@ declare class ModulationStoreClass {
     /** A knob tap on a page dial that cycles (the curve's clip vocabulary). */
     tapSettingsControl(path: string): boolean;
     private registerSettingsPanel;
+    /** Rebuild the open settings page in place — the source select tracks the inputs. */
+    private refreshSettingsPanel;
     /** A settings-panel edit — screen or hardware — lands in the slot's params. */
     private onSettingsChange;
     /**
@@ -2652,6 +2777,21 @@ declare class ModulationStoreClass {
     /** Push a source's signal (-1..1) at any rate; the engine mirrors the latest. */
     setSourceValue(id: string, value: number): void;
     getSources(): string[];
+    /**
+     * Hand over live audio as a named input: an AnalyserNode getter, read at
+     * frame time (a getter, so the node can exist only after the app's audio
+     * starts on a user gesture). Returns an unregister fn. Registering while
+     * a follower's settings page is open refreshes its source select.
+     */
+    registerAudioInput(id: string, get: () => AnalyserNode | null): () => void;
+    getAudioInputs(): string[];
+    /**
+     * The band sampler served to a slot's modulator: its chosen source when
+     * that input is registered, else the first registered input, else null
+     * (the follower hears silence). Levels are the band's spectral peak —
+     * the same reduction the analyser visualizer draws.
+     */
+    private audioInputFor;
     setTempo(bpm: number): void;
     getTempo(): number;
     /** A slot's live signal, -1..1. */
@@ -2688,6 +2828,8 @@ declare class ModulationStoreClass {
      * directly with their own clock.
      */
     tick(dt: number): void;
+    /** Push one frame of a metering modulator onto its rolling history. */
+    private recordMeter;
     /** Wipe every slot, assignment, and the persisted shelf. */
     clear(): void;
     private ensureLoop;
@@ -3710,4 +3852,4 @@ interface SpectrumAudioLevelMeterProps extends AudioLevelMeterBaseProps {
 type AudioLevelMeterProps = MonoAudioLevelMeterProps | StereoAudioLevelMeterProps | SpectrumAudioLevelMeterProps;
 declare function AudioLevelMeter(props: AudioLevelMeterProps): ReactElement;
 
-export { ADSR_DEF, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AnalyserMode, AnalyserRow, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, Checkbox, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, type FilterAxis, type FilterAxisConfig, type FilterConfig, FilterControl, type FilterResponse, type FilterValue, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_DIALS, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_PADS, MOVE_SLOT_LIBRARY, MOVE_SPECIAL_BUTTONS, MOVE_TRACKS, MOVE_WAVEFORM_STEPS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, Module, type MonoAudioLevelMeterProps, MoveActionButton, type MoveActionButtonProps, type MoveFunctionButton, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, type MovePadCell, type MovePage, MovePanel, type MoveScreenList, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotFilterBody, MoveSlotGlyph, type MoveSlotKind, MoveSlotRangeBody, MoveSlotReadout, MoveSlotShape, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, MoveVolumeDisplay, type MoveVolumeDisplayState, MoveWaveform, type MoveWaveformProps, MoveWaveformStore, type MoveWaveformVariant, type MoveWaveformView, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type NumberConfig, NumberControl, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, TAB_PATH, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type TweakConfig, type TweakEvent, type TweakMode, type TweakPosition, TweakRoot, TweakStore, type TweakTheme, TweakTimeline, type TweakTimelineProps, type TweakTimelineValues, type TweakValue, type UseTweakTimelineOptions, type UseTweakersOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, applyModulation, buildModMovePage, buildMovePages, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultFilterResponse, defaultListItemParams, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, dialOrigin, dialSpan, displayHex, enumOptionIcon, filterHand01, filterHandValue, filterResponsePath, filterShapePath, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, isSpanContinuation, lfoSyncedHz, listModTypes, loopFromStep, loopSteps, modColor, modKey, modPageLayout, modRingArc, moveAppPadRow, movePadRows, moveSlotKind, moveStop, defaultView as moveWaveformDefaultView, nearestHandle, normToValue, normalizeCurveMarkers, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeFilterValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeValue, normalizeXYDial, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, readComposition, redistributeWeight, registerModType, removeDriver, removeSegment, removeStop, resolveAxis, resolveFilterAxis, rgbToHsl, rgbToHsv, rgbToOklch, scrubBy, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, stepPosition, triggerLevels, triggersCrossed, useTweakTimeline, useTweakers, valueFromPoint, valueToNorm, valueToPercent, visibleColumns, visibleModControls, zoomBy };
+export { ADSR_DEF, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AnalyserMode, AnalyserRow, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, Checkbox, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DriverDirection, type EasingConfig, EasingVisualization, FOLLOWER_DEF, FOLLOWER_HZ_MAX, FOLLOWER_HZ_MIN, type FileConfig, FileControl, type FilterAxis, type FilterAxisConfig, type FilterConfig, FilterControl, type FilterResponse, type FilterValue, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SCOPE_SAMPLES, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_DIALS, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_PADS, MOVE_SLOT_LIBRARY, MOVE_SPECIAL_BUTTONS, MOVE_TRACKS, MOVE_WAVEFORM_STEPS, type ModAudioInput, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, Module, type MonoAudioLevelMeterProps, MoveActionButton, type MoveActionButtonProps, type MoveFunctionButton, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, type MovePadCell, type MovePage, MovePanel, type MoveScreenList, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotFilterBody, MoveSlotGlyph, type MoveSlotKind, MoveSlotRangeBody, MoveSlotReadout, MoveSlotScopeBody, MoveSlotShape, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, MoveVolumeDisplay, type MoveVolumeDisplayState, MoveWaveform, type MoveWaveformProps, MoveWaveformStore, type MoveWaveformVariant, type MoveWaveformView, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type NumberConfig, NumberControl, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, TAB_PATH, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type TweakConfig, type TweakEvent, type TweakMode, type TweakPosition, TweakRoot, TweakStore, type TweakTheme, TweakTimeline, type TweakTimelineProps, type TweakTimelineValues, type TweakValue, type UseTweakTimelineOptions, type UseTweakersOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, applyModulation, buildModMovePage, buildMovePages, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultFilterResponse, defaultListItemParams, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, dialOrigin, dialSpan, displayHex, enumOptionIcon, filterHand01, filterHandValue, filterResponsePath, filterShapePath, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, followerHz, formatClock, formatHex, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, isSpanContinuation, lfoSyncedHz, listModTypes, loopFromStep, loopSteps, modColor, modKey, modPageLayout, modRingArc, moveAppPadRow, movePadRows, moveSlotKind, moveStop, defaultView as moveWaveformDefaultView, nearestHandle, normToValue, normalizeCurveMarkers, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeFilterValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeValue, normalizeXYDial, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, readComposition, redistributeWeight, registerModType, removeDriver, removeSegment, removeStop, resolveAxis, resolveFilterAxis, rgbToHsl, rgbToHsv, rgbToOklch, scopeAreaPath, scopeLinePath, scrubBy, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, stepPosition, triggerLevels, triggersCrossed, useTweakTimeline, useTweakers, valueFromPoint, valueToNorm, valueToPercent, visibleColumns, visibleModControls, zoomBy };

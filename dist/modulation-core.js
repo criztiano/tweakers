@@ -269,6 +269,7 @@ var isModDial = (c) => !c.chip && (c.type === "select" || c.type === "slider" ||
 var slotOf = (c) => ({
   path: c.path,
   ...c.drawsPreview ? { preview: true } : {},
+  ...c.drawsScope ? { scope: true } : {},
   ...c.cycle ? { cycle: true } : {}
 });
 function modPageLayout(controls, params = {}) {
@@ -701,6 +702,57 @@ var CURVE_DEF = {
   }
 };
 registerModType(CURVE_DEF);
+var FOLLOWER_HZ_MIN = 20;
+var FOLLOWER_HZ_MAX = 2e4;
+var followerHz = (t) => FOLLOWER_HZ_MIN * Math.pow(FOLLOWER_HZ_MAX / FOLLOWER_HZ_MIN, clamp012(t));
+var fmtHz = (t) => {
+  const hz = followerHz(t);
+  return hz >= 1e3 ? `${(hz / 1e3).toFixed(1)} kHz` : `${Math.round(hz)} Hz`;
+};
+var FOLLOWER_DEF = {
+  type: "follower",
+  label: "Follower",
+  defaults: { gain: 0, rise: 20, fall: 250, delay: 0, source: "", lo: 0, hi: 1 },
+  controls: [
+    { type: "slider", path: "gain", label: "Gain", min: -24, max: 24, step: 0.1, unit: "dB", bipolar: true, drawsScope: true },
+    { type: "slider", path: "rise", label: "Rise", min: 0, max: 1e3, step: 1, unit: "ms" },
+    { type: "slider", path: "fall", label: "Fall", min: 0, max: 2e3, step: 1, unit: "ms" },
+    { type: "slider", path: "delay", label: "Delay", min: 0, max: 1e3, step: 1, unit: "ms" },
+    { type: "select", path: "source", label: "Source", sourceOptions: true },
+    { type: "slider", path: "lo", label: "Lo Cut", min: 0, max: 1, step: 0.01, formatValue: fmtHz },
+    { type: "slider", path: "hi", label: "Hi Cut", min: 0, max: 1, step: 0.01, formatValue: fmtHz }
+  ],
+  createState: () => ({ now: 0, line: [], in: 0, env: 0 }),
+  tick(state, params, dt, _bpm, input) {
+    const s = state;
+    s.now += dt;
+    const lo = clamp012(params.lo);
+    const hi = clamp012(params.hi);
+    const raw = input ? clamp012(input(followerHz(Math.min(lo, hi)), followerHz(Math.max(lo, hi)))) : 0;
+    const gainDb = clamp(Number(params.gain) || 0, -24, 24);
+    const level = clamp012(raw * Math.pow(10, gainDb / 20));
+    s.in = level;
+    const delayS = clamp(Number(params.delay) || 0, 0, 2e3) / 1e3;
+    let target = level;
+    if (delayS > 0) {
+      s.line.push({ t: s.now, v: level });
+      const readAt = s.now - delayS;
+      while (s.line.length > 1 && s.line[1].t <= readAt) s.line.shift();
+      target = s.line[0].t <= readAt ? s.line[0].v : 0;
+    } else if (s.line.length) {
+      s.line.length = 0;
+    }
+    const tauS = Math.max(0, Number(target > s.env ? params.rise : params.fall) || 0) / 1e3;
+    const k = tauS > 0 ? 1 - Math.exp(-dt / tauS) : 1;
+    s.env = clamp012(s.env + (target - s.env) * k);
+    return s.env;
+  },
+  meter(state) {
+    const s = state;
+    return { input: s.in, output: s.env };
+  }
+};
+registerModType(FOLLOWER_DEF);
 export {
   ADSR_DEF,
   CURVE_DEF,
@@ -708,6 +760,9 @@ export {
   CURVE_MAX_CLIPS,
   CURVE_MAX_DURATION,
   CURVE_MIN_DURATION,
+  FOLLOWER_DEF,
+  FOLLOWER_HZ_MAX,
+  FOLLOWER_HZ_MIN,
   LFO_DEF,
   LFO_SYNC_DIVISIONS,
   MOD_COLORS,
@@ -720,6 +775,7 @@ export {
   applyModulation,
   curveComposition,
   curveDuration,
+  followerHz,
   getModType,
   lfoSyncedHz,
   listModTypes,

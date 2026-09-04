@@ -397,6 +397,27 @@ export function filterShapePath(meta: ControlMeta, value: unknown): string | nul
   return filterResponsePath(response);
 }
 
+/**
+ * A meter history as an SVG trace across the 100×100 picture box, oldest
+ * sample at the left and newest at the right, y pointing up. Fewer than two
+ * samples draw nothing — a single point is not yet a trace.
+ */
+export function scopeLinePath(samples: readonly number[]): string {
+  if (samples.length < 2) return '';
+  const x = (i: number) => ((i / (samples.length - 1)) * 100).toFixed(2);
+  const y = (v: number) => ((1 - Math.min(1, Math.max(0, v))) * 100).toFixed(2);
+  return samples.map((v, i) => `${i ? 'L' : 'M'} ${x(i)} ${y(v)}`).join(' ');
+}
+
+/**
+ * The same trace closed down to the baseline, so the incoming signal reads
+ * as a filled body under the follower's line rather than a second stroke.
+ */
+export function scopeAreaPath(samples: readonly number[]): string {
+  const line = scopeLinePath(samples);
+  return line ? `${line} L 100 100 L 0 100 Z` : '';
+}
+
 /** Where the fill anchors for a bipolar/origin slider, 0..1 (else 0). */
 export function dialOrigin(meta: ControlMeta): number {
   const origin = meta.origin ?? (meta.bipolar ? 0 : undefined);

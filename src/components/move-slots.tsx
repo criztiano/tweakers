@@ -33,6 +33,9 @@ import { resolveFilterAxis, type FilterValue } from '../filter-core';
  * - `filter`  — the 2-slot control: cutoff and resonance as one picture,
  *   the magnitude response maximised across both columns, each hand's
  *   small label sitting where its own slot's label would have been.
+ * - `scope`   — a dial that draws its modulator's live meter behind it: the
+ *   incoming signal filled, the modulator's own line over it. The
+ *   follower's Gain wears this.
  */
 export type MoveSlotKind =
   | 'default'
@@ -42,14 +45,16 @@ export type MoveSlotKind =
   | 'enum'
   | 'xy'
   | 'range'
-  | 'filter';
+  | 'filter'
+  | 'scope';
 
 /** Which face a control wears in its slot, from its meta and moment. */
 export function moveSlotKind(
   meta: ControlMeta,
-  opts: { enum?: boolean; shape?: string | null; glyph?: string | null; valueFirst?: boolean } = {}
+  opts: { enum?: boolean; shape?: string | null; glyph?: string | null; valueFirst?: boolean; scope?: boolean } = {}
 ): MoveSlotKind {
   if (meta.type === 'filter') return 'filter';
+  if (opts.scope) return 'scope';
   if (meta.type === 'xy') return 'xy';
   if (meta.type === 'range') return 'range';
   if (opts.enum) {
@@ -118,6 +123,58 @@ export function MoveSlotDefaultBody({
 }) {
   return (
     <>
+      <MoveSlotReadout label={label} value={value} />
+      <div className="tweakers-move-dial-bar">
+        <div
+          className="tweakers-move-dial-fill"
+          data-zero={atOrigin || undefined}
+          style={originPct != null
+            ? { marginLeft: `${Math.min(pct, originPct)}%`, width: `${Math.abs(pct - originPct)}%` }
+            : { width: `${pct}%` }}
+        />
+        {atOrigin && (
+          <span className="tweakers-move-dial-zero" style={{ left: `${originPct}%` }} />
+        )}
+      </div>
+    </>
+  );
+}
+
+/**
+ * The meter slot: a dial you turn that also shows what it is doing. The
+ * incoming level fills as a body, the modulator's own line rides over it,
+ * and the dial keeps its readout and fill bar — so Gain still reads and
+ * drags like any other slot, with the evidence drawn behind it.
+ *
+ * Pure, like every other face: the caller hands over the two traces, and
+ * whoever wants them live re-renders this with fresh ones each frame.
+ */
+export function MoveSlotScopeBody({
+  label, value, pct, originPct, atOrigin, inputPath, outputPath,
+}: {
+  label: string;
+  value: ReactNode;
+  /** Fill extent, 0–100. */
+  pct: number;
+  /** Bipolar/origin anchor position, 0–100 — null for a plain fill. */
+  originPct: number | null;
+  atOrigin?: boolean;
+  /** The incoming signal, closed to the baseline. */
+  inputPath: string;
+  /** The modulator's own output line. */
+  outputPath: string;
+}) {
+  return (
+    <>
+      <svg
+        className="tweakers-move-scope"
+        viewBox="0 0 100 100"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        {inputPath && <path className="tweakers-move-scope-in" d={inputPath} />}
+        {outputPath && <path className="tweakers-move-scope-out" d={outputPath} />}
+      </svg>
       <MoveSlotReadout label={label} value={value} />
       <div className="tweakers-move-dial-bar">
         <div
@@ -252,4 +309,5 @@ export const MOVE_SLOT_LIBRARY = {
   enum: { description: 'stepped option picker, one pagination cell per option', component: MoveSlotEnumBody },
   range: { description: 'two handles on one bar; volume knob is the second hand', component: MoveSlotRangeBody },
   filter: { description: '2 slots: cutoff + resonance as one response picture', component: MoveSlotFilterBody },
+  scope: { description: 'a dial drawing its modulator’s live meter behind it', component: MoveSlotScopeBody },
 } as const;

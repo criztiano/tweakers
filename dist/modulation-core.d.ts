@@ -35,7 +35,7 @@ declare const MOD_SLOTS = 16;
 declare const MOD_COLORS: string[];
 /** A slot's palette colour — the one constant identity it keeps. */
 declare const modColor: (index: number) => string;
-type ModulationType = 'lfo' | 'adsr' | 'envelope' | 'curve' | 'sh' | 'sequencer';
+type ModulationType = 'lfo' | 'adsr' | 'follower' | 'curve' | 'sh' | 'sequencer';
 /**
  * A settings value: the scalars a dial or a pad edits, plus the structures a
  * richer modulator carries (the curve's clip list). JSON-safe throughout, so
@@ -65,27 +65,39 @@ interface ModulationAssignment {
 /**
  * Settings-page control metadata — ControlMeta plus what the Move page needs:
  * the xy mapping (an xy control edits two scalar params, xParam/yParam,
- * rather than storing an {x, y} object), and the placement and gestures the
- * two surfaces read through {@link modPageLayout}.
+ * rather than storing an {x, y} object), the placement and gestures the two
+ * surfaces read through {@link modPageLayout}, and the source marker: a
+ * select flagged `sourceOptions` lists the ModulationStore's registered
+ * audio inputs, and only appears when there is a real choice to make.
  */
 type ModControlMeta = ControlMeta & {
     xParam?: string;
     yParam?: string;
+    /** Lists the ModulationStore's registered audio inputs (the follower's source). */
+    sourceOptions?: boolean;
     /** Sits in a small slot under its dial's column instead of taking a big one. */
     chip?: boolean;
     /** Shown only when this says so — a control that belongs to one mode. */
     when?: (params: ModulationParams) => boolean;
     /** This dial draws the modulator's own shape (the type's `preview`). */
     drawsPreview?: boolean;
+    /** This dial draws the modulator's live meter (the type's `meter`). */
+    drawsScope?: boolean;
     /** A knob tap on this dial runs this, returning the params it changes. */
     cycle?: (params: ModulationParams) => ModulationParams;
 };
+/**
+ * Live audio handed to a modulator by the engine: the band level 0..1
+ * inside a frequency window — a follower's raw material.
+ */
+type ModAudioInput = (loHz: number, hiHz: number) => number;
 /**
  * One modulator type, pluggable: LFO ships with the kit, the others
  * (envelope, curve, S&H, sequencer) register through the same door.
  * `tick` advances the modulator by `dt` seconds and returns the signal,
  * always -1..1; `state` is whatever `createState` returned — the engine
- * never looks inside it.
+ * never looks inside it. Types that listen to audio (the envelope follower)
+ * read the engine-provided `input`; the others ignore it.
  */
 interface ModTypeDef {
     type: ModulationType;
@@ -94,7 +106,7 @@ interface ModTypeDef {
     /** The settings-page layout, in slot order: dials, toggles, the xy pad. */
     controls: ModControlMeta[];
     createState(): unknown;
-    tick(state: unknown, params: ModulationParams, dt: number, bpm: number): number;
+    tick(state: unknown, params: ModulationParams, dt: number, bpm: number, input?: ModAudioInput | null): number;
     /**
      * Fold an incoming patch into the type's own structure — the curve writes
      * the shape dials into the clip they belong to, and reads the next clip's
@@ -115,6 +127,15 @@ interface ModTypeDef {
         points: number[];
         label: string;
     };
+    /**
+     * What the modulator is hearing and doing right now, each 0..1 — the
+     * follower's incoming level and its own output. A type that declares this
+     * gets a rolling history kept for it, which the scope dial draws.
+     */
+    meter?(state: unknown): {
+        input: number;
+        output: number;
+    };
     /** Where the modulator sits in its cycle, 0..1 — a composer's playhead. */
     phase?(state: unknown): number;
     /**
@@ -129,6 +150,8 @@ interface ModPageSlot {
     path: string;
     /** The dial draws the modulator's preview instead of a bar. */
     preview?: boolean;
+    /** The dial draws the modulator's live meter behind its bar. */
+    scope?: boolean;
     /** A knob tap on this dial cycles it. */
     cycle?: boolean;
 }
@@ -252,5 +275,27 @@ declare function curveComposition(params: ModulationParams): CurveComposition;
  */
 declare function curveDuration(params: ModulationParams, bpm: number): number;
 declare const CURVE_DEF: ModTypeDef;
+/** The cut dials' frequency span — the audible band. */
+declare const FOLLOWER_HZ_MIN = 20;
+declare const FOLLOWER_HZ_MAX = 20000;
+/**
+ * A cut dial's position 0..1 → Hz, exponential across the audible band —
+ * equal knob travel covers equal musical distance (20·1000^t).
+ */
+declare const followerHz: (t: number) => number;
+/**
+ * The follower: the band level of an audio input (lo/hi confine it to a
+ * frequency window — follow just the kick, just the hiss), through gain, an
+ * optional delay, and rise/fall smoothing. The signal is unipolar 0..1:
+ * silence rests the control at its base value, level pushes it up to
+ * `amount` of the span. Which audio it follows comes from the engine — apps
+ * register inputs on the ModulationStore (`registerAudioInput`), and the
+ * source select appears once there is more than one to choose from.
+ *
+ * Gain draws the meter (`drawsScope`): the incoming level as a filled trace
+ * with the follower's own line riding over it, so the dial you turn to set
+ * the drive is the one that shows what the drive is doing.
+ */
+declare const FOLLOWER_DEF: ModTypeDef;
 
-export { ADSR_DEF, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, curveComposition, curveDuration, getModType, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modRingArc, registerModType, visibleModControls };
+export { ADSR_DEF, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, FOLLOWER_DEF, FOLLOWER_HZ_MAX, FOLLOWER_HZ_MIN, LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModAudioInput, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, curveComposition, curveDuration, followerHz, getModType, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modRingArc, registerModType, visibleModControls };

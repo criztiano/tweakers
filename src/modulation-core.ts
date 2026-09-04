@@ -68,7 +68,7 @@ export const MOD_COLORS = [
 export const modColor = (index: number) =>
   MOD_COLORS[((index % MOD_SLOTS) + MOD_SLOTS) % MOD_SLOTS];
 
-export type ModulationType = 'lfo' | 'adsr' | 'envelope' | 'curve' | 'sh' | 'sequencer';
+export type ModulationType = 'lfo' | 'adsr' | 'follower' | 'curve' | 'sh' | 'sequencer';
 
 /**
  * A settings value: the scalars a dial or a pad edits, plus the structures a
@@ -106,28 +106,41 @@ export interface ModulationAssignment {
 /**
  * Settings-page control metadata — ControlMeta plus what the Move page needs:
  * the xy mapping (an xy control edits two scalar params, xParam/yParam,
- * rather than storing an {x, y} object), and the placement and gestures the
- * two surfaces read through {@link modPageLayout}.
+ * rather than storing an {x, y} object), the placement and gestures the two
+ * surfaces read through {@link modPageLayout}, and the source marker: a
+ * select flagged `sourceOptions` lists the ModulationStore's registered
+ * audio inputs, and only appears when there is a real choice to make.
  */
 export type ModControlMeta = ControlMeta & {
   xParam?: string;
   yParam?: string;
+  /** Lists the ModulationStore's registered audio inputs (the follower's source). */
+  sourceOptions?: boolean;
   /** Sits in a small slot under its dial's column instead of taking a big one. */
   chip?: boolean;
   /** Shown only when this says so — a control that belongs to one mode. */
   when?: (params: ModulationParams) => boolean;
   /** This dial draws the modulator's own shape (the type's `preview`). */
   drawsPreview?: boolean;
+  /** This dial draws the modulator's live meter (the type's `meter`). */
+  drawsScope?: boolean;
   /** A knob tap on this dial runs this, returning the params it changes. */
   cycle?: (params: ModulationParams) => ModulationParams;
 };
+
+/**
+ * Live audio handed to a modulator by the engine: the band level 0..1
+ * inside a frequency window — a follower's raw material.
+ */
+export type ModAudioInput = (loHz: number, hiHz: number) => number;
 
 /**
  * One modulator type, pluggable: LFO ships with the kit, the others
  * (envelope, curve, S&H, sequencer) register through the same door.
  * `tick` advances the modulator by `dt` seconds and returns the signal,
  * always -1..1; `state` is whatever `createState` returned — the engine
- * never looks inside it.
+ * never looks inside it. Types that listen to audio (the envelope follower)
+ * read the engine-provided `input`; the others ignore it.
  */
 export interface ModTypeDef {
   type: ModulationType;
@@ -136,7 +149,13 @@ export interface ModTypeDef {
   /** The settings-page layout, in slot order: dials, toggles, the xy pad. */
   controls: ModControlMeta[];
   createState(): unknown;
-  tick(state: unknown, params: ModulationParams, dt: number, bpm: number): number;
+  tick(
+    state: unknown,
+    params: ModulationParams,
+    dt: number,
+    bpm: number,
+    input?: ModAudioInput | null
+  ): number;
   /**
    * Fold an incoming patch into the type's own structure — the curve writes
    * the shape dials into the clip they belong to, and reads the next clip's
@@ -154,6 +173,12 @@ export interface ModTypeDef {
    * and what that shape is called. Both small screens draw it.
    */
   preview?(params: ModulationParams, count: number): { points: number[]; label: string };
+  /**
+   * What the modulator is hearing and doing right now, each 0..1 — the
+   * follower's incoming level and its own output. A type that declares this
+   * gets a rolling history kept for it, which the scope dial draws.
+   */
+  meter?(state: unknown): { input: number; output: number };
   /** Where the modulator sits in its cycle, 0..1 — a composer's playhead. */
   phase?(state: unknown): number;
   /**
@@ -171,6 +196,8 @@ export interface ModPageSlot {
   path: string;
   /** The dial draws the modulator's preview instead of a bar. */
   preview?: boolean;
+  /** The dial draws the modulator's live meter behind its bar. */
+  scope?: boolean;
   /** A knob tap on this dial cycles it. */
   cycle?: boolean;
 }
@@ -196,6 +223,7 @@ const isModDial = (c: ModControlMeta) =>
 const slotOf = (c: ModControlMeta): ModPageSlot => ({
   path: c.path,
   ...(c.drawsPreview ? { preview: true } : {}),
+  ...(c.drawsScope ? { scope: true } : {}),
   ...(c.cycle ? { cycle: true } : {}),
 });
 
@@ -814,3 +842,100 @@ export const CURVE_DEF: ModTypeDef = {
 };
 
 registerModType(CURVE_DEF);
+
+/* ── Follower — rides the app's audio ─────────────────────────────────── */
+
+/** The cut dials' frequency span — the audible band. */
+export const FOLLOWER_HZ_MIN = 20;
+export const FOLLOWER_HZ_MAX = 20000;
+
+/**
+ * A cut dial's position 0..1 → Hz, exponential across the audible band —
+ * equal knob travel covers equal musical distance (20·1000^t).
+ */
+export const followerHz = (t: number) =>
+  FOLLOWER_HZ_MIN * Math.pow(FOLLOWER_HZ_MAX / FOLLOWER_HZ_MIN, clamp01(t));
+
+const fmtHz = (t: number) => {
+  const hz = followerHz(t);
+  return hz >= 1000 ? `${(hz / 1000).toFixed(1)} kHz` : `${Math.round(hz)} Hz`;
+};
+
+interface FollowerState {
+  /** The follower's own clock, the delay line's time base. */
+  now: number;
+  /** Time-tagged input history — the delay line, trimmed to the delay. */
+  line: { t: number; v: number }[];
+  /** The level going in, after gain — what the meter draws as the signal. */
+  in: number;
+  /** The followed level 0..1 — the signal itself. */
+  env: number;
+}
+
+/**
+ * The follower: the band level of an audio input (lo/hi confine it to a
+ * frequency window — follow just the kick, just the hiss), through gain, an
+ * optional delay, and rise/fall smoothing. The signal is unipolar 0..1:
+ * silence rests the control at its base value, level pushes it up to
+ * `amount` of the span. Which audio it follows comes from the engine — apps
+ * register inputs on the ModulationStore (`registerAudioInput`), and the
+ * source select appears once there is more than one to choose from.
+ *
+ * Gain draws the meter (`drawsScope`): the incoming level as a filled trace
+ * with the follower's own line riding over it, so the dial you turn to set
+ * the drive is the one that shows what the drive is doing.
+ */
+export const FOLLOWER_DEF: ModTypeDef = {
+  type: 'follower',
+  label: 'Follower',
+  defaults: { gain: 0, rise: 20, fall: 250, delay: 0, source: '', lo: 0, hi: 1 },
+  controls: [
+    { type: 'slider', path: 'gain', label: 'Gain', min: -24, max: 24, step: 0.1, unit: 'dB', bipolar: true, drawsScope: true },
+    { type: 'slider', path: 'rise', label: 'Rise', min: 0, max: 1000, step: 1, unit: 'ms' },
+    { type: 'slider', path: 'fall', label: 'Fall', min: 0, max: 2000, step: 1, unit: 'ms' },
+    { type: 'slider', path: 'delay', label: 'Delay', min: 0, max: 1000, step: 1, unit: 'ms' },
+    { type: 'select', path: 'source', label: 'Source', sourceOptions: true },
+    { type: 'slider', path: 'lo', label: 'Lo Cut', min: 0, max: 1, step: 0.01, formatValue: fmtHz },
+    { type: 'slider', path: 'hi', label: 'Hi Cut', min: 0, max: 1, step: 0.01, formatValue: fmtHz },
+  ],
+  createState: (): FollowerState => ({ now: 0, line: [], in: 0, env: 0 }),
+  tick(state, params, dt, _bpm, input) {
+    const s = state as FollowerState;
+    s.now += dt;
+
+    // The band window; crossed dials just swap so the window never inverts.
+    const lo = clamp01(params.lo);
+    const hi = clamp01(params.hi);
+    const raw = input
+      ? clamp01(input(followerHz(Math.min(lo, hi)), followerHz(Math.max(lo, hi))))
+      : 0;
+    const gainDb = clamp(Number(params.gain) || 0, -24, 24);
+    const level = clamp01(raw * Math.pow(10, gainDb / 20));
+    s.in = level;
+
+    // The delay line: read `delay` ms behind the head; until history reaches
+    // that far back (startup), the follower hears silence.
+    const delayS = clamp(Number(params.delay) || 0, 0, 2000) / 1000;
+    let target = level;
+    if (delayS > 0) {
+      s.line.push({ t: s.now, v: level });
+      const readAt = s.now - delayS;
+      while (s.line.length > 1 && s.line[1].t <= readAt) s.line.shift();
+      target = s.line[0].t <= readAt ? s.line[0].v : 0;
+    } else if (s.line.length) {
+      s.line.length = 0;
+    }
+
+    // Rise/fall one-pole, picked by direction; 0 ms is instant.
+    const tauS = Math.max(0, Number(target > s.env ? params.rise : params.fall) || 0) / 1000;
+    const k = tauS > 0 ? 1 - Math.exp(-dt / tauS) : 1;
+    s.env = clamp01(s.env + (target - s.env) * k);
+    return s.env;
+  },
+  meter(state) {
+    const s = state as FollowerState;
+    return { input: s.in, output: s.env };
+  },
+};
+
+registerModType(FOLLOWER_DEF);

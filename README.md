@@ -1076,7 +1076,7 @@ Time-style strings (`0:00:00`) render with bold separators so the digit groups r
 
 ## Modulation
 
-Any bounded numeric control (slider, `number` with min/max) can be driven by a modulation — an LFO, a sample & hold, and an ADSR today; envelope follower, curve, and step sequencer plug into the same registry. Modulations live in 16 slots, one per Move sequencer step button: **touch a control, press a step** and the modulation is created there and wired to the control (press again to unwire). Each slot keeps a palette colour; the track row shows a circle per slot with a pulsing dot of that colour, and the same dot marks every control the slot drives — in the Move panel and the side panel both.
+Any bounded numeric control (slider, `number` with min/max) can be driven by a modulation — an LFO, a sample & hold, an ADSR, a curve, and a follower today; the step sequencer plugs into the same registry. Modulations live in 16 slots, one per Move sequencer step button: **touch a control, press a step** and the modulation is created there and wired to the control (press again to unwire). Each slot keeps a palette colour; the track row shows a circle per slot with a pulsing dot of that colour, and the same dot marks every control the slot drives — in the Move panel and the side panel both.
 
 The modulated value **never enters the TweakStore.** The control keeps the value you set (the base); the modulation is a live layer your app pulls at frame time:
 
@@ -1091,7 +1091,7 @@ const params = ModulationStore.getValues('fx');               // whole panel
 
 Because the stored value never moves, presets, persistence, and the bridge kit's diffing all stay quiet — no loops, no thrash. Slots and assignments persist to localStorage (fail-soft), so a prototype's modulation setup survives a reload.
 
-**Settings.** Hold an occupied step (or hold its circle on-screen) and the modulator's settings page takes the surface over: the type enum in the first big slot, then the modulator's own controls — for the LFO: rate (its tempo-sync pad directly below), phase, width, and a jitter/smooth XY. A track button puts a regular page back. Under the hood the page is one hidden TweakStore panel (`MOD_SETTINGS_PANEL`, kind `'modulation'` — never in the dock, never on a track), so the bridge kit syncs it to the hardware like any page and every edit flows into the slot's params.
+**Settings.** Hold an occupied step (or hold its circle on-screen) and the modulator's settings page takes the surface over: the type enum in the first big slot, then the modulator's own controls — for the LFO: rate (its tempo-sync pad directly below), phase, width, and a jitter/smooth XY; for the follower: a live gain meter, rise, fall, delay, the source select, and the lo/hi cut dials. A track button puts a regular page back. Under the hood the page is one hidden TweakStore panel (`MOD_SETTINGS_PANEL`, kind `'modulation'` — never in the dock, never on a track), so the bridge kit syncs it to the hardware like any page and every edit flows into the slot's params.
 
 Everything the gesture does is also plain API — `createSlot(step, 'lfo')`, `assign(panelId, path, step, amount)`, `updateSlotParams`, `setSlotType`, `removeSlot`, `openSettings(step)` / `closeSettings()` — and `subscribe` / `subscribeFrames` cover structure and per-frame signals (`getSignal(step)` is the slot's raw −1..1).
 
@@ -1114,7 +1114,7 @@ Free-running types (LFO, S&H) ignore the gate, and so do slots pointed at an ext
 
 ### External modulation sources
 
-DSP apps whose modulators run on the audio side (a native LFO, an envelope follower) register them instead of using the internal engine:
+DSP apps whose modulators run on the audio side (a native LFO, a native follower) register them instead of using the internal engine:
 
 ```tsx
 // Pull: sampled once per frame by the engine…
@@ -1127,7 +1127,21 @@ ModulationStore.setSlotSource(step, 'env-follow');
 
 A slot on a source shows its signal (circle, dots, step light) but applies nothing to values — the app's own engine already did, at audio rate. A source that wants the library to apply for it passes `applies: true`. Tempo-synced modulators follow `ModulationStore.setTempo(bpm)` (the bridge kit feeds it the Move's tempo).
 
-New modulator types register a `ModTypeDef` — defaults, the settings-page controls, a stateful `tick(state, params, dt, bpm)` returning −1..1, and an optional `gate(state, on)` for the types that take one — via `registerModType`; the LFO (`LFO_DEF`) is the reference implementation, with `SH_DEF` and `ADSR_DEF` beside it.
+### The follower
+
+`FOLLOWER_DEF` rides live audio instead of a clock. Hand the store your audio as named inputs — an `AnalyserNode` getter, so the node can exist only after the app's audio starts on a user gesture:
+
+```tsx
+const off = ModulationStore.registerAudioInput('drums', () => analyser);
+```
+
+Its controls: **gain** (dB trim into the detector), **rise** and **fall** (the attack/release smoothing, in ms), **delay** (the follower hears the audio late, for staggered layers), a **source** select (which registered input to follow — it appears only when there is more than one; with one input, or none chosen, the first is followed), and **lo/hi cut** dials that confine the detector to a frequency window — follow just the kick, or just the hiss. The signal is unipolar 0..1: silence rests a wired control at its base value, level pushes it up to `amount` of the span.
+
+**Gain shows its work.** The Gain slot is a live meter: the incoming level (after gain) fills as a body, and the follower's own line rides over it, about two seconds of history scrolling right to left. So the dial you turn to set the drive is the one that shows what the drive is doing — turn gain up and watch the body swell under the line, turn rise and fall and watch the line lag or snap to it.
+
+A type gets that for free by declaring a `meter(state)` returning `{ input, output }`, each 0..1, and marking one control `drawsScope`. The store keeps the rolling history (`MOD_SCOPE_SAMPLES` frames), and both surfaces read it through `ModulationStore.getSettingsScope()`; `scopeLinePath` / `scopeAreaPath` turn a history into the SVG traces the slot draws.
+
+New modulator types register a `ModTypeDef` — defaults, the settings-page controls, a stateful `tick(state, params, dt, bpm, input?)` returning −1..1 (`input` is the engine-served audio band sampler; clock-driven types ignore it), and the optional `gate(state, on)`, `preview(params, count)` and `meter(state)` for the types that want them — via `registerModType`; the LFO (`LFO_DEF`) is the reference implementation, with `SH_DEF`, `ADSR_DEF`, `CURVE_DEF` and `FOLLOWER_DEF` beside it.
 
 ---
 

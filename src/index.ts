@@ -10,11 +10,11 @@ export type { TweakPosition, TweakMode, TweakTheme } from './components/TweakRoo
 export { MovePanel } from './components/MovePanel';
 export { MoveActionButton } from './components/MoveActionButton';
 export type { MoveActionButtonProps } from './components/MoveActionButton';
-export { buildMovePages, buildModMovePage, movePadRows, moveAppPadRow, visibleColumns, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
+export { buildMovePages, buildModMovePage, movePadRows, moveAppPadRow, visibleColumns, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, scopeLinePath, scopeAreaPath, dialOrigin, dialSpan, isSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
 export type { MovePage } from './move-layout';
 
 // The big-slot library — the dictionary of what a Move dial slot can be
-export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
+export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotScopeBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
 export type { MoveSlotKind } from './components/move-slots';
 
 // The filter control — the kit's first 2-slot control (cutoff + resonance)
@@ -49,7 +49,7 @@ export { ListScreen } from './components/ListScreen';
 export type { ListScreenProps, ListScreenItem } from './components/ListScreen';
 
 // Modulation layer — slots, assignments, the engine, and the type registry
-export { ModulationStore, MOD_TOUCH_GRACE_MS } from './store/ModulationStore';
+export { ModulationStore, MOD_TOUCH_GRACE_MS, MOD_SCOPE_SAMPLES } from './store/ModulationStore';
 export type { ModulationSourceConfig, ModStepAction } from './store/ModulationStore';
 export {
   MOD_SLOTS,
@@ -79,6 +79,10 @@ export {
   MOD_RING_CIRCUMFERENCE,
   LFO_SYNC_DIVISIONS,
   lfoSyncedHz,
+  FOLLOWER_DEF,
+  FOLLOWER_HZ_MIN,
+  FOLLOWER_HZ_MAX,
+  followerHz,
 } from './modulation-core';
 export type {
   ModulationType,
@@ -88,6 +92,7 @@ export type {
   ModulationAssignment,
   ModTypeDef,
   ModControlMeta,
+  ModAudioInput,
   ModPageLayout,
   ModPageSlot,
 } from './modulation-core';

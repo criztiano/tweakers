@@ -5833,6 +5833,73 @@ input.tweakers-list-item-title:focus {
   white-space: nowrap;
 }
 
+/* Scope slot — a dial that draws what it is doing. The meter fills the
+   picture band above the bar (the same band the filter's response uses), so
+   the slot still reads as a dial: name centred, value on touch, fill at the
+   bottom. The incoming signal is a quiet body; the modulator's own line
+   rides over it at full strength, because the line is the point. */
+.tweakers-move-scope {
+  position: absolute;
+  top: 24px;
+  left: 8px;
+  width: calc(100% - 17px);
+  height: calc(100% - 24px - 42px);
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: 4px;
+}
+
+/* The trace is the headline here, so the dB reading drops to a caption
+   under it — the filter slot's move, where the picture is the value. */
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-readout {
+  inset: auto 8px 23px;
+  height: 16px;
+  align-items: flex-end;
+}
+
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-value,
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-label {
+  font-size: 13px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.tweakers-move-scope-in {
+  fill: var(--move-text);
+  stroke: none;
+  opacity: 0.16;
+  transition: opacity 0.12s;
+}
+
+.tweakers-move-scope-out {
+  fill: none;
+  stroke: var(--move-text);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.55;
+  transition: opacity 0.12s;
+}
+
+.tweakers-move-dial[data-kind="scope"]:hover .tweakers-move-scope-in,
+.tweakers-move-dial[data-kind="scope"][data-active] .tweakers-move-scope-in {
+  opacity: 0.26;
+}
+
+.tweakers-move-dial[data-kind="scope"]:hover .tweakers-move-scope-out,
+.tweakers-move-dial[data-kind="scope"][data-active] .tweakers-move-scope-out {
+  opacity: 1;
+}
+
+/* The trace runs behind the name, so the name gets a halo to stay legible —
+   the same move the shape slots make. */
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-label,
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-value {
+  z-index: 1;
+  text-shadow: 0 0 6px var(--move-chip), 0 0 6px var(--move-chip);
+}
+
 /* Range slot — the bar fills BETWEEN two handle ticks (the span), and the
    ticks poke past the bar so a collapsed range still reads as two hands. */
 .tweakers-move-dial-range {

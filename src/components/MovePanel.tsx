@@ -7,9 +7,9 @@ import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from './TweakRoot';
-import { buildMovePages, buildModMovePage, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, isEnumDial, isSpanContinuation, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_DIALS, MOVE_PADS } from '../move-layout';
+import { buildMovePages, buildModMovePage, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, scopeLinePath, scopeAreaPath, dialOrigin, isEnumDial, isSpanContinuation, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_DIALS, MOVE_PADS } from '../move-layout';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody } from './move-slots';
+import { MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotScopeBody } from './move-slots';
 import { MoveSurfaceStore, type MovePadCell } from '../move-surface-store';
 import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValue, applyDetentAxis, type XYValue } from '../xy-pad-core';
 import { nearestHandle, type RangeValue } from '../range-slider-core';
@@ -201,6 +201,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     ? Math.min(composition.segments.length - 1, Math.max(0, Math.round(Number(modSlot!.params.selected) || 0)))
     : 0;
   const previewPath = modLayout?.dials.find((d) => d.preview)?.path ?? null;
+  // The dial wearing the modulator's live meter — the follower's Gain.
+  const scopePath = modLayout?.dials.find((d) => d.scope)?.path ?? null;
 
   // Subscribe to the active page's value changes (per-panel channel only).
   const values = useSyncExternalStore(
@@ -615,7 +617,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 // reads the other way round: the name shrinks to the tag on
                 // top and the value takes the slot. Plain 0..1 amounts keep
                 // the big name, since "40%" on its own says nothing.
-                const valueFirst = !!settingsPanel && !(meta.min === 0 && meta.max === 1);
+                // A settings dial leads with its value, except a plain 0..1
+                // knob whose honest reading is the percentage. A control that
+                // declares its own formatter has said how it wants to read —
+                // the follower's cut dials are 0..1 but speak in Hz.
+                const valueFirst = !!settingsPanel &&
+                  !(meta.min === 0 && meta.max === 1 && !meta.formatValue);
                 // The filter takes two slots as one picture: the magnitude
                 // response maximised across both, each hand's small label
                 // sitting where its own slot's label would have been.
@@ -832,6 +839,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   <div
                     key={meta.path}
                     className="tweakers-move-dial"
+                    data-kind={meta.path === scopePath && !subbed ? 'scope' : undefined}
                     data-active={active || undefined}
                     data-latched={latchedHere || undefined}
                     data-sub={subbed || valueFirst || undefined}
@@ -850,15 +858,25 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   >
                     {(subbed || valueFirst) && <span className="tweakers-move-dial-sub">{meta.label}</span>}
                     <ModDot path={meta.path} />
-                    <MoveSlotDefaultBody
-                      label={meta.label}
-                      value={subValue
-                        ? `${subValue.num}${subValue.unit ? ` ${subValue.unit}` : ''}`
-                        : dialReading(meta)}
-                      pct={pct}
-                      originPct={originPct}
-                      atOrigin={atOrigin}
-                    />
+                    {meta.path === scopePath && !subbed ? (
+                      <MoveDialScope
+                        label={meta.label}
+                        value={dialReading(meta)}
+                        pct={pct}
+                        originPct={originPct}
+                        atOrigin={atOrigin}
+                      />
+                    ) : (
+                      <MoveSlotDefaultBody
+                        label={meta.label}
+                        value={subValue
+                          ? `${subValue.num}${subValue.unit ? ` ${subValue.unit}` : ''}`
+                          : dialReading(meta)}
+                        pct={pct}
+                        originPct={originPct}
+                        atOrigin={atOrigin}
+                      />
+                    )}
 
                   </div>
                 );
@@ -962,6 +980,35 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // Flow docking stays in the host's tree, so the app can centre content and
   // panel as one group; viewport docking portals out and pins to the edge.
   return dock === 'flow' ? content : createPortal(content, document.body);
+}
+
+/**
+ * The follower's Gain slot, redrawn every engine frame: the incoming level
+ * as a filled body with the follower's own line over it. Only this subtree
+ * re-renders — the panel around it never hears the frame — and the slot's
+ * face itself stays the pure `MoveSlotScopeBody`.
+ */
+function MoveDialScope(props: {
+  label: string;
+  value: React.ReactNode;
+  pct: number;
+  originPct: number | null;
+  atOrigin?: boolean;
+}) {
+  const [paths, setPaths] = useState({ input: '', output: '' });
+
+  useEffect(() => {
+    const draw = () => {
+      const scope = ModulationStore.getSettingsScope();
+      setPaths(scope
+        ? { input: scopeAreaPath(scope.input), output: scopeLinePath(scope.output) }
+        : { input: '', output: '' });
+    };
+    draw();
+    return ModulationStore.subscribeFrames(draw);
+  }, []);
+
+  return <MoveSlotScopeBody {...props} inputPath={paths.input} outputPath={paths.output} />;
 }
 
 /** A preview's samples as an SVG path across a 100×100 box, y pointing up. */

@@ -288,6 +288,7 @@ var isModDial = (c) => !c.chip && (c.type === "select" || c.type === "slider" ||
 var slotOf = (c) => ({
   path: c.path,
   ...c.drawsPreview ? { preview: true } : {},
+  ...c.drawsScope ? { scope: true } : {},
   ...c.cycle ? { cycle: true } : {}
 });
 function modPageLayout(controls, params = {}) {
@@ -712,9 +713,76 @@ var CURVE_DEF = {
   }
 };
 registerModType(CURVE_DEF);
+var FOLLOWER_HZ_MIN = 20;
+var FOLLOWER_HZ_MAX = 2e4;
+var followerHz = (t) => FOLLOWER_HZ_MIN * Math.pow(FOLLOWER_HZ_MAX / FOLLOWER_HZ_MIN, clamp012(t));
+var fmtHz = (t) => {
+  const hz = followerHz(t);
+  return hz >= 1e3 ? `${(hz / 1e3).toFixed(1)} kHz` : `${Math.round(hz)} Hz`;
+};
+var FOLLOWER_DEF = {
+  type: "follower",
+  label: "Follower",
+  defaults: { gain: 0, rise: 20, fall: 250, delay: 0, source: "", lo: 0, hi: 1 },
+  controls: [
+    { type: "slider", path: "gain", label: "Gain", min: -24, max: 24, step: 0.1, unit: "dB", bipolar: true, drawsScope: true },
+    { type: "slider", path: "rise", label: "Rise", min: 0, max: 1e3, step: 1, unit: "ms" },
+    { type: "slider", path: "fall", label: "Fall", min: 0, max: 2e3, step: 1, unit: "ms" },
+    { type: "slider", path: "delay", label: "Delay", min: 0, max: 1e3, step: 1, unit: "ms" },
+    { type: "select", path: "source", label: "Source", sourceOptions: true },
+    { type: "slider", path: "lo", label: "Lo Cut", min: 0, max: 1, step: 0.01, formatValue: fmtHz },
+    { type: "slider", path: "hi", label: "Hi Cut", min: 0, max: 1, step: 0.01, formatValue: fmtHz }
+  ],
+  createState: () => ({ now: 0, line: [], in: 0, env: 0 }),
+  tick(state, params, dt, _bpm, input) {
+    const s = state;
+    s.now += dt;
+    const lo = clamp012(params.lo);
+    const hi = clamp012(params.hi);
+    const raw = input ? clamp012(input(followerHz(Math.min(lo, hi)), followerHz(Math.max(lo, hi)))) : 0;
+    const gainDb = clamp(Number(params.gain) || 0, -24, 24);
+    const level = clamp012(raw * Math.pow(10, gainDb / 20));
+    s.in = level;
+    const delayS = clamp(Number(params.delay) || 0, 0, 2e3) / 1e3;
+    let target = level;
+    if (delayS > 0) {
+      s.line.push({ t: s.now, v: level });
+      const readAt = s.now - delayS;
+      while (s.line.length > 1 && s.line[1].t <= readAt) s.line.shift();
+      target = s.line[0].t <= readAt ? s.line[0].v : 0;
+    } else if (s.line.length) {
+      s.line.length = 0;
+    }
+    const tauS = Math.max(0, Number(target > s.env ? params.rise : params.fall) || 0) / 1e3;
+    const k = tauS > 0 ? 1 - Math.exp(-dt / tauS) : 1;
+    s.env = clamp012(s.env + (target - s.env) * k);
+    return s.env;
+  },
+  meter(state) {
+    const s = state;
+    return { input: s.in, output: s.env };
+  }
+};
+registerModType(FOLLOWER_DEF);
+
+// src/analyser-core.ts
+function byteFreqToUnit(v) {
+  return v / 255;
+}
+function hzWindowToBins(rangeHz, nyquistHz, bins) {
+  const [loHz, hiHz] = rangeHz;
+  if (!Number.isFinite(loHz) || !Number.isFinite(hiHz) || !(nyquistHz > 0) || bins <= 2) return null;
+  if (!(hiHz > loHz) || hiHz <= 0) return null;
+  const toBin = (hz) => hz / nyquistHz * bins;
+  const loBin = Math.max(1, Math.min(bins - 1, toBin(Math.max(0, loHz))));
+  const hiBin = Math.max(loBin + 1, Math.min(bins, toBin(hiHz)));
+  return { loBin, hiBin };
+}
+var SPRING_MAX_STEP = 1 / 240;
 
 // src/store/ModulationStore.ts
 var MOD_TOUCH_GRACE_MS = 4e3;
+var MOD_SCOPE_SAMPLES = 128;
 var PERSIST_TARGET = resolvePersistTarget("modulation", "global", true);
 var clamp2 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 var freshParams = (def) => JSON.parse(JSON.stringify(def.defaults));
@@ -726,6 +794,11 @@ var ModulationStoreClass = class {
     this.signals = Array(MOD_SLOTS).fill(0);
     this.sources = /* @__PURE__ */ new Map();
     this.sourceValues = /* @__PURE__ */ new Map();
+    this.audioInputs = /* @__PURE__ */ new Map();
+    /** Reused per-input spectrum buffers — one read per input per tick. */
+    this.freqData = /* @__PURE__ */ new Map();
+    /** Rolling meter history per slot, for the types that declare a `meter`. */
+    this.scopes = /* @__PURE__ */ new Map();
     this.metas = /* @__PURE__ */ new Map();
     this.bpm = 120;
     this.touched = null;
@@ -749,7 +822,8 @@ var ModulationStoreClass = class {
       for (const slot of saved.slots ?? []) {
         const i = Math.round(Number(slot?.index));
         if (i >= 0 && i < MOD_SLOTS && slot.type && slot.params) {
-          this.slots[i] = { ...slot, index: i, params: { ...slot.params } };
+          const type = slot.type === "envelope" ? "follower" : slot.type;
+          this.slots[i] = { ...slot, index: i, type, params: { ...slot.params } };
         }
       }
       for (const a of saved.assignments ?? []) {
@@ -807,6 +881,7 @@ var ModulationStoreClass = class {
     slot.type = type;
     slot.params = freshParams(def);
     this.states.set(index, def.createState());
+    this.scopes.delete(index);
     this.changed();
   }
   /** Point a slot at an external source (null returns it to the engine). */
@@ -822,6 +897,7 @@ var ModulationStoreClass = class {
     if (this.settingsIndex === index) this.closeSettings();
     this.slots[index] = null;
     this.states.delete(index);
+    this.scopes.delete(index);
     this.signals[index] = 0;
     for (const [key, a] of this.assignments) {
       if (a.slot === index) this.assignments.delete(key);
@@ -973,6 +1049,30 @@ var ModulationStoreClass = class {
     const def = slot && getModType(slot.type);
     return slot && def?.preview ? def.preview(slot.params, count) : null;
   }
+  /**
+   * The open page's meter history, oldest sample first — what the scope dial
+   * draws. `input` is the level going in (after gain), `output` the
+   * follower's own line over it. Null unless the open modulator meters.
+   */
+  getSettingsScope() {
+    const slot = this.settingsIndex === null ? null : this.slots[this.settingsIndex];
+    const def = slot && getModType(slot.type);
+    if (!slot || !def?.meter) return null;
+    return this.getSlotScope(slot.index);
+  }
+  /** A metering slot's rolling history, oldest first (zeros before it runs). */
+  getSlotScope(index) {
+    const ring = this.scopes.get(index);
+    if (!ring) return { input: [], output: [] };
+    const order = (buf) => {
+      const out = new Array(MOD_SCOPE_SAMPLES);
+      for (let i = 0; i < MOD_SCOPE_SAMPLES; i++) {
+        out[i] = buf[(ring.head + i) % MOD_SCOPE_SAMPLES];
+      }
+      return out;
+    };
+    return { input: order(ring.input), output: order(ring.output) };
+  }
   /** Hardware buttons the open page claims (the curve's arrows and Delete). */
   getSettingsButtons() {
     const slot = this.settingsIndex === null ? null : this.slots[this.settingsIndex];
@@ -1007,7 +1107,16 @@ var ModulationStoreClass = class {
     };
     this.settingsShape = this.shapeOf(slot, def);
     for (const c of visibleModControls(def, slot.params)) {
-      if (c.type === "select") {
+      if (c.type === "select" && c.sourceOptions) {
+        const inputs = this.getAudioInputs();
+        if (inputs.length < 2) continue;
+        const current = slot.params[c.path];
+        config[c.path] = {
+          type: "select",
+          options: inputs,
+          default: typeof current === "string" && inputs.includes(current) ? current : inputs[0]
+        };
+      } else if (c.type === "select") {
         config[c.path] = {
           type: "select",
           options: c.options ?? [],
@@ -1020,6 +1129,8 @@ var ModulationStoreClass = class {
           max: c.max ?? 1,
           step: c.step,
           unit: c.unit,
+          formatValue: c.formatValue,
+          bipolar: c.bipolar,
           default: Number(slot.params[c.path]) || 0
         };
       } else if (c.type === "toggle") {
@@ -1042,6 +1153,13 @@ var ModulationStoreClass = class {
       { kind: "modulation" }
     );
     this.applyingSettings = false;
+  }
+  /** Rebuild the open settings page in place — the source select tracks the inputs. */
+  refreshSettingsPanel() {
+    if (this.settingsIndex === null) return;
+    const slot = this.slots[this.settingsIndex];
+    const def = slot && getModType(slot.type);
+    if (slot && def) this.registerSettingsPanel(slot, def);
   }
   /** A settings-panel edit — screen or hardware — lands in the slot's params. */
   onSettingsChange() {
@@ -1066,10 +1184,10 @@ var ModulationStoreClass = class {
           patch[c.xParam] = Number(xy.x) || 0;
           patch[c.yParam] = Number(xy.y) || 0;
         }
-      } else if (c.type === "toggle") {
-        patch[c.path] = !!v;
       } else if (c.type === "select") {
         if (typeof v === "string") patch[c.path] = v;
+      } else if (c.type === "toggle") {
+        patch[c.path] = !!v;
       } else if (typeof v === "number" && Number.isFinite(v)) {
         patch[c.path] = v;
       }
@@ -1129,6 +1247,61 @@ var ModulationStoreClass = class {
   }
   getSources() {
     return [...this.sources.keys()];
+  }
+  /* ── audio inputs — what the envelope follower hears ──────────────── */
+  /**
+   * Hand over live audio as a named input: an AnalyserNode getter, read at
+   * frame time (a getter, so the node can exist only after the app's audio
+   * starts on a user gesture). Returns an unregister fn. Registering while
+   * a follower's settings page is open refreshes its source select.
+   */
+  registerAudioInput(id, get) {
+    this.audioInputs.set(id, get);
+    this.refreshSettingsPanel();
+    this.changed();
+    return () => {
+      if (this.audioInputs.get(id) === get) {
+        this.audioInputs.delete(id);
+        this.freqData.delete(id);
+        this.refreshSettingsPanel();
+        this.changed();
+      }
+    };
+  }
+  getAudioInputs() {
+    return [...this.audioInputs.keys()];
+  }
+  /**
+   * The band sampler served to a slot's modulator: its chosen source when
+   * that input is registered, else the first registered input, else null
+   * (the follower hears silence). Levels are the band's spectral peak —
+   * the same reduction the analyser visualizer draws.
+   */
+  audioInputFor(slot) {
+    const chosen = typeof slot.params.source === "string" ? slot.params.source : "";
+    const id = this.audioInputs.has(chosen) ? chosen : this.getAudioInputs()[0];
+    if (id === void 0) return null;
+    const analyser = this.audioInputs.get(id)?.();
+    if (!analyser) return null;
+    return (loHz, hiHz) => {
+      const bins = analyser.frequencyBinCount;
+      if (!bins) return 0;
+      let data = this.freqData.get(id);
+      if (!data || data.length !== bins) {
+        data = new Uint8Array(bins);
+        this.freqData.set(id, data);
+      }
+      analyser.getByteFrequencyData(data);
+      const nyquist = (analyser.context?.sampleRate ?? 44100) / 2;
+      const w = hzWindowToBins([loHz, hiHz], nyquist, bins);
+      const start = w ? Math.floor(w.loBin) : 1;
+      const end = Math.min(bins, w ? Math.ceil(w.hiBin) : bins);
+      let mx = 0;
+      for (let b = start; b < end; b++) {
+        if (data[b] > mx) mx = data[b];
+      }
+      return byteFreqToUnit(mx);
+    };
   }
   /* ── tempo ────────────────────────────────────────────────────────── */
   setTempo(bpm) {
@@ -1237,9 +1410,29 @@ var ModulationStoreClass = class {
         state = def.createState();
         this.states.set(slot.index, state);
       }
-      this.signals[slot.index] = clamp2(def.tick(state, slot.params, step, this.bpm), -1, 1);
+      this.signals[slot.index] = clamp2(
+        def.tick(state, slot.params, step, this.bpm, this.audioInputFor(slot)),
+        -1,
+        1
+      );
+      if (def.meter) this.recordMeter(slot.index, def.meter(state));
     }
     this.frameListeners.forEach((fn) => fn());
+  }
+  /** Push one frame of a metering modulator onto its rolling history. */
+  recordMeter(index, sample) {
+    let ring = this.scopes.get(index);
+    if (!ring) {
+      ring = {
+        input: new Float32Array(MOD_SCOPE_SAMPLES),
+        output: new Float32Array(MOD_SCOPE_SAMPLES),
+        head: 0
+      };
+      this.scopes.set(index, ring);
+    }
+    ring.input[ring.head] = clamp2(Number(sample.input) || 0, 0, 1);
+    ring.output[ring.head] = clamp2(Number(sample.output) || 0, 0, 1);
+    ring.head = (ring.head + 1) % MOD_SCOPE_SAMPLES;
   }
   /** Wipe every slot, assignment, and the persisted shelf. */
   clear() {
@@ -1248,6 +1441,7 @@ var ModulationStoreClass = class {
     this.assignments.clear();
     this.states.clear();
     this.signals.fill(0);
+    this.scopes.clear();
     this.touched = null;
     clearPersisted(PERSIST_TARGET);
     this.changed();
@@ -1292,6 +1486,7 @@ function findControl(controls, path) {
 }
 var ModulationStore = /* @__PURE__ */ new ModulationStoreClass();
 export {
+  MOD_SCOPE_SAMPLES,
   MOD_TOUCH_GRACE_MS,
   ModulationStore
 };
