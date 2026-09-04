@@ -123,6 +123,8 @@ export type SliderConfig = {
   max: number;
   /** Falls back to inferStep(min, max) when omitted. */
   step?: number;
+  /** On the Move, sit as a value chip under the preceding dial instead of claiming a dial slot. */
+  moveChip?: boolean;
   /** Appended to the displayed value, e.g. ' dB', ' ms', '×'. */
   unit?: string;
   /**
@@ -157,6 +159,8 @@ export type NumberConfig = {
   formatValue?: (value: number) => string;
   /** `vertical` stacks the label above a centered value (column card). */
   orientation?: 'horizontal' | 'vertical';
+  /** On the Move, sit as a value chip under the preceding dial instead of claiming a dial slot. */
+  moveChip?: boolean;
 };
 
 /**
@@ -506,6 +510,8 @@ export type ControlMeta = {
   bipolar?: boolean;
   /** Slider/number layout, from the explicit config forms. */
   orientation?: 'horizontal' | 'vertical';
+  /** Slider/number declared `moveChip` — on the Move it is a value chip under the preceding dial, never a dial. */
+  moveChip?: boolean;
   itemTypes?: Record<string, ListItemType>;
   addLabel?: string;
   maxItems?: number;
@@ -1558,6 +1564,7 @@ class TweakStoreClass {
           origin: value.origin,
           bipolar: value.bipolar,
           orientation: value.orientation,
+          moveChip: value.moveChip,
           shortcut,
         });
       } else if (this.isNumberConfig(value)) {
@@ -1571,6 +1578,7 @@ class TweakStoreClass {
           unit: value.unit,
           formatValue: value.formatValue,
           orientation: value.orientation,
+          moveChip: value.moveChip,
           shortcut,
         });
       } else if (typeof value === 'boolean') {

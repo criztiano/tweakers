@@ -88,15 +88,57 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
     .slice(0, MOVE_TRACKS)
     .map((panel) => {
       const controls = flat(panel.controls);
-      const bounded = controls.filter(isDial);
-      return {
-        panel,
-        dials: bounded.slice(0, MOVE_DIALS),
-        toggles: controls.filter((c) => c.type === 'toggle').slice(0, MOVE_PADS),
-        /* xy pads and ranges need a dial slot — past the 8 dials they don't fit a chip */
-        values: bounded.slice(MOVE_DIALS).filter((c) => !noChip(c)).slice(0, MOVE_PADS),
+      const dials: ControlMeta[] = [];
+      const toggles: ControlMeta[] = [];
+      const values: ControlMeta[] = [];
+      /* A small control drops into the column of the dial declared just before
+         it — the mod-page rule, now for every page. A taken column falls
+         forward to the next free one; only past column 7 does it drop. The
+         rows stay SPARSE — index is the column, on both surfaces. */
+      const place = (row: ControlMeta[], c: ControlMeta) => {
+        for (let i = Math.max(0, dials.length - 1); i < MOVE_PADS; i++) {
+          if (row[i] === undefined) { row[i] = c; return; }
+        }
       };
+      for (const c of controls) {
+        if (c.type === 'toggle') place(toggles, c);
+        else if (isDial(c)) {
+          /* `moveChip` opts a bounded scalar out of the dial race entirely */
+          if (c.moveChip && !noChip(c)) place(values, c);
+          else if (dials.length < MOVE_DIALS) dials.push(c);
+          /* xy pads, ranges and enums need a dial slot — past the 8 dials they don't fit a chip */
+          else if (!noChip(c)) place(values, c);
+        }
+      }
+      return { panel, dials, toggles, values };
     });
+}
+
+/**
+ * The pad grid's four rows, top to bottom, exactly as the hardware stacks
+ * them — screen row 0 is the row nearest the knobs.
+ *
+ * Plain: y=3 is the dial-slot indicator (the dials draw it, so it is not a
+ * row here), y=2 the switches, y=1 the value chips, y=0 the ALT pad. An app
+ * that claims both bottom rows takes y=1 and y=0, and the chips move up above
+ * the switches — the same shuffle the surface makes, so a dial column keeps
+ * its chip AND its switch underneath it (see PROTOCOL.md).
+ */
+export function movePadRows(page: MovePage, claimedRows: number): ControlMeta[][] {
+  return claimedRows >= 2
+    ? [page.values, page.toggles, [], []]
+    : [page.toggles, page.values, [], []];
+}
+
+/**
+ * Which claimed hardware row a screen row shows, or null when it is a control
+ * row. Two claimed rows fill screen rows 2 and 3 (y=1 then y=0); one claimed
+ * row is the bottom row alone, and lands on screen row 2 because the plain
+ * layout has nothing below the value chips.
+ */
+export function moveAppPadRow(row: number, claimedRows: number): 0 | 1 | null {
+  if (claimedRows >= 2) return row === 2 ? 1 : row === 3 ? 0 : null;
+  return claimedRows === 1 && row === 2 ? 0 : null;
 }
 
 /** Dial position 0..1 back to the control's real value, kit-identical. */
