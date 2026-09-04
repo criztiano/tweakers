@@ -9907,10 +9907,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 fineRef.current = null;
               },
               children: [
-                (shape || glyph) && /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)("span", { className: "tweakers-move-dial-tag", children: [
-                  glyph && /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(LucideGlyph, { name: glyph }),
-                  /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-tag-text", children: optionLabel })
-                ] }),
+                (shape || glyph) && /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-tag", children: optionLabel }),
                 /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(ModDot, { path: meta.path }),
                 shape && /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(
                   "svg",
@@ -9922,10 +9919,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                     children: /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("path", { d: shape })
                   }
                 ),
-                /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)("div", { className: "tweakers-move-dial-readout", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-dial-readout", children: glyph ? /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(LucideGlyph, { name: glyph, className: "tweakers-move-dial-icon" }) : /* @__PURE__ */ (0, import_jsx_runtime39.jsxs)(import_jsx_runtime39.Fragment, { children: [
                   /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-label", "data-long": meta.label.length > 9 || void 0, children: meta.label }),
                   !shape && /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("span", { className: "tweakers-move-dial-value", children: optionLabel })
-                ] }),
+                ] }) }),
                 /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ (0, import_jsx_runtime39.jsx)("div", { className: "tweakers-move-dial-enum", children: options.map((opt, j) => /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(
                   "span",
                   {
@@ -10053,13 +10050,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   ] }) }) });
   return dock === "flow" ? content : (0, import_react_dom8.createPortal)(content, document.body);
 }
-function LucideGlyph({ name }) {
+function LucideGlyph({ name, className }) {
   const paths = LUCIDE_ICONS[name];
   if (!paths) return null;
   return /* @__PURE__ */ (0, import_jsx_runtime39.jsx)(
     "svg",
     {
-      className: "tweakers-move-glyph",
+      className,
       viewBox: "0 0 24 24",
       fill: "none",
       stroke: "currentColor",

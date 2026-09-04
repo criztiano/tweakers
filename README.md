@@ -966,7 +966,7 @@ A `range` control claims a dial slot too: the bar fills between two handle ticks
 
 A `select` with options becomes a stepped enum dial: the bar splits into one cell per option, the active cell filled, and the readout shows the option's label. Dragging the slot — or turning the column's knob — steps through the options in order.
 
-An option can name an `icon` from the bundled [lucide](https://lucide.dev) subset (`LUCIDE_ICONS`), and the slot draws the glyph on a tag at the top — reading four mode names off a controller at arm's length is exactly what a glyph is for.
+An option can name an `icon` from the bundled [lucide](https://lucide.dev) subset (`LUCIDE_ICONS`). The glyph takes the middle of the slot, in place of the name, and the option's name moves to a small tag at the top — at arm's length you read a picture, not a word.
 
 ```tsx
 playMode: {
@@ -979,7 +979,7 @@ playMode: {
 },
 ```
 
-A select whose options *are* shapes takes `preview` instead: `t` in `[0, 1]` → y for the given option, or `null` for options with no shape. The slot draws that curve in place of the option's big name, which moves to the tag — the picture is the value. It is auto-fitted like a curve row, so a bipolar arc and a 0–1 envelope both fill the slot.
+A select whose options *are* shapes takes `preview` instead: `t` in `[0, 1]` → y for the given option, or `null` for options with no shape. The slot draws that curve in place of the option's big name, which moves to the same tag — the picture is the value. It is auto-fitted like a curve row, so a bipolar arc and a 0–1 envelope both fill the slot.
 
 ```tsx
 pitchShape: {
