@@ -5623,11 +5623,10 @@ input.tweakers-list-item-title:focus {
 .tweakers-move-dial-icon {
   position: absolute;
   top: var(--move-shape-top);
-  bottom: var(--move-shape-bottom);
+  height: calc(100% - var(--move-shape-top) - var(--move-shape-bottom));
   left: 10px;
   right: 10px;
   width: auto;
-  height: auto;
   stroke-width: 1.5;
   color: var(--move-text);
   pointer-events: none;
@@ -5663,14 +5662,17 @@ input.tweakers-list-item-title:focus {
   --move-shape-bottom: 49px;
 }
 
+/* Height, not a bottom edge: an <svg> is a replaced element, so top+bottom
+   with height:auto is over-constrained — the browser keeps the intrinsic
+   height and drops `bottom`, and the drawing runs straight over the caption
+   and the pagination cells. Stating the height leaves nothing to resolve. */
 .tweakers-move-dial-shape {
   position: absolute;
   top: var(--move-shape-top);
-  bottom: var(--move-shape-bottom);
+  height: calc(100% - var(--move-shape-top) - var(--move-shape-bottom));
   left: 10px;
   right: 10px;
   width: auto;
-  height: auto;
   overflow: visible;
   pointer-events: none;
 }
