@@ -30,13 +30,15 @@ describe('pad rows under a claim', () => {
     const rows = movePadRows(p, 0);
     assert.equal(rows[0], p.toggles);
     assert.equal(rows[1], p.values);
+    assert.equal(rows[2], p.actions);
   });
 
-  it('keeps the plain order for a single claimed row', () => {
+  it('keeps the plain order — actions included — for a single claimed row', () => {
     const p = page();
     const rows = movePadRows(p, 1);
     assert.equal(rows[0], p.toggles);
     assert.equal(rows[1], p.values);
+    assert.equal(rows[2], p.actions);
   });
 
   it('lifts the chips above the switches when both rows are claimed', () => {
@@ -49,8 +51,8 @@ describe('pad rows under a claim', () => {
   it('places the claimed rows where the hardware puts them', () => {
     // nothing claimed: every screen row is a control row
     assert.deepEqual([0, 1, 2, 3].map((r) => moveAppPadRow(r, 0)), [null, null, null, null]);
-    // one row: the bottom row alone, below the chips
-    assert.deepEqual([0, 1, 2, 3].map((r) => moveAppPadRow(r, 1)), [null, null, 0, null]);
+    // one row: the bottom row alone, below the action pads
+    assert.deepEqual([0, 1, 2, 3].map((r) => moveAppPadRow(r, 1)), [null, null, null, 0]);
     // two rows: y=1 then y=0, filling the grid out
     assert.deepEqual([0, 1, 2, 3].map((r) => moveAppPadRow(r, 2)), [null, null, 1, 0]);
   });

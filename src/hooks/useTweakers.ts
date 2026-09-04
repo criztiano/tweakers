@@ -15,6 +15,12 @@ export interface UseTweakersOptions {
   /** Display label by control path, overriding the key-derived name. */
   labels?: Record<string, string>;
   /**
+   * Which Move pad column each pad control sits in, by control path (0-7) —
+   * the page's hand-authored hardware layout, so a pad sits under the dial it
+   * belongs to instead of packing left.
+   */
+  movePads?: Record<string, number>;
+  /**
    * Host-owned backing for the toolbar's preset UI. The toolbar renders this
    * list instead of the built-in localStorage snapshots; the host applies
    * values in `onSelect` and owns persistence (see PresetProvider).
@@ -43,6 +49,7 @@ export function useTweakers<T extends TweakConfig>(
     hints: options?.hints,
     affordances: options?.affordances,
       labels: options?.labels,
+    movePads: options?.movePads,
     presets: options?.presets,
   });
 

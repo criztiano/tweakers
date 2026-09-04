@@ -1,4 +1,4 @@
-import { C as ControlMeta } from './TweakStore-CsmDcWfK.js';
+import { C as ControlMeta } from './TweakStore-BRgese49.js';
 import { CurveType, CurveComposition } from './curve-composer-core.js';
 import './range-slider-core.js';
 
@@ -35,7 +35,7 @@ declare const MOD_SLOTS = 16;
 declare const MOD_COLORS: string[];
 /** A slot's palette colour — the one constant identity it keeps. */
 declare const modColor: (index: number) => string;
-type ModulationType = 'lfo' | 'envelope' | 'curve' | 'sh' | 'sequencer';
+type ModulationType = 'lfo' | 'adsr' | 'envelope' | 'curve' | 'sh' | 'sequencer';
 /**
  * A settings value: the scalars a dial or a pad edits, plus the structures a
  * richer modulator carries (the curve's clip list). JSON-safe throughout, so
@@ -75,8 +75,8 @@ type ModControlMeta = ControlMeta & {
     chip?: boolean;
     /** Shown only when this says so — a control that belongs to one mode. */
     when?: (params: ModulationParams) => boolean;
-    /** This dial draws the modulator's own preview (the type's `preview`). */
-    preview?: boolean;
+    /** This dial draws the modulator's own shape (the type's `preview`). */
+    drawsPreview?: boolean;
     /** A knob tap on this dial runs this, returning the params it changes. */
     cycle?: (params: ModulationParams) => ModulationParams;
 };
@@ -117,6 +117,12 @@ interface ModTypeDef {
     };
     /** Where the modulator sits in its cycle, 0..1 — a composer's playhead. */
     phase?(state: unknown): number;
+    /**
+     * Note on / note off, for the types that take a gate (the ADSR). The
+     * store's `gate(slot, on)` lands here; free-running types (LFO, S&H)
+     * leave it out and the store ignores the call.
+     */
+    gate?(state: unknown, on: boolean): void;
 }
 /** One control's place on the Move page, with the gestures it answers to. */
 interface ModPageSlot {
@@ -204,6 +210,23 @@ declare const LFO_DEF: ModTypeDef;
  */
 declare const SH_DEF: ModTypeDef;
 /**
+ * The ADSR: attack up to full, decay down to the sustain level, sustain
+ * held while the gate is on, release back to rest. The signal is unipolar
+ * 0..1 — at rest the control sits on its base value, and the envelope
+ * lifts it up to `amount` of the span.
+ *
+ * A gate drives it — `ModulationStore.gate(slot, on)`, from a note, a pad,
+ * a hardware step — and a fresh slot rests at zero until the host sends
+ * one. That is the shape an app integrates against; a DSP app whose own
+ * envelope already runs at audio rate points the slot at a source instead
+ * and the kit just shows the signal.
+ *
+ * Loop is the exception, for demos and for prototyping with no host: with
+ * it on the envelope plays its own gate, running attack → decay → release
+ * over and over.
+ */
+declare const ADSR_DEF: ModTypeDef;
+/**
  * The curve modulator plays a composition from the Curve Composer: a series
  * of clips, each an eased or springy walk, read once per pass. The page is
  * the composer laid onto the Move — the arrows walk the clips, Delete drops
@@ -230,4 +253,4 @@ declare function curveComposition(params: ModulationParams): CurveComposition;
 declare function curveDuration(params: ModulationParams, bpm: number): number;
 declare const CURVE_DEF: ModTypeDef;
 
-export { CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, curveComposition, curveDuration, getModType, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modRingArc, registerModType, visibleModControls };
+export { ADSR_DEF, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, curveComposition, curveDuration, getModType, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modRingArc, registerModType, visibleModControls };

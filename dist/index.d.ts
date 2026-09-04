@@ -1,5 +1,6 @@
-import * as react from 'react';
-import { ReactNode, CSSProperties, ReactElement } from 'react';
+import * as react_jsx_runtime from 'react/jsx-runtime';
+import * as React from 'react';
+import React__default, { CSSProperties, ReactElement, ReactNode } from 'react';
 
 /**
  * color-core — DOM-free color math shared by every framework port of the
@@ -391,13 +392,29 @@ type ActionConfig = {
 };
 type SelectConfig = {
     type: 'select';
+    /**
+     * An option may name an `icon` from `LUCIDE_ICONS` — the Move slot draws it
+     * instead of making you read the mode name off a controller.
+     */
     options: (string | {
         value: string;
         label: string;
+        icon?: string;
     })[];
     default?: string;
     /** 'segmented' renders the options as an inline segmented control instead of a dropdown. Suits 2–4 short options. */
     display?: 'dropdown' | 'segmented';
+    /**
+     * The shape an option stands for: `t` in [0,1] → y, auto-fitted and drawn
+     * in the Move slot in place of the option's name, which moves to a small
+     * tag at the top. Return `null` for options that have no shape.
+     *
+     * A closure, so — like a curve row's `sample` — it is invisible to the
+     * serialized config diff and is refreshed through `syncCurveConfigs`. That
+     * is what lets the drawing follow the app's other controls: a pitch arc's
+     * preview tracks its bell and flip while the picker stays a picker.
+     */
+    preview?: (value: string) => ((t: number) => number) | null | undefined;
 };
 type ColorConfig = {
     type: 'color';
@@ -454,8 +471,6 @@ type SliderConfig = {
     max: number;
     /** Falls back to inferStep(min, max) when omitted. */
     step?: number;
-    /** On the Move, sit as a value chip under the preceding dial instead of claiming a dial slot. */
-    moveChip?: boolean;
     /** Appended to the displayed value, e.g. ' dB', ' ms', '×'. */
     unit?: string;
     /**
@@ -489,8 +504,6 @@ type NumberConfig = {
     formatValue?: (value: number) => string;
     /** `vertical` stacks the label above a centered value (column card). */
     orientation?: 'horizontal' | 'vertical';
-    /** On the Move, sit as a value chip under the preceding dial instead of claiming a dial slot. */
-    moveChip?: boolean;
 };
 /**
  * A read-only curve preview row. Draws the shape the host's own parameters
@@ -753,7 +766,10 @@ type ControlMeta = {
     options?: (string | {
         value: string;
         label: string;
+        icon?: string;
     })[];
+    /** Select's per-option shape sampler — swapped in place by syncCurveConfigs. */
+    preview?: (value: string) => ((t: number) => number) | null | undefined;
     /** Select's rendering mode, from the SelectConfig form. */
     display?: 'dropdown' | 'segmented';
     placeholder?: string;
@@ -773,8 +789,6 @@ type ControlMeta = {
     bipolar?: boolean;
     /** Slider/number layout, from the explicit config forms. */
     orientation?: 'horizontal' | 'vertical';
-    /** Slider/number declared `moveChip` — on the Move it is a value chip under the preceding dial, never a dial. */
-    moveChip?: boolean;
     itemTypes?: Record<string, ListItemType>;
     addLabel?: string;
     maxItems?: number;
@@ -818,6 +832,8 @@ type PanelConfig = {
     affordances?: Record<string, AffordanceConfig>;
     /** Label overrides by control path, retained on the same terms as `hints`. */
     labels?: Record<string, string>;
+    /** Move pad columns by control path, retained on the same terms as `hints`. */
+    movePads?: Record<string, number>;
     /**
      * Config declared `_enabled` at its root — the whole panel is a module, and
      * its title carries the switch. Same idiom as a module folder, one level up.
@@ -917,6 +933,16 @@ type TweakStorePanelOptions = {
      * persisted entry and its shortcut binding.
      */
     labels?: Record<string, string>;
+    /**
+     * Which Move pad column a control sits in, by control path (0-7) — the
+     * page's hand-authored hardware layout. Without it the surface packs pads
+     * left to right, which is fine for a page whose pads happen to belong to
+     * the leftmost dials and wrong for every other page. With it, a pad sits
+     * under the dial it belongs to: toggles take the toggle row, bounded
+     * numbers the value row (leaving the dial pool however few dials the page
+     * has), actions the row under those.
+     */
+    movePads?: Record<string, number>;
     /** Timeline panels render in TweakTimeline; modulation panels are the Move's
      * modulator settings pages — both are filtered out of the panel dock. */
     kind?: 'timeline' | 'modulation';
@@ -1141,6 +1167,12 @@ interface UseTweakersOptions {
     /** Display label by control path, overriding the key-derived name. */
     labels?: Record<string, string>;
     /**
+     * Which Move pad column each pad control sits in, by control path (0-7) —
+     * the page's hand-authored hardware layout, so a pad sits under the dial it
+     * belongs to instead of packing left.
+     */
+    movePads?: Record<string, number>;
+    /**
      * Host-owned backing for the toolbar's preset UI. The toolbar renders this
      * list instead of the built-in localStorage snapshots; the host applies
      * values in `onSelect` and owns persistence (see PresetProvider).
@@ -1178,21 +1210,40 @@ interface TweakRootProps {
      */
     chrome?: TweakChrome;
 }
-declare function TweakRoot({ position, defaultOpen, mode, theme, productionEnabled, panels: only, chrome }: TweakRootProps): react.JSX.Element | null;
+declare function TweakRoot({ position, defaultOpen, mode, theme, productionEnabled, panels: only, chrome }: TweakRootProps): react_jsx_runtime.JSX.Element | null;
 
 interface MovePanelProps {
     theme?: TweakTheme;
     productionEnabled?: boolean;
     /** Mirror only the named panels, in the order given — same option the bridge kit takes. */
     panels?: string | string[];
+    /**
+     * Where the panel sits. `viewport` (the default) portals it to `<body>` and
+     * pins it to the window's bottom edge — for apps whose content fills the
+     * screen. `flow` renders it inline, in normal document flow, wherever the
+     * host puts it — for sparse apps that want the content and the panel to
+     * read as one group instead of leaving a dead gap between them.
+     */
+    dock?: 'viewport' | 'flow';
 }
 /**
- * The Move's control surface docked to the bottom edge, laid out to Cri's
- * Figma spec (file USU9CW2vC3SrvKsnHVnYGi, node 802:319; slot components
- * 802:756 and 800:1737): a track row of four coloured markers, 8 dial
- * slots hosting slider ports, and the pad grid — toggle chips on the
- * first row, value chips on the second, at the same columns as their
- * hardware pads (move-layout keeps both surfaces in agreement).
+ * The Move's control surface, laid out to Cri's Figma spec (file
+ * USU9CW2vC3SrvKsnHVnYGi, node 802:319; slot components 802:756 and
+ * 800:1737): a track row of coloured markers — one per page, so an app
+ * with a single panel gets a single tick and name — 8 dial slots hosting
+ * slider ports, and the pad grid — toggle chips on the first row, value
+ * chips on the second, at the same columns as their hardware pads
+ * (move-layout keeps both surfaces in agreement).
+ *
+ * `dock` decides where it lives: `viewport` portals it to `<body>` and pins
+ * it to the window's bottom edge; `flow` leaves it inline where the host
+ * placed it. Both wear the same surface, padding and slot geometry.
+ *
+ * Only occupied slots/columns are shown: a column renders when it holds a
+ * dial, a toggle chip, or a value chip, at its full 8-wide slot size; the
+ * visible cluster centres in the panel and the header row shares its width,
+ * so the page name lines up with the first visible slot. Hidden columns
+ * are skipped, never renumbered — column i is still hardware knob i.
  *
  * Value chips substitute the dial in their column: hold one to peek at
  * its value in the dial slot, tap to latch it in — the chip inverts and
@@ -1204,13 +1255,57 @@ interface MovePanelProps {
  * Dragging the slot sets both axes; on the hardware the column's knob
  * turns X, and the volume knob turns Y while that knob is touched.
  *
- * A range control keeps the slider look but its fill is the span between
- * the two ends — dragging moves the nearer end, and on the hardware the
- * column's knob moves the low end while the volume knob moves the high
- * end while that knob is touched. Bipolar/origin sliders anchor their
- * fill at the origin and read as a signed offset.
+ * A range control takes a dial slot too: the bar fills between two handle
+ * ticks, and a drag grabs the nearest handle. On the hardware the column's
+ * knob edits the low handle and the volume knob edits the high one while
+ * that knob is touched — the xy pad's two-handed concept on one axis.
+ * Bipolar/origin sliders anchor their fill at the origin mark.
+ *
+ * A select with options takes a dial slot as a stepped enum dial: the bar
+ * splits into one cell per option, the active cell filled, and the readout
+ * shows the option's label. A drag picks the nearest cell.
+ *
+ * Holding Shift mid-drag switches any slot to fine mode: pointer travel
+ * applies at 0.1× relative to where shift went down, and releasing shift
+ * rebases at 1× so the value never jumps.
+ *
+ * Controls wired to a modulation slot wear that slot's colour as a dot, and
+ * the track row carries one circle per slot — the on-screen step button.
  */
-declare function MovePanel({ theme, productionEnabled, panels: only }: MovePanelProps): react.ReactPortal | null;
+declare function MovePanel({ theme, productionEnabled, panels: only, dock }: MovePanelProps): react_jsx_runtime.JSX.Element | null;
+
+interface MoveActionButtonProps {
+    /**
+     * The hardware button this action rides, which fixes the styling:
+     * `enter` is the wheel's click — track 4's green with the dot glyph —
+     * `capture` is the capture button — track 1's blue with the
+     * four-corners glyph — and `shift` is the shift key — the surface's
+     * light neutral, wearing the same dot in the pill's dark text colour.
+     * The pairing matches the physical Move, so the on-screen button
+     * always looks like the key that triggers it.
+     * Shift is reserved on the hardware and never claimable, so
+     * `kind="shift"` is purely visual: it runs no Move function, only its
+     * own `onPress` — the app wires the hardware gesture (a shift tap)
+     * itself.
+     */
+    kind: 'enter' | 'capture' | 'shift';
+    /** The label. */
+    children: React__default.ReactNode;
+    /** Runs after the attached Move function, on a screen click. */
+    onPress?: () => void;
+    disabled?: boolean;
+    className?: string;
+}
+/**
+ * A free-standing Move action button, placed wherever the view wants it —
+ * the same pill the panel header used to carry. Clicking it runs whatever
+ * the app attached to the matching hardware button (`jog_click` for enter,
+ * `capture` for capture) through MoveFunctions, and both screen clicks and
+ * hardware presses flash it briefly. Disabled buttons dim to 40% and run
+ * nothing. Every kind carries its hardware glyph — the shift pill wears the
+ * enter dot in black, since a shift tap confirms the same way.
+ */
+declare function MoveActionButton({ kind, children, onPress, disabled, className }: MoveActionButtonProps): react_jsx_runtime.JSX.Element;
 
 /** The curve vocabulary a segment cycles through on quick-click. */
 type CurveType = 'linear' | 'easeIn' | 'easeOut' | 'easeInOut' | 'spring';
@@ -1424,7 +1519,7 @@ declare const MOD_SLOTS = 16;
 declare const MOD_COLORS: string[];
 /** A slot's palette colour — the one constant identity it keeps. */
 declare const modColor: (index: number) => string;
-type ModulationType = 'lfo' | 'envelope' | 'curve' | 'sh' | 'sequencer';
+type ModulationType = 'lfo' | 'adsr' | 'envelope' | 'curve' | 'sh' | 'sequencer';
 /**
  * A settings value: the scalars a dial or a pad edits, plus the structures a
  * richer modulator carries (the curve's clip list). JSON-safe throughout, so
@@ -1464,8 +1559,8 @@ type ModControlMeta = ControlMeta & {
     chip?: boolean;
     /** Shown only when this says so — a control that belongs to one mode. */
     when?: (params: ModulationParams) => boolean;
-    /** This dial draws the modulator's own preview (the type's `preview`). */
-    preview?: boolean;
+    /** This dial draws the modulator's own shape (the type's `preview`). */
+    drawsPreview?: boolean;
     /** A knob tap on this dial runs this, returning the params it changes. */
     cycle?: (params: ModulationParams) => ModulationParams;
 };
@@ -1506,6 +1601,12 @@ interface ModTypeDef {
     };
     /** Where the modulator sits in its cycle, 0..1 — a composer's playhead. */
     phase?(state: unknown): number;
+    /**
+     * Note on / note off, for the types that take a gate (the ADSR). The
+     * store's `gate(slot, on)` lands here; free-running types (LFO, S&H)
+     * leave it out and the store ignores the call.
+     */
+    gate?(state: unknown, on: boolean): void;
 }
 /** One control's place on the Move page, with the gestures it answers to. */
 interface ModPageSlot {
@@ -1593,6 +1694,23 @@ declare const LFO_DEF: ModTypeDef;
  */
 declare const SH_DEF: ModTypeDef;
 /**
+ * The ADSR: attack up to full, decay down to the sustain level, sustain
+ * held while the gate is on, release back to rest. The signal is unipolar
+ * 0..1 — at rest the control sits on its base value, and the envelope
+ * lifts it up to `amount` of the span.
+ *
+ * A gate drives it — `ModulationStore.gate(slot, on)`, from a note, a pad,
+ * a hardware step — and a fresh slot rests at zero until the host sends
+ * one. That is the shape an app integrates against; a DSP app whose own
+ * envelope already runs at audio rate points the slot at a source instead
+ * and the kit just shows the signal.
+ *
+ * Loop is the exception, for demos and for prototyping with no host: with
+ * it on the envelope plays its own gate, running attack → decay → release
+ * over and over.
+ */
+declare const ADSR_DEF: ModTypeDef;
+/**
  * The curve modulator plays a composition from the Curve Composer: a series
  * of clips, each an eased or springy walk, read once per pass. The page is
  * the composer laid onto the Move — the arrows walk the clips, Delete drops
@@ -1626,7 +1744,9 @@ declare const CURVE_DEF: ModTypeDef;
  * takes a dial slot too — the pad draws behind the label, its knob turns
  * the X axis, and the volume knob turns Y while that knob is touched. A
  * range control claims a slot the same way: its knob moves the low end,
- * the volume knob the high end while touched. Bounded params
+ * the volume knob the high end while touched. A select with real choices
+ * claims one as a stepped enum dial — the knob's 0..1 position maps to an
+ * option index, step 1/(count-1). Bounded params
  * beyond the 8 dials overflow into the pad grid as value chips — each one
  * related, by column, to the dial above it, which it can substitute (hold
  * to peek, tap to latch). The on-screen MovePanel mirrors this mapping so
@@ -1643,6 +1763,9 @@ interface MovePage {
     /** Overflow value chips — the hardware's value pad row (y=1). Value i sits
      *  at column i on both surfaces, pairing it with the dial in that column. */
     values: ControlMeta[];
+    /** Action pads — the row under the values (the device's bottom pad row).
+     *  Placed by hand only, through the panel's `movePads` map. */
+    actions: ControlMeta[];
 }
 /**
  * The modulator-settings page (hold a step button): the kind picker takes
@@ -1666,15 +1789,27 @@ declare function buildMovePages(panels: PanelConfig[]): MovePage[];
  * that claims both bottom rows takes y=1 and y=0, and the chips move up above
  * the switches — the same shuffle the surface makes, so a dial column keeps
  * its chip AND its switch underneath it (see PROTOCOL.md).
+ *
+ * Hand-placed action pads take the row under the values. A single-row claim
+ * is the bottom row alone, so the actions keep theirs; a two-row claim takes
+ * both bottom rows, and the actions have nowhere left to sit.
  */
 declare function movePadRows(page: MovePage, claimedRows: number): ControlMeta[][];
 /**
  * Which claimed hardware row a screen row shows, or null when it is a control
  * row. Two claimed rows fill screen rows 2 and 3 (y=1 then y=0); one claimed
- * row is the bottom row alone, and lands on screen row 2 because the plain
- * layout has nothing below the value chips.
+ * row is the bottom row alone, and lands on screen row 3 — below the action
+ * pads, exactly where the hardware puts it.
  */
 declare function moveAppPadRow(row: number, claimedRows: number): 0 | 1 | null;
+/**
+ * The columns the on-screen panel actually shows: a column is occupied when
+ * it has a dial, a toggle chip, or a value chip at that index. The indices
+ * stay the hardware knob numbers — callers hide the unoccupied columns,
+ * never renumber them, so the latch/substitution logic and the physical
+ * knobs keep agreeing on what column i means.
+ */
+declare function visibleColumns(page: MovePage): number[];
 /** Dial position 0..1, the same normalization the kit puts on the wire. */
 declare function normalizeDial(meta: ControlMeta, value: unknown): number;
 /** An xy pad's position, each axis 0..1 — the two numbers on the wire. */
@@ -1682,11 +1817,24 @@ declare function normalizeXYDial(meta: ControlMeta, value: unknown): {
     x: number;
     y: number;
 };
+/** The option's glyph name, or null — a bare string option never has one. */
+declare const enumOptionIcon: (o: string | {
+    icon?: string;
+}) => string | null;
 /** A range dial's two ends, each 0..1 — the two numbers on the wire. */
 declare function normalizeRangeDial(meta: ControlMeta, value: unknown): {
     lo: number;
     hi: number;
 };
+/** End positions 0..1 back to the control's real {min, max}, kit-identical —
+ *  clamped into the bounds and ordered, so crossed ends never come back reversed. */
+declare function denormalizeRangeDial(meta: ControlMeta, lo01: number, hi01: number): RangeValue;
+/** An enum dial's position 0..1 — the option's index over the last index.
+ *  An unknown (or missing) value reads as the first option, position 0. */
+declare function normalizeEnumDial(meta: ControlMeta, value: unknown): number;
+/** Dial position 0..1 back to the option at that step, kit-identical:
+ *  round(v01 * (count-1)), clamped into the options list. */
+declare function denormalizeEnumDial(meta: ControlMeta, v01: number): string;
 /** Where the fill anchors for a bipolar/origin slider, 0..1 (else 0). */
 declare function dialOrigin(meta: ControlMeta): number;
 
@@ -1763,9 +1911,9 @@ declare const MOVE_FUNCTION_MANIFEST: readonly [{
     readonly special: true;
 }];
 /** The attachable function names, manifest order. */
-declare const MOVE_FUNCTION_BUTTONS: ("sample" | "menu" | "copy" | "play" | "left" | "right" | "delete" | "capture" | "rec" | "mute" | "undo" | "up" | "down" | "loop" | "back" | "jog_click")[];
+declare const MOVE_FUNCTION_BUTTONS: ("sample" | "menu" | "copy" | "play" | "left" | "right" | "loop" | "delete" | "capture" | "rec" | "mute" | "undo" | "up" | "down" | "back" | "jog_click")[];
 /** The special buttons — free for app-specific meanings. */
-declare const MOVE_SPECIAL_BUTTONS: ("sample" | "menu" | "copy" | "play" | "left" | "right" | "delete" | "capture" | "rec" | "mute" | "undo" | "up" | "down" | "loop" | "back" | "jog_click")[];
+declare const MOVE_SPECIAL_BUTTONS: ("sample" | "menu" | "copy" | "play" | "left" | "right" | "loop" | "delete" | "capture" | "rec" | "mute" | "undo" | "up" | "down" | "back" | "jog_click")[];
 type MoveFunctionButton = (typeof MOVE_FUNCTION_MANIFEST)[number]['name'];
 interface MoveFunctionPress {
     name: MoveFunctionButton;
@@ -1773,23 +1921,91 @@ interface MoveFunctionPress {
     shift: boolean;
 }
 type MoveFunctionHandler = (press: MoveFunctionPress) => void;
+interface MoveFunctionOptions {
+    /**
+     * A screen name for the action, readable back via `label(name)`. The
+     * screen-side pills are MoveActionButtons now, which carry their own
+     * labels — this stays for kits and views that want a registry name.
+     */
+    label?: string;
+}
+type MoveFunctionRunListener = (name: MoveFunctionButton, press: MoveFunctionPress) => void;
 declare class MoveFunctionsClass {
     private handlers;
+    private labels;
     private listeners;
+    private runListeners;
     /**
      * Attach an action to a function button; returns a detach function.
      * One action per button — attaching again replaces the previous one.
      */
-    attach(name: MoveFunctionButton, handler: MoveFunctionHandler): () => void;
+    attach(name: MoveFunctionButton, handler: MoveFunctionHandler, options?: MoveFunctionOptions): () => void;
     /** The attached button names — what the kit claims on the hardware. */
     list(): MoveFunctionButton[];
+    /** The screen name an attachment carries, if any. */
+    label(name: MoveFunctionButton): string | undefined;
     /** Run the action attached to a button, if any. Called by the kit per press. */
     run(name: MoveFunctionButton, press?: Partial<MoveFunctionPress>): void;
     /** Notified when attachments change, so the kit can reconfigure the Move. */
     subscribe(listener: () => void): () => void;
+    /** Notified on every run — the MovePanel flashes its pills on hardware presses. */
+    subscribeRuns(listener: MoveFunctionRunListener): () => void;
     private notify;
 }
 declare const MoveFunctions: MoveFunctionsClass;
+
+/**
+ * The Move's volume-dial readout, offered to the app as a tiny display slot.
+ *
+ * The MovePanel keeps a dark pill in its header for whatever the volume
+ * dial currently means in the app — a playhead time, a zoom level, a gain.
+ * The app fills it:
+ *
+ *   import { MoveVolumeDisplay } from 'tweakers';
+ *
+ *   MoveVolumeDisplay.set({ label: 'gain', value: '-6.0 dB' });        // static
+ *   MoveVolumeDisplay.set({ getValue: () => formatTime(playhead) });   // live
+ *   MoveVolumeDisplay.clear();
+ *
+ * A static `value` renders as-is; a `getValue` is polled every frame while
+ * the panel is on screen, for readouts that move (a waveform playhead).
+ * When nothing is set, the pill disappears.
+ */
+interface MoveVolumeDisplayState {
+    /** A short name for what the dial edits — dimmed ahead of the value. */
+    label?: string;
+    /** A static readout string. */
+    value?: string;
+    /** A live readout, polled per animation frame while the panel is mounted. */
+    getValue?: () => string;
+}
+declare class MoveVolumeDisplayClass {
+    private state;
+    private listeners;
+    /** Show the pill with this readout — replaces any previous one. */
+    set(state: MoveVolumeDisplayState): void;
+    /** Hide the pill. */
+    clear(): void;
+    /** The current readout, or null when the pill is hidden. */
+    get(): MoveVolumeDisplayState | null;
+    /** Notified when the readout is set or cleared. */
+    subscribe(listener: () => void): () => void;
+    private notify;
+}
+declare const MoveVolumeDisplay: MoveVolumeDisplayClass;
+
+declare const ICON_MOVE_CAPTURE: {
+    viewBox: string;
+    path: string;
+};
+declare const ICON_MOVE_ENTER: {
+    viewBox: string;
+    circle: {
+        cx: string;
+        cy: string;
+        r: string;
+    };
+};
 
 /**
  * What an app puts on the Move that its parameters cannot describe.
@@ -1863,6 +2079,41 @@ declare const MoveSurfaceStore: {
     /** Hand the whole surface back — the panel returns to its plain layout. */
     reset(): void;
 };
+
+/** A row: a plain string, or a value with a separate display label and an
+ * optional inline tag pinned to the row's right end. `muted` marks a row the
+ * host has nothing to act on — it still walks and selects, it just never
+ * brightens, so a list can carry information alongside its choices. */
+type ListScreenItem = string | {
+    value: string;
+    label?: string;
+    tag?: string;
+    muted?: boolean;
+};
+interface ListScreenProps {
+    /** Rows in display order. */
+    items: ListScreenItem[];
+    /** The selected item's value. */
+    value?: string;
+    /** Called with a row's value when it is clicked. */
+    onSelect?: (value: string) => void;
+    /** 400px with left-aligned rows, instead of the 200px centered default. */
+    wide?: boolean;
+    className?: string;
+    style?: CSSProperties;
+}
+/**
+ * The Move's dark list screen (Figma node "list screen"): a column of
+ * single-line rows on the display surface. Unselected rows sit dim at 22%
+ * text opacity; the selected row reads at full brightness on a soft
+ * highlight. Ten and a half rows show before the screen scrolls — the cut
+ * row is the hint that there's more below — and the view follows the
+ * selection as it moves. A `muted` row stays dim even when it is the
+ * selection: it is information the list carries, not a choice. Purely
+ * presentational: the host owns the selection state and any wheel or
+ * arrow-key stepping.
+ */
+declare function ListScreen({ items, value, onSelect, wide, className, style, }: ListScreenProps): ReactElement;
 
 /**
  * The modulation layer's runtime — a singleton beside the TweakStore.
@@ -1970,6 +2221,17 @@ declare class ModulationStoreClass {
         action: ModStepAction;
         slot: ModulationSlot | null;
     };
+    /**
+     * Note on / note off for a slot — what drives a gated modulator like the
+     * ADSR:
+     *
+     *   ModulationStore.gate(0, true);    // key down
+     *   ModulationStore.gate(0, false);   // key up — the release runs
+     *
+     * Free-running types (LFO, S&H) and slots on an external source ignore
+     * it. The gate is live state, not a param: it is never persisted.
+     */
+    gate(index: number, on: boolean): void;
     /**
      * Open a slot's settings (hold its step button): registers one hidden
      * TweakStore panel (`mod-settings`, kind 'modulation') built from the
@@ -2338,7 +2600,7 @@ interface TweakTimelineProps {
     defaultOpen?: boolean;
     productionEnabled?: boolean;
 }
-declare const TweakTimeline: react.NamedExoticComponent<TweakTimelineProps>;
+declare const TweakTimeline: React.NamedExoticComponent<TweakTimelineProps>;
 
 interface ControlRendererProps {
     panelId: string;
@@ -2353,7 +2615,7 @@ interface ControlRendererProps {
         step?: number;
     };
 }
-declare function ControlRenderer({ panelId, controls, values, transitionDuration }: ControlRendererProps): react.JSX.Element;
+declare function ControlRenderer({ panelId, controls, values, transitionDuration }: ControlRendererProps): react_jsx_runtime.JSX.Element;
 
 interface SliderProps {
     label: string;
@@ -2393,7 +2655,7 @@ interface SliderProps {
     shortcut?: ShortcutConfig;
     shortcutActive?: boolean;
 }
-declare function Slider({ label, value, onChange, min, max, step, unit, formatValue, valueIcon, origin, bipolar, orientation, shortcut, shortcutActive, }: SliderProps): react.JSX.Element;
+declare function Slider({ label, value, onChange, min, max, step, unit, formatValue, valueIcon, origin, bipolar, orientation, shortcut, shortcutActive, }: SliderProps): react_jsx_runtime.JSX.Element;
 
 interface NumberControlProps {
     label: string;
@@ -2413,7 +2675,7 @@ interface NumberControlProps {
  * Numeric readout card. Drag anywhere on the card to scrub the value
  * (Shift = ×10, Alt = ×0.1); a plain click opens inline text entry.
  */
-declare function NumberControl({ label, value, onChange, min, max, step, unit, formatValue, orientation, }: NumberControlProps): react.JSX.Element;
+declare function NumberControl({ label, value, onChange, min, max, step, unit, formatValue, orientation, }: NumberControlProps): react_jsx_runtime.JSX.Element;
 
 interface RangeSliderProps {
     label: string;
@@ -2427,7 +2689,7 @@ interface RangeSliderProps {
     /** Reset target for a double-click on the track. Falls back to the full {min,max} span. */
     defaultValue?: RangeValue;
 }
-declare function RangeSlider({ label, value: rawValue, onChange, min, max, step, defaultValue, }: RangeSliderProps): react.JSX.Element;
+declare function RangeSlider({ label, value: rawValue, onChange, min, max, step, defaultValue, }: RangeSliderProps): react_jsx_runtime.JSX.Element;
 
 interface CheckboxProps {
     checked: boolean;
@@ -2451,7 +2713,7 @@ interface CheckboxProps {
  * All three marks are always in the DOM; CSS reveals one from the data
  * attributes, so the state swap animates without any motion code.
  */
-declare function Checkbox({ checked, onChange, label, disabled, id }: CheckboxProps): react.JSX.Element;
+declare function Checkbox({ checked, onChange, label, disabled, id }: CheckboxProps): react_jsx_runtime.JSX.Element;
 
 interface ToggleProps {
     label: string;
@@ -2460,7 +2722,7 @@ interface ToggleProps {
     shortcut?: ShortcutConfig;
     shortcutActive?: boolean;
 }
-declare function Toggle({ label, checked, onChange, shortcut, shortcutActive }: ToggleProps): react.JSX.Element;
+declare function Toggle({ label, checked, onChange, shortcut, shortcutActive }: ToggleProps): react_jsx_runtime.JSX.Element;
 
 interface FolderProps {
     title: string;
@@ -2485,7 +2747,7 @@ interface FolderProps {
     enabled?: boolean;
     onEnabledChange?: (enabled: boolean) => void;
 }
-declare function Folder({ title, children, defaultOpen, collapsible, isRoot, inline, onOpenChange, toolbar, tabs, hint, hintId, enabled, onEnabledChange }: FolderProps): react.JSX.Element;
+declare function Folder({ title, children, defaultOpen, collapsible, isRoot, inline, onOpenChange, toolbar, tabs, hint, hintId, enabled, onEnabledChange }: FolderProps): react_jsx_runtime.JSX.Element;
 
 interface ControlShellProps {
     /** Help text for this control. Without one the tooltip is not rendered. */
@@ -2506,7 +2768,7 @@ interface ControlShellProps {
  * Both are optional, and a control with neither renders just the wrapper plus
  * the config-path tooltip.
  */
-declare function ControlShell({ hint, title, id, affordance, panelId, path, children }: ControlShellProps): react.JSX.Element;
+declare function ControlShell({ hint, title, id, affordance, panelId, path, children }: ControlShellProps): react_jsx_runtime.JSX.Element;
 
 interface ModuleProps {
     title: string;
@@ -2522,7 +2784,7 @@ interface ModuleProps {
  * feature groups). The switch doubles as the expand control: disabling
  * collapses the body away with a smooth height transition.
  */
-declare function Module({ title, enabled, onEnabledChange, children }: ModuleProps): react.JSX.Element;
+declare function Module({ title, enabled, onEnabledChange, children }: ModuleProps): react_jsx_runtime.JSX.Element;
 
 interface SegmentedControlOption<T extends string> {
     value: T;
@@ -2533,7 +2795,7 @@ interface SegmentedControlProps<T extends string> {
     value: T;
     onChange: (value: T) => void;
 }
-declare function SegmentedControl<T extends string>({ options, value, onChange, }: SegmentedControlProps<T>): react.JSX.Element;
+declare function SegmentedControl<T extends string>({ options, value, onChange, }: SegmentedControlProps<T>): react_jsx_runtime.JSX.Element;
 
 interface ButtonGroupProps {
     buttons: Array<{
@@ -2541,7 +2803,7 @@ interface ButtonGroupProps {
         onClick: () => void;
     }>;
 }
-declare function ButtonGroup({ buttons }: ButtonGroupProps): react.JSX.Element;
+declare function ButtonGroup({ buttons }: ButtonGroupProps): react_jsx_runtime.JSX.Element;
 
 interface SpringControlProps {
     panelId: string;
@@ -2550,13 +2812,13 @@ interface SpringControlProps {
     spring: SpringConfig;
     onChange: (spring: SpringConfig) => void;
 }
-declare function SpringControl({ panelId, path, label, spring, onChange }: SpringControlProps): react.JSX.Element;
+declare function SpringControl({ panelId, path, label, spring, onChange }: SpringControlProps): react_jsx_runtime.JSX.Element;
 
 interface SpringVisualizationProps {
     spring: SpringConfig;
     isSimpleMode: boolean;
 }
-declare function SpringVisualization({ spring, isSimpleMode }: SpringVisualizationProps): react.JSX.Element;
+declare function SpringVisualization({ spring, isSimpleMode }: SpringVisualizationProps): react_jsx_runtime.JSX.Element;
 
 interface TransitionControlProps {
     panelId: string;
@@ -2575,12 +2837,12 @@ interface TransitionControlProps {
         step?: number;
     };
 }
-declare function TransitionControl({ panelId, path, label, value, onChange, hideDuration, durationControl, }: TransitionControlProps): react.JSX.Element;
+declare function TransitionControl({ panelId, path, label, value, onChange, hideDuration, durationControl, }: TransitionControlProps): react_jsx_runtime.JSX.Element;
 
 interface EasingVisualizationProps {
     easing: EasingConfig;
 }
-declare function EasingVisualization({ easing }: EasingVisualizationProps): react.JSX.Element;
+declare function EasingVisualization({ easing }: EasingVisualizationProps): react_jsx_runtime.JSX.Element;
 
 type WaveformMode = 'smooth' | 'pixelated';
 /** A loop region over the sample, as normalized 0..1 positions. */
@@ -2642,7 +2904,7 @@ interface WaveformVisualizationProps {
     width?: number;
     height?: number;
 }
-declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, grid, gridSubdivisions, onSeek, loop, onLoopChange, waveColor, playheadColor, autoZoomOnLoop, width, height, }: WaveformVisualizationProps): react.JSX.Element;
+declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, grid, gridSubdivisions, onSeek, loop, onLoopChange, waveColor, playheadColor, autoZoomOnLoop, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
 
 type AnalyserScale = 'log' | 'linear';
 /** `true` enables the default spring; an object overrides stiffness/damping. */
@@ -2714,7 +2976,7 @@ interface AnalyserVisualizationProps {
     width?: number;
     height?: number;
 }
-declare function AnalyserVisualization({ analyser, source, variant, mode, pixelSize, scale, spring, grid, gridSubdivisions, waveColor, fillColor, muted, onMuteChange, soloed, onSoloChange, rangeHz, marker, width, height, }: AnalyserVisualizationProps): react.JSX.Element;
+declare function AnalyserVisualization({ analyser, source, variant, mode, pixelSize, scale, spring, grid, gridSubdivisions, waveColor, fillColor, muted, onMuteChange, soloed, onSoloChange, rangeHz, marker, width, height, }: AnalyserVisualizationProps): react_jsx_runtime.JSX.Element;
 
 interface AnalyserRowProps {
     panelId: string;
@@ -2733,7 +2995,7 @@ interface AnalyserRowProps {
  * The canvas engine needs a pixel width, and a panel column's width is the
  * layout's business — so the row measures itself and follows.
  */
-declare function AnalyserRow({ panelId, control }: AnalyserRowProps): react.JSX.Element;
+declare function AnalyserRow({ panelId, control }: AnalyserRowProps): react_jsx_runtime.JSX.Element;
 
 interface CurveComposerProps {
     /** The curve series (controlled). */
@@ -2781,7 +3043,7 @@ interface CurveComposerProps {
     /** Height of the main lane; the driver lane adds height below it. */
     height?: number;
 }
-declare function CurveComposer({ segments, driver, direction, onSegmentsChange, onDriverChange, getPhase, phase, mode, triggerSteps, onTrigger, selectedIndex, onSelect, gap, curveColor, playheadColor, grid, gridSubdivisions, width, height, }: CurveComposerProps): react.JSX.Element;
+declare function CurveComposer({ segments, driver, direction, onSegmentsChange, onDriverChange, getPhase, phase, mode, triggerSteps, onTrigger, selectedIndex, onSelect, gap, curveColor, playheadColor, grid, gridSubdivisions, width, height, }: CurveComposerProps): react_jsx_runtime.JSX.Element;
 
 interface TextControlProps {
     label: string;
@@ -2789,7 +3051,7 @@ interface TextControlProps {
     onChange: (value: string) => void;
     placeholder?: string;
 }
-declare function TextControl({ label, value, onChange, placeholder }: TextControlProps): react.JSX.Element;
+declare function TextControl({ label, value, onChange, placeholder }: TextControlProps): react_jsx_runtime.JSX.Element;
 
 type SelectOption = string | {
     value: string;
@@ -2801,7 +3063,7 @@ interface SelectControlProps {
     options: SelectOption[];
     onChange: (value: string) => void;
 }
-declare function SelectControl({ label, value, options, onChange }: SelectControlProps): react.JSX.Element;
+declare function SelectControl({ label, value, options, onChange }: SelectControlProps): react_jsx_runtime.JSX.Element;
 
 interface ColorControlProps {
     label: string;
@@ -2810,7 +3072,7 @@ interface ColorControlProps {
     alpha?: boolean;
     palette?: boolean;
 }
-declare function ColorControl({ label, value, onChange, alpha, palette }: ColorControlProps): react.JSX.Element;
+declare function ColorControl({ label, value, onChange, alpha, palette }: ColorControlProps): react_jsx_runtime.JSX.Element;
 
 interface ColorPickerPanelProps {
     value: string;
@@ -2818,14 +3080,14 @@ interface ColorPickerPanelProps {
     alpha?: boolean;
     palette?: boolean;
 }
-declare function ColorPickerPanel({ value, onChange, alpha, palette }: ColorPickerPanelProps): react.JSX.Element;
+declare function ColorPickerPanel({ value, onChange, alpha, palette }: ColorPickerPanelProps): react_jsx_runtime.JSX.Element;
 
 interface GradientControlProps {
     label: string;
     value: GradientValue;
     onChange: (value: GradientValue) => void;
 }
-declare function GradientControl({ label, value, onChange }: GradientControlProps): react.JSX.Element;
+declare function GradientControl({ label, value, onChange }: GradientControlProps): react_jsx_runtime.JSX.Element;
 
 interface GradientPanelProps {
     value: GradientValue;
@@ -2833,7 +3095,7 @@ interface GradientPanelProps {
     /** Incremental pointer delta while the drag grip is held. */
     onDrag?: (dx: number, dy: number) => void;
 }
-declare function GradientPanel({ value, onChange, onDrag }: GradientPanelProps): react.JSX.Element;
+declare function GradientPanel({ value, onChange, onDrag }: GradientPanelProps): react_jsx_runtime.JSX.Element;
 
 interface XYPadProps {
     label: string;
@@ -2877,7 +3139,7 @@ interface XYPadProps {
  * and return-to-centre comes from a CSS transition that is disabled during drag
  * (via `data-dragging`), keeping drags instant.
  */
-declare function XYPad({ label, value, onChange, x, y, size, grid, density, snap, returnToCenter, showValues, disabled, formatValue, shortcut, shortcutActive, }: XYPadProps): react.JSX.Element;
+declare function XYPad({ label, value, onChange, x, y, size, grid, density, snap, returnToCenter, showValues, disabled, formatValue, shortcut, shortcutActive, }: XYPadProps): react_jsx_runtime.JSX.Element;
 
 interface XYControlProps {
     label: string;
@@ -2898,7 +3160,7 @@ interface XYControlProps {
  * ControlMeta fields and forwards them to the standalone XYPad, mirroring how
  * ColorControl wraps ColorPickerPanel.
  */
-declare function XYControl({ label, value, onChange, x, y, grid, density, snap, returnToCenter, showValues, shortcut, shortcutActive }: XYControlProps): react.JSX.Element;
+declare function XYControl({ label, value, onChange, x, y, grid, density, snap, returnToCenter, showValues, shortcut, shortcutActive }: XYControlProps): react_jsx_runtime.JSX.Element;
 
 interface GalleryControlProps {
     label: string;
@@ -2908,7 +3170,7 @@ interface GalleryControlProps {
     /** Masonry column count for the open grid. Default 2. */
     columns?: number;
 }
-declare function GalleryControl({ label, value, items, onChange, columns }: GalleryControlProps): react.JSX.Element;
+declare function GalleryControl({ label, value, items, onChange, columns }: GalleryControlProps): react_jsx_runtime.JSX.Element;
 
 interface FileControlProps {
     label: string;
@@ -2918,7 +3180,7 @@ interface FileControlProps {
     onChange: (filename: string) => void;
     onPick: (files: FileList) => void;
 }
-declare function FileControl({ label, value, accept, multiple, onChange, onPick }: FileControlProps): react.JSX.Element;
+declare function FileControl({ label, value, accept, multiple, onChange, onPick }: FileControlProps): react_jsx_runtime.JSX.Element;
 
 interface SwatchControlProps {
     label: string;
@@ -2926,7 +3188,7 @@ interface SwatchControlProps {
     options: SwatchOption[];
     onChange: (value: string) => void;
 }
-declare function SwatchControl({ label, value, options, onChange }: SwatchControlProps): react.JSX.Element;
+declare function SwatchControl({ label, value, options, onChange }: SwatchControlProps): react_jsx_runtime.JSX.Element;
 
 interface ChipsControlProps {
     label: string;
@@ -2935,7 +3197,7 @@ interface ChipsControlProps {
     onChange: (value: string) => void;
     onRemove: (value: string) => void;
 }
-declare function ChipsControl({ label, value, options, onChange, onRemove }: ChipsControlProps): react.JSX.Element;
+declare function ChipsControl({ label, value, options, onChange, onRemove }: ChipsControlProps): react_jsx_runtime.JSX.Element;
 
 interface MultiSelectControlProps {
     label: string;
@@ -2943,7 +3205,7 @@ interface MultiSelectControlProps {
     options: MultiSelectOption[];
     onChange: (value: string[]) => void;
 }
-declare function MultiSelectControl({ label, value, options, onChange }: MultiSelectControlProps): react.JSX.Element;
+declare function MultiSelectControl({ label, value, options, onChange }: MultiSelectControlProps): react_jsx_runtime.JSX.Element;
 
 interface ListControlProps {
     label: string;
@@ -2955,7 +3217,7 @@ interface ListControlProps {
     /** Structural signal for engines that bridge list ops imperatively. */
     onEvent: (event: TweakEvent) => void;
 }
-declare function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, onEvent }: ListControlProps): react.JSX.Element;
+declare function ListControl({ label, value, itemTypes, addLabel, maxItems, onChange, onEvent }: ListControlProps): react_jsx_runtime.JSX.Element;
 
 interface CurvePreviewProps {
     panelId: string;
@@ -2968,7 +3230,7 @@ interface CurvePreviewProps {
  * the config diff; markers ride the same sync), with the swap announced on the
  * control-state channel — so this subscribes there and re-reads each snapshot.
  */
-declare function CurvePreview({ panelId, control }: CurvePreviewProps): react.JSX.Element;
+declare function CurvePreview({ panelId, control }: CurvePreviewProps): react_jsx_runtime.JSX.Element;
 
 type CurvePoint = {
     /** Sample position, 0..1 across the row's width. */
@@ -3036,12 +3298,12 @@ interface PresetManagerProps {
      */
     editSignal?: number;
 }
-declare function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode, editSignal }: PresetManagerProps): react.JSX.Element;
+declare function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode, editSignal }: PresetManagerProps): react_jsx_runtime.JSX.Element;
 
 interface ShortcutsMenuProps {
     panelId: string;
 }
-declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react.JSX.Element | null;
+declare function ShortcutsMenu({ panelId }: ShortcutsMenuProps): react_jsx_runtime.JSX.Element | null;
 
 type AudioLevelMeterMode = 'mono' | 'stereo' | 'spectrum';
 type AudioLevelMeterColors = readonly [
@@ -3077,4 +3339,4 @@ interface SpectrumAudioLevelMeterProps extends AudioLevelMeterBaseProps {
 type AudioLevelMeterProps = MonoAudioLevelMeterProps | StereoAudioLevelMeterProps | SpectrumAudioLevelMeterProps;
 declare function AudioLevelMeter(props: AudioLevelMeterProps): ReactElement;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AnalyserMode, AnalyserRow, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, Checkbox, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, MIN_STOPS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_DIALS, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_PADS, MOVE_SPECIAL_BUTTONS, MOVE_TRACKS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, Module, type MonoAudioLevelMeterProps, type MoveFunctionButton, type MoveFunctionHandler, type MoveFunctionPress, MoveFunctions, type MovePadCell, type MovePage, MovePanel, type MoveScreenList, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type NumberConfig, NumberControl, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, TAB_PATH, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type TweakConfig, type TweakEvent, type TweakMode, type TweakPosition, TweakRoot, TweakStore, type TweakTheme, TweakTimeline, type TweakTimelineProps, type TweakTimelineValues, type TweakValue, type UseTweakTimelineOptions, type UseTweakersOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, applyModulation, buildModMovePage, buildMovePages, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, dialOrigin, displayHex, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modRingArc, moveAppPadRow, movePadRows, moveStop, nearestHandle, normToValue, normalizeCurveMarkers, normalizeDial, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeValue, normalizeXYDial, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, readComposition, redistributeWeight, registerModType, removeDriver, removeSegment, removeStop, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useTweakTimeline, useTweakers, valueFromPoint, valueToNorm, valueToPercent, visibleModControls };
+export { ADSR_DEF, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AnalyserMode, AnalyserRow, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, AudioLevelMeter, type AudioLevelMeterColors, type AudioLevelMeterMode, type AudioLevelMeterProps, type AxisSpec, ButtonGroup, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, Checkbox, type ChipOption, type ChipsConfig, ChipsControl, type ColorConfig, ColorControl, type ColorFormat, ColorPickerPanel, type CompositionRead, type CompositionSamplers, type ControlMeta, ControlRenderer, ControlShell, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, CurvePreview, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRIGGER_STEPS, type DriverDirection, type EasingConfig, EasingVisualization, type FileConfig, FileControl, Folder, type GalleryConfig, GalleryControl, type GalleryItem, type GradientConfig, GradientControl, GradientPanel, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, ListControl, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_DIALS, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_PADS, MOVE_SPECIAL_BUTTONS, MOVE_TRACKS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, Module, type MonoAudioLevelMeterProps, MoveActionButton, type MoveActionButtonProps, type MoveFunctionButton, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, type MovePadCell, type MovePage, MovePanel, type MoveScreenList, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, MoveVolumeDisplay, type MoveVolumeDisplayState, type MultiSelectConfig, MultiSelectControl, type MultiSelectOption, type NumberConfig, NumberControl, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, RangeSlider, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, ShortcutsMenu, Slider, type SliderConfig, type SpectrumAudioLevelMeterProps, type SpringConfig, SpringControl, SpringVisualization, type StereoAudioLevelMeterProps, type SwatchConfig, SwatchControl, type SwatchOption, TAB_PATH, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelineMeta, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineStore, type TimelineTransport, Toggle, type TransitionConfig, TransitionControl, type TweakConfig, type TweakEvent, type TweakMode, type TweakPosition, TweakRoot, TweakStore, type TweakTheme, TweakTimeline, type TweakTimelineProps, type TweakTimelineValues, type TweakValue, type UseTweakTimelineOptions, type UseTweakersOptions, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, applyDetentAxis, applyModulation, buildModMovePage, buildMovePages, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultListItemParams, denormalizeEnumDial, denormalizeRangeDial, dialOrigin, displayHex, enumOptionIcon, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, invertY, isOutsideSpan, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modRingArc, moveAppPadRow, movePadRows, moveStop, nearestHandle, normToValue, normalizeCurveMarkers, normalizeDial, normalizeEnumDial, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeValue, normalizeXYDial, nudge, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, readComposition, redistributeWeight, registerModType, removeDriver, removeSegment, removeStop, resolveAxis, rgbToHsl, rgbToHsv, rgbToOklch, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapToStep, splitSegment, triggerLevels, triggersCrossed, useTweakTimeline, useTweakers, valueFromPoint, valueToNorm, valueToPercent, visibleColumns, visibleModControls };

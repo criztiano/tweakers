@@ -80,6 +80,29 @@ export function findControl(controls: ControlMeta[], path: string): ControlMeta 
 
 export const DRAG_SENSITIVITY = 4;
 
+/**
+ * Fine-tuning while a pointer drag is in progress: pointer travel applies at
+ * `factor` (default 0.1×) as a RELATIVE delta from `startValue` — the value at
+ * the moment shift went down — so the handle stops tracking the cursor
+ * absolutely and creeps precisely. Callers rebase `startValue`/`startPos` on
+ * every shift transition (press mid-drag, release mid-drag) so the value never
+ * jumps; releasing shift continues at factor 1 from the release point.
+ * Positions are px along the drag axis; `extentPx` is the track's full travel.
+ */
+export function fineDragValue(opts: {
+  startValue: number;
+  startPos: number;
+  pos: number;
+  extentPx: number;
+  min: number;
+  max: number;
+  factor?: number;
+}): number {
+  const { startValue, startPos, pos, extentPx, min, max, factor = 0.1 } = opts;
+  const delta = ((pos - startPos) / (extentPx || 1)) * (max - min) * factor;
+  return Math.max(min, Math.min(max, startValue + delta));
+}
+
 // ── Formatting helpers ──
 
 export function formatInteractionLabel(interaction: string): string {

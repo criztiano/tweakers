@@ -1,5 +1,5 @@
-import { defineComponent, h, inject, onMounted, onUnmounted, provide, ref, type InjectionKey, type Ref } from 'vue';
-import { TweakStore, ControlMeta, ShortcutConfig } from '../../store/TweakStore';
+import { defineComponent, inject, onMounted, onUnmounted, provide, ref, type InjectionKey, type Ref } from 'vue';
+import { TweakStore } from '../../store/TweakStore';
 import { getEffectiveStep, applySliderDelta, findControl, isInputFocused, getActiveModifier, DRAG_SENSITIVITY } from '../../shortcut-utils';
 
 export interface ShortcutState {

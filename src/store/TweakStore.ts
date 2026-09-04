@@ -57,10 +57,25 @@ export type ActionConfig = {
 
 export type SelectConfig = {
   type: 'select';
-  options: (string | { value: string; label: string })[];
+  /**
+   * An option may name an `icon` from `LUCIDE_ICONS` — the Move slot draws it
+   * instead of making you read the mode name off a controller.
+   */
+  options: (string | { value: string; label: string; icon?: string })[];
   default?: string;
   /** 'segmented' renders the options as an inline segmented control instead of a dropdown. Suits 2–4 short options. */
   display?: 'dropdown' | 'segmented';
+  /**
+   * The shape an option stands for: `t` in [0,1] → y, auto-fitted and drawn
+   * in the Move slot in place of the option's name, which moves to a small
+   * tag at the top. Return `null` for options that have no shape.
+   *
+   * A closure, so — like a curve row's `sample` — it is invisible to the
+   * serialized config diff and is refreshed through `syncCurveConfigs`. That
+   * is what lets the drawing follow the app's other controls: a pitch arc's
+   * preview tracks its bell and flip while the picker stays a picker.
+   */
+  preview?: (value: string) => ((t: number) => number) | null | undefined;
 };
 
 export type ColorConfig = {
@@ -123,8 +138,6 @@ export type SliderConfig = {
   max: number;
   /** Falls back to inferStep(min, max) when omitted. */
   step?: number;
-  /** On the Move, sit as a value chip under the preceding dial instead of claiming a dial slot. */
-  moveChip?: boolean;
   /** Appended to the displayed value, e.g. ' dB', ' ms', '×'. */
   unit?: string;
   /**
@@ -159,8 +172,6 @@ export type NumberConfig = {
   formatValue?: (value: number) => string;
   /** `vertical` stacks the label above a centered value (column card). */
   orientation?: 'horizontal' | 'vertical';
-  /** On the Move, sit as a value chip under the preceding dial instead of claiming a dial slot. */
-  moveChip?: boolean;
 };
 
 /**
@@ -490,7 +501,9 @@ export type ControlMeta = {
   tab?: boolean;
   /** The synthetic segmented select driving `_tab` — it renders as the panel's tab bar, never as a row. */
   tabBar?: boolean;
-  options?: (string | { value: string; label: string })[];
+  options?: (string | { value: string; label: string; icon?: string })[];
+  /** Select's per-option shape sampler — swapped in place by syncCurveConfigs. */
+  preview?: (value: string) => ((t: number) => number) | null | undefined;
   /** Select's rendering mode, from the SelectConfig form. */
   display?: 'dropdown' | 'segmented';
   placeholder?: string;
@@ -510,8 +523,6 @@ export type ControlMeta = {
   bipolar?: boolean;
   /** Slider/number layout, from the explicit config forms. */
   orientation?: 'horizontal' | 'vertical';
-  /** Slider/number declared `moveChip` — on the Move it is a value chip under the preceding dial, never a dial. */
-  moveChip?: boolean;
   itemTypes?: Record<string, ListItemType>;
   addLabel?: string;
   maxItems?: number;
@@ -557,6 +568,8 @@ export type PanelConfig = {
   affordances?: Record<string, AffordanceConfig>;
   /** Label overrides by control path, retained on the same terms as `hints`. */
   labels?: Record<string, string>;
+  /** Move pad columns by control path, retained on the same terms as `hints`. */
+  movePads?: Record<string, number>;
   /**
    * Config declared `_enabled` at its root — the whole panel is a module, and
    * its title carries the switch. Same idiom as a module folder, one level up.
@@ -662,6 +675,16 @@ export type TweakStorePanelOptions = {
    * persisted entry and its shortcut binding.
    */
   labels?: Record<string, string>;
+  /**
+   * Which Move pad column a control sits in, by control path (0-7) — the
+   * page's hand-authored hardware layout. Without it the surface packs pads
+   * left to right, which is fine for a page whose pads happen to belong to
+   * the leftmost dials and wrong for every other page. With it, a pad sits
+   * under the dial it belongs to: toggles take the toggle row, bounded
+   * numbers the value row (leaving the dial pool however few dials the page
+   * has), actions the row under those.
+   */
+  movePads?: Record<string, number>;
   /** Timeline panels render in TweakTimeline; modulation panels are the Move's
    * modulator settings pages — both are filtered out of the panel dock. */
   kind?: 'timeline' | 'modulation';
@@ -818,7 +841,7 @@ class TweakStoreClass {
     // stale saved value instead of resurrecting it.
     this.overlayPersistedValues(target, values);
 
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, module: '_enabled' in config ? true : undefined, kind: options.kind });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, module: '_enabled' in config ? true : undefined, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -834,6 +857,7 @@ class TweakStoreClass {
     const hints = options.hints ?? existing.hints;
     const affordances = options.affordances ?? existing.affordances;
     const labels = options.labels ?? existing.labels;
+    const movePads = options.movePads ?? existing.movePads;
     const controls = this.parseConfig(config, '', shortcuts);
     this.applyControlExtras(controls, hints, affordances, labels);
     const controlsByPath = this.mapControlsByPath(controls);
@@ -864,7 +888,7 @@ class TweakStoreClass {
       }
     }
 
-    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, module: '_enabled' in config ? true : undefined, kind: options.kind ?? existing.kind };
+    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, module: '_enabled' in config ? true : undefined, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
 
@@ -1234,6 +1258,14 @@ class TweakStoreClass {
               changed = true;
             }
           }
+        } else if (this.isSelectConfig(value) && value.preview) {
+          // A select's preview closes over the app's other controls exactly
+          // as a curve row's sample does, so it goes stale the same way.
+          const control = this.findControlByPath(panel.controls, path);
+          if (control?.type === 'select' && control.preview !== value.preview) {
+            control.preview = value.preview;
+            changed = true;
+          }
         } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
           visit(value as TweakConfig, path);
         }
@@ -1564,7 +1596,6 @@ class TweakStoreClass {
           origin: value.origin,
           bipolar: value.bipolar,
           orientation: value.orientation,
-          moveChip: value.moveChip,
           shortcut,
         });
       } else if (this.isNumberConfig(value)) {
@@ -1578,7 +1609,6 @@ class TweakStoreClass {
           unit: value.unit,
           formatValue: value.formatValue,
           orientation: value.orientation,
-          moveChip: value.moveChip,
           shortcut,
         });
       } else if (typeof value === 'boolean') {
@@ -1588,7 +1618,7 @@ class TweakStoreClass {
       } else if (this.isActionConfig(value)) {
         controls.push({ type: 'action', path, label: (value as ActionConfig).label || label, caption: (value as ActionConfig).caption });
       } else if (this.isSelectConfig(value)) {
-        controls.push({ type: 'select', path, label, options: value.options, display: value.display });
+        controls.push({ type: 'select', path, label, options: value.options, display: value.display, preview: value.preview });
       } else if (this.isColorConfig(value)) {
         controls.push({ type: 'color', path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {

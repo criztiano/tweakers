@@ -780,7 +780,7 @@ var TweakStoreClass = class {
     this.initTabValue(controls, values);
     this.initTransitionModes(config, "", values);
     this.overlayPersistedValues(target, values);
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, module: "_enabled" in config ? true : void 0, kind: options.kind });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, module: "_enabled" in config ? true : void 0, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -794,6 +794,7 @@ var TweakStoreClass = class {
     const hints = options.hints ?? existing.hints;
     const affordances = options.affordances ?? existing.affordances;
     const labels = options.labels ?? existing.labels;
+    const movePads = options.movePads ?? existing.movePads;
     const controls = this.parseConfig(config, "", shortcuts);
     this.applyControlExtras(controls, hints, affordances, labels);
     const controlsByPath = this.mapControlsByPath(controls);
@@ -818,7 +819,7 @@ var TweakStoreClass = class {
         nextValues[path] = mode;
       }
     }
-    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, module: "_enabled" in config ? true : void 0, kind: options.kind ?? existing.kind };
+    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, module: "_enabled" in config ? true : void 0, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
     const previousBaseValues = this.baseValues.get(id) ?? {};
@@ -1114,6 +1115,12 @@ var TweakStoreClass = class {
               changed = true;
             }
           }
+        } else if (this.isSelectConfig(value) && value.preview) {
+          const control = this.findControlByPath(panel.controls, path);
+          if (control?.type === "select" && control.preview !== value.preview) {
+            control.preview = value.preview;
+            changed = true;
+          }
         } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
           visit(value, path);
         }
@@ -1383,7 +1390,6 @@ var TweakStoreClass = class {
           origin: value.origin,
           bipolar: value.bipolar,
           orientation: value.orientation,
-          moveChip: value.moveChip,
           shortcut
         });
       } else if (this.isNumberConfig(value)) {
@@ -1397,7 +1403,6 @@ var TweakStoreClass = class {
           unit: value.unit,
           formatValue: value.formatValue,
           orientation: value.orientation,
-          moveChip: value.moveChip,
           shortcut
         });
       } else if (typeof value === "boolean") {
@@ -1407,7 +1412,7 @@ var TweakStoreClass = class {
       } else if (this.isActionConfig(value)) {
         controls.push({ type: "action", path, label: value.label || label, caption: value.caption });
       } else if (this.isSelectConfig(value)) {
-        controls.push({ type: "select", path, label, options: value.options, display: value.display });
+        controls.push({ type: "select", path, label, options: value.options, display: value.display, preview: value.preview });
       } else if (this.isColorConfig(value)) {
         controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {
@@ -8849,7 +8854,7 @@ var _tmpl$220 = /* @__PURE__ */ (0, import_web184.template)(`<button class=tweak
 var _tmpl$315 = /* @__PURE__ */ (0, import_web184.template)(`<div class=tweakers-panel-wrapper>`);
 function Panel(props) {
   const [copied, setCopied] = (0, import_solid_js25.createSignal)(false);
-  const [isPanelOpen, setIsPanelOpen] = (0, import_solid_js25.createSignal)(props.defaultOpen ?? true);
+  const [, setIsPanelOpen] = (0, import_solid_js25.createSignal)(props.defaultOpen ?? true);
   const [values, setValues] = (0, import_solid_js25.createSignal)(TweakStore.getValues(props.panel.id));
   const [presets, setPresets] = (0, import_solid_js25.createSignal)(TweakStore.getPresetItems(props.panel.id));
   const [activePresetId, setActivePresetId] = (0, import_solid_js25.createSignal)(TweakStore.getActivePresetId(props.panel.id));

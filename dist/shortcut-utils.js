@@ -56,6 +56,11 @@ function findControl(controls, path) {
   return null;
 }
 var DRAG_SENSITIVITY = 4;
+function fineDragValue(opts) {
+  const { startValue, startPos, pos, extentPx, min, max, factor = 0.1 } = opts;
+  const delta = (pos - startPos) / (extentPx || 1) * (max - min) * factor;
+  return Math.max(min, Math.min(max, startValue + delta));
+}
 function formatInteractionLabel(interaction) {
   switch (interaction) {
     case "drag":
@@ -88,6 +93,7 @@ export {
   applySliderDelta,
   decimalsForStep,
   findControl,
+  fineDragValue,
   formatInteractionLabel,
   formatSliderShortcut,
   formatToggleShortcut,
