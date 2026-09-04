@@ -8854,7 +8854,7 @@ var _tmpl$220 = /* @__PURE__ */ (0, import_web184.template)(`<button class=tweak
 var _tmpl$315 = /* @__PURE__ */ (0, import_web184.template)(`<div class=tweakers-panel-wrapper>`);
 function Panel(props) {
   const [copied, setCopied] = (0, import_solid_js25.createSignal)(false);
-  const [isPanelOpen, setIsPanelOpen] = (0, import_solid_js25.createSignal)(props.defaultOpen ?? true);
+  const [, setIsPanelOpen] = (0, import_solid_js25.createSignal)(props.defaultOpen ?? true);
   const [values, setValues] = (0, import_solid_js25.createSignal)(TweakStore.getValues(props.panel.id));
   const [presets, setPresets] = (0, import_solid_js25.createSignal)(TweakStore.getPresetItems(props.panel.id));
   const [activePresetId, setActivePresetId] = (0, import_solid_js25.createSignal)(TweakStore.getActivePresetId(props.panel.id));

@@ -2414,6 +2414,37 @@ var ICON_PANEL = {
     { cx: "9.75015", cy: "12.5", r: "0.997986" }
   ]
 };
+var LUCIDE_ICONS = {
+  /* directions and traversal */
+  "arrow-right": ["M5 12h14", "m12 5 7 7-7 7"],
+  "arrow-left-right": ["M8 3 4 7l4 4", "M4 7h16", "m16 21 4-4-4-4", "M20 17H4"],
+  "fold-horizontal": [
+    "M2 12h6",
+    "M22 12h-6",
+    "M12 2v2",
+    "M12 8v2",
+    "M12 14v2",
+    "M12 20v2",
+    "m19 9-3 3 3 3",
+    "m5 15 3-3-3-3"
+  ],
+  scissors: [
+    "M20 4 8.12 15.88",
+    "M14.47 14.48 20 20",
+    "M8.12 8.12 12 12",
+    "M6 3a3 3 0 1 0 0 6 3 3 0 1 0 0-6",
+    "M6 15a3 3 0 1 0 0 6 3 3 0 1 0 0-6"
+  ],
+  /* signal character */
+  "grid-2x2": ["M12 3v18", "M3 12h18", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"],
+  activity: ["M22 12h-4l-3 9L9 3l-3 9H2"],
+  waves: [
+    "M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1",
+    "M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1",
+    "M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"
+  ],
+  "audio-lines": ["M2 10v3", "M6 6v11", "M10 3v18", "M14 8v7", "M18 5v13", "M22 10v3"]
+};
 
 // src/components/Checkbox.tsx
 import { jsx, jsxs } from "react/jsx-runtime";
@@ -8812,8 +8843,7 @@ function PresetManager({ panelId, presets, activePresetId, onAdd, providerMode =
 import { Fragment as Fragment8, jsx as jsx36, jsxs as jsxs33 } from "react/jsx-runtime";
 function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
   const [copied, setCopied] = useState22(false);
-  const [isPanelOpen, setIsPanelOpen] = useState22(defaultOpen);
-  const hasShortcuts = Object.keys(panel.shortcuts).length > 0;
+  const [, setIsPanelOpen] = useState22(defaultOpen);
   const values = useSyncExternalStore7(
     (cb) => TweakStore.subscribe(panel.id, cb),
     () => TweakStore.getValues(panel.id),
@@ -8846,7 +8876,6 @@ function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }) {
     renderRows(looseControls),
     /* @__PURE__ */ jsx36("div", { className: "tweakers-panel-tab-page", children: renderRows(pageControls) }, activeTab.path)
   ] }) : renderRows(pageControls);
-  const iconTransition = { type: "spring", visualDuration: 0.4, bounce: 0.1 };
   const presetsHidden = TweakStore.arePresetsHidden(panel.id);
   const toolbar = presetsHidden ? toolbarExtra : /* @__PURE__ */ jsxs33(Fragment8, { children: [
     /* @__PURE__ */ jsx36(
@@ -9274,6 +9303,19 @@ function normalizeXYDial(meta, value) {
 var enumOptionValue = (o) => typeof o === "string" ? o : o.value;
 var enumOptionLabel = (o) => typeof o === "string" ? o : o.label ?? o.value;
 var enumOptionIcon = (o) => typeof o === "string" ? null : o.icon ?? null;
+var ENUM_SHAPE_SAMPLES = 64;
+function enumShapePath(meta, value) {
+  if (!meta.preview) return null;
+  let sample;
+  try {
+    sample = meta.preview(String(value ?? ""));
+  } catch {
+    return null;
+  }
+  if (typeof sample !== "function") return null;
+  const d = plotCurve(sample, { count: ENUM_SHAPE_SAMPLES }).segments.map((seg) => seg.map((pt, i) => `${i ? "L" : "M"} ${(pt.t * 100).toFixed(2)} ${((1 - pt.v) * 100).toFixed(2)}`).join(" ")).join(" ");
+  return d || null;
+}
 function enumIndex(meta, value) {
   const i = (meta.options ?? []).findIndex((o) => enumOptionValue(o) === value);
   return Math.max(0, i);
@@ -9750,11 +9792,16 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         if (isEnumDial(meta)) {
           const options = meta.options ?? [];
           const activeIdx = enumIndex(meta, values[meta.path]);
+          const option = options[activeIdx];
+          const optionLabel = enumOptionLabel(option);
+          const shape = enumShapePath(meta, values[meta.path]);
+          const glyph = enumOptionIcon(option);
           return /* @__PURE__ */ jsxs34(
             "div",
             {
               className: "tweakers-move-dial",
               "data-kind": "enum",
+              "data-shape": shape ? true : void 0,
               "data-active": active || void 0,
               onPointerDown: (e) => {
                 try {
@@ -9778,10 +9825,24 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 fineRef.current = null;
               },
               children: [
+                (shape || glyph) && /* @__PURE__ */ jsxs34("span", { className: "tweakers-move-dial-tag", children: [
+                  glyph && /* @__PURE__ */ jsx39(LucideGlyph, { name: glyph }),
+                  /* @__PURE__ */ jsx39("span", { className: "tweakers-move-dial-tag-text", children: optionLabel })
+                ] }),
                 /* @__PURE__ */ jsx39(ModDot, { path: meta.path }),
+                shape && /* @__PURE__ */ jsx39(
+                  "svg",
+                  {
+                    className: "tweakers-move-dial-shape",
+                    viewBox: "0 0 100 100",
+                    preserveAspectRatio: "none",
+                    "aria-hidden": "true",
+                    children: /* @__PURE__ */ jsx39("path", { d: shape })
+                  }
+                ),
                 /* @__PURE__ */ jsxs34("div", { className: "tweakers-move-dial-readout", children: [
                   /* @__PURE__ */ jsx39("span", { className: "tweakers-move-dial-label", "data-long": meta.label.length > 9 || void 0, children: meta.label }),
-                  /* @__PURE__ */ jsx39("span", { className: "tweakers-move-dial-value", children: enumOptionLabel(options[activeIdx]) })
+                  !shape && /* @__PURE__ */ jsx39("span", { className: "tweakers-move-dial-value", children: optionLabel })
                 ] }),
                 /* @__PURE__ */ jsx39("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ jsx39("div", { className: "tweakers-move-dial-enum", children: options.map((opt, j) => /* @__PURE__ */ jsx39(
                   "span",
@@ -9909,6 +9970,24 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     ] })
   ] }) }) });
   return dock === "flow" ? content : createPortal8(content, document.body);
+}
+function LucideGlyph({ name }) {
+  const paths = LUCIDE_ICONS[name];
+  if (!paths) return null;
+  return /* @__PURE__ */ jsx39(
+    "svg",
+    {
+      className: "tweakers-move-glyph",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      strokeWidth: "2",
+      strokeLinecap: "round",
+      strokeLinejoin: "round",
+      "aria-hidden": "true",
+      children: paths.map((d) => /* @__PURE__ */ jsx39("path", { d }, d))
+    }
+  );
 }
 function MoveModCircle({ slot }) {
   const dotRef = useRef27(null);

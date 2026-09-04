@@ -8779,7 +8779,7 @@ var _tmpl$220 = /* @__PURE__ */ _$template24(`<button class=tweakers-toolbar-cop
 var _tmpl$315 = /* @__PURE__ */ _$template24(`<div class=tweakers-panel-wrapper>`);
 function Panel(props) {
   const [copied, setCopied] = createSignal22(false);
-  const [isPanelOpen, setIsPanelOpen] = createSignal22(props.defaultOpen ?? true);
+  const [, setIsPanelOpen] = createSignal22(props.defaultOpen ?? true);
   const [values, setValues] = createSignal22(TweakStore.getValues(props.panel.id));
   const [presets, setPresets] = createSignal22(TweakStore.getPresetItems(props.panel.id));
   const [activePresetId, setActivePresetId] = createSignal22(TweakStore.getActivePresetId(props.panel.id));
