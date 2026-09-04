@@ -68,6 +68,10 @@ function applyModulation(base, signal, amount, min, max) {
   const offset = clamp(signal, -1, 1) * clamp01(amount) * (max - min) / 2;
   return clamp(base + offset, min, max);
 }
+var MOD_RING_RADIUS = 6;
+var MOD_RING_CIRCUMFERENCE = 2 * Math.PI * MOD_RING_RADIUS;
+var RING_SWEEP_START = 135 / 360;
+var RING_SWEEP_LEN = 270 / 360;
 var LFO_SYNC_DIVISIONS = [
   { label: "4", beats: 16 },
   { label: "2", beats: 8 },
@@ -126,6 +130,116 @@ var LFO_DEF = {
   }
 };
 registerModType(LFO_DEF);
+var SH_DEF = {
+  type: "sh",
+  label: "S&H",
+  defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0 },
+  controls: [
+    { type: "slider", path: "rate", label: "Rate", min: 0.1, max: 30, step: 0.01, unit: "Hz" },
+    { type: "slider", path: "depth", label: "Depth", min: 0, max: 1, step: 0.01 },
+    { type: "slider", path: "offset", label: "Offset", min: -1, max: 1, step: 0.01 },
+    {
+      type: "xy",
+      path: "texture",
+      label: "Texture",
+      xParam: "jitter",
+      yParam: "smooth",
+      xAxis: { min: 0, max: 1, step: 0.01, label: "Jitter" },
+      yAxis: { min: 0, max: 1, step: 0.01, label: "Smooth" }
+    }
+  ],
+  createState: () => ({ wait: 0, held: 0, out: null }),
+  tick(state, params, dt) {
+    const s = state;
+    s.wait -= dt;
+    if (s.out === null || s.wait <= 0) {
+      s.held = Math.random() * 2 - 1;
+      const hz = Math.max(0.01, Number(params.rate) || 0);
+      const len = 1 / hz * (1 + (Math.random() * 2 - 1) * clamp01(params.jitter) * 0.9);
+      s.wait = Math.max(5e-3, len);
+    }
+    const offset = clamp(Number(params.offset) || 0, -1, 1);
+    let v = clamp(s.held * clamp01(params.depth) + offset, -1, 1);
+    const smooth = clamp01(params.smooth);
+    if (smooth > 0 && s.out !== null) {
+      const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
+      v = s.out + (v - s.out) * k;
+    }
+    s.out = v;
+    return v;
+  }
+};
+registerModType(SH_DEF);
+var secs = (ms) => Math.max(0, Number(ms) || 0) / 1e3;
+var adsrEase = (p) => 1 - (1 - p) * (1 - p);
+function adsrStageLength(stage, params) {
+  if (stage === "attack") return secs(params.attack);
+  if (stage === "decay") return secs(params.decay);
+  if (stage === "release") return secs(params.release);
+  return Infinity;
+}
+var ADSR_DEF = {
+  type: "adsr",
+  label: "ADSR",
+  defaults: { attack: 10, decay: 300, sustain: 0.6, release: 600, loop: false },
+  controls: [
+    { type: "slider", path: "attack", label: "Attack", min: 0, max: 2e3, step: 1, unit: "ms" },
+    { type: "slider", path: "decay", label: "Decay", min: 0, max: 2e3, step: 1, unit: "ms" },
+    { type: "slider", path: "sustain", label: "Sustain", min: 0, max: 1, step: 0.01 },
+    { type: "slider", path: "release", label: "Release", min: 0, max: 4e3, step: 1, unit: "ms" },
+    { type: "toggle", path: "loop", label: "Loop" }
+  ],
+  createState: () => ({ stage: "idle", t: 0, from: 0, env: 0, gate: false }),
+  gate(state, on) {
+    const s = state;
+    s.gate = on;
+    if (on) {
+      s.stage = "attack";
+      s.t = 0;
+      s.from = s.env;
+    } else if (s.stage !== "idle") {
+      s.stage = "release";
+      s.t = 0;
+      s.from = s.env;
+    }
+  },
+  tick(state, params, dt) {
+    const s = state;
+    const loop = !!params.loop;
+    const sustain = clamp01(params.sustain);
+    if (s.stage === "idle") {
+      if (!loop) return s.env = 0;
+      s.stage = "attack";
+      s.t = 0;
+      s.from = 0;
+    }
+    s.t += dt;
+    for (let guard = 0; guard < 4; guard++) {
+      const len2 = adsrStageLength(s.stage, params);
+      if (s.t < len2) break;
+      s.t -= len2;
+      if (s.stage === "attack") {
+        s.stage = "decay";
+        s.from = 1;
+      } else if (s.stage === "decay") {
+        s.stage = s.gate ? "sustain" : "release";
+        s.from = sustain;
+      } else {
+        s.stage = loop ? "attack" : "idle";
+        s.from = 0;
+      }
+    }
+    const len = adsrStageLength(s.stage, params);
+    const shaped = adsrEase(len > 0 && Number.isFinite(len) ? Math.min(1, s.t / len) : 1);
+    if (s.stage === "attack") s.env = s.from + (1 - s.from) * shaped;
+    else if (s.stage === "decay") s.env = s.from + (sustain - s.from) * shaped;
+    else if (s.stage === "sustain") s.env = sustain;
+    else if (s.stage === "release") s.env = s.from * (1 - shaped);
+    else s.env = 0;
+    return clamp01(s.env);
+  }
+};
+registerModType(ADSR_DEF);
 var ENV_HZ_MIN = 20;
 var ENV_HZ_MAX = 2e4;
 var envHz = (t) => ENV_HZ_MIN * Math.pow(ENV_HZ_MAX / ENV_HZ_MIN, clamp01(t));
@@ -364,6 +478,29 @@ var ModulationStoreClass = class {
     }
     return { action: created ? "created" : "assigned", slot };
   }
+  /* ── gates ────────────────────────────────────────────────────────── */
+  /**
+   * Note on / note off for a slot — what drives a gated modulator like the
+   * ADSR:
+   *
+   *   ModulationStore.gate(0, true);    // key down
+   *   ModulationStore.gate(0, false);   // key up — the release runs
+   *
+   * Free-running types (LFO, S&H) and slots on an external source ignore
+   * it. The gate is live state, not a param: it is never persisted.
+   */
+  gate(index, on) {
+    const slot = this.slots[index];
+    const def = slot && getModType(slot.type);
+    if (!slot || slot.source || !def?.gate) return;
+    let state = this.states.get(index);
+    if (state === void 0) {
+      state = def.createState();
+      this.states.set(index, state);
+    }
+    def.gate(state, on);
+    this.ensureLoop();
+  }
   /* ── the settings page ────────────────────────────────────────────── */
   /**
    * Open a slot's settings (hold its step button): registers one hidden
@@ -587,6 +724,15 @@ var ModulationStoreClass = class {
     const base = Number(TweakStore.getValue(panelId, path));
     if (!Number.isFinite(base)) return 0;
     return applyModulation(base, this.signals[a.slot], a.amount, meta.min, meta.max) - base;
+  }
+  /**
+   * A modulatable control's bounds, or null when it has none (or its panel
+   * has not registered yet) — what a display needs to draw the modulation
+   * against the control's own span.
+   */
+  getBounds(panelId, path) {
+    const meta = this.resolveMeta(panelId, path);
+    return meta ? { min: meta.min, max: meta.max } : null;
   }
   /** One control's value with its modulation applied — the frame-time read. */
   getValue(panelId, path) {

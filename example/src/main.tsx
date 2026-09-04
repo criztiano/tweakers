@@ -24,13 +24,27 @@ TweakStore.registerPanel('move-xy', 'Move Demo', {
 });
 
 // Modulation demo: an LFO in the first step slot breathing the Move demo's
-// Amount slider — a pulsing circle in the track row, the slot's colour
-// dotted on the control. The slider keeps its base value; read the live
+// Amount slider — a pulsing circle in the track row, and a ring on the
+// control whose arc runs from the slider's own value to where the
+// modulation is holding it. The slider keeps its base value; read the live
 // number with ModulationStore.getValue('move-xy', 'amount'). (Slots
 // persist across reloads, hence the guard.)
 if (!ModulationStore.getSlot(0)) {
   ModulationStore.createSlot(0);
   ModulationStore.assign('move-xy', 'amount', 0, 0.6);
+}
+
+// The second slot holds an ADSR pumping the Bias slider. An ADSR rests until
+// something gates it — a real app calls ModulationStore.gate(1, true/false)
+// on its notes — so this demo turns Loop on to let it play its own gate and
+// show the shape. Hold the slot's circle (or step 2) for its Attack / Decay
+// / Sustain / Release page.
+if (!ModulationStore.getSlot(1)) {
+  ModulationStore.createSlot(1, 'adsr');
+  ModulationStore.updateSlotParams(1, {
+    attack: 40, decay: 250, sustain: 0.4, release: 700, loop: true,
+  });
+  ModulationStore.assign('move-xy', 'bias', 1, 0.8);
 }
 
 // Function buttons: the Move's Copy puts every panel's current values on the

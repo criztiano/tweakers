@@ -159,3 +159,32 @@ describe('external sources', () => {
     expect(ModulationStore.getSources()).not.toContain('lfo-native');
   });
 });
+
+describe('gates', () => {
+  it('runs a gated ADSR slot and lifts the control while it is held', () => {
+    const id = freshId();
+    register(id, { speed: [50, 0, 100] as [number, number, number] });
+    ModulationStore.createSlot(0, 'adsr');
+    ModulationStore.updateSlotParams(0, {
+      attack: 0, decay: 0, sustain: 1, release: 100, loop: false,
+    });
+    ModulationStore.assign(id, 'speed', 0, 1);
+
+    ModulationStore.tick(0.016);
+    expect(ModulationStore.getValue(id, 'speed')).toBe(50);  // no gate, no lift
+
+    ModulationStore.gate(0, true);
+    ModulationStore.tick(0.016);
+    expect(ModulationStore.getValue(id, 'speed')).toBe(100); // held wide open
+
+    ModulationStore.gate(0, false);
+    ModulationStore.tick(0.2);                               // past the release
+    expect(ModulationStore.getValue(id, 'speed')).toBe(50);
+  });
+
+  it('lets a free-running slot ignore the gate', () => {
+    ModulationStore.createSlot(0);                           // an LFO
+    expect(() => ModulationStore.gate(0, true)).not.toThrow();
+    expect(() => ModulationStore.gate(5, true)).not.toThrow(); // empty slot
+  });
+});

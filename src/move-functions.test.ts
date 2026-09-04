@@ -78,6 +78,43 @@ describe('move functions', () => {
     assert.ok(MOVE_FUNCTION_BUTTONS.includes('copy'));
   });
 
+  it('carries an optional label per attachment, cleared on detach and on plain re-attach', () => {
+    const detach = MoveFunctions.attach('capture', () => {}, { label: 'add marker' });
+    assert.equal(MoveFunctions.label('capture'), 'add marker');
+    assert.ok(MoveFunctions.list().includes('capture'));
+
+    // Re-attaching without a label drops the old one — no stale screen names.
+    const detach2 = MoveFunctions.attach('capture', () => {});
+    assert.equal(MoveFunctions.label('capture'), undefined);
+
+    const detach3 = MoveFunctions.attach('capture', () => {}, { label: 'confirm' });
+    assert.equal(MoveFunctions.label('capture'), 'confirm');
+    detach3();
+    assert.equal(MoveFunctions.label('capture'), undefined);
+    assert.ok(!MoveFunctions.list().includes('capture'));
+    detach();
+    detach2();
+  });
+
+  it('notifies run listeners on every run, with the full press', () => {
+    const runs: { name: string; shift: boolean }[] = [];
+    const unsubscribe = MoveFunctions.subscribeRuns((name, press) => runs.push({ name, shift: press.shift }));
+
+    // Fires even with nothing attached — presses are observable regardless.
+    MoveFunctions.run('jog_click');
+    const detach = MoveFunctions.attach('jog_click', () => {}, { label: 'enter' });
+    MoveFunctions.run('jog_click', { shift: true });
+    assert.deepEqual(runs, [
+      { name: 'jog_click', shift: false },
+      { name: 'jog_click', shift: true },
+    ]);
+
+    unsubscribe();
+    MoveFunctions.run('jog_click');
+    assert.equal(runs.length, 2);
+    detach();
+  });
+
   it('names buttons as the hardware prints them, and marks the special ones', () => {
     // Names match the wire protocol — no aliases, no integration confusion.
     assert.ok(MOVE_FUNCTION_BUTTONS.includes('sample'));

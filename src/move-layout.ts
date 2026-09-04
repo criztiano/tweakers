@@ -1,5 +1,6 @@
 import type { PanelConfig, ControlMeta } from './store/TweakStore';
 import { resolveAxis, type XYValue } from './xy-pad-core';
+import { clampRange, type RangeValue } from './range-slider-core';
 
 /**
  * The Move's control surface, as the bridge kit maps it (move-tweakers v0):
@@ -8,7 +9,9 @@ import { resolveAxis, type XYValue } from './xy-pad-core';
  * takes a dial slot too — the pad draws behind the label, its knob turns
  * the X axis, and the volume knob turns Y while that knob is touched. A
  * range control claims a slot the same way: its knob moves the low end,
- * the volume knob the high end while touched. Bounded params
+ * the volume knob the high end while touched. A select with real choices
+ * claims one as a stepped enum dial — the knob's 0..1 position maps to an
+ * option index, step 1/(count-1). Bounded params
  * beyond the 8 dials overflow into the pad grid as value chips — each one
  * related, by column, to the dial above it, which it can substitute (hold
  * to peek, tap to latch). The on-screen MovePanel mirrors this mapping so
@@ -26,6 +29,9 @@ export interface MovePage {
   /** Overflow value chips — the hardware's value pad row (y=1). Value i sits
    *  at column i on both surfaces, pairing it with the dial in that column. */
   values: ControlMeta[];
+  /** Action pads — the row under the values (the device's bottom pad row).
+   *  Placed by hand only, through the panel's `movePads` map. */
+  actions: ControlMeta[];
 }
 
 const flat = (controls: ControlMeta[], out: ControlMeta[] = []): ControlMeta[] => {
@@ -64,8 +70,21 @@ export function buildModMovePage(panel: PanelConfig): MovePage {
     if (c.type === 'toggle') toggles[Math.max(0, dials.length - 1)] = c;
     else if (c.type === 'select' || isDial(c)) dials.push(c);
   }
-  return { panel, dials: dials.slice(0, MOVE_DIALS), toggles: toggles.slice(0, MOVE_PADS), values: [] };
+  return { panel, dials: dials.slice(0, MOVE_DIALS), toggles: toggles.slice(0, MOVE_PADS), values: [], actions: [] };
 }
+
+/**
+ * A hand-placed pad's column, or null when the panel leaves the control to
+ * the automatic packing. Out-of-range columns are ignored rather than
+ * clamped: silently stacking two pads on column 7 would read as a layout
+ * that works until you look at the hardware.
+ */
+const padColumn = (panel: PanelConfig, c: ControlMeta): number | null => {
+  const col = panel.movePads?.[c.path];
+  return typeof col === 'number' && Number.isInteger(col) && col >= 0 && col < MOVE_PADS
+    ? col
+    : null;
+};
 
 export function buildMovePages(panels: PanelConfig[]): MovePage[] {
   return panels
@@ -73,15 +92,63 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
     .slice(0, MOVE_TRACKS)
     .map((panel) => {
       const controls = flat(panel.controls);
-      const bounded = controls.filter(isDial);
+      // A bounded control sent to a pad is a value chip wherever it was
+      // declared, so it must not eat a dial slot on the way past. Two-handed
+      // dials and enums can't be chips at all, so a pad column on one of
+      // those is ignored and it keeps its slot.
+      const chipPlaced = (c: ControlMeta) => padColumn(panel, c) !== null && !noChip(c);
+      const dials = controls.filter((c) => isDial(c) && !chipPlaced(c)).slice(0, MOVE_DIALS);
+
+      const toggles: ControlMeta[] = [];
+      const values: ControlMeta[] = [];
+      const actions: ControlMeta[] = [];
+      // A named column is taken as read; everything else — and anything whose
+      // column is already spoken for — packs into the leftmost free one, which
+      // is the whole rule for a panel that names no columns at all.
+      const place = (row: ControlMeta[], c: ControlMeta, col: number | null) => {
+        if (col !== null && row[col] === undefined) {
+          row[col] = c;
+          return;
+        }
+        for (let i = 0; i < MOVE_PADS; i++) {
+          if (row[i] === undefined) {
+            row[i] = c;
+            return;
+          }
+        }
+      };
+      for (const c of controls) {
+        const col = padColumn(panel, c);
+        if (c.type === 'toggle') place(toggles, c, col);
+        // Actions reach the pads only when the page asks for them by column —
+        // every app has buttons, and none of them expect a hardware pad.
+        else if (c.type === 'action') { if (col !== null) place(actions, c, col); }
+        /* xy pads and ranges need a dial slot — past the 8 dials they don't fit a chip */
+        else if (isDial(c) && !noChip(c) && !dials.includes(c)) place(values, c, col);
+      }
       return {
         panel,
-        dials: bounded.slice(0, MOVE_DIALS),
-        toggles: controls.filter((c) => c.type === 'toggle').slice(0, MOVE_PADS),
-        /* xy pads and ranges need a dial slot — past the 8 dials they don't fit a chip */
-        values: bounded.slice(MOVE_DIALS).filter((c) => !noChip(c)).slice(0, MOVE_PADS),
+        dials,
+        toggles: toggles.slice(0, MOVE_PADS),
+        values: values.slice(0, MOVE_PADS),
+        actions: actions.slice(0, MOVE_PADS),
       };
     });
+}
+
+/**
+ * The columns the on-screen panel actually shows: a column is occupied when
+ * it has a dial, a toggle chip, or a value chip at that index. The indices
+ * stay the hardware knob numbers — callers hide the unoccupied columns,
+ * never renumber them, so the latch/substitution logic and the physical
+ * knobs keep agreeing on what column i means.
+ */
+export function visibleColumns(page: MovePage): number[] {
+  const cols: number[] = [];
+  for (let i = 0; i < MOVE_DIALS; i++) {
+    if (page.dials[i] || page.toggles[i] || page.values[i] || page.actions[i]) cols.push(i);
+  }
+  return cols;
 }
 
 /** Dial position 0..1 back to the control's real value, kit-identical. */
@@ -120,11 +187,14 @@ export function normalizeXYDial(meta: ControlMeta, value: unknown): { x: number;
   return { x: norm01(v.x, xAxis.min, xAxis.max), y: norm01(v.y, yAxis.min, yAxis.max) };
 }
 
-/** Enum dial helpers — options may be strings or { value, label }. */
+/** Enum dial helpers — options may be strings or { value, label, icon }. */
 export const enumOptionValue = (o: string | { value: string; label?: string }) =>
   typeof o === 'string' ? o : o.value;
 export const enumOptionLabel = (o: string | { value: string; label?: string }) =>
   typeof o === 'string' ? o : (o.label ?? o.value);
+/** The option's glyph name, or null — a bare string option never has one. */
+export const enumOptionIcon = (o: string | { icon?: string }): string | null =>
+  typeof o === 'string' ? null : (o.icon ?? null);
 export function enumIndex(meta: ControlMeta, value: unknown): number {
   const i = (meta.options ?? []).findIndex((o) => enumOptionValue(o as never) === value);
   return Math.max(0, i);
@@ -134,17 +204,39 @@ export function enumIndex(meta: ControlMeta, value: unknown): number {
 export function normalizeRangeDial(meta: ControlMeta, value: unknown): { lo: number; hi: number } {
   const min = meta.min ?? 0;
   const max = meta.max ?? 1;
-  const v = (value ?? {}) as Partial<{ min: number; max: number }>;
+  const v = (value ?? {}) as Partial<RangeValue>;
   return { lo: norm01(v.min, min, max), hi: norm01(v.max, min, max) };
 }
 
-/** End positions 0..1 back to the control's real {min, max}, kit-identical. */
-export function denormalizeRangeDial(meta: ControlMeta, lo01: number, hi01: number): { min: number; max: number } {
+/** End positions 0..1 back to the control's real {min, max}, kit-identical —
+ *  clamped into the bounds and ordered, so crossed ends never come back reversed. */
+export function denormalizeRangeDial(meta: ControlMeta, lo01: number, hi01: number): RangeValue {
   const min = meta.min ?? 0;
   const max = meta.max ?? 1;
-  const lo = denorm01(Math.min(lo01, hi01), min, max, meta.step ?? 0);
-  const hi = denorm01(Math.max(lo01, hi01), min, max, meta.step ?? 0);
-  return { min: lo, max: hi };
+  const step = meta.step ?? 0;
+  return clampRange(
+    { min: denorm01(lo01, min, max, step), max: denorm01(hi01, min, max, step) },
+    min,
+    max
+  );
+}
+
+/** An enum dial's position 0..1 — the option's index over the last index.
+ *  An unknown (or missing) value reads as the first option, position 0. */
+export function normalizeEnumDial(meta: ControlMeta, value: unknown): number {
+  const opts = (meta.options ?? []).map((o) => enumOptionValue(o as never));
+  if (opts.length < 2) return 0;
+  const i = opts.indexOf(String(value));
+  return i <= 0 ? 0 : i / (opts.length - 1);
+}
+
+/** Dial position 0..1 back to the option at that step, kit-identical:
+ *  round(v01 * (count-1)), clamped into the options list. */
+export function denormalizeEnumDial(meta: ControlMeta, v01: number): string {
+  const opts = (meta.options ?? []).map((o) => enumOptionValue(o as never));
+  if (opts.length === 0) return '';
+  const i = Math.round(Math.min(1, Math.max(0, v01)) * (opts.length - 1));
+  return opts[i];
 }
 
 /** Where the fill anchors for a bipolar/origin slider, 0..1 (else 0). */

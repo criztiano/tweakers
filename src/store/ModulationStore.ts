@@ -280,6 +280,31 @@ class ModulationStoreClass {
     return { action: created ? 'created' : 'assigned', slot };
   }
 
+  /* ── gates ────────────────────────────────────────────────────────── */
+
+  /**
+   * Note on / note off for a slot — what drives a gated modulator like the
+   * ADSR:
+   *
+   *   ModulationStore.gate(0, true);    // key down
+   *   ModulationStore.gate(0, false);   // key up — the release runs
+   *
+   * Free-running types (LFO, S&H) and slots on an external source ignore
+   * it. The gate is live state, not a param: it is never persisted.
+   */
+  gate(index: number, on: boolean): void {
+    const slot = this.slots[index];
+    const def = slot && getModType(slot.type);
+    if (!slot || slot.source || !def?.gate) return;
+    let state = this.states.get(index);
+    if (state === undefined) {
+      state = def.createState();
+      this.states.set(index, state);
+    }
+    def.gate(state, on);
+    this.ensureLoop();
+  }
+
   /* ── the settings page ────────────────────────────────────────────── */
 
   /**
@@ -531,6 +556,16 @@ class ModulationStoreClass {
     const base = Number(TweakStore.getValue(panelId, path));
     if (!Number.isFinite(base)) return 0;
     return applyModulation(base, this.signals[a.slot], a.amount, meta.min, meta.max) - base;
+  }
+
+  /**
+   * A modulatable control's bounds, or null when it has none (or its panel
+   * has not registered yet) — what a display needs to draw the modulation
+   * against the control's own span.
+   */
+  getBounds(panelId: string, path: string): { min: number; max: number } | null {
+    const meta = this.resolveMeta(panelId, path);
+    return meta ? { min: meta.min, max: meta.max } : null;
   }
 
   /** One control's value with its modulation applied — the frame-time read. */
