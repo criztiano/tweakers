@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { TweakStore, PanelConfig, ControlMeta, TAB_PATH } from '../store/TweakStore';
 import { splitPanelTabs } from '../panel-tabs';
 import { buildCopyInstruction } from '../copy-instruction';
-import { ShortcutsMenu } from './ShortcutsMenu';
 import { ICON_CLIPBOARD, ICON_CHECK, ICON_ADD_PRESET } from '../icons';
 import { Folder } from './Folder';
 import { ControlRenderer } from './ControlRenderer';
@@ -20,8 +19,7 @@ interface PanelProps {
 
 export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra }: PanelProps) {
   const [copied, setCopied] = useState(false);
-  const [isPanelOpen, setIsPanelOpen] = useState(defaultOpen);
-  const hasShortcuts = Object.keys(panel.shortcuts).length > 0;
+  const [, setIsPanelOpen] = useState(defaultOpen);
 
   // Subscribe to panel value changes
   const values = useSyncExternalStore(
@@ -75,8 +73,6 @@ export function Panel({ panel, defaultOpen = true, inline = false, toolbarExtra 
     ) : (
       renderRows(pageControls)
     );
-
-  const iconTransition = { type: 'spring' as const, visualDuration: 0.4, bounce: 0.1 };
 
   const presetsHidden = TweakStore.arePresetsHidden(panel.id);
 

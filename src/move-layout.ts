@@ -1,5 +1,6 @@
 import type { PanelConfig, ControlMeta } from './store/TweakStore';
 import { resolveAxis, type XYValue } from './xy-pad-core';
+import { plotCurve } from './curve-preview-core';
 import { clampRange, type RangeValue } from './range-slider-core';
 
 /**
@@ -195,6 +196,38 @@ export const enumOptionLabel = (o: string | { value: string; label?: string }) =
 /** The option's glyph name, or null — a bare string option never has one. */
 export const enumOptionIcon = (o: string | { icon?: string }): string | null =>
   typeof o === 'string' ? null : (o.icon ?? null);
+
+/** Enough points to read a bell or a bounce at slot width, and no more. */
+export const ENUM_SHAPE_SAMPLES = 64;
+
+/**
+ * The shape an enum option stands for, as an SVG path across a 100×100 box
+ * with y pointing up — or null when the select declares no `preview`, or that
+ * option has no shape. Auto-fitted through the curve row's own core, so a
+ * bipolar arc and a 0..1 envelope both fill the box.
+ *
+ * Lives here rather than in the panel so the "what does this slot draw"
+ * question has one answer both surfaces can be tested against.
+ */
+export function enumShapePath(meta: ControlMeta, value: unknown): string | null {
+  if (!meta.preview) return null;
+  let sample: ((t: number) => number) | null | undefined;
+  try {
+    sample = meta.preview(String(value ?? ''));
+  } catch {
+    return null;                      /* a throwing preview draws nothing */
+  }
+  if (typeof sample !== 'function') return null;
+  const d = plotCurve(sample, { count: ENUM_SHAPE_SAMPLES })
+    .segments
+    .map((seg) =>
+      seg
+        .map((pt, i) =>
+          `${i ? 'L' : 'M'} ${(pt.t * 100).toFixed(2)} ${((1 - pt.v) * 100).toFixed(2)}`)
+        .join(' '))
+    .join(' ');
+  return d || null;
+}
 export function enumIndex(meta: ControlMeta, value: unknown): number {
   const i = (meta.options ?? []).findIndex((o) => enumOptionValue(o as never) === value);
   return Math.max(0, i);

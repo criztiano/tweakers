@@ -5,8 +5,7 @@ import { ModulationStore } from '../store/ModulationStore';
 import { modColor, MOD_SETTINGS_PANEL, type ModulationSlot } from '../modulation-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from './TweakRoot';
-import { buildMovePages, buildModMovePage, visibleColumns, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, dialOrigin, isEnumDial, enumOptionLabel, enumOptionIcon, enumIndex, MOVE_DIALS } from '../move-layout';
-import { plotCurve } from '../curve-preview-core';
+import { buildMovePages, buildModMovePage, visibleColumns, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, dialOrigin, isEnumDial, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_DIALS } from '../move-layout';
 import { LUCIDE_ICONS } from '../icons';
 import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValue, applyDetentAxis, type XYValue } from '../xy-pad-core';
 import { nearestHandle, type RangeValue } from '../range-slider-core';
@@ -618,11 +617,18 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 if (isEnumDial(meta)) {
                   const options = meta.options ?? [];
                   const activeIdx = enumIndex(meta, values[meta.path]);
+                  const option = options[activeIdx];
+                  const optionLabel = enumOptionLabel(option as never);
+                  // The option's own shape, drawn in the slot: the picture is
+                  // the value, so its name steps back to a tag at the top.
+                  const shape = enumShapePath(meta, values[meta.path]);
+                  const glyph = enumOptionIcon(option as never);
                   return (
                     <div
                       key={meta.path}
                       className="tweakers-move-dial"
                       data-kind="enum"
+                      data-shape={shape ? true : undefined}
                       data-active={active || undefined}
                       onPointerDown={(e) => {
                         try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
@@ -637,14 +643,32 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
                       onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
                     >
+                      {(shape || glyph) && (
+                        <span className="tweakers-move-dial-tag">
+                          {glyph && <LucideGlyph name={glyph} />}
+                          <span className="tweakers-move-dial-tag-text">{optionLabel}</span>
+                        </span>
+                      )}
                       <ModDot path={meta.path} />
+                      {shape && (
+                        <svg
+                          className="tweakers-move-dial-shape"
+                          viewBox="0 0 100 100"
+                          preserveAspectRatio="none"
+                          aria-hidden="true"
+                        >
+                          <path d={shape} />
+                        </svg>
+                      )}
                       <div className="tweakers-move-dial-readout">
                         <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
                           {meta.label}
                         </span>
-                        <span className="tweakers-move-dial-value">
-                          {enumOptionLabel(options[activeIdx] as never)}
-                        </span>
+                        {/* With the shape drawn, its name lives on the tag —
+                            the big line would only repeat it over the drawing. */}
+                        {!shape && (
+                          <span className="tweakers-move-dial-value">{optionLabel}</span>
+                        )}
                       </div>
                       <div className="tweakers-move-dial-bar">
                         <div className="tweakers-move-dial-enum">
@@ -793,33 +817,6 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // Flow docking stays in the host's tree, so the app can centre content and
   // panel as one group; viewport docking portals out and pins to the edge.
   return dock === 'flow' ? content : createPortal(content, document.body);
-}
-
-/** Enough points to read a bell or a bounce at slot width, and no more. */
-const MOVE_SHAPE_SAMPLES = 64;
-
-/**
- * The selected option's shape as an SVG path, or null when the select has no
- * `preview` — or that option has no shape. Auto-fitted through the same core
- * the curve row uses, so a bipolar arc and a 0..1 envelope both fill the box.
- */
-function optionOutline(meta: ControlMeta, value: string): string | null {
-  if (!meta.preview) return null;
-  let sample: ((t: number) => number) | null | undefined;
-  try {
-    sample = meta.preview(value);
-  } catch {
-    return null;                    /* a throwing preview draws nothing */
-  }
-  if (typeof sample !== 'function') return null;
-  const d = plotCurve(sample, { count: MOVE_SHAPE_SAMPLES })
-    .segments
-    .map((seg) =>
-      seg
-        .map((pt, i) => `${i ? 'L' : 'M'} ${(pt.t * 100).toFixed(2)} ${((1 - pt.v) * 100).toFixed(2)}`)
-        .join(' '))
-    .join(' ');
-  return d || null;
 }
 
 /** One glyph from the bundled lucide subset; an unknown name draws nothing. */
