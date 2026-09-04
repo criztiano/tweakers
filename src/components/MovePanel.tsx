@@ -643,8 +643,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
                       onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
                     >
+                      {/* A slot with a picture in it reads top down: what the
+                          knob is on the chip, the picture between, what it is
+                          set to underneath. No crossfade — with the name out
+                          of the way there is nothing for the value to replace. */}
                       {(shape || glyph) && (
-                        <span className="tweakers-move-dial-tag">{optionLabel}</span>
+                        <span className="tweakers-move-dial-tag">{meta.label}</span>
                       )}
                       <ModDot path={meta.path} />
                       {shape && (
@@ -657,25 +661,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           <path d={shape} />
                         </svg>
                       )}
-                      <div className="tweakers-move-dial-readout">
-                        {/* The glyph takes the middle of the slot, where the
-                            name would be: a picture is what you read at arm's
-                            length. The name keeps the tag above it. */}
-                        {glyph ? (
-                          <LucideGlyph name={glyph} className="tweakers-move-dial-icon" />
-                        ) : (
-                          <>
-                            <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
-                              {meta.label}
-                            </span>
-                            {/* With the shape drawn, its name lives on the tag —
-                                the big line would only repeat it over the drawing. */}
-                            {!shape && (
-                              <span className="tweakers-move-dial-value">{optionLabel}</span>
-                            )}
-                          </>
-                        )}
-                      </div>
+                      {glyph && <LucideGlyph name={glyph} className="tweakers-move-dial-icon" />}
+                      {shape || glyph ? (
+                        <span className="tweakers-move-dial-option">{optionLabel}</span>
+                      ) : (
+                        <div className="tweakers-move-dial-readout">
+                          <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
+                            {meta.label}
+                          </span>
+                          <span className="tweakers-move-dial-value">{optionLabel}</span>
+                        </div>
+                      )}
                       <div className="tweakers-move-dial-bar">
                         <div className="tweakers-move-dial-enum">
                           {options.map((opt, j) => (

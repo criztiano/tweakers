@@ -966,7 +966,7 @@ A `range` control claims a dial slot too: the bar fills between two handle ticks
 
 A `select` with options becomes a stepped enum dial: the bar splits into one cell per option, the active cell filled, and the readout shows the option's label. Dragging the slot — or turning the column's knob — steps through the options in order.
 
-An option can name an `icon` from the bundled [lucide](https://lucide.dev) subset (`LUCIDE_ICONS`). The glyph takes the middle of the slot, in place of the name, and the option's name moves to a small tag at the top — at arm's length you read a picture, not a word.
+An option can name an `icon` from the bundled [lucide](https://lucide.dev) subset (`LUCIDE_ICONS`). The glyph takes the middle of the slot, in place of the name — at arm's length you read a picture, not a word.
 
 ```tsx
 playMode: {
@@ -979,7 +979,7 @@ playMode: {
 },
 ```
 
-A select whose options *are* shapes takes `preview` instead: `t` in `[0, 1]` → y for the given option, or `null` for options with no shape. The slot draws that curve in place of the option's big name, which moves to the same tag — the picture is the value. It is auto-fitted like a curve row, so a bipolar arc and a 0–1 envelope both fill the slot.
+A select whose options *are* shapes takes `preview` instead: `t` in `[0, 1]` → y for the given option, or `null` for options with no shape. The slot draws that curve in place of the option's big name — the picture is the value. It is auto-fitted like a curve row, so a bipolar arc and a 0–1 envelope both fill the slot.
 
 ```tsx
 pitchShape: {
@@ -989,6 +989,8 @@ pitchShape: {
   preview: (name) => (t) => arcCurve(name, bell, t, flip),   // follows bell and flip
 },
 ```
+
+A slot showing a picture reads top down and drops the label/value crossfade, which has nothing left to swap: the control's name sits on a small chip at the top, the picture takes every pixel between the two labels (8px clear of each), and the option's name captions it above the pagination cells.
 
 `preview` is a closure, so — like a curve row's `sample` — it is invisible to the serialized config diff and is refreshed through the same sync. That is what lets the drawing track the app's other controls while the picker stays a picker.
 

@@ -5618,21 +5618,58 @@ input.tweakers-list-item-title:focus {
 }
 
 /* Option glyph — lucide in the middle of the slot, where the name would be:
-   at arm's length you read a picture, not a word. Sized to the label it
-   stands in for, and drawn a touch lighter so it sits at label weight. */
+   at arm's length you read a picture, not a word. It shares the shape's band
+   and keeps its own proportions inside it (the viewBox meets, not stretches),
+   so a glyph and a curve sit on the same line across a page. */
 .tweakers-move-dial-icon {
-  width: 36px;
-  height: 36px;
+  position: absolute;
+  top: var(--move-shape-top);
+  bottom: var(--move-shape-bottom);
+  left: 10px;
+  right: 10px;
+  width: auto;
+  height: auto;
   stroke-width: 1.5;
   color: var(--move-text);
+  pointer-events: none;
 }
 
-/* The shape itself, filling the slot between the tag and the track: faint at
-   rest so the slot still reads as a row of names, full strength under a
-   finger — the same rise the xy pad's preview makes. */
+/* What the slot is set to, under the picture and clear of the pagination
+   cells. Smaller than the dial's own big readout: the picture is the
+   headline, this is its caption. */
+.tweakers-move-dial-option {
+  position: absolute;
+  left: 8px;
+  right: 9px;
+  bottom: var(--move-option-bottom);
+  font-family: var(--move-font-label);
+  font-size: 16px;
+  line-height: 20px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The picture takes every pixel between the two labels and nothing either of
+   them needs: 8px clear of the chip above and of the caption below, which is
+   itself clear of the pagination cells.
+
+   Band arithmetic, from the slot's own edges:
+     top    = chip top (6) + chip height (18) + 8
+     bottom = option bottom + option line (20) + 8 */
+.tweakers-move-dial {
+  --move-option-bottom: 21px;   /* the track's 8 + 9, plus 4 of air */
+  --move-shape-top: 32px;
+  --move-shape-bottom: 49px;
+}
+
 .tweakers-move-dial-shape {
   position: absolute;
-  inset: 26px 10px 24px;
+  top: var(--move-shape-top);
+  bottom: var(--move-shape-bottom);
+  left: 10px;
+  right: 10px;
   width: auto;
   height: auto;
   overflow: visible;
@@ -5960,6 +5997,15 @@ input.tweakers-list-item-title:focus {
   }
   .tweakers-move-dial-value {
     font-size: 18px;
+  }
+  .tweakers-move-dial {
+    --move-option-bottom: 20px;
+    --move-shape-top: 32px;
+    --move-shape-bottom: 44px;
+  }
+  .tweakers-move-dial-option {
+    font-size: 13px;
+    line-height: 16px;
   }
 }
 
