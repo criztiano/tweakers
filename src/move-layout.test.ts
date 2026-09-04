@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { TweakStore } from './store/TweakStore';
-import { buildMovePages, visibleColumns, enumOptionIcon, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from './move-layout';
+import { buildMovePages, visibleColumns, enumOptionIcon, enumShapePath, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from './move-layout';
 
 // The MovePanel mirrors the bridge kit's v0 mapping: first 4 panels are the
 // track pages, sliders and bounded numbers fill the 8 dials, toggles the
@@ -352,6 +352,29 @@ describe('move layout', () => {
     assert.equal(typeof shape!.preview!('arc'), 'function');
     assert.equal(shape!.preview!('flat'), null);
     assert.equal(mode!.preview, undefined, 'a select without one stays a plain picker');
+
+    // The path the slot draws: real geometry, spanning the box both ways.
+    const d = enumShapePath(shape!, 'arc');
+    assert.ok(d && d.startsWith('M '), `expected a path, got ${d}`);
+    const xs = [...d!.matchAll(/[ML] ([\d.]+) ([\d.]+)/g)].map((m) => Number(m[1]));
+    const ys = [...d!.matchAll(/[ML] ([\d.]+) ([\d.]+)/g)].map((m) => Number(m[2]));
+    assert.equal(Math.min(...xs), 0);
+    assert.equal(Math.max(...xs), 100);
+    assert.ok(Math.max(...ys) - Math.min(...ys) > 50, 'the fit should use the box');
+
+    // No preview, no drawing — the slot keeps its big name instead.
+    assert.equal(enumShapePath(mode!, 'forward'), null);
+    assert.equal(enumShapePath(shape!, 'flat'), null, 'a shapeless option draws nothing');
+  });
+
+  it('survives a preview that throws or returns nonsense', () => {
+    const meta = { type: 'select', path: 's', label: 'S', options: ['a', 'b'] } as never;
+    const boom = { ...(meta as object), preview: () => { throw new Error('nope'); } } as never;
+    assert.equal(enumShapePath(boom, 'a'), null);
+    const junk = { ...(meta as object), preview: () => 7 } as never;
+    assert.equal(enumShapePath(junk, 'a'), null);
+    const nan = { ...(meta as object), preview: () => () => NaN } as never;
+    assert.equal(enumShapePath(nan, 'a'), null, 'an all-NaN curve leaves nothing to stroke');
   });
 
   it('returns no visible columns for an empty page', () => {
