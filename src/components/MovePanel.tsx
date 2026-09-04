@@ -7,8 +7,9 @@ import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from './TweakRoot';
-import { buildMovePages, buildModMovePage, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, dialOrigin, isEnumDial, enumOptionValue, enumOptionLabel, enumIndex, MOVE_TRACKS, MOVE_DIALS } from '../move-layout';
+import { buildMovePages, buildModMovePage, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, dialOrigin, isEnumDial, enumOptionValue, enumOptionLabel, enumIndex, MOVE_TRACKS, MOVE_DIALS } from '../move-layout';
 import { MOD_SETTINGS_PANEL } from '../modulation-core';
+import { MoveSurfaceStore, type MovePadCell } from '../move-surface-store';
 import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValue, applyDetentAxis, type XYValue } from '../xy-pad-core';
 
 interface MovePanelProps {
@@ -137,6 +138,14 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     useCallback((cb) => ModulationStore.subscribe(cb), []),
     () => ModulationStore.getVersion(),
     () => 0
+  );
+
+  // The raw hardware an app claimed for itself: the bottom pad rows, the step
+  // buttons, the device screen. Empty unless a host fills it in.
+  const surface = useSyncExternalStore(
+    useCallback((cb) => MoveSurfaceStore.subscribe(cb), []),
+    () => MoveSurfaceStore.getState(),
+    () => MoveSurfaceStore.getState()
   );
 
   // Hardware presence: a finger on a knob, a held or latched value pad.
@@ -314,7 +323,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     }));
   };
 
-  const padRows: (ControlMeta[])[] = [page.toggles, page.values, [], []];
+  const appRows = surface.rows;
+  const padRows = movePadRows(page, appRows);
+  const appRowAt = (row: number) => moveAppPadRow(row, appRows);
+  const padAt = (x: number, y: 0 | 1): MovePadCell | undefined =>
+    surface.pads.find((p) => p.x === x && p.y === y);
 
   const content = (
     <div className="tweakers-root tweakers-move-root" data-theme={theme}>
@@ -352,12 +365,23 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 </button>
               ))}
             </div>
-            {/* The modulations, centred between the track labels and the
-                (future) volume readout — one circle per occupied slot. */}
+            {/* The step buttons, centred between the track labels and the
+                (future) volume readout — one circle each. Normally the
+                modulation slots; an app that claimed the row paints them
+                itself, and its picture wins. */}
             <div className="tweakers-move-mods">
-              {ModulationStore.getSlots().map((slot) => (
-                <MoveModCircle key={slot.index} slot={slot} />
-              ))}
+              {surface.steps
+                ? surface.steps.map((s) => (
+                    <span key={s.step} className="tweakers-move-mod" title={`step ${s.step + 1}`}>
+                      <span
+                        className="tweakers-move-mod-dot"
+                        style={{ background: s.color ?? 'var(--move-text)', opacity: s.lit ? 1 : 0.25 }}
+                      />
+                    </span>
+                  ))
+                : ModulationStore.getSlots().map((slot) => (
+                    <MoveModCircle key={slot.index} slot={slot} />
+                  ))}
             </div>
             <span className="tweakers-move-tracks-spacer" />
           </div>
@@ -609,10 +633,35 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 their place, but the panel never ends on dead rows. A claimed
                 row always counts, even before the app has painted it. */}
             {Array.from({ length: PAD_ROWS }, (_, row) => row)
-              .filter((row) => padRows.slice(row).some((r) => r.length > 0))
+              .filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0))
               .map((row) => (
                 <div key={row} className="tweakers-move-pads">
                   {Array.from({ length: PAD_COLS }, (_, col) => {
+                    // A claimed row is the app's: it paints these, we only show them.
+                    const appRow = appRowAt(row);
+                    if (appRow !== null) {
+                      const cell = padAt(col, appRow);
+                      if (!cell || cell.empty) {
+                        return <div key={`app-${col}`} className="tweakers-move-pad" data-empty="true" />;
+                      }
+                      return (
+                        <button
+                          key={`app-${col}`}
+                          className="tweakers-move-pad"
+                          data-kind="app"
+                          data-on={cell.lit || undefined}
+                          onClick={() => MoveSurfaceStore.press(col, appRow)}
+                        >
+                          {/* the colour is the app's own — a track, a slot, a
+                              slice — so it rides inline, like a mod dot does */}
+                          <span
+                            className="tweakers-move-pad-indicator"
+                            style={cell.color ? { background: cell.color } : undefined}
+                          />
+                          {cell.label && <span className="tweakers-move-pad-title">{cell.label}</span>}
+                        </button>
+                      );
+                    }
                     const meta = padRows[row][col];
                     if (!meta) return <div key={`empty-${col}`} className="tweakers-move-pad" data-empty="true" />;
                     if (padRows[row] === page.toggles) {

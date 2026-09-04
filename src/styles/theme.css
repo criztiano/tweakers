@@ -5709,6 +5709,19 @@ input.tweakers-list-item-title:focus {
   background: var(--move-chip);
 }
 
+/* App pad — a row the app claimed for itself: a step, a slice, a note. It
+   borrows the toggle chip's shape and inversion, but its colour is the
+   app's own and rides inline on the indicator bar. Unlit pads stay
+   readable, so the row shows what is there before you play it. */
+.tweakers-move-pad[data-kind="app"] {
+  padding: 0 4px;
+  font-weight: 400;
+}
+
+.tweakers-move-pad[data-kind="app"]:not([data-on="true"]) .tweakers-move-pad-indicator {
+  opacity: 0.35;
+}
+
 /* Value chip — label left in Regular, number Bold + unit Regular right
    (800:1748). Hold to peek at it in the column's dial; tap to latch it
    in — the chip inverts like a toggle and pulses while it holds the

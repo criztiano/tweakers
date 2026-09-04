@@ -912,9 +912,9 @@ var TweakStoreClass = class {
     }
     this.listeners.get(panelId).add(listener);
     return () => {
-      const listeners2 = this.listeners.get(panelId);
-      listeners2?.delete(listener);
-      if (listeners2?.size === 0 && !this.panels.has(panelId)) {
+      const listeners3 = this.listeners.get(panelId);
+      listeners3?.delete(listener);
+      if (listeners3?.size === 0 && !this.panels.has(panelId)) {
         this.listeners.delete(panelId);
       }
     };
@@ -929,9 +929,9 @@ var TweakStoreClass = class {
     }
     this.actionListeners.get(panelId).add(listener);
     return () => {
-      const listeners2 = this.actionListeners.get(panelId);
-      listeners2?.delete(listener);
-      if (listeners2?.size === 0 && !this.panels.has(panelId)) {
+      const listeners3 = this.actionListeners.get(panelId);
+      listeners3?.delete(listener);
+      if (listeners3?.size === 0 && !this.panels.has(panelId)) {
         this.actionListeners.delete(panelId);
       }
     };
@@ -946,9 +946,9 @@ var TweakStoreClass = class {
     }
     this.eventListeners.get(panelId).add(listener);
     return () => {
-      const listeners2 = this.eventListeners.get(panelId);
-      listeners2?.delete(listener);
-      if (listeners2?.size === 0 && !this.panels.has(panelId)) {
+      const listeners3 = this.eventListeners.get(panelId);
+      listeners3?.delete(listener);
+      if (listeners3?.size === 0 && !this.panels.has(panelId)) {
         this.eventListeners.delete(panelId);
       }
     };
@@ -1007,9 +1007,9 @@ var TweakStoreClass = class {
     }
     this.controlStateListeners.get(panelId).add(listener);
     return () => {
-      const listeners2 = this.controlStateListeners.get(panelId);
-      listeners2?.delete(listener);
-      if (listeners2?.size === 0 && !this.panels.has(panelId)) {
+      const listeners3 = this.controlStateListeners.get(panelId);
+      listeners3?.delete(listener);
+      if (listeners3?.size === 0 && !this.panels.has(panelId)) {
         this.controlStateListeners.delete(panelId);
       }
     };
@@ -1330,6 +1330,7 @@ var TweakStoreClass = class {
           origin: value.origin,
           bipolar: value.bipolar,
           orientation: value.orientation,
+          moveChip: value.moveChip,
           shortcut
         });
       } else if (this.isNumberConfig(value)) {
@@ -1343,6 +1344,7 @@ var TweakStoreClass = class {
           unit: value.unit,
           formatValue: value.formatValue,
           orientation: value.orientation,
+          moveChip: value.moveChip,
           shortcut
         });
       } else if (typeof value === "boolean") {
@@ -2269,9 +2271,9 @@ var TimelineStoreClass = class {
     }
     this.listeners.get(id).add(listener);
     return () => {
-      const listeners2 = this.listeners.get(id);
-      listeners2?.delete(listener);
-      if (listeners2?.size === 0 && !this.timelines.has(id)) {
+      const listeners3 = this.listeners.get(id);
+      listeners3?.delete(listener);
+      if (listeners3?.size === 0 && !this.timelines.has(id)) {
         this.listeners.delete(id);
       }
     };
@@ -3528,8 +3530,8 @@ var LFO_DEF = {
     }
   ],
   createState: () => ({ phase: 0, drift: 0, driftTarget: 0, out: null }),
-  tick(state, params, dt, bpm) {
-    const s = state;
+  tick(state2, params, dt, bpm) {
+    const s = state2;
     const hz = params.sync ? lfoSyncedHz(Number(params.division) || 0, bpm) : Math.max(0, Number(params.rate) || 0);
     const before = s.phase;
     s.phase = (s.phase + dt * hz) % 1;
@@ -3571,8 +3573,8 @@ var SH_DEF = {
     }
   ],
   createState: () => ({ wait: 0, held: 0, out: null }),
-  tick(state, params, dt) {
-    const s = state;
+  tick(state2, params, dt) {
+    const s = state2;
     s.wait -= dt;
     if (s.out === null || s.wait <= 0) {
       s.held = Math.random() * 2 - 1;
@@ -3718,8 +3720,8 @@ var CURVE_DEF = {
     { type: "slider", path: "segments", label: "Segments", min: 1, max: CURVE_MAX_CLIPS, step: 1 }
   ],
   createState: () => ({ phase: 0, signature: "", samplers: null, prev: null, pulse: 0 }),
-  tick(state, params, dt, bpm) {
-    const s = state;
+  tick(state2, params, dt, bpm) {
+    const s = state2;
     const comp = curveComposition(params);
     const signature = JSON.stringify(comp.segments) + `|${comp.gap}`;
     if (signature !== s.signature || !s.samplers) {
@@ -3745,12 +3747,12 @@ var CURVE_DEF = {
    * curve — reads that clip's shape back out, so the dials always show the
    * clip the composer is highlighting.
    */
-  normalize(current, patch) {
-    const next = { ...current, ...patch };
-    const changed = (key) => key in patch && patch[key] !== current[key];
-    let list = "clips" in patch ? readClips(patch) : readClips(current);
-    if (!("clips" in patch) && changed("segments")) {
-      const want = clamp4(Math.round(Number(patch.segments) || 1), 1, CURVE_MAX_CLIPS);
+  normalize(current, patch2) {
+    const next = { ...current, ...patch2 };
+    const changed = (key) => key in patch2 && patch2[key] !== current[key];
+    let list = "clips" in patch2 ? readClips(patch2) : readClips(current);
+    if (!("clips" in patch2) && changed("segments")) {
+      const want = clamp4(Math.round(Number(patch2.segments) || 1), 1, CURVE_MAX_CLIPS);
       while (list.length > want) list.pop();
       while (list.length < want) list.push(newClip());
       list = list.map((c) => ({ ...c, weight: 1 }));
@@ -3795,7 +3797,7 @@ var CURVE_DEF = {
       return { clips: writeClips(list), selected: Math.min(sel, list.length - 1) };
     }
   },
-  phase: (state) => state.phase,
+  phase: (state2) => state2.phase,
   preview(params, count) {
     const list = readClips(params);
     const sel = selectedClip(params, list.length);
@@ -3888,11 +3890,11 @@ var ModulationStoreClass = class {
    * patch in its own way (`normalize`) — the curve writes a shape dial into
    * the clip it belongs to — and the open settings page follows.
    */
-  updateSlotParams(index, patch) {
+  updateSlotParams(index, patch2) {
     const slot = this.slots[index];
     if (!slot) return;
     const def = getModType(slot.type);
-    slot.params = def?.normalize ? def.normalize(slot.params, patch) : { ...slot.params, ...patch };
+    slot.params = def?.normalize ? def.normalize(slot.params, patch2) : { ...slot.params, ...patch2 };
     if (this.settingsIndex === index) this.refreshSettings();
     this.changed();
   }
@@ -4058,8 +4060,8 @@ var ModulationStoreClass = class {
     const slot = this.settingsIndex === null ? null : this.slots[this.settingsIndex];
     const action = slot && getModType(slot.type)?.buttons?.[name];
     if (!slot || !action) return false;
-    const patch = action(slot.params);
-    if (patch) this.updateSlotParams(slot.index, patch);
+    const patch2 = action(slot.params);
+    if (patch2) this.updateSlotParams(slot.index, patch2);
     return true;
   }
   /** A knob tap on a page dial that cycles (the curve's clip vocabulary). */
@@ -4131,24 +4133,24 @@ var ModulationStoreClass = class {
     }
     const def = getModType(slot.type);
     if (!def) return;
-    const patch = {};
+    const patch2 = {};
     for (const c of visibleModControls(def, slot.params)) {
       const v = values[c.path];
       if (c.type === "xy" && c.xParam && c.yParam) {
         const xy = v;
         if (xy && typeof xy === "object") {
-          patch[c.xParam] = Number(xy.x) || 0;
-          patch[c.yParam] = Number(xy.y) || 0;
+          patch2[c.xParam] = Number(xy.x) || 0;
+          patch2[c.yParam] = Number(xy.y) || 0;
         }
       } else if (c.type === "toggle") {
-        patch[c.path] = !!v;
+        patch2[c.path] = !!v;
       } else if (c.type === "select") {
-        if (typeof v === "string") patch[c.path] = v;
+        if (typeof v === "string") patch2[c.path] = v;
       } else if (typeof v === "number" && Number.isFinite(v)) {
-        patch[c.path] = v;
+        patch2[c.path] = v;
       }
     }
-    this.updateSlotParams(slot.index, patch);
+    this.updateSlotParams(slot.index, patch2);
   }
   /**
    * The open page, after the params moved under it. A change that alters
@@ -4223,8 +4225,8 @@ var ModulationStoreClass = class {
   getSlotPhase(index) {
     const slot = this.slots[index];
     const def = slot && getModType(slot.type);
-    const state = this.states.get(index);
-    return slot && def?.phase && state !== void 0 ? def.phase(state) : 0;
+    const state2 = this.states.get(index);
+    return slot && def?.phase && state2 !== void 0 ? def.phase(state2) : 0;
   }
   /** The modulation's contribution to one control, in the control's units. */
   getOffset(panelId, path) {
@@ -4306,12 +4308,12 @@ var ModulationStoreClass = class {
       }
       const def = getModType(slot.type);
       if (!def) continue;
-      let state = this.states.get(slot.index);
-      if (state === void 0) {
-        state = def.createState();
-        this.states.set(slot.index, state);
+      let state2 = this.states.get(slot.index);
+      if (state2 === void 0) {
+        state2 = def.createState();
+        this.states.set(slot.index, state2);
       }
-      this.signals[slot.index] = clamp5(def.tick(state, slot.params, step, this.bpm), -1, 1);
+      this.signals[slot.index] = clamp5(def.tick(state2, slot.params, step, this.bpm), -1, 1);
     }
     this.frameListeners.forEach((fn) => fn());
   }
@@ -6404,7 +6406,7 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
     if (!palette) return;
     return subscribePalette(setSlots);
   }, [palette]);
-  const emit = useCallback9(
+  const emit2 = useCallback9(
     (next) => {
       setHsva(next);
       const hex = formatHex(hsvToRgb(next), alpha);
@@ -6427,13 +6429,13 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
   const hsvaRef = useRef13(hsva);
   hsvaRef.current = hsva;
   const svDrag = useAreaDrag(
-    useCallback9((x, y) => emit({ ...hsvaRef.current, s: x, v: 1 - y }), [emit])
+    useCallback9((x, y) => emit2({ ...hsvaRef.current, s: x, v: 1 - y }), [emit2])
   );
   const hueDrag = useAreaDrag(
-    useCallback9((x) => emit({ ...hsvaRef.current, h: Math.min(x * 360, 359.999) }), [emit])
+    useCallback9((x) => emit2({ ...hsvaRef.current, h: Math.min(x * 360, 359.999) }), [emit2])
   );
   const alphaDrag = useAreaDrag(
-    useCallback9((x) => emit({ ...hsvaRef.current, a: x }), [emit])
+    useCallback9((x) => emit2({ ...hsvaRef.current, a: x }), [emit2])
   );
   const rgba = hsvToRgb(hsva);
   const opaqueHex = formatHex(rgba, false);
@@ -6447,7 +6449,7 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
     const nextHsva = rgbToHsv(committed);
     if (nextHsva.s === 0) nextHsva.h = hsva.h;
     if (nextHsva.v === 0) nextHsva.s = hsva.s;
-    emit(nextHsva);
+    emit2(nextHsva);
   };
   return /* @__PURE__ */ jsxs16("div", { className: "tweakers-color-picker", style: { "--picker-hue": hsva.h }, children: [
     /* @__PURE__ */ jsx18(
@@ -6531,7 +6533,7 @@ function ColorPickerPanel({ value, onChange, alpha = false, palette = false }) {
         {
           spec: { key: "a", label: "A", min: 0, max: 100, step: 1, precision: 0 },
           value: opacityPercent(rgba),
-          onCommit: (n) => emit({ ...hsva, a: Math.min(1, Math.max(0, n / 100)) })
+          onCommit: (n) => emit2({ ...hsva, a: Math.min(1, Math.max(0, n / 100)) })
         }
       )
     ] }) : channelSpecs.map((spec, i) => /* @__PURE__ */ jsx18(ChannelField, { spec, value: channelValues[i], onCommit: (n) => commitChannel(i, n) }, `${format}-${spec.key}`)) }),
@@ -7284,7 +7286,7 @@ function XYPad({
     },
     [xAxis, yAxis, snap]
   );
-  const emit = useCallback12(
+  const emit2 = useCallback12(
     (next) => {
       valueRef.current = next;
       onChange(next);
@@ -7304,7 +7306,7 @@ function XYPad({
     draggingRef.current = true;
     setActive(true);
     setDragging(true);
-    emit(pointToValue(e.clientX, e.clientY, e.shiftKey));
+    emit2(pointToValue(e.clientX, e.clientY, e.shiftKey));
   };
   const handlePointerMove = (e) => {
     if (!draggingRef.current) return;
@@ -7312,7 +7314,7 @@ function XYPad({
       finishDrag(e);
       return;
     }
-    emit(pointToValue(e.clientX, e.clientY, e.shiftKey));
+    emit2(pointToValue(e.clientX, e.clientY, e.shiftKey));
   };
   const finishDrag = (e) => {
     if (!draggingRef.current) return;
@@ -7325,7 +7327,7 @@ function XYPad({
     const el = areaRef.current;
     const stillActive = (el?.matches(":hover") ?? false) || el === (el?.ownerDocument ?? document).activeElement;
     if (!stillActive) setActive(false);
-    if (returnToCenter) emit(normalizeValue(centerValue(xAxis, yAxis), xAxis, yAxis, snap));
+    if (returnToCenter) emit2(normalizeValue(centerValue(xAxis, yAxis), xAxis, yAxis, snap));
   };
   const handleKeyDown = (e) => {
     if (disabled) return;
@@ -7362,11 +7364,11 @@ function XYPad({
         return;
     }
     e.preventDefault();
-    emit(next);
+    emit2(next);
   };
   const reset = () => {
     if (disabled) return;
-    emit(normalizeValue(centerValue(xAxis, yAxis), xAxis, yAxis, snap));
+    emit2(normalizeValue(centerValue(xAxis, yAxis), xAxis, yAxis, snap));
   };
   const xLabel = x?.label ?? "X";
   const yLabel = y?.label ?? "Y";
@@ -10046,15 +10048,34 @@ function buildModMovePage(panel, layout) {
 function buildMovePages(panels) {
   return panels.filter((p) => p.kind === void 0).slice(0, MOVE_TRACKS).map((panel) => {
     const controls = flat(panel.controls);
-    const bounded = controls.filter(isDial);
-    return {
-      panel,
-      dials: bounded.slice(0, MOVE_DIALS),
-      toggles: controls.filter((c) => c.type === "toggle").slice(0, MOVE_PADS),
-      /* xy pads and ranges need a dial slot — past the 8 dials they don't fit a chip */
-      values: bounded.slice(MOVE_DIALS).filter((c) => !noChip(c)).slice(0, MOVE_PADS)
+    const dials = [];
+    const toggles = [];
+    const values = [];
+    const place = (row, c) => {
+      for (let i = Math.max(0, dials.length - 1); i < MOVE_PADS; i++) {
+        if (row[i] === void 0) {
+          row[i] = c;
+          return;
+        }
+      }
     };
+    for (const c of controls) {
+      if (c.type === "toggle") place(toggles, c);
+      else if (isDial(c)) {
+        if (c.moveChip && !noChip(c)) place(values, c);
+        else if (dials.length < MOVE_DIALS) dials.push(c);
+        else if (!noChip(c)) place(values, c);
+      }
+    }
+    return { panel, dials, toggles, values };
   });
+}
+function movePadRows(page, claimedRows) {
+  return claimedRows >= 2 ? [page.values, page.toggles, [], []] : [page.toggles, page.values, [], []];
+}
+function moveAppPadRow(row, claimedRows) {
+  if (claimedRows >= 2) return row === 2 ? 1 : row === 3 ? 0 : null;
+  return claimedRows === 1 && row === 2 ? 0 : null;
 }
 function denormalizeDial(meta, v01) {
   const min = meta.min ?? 0;
@@ -10107,6 +10128,54 @@ function dialOrigin(meta) {
   const origin = meta.origin ?? (meta.bipolar ? 0 : void 0);
   return origin === void 0 ? 0 : normalizeDial(meta, origin);
 }
+
+// src/move-surface-store.ts
+var EMPTY = { rows: 0, pads: [], steps: null, screen: null };
+var state = EMPTY;
+var listeners2 = /* @__PURE__ */ new Set();
+var pressListeners = /* @__PURE__ */ new Set();
+var emit = () => {
+  for (const fn of listeners2) fn();
+};
+function patch(key, value) {
+  if (JSON.stringify(state[key]) === JSON.stringify(value)) return;
+  state = { ...state, [key]: value };
+  emit();
+}
+var MoveSurfaceStore = {
+  getState: () => state,
+  subscribe(fn) {
+    listeners2.add(fn);
+    return () => listeners2.delete(fn);
+  },
+  /** How many bottom pad rows the app took (matches `claims.pads` on the wire). */
+  claimRows(rows) {
+    patch("rows", rows);
+  },
+  setPads(pads) {
+    patch("pads", pads.filter((p) => p.x >= 0 && p.x < 8 && (p.y === 0 || p.y === 1)));
+  },
+  setSteps(steps) {
+    patch("steps", steps === null ? null : steps.filter((s) => s.step >= 0 && s.step < 16));
+  },
+  setScreen(screen) {
+    patch("screen", screen);
+  },
+  /** A tap on an on-screen pad, for the host to treat like a hardware press. */
+  onPress(fn) {
+    pressListeners.add(fn);
+    return () => pressListeners.delete(fn);
+  },
+  press(x, y) {
+    for (const fn of pressListeners) fn({ x, y });
+  },
+  /** Hand the whole surface back — the panel returns to its plain layout. */
+  reset() {
+    if (state === EMPTY) return;
+    state = EMPTY;
+    emit();
+  }
+};
 
 // src/components/MovePanel.tsx
 import { Fragment as Fragment10, jsx as jsx40, jsxs as jsxs35 } from "react/jsx-runtime";
@@ -10164,6 +10233,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     useCallback19((cb) => ModulationStore.subscribe(cb), []),
     () => ModulationStore.getVersion(),
     () => 0
+  );
+  const surface = useSyncExternalStore9(
+    useCallback19((cb) => MoveSurfaceStore.subscribe(cb), []),
+    () => MoveSurfaceStore.getState(),
+    () => MoveSurfaceStore.getState()
   );
   useEffect21(() => {
     const forPage = (detail, map) => detail && detail.pageId === pageId ? map ?? {} : {};
@@ -10298,7 +10372,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       detail: { pageId: page.panel.id, path: meta.path, latched: !wasLatched }
     }));
   };
-  const padRows = [page.toggles, page.values, [], []];
+  const appRows = surface.rows;
+  const padRows = movePadRows(page, appRows);
+  const appRowAt = (row) => moveAppPadRow(row, appRows);
+  const padAt = (x, y) => surface.pads.find((p) => p.x === x && p.y === y);
   const content = /* @__PURE__ */ jsx40("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, children: /* @__PURE__ */ jsxs35("div", { className: "tweakers-move", "data-overlay": composition ? true : void 0, children: [
     composition && modSettings && /* @__PURE__ */ jsx40(
       MoveCurveComposer,
@@ -10331,7 +10408,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
           },
           pg ? pg.panel.id : `empty-${i}`
         )) }),
-        /* @__PURE__ */ jsx40("div", { className: "tweakers-move-mods", children: ModulationStore.getSlots().map((slot) => /* @__PURE__ */ jsx40(MoveModCircle, { slot }, slot.index)) }),
+        /* @__PURE__ */ jsx40("div", { className: "tweakers-move-mods", children: surface.steps ? surface.steps.map((s) => /* @__PURE__ */ jsx40("span", { className: "tweakers-move-mod", title: `step ${s.step + 1}`, children: /* @__PURE__ */ jsx40(
+          "span",
+          {
+            className: "tweakers-move-mod-dot",
+            style: { background: s.color ?? "var(--move-text)", opacity: s.lit ? 1 : 0.25 }
+          }
+        ) }, s.step)) : ModulationStore.getSlots().map((slot) => /* @__PURE__ */ jsx40(MoveModCircle, { slot }, slot.index)) }),
         /* @__PURE__ */ jsx40("span", { className: "tweakers-move-tracks-spacer" })
       ] }),
       /* @__PURE__ */ jsxs35("div", { className: "tweakers-move-grid", children: [
@@ -10545,7 +10628,34 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             meta.path
           );
         }) }),
-        Array.from({ length: PAD_ROWS }, (_, row) => row).filter((row) => padRows.slice(row).some((r) => r.length > 0)).map((row) => /* @__PURE__ */ jsx40("div", { className: "tweakers-move-pads", children: Array.from({ length: PAD_COLS }, (_, col) => {
+        Array.from({ length: PAD_ROWS }, (_, row) => row).filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0)).map((row) => /* @__PURE__ */ jsx40("div", { className: "tweakers-move-pads", children: Array.from({ length: PAD_COLS }, (_, col) => {
+          const appRow = appRowAt(row);
+          if (appRow !== null) {
+            const cell = padAt(col, appRow);
+            if (!cell || cell.empty) {
+              return /* @__PURE__ */ jsx40("div", { className: "tweakers-move-pad", "data-empty": "true" }, `app-${col}`);
+            }
+            return /* @__PURE__ */ jsxs35(
+              "button",
+              {
+                className: "tweakers-move-pad",
+                "data-kind": "app",
+                "data-on": cell.lit || void 0,
+                onClick: () => MoveSurfaceStore.press(col, appRow),
+                children: [
+                  /* @__PURE__ */ jsx40(
+                    "span",
+                    {
+                      className: "tweakers-move-pad-indicator",
+                      style: cell.color ? { background: cell.color } : void 0
+                    }
+                  ),
+                  cell.label && /* @__PURE__ */ jsx40("span", { className: "tweakers-move-pad-title", children: cell.label })
+                ]
+              },
+              `app-${col}`
+            );
+          }
           const meta = padRows[row][col];
           if (!meta) return /* @__PURE__ */ jsx40("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
           if (padRows[row] === page.toggles) {
@@ -11630,12 +11740,12 @@ function buildTimelineValues(staticClips, transport, timelineDuration, loopStart
   const span = loopSpan(transport.duration, loopStart, loopEnd);
   const cycleTime = (span > 0 ? transport.wraps * span : 0) + transport.time;
   for (const clip of staticClips) {
-    const state = computeClipState(clip, transport.time, cycleTime);
+    const state2 = computeClipState(clip, transport.time, cycleTime);
     if (clip.group) {
       const bucket = result[_a = clip.group] ?? (result[_a] = {});
-      bucket[clip.childKey] = state;
+      bucket[clip.childKey] = state2;
     } else {
-      result[clip.key] = state;
+      result[clip.key] = state2;
     }
   }
   return result;
@@ -14084,6 +14194,7 @@ export {
   Module,
   MoveFunctions,
   MovePanel,
+  MoveSurfaceStore,
   MultiSelectControl,
   NumberControl,
   PresetManager,
@@ -14157,6 +14268,8 @@ export {
   modKey,
   modPageLayout,
   modRingArc,
+  moveAppPadRow,
+  movePadRows,
   moveStop,
   nearestHandle,
   normToValue,

@@ -1383,6 +1383,7 @@ var TweakStoreClass = class {
           origin: value.origin,
           bipolar: value.bipolar,
           orientation: value.orientation,
+          moveChip: value.moveChip,
           shortcut
         });
       } else if (this.isNumberConfig(value)) {
@@ -1396,6 +1397,7 @@ var TweakStoreClass = class {
           unit: value.unit,
           formatValue: value.formatValue,
           orientation: value.orientation,
+          moveChip: value.moveChip,
           shortcut
         });
       } else if (typeof value === "boolean") {

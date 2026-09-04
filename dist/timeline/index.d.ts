@@ -153,6 +153,8 @@ type SliderConfig = {
     max: number;
     /** Falls back to inferStep(min, max) when omitted. */
     step?: number;
+    /** On the Move, sit as a value chip under the preceding dial instead of claiming a dial slot. */
+    moveChip?: boolean;
     /** Appended to the displayed value, e.g. ' dB', ' ms', '×'. */
     unit?: string;
     /**
@@ -186,6 +188,8 @@ type NumberConfig = {
     formatValue?: (value: number) => string;
     /** `vertical` stacks the label above a centered value (column card). */
     orientation?: 'horizontal' | 'vertical';
+    /** On the Move, sit as a value chip under the preceding dial instead of claiming a dial slot. */
+    moveChip?: boolean;
 };
 /**
  * A read-only curve preview row. Draws the shape the host's own parameters

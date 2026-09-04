@@ -8,10 +8,14 @@ export type { TweakPosition, TweakMode, TweakTheme } from './components/TweakRoo
 
 // Move surface mirror (docked bottom panel matching the bridge kit's mapping)
 export { MovePanel } from './components/MovePanel';
-export { buildMovePages, buildModMovePage, normalizeDial, normalizeXYDial, normalizeRangeDial, dialOrigin, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
+export { buildMovePages, buildModMovePage, movePadRows, moveAppPadRow, normalizeDial, normalizeXYDial, normalizeRangeDial, dialOrigin, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
 export type { MovePage } from './move-layout';
 export { MoveFunctions, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_SPECIAL_BUTTONS } from './move-functions';
 export type { MoveFunctionButton, MoveFunctionPress, MoveFunctionHandler } from './move-functions';
+// Raw hardware an app claims for itself — the bottom pad rows, the step
+// buttons, the device screen — kept for the on-screen mirror.
+export { MoveSurfaceStore } from './move-surface-store';
+export type { MovePadCell, MoveStepCell, MoveScreenList, MoveSurfaceState } from './move-surface-store';
 
 // Modulation layer — slots, assignments, the engine, and the type registry
 export { ModulationStore, MOD_TOUCH_GRACE_MS } from './store/ModulationStore';

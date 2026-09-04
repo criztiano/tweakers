@@ -210,6 +210,8 @@ type ControlMeta = {
     bipolar?: boolean;
     /** Slider/number layout, from the explicit config forms. */
     orientation?: 'horizontal' | 'vertical';
+    /** Slider/number declared `moveChip` — on the Move it is a value chip under the preceding dial, never a dial. */
+    moveChip?: boolean;
     itemTypes?: Record<string, ListItemType>;
     addLabel?: string;
     maxItems?: number;
