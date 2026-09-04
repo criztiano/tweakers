@@ -5764,20 +5764,36 @@ input.tweakers-list-item-title:focus {
   grid-column: span 2;
 }
 
+/* The response's display — the waveform's dark hole in the face, cut into
+   the chip with the slot's small radius, holding every pixel between the
+   slot's top edge and the hand labels. */
+.tweakers-move-filter-display {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 9px;
+  bottom: 28px;
+  background: var(--move-display, #1e1e1e);
+  border-radius: var(--move-radius-small, 8px);
+  overflow: hidden;
+  pointer-events: none;
+}
+
 .tweakers-move-filter-shape {
   position: absolute;
-  top: 10px;
-  left: 10px;
+  inset: 8px 10px;
   width: calc(100% - 20px);
-  height: calc(100% - 10px - 30px);
+  height: calc(100% - 16px);
   overflow: visible;
   pointer-events: none;
 }
 
+/* The same ink weight as the curve-selection slot's drawing — the two
+   pictures sit on one page and must read as one hand. */
 .tweakers-move-filter-shape path {
   fill: none;
   stroke: var(--move-text);
-  stroke-width: 2;
+  stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;

@@ -861,14 +861,14 @@ function defaultFilterResponse(cutoff01, resonance01) {
     const f = Math.pow(10, -3 + 3 * clamp4(t, 0, 1));
     const w = f / fc;
     const mag = 1 / Math.sqrt(Math.pow(1 - w * w, 2) + Math.pow(w / q, 2));
-    return clamp4(mag / Math.max(1, q), 0, 1);
+    return clamp4((20 * Math.log10(Math.max(mag, 1e-6)) + FILTER_DB_FLOOR) / (FILTER_DB_FLOOR + FILTER_DB_CEIL), 0, 1);
   };
 }
+var FILTER_DB_FLOOR = 36;
+var FILTER_DB_CEIL = 24;
 var FILTER_SHAPE_SAMPLES = 96;
 function filterResponsePath(response, samples = FILTER_SHAPE_SAMPLES) {
   const pts = [];
-  let lo = Infinity;
-  let hi = -Infinity;
   for (let i = 0; i < samples; i++) {
     let y;
     try {
@@ -877,13 +877,9 @@ function filterResponsePath(response, samples = FILTER_SHAPE_SAMPLES) {
       return null;
     }
     if (!Number.isFinite(y)) return null;
-    pts.push(y);
-    if (y < lo) lo = y;
-    if (y > hi) hi = y;
+    pts.push(clamp4(y, 0, 1));
   }
-  const span = hi - lo;
-  const fit = (y) => span > 0 ? (y - lo) / span : 0.5;
-  return pts.map((y, i) => `${i ? "L" : "M"} ${(i / (samples - 1) * 100).toFixed(2)} ${((1 - fit(y)) * 100).toFixed(2)}`).join(" ");
+  return pts.map((y, i) => `${i ? "L" : "M"} ${(i / (samples - 1) * 100).toFixed(2)} ${((1 - y) * 100).toFixed(2)}`).join(" ");
 }
 
 // src/store/persist.ts
@@ -10944,7 +10940,7 @@ function MoveSlotFilterBody({
   const ra = resolveFilterAxis(meta.resonanceAxis, "resonance");
   const fmt = (v, f) => f ? f(v) : Math.abs(v) >= 100 ? Math.round(v).toString() : Number(v.toFixed(2)).toString();
   return /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)(import_jsx_runtime41.Fragment, { children: [
-    shape && /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(MoveSlotShape, { d: shape, className: "tweakers-move-filter-shape" }),
+    /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("div", { className: "tweakers-move-filter-display", children: shape && /* @__PURE__ */ (0, import_jsx_runtime41.jsx)(MoveSlotShape, { d: shape, className: "tweakers-move-filter-shape" }) }),
     /* @__PURE__ */ (0, import_jsx_runtime41.jsxs)("div", { className: "tweakers-move-filter-readout", "data-side": "cutoff", children: [
       /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-label", children: ca.label }),
       /* @__PURE__ */ (0, import_jsx_runtime41.jsx)("span", { className: "tweakers-move-dial-value", children: fmt(value.cutoff, ca.formatValue) })

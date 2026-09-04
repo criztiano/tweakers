@@ -38,13 +38,23 @@ describe('filter core', () => {
     assert.equal(filterHandValue(filterHand01(440, axis), axis), 440);
   });
 
-  it('draws the default response edge to edge', () => {
-    const d = filterResponsePath(defaultFilterResponse(0.5, 0.2));
-    assert.ok(d && d.startsWith('M '));
-    // Fitted: some point touches y=0 (top) and some touches y=100 (bottom).
-    const ys = [...d!.matchAll(/[ML] [\d.]+ ([\d.]+)/g)].map((m) => Number(m[1]));
-    assert.equal(Math.min(...ys), 0);
-    assert.equal(Math.max(...ys), 100);
+  it('draws the response in its own calibration, never refitted', () => {
+    const ys = (c01: number, r01: number) => {
+      const d = filterResponsePath(defaultFilterResponse(c01, r01))!;
+      return [...d.matchAll(/[ML] [\d.]+ ([\d.]+)/g)].map((m) => Number(m[1]));
+    };
+    // A mid lowpass: passband below the top (headroom), rolloff on the floor.
+    const flat = ys(0.5, 0);
+    assert.ok(Math.min(...flat) > 0);
+    assert.equal(Math.max(...flat), 100);
+    // Raising resonance grows the peak into that headroom — never a clip:
+    // the resonant peak sits strictly higher (smaller y) than the passband.
+    const peaked = ys(0.5, 0.9);
+    assert.ok(Math.min(...peaked) < Math.min(...flat));
+    assert.ok(Math.min(...peaked) > 0);
+    // A constant response draws flat at its own height, not mid-air.
+    const open = filterResponsePath(() => 1)!;
+    assert.ok([...open.matchAll(/[ML] [\d.]+ ([\d.]+)/g)].every((m) => Number(m[1]) === 0));
   });
 
   it('a throwing response draws nothing', () => {
