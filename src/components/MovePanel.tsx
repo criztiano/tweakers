@@ -643,6 +643,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       className="tweakers-move-dial"
                       data-kind="filter"
                       data-active={active || undefined}
+                      data-disabled={meta.filterEnabled === false || undefined}
                       onPointerDown={(e) => {
                         try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
                         fineRef.current = null;

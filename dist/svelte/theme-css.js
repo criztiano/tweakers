@@ -5780,11 +5780,14 @@ input.tweakers-list-item-title:focus {
   pointer-events: none;
 }
 
+/* The drawing fills the display; the response's rolloff runs off the bottom
+   edge and the display's own clip hides the overshoot, so a steep fall ends
+   as a clean line into the floor, never a corner bent flat against it. */
 .tweakers-move-filter-shape {
   position: absolute;
-  inset: 8px 10px;
-  width: calc(100% - 20px);
-  height: calc(100% - 16px);
+  inset: 0;
+  width: 100%;
+  height: 100%;
   overflow: visible;
   pointer-events: none;
 }
@@ -5805,6 +5808,14 @@ input.tweakers-list-item-title:focus {
 .tweakers-move-dial[data-kind="filter"]:hover .tweakers-move-filter-shape path,
 .tweakers-move-dial[data-kind="filter"][data-active] .tweakers-move-filter-shape path {
   opacity: 1;
+}
+
+/* Bypassed — the filter is off. The curve still draws so the slot reads as a
+   filter, not an empty display, but the whole picture and its labels dim the
+   way a disabled module does: present, plainly not acting. */
+.tweakers-move-dial[data-kind="filter"][data-disabled] .tweakers-move-filter-display,
+.tweakers-move-dial[data-kind="filter"][data-disabled] .tweakers-move-filter-readout {
+  opacity: 0.4;
 }
 
 .tweakers-move-filter-readout {

@@ -346,9 +346,10 @@ declare const FILTER_DB_CEIL = 24;
  * The response drawn as an SVG path across a 100×100 box, y pointing up —
  * the 2-slot picture. The sampler's 0..1 gain is taken at its word, never
  * refitted: the window is the sampler's own calibration, so an open filter
- * draws as a line near the top, a rolloff reaches the floor, and a rising
- * resonance grows its peak into real headroom instead of being stretched
- * (or clipped) to the band. Out-of-range samples clamp to the box edges.
+ * draws as a line near the top, a rising resonance grows its peak into real
+ * headroom, and a rolloff keeps falling past the box's bottom (the display
+ * clips the overshoot) instead of bending flat into a kink at the floor.
+ * The top holds at the box edge so a peak never escapes upward.
  */
 declare function filterResponsePath(response: FilterResponse, samples?: number): string | null;
 
@@ -539,6 +540,12 @@ type FilterConfig = {
     resonance?: FilterAxisConfig;
     /** The drawn magnitude response, from each hand's 0..1 position. */
     response?: (cutoff01: number, resonance01: number) => (t: number) => number;
+    /**
+     * `false` draws the control bypassed — the curve still shows (so the slot
+     * reads as a filter, not an empty display) but greyed out, the way a
+     * disabled module dims. Defaults to on.
+     */
+    enabled?: boolean;
 };
 type RangeConfig = {
     type: 'range';
@@ -896,6 +903,8 @@ type ControlMeta = {
     resonanceAxis?: FilterAxisConfig;
     /** Filter control's drawn magnitude response — swapped in place by syncCurveConfigs. */
     response?: (cutoff01: number, resonance01: number) => (t: number) => number;
+    /** Filter control declared `enabled: false` — the slot draws bypassed (dimmed). */
+    filterEnabled?: boolean;
     /** Curve preview's host-supplied sampler — swapped in place by syncCurveConfigs. */
     sample?: (t: number) => number;
     /** Curve preview's fixed y-range; absent = auto-fit per draw. */

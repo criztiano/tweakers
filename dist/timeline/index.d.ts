@@ -177,6 +177,12 @@ type FilterConfig = {
     resonance?: FilterAxisConfig;
     /** The drawn magnitude response, from each hand's 0..1 position. */
     response?: (cutoff01: number, resonance01: number) => (t: number) => number;
+    /**
+     * `false` draws the control bypassed — the curve still shows (so the slot
+     * reads as a filter, not an empty display) but greyed out, the way a
+     * disabled module dims. Defaults to on.
+     */
+    enabled?: boolean;
 };
 type RangeConfig = {
     type: 'range';

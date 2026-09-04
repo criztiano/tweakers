@@ -45,10 +45,11 @@ describe('filter core', () => {
       const d = filterResponsePath(defaultFilterResponse(c01, r01))!;
       return [...d.matchAll(/[ML] [\d.]+ ([\d.]+)/g)].map((m) => Number(m[1]));
     };
-    // A mid lowpass: passband below the top (headroom), rolloff on the floor.
+    // A mid lowpass: passband below the top (headroom), rolloff running off
+    // the bottom (past y=100, clipped by the display) so it never bends flat.
     const flat = ys(0.5, 0);
     assert.ok(Math.min(...flat) > 0);
-    assert.equal(Math.max(...flat), 100);
+    assert.ok(Math.max(...flat) > 100);
     // Raising resonance grows the peak into that headroom — never a clip:
     // the resonant peak sits strictly higher (smaller y) than the passband.
     const peaked = ys(0.5, 0.9);
