@@ -38,6 +38,16 @@ export {
   LFO_DEF,
   SH_DEF,
   ADSR_DEF,
+  CURVE_DEF,
+  CURVE_LABELS,
+  CURVE_MAX_CLIPS,
+  CURVE_MIN_DURATION,
+  CURVE_MAX_DURATION,
+  curveComposition,
+  curveDuration,
+  modPageLayout,
+  visibleModControls,
+  MOD_PAGE_DIALS,
   modRingArc,
   MOD_RING_RADIUS,
   MOD_RING_CIRCUMFERENCE,
@@ -47,10 +57,13 @@ export {
 export type {
   ModulationType,
   ModulationParams,
+  ModulationParamValue,
   ModulationSlot,
   ModulationAssignment,
   ModTypeDef,
   ModControlMeta,
+  ModPageLayout,
+  ModPageSlot,
 } from './modulation-core';
 
 // Timeline (prototype)

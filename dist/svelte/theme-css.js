@@ -5580,6 +5580,8 @@ input.tweakers-list-item-title:focus {
    number below matches the chip's own readout exactly. */
 .tweakers-move-dial-sub {
   position: absolute;
+  /* over the xy field, which is painted after it and would swallow it */
+  z-index: 1;
   top: 6px;
   left: 50%;
   transform: translateX(-50%);
@@ -5856,9 +5858,102 @@ input.tweakers-list-item-title:focus {
   box-shadow: 0 0 12px 0 rgba(222, 227, 201, 0.7);
 }
 
+/* A preview dial draws the shape its two axes are editing — the curve
+   modulator's selected clip — filling the field in place of the crosshair. */
+/* An <svg> is a replaced element: \`auto\` sizing falls back to its intrinsic
+   300×150 and spills out of the slot, so the box is stated outright. */
+.tweakers-move-xy-curve {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: calc(100% - 12px);
+  height: calc(100% - 12px);
+  overflow: visible;
+}
+
+.tweakers-move-xy-curve path {
+  fill: none;
+  stroke: var(--move-text);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.55;
+  vector-effect: non-scaling-stroke;
+  transition: opacity 0.15s ease;
+}
+
+.tweakers-move-dial[data-active] .tweakers-move-xy-curve path {
+  opacity: 1;
+}
+
 /* The label floats over the field; the readout keeps clear of the edges. */
 .tweakers-move-dial[data-kind="xy"] .tweakers-move-dial-readout {
   inset: 10px 12px;
+}
+
+/* A preview slot stacks: the name on its tag, the shape across the middle,
+   the clip it is on underneath — so nothing sits over the drawing. */
+/* Room for the tag above the shape and the clip name below it. */
+.tweakers-move-dial[data-preview] .tweakers-move-xy-curve {
+  top: 20px;
+  height: calc(100% - 44px);
+}
+
+.tweakers-move-dial[data-preview] .tweakers-move-dial-readout {
+  inset: auto 10px 8px;
+  height: 20px;
+}
+
+.tweakers-move-dial[data-preview] .tweakers-move-dial-value {
+  left: 0;
+  right: 0;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* The curve modulator's composition, floating clear of the panel's top edge
+   while its settings page is open — the whole pass at a glance, above the
+   dials that shape it. */
+.tweakers-move[data-overlay] {
+  z-index: 10001;
+}
+
+.tweakers-move-curve {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 12px;
+  border-radius: var(--move-radius);
+  background: var(--move-bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  color: var(--move-text);
+  line-height: 0;
+}
+
+/* The composer strokes in the instrument's own colour, and loses its boxes:
+   the card behind it is frame enough, and the selected clip reads as a lift
+   in the surface rather than a rectangle drawn around it. */
+.tweakers-move-curve .tweakers-cc {
+  color: var(--move-text);
+}
+
+.tweakers-move-curve .tweakers-cc-lane {
+  fill: transparent;
+}
+
+.tweakers-move-curve .tweakers-cc-seg-selected {
+  fill: rgba(222, 227, 201, 0.06);
+  stroke: none;
+}
+
+/* The playhead sits behind the curve it is reading: same colour, less of it. */
+.tweakers-move-curve .tweakers-cc-playhead {
+  stroke-opacity: 0.3;
+}
+
+.tweakers-move-curve .tweakers-cc-dot {
+  fill-opacity: 0.45;
 }
 
 /* Pad rows — 32px chips (800:1737). */

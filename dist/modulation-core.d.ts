@@ -1,4 +1,5 @@
 import { C as ControlMeta } from './TweakStore-BRgese49.js';
+import { CurveType, CurveComposition } from './curve-composer-core.js';
 import './range-slider-core.js';
 
 /**
@@ -35,8 +36,16 @@ declare const MOD_COLORS: string[];
 /** A slot's palette colour — the one constant identity it keeps. */
 declare const modColor: (index: number) => string;
 type ModulationType = 'lfo' | 'adsr' | 'envelope' | 'curve' | 'sh' | 'sequencer';
-/** Modulator settings — flat and JSON-safe, like TweakStore values. */
-type ModulationParams = Record<string, number | boolean>;
+/**
+ * A settings value: the scalars a dial or a pad edits, plus the structures a
+ * richer modulator carries (the curve's clip list). JSON-safe throughout, so
+ * a slot's whole setup still rides the persistence shelf as it is.
+ */
+type ModulationParamValue = number | boolean | string | ModulationParamValue[] | {
+    [key: string]: ModulationParamValue;
+};
+/** Modulator settings — JSON-safe, like TweakStore values. */
+type ModulationParams = Record<string, ModulationParamValue>;
 interface ModulationSlot {
     /** 0..15 — the Move step button that created it, and its palette index. */
     index: number;
@@ -54,13 +63,22 @@ interface ModulationAssignment {
     amount: number;
 }
 /**
- * Settings-page control metadata — ControlMeta plus the xy mapping: an xy
- * control on a modulator page edits two scalar params (xParam/yParam)
- * rather than storing an {x, y} object.
+ * Settings-page control metadata — ControlMeta plus what the Move page needs:
+ * the xy mapping (an xy control edits two scalar params, xParam/yParam,
+ * rather than storing an {x, y} object), and the placement and gestures the
+ * two surfaces read through {@link modPageLayout}.
  */
 type ModControlMeta = ControlMeta & {
     xParam?: string;
     yParam?: string;
+    /** Sits in a small slot under its dial's column instead of taking a big one. */
+    chip?: boolean;
+    /** Shown only when this says so — a control that belongs to one mode. */
+    when?: (params: ModulationParams) => boolean;
+    /** This dial draws the modulator's own shape (the type's `preview`). */
+    drawsPreview?: boolean;
+    /** A knob tap on this dial runs this, returning the params it changes. */
+    cycle?: (params: ModulationParams) => ModulationParams;
 };
 /**
  * One modulator type, pluggable: LFO ships with the kit, the others
@@ -78,12 +96,66 @@ interface ModTypeDef {
     createState(): unknown;
     tick(state: unknown, params: ModulationParams, dt: number, bpm: number): number;
     /**
+     * Fold an incoming patch into the type's own structure — the curve writes
+     * the shape dials into the clip they belong to, and reads the next clip's
+     * shape back out when the selection moves. Returns the params to store;
+     * without it a patch is simply merged.
+     */
+    normalize?(current: ModulationParams, patch: ModulationParams): ModulationParams;
+    /**
+     * Hardware buttons this modulator's settings page claims (`left`, `right`,
+     * `delete`...). A press runs the action, whose patch lands in the params.
+     */
+    buttons?: Record<string, (params: ModulationParams) => ModulationParams | void>;
+    /**
+     * What the modulator is shaped like right now: `count` samples, each 0..1,
+     * and what that shape is called. Both small screens draw it.
+     */
+    preview?(params: ModulationParams, count: number): {
+        points: number[];
+        label: string;
+    };
+    /** Where the modulator sits in its cycle, 0..1 — a composer's playhead. */
+    phase?(state: unknown): number;
+    /**
      * Note on / note off, for the types that take a gate (the ADSR). The
      * store's `gate(slot, on)` lands here; free-running types (LFO, S&H)
      * leave it out and the store ignores the call.
      */
     gate?(state: unknown, on: boolean): void;
 }
+/** One control's place on the Move page, with the gestures it answers to. */
+interface ModPageSlot {
+    path: string;
+    /** The dial draws the modulator's preview instead of a bar. */
+    preview?: boolean;
+    /** A knob tap on this dial cycles it. */
+    cycle?: boolean;
+}
+/**
+ * A modulator's page: the eight big dial slots, and the small slots under
+ * them — a switch row and a chip row, both column-aligned with the dial
+ * above. Empty slots ride as nulls so a column stays open.
+ */
+interface ModPageLayout {
+    dials: ModPageSlot[];
+    toggles: (ModPageSlot | null)[];
+    values: (ModPageSlot | null)[];
+}
+declare const MOD_PAGE_DIALS = 8;
+/**
+ * Place a modulator's controls, in declaration order: each dial takes the
+ * next big slot, and everything else drops into the column of the dial just
+ * declared — a switch to the switch row, a chip (or a second switch) to the
+ * chip row below it. That is what stacks the LFO's sync pad under its rate
+ * dial, and the curve's sync and signal under its duration dial.
+ *
+ * Both surfaces read this one list, so the screen and the hardware never
+ * disagree about which knob a pad belongs to.
+ */
+declare function modPageLayout(controls: ModControlMeta[], params?: ModulationParams): ModPageLayout;
+/** The controls a page actually shows — the mode-specific ones filtered out. */
+declare const visibleModControls: (def: ModTypeDef, params: ModulationParams) => ModControlMeta[];
 /** Plug a modulator type in; registering a type again replaces it. */
 declare function registerModType(def: ModTypeDef): void;
 declare const getModType: (type: ModulationType) => ModTypeDef | undefined;
@@ -154,5 +226,31 @@ declare const SH_DEF: ModTypeDef;
  * over and over.
  */
 declare const ADSR_DEF: ModTypeDef;
+/**
+ * The curve modulator plays a composition from the Curve Composer: a series
+ * of clips, each an eased or springy walk, read once per pass. The page is
+ * the composer laid onto the Move — the arrows walk the clips, Delete drops
+ * the selected one, and the shape dials edit whichever clip is selected, so
+ * one page sculpts a whole series without ever leaving the hardware.
+ *
+ * The composition lives in the slot's params (`clips`), so it persists with
+ * everything else; the shape dials are a live projection of the selected
+ * clip, kept in step by `normalize`.
+ */
+/** How many clips one pass may hold — one per shape dial's worth of patience. */
+declare const CURVE_MAX_CLIPS = 8;
+/** A pass lasts between these, in seconds. */
+declare const CURVE_MIN_DURATION = 0.05;
+declare const CURVE_MAX_DURATION = 60;
+/** What each curve in the vocabulary is called on the two small screens. */
+declare const CURVE_LABELS: Record<CurveType, string>;
+/** The slot's params read as a composition the composer core can play. */
+declare function curveComposition(params: ModulationParams): CurveComposition;
+/**
+ * One pass in seconds. Synced, the dial's duration snaps to the nearest
+ * tempo division, so a pass locks to the Move's clock without a second dial.
+ */
+declare function curveDuration(params: ModulationParams, bpm: number): number;
+declare const CURVE_DEF: ModTypeDef;
 
-export { ADSR_DEF, LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModTypeDef, type ModulationAssignment, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, getModType, lfoSyncedHz, listModTypes, modColor, modKey, modRingArc, registerModType };
+export { ADSR_DEF, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, curveComposition, curveDuration, getModType, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modRingArc, registerModType, visibleModControls };

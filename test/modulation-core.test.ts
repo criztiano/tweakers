@@ -13,6 +13,7 @@ import {
   LFO_SYNC_DIVISIONS,
   SH_DEF,
   ADSR_DEF,
+  CURVE_DEF,
   modRingArc,
   MOD_RING_CIRCUMFERENCE,
   type ModTypeDef,
@@ -96,11 +97,12 @@ describe('the modulation ring', () => {
 });
 
 describe('the type registry', () => {
-  it('ships the LFO, the S&H, and the ADSR, in that order', () => {
+  it('ships the LFO, the S&H, the ADSR and the curve, in that order', () => {
     expect(getModType('lfo')).toBe(LFO_DEF);
     expect(getModType('sh')).toBe(SH_DEF);
     expect(getModType('adsr')).toBe(ADSR_DEF);
-    expect(listModTypes().map((d) => d.type)).toEqual(['lfo', 'sh', 'adsr']);
+    expect(getModType('curve')).toBe(CURVE_DEF);
+    expect(listModTypes().map((d) => d.type)).toEqual(['lfo', 'sh', 'adsr', 'curve']);
   });
 
   it('accepts new types', () => {

@@ -21,6 +21,7 @@ TweakStore.registerPanel('move-xy', 'Move Demo', {
   band: { type: 'range', min: 0, max: 100, default: { min: 20, max: 80 } },
   bias: { type: 'slider', min: -1, max: 1, default: 0, bipolar: true },
   amount: [0.5, 0, 1],
+  sweep: [0, 0, 1],
 });
 
 // Modulation demo: an LFO in the first step slot breathing the Move demo's
@@ -45,6 +46,15 @@ if (!ModulationStore.getSlot(1)) {
     attack: 40, decay: 250, sustain: 0.4, release: 700, loop: true,
   });
   ModulationStore.assign('move-xy', 'bias', 1, 0.8);
+}
+
+// The third slot holds a curve on the Sweep slider: a series of eased clips
+// read once per pass. Tap its circle (or step 3) to open the page — the
+// composer floats above the panel, the arrows walk its clips, Delete drops
+// one, and a tap on the Curve knob moves a clip to the next shape.
+if (!ModulationStore.getSlot(2)) {
+  ModulationStore.createSlot(2, 'curve');
+  ModulationStore.assign('move-xy', 'sweep', 2, 0.8);
 }
 
 // Function buttons: the Move's Copy puts every panel's current values on the

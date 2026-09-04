@@ -8,7 +8,10 @@ import {
   getModType,
   listModTypes,
   applyModulation,
+  modPageLayout,
+  visibleModControls,
   type ModTypeDef,
+  type ModPageLayout,
   type ModulationSlot,
   type ModulationType,
   type ModulationParams,
@@ -76,6 +79,11 @@ const PERSIST_TARGET = resolvePersistTarget('modulation', 'global', true);
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
+/** A slot's own copy of a type's defaults — params are JSON-safe, and a
+ *  structured one (the curve's clip list) must not be shared between slots. */
+const freshParams = (def: ModTypeDef): ModulationParams =>
+  JSON.parse(JSON.stringify(def.defaults)) as ModulationParams;
+
 class ModulationStoreClass {
   private slots: (ModulationSlot | null)[] = Array(MOD_SLOTS).fill(null);
   private assignments = new Map<string, ModulationAssignment>();
@@ -88,6 +96,8 @@ class ModulationStoreClass {
   private touched: { panelId: string; path: string; at: number } | null = null;
   private settingsIndex: number | null = null;
   private settingsUnsub: (() => void) | null = null;
+  /** The control set the open page was built from — see `shapeOf`. */
+  private settingsShape = '';
   private applyingSettings = false;
   private structListeners = new Set<Listener>();
   private frameListeners = new Set<Listener>();
@@ -128,7 +138,7 @@ class ModulationStoreClass {
       console.warn(`[tweakers] modulator type "${type}" is not registered`);
       return null;
     }
-    const slot: ModulationSlot = { index, type, params: { ...def.defaults } };
+    const slot: ModulationSlot = { index, type, params: freshParams(def) };
     this.slots[index] = slot;
     this.states.set(index, def.createState());
     this.changed();
@@ -145,10 +155,17 @@ class ModulationStoreClass {
     return this.slots.filter((s): s is ModulationSlot => s !== null);
   }
 
+  /**
+   * Change a slot's settings. A modulator with its own structure folds the
+   * patch in its own way (`normalize`) — the curve writes a shape dial into
+   * the clip it belongs to — and the open settings page follows.
+   */
   updateSlotParams(index: number, patch: ModulationParams): void {
     const slot = this.slots[index];
     if (!slot) return;
-    slot.params = { ...slot.params, ...patch };
+    const def = getModType(slot.type);
+    slot.params = def?.normalize ? def.normalize(slot.params, patch) : { ...slot.params, ...patch };
+    if (this.settingsIndex === index) this.refreshSettings();
     this.changed();
   }
 
@@ -158,7 +175,7 @@ class ModulationStoreClass {
     const def = getModType(type);
     if (!slot || !def) return;
     slot.type = type;
-    slot.params = { ...def.defaults };
+    slot.params = freshParams(def);
     this.states.set(index, def.createState());
     this.changed();
   }
@@ -316,6 +333,7 @@ class ModulationStoreClass {
     this.settingsUnsub?.();
     this.settingsUnsub = null;
     this.settingsIndex = null;
+    this.settingsShape = '';
     TweakStore.unregisterPanel(MOD_SETTINGS_PANEL);
     this.changed();
   }
@@ -323,6 +341,58 @@ class ModulationStoreClass {
   /** The open settings page, or null — the panel to render as the Move page. */
   getSettings(): { index: number; panelId: string } | null {
     return this.settingsIndex === null ? null : { index: this.settingsIndex, panelId: MOD_SETTINGS_PANEL };
+  }
+
+  /**
+   * Where the open page's controls sit — the eight dial slots and the small
+   * slots under them. Both surfaces lay the page out from this one list, so
+   * they never disagree about which knob a pad belongs to.
+   */
+  getSettingsLayout(): ModPageLayout | null {
+    const slot = this.settingsIndex === null ? null : this.slots[this.settingsIndex];
+    const def = slot && getModType(slot.type);
+    if (!slot || !def) return null;
+    // The kind picker takes the first slot, ahead of the modulator's own.
+    const layout = modPageLayout(def.controls, slot.params);
+    return {
+      dials: [{ path: 'type' }, ...layout.dials].slice(0, 8),
+      toggles: [null, ...layout.toggles].slice(0, 8),
+      values: [null, ...layout.values].slice(0, 8),
+    };
+  }
+
+  /** The open page's curve, sampled 0..1, and its name — the preview dial. */
+  getSettingsPreview(count = 32): { points: number[]; label: string } | null {
+    const slot = this.settingsIndex === null ? null : this.slots[this.settingsIndex];
+    const def = slot && getModType(slot.type);
+    return slot && def?.preview ? def.preview(slot.params, count) : null;
+  }
+
+  /** Hardware buttons the open page claims (the curve's arrows and Delete). */
+  getSettingsButtons(): string[] {
+    const slot = this.settingsIndex === null ? null : this.slots[this.settingsIndex];
+    const def = slot && getModType(slot.type);
+    return def?.buttons ? Object.keys(def.buttons) : [];
+  }
+
+  /** Run a claimed button. False when the page does not claim that name. */
+  pressSettingsButton(name: string): boolean {
+    const slot = this.settingsIndex === null ? null : this.slots[this.settingsIndex];
+    const action = slot && getModType(slot.type)?.buttons?.[name];
+    if (!slot || !action) return false;
+    const patch = action(slot.params);
+    if (patch) this.updateSlotParams(slot.index, patch);
+    return true;
+  }
+
+  /** A knob tap on a page dial that cycles (the curve's clip vocabulary). */
+  tapSettingsControl(path: string): boolean {
+    const slot = this.settingsIndex === null ? null : this.slots[this.settingsIndex];
+    const def = slot && getModType(slot.type);
+    const cycle = def?.controls.find((c) => c.path === path)?.cycle;
+    if (!slot || !cycle) return false;
+    this.updateSlotParams(slot.index, cycle(slot.params));
+    return true;
   }
 
   private registerSettingsPanel(slot: ModulationSlot, def: ModTypeDef): void {
@@ -333,8 +403,15 @@ class ModulationStoreClass {
         default: slot.type,
       },
     };
-    for (const c of def.controls) {
-      if (c.type === 'slider') {
+    this.settingsShape = this.shapeOf(slot, def);
+    for (const c of visibleModControls(def, slot.params)) {
+      if (c.type === 'select') {
+        config[c.path] = {
+          type: 'select',
+          options: c.options ?? [],
+          default: String(slot.params[c.path] ?? ''),
+        };
+      } else if (c.type === 'slider') {
         config[c.path] = {
           type: 'slider',
           min: c.min ?? 0,
@@ -386,7 +463,7 @@ class ModulationStoreClass {
     const def = getModType(slot.type);
     if (!def) return;
     const patch: ModulationParams = {};
-    for (const c of def.controls) {
+    for (const c of visibleModControls(def, slot.params)) {
       const v = values[c.path];
       if (c.type === 'xy' && c.xParam && c.yParam) {
         const xy = v as { x?: number; y?: number } | undefined;
@@ -396,11 +473,49 @@ class ModulationStoreClass {
         }
       } else if (c.type === 'toggle') {
         patch[c.path] = !!v;
+      } else if (c.type === 'select') {
+        if (typeof v === 'string') patch[c.path] = v;
       } else if (typeof v === 'number' && Number.isFinite(v)) {
         patch[c.path] = v;
       }
     }
     this.updateSlotParams(slot.index, patch);
+  }
+
+  /**
+   * The open page, after the params moved under it. A change that alters
+   * which controls the page shows (the curve's trigger chip appearing) or
+   * what they read (an arrow selecting another clip) has to reach the panel
+   * — hardware edits arrive there, and the screen renders from it.
+   */
+  private refreshSettings(): void {
+    if (this.settingsIndex === null) return;
+    const slot = this.slots[this.settingsIndex];
+    const def = slot && getModType(slot.type);
+    if (!slot || !def) return;
+    if (this.shapeOf(slot, def) !== this.settingsShape) {
+      this.registerSettingsPanel(slot, def);
+      return;
+    }
+    const values = TweakStore.getValues(MOD_SETTINGS_PANEL);
+    const guarded = this.applyingSettings;
+    this.applyingSettings = true;
+    for (const c of visibleModControls(def, slot.params)) {
+      if (c.type === 'xy' && c.xParam && c.yParam) {
+        const xy = (values[c.path] ?? {}) as { x?: number; y?: number };
+        const x = Number(slot.params[c.xParam]) || 0;
+        const y = Number(slot.params[c.yParam]) || 0;
+        if (xy.x !== x || xy.y !== y) TweakStore.updateValue(MOD_SETTINGS_PANEL, c.path, { x, y });
+      } else if (values[c.path] !== slot.params[c.path]) {
+        TweakStore.updateValue(MOD_SETTINGS_PANEL, c.path, slot.params[c.path] as never);
+      }
+    }
+    this.applyingSettings = guarded;
+  }
+
+  /** Which controls the page is built from — a rebuild when this changes. */
+  private shapeOf(slot: ModulationSlot, def: ModTypeDef): string {
+    return `${slot.type}:${visibleModControls(def, slot.params).map((c) => c.path).join(',')}`;
   }
 
   /* ── external sources ─────────────────────────────────────────────── */
@@ -445,6 +560,14 @@ class ModulationStoreClass {
   /** A slot's live signal, -1..1. */
   getSignal(index: number): number {
     return this.signals[index] ?? 0;
+  }
+
+  /** Where a slot sits in its cycle, 0..1 — a curve composer's playhead. */
+  getSlotPhase(index: number): number {
+    const slot = this.slots[index];
+    const def = slot && getModType(slot.type);
+    const state = this.states.get(index);
+    return slot && def?.phase && state !== undefined ? def.phase(state) : 0;
   }
 
   /** The modulation's contribution to one control, in the control's units. */

@@ -1,4 +1,5 @@
 import type { PanelConfig, ControlMeta } from './store/TweakStore';
+import type { ModPageLayout } from './modulation-core';
 import { resolveAxis, type XYValue } from './xy-pad-core';
 import { plotCurve } from './curve-preview-core';
 import { clampRange, type RangeValue } from './range-slider-core';
@@ -55,18 +56,33 @@ const isDial = (c: ControlMeta) =>
 const noChip = (c: ControlMeta) => c.type === 'xy' || c.type === 'range' || isEnumDial(c);
 
 /**
- * The modulator-settings page (hold a step button): the type enum takes the
- * first big slot, the modulator's own controls follow, and a toggle drops
- * into the pad row under the dial declared just before it — that puts the
- * LFO's tempo-sync pad directly below its rate dial. The kit mirrors this
- * rule for the hardware page.
+ * The modulator-settings page (hold a step button): the kind picker takes
+ * the first big slot, the modulator's own controls follow, and everything
+ * else drops into the column of the dial declared just before it — the
+ * LFO's tempo-sync pad below its rate dial, the curve's sync and signal
+ * below its duration dial.
+ *
+ * `layout` is the ModulationStore's own placement (`getSettingsLayout`), the
+ * single list both surfaces read; without it the same rule is re-derived
+ * from the panel, which is enough for a modulator with no small slots.
  */
-export function buildModMovePage(panel: PanelConfig): MovePage {
+export function buildModMovePage(panel: PanelConfig, layout?: ModPageLayout | null): MovePage {
   const controls = flat(panel.controls);
+  if (layout) {
+    const at = (slot: { path: string } | null) =>
+      slot ? controls.find((c) => c.path === slot.path) : undefined;
+    return {
+      panel,
+      dials: layout.dials.slice(0, MOVE_DIALS).map(at).filter((c): c is ControlMeta => !!c),
+      toggles: layout.toggles.slice(0, MOVE_PADS).map(at) as ControlMeta[],
+      values: layout.values.slice(0, MOVE_PADS).map(at) as ControlMeta[],
+      actions: [],
+    };
+  }
   const dials: ControlMeta[] = [];
   const toggles: ControlMeta[] = [];
   for (const c of controls) {
-    // The type select keeps its slot even while only one modulator type is
+    // The kind picker keeps its slot even while only one modulator type is
     // registered (a 1-option select is not an enum dial by the kit's rule).
     if (c.type === 'toggle') toggles[Math.max(0, dials.length - 1)] = c;
     else if (c.type === 'select' || isDial(c)) dials.push(c);
