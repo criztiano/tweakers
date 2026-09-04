@@ -1593,6 +1593,14 @@ export const themeCSS = `/* No webfont import: the System85 Pro faces (labels: S
   color: var(--tweak-text-label);
 }
 
+/* Filter row — the response curve with its two hands stacked under it,
+   reading as one control the way the Move's 2-slot picture does. */
+.tweakers-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .tweakers-curve-surface {
   display: block;
   width: 100%;
@@ -5735,6 +5743,68 @@ input.tweakers-list-item-title:focus {
 /* The glow marks the touched dial — lit while held (802:773). */
 .tweakers-move-dial[data-active] .tweakers-move-dial-fill {
   box-shadow: 0 0 12px 0 rgba(222, 227, 201, 0.7);
+}
+
+/* Filter slot — the kit's first 2-slot control. The slot claims two grid
+   tracks; the magnitude response takes every pixel it can, and each hand
+   keeps only a small label, sitting inline where its own single slot's
+   label band would have been — cutoff over the left column, resonance over
+   the right. Each label gives way to its hand's value on touch. */
+.tweakers-move-dial[data-kind="filter"] {
+  grid-column: span 2;
+}
+
+.tweakers-move-filter-shape {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: calc(100% - 20px);
+  height: calc(100% - 10px - 30px);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.tweakers-move-filter-shape path {
+  fill: none;
+  stroke: var(--move-text);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.5;
+  transition: opacity 0.12s;
+}
+
+.tweakers-move-dial[data-kind="filter"]:hover .tweakers-move-filter-shape path,
+.tweakers-move-dial[data-kind="filter"][data-active] .tweakers-move-filter-shape path {
+  opacity: 1;
+}
+
+.tweakers-move-filter-readout {
+  position: absolute;
+  bottom: 6px;
+  width: 50%;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tweakers-move-filter-readout[data-side="cutoff"] { left: 0; }
+.tweakers-move-filter-readout[data-side="resonance"] { right: 0; }
+
+/* The hand labels are captions, not headlines — the picture is the value. */
+.tweakers-move-filter-readout .tweakers-move-dial-label {
+  font-size: 13px;
+  line-height: 16px;
+  white-space: nowrap;
+  -webkit-line-clamp: 1;
+}
+
+.tweakers-move-filter-readout .tweakers-move-dial-value {
+  font-size: 13px;
+  line-height: 16px;
+  white-space: nowrap;
 }
 
 /* Range slot — the bar fills BETWEEN two handle ticks (the span), and the

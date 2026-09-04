@@ -4,6 +4,7 @@ import { HEX_COLOR_REGEX } from '../color-core';
 import { normalizeGradient, DEFAULT_GRADIENT, type GradientValue } from '../gradient-core';
 import { resolveAxis, normalizeValue as normalizeXYValue, type XYValue } from '../xy-pad-core';
 import { clampRange } from '../range-slider-core';
+import { resolveFilterAxis, normalizeFilterValue, type FilterAxisConfig, type FilterValue } from '../filter-core';
 import { resolvePersistTarget, loadPersisted, savePersisted, type PersistTarget } from './persist';
 // Type-only (erased in JS): lets consumers import `RangeValue` from the package types.
 import type { RangeValue } from '../range-slider-core';
@@ -115,6 +116,23 @@ export type TextConfig = {
   type: 'text';
   default?: string;
   placeholder?: string;
+};
+
+/**
+ * The 2-slot filter control: one value, two hands — cutoff on the left,
+ * resonance on the right. On the Move it claims two dial slots and draws
+ * its magnitude response across both; inline it is one row for the same
+ * pair. `response` is a closure like a curve row's `sample` (refreshed
+ * through `syncCurveConfigs`); without one the kit draws its own lowpass.
+ */
+export type FilterConfig = {
+  type: 'filter';
+  /** Starting point. Missing hands open the filter: cutoff max, resonance min. */
+  default?: Partial<FilterValue>;
+  cutoff?: FilterAxisConfig;
+  resonance?: FilterAxisConfig;
+  /** The drawn magnitude response, from each hand's 0..1 position. */
+  response?: (cutoff01: number, resonance01: number) => (t: number) => number;
 };
 
 export type RangeConfig = {
@@ -380,7 +398,7 @@ export type ListField = {
   defaultValue: number | boolean | string;
 };
 
-export type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue;
+export type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue | FilterConfig | FilterValue;
 
 export type TweakConfig = {
   // CurveConfig and AnalyserConfig are not TweakValues: they never enter the
@@ -418,6 +436,8 @@ export type ResolvedValues<T extends TweakConfig> = {
                 ? string
                 : T[K] extends RangeConfig
                   ? RangeValue
+                : T[K] extends FilterConfig
+                  ? FilterValue
                 : T[K] extends GalleryConfig
                   ? string
                   : T[K] extends FileConfig
@@ -477,7 +497,7 @@ export type AffordanceConfig = {
 };
 
 export type ControlMeta = {
-  type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser';
+  type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser' | 'filter';
   path: string;
   label: string;
   /** One line of help, revealed on hover or when focus lands inside the control. */
@@ -536,6 +556,11 @@ export type ControlMeta = {
   snap?: boolean;
   returnToCenter?: boolean;
   showValues?: boolean;
+  /** Filter control's per-hand range/step/label/format. */
+  cutoffAxis?: FilterAxisConfig;
+  resonanceAxis?: FilterAxisConfig;
+  /** Filter control's drawn magnitude response — swapped in place by syncCurveConfigs. */
+  response?: (cutoff01: number, resonance01: number) => (t: number) => number;
   /** Curve preview's host-supplied sampler — swapped in place by syncCurveConfigs. */
   sample?: (t: number) => number;
   /** Curve preview's fixed y-range; absent = auto-fit per draw. */
@@ -1258,6 +1283,14 @@ class TweakStoreClass {
               changed = true;
             }
           }
+        } else if (this.isFilterConfig(value) && value.response) {
+          // The filter's response closes over the app's other controls exactly
+          // as a curve row's sample does, so it goes stale the same way.
+          const control = this.findControlByPath(panel.controls, path);
+          if (control?.type === 'filter' && control.response !== value.response) {
+            control.response = value.response;
+            changed = true;
+          }
         } else if (this.isSelectConfig(value) && value.preview) {
           // A select's preview closes over the app's other controls exactly
           // as a curve row's sample does, so it goes stale the same way.
@@ -1266,7 +1299,7 @@ class TweakStoreClass {
             control.preview = value.preview;
             changed = true;
           }
-        } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
+        } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
           visit(value as TweakConfig, path);
         }
       }
@@ -1548,7 +1581,7 @@ class TweakStoreClass {
         const hasPhysics = value.stiffness !== undefined || value.damping !== undefined || value.mass !== undefined;
         const hasTime = value.visualDuration !== undefined || value.bounce !== undefined;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? 'advanced' : 'simple';
-      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isCurveConfig(value)) {
+      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isCurveConfig(value)) {
         this.initTransitionModes(value as TweakConfig, path, values);
       }
     }
@@ -1625,6 +1658,10 @@ class TweakStoreClass {
         controls.push({ type: 'gradient', path, label });
       } else if (this.isXYConfig(value)) {
         controls.push({ type: 'xy', path, label, xAxis: value.x, yAxis: value.y, grid: value.grid, density: value.density, snap: value.snap, returnToCenter: value.returnToCenter, showValues: value.showValues });
+      } else if (this.isFilterConfig(value)) {
+        // No `shortcut`: a filter value is {cutoff,resonance}, which the
+        // numeric-nudge shortcut path can't drive (the range precedent).
+        controls.push({ type: 'filter', path, label, cutoffAxis: value.cutoff, resonanceAxis: value.resonance, response: value.response });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: 'text', path, label, placeholder: value.placeholder });
       } else if (this.isRangeConfig(value)) {
@@ -1786,6 +1823,14 @@ class TweakStoreClass {
         values[path] = value.default ?? '';
       } else if (this.isRangeConfig(value)) {
         values[path] = value.default ?? { min: value.min, max: value.max };
+      } else if (this.isFilterConfig(value)) {
+        // Clamp/snap the config default into both axes up front; missing hands
+        // fall back to the open filter (cutoff max, resonance min).
+        values[path] = normalizeFilterValue(
+          value.default,
+          resolveFilterAxis(value.cutoff, 'cutoff'),
+          resolveFilterAxis(value.resonance, 'resonance')
+        );
       } else if (this.isGalleryConfig(value)) {
         // Resolve to the selected item id — default, else the first item.
         values[path] = value.default ?? value.items[0]?.id ?? '';
@@ -1876,6 +1921,15 @@ class TweakStoreClass {
       value !== null &&
       'type' in value &&
       (value as XYConfig).type === 'xy'
+    );
+  }
+
+  private isFilterConfig(value: unknown): value is FilterConfig {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'type' in value &&
+      (value as FilterConfig).type === 'filter'
     );
   }
 
@@ -2144,6 +2198,22 @@ class TweakStoreClass {
         const xAxis = resolveAxis(control.xAxis);
         const yAxis = resolveAxis(control.yAxis);
         return normalizeXYValue(candidate, xAxis, yAxis, false);
+      }
+      case 'filter': {
+        // Re-clamp a preserved pair against the (possibly edited) axes; a lost
+        // shape falls back to the default (the range/xy precedent).
+        if (typeof existingValue !== 'object' || existingValue === null || Array.isArray(existingValue)) {
+          return defaultValue;
+        }
+        const candidate = existingValue as Partial<FilterValue>;
+        if (typeof candidate.cutoff !== 'number' || typeof candidate.resonance !== 'number') {
+          return defaultValue;
+        }
+        return normalizeFilterValue(
+          candidate,
+          resolveFilterAxis(control.cutoffAxis, 'cutoff'),
+          resolveFilterAxis(control.resonanceAxis, 'resonance')
+        );
       }
       case 'text':
       case 'file':

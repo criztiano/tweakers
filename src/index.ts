@@ -10,8 +10,17 @@ export type { TweakPosition, TweakMode, TweakTheme } from './components/TweakRoo
 export { MovePanel } from './components/MovePanel';
 export { MoveActionButton } from './components/MoveActionButton';
 export type { MoveActionButtonProps } from './components/MoveActionButton';
-export { buildMovePages, buildModMovePage, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
+export { buildMovePages, buildModMovePage, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
 export type { MovePage } from './move-layout';
+
+// The big-slot library — the dictionary of what a Move dial slot can be
+export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
+export type { MoveSlotKind } from './components/move-slots';
+
+// The filter control — the kit's first 2-slot control (cutoff + resonance)
+export { resolveFilterAxis, normalizeFilterValue, defaultFilterResponse, filterResponsePath, filterHand01, filterHandValue } from './filter-core';
+export type { FilterAxis, FilterAxisConfig, FilterValue, FilterResponse } from './filter-core';
+export { FilterControl } from './components/FilterControl';
 export { MoveFunctions, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_SPECIAL_BUTTONS } from './move-functions';
 export type { MoveFunctionButton, MoveFunctionPress, MoveFunctionHandler, MoveFunctionOptions, MoveFunctionRunListener } from './move-functions';
 export { MoveVolumeDisplay } from './move-volume';
@@ -282,6 +291,7 @@ export type {
   SliderConfig,
   NumberConfig,
   RangeConfig,
+  FilterConfig,
   RangeValue,
   ListConfig,
   ListItemValue,

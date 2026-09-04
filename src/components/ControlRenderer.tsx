@@ -1,5 +1,6 @@
 import { useContext } from 'react';
 import { TweakStore, hintDomId, ControlMeta, TweakValue, SpringConfig, TransitionConfig, ListItemValue, XYValue } from '../store/TweakStore';
+import type { FilterValue } from '../filter-core';
 import type { RangeValue } from '../store/TweakStore';
 import type { GradientValue } from '../gradient-core';
 import { ShortcutContext } from './ShortcutListener';
@@ -25,6 +26,7 @@ import { ChipsControl } from './ChipsControl';
 import { MultiSelectControl } from './MultiSelectControl';
 import { ListControl } from './ListControl';
 import { CurvePreview } from './CurvePreview';
+import { FilterControl } from './FilterControl';
 import { AnalyserRow } from './AnalyserRow';
 
 interface ControlRendererProps {
@@ -343,6 +345,16 @@ export function ControlRenderer({ panelId, controls, values, transitionDuration 
             maxItems={control.maxItems}
             onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
             onEvent={(event) => TweakStore.emitEvent(panelId, control.path, event)}
+          />
+        );
+
+      case 'filter':
+        return (
+          <FilterControl
+            key={control.path}
+            control={control}
+            value={value as FilterValue | undefined}
+            onChange={(v) => TweakStore.updateValue(panelId, control.path, v)}
           />
         );
 

@@ -7,8 +7,9 @@ import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from './TweakRoot';
-import { buildMovePages, buildModMovePage, visibleColumns, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, dialOrigin, isEnumDial, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_DIALS } from '../move-layout';
-import { LUCIDE_ICONS } from '../icons';
+import { buildMovePages, buildModMovePage, visibleColumns, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, isEnumDial, isSpanContinuation, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_DIALS } from '../move-layout';
+import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
+import { MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody } from './move-slots';
 import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValue, applyDetentAxis, type XYValue } from '../xy-pad-core';
 import { nearestHandle, type RangeValue } from '../range-slider-core';
 import { fineDragValue } from '../shortcut-utils';
@@ -142,6 +143,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const fineRef = useRef<{ shift: boolean; x: number; y: number; v: unknown } | null>(null);
   // Which range handle a gesture grabbed — locked at pointer-down.
   const rangeHandleRef = useRef<'min' | 'max'>('min');
+  // Which filter hand a gesture grabbed (left half = cutoff, right half =
+  // resonance) — locked at pointer-down, like the range handle.
+  const filterHandRef = useRef<'cutoff' | 'resonance'>('cutoff');
 
   // Volume-dial readout: a static value renders as set; a getValue is polled
   // per animation frame while mounted, for readouts that move (a playhead).
@@ -375,6 +379,41 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     TweakStore.updateValue(page.panel.id, meta.path, denormalizeRangeDial(meta, next.lo, next.hi));
   };
 
+  // A filter slot is two dials wearing one picture: the half the gesture
+  // starts in picks the hand (left = cutoff, right = resonance, locked for
+  // the drag), and the pointer's travel across that half turns it. On the
+  // hardware the left column's knob is cutoff and the right column's is
+  // resonance — two ordinary one-column dials to the bridge.
+  const filterFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, down: boolean) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const half = rect.width / 2;
+    if (down) filterHandRef.current = e.clientX - rect.left < half ? 'cutoff' : 'resonance';
+    const hand = filterHandRef.current;
+    const left = hand === 'cutoff' ? rect.left + DIAL_TRACK_INSET : rect.left + half;
+    const span = half - DIAL_TRACK_INSET;
+    const cur = normalizeFilterDial(meta, values[meta.path]);
+    const fine = fineAnchor(e, () => cur);
+    let v01: number;
+    if (fine) {
+      const a = fine.v as { cutoff: number; resonance: number };
+      v01 = fineDragValue({
+        startValue: hand === 'cutoff' ? a.cutoff : a.resonance,
+        startPos: fine.x,
+        pos: e.clientX,
+        extentPx: span || 1,
+        min: 0,
+        max: 1,
+        factor: fine.shift ? 0.1 : 1,
+      });
+    } else {
+      v01 = Math.min(1, Math.max(0, (e.clientX - left) / (span || 1)));
+    }
+    const next = hand === 'cutoff'
+      ? denormalizeFilterDial(meta, v01, cur.resonance)
+      : denormalizeFilterDial(meta, cur.cutoff, v01);
+    TweakStore.updateValue(page.panel.id, meta.path, next);
+  };
+
   // An enum slot steps between the options: the pointer's position on the
   // track maps to 0..1, and denormalizeEnumDial snaps it to the nearest option.
   const enumFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) => {
@@ -529,7 +568,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
           {visibleCols.length > 0 && <div className="tweakers-move-grid">
             <div className="tweakers-move-dials">
               {visibleCols.map((i) => {
-                const meta = dialAt(i);
+                // A 2-slot dial's second column renders nothing of its own —
+                // the base column's slot spans across it. And a 2-slot dial
+                // keeps its slot against chip substitution: a chip landing in
+                // half a picture would break the span.
+                if (isSpanContinuation(page, i)) return null;
+                const meta = page.dials[i]?.type === 'filter' ? page.dials[i] : dialAt(i);
                 if (!meta) return <div key={`empty-${i}`} className="tweakers-move-dial" data-empty="true" />;
                 const active =
                   dragPath === meta.path ||
@@ -542,6 +586,40 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 // top and the value takes the slot. Plain 0..1 amounts keep
                 // the big name, since "40%" on its own says nothing.
                 const valueFirst = !!settingsPanel && !(meta.min === 0 && meta.max === 1);
+                // The filter takes two slots as one picture: the magnitude
+                // response maximised across both, each hand's small label
+                // sitting where its own slot's label would have been.
+                if (meta.type === 'filter') {
+                  const fv = normalizeFilterValue(
+                    values[meta.path],
+                    resolveFilterAxis(meta.cutoffAxis, 'cutoff'),
+                    resolveFilterAxis(meta.resonanceAxis, 'resonance')
+                  );
+                  const shape = filterShapePath(meta, values[meta.path]);
+                  return (
+                    <div
+                      key={meta.path}
+                      className="tweakers-move-dial"
+                      data-kind="filter"
+                      data-active={active || undefined}
+                      onPointerDown={(e) => {
+                        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                        fineRef.current = null;
+                        setDragPath(meta.path);
+                        armMod(meta.path);
+                        filterFromPointer(e, meta, true);
+                      }}
+                      onPointerMove={(e) => {
+                        if (dragPath === meta.path) filterFromPointer(e, meta, false);
+                      }}
+                      onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
+                      onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                    >
+                      <ModDot path={meta.path} />
+                      <MoveSlotFilterBody meta={meta} value={fv} shape={shape} />
+                    </div>
+                  );
+                }
                 // An xy control fills its slot with the pad — the field draws
                 // behind the label and there is no slider at the bottom.
                 if (meta.type === 'xy') {
@@ -648,22 +726,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
                     >
                       <ModDot path={meta.path} />
-                      <div className="tweakers-move-dial-readout">
-                        <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
-                          {meta.label}
-                        </span>
-                        <span className="tweakers-move-dial-value">{rangeReading(meta)}</span>
-                      </div>
-                      <div className="tweakers-move-dial-bar">
-                        <div className="tweakers-move-dial-range">
-                          <div
-                            className="tweakers-move-dial-span"
-                            style={{ left: `${pos.lo * 100}%`, width: `${(pos.hi - pos.lo) * 100}%` }}
-                          />
-                          <span className="tweakers-move-dial-handle" style={{ left: `${pos.lo * 100}%` }} />
-                          <span className="tweakers-move-dial-handle" style={{ left: `${pos.hi * 100}%` }} />
-                        </div>
-                      </div>
+                      <MoveSlotRangeBody label={meta.label} value={rangeReading(meta)} lo={pos.lo} hi={pos.hi} />
                     </div>
                   );
                 }
@@ -704,42 +767,15 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           knob is on the chip, the picture between, what it is
                           set to underneath. No crossfade — with the name out
                           of the way there is nothing for the value to replace. */}
-                      {(shape || glyph) && (
-                        <span className="tweakers-move-dial-tag">{meta.label}</span>
-                      )}
                       <ModDot path={meta.path} />
-                      {shape && (
-                        <svg
-                          className="tweakers-move-dial-shape"
-                          viewBox="0 0 100 100"
-                          preserveAspectRatio="none"
-                          aria-hidden="true"
-                        >
-                          <path d={shape} />
-                        </svg>
-                      )}
-                      {glyph && <LucideGlyph name={glyph} className="tweakers-move-dial-icon" />}
-                      {shape || glyph ? (
-                        <span className="tweakers-move-dial-option">{optionLabel}</span>
-                      ) : (
-                        <div className="tweakers-move-dial-readout">
-                          <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
-                            {meta.label}
-                          </span>
-                          <span className="tweakers-move-dial-value">{optionLabel}</span>
-                        </div>
-                      )}
-                      <div className="tweakers-move-dial-bar">
-                        <div className="tweakers-move-dial-enum">
-                          {options.map((opt, j) => (
-                            <span
-                              key={typeof opt === 'string' ? opt : opt.value}
-                              className="tweakers-move-dial-enum-cell"
-                              data-on={j === activeIdx || undefined}
-                            />
-                          ))}
-                        </div>
-                      </div>
+                      <MoveSlotEnumBody
+                        label={meta.label}
+                        optionLabel={optionLabel}
+                        options={options}
+                        activeIdx={activeIdx}
+                        shape={shape}
+                        glyph={glyph}
+                      />
                     </div>
                   );
                 }
@@ -778,27 +814,14 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   >
                     {(subbed || valueFirst) && <span className="tweakers-move-dial-sub">{meta.label}</span>}
                     <ModDot path={meta.path} />
-                    <div className="tweakers-move-dial-readout">
-                      <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
-                        {meta.label}
-                      </span>
-                      <span className="tweakers-move-dial-value">
-                        {subValue
-                          ? `${subValue.num}${subValue.unit ? ` ${subValue.unit}` : ''}`
-                          : dialReading(meta)}
-                      </span>
-                    </div>
-                    <div className="tweakers-move-dial-bar">
-                      {originPct != null && (
-                        <span className="tweakers-move-dial-origin" style={{ left: `${originPct}%` }} />
-                      )}
-                      <div
-                        className="tweakers-move-dial-fill"
-                        style={originPct != null
-                          ? { marginLeft: `${Math.min(pct, originPct)}%`, width: `${Math.abs(pct - originPct)}%` }
-                          : { width: `${pct}%` }}
-                      />
-                    </div>
+                    <MoveSlotDefaultBody
+                      label={meta.label}
+                      value={subValue
+                        ? `${subValue.num}${subValue.unit ? ` ${subValue.unit}` : ''}`
+                        : dialReading(meta)}
+                      pct={pct}
+                      originPct={originPct}
+                    />
                   </div>
                 );
               })}
@@ -876,26 +899,6 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // Flow docking stays in the host's tree, so the app can centre content and
   // panel as one group; viewport docking portals out and pins to the edge.
   return dock === 'flow' ? content : createPortal(content, document.body);
-}
-
-/** One glyph from the bundled lucide subset; an unknown name draws nothing. */
-function LucideGlyph({ name, className }: { name: string; className: string }) {
-  const paths = LUCIDE_ICONS[name];
-  if (!paths) return null;
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      {paths.map((d) => <path key={d} d={d} />)}
-    </svg>
-  );
 }
 
 /** A preview's samples as an SVG path across a 100×100 box, y pointing up. */
