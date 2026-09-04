@@ -5210,6 +5210,7 @@ input.tweakers-list-item-title:focus {
   --move-text: #dee3c9;
   --move-text-inverse: #31322f;
   --move-radius: 12px;
+  --move-glyph-stroke: 1.25;
   --move-radius-small: 8px;
   --move-font-label: 'Ableton Sans Small', system-ui, -apple-system, sans-serif;
 
@@ -5624,11 +5625,10 @@ input.tweakers-list-item-title:focus {
 .tweakers-move-dial-icon {
   position: absolute;
   top: var(--move-shape-top);
-  height: calc(100% - var(--move-shape-top) - var(--move-shape-bottom));
   left: 10px;
-  right: 10px;
-  width: auto;
-  stroke-width: 1.5;
+  width: calc(100% - 20px);
+  height: calc(100% - var(--move-shape-top) - var(--move-shape-bottom));
+  stroke-width: var(--move-glyph-stroke);
   color: var(--move-text);
   pointer-events: none;
 }
@@ -5642,8 +5642,8 @@ input.tweakers-list-item-title:focus {
   right: 9px;
   bottom: var(--move-option-bottom);
   font-family: var(--move-font-label);
-  font-size: 16px;
-  line-height: 20px;
+  font-size: 13px;
+  line-height: 16px;
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
@@ -5659,8 +5659,8 @@ input.tweakers-list-item-title:focus {
      bottom = option bottom + option line (20) + 8 */
 .tweakers-move-dial {
   --move-option-bottom: 21px;   /* the track's 8 + 9, plus 4 of air */
-  --move-shape-top: 32px;
-  --move-shape-bottom: 49px;
+  --move-shape-top: 32px;       /* chip top (6) + chip height (18) + 8 */
+  --move-shape-bottom: 45px;    /* option bottom (21) + option line (16) + 8 */
 }
 
 /* Height, not a bottom edge: an <svg> is a replaced element, so top+bottom
@@ -5670,10 +5670,9 @@ input.tweakers-list-item-title:focus {
 .tweakers-move-dial-shape {
   position: absolute;
   top: var(--move-shape-top);
-  height: calc(100% - var(--move-shape-top) - var(--move-shape-bottom));
   left: 10px;
-  right: 10px;
-  width: auto;
+  width: calc(100% - 20px);
+  height: calc(100% - var(--move-shape-top) - var(--move-shape-bottom));
   overflow: visible;
   pointer-events: none;
 }
@@ -6003,11 +6002,11 @@ input.tweakers-list-item-title:focus {
   .tweakers-move-dial {
     --move-option-bottom: 20px;
     --move-shape-top: 32px;
-    --move-shape-bottom: 44px;
+    --move-shape-bottom: 42px;
   }
   .tweakers-move-dial-option {
-    font-size: 13px;
-    line-height: 16px;
+    font-size: 12px;
+    line-height: 14px;
   }
 }
 

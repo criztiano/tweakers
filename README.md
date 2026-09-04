@@ -990,7 +990,7 @@ pitchShape: {
 },
 ```
 
-A slot showing a picture reads top down and drops the label/value crossfade, which has nothing left to swap: the control's name sits on a small chip at the top, the picture takes every pixel between the two labels (8px clear of each), and the option's name captions it above the pagination cells.
+A slot showing a picture reads top down and drops the label/value crossfade, which has nothing left to swap: the control's name sits on a small chip at the top, the picture fills every pixel between the two labels (8px clear of each, edge to edge across the slot), and the option's name captions it above the pagination cells. Glyph weight is one knob, `--move-glyph-stroke` (1.25 by default) — lucide draws at 2, which reads heavy against this surface's chrome.
 
 `preview` is a closure, so — like a curve row's `sample` — it is invisible to the serialized config diff and is refreshed through the same sync. That is what lets the drawing track the app's other controls while the picker stays a picker.
 
