@@ -996,6 +996,36 @@ A slot showing a picture reads top down and drops the label/value crossfade, whi
 
 Bipolar sliders (`bipolar: true` or an `origin`) keep their character on the dial: the fill anchors at an origin tick and grows toward the handle on either side, and the readout shows the real signed value (`+12`, `-8`) instead of the 0–100 position.
 
+### Waveform
+
+The panel gives an app its knobs; `MoveWaveform` gives it the sample they are acting on, on the same surface and driven by the same hardware.
+
+```tsx
+import { MoveWaveform, MoveWaveformStore } from 'tweakers';
+
+<MoveWaveform buffer={buffer} getProgress={() => playhead} onSeek={setPosition} onLoopChange={setLoop} />
+
+import('http://localhost:7787/kit.js')
+  .then(m => m.bindMove(TweakStore, { waveform: MoveWaveformStore }))
+  .catch(() => {});
+```
+
+The hardware follows the shape of the gesture, not the shape of the API: the **big wheel zooms** (it is a scrub-and-zoom wheel on every deck ever built), the **volume knob scrubs** (the one continuous control a hand finds without looking, Shift for fine), and the **step row marks the loop** — first press the in point, second the out, the same step twice to cancel.
+
+The steps are shared politely with [modulation](#modulation): a slot keeps any step it holds, and the loop takes only the gesture the modulation layer declines — an empty step tapped with nothing armed, which did nothing before. No modifier, and neither feature has to explain itself. The lit span shows on the row.
+
+Rendering one claims the wheel, the volume knob and the steps for as long as it is mounted; unmount it and the volume knob goes back to being the tempo.
+
+Three placements, one look — all of them on the hardware's own display surface (`#1e1e1e`, no border), like the list screen:
+
+| `variant` | Where it sits |
+|---|---|
+| `page` (default) | A card in the app's own layout, wherever you put it. |
+| `slot` | Dial-sized, the playhead pinned at the centre and the sample running past it — a tape head, not a cursor. |
+| `dock` | Floating above the Move panel, the width of the surface it belongs to. |
+
+`children` render over the waveform, so an app can lay its own markers on top without fighting the canvas's sizing. Every prop `WaveformVisualization` takes is passed through; `WaveformVisualization` itself now also accepts a controlled `zoom`, which is how the wheel drives it.
+
 ### Function buttons
 
 The Move's named function buttons attach to your app's own actions through the function library. Names match the printed hardware labels, and the manifest (`MOVE_FUNCTION_MANIFEST`) splits them in two groups:
