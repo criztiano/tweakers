@@ -104,26 +104,34 @@ export function defaultFilterResponse(cutoff01: number, resonance01: number): Fi
     const f = Math.pow(10, -3 + 3 * clamp(t, 0, 1));
     const w = f / fc;
     const mag = 1 / Math.sqrt(Math.pow(1 - w * w, 2) + Math.pow(w / q, 2));
-    // Gains over 1 (the peak) share the headroom band; the curve stays 0..1.
-    return clamp(mag / Math.max(1, q), 0, 1);
+    // On a dB ruler with headroom above unity: the biggest peak Q allows
+    // (+20 dB) still fits under the ceiling, so a rising resonance grows the
+    // bump instead of flattening it against the top of the band. Only the
+    // stopband tail meets a hard edge — the floor, where a rolloff belongs.
+    return clamp((20 * Math.log10(Math.max(mag, 1e-6)) + FILTER_DB_FLOOR) / (FILTER_DB_FLOOR + FILTER_DB_CEIL), 0, 1);
   };
 }
+
+/** The default response's dB window: floor 36 below unity, ceiling 24 above. */
+export const FILTER_DB_FLOOR = 36;
+export const FILTER_DB_CEIL = 24;
 
 /** Enough points for a clean knee at two-slot width, and no more. */
 export const FILTER_SHAPE_SAMPLES = 96;
 
 /**
- * The response drawn as an SVG path filling a 100×100 box, y pointing up —
- * the 2-slot picture. Peaks are fitted so the tallest point touches the top
- * and the floor touches the bottom; the CSS band alone decides the air.
+ * The response drawn as an SVG path across a 100×100 box, y pointing up —
+ * the 2-slot picture. The sampler's 0..1 gain is taken at its word, never
+ * refitted: the window is the sampler's own calibration, so an open filter
+ * draws as a line near the top, a rolloff reaches the floor, and a rising
+ * resonance grows its peak into real headroom instead of being stretched
+ * (or clipped) to the band. Out-of-range samples clamp to the box edges.
  */
 export function filterResponsePath(
   response: FilterResponse,
   samples: number = FILTER_SHAPE_SAMPLES
 ): string | null {
   const pts: number[] = [];
-  let lo = Infinity;
-  let hi = -Infinity;
   for (let i = 0; i < samples; i++) {
     let y: number;
     try {
@@ -132,14 +140,10 @@ export function filterResponsePath(
       return null; /* a throwing response draws nothing */
     }
     if (!Number.isFinite(y)) return null;
-    pts.push(y);
-    if (y < lo) lo = y;
-    if (y > hi) hi = y;
+    pts.push(clamp(y, 0, 1));
   }
-  const span = hi - lo;
-  const fit = (y: number) => (span > 0 ? (y - lo) / span : 0.5);
   return pts
     .map((y, i) =>
-      `${i ? 'L' : 'M'} ${((i / (samples - 1)) * 100).toFixed(2)} ${((1 - fit(y)) * 100).toFixed(2)}`)
+      `${i ? 'L' : 'M'} ${((i / (samples - 1)) * 100).toFixed(2)} ${((1 - y) * 100).toFixed(2)}`)
     .join(' ');
 }

@@ -219,7 +219,12 @@ export function MoveSlotFilterBody({
     f ? f(v) : Math.abs(v) >= 100 ? Math.round(v).toString() : Number(v.toFixed(2)).toString();
   return (
     <>
-      {shape && <MoveSlotShape d={shape} className="tweakers-move-filter-shape" />}
+      {/* The drawing sits on a display — the same dark hole in the face the
+          waveform is cut into — so the response reads as a screen, not a
+          squiggle floating on the chip. */}
+      <div className="tweakers-move-filter-display">
+        {shape && <MoveSlotShape d={shape} className="tweakers-move-filter-shape" />}
+      </div>
       <div className="tweakers-move-filter-readout" data-side="cutoff">
         <span className="tweakers-move-dial-label">{ca.label}</span>
         <span className="tweakers-move-dial-value">{fmt(value.cutoff, ca.formatValue)}</span>
