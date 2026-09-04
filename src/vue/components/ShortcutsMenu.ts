@@ -1,4 +1,4 @@
-import { defineComponent, h, onMounted, onUnmounted, ref, Teleport, type PropType } from 'vue';
+import { defineComponent, h, onUnmounted, ref, Teleport, type PropType } from 'vue';
 import { TweakStore, ShortcutConfig } from '../../store/TweakStore';
 
 function formatShortcutKey(sc: ShortcutConfig): string {

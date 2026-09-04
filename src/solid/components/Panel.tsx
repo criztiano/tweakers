@@ -16,7 +16,7 @@ interface PanelProps {
 
 export function Panel(props: PanelProps) {
   const [copied, setCopied] = createSignal(false);
-  const [isPanelOpen, setIsPanelOpen] = createSignal(props.defaultOpen ?? true);
+  const [, setIsPanelOpen] = createSignal(props.defaultOpen ?? true);
   const [values, setValues] = createSignal<Record<string, TweakValue>>(
     TweakStore.getValues(props.panel.id)
   );
