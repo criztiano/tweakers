@@ -130,7 +130,11 @@ export function filterShapeResponse(
         break;
       default: mag = 1 / den;
     }
-    return clamp((20 * Math.log10(Math.max(mag, 1e-6)) + FILTER_DB_FLOOR) / (FILTER_DB_FLOOR + FILTER_DB_CEIL), 0, 1);
+    // Clamp the top only — a peak can't escape the ceiling. The bottom is
+    // left open so a rolloff keeps descending past the floor instead of
+    // bending flat against it (the drawing clips the overshoot), which is
+    // what turns the old kink at the floor back into a smooth fall.
+    return Math.min((20 * Math.log10(Math.max(mag, 1e-6)) + FILTER_DB_FLOOR) / (FILTER_DB_FLOOR + FILTER_DB_CEIL), 1);
   };
 }
 
@@ -150,9 +154,10 @@ export const FILTER_SHAPE_SAMPLES = 96;
  * The response drawn as an SVG path across a 100×100 box, y pointing up —
  * the 2-slot picture. The sampler's 0..1 gain is taken at its word, never
  * refitted: the window is the sampler's own calibration, so an open filter
- * draws as a line near the top, a rolloff reaches the floor, and a rising
- * resonance grows its peak into real headroom instead of being stretched
- * (or clipped) to the band. Out-of-range samples clamp to the box edges.
+ * draws as a line near the top, a rising resonance grows its peak into real
+ * headroom, and a rolloff keeps falling past the box's bottom (the display
+ * clips the overshoot) instead of bending flat into a kink at the floor.
+ * The top holds at the box edge so a peak never escapes upward.
  */
 export function filterResponsePath(
   response: FilterResponse,
@@ -167,7 +172,10 @@ export function filterResponsePath(
       return null; /* a throwing response draws nothing */
     }
     if (!Number.isFinite(y)) return null;
-    pts.push(clamp(y, 0, 1));
+    // Top clamped to the box; bottom allowed a box-height of overshoot, so
+    // the steepest rolloff runs cleanly off the bottom edge and is clipped
+    // by the display rather than flattened into a corner at y=100.
+    pts.push(Math.min(1, Math.max(-1, y)));
   }
   return pts
     .map((y, i) =>

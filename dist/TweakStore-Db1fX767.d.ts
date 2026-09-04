@@ -256,6 +256,8 @@ type ControlMeta = {
     resonanceAxis?: FilterAxisConfig;
     /** Filter control's drawn magnitude response — swapped in place by syncCurveConfigs. */
     response?: (cutoff01: number, resonance01: number) => (t: number) => number;
+    /** Filter control declared `enabled: false` — the slot draws bypassed (dimmed). */
+    filterEnabled?: boolean;
     /** Curve preview's host-supplied sampler — swapped in place by syncCurveConfigs. */
     sample?: (t: number) => number;
     /** Curve preview's fixed y-range; absent = auto-fit per draw. */

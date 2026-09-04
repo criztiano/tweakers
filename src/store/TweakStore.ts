@@ -133,6 +133,12 @@ export type FilterConfig = {
   resonance?: FilterAxisConfig;
   /** The drawn magnitude response, from each hand's 0..1 position. */
   response?: (cutoff01: number, resonance01: number) => (t: number) => number;
+  /**
+   * `false` draws the control bypassed — the curve still shows (so the slot
+   * reads as a filter, not an empty display) but greyed out, the way a
+   * disabled module dims. Defaults to on.
+   */
+  enabled?: boolean;
 };
 
 export type RangeConfig = {
@@ -561,6 +567,8 @@ export type ControlMeta = {
   resonanceAxis?: FilterAxisConfig;
   /** Filter control's drawn magnitude response — swapped in place by syncCurveConfigs. */
   response?: (cutoff01: number, resonance01: number) => (t: number) => number;
+  /** Filter control declared `enabled: false` — the slot draws bypassed (dimmed). */
+  filterEnabled?: boolean;
   /** Curve preview's host-supplied sampler — swapped in place by syncCurveConfigs. */
   sample?: (t: number) => number;
   /** Curve preview's fixed y-range; absent = auto-fit per draw. */
@@ -1661,7 +1669,7 @@ class TweakStoreClass {
       } else if (this.isFilterConfig(value)) {
         // No `shortcut`: a filter value is {cutoff,resonance}, which the
         // numeric-nudge shortcut path can't drive (the range precedent).
-        controls.push({ type: 'filter', path, label, cutoffAxis: value.cutoff, resonanceAxis: value.resonance, response: value.response });
+        controls.push({ type: 'filter', path, label, cutoffAxis: value.cutoff, resonanceAxis: value.resonance, response: value.response, filterEnabled: value.enabled });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: 'text', path, label, placeholder: value.placeholder });
       } else if (this.isRangeConfig(value)) {

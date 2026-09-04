@@ -627,7 +627,7 @@ function filterShapeResponse(type, cutoff01, resonance01) {
       default:
         mag = 1 / den;
     }
-    return clamp4((20 * Math.log10(Math.max(mag, 1e-6)) + FILTER_DB_FLOOR) / (FILTER_DB_FLOOR + FILTER_DB_CEIL), 0, 1);
+    return Math.min((20 * Math.log10(Math.max(mag, 1e-6)) + FILTER_DB_FLOOR) / (FILTER_DB_FLOOR + FILTER_DB_CEIL), 1);
   };
 }
 function defaultFilterResponse(cutoff01, resonance01) {
@@ -646,7 +646,7 @@ function filterResponsePath(response, samples = FILTER_SHAPE_SAMPLES) {
       return null;
     }
     if (!Number.isFinite(y)) return null;
-    pts.push(clamp4(y, 0, 1));
+    pts.push(Math.min(1, Math.max(-1, y)));
   }
   return pts.map((y, i) => `${i ? "L" : "M"} ${(i / (samples - 1) * 100).toFixed(2)} ${((1 - y) * 100).toFixed(2)}`).join(" ");
 }
@@ -1456,7 +1456,7 @@ var TweakStoreClass = class {
       } else if (this.isXYConfig(value)) {
         controls.push({ type: "xy", path, label, xAxis: value.x, yAxis: value.y, grid: value.grid, density: value.density, snap: value.snap, returnToCenter: value.returnToCenter, showValues: value.showValues });
       } else if (this.isFilterConfig(value)) {
-        controls.push({ type: "filter", path, label, cutoffAxis: value.cutoff, resonanceAxis: value.resonance, response: value.response });
+        controls.push({ type: "filter", path, label, cutoffAxis: value.cutoff, resonanceAxis: value.resonance, response: value.response, filterEnabled: value.enabled });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: "text", path, label, placeholder: value.placeholder });
       } else if (this.isRangeConfig(value)) {
@@ -11183,6 +11183,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 className: "tweakers-move-dial",
                 "data-kind": "filter",
                 "data-active": active || void 0,
+                "data-disabled": meta.filterEnabled === false || void 0,
                 onPointerDown: (e) => {
                   try {
                     e.currentTarget.setPointerCapture(e.pointerId);
