@@ -11142,6 +11142,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
           const origin01 = dialOrigin(meta);
           const originPct = origin01 > 0 ? origin01 * 100 : null;
           const pct = dialPercent(meta);
+          const atOrigin = originPct != null && Math.abs(normalizeDial(meta, values[meta.path]) - origin01) < 1e-6;
           const subbed = meta !== page.dials[i];
           const subValue = subbed || valueFirst ? chipValue(meta) : null;
           return /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)(
@@ -11180,14 +11181,15 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                   /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-dial-value", children: subValue ? `${subValue.num}${subValue.unit ? ` ${subValue.unit}` : ""}` : dialReading(meta) })
                 ] }),
                 /* @__PURE__ */ (0, import_jsx_runtime40.jsxs)("div", { className: "tweakers-move-dial-bar", children: [
-                  originPct != null && /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-dial-origin", style: { left: `${originPct}%` } }),
                   /* @__PURE__ */ (0, import_jsx_runtime40.jsx)(
                     "div",
                     {
                       className: "tweakers-move-dial-fill",
+                      "data-zero": atOrigin || void 0,
                       style: originPct != null ? { marginLeft: `${Math.min(pct, originPct)}%`, width: `${Math.abs(pct - originPct)}%` } : { width: `${pct}%` }
                     }
-                  )
+                  ),
+                  atOrigin && /* @__PURE__ */ (0, import_jsx_runtime40.jsx)("span", { className: "tweakers-move-dial-zero", style: { left: `${originPct}%` } })
                 ] })
               ]
             },
