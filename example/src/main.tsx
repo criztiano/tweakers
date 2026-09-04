@@ -21,6 +21,7 @@ TweakStore.registerPanel('move-xy', 'Move Demo', {
   band: { type: 'range', min: 0, max: 100, default: { min: 20, max: 80 } },
   bias: { type: 'slider', min: -1, max: 1, default: 0, bipolar: true },
   amount: [0.5, 0, 1],
+  drive: [0.3, 0, 1],
 });
 
 // Modulation demo: an LFO in the first step slot breathing the Move demo's
@@ -46,6 +47,69 @@ if (!ModulationStore.getSlot(1)) {
   });
   ModulationStore.assign('move-xy', 'bias', 1, 0.8);
 }
+
+// The third slot holds an envelope follower riding the demo beat below, so
+// Drive breathes with the audio's own shape — a hard hit and a tail, not a
+// clock. Hold its circle (or step 3) for the Gain / Rise / Fall / Delay /
+// Lo / Hi page.
+if (!ModulationStore.getSlot(2)) {
+  ModulationStore.createSlot(2, 'envelope');
+  // Lo/Hi keep it on the thud's own band, so the follower tracks the kick
+  // and lets the ticks through — the point of the two filter dials.
+  ModulationStore.updateSlotParams(2, { gain: 0, rise: 8, fall: 160, lo: 0, hi: 0.3 });
+  ModulationStore.assign('move-xy', 'drive', 2, 0.9);
+}
+
+/**
+ * The demo beat the follower listens to: a four-on-the-floor thud and an
+ * offbeat tick, routed into an AnalyserNode ONLY — never to the speakers.
+ * It exists to be measured, not heard, so the page stays silent while the
+ * follower has a real, audio-shaped signal to ride. A browser will not run
+ * an AudioContext before a gesture, so it starts on the first click.
+ */
+let beat: AudioContext | null = null;
+function startDemoBeat(): void {
+  // Autoplay policy can hand back a suspended context even on a gesture, and
+  // a suspended one never advances — so resume on every click until it runs.
+  if (beat) {
+    if (beat.state !== 'running') beat.resume().catch(() => {});
+    return;
+  }
+  const ctx = new AudioContext();
+  beat = ctx;
+  ctx.resume().catch(() => {});
+  const analyser = ctx.createAnalyser();
+  analyser.fftSize = 1024;
+  // The detector wants the audio as it is; the node's default smoothing
+  // (0.8) would hold the band up between hits and flatten the follower.
+  analyser.smoothingTimeConstant = 0.2;
+  // No analyser.connect(ctx.destination) — the graph is a dead end on purpose.
+  ModulationStore.registerAudioInput('demo beat', () => analyser);
+
+  // An eight-step bar with rests in it — the gaps are the point, since a
+  // wall of sound would hold the follower pinned at the top with nothing
+  // to see. 'k' thud, 't' tick, '.' silence.
+  const PATTERN = ['k', '.', '.', 't', '.', 'k', '.', '.'];
+  let step = 0;
+  window.setInterval(() => {
+    const hit = PATTERN[step++ % PATTERN.length];
+    if (hit === '.') return;
+    const t = ctx.currentTime;
+    const kick = hit === 'k';
+    const o = ctx.createOscillator();
+    o.frequency.setValueAtTime(kick ? 160 : 900, t);
+    if (kick) o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(kick ? 0.9 : 0.3, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0005, t + (kick ? 0.22 : 0.06));
+    o.connect(g);
+    g.connect(analyser);
+    o.start(t);
+    o.stop(t + 0.4);
+  }, 150);
+}
+window.addEventListener('pointerdown', startDemoBeat);
 
 // Function buttons: the Move's Copy puts every panel's current values on the
 // clipboard as JSON. Unattached buttons keep the surface built-ins.
