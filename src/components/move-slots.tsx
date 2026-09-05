@@ -137,7 +137,7 @@ export function MoveSlotDefaultBody({
 }
 
 /** How many option rows a slot-sized list screen holds — the count the CSS
- *  band is cut for, and the point past which the list starts to scroll. */
+ *  band is cut for, and the point past which the list starts to run. */
 export const MOVE_LIST_ROWS = 5;
 
 /** The option picker's three faces — list, glyph, or drawn shape — plus the
@@ -150,9 +150,11 @@ export const MOVE_LIST_ROWS = 5;
  *  and becomes the screen: a small head keeps the control's name, and the
  *  list has everything under it — the current option lit, the rest dim
  *  around it. Naming only the selection spends a whole slot saying one word;
- *  the list spends it saying where that word sits among the others. Past the
- *  five rows the slot holds, the list runs behind a still selection and the
- *  pagination cells come out to say how far along the run it is. It is a
+ *  the list spends it saying where that word sits among the others.
+ *
+ *  Past the five rows the slot holds, the list runs behind a still
+ *  selection — and a touch grows the screen up out of the slot to the whole
+ *  list, so the run can be seen while the knob is going through it. It is a
  *  readout, not a second control — the slot's own drag, and the column's
  *  knob, still step the options. */
 export function MoveSlotEnumBody({
@@ -165,32 +167,17 @@ export function MoveSlotEnumBody({
   shape: string | null;
   glyph: string | null;
 }) {
-  const picture = shape || glyph;
   const selected = options[activeIdx];
-  // A list that fits its slot says its own length: every option is on show,
-  // so the cells would only repeat it.
-  const scrolls = !picture && options.length > MOVE_LIST_ROWS;
-  return (
-    <>
-      {picture
-        ? <span className="tweakers-move-dial-tag">{label}</span>
-        : <span className="tweakers-move-dial-head">{label}</span>}
-      {shape && <MoveSlotShape d={shape} />}
-      {glyph && <MoveSlotGlyph name={glyph} className="tweakers-move-dial-icon" />}
-      {picture ? (
+
+  // A picture names one option at a time, so it keeps the pagination cells
+  // to say where that one sits. A list has the whole run on it already.
+  if (shape || glyph) {
+    return (
+      <>
+        <span className="tweakers-move-dial-tag">{label}</span>
+        {shape && <MoveSlotShape d={shape} />}
+        {glyph && <MoveSlotGlyph name={glyph} className="tweakers-move-dial-icon" />}
         <span className="tweakers-move-dial-option">{optionLabel}</span>
-      ) : (
-        <ListScreen
-          className={`tweakers-move-dial-list${scrolls ? ' tweakers-move-dial-list-long' : ''}`}
-          items={options.map((opt) => ({
-            value: enumOptionValue(opt as never),
-            label: enumOptionLabel(opt as never),
-          }))}
-          value={selected ? enumOptionValue(selected as never) : undefined}
-          follow="center"
-        />
-      )}
-      {(picture || scrolls) && (
         <div className="tweakers-move-dial-bar">
           <div className="tweakers-move-dial-enum">
             {options.map((opt, j) => (
@@ -202,8 +189,30 @@ export function MoveSlotEnumBody({
             ))}
           </div>
         </div>
-      )}
-    </>
+      </>
+    );
+  }
+
+  return (
+    <div
+      className="tweakers-move-dial-screen"
+      // More options than the slot holds: the screen grows to the whole list
+      // while the dial is touched. The count is what the CSS measures that
+      // grown height from, so the row metrics stay in the stylesheet.
+      data-grow={options.length > MOVE_LIST_ROWS || undefined}
+      style={{ '--move-list-count': options.length } as CSSProperties}
+    >
+      <span className="tweakers-move-dial-head">{label}</span>
+      <ListScreen
+        className="tweakers-move-dial-list"
+        items={options.map((opt) => ({
+          value: enumOptionValue(opt as never),
+          label: enumOptionLabel(opt as never),
+        }))}
+        value={selected ? enumOptionValue(selected as never) : undefined}
+        follow="center"
+      />
+    </div>
   );
 }
 

@@ -5894,23 +5894,47 @@ input.tweakers-list-item-title:focus {
    the whole slot turns into screen: the chip is left as a head at the top
    holding the control's name, and the list takes every pixel under it.
    Nothing is inset — on this instrument a display is a hole cut in the face,
-   and here the hole is the face. */
-.tweakers-move-dial:has(.tweakers-move-dial-list) {
+   and here the hole is the face.
+
+   The band is cut for exactly five rows: pad (3) + 5 rows (20) + 4 gaps (4)
+   + pad (3) = the 122px left below an 18px head. That is what makes "more
+   than five" the moment the list starts to run. */
+.tweakers-move-dial-screen {
+  --move-list-row: 20px;
+  --move-list-gap: 4px;
+  --move-list-pad: 3px;
+  /* The whole run, laid out — what a touch grows the screen to. */
+  --move-screen-full: calc(
+    var(--move-head-h) + 2 * var(--move-list-pad)
+    + var(--move-list-count, 1) * var(--move-list-row)
+    + (var(--move-list-count, 1) - 1) * var(--move-list-gap)
+  );
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
   background: var(--move-display, #1e1e1e);
+  border-radius: var(--move-radius);
+  overflow: hidden;
+}
+
+/* Touched, a list too long for its slot grows up out of it: the whole run
+   on screen while the knob is going through it, half the window at most,
+   and scrolling past that. It is over the page at that point, so it takes
+   the shadow of something lifted off the face. */
+.tweakers-move-dial[data-active] .tweakers-move-dial-screen[data-grow] {
+  top: auto;
+  height: min(var(--move-screen-full), 50vh);
+  z-index: 6;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
 /* The head: the last of the chip, the width of the slot, rounded to its top
    corners. The name is a caption here, not the headline the list is. */
 .tweakers-move-dial-head {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 1;
-  height: var(--move-head-h);
+  flex: 0 0 var(--move-head-h);
   padding: 0 8px;
   background: var(--move-chip);
-  border-radius: var(--move-radius) var(--move-radius) 0 0;
   color: var(--move-text);
   font-family: var(--move-font-label);
   font-size: 11px;
@@ -5921,57 +5945,33 @@ input.tweakers-list-item-title:focus {
   text-overflow: ellipsis;
 }
 
-/* A wired slot's ring moves into the head, where it has ground of its own —
-   over the screen it would land on a row. */
-.tweakers-move-dial:has(.tweakers-move-dial-list) .tweakers-mod-ring.tweakers-move-dial-mod {
-  top: 2px;
-  right: 4px;
-}
-
-/* The list fills the slot under the head. The band is cut for exactly five
-   rows — pad (3) + 5 rows (20) + 4 gaps (4) + pad (3) = the 122px left below
-   an 18px head — which is what makes "more than five" the moment the list
-   starts to move. Rows and ink are the standalone component's, one size down.
-
-   It is a readout, not a second control — the slot's drag and the column's
-   knob still step the options — so the rows take no pointer of their own. */
+/* Rows and ink are the standalone component's, one size down. It is a
+   readout, not a second control — the slot's drag and the column's knob
+   still step the options — so the rows take no pointer of their own. */
 .tweakers-list-screen.tweakers-move-dial-list {
-  --move-list-row: 20px;
-  --move-list-gap: 4px;
-  --move-list-pad: 3px;
-  position: absolute;
-  top: var(--move-head-h);
-  left: 0;
-  right: 0;
-  bottom: 0;
+  /* The component declares its own row metrics on this very element, so
+     they have to be handed back to the screen's — which is the one place
+     they are stated, since the grown height is measured from them. */
+  --move-list-row: inherit;
+  --move-list-gap: inherit;
+  --move-list-pad: inherit;
+  --move-list-fade-top: 0px;
+  --move-list-fade-bottom: 0px;
+  flex: 1 1 auto;
+  min-height: 0;
   width: auto;
   max-height: none;
   padding: var(--move-list-pad) 2px;
-  border-radius: 0 0 var(--move-radius) var(--move-radius);
+  border-radius: 0;
   background: none;
-  /* Centred while the options fit the slot, from the top once they overflow
-     — a plain `center` would strand the first rows out of reach. */
+  /* Centred while the options fit the screen, from the top once they
+     overflow — a plain `center` would strand the first rows out of reach. */
   justify-content: center;
   justify-content: safe center;
   pointer-events: none;
-}
-
-.tweakers-move-dial-list .tweakers-list-screen-row {
-  font-size: 14px;
-  line-height: 16px;
-}
-
-/* Long enough to run: the rows fade out instead of being cut. The bottom
-   fade is always on — it is what carries a row away under the pagination
-   cells — while the top one waits until there is something up there to have
-   gone behind the head. */
-.tweakers-list-screen.tweakers-move-dial-list-long {
-  --move-list-fade-top: 0px;
-  --move-list-fade-bottom: 22px;
-  /* The list ends one fade above the floor, so the last option — which is
-     where the selection parks at the end of a run — comes to rest clear of
-     the cells instead of dissolving under them. */
-  padding-bottom: var(--move-list-fade-bottom);
+  /* Rows dissolve at an edge that is hiding something, and only there: at
+     either end of the run the last row must read as the end, not as a row
+     cut in half. Both stops collapse to zero when nothing is behind them. */
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
@@ -5988,14 +5988,17 @@ input.tweakers-list-item-title:focus {
   );
 }
 
-.tweakers-list-screen.tweakers-move-dial-list-long[data-over-top] {
+.tweakers-move-dial-list[data-over-top] {
   --move-list-fade-top: 14px;
 }
 
-/* Over the screen the cells stand on their own — the track would read as a
-   box sat on the display. */
-.tweakers-move-dial-list ~ .tweakers-move-dial-bar {
-  background: none;
+.tweakers-move-dial-list[data-over-bottom] {
+  --move-list-fade-bottom: 14px;
+}
+
+.tweakers-move-dial-list .tweakers-list-screen-row {
+  font-size: 14px;
+  line-height: 16px;
 }
 
 /* XY slot — the pad fills the slot behind the label: crosshair lines meet
@@ -6322,8 +6325,9 @@ input.tweakers-list-item-title:focus {
     line-height: 14px;
   }
   /* The same five rows, cut for a 100px slot: 3 + 5×14 + 4×2 + 3 = the 84px
-     left under a 16px head. */
-  .tweakers-list-screen.tweakers-move-dial-list {
+     left under a 16px head. Set on the screen, which is what measures the
+     grown height from them; the list inherits. */
+  .tweakers-move-dial-screen {
     --move-list-row: 14px;
     --move-list-gap: 2px;
   }

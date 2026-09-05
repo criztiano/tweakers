@@ -885,6 +885,8 @@ An item may also carry a `tag` — a short note pinned to the row's right end (a
 />
 ```
 
+The list marks its own scroll edges: `data-over-top` and `data-over-bottom` land on the root whenever rows are hidden that way, so a host can soften exactly the edge that is hiding something (the Move's option slot fades its rows there). They follow both the selection and the element's size, so a screen that grows under the list keeps them honest.
+
 Mark an item `muted` when the row is information rather than a choice — a job still queued, a tag that produced nothing. It walks and selects like any row, so nothing disappears from the list, but it never comes up to full brightness; keep the actions beside the list disabled while such a row is the one reached.
 
 | Prop | Type | Default |
@@ -974,7 +976,7 @@ A `select` with options becomes a stepped enum dial. Dragging the slot — or tu
 
 With no picture to stand for the option (see `icon` and `preview` below), the slot shows the choice itself and turns into screen: the [list screen](#listscreen) takes the whole slot, with the control's name on a small head across the top and five option rows under it — the current one lit, the rest dim around it. The list is a readout, not a second control: the slot's own drag and the column's knob are still what step the options.
 
-Past those five rows the list runs behind a still selection: the selected row holds the middle of the screen and the options move past it, and only the two ends of the list push it off centre. A running list also softens: the rows dissolve at the top as they go under the head and at the bottom as they pass beneath the pagination cells — one cell per option, which come out only when the list is longer than the slot, since a list you can see all of already says how long it is. A picture face keeps its cells always, having only ever named one option at a time.
+Past those five rows the list runs behind a still selection: the selected row holds the middle of the screen and the options move past it, and only the two ends of the list push it off centre. **Touch the dial and the screen grows up out of the slot to the whole run**, so the choice can be seen while it is being made — up to half the window, scrolling past that — and drops back when the knob is let go. Rows dissolve at an edge that is hiding something and only there, so the first and last of a list read as its ends rather than as rows cut in half. A list carries no pagination cells: the whole run is on it already. A picture face keeps its cells, having only ever named one option at a time.
 
 An option can name an `icon` from the bundled [lucide](https://lucide.dev) subset (`LUCIDE_ICONS`). The glyph takes the middle of the slot, in place of the name — at arm's length you read a picture, not a word.
 

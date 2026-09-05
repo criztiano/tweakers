@@ -2077,9 +2077,11 @@ declare function MoveSlotDefaultBody({ label, value, pct, originPct, atOrigin, }
  *  and becomes the screen: a small head keeps the control's name, and the
  *  list has everything under it — the current option lit, the rest dim
  *  around it. Naming only the selection spends a whole slot saying one word;
- *  the list spends it saying where that word sits among the others. Past the
- *  five rows the slot holds, the list runs behind a still selection and the
- *  pagination cells come out to say how far along the run it is. It is a
+ *  the list spends it saying where that word sits among the others.
+ *
+ *  Past the five rows the slot holds, the list runs behind a still
+ *  selection — and a touch grows the screen up out of the slot to the whole
+ *  list, so the run can be seen while the knob is going through it. It is a
  *  readout, not a second control — the slot's own drag, and the column's
  *  knob, still step the options. */
 declare function MoveSlotEnumBody({ label, optionLabel, options, activeIdx, shape, glyph, }: {

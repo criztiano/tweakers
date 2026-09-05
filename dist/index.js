@@ -10705,8 +10705,18 @@ function ListScreen({
   const rootRef = useRef29(null);
   useEffect22(() => {
     const root = rootRef.current;
-    root?.querySelector("[data-selected]")?.scrollIntoView?.({ block: follow });
-    root?.toggleAttribute?.("data-over-top", root.scrollTop > 1);
+    if (!root) return;
+    const sync = () => {
+      root.querySelector("[data-selected]")?.scrollIntoView?.({ block: follow });
+      const end = root.scrollHeight - root.clientHeight;
+      root.toggleAttribute?.("data-over-top", root.scrollTop > 1);
+      root.toggleAttribute?.("data-over-bottom", root.scrollTop < end - 1);
+    };
+    sync();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(sync);
+    observer.observe(root);
+    return () => observer.disconnect();
   }, [value, follow, items.length]);
   const rootClassName = ["tweakers-list-screen", className].filter(Boolean).join(" ");
   return /* @__PURE__ */ jsx42(
@@ -10815,34 +10825,46 @@ function MoveSlotEnumBody({
   shape,
   glyph
 }) {
-  const picture = shape || glyph;
   const selected = options[activeIdx];
-  const scrolls = !picture && options.length > MOVE_LIST_ROWS;
-  return /* @__PURE__ */ jsxs38(Fragment10, { children: [
-    picture ? /* @__PURE__ */ jsx43("span", { className: "tweakers-move-dial-tag", children: label }) : /* @__PURE__ */ jsx43("span", { className: "tweakers-move-dial-head", children: label }),
-    shape && /* @__PURE__ */ jsx43(MoveSlotShape, { d: shape }),
-    glyph && /* @__PURE__ */ jsx43(MoveSlotGlyph, { name: glyph, className: "tweakers-move-dial-icon" }),
-    picture ? /* @__PURE__ */ jsx43("span", { className: "tweakers-move-dial-option", children: optionLabel }) : /* @__PURE__ */ jsx43(
-      ListScreen,
-      {
-        className: `tweakers-move-dial-list${scrolls ? " tweakers-move-dial-list-long" : ""}`,
-        items: options.map((opt) => ({
-          value: enumOptionValue(opt),
-          label: enumOptionLabel(opt)
-        })),
-        value: selected ? enumOptionValue(selected) : void 0,
-        follow: "center"
-      }
-    ),
-    (picture || scrolls) && /* @__PURE__ */ jsx43("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ jsx43("div", { className: "tweakers-move-dial-enum", children: options.map((opt, j) => /* @__PURE__ */ jsx43(
-      "span",
-      {
-        className: "tweakers-move-dial-enum-cell",
-        "data-on": j === activeIdx || void 0
-      },
-      enumOptionValue(opt)
-    )) }) })
-  ] });
+  if (shape || glyph) {
+    return /* @__PURE__ */ jsxs38(Fragment10, { children: [
+      /* @__PURE__ */ jsx43("span", { className: "tweakers-move-dial-tag", children: label }),
+      shape && /* @__PURE__ */ jsx43(MoveSlotShape, { d: shape }),
+      glyph && /* @__PURE__ */ jsx43(MoveSlotGlyph, { name: glyph, className: "tweakers-move-dial-icon" }),
+      /* @__PURE__ */ jsx43("span", { className: "tweakers-move-dial-option", children: optionLabel }),
+      /* @__PURE__ */ jsx43("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ jsx43("div", { className: "tweakers-move-dial-enum", children: options.map((opt, j) => /* @__PURE__ */ jsx43(
+        "span",
+        {
+          className: "tweakers-move-dial-enum-cell",
+          "data-on": j === activeIdx || void 0
+        },
+        enumOptionValue(opt)
+      )) }) })
+    ] });
+  }
+  return /* @__PURE__ */ jsxs38(
+    "div",
+    {
+      className: "tweakers-move-dial-screen",
+      "data-grow": options.length > MOVE_LIST_ROWS || void 0,
+      style: { "--move-list-count": options.length },
+      children: [
+        /* @__PURE__ */ jsx43("span", { className: "tweakers-move-dial-head", children: label }),
+        /* @__PURE__ */ jsx43(
+          ListScreen,
+          {
+            className: "tweakers-move-dial-list",
+            items: options.map((opt) => ({
+              value: enumOptionValue(opt),
+              label: enumOptionLabel(opt)
+            })),
+            value: selected ? enumOptionValue(selected) : void 0,
+            follow: "center"
+          }
+        )
+      ]
+    }
+  );
 }
 function MoveSlotXYBody({ label, value, position, gridN, shape = null }) {
   return /* @__PURE__ */ jsxs38(Fragment10, { children: [
