@@ -9,7 +9,7 @@ import { isDevDefault } from '../env';
 import type { TweakTheme } from './TweakRoot';
 import { buildMovePages, buildModMovePage, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, isEnumDial, isSpanContinuation, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_DIALS, MOVE_PADS } from '../move-layout';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody } from './move-slots';
+import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody } from './move-slots';
 import { MoveSurfaceStore, type MovePadCell } from '../move-surface-store';
 import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValue, applyDetentAxis, type XYValue } from '../xy-pad-core';
 import { nearestHandle, type RangeValue } from '../range-slider-core';
@@ -702,43 +702,13 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     >
                       {valueFirst && <span className="tweakers-move-dial-sub">{meta.label}</span>}
                       <ModDot path={meta.path} />
-                      <div className="tweakers-move-xy">
-                        {preview ? (
-                          <svg
-                            className="tweakers-move-xy-curve"
-                            viewBox="0 0 100 100"
-                            preserveAspectRatio="none"
-                            aria-hidden="true"
-                          >
-                            <path d={previewPathData(preview.points)} />
-                          </svg>
-                        ) : (
-                          <>
-                            {gridN > 0 && (
-                              <span
-                                className="tweakers-move-xy-grid"
-                                style={{
-                                  '--tweak-xy-grid-step-x': `${100 / gridN}%`,
-                                  '--tweak-xy-grid-step-y': `${100 / gridN}%`,
-                                } as React.CSSProperties}
-                              />
-                            )}
-                            <span className="tweakers-move-xy-line" data-axis="x" style={{ top: `${pos.y * 100}%` }} />
-                            <span className="tweakers-move-xy-line" data-axis="y" style={{ left: `${pos.x * 100}%` }} />
-                            <span className="tweakers-move-xy-dot" style={{ left: `${pos.x * 100}%`, top: `${pos.y * 100}%` }} />
-                          </>
-                        )}
-                      </div>
-                      <div className="tweakers-move-dial-readout">
-                        <span className="tweakers-move-dial-label" data-long={meta.label.length > 9 || undefined}>
-                          {meta.label}
-                        </span>
-                        <span className="tweakers-move-dial-value">
-                          {preview
-                            ? preview.label
-                            : `${Math.round(pos.x * 100)}·${Math.round((1 - pos.y) * 100)}`}
-                        </span>
-                      </div>
+                      <MoveSlotXYBody
+                        label={meta.label}
+                        value={preview ? preview.label : `${Math.round(pos.x * 100)}·${Math.round((1 - pos.y) * 100)}`}
+                        position={pos}
+                        gridN={gridN}
+                        shape={preview ? previewPathData(preview.points) : null}
+                      />
                     </div>
                   );
                 }
