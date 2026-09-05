@@ -1,8 +1,9 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { ControlMeta } from '../store/TweakStore';
 import { LUCIDE_ICONS } from '../icons';
-import { enumOptionValue } from '../move-layout';
+import { enumOptionLabel, enumOptionValue } from '../move-layout';
 import { resolveFilterAxis, type FilterValue } from '../filter-core';
+import { ListScreen } from './ListScreen';
 
 /**
  * The big-slot library — the dictionary of what a Move dial slot can be.
@@ -24,8 +25,8 @@ import { resolveFilterAxis, type FilterValue } from '../filter-core';
  *   at arm's length you read a picture, not a word.
  * - `curve`   — an option picker whose current option draws its shape (the
  *   select's `preview` sampler) — the curve-selection slot.
- * - `enum`    — a plain stepped option picker: option name centred, one
- *   pagination cell per option.
+ * - `enum`    — a plain stepped option picker: every option on the Move's
+ *   own list screen, cut into the slot, plus one pagination cell each.
  * - `xy`      — a 2D pad filling the slot; on the hardware the column's
  *   knob turns X and the volume knob turns Y while touched.
  * - `range`   — two handles on one bar; column knob = low end, volume
@@ -135,9 +136,25 @@ export function MoveSlotDefaultBody({
   );
 }
 
-/** The option picker's three faces — name, glyph, or drawn shape — plus the
- *  pagination cells. A slot with a picture reads top down: what the knob is
- *  on the tag, the picture between, what it is set to underneath. */
+/** How many option rows a slot-sized list screen holds — the count the CSS
+ *  band is cut for, and the point past which the list starts to scroll. */
+export const MOVE_LIST_ROWS = 5;
+
+/** The option picker's three faces — list, glyph, or drawn shape — plus the
+ *  pagination cells.
+ *
+ *  A face with a picture reads top down: what the knob is on the tag, the
+ *  picture between, what it is set to underneath.
+ *
+ *  With no picture to stand for the option, the slot shows the choice itself
+ *  and becomes the screen: a small head keeps the control's name, and the
+ *  list has everything under it — the current option lit, the rest dim
+ *  around it. Naming only the selection spends a whole slot saying one word;
+ *  the list spends it saying where that word sits among the others. Past the
+ *  five rows the slot holds, the list runs behind a still selection and the
+ *  pagination cells come out to say how far along the run it is. It is a
+ *  readout, not a second control — the slot's own drag, and the column's
+ *  knob, still step the options. */
 export function MoveSlotEnumBody({
   label, optionLabel, options, activeIdx, shape, glyph,
 }: {
@@ -148,27 +165,44 @@ export function MoveSlotEnumBody({
   shape: string | null;
   glyph: string | null;
 }) {
+  const picture = shape || glyph;
+  const selected = options[activeIdx];
+  // A list that fits its slot says its own length: every option is on show,
+  // so the cells would only repeat it.
+  const scrolls = !picture && options.length > MOVE_LIST_ROWS;
   return (
     <>
-      {(shape || glyph) && <span className="tweakers-move-dial-tag">{label}</span>}
+      {picture
+        ? <span className="tweakers-move-dial-tag">{label}</span>
+        : <span className="tweakers-move-dial-head">{label}</span>}
       {shape && <MoveSlotShape d={shape} />}
       {glyph && <MoveSlotGlyph name={glyph} className="tweakers-move-dial-icon" />}
-      {shape || glyph ? (
+      {picture ? (
         <span className="tweakers-move-dial-option">{optionLabel}</span>
       ) : (
-        <MoveSlotReadout label={label} value={optionLabel} />
+        <ListScreen
+          className={`tweakers-move-dial-list${scrolls ? ' tweakers-move-dial-list-long' : ''}`}
+          items={options.map((opt) => ({
+            value: enumOptionValue(opt as never),
+            label: enumOptionLabel(opt as never),
+          }))}
+          value={selected ? enumOptionValue(selected as never) : undefined}
+          follow="center"
+        />
       )}
-      <div className="tweakers-move-dial-bar">
-        <div className="tweakers-move-dial-enum">
-          {options.map((opt, j) => (
-            <span
-              key={enumOptionValue(opt as never)}
-              className="tweakers-move-dial-enum-cell"
-              data-on={j === activeIdx || undefined}
-            />
-          ))}
+      {(picture || scrolls) && (
+        <div className="tweakers-move-dial-bar">
+          <div className="tweakers-move-dial-enum">
+            {options.map((opt, j) => (
+              <span
+                key={enumOptionValue(opt as never)}
+                className="tweakers-move-dial-enum-cell"
+                data-on={j === activeIdx || undefined}
+              />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </>
   );
 }
@@ -282,7 +316,7 @@ export const MOVE_SLOT_LIBRARY = {
   value: { description: 'value-first: the value is the headline, the name a tag on top', component: MoveSlotDefaultBody },
   icon: { description: 'option picker showing the current option as a glyph', component: MoveSlotEnumBody },
   curve: { description: 'option picker drawing the current option’s shape — curve selection', component: MoveSlotEnumBody },
-  enum: { description: 'stepped option picker, one pagination cell per option', component: MoveSlotEnumBody },
+  enum: { description: 'stepped option picker showing every option on a list screen', component: MoveSlotEnumBody },
   xy: { description: 'two axes in one gesture field, or a live shape preview', component: MoveSlotXYBody },
   range: { description: 'two handles on one bar; volume knob is the second hand', component: MoveSlotRangeBody },
   filter: { description: '2 slots: cutoff + resonance as one response picture', component: MoveSlotFilterBody },
