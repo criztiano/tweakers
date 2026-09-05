@@ -29,7 +29,7 @@ import { ListScreen } from './ListScreen';
  * - `curve`   — an option picker whose current option draws its shape (the
  *   select's `preview` sampler) — the curve-selection slot.
  * - `enum`    — a plain stepped option picker: every option on the Move's
- *   own list screen, cut into the slot, plus one pagination cell each.
+ *   own list screen, which is the whole slot; a touch grows it to the run.
  * - `xy`      — a 2D pad filling the slot; on the hardware the column's
  *   knob turns X and the volume knob turns Y while touched.
  * - `range`   — two handles on one bar; column knob = low end, volume
@@ -152,22 +152,25 @@ export function MoveSlotDefaultBody({
 }
 
 /** How many option rows a slot-sized list screen holds — the count the CSS
- *  band is cut for, and the point past which the list starts to scroll. */
+ *  band is cut for, and the point past which the list starts to run. */
 export const MOVE_LIST_ROWS = 5;
 
-/** The option picker's three faces — list, glyph, or drawn shape — plus the
- *  pagination cells.
+/** The option picker's faces — a list, or a picture: a glyph, a drawn shape,
+ *  or a playback drawing.
  *
  *  A face with a picture reads top down: what the knob is on the tag, the
- *  picture between, what it is set to underneath.
+ *  picture between, what it is set to underneath, and the pagination cells
+ *  under that to say where the named option sits in the run.
  *
  *  With no picture to stand for the option, the slot shows the choice itself
  *  and becomes the screen: a small head keeps the control's name, and the
  *  list has everything under it — the current option lit, the rest dim
  *  around it. Naming only the selection spends a whole slot saying one word;
- *  the list spends it saying where that word sits among the others. Past the
- *  five rows the slot holds, the list runs behind a still selection and the
- *  pagination cells come out to say how far along the run it is. It is a
+ *  the list spends it saying where that word sits among the others.
+ *
+ *  Past the five rows the slot holds, the list runs behind a still
+ *  selection — and a touch grows the screen up out of the slot to the whole
+ *  list, so the run can be seen while the knob is going through it. It is a
  *  readout, not a second control — the slot's own drag, and the column's
  *  knob, still step the options. */
 export function MoveSlotEnumBody({
@@ -181,33 +184,18 @@ export function MoveSlotEnumBody({
   glyph: string | null;
   playback?: MovePlaybackMode | null;
 }) {
-  const picture = playback || shape || glyph;
   const selected = options[activeIdx];
-  // A list that fits its slot says its own length: every option is on show,
-  // so the cells would only repeat it.
-  const scrolls = !picture && options.length > MOVE_LIST_ROWS;
-  return (
-    <>
-      {picture
-        ? <span className="tweakers-move-dial-tag">{label}</span>
-        : <span className="tweakers-move-dial-head">{label}</span>}
-      {playback && <MoveSlotPlaybackDrawing mode={playback} />}
-      {!playback && shape && <MoveSlotShape d={shape} />}
-      {!playback && glyph && <MoveSlotGlyph name={glyph} className="tweakers-move-dial-icon" />}
-      {picture ? (
+
+  // A picture names one option at a time, so it keeps the pagination cells
+  // to say where that one sits. A list has the whole run on it already.
+  if (playback || shape || glyph) {
+    return (
+      <>
+        <span className="tweakers-move-dial-tag">{label}</span>
+        {playback && <MoveSlotPlaybackDrawing mode={playback} />}
+        {!playback && shape && <MoveSlotShape d={shape} />}
+        {!playback && glyph && <MoveSlotGlyph name={glyph} className="tweakers-move-dial-icon" />}
         <span className="tweakers-move-dial-option">{optionLabel}</span>
-      ) : (
-        <ListScreen
-          className={`tweakers-move-dial-list${scrolls ? ' tweakers-move-dial-list-long' : ''}`}
-          items={options.map((opt) => ({
-            value: enumOptionValue(opt as never),
-            label: enumOptionLabel(opt as never),
-          }))}
-          value={selected ? enumOptionValue(selected as never) : undefined}
-          follow="center"
-        />
-      )}
-      {(picture || scrolls) && (
         <div className="tweakers-move-dial-bar">
           <div className="tweakers-move-dial-enum">
             {options.map((opt, j) => (
@@ -219,8 +207,30 @@ export function MoveSlotEnumBody({
             ))}
           </div>
         </div>
-      )}
-    </>
+      </>
+    );
+  }
+
+  return (
+    <div
+      className="tweakers-move-dial-screen"
+      // More options than the slot holds: the screen grows to the whole list
+      // while the dial is touched. The count is what the CSS measures that
+      // grown height from, so the row metrics stay in the stylesheet.
+      data-grow={options.length > MOVE_LIST_ROWS || undefined}
+      style={{ '--move-list-count': options.length } as CSSProperties}
+    >
+      <span className="tweakers-move-dial-head">{label}</span>
+      <ListScreen
+        className="tweakers-move-dial-list"
+        items={options.map((opt) => ({
+          value: enumOptionValue(opt as never),
+          label: enumOptionLabel(opt as never),
+        }))}
+        value={selected ? enumOptionValue(selected as never) : undefined}
+        follow="center"
+      />
+    </div>
   );
 }
 

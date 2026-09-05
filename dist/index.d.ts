@@ -2088,7 +2088,7 @@ declare function MoveSlotPlaybackDrawing({ mode }: {
  * - `curve`   — an option picker whose current option draws its shape (the
  *   select's `preview` sampler) — the curve-selection slot.
  * - `enum`    — a plain stepped option picker: every option on the Move's
- *   own list screen, cut into the slot, plus one pagination cell each.
+ *   own list screen, which is the whole slot; a touch grows it to the run.
  * - `xy`      — a 2D pad filling the slot; on the hardware the column's
  *   knob turns X and the volume knob turns Y while touched.
  * - `range`   — two handles on one bar; column knob = low end, volume
@@ -2137,19 +2137,22 @@ declare function MoveSlotDefaultBody({ label, value, pct, originPct, atOrigin, }
     /** Parked on the origin exactly — the dial's zero. */
     atOrigin?: boolean;
 }): react_jsx_runtime.JSX.Element;
-/** The option picker's three faces — list, glyph, or drawn shape — plus the
- *  pagination cells.
+/** The option picker's faces — a list, or a picture: a glyph, a drawn shape,
+ *  or a playback drawing.
  *
  *  A face with a picture reads top down: what the knob is on the tag, the
- *  picture between, what it is set to underneath.
+ *  picture between, what it is set to underneath, and the pagination cells
+ *  under that to say where the named option sits in the run.
  *
  *  With no picture to stand for the option, the slot shows the choice itself
  *  and becomes the screen: a small head keeps the control's name, and the
  *  list has everything under it — the current option lit, the rest dim
  *  around it. Naming only the selection spends a whole slot saying one word;
- *  the list spends it saying where that word sits among the others. Past the
- *  five rows the slot holds, the list runs behind a still selection and the
- *  pagination cells come out to say how far along the run it is. It is a
+ *  the list spends it saying where that word sits among the others.
+ *
+ *  Past the five rows the slot holds, the list runs behind a still
+ *  selection — and a touch grows the screen up out of the slot to the whole
+ *  list, so the run can be seen while the knob is going through it. It is a
  *  readout, not a second control — the slot's own drag, and the column's
  *  knob, still step the options. */
 declare function MoveSlotEnumBody({ label, optionLabel, options, activeIdx, shape, glyph, playback, }: {
