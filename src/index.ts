@@ -167,13 +167,14 @@ export {
   setDriverSteepness,
   setDriverOvershoot,
   setDriverAnticipate,
+  springify,
   buildSamplers,
   readComposition,
   triggerLevels,
   triggersCrossed,
   DEFAULT_TRIGGER_STEPS,
 } from './curve-composer-core';
-export type { Sampler, CompositionSamplers, CompositionRead } from './curve-composer-core';
+export type { Sampler, SpringifyOptions, CompositionSamplers, CompositionRead } from './curve-composer-core';
 export {
   clamp,
   valueToPercent,

@@ -242,6 +242,7 @@ __export(index_exports, {
   shiftSpan: () => shiftSpan,
   snapToStep: () => snapToStep,
   splitSegment: () => splitSegment,
+  springify: () => springify,
   stepPosition: () => stepPosition,
   triggerLevels: () => triggerLevels,
   triggersCrossed: () => triggersCrossed,
@@ -3405,6 +3406,32 @@ function bezierY(ease, x) {
   return bezierAxis(ease[1], ease[3], s);
 }
 var SPRING_SAMPLES = 72;
+function sampleSpringTargets(sample, steps) {
+  const targets = [];
+  let target = sample(0);
+  if (!Number.isFinite(target)) target = 0;
+  targets.push(target);
+  for (let i = 1; i <= steps; i++) {
+    const nextTarget = sample(i / steps);
+    if (Number.isFinite(nextTarget)) target = nextTarget;
+    targets.push(target);
+  }
+  return targets;
+}
+function integrateSpringTrace(targets, stiffness, damping, mass, initial, collect = true) {
+  const points = collect ? [initial.position] : [];
+  const steps = Math.max(1, targets.length - 1);
+  const dt = 1 / steps;
+  let { position, velocity } = initial;
+  for (let i = 1; i <= steps; i++) {
+    const target = targets[i] ?? targets[targets.length - 1] ?? 0;
+    const acceleration = (-stiffness * (position - target) - damping * velocity) / mass;
+    velocity += acceleration * dt;
+    position += velocity * dt;
+    if (collect) points.push(position);
+  }
+  return { points, state: { position, velocity } };
+}
 function springPoints(curvature, steepness = 0) {
   const visualDuration = 1;
   const bounce = clamp013((clampBipolar(curvature) + 1) / 2) * 0.6;
@@ -3414,24 +3441,70 @@ function springPoints(curvature, steepness = 0) {
   stiffness *= Math.max(0.2, 1 + clampBipolar(steepness) * 0.9);
   const dampingRatio = 1 - bounce;
   const damping = 2 * dampingRatio * Math.sqrt(stiffness * mass);
-  const raw = [];
-  const steps = SPRING_SAMPLES;
-  const dt = visualDuration / steps;
-  let position = 0;
-  let velocity = 0;
-  for (let i = 0; i <= steps; i++) {
-    raw.push(position);
-    const acceleration = (-stiffness * (position - 1) - damping * velocity) / mass;
-    velocity += acceleration * dt;
-    position += velocity * dt;
-  }
-  return raw;
+  return integrateSpringTrace(new Array(SPRING_SAMPLES + 1).fill(1), stiffness, damping, mass, {
+    position: 0,
+    velocity: 0
+  }).points;
 }
 function interp(points, t) {
   const x = clamp013(t) * (points.length - 1);
   const i = Math.floor(x);
   if (i >= points.length - 1) return points[points.length - 1];
   return lerp(points[i], points[i + 1], x - i);
+}
+var SPRINGIFY_DEFAULTS = { stiffness: 100, damping: 10, mass: 1 };
+var SPRINGIFY_SAMPLES = 1200;
+function finiteInRange(value, fallback, min, max) {
+  return value !== void 0 && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
+}
+function periodicSpringState(targets, stiffness, damping, mass) {
+  const advance = (initial) => integrateSpringTrace(targets, stiffness, damping, mass, initial, false).state;
+  const offset = advance({ position: 0, velocity: 0 });
+  const fromPosition = advance({ position: 1, velocity: 0 });
+  const fromVelocity = advance({ position: 0, velocity: 1 });
+  const a00 = fromPosition.position - offset.position;
+  const a10 = fromPosition.velocity - offset.velocity;
+  const a01 = fromVelocity.position - offset.position;
+  const a11 = fromVelocity.velocity - offset.velocity;
+  const m00 = 1 - a00;
+  const m01 = -a01;
+  const m10 = -a10;
+  const m11 = 1 - a11;
+  const determinant = m00 * m11 - m01 * m10;
+  if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-9) return null;
+  return {
+    position: (offset.position * m11 - m01 * offset.velocity) / determinant,
+    velocity: (m00 * offset.velocity - offset.position * m10) / determinant
+  };
+}
+function normalizeFollowerTrace(points) {
+  let min = points[0] ?? 0;
+  let max = min;
+  for (const value of points) {
+    min = Math.min(min, value);
+    max = Math.max(max, value);
+  }
+  if (min >= 0 && max <= 1) return points;
+  const range = max - min;
+  if (range <= Number.EPSILON) return points.map(() => 0);
+  return points.map((value) => (value - min) / range);
+}
+function springify(sample, options = {}) {
+  const stiffness = finiteInRange(options.stiffness, SPRINGIFY_DEFAULTS.stiffness, 1, 1e3);
+  const damping = finiteInRange(options.damping, SPRINGIFY_DEFAULTS.damping, 0, 100);
+  const mass = finiteInRange(options.mass, SPRINGIFY_DEFAULTS.mass, 0.1, 10);
+  const targets = sampleSpringTargets(sample, SPRINGIFY_SAMPLES);
+  const atRest = { position: targets[0], velocity: 0 };
+  const initial = options.loop ? periodicSpringState(targets, stiffness, damping, mass) ?? atRest : atRest;
+  const raw = integrateSpringTrace(
+    targets,
+    stiffness,
+    damping,
+    mass,
+    initial
+  ).points;
+  const points = options.normalize ? normalizeFollowerTrace(raw) : raw;
+  return (t) => interp(points, t);
 }
 function buildSampler(curve) {
   let base;
@@ -15803,6 +15876,7 @@ function AudioLevelMeter(props) {
   shiftSpan,
   snapToStep,
   splitSegment,
+  springify,
   stepPosition,
   triggerLevels,
   triggersCrossed,

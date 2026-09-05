@@ -114,6 +114,30 @@ export const CURVE_MIN_WEIGHT_FRAC = 0.06;
 /** A pure `(t) -> value` sampler over local time, both in 0..1 (value may overshoot for springs). */
 export type Sampler = (t: number) => number;
 
+/**
+ * Physics used only by {@link springify}'s one-second driven follower.
+ * This is deliberately distinct from timeline `SpringConfig`, whose defaults describe
+ * a transition settling toward a fixed endpoint rather than tracking a moving signal.
+ */
+export interface SpringifyOptions {
+  /** Spring stiffness, constrained to 1..1000. Default 100. */
+  stiffness?: number;
+  /** Damping coefficient, constrained to 0..100. Default 10. */
+  damping?: number;
+  /** Attached mass, constrained to 0.1..10. Default 1. */
+  mass?: number;
+  /**
+   * If the follower escapes 0..1, affinely fit its complete trace back into that range.
+   * Unlike clipping, this preserves the shape and relative size of every bounce. Default false.
+   */
+  normalize?: boolean;
+  /**
+   * Solve for a periodic steady state so position and velocity join seamlessly at t=0/1.
+   * Enable this when the source sampler repeats. Default false.
+   */
+  loop?: boolean;
+}
+
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const clampBipolar = (v: number) => (v < -1 ? -1 : v > 1 ? 1 : v);
@@ -203,6 +227,47 @@ function bezierY(ease: [number, number, number, number], x: number): number {
 // kept (settles at 1, overshoots above it) so the bounce stays visible — a spring is
 // only recognizable by its overshoot. Curvature maps to a tasteful bounce range.
 const SPRING_SAMPLES = 72;
+interface SpringState {
+  position: number;
+  velocity: number;
+}
+
+function sampleSpringTargets(sample: Sampler, steps: number): number[] {
+  const targets: number[] = [];
+  let target = sample(0);
+  if (!Number.isFinite(target)) target = 0;
+  targets.push(target);
+  for (let i = 1; i <= steps; i++) {
+    const nextTarget = sample(i / steps);
+    if (Number.isFinite(nextTarget)) target = nextTarget;
+    targets.push(target);
+  }
+  return targets;
+}
+
+function integrateSpringTrace(
+  targets: number[],
+  stiffness: number,
+  damping: number,
+  mass: number,
+  initial: SpringState,
+  collect = true
+): { points: number[]; state: SpringState } {
+  const points = collect ? [initial.position] : [];
+  const steps = Math.max(1, targets.length - 1);
+  const dt = 1 / steps;
+  let { position, velocity } = initial;
+
+  for (let i = 1; i <= steps; i++) {
+    const target = targets[i] ?? targets[targets.length - 1] ?? 0;
+    const acceleration = (-stiffness * (position - target) - damping * velocity) / mass;
+    velocity += acceleration * dt;
+    position += velocity * dt;
+    if (collect) points.push(position);
+  }
+  return { points, state: { position, velocity } };
+}
+
 function springPoints(curvature: number, steepness = 0): number[] {
   const visualDuration = 1;
   // Bipolar bias → bounce: −1 = none, 0 = moderate, +1 = max.
@@ -215,18 +280,10 @@ function springPoints(curvature: number, steepness = 0): number[] {
   const dampingRatio = 1 - bounce;
   const damping = 2 * dampingRatio * Math.sqrt(stiffness * mass);
 
-  const raw: number[] = [];
-  const steps = SPRING_SAMPLES;
-  const dt = visualDuration / steps;
-  let position = 0;
-  let velocity = 0;
-  for (let i = 0; i <= steps; i++) {
-    raw.push(position);
-    const acceleration = (-stiffness * (position - 1) - damping * velocity) / mass;
-    velocity += acceleration * dt;
-    position += velocity * dt;
-  }
-  return raw;
+  return integrateSpringTrace(new Array(SPRING_SAMPLES + 1).fill(1), stiffness, damping, mass, {
+    position: 0,
+    velocity: 0,
+  }).points;
 }
 
 function interp(points: number[], t: number): number {
@@ -234,6 +291,82 @@ function interp(points: number[], t: number): number {
   const i = Math.floor(x);
   if (i >= points.length - 1) return points[points.length - 1];
   return lerp(points[i], points[i + 1], x - i);
+}
+
+const SPRINGIFY_DEFAULTS = { stiffness: 100, damping: 10, mass: 1 } as const;
+const SPRINGIFY_SAMPLES = 1200;
+
+function finiteInRange(value: number | undefined, fallback: number, min: number, max: number): number {
+  return value !== undefined && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
+}
+
+function periodicSpringState(
+  targets: number[],
+  stiffness: number,
+  damping: number,
+  mass: number
+): SpringState | null {
+  const advance = (initial: SpringState) =>
+    integrateSpringTrace(targets, stiffness, damping, mass, initial, false).state;
+  const offset = advance({ position: 0, velocity: 0 });
+  const fromPosition = advance({ position: 1, velocity: 0 });
+  const fromVelocity = advance({ position: 0, velocity: 1 });
+  const a00 = fromPosition.position - offset.position;
+  const a10 = fromPosition.velocity - offset.velocity;
+  const a01 = fromVelocity.position - offset.position;
+  const a11 = fromVelocity.velocity - offset.velocity;
+  const m00 = 1 - a00;
+  const m01 = -a01;
+  const m10 = -a10;
+  const m11 = 1 - a11;
+  const determinant = m00 * m11 - m01 * m10;
+  if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-9) return null;
+  return {
+    position: (offset.position * m11 - m01 * offset.velocity) / determinant,
+    velocity: (m00 * offset.velocity - offset.position * m10) / determinant,
+  };
+}
+
+function normalizeFollowerTrace(points: number[]): number[] {
+  let min = points[0] ?? 0;
+  let max = min;
+  for (const value of points) {
+    min = Math.min(min, value);
+    max = Math.max(max, value);
+  }
+  if (min >= 0 && max <= 1) return points;
+  const range = max - min;
+  if (range <= Number.EPSILON) return points.map(() => 0);
+  return points.map((value) => (value - min) / range);
+}
+
+/**
+ * Attach a damped follower to any designed curve.
+ *
+ * The source value is the spring's moving target: at every step a second value is pulled
+ * toward it by stiffness, retains momentum through mass, and loses energy through damping.
+ * The trace is baked once so the returned sampler stays deterministic and scrubbable.
+ *
+ * Set `normalize` to fit an over-bouncing trace into 0..1. This is an affine rescale of
+ * the complete trace, not a clamp, so every peak and damped return remains visible.
+ */
+export function springify(sample: Sampler, options: SpringifyOptions = {}): Sampler {
+  const stiffness = finiteInRange(options.stiffness, SPRINGIFY_DEFAULTS.stiffness, 1, 1000);
+  const damping = finiteInRange(options.damping, SPRINGIFY_DEFAULTS.damping, 0, 100);
+  const mass = finiteInRange(options.mass, SPRINGIFY_DEFAULTS.mass, 0.1, 10);
+  const targets = sampleSpringTargets(sample, SPRINGIFY_SAMPLES);
+  const atRest: SpringState = { position: targets[0], velocity: 0 };
+  const initial = options.loop ? periodicSpringState(targets, stiffness, damping, mass) ?? atRest : atRest;
+  const raw = integrateSpringTrace(
+    targets,
+    stiffness,
+    damping,
+    mass,
+    initial
+  ).points;
+
+  const points = options.normalize ? normalizeFollowerTrace(raw) : raw;
+  return (t) => interp(points, t);
 }
 
 /** Build a reusable sampler for a segment/driver (precomputes spring points once). */

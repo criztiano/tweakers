@@ -90,6 +90,29 @@ declare const CURVE_MIN_WEIGHT_FRAC = 0.06;
 /** A pure `(t) -> value` sampler over local time, both in 0..1 (value may overshoot for springs). */
 type Sampler = (t: number) => number;
 /**
+ * Physics used only by {@link springify}'s one-second driven follower.
+ * This is deliberately distinct from timeline `SpringConfig`, whose defaults describe
+ * a transition settling toward a fixed endpoint rather than tracking a moving signal.
+ */
+interface SpringifyOptions {
+    /** Spring stiffness, constrained to 1..1000. Default 100. */
+    stiffness?: number;
+    /** Damping coefficient, constrained to 0..100. Default 10. */
+    damping?: number;
+    /** Attached mass, constrained to 0.1..10. Default 1. */
+    mass?: number;
+    /**
+     * If the follower escapes 0..1, affinely fit its complete trace back into that range.
+     * Unlike clipping, this preserves the shape and relative size of every bounce. Default false.
+     */
+    normalize?: boolean;
+    /**
+     * Solve for a periodic steady state so position and velocity join seamlessly at t=0/1.
+     * Enable this when the source sampler repeats. Default false.
+     */
+    loop?: boolean;
+}
+/**
  * Derive the cubic-bezier control points [x1,y1,x2,y2] for a curve. Three knobs span the
  * whole easing space (P0=(0,0), P3=(1,1) implied):
  * - steepness sweeps linear (−1) ← preset (0) → the expo-grade extreme (+1); it's the
@@ -100,6 +123,17 @@ type Sampler = (t: number) => number;
  *   so time stays monotonic.
  */
 declare function deriveEase(type: CurveType, curvature: number, steepness?: number, overshoot?: number, anticipate?: number): [number, number, number, number];
+/**
+ * Attach a damped follower to any designed curve.
+ *
+ * The source value is the spring's moving target: at every step a second value is pulled
+ * toward it by stiffness, retains momentum through mass, and loses energy through damping.
+ * The trace is baked once so the returned sampler stays deterministic and scrubbable.
+ *
+ * Set `normalize` to fit an over-bouncing trace into 0..1. This is an affine rescale of
+ * the complete trace, not a clamp, so every peak and damped return remains visible.
+ */
+declare function springify(sample: Sampler, options?: SpringifyOptions): Sampler;
 /** Build a reusable sampler for a segment/driver (precomputes spring points once). */
 declare function buildSampler(curve: CurveSegment | CurveDriver): Sampler;
 declare function totalWeight(segments: CurveSegment[]): number;
@@ -332,4 +366,4 @@ declare function triggersCrossed(prevValue: number, curValue: number, steps: num
 /** A reasonable starting composition for demos / uncontrolled mounts. */
 declare function defaultComposition(): CurveComposition;
 
-export { COMPOSER_DRIVER_FRAC, COMPOSER_GAP, COMPOSER_HEADER_H, COMPOSER_PAD_FRAC, CURVE_CYCLE, CURVE_MIN_WEIGHT_FRAC, type ClientRectLike, type ComposerHitLayout, type ComposerLayout, type CompositionRead, type CompositionSamplers, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, DRAG_ENERGY_GAIN, DRAG_STEEP_GAIN, DRAG_THRESHOLD, type DriverDirection, EDGE_HIT, type PointerTarget, type Rect, type Sampler, type TimelineSlot, addDriver, applyDriverBodyDrag, applySegmentBodyDrag, boundaries, boundaryAt, buildSampler, buildSamplers, composerLayout, connectorPath, curvePath, cycleDriverType, cycleSegmentType, defaultComposition, deriveEase, diagonalLine, directionPhase, easingPresets, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, headerHit, mapY, playheadGeometry, pointerTarget, readComposition, redistributeWeight, removeDriver, removeSegment, segmentIndexAt, segmentSpan, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, smootherstep, splitSegment, timelineSlots, toLocalCoords, totalWeight, triggerLevels, triggersCrossed };
+export { COMPOSER_DRIVER_FRAC, COMPOSER_GAP, COMPOSER_HEADER_H, COMPOSER_PAD_FRAC, CURVE_CYCLE, CURVE_MIN_WEIGHT_FRAC, type ClientRectLike, type ComposerHitLayout, type ComposerLayout, type CompositionRead, type CompositionSamplers, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_TRIGGER_STEPS, DRAG_ENERGY_GAIN, DRAG_STEEP_GAIN, DRAG_THRESHOLD, type DriverDirection, EDGE_HIT, type PointerTarget, type Rect, type Sampler, type SpringifyOptions, type TimelineSlot, addDriver, applyDriverBodyDrag, applySegmentBodyDrag, boundaries, boundaryAt, buildSampler, buildSamplers, composerLayout, connectorPath, curvePath, cycleDriverType, cycleSegmentType, defaultComposition, deriveEase, diagonalLine, directionPhase, easingPresets, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, headerHit, mapY, playheadGeometry, pointerTarget, readComposition, redistributeWeight, removeDriver, removeSegment, segmentIndexAt, segmentSpan, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, smootherstep, splitSegment, springify, timelineSlots, toLocalCoords, totalWeight, triggerLevels, triggersCrossed };

@@ -1490,6 +1490,42 @@ interface CurveComposition {
      */
     gap?: number;
 }
+/** A pure `(t) -> value` sampler over local time, both in 0..1 (value may overshoot for springs). */
+type Sampler = (t: number) => number;
+/**
+ * Physics used only by {@link springify}'s one-second driven follower.
+ * This is deliberately distinct from timeline `SpringConfig`, whose defaults describe
+ * a transition settling toward a fixed endpoint rather than tracking a moving signal.
+ */
+interface SpringifyOptions {
+    /** Spring stiffness, constrained to 1..1000. Default 100. */
+    stiffness?: number;
+    /** Damping coefficient, constrained to 0..100. Default 10. */
+    damping?: number;
+    /** Attached mass, constrained to 0.1..10. Default 1. */
+    mass?: number;
+    /**
+     * If the follower escapes 0..1, affinely fit its complete trace back into that range.
+     * Unlike clipping, this preserves the shape and relative size of every bounce. Default false.
+     */
+    normalize?: boolean;
+    /**
+     * Solve for a periodic steady state so position and velocity join seamlessly at t=0/1.
+     * Enable this when the source sampler repeats. Default false.
+     */
+    loop?: boolean;
+}
+/**
+ * Attach a damped follower to any designed curve.
+ *
+ * The source value is the spring's moving target: at every step a second value is pulled
+ * toward it by stiffness, retains momentum through mass, and loses energy through damping.
+ * The trace is baked once so the returned sampler stays deterministic and scrubbable.
+ *
+ * Set `normalize` to fit an over-bouncing trace into 0..1. This is an affine rescale of
+ * the complete trace, not a clamp, so every peak and damped return remains visible.
+ */
+declare function springify(sample: Sampler, options?: SpringifyOptions): Sampler;
 
 interface CurveComposerProps {
     /** The curve series (controlled). */
@@ -1701,4 +1737,4 @@ declare function EasingVisualization(props: {
     easing: EasingConfig;
 }): solid_js.JSX.Element;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, type AxisSpec, ButtonGroup, Checkbox, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, ControlRenderer, ControlShell, type CreateTweakTimelineOptions, type CreateTweakersOptions, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, type DriverDirection, type EasingConfig, EasingVisualization, Folder, GradientControl, GradientPanel, type GradientStop, type GradientType, type GradientValue, Module, NumberControl, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, RangeSlider, type ResolvedValues, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, Slider, type SpringConfig, SpringControl, SpringVisualization, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineToggleButton, Toggle, type TransitionConfig, TransitionControl, type TweakConfig, type TweakMode, type TweakPosition, TweakRoot, TweakStore, type TweakTheme, TweakTimeline, type TweakTimelineProps, type TweakTimelineValues, type TweakValue, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, applyDetentAxis, centerValue, clamp, createTweakTimeline, createTweakers, gradientToCss, invertY, normToValue, normalizeValue, nudge, pointFromValue, resolveAxis, snapToStep, valueFromPoint, valueToNorm };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserMode, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserVariant, AnalyserVisualization, type AxisSpec, ButtonGroup, Checkbox, type ColorConfig, ColorControl, ColorPickerPanel, type ControlMeta, ControlRenderer, ControlShell, type CreateTweakTimelineOptions, type CreateTweakersOptions, CurveComposer, type CurveComposition, type CurveDriver, type CurveSegment, type CurveType, DEFAULT_GRADIENT, type DriverDirection, type EasingConfig, EasingVisualization, Folder, GradientControl, GradientPanel, type GradientStop, type GradientType, type GradientValue, Module, NumberControl, type PanelConfig, type Point, type Preset, type PresetItem, PresetManager, type PresetProvider, type PresetProviderPreset, RangeSlider, type ResolvedValues, type Sampler, SegmentedControl, type SelectConfig, SelectControl, type ShortcutConfig, Slider, type SpringConfig, SpringControl, SpringVisualization, type SpringifyOptions, type TextConfig, TextControl, type TimelineClipConfig, type TimelineClipCss, type TimelineClipLoop, type TimelineClipValues, type TimelineConfig, type TimelineGroupConfig, type TimelineGroupValues, type TimelinePropConfig, type TimelinePropStepConfig, type TimelineStepConfig, type TimelineStepValues, TimelineToggleButton, Toggle, type TransitionConfig, TransitionControl, type TweakConfig, type TweakMode, type TweakPosition, TweakRoot, TweakStore, type TweakTheme, TweakTimeline, type TweakTimelineProps, type TweakTimelineValues, type TweakValue, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, XYControl, XYPad, type XYPadProps, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, applyDetentAxis, centerValue, clamp, createTweakTimeline, createTweakers, gradientToCss, invertY, normToValue, normalizeValue, nudge, pointFromValue, resolveAxis, snapToStep, springify, valueFromPoint, valueToNorm };

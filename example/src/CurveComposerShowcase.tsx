@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   CurveComposer,
+  Toggle,
   SegmentedControl,
   ColorControl,
   Slider,
@@ -15,12 +16,45 @@ import {
   buildSamplers,
   readComposition,
   triggerLevels,
+  springify,
 } from 'tweakers';
 import type { CurveSegment, CurveDriver, DriverDirection, CurveComposition } from 'tweakers';
 
+const SPRING_SCALE_MIN = -0.2;
+const SPRING_SCALE_MAX = 1.5;
+const OUTPUT_DOT_SIZE = 16;
+const FOLLOWER_DEFAULTS = { stiffness: 100, damping: 5, mass: 1, normalize: true } as const;
+
+function initialComposition(): CurveComposition {
+  return { ...defaultComposition(), direction: 'mirror' };
+}
+
+function springScalePosition(value: number) {
+  const clamped = Math.max(SPRING_SCALE_MIN, Math.min(SPRING_SCALE_MAX, value));
+  return (clamped - SPRING_SCALE_MIN) / (SPRING_SCALE_MAX - SPRING_SCALE_MIN);
+}
+
+function positionOutputIndicator(indicator: HTMLDivElement | null, value: number, trackWidth: number) {
+  if (!indicator || trackWidth <= 0) return;
+  const x = springScalePosition(value) * trackWidth - OUTPUT_DOT_SIZE / 2;
+  indicator.style.transform = `translateX(${x}px)`;
+}
+
+function positionElasticBand(band: HTMLDivElement | null, target: number, follower: number, trackWidth: number) {
+  if (!band || trackWidth <= 0) return;
+  const targetX = springScalePosition(target) * trackWidth;
+  const followerX = springScalePosition(follower) * trackWidth;
+  const start = Math.min(targetX, followerX);
+  const length = Math.max(1, Math.abs(targetX - followerX));
+  band.style.transform = `translateX(${start}px) scaleX(${length})`;
+}
+
 export function CurveComposerShowcase() {
-  const [comp, setComp] = useState<CurveComposition>(() => defaultComposition());
+  const [comp, setComp] = useState<CurveComposition>(initialComposition);
   const [playing, setPlaying] = useState(true);
+  const [reduceMotion, setReduceMotion] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
+  );
   const [selected, setSelected] = useState(0);
   const [duration, setDuration] = useState(2.4); // seconds for one transport loop
   const durationRef = useRef(duration);
@@ -29,28 +63,27 @@ export function CurveComposerShowcase() {
   const [playheadColor, setPlayheadColor] = useState('#6366f1');
   const [mode, setMode] = useState<'continuous' | 'trigger'>('continuous');
   const [triggerSteps, setTriggerSteps] = useState(5);
+  const [normalize, setNormalize] = useState(FOLLOWER_DEFAULTS.normalize);
+  const [springStiffness, setSpringStiffness] = useState(FOLLOWER_DEFAULTS.stiffness);
+  const [springDamping, setSpringDamping] = useState(FOLLOWER_DEFAULTS.damping);
+  const [springMass, setSpringMass] = useState(FOLLOWER_DEFAULTS.mass);
 
   const { segments, driver, direction } = comp;
   const gap = comp.gap ?? 0;
 
-  // The continuous dot's travel along the demo track: left 6 + radius 8 = center start,
-  // then value * TRACK_TRAVEL. Trigger markers sit at the same per-value positions, so the
-  // dot visibly crosses them.
-  const TRACK_TRAVEL = 220;
-  const DOT_CENTER = 14;
-
-  // Trigger mode: blink the crossed marker purple as the continuous dot passes over it.
+  // The shared extended domain leaves room to see the follower escape 0..1 when
+  // normalization is off. Trigger markers belong to the designed target signal.
   const markerRefs = useRef<(HTMLDivElement | null)[]>([]);
   const blinkTimers = useRef<number[]>([]);
   const handleTrigger = (index: number) => {
-    const el = markerRefs.current[index];
-    if (!el) return;
-    el.style.background = playheadColor;
-    el.style.transform = 'translate(-50%, -50%) scale(1.9)';
+    const marker = markerRefs.current[index];
+    if (!marker) return;
+    marker.style.background = playheadColor;
+    marker.style.transform = 'translate(-50%, -50%) scale(1.9)';
     window.clearTimeout(blinkTimers.current[index]);
     blinkTimers.current[index] = window.setTimeout(() => {
-      el.style.background = 'var(--tweak-text-tertiary)';
-      el.style.transform = 'translate(-50%, -50%) scale(1)';
+      marker.style.background = 'var(--tweak-text-tertiary)';
+      marker.style.transform = 'translate(-50%, -50%) scale(1)';
     }, 130);
   };
   // Clear any pending blink timers on unmount so they can't write into a detached node.
@@ -65,15 +98,21 @@ export function CurveComposerShowcase() {
   // duration changes the loop's velocity rather than jumping/resetting the playhead.
   const phaseRef = useRef(0);
   useEffect(() => {
+    const query = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if (!query) return;
+    const update = (event: MediaQueryListEvent) => setReduceMotion(event.matches);
+    setReduceMotion(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+
+  useEffect(() => {
+    if (!playing || reduceMotion) return;
+
     let raf = 0;
     let last: number | null = null;
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     const tick = (now: number) => {
       raf = requestAnimationFrame(tick);
-      if (!playing || reduce) {
-        last = null;
-        return;
-      }
       if (last != null) {
         phaseRef.current = (phaseRef.current + (now - last) / 1000 / durationRef.current) % 1;
       }
@@ -81,27 +120,69 @@ export function CurveComposerShowcase() {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [playing]);
+  }, [playing, reduceMotion]);
 
   const getPhase = () => phaseRef.current;
 
   // Read the composed value each frame to drive the demo dot — each segment drives a
   // full min→max walk, so the dot walks the track once per segment (twice for two).
   const samplers = useMemo(() => buildSamplers(comp), [comp]);
-  const demoRef = useRef<HTMLDivElement>(null);
+  const composedSampler = useMemo(() => (phase: number) => readComposition(comp, phase, samplers).value, [comp, samplers]);
+  const springSampler = useMemo(
+    () => springify(composedSampler, {
+      stiffness: springStiffness,
+      damping: springDamping,
+      mass: springMass,
+      normalize,
+      loop: true,
+    }),
+    [composedSampler, normalize, springDamping, springMass, springStiffness]
+  );
+  const trackRef = useRef<HTMLDivElement>(null);
+  const indicatorRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const bandRef = useRef<HTMLDivElement>(null);
+  const valueRefs = useRef<(HTMLOutputElement | null)[]>([]);
+  const trackWidthRef = useRef(0);
+  const outputValuesRef = useRef([0, 0]);
+
+  useEffect(() => {
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width ?? 0;
+      trackWidthRef.current = width;
+      positionOutputIndicator(indicatorRefs.current[0], outputValuesRef.current[0], width);
+      positionOutputIndicator(indicatorRefs.current[1], outputValuesRef.current[1], width);
+      positionElasticBand(bandRef.current, outputValuesRef.current[0], outputValuesRef.current[1], width);
+    });
+    const track = trackRef.current;
+    if (!track) return;
+    trackWidthRef.current = track.clientWidth;
+    observer.observe(track);
+    return () => observer.disconnect();
+  }, []);
+
   useEffect(() => {
     let raf = 0;
-    const tick = () => {
-      raf = requestAnimationFrame(tick);
-      const { value } = readComposition(comp, getPhase(), samplers);
-      if (demoRef.current) {
-        const clamped = Math.max(-0.15, Math.min(1.15, value));
-        demoRef.current.style.transform = `translateX(${clamped * 220}px)`;
+    const renderOutput = () => {
+      const phase = getPhase();
+      const values = [composedSampler(phase), springSampler(phase)];
+      outputValuesRef.current = values;
+      for (let i = 0; i < values.length; i++) {
+        const value = values[i];
+        positionOutputIndicator(indicatorRefs.current[i], value, trackWidthRef.current);
+        if (valueRefs.current[i]) valueRefs.current[i]!.textContent = Number.isFinite(value) ? value.toFixed(4) : '—';
       }
+      positionElasticBand(bandRef.current, values[0], values[1], trackWidthRef.current);
+    };
+    renderOutput();
+
+    if (!playing || reduceMotion) return;
+    const tick = () => {
+      renderOutput();
+      raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [comp, samplers]);
+  }, [composedSampler, playing, reduceMotion, springSampler]);
 
   const onSegments = (next: CurveSegment[]) => setComp((c) => ({ ...c, segments: next }));
   const onDriver = (next: CurveDriver) => setComp((c) => ({ ...c, driver: next }));
@@ -118,8 +199,13 @@ export function CurveComposerShowcase() {
     setComp((c) => flipSegment(c, Math.min(selected, c.segments.length - 1)));
   };
   const doReset = () => {
-    setComp(defaultComposition());
+    setComp(initialComposition());
     setSelected(0);
+    phaseRef.current = 0;
+    setSpringStiffness(FOLLOWER_DEFAULTS.stiffness);
+    setSpringDamping(FOLLOWER_DEFAULTS.damping);
+    setSpringMass(FOLLOWER_DEFAULTS.mass);
+    setNormalize(FOLLOWER_DEFAULTS.normalize);
   };
   const toggleDriver = () => setComp((c) => (c.driver ? removeDriver(c) : addDriver(c)));
   // Overshoot (end, easeOutBack) and anticipate (start, easeInBack) are independent per-segment
@@ -159,43 +245,90 @@ export function CurveComposerShowcase() {
         divider to retime · double-click to split
       </div>
 
-      {/* output track: the continuous dot travels along it (position = value). In trigger mode,
-          evenly-spaced markers sit along the track and blink as the dot crosses each one. */}
-      <div style={{ position: 'relative', height: 22, background: 'var(--tweak-surface)', borderRadius: 8 }}>
-        {/* moving continuous dot (behind), so the markers' flash always reads on top of it */}
-        <div
-          ref={demoRef}
-          style={{
-            position: 'absolute',
-            top: 3,
-            left: 6,
-            width: 16,
-            height: 16,
-            borderRadius: '50%',
-            background: mode === 'trigger' ? 'var(--tweak-text-tertiary)' : playheadColor,
-            willChange: 'transform',
-          }}
-        />
-        {mode === 'trigger' &&
-          triggerLevels(triggerSteps).map((lv, i) => (
+      <div className="curve-output-comparison">
+        <div className="curve-output-readouts">
+          <div className="curve-output-readout">
+            <span
+              className="curve-output-key curve-output-key-target"
+              style={{ background: curveColor === '#ffffff' ? 'var(--tweak-text-primary)' : curveColor }}
+              aria-hidden="true"
+            />
+            <span className="curve-output-label">Designed target</span>
+            <output
+              ref={(el) => { valueRefs.current[0] = el; }}
+              className="curve-output-value"
+              aria-label="Designed target value"
+            >
+              0.0000
+            </output>
+          </div>
+          <div className="curve-output-readout">
+            <span className="curve-output-key curve-output-key-follower" style={{ background: playheadColor }} aria-hidden="true" />
+            <span className="curve-output-label">Elastic follower</span>
+            <output
+              ref={(el) => { valueRefs.current[1] = el; }}
+              className="curve-output-value"
+              aria-label="Elastic follower value"
+            >
+              0.0000
+            </output>
+          </div>
+        </div>
+        <div ref={trackRef} className="curve-output-track">
+          <span className="curve-output-bound" style={{ left: `${springScalePosition(0) * 100}%` }}>0</span>
+          <span className="curve-output-bound" style={{ left: `${springScalePosition(1) * 100}%` }}>1</span>
+          <div ref={bandRef} className="curve-output-band" aria-hidden="true" />
+          <div
+            ref={(el) => { indicatorRefs.current[0] = el; }}
+            className="curve-output-indicator curve-output-target"
+            style={{ background: curveColor === '#ffffff' ? 'var(--tweak-text-primary)' : curveColor }}
+            aria-hidden="true"
+          />
+          <div
+            ref={(el) => { indicatorRefs.current[1] = el; }}
+            className="curve-output-indicator curve-output-follower"
+            style={{ background: playheadColor }}
+            aria-hidden="true"
+          />
+          {mode === 'trigger' && triggerLevels(triggerSteps).map((level, index) => (
             <div
-              key={i}
-              ref={(el) => {
-                markerRefs.current[i] = el;
-              }}
-              style={{
-                position: 'absolute',
-                top: '50%',
-                left: DOT_CENTER + lv * TRACK_TRAVEL,
-                width: 7,
-                height: 7,
-                borderRadius: '50%',
-                background: 'var(--tweak-text-tertiary)',
-                transform: 'translate(-50%, -50%) scale(1)',
-                transition: 'background 120ms ease, transform 120ms ease',
-              }}
+              key={index}
+              ref={(el) => { markerRefs.current[index] = el; }}
+              className="curve-output-marker"
+              style={{ left: `${springScalePosition(level) * 100}%` }}
             />
           ))}
+        </div>
+      </div>
+      <div className="curve-spring-toggle">
+        <Toggle label="Normalize 0–1" checked={normalize} onChange={setNormalize} />
+      </div>
+      <div className="curve-spring-controls" role="group" aria-label="Elastic follower physics">
+        <Slider
+          label="stiffness"
+          value={springStiffness}
+          onChange={setSpringStiffness}
+          min={10}
+          max={400}
+          step={5}
+        />
+        <Slider
+          label="damping"
+          value={springDamping}
+          onChange={setSpringDamping}
+          min={0}
+          max={40}
+          step={1}
+        />
+        <Slider
+          label="mass"
+          value={springMass}
+          onChange={setSpringMass}
+          min={0.1}
+          max={5}
+          step={0.1}
+          formatValue={(value) => value.toFixed(1)}
+        />
       </div>
       {mode === 'trigger' && (
         <div style={{ fontSize: 12, color: 'var(--tweak-text-secondary)' }}>
@@ -204,22 +337,22 @@ export function CurveComposerShowcase() {
       )}
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button type="button" className="lib-tab" data-active={String(playing)} onClick={() => setPlaying((p) => !p)}>
+        <button type="button" className="lib-tab curve-pressable" data-active={String(playing)} onClick={() => setPlaying((p) => !p)}>
           {playing ? '❚❚ Pause' : '▶ Play'}
         </button>
-        <button type="button" className="lib-tab" onClick={doSplit}>
+        <button type="button" className="lib-tab curve-pressable" onClick={doSplit}>
           + Split
         </button>
-        <button type="button" className="lib-tab" onClick={doFlip}>
+        <button type="button" className="lib-tab curve-pressable" onClick={doFlip}>
           ⇄ Flip
         </button>
-        <button type="button" className="lib-tab" onClick={doRemove} disabled={segments.length <= 1}>
+        <button type="button" className="lib-tab curve-pressable" onClick={doRemove} disabled={segments.length <= 1}>
           − Remove
         </button>
-        <button type="button" className="lib-tab" onClick={doReset}>
+        <button type="button" className="lib-tab curve-pressable" onClick={doReset}>
           ⟲ Reset
         </button>
-        <button type="button" className="lib-tab" data-active={String(!!driver)} onClick={toggleDriver}>
+        <button type="button" className="lib-tab curve-pressable" data-active={String(!!driver)} onClick={toggleDriver}>
           driver: {driver ? 'on' : 'off'}
         </button>
       </div>
@@ -240,11 +373,11 @@ export function CurveComposerShowcase() {
         <div className="tweakers-labeled-control">
           <span className="tweakers-labeled-control-label">Triggers</span>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <button type="button" className="lib-tab" onClick={() => setTriggerSteps((s) => Math.max(2, s - 1))}>
+            <button type="button" className="lib-tab curve-pressable" onClick={() => setTriggerSteps((s) => Math.max(2, s - 1))}>
               −
             </button>
             <span style={{ minWidth: 20, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{triggerSteps}</span>
-            <button type="button" className="lib-tab" onClick={() => setTriggerSteps((s) => Math.min(16, s + 1))}>
+            <button type="button" className="lib-tab curve-pressable" onClick={() => setTriggerSteps((s) => Math.min(16, s + 1))}>
               +
             </button>
           </div>
