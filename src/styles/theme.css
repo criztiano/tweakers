@@ -5653,12 +5653,15 @@ input.tweakers-list-item-title:focus {
 
    Band arithmetic, from the slot's own edges:
      top    = chip top (6) + chip height (18) + 8
-     bottom = option bottom + option line (20) + 8 */
+     bottom = option bottom + option line (16) + 8 */
 .tweakers-move-dial {
-  --move-option-bottom: 23px;   /* the track's 8 + 9, plus 6 of air */
+  --move-indicator-bottom: 8px;
+  --move-indicator-height: 9px;
+  --move-option-gap: 8px;
+  --move-option-bottom: calc(var(--move-indicator-bottom) + var(--move-indicator-height) + var(--move-option-gap));
   --move-shape-top: 32px;       /* chip top (6) + chip height (18) + 8 */
-  --move-shape-bottom: 47px;    /* option bottom (23) + option line (16) + 8 */
-  --move-head-h: 18px;          /* the list face's head — the chip's own height */
+  --move-shape-bottom: calc(var(--move-option-bottom) + 16px + 8px);
+  --move-head-h: 18px;
 }
 
 /* Height, not a bottom edge: an <svg> is a replaced element, so top+bottom
@@ -5702,8 +5705,8 @@ input.tweakers-list-item-title:focus {
   position: absolute;
   left: 8px;
   right: 9px;
-  bottom: 8px;
-  height: 9px;
+  bottom: var(--move-indicator-bottom);
+  height: var(--move-indicator-height);
   padding: 2px;
   background: var(--move-bg);
   border-radius: 8px;
@@ -6318,9 +6321,8 @@ input.tweakers-list-item-title:focus {
     font-size: 18px;
   }
   .tweakers-move-dial {
-    --move-option-bottom: 22px;
     --move-shape-top: 32px;
-    --move-shape-bottom: 44px;
+    --move-shape-bottom: calc(var(--move-option-bottom) + 14px + 8px);
     --move-head-h: 16px;
   }
   .tweakers-move-dial-option {
@@ -6549,4 +6551,92 @@ input.tweakers-list-item-title:focus {
 
 .tweakers-list-screen-row[data-muted][data-selected] .tweakers-list-screen-tag {
   opacity: 0.3;
+}
+
+/* Semantic Move faces share the existing picture band. Geometry follows the
+   value immediately; only the specimen receives blur or alpha. */
+.tweakers-move-dial {
+  --move-visual-stroke: 1.5;
+  --move-visual-guide-opacity: 0.6;
+  --move-visual-reference-opacity: 0.7;
+  --move-visual-pitch-active: #f39a38;
+  --move-visual-font-size: 10px;
+  --move-visual-focus-width: 2px;
+  --move-visual-focus-offset: 2px;
+  --move-visual-disabled-opacity: 0.45;
+}
+
+.tweakers-move-dial[role="slider"]:focus-visible {
+  outline: var(--move-visual-focus-width) solid var(--move-text);
+  outline-offset: var(--move-visual-focus-offset);
+}
+
+.tweakers-move-dial[role="slider"][data-disabled] {
+  opacity: var(--move-visual-disabled-opacity);
+  cursor: not-allowed;
+}
+
+.tweakers-move-visual {
+  position: absolute;
+  top: var(--move-shape-top);
+  left: 8%;
+  width: 84%;
+  height: calc(100% - var(--move-shape-top) - var(--move-shape-bottom));
+  overflow: hidden;
+  color: var(--move-text);
+  pointer-events: none;
+}
+
+.tweakers-move-visual text {
+  fill: currentColor;
+  text-anchor: middle;
+  font-family: var(--move-font-label);
+  font-size: var(--move-visual-font-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.tweakers-move-visual-guide,
+.tweakers-move-visual-reference,
+.tweakers-move-visual-line,
+.tweakers-move-visual-lobes {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--move-visual-stroke);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tweakers-move-visual-guide {
+  opacity: var(--move-visual-guide-opacity);
+}
+
+.tweakers-move-visual-reference {
+  opacity: var(--move-visual-reference-opacity);
+  stroke-dasharray: 2 3;
+}
+
+.tweakers-move-visual-solid,
+.tweakers-move-visual-point,
+.tweakers-move-visual-pitch-marker {
+  fill: currentColor;
+}
+
+.tweakers-move-visual-pitch-marker[data-offset],
+.tweakers-move-visual-point[data-offset] {
+  fill: var(--move-visual-pitch-active);
+}
+
+.tweakers-move-dial[data-visual] .tweakers-move-dial-option {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Numeric readings sit 4px above the indicator row's centre. */
+.tweakers-move-visual-value {
+  bottom: calc(var(--move-indicator-bottom) + var(--move-indicator-height) / 2 + 4px);
+  transform: translateY(50%);
+}
+
+.tweakers-move-dial[data-visual] .tweakers-move-visual,
+.tweakers-move-dial[data-visual] .tweakers-move-dial-icon {
+  transform: translateY(8px);
 }
