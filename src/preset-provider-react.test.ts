@@ -16,6 +16,10 @@ globals.window ??= { innerHeight: 800, addEventListener() {}, removeEventListene
 // `createNodeMock` make the body double as a react-test-renderer container,
 // since refs inside a portal resolve against the portal's container.
 const nodeMock = () => ({
+  style: {},
+  addEventListener() {},
+  removeEventListener() {},
+  select() {},
   contains: () => false,
   getBoundingClientRect: () => ({ top: 0, left: 0, bottom: 0, width: 0 }),
 });
@@ -185,7 +189,11 @@ describe('preset provider (React)', () => {
     assert.equal(presets.length, 1);
     assert.equal(presets[0].name, 'Version 2');
 
-    host.open();
+    // Adding a stock preset opens its rename input immediately. Finish the
+    // unchanged name before inspecting the saved rows and delete action.
+    const nameInput = host.root.findByType('input');
+    assert.equal(nameInput.props.value, 'Version 2');
+    act(() => nameInput.props.onBlur());
     // Base row plus the saved version, every saved row deletable.
     assert.deepEqual(host.rowNames(), ['Version 1', 'Version 2']);
     assert.equal(host.rows()[1].findAllByProps({ className: 'tweakers-preset-delete' }).length, 1);

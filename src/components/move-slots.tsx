@@ -1,4 +1,7 @@
 import type { ReactNode } from 'react';
+import { moveNumericDrawing, movePlaybackMode, type MovePlaybackMode } from '../move-visual-core';
+import { MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
+export { MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
 import type { ControlMeta } from '../store/TweakStore';
 import { LUCIDE_ICONS } from '../icons';
 import { enumOptionValue } from '../move-layout';
@@ -30,6 +33,9 @@ import { resolveFilterAxis, type FilterValue } from '../filter-core';
  *   knob turns X and the volume knob turns Y while touched.
  * - `range`   — two handles on one bar; column knob = low end, volume
  *   knob = high end while touched.
+ * - `opacity`, `blur`, `pan`, `stereo-width`, `pitch` — explicit numeric
+ *   meanings, drawn as specimens or positioned against domain references.
+ * - `playback` — an explicitly mapped playback icon.
  * - `filter`  — the 2-slot control: cutoff and resonance as one picture,
  *   the magnitude response maximised across both columns, each hand's
  *   small label sitting where its own slot's label would have been.
@@ -42,16 +48,25 @@ export type MoveSlotKind =
   | 'enum'
   | 'xy'
   | 'range'
-  | 'filter';
+  | 'filter'
+  | 'opacity'
+  | 'blur'
+  | 'pan'
+  | 'stereo-width'
+  | 'pitch'
+  | 'playback';
 
 /** Which face a control wears in its slot, from its meta and moment. */
 export function moveSlotKind(
   meta: ControlMeta,
-  opts: { enum?: boolean; shape?: string | null; glyph?: string | null; valueFirst?: boolean } = {}
+  opts: { enum?: boolean; shape?: string | null; glyph?: string | null; valueFirst?: boolean; value?: unknown } = {}
 ): MoveSlotKind {
   if (meta.type === 'filter') return 'filter';
   if (meta.type === 'xy') return 'xy';
   if (meta.type === 'range') return 'range';
+  const drawing = moveNumericDrawing(meta, opts.value ?? meta.min);
+  if (drawing) return drawing.kind;
+  if (movePlaybackMode(meta, opts.value)) return 'playback';
   if (opts.enum) {
     if (opts.shape) return 'curve';
     if (opts.glyph) return 'icon';
@@ -135,11 +150,11 @@ export function MoveSlotDefaultBody({
   );
 }
 
-/** The option picker's three faces — name, glyph, or drawn shape — plus the
+/** The option picker's faces — name, glyph, curve or playback — plus the
  *  pagination cells. A slot with a picture reads top down: what the knob is
  *  on the tag, the picture between, what it is set to underneath. */
 export function MoveSlotEnumBody({
-  label, optionLabel, options, activeIdx, shape, glyph,
+  label, optionLabel, options, activeIdx, shape, glyph, playback,
 }: {
   label: string;
   optionLabel: string;
@@ -147,13 +162,15 @@ export function MoveSlotEnumBody({
   activeIdx: number;
   shape: string | null;
   glyph: string | null;
+  playback?: MovePlaybackMode | null;
 }) {
   return (
     <>
-      {(shape || glyph) && <span className="tweakers-move-dial-tag">{label}</span>}
-      {shape && <MoveSlotShape d={shape} />}
-      {glyph && <MoveSlotGlyph name={glyph} className="tweakers-move-dial-icon" />}
-      {shape || glyph ? (
+      {(shape || glyph || playback) && <span className="tweakers-move-dial-tag">{label}</span>}
+      {playback && <MoveSlotPlaybackDrawing mode={playback} />}
+      {!playback && shape && <MoveSlotShape d={shape} />}
+      {!playback && glyph && <MoveSlotGlyph name={glyph} className="tweakers-move-dial-icon" />}
+      {shape || glyph || playback ? (
         <span className="tweakers-move-dial-option">{optionLabel}</span>
       ) : (
         <MoveSlotReadout label={label} value={optionLabel} />
@@ -245,6 +262,12 @@ export function MoveSlotFilterBody({
  * its gesture surface.
  */
 export const MOVE_SLOT_LIBRARY = {
+  opacity: { description: 'overlapping circles showing transparency', component: MoveSlotNumericBody },
+  blur: { description: 'pixel blur on a single filled circle', component: MoveSlotNumericBody },
+  pan: { description: 'position between L, C and R references', component: MoveSlotNumericBody },
+  'stereo-width': { description: 'stereo separation with a unity reference', component: MoveSlotNumericBody },
+  pitch: { description: 'signed pitch ruler with a zero reference', component: MoveSlotNumericBody },
+  playback: { description: 'explicit playback traversal with a named mode', component: MoveSlotEnumBody },
   default: { description: 'name centred, value on touch, fill bar', component: MoveSlotDefaultBody },
   value: { description: 'value-first: the value is the headline, the name a tag on top', component: MoveSlotDefaultBody },
   icon: { description: 'option picker showing the current option as a glyph', component: MoveSlotEnumBody },

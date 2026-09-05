@@ -281,6 +281,60 @@ import { Slider } from 'tweakers';
 
 When an origin is set, dragging gains a soft, **escapable** detent at the origin — the value sticks to it within a few pixels of travel and releases when you drag past. Omit both props and the slider is unchanged (classic left-anchored fill, no detent). These props apply to the standalone `Slider` component (advanced usage).
 
+### Specialized Move visuals
+
+Add `moveVisual` to an explicit slider or select to give its on-screen Move slot
+a diagram that follows its value. It remains the same numeric or enum control:
+presets, modulation and hardware values keep their existing shape. Labels are
+never used to guess a visual.
+
+```tsx
+const p = useTweakers('Specialized', {
+  opacity: {
+    type: 'slider', default: 0.7, min: 0, max: 1, step: 0.01,
+    moveVisual: { kind: 'opacity' },
+  },
+  blur: {
+    type: 'slider', default: 4, min: 0, max: 24, unit: 'px',
+    moveVisual: { kind: 'blur' },
+  },
+  pan: {
+    type: 'slider', default: 0, min: -1, max: 1, bipolar: true,
+    moveVisual: { kind: 'pan' },
+  },
+  width: {
+    type: 'slider', default: 1, min: 0, max: 2, origin: 1,
+    moveVisual: { kind: 'stereo-width' },
+  },
+  pitch: {
+    type: 'slider', default: 0, min: -24, max: 24, step: 1,
+    bipolar: true, unit: 'st', moveVisual: { kind: 'pitch' },
+  },
+  direction: {
+    type: 'select', default: 'forward',
+    options: ['forward', 'reverse', 'ping-pong', 'scissors'],
+    moveVisual: { kind: 'playback' },
+  },
+});
+```
+
+| Visual | Meaning and configuration |
+| --- | --- |
+| `opacity` | Overlapping circles reveal transparency. `opaqueValue` defaults to `1`; set it to `100` for a percentage domain. |
+| `blur` | A single filled circle softens with blur; the numeric value means CSS pixels. The readout stays sharp. |
+| `pan` | Position between left/centre/right references, defaulting to `-1`, `0`, `1`. Set `left`, `center`, `right` for another domain, such as `-100`, `0`, `100`. |
+| `stereo-width` | Separation around mono and unity references, defaulting to `0` and `1`. Override `mono` and `unity` for another scale. |
+| `pitch` | Signed pitch ruler. `unit` defaults to `'semitones'`; use `'cents'` for fine tuning. The slider's `unit`/`formatValue` still controls its text. |
+| `playback` | Bundled direction and scissors icons. Map app values using `modes`, e.g. `{ fwd: 'forward', pingPong: 'ping-pong' }`. Options retain their original stored values and labels. |
+
+Each visual uses one column. Graphics update immediately and remain informative
+without animation or hover. Unsupported or invalid visual configuration falls
+back to the ordinary slot. Other framework panels continue rendering their normal
+slider/select; these presentations belong to the React `MovePanel`.
+
+Try the example app's `/specialized` page. The remaining candidates and proposed
+multi-column surfaces are recorded in [the control roadmap](docs/specialized-controls-roadmap.md).
+
 ### Toggle
 
 ```tsx
