@@ -63,6 +63,7 @@ export { default as CurveComposer } from './components/CurveComposer.svelte';
 export {
   defaultComposition,
   buildSamplers,
+  springify,
   readComposition,
   directionPhase,
   splitSegment,
@@ -90,6 +91,8 @@ export type {
   CurveComposition,
   CompositionRead,
   CompositionSamplers,
+  Sampler,
+  SpringifyOptions,
   DriverDirection,
 } from '../curve-composer-core';
 export { default as TextControl } from './components/TextControl.svelte';

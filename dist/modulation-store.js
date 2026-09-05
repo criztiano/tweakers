@@ -111,6 +111,20 @@ function bezierY(ease, x) {
   return bezierAxis(ease[1], ease[3], s);
 }
 var SPRING_SAMPLES = 72;
+function integrateSpringTrace(targets, stiffness, damping, mass, initial, collect = true) {
+  const points = collect ? [initial.position] : [];
+  const steps = Math.max(1, targets.length - 1);
+  const dt = 1 / steps;
+  let { position, velocity } = initial;
+  for (let i = 1; i <= steps; i++) {
+    const target = targets[i] ?? targets[targets.length - 1] ?? 0;
+    const acceleration = (-stiffness * (position - target) - damping * velocity) / mass;
+    velocity += acceleration * dt;
+    position += velocity * dt;
+    if (collect) points.push(position);
+  }
+  return { points, state: { position, velocity } };
+}
 function springPoints(curvature, steepness = 0) {
   const visualDuration = 1;
   const bounce = clamp01((clampBipolar(curvature) + 1) / 2) * 0.6;
@@ -120,18 +134,10 @@ function springPoints(curvature, steepness = 0) {
   stiffness *= Math.max(0.2, 1 + clampBipolar(steepness) * 0.9);
   const dampingRatio = 1 - bounce;
   const damping = 2 * dampingRatio * Math.sqrt(stiffness * mass);
-  const raw = [];
-  const steps = SPRING_SAMPLES;
-  const dt = visualDuration / steps;
-  let position = 0;
-  let velocity = 0;
-  for (let i = 0; i <= steps; i++) {
-    raw.push(position);
-    const acceleration = (-stiffness * (position - 1) - damping * velocity) / mass;
-    velocity += acceleration * dt;
-    position += velocity * dt;
-  }
-  return raw;
+  return integrateSpringTrace(new Array(SPRING_SAMPLES + 1).fill(1), stiffness, damping, mass, {
+    position: 0,
+    velocity: 0
+  }).points;
 }
 function interp(points, t) {
   const x = clamp01(t) * (points.length - 1);

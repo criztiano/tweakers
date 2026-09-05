@@ -414,8 +414,8 @@ export function Library() {
           </Card>
         </Section>
 
-        <Section index="15" title="Curve Composer" hint="Compose several curves into one. Split divides the time axis into more segments; quick-click a segment to cycle its shape (linear → easeIn → easeOut → easeInOut → spring); drag a segment's middle for curvature; drag a divider to retime neighbors. Add a driver — a stacked lane below that re-paces the reading — and set Direction (forward / mirror / reverse)." single>
-          <Card title="CurveComposer" desc="An editable curve series with an optional time-warping driver lane. Each segment owns a slice of the horizontal time axis (its relative duration); quick-click cycles its curve type, dragging its body changes the curvature amount, and dragging a shared divider trades duration between neighbors. Double-click splits a segment in two. The driver is a single stacked curve below that remaps the reading pace of the series above; Direction reverses or ping-pongs the whole composition. Curves are SVG, themed via currentColor; curveColor and playheadColor are overridable." code="<CurveComposer segments driver direction onSegmentsChange onDriverChange getPhase />">
+        <Section index="15" title="Curve Composer" hint="Compose a moving target signal, then attach an elastic follower with springify. The follower is pulled toward the designed value while its mass, stiffness, and damping create lag, momentum, and bounce." single>
+          <Card title="CurveComposer" desc="The shared output axis makes the coupling literal: the square is the designed target, the round dot is its spring-attached follower, and the line between them is the elastic gap. Tune stiffness, damping, and mass live. Normalize 0–1 fits the follower's complete over-bouncing trace into range without clipping; loop solves a seamless periodic state for repeating signals." code="springify(target, { stiffness, damping, mass, normalize, loop: true })">
             <CurveComposerShowcase />
           </Card>
         </Section>
@@ -547,6 +547,8 @@ function Card({ title, desc, code, children }: { title: string; desc: string; co
    uppercase for anything that names a thing, the reading face for prose. */
 const CSS = `
 .lib-page {
+  --curve-ease-out: cubic-bezier(0.2,0,0,1);
+  --curve-dur-fast: 150ms;
   --lib-bg: #161616;
   --lib-accent: var(--tweak-accent);
   height: 100vh;
@@ -595,9 +597,34 @@ const CSS = `
 
 /* Tab bar for the slider type switcher — the panel's tab idiom, in miniature */
 .lib-tabs { display: inline-flex; align-self: center; margin-left: auto; gap: 4px; }
-.lib-tab { font-family: var(--tweak-font-label); font-size: 12px; text-transform: uppercase; padding: 5px 10px; border: none; border-radius: var(--tweak-radius); background: var(--tweak-surface); color: var(--tweak-text-label); cursor: pointer; transition: background 0.18s, color 0.18s; }
+.lib-tab { font-family: var(--tweak-font-label); font-size: 12px; text-transform: uppercase; padding: 5px 10px; border: none; border-radius: var(--tweak-radius); background: var(--tweak-surface); color: var(--tweak-text-label); cursor: pointer; transition: background 0.18s, color 0.18s, scale var(--curve-dur-fast) var(--curve-ease-out); }
 .lib-tab:hover { color: var(--tweak-text-root); }
 .lib-tab[data-active="true"] { background: var(--tweak-text-root); color: var(--lib-bg); }
+.lib-tab:disabled { cursor: default; opacity: 0.45; }
+.lib-tab:focus-visible, .curve-spring-toggle .tweakers-checkbox:focus-visible { outline: 2px solid var(--tweak-affordance-active); outline-offset: 2px; }
+.curve-pressable:active { scale: .97; }
+
+.curve-output-comparison { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.curve-output-readouts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; }
+.curve-output-readout { display: grid; grid-template-columns: auto minmax(0, 1fr) 7ch; align-items: center; gap: 6px; min-width: 0; }
+.curve-output-key { width: 10px; height: 10px; flex: none; }
+.curve-output-key-target { border-radius: 2px; }
+.curve-output-key-follower { border-radius: 50%; }
+.curve-output-label, .curve-output-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.curve-output-label { font-family: var(--tweak-font-label); font-size: 11px; text-transform: uppercase; color: var(--tweak-text-label); }
+.curve-output-value { flex: 0 0 7ch; text-align: right; font-family: var(--tweak-font-label); font-size: 11px; color: var(--tweak-text-root); font-variant-numeric: tabular-nums; }
+.curve-output-track { position: relative; height: 32px; min-width: 0; overflow: hidden; background: var(--tweak-surface); border-radius: var(--tweak-radius); }
+.curve-output-band { position: absolute; z-index: 1; top: 15px; left: 0; width: 1px; height: 2px; border-radius: 999px; background: var(--tweak-text-tertiary); opacity: .7; transform-origin: 0 50%; }
+.curve-output-indicator { position: absolute; z-index: 2; top: 8px; left: 0; width: 16px; height: 16px; }
+.curve-output-target { border-radius: 3px; }
+.curve-output-follower { border-radius: 50%; box-shadow: 0 0 0 2px var(--tweak-surface); }
+.curve-output-bound { position: absolute; top: 50%; z-index: 0; transform: translate(-50%, -50%); font-family: var(--tweak-font-label); font-size: 8px; color: var(--tweak-text-tertiary); opacity: 0.55; pointer-events: none; }
+.curve-output-marker { position: absolute; z-index: 3; top: 50%; width: 7px; height: 7px; border-radius: 50%; background: var(--tweak-text-tertiary); transform: translate(-50%, -50%) scale(1); transition: background var(--curve-dur-fast) var(--curve-ease-out), transform var(--curve-dur-fast) var(--curve-ease-out); }
+.curve-spring-toggle { align-self: flex-start; min-width: 0; }
+.curve-spring-toggle .tweakers-labeled-control-check { min-height: 32px; padding-right: 8px; }
+.curve-spring-toggle .tweakers-checkbox { transition-property: scale, background; transition-duration: var(--curve-dur-fast); transition-timing-function: var(--curve-ease-out); }
+.curve-spring-toggle .tweakers-checkbox:active { scale: .97; }
+.curve-spring-controls { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 
 /* Surface the ShortcutsMenu trigger (normally inside a panel) on the section head */
 .lib-section-headline .tweakers-shortcuts-trigger { margin-left: auto; align-self: center; }
@@ -648,5 +675,8 @@ const CSS = `
   .lib-live { grid-template-columns: 1fr; }
   .lib-window { height: 480px; }
 }
-@media (max-width: 520px) { .lib-grid { grid-template-columns: 1fr; } .lib-tabs { margin-left: 0; } }
+@media (max-width: 520px) { .lib-grid { grid-template-columns: 1fr; } .lib-tabs { margin-left: 0; } .curve-output-readouts { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce){
+  .lib-page,.lib-page *,.lib-page *::before,.lib-page *::after{ animation-duration:.01ms!important; animation-iteration-count:1!important; transition-duration:.01ms!important; scroll-behavior:auto!important; }
+}
 `;

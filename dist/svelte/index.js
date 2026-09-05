@@ -32,7 +32,7 @@ export { default as CurveComposer } from './components/CurveComposer.svelte';
 // below: a host app driving its own composition state needs them, and they are
 // otherwise reachable only from the React entry. `tweakers/curve-composer-core`
 // serves the same functions to code that must stay framework-free.
-export { defaultComposition, buildSamplers, readComposition, directionPhase, splitSegment, removeSegment, cycleSegmentType, flipSegment, redistributeWeight, setSegmentCurvature, setSegmentSteepness, setSegmentOvershoot, setSegmentAnticipate, addDriver, removeDriver, cycleDriverType, flipDriver, setDriverCurvature, setDriverSteepness, setDriverOvershoot, setDriverAnticipate, } from '../curve-composer-core';
+export { defaultComposition, buildSamplers, springify, readComposition, directionPhase, splitSegment, removeSegment, cycleSegmentType, flipSegment, redistributeWeight, setSegmentCurvature, setSegmentSteepness, setSegmentOvershoot, setSegmentAnticipate, addDriver, removeDriver, cycleDriverType, flipDriver, setDriverCurvature, setDriverSteepness, setDriverOvershoot, setDriverAnticipate, } from '../curve-composer-core';
 export { default as TextControl } from './components/TextControl.svelte';
 export { default as SelectControl } from './components/SelectControl.svelte';
 export { default as ColorControl } from './components/ColorControl.svelte';

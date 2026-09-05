@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   deriveEase,
   buildSampler,
+  springify,
   buildSamplers,
   readComposition,
   directionPhase,
@@ -362,6 +363,109 @@ describe('buildSampler', () => {
     expect(peak).toBeGreaterThan(1); // visible bounce
     expect(spring(1)).toBeGreaterThan(0.85); // settled back near 1
     expect(spring(1)).toBeLessThan(1.15);
+  });
+});
+
+describe('springify', () => {
+  const linear = (t: number) => t;
+  const triangle = (t: number) => 1 - Math.abs(1 - 2 * t);
+  const sampleCurve = (sample: (t: number) => number, count = 400) =>
+    Array.from({ length: count + 1 }, (_, i) => sample(i / count));
+
+  it('keeps the follower still until the source target moves', () => {
+    const delayedStep = (t: number) => (t < 0.5 ? 0 : 1);
+    const follower = springify(delayedStep);
+    expect(follower(0.45)).toBe(0);
+    expect(follower(0.55)).toBeGreaterThan(0);
+    expect(follower(0.55)).toBeLessThan(delayedStep(0.55));
+  });
+
+  it('follows a moving source with lag and retained momentum', () => {
+    const follower = springify(triangle, { stiffness: 100, damping: 5 });
+    expect(follower(0.25)).toBeLessThan(triangle(0.25));
+    expect(follower(0.75)).toBeGreaterThan(triangle(0.75));
+  });
+
+  it('preserves physical overshoot by default', () => {
+    const follower = springify(triangle, { stiffness: 100, damping: 5 });
+    const values = sampleCurve(follower);
+    expect(Math.min(...values)).toBeLessThan(0);
+    expect(Math.max(...values)).toBeGreaterThan(1);
+  });
+
+  it('affinely normalizes an over-bouncing trace instead of clipping it', () => {
+    const raw = springify(triangle, { stiffness: 100, damping: 5 });
+    const normalized = springify(triangle, { stiffness: 100, damping: 5, normalize: true });
+    const rawValues = sampleCurve(raw, 800);
+    const normalizedValues = sampleCurve(normalized, 800);
+    for (const value of normalizedValues) {
+      expect(value).toBeGreaterThanOrEqual(0);
+      expect(value).toBeLessThanOrEqual(1);
+    }
+
+    const overbounce = rawValues
+      .map((value, i) => ({ value, normalized: normalizedValues[i] }))
+      .filter(({ value }) => value > 1);
+    expect(overbounce.length).toBeGreaterThan(2);
+    expect(new Set(overbounce.map(({ normalized: value }) => value.toFixed(5))).size).toBeGreaterThan(2);
+
+    const times = [0.2, 0.5, 0.8];
+    const rawTriplet = times.map(raw);
+    const normalizedTriplet = times.map(normalized);
+    const rawRatio = (rawTriplet[1] - rawTriplet[0]) / (rawTriplet[2] - rawTriplet[0]);
+    const normalizedRatio =
+      (normalizedTriplet[1] - normalizedTriplet[0]) / (normalizedTriplet[2] - normalizedTriplet[0]);
+    expect(normalizedRatio).toBeCloseTo(rawRatio, 8);
+  });
+
+  it('solves a seamless periodic follower for looping composer signals', () => {
+    const composition = { ...defaultComposition(), direction: 'mirror' as const };
+    const samplers = buildSamplers(composition);
+    const source = (t: number) => readComposition(composition, t, samplers).value;
+    const follower = springify(source, { stiffness: 100, damping: 5, loop: true });
+    expect(source(0)).toBeCloseTo(source(1), 10);
+    expect(follower(0)).toBeCloseTo(follower(1), 10);
+  });
+
+  it('leaves an already in-range follower unchanged when normalization is enabled', () => {
+    const raw = springify(linear);
+    const normalized = springify(linear, { normalize: true });
+    for (let i = 0; i <= 100; i++) expect(normalized(i / 100)).toBeCloseTo(raw(i / 100), 8);
+  });
+
+  it('holds the last finite source target when later samples are non-finite', () => {
+    const follower = springify((t) => (t < 0.25 ? 0 : Number.NaN), { normalize: true });
+    for (let i = 0; i <= 100; i++) expect(follower(i / 100)).toBe(0);
+  });
+
+  it('supports finite, monotonic overdamped following', () => {
+    const delayedStep = (t: number) => (t < 0.2 ? 0 : 1);
+    const follower = springify(delayedStep, { stiffness: 100, damping: 40 });
+    const values = Array.from({ length: 201 }, (_, i) => follower(i / 200));
+    expect(values.every(Number.isFinite)).toBe(true);
+    for (let i = 1; i < values.length; i++) expect(values[i]).toBeGreaterThanOrEqual(values[i - 1]);
+    expect(values.at(-1)).toBeLessThan(1);
+  });
+
+  it('accepts zero damping for an undamped spring', () => {
+    const follower = springify((t) => (t < 0.2 ? 0 : 1), { stiffness: 100, damping: 0 });
+    const values = sampleCurve(follower);
+    expect(Math.max(...values)).toBeGreaterThan(1.5);
+  });
+
+  it('keeps constrained and non-finite physics options numerically stable', () => {
+    const follower = springify(triangle, { stiffness: -10, damping: Number.POSITIVE_INFINITY, mass: 0 });
+    expect(sampleCurve(follower).every(Number.isFinite)).toBe(true);
+  });
+
+  it('responds faster with more stiffness and slower with more mass', () => {
+    const delayedStep = (t: number) => (t < 0.5 ? 0 : 1);
+    const soft = springify(delayedStep, { stiffness: 25, damping: 10, mass: 1 });
+    const stiff = springify(delayedStep, { stiffness: 100, damping: 10, mass: 1 });
+    const light = springify(delayedStep, { stiffness: 100, damping: 10, mass: 1 });
+    const heavy = springify(delayedStep, { stiffness: 100, damping: 10, mass: 4 });
+    expect(stiff(0.55)).toBeGreaterThan(soft(0.55));
+    expect(light(0.55)).toBeGreaterThan(heavy(0.55));
   });
 });
 

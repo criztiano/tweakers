@@ -46,6 +46,8 @@ export { AnalyserVisualization } from './components/AnalyserVisualization';
 export type { AnalyserSource, AnalyserVariant, AnalyserMode, AnalyserScale, AnalyserSpring } from './components/AnalyserVisualization';
 export { CurveComposer } from './components/CurveComposer';
 export type { CurveType, CurveSegment, CurveDriver, CurveComposition, DriverDirection } from './components/CurveComposer';
+export { springify } from '../curve-composer-core';
+export type { Sampler, SpringifyOptions } from '../curve-composer-core';
 export { TextControl } from './components/TextControl';
 export { SelectControl } from './components/SelectControl';
 export { ColorControl } from './components/ColorControl';
