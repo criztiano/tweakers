@@ -16,6 +16,7 @@ globals.window ??= { innerHeight: 800, addEventListener() {}, removeEventListene
 // `createNodeMock` make the body double as a react-test-renderer container,
 // since refs inside a portal resolve against the portal's container.
 const nodeMock = () => ({
+  style: {},
   focus() {},
   select() {},
   addEventListener() {},

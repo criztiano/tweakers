@@ -209,6 +209,7 @@ export function Library() {
       <header className="lib-header">
         <div className="lib-header-top">
           <Link to="/" className="lib-back">← Demo</Link>
+          <Link to="/specialized" className="lib-back">Specialized controls →</Link>
           <div className="lib-theme-switch" role="group" aria-label="Theme">
             {(['dark', 'light'] as const).map((t) => (
               <button key={t} className="lib-theme-btn" data-active={String(theme === t)} onClick={() => setTheme(t)}>
