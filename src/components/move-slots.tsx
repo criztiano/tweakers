@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import type { ControlMeta } from '../store/TweakStore';
 import { LUCIDE_ICONS } from '../icons';
 import { enumOptionLabel, enumOptionValue } from '../move-layout';
@@ -207,6 +207,40 @@ export function MoveSlotEnumBody({
   );
 }
 
+/** The XY slot face. Coordinates are normalized screen positions (Y down).
+ * The panel owns gestures and normalization; a preview replaces the crosshair.
+ */
+export function MoveSlotXYBody({ label, value, position, gridN, shape = null }: {
+  label: string;
+  value: ReactNode;
+  position: { x: number; y: number };
+  gridN: number;
+  shape?: string | null;
+}) {
+  return (
+    <>
+      <div className="tweakers-move-xy">
+        {shape !== null ? (
+          <MoveSlotShape d={shape} className="tweakers-move-xy-curve" />
+        ) : (
+          <>
+            {gridN > 0 && (
+              <span className="tweakers-move-xy-grid" style={{
+                '--tweak-xy-grid-step-x': `${100 / gridN}%`,
+                '--tweak-xy-grid-step-y': `${100 / gridN}%`,
+              } as CSSProperties} />
+            )}
+            <span className="tweakers-move-xy-line" data-axis="x" style={{ top: `${position.y * 100}%` }} />
+            <span className="tweakers-move-xy-line" data-axis="y" style={{ left: `${position.x * 100}%` }} />
+            <span className="tweakers-move-xy-dot" style={{ left: `${position.x * 100}%`, top: `${position.y * 100}%` }} />
+          </>
+        )}
+      </div>
+      <MoveSlotReadout label={label} value={value} />
+    </>
+  );
+}
+
 /** The range slot — readout plus the two-handled span bar. */
 export function MoveSlotRangeBody({
   label, value, lo, hi,
@@ -275,8 +309,7 @@ export function MoveSlotFilterBody({
  * The dictionary itself — every big-slot case the kit knows, named, with
  * the component that draws it. `value`, `icon`, `curve` and `enum` are
  * faces of shared bodies (the same markup, chosen by `moveSlotKind`);
- * `xy` stays inline in the MovePanel for now, its face being nothing but
- * its gesture surface.
+ * every face is reusable; gesture ownership stays in MovePanel.
  */
 export const MOVE_SLOT_LIBRARY = {
   default: { description: 'name centred, value on touch, fill bar', component: MoveSlotDefaultBody },
@@ -284,6 +317,7 @@ export const MOVE_SLOT_LIBRARY = {
   icon: { description: 'option picker showing the current option as a glyph', component: MoveSlotEnumBody },
   curve: { description: 'option picker drawing the current option’s shape — curve selection', component: MoveSlotEnumBody },
   enum: { description: 'stepped option picker showing every option on a list screen', component: MoveSlotEnumBody },
+  xy: { description: 'two axes in one gesture field, or a live shape preview', component: MoveSlotXYBody },
   range: { description: 'two handles on one bar; volume knob is the second hand', component: MoveSlotRangeBody },
   filter: { description: '2 slots: cutoff + resonance as one response picture', component: MoveSlotFilterBody },
-} as const;
+} as const satisfies Record<MoveSlotKind, { description: string; component: unknown }>;

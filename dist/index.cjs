@@ -91,6 +91,7 @@ __export(index_exports, {
   MoveSlotRangeBody: () => MoveSlotRangeBody,
   MoveSlotReadout: () => MoveSlotReadout,
   MoveSlotShape: () => MoveSlotShape,
+  MoveSlotXYBody: () => MoveSlotXYBody,
   MoveSurfaceStore: () => MoveSurfaceStore,
   MoveVolumeDisplay: () => MoveVolumeDisplay,
   MoveWaveform: () => MoveWaveform,
@@ -11102,6 +11103,20 @@ function MoveSlotEnumBody({
     )) }) })
   ] });
 }
+function MoveSlotXYBody({ label, value, position, gridN, shape = null }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)(import_jsx_runtime43.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("div", { className: "tweakers-move-xy", children: shape !== null ? /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(MoveSlotShape, { d: shape, className: "tweakers-move-xy-curve" }) : /* @__PURE__ */ (0, import_jsx_runtime43.jsxs)(import_jsx_runtime43.Fragment, { children: [
+      gridN > 0 && /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("span", { className: "tweakers-move-xy-grid", style: {
+        "--tweak-xy-grid-step-x": `${100 / gridN}%`,
+        "--tweak-xy-grid-step-y": `${100 / gridN}%`
+      } }),
+      /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("span", { className: "tweakers-move-xy-line", "data-axis": "x", style: { top: `${position.y * 100}%` } }),
+      /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("span", { className: "tweakers-move-xy-line", "data-axis": "y", style: { left: `${position.x * 100}%` } }),
+      /* @__PURE__ */ (0, import_jsx_runtime43.jsx)("span", { className: "tweakers-move-xy-dot", style: { left: `${position.x * 100}%`, top: `${position.y * 100}%` } })
+    ] }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime43.jsx)(MoveSlotReadout, { label, value })
+  ] });
+}
 function MoveSlotRangeBody({
   label,
   value,
@@ -11149,6 +11164,7 @@ var MOVE_SLOT_LIBRARY = {
   icon: { description: "option picker showing the current option as a glyph", component: MoveSlotEnumBody },
   curve: { description: "option picker drawing the current option\u2019s shape \u2014 curve selection", component: MoveSlotEnumBody },
   enum: { description: "stepped option picker showing every option on a list screen", component: MoveSlotEnumBody },
+  xy: { description: "two axes in one gesture field, or a live shape preview", component: MoveSlotXYBody },
   range: { description: "two handles on one bar; volume knob is the second hand", component: MoveSlotRangeBody },
   filter: { description: "2 slots: cutoff + resonance as one response picture", component: MoveSlotFilterBody }
 };
@@ -11678,34 +11694,16 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 children: [
                   valueFirst && /* @__PURE__ */ (0, import_jsx_runtime44.jsx)("span", { className: "tweakers-move-dial-sub", children: meta.label }),
                   /* @__PURE__ */ (0, import_jsx_runtime44.jsx)(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                  /* @__PURE__ */ (0, import_jsx_runtime44.jsx)("div", { className: "tweakers-move-xy", children: preview ? /* @__PURE__ */ (0, import_jsx_runtime44.jsx)(
-                    "svg",
+                  /* @__PURE__ */ (0, import_jsx_runtime44.jsx)(
+                    MoveSlotXYBody,
                     {
-                      className: "tweakers-move-xy-curve",
-                      viewBox: "0 0 100 100",
-                      preserveAspectRatio: "none",
-                      "aria-hidden": "true",
-                      children: /* @__PURE__ */ (0, import_jsx_runtime44.jsx)("path", { d: previewPathData(preview.points) })
+                      label: meta.label,
+                      value: preview ? preview.label : `${Math.round(pos.x * 100)}\xB7${Math.round((1 - pos.y) * 100)}`,
+                      position: pos,
+                      gridN,
+                      shape: preview ? previewPathData(preview.points) : null
                     }
-                  ) : /* @__PURE__ */ (0, import_jsx_runtime44.jsxs)(import_jsx_runtime44.Fragment, { children: [
-                    gridN > 0 && /* @__PURE__ */ (0, import_jsx_runtime44.jsx)(
-                      "span",
-                      {
-                        className: "tweakers-move-xy-grid",
-                        style: {
-                          "--tweak-xy-grid-step-x": `${100 / gridN}%`,
-                          "--tweak-xy-grid-step-y": `${100 / gridN}%`
-                        }
-                      }
-                    ),
-                    /* @__PURE__ */ (0, import_jsx_runtime44.jsx)("span", { className: "tweakers-move-xy-line", "data-axis": "x", style: { top: `${pos.y * 100}%` } }),
-                    /* @__PURE__ */ (0, import_jsx_runtime44.jsx)("span", { className: "tweakers-move-xy-line", "data-axis": "y", style: { left: `${pos.x * 100}%` } }),
-                    /* @__PURE__ */ (0, import_jsx_runtime44.jsx)("span", { className: "tweakers-move-xy-dot", style: { left: `${pos.x * 100}%`, top: `${pos.y * 100}%` } })
-                  ] }) }),
-                  /* @__PURE__ */ (0, import_jsx_runtime44.jsxs)("div", { className: "tweakers-move-dial-readout", children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime44.jsx)("span", { className: "tweakers-move-dial-label", "data-long": meta.label.length > 9 || void 0, children: meta.label }),
-                    /* @__PURE__ */ (0, import_jsx_runtime44.jsx)("span", { className: "tweakers-move-dial-value", children: preview ? preview.label : `${Math.round(pos.x * 100)}\xB7${Math.round((1 - pos.y) * 100)}` })
-                  ] })
+                  )
                 ]
               },
               meta.path
@@ -15759,6 +15757,7 @@ function AudioLevelMeter(props) {
   MoveSlotRangeBody,
   MoveSlotReadout,
   MoveSlotShape,
+  MoveSlotXYBody,
   MoveSurfaceStore,
   MoveVolumeDisplay,
   MoveWaveform,

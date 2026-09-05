@@ -10844,6 +10844,20 @@ function MoveSlotEnumBody({
     )) }) })
   ] });
 }
+function MoveSlotXYBody({ label, value, position, gridN, shape = null }) {
+  return /* @__PURE__ */ jsxs38(Fragment10, { children: [
+    /* @__PURE__ */ jsx43("div", { className: "tweakers-move-xy", children: shape !== null ? /* @__PURE__ */ jsx43(MoveSlotShape, { d: shape, className: "tweakers-move-xy-curve" }) : /* @__PURE__ */ jsxs38(Fragment10, { children: [
+      gridN > 0 && /* @__PURE__ */ jsx43("span", { className: "tweakers-move-xy-grid", style: {
+        "--tweak-xy-grid-step-x": `${100 / gridN}%`,
+        "--tweak-xy-grid-step-y": `${100 / gridN}%`
+      } }),
+      /* @__PURE__ */ jsx43("span", { className: "tweakers-move-xy-line", "data-axis": "x", style: { top: `${position.y * 100}%` } }),
+      /* @__PURE__ */ jsx43("span", { className: "tweakers-move-xy-line", "data-axis": "y", style: { left: `${position.x * 100}%` } }),
+      /* @__PURE__ */ jsx43("span", { className: "tweakers-move-xy-dot", style: { left: `${position.x * 100}%`, top: `${position.y * 100}%` } })
+    ] }) }),
+    /* @__PURE__ */ jsx43(MoveSlotReadout, { label, value })
+  ] });
+}
 function MoveSlotRangeBody({
   label,
   value,
@@ -10891,6 +10905,7 @@ var MOVE_SLOT_LIBRARY = {
   icon: { description: "option picker showing the current option as a glyph", component: MoveSlotEnumBody },
   curve: { description: "option picker drawing the current option\u2019s shape \u2014 curve selection", component: MoveSlotEnumBody },
   enum: { description: "stepped option picker showing every option on a list screen", component: MoveSlotEnumBody },
+  xy: { description: "two axes in one gesture field, or a live shape preview", component: MoveSlotXYBody },
   range: { description: "two handles on one bar; volume knob is the second hand", component: MoveSlotRangeBody },
   filter: { description: "2 slots: cutoff + resonance as one response picture", component: MoveSlotFilterBody }
 };
@@ -10975,7 +10990,7 @@ var MoveVolumeDisplayClass = class {
 var MoveVolumeDisplay = new MoveVolumeDisplayClass();
 
 // src/components/MovePanel.tsx
-import { Fragment as Fragment11, jsx as jsx44, jsxs as jsxs39 } from "react/jsx-runtime";
+import { jsx as jsx44, jsxs as jsxs39 } from "react/jsx-runtime";
 var MOVE_TRACK_COLORS = ["#4274f4", "#d83dff", "#ff4d07", "#52bd06"];
 var PAD_ROWS = 4;
 var DIAL_TRACK_INSET = 10;
@@ -11420,34 +11435,16 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 children: [
                   valueFirst && /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-sub", children: meta.label }),
                   /* @__PURE__ */ jsx44(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                  /* @__PURE__ */ jsx44("div", { className: "tweakers-move-xy", children: preview ? /* @__PURE__ */ jsx44(
-                    "svg",
+                  /* @__PURE__ */ jsx44(
+                    MoveSlotXYBody,
                     {
-                      className: "tweakers-move-xy-curve",
-                      viewBox: "0 0 100 100",
-                      preserveAspectRatio: "none",
-                      "aria-hidden": "true",
-                      children: /* @__PURE__ */ jsx44("path", { d: previewPathData(preview.points) })
+                      label: meta.label,
+                      value: preview ? preview.label : `${Math.round(pos.x * 100)}\xB7${Math.round((1 - pos.y) * 100)}`,
+                      position: pos,
+                      gridN,
+                      shape: preview ? previewPathData(preview.points) : null
                     }
-                  ) : /* @__PURE__ */ jsxs39(Fragment11, { children: [
-                    gridN > 0 && /* @__PURE__ */ jsx44(
-                      "span",
-                      {
-                        className: "tweakers-move-xy-grid",
-                        style: {
-                          "--tweak-xy-grid-step-x": `${100 / gridN}%`,
-                          "--tweak-xy-grid-step-y": `${100 / gridN}%`
-                        }
-                      }
-                    ),
-                    /* @__PURE__ */ jsx44("span", { className: "tweakers-move-xy-line", "data-axis": "x", style: { top: `${pos.y * 100}%` } }),
-                    /* @__PURE__ */ jsx44("span", { className: "tweakers-move-xy-line", "data-axis": "y", style: { left: `${pos.x * 100}%` } }),
-                    /* @__PURE__ */ jsx44("span", { className: "tweakers-move-xy-dot", style: { left: `${pos.x * 100}%`, top: `${pos.y * 100}%` } })
-                  ] }) }),
-                  /* @__PURE__ */ jsxs39("div", { className: "tweakers-move-dial-readout", children: [
-                    /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-label", "data-long": meta.label.length > 9 || void 0, children: meta.label }),
-                    /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-value", children: preview ? preview.label : `${Math.round(pos.x * 100)}\xB7${Math.round((1 - pos.y) * 100)}` })
-                  ] })
+                  )
                 ]
               },
               meta.path
@@ -13571,7 +13568,7 @@ function useTweakTimeline(name, config, options) {
 import { memo, useCallback as useCallback22, useEffect as useEffect28, useLayoutEffect as useLayoutEffect5, useRef as useRef35, useState as useState29, useSyncExternalStore as useSyncExternalStore12 } from "react";
 import { createPortal as createPortal10 } from "react-dom";
 import { AnimatePresence as AnimatePresence8, motion as motion12 } from "motion/react";
-import { Fragment as Fragment12, jsx as jsx48, jsxs as jsxs43 } from "react/jsx-runtime";
+import { Fragment as Fragment11, jsx as jsx48, jsxs as jsxs43 } from "react/jsx-runtime";
 var DRAG_THRESHOLD_PX = 3;
 var LOOP_DRAG_THRESHOLD_PX = 4;
 var MAJOR_TICK_TARGET_PX = 140;
@@ -14529,7 +14526,7 @@ var TimelineSection = memo(function TimelineSection2({
                       if (!activeLoop || pxPerSecond <= 0) return null;
                       const left = (activeLoop.start - safeViewStart) * pxPerSecond;
                       const width = Math.max(0, (activeLoop.end - activeLoop.start) * pxPerSecond);
-                      return /* @__PURE__ */ jsxs43(Fragment12, { children: [
+                      return /* @__PURE__ */ jsxs43(Fragment11, { children: [
                         /* @__PURE__ */ jsx48("div", { className: "tweakers-timeline-loop-dim", style: { left: 0, width: Math.max(0, left) } }),
                         /* @__PURE__ */ jsx48("div", { className: "tweakers-timeline-loop-dim", style: { left: left + width, right: 0 } }),
                         /* @__PURE__ */ jsx48(
@@ -14905,7 +14902,7 @@ function TimelineClip({
     }
   }
   const barTitle = composite ? `${clip.label} \u2014 composite of its property tracks${looping ? " \xB7 repeats through timeline" : ""} \xB7 click to expand` : `${clip.label} \u2014 ${formatSeconds(at)} for ${durationText}${fixedDuration ? " (duration set by spring physics)" : ""}${looping ? " \xB7 repeats through timeline" : ""}${delayMode ? " \xB7 drag to phase-shift" : ""}`;
-  return /* @__PURE__ */ jsxs43(Fragment12, { children: [
+  return /* @__PURE__ */ jsxs43(Fragment11, { children: [
     ghostCycles.map((cycle) => {
       const ghostWidth = Math.max(1, cycle.duration * pxPerSecond - 2);
       return /* @__PURE__ */ jsx48(
@@ -14950,7 +14947,7 @@ function TimelineClip({
         onPointerCancel: handlePointerCancel,
         onLostPointerCapture: handlePointerCancel,
         title: barTitle,
-        children: composite ? /* @__PURE__ */ jsx48(Fragment12, { children: width > 56 && /* @__PURE__ */ jsx48("span", { className: "tweakers-timeline-clip-duration", children: durationText }) }) : isSteps ? /* @__PURE__ */ jsxs43(Fragment12, { children: [
+        children: composite ? /* @__PURE__ */ jsx48(Fragment11, { children: width > 56 && /* @__PURE__ */ jsx48("span", { className: "tweakers-timeline-clip-duration", children: durationText }) }) : isSteps ? /* @__PURE__ */ jsxs43(Fragment11, { children: [
           steps.map((step) => {
             const segmentWidth = step.duration * pxPerSecond;
             return /* @__PURE__ */ jsx48(
@@ -14977,7 +14974,7 @@ function TimelineClip({
             )
           ),
           !steps[0].isPhysics && /* @__PURE__ */ jsx48("div", { className: "tweakers-timeline-clip-handle", "data-edge": "start" })
-        ] }) : /* @__PURE__ */ jsxs43(Fragment12, { children: [
+        ] }) : /* @__PURE__ */ jsxs43(Fragment11, { children: [
           resizable && /* @__PURE__ */ jsx48("div", { className: "tweakers-timeline-clip-handle", "data-edge": "start" }),
           width > 56 && /* @__PURE__ */ jsx48("span", { className: "tweakers-timeline-clip-duration", children: durationText }),
           resizable && /* @__PURE__ */ jsx48("div", { className: "tweakers-timeline-clip-handle", "data-edge": "end" })
@@ -15018,7 +15015,7 @@ function ButtonGroup({ buttons }) {
 import { useState as useState30, useRef as useRef36, useEffect as useEffect29, useCallback as useCallback23 } from "react";
 import { createPortal as createPortal11 } from "react-dom";
 import { motion as motion13, AnimatePresence as AnimatePresence9 } from "motion/react";
-import { Fragment as Fragment13, jsx as jsx51, jsxs as jsxs45 } from "react/jsx-runtime";
+import { Fragment as Fragment12, jsx as jsx51, jsxs as jsxs45 } from "react/jsx-runtime";
 function formatShortcutKey(sc) {
   if (!sc.key) return "\u2014";
   const mod = sc.modifier === "alt" ? "\u2325" : sc.modifier === "shift" ? "\u21E7" : sc.modifier === "meta" ? "\u2318" : "";
@@ -15085,7 +15082,7 @@ function ShortcutsMenu({ panelId }) {
       label: findLabel(panel.controls)
     };
   });
-  return /* @__PURE__ */ jsxs45(Fragment13, { children: [
+  return /* @__PURE__ */ jsxs45(Fragment12, { children: [
     /* @__PURE__ */ jsx51(
       motion13.button,
       {
@@ -15500,6 +15497,7 @@ export {
   MoveSlotRangeBody,
   MoveSlotReadout,
   MoveSlotShape,
+  MoveSlotXYBody,
   MoveSurfaceStore,
   MoveVolumeDisplay,
   MoveWaveform,
