@@ -1373,7 +1373,9 @@ interface MovePanelProps {
  * applies at 0.1× relative to where shift went down, and releasing shift
  * rebases at 1× so the value never jumps.
  *
- * Controls wired to a modulation slot wear that slot's colour as a dot, and
+ * Controls wired to a modulation slot wear the dock panel's own modulation
+ * ring — the slot's colour, and an arc running from the control's value to
+ * where the modulation is holding it — in the slot's corner, and
  * the track row carries one circle per slot — the on-screen step button.
  */
 declare function MovePanel({ theme, productionEnabled, panels: only, dock }: MovePanelProps): react_jsx_runtime.JSX.Element | null;
@@ -2019,8 +2021,8 @@ declare function dialOrigin(meta: ControlMeta): number;
  *   at arm's length you read a picture, not a word.
  * - `curve`   — an option picker whose current option draws its shape (the
  *   select's `preview` sampler) — the curve-selection slot.
- * - `enum`    — a plain stepped option picker: option name centred, one
- *   pagination cell per option.
+ * - `enum`    — a plain stepped option picker: every option on the Move's
+ *   own list screen, cut into the slot, plus one pagination cell each.
  * - `xy`      — a 2D pad filling the slot; on the hardware the column's
  *   knob turns X and the volume knob turns Y while touched.
  * - `range`   — two handles on one bar; column knob = low end, volume
@@ -2065,9 +2067,21 @@ declare function MoveSlotDefaultBody({ label, value, pct, originPct, atOrigin, }
     /** Parked on the origin exactly — the dial's zero. */
     atOrigin?: boolean;
 }): react_jsx_runtime.JSX.Element;
-/** The option picker's three faces — name, glyph, or drawn shape — plus the
- *  pagination cells. A slot with a picture reads top down: what the knob is
- *  on the tag, the picture between, what it is set to underneath. */
+/** The option picker's three faces — list, glyph, or drawn shape — plus the
+ *  pagination cells.
+ *
+ *  A face with a picture reads top down: what the knob is on the tag, the
+ *  picture between, what it is set to underneath.
+ *
+ *  With no picture to stand for the option, the slot shows the choice itself
+ *  and becomes the screen: a small head keeps the control's name, and the
+ *  list has everything under it — the current option lit, the rest dim
+ *  around it. Naming only the selection spends a whole slot saying one word;
+ *  the list spends it saying where that word sits among the others. Past the
+ *  five rows the slot holds, the list runs behind a still selection and the
+ *  pagination cells come out to say how far along the run it is. It is a
+ *  readout, not a second control — the slot's own drag, and the column's
+ *  knob, still step the options. */
 declare function MoveSlotEnumBody({ label, optionLabel, options, activeIdx, shape, glyph, }: {
     label: string;
     optionLabel: string;
@@ -2120,7 +2134,7 @@ declare const MOVE_SLOT_LIBRARY: {
         readonly component: typeof MoveSlotEnumBody;
     };
     readonly enum: {
-        readonly description: "stepped option picker, one pagination cell per option";
+        readonly description: "stepped option picker showing every option on a list screen";
         readonly component: typeof MoveSlotEnumBody;
     };
     readonly range: {
@@ -2529,6 +2543,13 @@ interface ListScreenProps {
     onSelect?: (value: string) => void;
     /** 400px with left-aligned rows, instead of the 200px centered default. */
     wide?: boolean;
+    /**
+     * How the view follows the selection. `nearest` (the default) scrolls only
+     * far enough to bring the row into view; `center` holds the selection in
+     * the middle of the screen, so a long list runs past a still row and only
+     * the two ends of it can push the selection off centre.
+     */
+    follow?: 'nearest' | 'center';
     className?: string;
     style?: CSSProperties;
 }
@@ -2543,7 +2564,7 @@ interface ListScreenProps {
  * presentational: the host owns the selection state and any wheel or
  * arrow-key stepping.
  */
-declare function ListScreen({ items, value, onSelect, wide, className, style, }: ListScreenProps): ReactElement;
+declare function ListScreen({ items, value, onSelect, wide, follow, className, style, }: ListScreenProps): ReactElement;
 
 /**
  * The modulation layer's runtime — a singleton beside the TweakStore.

@@ -10,6 +10,7 @@ import type { TweakTheme } from './TweakRoot';
 import { buildMovePages, buildModMovePage, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, isEnumDial, isSpanContinuation, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_DIALS, MOVE_PADS } from '../move-layout';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
 import { MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody } from './move-slots';
+import { ModRing } from './ModRing';
 import { MoveSurfaceStore, type MovePadCell } from '../move-surface-store';
 import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValue, applyDetentAxis, type XYValue } from '../xy-pad-core';
 import { nearestHandle, type RangeValue } from '../range-slider-core';
@@ -59,6 +60,26 @@ function boldColons(text: string) {
   if (!text.includes(':')) return text;
   return text.split(':').flatMap((part, i) =>
     i === 0 ? [part] : [<span key={`sep-${i}`} className="tweakers-move-volume-sep">:</span>, part]
+  );
+}
+
+/**
+ * A wired control's ring, on this surface: the dock panel's own ring — slot
+ * colour, live arc — placed in a dial slot's corner, or inline on a pad chip.
+ * Module scope, not a closure inside the panel: the arc subscribes per frame,
+ * and a component re-declared on every render would tear that down and build
+ * it again on every value the panel draws.
+ */
+function MoveModRing({ panelId, path, pad }: { panelId: string; path: string; pad?: boolean }) {
+  const assignment = ModulationStore.getAssignment(panelId, path);
+  if (!assignment || !ModulationStore.getSlot(assignment.slot)) return null;
+  return (
+    <ModRing
+      panelId={panelId}
+      path={path}
+      assignment={assignment}
+      className={pad ? 'tweakers-move-pad-mod' : 'tweakers-move-dial-mod'}
+    />
   );
 }
 
@@ -121,7 +142,9 @@ export const MOVE_PAGE_SELECT_EVENT = 'move-tweakers:page-select';
  * applies at 0.1× relative to where shift went down, and releasing shift
  * rebases at 1× so the value never jumps.
  *
- * Controls wired to a modulation slot wear that slot's colour as a dot, and
+ * Controls wired to a modulation slot wear the dock panel's own modulation
+ * ring — the slot's colour, and an arc running from the control's value to
+ * where the modulation is holding it — in the slot's corner, and
  * the track row carries one circle per slot — the on-screen step button.
  */
 export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport' }: MovePanelProps) {
@@ -468,21 +491,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const chipLatched = (col: number, meta: ControlMeta) =>
     latched[col]?.path === meta.path || !!hwLatched[meta.path];
 
-  // A wired control wears its slot's palette colour as a dot.
-  const modColorFor = (path: string): string | null => {
-    const a = ModulationStore.getAssignment(page.panel.id, path);
-    return a && ModulationStore.getSlot(a.slot) ? modColor(a.slot) : null;
-  };
-
   // Touching a control arms it for the assignment gesture (step press).
   const armMod = (path: string) => ModulationStore.noteTouch(page.panel.id, path);
-
-  // The dot itself: absolute in a dial slot, inline on a pad chip.
-  const ModDot = ({ path, pad }: { path: string; pad?: boolean }) => {
-    const c = modColorFor(path);
-    if (!c) return null;
-    return <span className={pad ? 'tweakers-move-pad-mod' : 'tweakers-move-dial-mod'} style={{ background: c }} />;
-  };
 
   // What a dial column actually edits: a held chip wins (screen or pad),
   // then a latched one, then the column's own dial.
@@ -657,7 +667,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
                       onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
                     >
-                      <ModDot path={meta.path} />
+                      <MoveModRing panelId={page.panel.id} path={meta.path} />
                       <MoveSlotFilterBody meta={meta} value={fv} shape={shape} />
                     </div>
                   );
@@ -701,7 +711,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerCancel={() => xyRelease(meta)}
                     >
                       {valueFirst && <span className="tweakers-move-dial-sub">{meta.label}</span>}
-                      <ModDot path={meta.path} />
+                      <MoveModRing panelId={page.panel.id} path={meta.path} />
                       <div className="tweakers-move-xy">
                         {preview ? (
                           <svg
@@ -767,15 +777,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
                       onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
                     >
-                      <ModDot path={meta.path} />
+                      <MoveModRing panelId={page.panel.id} path={meta.path} />
                       <MoveSlotRangeBody label={meta.label} value={rangeReading(meta)} lo={pos.lo} hi={pos.hi} />
                     </div>
                   );
                 }
                 // A select with options is a stepped enum dial: the bar splits
                 // into one cell per option, the active cell filled, and the
-                // value line names the option. A drag picks the nearest cell;
-                // on the hardware the column's knob steps the same way.
+                // slot shows the option — as a picture where there is one, and
+                // otherwise as the whole list, lit on the current row. A drag
+                // picks the nearest cell; on the hardware the column's knob
+                // steps the same way.
                 if (isEnumDial(meta)) {
                   const options = meta.options ?? [];
                   const activeIdx = enumIndex(meta, values[meta.path]);
@@ -805,11 +817,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
                       onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
                     >
-                      {/* A slot with a picture in it reads top down: what the
-                          knob is on the chip, the picture between, what it is
-                          set to underneath. No crossfade — with the name out
-                          of the way there is nothing for the value to replace. */}
-                      <ModDot path={meta.path} />
+                      {/* An option slot reads top down: what the knob is on
+                          the chip, the picture — curve, glyph or list —
+                          between, what it is set to underneath. No crossfade:
+                          with the name out of the way there is nothing left
+                          for the value to replace. */}
+                      <MoveModRing panelId={page.panel.id} path={meta.path} />
                       <MoveSlotEnumBody
                         label={meta.label}
                         optionLabel={optionLabel}
@@ -861,7 +874,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
                   >
                     {(subbed || valueFirst) && <span className="tweakers-move-dial-sub">{meta.label}</span>}
-                    <ModDot path={meta.path} />
+                    <MoveModRing panelId={page.panel.id} path={meta.path} />
                     <MoveSlotDefaultBody
                       label={meta.label}
                       value={subValue
@@ -954,7 +967,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                         onPointerUp={() => releaseChip(col, meta)}
                         onPointerCancel={() => setHeld(null)}
                       >
-                        <ModDot path={meta.path} pad />
+                        <MoveModRing panelId={page.panel.id} path={meta.path} pad />
                         <span className="tweakers-move-pad-title">{meta.label}</span>
                         <span className="tweakers-move-pad-reading">
                           <span className="tweakers-move-pad-number">{value.num}</span>
