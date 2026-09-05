@@ -78,7 +78,9 @@
     "./styles.css": "./dist/styles.css"
   },
   "files": [
-    "dist"
+    "dist",
+    "docs",
+    "skills/tweakers-integration"
   ],
   "scripts": {
     "build": "rm -rf dist && tsup && npm run build:svelte",
@@ -88,7 +90,8 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.solid.json && tsc --noEmit -p tsconfig.vue.json && node scripts/gen-theme-css.js && svelte-check --tsconfig tsconfig.svelte.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:timeline": "tsx --test src/*.test.ts"
+    "test:timeline": "tsx --test src/*.test.ts",
+    "snapshot": "node scripts/snapshot-package.mjs"
   },
   "peerDependencies": {
     "motion": ">=11.0.0",

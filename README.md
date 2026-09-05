@@ -2,6 +2,11 @@
 
 Real-time parameter tweaking for React, Solid, Svelte, and Vue.
 
+## Guidebook
+
+Start with the [control dictionary, design language and integration standards](docs/README.md).
+For new Move controls, follow the [component contribution checklist](docs/contributing-components.md).
+
 ## Credit where it's due
 
 Tweakers began as a fork of [dialkit](https://github.com/joshpuckett/dialkit) by
