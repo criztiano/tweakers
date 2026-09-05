@@ -2,6 +2,11 @@
 
 Real-time parameter tweaking for React, Solid, Svelte, and Vue.
 
+## Guidebook
+
+Start with the [control dictionary, design language and integration standards](docs/README.md).
+For new Move controls, follow the [component contribution checklist](docs/contributing-components.md).
+
 ## Credit where it's due
 
 Tweakers began as a fork of [dialkit](https://github.com/joshpuckett/dialkit) by
@@ -942,6 +947,7 @@ Mark an item `muted` when the row is information rather than a choice — a job 
 | `value` | `string` — the selected item's value | — |
 | `onSelect` | `(value: string) => void` | — |
 | `wide` | `boolean` — 400px with left-aligned rows, instead of the 200px centered default | `false` |
+| `follow` | `'nearest' \| 'center'` — how the view follows the selection: scroll it just into view, or hold it in the middle of the screen | `'nearest'` |
 | `className` | `string` | — |
 | `style` | `React.CSSProperties` | — |
 
@@ -1018,7 +1024,11 @@ An `xy` control claims a dial slot as a 2D pad: the field draws behind the label
 
 A `range` control claims a dial slot too: the bar fills between two handle ticks, and dragging grabs the nearest handle. On the hardware it uses the same two-handed idea as the xy pad — the column's knob edits the low handle, and while a finger rests on that knob, the volume knob edits the high one (the ends never cross).
 
-A `select` with options becomes a stepped enum dial: the bar splits into one cell per option, the active cell filled, and the readout shows the option's label. Dragging the slot — or turning the column's knob — steps through the options in order.
+A `select` with options becomes a stepped enum dial. Dragging the slot — or turning the column's knob — steps through the options in order.
+
+With no picture to stand for the option (see `icon` and `preview` below), the slot shows the choice itself and turns into screen: the [list screen](#listscreen) takes the whole slot, with the control's name on a small head across the top and five option rows under it — the current one lit, the rest dim around it. The list is a readout, not a second control: the slot's own drag and the column's knob are still what step the options.
+
+Past those five rows the list runs behind a still selection: the selected row holds the middle of the screen and the options move past it, and only the two ends of the list push it off centre. A running list also softens: the rows dissolve at the top as they go under the head and at the bottom as they pass beneath the pagination cells — one cell per option, which come out only when the list is longer than the slot, since a list you can see all of already says how long it is. A picture face keeps its cells always, having only ever named one option at a time.
 
 An option can name an `icon` from the bundled [lucide](https://lucide.dev) subset (`LUCIDE_ICONS`). The glyph takes the middle of the slot, in place of the name — at arm's length you read a picture, not a word.
 
@@ -1044,7 +1054,7 @@ pitchShape: {
 },
 ```
 
-A slot showing a picture reads top down and drops the label/value crossfade, which has nothing left to swap: the control's name sits on a small chip at the top, the picture fills every pixel between the two labels (8px clear of each, edge to edge across the slot), and the option's name captions it above the pagination cells. Glyph weight is one knob, `--move-glyph-stroke` (1.25 by default) — lucide draws at 2, which reads heavy against this surface's chrome.
+A picture slot reads top down and drops the label/value crossfade, which has nothing left to swap: the control's name sits on a small chip at the top, the picture fills every pixel of the band below it (8px clear of the chip, edge to edge across the slot), and the option's name captions it above the pagination cells. A list needs no caption — it names the option itself — so it spends that room on rows instead, and its name goes edge to edge as a head. Glyph weight is one knob, `--move-glyph-stroke` (1.25 by default) — lucide draws at 2, which reads heavy against this surface's chrome.
 
 `preview` is a closure, so — like a curve row's `sample` — it is invisible to the serialized config diff and is refreshed through the same sync. That is what lets the drawing track the app's other controls while the picker stays a picker.
 
@@ -1130,7 +1140,7 @@ Time-style strings (`0:00:00`) render with bold separators so the digit groups r
 
 ## Modulation
 
-Any bounded numeric control (slider, `number` with min/max) can be driven by a modulation — an LFO, a sample & hold, and an ADSR today; envelope follower, curve, and step sequencer plug into the same registry. Modulations live in 16 slots, one per Move sequencer step button: **touch a control, press a step** and the modulation is created there and wired to the control (press again to unwire). Each slot keeps a palette colour; the track row shows a circle per slot with a pulsing dot of that colour, and the same dot marks every control the slot drives — in the Move panel and the side panel both.
+Any bounded numeric control (slider, `number` with min/max) can be driven by a modulation — an LFO, a sample & hold, and an ADSR today; envelope follower, curve, and step sequencer plug into the same registry. Modulations live in 16 slots, one per Move sequencer step button: **touch a control, press a step** and the modulation is created there and wired to the control (press again to unwire). Each slot keeps a palette colour; the track row shows a circle per slot with a pulsing dot of that colour, and every control the slot drives wears a ring in it — a small dial whose arc runs from the control's own value to where the modulation is holding it, the same ring on the Move panel's slots and on the side panel's rows.
 
 The modulated value **never enters the TweakStore.** The control keeps the value you set (the base); the modulation is a live layer your app pulls at frame time:
 
