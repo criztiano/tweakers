@@ -5897,16 +5897,19 @@ input.tweakers-list-item-title:focus {
    Nothing is inset — on this instrument a display is a hole cut in the face,
    and here the hole is the face.
 
-   The band is cut for exactly five rows: pad (3) + 5 rows (20) + 4 gaps (4)
-   + pad (3) = the 122px left below an 18px head. That is what makes "more
+   The band is cut for exactly five rows: pad (3) + 5 rows (20) + 4 gaps (3)
+   + foot (7) = the 122px left below an 18px head. That is what makes "more
    than five" the moment the list starts to run. */
 .tweakers-move-dial-screen {
   --move-list-row: 20px;
-  --move-list-gap: 4px;
+  --move-list-gap: 3px;
   --move-list-pad: 3px;
+  /* The last row sits off the floor: 4px more than the top has, which the
+     gaps give back so the five rows still land exactly. */
+  --move-list-foot: calc(var(--move-list-pad) + 4px);
   /* The whole run, laid out — what a touch grows the screen to. */
   --move-screen-full: calc(
-    var(--move-head-h) + 2 * var(--move-list-pad)
+    var(--move-head-h) + var(--move-list-pad) + var(--move-list-foot)
     + var(--move-list-count, 1) * var(--move-list-row)
     + (var(--move-list-count, 1) - 1) * var(--move-list-gap)
   );
@@ -5962,7 +5965,7 @@ input.tweakers-list-item-title:focus {
   min-height: 0;
   width: auto;
   max-height: none;
-  padding: var(--move-list-pad) 2px;
+  padding: var(--move-list-pad) 2px var(--move-list-foot);
   border-radius: 0;
   background: none;
   /* Centred while the options fit the screen, from the top once they
@@ -6325,12 +6328,12 @@ input.tweakers-list-item-title:focus {
     font-size: 12px;
     line-height: 14px;
   }
-  /* The same five rows, cut for a 100px slot: 3 + 5×14 + 4×2 + 3 = the 84px
+  /* The same five rows, cut for a 100px slot: 3 + 5×14 + 4×1 + 7 = the 84px
      left under a 16px head. Set on the screen, which is what measures the
      grown height from them; the list inherits. */
   .tweakers-move-dial-screen {
     --move-list-row: 14px;
-    --move-list-gap: 2px;
+    --move-list-gap: 1px;
   }
   .tweakers-move-dial-list .tweakers-list-screen-row {
     padding: 1px 0;
