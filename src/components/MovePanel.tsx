@@ -17,6 +17,8 @@ import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValu
 import { nearestHandle, type RangeValue } from '../range-slider-core';
 import { fineDragValue } from '../shortcut-utils';
 import { MoveVolumeDisplay, type MoveVolumeDisplayState } from '../move-volume';
+import { MoveColorStore } from '../move-color';
+import { MoveColorSlot, MoveColorDisplay, MoveHueGrid, MoveColorSteps } from './MoveColor';
 
 interface MovePanelProps {
   theme?: TweakTheme;
@@ -162,6 +164,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const [latched, setLatched] = useState<Record<number, ControlMeta | undefined>>({});
   const holdStart = useRef(0);
   const [mounted, setMounted] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
   // Shift mid-drag = fine mode: pointer travel applies at 0.1× relative to the
   // value snapshot where shift went down; releasing shift rebases at 1× so the
   // value never jumps back to the cursor's absolute position.
@@ -215,6 +218,15 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     ? buildModMovePage(settingsPanel, modLayout)
     : pages[Math.min(track, Math.max(0, pages.length - 1))];
   const pageId = page?.panel.id;
+  useSyncExternalStore(MoveColorStore.subscribe, MoveColorStore.getVersion, () => 0);
+  const colorView = MoveColorStore.getView();
+  const colorMeta = colorView?.panelId === pageId
+    ? page?.dials.find((meta) => meta.type === 'color' && meta.path === colorView.path)
+    : undefined;
+  const color = colorMeta && pageId ? MoveColorStore.read(pageId, colorMeta.path) : null;
+  useEffect(() => () => {
+    if (MoveColorStore.getView()?.panelId === pageId) MoveColorStore.close();
+  }, [pageId]);
 
   // A curve modulator's page brings its composition with it: the composer
   // floats above the panel, and its selected clip is what the shape dials
@@ -549,7 +561,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // empty page shows the header alone.
   // With app rows claimed the app owns whole hardware rows, so all 8 columns
   // stay on screen — its pads sit at real hardware coordinates.
-  const visibleCols = appRows > 0
+  const visibleCols = appRows > 0 || color
     ? Array.from({ length: MOVE_PADS }, (_, i) => i)
     : visibleColumns(page);
 
@@ -573,7 +585,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     <div className="tweakers-root tweakers-move-root" data-theme={theme} data-dock={dock}>
       {/* While a composer floats above it the whole instrument comes forward,
           over the app's own panels — you are working in it. */}
-      <div className="tweakers-move" data-dock={dock} data-overlay={composition ? true : undefined}>
+      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-overlay={composition || color ? true : undefined}>
+        {colorMeta && <MoveColorDisplay panelId={page.panel.id} meta={colorMeta} anchor={panelRef} theme={theme} />}
         {composition && modSettings && (
           <MoveCurveComposer
             index={modSettings.index}
@@ -611,7 +624,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 slots; an app that claimed the row paints them itself, and
                 its picture wins. */}
             <div className="tweakers-move-mods">
-              {surface.steps
+              {color && colorMeta
+                ? <MoveColorSteps color={color} disabled={TweakStore.isDisabled(page.panel.id, colorMeta.path)} />
+                : surface.steps
                 ? surface.steps.map((s) => (
                     <span key={s.step} className="tweakers-move-mod" title={`step ${s.step + 1}`}>
                       <span
@@ -649,6 +664,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 // top and the value takes the slot. Plain 0..1 amounts keep
                 // the big name, since "40%" on its own says nothing.
                 const valueFirst = !!settingsPanel && !(meta.min === 0 && meta.max === 1);
+                if (meta.type === 'color') return <MoveColorSlot key={meta.path} panelId={page.panel.id} meta={meta} active={active} open={colorMeta?.path === meta.path} />;
                 // The filter takes two slots as one picture: the magnitude
                 // response maximised across both, each hand's small label
                 // sitting where its own slot's label would have been.
@@ -908,7 +924,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 their place, but the panel never ends on dead rows. Columns
                 collapse the same way: cells render only for visible columns,
                 blank pads filling the gaps to keep the grid rectangular. */}
-            {Array.from({ length: PAD_ROWS }, (_, row) => row)
+            {color && colorMeta ? <MoveHueGrid color={color} disabled={TweakStore.isDisabled(page.panel.id, colorMeta.path)} mirror /> : Array.from({ length: PAD_ROWS }, (_, row) => row)
               .filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0))
               .map((row) => (
                 <div key={row} className="tweakers-move-pads">

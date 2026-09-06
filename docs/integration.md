@@ -103,3 +103,38 @@ it does not prove the build is current. The explicit build gate above does that.
 - Both directions of state sync verified after preset/undo.
 - Binding, function listeners, timers and subscriptions cleaned up.
 - Snapshot provenance, full vendor package and matching lockfile committed.
+
+### Move color slot
+
+A `color` control now occupies one Move dial slot. Its face shows the selected
+color over a transparency checker. Drag or use arrow keys to change hue; tap to
+open a floating 32-color hue display and mirror it on the Move grid.
+
+```tsx
+import { MoveColorStore, TweakStore, useTweakers } from 'tweakers';
+
+const values = useTweakers('Color', {
+  tint: { type: 'color', default: '#eb644dff', alpha: true },
+});
+
+// Alongside any existing functions/modulation/waveform options:
+import('http://localhost:7787/kit.js').then(m =>
+  m.bindMove(TweakStore, { color: MoveColorStore })
+);
+```
+
+The column dial controls hue; volume controls HSL lightness while the column dial
+is touched, or whenever its editor is open. In the open editor, pads choose hue,
+sequencer steps span 0–100% opacity, and the big wheel adjusts opacity continuously.
+Hue advances by 1° per dial step; Shift reduces it to 0.1°. Tap the slot again, press Back on Move, or use Escape
+or the close button on screen to return to the normal surface. Changing pages also
+closes the editor. Use `alpha: true` so opacity remains part of the control's value
+when its configuration is reconciled.
+
+The hardware requires the matching color-slot support in the Move bridge kit and
+surface. The updated Bridge module uses direct RGB for 32 distinct hues at maximum
+saturation and fixed lightness, matching the on-screen grid. Reopen Bridge once
+after installing the on-device module update; older modules retain indexed colors
+until they advertise RGB support. Grid taps set saturation to maximum while
+preserving the selected luminosity and opacity. This is the single-color foundation for later palette and gradient
+controls.
