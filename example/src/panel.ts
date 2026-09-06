@@ -159,8 +159,43 @@ export function registerLibraryPanel() {
     ModulationStore.assign(PANEL_ID, 'sweep', MOD_CURVE, 0.8);
   }
 
+  seedPresets();
+
   // The Move's Copy button puts the whole page on the clipboard.
   MoveFunctions.attach('copy', () => {
     navigator.clipboard?.writeText(JSON.stringify(TweakStore.getValues(PANEL_ID), null, 2)).catch(() => {});
   });
+}
+
+/**
+ * A few presets to walk through on the wheel. `savePreset` snapshots the
+ * page as it stands, so each one is written by setting the values and
+ * saving — the same thing the navigator's own save input does.
+ *
+ * They are deliberately far apart: browsing has to be visible from across
+ * the room, and every row you rest on plays live.
+ */
+const PRESETS: { name: string; values: Record<string, number | string | boolean> }[] = [
+  { name: 'Open', values: { amount: 0.5, bias: 0, opacity: 1, blur: 0, pan: 0, width: 1, pitch: 0, heading: 270, scale: 'dorian', playback: 'forward' } },
+  { name: 'Smoke', values: { amount: 0.2, bias: -0.6, opacity: 0.35, blur: 9, pan: -0.5, width: 1.6, pitch: -12, heading: 200, scale: 'phrygian', playback: 'reverse' } },
+  { name: 'Glass', values: { amount: 0.85, bias: 0.4, opacity: 0.8, blur: 1.5, pan: 0.3, width: 0.4, pitch: 7, heading: 45, scale: 'lydian', playback: 'ping-pong' } },
+  { name: 'Ruin', values: { amount: 1, bias: 1, opacity: 0.6, blur: 12, pan: 1, width: 2, pitch: 24, heading: 120, scale: 'locrian', playback: 'scissors' } },
+];
+
+function seedPresets() {
+  if (TweakStore.getPresets(PANEL_ID).length) return;      /* a reload keeps its own */
+  const before = { ...TweakStore.getValues(PANEL_ID) };
+  for (const preset of PRESETS) {
+    // An edit follows the loaded preset: while one is active, every value
+    // written goes into it. Saving leaves the new preset active, so writing
+    // the next one would quietly rewrite the last — clear it first.
+    TweakStore.clearActivePreset(PANEL_ID);
+    for (const [path, value] of Object.entries(preset.values)) {
+      TweakStore.updateValue(PANEL_ID, path, value);
+    }
+    TweakStore.savePreset(PANEL_ID, preset.name);
+  }
+  // The library opens on the values it was registered with, and on no preset.
+  TweakStore.clearActivePreset(PANEL_ID);
+  for (const [path, value] of Object.entries(before)) TweakStore.updateValue(PANEL_ID, path, value);
 }

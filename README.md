@@ -1095,6 +1095,25 @@ Actions reach the pads **only** through `movePads` — every app has buttons, an
 
 Both variants wear the same surface, padding and slot geometry; only the placement differs. The panel carries `data-dock="viewport" | "flow"` if your own CSS needs to branch on it.
 
+### The preset navigator
+
+A whole page, saved and walked through on the wheel. It lives behind the hardware **Menu** button and needs no wiring: the panel claims Menu wherever it is mounted, and `MovePresetStore` holds the open view — the same contract as the colour wheel.
+
+| Gesture | What it does |
+|---|---|
+| Menu, tapped | Opens the list beside the slots; tapped again it puts your settings back and dismisses. |
+| The wheel | Walks the list. **Every row it rests on plays right away** — the slots move under it — through `TweakStore.previewValues`, which records nothing, so browsing can never rewrite a saved preset. |
+| The wheel pressed | Keeps the row: the preset loads for real, the row reads green for a beat, the screen dismisses. |
+| Back | Puts the pre-navigator settings back and dismisses. The navigator borrows the button while it is open and hands it back on close. |
+| Mute, held | Plays the settings you came in with, for as long as it is held — the comparison. |
+| Menu, held (or Shift+Menu) | The save input, floating above the panel: name what is on the slots now. |
+
+A host that finds the live preview too heavy turns it off with `MovePresetStore.setPreviewEnabled(false)` — browsing then only moves the cursor, and the confirm does the loading. With a `PresetProvider` installed the host owns the values, so preview, compare and revert are off and selection routes through the provider.
+
+One thing to know about the underlying store: **an edit follows the loaded preset**. While a preset is active, every value written goes into it — so seeding a set of presets in code means clearing the active one between them (`TweakStore.clearActivePreset`), or each save quietly rewrites the last.
+
+The library app has all of it on one page, with the Move's buttons mapped to keys so it can be tried with nothing plugged in.
+
 ### More slots than dials (`scroll`)
 
 A page is eight slots wide because the Move has eight knobs, and everything past them drops to a value chip. Some pages are not that shape: a library, a preset browser, a synth with forty parameters. `scroll` gives the panel an **endless strip** instead — every control keeps a full slot, the row runs longer than the panel, and the window on it moves:

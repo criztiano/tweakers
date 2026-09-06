@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import {
   MovePanel,
+  MovePresetStore,
   MOVE_JOG_EVENT,
   MOVE_STRIP_EVENT,
   TweakStore,
@@ -10,6 +11,7 @@ import {
 } from 'tweakers';
 import { PANEL_ID, PANEL_NAME } from './panel';
 import { BIG_SLOTS, SMALL_SLOTS, SMALL_SLOT_STATES, MOD_FACES, type Specimen } from './specimens';
+import { KEYS, openPresets, savePreset } from './hardware';
 
 /**
  * The kit's library: every face a Move slot can wear, live in one
@@ -90,6 +92,14 @@ export function Library() {
       </Section>
 
       <Section
+        id="presets"
+        title="Presets"
+        lede="A whole page, saved and walked through on the wheel. The navigator lives behind the Move’s Menu button: it opens a list beside the slots, and every row you rest on plays right away — the slots move under it. Keep one with the wheel press, put your old settings back with Back, or hold Mute to hear where you came from."
+      >
+        <PresetPanel />
+      </Section>
+
+      <Section
         id="small"
         title="Small slots"
         lede="The pad row under the dials: a switch, a value the dial above can borrow, a button, a cell the app paints itself."
@@ -158,6 +168,11 @@ export function Library() {
             The modulation slots, in the header. Touch a control then tap a circle to
             wire it; hold one to open the modulator’s own page.
           </dd>
+          <dt>Menu</dt>
+          <dd>
+            The preset navigator — the whole page, saved and walked through on the
+            wheel. While one is loaded, turning a slot edits it.
+          </dd>
           <dt>The hardware</dt>
           <dd>
             Run the bridge (<code>move</code> repo, port 7787) and the panel mirrors
@@ -167,6 +182,75 @@ export function Library() {
         </dl>
       </Section>
     </main>
+  );
+}
+
+/**
+ * The preset navigator, from this side of the glass. The Move opens it with
+ * Menu; a page with no Menu button needs one on screen, and the same two
+ * gestures — open, and save what is on the slots now — are all it takes.
+ * The rows and the state come straight from the store, so this reads the
+ * navigator rather than describing it.
+ */
+function PresetPanel() {
+  useSyncExternalStore(MovePresetStore.subscribe, MovePresetStore.getVersion, () => 0);
+  // The active preset lives in the panel's own channel, and loading one
+  // rewrites every value on it — so this row follows both.
+  useSyncExternalStore(
+    useCallback((cb: () => void) => TweakStore.subscribe(PANEL_ID, cb), []),
+    () => TweakStore.getActivePresetId(PANEL_ID),
+    () => null
+  );
+  const open = MovePresetStore.getView();
+  const items = MovePresetStore.items(PANEL_ID);
+  const active = TweakStore.getActivePresetId(PANEL_ID);
+  return (
+    <div className="kit-presets">
+      <div className="kit-preset-actions">
+        <button type="button" onClick={() => openPresets(PANEL_ID)}>
+          {open && open.phase !== 'closing' ? 'Close the navigator' : 'Open the navigator'}
+        </button>
+        <button type="button" onClick={() => savePreset(PANEL_ID)}>Save what is on the slots</button>
+        <span className="kit-preset-state">
+          {open && open.phase !== 'closing'
+            ? open.comparing
+              ? 'comparing — the settings you came in with'
+              : `browsing — ${items.find((i) => i.id === open.cursor)?.label ?? 'nothing'}`
+            : active
+              ? `on ${items.find((i) => i.id === active)?.label ?? 'a preset'}`
+              : 'no preset loaded'}
+        </span>
+      </div>
+      <ul className="kit-preset-list">
+        {items.map((item) => (
+          <li key={item.id}>
+            <button
+              type="button"
+              data-active={item.id === active || undefined}
+              data-cursor={open && open.phase !== 'closing' && item.id === open.cursor ? true : undefined}
+              onClick={() => TweakStore.loadPreset(PANEL_ID, item.id)}
+            >
+              {item.label}
+            </button>
+          </li>
+        ))}
+        {!items.length && <li className="kit-preset-empty">nothing saved yet</li>}
+      </ul>
+      <p className="kit-card-note">
+        The same list the Move shows. Clicking a row here loads it outright;
+        on the navigator, resting on a row only previews it — nothing is
+        written until you keep it.
+      </p>
+      <h3 className="kit-sub">The hardware, on a keyboard</h3>
+      <dl className="kit-notes">
+        {KEYS.map((k) => (
+          <Fragment key={k.keys}>
+            <dt><kbd>{k.keys}</kbd></dt>
+            <dd><b>{k.button}</b> — {k.what}</dd>
+          </Fragment>
+        ))}
+      </dl>
+    </div>
   );
 }
 
@@ -278,6 +362,17 @@ const CSS = `
 .kit-tile-pad .tweakers-move-pad { width: var(--kit-slot-w); cursor: default; }
 .kit-tile-free .tweakers-move { color: var(--move-text, #dee3c9); }
 .kit-tile-free .tweakers-move-curve { position: static; }
+
+.kit-preset-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--kit-space); margin-bottom: var(--kit-space); }
+.kit-presets button { min-height: 32px; padding: 4px 12px; color: var(--kit-fg); font: inherit; font-size: 13px; background: none; border: 1px solid var(--kit-line); border-radius: 999px; cursor: pointer; }
+.kit-presets button:hover { border-color: var(--kit-fg); }
+.kit-preset-state { font-size: 13px; color: var(--kit-dim); font-variant-numeric: tabular-nums; }
+.kit-preset-list { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0 0 var(--kit-space); padding: 0; }
+.kit-preset-list button[data-active] { color: var(--kit-bg); background: var(--kit-fg); border-color: var(--kit-fg); }
+.kit-preset-list button[data-cursor] { border-color: var(--kit-fg); box-shadow: inset 0 0 0 1px var(--kit-fg); }
+.kit-preset-empty { font-size: 13px; color: var(--kit-dim); }
+.kit-presets kbd { display: inline-block; min-width: 24px; padding: 2px 7px; font: inherit; font-size: 12px; text-align: center; color: var(--kit-fg); background: #222; border: 1px solid var(--kit-line); border-radius: 5px; }
+.kit-presets dd b { font-weight: 500; color: var(--kit-fg); }
 
 .kit-pad-states { display: flex; flex-wrap: wrap; gap: var(--kit-space-lg); }
 .kit-pad-state { display: flex; flex-direction: column; gap: 8px; font-size: 12px; color: var(--kit-dim); }

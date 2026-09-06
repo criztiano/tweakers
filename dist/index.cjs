@@ -55,15 +55,17 @@ __export(index_exports, {
   MOD_RING_RADIUS: () => MOD_RING_RADIUS,
   MOD_SETTINGS_PANEL: () => MOD_SETTINGS_PANEL,
   MOD_SLOTS: () => MOD_SLOTS,
-  MOD_TOUCH_GRACE_MS: () => MOD_TOUCH_GRACE_MS,
+  MOD_TOUCH_GRACE_MS: () => import_ModulationStore3.MOD_TOUCH_GRACE_MS,
   MOVE_COLOR_HUES: () => MOVE_COLOR_HUES,
   MOVE_COLOR_STEPS: () => MOVE_COLOR_STEPS,
   MOVE_COLOR_WHEEL: () => MOVE_COLOR_WHEEL,
   MOVE_DIALS: () => MOVE_DIALS,
   MOVE_FUNCTION_BUTTONS: () => MOVE_FUNCTION_BUTTONS,
   MOVE_FUNCTION_MANIFEST: () => MOVE_FUNCTION_MANIFEST,
+  MOVE_JOG_CLICK_EVENT: () => MOVE_JOG_CLICK_EVENT,
   MOVE_JOG_EVENT: () => MOVE_JOG_EVENT,
   MOVE_LATCH_EVENT: () => MOVE_LATCH_EVENT,
+  MOVE_MUTE_EVENT: () => MOVE_MUTE_EVENT,
   MOVE_OVERRIDE_EVENT: () => MOVE_OVERRIDE_EVENT,
   MOVE_PADS: () => MOVE_PADS,
   MOVE_PAD_LIBRARY: () => MOVE_PAD_LIBRARY,
@@ -77,7 +79,7 @@ __export(index_exports, {
   MOVE_TRACK_COLORS: () => MOVE_TRACK_COLORS,
   MOVE_WAVEFORM_STEPS: () => MOVE_WAVEFORM_STEPS,
   ModRing: () => ModRing,
-  ModulationStore: () => ModulationStore,
+  ModulationStore: () => import_ModulationStore3.ModulationStore,
   MoveActionButton: () => MoveActionButton,
   MoveColorStore: () => MoveColorStore,
   MoveFunctions: () => MoveFunctions,
@@ -86,6 +88,7 @@ __export(index_exports, {
   MovePadToggleBody: () => MovePadToggleBody,
   MovePadValueBody: () => MovePadValueBody,
   MovePanel: () => MovePanel,
+  MovePresetStore: () => MovePresetStore,
   MoveSlotColorBody: () => MoveSlotColorBody,
   MoveSlotDefaultBody: () => MoveSlotDefaultBody,
   MoveSlotDialBody: () => MoveSlotDialBody,
@@ -108,11 +111,11 @@ __export(index_exports, {
   MoveWaveform: () => MoveWaveform,
   MoveWaveformStore: () => MoveWaveformStore,
   SH_DEF: () => SH_DEF,
-  TAB_PATH: () => TAB_PATH,
+  TAB_PATH: () => import_TweakStore8.TAB_PATH,
   TRANSFER_MAX_POINTS: () => TRANSFER_MAX_POINTS,
   TRANSFER_MIN_GAP: () => TRANSFER_MIN_GAP,
   TimelineStore: () => TimelineStore,
-  TweakStore: () => TweakStore,
+  TweakStore: () => import_TweakStore8.TweakStore,
   WaveformVisualization: () => WaveformVisualization,
   XY_DEFAULT_STEP: () => XY_DEFAULT_STEP,
   XY_DETENT_PX: () => XY_DETENT_PX,
@@ -142,7 +145,7 @@ __export(index_exports, {
   cycleSegmentType: () => cycleSegmentType,
   defaultComposition: () => defaultComposition,
   defaultFilterResponse: () => defaultFilterResponse,
-  defaultListItemParams: () => defaultListItemParams,
+  defaultListItemParams: () => import_TweakStore8.defaultListItemParams,
   denormalizeEnumDial: () => denormalizeEnumDial,
   denormalizeFilterDial: () => denormalizeFilterDial,
   denormalizeRangeDial: () => denormalizeRangeDial,
@@ -170,9 +173,9 @@ __export(index_exports, {
   gradientFillBox: () => gradientFillBox,
   gradientToCss: () => gradientToCss,
   gradientToTransform: () => gradientToTransform,
-  groupListFields: () => groupListFields,
+  groupListFields: () => import_TweakStore8.groupListFields,
   handleLeftStyles: () => handleLeftStyles,
-  hintDomId: () => hintDomId,
+  hintDomId: () => import_TweakStore8.hintDomId,
   hslToRgb: () => hslToRgb,
   hsvToRgb: () => hsvToRgb,
   insertPoint: () => insertPoint,
@@ -212,7 +215,7 @@ __export(index_exports, {
   normalizeFilterValue: () => normalizeFilterValue,
   normalizeGradient: () => normalizeGradient,
   normalizeHex: () => normalizeHex,
-  normalizeListItems: () => normalizeListItems,
+  normalizeListItems: () => import_TweakStore8.normalizeListItems,
   normalizeRangeDial: () => normalizeRangeDial,
   normalizeTransfer: () => normalizeTransfer,
   normalizeValue: () => normalizeValue,
@@ -224,7 +227,7 @@ __export(index_exports, {
   orderRange: () => orderRange,
   pageStripOffset: () => pageStripOffset,
   parseHex: () => parseHex,
-  parseListItemSchema: () => parseListItemSchema,
+  parseListItemSchema: () => import_TweakStore8.parseListItemSchema,
   percentToValue: () => percentToValue,
   pickDragTarget: () => pickDragTarget,
   plotCurve: () => plotCurve,
@@ -290,1988 +293,8 @@ module.exports = __toCommonJS(index_exports);
 // src/components/MovePanel.tsx
 var import_react5 = require("react");
 var import_react_dom2 = require("react-dom");
-
-// src/color-core.ts
-var COLOR_FORMATS = ["hex", "rgb", "hsl", "oklch"];
-var HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
-var clamp = (n, min, max) => Math.min(max, Math.max(min, n));
-var clamp01 = (n) => clamp(n, 0, 1);
-var byte = (n) => clamp(Math.round(n), 0, 255);
-function parseHex(input) {
-  if (typeof input !== "string") return null;
-  let s = input.trim();
-  if (!s.startsWith("#")) s = `#${s}`;
-  if (!HEX_COLOR_REGEX.test(s)) return null;
-  let h = s.slice(1);
-  if (h.length <= 4) h = h.split("").map((c) => c + c).join("");
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  const a = h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1;
-  return { r, g, b, a };
-}
-function formatHex(rgba, alphaEnabled) {
-  const hx = (n) => byte(n).toString(16).padStart(2, "0");
-  const base = `#${hx(rgba.r)}${hx(rgba.g)}${hx(rgba.b)}`;
-  return alphaEnabled ? `${base}${hx(clamp01(rgba.a) * 255)}` : base;
-}
-function normalizeHex(input, alphaEnabled) {
-  const rgba = parseHex(input);
-  return rgba ? formatHex(rgba, alphaEnabled) : null;
-}
-function displayHex(value) {
-  const rgba = parseHex(value);
-  if (!rgba) return (value ?? "").toUpperCase();
-  return formatHex(rgba, false).toUpperCase();
-}
-function opacityPercent(rgba) {
-  return Math.round(clamp01(rgba.a) * 100);
-}
-function rgbToHsv(rgba) {
-  const r = rgba.r / 255, g = rgba.g / 255, b = rgba.b / 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  const d = max - min;
-  let h = 0;
-  if (d !== 0) {
-    if (max === r) h = (g - b) / d % 6;
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    h *= 60;
-    if (h < 0) h += 360;
-  }
-  return { h, s: max === 0 ? 0 : d / max, v: max, a: rgba.a };
-}
-function hsvToRgb(hsva) {
-  const h = (hsva.h % 360 + 360) % 360;
-  const s = clamp01(hsva.s), v = clamp01(hsva.v);
-  const c = v * s;
-  const x = c * (1 - Math.abs(h / 60 % 2 - 1));
-  const m = v - c;
-  let r = 0, g = 0, b = 0;
-  if (h < 60) [r, g, b] = [c, x, 0];
-  else if (h < 120) [r, g, b] = [x, c, 0];
-  else if (h < 180) [r, g, b] = [0, c, x];
-  else if (h < 240) [r, g, b] = [0, x, c];
-  else if (h < 300) [r, g, b] = [x, 0, c];
-  else [r, g, b] = [c, 0, x];
-  return { r: byte((r + m) * 255), g: byte((g + m) * 255), b: byte((b + m) * 255), a: hsva.a };
-}
-function rgbToHsl(rgba) {
-  const { h, s, v, a } = rgbToHsv(rgba);
-  const l = v * (1 - s / 2);
-  const sl = l === 0 || l === 1 ? 0 : (v - l) / Math.min(l, 1 - l);
-  return { h, s: sl, l, a };
-}
-function hslToRgb(hsla) {
-  const l = clamp01(hsla.l), s = clamp01(hsla.s);
-  const v = l + s * Math.min(l, 1 - l);
-  const sv = v === 0 ? 0 : 2 * (1 - l / v);
-  return hsvToRgb({ h: hsla.h, s: sv, v, a: hsla.a });
-}
-var srgbToLinear = (c) => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-var linearToSrgb = (c) => c <= 31308e-7 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
-function rgbToOklab(rgba) {
-  const r = srgbToLinear(rgba.r / 255);
-  const g = srgbToLinear(rgba.g / 255);
-  const b = srgbToLinear(rgba.b / 255);
-  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
-  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
-  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
-  return {
-    L: 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
-    A: 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
-    B: 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
-  };
-}
-function oklabToLinearRgb(L, A, B) {
-  const l = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3;
-  const m = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3;
-  const s = (L - 0.0894841775 * A - 1.291485548 * B) ** 3;
-  return {
-    r: 4.0767416621 * l - 3.3077115913 * m + 0.2307590544 * s,
-    g: -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
-    b: -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
-  };
-}
-function rgbToOklch(rgba) {
-  const { L, A, B } = rgbToOklab(rgba);
-  const c = Math.sqrt(A * A + B * B);
-  let h = Math.atan2(B, A) * 180 / Math.PI;
-  if (h < 0) h += 360;
-  return { l: L, c, h: c < 1e-6 ? 0 : h, a: rgba.a };
-}
-var GAMUT_EPS = 1e-4;
-function inSrgbGamut(l, c, h) {
-  const rad = h * Math.PI / 180;
-  const { r, g, b } = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
-  return r >= -GAMUT_EPS && r <= 1 + GAMUT_EPS && g >= -GAMUT_EPS && g <= 1 + GAMUT_EPS && b >= -GAMUT_EPS && b <= 1 + GAMUT_EPS;
-}
-function clampOklchToSrgb(oklch) {
-  const l = clamp01(oklch.l);
-  const h = (oklch.h % 360 + 360) % 360;
-  const c = Math.max(0, oklch.c);
-  if (inSrgbGamut(l, c, h)) return { l, c, h, a: clamp01(oklch.a) };
-  let lo = 0, hi = c;
-  for (let i = 0; i < 24; i++) {
-    const mid = (lo + hi) / 2;
-    if (inSrgbGamut(l, mid, h)) lo = mid;
-    else hi = mid;
-  }
-  return { l, c: lo, h, a: clamp01(oklch.a) };
-}
-function oklchToRgb(oklch) {
-  const { l, c, h, a } = clampOklchToSrgb(oklch);
-  const rad = h * Math.PI / 180;
-  const lin = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
-  return {
-    r: byte(linearToSrgb(clamp01(lin.r)) * 255),
-    g: byte(linearToSrgb(clamp01(lin.g)) * 255),
-    b: byte(linearToSrgb(clamp01(lin.b)) * 255),
-    a: clamp01(a)
-  };
-}
-
-// src/gradient-core.ts
-var MIN_STOPS = 2;
-var DEFAULT_GRADIENT = {
-  type: "linear",
-  angle: 90,
-  stops: [
-    { color: "#6366f1ff", position: 0 },
-    { color: "#ec4899ff", position: 1 }
-  ]
-};
-var clamp012 = (n) => Math.min(1, Math.max(0, n));
-var clampPct = (n) => Math.min(100, Math.max(0, n));
-var clampScale = (n) => Math.min(200, Math.max(10, n));
-var clampSquash = (n) => Math.min(200, Math.max(1, n));
-var wrapAngle = (a) => (a % 360 + 360) % 360;
-var round = (n, p) => {
-  const f = 10 ** p;
-  return Math.round(n * f) / f;
-};
-var cloneDefaultStops = () => DEFAULT_GRADIENT.stops.map((s) => ({ ...s }));
-var cloneDefault = () => ({
-  type: DEFAULT_GRADIENT.type,
-  angle: DEFAULT_GRADIENT.angle,
-  stops: cloneDefaultStops()
-});
-var sortedStops = (stops) => [...stops].sort((a, b) => a.position - b.position);
-var stopString = (stops) => sortedStops(stops).map((s) => `${s.color} ${round(clamp012(s.position) * 100, 2)}%`).join(", ");
-var normColor = (color) => {
-  const rgba = parseHex(color);
-  return rgba ? formatHex(rgba, true) : "#000000ff";
-};
-function rampCss(stops) {
-  return gradientToCss({ type: "linear", angle: 90, stops });
-}
-function gradientToCss(value) {
-  const stopStr = stopString(value.stops);
-  const angle = round(wrapAngle(value.angle), 2);
-  const cx = round(clampPct(value.centerX ?? 50), 2);
-  const cy = round(clampPct(value.centerY ?? 50), 2);
-  switch (value.type) {
-    case "radial": {
-      const rx = clampScale(value.scale ?? 100);
-      const ry = value.squash === void 0 ? rx : clampSquash(value.squash);
-      if (rx === 100 && ry === 100) {
-        return `radial-gradient(circle at ${cx}% ${cy}%, ${stopStr})`;
-      }
-      return `radial-gradient(${round(rx, 2)}% ${round(ry, 2)}% at ${cx}% ${cy}%, ${stopStr})`;
-    }
-    case "conic":
-      return `conic-gradient(from ${angle}deg at ${cx}% ${cy}%, ${stopStr})`;
-    case "linear":
-    default:
-      return `linear-gradient(${angle}deg, ${stopStr})`;
-  }
-}
-function gradientToTransform(value) {
-  const cx = round(clampPct(value.centerX ?? 50), 2);
-  const cy = round(clampPct(value.centerY ?? 50), 2);
-  const rotation = wrapAngle(value.rotation ?? 0);
-  const rx = clampScale(value.scale ?? 100);
-  const ry = value.squash === void 0 ? rx : clampSquash(value.squash);
-  if (value.type !== "radial" || rotation === 0 || rx === ry) {
-    return { transform: "none", transformOrigin: "50% 50%" };
-  }
-  return { transform: `rotate(${round(rotation, 2)}deg)`, transformOrigin: `${cx}% ${cy}%` };
-}
-function gradientFillBox(value, boxW, boxH) {
-  if (value.type !== "radial" || boxW <= 0 || boxH <= 0) {
-    return {
-      background: gradientToCss(value),
-      transform: "none",
-      transformOrigin: "50% 50%",
-      left: 0,
-      top: 0,
-      width: boxW,
-      height: boxH
-    };
-  }
-  const cxPx = clampPct(value.centerX ?? 50) / 100 * boxW;
-  const cyPx = clampPct(value.centerY ?? 50) / 100 * boxH;
-  const scaleX = clampScale(value.scale ?? 100) / 100;
-  const scaleY = (value.squash === void 0 ? clampScale(value.scale ?? 100) : clampSquash(value.squash)) / 100;
-  const rx = round(scaleX * boxW, 2);
-  const ry = round(scaleY * boxH, 2);
-  const side = round(2 * Math.hypot(boxW, boxH), 2);
-  const rotation = wrapAngle(value.rotation ?? 0);
-  return {
-    background: `radial-gradient(${rx}px ${ry}px at 50% 50%, ${stopString(value.stops)})`,
-    transform: rotation === 0 ? "none" : `rotate(${round(rotation, 2)}deg)`,
-    transformOrigin: "50% 50%",
-    left: round(cxPx - side / 2, 2),
-    top: round(cyPx - side / 2, 2),
-    width: side,
-    height: side
-  };
-}
-function lerpPremult(a, b, t) {
-  const pa = a.a + (b.a - a.a) * t;
-  if (pa === 0) return { r: 0, g: 0, b: 0, a: 0 };
-  const mix = (ca, aa, cb, ba) => (ca * aa + (cb * ba - ca * aa) * t) / pa;
-  return {
-    r: mix(a.r, a.a, b.r, b.a),
-    g: mix(a.g, a.a, b.g, b.a),
-    b: mix(a.b, a.a, b.b, b.a),
-    a: pa
-  };
-}
-function colorAtPosition(value, position) {
-  const stops = sortedStops(value.stops);
-  if (stops.length === 0) return "#000000ff";
-  const p = clamp012(position);
-  if (p <= stops[0].position) return normColor(stops[0].color);
-  const last = stops[stops.length - 1];
-  if (p >= last.position) return normColor(last.color);
-  let i = 0;
-  while (i < stops.length - 1 && stops[i + 1].position <= p) i++;
-  const a = stops[i];
-  const b = stops[i + 1];
-  const span = b.position - a.position;
-  const t = span === 0 ? 0 : (p - a.position) / span;
-  const ca = parseHex(a.color) ?? { r: 0, g: 0, b: 0, a: 1 };
-  const cb = parseHex(b.color) ?? { r: 0, g: 0, b: 0, a: 1 };
-  return formatHex(lerpPremult(ca, cb, t), true);
-}
-function normalizeGradient(input) {
-  if (!input || typeof input !== "object") return cloneDefault();
-  const obj = input;
-  if (!Array.isArray(obj.stops)) return cloneDefault();
-  const type = obj.type === "radial" || obj.type === "conic" ? obj.type : "linear";
-  const rawAngle = Number(obj.angle);
-  const angle = Number.isFinite(rawAngle) ? wrapAngle(rawAngle) : DEFAULT_GRADIENT.angle;
-  const extras = {};
-  const cx = Number(obj.centerX);
-  if (Number.isFinite(cx)) extras.centerX = clampPct(cx);
-  const cy = Number(obj.centerY);
-  if (Number.isFinite(cy)) extras.centerY = clampPct(cy);
-  const scale = Number(obj.scale);
-  if (Number.isFinite(scale)) extras.scale = clampScale(scale);
-  const squash = Number(obj.squash);
-  if (Number.isFinite(squash)) extras.squash = clampSquash(squash);
-  const rotation = Number(obj.rotation);
-  if (Number.isFinite(rotation)) extras.rotation = wrapAngle(rotation);
-  const stops = [];
-  for (const raw of obj.stops) {
-    if (!raw || typeof raw !== "object") continue;
-    const s = raw;
-    const rgba = typeof s.color === "string" ? parseHex(s.color) : null;
-    const pos = Number(s.position);
-    if (!rgba || !Number.isFinite(pos)) continue;
-    stops.push({ color: formatHex(rgba, true), position: clamp012(pos) });
-  }
-  if (stops.length < MIN_STOPS) return { type, angle, stops: cloneDefaultStops(), ...extras };
-  stops.sort((a, b) => a.position - b.position);
-  return { type, angle, stops, ...extras };
-}
-function addStop(value, position) {
-  const stop = { color: colorAtPosition(value, position), position: clamp012(position) };
-  const stops = [...value.stops, stop].sort((a, b) => a.position - b.position);
-  return { value: { ...value, stops }, index: stops.indexOf(stop) };
-}
-function moveStop(value, index, position) {
-  if (index < 0 || index >= value.stops.length) return { value, index };
-  const moved = { ...value.stops[index], position: clamp012(position) };
-  const stops = value.stops.map((s, i) => i === index ? moved : s);
-  stops.sort((a, b) => a.position - b.position);
-  return { value: { ...value, stops }, index: stops.indexOf(moved) };
-}
-function removeStop(value, index) {
-  if (value.stops.length <= MIN_STOPS || index < 0 || index >= value.stops.length) return value;
-  return { ...value, stops: value.stops.filter((_, i) => i !== index) };
-}
-function setStopColor(value, index, hex) {
-  if (index < 0 || index >= value.stops.length) return value;
-  const rgba = parseHex(hex);
-  if (!rgba) return value;
-  const color = formatHex(rgba, true);
-  return { ...value, stops: value.stops.map((s, i) => i === index ? { ...s, color } : s) };
-}
-function setGradientType(value, type) {
-  return { ...value, type };
-}
-function setGradientAngle(value, angle) {
-  return { ...value, angle: wrapAngle(angle) };
-}
-function setGradientCenter(value, centerX, centerY) {
-  return { ...value, centerX: clampPct(centerX), centerY: clampPct(centerY) };
-}
-function setGradientScale(value, scale) {
-  return { ...value, scale: clampScale(scale) };
-}
-function setGradientSquash(value, squash) {
-  return { ...value, squash: clampSquash(squash) };
-}
-function setGradientRotation(value, rotation) {
-  return { ...value, rotation: wrapAngle(rotation) };
-}
-
-// src/xy-pad-core.ts
-var XY_DETENT_PX = 6;
-var XY_DEFAULT_STEP = 0.01;
-function decimalsForStep(step) {
-  const s = step.toString();
-  const dot = s.indexOf(".");
-  return dot === -1 ? 0 : s.length - dot - 1;
-}
-function roundToStep(val, step) {
-  return parseFloat(val.toFixed(decimalsForStep(step)));
-}
-function resolveAxis(axis) {
-  const min = axis?.min ?? 0;
-  const max = axis?.max ?? 1;
-  const step = axis?.step ?? XY_DEFAULT_STEP;
-  const bipolar = axis?.bipolar ?? false;
-  const origin = axis?.origin ?? (bipolar ? (min + max) / 2 : min);
-  return { min, max, step, origin, bipolar };
-}
-function clamp2(v, min, max) {
-  return Math.min(max, Math.max(min, v));
-}
-function snapToStep(v, step, min) {
-  if (step <= 0) return v;
-  const snapped = min + Math.round((v - min) / step) * step;
-  return roundToStep(snapped, step);
-}
-function valueToNorm(v, axis) {
-  if (axis.max === axis.min) return 0;
-  return clamp2((v - axis.min) / (axis.max - axis.min), 0, 1);
-}
-function normToValue(n, axis) {
-  const t = clamp2(n, 0, 1);
-  return axis.min + t * (axis.max - axis.min);
-}
-function invertY(n) {
-  return 1 - n;
-}
-function valueFromPoint(point, xAxis, yAxis, snap2 = false) {
-  let x = clamp2(normToValue(point.x, xAxis), xAxis.min, xAxis.max);
-  let y = clamp2(normToValue(invertY(point.y), yAxis), yAxis.min, yAxis.max);
-  if (snap2) {
-    x = snapToStep(x, xAxis.step, xAxis.min);
-    y = snapToStep(y, yAxis.step, yAxis.min);
-  }
-  return { x, y };
-}
-function pointFromValue(value, xAxis, yAxis) {
-  return {
-    x: valueToNorm(value.x, xAxis),
-    y: invertY(valueToNorm(value.y, yAxis))
-  };
-}
-function applyDetentAxis(value, axis, pxFromOrigin) {
-  if (axis.bipolar && pxFromOrigin <= XY_DETENT_PX) return axis.origin;
-  return value;
-}
-function effectiveStep(axis, mode) {
-  const range = axis.max - axis.min;
-  if (mode === "fine") return range * 0.01;
-  if (mode === "coarse") return range * 0.1;
-  return axis.step;
-}
-function nudge(value, axis, direction, xAxis, yAxis, mode = "normal") {
-  const spec = axis === "x" ? xAxis : yAxis;
-  const step = effectiveStep(spec, mode);
-  const next = roundToStep(clamp2(value[axis] + direction * step, spec.min, spec.max), step);
-  return axis === "x" ? { x: next, y: value.y } : { x: value.x, y: next };
-}
-function centerValue(xAxis, yAxis) {
-  return { x: xAxis.origin, y: yAxis.origin };
-}
-function coerceComponent(v, axis) {
-  return typeof v === "number" && Number.isFinite(v) ? v : axis.origin;
-}
-function normalizeValue(value, xAxis, yAxis, snap2 = false) {
-  const resolve = (raw, axis) => {
-    let v = clamp2(coerceComponent(raw, axis), axis.min, axis.max);
-    if (snap2) v = snapToStep(v, axis.step, axis.min);
-    return v + 0;
-  };
-  return {
-    x: resolve(value?.x, xAxis),
-    y: resolve(value?.y, yAxis)
-  };
-}
-
-// src/range-slider-core.ts
-function clamp3(v, lo, hi) {
-  return Math.min(hi, Math.max(lo, v));
-}
-function valueToPercent(v, min, max) {
-  if (max === min) return 0;
-  return (v - min) / (max - min) * 100;
-}
-function percentToValue(pct01, min, max) {
-  return min + clamp3(pct01, 0, 1) * (max - min);
-}
-function orderRange(v) {
-  return v.min <= v.max ? v : { min: v.max, max: v.min };
-}
-function clampRange(v, min, max) {
-  return orderRange({ min: clamp3(v.min, min, max), max: clamp3(v.max, min, max) });
-}
-function setLow(nextLow, current, min) {
-  return { min: clamp3(nextLow, min, current.max), max: current.max };
-}
-function setHigh(nextHigh, current, max) {
-  return { min: current.min, max: clamp3(nextHigh, current.min, max) };
-}
-function shiftSpan(deltaValue, current, min, max) {
-  const width = current.max - current.min;
-  const desiredMin = clamp3(current.min + deltaValue, min, max - width);
-  return { min: desiredMin, max: desiredMin + width };
-}
-function nearestHandle(atValue, current) {
-  const dMin = Math.abs(atValue - current.min);
-  const dMax = Math.abs(atValue - current.max);
-  if (dMin < dMax) return "min";
-  if (dMax < dMin) return "max";
-  return atValue < current.min ? "min" : "max";
-}
-function pickDragTarget(atValue, current, hitValue) {
-  const nearLow = Math.abs(atValue - current.min) <= hitValue;
-  const nearHigh = Math.abs(atValue - current.max) <= hitValue;
-  if (nearLow && nearHigh) return nearestHandle(atValue, current);
-  if (nearLow) return "min";
-  if (nearHigh) return "max";
-  if (atValue > current.min && atValue < current.max) return "span";
-  return nearestHandle(atValue, current);
-}
-function isOutsideSpan(atValue, current) {
-  return atValue <= current.min || atValue >= current.max;
-}
-function handleLeftStyles(lowPercent, highPercent) {
-  const gap = `(${highPercent}% - ${lowPercent}%)`;
-  const ramp = `clamp(0px, calc(6px - ${gap}), 2px)`;
-  return {
-    low: `max(0px, min(calc(100% - 2px), calc(${lowPercent}% - 1px - ${ramp})))`,
-    high: `min(calc(100% - 2px), max(0px, calc(${highPercent}% - 1px + ${ramp})))`
-  };
-}
-
-// src/transfer-core.ts
-var DEFAULT_TRANSFER = { points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] };
-var TRANSFER_MIN_GAP = 0.02;
-var TRANSFER_MAX_POINTS = 12;
-var clamp013 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
-var finite = (v, fallback) => typeof v === "number" && Number.isFinite(v) ? v : fallback;
-function normalizeTransfer(value) {
-  const raw = value?.points;
-  if (!Array.isArray(raw) || raw.length < 2) return { points: DEFAULT_TRANSFER.points.map((p) => ({ ...p })) };
-  const points = raw.map((p) => ({ x: clamp013(finite(p?.x, 0)), y: clamp013(finite(p?.y, 0)) })).sort((a, b) => a.x - b.x);
-  points[0].x = 0;
-  points[points.length - 1].x = 1;
-  const out = [points[0]];
-  for (let i = 1; i < points.length - 1; i++) {
-    if (points[i].x - out[out.length - 1].x < TRANSFER_MIN_GAP) continue;
-    if (1 - points[i].x < TRANSFER_MIN_GAP) continue;
-    out.push(points[i]);
-  }
-  out.push(points[points.length - 1]);
-  return { points: out.slice(0, TRANSFER_MAX_POINTS) };
-}
-function tangents(points) {
-  const n = points.length;
-  const secant = new Array(n - 1);
-  for (let i = 0; i < n - 1; i++) {
-    const dx = points[i + 1].x - points[i].x;
-    secant[i] = dx > 0 ? (points[i + 1].y - points[i].y) / dx : 0;
-  }
-  const m = new Array(n);
-  m[0] = secant[0];
-  m[n - 1] = secant[n - 2];
-  for (let i = 1; i < n - 1; i++) {
-    m[i] = secant[i - 1] * secant[i] <= 0 ? 0 : (secant[i - 1] + secant[i]) / 2;
-  }
-  for (let i = 0; i < n - 1; i++) {
-    if (secant[i] === 0) {
-      m[i] = 0;
-      m[i + 1] = 0;
-      continue;
-    }
-    const a = m[i] / secant[i];
-    const b = m[i + 1] / secant[i];
-    const h = Math.hypot(a, b);
-    if (h > 3) {
-      m[i] = 3 / h * a * secant[i];
-      m[i + 1] = 3 / h * b * secant[i];
-    }
-  }
-  return m;
-}
-function sampleTransfer(points, x) {
-  if (!points.length) return clamp013(x);
-  if (points.length === 1) return points[0].y;
-  const t = clamp013(finite(x, 0));
-  if (t <= points[0].x) return points[0].y;
-  const last = points[points.length - 1];
-  if (t >= last.x) return last.y;
-  let i = 0;
-  while (i < points.length - 2 && points[i + 1].x < t) i++;
-  const p0 = points[i], p1 = points[i + 1];
-  const h = p1.x - p0.x;
-  if (h <= 0) return p1.y;
-  const m = tangents(points);
-  const s = (t - p0.x) / h;
-  const s2 = s * s, s3 = s2 * s;
-  return clamp013(
-    (2 * s3 - 3 * s2 + 1) * p0.y + (s3 - 2 * s2 + s) * h * m[i] + (-2 * s3 + 3 * s2) * p1.y + (s3 - s2) * h * m[i + 1]
-  );
-}
-function transferLut(points, size = 256) {
-  const out = new Float32Array(size);
-  for (let i = 0; i < size; i++) out[i] = sampleTransfer(points, size === 1 ? 0 : i / (size - 1));
-  return out;
-}
-function insertPoint(points, x, y) {
-  const next = normalizeTransfer({ points: [...points, { x: clamp013(x), y: clamp013(y) }] }).points;
-  const index = next.findIndex((p) => Math.abs(p.x - clamp013(x)) < 1e-9);
-  return { points: next, index: index < 0 ? 0 : index };
-}
-function removePoint(points, index) {
-  if (index <= 0 || index >= points.length - 1) return points;
-  return points.filter((_, i) => i !== index);
-}
-function movePoint(points, index, x, y) {
-  if (index < 0 || index >= points.length) return points;
-  const out = points.map((p) => ({ ...p }));
-  const ny = clamp013(finite(y, 0));
-  if (index === 0 || index === points.length - 1) {
-    out[index].y = ny;
-    return out;
-  }
-  const lo = out[index - 1].x + TRANSFER_MIN_GAP;
-  const hi = out[index + 1].x - TRANSFER_MIN_GAP;
-  out[index] = { x: hi < lo ? out[index].x : Math.min(hi, Math.max(lo, clamp013(finite(x, 0)))), y: ny };
-  return out;
-}
-function nearestPoint(points, x, y, tolerance) {
-  let best = -1, bestD = tolerance;
-  for (let i = 0; i < points.length; i++) {
-    const d = Math.hypot(points[i].x - x, points[i].y - y);
-    if (d <= bestD) {
-      best = i;
-      bestD = d;
-    }
-  }
-  return best;
-}
-function isIdentityTransfer(points) {
-  return points.length === 2 && points[0].x === 0 && points[0].y === 0 && points[1].x === 1 && points[1].y === 1;
-}
-
-// src/filter-core.ts
-var FILTER_AXIS_DEFAULTS = {
-  cutoff: { min: 0, max: 1, step: 0, label: "Freq" },
-  resonance: { min: 0, max: 1, step: 0, label: "Res" }
-};
-function resolveFilterAxis(axis, hand) {
-  const base = FILTER_AXIS_DEFAULTS[hand];
-  return {
-    min: axis?.min ?? base.min,
-    max: axis?.max ?? base.max,
-    step: axis?.step ?? base.step,
-    label: axis?.label ?? base.label,
-    formatValue: axis?.formatValue
-  };
-}
-var clamp4 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-var snap = (v, axis) => {
-  let out = clamp4(Number.isFinite(v) ? v : axis.min, axis.min, axis.max);
-  if (axis.step > 0) out = clamp4(axis.min + Math.round((out - axis.min) / axis.step) * axis.step, axis.min, axis.max);
-  return Number(out.toFixed(6));
-};
-function normalizeFilterValue(value, cutoffAxis, resonanceAxis) {
-  const v = typeof value === "object" && value !== null ? value : {};
-  return {
-    cutoff: snap(typeof v.cutoff === "number" ? v.cutoff : cutoffAxis.max, cutoffAxis),
-    resonance: snap(typeof v.resonance === "number" ? v.resonance : resonanceAxis.min, resonanceAxis)
-  };
-}
-var filterHand01 = (v, axis) => {
-  const n = (v - axis.min) / (axis.max - axis.min || 1);
-  return clamp4(Number.isFinite(n) ? n : 0, 0, 1);
-};
-var filterHandValue = (v01, axis) => snap(axis.min + clamp4(v01, 0, 1) * (axis.max - axis.min), axis);
-function filterShapeResponse(type, cutoff01, resonance01) {
-  const fc = Math.pow(10, -3 + 3 * clamp4(cutoff01, 0, 1));
-  const q = 0.707 * Math.pow(14, clamp4(resonance01, 0, 1));
-  const a = Math.pow(10, clamp4(resonance01, 0, 1) * 18 / 40);
-  return (t) => {
-    const f = Math.pow(10, -3 + 3 * clamp4(t, 0, 1));
-    const w = f / fc;
-    const w2 = w * w;
-    const den = Math.sqrt(Math.pow(1 - w2, 2) + Math.pow(w / q, 2));
-    let mag;
-    switch (type) {
-      case "highpass":
-        mag = w2 / den;
-        break;
-      case "bandpass":
-        mag = w / q / den;
-        break;
-      case "notch":
-        mag = Math.abs(1 - w2) / den;
-        break;
-      case "peak":
-        mag = Math.sqrt(Math.pow(1 - w2, 2) + Math.pow(w * a / q, 2)) / Math.sqrt(Math.pow(1 - w2, 2) + Math.pow(w / (a * q), 2));
-        break;
-      default:
-        mag = 1 / den;
-    }
-    return Math.min((20 * Math.log10(Math.max(mag, 1e-6)) + FILTER_DB_FLOOR) / (FILTER_DB_FLOOR + FILTER_DB_CEIL), 1);
-  };
-}
-function defaultFilterResponse(cutoff01, resonance01) {
-  return filterShapeResponse("lowpass", cutoff01, resonance01);
-}
-var FILTER_DB_FLOOR = 36;
-var FILTER_DB_CEIL = 24;
-var FILTER_SHAPE_SAMPLES = 96;
-function filterResponsePath(response, samples = FILTER_SHAPE_SAMPLES) {
-  const pts = [];
-  for (let i = 0; i < samples; i++) {
-    let y;
-    try {
-      y = response(i / (samples - 1));
-    } catch {
-      return null;
-    }
-    if (!Number.isFinite(y)) return null;
-    pts.push(Math.min(1, Math.max(-1, y)));
-  }
-  return pts.map((y, i) => `${i ? "L" : "M"} ${(i / (samples - 1) * 100).toFixed(2)} ${((1 - y) * 100).toFixed(2)}`).join(" ");
-}
-
-// src/store/persist.ts
-var STORAGE_VERSION = "v1";
-function resolvePersistTarget(kind, id, persist) {
-  if (!persist) return null;
-  const config = persist === true ? {} : persist;
-  const base = config.key ?? id;
-  if (!base) return null;
-  return {
-    key: `tweakers:${STORAGE_VERSION}:${kind}:${base}`,
-    storage: config.storage ?? "localStorage"
-  };
-}
-function getStorage(name) {
-  try {
-    if (typeof window === "undefined") return null;
-    return name === "sessionStorage" ? window.sessionStorage : window.localStorage;
-  } catch {
-    return null;
-  }
-}
-function loadPersisted(target) {
-  if (!target) return null;
-  try {
-    const storage = getStorage(target.storage);
-    if (!storage) return null;
-    const raw = storage.getItem(target.key);
-    if (raw == null) return null;
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-function savePersisted(target, value) {
-  if (!target) return;
-  try {
-    const storage = getStorage(target.storage);
-    if (!storage) return;
-    storage.setItem(target.key, JSON.stringify(value));
-  } catch {
-  }
-}
-function clearPersisted(target) {
-  if (!target) return;
-  try {
-    const storage = getStorage(target.storage);
-    if (!storage) return;
-    storage.removeItem(target.key);
-  } catch {
-  }
-}
-
-// src/store/TweakStore.ts
-var TAB_PATH = "_tab";
-var EMPTY_VALUES = Object.freeze({});
-function hintDomId(scope, path) {
-  return `tweakers-hint-${scope}-${path}`.replace(/\s+/g, "-");
-}
-function sameMarkers(a, b) {
-  if (a === b) return true;
-  if (!a || !b || a.length !== b.length) return false;
-  return a.every((m, i) => Object.is(m, b[i]));
-}
-var TweakStoreClass = class {
-  constructor() {
-    this.panels = /* @__PURE__ */ new Map();
-    this.listeners = /* @__PURE__ */ new Map();
-    this.globalListeners = /* @__PURE__ */ new Set();
-    this.snapshots = /* @__PURE__ */ new Map();
-    this.actionListeners = /* @__PURE__ */ new Map();
-    this.eventListeners = /* @__PURE__ */ new Map();
-    // Affordance status and disabled state are app-pushed presentation, not
-    // control values: they stay out of `values` so they are never persisted, saved
-    // into a preset, or diffed against the config. One listener set covers both, so
-    // a control's shell needs a single subscription.
-    this.affordanceStatus = /* @__PURE__ */ new Map();
-    this.disabledPaths = /* @__PURE__ */ new Map();
-    this.controlStateListeners = /* @__PURE__ */ new Map();
-    this.presets = /* @__PURE__ */ new Map();
-    this.activePreset = /* @__PURE__ */ new Map();
-    // Host-owned preset providers. The serialized form (functions drop out of
-    // JSON, leaving list + activeId) decides whether a swap is visible: adapters
-    // replace the object on every host render so callbacks never go stale, and
-    // only a data change should notify.
-    this.presetProviders = /* @__PURE__ */ new Map();
-    /** Panels whose header carries no preset toolbar (see setPresetsHidden). */
-    this.presetsHidden = /* @__PURE__ */ new Set();
-    this.baseValues = /* @__PURE__ */ new Map();
-    // Resolved storage target per panel (null = persistence off). Absent = not
-    // yet registered.
-    this.persistTargets = /* @__PURE__ */ new Map();
-  }
-  registerPanel(id, name, config, shortcuts, options = {}) {
-    const existingPanel = this.panels.get(id);
-    if (existingPanel && existingPanel.kind !== options.kind) {
-      console.warn(
-        `[tweakers] Panel id "${id}" cannot be shared by a timeline and a standard panel; the most recent registration controls where it renders.`
-      );
-    }
-    const target = resolvePersistTarget("panel", id, options.persist);
-    this.persistTargets.set(id, target);
-    const controls = this.parseConfig(config, "", shortcuts);
-    this.applyControlExtras(controls, options.hints, options.affordances, options.labels);
-    const values = this.flattenValues(config, "");
-    this.initTabValue(controls, values);
-    this.initTransitionModes(config, "", values);
-    this.overlayPersistedValues(target, values);
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, module: "_enabled" in config ? true : void 0, kind: options.kind });
-    this.snapshots.set(id, { ...values });
-    this.baseValues.set(id, { ...values });
-    this.notifyGlobal();
-  }
-  updatePanel(id, name, config, shortcuts, options = {}) {
-    const existing = this.panels.get(id);
-    if (!existing) {
-      this.registerPanel(id, name, config, shortcuts, options);
-      return;
-    }
-    const hints = options.hints ?? existing.hints;
-    const affordances = options.affordances ?? existing.affordances;
-    const labels = options.labels ?? existing.labels;
-    const movePads = options.movePads ?? existing.movePads;
-    const controls = this.parseConfig(config, "", shortcuts);
-    this.applyControlExtras(controls, hints, affordances, labels);
-    const controlsByPath = this.mapControlsByPath(controls);
-    const defaultValues = this.flattenValues(config, "");
-    this.initTabValue(controls, defaultValues);
-    const nextValues = {};
-    for (const [path, defaultValue] of Object.entries(defaultValues)) {
-      nextValues[path] = this.normalizePreservedValue(
-        existing.values[path],
-        defaultValue,
-        controlsByPath.get(path)
-      );
-    }
-    this.initTransitionModes(config, "", nextValues);
-    for (const [path, mode] of Object.entries(existing.values)) {
-      if (!path.endsWith(".__mode")) {
-        continue;
-      }
-      const transitionPath = path.slice(0, -"__mode".length - 1);
-      const transitionControl = controlsByPath.get(transitionPath);
-      if (transitionControl?.type === "transition") {
-        nextValues[path] = mode;
-      }
-    }
-    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, module: "_enabled" in config ? true : void 0, kind: options.kind ?? existing.kind };
-    this.panels.set(id, nextPanel);
-    this.snapshots.set(id, { ...nextValues });
-    const previousBaseValues = this.baseValues.get(id) ?? {};
-    const nextBaseValues = {};
-    for (const [path, defaultValue] of Object.entries(defaultValues)) {
-      nextBaseValues[path] = this.normalizePreservedValue(
-        previousBaseValues[path],
-        defaultValue,
-        controlsByPath.get(path)
-      );
-    }
-    for (const [path, value] of Object.entries(nextValues)) {
-      if (path.endsWith(".__mode")) {
-        nextBaseValues[path] = value;
-      }
-    }
-    this.baseValues.set(id, nextBaseValues);
-    this.savePanelValues(id);
-    this.notify(id);
-    this.notifyGlobal();
-  }
-  unregisterPanel(id) {
-    this.panels.delete(id);
-    if (this.listeners.get(id)?.size === 0) this.listeners.delete(id);
-    if (this.actionListeners.get(id)?.size === 0) this.actionListeners.delete(id);
-    if (this.eventListeners.get(id)?.size === 0) this.eventListeners.delete(id);
-    if (this.controlStateListeners.get(id)?.size === 0) this.controlStateListeners.delete(id);
-    this.affordanceStatus.delete(id);
-    this.disabledPaths.delete(id);
-    this.snapshots.delete(id);
-    this.baseValues.delete(id);
-    this.persistTargets.delete(id);
-    this.presetProviders.delete(id);
-    this.presetsHidden.delete(id);
-    this.notifyGlobal();
-  }
-  // Overlay saved values onto freshly-computed defaults, in place. Only keys
-  // that still exist in `values` (i.e. the current config) are restored.
-  overlayPersistedValues(target, values) {
-    const persisted = loadPersisted(target);
-    if (!persisted) return;
-    for (const key of Object.keys(values)) {
-      if (Object.prototype.hasOwnProperty.call(persisted, key)) {
-        values[key] = persisted[key];
-      }
-    }
-  }
-  // Save the panel's current flat values (fail-soft, no-op when persistence is
-  // off). Called after every edit so timing/values survive a reload.
-  savePanelValues(panelId) {
-    const target = this.persistTargets.get(panelId);
-    if (!target) return;
-    const panel = this.panels.get(panelId);
-    if (panel) savePersisted(target, panel.values);
-  }
-  updateValue(panelId, path, value) {
-    const panel = this.panels.get(panelId);
-    if (!panel) return;
-    panel.values[path] = value;
-    const activeId = this.activePreset.get(panelId);
-    if (activeId) {
-      const presets = this.presets.get(panelId) ?? [];
-      const preset = presets.find((p) => p.id === activeId);
-      if (preset) preset.values[path] = value;
-    } else {
-      const base = this.baseValues.get(panelId);
-      if (base) base[path] = value;
-    }
-    this.snapshots.set(panelId, { ...panel.values });
-    this.savePanelValues(panelId);
-    this.notify(panelId);
-  }
-  // Apply several path/value edits atomically — one snapshot + one notify.
-  // The timeline uses this when a single gesture trades time between fields
-  // (e.g. resizing a clip's start edge shifts both its position and duration),
-  // where an intermediate single-field state would be invalid.
-  updateValues(panelId, updates) {
-    const panel = this.panels.get(panelId);
-    if (!panel) return;
-    const activeId = this.activePreset.get(panelId);
-    const preset = activeId ? (this.presets.get(panelId) ?? []).find((p) => p.id === activeId) : void 0;
-    const base = this.baseValues.get(panelId);
-    for (const [path, value] of Object.entries(updates)) {
-      panel.values[path] = value;
-      if (preset) preset.values[path] = value;
-      else if (base) base[path] = value;
-    }
-    this.snapshots.set(panelId, { ...panel.values });
-    this.savePanelValues(panelId);
-    this.notify(panelId);
-  }
-  updateSpringMode(panelId, path, mode) {
-    this.updateTransitionMode(panelId, path, mode);
-  }
-  getSpringMode(panelId, path) {
-    const mode = this.getTransitionMode(panelId, path);
-    if (mode === "easing") return "simple";
-    return mode;
-  }
-  updateTransitionMode(panelId, path, mode) {
-    const panel = this.panels.get(panelId);
-    if (!panel) return;
-    panel.values[`${path}.__mode`] = mode;
-    this.snapshots.set(panelId, { ...panel.values });
-    this.notify(panelId);
-  }
-  getTransitionMode(panelId, path) {
-    const panel = this.panels.get(panelId);
-    if (!panel) return "simple";
-    return panel.values[`${path}.__mode`] || "simple";
-  }
-  getValue(panelId, path) {
-    const panel = this.panels.get(panelId);
-    return panel?.values[path];
-  }
-  getValues(panelId) {
-    return this.snapshots.get(panelId) ?? EMPTY_VALUES;
-  }
-  getPanels(kind) {
-    const all = Array.from(this.panels.values());
-    if (kind === "panel") return all.filter((panel) => panel.kind === void 0);
-    if (kind === "timeline") return all.filter((panel) => panel.kind === "timeline");
-    return all;
-  }
-  /**
-   * The settings panels a root should draw, given its optional `panels` filter.
-   * `undefined` means every panel — the single-surface default. A list means
-   * exactly those names, in the order named, so two roots never fight over the
-   * same panel and a panel that has not registered yet leaves a gap that fills
-   * when it does.
-   */
-  selectPanels(only) {
-    const registered = this.getPanels("panel");
-    if (only === void 0) return registered;
-    const names = typeof only === "string" ? [only] : only;
-    return names.map((name) => registered.find((panel) => panel.name === name)).filter((panel) => panel !== void 0);
-  }
-  getPanel(id) {
-    return this.panels.get(id);
-  }
-  subscribe(panelId, listener) {
-    if (!this.listeners.has(panelId)) {
-      this.listeners.set(panelId, /* @__PURE__ */ new Set());
-    }
-    this.listeners.get(panelId).add(listener);
-    return () => {
-      const listeners2 = this.listeners.get(panelId);
-      listeners2?.delete(listener);
-      if (listeners2?.size === 0 && !this.panels.has(panelId)) {
-        this.listeners.delete(panelId);
-      }
-    };
-  }
-  subscribeGlobal(listener) {
-    this.globalListeners.add(listener);
-    return () => this.globalListeners.delete(listener);
-  }
-  subscribeActions(panelId, listener) {
-    if (!this.actionListeners.has(panelId)) {
-      this.actionListeners.set(panelId, /* @__PURE__ */ new Set());
-    }
-    this.actionListeners.get(panelId).add(listener);
-    return () => {
-      const listeners2 = this.actionListeners.get(panelId);
-      listeners2?.delete(listener);
-      if (listeners2?.size === 0 && !this.panels.has(panelId)) {
-        this.actionListeners.delete(panelId);
-      }
-    };
-  }
-  triggerAction(panelId, path) {
-    this.actionListeners.get(panelId)?.forEach((fn) => fn(path));
-  }
-  // Generic non-value event channel (file picked, chip removed, list mutated).
-  subscribeEvents(panelId, listener) {
-    if (!this.eventListeners.has(panelId)) {
-      this.eventListeners.set(panelId, /* @__PURE__ */ new Set());
-    }
-    this.eventListeners.get(panelId).add(listener);
-    return () => {
-      const listeners2 = this.eventListeners.get(panelId);
-      listeners2?.delete(listener);
-      if (listeners2?.size === 0 && !this.panels.has(panelId)) {
-        this.eventListeners.delete(panelId);
-      }
-    };
-  }
-  emitEvent(panelId, path, event) {
-    this.eventListeners.get(panelId)?.forEach((fn) => fn(path, event));
-  }
-  /**
-   * How lit a control's affordance dot is. Callers may push this as often as
-   * they like — an unchanged status is dropped without notifying, so driving it
-   * from an audio callback costs nothing.
-   */
-  setAffordanceStatus(panelId, path, status) {
-    let byPath = this.affordanceStatus.get(panelId);
-    if (status === "off") {
-      if (!byPath?.delete(path)) return;
-    } else {
-      if (byPath?.get(path) === status) return;
-      if (!byPath) {
-        byPath = /* @__PURE__ */ new Map();
-        this.affordanceStatus.set(panelId, byPath);
-      }
-      byPath.set(path, status);
-    }
-    this.notifyControlState(panelId);
-  }
-  getAffordanceStatus(panelId, path) {
-    return this.affordanceStatus.get(panelId)?.get(path) ?? "off";
-  }
-  /**
-   * Greys a control out and stops it responding. Runtime-only by design: a
-   * config default plus a runtime override would be two sources of truth, and
-   * calling this once covers the static case.
-   */
-  setDisabled(panelId, path, disabled) {
-    let paths = this.disabledPaths.get(panelId);
-    if (disabled) {
-      if (paths?.has(path)) return;
-      if (!paths) {
-        paths = /* @__PURE__ */ new Set();
-        this.disabledPaths.set(panelId, paths);
-      }
-      paths.add(path);
-    } else if (!paths?.delete(path)) {
-      return;
-    }
-    this.notifyControlState(panelId);
-  }
-  isDisabled(panelId, path) {
-    return this.disabledPaths.get(panelId)?.has(path) ?? false;
-  }
-  /** One channel for every app-pushed presentation change on a panel. */
-  subscribeControlState(panelId, listener) {
-    if (!this.controlStateListeners.has(panelId)) {
-      this.controlStateListeners.set(panelId, /* @__PURE__ */ new Set());
-    }
-    this.controlStateListeners.get(panelId).add(listener);
-    return () => {
-      const listeners2 = this.controlStateListeners.get(panelId);
-      listeners2?.delete(listener);
-      if (listeners2?.size === 0 && !this.panels.has(panelId)) {
-        this.controlStateListeners.delete(panelId);
-      }
-    };
-  }
-  notifyControlState(panelId) {
-    this.controlStateListeners.get(panelId)?.forEach((fn) => fn());
-  }
-  /**
-   * Refresh curve rows' host-supplied presentation (sample function + markers)
-   * in place. Functions drop out of the serialized config diff (the
-   * `formatValue` precedent), so a host that rebuilds its config per render
-   * would otherwise leave the preview drawing a stale closure; markers ride the
-   * same sync so the whole curve row stays one coherent refresh. Adapters call
-   * this after every render — the same contract as setPresetProvider — and only
-   * an actual change (function identity, marker values) notifies, on the
-   * control-state channel: curve rows are presentation, and the value snapshot
-   * must not churn (a new snapshot would re-render the host, whose rebuilt
-   * closure would notify again, forever). Markers are compared by value, not
-   * identity, because a per-render rebuild remakes the array every time.
-   */
-  syncCurveConfigs(panelId, config) {
-    const panel = this.panels.get(panelId);
-    if (!panel) return;
-    let changed = false;
-    const visit = (cfg, prefix) => {
-      for (const [key, value] of Object.entries(cfg)) {
-        if (key === "_collapsed" || key === "_collapsible" || key === "_tabs") continue;
-        const path = prefix ? `${prefix}.${key}` : key;
-        if (this.isCurveConfig(value)) {
-          const control = this.findControlByPath(panel.controls, path);
-          if (control?.type === "curve") {
-            if (control.sample !== value.sample) {
-              control.sample = value.sample;
-              changed = true;
-            }
-            if (!sameMarkers(control.markers, value.markers)) {
-              control.markers = value.markers;
-              changed = true;
-            }
-          }
-        } else if (this.isAnalyserConfig(value)) {
-          const control = this.findControlByPath(panel.controls, path);
-          if (control?.type === "analyser" && control.analyserRow !== void 0) {
-            const prev = control.analyserRow;
-            const sameRange = prev.rangeHz === value.rangeHz || !!prev.rangeHz && !!value.rangeHz && prev.rangeHz[0] === value.rangeHz[0] && prev.rangeHz[1] === value.rangeHz[1];
-            const sameScalars = prev.source === value.source && prev.variant === value.variant && prev.mode === value.mode && prev.pixelSize === value.pixelSize && prev.scale === value.scale && prev.height === value.height && sameRange;
-            if (prev.analyser !== value.analyser || prev.marker !== value.marker || !sameScalars) {
-              control.analyserRow = value;
-              changed = true;
-            }
-          }
-        } else if (this.isFilterConfig(value) && value.response) {
-          const control = this.findControlByPath(panel.controls, path);
-          if (control?.type === "filter" && control.response !== value.response) {
-            control.response = value.response;
-            changed = true;
-          }
-        } else if (this.isSelectConfig(value) && value.preview) {
-          const control = this.findControlByPath(panel.controls, path);
-          if (control?.type === "select" && control.preview !== value.preview) {
-            control.preview = value.preview;
-            changed = true;
-          }
-        } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
-          visit(value, path);
-        }
-      }
-    };
-    visit(config, "");
-    if (changed) this.notifyControlState(panelId);
-  }
-  savePreset(panelId, name) {
-    const panel = this.panels.get(panelId);
-    if (!panel) throw new Error(`Panel ${panelId} not found`);
-    const id = `preset-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    const preset = {
-      id,
-      name,
-      values: { ...panel.values }
-    };
-    const existing = this.presets.get(panelId) ?? [];
-    this.presets.set(panelId, [...existing, preset]);
-    this.activePreset.set(panelId, id);
-    this.snapshots.set(panelId, { ...panel.values });
-    this.notify(panelId);
-    return id;
-  }
-  loadPreset(panelId, presetId) {
-    const panel = this.panels.get(panelId);
-    if (!panel) return;
-    const presets = this.presets.get(panelId) ?? [];
-    const preset = presets.find((p) => p.id === presetId);
-    if (!preset) return;
-    this.replaceValues(panel, preset.values);
-    this.snapshots.set(panelId, { ...panel.values });
-    this.activePreset.set(panelId, presetId);
-    this.savePanelValues(panelId);
-    this.notify(panelId);
-  }
-  deletePreset(panelId, presetId) {
-    const presets = this.presets.get(panelId) ?? [];
-    this.presets.set(panelId, presets.filter((p) => p.id !== presetId));
-    if (this.activePreset.get(panelId) === presetId) {
-      this.activePreset.set(panelId, null);
-    }
-    const panel = this.panels.get(panelId);
-    if (panel) {
-      this.snapshots.set(panelId, { ...panel.values });
-    }
-    this.notify(panelId);
-  }
-  getPresets(panelId) {
-    return this.presets.get(panelId) ?? [];
-  }
-  getActivePresetId(panelId) {
-    const provider = this.getPresetProvider(panelId);
-    if (provider) return provider.activeId ?? null;
-    return this.activePreset.get(panelId) ?? null;
-  }
-  clearActivePreset(panelId) {
-    const panel = this.panels.get(panelId);
-    const base = this.baseValues.get(panelId);
-    if (panel && base) {
-      this.replaceValues(panel, base);
-      this.snapshots.set(panelId, { ...panel.values });
-    }
-    this.activePreset.set(panelId, null);
-    this.notify(panelId);
-  }
-  /**
-   * Install (or clear) a host-owned preset provider. Safe to call on every
-   * host render: the object is always swapped so `onSelect`/`onCreate`/
-   * `onDelete` never close over stale host state, but listeners are only
-   * notified when the visible data (list, active id) actually changed.
-   */
-  setPresetProvider(panelId, provider) {
-    const entry = this.presetProviders.get(panelId);
-    if (!provider) {
-      if (!entry) return;
-      this.presetProviders.delete(panelId);
-    } else {
-      const serialized = JSON.stringify(provider);
-      this.presetProviders.set(panelId, { provider, serialized });
-      if (entry?.serialized === serialized) return;
-    }
-    const panel = this.panels.get(panelId);
-    if (panel) {
-      this.snapshots.set(panelId, { ...panel.values });
-    }
-    this.notify(panelId);
-  }
-  getPresetProvider(panelId) {
-    return this.presetProviders.get(panelId)?.provider ?? null;
-  }
-  /**
-   * Hide (or restore) a panel's preset toolbar. For the secondary panels of a
-   * multi-panel app — a rack of per-voice columns, say — where a snapshot
-   * means the whole instrument and so belongs to one panel only. Hiding the
-   * toolbar hides its add and copy buttons with it: the header of a panel that
-   * does not own presets is bare.
-   */
-  setPresetsHidden(panelId, hidden) {
-    const had = this.presetsHidden.has(panelId);
-    if (hidden === had) return;
-    if (hidden) this.presetsHidden.add(panelId);
-    else this.presetsHidden.delete(panelId);
-    this.notify(panelId);
-  }
-  arePresetsHidden(panelId) {
-    return this.presetsHidden.has(panelId);
-  }
-  /** Provider mode hides the implicit "Version 1" base row — the host owns the whole list. */
-  hasPresetProvider(panelId) {
-    return this.presetProviders.has(panelId);
-  }
-  /** The dropdown rows in host order, from the provider when one is set. */
-  getPresetItems(panelId) {
-    const provider = this.getPresetProvider(panelId);
-    if (provider) {
-      return provider.presets.map((p) => ({
-        id: p.id,
-        name: p.label,
-        deletable: !!provider.onDelete && !p.readonly,
-        renamable: !!provider.onRename && !p.readonly
-      }));
-    }
-    return this.getPresets(panelId).map((p) => ({ id: p.id, name: p.name, deletable: true, renamable: true }));
-  }
-  /**
-   * Row clicked. Stock mode loads the snapshot (null = back to base values);
-   * provider mode hands the id to the host, which applies values itself.
-   */
-  selectPreset(panelId, presetId) {
-    const provider = this.getPresetProvider(panelId);
-    if (provider) {
-      if (presetId) void provider.onSelect(presetId);
-      return;
-    }
-    if (presetId) this.loadPreset(panelId, presetId);
-    else this.clearActivePreset(panelId);
-  }
-  /**
-   * "+" pressed. Stock mode snapshots into "Version N" (N counts the implicit
-   * base as version 1); provider mode suggests the matching "Preset N" label.
-   */
-  createPreset(panelId) {
-    const provider = this.getPresetProvider(panelId);
-    if (provider) {
-      void provider.onCreate(`Preset ${provider.presets.length + 1}`);
-      return;
-    }
-    this.savePreset(panelId, `Version ${this.getPresets(panelId).length + 2}`);
-  }
-  /** Trash icon pressed on a row (only rendered when the item is deletable). */
-  removePreset(panelId, presetId) {
-    const provider = this.getPresetProvider(panelId);
-    if (provider) {
-      void provider.onDelete?.(presetId);
-      return;
-    }
-    this.deletePreset(panelId, presetId);
-  }
-  /** Rename a preset (toolbar inline edit). Provider mode hands the new name
-   * to the host; stock mode edits the store's own snapshot list. */
-  renamePreset(panelId, presetId, name) {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    const provider = this.getPresetProvider(panelId);
-    if (provider) {
-      void provider.onRename?.(presetId, trimmed);
-      return;
-    }
-    const preset = (this.presets.get(panelId) ?? []).find((p) => p.id === presetId);
-    if (!preset) return;
-    preset.name = trimmed;
-    const panel = this.panels.get(panelId);
-    if (panel) this.snapshots.set(panelId, { ...panel.values });
-    this.notify(panelId);
-  }
-  resolveShortcutTarget(key, modifier) {
-    for (const panel of this.panels.values()) {
-      for (const [path, shortcut] of Object.entries(panel.shortcuts)) {
-        if (!shortcut.key) continue;
-        if (shortcut.key.toLowerCase() !== key.toLowerCase()) continue;
-        const scMod = shortcut.modifier ?? void 0;
-        if (scMod !== modifier) continue;
-        const control = this.findControlByPath(panel.controls, path);
-        if (control) {
-          return { panelId: panel.id, path, control };
-        }
-      }
-    }
-    return null;
-  }
-  resolveScrollOnlyTargets() {
-    const results = [];
-    for (const panel of this.panels.values()) {
-      for (const [path, shortcut] of Object.entries(panel.shortcuts)) {
-        if ((shortcut.interaction ?? "scroll") !== "scroll-only") continue;
-        const control = this.findControlByPath(panel.controls, path);
-        if (control) {
-          results.push({ panelId: panel.id, path, control, shortcut });
-        }
-      }
-    }
-    return results;
-  }
-  findControlByPath(controls, path) {
-    for (const control of controls) {
-      if (control.path === path) return control;
-      if (control.type === "folder" && control.children) {
-        const found = this.findControlByPath(control.children, path);
-        if (found) return found;
-      }
-    }
-    return null;
-  }
-  notify(panelId) {
-    this.listeners.get(panelId)?.forEach((fn) => fn());
-  }
-  notifyGlobal() {
-    this.globalListeners.forEach((fn) => fn());
-  }
-  initTransitionModes(config, prefix, values) {
-    for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed" || key === "_collapsible" || key === "_tabs") continue;
-      const path = prefix ? `${prefix}.${key}` : key;
-      if (this.isEasingConfig(value)) {
-        values[`${path}.__mode`] = "easing";
-      } else if (this.isSpringConfig(value)) {
-        const hasPhysics = value.stiffness !== void 0 || value.damping !== void 0 || value.mass !== void 0;
-        const hasTime = value.visualDuration !== void 0 || value.bounce !== void 0;
-        values[`${path}.__mode`] = hasPhysics && !hasTime ? "advanced" : "simple";
-      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isCurveConfig(value)) {
-        this.initTransitionModes(value, path, values);
-      }
-    }
-  }
-  parseConfig(config, prefix, shortcuts) {
-    const controls = [];
-    for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed" || key === "_collapsible" || key === "_tabs" || key === "_enabled") continue;
-      const path = prefix ? `${prefix}.${key}` : key;
-      const label = this.formatLabel(key);
-      const shortcut = shortcuts?.[path];
-      if (Array.isArray(value) && value.length <= 4 && typeof value[0] === "number") {
-        const tuple = value;
-        controls.push({
-          type: "slider",
-          path,
-          label,
-          min: tuple[1],
-          max: tuple[2],
-          step: tuple[3] ?? this.inferStep(tuple[1], tuple[2]),
-          shortcut
-        });
-      } else if (typeof value === "number") {
-        const { min, max, step } = this.inferRange(value);
-        controls.push({ type: "slider", path, label, min, max, step, shortcut });
-      } else if (this.isSliderConfig(value)) {
-        controls.push({
-          type: "slider",
-          path,
-          label,
-          min: value.min,
-          max: value.max,
-          moveVisual: value.moveVisual,
-          step: value.step ?? this.inferStep(value.min, value.max),
-          unit: value.unit,
-          formatValue: value.formatValue,
-          origin: value.origin,
-          bipolar: value.bipolar,
-          orientation: value.orientation,
-          display: value.display,
-          wrap: value.wrap,
-          shortcut
-        });
-      } else if (this.isNumberConfig(value)) {
-        controls.push({
-          type: "number",
-          path,
-          label,
-          min: value.min,
-          max: value.max,
-          step: value.step ?? this.inferRange(value.default).step,
-          unit: value.unit,
-          formatValue: value.formatValue,
-          orientation: value.orientation,
-          shortcut
-        });
-      } else if (typeof value === "boolean") {
-        controls.push({ type: "toggle", path, label, shortcut });
-      } else if (this.isSpringConfig(value) || this.isEasingConfig(value)) {
-        controls.push({ type: "transition", path, label });
-      } else if (this.isActionConfig(value)) {
-        controls.push({ type: "action", path, label: value.label || label, caption: value.caption });
-      } else if (this.isSelectConfig(value)) {
-        controls.push({ type: "select", path, label, options: value.options, display: value.display, preview: value.preview, moveVisual: value.moveVisual });
-      } else if (this.isColorConfig(value)) {
-        controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
-      } else if (this.isGradientConfig(value)) {
-        controls.push({ type: "gradient", path, label, gradientForm: value.form });
-      } else if (this.isXYConfig(value)) {
-        controls.push({ type: "xy", path, label, xAxis: value.x, yAxis: value.y, grid: value.grid, density: value.density, snap: value.snap, returnToCenter: value.returnToCenter, showValues: value.showValues });
-      } else if (this.isFilterConfig(value)) {
-        controls.push({ type: "filter", path, label, cutoffAxis: value.cutoff, resonanceAxis: value.resonance, response: value.response, filterEnabled: value.enabled });
-      } else if (this.isTextConfig(value)) {
-        controls.push({ type: "text", path, label, placeholder: value.placeholder });
-      } else if (this.isTransferConfig(value)) {
-        controls.push({
-          type: "transfer",
-          path,
-          label,
-          curveHeight: value.height,
-          gridDivisions: value.grid,
-          axisLabels: value.axisLabels
-        });
-      } else if (this.isRangeConfig(value)) {
-        controls.push({
-          type: "range",
-          path,
-          label,
-          min: value.min,
-          max: value.max,
-          step: value.step ?? this.inferStep(value.min, value.max),
-          rangeDefault: value.default ?? { min: value.min, max: value.max }
-        });
-      } else if (this.isGalleryConfig(value)) {
-        controls.push({ type: "gallery", path, label, items: value.items, columns: value.columns });
-      } else if (this.isFileConfig(value)) {
-        controls.push({ type: "file", path, label, accept: value.accept, multiple: value.multiple });
-      } else if (this.isSwatchConfig(value)) {
-        controls.push({ type: "swatch", path, label, swatchOptions: value.options });
-      } else if (this.isChipsConfig(value)) {
-        controls.push({ type: "chips", path, label, chipOptions: value.options });
-      } else if (this.isMultiSelectConfig(value)) {
-        controls.push({ type: "multiselect", path, label, multiSelectOptions: value.options });
-      } else if (this.isListConfig(value)) {
-        controls.push({ type: "list", path, label, itemTypes: value.itemTypes, addLabel: value.addLabel, maxItems: value.max });
-      } else if (this.isCurveConfig(value)) {
-        controls.push({
-          type: "curve",
-          path,
-          label: typeof value.label === "string" ? value.label : label,
-          hideLabel: value.label === false || void 0,
-          sample: value.sample,
-          domain: value.domain,
-          markers: value.markers,
-          height: value.height,
-          aspect: value.aspect
-        });
-      } else if (this.isAnalyserConfig(value)) {
-        controls.push({
-          type: "analyser",
-          path,
-          label: typeof value.label === "string" ? value.label : label,
-          hideLabel: value.label === false || void 0,
-          height: value.height,
-          analyserRow: value
-        });
-      } else if (typeof value === "string") {
-        if (this.isHexColor(value)) {
-          const hasAlpha = value.length === 5 || value.length === 9;
-          controls.push({ type: "color", path, label, alpha: hasAlpha || void 0 });
-        } else {
-          controls.push({ type: "text", path, label });
-        }
-      } else if (typeof value === "object" && value !== null) {
-        const folderConfig = value;
-        const module2 = "_enabled" in folderConfig ? true : void 0;
-        const collapsible = !module2 && folderConfig._collapsible === false ? false : void 0;
-        const defaultOpen = collapsible === false ? true : "_collapsed" in folderConfig ? !folderConfig._collapsed : true;
-        controls.push({
-          type: "folder",
-          path,
-          label,
-          defaultOpen,
-          collapsible,
-          module: module2,
-          children: this.parseConfig(folderConfig, path, shortcuts)
-        });
-      }
-    }
-    if (prefix === "" && config._tabs === true) {
-      const isFolder = (control) => control.type === "folder";
-      const tabs = controls.filter((control) => isFolder(control) && (control.children?.length ?? 0) > 0);
-      if (tabs.length > 0) {
-        for (const tab of tabs) tab.tab = true;
-        return [
-          {
-            type: "select",
-            path: TAB_PATH,
-            label: "Tab",
-            display: "segmented",
-            tabBar: true,
-            options: tabs.map((tab) => tab.path)
-          },
-          ...controls.filter((control) => !isFolder(control)),
-          ...tabs
-        ];
-      }
-    }
-    return controls;
-  }
-  /**
-   * Swaps a panel's whole value map, keeping the open tab. Which tab you are
-   * reading is a place, not a parameter: a preset should change the sound, not
-   * move you to another page of the panel.
-   */
-  replaceValues(panel, values) {
-    const openTab = panel.values[TAB_PATH];
-    panel.values = { ...values };
-    if (openTab !== void 0) panel.values[TAB_PATH] = openTab;
-  }
-  /**
-   * Seeds the active tab. It is a real value, not component state, so a config
-   * rebuild preserves the reader's place — and `normalizePreservedValue` resets
-   * it through the select's options when the tab it named is gone.
-   */
-  initTabValue(controls, values) {
-    const tabBar = controls.find((control) => control.tabBar);
-    if (!tabBar) return;
-    values[TAB_PATH] = tabBar.options?.[0] ?? "";
-  }
-  flattenValues(config, prefix) {
-    const values = {};
-    for (const [key, value] of Object.entries(config)) {
-      if (key === "_collapsed" || key === "_collapsible" || key === "_tabs") continue;
-      const path = prefix ? `${prefix}.${key}` : key;
-      if (Array.isArray(value) && value.length <= 4 && typeof value[0] === "number") {
-        values[path] = value[0];
-      } else if (this.isSliderConfig(value) || this.isNumberConfig(value)) {
-        values[path] = value.default;
-      } else if (typeof value === "number" || typeof value === "boolean" || typeof value === "string") {
-        values[path] = value;
-      } else if (this.isSpringConfig(value) || this.isEasingConfig(value)) {
-        values[path] = value;
-      } else if (this.isActionConfig(value)) {
-        values[path] = value;
-      } else if (this.isSelectConfig(value)) {
-        const firstOption = value.options[0];
-        const firstValue = typeof firstOption === "string" ? firstOption : firstOption.value;
-        values[path] = value.default ?? firstValue;
-      } else if (this.isColorConfig(value)) {
-        values[path] = value.default ?? "#000000";
-      } else if (this.isGradientConfig(value)) {
-        values[path] = normalizeGradient(value.default ?? DEFAULT_GRADIENT);
-      } else if (this.isXYConfig(value)) {
-        const xAxis = resolveAxis(value.x);
-        const yAxis = resolveAxis(value.y);
-        values[path] = normalizeValue(value.default, xAxis, yAxis, value.snap ?? false);
-      } else if (this.isTextConfig(value)) {
-        values[path] = value.default ?? "";
-      } else if (this.isTransferConfig(value)) {
-        values[path] = normalizeTransfer(value.default ?? DEFAULT_TRANSFER);
-      } else if (this.isRangeConfig(value)) {
-        values[path] = value.default ?? { min: value.min, max: value.max };
-      } else if (this.isFilterConfig(value)) {
-        values[path] = normalizeFilterValue(
-          value.default,
-          resolveFilterAxis(value.cutoff, "cutoff"),
-          resolveFilterAxis(value.resonance, "resonance")
-        );
-      } else if (this.isGalleryConfig(value)) {
-        values[path] = value.default ?? value.items[0]?.id ?? "";
-      } else if (this.isFileConfig(value)) {
-        values[path] = "";
-      } else if (this.isSwatchConfig(value)) {
-        values[path] = value.default ?? value.options[0]?.value ?? "";
-      } else if (this.isChipsConfig(value)) {
-        values[path] = value.default ?? value.options[0]?.value ?? "";
-      } else if (this.isMultiSelectConfig(value)) {
-        values[path] = value.default ?? [];
-      } else if (this.isListConfig(value)) {
-        values[path] = normalizeListItems(value);
-      } else if (this.isCurveConfig(value)) {
-      } else if (typeof value === "object" && value !== null) {
-        Object.assign(values, this.flattenValues(value, path));
-      }
-    }
-    return values;
-  }
-  isSpringConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "spring";
-  }
-  isEasingConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "easing";
-  }
-  isActionConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "action";
-  }
-  isSelectConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "select" && "options" in value && Array.isArray(value.options);
-  }
-  isColorConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "color";
-  }
-  isGradientConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "gradient";
-  }
-  // Explicit { type: 'xy' } only — a bare { x, y } object would collide with the
-  // "nested object → folder" fallback, so the shorthand is deliberately unsupported.
-  isXYConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "xy";
-  }
-  isFilterConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "filter";
-  }
-  isTransferConfig(value) {
-    return typeof value === "object" && value !== null && !Array.isArray(value) && value.type === "transfer";
-  }
-  isRangeConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "range";
-  }
-  // A stored range VALUE ({min,max} numbers), as opposed to a range config.
-  // Used to preserve the leaf value by identity across a panel update.
-  isRangeValue(value) {
-    return typeof value === "object" && value !== null && typeof value.min === "number" && typeof value.max === "number";
-  }
-  isTextConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "text";
-  }
-  isGalleryConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "gallery" && "items" in value && Array.isArray(value.items);
-  }
-  isFileConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "file";
-  }
-  isSwatchConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "swatch" && "options" in value && Array.isArray(value.options);
-  }
-  isChipsConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "chips" && "options" in value && Array.isArray(value.options);
-  }
-  isMultiSelectConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "multiselect" && "options" in value && Array.isArray(value.options);
-  }
-  isSliderConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "slider" && typeof value.min === "number" && typeof value.max === "number";
-  }
-  isNumberConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "number" && typeof value.default === "number";
-  }
-  isAnalyserConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "analyser" && typeof value.analyser === "function";
-  }
-  isCurveConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "curve" && typeof value.sample === "function";
-  }
-  isListConfig(value) {
-    return typeof value === "object" && value !== null && "type" in value && value.type === "list" && "itemTypes" in value && typeof value.itemTypes === "object";
-  }
-  isHexColor(value) {
-    return HEX_COLOR_REGEX.test(value);
-  }
-  formatLabel(key) {
-    return key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()).trim();
-  }
-  inferRange(value) {
-    if (value >= 0 && value <= 1) {
-      return { min: 0, max: 1, step: 0.01 };
-    } else if (value >= 0 && value <= 10) {
-      return { min: 0, max: value * 3 || 10, step: 0.1 };
-    } else if (value >= 0 && value <= 100) {
-      return { min: 0, max: value * 3 || 100, step: 1 };
-    } else if (value >= 0) {
-      return { min: 0, max: value * 3 || 1e3, step: 10 };
-    } else {
-      return { min: value * 3, max: -value * 3, step: 1 };
-    }
-  }
-  inferStep(min, max) {
-    const range = max - min;
-    if (range <= 1) return 0.01;
-    if (range <= 10) return 0.1;
-    if (range <= 100) return 1;
-    return 10;
-  }
-  normalizePreservedValue(existingValue, defaultValue, control) {
-    if (existingValue === void 0 || !control) {
-      return defaultValue;
-    }
-    switch (control.type) {
-      case "slider":
-      case "number": {
-        if (typeof existingValue !== "number" || typeof defaultValue !== "number") {
-          return defaultValue;
-        }
-        const min = control.min ?? Number.NEGATIVE_INFINITY;
-        const max = control.max ?? Number.POSITIVE_INFINITY;
-        const clamped = Math.min(max, Math.max(min, existingValue));
-        if (typeof control.step !== "number" || control.step <= 0) {
-          return clamped;
-        }
-        return this.roundToStep(clamped, min, max, control.step);
-      }
-      case "toggle":
-        return typeof existingValue === "boolean" ? existingValue : defaultValue;
-      case "select": {
-        if (typeof existingValue !== "string") {
-          return defaultValue;
-        }
-        const options = control.options ?? [];
-        const validValues = new Set(options.map((option) => typeof option === "string" ? option : option.value));
-        return validValues.has(existingValue) ? existingValue : defaultValue;
-      }
-      case "swatch": {
-        if (typeof existingValue !== "string") {
-          return defaultValue;
-        }
-        const validValues = new Set((control.swatchOptions ?? []).map((option) => option.value));
-        return validValues.has(existingValue) ? existingValue : defaultValue;
-      }
-      case "chips": {
-        if (typeof existingValue !== "string") {
-          return defaultValue;
-        }
-        const validValues = new Set((control.chipOptions ?? []).map((option) => option.value));
-        return validValues.has(existingValue) ? existingValue : defaultValue;
-      }
-      case "multiselect": {
-        if (!Array.isArray(existingValue) || existingValue.some((v) => typeof v !== "string")) {
-          return defaultValue;
-        }
-        const validValues = new Set((control.multiSelectOptions ?? []).map((option) => option.value));
-        return existingValue.filter((v) => validValues.has(v));
-      }
-      case "color": {
-        if (typeof existingValue !== "string" || !this.isHexColor(existingValue)) {
-          return defaultValue;
-        }
-        if (!control.alpha && (existingValue.length === 5 || existingValue.length === 9)) {
-          return existingValue.length === 9 ? existingValue.slice(0, 7) : existingValue.slice(0, 4);
-        }
-        if (control.alpha && (existingValue.length === 4 || existingValue.length === 7)) {
-          return existingValue + (existingValue.length === 7 ? "ff" : "f");
-        }
-        return existingValue;
-      }
-      case "gradient": {
-        if (typeof existingValue !== "object" || existingValue === null || !Array.isArray(existingValue.stops)) {
-          return defaultValue;
-        }
-        return normalizeGradient(existingValue);
-      }
-      case "xy": {
-        if (typeof existingValue !== "object" || existingValue === null || Array.isArray(existingValue)) {
-          return defaultValue;
-        }
-        const candidate = existingValue;
-        if (typeof candidate.x !== "number" || typeof candidate.y !== "number") {
-          return defaultValue;
-        }
-        const xAxis = resolveAxis(control.xAxis);
-        const yAxis = resolveAxis(control.yAxis);
-        return normalizeValue(candidate, xAxis, yAxis, false);
-      }
-      case "filter": {
-        if (typeof existingValue !== "object" || existingValue === null || Array.isArray(existingValue)) {
-          return defaultValue;
-        }
-        const candidate = existingValue;
-        if (typeof candidate.cutoff !== "number" || typeof candidate.resonance !== "number") {
-          return defaultValue;
-        }
-        return normalizeFilterValue(
-          candidate,
-          resolveFilterAxis(control.cutoffAxis, "cutoff"),
-          resolveFilterAxis(control.resonanceAxis, "resonance")
-        );
-      }
-      case "text":
-      case "file":
-        return typeof existingValue === "string" ? existingValue : defaultValue;
-      case "list":
-        return Array.isArray(existingValue) ? existingValue : defaultValue;
-      case "transfer":
-        return typeof existingValue === "object" && existingValue !== null && !Array.isArray(existingValue) ? normalizeTransfer(existingValue) : defaultValue;
-      case "range": {
-        if (!this.isRangeValue(existingValue)) {
-          return defaultValue;
-        }
-        const lo = control.min ?? Number.NEGATIVE_INFINITY;
-        const hi = control.max ?? Number.POSITIVE_INFINITY;
-        return clampRange(existingValue, lo, hi);
-      }
-      case "gallery": {
-        if (typeof existingValue !== "string") {
-          return defaultValue;
-        }
-        const validIds = new Set((control.items ?? []).map((item) => item.id));
-        return validIds.has(existingValue) ? existingValue : defaultValue;
-      }
-      case "transition":
-        if (this.isSpringConfig(defaultValue)) {
-          return this.isSpringConfig(existingValue) ? existingValue : defaultValue;
-        }
-        if (this.isEasingConfig(defaultValue)) {
-          return this.isEasingConfig(existingValue) ? existingValue : defaultValue;
-        }
-        return defaultValue;
-      case "action":
-        return defaultValue;
-      default:
-        return defaultValue;
-    }
-  }
-  roundToStep(value, min, max, step) {
-    const snapped = min + Math.round((value - min) / step) * step;
-    const clamped = Math.min(max, Math.max(min, snapped));
-    const precision = this.stepPrecision(step);
-    return Number(clamped.toFixed(precision));
-  }
-  stepPrecision(step) {
-    const text = String(step);
-    const decimalIndex = text.indexOf(".");
-    return decimalIndex === -1 ? 0 : text.length - decimalIndex - 1;
-  }
-  // Stamp path-keyed extras onto the parsed tree. A post-pass rather than
-  // parseConfig parameters: these are cross-cutting metadata like shortcuts, and
-  // every control — including folders and bare-shorthand sliders — is reachable
-  // by path once the tree exists.
-  applyControlExtras(controls, hints, affordances, labels) {
-    if (!hints && !affordances && !labels) return;
-    for (const control of controls) {
-      const hint = hints?.[control.path];
-      if (hint) control.hint = hint;
-      const affordance = affordances?.[control.path];
-      if (affordance) control.affordance = affordance;
-      const label = labels?.[control.path];
-      if (label) control.label = label;
-      if (control.children) this.applyControlExtras(control.children, hints, affordances, labels);
-    }
-  }
-  mapControlsByPath(controls) {
-    const map = /* @__PURE__ */ new Map();
-    const visit = (nodes) => {
-      for (const node of nodes) {
-        if (node.type === "folder" && node.children) {
-          if (node.module) {
-            const enabledPath = `${node.path}._enabled`;
-            map.set(enabledPath, { type: "toggle", path: enabledPath, label: "Enabled" });
-          }
-          visit(node.children);
-          continue;
-        }
-        map.set(node.path, node);
-      }
-    };
-    visit(controls);
-    return map;
-  }
-};
-function listHasType(value, type) {
-  return typeof value === "object" && value !== null && "type" in value && value.type === type;
-}
-function listFormatLabel(key) {
-  return key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()).trim();
-}
-function listIsHexColor(value) {
-  return /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/.test(value);
-}
-function listInferStep(min, max) {
-  const range = max - min;
-  if (range <= 1) return 0.01;
-  if (range <= 10) return 0.1;
-  if (range <= 100) return 1;
-  return 10;
-}
-function listInferRange(value) {
-  if (value >= 0 && value <= 1) return { min: 0, max: 1, step: 0.01 };
-  if (value >= 0 && value <= 10) return { min: 0, max: value * 3 || 10, step: 0.1 };
-  if (value >= 0 && value <= 100) return { min: 0, max: value * 3 || 100, step: 1 };
-  if (value >= 0) return { min: 0, max: value * 3 || 1e3, step: 10 };
-  return { min: value * 3, max: -value * 3, step: 1 };
-}
-function parseListItemSchema(schema, hints, groups) {
-  const fields = [];
-  for (const [key, def] of Object.entries(schema)) {
-    const label = listFormatLabel(key);
-    const hint = hints?.[key];
-    const group = groups?.[key];
-    if (Array.isArray(def) && def.length <= 4 && typeof def[0] === "number") {
-      const [d, min, max, step] = def;
-      fields.push({ key, label, hint, group, kind: "slider", min, max, step: step ?? listInferStep(min, max), defaultValue: d });
-    } else if (typeof def === "number") {
-      const { min, max, step } = listInferRange(def);
-      fields.push({ key, label, hint, group, kind: "slider", min, max, step, defaultValue: def });
-    } else if (typeof def === "boolean") {
-      fields.push({ key, label, hint, group, kind: "toggle", defaultValue: def });
-    } else if (listHasType(def, "select") && Array.isArray(def.options)) {
-      const select = def;
-      const first = select.options[0];
-      const firstValue = typeof first === "string" ? first : first?.value ?? "";
-      fields.push({ key, label, hint, group, kind: "select", options: select.options, defaultValue: select.default ?? firstValue });
-    } else if (listHasType(def, "color")) {
-      const color = def;
-      fields.push({ key, label, hint, group, kind: "color", palette: color.palette, defaultValue: color.default ?? "#000000" });
-    } else if (listHasType(def, "swatch") && Array.isArray(def.options)) {
-      const swatch = def;
-      fields.push({
-        key,
-        label,
-        hint,
-        group,
-        kind: "swatch",
-        swatchOptions: swatch.options,
-        defaultValue: swatch.default ?? swatch.options[0]?.value ?? ""
-      });
-    } else if (listHasType(def, "text")) {
-      const text = def;
-      fields.push({ key, label, hint, group, kind: "text", placeholder: text.placeholder, defaultValue: text.default ?? "" });
-    } else if (typeof def === "string") {
-      fields.push({ key, label, hint, group, kind: listIsHexColor(def) ? "color" : "text", defaultValue: def });
-    }
-  }
-  return fields;
-}
-function groupListFields(fields) {
-  const flat3 = [];
-  const groups = [];
-  const byLabel = /* @__PURE__ */ new Map();
-  for (const field of fields) {
-    if (!field.group) {
-      flat3.push(field);
-      continue;
-    }
-    let group = byLabel.get(field.group);
-    if (!group) {
-      group = { label: field.group, fields: [] };
-      byLabel.set(field.group, group);
-      groups.push(group);
-    }
-    group.fields.push(field);
-  }
-  return { flat: flat3, groups };
-}
-function defaultListItemParams(schema) {
-  const params = {};
-  for (const field of parseListItemSchema(schema)) {
-    params[field.key] = field.defaultValue;
-  }
-  return params;
-}
-function normalizeListItems(config) {
-  const items = config.default ?? [];
-  return items.filter((item) => item && typeof item.type === "string" && config.itemTypes[item.type]).map((item) => {
-    const row = {
-      type: item.type,
-      params: { ...defaultListItemParams(config.itemTypes[item.type].schema), ...item.params ?? {} }
-    };
-    const title = typeof item.title === "string" ? item.title.trim() : "";
-    if (title) row.title = title;
-    return row;
-  });
-}
-var TweakStore = new TweakStoreClass();
+var import_TweakStore6 = require("tweakers/store");
+var import_ModulationStore2 = require("tweakers/modulation-store");
 
 // src/curve-composer-core.ts
 var CURVE_CYCLE = ["linear", "easeIn", "easeOut", "easeInOut", "spring"];
@@ -2285,7 +308,7 @@ var DRAG_THRESHOLD = 3;
 var EDGE_HIT = 6;
 var CURVE_MIN_WEIGHT_FRAC = 0.06;
 var lerp = (a, b, t) => a + (b - a) * t;
-var clamp014 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+var clamp01 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
 var clampBipolar = (v) => v < -1 ? -1 : v > 1 ? 1 : v;
 var SKEW_MAX = 0.45;
 var BACK_MAX = 0.8;
@@ -2308,10 +331,10 @@ function deriveEase(type, curvature, steepness = 0, overshoot = 0, anticipate = 
   const pts = s >= 0 ? lerp4(base, easingExtremes[key], s) : lerp4(easingPresets.linear, base, s + 1);
   let [x1, y1, x2, y2] = pts;
   const shift = clampBipolar(curvature) * SKEW_MAX;
-  x1 = clamp014(x1 + shift);
-  x2 = clamp014(x2 + shift);
-  y2 += clamp014(overshoot) * BACK_MAX;
-  y1 -= clamp014(anticipate) * BACK_MAX;
+  x1 = clamp01(x1 + shift);
+  x2 = clamp01(x2 + shift);
+  y2 += clamp01(overshoot) * BACK_MAX;
+  y1 -= clamp01(anticipate) * BACK_MAX;
   return [x1, y1, x2, y2];
 }
 function bezierAxis(p1, p2, s) {
@@ -2323,14 +346,14 @@ function bezierAxisDeriv(p1, p2, s) {
   return 3 * u * u * p1 + 6 * u * s * (p2 - p1) + 3 * s * s * (1 - p2);
 }
 function bezierY(ease, x) {
-  const tx = clamp014(x);
+  const tx = clamp01(x);
   let s = tx;
   for (let i = 0; i < 6; i++) {
     const xs = bezierAxis(ease[0], ease[2], s) - tx;
     if (Math.abs(xs) < 1e-5) break;
     const d = bezierAxisDeriv(ease[0], ease[2], s);
     if (Math.abs(d) < 1e-6) break;
-    s = clamp014(s - xs / d);
+    s = clamp01(s - xs / d);
   }
   return bezierAxis(ease[1], ease[3], s);
 }
@@ -2363,7 +386,7 @@ function integrateSpringTrace(targets, stiffness, damping, mass, initial, collec
 }
 function springPoints(curvature, steepness = 0) {
   const visualDuration = 1;
-  const bounce = clamp014((clampBipolar(curvature) + 1) / 2) * 0.6;
+  const bounce = clamp01((clampBipolar(curvature) + 1) / 2) * 0.6;
   const mass = 1;
   let stiffness = 2 * Math.PI / visualDuration;
   stiffness = stiffness * stiffness;
@@ -2376,7 +399,7 @@ function springPoints(curvature, steepness = 0) {
   }).points;
 }
 function interp(points, t) {
-  const x = clamp014(t) * (points.length - 1);
+  const x = clamp01(t) * (points.length - 1);
   const i = Math.floor(x);
   if (i >= points.length - 1) return points[points.length - 1];
   return lerp(points[i], points[i + 1], x - i);
@@ -2458,7 +481,7 @@ function totalWeight(segments) {
 }
 function timelineSlots(segments, gap = 0) {
   const n = segments.length;
-  const g = n > 1 ? clamp014(gap) : 0;
+  const g = n > 1 ? clamp01(gap) : 0;
   const total = totalWeight(segments);
   const content = 1 - g;
   const gapW = n > 1 ? g / (n - 1) : 0;
@@ -2498,13 +521,13 @@ function segmentSpan(segments, index, gap = 0) {
 }
 function segmentIndexAt(xNorm, segments, gap = 0) {
   if (gap > 0) {
-    const x2 = clamp014(xNorm);
+    const x2 = clamp01(xNorm);
     const slots = timelineSlots(segments, gap);
     for (const s of slots) if (x2 < s.b) return s.index;
     return segments.length - 1;
   }
   const total = totalWeight(segments);
-  const x = clamp014(xNorm) * total;
+  const x = clamp01(xNorm) * total;
   let acc = 0;
   for (let i = 0; i < segments.length; i++) {
     acc += segments[i].weight;
@@ -2527,7 +550,7 @@ function boundaryAt(xNorm, segments, edgeHitNorm, gap = 0) {
   return best;
 }
 function smootherstep(t) {
-  const x = clamp014(t);
+  const x = clamp01(t);
   return x * x * x * (x * (x * 6 - 15) + 10);
 }
 function cloneSegments(comp, segments) {
@@ -2607,14 +630,14 @@ function setSegmentOvershoot(comp, index, overshoot) {
   const src = comp.segments[index];
   if (!src) return comp;
   const next = comp.segments.slice();
-  next[index] = { ...src, overshoot: clamp014(overshoot) };
+  next[index] = { ...src, overshoot: clamp01(overshoot) };
   return cloneSegments(comp, next);
 }
 function setSegmentAnticipate(comp, index, anticipate) {
   const src = comp.segments[index];
   if (!src) return comp;
   const next = comp.segments.slice();
-  next[index] = { ...src, anticipate: clamp014(anticipate) };
+  next[index] = { ...src, anticipate: clamp01(anticipate) };
   return cloneSegments(comp, next);
 }
 function redistributeWeight(comp, boundaryIndex, deltaFrac) {
@@ -2653,11 +676,11 @@ function setDriverSteepness(comp, steepness) {
 }
 function setDriverOvershoot(comp, overshoot) {
   if (!comp.driver) return comp;
-  return { ...comp, driver: { ...comp.driver, overshoot: clamp014(overshoot) } };
+  return { ...comp, driver: { ...comp.driver, overshoot: clamp01(overshoot) } };
 }
 function setDriverAnticipate(comp, anticipate) {
   if (!comp.driver) return comp;
-  return { ...comp, driver: { ...comp.driver, anticipate: clamp014(anticipate) } };
+  return { ...comp, driver: { ...comp.driver, anticipate: clamp01(anticipate) } };
 }
 var DRAG_ENERGY_GAIN = 0.6;
 var DRAG_STEEP_GAIN = 0.6;
@@ -2668,7 +691,7 @@ function headerHit(xN, py, segments, layout) {
   return null;
 }
 function toLocalCoords(clientX, clientY, rect, totalH) {
-  const xN = clamp014((clientX - rect.left) / (rect.width || 1));
+  const xN = clamp01((clientX - rect.left) / (rect.width || 1));
   const py = (clientY - rect.top) / (rect.height || 1) * totalH;
   return { xN, py };
 }
@@ -2694,14 +717,14 @@ function buildSamplers(comp) {
   };
 }
 function directionPhase(u, dir) {
-  const x = clamp014(u);
+  const x = clamp01(u);
   if (dir === "reverse") return 1 - x;
   if (dir === "mirror") return 1 - Math.abs(1 - 2 * x);
   return x;
 }
 function readComposition(comp, u, s) {
   const inputPhase = directionPhase(u, comp.direction);
-  const warpedPhase = s.driver ? clamp014(s.driver(inputPhase)) : inputPhase;
+  const warpedPhase = s.driver ? clamp01(s.driver(inputPhase)) : inputPhase;
   const gap = comp.gap ?? 0;
   if (gap > 0 && comp.segments.length > 1) {
     const slots = timelineSlots(comp.segments, gap);
@@ -2803,8 +826,8 @@ var TRIGGER_FLYBACK = 0.5;
 function triggersCrossed(prevValue, curValue, steps) {
   const n = Math.max(2, Math.floor(steps));
   const seg = 1 / (n - 1);
-  const p = clamp014(prevValue);
-  const c = clamp014(curValue);
+  const p = clamp01(prevValue);
+  const c = clamp01(curValue);
   const delta = c - p;
   const fired = [];
   if (Math.abs(delta) > TRIGGER_FLYBACK) {
@@ -2912,20 +935,20 @@ var modPageWidth = () => Math.min(
 );
 var MOD_SETTINGS_PANEL = "mod-settings";
 var modKey = (panelId, path) => `${panelId}\0${path}`;
-var clamp5 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-var clamp015 = (v) => clamp5(Number(v) || 0, 0, 1);
-var clampSigned = (v) => clamp5(Number(v) || 0, -1, 1);
+var clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+var clamp012 = (v) => clamp(Number(v) || 0, 0, 1);
+var clampSigned = (v) => clamp(Number(v) || 0, -1, 1);
 function applyModulation(base, signal, amount, min, max) {
-  const offset = clamp5(signal, -1, 1) * clamp015(amount) * (max - min) / 2;
-  return clamp5(base + offset, min, max);
+  const offset = clamp(signal, -1, 1) * clamp012(amount) * (max - min) / 2;
+  return clamp(base + offset, min, max);
 }
 var MOD_RING_RADIUS = 6;
 var MOD_RING_CIRCUMFERENCE = 2 * Math.PI * MOD_RING_RADIUS;
 var RING_SWEEP_START = 135 / 360;
 var RING_SWEEP_LEN = 270 / 360;
 function modRingArc(from01, to01) {
-  const a = RING_SWEEP_START + clamp015(from01) * RING_SWEEP_LEN;
-  const b = RING_SWEEP_START + clamp015(to01) * RING_SWEEP_LEN;
+  const a = RING_SWEEP_START + clamp012(from01) * RING_SWEEP_LEN;
+  const b = RING_SWEEP_START + clamp012(to01) * RING_SWEEP_LEN;
   return {
     length: Math.abs(b - a) * MOD_RING_CIRCUMFERENCE,
     offset: -Math.min(a, b) * MOD_RING_CIRCUMFERENCE
@@ -2942,7 +965,7 @@ var LFO_SYNC_DIVISIONS = [
   { label: "1/32", beats: 0.125 }
 ];
 function lfoSyncedHz(division, bpm) {
-  const i = clamp5(Math.round(Number(division) || 0), 0, LFO_SYNC_DIVISIONS.length - 1);
+  const i = clamp(Math.round(Number(division) || 0), 0, LFO_SYNC_DIVISIONS.length - 1);
   return (Number(bpm) || 120) / 60 / LFO_SYNC_DIVISIONS[i].beats;
 }
 var previewNoise = (i, salt = 0) => {
@@ -2950,7 +973,7 @@ var previewNoise = (i, salt = 0) => {
   return (x - Math.floor(x)) * 2 - 1;
 };
 function previewSlew(values, smooth) {
-  const s = clamp015(smooth);
+  const s = clamp012(smooth);
   if (s <= 0 || values.length < 2) return values;
   const k = 1 - Math.exp(-(1 / values.length) / (s * s * 0.4 + 1e-6));
   let out = values[0];
@@ -2974,16 +997,16 @@ var LFO_DEF = {
     const hz = params.sync ? lfoSyncedHz(Number(params.division) || 0, bpm) : Math.max(0, Number(params.rate) || 0);
     const before = s.phase;
     s.phase = (s.phase + dt * hz) % 1;
-    if (s.phase < before) s.driftTarget = (Math.random() * 2 - 1) * clamp015(params.jitter);
-    if (!clamp015(params.jitter)) {
+    if (s.phase < before) s.driftTarget = (Math.random() * 2 - 1) * clamp012(params.jitter);
+    if (!clamp012(params.jitter)) {
       s.drift = 0;
       s.driftTarget = 0;
     } else s.drift += (s.driftTarget - s.drift) * Math.min(1, dt * hz * 4);
-    const w = clamp5(Number(params.width) || 0, 0.01, 0.99);
-    const ph = (s.phase + clamp015(params.phase)) % 1;
+    const w = clamp(Number(params.width) || 0, 0.01, 0.99);
+    const ph = (s.phase + clamp012(params.phase)) % 1;
     const tri = ph < w ? ph / w : 1 - (ph - w) / (1 - w);
-    let v = clamp5(tri * 2 - 1 + s.drift, -1, 1);
-    const smooth = clamp015(params.smooth);
+    let v = clamp(tri * 2 - 1 + s.drift, -1, 1);
+    const smooth = clamp012(params.smooth);
     if (smooth > 0 && s.out !== null) {
       const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
       v = s.out + (v - s.out) * k;
@@ -2999,18 +1022,18 @@ var LFO_DEF = {
    */
   preview(params, count) {
     const n = Math.max(2, count);
-    const w = clamp5(Number(params.width) || 0, 0.01, 0.99);
-    const jitter = clamp015(params.jitter);
+    const w = clamp(Number(params.width) || 0, 0.01, 0.99);
+    const jitter = clamp012(params.jitter);
     const wobble = Math.max(2, Math.round(n / 8));
     const raw = Array.from({ length: n }, (_, i) => {
-      const ph = (i / (n - 1) * 2 + clamp015(params.phase)) % 1;
+      const ph = (i / (n - 1) * 2 + clamp012(params.phase)) % 1;
       const tri = ph < w ? ph / w : 1 - (ph - w) / (1 - w);
       const drift = previewNoise(Math.floor(i / wobble)) * jitter * 0.5;
-      return clamp5(tri * 2 - 1 + drift, -1, 1);
+      return clamp(tri * 2 - 1 + drift, -1, 1);
     });
-    const shape = clamp015(params.smooth) > 0.55 ? "Sine" : w <= 0.25 ? "Saw" : w >= 0.75 ? "Ramp" : "Tri";
+    const shape = clamp012(params.smooth) > 0.55 ? "Sine" : w <= 0.25 ? "Saw" : w >= 0.75 ? "Ramp" : "Tri";
     return {
-      points: previewSlew(raw, clamp015(params.smooth)).map((v) => (v + 1) / 2),
+      points: previewSlew(raw, clamp012(params.smooth)).map((v) => (v + 1) / 2),
       label: jitter > 0.4 ? `${shape} \xB7 Jitter` : shape
     };
   }
@@ -3034,12 +1057,12 @@ var SH_DEF = {
     if (s.out === null || s.wait <= 0) {
       s.held = Math.random() * 2 - 1;
       const hz = Math.max(0.01, Number(params.rate) || 0);
-      const len = 1 / hz * (1 + (Math.random() * 2 - 1) * clamp015(params.jitter) * 0.9);
+      const len = 1 / hz * (1 + (Math.random() * 2 - 1) * clamp012(params.jitter) * 0.9);
       s.wait = Math.max(5e-3, len);
     }
-    const offset = clamp5(Number(params.offset) || 0, -1, 1);
-    let v = clamp5(s.held * clamp015(params.depth) + offset, -1, 1);
-    const smooth = clamp015(params.smooth);
+    const offset = clamp(Number(params.offset) || 0, -1, 1);
+    let v = clamp(s.held * clamp012(params.depth) + offset, -1, 1);
+    const smooth = clamp012(params.smooth);
     if (smooth > 0 && s.out !== null) {
       const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
       v = s.out + (v - s.out) * k;
@@ -3055,9 +1078,9 @@ var SH_DEF = {
    */
   preview(params, count) {
     const n = Math.max(2, count);
-    const depth = clamp015(params.depth);
-    const offset = clamp5(Number(params.offset) || 0, -1, 1);
-    const jitter = clamp015(params.jitter);
+    const depth = clamp012(params.depth);
+    const offset = clamp(Number(params.offset) || 0, -1, 1);
+    const jitter = clamp012(params.jitter);
     const steps = 8;
     const lens = Array.from({ length: steps }, (_, i) => 1 + previewNoise(i, 1) * jitter * 0.9);
     const total = lens.reduce((a, b) => a + b, 0);
@@ -3067,11 +1090,11 @@ var SH_DEF = {
     const raw = Array.from({ length: n }, (_, i) => {
       const t = i / (n - 1);
       const step = edges.findIndex((e) => t <= e);
-      return clamp5(previewNoise(step < 0 ? steps - 1 : step) * depth + offset, -1, 1);
+      return clamp(previewNoise(step < 0 ? steps - 1 : step) * depth + offset, -1, 1);
     });
     return {
-      points: previewSlew(raw, clamp015(params.smooth)).map((v) => (v + 1) / 2),
-      label: clamp015(params.smooth) > 0.55 ? "Drift" : "Steps"
+      points: previewSlew(raw, clamp012(params.smooth)).map((v) => (v + 1) / 2),
+      label: clamp012(params.smooth) > 0.55 ? "Drift" : "Steps"
     };
   }
 };
@@ -3081,12 +1104,12 @@ var ADSR_STAGE_MAX = { attack: 2e3, decay: 2e3, release: 4e3 };
 var ENV_BEND_STAGES = ["attack", "decay", "release"];
 var envCurveParam = (stage) => `${stage}Curve`;
 var adsrShape = (p, curve) => {
-  const c = clamp5(Number(curve) || 0, -1, 1);
+  const c = clamp(Number(curve) || 0, -1, 1);
   return 1 - Math.pow(1 - p, Math.pow(4, c));
 };
 function envelopePoints(params, count) {
   const n = Math.max(2, count);
-  const sustain = clamp015(params.sustain);
+  const sustain = clamp012(params.sustain);
   const share = (key) => 0.04 + 0.24 * Math.min(1, secs(params[key]) * 1e3 / ADSR_STAGE_MAX[key]);
   const wA = share("attack");
   const wD = share("decay");
@@ -3100,7 +1123,7 @@ function envelopePoints(params, count) {
   return Array.from({ length: n }, (_, i) => at(i / (n - 1)));
 }
 function envelopeJoints(params) {
-  const sustain = clamp015(params.sustain);
+  const sustain = clamp012(params.sustain);
   const share = (key) => 0.04 + 0.24 * Math.min(1, secs(params[key]) * 1e3 / ADSR_STAGE_MAX[key]);
   const wA = share("attack");
   return [
@@ -3156,7 +1179,7 @@ var ADSR_DEF = {
   tick(state2, params, dt) {
     const s = state2;
     const loop = !!params.loop;
-    const sustain = clamp015(params.sustain);
+    const sustain = clamp012(params.sustain);
     if (s.stage === "idle") {
       if (!loop) return s.env = 0;
       s.stage = "attack";
@@ -3186,7 +1209,7 @@ var ADSR_DEF = {
     else if (s.stage === "sustain") s.env = sustain;
     else if (s.stage === "release") s.env = s.from * (1 - adsrShape(p, params.releaseCurve));
     else s.env = 0;
-    return clamp015(s.env);
+    return clamp012(s.env);
   }
 };
 registerModType(ADSR_DEF);
@@ -3218,18 +1241,18 @@ function readClips(params) {
   return list.length ? list.slice(0, CURVE_MAX_CLIPS) : [newClip()];
 }
 var writeClips = (list) => list;
-var selectedClip = (params, count) => clamp5(Math.round(Number(params.selected) || 0), 0, Math.max(0, count - 1));
+var selectedClip = (params, count) => clamp(Math.round(Number(params.selected) || 0), 0, Math.max(0, count - 1));
 function curveComposition(params) {
   const i = DIRECTIONS.indexOf(params.direction);
   return {
     segments: readClips(params),
     driver: null,
     direction: DIRECTIONS[i < 0 ? 0 : i],
-    gap: clamp015(params.gap)
+    gap: clamp012(params.gap)
   };
 }
 function curveDuration(params, bpm) {
-  const want = clamp5(Number(params.duration) || 0, CURVE_MIN_DURATION, CURVE_MAX_DURATION);
+  const want = clamp(Number(params.duration) || 0, CURVE_MIN_DURATION, CURVE_MAX_DURATION);
   if (!params.sync) return want;
   const beat = 60 / (Number(bpm) || 120);
   let best = LFO_SYNC_DIVISIONS[0].beats * beat;
@@ -3327,7 +1350,7 @@ var CURVE_DEF = {
       s.samplers = buildSamplers(comp);
     }
     s.phase = (s.phase + dt / curveDuration(params, bpm)) % 1;
-    let v = clamp015(readComposition(comp, s.phase, s.samplers).value);
+    let v = clamp012(readComposition(comp, s.phase, s.samplers).value);
     if (params.flip) v = 1 - v;
     if (params.signal !== "trigger") {
       s.prev = v;
@@ -3350,7 +1373,7 @@ var CURVE_DEF = {
     const changed = (key) => key in patch2 && patch2[key] !== current[key];
     let list = "clips" in patch2 ? readClips(patch2) : readClips(current);
     if (!("clips" in patch2) && changed("segments")) {
-      const want = clamp5(Math.round(Number(patch2.segments) || 1), 1, CURVE_MAX_CLIPS);
+      const want = clamp(Math.round(Number(patch2.segments) || 1), 1, CURVE_MAX_CLIPS);
       while (list.length > want) list.pop();
       while (list.length < want) list.push(newClip());
       list = list.map((c) => ({ ...c, weight: 1 }));
@@ -3361,8 +1384,8 @@ var CURVE_DEF = {
         ...list[sel],
         curvature: clampSigned(next.curvature),
         steepness: clampSigned(next.steepness),
-        anticipate: clamp015(next.anticipate),
-        overshoot: clamp015(next.overshoot)
+        anticipate: clamp012(next.anticipate),
+        overshoot: clamp012(next.overshoot)
       };
     } else {
       const clip = list[sel];
@@ -3403,591 +1426,12 @@ var CURVE_DEF = {
     const span = CURVE_PREVIEW_BAND.hi - CURVE_PREVIEW_BAND.lo;
     const n = Math.max(2, count);
     return {
-      points: Array.from({ length: n }, (_, i) => clamp015((sampler(i / (n - 1)) - CURVE_PREVIEW_BAND.lo) / span)),
+      points: Array.from({ length: n }, (_, i) => clamp012((sampler(i / (n - 1)) - CURVE_PREVIEW_BAND.lo) / span)),
       label: `${CURVE_LABELS[list[sel].type]} ${sel + 1}/${list.length}`
     };
   }
 };
 registerModType(CURVE_DEF);
-
-// src/store/ModulationStore.ts
-var MOD_TOUCH_GRACE_MS = 4e3;
-var PERSIST_TARGET = resolvePersistTarget("modulation", "global", true);
-var clamp6 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-var freshParams = (def) => JSON.parse(JSON.stringify(def.defaults));
-var ModulationStoreClass = class {
-  constructor() {
-    this.slots = Array(MOD_SLOTS).fill(null);
-    this.assignments = /* @__PURE__ */ new Map();
-    this.states = /* @__PURE__ */ new Map();
-    this.signals = Array(MOD_SLOTS).fill(0);
-    this.sources = /* @__PURE__ */ new Map();
-    this.sourceValues = /* @__PURE__ */ new Map();
-    this.metas = /* @__PURE__ */ new Map();
-    this.bpm = 120;
-    this.touched = null;
-    this.settingsIndex = null;
-    this.settingsUnsub = null;
-    /** The control set the open page was built from — see `shapeOf`. */
-    this.settingsShape = "";
-    this.applyingSettings = false;
-    this.structListeners = /* @__PURE__ */ new Set();
-    this.frameListeners = /* @__PURE__ */ new Set();
-    this.version = 0;
-    this.rafId = null;
-    this.lastTick = 0;
-    this.loop = (now) => {
-      this.tick(Math.max(0, (now - this.lastTick) / 1e3));
-      this.lastTick = now;
-      this.rafId = this.slots.some(Boolean) ? window.requestAnimationFrame(this.loop) : null;
-    };
-    const saved = loadPersisted(PERSIST_TARGET);
-    if (saved) {
-      for (const slot of saved.slots ?? []) {
-        const i = Math.round(Number(slot?.index));
-        if (i >= 0 && i < MOD_SLOTS && slot.type && slot.params) {
-          this.slots[i] = { ...slot, index: i, params: { ...slot.params } };
-        }
-      }
-      for (const a of saved.assignments ?? []) {
-        if (a?.panelId && a.path && this.slots[a.slot]) {
-          this.assignments.set(modKey(a.panelId, a.path), { ...a });
-        }
-      }
-    }
-    TweakStore.subscribeGlobal(() => this.metas.clear());
-    this.ensureLoop();
-  }
-  /* ── slots ────────────────────────────────────────────────────────── */
-  /** Create a modulation in a step's slot; an occupied slot is returned as-is. */
-  createSlot(index, type = "lfo") {
-    if (!Number.isInteger(index) || index < 0 || index >= MOD_SLOTS) return null;
-    const existing = this.slots[index];
-    if (existing) return existing;
-    const def = getModType(type);
-    if (!def) {
-      console.warn(`[tweakers] modulator type "${type}" is not registered`);
-      return null;
-    }
-    const slot = { index, type, params: freshParams(def) };
-    this.slots[index] = slot;
-    this.states.set(index, def.createState());
-    this.changed();
-    this.ensureLoop();
-    return slot;
-  }
-  getSlot(index) {
-    return this.slots[index] ?? null;
-  }
-  /** The occupied slots, index order — the track row's circles. */
-  getSlots() {
-    return this.slots.filter((s) => s !== null);
-  }
-  /**
-   * Change a slot's settings. A modulator with its own structure folds the
-   * patch in its own way (`normalize`) — the curve writes a shape dial into
-   * the clip it belongs to — and the open settings page follows.
-   */
-  updateSlotParams(index, patch2) {
-    const slot = this.slots[index];
-    if (!slot) return;
-    const def = getModType(slot.type);
-    slot.params = def?.normalize ? def.normalize(slot.params, patch2) : { ...slot.params, ...patch2 };
-    if (this.settingsIndex === index) this.refreshSettings();
-    this.changed();
-  }
-  /** Switch a slot's modulator type — fresh defaults, fresh state. */
-  setSlotType(index, type) {
-    const slot = this.slots[index];
-    const def = getModType(type);
-    if (!slot || !def) return;
-    slot.type = type;
-    slot.params = freshParams(def);
-    this.states.set(index, def.createState());
-    this.changed();
-  }
-  /** Point a slot at an external source (null returns it to the engine). */
-  setSlotSource(index, sourceId) {
-    const slot = this.slots[index];
-    if (!slot) return;
-    slot.source = sourceId;
-    this.changed();
-  }
-  /** Remove a slot's modulation and every assignment wired to it. */
-  removeSlot(index) {
-    if (!this.slots[index]) return;
-    if (this.settingsIndex === index) this.closeSettings();
-    this.slots[index] = null;
-    this.states.delete(index);
-    this.signals[index] = 0;
-    for (const [key, a] of this.assignments) {
-      if (a.slot === index) this.assignments.delete(key);
-    }
-    this.changed();
-  }
-  /* ── assignments ──────────────────────────────────────────────────── */
-  /**
-   * Wire a control to a slot. Only bounded numeric controls (slider, number
-   * with min/max) can be modulated; anything else is refused. A control not
-   * yet registered is accepted on trust and resolves when its panel appears.
-   */
-  assign(panelId, path, slot, amount = 0.5) {
-    if (!this.slots[slot]) return false;
-    if (panelId === MOD_SETTINGS_PANEL) return false;
-    if (TweakStore.getPanel(panelId) && !this.resolveMeta(panelId, path)) {
-      console.warn(`[tweakers] "${path}" is not a bounded numeric control; it cannot take a modulation`);
-      return false;
-    }
-    this.assignments.set(modKey(panelId, path), {
-      panelId,
-      path,
-      slot,
-      amount: clamp6(Number(amount) || 0, 0, 1)
-    });
-    this.changed();
-    return true;
-  }
-  unassign(panelId, path) {
-    if (this.assignments.delete(modKey(panelId, path))) this.changed();
-  }
-  getAssignment(panelId, path) {
-    return this.assignments.get(modKey(panelId, path));
-  }
-  getAssignments() {
-    return [...this.assignments.values()];
-  }
-  assignmentsForSlot(index) {
-    return this.getAssignments().filter((a) => a.slot === index);
-  }
-  setAmount(panelId, path, amount) {
-    const a = this.assignments.get(modKey(panelId, path));
-    if (!a) return;
-    a.amount = clamp6(Number(amount) || 0, 0, 1);
-    this.changed();
-  }
-  /* ── the assignment gesture ───────────────────────────────────────── */
-  /** A finger on a control — panel pointer, hardware knob. Arms assignment. */
-  noteTouch(panelId, path) {
-    this.touched = { panelId, path, at: Date.now() };
-  }
-  /**
-   * A step-button press (hardware step or on-screen circle): with a control
-   * armed, create the slot's modulation if needed and toggle the control
-   * onto it. Returns what happened, for lights and readouts.
-   */
-  assignFromStep(index) {
-    const t = this.touched;
-    const armed = t && Date.now() - t.at < MOD_TOUCH_GRACE_MS;
-    if (!armed) return { action: "none", slot: this.getSlot(index) };
-    const existing = this.assignments.get(modKey(t.panelId, t.path));
-    if (this.slots[index] && existing?.slot === index) {
-      this.unassign(t.panelId, t.path);
-      return { action: "unassigned", slot: this.getSlot(index) };
-    }
-    const created = !this.slots[index];
-    const slot = this.createSlot(index);
-    if (!slot) return { action: "none", slot: null };
-    if (!this.assign(t.panelId, t.path, index)) {
-      if (created) this.removeSlot(index);
-      return { action: "none", slot: this.getSlot(index) };
-    }
-    return { action: created ? "created" : "assigned", slot };
-  }
-  /* ── gates ────────────────────────────────────────────────────────── */
-  /**
-   * Note on / note off for a slot — what drives a gated modulator like the
-   * ADSR:
-   *
-   *   ModulationStore.gate(0, true);    // key down
-   *   ModulationStore.gate(0, false);   // key up — the release runs
-   *
-   * Free-running types (LFO, S&H) and slots on an external source ignore
-   * it. The gate is live state, not a param: it is never persisted.
-   */
-  gate(index, on) {
-    const slot = this.slots[index];
-    const def = slot && getModType(slot.type);
-    if (!slot || slot.source || !def?.gate) return;
-    let state2 = this.states.get(index);
-    if (state2 === void 0) {
-      state2 = def.createState();
-      this.states.set(index, state2);
-    }
-    def.gate(state2, on);
-    this.ensureLoop();
-  }
-  /* ── the settings page ────────────────────────────────────────────── */
-  /**
-   * Open a slot's settings (hold its step button): registers one hidden
-   * TweakStore panel (`mod-settings`, kind 'modulation') built from the
-   * modulator's own control list, with the type enum ahead of it. Every
-   * edit on that panel — screen or hardware, the kit syncs it like any
-   * page — flows back into the slot's params. Returns the panel id.
-   */
-  openSettings(index) {
-    const slot = this.slots[index];
-    const def = slot && getModType(slot.type);
-    if (!slot || !def) return null;
-    this.closeSettings();
-    this.settingsIndex = index;
-    this.registerSettingsPanel(slot, def);
-    this.settingsUnsub = TweakStore.subscribe(MOD_SETTINGS_PANEL, () => this.onSettingsChange());
-    this.changed();
-    return MOD_SETTINGS_PANEL;
-  }
-  closeSettings() {
-    if (this.settingsIndex === null) return;
-    this.settingsUnsub?.();
-    this.settingsUnsub = null;
-    this.settingsIndex = null;
-    this.settingsShape = "";
-    TweakStore.unregisterPanel(MOD_SETTINGS_PANEL);
-    this.changed();
-  }
-  /** The open settings page, or null — the panel to render as the Move page. */
-  getSettings() {
-    return this.settingsIndex === null ? null : { index: this.settingsIndex, panelId: MOD_SETTINGS_PANEL };
-  }
-  /**
-   * Where the open page's controls sit — the eight dial slots and the small
-   * slots under them. Both surfaces lay the page out from this one list, so
-   * they never disagree about which knob a pad belongs to.
-   */
-  getSettingsLayout() {
-    const slot = this.settingsIndex === null ? null : this.slots[this.settingsIndex];
-    const def = slot && getModType(slot.type);
-    if (!slot || !def) return null;
-    const layout = modPageLayout(def.controls, slot.params);
-    return {
-      dials: [{ path: "type" }, ...layout.dials].slice(0, 8),
-      toggles: [null, ...layout.toggles].slice(0, 8),
-      values: [null, ...layout.values].slice(0, 8)
-    };
-  }
-  /** The open page's curve, sampled 0..1, and its name — the preview dial. */
-  getSettingsPreview(count = 32) {
-    const slot = this.settingsIndex === null ? null : this.slots[this.settingsIndex];
-    const def = slot && getModType(slot.type);
-    return slot && def?.preview ? def.preview(slot.params, count) : null;
-  }
-  /** Hardware buttons the open page claims (the curve's arrows and Delete). */
-  getSettingsButtons() {
-    const slot = this.settingsIndex === null ? null : this.slots[this.settingsIndex];
-    const def = slot && getModType(slot.type);
-    return def?.buttons ? Object.keys(def.buttons) : [];
-  }
-  /** Run a claimed button. False when the page does not claim that name. */
-  pressSettingsButton(name) {
-    const slot = this.settingsIndex === null ? null : this.slots[this.settingsIndex];
-    const action = slot && getModType(slot.type)?.buttons?.[name];
-    if (!slot || !action) return false;
-    const patch2 = action(slot.params);
-    if (patch2) this.updateSlotParams(slot.index, patch2);
-    return true;
-  }
-  /** A knob tap on a page dial that cycles (the curve's clip vocabulary). */
-  tapSettingsControl(path) {
-    const slot = this.settingsIndex === null ? null : this.slots[this.settingsIndex];
-    const def = slot && getModType(slot.type);
-    const cycle = def?.controls.find((c) => c.path === path)?.cycle;
-    if (!slot || !cycle) return false;
-    this.updateSlotParams(slot.index, cycle(slot.params));
-    return true;
-  }
-  registerSettingsPanel(slot, def) {
-    const config = {
-      type: {
-        type: "select",
-        options: listModTypes().map((d) => ({ value: d.type, label: d.label })),
-        default: slot.type
-      }
-    };
-    this.settingsShape = this.shapeOf(slot, def);
-    for (const c of visibleModControls(def, slot.params)) {
-      if (c.type === "select") {
-        config[c.path] = {
-          type: "select",
-          options: c.options ?? [],
-          default: String(slot.params[c.path] ?? "")
-        };
-      } else if (c.type === "slider") {
-        config[c.path] = {
-          type: "slider",
-          min: c.min ?? 0,
-          max: c.max ?? 1,
-          step: c.step,
-          unit: c.unit,
-          default: Number(slot.params[c.path]) || 0
-        };
-      } else if (c.type === "toggle") {
-        config[c.path] = !!slot.params[c.path];
-      } else if (c.type === "xy" && c.xParam && c.yParam) {
-        config[c.path] = {
-          type: "xy",
-          x: c.xAxis,
-          y: c.yAxis,
-          default: { x: Number(slot.params[c.xParam]) || 0, y: Number(slot.params[c.yParam]) || 0 }
-        };
-      }
-    }
-    this.applyingSettings = true;
-    TweakStore.registerPanel(
-      MOD_SETTINGS_PANEL,
-      `${def.label} ${slot.index + 1}`,
-      config,
-      void 0,
-      { kind: "modulation" }
-    );
-    this.applyingSettings = false;
-  }
-  /** A settings-panel edit — screen or hardware — lands in the slot's params. */
-  onSettingsChange() {
-    if (this.applyingSettings || this.settingsIndex === null) return;
-    const slot = this.slots[this.settingsIndex];
-    if (!slot) return;
-    const values = TweakStore.getValues(MOD_SETTINGS_PANEL);
-    const nextType = values.type;
-    if (nextType && nextType !== slot.type && getModType(nextType)) {
-      this.setSlotType(slot.index, nextType);
-      this.registerSettingsPanel(this.slots[slot.index], getModType(nextType));
-      return;
-    }
-    const def = getModType(slot.type);
-    if (!def) return;
-    const patch2 = {};
-    for (const c of visibleModControls(def, slot.params)) {
-      const v = values[c.path];
-      if (c.type === "xy" && c.xParam && c.yParam) {
-        const xy = v;
-        if (xy && typeof xy === "object") {
-          patch2[c.xParam] = Number(xy.x) || 0;
-          patch2[c.yParam] = Number(xy.y) || 0;
-        }
-      } else if (c.type === "toggle") {
-        patch2[c.path] = !!v;
-      } else if (c.type === "select") {
-        if (typeof v === "string") patch2[c.path] = v;
-      } else if (typeof v === "number" && Number.isFinite(v)) {
-        patch2[c.path] = v;
-      }
-    }
-    this.updateSlotParams(slot.index, patch2);
-  }
-  /**
-   * The open page, after the params moved under it. A change that alters
-   * which controls the page shows (the curve's trigger chip appearing) or
-   * what they read (an arrow selecting another clip) has to reach the panel
-   * — hardware edits arrive there, and the screen renders from it.
-   */
-  refreshSettings() {
-    if (this.settingsIndex === null) return;
-    const slot = this.slots[this.settingsIndex];
-    const def = slot && getModType(slot.type);
-    if (!slot || !def) return;
-    if (this.shapeOf(slot, def) !== this.settingsShape) {
-      this.registerSettingsPanel(slot, def);
-      return;
-    }
-    const values = TweakStore.getValues(MOD_SETTINGS_PANEL);
-    const guarded = this.applyingSettings;
-    this.applyingSettings = true;
-    for (const c of visibleModControls(def, slot.params)) {
-      if (c.type === "xy" && c.xParam && c.yParam) {
-        const xy = values[c.path] ?? {};
-        const x = Number(slot.params[c.xParam]) || 0;
-        const y = Number(slot.params[c.yParam]) || 0;
-        if (xy.x !== x || xy.y !== y) TweakStore.updateValue(MOD_SETTINGS_PANEL, c.path, { x, y });
-      } else if (values[c.path] !== slot.params[c.path]) {
-        TweakStore.updateValue(MOD_SETTINGS_PANEL, c.path, slot.params[c.path]);
-      }
-    }
-    this.applyingSettings = guarded;
-  }
-  /** Which controls the page is built from — a rebuild when this changes. */
-  shapeOf(slot, def) {
-    return `${slot.type}:${visibleModControls(def, slot.params).map((c) => c.path).join(",")}`;
-  }
-  /* ── external sources ─────────────────────────────────────────────── */
-  /** Offer an app-side modulator to the slots; returns an unregister fn. */
-  registerSource(id, config = {}) {
-    this.sources.set(id, config);
-    this.changed();
-    return () => {
-      if (this.sources.get(id) === config) {
-        this.sources.delete(id);
-        this.sourceValues.delete(id);
-        this.changed();
-      }
-    };
-  }
-  /** Push a source's signal (-1..1) at any rate; the engine mirrors the latest. */
-  setSourceValue(id, value) {
-    this.sourceValues.set(id, clamp6(Number(value) || 0, -1, 1));
-  }
-  getSources() {
-    return [...this.sources.keys()];
-  }
-  /* ── tempo ────────────────────────────────────────────────────────── */
-  setTempo(bpm) {
-    const next = clamp6(Number(bpm) || 0, 20, 999);
-    if (next === this.bpm) return;
-    this.bpm = next;
-    this.changed();
-  }
-  getTempo() {
-    return this.bpm;
-  }
-  /* ── reading the modulated layer ──────────────────────────────────── */
-  /** A slot's live signal, -1..1. */
-  getSignal(index) {
-    return this.signals[index] ?? 0;
-  }
-  /** Where a slot sits in its cycle, 0..1 — a curve composer's playhead. */
-  getSlotPhase(index) {
-    const slot = this.slots[index];
-    const def = slot && getModType(slot.type);
-    const state2 = this.states.get(index);
-    return slot && def?.phase && state2 !== void 0 ? def.phase(state2) : 0;
-  }
-  /** The modulation's contribution to one control, in the control's units. */
-  getOffset(panelId, path) {
-    const a = this.assignments.get(modKey(panelId, path));
-    if (!a) return 0;
-    const slot = this.slots[a.slot];
-    if (!slot) return 0;
-    if (slot.source && !this.sources.get(slot.source)?.applies) return 0;
-    const meta = this.resolveMeta(panelId, path);
-    if (!meta) return 0;
-    const base = Number(TweakStore.getValue(panelId, path));
-    if (!Number.isFinite(base)) return 0;
-    return applyModulation(base, this.signals[a.slot], a.amount, meta.min, meta.max) - base;
-  }
-  /**
-   * A modulatable control's bounds, or null when it has none (or its panel
-   * has not registered yet) — what a display needs to draw the modulation
-   * against the control's own span.
-   */
-  getBounds(panelId, path) {
-    const meta = this.resolveMeta(panelId, path);
-    return meta ? { min: meta.min, max: meta.max } : null;
-  }
-  /** One control's value with its modulation applied — the frame-time read. */
-  getValue(panelId, path) {
-    const base = Number(TweakStore.getValue(panelId, path));
-    return base + this.getOffset(panelId, path);
-  }
-  /**
-   * A panel's values with every modulation applied — a fresh snapshot per
-   * call, meant to be pulled once per frame in place of `TweakStore.getValues`.
-   */
-  getValues(panelId) {
-    const out = { ...TweakStore.getValues(panelId) };
-    for (const a of this.assignments.values()) {
-      if (a.panelId !== panelId) continue;
-      const offset = this.getOffset(panelId, a.path);
-      if (offset !== 0) out[a.path] = Number(out[a.path]) + offset;
-    }
-    return out;
-  }
-  /* ── subscriptions ────────────────────────────────────────────────── */
-  /** Structural changes: slots, assignments, sources, tempo. */
-  subscribe(listener) {
-    this.structListeners.add(listener);
-    return () => this.structListeners.delete(listener);
-  }
-  /** Every engine frame — for pulsing circles, dots, and step lights. */
-  subscribeFrames(listener) {
-    this.frameListeners.add(listener);
-    return () => this.frameListeners.delete(listener);
-  }
-  /** Bumped on every structural change — a stable snapshot for UI stores. */
-  getVersion() {
-    return this.version;
-  }
-  /* ── the engine ───────────────────────────────────────────────────── */
-  /**
-   * Advance every slot by `dt` seconds and refresh the signals. The RAF
-   * loop calls this per frame; headless hosts and tests may drive it
-   * directly with their own clock.
-   */
-  tick(dt) {
-    const step = clamp6(Number(dt) || 0, 0, 1);
-    for (const slot of this.slots) {
-      if (!slot) continue;
-      if (slot.source) {
-        const src = this.sources.get(slot.source);
-        let v = this.sourceValues.get(slot.source) ?? 0;
-        if (src?.sample) {
-          try {
-            v = clamp6(Number(src.sample(slot)) || 0, -1, 1);
-          } catch {
-            v = 0;
-          }
-        }
-        this.signals[slot.index] = v;
-        continue;
-      }
-      const def = getModType(slot.type);
-      if (!def) continue;
-      let state2 = this.states.get(slot.index);
-      if (state2 === void 0) {
-        state2 = def.createState();
-        this.states.set(slot.index, state2);
-      }
-      this.signals[slot.index] = clamp6(def.tick(state2, slot.params, step, this.bpm), -1, 1);
-    }
-    this.frameListeners.forEach((fn) => fn());
-  }
-  /** Wipe every slot, assignment, and the persisted shelf. */
-  clear() {
-    this.closeSettings();
-    this.slots.fill(null);
-    this.assignments.clear();
-    this.states.clear();
-    this.signals.fill(0);
-    this.touched = null;
-    clearPersisted(PERSIST_TARGET);
-    this.changed();
-  }
-  ensureLoop() {
-    if (this.rafId !== null || typeof window === "undefined") return;
-    if (!this.slots.some(Boolean)) return;
-    this.lastTick = performance.now();
-    this.rafId = window.requestAnimationFrame(this.loop);
-  }
-  resolveMeta(panelId, path) {
-    const key = modKey(panelId, path);
-    const cached = this.metas.get(key);
-    if (cached !== void 0) return cached;
-    const panel = TweakStore.getPanel(panelId);
-    if (!panel) return null;
-    const meta = findControl(panel.controls, path);
-    const numeric = meta && (meta.type === "slider" || meta.type === "number") && Number.isFinite(meta.min) && Number.isFinite(meta.max) ? { min: meta.min, max: meta.max } : null;
-    this.metas.set(key, numeric);
-    return numeric;
-  }
-  changed() {
-    this.version++;
-    savePersisted(PERSIST_TARGET, {
-      slots: this.getSlots(),
-      assignments: this.getAssignments()
-    });
-    this.structListeners.forEach((fn) => fn());
-    this.ensureLoop();
-  }
-};
-function findControl(controls, path) {
-  for (const c of controls) {
-    if (c.children) {
-      const hit = findControl(c.children, path);
-      if (hit) return hit;
-    } else if (c.path === path) {
-      return c;
-    }
-  }
-  return null;
-}
-var ModulationStore = /* @__PURE__ */ new ModulationStoreClass();
 
 // src/components/CurveComposer.tsx
 var import_react = require("react");
@@ -4294,6 +1738,93 @@ function CurveComposer({
 var import_meta = {};
 var isDevDefault = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import_meta !== "undefined" && import_meta.env?.MODE ? import_meta.env.MODE !== "production" : true;
 
+// src/xy-pad-core.ts
+var XY_DETENT_PX = 6;
+var XY_DEFAULT_STEP = 0.01;
+function decimalsForStep(step) {
+  const s = step.toString();
+  const dot = s.indexOf(".");
+  return dot === -1 ? 0 : s.length - dot - 1;
+}
+function roundToStep(val, step) {
+  return parseFloat(val.toFixed(decimalsForStep(step)));
+}
+function resolveAxis(axis) {
+  const min = axis?.min ?? 0;
+  const max = axis?.max ?? 1;
+  const step = axis?.step ?? XY_DEFAULT_STEP;
+  const bipolar = axis?.bipolar ?? false;
+  const origin = axis?.origin ?? (bipolar ? (min + max) / 2 : min);
+  return { min, max, step, origin, bipolar };
+}
+function clamp2(v, min, max) {
+  return Math.min(max, Math.max(min, v));
+}
+function snapToStep(v, step, min) {
+  if (step <= 0) return v;
+  const snapped = min + Math.round((v - min) / step) * step;
+  return roundToStep(snapped, step);
+}
+function valueToNorm(v, axis) {
+  if (axis.max === axis.min) return 0;
+  return clamp2((v - axis.min) / (axis.max - axis.min), 0, 1);
+}
+function normToValue(n, axis) {
+  const t = clamp2(n, 0, 1);
+  return axis.min + t * (axis.max - axis.min);
+}
+function invertY(n) {
+  return 1 - n;
+}
+function valueFromPoint(point, xAxis, yAxis, snap2 = false) {
+  let x = clamp2(normToValue(point.x, xAxis), xAxis.min, xAxis.max);
+  let y = clamp2(normToValue(invertY(point.y), yAxis), yAxis.min, yAxis.max);
+  if (snap2) {
+    x = snapToStep(x, xAxis.step, xAxis.min);
+    y = snapToStep(y, yAxis.step, yAxis.min);
+  }
+  return { x, y };
+}
+function pointFromValue(value, xAxis, yAxis) {
+  return {
+    x: valueToNorm(value.x, xAxis),
+    y: invertY(valueToNorm(value.y, yAxis))
+  };
+}
+function applyDetentAxis(value, axis, pxFromOrigin) {
+  if (axis.bipolar && pxFromOrigin <= XY_DETENT_PX) return axis.origin;
+  return value;
+}
+function effectiveStep(axis, mode) {
+  const range = axis.max - axis.min;
+  if (mode === "fine") return range * 0.01;
+  if (mode === "coarse") return range * 0.1;
+  return axis.step;
+}
+function nudge(value, axis, direction, xAxis, yAxis, mode = "normal") {
+  const spec = axis === "x" ? xAxis : yAxis;
+  const step = effectiveStep(spec, mode);
+  const next = roundToStep(clamp2(value[axis] + direction * step, spec.min, spec.max), step);
+  return axis === "x" ? { x: next, y: value.y } : { x: value.x, y: next };
+}
+function centerValue(xAxis, yAxis) {
+  return { x: xAxis.origin, y: yAxis.origin };
+}
+function coerceComponent(v, axis) {
+  return typeof v === "number" && Number.isFinite(v) ? v : axis.origin;
+}
+function normalizeValue(value, xAxis, yAxis, snap2 = false) {
+  const resolve = (raw, axis) => {
+    let v = clamp2(coerceComponent(raw, axis), axis.min, axis.max);
+    if (snap2) v = snapToStep(v, axis.step, axis.min);
+    return v + 0;
+  };
+  return {
+    x: resolve(value?.x, xAxis),
+    y: resolve(value?.y, yAxis)
+  };
+}
+
 // src/curve-preview-core.ts
 var CURVE_SAMPLE_COUNT = 160;
 var CURVE_MIN_HEIGHT = 32;
@@ -4362,11 +1893,150 @@ function curveY(v, height, pad = 0) {
 }
 function curvePathData(segments, width, height, pad = 0) {
   return segments.map(
-    (segment) => segment.map((p, i) => `${i === 0 ? "M" : "L"} ${round2(p.t * width)} ${round2(curveY(p.v, height, pad))}`).join(" ")
+    (segment) => segment.map((p, i) => `${i === 0 ? "M" : "L"} ${round(p.t * width)} ${round(curveY(p.v, height, pad))}`).join(" ")
   ).join(" ");
 }
-function round2(value) {
+function round(value) {
   return Math.round(value * 100) / 100;
+}
+
+// src/range-slider-core.ts
+function clamp3(v, lo, hi) {
+  return Math.min(hi, Math.max(lo, v));
+}
+function valueToPercent(v, min, max) {
+  if (max === min) return 0;
+  return (v - min) / (max - min) * 100;
+}
+function percentToValue(pct01, min, max) {
+  return min + clamp3(pct01, 0, 1) * (max - min);
+}
+function orderRange(v) {
+  return v.min <= v.max ? v : { min: v.max, max: v.min };
+}
+function clampRange(v, min, max) {
+  return orderRange({ min: clamp3(v.min, min, max), max: clamp3(v.max, min, max) });
+}
+function setLow(nextLow, current, min) {
+  return { min: clamp3(nextLow, min, current.max), max: current.max };
+}
+function setHigh(nextHigh, current, max) {
+  return { min: current.min, max: clamp3(nextHigh, current.min, max) };
+}
+function shiftSpan(deltaValue, current, min, max) {
+  const width = current.max - current.min;
+  const desiredMin = clamp3(current.min + deltaValue, min, max - width);
+  return { min: desiredMin, max: desiredMin + width };
+}
+function nearestHandle(atValue, current) {
+  const dMin = Math.abs(atValue - current.min);
+  const dMax = Math.abs(atValue - current.max);
+  if (dMin < dMax) return "min";
+  if (dMax < dMin) return "max";
+  return atValue < current.min ? "min" : "max";
+}
+function pickDragTarget(atValue, current, hitValue) {
+  const nearLow = Math.abs(atValue - current.min) <= hitValue;
+  const nearHigh = Math.abs(atValue - current.max) <= hitValue;
+  if (nearLow && nearHigh) return nearestHandle(atValue, current);
+  if (nearLow) return "min";
+  if (nearHigh) return "max";
+  if (atValue > current.min && atValue < current.max) return "span";
+  return nearestHandle(atValue, current);
+}
+function isOutsideSpan(atValue, current) {
+  return atValue <= current.min || atValue >= current.max;
+}
+function handleLeftStyles(lowPercent, highPercent) {
+  const gap = `(${highPercent}% - ${lowPercent}%)`;
+  const ramp = `clamp(0px, calc(6px - ${gap}), 2px)`;
+  return {
+    low: `max(0px, min(calc(100% - 2px), calc(${lowPercent}% - 1px - ${ramp})))`,
+    high: `min(calc(100% - 2px), max(0px, calc(${highPercent}% - 1px + ${ramp})))`
+  };
+}
+
+// src/filter-core.ts
+var FILTER_AXIS_DEFAULTS = {
+  cutoff: { min: 0, max: 1, step: 0, label: "Freq" },
+  resonance: { min: 0, max: 1, step: 0, label: "Res" }
+};
+function resolveFilterAxis(axis, hand) {
+  const base = FILTER_AXIS_DEFAULTS[hand];
+  return {
+    min: axis?.min ?? base.min,
+    max: axis?.max ?? base.max,
+    step: axis?.step ?? base.step,
+    label: axis?.label ?? base.label,
+    formatValue: axis?.formatValue
+  };
+}
+var clamp4 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+var snap = (v, axis) => {
+  let out = clamp4(Number.isFinite(v) ? v : axis.min, axis.min, axis.max);
+  if (axis.step > 0) out = clamp4(axis.min + Math.round((out - axis.min) / axis.step) * axis.step, axis.min, axis.max);
+  return Number(out.toFixed(6));
+};
+function normalizeFilterValue(value, cutoffAxis, resonanceAxis) {
+  const v = typeof value === "object" && value !== null ? value : {};
+  return {
+    cutoff: snap(typeof v.cutoff === "number" ? v.cutoff : cutoffAxis.max, cutoffAxis),
+    resonance: snap(typeof v.resonance === "number" ? v.resonance : resonanceAxis.min, resonanceAxis)
+  };
+}
+var filterHand01 = (v, axis) => {
+  const n = (v - axis.min) / (axis.max - axis.min || 1);
+  return clamp4(Number.isFinite(n) ? n : 0, 0, 1);
+};
+var filterHandValue = (v01, axis) => snap(axis.min + clamp4(v01, 0, 1) * (axis.max - axis.min), axis);
+function filterShapeResponse(type, cutoff01, resonance01) {
+  const fc = Math.pow(10, -3 + 3 * clamp4(cutoff01, 0, 1));
+  const q = 0.707 * Math.pow(14, clamp4(resonance01, 0, 1));
+  const a = Math.pow(10, clamp4(resonance01, 0, 1) * 18 / 40);
+  return (t) => {
+    const f = Math.pow(10, -3 + 3 * clamp4(t, 0, 1));
+    const w = f / fc;
+    const w2 = w * w;
+    const den = Math.sqrt(Math.pow(1 - w2, 2) + Math.pow(w / q, 2));
+    let mag;
+    switch (type) {
+      case "highpass":
+        mag = w2 / den;
+        break;
+      case "bandpass":
+        mag = w / q / den;
+        break;
+      case "notch":
+        mag = Math.abs(1 - w2) / den;
+        break;
+      case "peak":
+        mag = Math.sqrt(Math.pow(1 - w2, 2) + Math.pow(w * a / q, 2)) / Math.sqrt(Math.pow(1 - w2, 2) + Math.pow(w / (a * q), 2));
+        break;
+      default:
+        mag = 1 / den;
+    }
+    return Math.min((20 * Math.log10(Math.max(mag, 1e-6)) + FILTER_DB_FLOOR) / (FILTER_DB_FLOOR + FILTER_DB_CEIL), 1);
+  };
+}
+function defaultFilterResponse(cutoff01, resonance01) {
+  return filterShapeResponse("lowpass", cutoff01, resonance01);
+}
+var FILTER_DB_FLOOR = 36;
+var FILTER_DB_CEIL = 24;
+var FILTER_SHAPE_SAMPLES = 96;
+function filterResponsePath(response, samples = FILTER_SHAPE_SAMPLES) {
+  const pts = [];
+  for (let i = 0; i < samples; i++) {
+    let y;
+    try {
+      y = response(i / (samples - 1));
+    } catch {
+      return null;
+    }
+    if (!Number.isFinite(y)) return null;
+    pts.push(Math.min(1, Math.max(-1, y)));
+  }
+  return pts.map((y, i) => `${i ? "L" : "M"} ${(i / (samples - 1) * 100).toFixed(2)} ${((1 - y) * 100).toFixed(2)}`).join(" ");
 }
 
 // src/move-layout.ts
@@ -4653,88 +2323,8 @@ function stripDialSlots(page, offset, cols = MOVE_DIALS) {
 var stripSlotCount = (page) => stripStarts(page).length;
 var stripSlotIndex = (page, offset) => stripStarts(page).filter((start) => start < offset).length;
 
-// src/move-functions.ts
-var MOVE_FUNCTION_MANIFEST = [
-  { name: "play" },
-  { name: "rec" },
-  { name: "mute" },
-  { name: "undo" },
-  { name: "copy" },
-  { name: "delete" },
-  { name: "up" },
-  { name: "down" },
-  { name: "left" },
-  { name: "right" },
-  { name: "sample", special: true },
-  { name: "loop", special: true },
-  { name: "capture", special: true },
-  { name: "menu", special: true },
-  { name: "back", special: true },
-  { name: "jog_click", special: true }
-];
-var MOVE_FUNCTION_BUTTONS = MOVE_FUNCTION_MANIFEST.map((b) => b.name);
-var MOVE_SPECIAL_BUTTONS = MOVE_FUNCTION_MANIFEST.filter((b) => "special" in b && b.special).map((b) => b.name);
-var MoveFunctionsClass = class {
-  constructor() {
-    this.handlers = /* @__PURE__ */ new Map();
-    this.labels = /* @__PURE__ */ new Map();
-    this.listeners = /* @__PURE__ */ new Set();
-    this.runListeners = /* @__PURE__ */ new Set();
-  }
-  /**
-   * Attach an action to a function button; returns a detach function.
-   * One action per button — attaching again replaces the previous one.
-   */
-  attach(name, handler, options) {
-    if (!MOVE_FUNCTION_BUTTONS.includes(name)) {
-      console.warn(`[tweakers] "${name}" is not a Move function button; expected one of: ${MOVE_FUNCTION_BUTTONS.join(", ")}`);
-      return () => {
-      };
-    }
-    this.handlers.set(name, handler);
-    if (options?.label != null) this.labels.set(name, options.label);
-    else this.labels.delete(name);
-    this.notify();
-    return () => {
-      if (this.handlers.get(name) === handler) {
-        this.handlers.delete(name);
-        this.labels.delete(name);
-        this.notify();
-      }
-    };
-  }
-  /** The attached button names — what the kit claims on the hardware. */
-  list() {
-    return [...this.handlers.keys()];
-  }
-  /** The screen name an attachment carries, if any. */
-  label(name) {
-    return this.labels.get(name);
-  }
-  /** Run the action attached to a button, if any. Called by the kit per press. */
-  run(name, press) {
-    const full = { name, shift: !!press?.shift };
-    this.handlers.get(name)?.(full);
-    for (const l of this.runListeners) l(name, full);
-  }
-  /** Notified when attachments change, so the kit can reconfigure the Move. */
-  subscribe(listener) {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-  /** Notified on every run — the MovePanel flashes its pills on hardware presses. */
-  subscribeRuns(listener) {
-    this.runListeners.add(listener);
-    return () => this.runListeners.delete(listener);
-  }
-  notify() {
-    for (const l of this.listeners) l();
-  }
-};
-var MoveFunctions = new MoveFunctionsClass();
-
 // src/move-visual-core.ts
-var clamp016 = (value) => Math.max(0, Math.min(1, value));
+var clamp013 = (value) => Math.max(0, Math.min(1, value));
 var between = (value, min, max) => value >= min && value <= max;
 function moveNumericDrawing(meta, value) {
   const visual = meta.moveVisual;
@@ -4757,7 +2347,7 @@ function moveNumericDrawing(meta, value) {
       const right = visual.right ?? 1;
       if (![left, center, right].every(Number.isFinite) || left >= center || center >= right || lo < left || hi > right) return null;
       const position = v <= center ? (v - left) / (center - left) / 2 : 0.5 + (v - center) / (right - center) / 2;
-      return { kind: "pan", position: clamp016(position) };
+      return { kind: "pan", position: clamp013(position) };
     }
     case "stereo-width": {
       const mono = visual.mono ?? 0;
@@ -5446,8 +3036,458 @@ var MOVE_SLOT_LIBRARY = {
   dial: { description: "a needle, for values whose two ends are the same place", component: MoveSlotDialBody }
 };
 
+// src/color-core.ts
+var COLOR_FORMATS = ["hex", "rgb", "hsl", "oklch"];
+var HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
+var clamp5 = (n, min, max) => Math.min(max, Math.max(min, n));
+var clamp014 = (n) => clamp5(n, 0, 1);
+var byte = (n) => clamp5(Math.round(n), 0, 255);
+function parseHex(input) {
+  if (typeof input !== "string") return null;
+  let s = input.trim();
+  if (!s.startsWith("#")) s = `#${s}`;
+  if (!HEX_COLOR_REGEX.test(s)) return null;
+  let h = s.slice(1);
+  if (h.length <= 4) h = h.split("").map((c) => c + c).join("");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const a = h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1;
+  return { r, g, b, a };
+}
+function formatHex(rgba, alphaEnabled) {
+  const hx = (n) => byte(n).toString(16).padStart(2, "0");
+  const base = `#${hx(rgba.r)}${hx(rgba.g)}${hx(rgba.b)}`;
+  return alphaEnabled ? `${base}${hx(clamp014(rgba.a) * 255)}` : base;
+}
+function normalizeHex(input, alphaEnabled) {
+  const rgba = parseHex(input);
+  return rgba ? formatHex(rgba, alphaEnabled) : null;
+}
+function displayHex(value) {
+  const rgba = parseHex(value);
+  if (!rgba) return (value ?? "").toUpperCase();
+  return formatHex(rgba, false).toUpperCase();
+}
+function opacityPercent(rgba) {
+  return Math.round(clamp014(rgba.a) * 100);
+}
+function rgbToHsv(rgba) {
+  const r = rgba.r / 255, g = rgba.g / 255, b = rgba.b / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    if (max === r) h = (g - b) / d % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  return { h, s: max === 0 ? 0 : d / max, v: max, a: rgba.a };
+}
+function hsvToRgb(hsva) {
+  const h = (hsva.h % 360 + 360) % 360;
+  const s = clamp014(hsva.s), v = clamp014(hsva.v);
+  const c = v * s;
+  const x = c * (1 - Math.abs(h / 60 % 2 - 1));
+  const m = v - c;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  return { r: byte((r + m) * 255), g: byte((g + m) * 255), b: byte((b + m) * 255), a: hsva.a };
+}
+function rgbToHsl(rgba) {
+  const { h, s, v, a } = rgbToHsv(rgba);
+  const l = v * (1 - s / 2);
+  const sl = l === 0 || l === 1 ? 0 : (v - l) / Math.min(l, 1 - l);
+  return { h, s: sl, l, a };
+}
+function hslToRgb(hsla) {
+  const l = clamp014(hsla.l), s = clamp014(hsla.s);
+  const v = l + s * Math.min(l, 1 - l);
+  const sv = v === 0 ? 0 : 2 * (1 - l / v);
+  return hsvToRgb({ h: hsla.h, s: sv, v, a: hsla.a });
+}
+var srgbToLinear = (c) => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+var linearToSrgb = (c) => c <= 31308e-7 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+function rgbToOklab(rgba) {
+  const r = srgbToLinear(rgba.r / 255);
+  const g = srgbToLinear(rgba.g / 255);
+  const b = srgbToLinear(rgba.b / 255);
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return {
+    L: 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    A: 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    B: 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
+  };
+}
+function oklabToLinearRgb(L, A, B) {
+  const l = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3;
+  const m = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3;
+  const s = (L - 0.0894841775 * A - 1.291485548 * B) ** 3;
+  return {
+    r: 4.0767416621 * l - 3.3077115913 * m + 0.2307590544 * s,
+    g: -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    b: -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
+  };
+}
+function rgbToOklch(rgba) {
+  const { L, A, B } = rgbToOklab(rgba);
+  const c = Math.sqrt(A * A + B * B);
+  let h = Math.atan2(B, A) * 180 / Math.PI;
+  if (h < 0) h += 360;
+  return { l: L, c, h: c < 1e-6 ? 0 : h, a: rgba.a };
+}
+var GAMUT_EPS = 1e-4;
+function inSrgbGamut(l, c, h) {
+  const rad = h * Math.PI / 180;
+  const { r, g, b } = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
+  return r >= -GAMUT_EPS && r <= 1 + GAMUT_EPS && g >= -GAMUT_EPS && g <= 1 + GAMUT_EPS && b >= -GAMUT_EPS && b <= 1 + GAMUT_EPS;
+}
+function clampOklchToSrgb(oklch) {
+  const l = clamp014(oklch.l);
+  const h = (oklch.h % 360 + 360) % 360;
+  const c = Math.max(0, oklch.c);
+  if (inSrgbGamut(l, c, h)) return { l, c, h, a: clamp014(oklch.a) };
+  let lo = 0, hi = c;
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    if (inSrgbGamut(l, mid, h)) lo = mid;
+    else hi = mid;
+  }
+  return { l, c: lo, h, a: clamp014(oklch.a) };
+}
+function oklchToRgb(oklch) {
+  const { l, c, h, a } = clampOklchToSrgb(oklch);
+  const rad = h * Math.PI / 180;
+  const lin = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
+  return {
+    r: byte(linearToSrgb(clamp014(lin.r)) * 255),
+    g: byte(linearToSrgb(clamp014(lin.g)) * 255),
+    b: byte(linearToSrgb(clamp014(lin.b)) * 255),
+    a: clamp014(a)
+  };
+}
+
+// src/gradient-core.ts
+var MIN_STOPS = 2;
+var DEFAULT_GRADIENT = {
+  type: "linear",
+  angle: 90,
+  stops: [
+    { color: "#6366f1ff", position: 0 },
+    { color: "#ec4899ff", position: 1 }
+  ]
+};
+var clamp015 = (n) => Math.min(1, Math.max(0, n));
+var clampPct = (n) => Math.min(100, Math.max(0, n));
+var clampScale = (n) => Math.min(200, Math.max(10, n));
+var clampSquash = (n) => Math.min(200, Math.max(1, n));
+var wrapAngle = (a) => (a % 360 + 360) % 360;
+var round2 = (n, p) => {
+  const f = 10 ** p;
+  return Math.round(n * f) / f;
+};
+var cloneDefaultStops = () => DEFAULT_GRADIENT.stops.map((s) => ({ ...s }));
+var cloneDefault = () => ({
+  type: DEFAULT_GRADIENT.type,
+  angle: DEFAULT_GRADIENT.angle,
+  stops: cloneDefaultStops()
+});
+var sortedStops = (stops) => [...stops].sort((a, b) => a.position - b.position);
+var stopString = (stops) => sortedStops(stops).map((s) => `${s.color} ${round2(clamp015(s.position) * 100, 2)}%`).join(", ");
+var normColor = (color) => {
+  const rgba = parseHex(color);
+  return rgba ? formatHex(rgba, true) : "#000000ff";
+};
+function rampCss(stops) {
+  return gradientToCss({ type: "linear", angle: 90, stops });
+}
+function gradientToCss(value) {
+  const stopStr = stopString(value.stops);
+  const angle = round2(wrapAngle(value.angle), 2);
+  const cx = round2(clampPct(value.centerX ?? 50), 2);
+  const cy = round2(clampPct(value.centerY ?? 50), 2);
+  switch (value.type) {
+    case "radial": {
+      const rx = clampScale(value.scale ?? 100);
+      const ry = value.squash === void 0 ? rx : clampSquash(value.squash);
+      if (rx === 100 && ry === 100) {
+        return `radial-gradient(circle at ${cx}% ${cy}%, ${stopStr})`;
+      }
+      return `radial-gradient(${round2(rx, 2)}% ${round2(ry, 2)}% at ${cx}% ${cy}%, ${stopStr})`;
+    }
+    case "conic":
+      return `conic-gradient(from ${angle}deg at ${cx}% ${cy}%, ${stopStr})`;
+    case "linear":
+    default:
+      return `linear-gradient(${angle}deg, ${stopStr})`;
+  }
+}
+function gradientToTransform(value) {
+  const cx = round2(clampPct(value.centerX ?? 50), 2);
+  const cy = round2(clampPct(value.centerY ?? 50), 2);
+  const rotation = wrapAngle(value.rotation ?? 0);
+  const rx = clampScale(value.scale ?? 100);
+  const ry = value.squash === void 0 ? rx : clampSquash(value.squash);
+  if (value.type !== "radial" || rotation === 0 || rx === ry) {
+    return { transform: "none", transformOrigin: "50% 50%" };
+  }
+  return { transform: `rotate(${round2(rotation, 2)}deg)`, transformOrigin: `${cx}% ${cy}%` };
+}
+function gradientFillBox(value, boxW, boxH) {
+  if (value.type !== "radial" || boxW <= 0 || boxH <= 0) {
+    return {
+      background: gradientToCss(value),
+      transform: "none",
+      transformOrigin: "50% 50%",
+      left: 0,
+      top: 0,
+      width: boxW,
+      height: boxH
+    };
+  }
+  const cxPx = clampPct(value.centerX ?? 50) / 100 * boxW;
+  const cyPx = clampPct(value.centerY ?? 50) / 100 * boxH;
+  const scaleX = clampScale(value.scale ?? 100) / 100;
+  const scaleY = (value.squash === void 0 ? clampScale(value.scale ?? 100) : clampSquash(value.squash)) / 100;
+  const rx = round2(scaleX * boxW, 2);
+  const ry = round2(scaleY * boxH, 2);
+  const side = round2(2 * Math.hypot(boxW, boxH), 2);
+  const rotation = wrapAngle(value.rotation ?? 0);
+  return {
+    background: `radial-gradient(${rx}px ${ry}px at 50% 50%, ${stopString(value.stops)})`,
+    transform: rotation === 0 ? "none" : `rotate(${round2(rotation, 2)}deg)`,
+    transformOrigin: "50% 50%",
+    left: round2(cxPx - side / 2, 2),
+    top: round2(cyPx - side / 2, 2),
+    width: side,
+    height: side
+  };
+}
+function lerpPremult(a, b, t) {
+  const pa = a.a + (b.a - a.a) * t;
+  if (pa === 0) return { r: 0, g: 0, b: 0, a: 0 };
+  const mix = (ca, aa, cb, ba) => (ca * aa + (cb * ba - ca * aa) * t) / pa;
+  return {
+    r: mix(a.r, a.a, b.r, b.a),
+    g: mix(a.g, a.a, b.g, b.a),
+    b: mix(a.b, a.a, b.b, b.a),
+    a: pa
+  };
+}
+function colorAtPosition(value, position) {
+  const stops = sortedStops(value.stops);
+  if (stops.length === 0) return "#000000ff";
+  const p = clamp015(position);
+  if (p <= stops[0].position) return normColor(stops[0].color);
+  const last = stops[stops.length - 1];
+  if (p >= last.position) return normColor(last.color);
+  let i = 0;
+  while (i < stops.length - 1 && stops[i + 1].position <= p) i++;
+  const a = stops[i];
+  const b = stops[i + 1];
+  const span = b.position - a.position;
+  const t = span === 0 ? 0 : (p - a.position) / span;
+  const ca = parseHex(a.color) ?? { r: 0, g: 0, b: 0, a: 1 };
+  const cb = parseHex(b.color) ?? { r: 0, g: 0, b: 0, a: 1 };
+  return formatHex(lerpPremult(ca, cb, t), true);
+}
+function normalizeGradient(input) {
+  if (!input || typeof input !== "object") return cloneDefault();
+  const obj = input;
+  if (!Array.isArray(obj.stops)) return cloneDefault();
+  const type = obj.type === "radial" || obj.type === "conic" ? obj.type : "linear";
+  const rawAngle = Number(obj.angle);
+  const angle = Number.isFinite(rawAngle) ? wrapAngle(rawAngle) : DEFAULT_GRADIENT.angle;
+  const extras = {};
+  const cx = Number(obj.centerX);
+  if (Number.isFinite(cx)) extras.centerX = clampPct(cx);
+  const cy = Number(obj.centerY);
+  if (Number.isFinite(cy)) extras.centerY = clampPct(cy);
+  const scale = Number(obj.scale);
+  if (Number.isFinite(scale)) extras.scale = clampScale(scale);
+  const squash = Number(obj.squash);
+  if (Number.isFinite(squash)) extras.squash = clampSquash(squash);
+  const rotation = Number(obj.rotation);
+  if (Number.isFinite(rotation)) extras.rotation = wrapAngle(rotation);
+  const stops = [];
+  for (const raw of obj.stops) {
+    if (!raw || typeof raw !== "object") continue;
+    const s = raw;
+    const rgba = typeof s.color === "string" ? parseHex(s.color) : null;
+    const pos = Number(s.position);
+    if (!rgba || !Number.isFinite(pos)) continue;
+    stops.push({ color: formatHex(rgba, true), position: clamp015(pos) });
+  }
+  if (stops.length < MIN_STOPS) return { type, angle, stops: cloneDefaultStops(), ...extras };
+  stops.sort((a, b) => a.position - b.position);
+  return { type, angle, stops, ...extras };
+}
+function addStop(value, position) {
+  const stop = { color: colorAtPosition(value, position), position: clamp015(position) };
+  const stops = [...value.stops, stop].sort((a, b) => a.position - b.position);
+  return { value: { ...value, stops }, index: stops.indexOf(stop) };
+}
+function moveStop(value, index, position) {
+  if (index < 0 || index >= value.stops.length) return { value, index };
+  const moved = { ...value.stops[index], position: clamp015(position) };
+  const stops = value.stops.map((s, i) => i === index ? moved : s);
+  stops.sort((a, b) => a.position - b.position);
+  return { value: { ...value, stops }, index: stops.indexOf(moved) };
+}
+function removeStop(value, index) {
+  if (value.stops.length <= MIN_STOPS || index < 0 || index >= value.stops.length) return value;
+  return { ...value, stops: value.stops.filter((_, i) => i !== index) };
+}
+function setStopColor(value, index, hex) {
+  if (index < 0 || index >= value.stops.length) return value;
+  const rgba = parseHex(hex);
+  if (!rgba) return value;
+  const color = formatHex(rgba, true);
+  return { ...value, stops: value.stops.map((s, i) => i === index ? { ...s, color } : s) };
+}
+function setGradientType(value, type) {
+  return { ...value, type };
+}
+function setGradientAngle(value, angle) {
+  return { ...value, angle: wrapAngle(angle) };
+}
+function setGradientCenter(value, centerX, centerY) {
+  return { ...value, centerX: clampPct(centerX), centerY: clampPct(centerY) };
+}
+function setGradientScale(value, scale) {
+  return { ...value, scale: clampScale(scale) };
+}
+function setGradientSquash(value, squash) {
+  return { ...value, squash: clampSquash(squash) };
+}
+function setGradientRotation(value, rotation) {
+  return { ...value, rotation: wrapAngle(rotation) };
+}
+
+// src/transfer-core.ts
+var DEFAULT_TRANSFER = { points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] };
+var TRANSFER_MIN_GAP = 0.02;
+var TRANSFER_MAX_POINTS = 12;
+var clamp016 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+var finite = (v, fallback) => typeof v === "number" && Number.isFinite(v) ? v : fallback;
+function normalizeTransfer(value) {
+  const raw = value?.points;
+  if (!Array.isArray(raw) || raw.length < 2) return { points: DEFAULT_TRANSFER.points.map((p) => ({ ...p })) };
+  const points = raw.map((p) => ({ x: clamp016(finite(p?.x, 0)), y: clamp016(finite(p?.y, 0)) })).sort((a, b) => a.x - b.x);
+  points[0].x = 0;
+  points[points.length - 1].x = 1;
+  const out = [points[0]];
+  for (let i = 1; i < points.length - 1; i++) {
+    if (points[i].x - out[out.length - 1].x < TRANSFER_MIN_GAP) continue;
+    if (1 - points[i].x < TRANSFER_MIN_GAP) continue;
+    out.push(points[i]);
+  }
+  out.push(points[points.length - 1]);
+  return { points: out.slice(0, TRANSFER_MAX_POINTS) };
+}
+function tangents(points) {
+  const n = points.length;
+  const secant = new Array(n - 1);
+  for (let i = 0; i < n - 1; i++) {
+    const dx = points[i + 1].x - points[i].x;
+    secant[i] = dx > 0 ? (points[i + 1].y - points[i].y) / dx : 0;
+  }
+  const m = new Array(n);
+  m[0] = secant[0];
+  m[n - 1] = secant[n - 2];
+  for (let i = 1; i < n - 1; i++) {
+    m[i] = secant[i - 1] * secant[i] <= 0 ? 0 : (secant[i - 1] + secant[i]) / 2;
+  }
+  for (let i = 0; i < n - 1; i++) {
+    if (secant[i] === 0) {
+      m[i] = 0;
+      m[i + 1] = 0;
+      continue;
+    }
+    const a = m[i] / secant[i];
+    const b = m[i + 1] / secant[i];
+    const h = Math.hypot(a, b);
+    if (h > 3) {
+      m[i] = 3 / h * a * secant[i];
+      m[i + 1] = 3 / h * b * secant[i];
+    }
+  }
+  return m;
+}
+function sampleTransfer(points, x) {
+  if (!points.length) return clamp016(x);
+  if (points.length === 1) return points[0].y;
+  const t = clamp016(finite(x, 0));
+  if (t <= points[0].x) return points[0].y;
+  const last = points[points.length - 1];
+  if (t >= last.x) return last.y;
+  let i = 0;
+  while (i < points.length - 2 && points[i + 1].x < t) i++;
+  const p0 = points[i], p1 = points[i + 1];
+  const h = p1.x - p0.x;
+  if (h <= 0) return p1.y;
+  const m = tangents(points);
+  const s = (t - p0.x) / h;
+  const s2 = s * s, s3 = s2 * s;
+  return clamp016(
+    (2 * s3 - 3 * s2 + 1) * p0.y + (s3 - 2 * s2 + s) * h * m[i] + (-2 * s3 + 3 * s2) * p1.y + (s3 - s2) * h * m[i + 1]
+  );
+}
+function transferLut(points, size = 256) {
+  const out = new Float32Array(size);
+  for (let i = 0; i < size; i++) out[i] = sampleTransfer(points, size === 1 ? 0 : i / (size - 1));
+  return out;
+}
+function insertPoint(points, x, y) {
+  const next = normalizeTransfer({ points: [...points, { x: clamp016(x), y: clamp016(y) }] }).points;
+  const index = next.findIndex((p) => Math.abs(p.x - clamp016(x)) < 1e-9);
+  return { points: next, index: index < 0 ? 0 : index };
+}
+function removePoint(points, index) {
+  if (index <= 0 || index >= points.length - 1) return points;
+  return points.filter((_, i) => i !== index);
+}
+function movePoint(points, index, x, y) {
+  if (index < 0 || index >= points.length) return points;
+  const out = points.map((p) => ({ ...p }));
+  const ny = clamp016(finite(y, 0));
+  if (index === 0 || index === points.length - 1) {
+    out[index].y = ny;
+    return out;
+  }
+  const lo = out[index - 1].x + TRANSFER_MIN_GAP;
+  const hi = out[index + 1].x - TRANSFER_MIN_GAP;
+  out[index] = { x: hi < lo ? out[index].x : Math.min(hi, Math.max(lo, clamp016(finite(x, 0)))), y: ny };
+  return out;
+}
+function nearestPoint(points, x, y, tolerance) {
+  let best = -1, bestD = tolerance;
+  for (let i = 0; i < points.length; i++) {
+    const d = Math.hypot(points[i].x - x, points[i].y - y);
+    if (d <= bestD) {
+      best = i;
+      bestD = d;
+    }
+  }
+  return best;
+}
+function isIdentityTransfer(points) {
+  return points.length === 2 && points[0].x === 0 && points[0].y === 0 && points[1].x === 1 && points[1].y === 1;
+}
+
 // src/components/ModRing.tsx
 var import_react3 = require("react");
+var import_TweakStore = require("tweakers/store");
+var import_ModulationStore = require("tweakers/modulation-store");
 var import_jsx_runtime5 = require("react/jsx-runtime");
 function ModRing({
   panelId,
@@ -5465,20 +3505,20 @@ function ModRing({
       el.setAttribute("stroke-dasharray", `${length.toFixed(2)} ${MOD_RING_CIRCUMFERENCE.toFixed(2)}`);
       el.setAttribute("stroke-dashoffset", offset.toFixed(2));
     };
-    const bounds = ModulationStore.getBounds(panelId, path);
+    const bounds = import_ModulationStore.ModulationStore.getBounds(panelId, path);
     const span = bounds ? bounds.max - bounds.min : 0;
-    const base01 = () => span ? (Number(TweakStore.getValue(panelId, path)) - bounds.min) / span : 0;
+    const base01 = () => span ? (Number(import_TweakStore.TweakStore.getValue(panelId, path)) - bounds.min) / span : 0;
     if (!span) return;
     const still = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (still) {
       const reach = assignment.amount / 2;
       const drawReach = () => draw(base01() - reach, base01() + reach);
       drawReach();
-      return TweakStore.subscribe(panelId, drawReach);
+      return import_TweakStore.TweakStore.subscribe(panelId, drawReach);
     }
-    return ModulationStore.subscribeFrames(() => {
+    return import_ModulationStore.ModulationStore.subscribeFrames(() => {
       const b = base01();
-      draw(b, b + ModulationStore.getOffset(panelId, path) / span);
+      draw(b, b + import_ModulationStore.ModulationStore.getOffset(panelId, path) / span);
     });
   }, [panelId, path, assignment.slot, assignment.amount]);
   return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(
@@ -5555,6 +3595,7 @@ var MoveSurfaceStore = {
 };
 
 // src/shortcut-utils.ts
+var import_TweakStore2 = require("tweakers/store");
 function fineDragValue(opts) {
   const { startValue, startPos, pos, extentPx, min, max, factor = 0.1 } = opts;
   const delta = (pos - startPos) / (extentPx || 1) * (max - min) * factor;
@@ -5593,10 +3634,11 @@ var MoveVolumeDisplayClass = class {
 var MoveVolumeDisplay = new MoveVolumeDisplayClass();
 
 // src/move-color.ts
+var import_TweakStore3 = require("tweakers/store");
 var MOVE_COLOR_WHEEL = [4, 18, 45, 78, 95, 120, 141, 158, 186, 204, 233, 244, 254, 271, 312, 351];
 var MOVE_COLOR_HUES = MOVE_COLOR_WHEEL.length;
 var MOVE_COLOR_STEPS = 16;
-var clamp7 = (n) => Math.max(0, Math.min(1, n));
+var clamp6 = (n) => Math.max(0, Math.min(1, n));
 var hue = (n) => (n % 360 + 360) % 360;
 var moveWheelSlot = (h) => {
   const target = hue(h);
@@ -5646,7 +3688,7 @@ var MoveColorStoreClass = class {
     else this.open(panelId, path);
   }
   read(panelId, path) {
-    const hex = String(TweakStore.getValue(panelId, path) ?? "#ff0000");
+    const hex = String(import_TweakStore3.TweakStore.getValue(panelId, path) ?? "#ff0000");
     const cached = this.coordinates.get(JSON.stringify([panelId, path]));
     if (cached?.hex === hex) return { ...cached.color };
     const color = rgbToHsl(parseHex(hex) ?? { r: 255, g: 0, b: 0, a: 1 });
@@ -5657,16 +3699,16 @@ var MoveColorStoreClass = class {
     return color;
   }
   update(panelId, path, patch2) {
-    if (!TweakStore.getPanel(panelId) || TweakStore.isDisabled(panelId, path) || Object.values(patch2).some((n) => !Number.isFinite(n))) return;
+    if (!import_TweakStore3.TweakStore.getPanel(panelId) || import_TweakStore3.TweakStore.isDisabled(panelId, path) || Object.values(patch2).some((n) => !Number.isFinite(n))) return;
     const color = { ...this.read(panelId, path), ...patch2 };
     color.h = hue(color.h);
-    color.s = clamp7(color.s);
-    color.l = clamp7(color.l);
-    color.a = clamp7(color.a);
-    const current = String(TweakStore.getValue(panelId, path) ?? "");
+    color.s = clamp6(color.s);
+    color.l = clamp6(color.l);
+    color.a = clamp6(color.a);
+    const current = String(import_TweakStore3.TweakStore.getValue(panelId, path) ?? "");
     const hex = formatHex(hslToRgb(color), color.a < 1 || current.length === 9 || current.length === 5);
     this.coordinates.set(JSON.stringify([panelId, path]), { hex, color });
-    TweakStore.updateValue(panelId, path, hex);
+    import_TweakStore3.TweakStore.updateValue(panelId, path, hex);
     this.notify();
   }
   setHue(h) {
@@ -5690,11 +3732,12 @@ var MoveColorStore = new MoveColorStoreClass();
 // src/components/MoveColor.tsx
 var import_react4 = require("react");
 var import_react_dom = require("react-dom");
+var import_TweakStore4 = require("tweakers/store");
 var import_jsx_runtime6 = require("react/jsx-runtime");
 function MoveColorSlot({ panelId, meta, active, open }) {
   const gesture = (0, import_react4.useRef)(null);
   const suppressClick = (0, import_react4.useRef)(false);
-  const disabled = TweakStore.isDisabled(panelId, meta.path);
+  const disabled = import_TweakStore4.TweakStore.isDisabled(panelId, meta.path);
   const color = MoveColorStore.read(panelId, meta.path);
   return /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(
     "button",
@@ -5756,7 +3799,7 @@ function MoveColorSlot({ panelId, meta, active, open }) {
       onLostPointerCapture: () => {
         gesture.current = null;
       },
-      children: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(MoveSlotColorBody, { label: meta.label, color: String(TweakStore.getValue(panelId, meta.path)), hue: color.h })
+      children: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)(MoveSlotColorBody, { label: meta.label, color: String(import_TweakStore4.TweakStore.getValue(panelId, meta.path)), hue: color.h })
     }
   );
 }
@@ -5799,7 +3842,7 @@ function MoveColorDisplay({ panelId, meta, anchor, theme }) {
   const display = (0, import_react4.useRef)(null);
   const [position, setPosition] = (0, import_react4.useState)({ left: 0, top: 0 });
   const color = MoveColorStore.read(panelId, meta.path);
-  const disabled = TweakStore.isDisabled(panelId, meta.path);
+  const disabled = import_TweakStore4.TweakStore.isDisabled(panelId, meta.path);
   const close = () => {
     if (display.current?.contains(document.activeElement)) {
       anchor.current?.querySelector('[data-kind="color"][aria-expanded="true"]')?.focus();
@@ -5853,7 +3896,7 @@ function MoveColorDisplay({ panelId, meta, anchor, theme }) {
       style: position,
       children: [
         /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("div", { className: "tweakers-move-color-heading", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "tweakers-move-color-preview", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { style: { background: String(TweakStore.getValue(panelId, meta.path)) } }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "tweakers-move-color-preview", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { style: { background: String(import_TweakStore4.TweakStore.getValue(panelId, meta.path)) } }) }),
           /* @__PURE__ */ (0, import_jsx_runtime6.jsx)("span", { className: "tweakers-move-color-name", children: meta.label }),
           /* @__PURE__ */ (0, import_jsx_runtime6.jsxs)("output", { children: [
             Math.round(color.h),
@@ -5910,6 +3953,279 @@ function MoveColorDisplay({ panelId, meta, anchor, theme }) {
   return typeof document === "undefined" ? content : (0, import_react_dom.createPortal)(content, document.body);
 }
 
+// src/move-functions.ts
+var MOVE_FUNCTION_MANIFEST = [
+  { name: "play" },
+  { name: "rec" },
+  { name: "mute" },
+  { name: "undo" },
+  { name: "copy" },
+  { name: "delete" },
+  { name: "up" },
+  { name: "down" },
+  { name: "left" },
+  { name: "right" },
+  { name: "sample", special: true },
+  { name: "loop", special: true },
+  { name: "capture", special: true },
+  { name: "menu", special: true },
+  { name: "back", special: true },
+  { name: "jog_click", special: true }
+];
+var MOVE_FUNCTION_BUTTONS = MOVE_FUNCTION_MANIFEST.map((b) => b.name);
+var MOVE_SPECIAL_BUTTONS = MOVE_FUNCTION_MANIFEST.filter((b) => "special" in b && b.special).map((b) => b.name);
+var MoveFunctionsClass = class {
+  constructor() {
+    this.handlers = /* @__PURE__ */ new Map();
+    this.labels = /* @__PURE__ */ new Map();
+    this.listeners = /* @__PURE__ */ new Set();
+    this.runListeners = /* @__PURE__ */ new Set();
+  }
+  /**
+   * Attach an action to a function button; returns a detach function.
+   * One action per button — attaching again replaces the previous one.
+   */
+  attach(name, handler, options) {
+    if (!MOVE_FUNCTION_BUTTONS.includes(name)) {
+      console.warn(`[tweakers] "${name}" is not a Move function button; expected one of: ${MOVE_FUNCTION_BUTTONS.join(", ")}`);
+      return () => {
+      };
+    }
+    this.handlers.set(name, handler);
+    if (options?.label != null) this.labels.set(name, options.label);
+    else this.labels.delete(name);
+    this.notify();
+    return () => {
+      if (this.handlers.get(name) === handler) {
+        this.handlers.delete(name);
+        this.labels.delete(name);
+        this.notify();
+      }
+    };
+  }
+  /** The attached button names — what the kit claims on the hardware. */
+  list() {
+    return [...this.handlers.keys()];
+  }
+  /**
+   * Attach on top of whatever is there; the returned release puts the
+   * previous attachment back. For overlays that borrow a button while they
+   * are open — the preset navigator takes Back, and hands it back on close.
+   */
+  push(name, handler, options) {
+    const prevHandler = this.handlers.get(name);
+    const prevLabel = this.labels.get(name);
+    const detach = this.attach(name, handler, options);
+    return () => {
+      if (this.handlers.get(name) !== handler) return;
+      detach();
+      if (prevHandler) this.attach(name, prevHandler, prevLabel != null ? { label: prevLabel } : void 0);
+    };
+  }
+  /** The screen name an attachment carries, if any. */
+  label(name) {
+    return this.labels.get(name);
+  }
+  /** Run the action attached to a button, if any. Called by the kit per press. */
+  run(name, press) {
+    const full = { name, shift: !!press?.shift, hold: !!press?.hold };
+    this.handlers.get(name)?.(full);
+    for (const l of this.runListeners) l(name, full);
+  }
+  /** Notified when attachments change, so the kit can reconfigure the Move. */
+  subscribe(listener) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+  /** Notified on every run — the MovePanel flashes its pills on hardware presses. */
+  subscribeRuns(listener) {
+    this.runListeners.add(listener);
+    return () => this.runListeners.delete(listener);
+  }
+  notify() {
+    for (const l of this.listeners) l();
+  }
+};
+var MoveFunctions = new MoveFunctionsClass();
+
+// src/move-presets.ts
+var import_TweakStore5 = require("tweakers/store");
+var CHOSEN_LINGER_MS = 800;
+var CLOSE_ANIM_MS = 450;
+var ENTER_MS = 20;
+var MovePresetStoreClass = class {
+  constructor() {
+    this.view = null;
+    this.saving = null;
+    /** The panel's values (and active preset) as they were at open — the
+     *  state Back restores and the compare hold plays. Null in provider mode. */
+    this.original = null;
+    this.previewEnabled = true;
+    this.version = 0;
+    this.listeners = /* @__PURE__ */ new Set();
+    this.timers = /* @__PURE__ */ new Set();
+    this.getView = () => this.view;
+    this.getSaving = () => this.saving;
+    this.getVersion = () => this.version;
+    this.subscribe = (fn) => {
+      this.listeners.add(fn);
+      return () => {
+        this.listeners.delete(fn);
+      };
+    };
+  }
+  notify() {
+    this.version++;
+    for (const fn of this.listeners) fn();
+  }
+  later(ms, fn) {
+    const t = setTimeout(() => {
+      this.timers.delete(t);
+      fn();
+    }, ms);
+    this.timers.add(t);
+  }
+  clearTimers() {
+    for (const t of this.timers) clearTimeout(t);
+    this.timers.clear();
+  }
+  /** Turn the browse-time live preview off (and back on) for heavy hosts. */
+  setPreviewEnabled(on) {
+    this.previewEnabled = on;
+  }
+  isPreviewEnabled() {
+    return this.previewEnabled;
+  }
+  /** The panel's presets as screen rows — provider list when one is set. */
+  items(panelId) {
+    const provider = import_TweakStore5.TweakStore.getPresetProvider(panelId);
+    if (provider) return provider.presets.map((p) => ({ id: p.id, label: p.label }));
+    return import_TweakStore5.TweakStore.getPresets(panelId).map((p) => ({ id: p.id, label: p.name }));
+  }
+  /** Play a row's values without recording them — the browsing preview. */
+  applyPreview(id) {
+    const view = this.view;
+    if (!view || !id || !this.previewEnabled || !this.original) return;
+    const preset = import_TweakStore5.TweakStore.getPresets(view.panelId).find((p) => p.id === id);
+    if (preset) import_TweakStore5.TweakStore.previewValues(view.panelId, preset.values);
+  }
+  open(panelId) {
+    this.clearTimers();
+    const active = import_TweakStore5.TweakStore.getActivePresetId(panelId);
+    const items = this.items(panelId);
+    const cursor = (active && items.some((i) => i.id === active) ? active : items[0]?.id) ?? null;
+    this.original = import_TweakStore5.TweakStore.getPresetProvider(panelId) ? null : { ...import_TweakStore5.TweakStore.getValues(panelId) };
+    this.view = { panelId, phase: "enter", cursor, chosen: null, comparing: false };
+    this.notify();
+    this.later(ENTER_MS, () => {
+      if (this.view?.phase === "enter") {
+        this.view = { ...this.view, phase: "open" };
+        this.notify();
+      }
+    });
+  }
+  close() {
+    if (!this.view || this.view.phase === "closing") return;
+    this.clearTimers();
+    this.view = { ...this.view, phase: "closing" };
+    this.notify();
+    this.later(CLOSE_ANIM_MS, () => {
+      if (this.view?.phase === "closing") {
+        this.view = null;
+        this.original = null;
+        this.notify();
+      }
+    });
+  }
+  /**
+   * Put everything back and dismiss: the pre-navigator values return, the
+   * previewed ones evaporate. Back's action, and a Menu tap on an open
+   * screen. After a confirm there is nothing to take back — it's a no-op.
+   */
+  cancel() {
+    const view = this.view;
+    if (!view || view.phase === "closing" || view.chosen) return;
+    if (this.original) import_TweakStore5.TweakStore.previewValues(view.panelId, this.original);
+    this.view = { ...view, comparing: false };
+    this.close();
+  }
+  toggle(panelId) {
+    if (this.view && this.view.panelId === panelId && this.view.phase !== "closing") this.cancel();
+    else this.open(panelId);
+  }
+  /** Walk the cursor by wheel detents — each rest is previewed live. */
+  scroll(delta) {
+    const view = this.view;
+    if (!view || view.phase === "closing" || view.chosen) return;
+    const items = this.items(view.panelId);
+    if (!items.length) return;
+    const step = Math.round(delta) || Math.sign(delta);
+    const index = items.findIndex((i) => i.id === view.cursor);
+    const next = Math.max(0, Math.min(items.length - 1, (index < 0 ? 0 : index) + step));
+    if (items[next].id === view.cursor && !view.comparing) return;
+    this.view = { ...view, cursor: items[next].id, comparing: false };
+    this.applyPreview(items[next].id);
+    this.notify();
+  }
+  /** Menu held down: play the pre-navigator sound for as long as it's held. */
+  compareStart() {
+    const view = this.view;
+    if (!view || view.phase !== "open" || view.chosen || view.comparing) return;
+    if (!this.previewEnabled || !this.original) return;
+    this.view = { ...view, comparing: true };
+    import_TweakStore5.TweakStore.previewValues(view.panelId, this.original);
+    this.notify();
+  }
+  /** Menu released: back to the previewed row. */
+  compareEnd() {
+    const view = this.view;
+    if (!view || !view.comparing) return;
+    this.view = { ...view, comparing: false };
+    this.applyPreview(view.cursor);
+    this.notify();
+  }
+  /**
+   * Confirm a row and keep it: the preset loads for real (active preset,
+   * persistence), the row reads green for a beat, then the screen dismisses.
+   */
+  choose(id) {
+    const view = this.view;
+    if (!view || view.phase !== "open" || view.chosen) return;
+    if (!this.items(view.panelId).some((i) => i.id === id)) return;
+    const provider = import_TweakStore5.TweakStore.getPresetProvider(view.panelId);
+    if (provider) void provider.onSelect(id);
+    else import_TweakStore5.TweakStore.loadPreset(view.panelId, id);
+    this.view = { ...view, cursor: id, chosen: id, comparing: false };
+    this.notify();
+    this.later(CHOSEN_LINGER_MS, () => this.close());
+  }
+  /** Confirm the cursor's row — the jog-click path. */
+  confirm() {
+    if (this.view?.cursor) this.choose(this.view.cursor);
+  }
+  beginSave(panelId) {
+    this.saving = { panelId, suggested: `Preset ${this.items(panelId).length + 1}` };
+    this.notify();
+  }
+  cancelSave() {
+    if (this.saving) {
+      this.saving = null;
+      this.notify();
+    }
+  }
+  commitSave(name) {
+    const saving = this.saving;
+    if (!saving) return;
+    const label = name.trim() || saving.suggested;
+    const provider = import_TweakStore5.TweakStore.getPresetProvider(saving.panelId);
+    if (provider) void provider.onCreate(label);
+    else import_TweakStore5.TweakStore.savePreset(saving.panelId, label);
+    this.saving = null;
+    this.notify();
+  }
+};
+var MovePresetStore = new MovePresetStoreClass();
+
 // src/components/MovePanel.tsx
 var import_jsx_runtime7 = require("react/jsx-runtime");
 var MOVE_TRACK_COLORS = ["#4274f4", "#d83dff", "#ff4d07", "#52bd06"];
@@ -5920,6 +4236,10 @@ var XY_GRID_DEFAULT = 5;
 var TAP_MS = 300;
 var WHEEL_SLOT_PX = 60;
 var STRIP_REANNOUNCE_MS = 1e3;
+var presetNavigatorOpen = () => {
+  const view = MovePresetStore.getView();
+  return !!view && view.phase !== "closing";
+};
 function boldColons(text) {
   if (!text.includes(":")) return text;
   return text.split(":").flatMap(
@@ -5927,8 +4247,8 @@ function boldColons(text) {
   );
 }
 function MoveModRing({ panelId, path, pad }) {
-  const assignment = ModulationStore.getAssignment(panelId, path);
-  if (!assignment || !ModulationStore.getSlot(assignment.slot)) return null;
+  const assignment = import_ModulationStore2.ModulationStore.getAssignment(panelId, path);
+  if (!assignment || !import_ModulationStore2.ModulationStore.getSlot(assignment.slot)) return null;
   return /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
     ModRing,
     {
@@ -5945,6 +4265,8 @@ var MOVE_LATCH_EVENT = "move-tweakers:latch";
 var MOVE_PAGE_EVENT = "move-tweakers:page";
 var MOVE_PAGE_SELECT_EVENT = "move-tweakers:page-select";
 var MOVE_JOG_EVENT = "move-tweakers:jog";
+var MOVE_JOG_CLICK_EVENT = "move-tweakers:jog-click";
+var MOVE_MUTE_EVENT = "move-tweakers:mute";
 var MOVE_STRIP_EVENT = "move-tweakers:strip";
 function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only, dock = "viewport", scroll = false }) {
   if (!productionEnabled) return null;
@@ -5987,18 +4309,18 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   }, [volume]);
   const onlyKey = only === void 0 ? void 0 : JSON.stringify(Array.isArray(only) ? only : [only]);
   const read = (0, import_react5.useCallback)(
-    () => TweakStore.selectPanels(onlyKey === void 0 ? void 0 : JSON.parse(onlyKey)),
+    () => import_TweakStore6.TweakStore.selectPanels(onlyKey === void 0 ? void 0 : JSON.parse(onlyKey)),
     [onlyKey]
   );
   (0, import_react5.useEffect)(() => {
     setMounted(true);
     setPanels(read());
-    return TweakStore.subscribeGlobal(() => setPanels(read()));
+    return import_TweakStore6.TweakStore.subscribeGlobal(() => setPanels(read()));
   }, [read]);
   const pages = scroll ? panels.filter((p) => p.kind === void 0).slice(0, MOVE_TRACKS).map(buildMoveStrip) : buildMovePages(panels);
-  const modSettings = ModulationStore.getSettings();
-  const settingsPanel = modSettings ? TweakStore.getPanel(modSettings.panelId) : void 0;
-  const modLayout = settingsPanel ? ModulationStore.getSettingsLayout() : null;
+  const modSettings = import_ModulationStore2.ModulationStore.getSettings();
+  const settingsPanel = modSettings ? import_TweakStore6.TweakStore.getPanel(modSettings.panelId) : void 0;
+  const modLayout = settingsPanel ? import_ModulationStore2.ModulationStore.getSettingsLayout() : null;
   const page = settingsPanel ? buildModMovePage(settingsPanel, modLayout) : pages[Math.min(track, Math.max(0, pages.length - 1))];
   const pageId = page?.panel.id;
   const stripMode = scroll && !settingsPanel && !!page;
@@ -6025,7 +4347,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   (0, import_react5.useEffect)(() => setOffset(0), [pageId]);
   (0, import_react5.useEffect)(() => {
     const onJog = (e) => {
-      if (!stripRef.current.on) return;
+      if (e.defaultPrevented || presetNavigatorOpen() || !stripRef.current.on) return;
       e.preventDefault();
       scrollSlots(Math.round(Number(e.detail?.delta) || 0));
     };
@@ -6047,7 +4369,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     const el = panelRef.current;
     if (!el) return;
     const onWheel = (e) => {
-      if (!stripRef.current.on) return;
+      const browsing = presetNavigatorOpen();
+      if (!browsing && !stripRef.current.on) return;
       const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
       if (!d) return;
       e.preventDefault();
@@ -6055,7 +4378,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       const steps = Math.trunc(wheelRest.current / WHEEL_SLOT_PX);
       if (!steps) return;
       wheelRest.current -= steps * WHEEL_SLOT_PX;
-      scrollSlots(steps);
+      if (browsing) MovePresetStore.scroll(steps);
+      else scrollSlots(steps);
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
@@ -6093,24 +4417,83 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   (0, import_react5.useEffect)(() => () => {
     if (MoveColorStore.getView()?.panelId === pageId) MoveColorStore.close();
   }, [pageId]);
-  const modSlot = modSettings ? ModulationStore.getSlot(modSettings.index) : null;
+  (0, import_react5.useSyncExternalStore)(MovePresetStore.subscribe, MovePresetStore.getVersion, () => 0);
+  const presetView = MovePresetStore.getView();
+  const presetSaving = MovePresetStore.getSaving();
+  const presetScreen = presetView?.panelId === pageId ? presetView : null;
+  const presetSave = presetSaving?.panelId === pageId ? presetSaving : null;
+  (0, import_react5.useEffect)(() => {
+    if (!pageId) return;
+    return MoveFunctions.attach("menu", ({ shift, hold }) => {
+      if (shift || hold) MovePresetStore.beginSave(pageId);
+      else MovePresetStore.toggle(pageId);
+    }, { label: "presets" });
+  }, [pageId]);
+  (0, import_react5.useEffect)(() => () => {
+    if (MovePresetStore.getView()?.panelId === pageId) MovePresetStore.cancel();
+    if (MovePresetStore.getSaving()?.panelId === pageId) MovePresetStore.cancelSave();
+  }, [pageId]);
+  const presetOpenPanel = presetScreen && presetScreen.phase !== "closing" ? presetScreen.panelId : null;
+  (0, import_react5.useEffect)(() => {
+    if (!presetOpenPanel) return;
+    return MoveFunctions.push("back", () => MovePresetStore.cancel(), { label: "revert" });
+  }, [presetOpenPanel]);
+  (0, import_react5.useEffect)(() => {
+    const openView = () => {
+      const view = MovePresetStore.getView();
+      return view && view.phase !== "closing" ? view : null;
+    };
+    const onJog = (e) => {
+      if (!openView()) return;
+      e.preventDefault();
+      MovePresetStore.scroll(Number(e.detail?.delta) || 0);
+    };
+    const onJogClick = (e) => {
+      if (!openView()) return;
+      e.preventDefault();
+      MovePresetStore.confirm();
+    };
+    let muteTaken = false;
+    const onMute = (e) => {
+      if (e.detail?.pressed) {
+        if (!openView() || MovePresetStore.getSaving()) return;
+        e.preventDefault();
+        muteTaken = true;
+        MovePresetStore.compareStart();
+      } else {
+        if (!muteTaken) return;
+        e.preventDefault();
+        muteTaken = false;
+        MovePresetStore.compareEnd();
+      }
+    };
+    window.addEventListener(MOVE_JOG_EVENT, onJog);
+    window.addEventListener(MOVE_JOG_CLICK_EVENT, onJogClick);
+    window.addEventListener(MOVE_MUTE_EVENT, onMute);
+    return () => {
+      window.removeEventListener(MOVE_JOG_EVENT, onJog);
+      window.removeEventListener(MOVE_JOG_CLICK_EVENT, onJogClick);
+      window.removeEventListener(MOVE_MUTE_EVENT, onMute);
+    };
+  }, []);
+  const modSlot = modSettings ? import_ModulationStore2.ModulationStore.getSlot(modSettings.index) : null;
   const composition = modSlot?.type === "curve" ? curveComposition(modSlot.params) : null;
   const clipIndex = composition ? Math.min(composition.segments.length - 1, Math.max(0, Math.round(Number(modSlot.params.selected) || 0))) : 0;
   const previewPath = modLayout?.dials.find((d) => d.preview)?.path ?? null;
   const values = (0, import_react5.useSyncExternalStore)(
-    (0, import_react5.useCallback)((cb) => pageId ? TweakStore.subscribe(pageId, cb) : () => {
+    (0, import_react5.useCallback)((cb) => pageId ? import_TweakStore6.TweakStore.subscribe(pageId, cb) : () => {
     }, [pageId]),
-    () => pageId ? TweakStore.getValues(pageId) : void 0,
+    () => pageId ? import_TweakStore6.TweakStore.getValues(pageId) : void 0,
     () => void 0
   );
   const [, bumpControlState] = (0, import_react5.useState)(0);
   (0, import_react5.useEffect)(
-    () => pageId ? TweakStore.subscribeControlState(pageId, () => bumpControlState((n) => n + 1)) : void 0,
+    () => pageId ? import_TweakStore6.TweakStore.subscribeControlState(pageId, () => bumpControlState((n) => n + 1)) : void 0,
     [pageId]
   );
   (0, import_react5.useSyncExternalStore)(
-    (0, import_react5.useCallback)((cb) => ModulationStore.subscribe(cb), []),
-    () => ModulationStore.getVersion(),
+    (0, import_react5.useCallback)((cb) => import_ModulationStore2.ModulationStore.subscribe(cb), []),
+    () => import_ModulationStore2.ModulationStore.getVersion(),
     () => 0
   );
   const surface = (0, import_react5.useSyncExternalStore)(
@@ -6148,7 +4531,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       }
       if (sawSettings.current) {
         sawSettings.current = false;
-        ModulationStore.closeSettings();
+        import_ModulationStore2.ModulationStore.closeSettings();
       }
       const i = pagesRef.current.findIndex((pg) => pg.panel.id === id);
       if (i >= 0) setTrack(i);
@@ -6180,20 +4563,20 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     return fineRef.current;
   };
   const dialFromKeyboard = (e, meta) => {
-    if (e.altKey || e.ctrlKey || e.metaKey || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+    if (e.altKey || e.ctrlKey || e.metaKey || import_TweakStore6.TweakStore.isDisabled(page.panel.id, meta.path)) return;
     const next = moveKeyboardValue(meta, values[meta.path], e.key, e.shiftKey);
     if (next === null) return;
     e.preventDefault();
     e.stopPropagation();
     armMod(meta.path);
-    TweakStore.updateValue(page.panel.id, meta.path, next);
+    import_TweakStore6.TweakStore.updateValue(page.panel.id, meta.path, next);
   };
   const dialFromPointer = (e, meta) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const span = rect.width - DIAL_TRACK_INSET * 2;
     const fine = fineAnchor(e, () => normalizeDial(meta, values[meta.path]));
     const v01 = fine ? fineDragValue({ startValue: fine.v, startPos: fine.x, pos: e.clientX, extentPx: span || 1, min: 0, max: 1, factor: fine.shift ? 0.1 : 1 }) : Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
-    TweakStore.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
+    import_TweakStore6.TweakStore.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
   };
   const xyFromPointer = (e, meta) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -6217,7 +4600,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     }
     const raw = valueFromPoint({ x: px, y: py }, xa, ya, !!meta.snap);
     const origin = pointFromValue(centerValue(xa, ya), xa, ya);
-    TweakStore.updateValue(page.panel.id, meta.path, {
+    import_TweakStore6.TweakStore.updateValue(page.panel.id, meta.path, {
       x: applyDetentAxis(raw.x, xa, Math.abs(px - origin.x) * (w || 1)),
       y: applyDetentAxis(raw.y, ya, Math.abs(py - origin.y) * (h || 1))
     });
@@ -6236,7 +4619,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       setCurvePoint((prev) => ({ ...prev, [meta.path]: Math.min(index, points.length - 1) }));
     }
     index = Math.min(index, points.length - 1);
-    TweakStore.updateValue(page.panel.id, meta.path, { points: movePoint(points, index, x, y) });
+    import_TweakStore6.TweakStore.updateValue(page.panel.id, meta.path, { points: movePoint(points, index, x, y) });
   };
   const needleFromPointer = (e, meta) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -6251,7 +4634,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       meta.step ?? 1,
       wraps
     );
-    if (next !== null) TweakStore.updateValue(page.panel.id, meta.path, next);
+    if (next !== null) import_TweakStore6.TweakStore.updateValue(page.panel.id, meta.path, next);
   };
   const rampFromPointer = (e, meta, down) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -6270,7 +4653,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     const lo = index > 0 ? g.stops[index - 1].position : 0;
     const hi = index < g.stops.length - 1 ? g.stops[index + 1].position : 1;
     const stops = g.stops.map((st, i) => i === index ? { ...st, position: Math.min(hi, Math.max(lo, x)) } : st);
-    TweakStore.updateValue(page.panel.id, meta.path, { ...g, stops });
+    import_TweakStore6.TweakStore.updateValue(page.panel.id, meta.path, { ...g, stops });
   };
   const xyRelease = (meta) => {
     setDragPath(null);
@@ -6278,7 +4661,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     if (!meta.returnToCenter) return;
     const xa = resolveAxis(meta.xAxis);
     const ya = resolveAxis(meta.yAxis);
-    TweakStore.updateValue(page.panel.id, meta.path, normalizeValue(centerValue(xa, ya), xa, ya, !!meta.snap));
+    import_TweakStore6.TweakStore.updateValue(page.panel.id, meta.path, normalizeValue(centerValue(xa, ya), xa, ya, !!meta.snap));
   };
   const rangeFromPointer = (e, meta, down) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -6300,7 +4683,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       });
     }
     const next = rangeHandleRef.current === "min" ? { lo: Math.min(p01, cur.hi), hi: cur.hi } : { lo: cur.lo, hi: Math.max(p01, cur.lo) };
-    TweakStore.updateValue(page.panel.id, meta.path, denormalizeRangeDial(meta, next.lo, next.hi));
+    import_TweakStore6.TweakStore.updateValue(page.panel.id, meta.path, denormalizeRangeDial(meta, next.lo, next.hi));
   };
   const filterFromPointer = (e, meta, down) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -6327,13 +4710,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       v01 = Math.min(1, Math.max(0, (e.clientX - left) / (span || 1)));
     }
     const next = hand === "cutoff" ? denormalizeFilterDial(meta, v01, cur.resonance) : denormalizeFilterDial(meta, cur.cutoff, v01);
-    TweakStore.updateValue(page.panel.id, meta.path, next);
+    import_TweakStore6.TweakStore.updateValue(page.panel.id, meta.path, next);
   };
   const enumFromPointer = (e, meta) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const span = rect.width - DIAL_TRACK_INSET * 2;
     const v01 = Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
-    TweakStore.updateValue(page.panel.id, meta.path, denormalizeEnumDial(meta, v01));
+    import_TweakStore6.TweakStore.updateValue(page.panel.id, meta.path, denormalizeEnumDial(meta, v01));
   };
   const dialReading = (meta) => {
     if (dialOrigin(meta) <= 0) return `${dialPercent(meta)}%`;
@@ -6353,7 +4736,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     return `${fmt(v.min)}\u2013${fmt(v.max)}`;
   };
   const chipLatched = (col, meta) => latched[col]?.path === meta.path || !!hwLatched[meta.path];
-  const armMod = (path) => ModulationStore.noteTouch(page.panel.id, path);
+  const armMod = (path) => import_ModulationStore2.ModulationStore.noteTouch(page.panel.id, path);
   const dialAt = (col) => {
     if (held && held.col === col) return held.meta;
     const hw = page.values[col];
@@ -6397,8 +4780,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     volume.label && volumeReading != null && /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("span", { className: "tweakers-move-volume-label", children: volume.label }),
     /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("span", { className: "tweakers-move-volume-value", children: boldColons(volumeReading ?? volume.label ?? "") })
   ] }) });
-  const content = /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-overlay": composition || color ? true : void 0, children: [
+  const content = /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-overlay": composition || color || presetSave ? true : void 0, children: [
     colorMeta && /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(MoveColorDisplay, { panelId: page.panel.id, meta: colorMeta, anchor: panelRef, theme }),
+    presetSave && /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(MovePresetSaveInput, { suggested: presetSave.suggested }),
     composition && modSettings && /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
       MoveCurveComposer,
       {
@@ -6417,7 +4801,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             className: "tweakers-move-track",
             "data-active": pg === page,
             onClick: () => {
-              ModulationStore.closeSettings();
+              import_ModulationStore2.ModulationStore.closeSettings();
               setTrack(i);
               window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
             },
@@ -6428,16 +4812,17 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
           },
           pg.panel.id
         )) }),
-        /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { className: "tweakers-move-mods", children: color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(MoveColorSteps, { color, disabled: TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps ? surface.steps.map((s) => /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("span", { className: "tweakers-move-mod", title: `step ${s.step + 1}`, children: /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
+        /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { className: "tweakers-move-mods", children: color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(MoveColorSteps, { color, disabled: import_TweakStore6.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps ? surface.steps.map((s) => /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("span", { className: "tweakers-move-mod", title: `step ${s.step + 1}`, children: /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
           "span",
           {
             className: "tweakers-move-mod-dot",
             style: { background: s.color ?? "var(--move-text)", opacity: s.lit ? 1 : 0.25 }
           }
-        ) }, s.step)) : ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(MoveModCircle, { slot }, slot.index)) }),
+        ) }, s.step)) : import_ModulationStore2.ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(MoveModCircle, { slot }, slot.index)) }),
         headerCluster
       ] }),
-      visibleCols.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { className: "tweakers-move-grid", children: [
+      visibleCols.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)("div", { className: "tweakers-move-grid", "data-presets": presetScreen?.phase === "open" || void 0, children: [
+        presetScreen && /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(MovePresetScreen, { view: presetScreen }),
         /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { className: "tweakers-move-viewport", "data-scroll": stripMode || void 0, children: /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
           "div",
           {
@@ -6448,7 +4833,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
               if (isSpanContinuation(page, i)) return null;
               const meta = page.dials[i]?.type === "filter" ? page.dials[i] : dialAt(i);
               if (!meta) return /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
-              const disabled = TweakStore.isDisabled(page.panel.id, meta.path);
+              const disabled = import_TweakStore6.TweakStore.isDisabled(page.panel.id, meta.path);
               const active = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
               const valueFirst = !!settingsPanel && !(meta.min === 0 && meta.max === 1);
               if (meta.type === "color") return /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(MoveColorSlot, { panelId: page.panel.id, meta, active, open: colorMeta?.path === meta.path }, meta.path);
@@ -6643,7 +5028,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                   xa,
                   ya
                 );
-                const preview = meta.path === previewPath ? ModulationStore.getSettingsPreview() : null;
+                const preview = meta.path === previewPath ? import_ModulationStore2.ModulationStore.getSettingsPreview() : null;
                 const gridBase = meta.grid === false ? 0 : typeof meta.grid === "number" ? meta.grid : XY_GRID_DEFAULT;
                 const gridN = gridBase > 0 ? Math.round(gridBase * Math.max(0, meta.density ?? 1)) : 0;
                 return /* @__PURE__ */ (0, import_jsx_runtime7.jsxs)(
@@ -6752,7 +5137,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                     "data-shape": shape ? true : void 0,
                     "data-active": active || void 0,
                     onPointerDown: (e) => {
-                      if (TweakStore.isDisabled(page.panel.id, meta.path)) return;
+                      if (import_TweakStore6.TweakStore.isDisabled(page.panel.id, meta.path)) return;
                       try {
                         e.currentTarget.setPointerCapture(e.pointerId);
                       } catch {
@@ -6763,7 +5148,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                       enumFromPointer(e, meta);
                     },
                     onPointerMove: (e) => {
-                      if (!TweakStore.isDisabled(page.panel.id, meta.path) && dragPath === meta.path) enumFromPointer(e, meta);
+                      if (!import_TweakStore6.TweakStore.isDisabled(page.panel.id, meta.path) && dragPath === meta.path) enumFromPointer(e, meta);
                     },
                     onPointerUp: () => {
                       setDragPath(null);
@@ -6799,7 +5184,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                     className: "tweakers-move-dial",
                     "data-kind": "toggle",
                     "data-on": !!values[meta.path] || void 0,
-                    onClick: () => TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path]),
+                    onClick: () => import_TweakStore6.TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path]),
                     children: [
                       /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(MoveModRing, { panelId: page.panel.id, path: meta.path }),
                       /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(MoveSlotToggleBody, { label: meta.label, on: !!values[meta.path] })
@@ -6954,7 +5339,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                   "data-disabled": disabled || void 0,
                   onKeyDown: (e) => dialFromKeyboard(e, meta),
                   onPointerDown: (e) => {
-                    if (TweakStore.isDisabled(page.panel.id, meta.path)) return;
+                    if (import_TweakStore6.TweakStore.isDisabled(page.panel.id, meta.path)) return;
                     try {
                       e.currentTarget.setPointerCapture(e.pointerId);
                     } catch {
@@ -6965,7 +5350,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                     dialFromPointer(e, meta);
                   },
                   onPointerMove: (e) => {
-                    if (!TweakStore.isDisabled(page.panel.id, meta.path) && dragPath === meta.path) dialFromPointer(e, meta);
+                    if (!import_TweakStore6.TweakStore.isDisabled(page.panel.id, meta.path) && dragPath === meta.path) dialFromPointer(e, meta);
                   },
                   onPointerUp: () => {
                     setDragPath(null);
@@ -7058,7 +5443,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             ]
           }
         ),
-        color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(MoveHueGrid, { color, disabled: TweakStore.isDisabled(page.panel.id, colorMeta.path), mirror: true }) : Array.from({ length: PAD_ROWS }, (_, row) => row).filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0)).map((row) => /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { className: "tweakers-move-pads", children: visibleCols.map((col) => {
+        color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(MoveHueGrid, { color, disabled: import_TweakStore6.TweakStore.isDisabled(page.panel.id, colorMeta.path), mirror: true }) : Array.from({ length: PAD_ROWS }, (_, row) => row).filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0)).map((row) => /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { className: "tweakers-move-pads", children: visibleCols.map((col) => {
           const appRow = appRowAt(row);
           if (appRow !== null) {
             const cell = padAt(col, appRow);
@@ -7103,7 +5488,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                     -1,
                     bendRef.current.curve + (bendRef.current.y - e.clientY) / 60
                   ));
-                  ModulationStore.updateSlotParams(modSettings.index, { [envCurveParam(bendStage)]: v });
+                  import_ModulationStore2.ModulationStore.updateSlotParams(modSettings.index, { [envCurveParam(bendStage)]: v });
                 },
                 onPointerUp: () => {
                   setBendHeld(null);
@@ -7126,7 +5511,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 className: "tweakers-move-pad",
                 "data-kind": "toggle",
                 "data-on": !!values[meta.path],
-                onClick: () => TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path]),
+                onClick: () => import_TweakStore6.TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path]),
                 children: /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(MovePadToggleBody, { label: meta.label })
               },
               meta.path
@@ -7138,7 +5523,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
               {
                 className: "tweakers-move-pad",
                 "data-kind": "action",
-                onClick: () => TweakStore.triggerAction(page.panel.id, meta.path),
+                onClick: () => import_TweakStore6.TweakStore.triggerAction(page.panel.id, meta.path),
                 children: /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(MovePadActionBody, { label: meta.label })
               },
               meta.path
@@ -7185,11 +5570,59 @@ function MoveCurveComposer({
       direction,
       gap,
       selectedIndex: selected,
-      getPhase: () => ModulationStore.getSlotPhase(index),
-      onSelect: (i) => ModulationStore.updateSlotParams(index, { selected: i }),
-      onSegmentsChange: (next) => ModulationStore.updateSlotParams(index, { clips: next }),
+      getPhase: () => import_ModulationStore2.ModulationStore.getSlotPhase(index),
+      onSelect: (i) => import_ModulationStore2.ModulationStore.updateSlotParams(index, { selected: i }),
+      onSegmentsChange: (next) => import_ModulationStore2.ModulationStore.updateSlotParams(index, { clips: next }),
       width: MOVE_CURVE_WIDTH,
       height: MOVE_CURVE_HEIGHT
+    }
+  ) });
+}
+function MovePresetScreen({ view }) {
+  const items = MovePresetStore.items(view.panelId);
+  const rows = items.length ? items.map((i) => ({ value: i.id, label: i.label })) : [{ value: "", label: "No presets", muted: true }];
+  return /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
+    "div",
+    {
+      className: "tweakers-move-preset-screen",
+      "data-open": view.phase === "open" || void 0,
+      "data-chosen": view.chosen ? true : void 0,
+      "data-comparing": view.comparing || void 0,
+      onWheel: (e) => {
+        e.preventDefault();
+        MovePresetStore.scroll(e.deltaY > 0 ? 1 : -1);
+      },
+      children: /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
+        ListScreen,
+        {
+          items: rows,
+          value: view.chosen ?? view.cursor ?? void 0,
+          onSelect: (id) => {
+            if (id) MovePresetStore.choose(id);
+          }
+        }
+      )
+    }
+  );
+}
+function MovePresetSaveInput({ suggested }) {
+  const inputRef = (0, import_react5.useRef)(null);
+  (0, import_react5.useEffect)(() => {
+    inputRef.current?.select();
+  }, []);
+  return /* @__PURE__ */ (0, import_jsx_runtime7.jsx)("div", { className: "tweakers-move-preset-save", children: /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
+    "input",
+    {
+      ref: inputRef,
+      className: "tweakers-move-preset-save-input",
+      defaultValue: suggested,
+      autoFocus: true,
+      spellCheck: false,
+      onKeyDown: (e) => {
+        if (e.key === "Enter") MovePresetStore.commitSave(e.currentTarget.value);
+        else if (e.key === "Escape") MovePresetStore.cancelSave();
+      },
+      onBlur: () => MovePresetStore.cancelSave()
     }
   ) });
 }
@@ -7197,10 +5630,10 @@ var SCOPE_SAMPLES = 120;
 function MoveScope({ index }) {
   const ref = (0, import_react5.useRef)(null);
   (0, import_react5.useEffect)(() => {
-    const now = (ModulationStore.getSignal(index) + 1) / 2;
+    const now = (import_ModulationStore2.ModulationStore.getSignal(index) + 1) / 2;
     const pts = Array(SCOPE_SAMPLES).fill(now);
     let raf = requestAnimationFrame(function tick() {
-      pts.push((ModulationStore.getSignal(index) + 1) / 2);
+      pts.push((import_ModulationStore2.ModulationStore.getSignal(index) + 1) / 2);
       pts.shift();
       ref.current?.setAttribute("d", previewPathData(pts));
       raf = requestAnimationFrame(tick);
@@ -7225,10 +5658,10 @@ function MoveModCircle({ slot }) {
   (0, import_react5.useEffect)(() => {
     if (typeof window === "undefined") return;
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    return ModulationStore.subscribeFrames(() => {
+    return import_ModulationStore2.ModulationStore.subscribeFrames(() => {
       const el = dotRef.current;
       if (!el) return;
-      const level = (ModulationStore.getSignal(slot.index) + 1) / 2;
+      const level = (import_ModulationStore2.ModulationStore.getSignal(slot.index) + 1) / 2;
       el.style.transform = `scale(${(0.66 + 0.34 * level).toFixed(3)})`;
     });
   }, [slot.index]);
@@ -7243,10 +5676,10 @@ function MoveModCircle({ slot }) {
       },
       onPointerUp: () => {
         const tapped = Date.now() - pressAt.current < TAP_MS;
-        if (tapped && ModulationStore.assignFromStep(slot.index).action !== "none") return;
-        const open = ModulationStore.getSettings();
-        if (tapped && open && open.index === slot.index) ModulationStore.closeSettings();
-        else ModulationStore.openSettings(slot.index);
+        if (tapped && import_ModulationStore2.ModulationStore.assignFromStep(slot.index).action !== "none") return;
+        const open = import_ModulationStore2.ModulationStore.getSettings();
+        if (tapped && open && open.index === slot.index) import_ModulationStore2.ModulationStore.closeSettings();
+        else import_ModulationStore2.ModulationStore.openSettings(slot.index);
       },
       children: /* @__PURE__ */ (0, import_jsx_runtime7.jsx)(
         "span",
@@ -8013,6 +6446,63 @@ function MoveWaveform({
   );
 }
 
+// src/index.ts
+var import_ModulationStore3 = require("tweakers/modulation-store");
+
+// src/timeline-core.ts
+var import_TweakStore7 = require("tweakers/store");
+
+// src/store/persist.ts
+var STORAGE_VERSION = "v1";
+function resolvePersistTarget(kind, id, persist) {
+  if (!persist) return null;
+  const config = persist === true ? {} : persist;
+  const base = config.key ?? id;
+  if (!base) return null;
+  return {
+    key: `tweakers:${STORAGE_VERSION}:${kind}:${base}`,
+    storage: config.storage ?? "localStorage"
+  };
+}
+function getStorage(name) {
+  try {
+    if (typeof window === "undefined") return null;
+    return name === "sessionStorage" ? window.sessionStorage : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+function loadPersisted(target) {
+  if (!target) return null;
+  try {
+    const storage = getStorage(target.storage);
+    if (!storage) return null;
+    const raw = storage.getItem(target.key);
+    if (raw == null) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+function savePersisted(target, value) {
+  if (!target) return;
+  try {
+    const storage = getStorage(target.storage);
+    if (!storage) return;
+    storage.setItem(target.key, JSON.stringify(value));
+  } catch {
+  }
+}
+function clearPersisted(target) {
+  if (!target) return;
+  try {
+    const storage = getStorage(target.storage);
+    if (!storage) return;
+    storage.removeItem(target.key);
+  } catch {
+  }
+}
+
 // src/store/TimelineStore.ts
 var MIN_LOOP_REGION = 0.02;
 function loopSpan(duration, loopStart, loopEnd) {
@@ -8278,6 +6768,9 @@ function formatClock(time, tenths = false) {
   const secondsText = tenths ? seconds.toFixed(1).padStart(4, "0") : String(Math.floor(seconds)).padStart(2, "0");
   return `${String(minutes).padStart(2, "0")}:${secondsText}`;
 }
+
+// src/index.ts
+var import_TweakStore8 = require("tweakers/store");
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   ADSR_DEF,
@@ -8321,8 +6814,10 @@ function formatClock(time, tenths = false) {
   MOVE_DIALS,
   MOVE_FUNCTION_BUTTONS,
   MOVE_FUNCTION_MANIFEST,
+  MOVE_JOG_CLICK_EVENT,
   MOVE_JOG_EVENT,
   MOVE_LATCH_EVENT,
+  MOVE_MUTE_EVENT,
   MOVE_OVERRIDE_EVENT,
   MOVE_PADS,
   MOVE_PAD_LIBRARY,
@@ -8345,6 +6840,7 @@ function formatClock(time, tenths = false) {
   MovePadToggleBody,
   MovePadValueBody,
   MovePanel,
+  MovePresetStore,
   MoveSlotColorBody,
   MoveSlotDefaultBody,
   MoveSlotDialBody,

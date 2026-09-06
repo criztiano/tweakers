@@ -1,11 +1,16 @@
 import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { TweakStore, ModulationStore, MoveFunctions, MoveColorStore, sampleTransfer, movePoint } from 'tweakers';
+import { TweakStore, ModulationStore, MoveFunctions, MoveColorStore, MovePresetStore, sampleTransfer, movePoint } from 'tweakers';
 import 'tweakers/styles.css';
 import { Library } from './Library';
 import { registerLibraryPanel } from './panel';
+import { bindKeyboardHardware } from './hardware';
 
 registerLibraryPanel();
+
+// Handles for poking the live stores from the console — a library is a place
+// to try things, and the stores are half of what there is to try.
+(window as unknown as Record<string, unknown>).__kit = { TweakStore, ModulationStore, MoveFunctions, MovePresetStore };
 
 /**
  * The hardware, when it is there. The bridge kit is served by the `move`
@@ -35,6 +40,9 @@ function MoveBridge() {
       .catch((error) => { if (!cancelled) console.warn('Move bridge could not connect', error); });
     return () => { cancelled = true; unbind?.(); };
   }, []);
+  // The Move's buttons on a keyboard, so every gesture in the library can be
+  // tried with nothing plugged in — the same events the bridge sends.
+  useEffect(bindKeyboardHardware, []);
   return null;
 }
 

@@ -1373,6 +1373,20 @@ class TweakStoreClass {
     if (changed) this.notifyControlState(panelId);
   }
 
+  /**
+   * Write values into the panel without recording them anywhere — not the
+   * active preset, not the base values, not persistence. The Move preset
+   * navigator's preview walks the list with this: the sound changes, the
+   * record doesn't, so browsing can never rewrite a saved preset.
+   */
+  previewValues(panelId: string, values: Record<string, TweakValue>): void {
+    const panel = this.panels.get(panelId);
+    if (!panel) return;
+    this.replaceValues(panel, values);
+    this.snapshots.set(panelId, { ...panel.values });
+    this.notify(panelId);
+  }
+
   savePreset(panelId: string, name: string): string {
     const panel = this.panels.get(panelId);
     if (!panel) throw new Error(`Panel ${panelId} not found`);

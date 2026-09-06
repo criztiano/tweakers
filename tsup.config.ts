@@ -42,6 +42,24 @@ export default defineConfig([
     splitting: false,
     sourcemap: true,
     external: ['react', 'react-dom', 'motion'],
+    // The Move surface must live on the same shared stores the sidebar
+    // package (dialkit) uses — an inlined copy is a second, desynced world
+    // where the panel sees no panels and presets land nowhere.
+    esbuildPlugins: [
+      {
+        name: 'externalize-shared-stores',
+        setup(build) {
+          build.onResolve({ filter: /store\/TweakStore$/ }, () => ({
+            path: 'tweakers/store',
+            external: true,
+          }));
+          build.onResolve({ filter: /store\/ModulationStore$/ }, () => ({
+            path: 'tweakers/modulation-store',
+            external: true,
+          }));
+        },
+      },
+    ],
     esbuildOptions(options) {
       options.banner = {
         js: '"use client";',

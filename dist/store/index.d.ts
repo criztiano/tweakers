@@ -873,6 +873,13 @@ declare class TweakStoreClass {
      * identity, because a per-render rebuild remakes the array every time.
      */
     syncCurveConfigs(panelId: string, config: TweakConfig): void;
+    /**
+     * Write values into the panel without recording them anywhere — not the
+     * active preset, not the base values, not persistence. The Move preset
+     * navigator's preview walks the list with this: the sound changes, the
+     * record doesn't, so browsing can never rewrite a saved preset.
+     */
+    previewValues(panelId: string, values: Record<string, TweakValue>): void;
     savePreset(panelId: string, name: string): string;
     loadPreset(panelId: string, presetId: string): void;
     deletePreset(panelId: string, presetId: string): void;
