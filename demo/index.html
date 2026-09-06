@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>tweakers — Move preset navigator demo</title>
+    <style>
+      body { margin: 0; min-height: 100vh; background: #1a1a1a; color: #dee3c9; font-family: system-ui, sans-serif; }
+      .hint { padding: 40px; line-height: 1.7; max-width: 560px; }
+      .hint kbd { background: #333; border-radius: 4px; padding: 1px 7px; font-family: inherit; }
+    </style>
+  </head>
+  <body>
+    <div class="hint">
+      <h2>Move preset navigator</h2>
+      <p><kbd>M</kbd> — the Menu button. It opens the preset screen at the left of the slots.<br />
+      <kbd>Shift</kbd>+<kbd>M</kbd> — the Menu long press. It opens the save input.</p>
+      <p>On the open screen: the mouse wheel or arrows walk the list, and every row you rest on plays right away — watch the sliders. <kbd>Enter</kbd> (the jog click) or a row click keeps it. <kbd>Backspace</kbd> (the Back button) or an <kbd>M</kbd> tap puts your old settings back and dismisses. <b>Hold</b> <kbd>C</kbd> (the Mute button) to hear your old settings while you browse; release to return to the preview.</p>
+      <p>Some presets are saved for you already. Turn a slot, save your own, and load one back.</p>
+    </div>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>

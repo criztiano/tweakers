@@ -1388,6 +1388,13 @@ declare class TweakStoreClass {
      * identity, because a per-render rebuild remakes the array every time.
      */
     syncCurveConfigs(panelId: string, config: TweakConfig): void;
+    /**
+     * Write values into the panel without recording them anywhere — not the
+     * active preset, not the base values, not persistence. The Move preset
+     * navigator's preview walks the list with this: the sound changes, the
+     * record doesn't, so browsing can never rewrite a saved preset.
+     */
+    previewValues(panelId: string, values: Record<string, TweakValue>): void;
     savePreset(panelId: string, name: string): string;
     loadPreset(panelId: string, presetId: string): void;
     deletePreset(panelId: string, presetId: string): void;
@@ -2582,6 +2589,12 @@ interface MoveFunctionPress {
     name: MoveFunctionButton;
     /** True when Shift was held on the hardware — a second-function layer. */
     shift: boolean;
+    /**
+     * True when the kit read the press as a long press. Older kits never set
+     * it, so a handler treating hold as a second function should accept
+     * Shift as the equivalent trigger.
+     */
+    hold?: boolean;
 }
 type MoveFunctionHandler = (press: MoveFunctionPress) => void;
 interface MoveFunctionOptions {
@@ -2605,6 +2618,12 @@ declare class MoveFunctionsClass {
     attach(name: MoveFunctionButton, handler: MoveFunctionHandler, options?: MoveFunctionOptions): () => void;
     /** The attached button names — what the kit claims on the hardware. */
     list(): MoveFunctionButton[];
+    /**
+     * Attach on top of whatever is there; the returned release puts the
+     * previous attachment back. For overlays that borrow a button while they
+     * are open — the preset navigator takes Back, and hands it back on close.
+     */
+    push(name: MoveFunctionButton, handler: MoveFunctionHandler, options?: MoveFunctionOptions): () => void;
     /** The screen name an attachment carries, if any. */
     label(name: MoveFunctionButton): string | undefined;
     /** Run the action attached to a button, if any. Called by the kit per press. */
@@ -3482,4 +3501,97 @@ declare class MoveColorStoreClass {
 }
 declare const MoveColorStore: MoveColorStoreClass;
 
-export { ADSR_DEF, ADSR_STAGE_MAX, ANGLE_DEAD_ZONE_PX, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AxisSpec, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, type ChipOption, type ChipsConfig, type ColorConfig, type ColorFormat, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRANSFER, DEFAULT_TRIGGER_STEPS, type DriverDirection, ENV_BEND_STAGES, type EasingConfig, type EnvStage, FILTER_DB_CEIL, FILTER_DB_FLOOR, type FileConfig, type FilterAxis, type FilterAxisConfig, type FilterConfig, type FilterResponse, type FilterShapeType, type FilterValue, type GalleryConfig, type GalleryItem, type GradientConfig, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_COLOR_HUES, MOVE_COLOR_STEPS, MOVE_COLOR_WHEEL, MOVE_DIALS, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_PADS, MOVE_SLOT_LIBRARY, MOVE_SPECIAL_BUTTONS, MOVE_TRACKS, MOVE_WAVEFORM_STEPS, type ModControlMeta, type ModPageLayout, type ModPageSlot, ModRing, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, MoveActionButton, type MoveActionButtonProps, MoveColorStore, type MoveColorView, type MoveFunctionButton, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, type MoveNumericDrawing, type MovePadCell, type MovePage, MovePanel, type MovePlaybackMode, type MoveScreenList, type MoveSelectVisual, type MoveSliderVisual, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotEnvBody, MoveSlotFilterBody, MoveSlotGlyph, type MoveSlotKind, MoveSlotNumericBody, MoveSlotPlaybackDrawing, MoveSlotRangeBody, MoveSlotReadout, MoveSlotScopeBody, MoveSlotShape, MoveSlotToggleBody, MoveSlotXYBody, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, type MoveVisual, MoveVolumeDisplay, type MoveVolumeDisplayState, MoveWaveform, type MoveWaveformProps, MoveWaveformStore, type MoveWaveformVariant, type MoveWaveformView, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SpringifyOptions, type SwatchConfig, type SwatchOption, TAB_PATH, TRANSFER_MAX_POINTS, TRANSFER_MIN_GAP, type TextConfig, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineMeta, TimelineStore, type TimelineTransport, type TransferPoint, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakTheme, type TweakValue, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, angleFromPointer, applyDetentAxis, applyModulation, arcPath, bearingToValue, buildModMovePage, buildMovePages, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultFilterResponse, defaultListItemParams, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, dialOrigin, dialSpan, displayHex, enumOptionIcon, envCurveParam, envelopeJoints, envelopePoints, filterHand01, filterHandValue, filterResponsePath, filterShapePath, filterShapeResponse, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, insertPoint, invertY, isIdentityTransfer, isOutsideSpan, isSpanContinuation, lfoSyncedHz, listModTypes, loopFromStep, loopSteps, modColor, modKey, modPageLayout, modPageWidth, modRingArc, moveAppPadRow, moveNumericDrawing, movePadRows, movePlaybackMode, movePoint, moveSlotKind, moveStop, moveVisualReading, defaultView as moveWaveformDefaultView, moveWheelSlot, nearestHandle, nearestPoint, normToValue, normalizeAngle, normalizeCurveMarkers, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeFilterValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeTransfer, normalizeValue, normalizeXYDial, nudge, nudgeAngle, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, rampCss, readComposition, redistributeWeight, registerModType, removeDriver, removePoint, removeSegment, removeStop, resolveAxis, resolveFilterAxis, rgbToHsl, rgbToHsv, rgbToOklch, sampleTransfer, scrubBy, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapAngle, snapToStep, splitSegment, springify, stepPosition, transferLut, triggerLevels, triggersCrossed, valueFromPoint, valueToBearing, valueToNorm, valueToPercent, visibleColumns, visibleModControls, zoomBy };
+/** A row of the preset screen — one shape for built-in and provider presets. */
+interface MovePresetItem {
+    id: string;
+    label: string;
+}
+/**
+ * The screen's life runs in three beats: `enter` is the mounted-but-still
+ * frame the entrance transition starts from, `open` is the working state,
+ * `closing` runs the exit transition before the view unmounts.
+ */
+type MovePresetPhase = 'enter' | 'open' | 'closing';
+interface MovePresetView {
+    panelId: string;
+    phase: MovePresetPhase;
+    /** The row the wheel is resting on — previewed live while browsing. */
+    cursor: string | null;
+    /** The confirmed row — it turns green, lingers, then the screen dismisses. */
+    chosen: string | null;
+    /** True while Menu is held down: the panel plays the pre-navigator sound. */
+    comparing: boolean;
+}
+interface MovePresetSave {
+    panelId: string;
+    suggested: string;
+}
+/**
+ * The Move's preset navigator, behind the hardware Menu button. A press
+ * opens the big list screen beside the slots; the wheel walks it, and each
+ * row it rests on is previewed live — the panel plays the preset while you
+ * browse. A click or the jog click confirms and keeps it; Back (or a Menu
+ * tap) puts everything back the way it was; holding Menu compares the
+ * previewed sound with the one you came in with. A Menu long press — or
+ * Shift+Menu — opens the floating save input above the panel.
+ *
+ * Preview writes through `TweakStore.previewValues`, which records nothing:
+ * browsing can never rewrite a saved preset. Heavyweight hosts can turn the
+ * live preview off with `setPreviewEnabled(false)` — then browsing only
+ * moves the cursor and the confirm click does the loading. With a host
+ * `PresetProvider` installed the store cannot see values at all, so preview,
+ * compare and revert are off and selection routes through the provider.
+ */
+declare class MovePresetStoreClass {
+    private view;
+    private saving;
+    /** The panel's values (and active preset) as they were at open — the
+     *  state Back restores and the compare hold plays. Null in provider mode. */
+    private original;
+    private previewEnabled;
+    private version;
+    private listeners;
+    private timers;
+    getView: () => MovePresetView | null;
+    getSaving: () => MovePresetSave | null;
+    getVersion: () => number;
+    subscribe: (fn: () => void) => (() => void);
+    private notify;
+    private later;
+    private clearTimers;
+    /** Turn the browse-time live preview off (and back on) for heavy hosts. */
+    setPreviewEnabled(on: boolean): void;
+    isPreviewEnabled(): boolean;
+    /** The panel's presets as screen rows — provider list when one is set. */
+    items(panelId: string): MovePresetItem[];
+    /** Play a row's values without recording them — the browsing preview. */
+    private applyPreview;
+    open(panelId: string): void;
+    close(): void;
+    /**
+     * Put everything back and dismiss: the pre-navigator values return, the
+     * previewed ones evaporate. Back's action, and a Menu tap on an open
+     * screen. After a confirm there is nothing to take back — it's a no-op.
+     */
+    cancel(): void;
+    toggle(panelId: string): void;
+    /** Walk the cursor by wheel detents — each rest is previewed live. */
+    scroll(delta: number): void;
+    /** Menu held down: play the pre-navigator sound for as long as it's held. */
+    compareStart(): void;
+    /** Menu released: back to the previewed row. */
+    compareEnd(): void;
+    /**
+     * Confirm a row and keep it: the preset loads for real (active preset,
+     * persistence), the row reads green for a beat, then the screen dismisses.
+     */
+    choose(id: string): void;
+    /** Confirm the cursor's row — the jog-click path. */
+    confirm(): void;
+    beginSave(panelId: string): void;
+    cancelSave(): void;
+    commitSave(name: string): void;
+}
+declare const MovePresetStore: MovePresetStoreClass;
+
+export { ADSR_DEF, ADSR_STAGE_MAX, ANGLE_DEAD_ZONE_PX, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AxisSpec, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, type ChipOption, type ChipsConfig, type ColorConfig, type ColorFormat, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRANSFER, DEFAULT_TRIGGER_STEPS, type DriverDirection, ENV_BEND_STAGES, type EasingConfig, type EnvStage, FILTER_DB_CEIL, FILTER_DB_FLOOR, type FileConfig, type FilterAxis, type FilterAxisConfig, type FilterConfig, type FilterResponse, type FilterShapeType, type FilterValue, type GalleryConfig, type GalleryItem, type GradientConfig, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_COLOR_HUES, MOVE_COLOR_STEPS, MOVE_COLOR_WHEEL, MOVE_DIALS, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_PADS, MOVE_SLOT_LIBRARY, MOVE_SPECIAL_BUTTONS, MOVE_TRACKS, MOVE_WAVEFORM_STEPS, type ModControlMeta, type ModPageLayout, type ModPageSlot, ModRing, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, MoveActionButton, type MoveActionButtonProps, MoveColorStore, type MoveColorView, type MoveFunctionButton, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, type MoveNumericDrawing, type MovePadCell, type MovePage, MovePanel, type MovePlaybackMode, type MovePresetItem, type MovePresetPhase, type MovePresetSave, MovePresetStore, type MovePresetView, type MoveScreenList, type MoveSelectVisual, type MoveSliderVisual, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotEnvBody, MoveSlotFilterBody, MoveSlotGlyph, type MoveSlotKind, MoveSlotNumericBody, MoveSlotPlaybackDrawing, MoveSlotRangeBody, MoveSlotReadout, MoveSlotScopeBody, MoveSlotShape, MoveSlotToggleBody, MoveSlotXYBody, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, type MoveVisual, MoveVolumeDisplay, type MoveVolumeDisplayState, MoveWaveform, type MoveWaveformProps, MoveWaveformStore, type MoveWaveformVariant, type MoveWaveformView, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SpringifyOptions, type SwatchConfig, type SwatchOption, TAB_PATH, TRANSFER_MAX_POINTS, TRANSFER_MIN_GAP, type TextConfig, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineMeta, TimelineStore, type TimelineTransport, type TransferPoint, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakTheme, type TweakValue, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, angleFromPointer, applyDetentAxis, applyModulation, arcPath, bearingToValue, buildModMovePage, buildMovePages, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, colorAtPosition, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultFilterResponse, defaultListItemParams, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, dialOrigin, dialSpan, displayHex, enumOptionIcon, envCurveParam, envelopeJoints, envelopePoints, filterHand01, filterHandValue, filterResponsePath, filterShapePath, filterShapeResponse, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, insertPoint, invertY, isIdentityTransfer, isOutsideSpan, isSpanContinuation, lfoSyncedHz, listModTypes, loopFromStep, loopSteps, modColor, modKey, modPageLayout, modPageWidth, modRingArc, moveAppPadRow, moveNumericDrawing, movePadRows, movePlaybackMode, movePoint, moveSlotKind, moveStop, moveVisualReading, defaultView as moveWaveformDefaultView, moveWheelSlot, nearestHandle, nearestPoint, normToValue, normalizeAngle, normalizeCurveMarkers, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeFilterValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeTransfer, normalizeValue, normalizeXYDial, nudge, nudgeAngle, oklchToRgb, opacityPercent, orderRange, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, rampCss, readComposition, redistributeWeight, registerModType, removeDriver, removePoint, removeSegment, removeStop, resolveAxis, resolveFilterAxis, rgbToHsl, rgbToHsv, rgbToOklch, sampleTransfer, scrubBy, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapAngle, snapToStep, splitSegment, springify, stepPosition, transferLut, triggerLevels, triggersCrossed, valueFromPoint, valueToBearing, valueToNorm, valueToPercent, visibleColumns, visibleModControls, zoomBy };

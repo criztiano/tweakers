@@ -63,6 +63,12 @@ export interface MoveFunctionPress {
   name: MoveFunctionButton;
   /** True when Shift was held on the hardware — a second-function layer. */
   shift: boolean;
+  /**
+   * True when the kit read the press as a long press. Older kits never set
+   * it, so a handler treating hold as a second function should accept
+   * Shift as the equivalent trigger.
+   */
+  hold?: boolean;
 }
 
 export type MoveFunctionHandler = (press: MoveFunctionPress) => void;
@@ -111,6 +117,22 @@ class MoveFunctionsClass {
     return [...this.handlers.keys()];
   }
 
+  /**
+   * Attach on top of whatever is there; the returned release puts the
+   * previous attachment back. For overlays that borrow a button while they
+   * are open — the preset navigator takes Back, and hands it back on close.
+   */
+  push(name: MoveFunctionButton, handler: MoveFunctionHandler, options?: MoveFunctionOptions): () => void {
+    const prevHandler = this.handlers.get(name);
+    const prevLabel = this.labels.get(name);
+    const detach = this.attach(name, handler, options);
+    return () => {
+      if (this.handlers.get(name) !== handler) return; // someone else took it since
+      detach();
+      if (prevHandler) this.attach(name, prevHandler, prevLabel != null ? { label: prevLabel } : undefined);
+    };
+  }
+
   /** The screen name an attachment carries, if any. */
   label(name: MoveFunctionButton): string | undefined {
     return this.labels.get(name);
@@ -118,7 +140,7 @@ class MoveFunctionsClass {
 
   /** Run the action attached to a button, if any. Called by the kit per press. */
   run(name: MoveFunctionButton, press?: Partial<MoveFunctionPress>): void {
-    const full: MoveFunctionPress = { name, shift: !!press?.shift };
+    const full: MoveFunctionPress = { name, shift: !!press?.shift, hold: !!press?.hold };
     this.handlers.get(name)?.(full);
     for (const l of this.runListeners) l(name, full);
   }

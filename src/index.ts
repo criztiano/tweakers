@@ -288,3 +288,9 @@ export type {
 
 export { MoveColorStore, MOVE_COLOR_WHEEL, MOVE_COLOR_HUES, MOVE_COLOR_STEPS, moveWheelSlot } from './move-color';
 export type { MoveColorView } from './move-color';
+
+// The preset navigator behind the hardware Menu button — the store the
+// bridge kit drives (scroll on wheel turns, confirm on jog click,
+// beginSave on a long press).
+export { MovePresetStore } from './move-presets';
+export type { MovePresetItem, MovePresetView, MovePresetSave, MovePresetPhase } from './move-presets';
