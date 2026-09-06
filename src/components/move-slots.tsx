@@ -64,6 +64,7 @@ export type MoveSlotKind =
   | 'xy'
   | 'range'
   | 'filter'
+  | 'color'
   | 'transfer'
   | 'ramp'
   | 'dial'
@@ -82,6 +83,7 @@ export function moveSlotKind(
   meta: ControlMeta,
   opts: { enum?: boolean; shape?: string | null; glyph?: string | null; valueFirst?: boolean; value?: unknown; stage?: string | null } = {}
 ): MoveSlotKind {
+  if (meta.type === 'color') return 'color';
   if (meta.type === 'filter') return 'filter';
   if (opts.stage) return 'env';
   if (meta.type === 'toggle') return 'toggle';
@@ -468,6 +470,15 @@ export function MoveSlotFilterBody({
   );
 }
 
+/** Selected color over a transparency checker, with its current hue. */
+export function MoveSlotColorBody({ label, color, hue }: { label: string; color: string; hue: number }) {
+  return <>
+    <span className="tweakers-move-dial-head">{label}</span>
+    <span className="tweakers-move-color-swatch" aria-hidden="true"><span style={{ background: color }} /></span>
+    <span className="tweakers-move-color-reading">{Math.round(hue)}°</span>
+  </>;
+}
+
 /**
  * The 4-slot envelope's face, the filter's big sibling: the whole ADSR
  * drawn as one shape on a single display spanning all four stage columns,
@@ -563,9 +574,10 @@ export function MoveSlotToggleBody({ label, on }: { label: string; on: boolean }
  * The dictionary itself — every big-slot case the kit knows, named, with
  * the component that draws it. `value`, `icon`, `curve` and `enum` are
  * faces of shared bodies (the same markup, chosen by `moveSlotKind`);
- * every face is reusable; gesture ownership stays in MovePanel.
+ * every face is reusable; gestures stay with the interactive surface.
  */
 export const MOVE_SLOT_LIBRARY = {
+  color: { description: 'selected color; hue on the dial, luminosity on volume, tap to edit', component: MoveSlotColorBody },
   opacity: { description: 'overlapping circles showing transparency', component: MoveSlotNumericBody },
   blur: { description: 'pixel blur on a single filled circle', component: MoveSlotNumericBody },
   pan: { description: 'position between L, C and R references', component: MoveSlotNumericBody },
