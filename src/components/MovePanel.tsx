@@ -22,6 +22,9 @@ import { fineDragValue } from '../shortcut-utils';
 import { MoveVolumeDisplay, type MoveVolumeDisplayState } from '../move-volume';
 import { MoveColorStore } from '../move-color';
 import { MoveColorSlot, MoveColorDisplay, MoveHueGrid, MoveColorSteps } from './MoveColor';
+import { MoveFunctions } from '../move-functions';
+import { MovePresetStore, type MovePresetView } from '../move-presets';
+import { ListScreen } from './ListScreen';
 
 interface MovePanelProps {
   theme?: TweakTheme;
@@ -103,6 +106,15 @@ export const MOVE_LATCH_EVENT = 'move-tweakers:latch';
 export const MOVE_PAGE_EVENT = 'move-tweakers:page';
 /** Out: `{ pageId }` — a screen track tap, for the kit to switch the hardware. */
 export const MOVE_PAGE_SELECT_EVENT = 'move-tweakers:page-select';
+/** In, cancelable: `{ delta, shift }` — a wheel turn. An open preset
+ *  navigator consumes it (preventDefault), else the kit's waveform zooms. */
+export const MOVE_JOG_EVENT = 'move-tweakers:jog';
+/** In, cancelable: `{ shift }` — the wheel pressed. Same consumption rule. */
+export const MOVE_JOG_CLICK_EVENT = 'move-tweakers:jog-click';
+/** In, cancelable: `{ pressed, shift }` — the Mute button's raw press and
+ *  release. An open preset navigator consumes them: holding Mute plays the
+ *  pre-navigator sound to compare. Unconsumed, Mute stays the app's. */
+export const MOVE_MUTE_EVENT = 'move-tweakers:mute';
 
 /**
  * The Move's control surface, laid out to Cri's Figma spec (file
@@ -239,6 +251,78 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   useEffect(() => () => {
     if (MoveColorStore.getView()?.panelId === pageId) MoveColorStore.close();
   }, [pageId]);
+
+  // The preset navigator, behind the hardware Menu button: a press toggles
+  // the list screen beside the slots, a long press (or Shift+Menu) opens the
+  // floating save input. The store holds the open view — same contract as
+  // the colour wheel — and leaving the page takes both down with it.
+  useSyncExternalStore(MovePresetStore.subscribe, MovePresetStore.getVersion, () => 0);
+  const presetView = MovePresetStore.getView();
+  const presetSaving = MovePresetStore.getSaving();
+  const presetScreen = presetView?.panelId === pageId ? presetView : null;
+  const presetSave = presetSaving?.panelId === pageId ? presetSaving : null;
+  useEffect(() => {
+    if (!pageId) return;
+    return MoveFunctions.attach('menu', ({ shift, hold }) => {
+      if (shift || hold) MovePresetStore.beginSave(pageId);
+      else MovePresetStore.toggle(pageId);
+    }, { label: 'presets' });
+  }, [pageId]);
+  useEffect(() => () => {
+    if (MovePresetStore.getView()?.panelId === pageId) MovePresetStore.cancel();
+    if (MovePresetStore.getSaving()?.panelId === pageId) MovePresetStore.cancelSave();
+  }, [pageId]);
+  // While the navigator is open it borrows the Back button: Back puts the
+  // pre-navigator settings back and dismisses. Borrowing (push, not attach)
+  // lights the button on the hardware and returns it to the app on close.
+  const presetOpenPanel = presetScreen && presetScreen.phase !== 'closing' ? presetScreen.panelId : null;
+  useEffect(() => {
+    if (!presetOpenPanel) return;
+    return MoveFunctions.push('back', () => MovePresetStore.cancel(), { label: 'revert' });
+  }, [presetOpenPanel]);
+  // The hardware wheel, while the navigator is open: turns walk the list,
+  // the jog click confirms. Mute's raw presses arrive here too: holding it
+  // plays the pre-navigator sound to compare, released it lets the preview
+  // back. Consuming the cancelable events keeps them from the waveform
+  // zoom, the app's jog_click action, and the app's own mute action.
+  useEffect(() => {
+    const openView = () => {
+      const view = MovePresetStore.getView();
+      return view && view.phase !== 'closing' ? view : null;
+    };
+    const onJog = (e: Event) => {
+      if (!openView()) return;
+      e.preventDefault();
+      MovePresetStore.scroll(Number((e as CustomEvent).detail?.delta) || 0);
+    };
+    const onJogClick = (e: Event) => {
+      if (!openView()) return;
+      e.preventDefault();
+      MovePresetStore.confirm();
+    };
+    let muteTaken = false;
+    const onMute = (e: Event) => {
+      if ((e as CustomEvent).detail?.pressed) {
+        if (!openView() || MovePresetStore.getSaving()) return;
+        e.preventDefault();
+        muteTaken = true;
+        MovePresetStore.compareStart();
+      } else {
+        if (!muteTaken) return; // we never took the press
+        e.preventDefault();
+        muteTaken = false;
+        MovePresetStore.compareEnd();
+      }
+    };
+    window.addEventListener(MOVE_JOG_EVENT, onJog);
+    window.addEventListener(MOVE_JOG_CLICK_EVENT, onJogClick);
+    window.addEventListener(MOVE_MUTE_EVENT, onMute);
+    return () => {
+      window.removeEventListener(MOVE_JOG_EVENT, onJog);
+      window.removeEventListener(MOVE_JOG_CLICK_EVENT, onJogClick);
+      window.removeEventListener(MOVE_MUTE_EVENT, onMute);
+    };
+  }, []);
 
   // A curve modulator's page brings its composition with it: the composer
   // floats above the panel, and its selected clip is what the shape dials
@@ -662,8 +746,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     <div className="tweakers-root tweakers-move-root" data-theme={theme} data-dock={dock}>
       {/* While a composer floats above it the whole instrument comes forward,
           over the app's own panels — you are working in it. */}
-      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-overlay={composition || color ? true : undefined}>
+      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-overlay={composition || color || presetSave ? true : undefined}>
         {colorMeta && <MoveColorDisplay panelId={page.panel.id} meta={colorMeta} anchor={panelRef} theme={theme} />}
+        {presetSave && <MovePresetSaveInput suggested={presetSave.suggested} />}
         {composition && modSettings && (
           <MoveCurveComposer
             index={modSettings.index}
@@ -719,7 +804,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
             {headerCluster}
           </div>
 
-          {visibleCols.length > 0 && <div className="tweakers-move-grid">
+          {visibleCols.length > 0 && <div className="tweakers-move-grid" data-presets={presetScreen?.phase === 'open' || undefined}>
+            {presetScreen && <MovePresetScreen view={presetScreen} />}
             <div className="tweakers-move-dials">
               {visibleCols.map((i) => {
                 // A 2-slot dial's second column renders nothing of its own —
@@ -1411,6 +1497,68 @@ function MoveCurveComposer({
           ModulationStore.updateSlotParams(index, { clips: next as never })}
         width={MOVE_CURVE_WIDTH}
         height={MOVE_CURVE_HEIGHT}
+      />
+    </div>
+  );
+}
+
+/**
+ * The preset navigator's screen, at the slot cluster's left edge and its
+ * full height. The rows lead the way in: the cluster slides over first and
+ * the screen follows a 120ms stagger behind it (theme.css owns the beats);
+ * dismissal runs the same dance backwards. The wheel walks the cursor and
+ * every rest is previewed live; a click — or the hardware jog click —
+ * confirms and keeps it, Back (or a Menu tap) reverts, and a held Menu
+ * plays the pre-navigator sound to compare (the screen dims to say the
+ * list is not what's sounding). The confirmed row reads in the enter-pill
+ * green while the screen lingers, then it dismisses itself.
+ */
+function MovePresetScreen({ view }: { view: MovePresetView }) {
+  const items = MovePresetStore.items(view.panelId);
+  const rows = items.length
+    ? items.map((i) => ({ value: i.id, label: i.label }))
+    : [{ value: '', label: 'No presets', muted: true }];
+  return (
+    <div
+      className="tweakers-move-preset-screen"
+      data-open={view.phase === 'open' || undefined}
+      data-chosen={view.chosen ? true : undefined}
+      data-comparing={view.comparing || undefined}
+      onWheel={(e) => {
+        e.preventDefault();
+        MovePresetStore.scroll(e.deltaY > 0 ? 1 : -1);
+      }}
+    >
+      <ListScreen
+        items={rows}
+        value={view.chosen ?? view.cursor ?? undefined}
+        onSelect={(id) => { if (id) MovePresetStore.choose(id); }}
+      />
+    </div>
+  );
+}
+
+/**
+ * The save-a-preset input, floating centred above the panel like the curve
+ * composer does. Enter keeps the name, Escape — or clicking away — lets it
+ * go. The suggested "Preset N" arrives selected, so typing replaces it.
+ */
+function MovePresetSaveInput({ suggested }: { suggested: string }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { inputRef.current?.select(); }, []);
+  return (
+    <div className="tweakers-move-preset-save">
+      <input
+        ref={inputRef}
+        className="tweakers-move-preset-save-input"
+        defaultValue={suggested}
+        autoFocus
+        spellCheck={false}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') MovePresetStore.commitSave(e.currentTarget.value);
+          else if (e.key === 'Escape') MovePresetStore.cancelSave();
+        }}
+        onBlur={() => MovePresetStore.cancelSave()}
       />
     </div>
   );

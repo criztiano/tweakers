@@ -1656,6 +1656,93 @@
   fill-opacity: 0.45;
 }
 
+/* The preset navigator. The screen sits at the cluster's left edge at the
+   rows' full height; the whole cluster slides right to keep the ensemble
+   centred. The beats: opening, the rows move first and the screen follows
+   120ms behind; closing, the screen leads and the rows trail the same
+   120ms. */
+.tweakers-move-grid {
+  position: relative;
+  transition: transform 0.3s ease 0.12s;
+}
+
+.tweakers-move-grid[data-presets] {
+  transform: translateX(calc((var(--move-preset-w, 200px) + var(--move-preset-gap, 12px)) / 2));
+  transition-delay: 0s;
+}
+
+.tweakers-move-preset-screen {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: calc(100% + var(--move-preset-gap, 12px));
+  width: var(--move-preset-w, 200px);
+  opacity: 0;
+  transform: translateX(-24px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.tweakers-move-preset-screen[data-open] {
+  opacity: 1;
+  transform: none;
+  transition-delay: 0.12s;
+}
+
+.tweakers-move-preset-screen .tweakers-list-screen {
+  height: 100%;
+  max-height: none;
+}
+
+/* The confirmed row reads in the enter pill's green while the screen
+   lingers — the selection speaking before the dismissal. */
+.tweakers-move-preset-screen .tweakers-list-screen-label {
+  transition: opacity 0.12s, color 0.12s;
+}
+
+.tweakers-move-preset-screen[data-chosen] .tweakers-list-screen-row[data-selected] .tweakers-list-screen-label {
+  color: #52bd06;
+}
+
+/* Menu held — the panel is playing the pre-navigator sound, so the list
+   steps back to say it is not what's sounding right now. */
+.tweakers-move-preset-screen[data-comparing] {
+  opacity: 0.45;
+}
+
+/* The save-a-preset input, floating centred above the panel like the
+   curve composer's frame. */
+.tweakers-move-preset-save {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 12px;
+  border-radius: var(--move-radius);
+  background: var(--move-bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.tweakers-move-preset-save-input {
+  width: 220px;
+  padding: 6px 10px;
+  border: none;
+  outline: none;
+  border-radius: var(--move-radius-small);
+  background: #1e1e1e;
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  font-size: 16px;
+  line-height: 20px;
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-grid,
+  .tweakers-move-preset-screen {
+    transition: none;
+  }
+}
+
 .tweakers-move-pads {
   display: grid;
   grid-template-columns: repeat(var(--move-cols, 8), minmax(0, 1fr));
