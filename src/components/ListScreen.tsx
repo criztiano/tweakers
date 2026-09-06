@@ -68,11 +68,26 @@ export function ListScreen({
 
   useEffect(() => {
     const root = rootRef.current;
-    root?.querySelector('[data-selected]')?.scrollIntoView?.({ block: follow });
-    // `data-over-top` marks rows scrolled up out of sight, for hosts that
-    // soften the edge they went behind: an edge hiding nothing must stay
-    // crisp, or the first row reads as damaged instead of as the top.
-    root?.toggleAttribute?.('data-over-top', root.scrollTop > 1);
+    if (!root) return;
+
+    // `data-over-top` / `data-over-bottom` mark rows scrolled out of sight,
+    // for hosts that soften the edge they went behind: an edge hiding
+    // nothing must stay crisp, or the end of a list reads as damage.
+    const sync = () => {
+      root.querySelector('[data-selected]')?.scrollIntoView?.({ block: follow });
+      const end = root.scrollHeight - root.clientHeight;
+      root.toggleAttribute?.('data-over-top', root.scrollTop > 1);
+      root.toggleAttribute?.('data-over-bottom', root.scrollTop < end - 1);
+    };
+    sync();
+
+    // A host can resize the screen under the list — the Move slot grows one
+    // to the whole list while it is touched — which changes both what is
+    // hidden and where the middle is.
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(sync);
+    observer.observe(root);
+    return () => observer.disconnect();
   }, [value, follow, items.length]);
 
   const rootClassName = ['tweakers-list-screen', className].filter(Boolean).join(' ');

@@ -40,7 +40,7 @@ function renderSlot(
   const byClass = (className: string): ReactTestInstance[] =>
     renderer.root.findAll((n) => n.props.className === className);
   return {
-    list: () => renderer.root.findAll((n) => String(n.props.className ?? '').includes('tweakers-move-dial-list'))[0],
+    screen: () => byClass('tweakers-move-dial-screen')[0],
     rows: () => byClass('tweakers-list-screen-row'),
     labels: () => byClass('tweakers-list-screen-label').map((n) => n.props.children),
     caption: () => byClass('tweakers-move-dial-option'),
@@ -76,15 +76,20 @@ describe('the plain option slot (React)', () => {
     assert.equal(curve.caption()[0].props.children, 'Landscape');
   });
 
-  it('holds the pagination cells back until the list runs past the slot', () => {
+  it('leaves the pagination cells to the faces that name one option', () => {
+    // A list has the whole run on it; the cells would only repeat it.
     assert.equal(renderSlot().cells().length, 0);
-    assert.equal(renderSlot({ options: LONG }).cells().length, LONG.length);
-    // A picture names one option at a time, so it always needs the cells.
+    assert.equal(renderSlot({ options: LONG }).cells().length, 0);
     assert.equal(renderSlot({ glyph: 'arrow-right' }).cells().length, OPTIONS.length);
   });
 
-  it('softens the list edges only once it runs', () => {
-    assert.equal(String(renderSlot().list().props.className).includes('list-long'), false);
-    assert.equal(String(renderSlot({ options: LONG }).list().props.className).includes('list-long'), true);
+  it('grows on touch only when the run is longer than the slot holds', () => {
+    assert.equal(renderSlot().screen().props['data-grow'], undefined);
+    assert.equal(renderSlot({ options: LONG }).screen().props['data-grow'], true);
+    // The count is what the CSS measures the grown height from.
+    assert.equal(
+      renderSlot({ options: LONG }).screen().props.style['--move-list-count'],
+      LONG.length
+    );
   });
 });

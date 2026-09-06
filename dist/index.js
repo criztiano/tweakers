@@ -2532,6 +2532,7 @@ var ICON_PANEL = {
 var LUCIDE_ICONS = {
   /* directions and traversal */
   "arrow-right": ["M5 12h14", "m12 5 7 7-7 7"],
+  "arrow-left": ["M19 12H5", "m12 19-7-7 7-7"],
   "arrow-left-right": ["M8 3 4 7l4 4", "M4 7h16", "m16 21 4-4-4-4", "M20 17H4"],
   "fold-horizontal": [
     "M2 12h6",
@@ -3685,10 +3686,12 @@ var MOD_COLORS = [
 ];
 var modColor = (index) => MOD_COLORS[(index % MOD_SLOTS + MOD_SLOTS) % MOD_SLOTS];
 var MOD_PAGE_DIALS = 8;
-var isModDial = (c) => !c.chip && (c.type === "select" || c.type === "slider" || c.type === "xy" || c.type === "range" || c.type === "number" && c.min != null && c.max != null);
+var isModDial = (c) => !c.chip && (c.scope || c.type === "toggle" && c.big || c.type === "select" || c.type === "slider" || c.type === "xy" || c.type === "range" || c.type === "number" && c.min != null && c.max != null);
 var slotOf = (c) => ({
   path: c.path,
   ...c.drawsPreview ? { preview: true } : {},
+  ...c.envStage ? { stage: c.envStage } : {},
+  ...c.scope ? { scope: true } : {},
   ...c.cycle ? { cycle: true } : {}
 });
 function modPageLayout(controls, params = {}) {
@@ -3715,6 +3718,13 @@ function registerModType(def) {
 }
 var getModType = (type) => registry.get(type);
 var listModTypes = () => [...registry.values()];
+var modPageWidth = () => Math.min(
+  MOD_PAGE_DIALS,
+  1 + listModTypes().reduce(
+    (w, def) => Math.max(w, modPageLayout(def.controls, def.defaults).dials.length),
+    0
+  )
+);
 var MOD_SETTINGS_PANEL = "mod-settings";
 var modKey = (panelId, path) => `${panelId}\0${path}`;
 var clamp5 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -3750,24 +3760,28 @@ function lfoSyncedHz(division, bpm) {
   const i = clamp5(Math.round(Number(division) || 0), 0, LFO_SYNC_DIVISIONS.length - 1);
   return (Number(bpm) || 120) / 60 / LFO_SYNC_DIVISIONS[i].beats;
 }
+var previewNoise = (i, salt = 0) => {
+  const x = Math.sin((i + 1) * 12.9898 + salt * 78.233) * 43758.5453;
+  return (x - Math.floor(x)) * 2 - 1;
+};
+function previewSlew(values, smooth) {
+  const s = clamp014(smooth);
+  if (s <= 0 || values.length < 2) return values;
+  const k = 1 - Math.exp(-(1 / values.length) / (s * s * 0.4 + 1e-6));
+  let out = values[0];
+  return values.map((v, i) => i === 0 ? out : out = out + (v - out) * k);
+}
 var LFO_DEF = {
   type: "lfo",
   label: "LFO",
   defaults: { rate: 1, division: 4, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false },
   controls: [
-    { type: "slider", path: "rate", label: "Rate", min: 0.02, max: 20, step: 0.01, unit: "Hz" },
+    { type: "slider", path: "rate", label: "Rate", min: 0.02, max: 20, step: 0.01, unit: "Hz", scope: true },
     { type: "toggle", path: "sync", label: "Sync" },
     { type: "slider", path: "phase", label: "Phase", min: 0, max: 1, step: 0.01 },
     { type: "slider", path: "width", label: "Width", min: 0, max: 1, step: 0.01 },
-    {
-      type: "xy",
-      path: "texture",
-      label: "Texture",
-      xParam: "jitter",
-      yParam: "smooth",
-      xAxis: { min: 0, max: 1, step: 0.01, label: "Jitter" },
-      yAxis: { min: 0, max: 1, step: 0.01, label: "Smooth" }
-    }
+    { type: "slider", path: "jitter", label: "Jitter", min: 0, max: 1, step: 0.01 },
+    { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 }
   ],
   createState: () => ({ phase: 0, drift: 0, driftTarget: 0, out: null }),
   tick(state2, params, dt, bpm) {
@@ -3791,6 +3805,29 @@ var LFO_DEF = {
     }
     s.out = v;
     return v;
+  },
+  /**
+   * Two cycles of the wave the params describe: the width skew, the jitter
+   * as a slow deterministic wobble, and the slew rounding it all. The
+   * on-screen scope draws the live engine signal instead; this is the
+   * scope's caption (the wave's name) and the small screens' drawing.
+   */
+  preview(params, count) {
+    const n = Math.max(2, count);
+    const w = clamp5(Number(params.width) || 0, 0.01, 0.99);
+    const jitter = clamp014(params.jitter);
+    const wobble = Math.max(2, Math.round(n / 8));
+    const raw = Array.from({ length: n }, (_, i) => {
+      const ph = (i / (n - 1) * 2 + clamp014(params.phase)) % 1;
+      const tri = ph < w ? ph / w : 1 - (ph - w) / (1 - w);
+      const drift = previewNoise(Math.floor(i / wobble)) * jitter * 0.5;
+      return clamp5(tri * 2 - 1 + drift, -1, 1);
+    });
+    const shape = clamp014(params.smooth) > 0.55 ? "Sine" : w <= 0.25 ? "Saw" : w >= 0.75 ? "Ramp" : "Tri";
+    return {
+      points: previewSlew(raw, clamp014(params.smooth)).map((v) => (v + 1) / 2),
+      label: jitter > 0.4 ? `${shape} \xB7 Jitter` : shape
+    };
   }
 };
 registerModType(LFO_DEF);
@@ -3799,18 +3836,11 @@ var SH_DEF = {
   label: "S&H",
   defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0 },
   controls: [
-    { type: "slider", path: "rate", label: "Rate", min: 0.1, max: 30, step: 0.01, unit: "Hz" },
+    { type: "slider", path: "rate", label: "Rate", min: 0.1, max: 30, step: 0.01, unit: "Hz", scope: true },
     { type: "slider", path: "depth", label: "Depth", min: 0, max: 1, step: 0.01 },
     { type: "slider", path: "offset", label: "Offset", min: -1, max: 1, step: 0.01 },
-    {
-      type: "xy",
-      path: "texture",
-      label: "Texture",
-      xParam: "jitter",
-      yParam: "smooth",
-      xAxis: { min: 0, max: 1, step: 0.01, label: "Jitter" },
-      yAxis: { min: 0, max: 1, step: 0.01, label: "Smooth" }
-    }
+    { type: "slider", path: "jitter", label: "Jitter", min: 0, max: 1, step: 0.01 },
+    { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 }
   ],
   createState: () => ({ wait: 0, held: 0, out: null }),
   tick(state2, params, dt) {
@@ -3831,11 +3861,69 @@ var SH_DEF = {
     }
     s.out = v;
     return v;
+  },
+  /**
+   * A run of held values, deterministic so the picture holds still while
+   * you shape it: depth scales the throw, offset lifts the whole run,
+   * jitter stretches and shrinks the holds (the drunken clock), and the
+   * slew turns the steps into a drift.
+   */
+  preview(params, count) {
+    const n = Math.max(2, count);
+    const depth = clamp014(params.depth);
+    const offset = clamp5(Number(params.offset) || 0, -1, 1);
+    const jitter = clamp014(params.jitter);
+    const steps = 8;
+    const lens = Array.from({ length: steps }, (_, i) => 1 + previewNoise(i, 1) * jitter * 0.9);
+    const total = lens.reduce((a, b) => a + b, 0);
+    const edges = [];
+    let acc = 0;
+    for (const len of lens) edges.push(acc += len / total);
+    const raw = Array.from({ length: n }, (_, i) => {
+      const t = i / (n - 1);
+      const step = edges.findIndex((e) => t <= e);
+      return clamp5(previewNoise(step < 0 ? steps - 1 : step) * depth + offset, -1, 1);
+    });
+    return {
+      points: previewSlew(raw, clamp014(params.smooth)).map((v) => (v + 1) / 2),
+      label: clamp014(params.smooth) > 0.55 ? "Drift" : "Steps"
+    };
   }
 };
 registerModType(SH_DEF);
 var secs = (ms) => Math.max(0, Number(ms) || 0) / 1e3;
-var adsrEase = (p) => 1 - (1 - p) * (1 - p);
+var ADSR_STAGE_MAX = { attack: 2e3, decay: 2e3, release: 4e3 };
+var ENV_BEND_STAGES = ["attack", "decay", "release"];
+var envCurveParam = (stage) => `${stage}Curve`;
+var adsrShape = (p, curve) => {
+  const c = clamp5(Number(curve) || 0, -1, 1);
+  return 1 - Math.pow(1 - p, Math.pow(4, c));
+};
+function envelopePoints(params, count) {
+  const n = Math.max(2, count);
+  const sustain = clamp014(params.sustain);
+  const share = (key) => 0.04 + 0.24 * Math.min(1, secs(params[key]) * 1e3 / ADSR_STAGE_MAX[key]);
+  const wA = share("attack");
+  const wD = share("decay");
+  const wR = share("release");
+  const at = (t) => {
+    if (t < wA) return adsrShape(t / wA, params.attackCurve);
+    if (t < wA + wD) return 1 - (1 - sustain) * adsrShape((t - wA) / wD, params.decayCurve);
+    if (t < 1 - wR) return sustain;
+    return sustain * (1 - adsrShape((t - (1 - wR)) / wR, params.releaseCurve));
+  };
+  return Array.from({ length: n }, (_, i) => at(i / (n - 1)));
+}
+function envelopeJoints(params) {
+  const sustain = clamp014(params.sustain);
+  const share = (key) => 0.04 + 0.24 * Math.min(1, secs(params[key]) * 1e3 / ADSR_STAGE_MAX[key]);
+  const wA = share("attack");
+  return [
+    { stage: "attack", x: wA, y: 1 },
+    { stage: "decay", x: wA + share("decay"), y: sustain },
+    { stage: "release", x: 1 - share("release"), y: sustain }
+  ];
+}
 function adsrStageLength(stage, params) {
   if (stage === "attack") return secs(params.attack);
   if (stage === "decay") return secs(params.decay);
@@ -3845,13 +3933,26 @@ function adsrStageLength(stage, params) {
 var ADSR_DEF = {
   type: "adsr",
   label: "ADSR",
-  defaults: { attack: 10, decay: 300, sustain: 0.6, release: 600, loop: false },
+  defaults: {
+    attack: 10,
+    decay: 300,
+    sustain: 0.6,
+    release: 600,
+    loop: false,
+    // The attack keeps its analog leap; decay and release start straight,
+    // as the design draws them — every ramp bendable from its pad.
+    attackCurve: 0.5,
+    decayCurve: 0,
+    releaseCurve: 0
+  },
   controls: [
-    { type: "slider", path: "attack", label: "Attack", min: 0, max: 2e3, step: 1, unit: "ms" },
-    { type: "slider", path: "decay", label: "Decay", min: 0, max: 2e3, step: 1, unit: "ms" },
-    { type: "slider", path: "sustain", label: "Sustain", min: 0, max: 1, step: 0.01 },
-    { type: "slider", path: "release", label: "Release", min: 0, max: 4e3, step: 1, unit: "ms" },
-    { type: "toggle", path: "loop", label: "Loop" }
+    { type: "slider", path: "attack", label: "Attack", min: 0, max: ADSR_STAGE_MAX.attack, step: 1, unit: "ms", envStage: "attack" },
+    { type: "slider", path: "decay", label: "Decay", min: 0, max: ADSR_STAGE_MAX.decay, step: 1, unit: "ms", envStage: "decay" },
+    { type: "slider", path: "sustain", label: "Sustain", min: 0, max: 1, step: 0.01, envStage: "sustain" },
+    { type: "slider", path: "release", label: "Release", min: 0, max: ADSR_STAGE_MAX.release, step: 1, unit: "ms", envStage: "release" },
+    /* A big slot of its own, beside the envelope — the pad row under the
+       ramps belongs to the hold-to-bend gesture. */
+    { type: "toggle", path: "loop", label: "Loop", big: true }
   ],
   createState: () => ({ stage: "idle", t: 0, from: 0, env: 0, gate: false }),
   gate(state2, on) {
@@ -3894,11 +3995,11 @@ var ADSR_DEF = {
       }
     }
     const len = adsrStageLength(s.stage, params);
-    const shaped = adsrEase(len > 0 && Number.isFinite(len) ? Math.min(1, s.t / len) : 1);
-    if (s.stage === "attack") s.env = s.from + (1 - s.from) * shaped;
-    else if (s.stage === "decay") s.env = s.from + (sustain - s.from) * shaped;
+    const p = len > 0 && Number.isFinite(len) ? Math.min(1, s.t / len) : 1;
+    if (s.stage === "attack") s.env = s.from + (1 - s.from) * adsrShape(p, params.attackCurve);
+    else if (s.stage === "decay") s.env = s.from + (sustain - s.from) * adsrShape(p, params.decayCurve);
     else if (s.stage === "sustain") s.env = sustain;
-    else if (s.stage === "release") s.env = s.from * (1 - shaped);
+    else if (s.stage === "release") s.env = s.from * (1 - adsrShape(p, params.releaseCurve));
     else s.env = 0;
     return clamp014(s.env);
   }
@@ -4001,14 +4102,16 @@ var CURVE_DEF = {
       chip: true,
       options: [{ value: "continuous", label: "Cont" }, { value: "trigger", label: "Trig" }]
     },
+    /* The direction reads as a picture — an arrow says which way the pass
+       runs faster than a word does. */
     {
       type: "select",
       path: "direction",
       label: "Direction",
       options: [
-        { value: "forward", label: "Forward" },
-        { value: "mirror", label: "Mirror" },
-        { value: "reverse", label: "Reverse" }
+        { value: "forward", label: "Forward", icon: "arrow-right" },
+        { value: "mirror", label: "Mirror", icon: "arrow-left-right" },
+        { value: "reverse", label: "Reverse", icon: "arrow-left" }
       ]
     },
     { type: "toggle", path: "flip", label: "Flip" },
@@ -8679,8 +8782,8 @@ function buildModMovePage(panel, layout) {
   const dials = [];
   const toggles = [];
   for (const c of controls) {
-    if (c.type === "toggle") toggles[Math.max(0, dials.length - 1)] = c;
-    else if (c.type === "select" || isDial(c)) dials.push(c);
+    if (c.type === "toggle" && !c.big) toggles[Math.max(0, dials.length - 1)] = c;
+    else if (c.type === "toggle" || c.type === "select" || isDial(c)) dials.push(c);
   }
   return { panel, dials: dials.slice(0, MOVE_DIALS), toggles: toggles.slice(0, MOVE_PADS), values: [], actions: [] };
 }
@@ -8989,6 +9092,12 @@ function resampleWaveform(data, out) {
     out[i] = a + (b - a) * (x - j);
   }
 }
+function risingZeroCross(data) {
+  for (let i = 1; i < data.length; i++) {
+    if (data[i - 1] < 128 && data[i] >= 128) return i;
+  }
+  return 0;
+}
 function peakLevel(data) {
   let mx = 0;
   for (let i = 0; i < data.length; i++) {
@@ -9047,6 +9156,10 @@ var WAVE_AMP = 0.42;
 var MAX_DT = 0.05;
 var EKG_SCROLL_SECONDS = 2.5;
 var EKG_AMP = 0.85;
+var TRANSFER_AMP = 0.85;
+var SCATTER_ALPHA = 0.35;
+var OVERLAY_BACK_ALPHA = 0.45;
+var OVERLAY_MIN_WINDOW = 32;
 function smoothThrough(ctx, pts) {
   for (let i = 0; i < pts.length - 1; i++) {
     const p0 = pts[i - 1] || pts[i];
@@ -9301,6 +9414,123 @@ function createAnalyserEngine(canvas, get) {
     ctx.fill();
     ctx.globalAlpha = 1;
   };
+  let bytesB = new Uint8Array(0);
+  const readB = (anB) => {
+    if (bytesB.length !== anB.fftSize) bytesB = new Uint8Array(anB.fftSize);
+    anB.getByteTimeDomainData(bytesB);
+  };
+  const drawTransfer = (rt, base, alpha) => {
+    const anB = rt.analyserB;
+    if (anB) readB(anB);
+    const yBytes = anB ? bytesB : bytes;
+    const m = Math.min(bytes.length, yBytes.length);
+    if (m < 2) return;
+    const half = Math.min(W, H) / 2;
+    const cx = W / 2;
+    const toX = (v) => cx + v * half * TRANSFER_AMP;
+    const toY = (v) => cy - v * half * TRANSFER_AMP;
+    ctx.strokeStyle = base;
+    ctx.globalAlpha = 0.15 * alpha;
+    ctx.lineWidth = dpr;
+    ctx.beginPath();
+    ctx.moveTo(Math.round(cx) + 0.5, Math.round(cy - half));
+    ctx.lineTo(Math.round(cx) + 0.5, Math.round(cy + half));
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    const wave = rt.waveColor || base;
+    const pixelated = rt.mode === "pixelated";
+    const scatter = rt.transferDraw === "scatter";
+    if (scatter || pixelated) {
+      ctx.fillStyle = wave;
+      ctx.globalAlpha = (pixelated ? 0.8 : SCATTER_ALPHA) * alpha;
+      const colW = columnWidth2(rt.pixelSize);
+      for (let i = 0; i < m; i++) {
+        const x = toX(byteTimeToUnit(bytes[i]));
+        const y = toY(byteTimeToUnit(yBytes[i]));
+        if (pixelated) {
+          ctx.fillRect(quantizeToGrid(x - colW / 2, colW), quantizeToGrid(y - colW / 2, colW), colW, colW);
+        } else {
+          ctx.beginPath();
+          ctx.arc(x, y, 1.4 * dpr, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+      return;
+    }
+    ctx.beginPath();
+    ctx.moveTo(toX(byteTimeToUnit(bytes[0])), toY(byteTimeToUnit(yBytes[0])));
+    for (let i = 1; i < m; i++) {
+      ctx.lineTo(toX(byteTimeToUnit(bytes[i])), toY(byteTimeToUnit(yBytes[i])));
+    }
+    ctx.globalAlpha = 0.9 * alpha;
+    ctx.strokeStyle = wave;
+    ctx.lineWidth = 1.6 * dpr;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  };
+  const drawBlockTrace = (values, pixelSize, color, alpha) => {
+    const colW = columnWidth2(pixelSize);
+    ctx.fillStyle = color;
+    ctx.globalAlpha = alpha;
+    for (let k = 0; k < values.length; k++) {
+      const x = k * colW;
+      if (x >= W) break;
+      const y = Math.max(0, Math.min(H - colW, quantizeToGrid(cy - values[k] * (H * WAVE_AMP) - colW / 2, colW)));
+      ctx.fillRect(x, y, colW, colW);
+    }
+    ctx.globalAlpha = 1;
+  };
+  const drawOverlay = (rt, dt, base, alpha) => {
+    const anB = rt.analyserB;
+    if (anB) readB(anB);
+    const syncSrc = anB ? bytesB : bytes;
+    const winLen = Math.max(
+      OVERLAY_MIN_WINDOW,
+      Math.min(bytes.length, Math.round(rt.windowSize ?? bytes.length))
+    );
+    let off = risingZeroCross(syncSrc);
+    if (off + winLen > syncSrc.length) off = Math.max(0, syncSrc.length - winLen);
+    const pixelated = rt.mode === "pixelated";
+    const n = pixelated ? Math.max(2, Math.ceil(W / columnWidth2(rt.pixelSize))) : SMOOTH_POINTS;
+    syncPoints(n);
+    const sliceAt = (src) => {
+      const start = Math.min(off, Math.max(0, src.length - winLen));
+      return src.subarray(start, Math.min(src.length, start + winLen));
+    };
+    resampleWaveform(sliceAt(bytes), targetsA);
+    if (anB) resampleWaveform(sliceAt(bytesB), targetsB);
+    else targetsB.set(targetsA);
+    const spring = normalizeSpring(rt.spring);
+    springActive = !!spring;
+    if (spring) {
+      if (!springSeeded) {
+        posA.set(targetsA);
+        posB.set(targetsB);
+        velA.fill(0);
+        velB.fill(0);
+        springSeeded = true;
+      }
+      stepSprings(posA, velA, targetsA, spring.stiffness, spring.damping, dt);
+      stepSprings(posB, velB, targetsB, spring.stiffness, spring.damping, dt);
+    } else {
+      springSeeded = false;
+    }
+    const wave = rt.waveColor || base;
+    const front = rt.waveColorB || wave;
+    const backA = springActive ? posA : targetsA;
+    const frontB = springActive ? posB : targetsB;
+    const toY = (v) => cy - v * (H * WAVE_AMP);
+    if (pixelated) {
+      drawBlockTrace(backA, rt.pixelSize, wave, OVERLAY_BACK_ALPHA * alpha);
+      if (anB) drawBlockTrace(frontB, rt.pixelSize, front, alpha);
+    } else {
+      drawSmooth(backA, toY, cy, false, wave, wave, (anB ? OVERLAY_BACK_ALPHA : 1) * alpha);
+      if (anB) drawSmooth(frontB, toY, cy, false, front, front, alpha);
+    }
+  };
   let springActive = false;
   let prevNow = null;
   let raf = 0;
@@ -9325,6 +9555,14 @@ function createAnalyserEngine(canvas, get) {
     else an.getByteTimeDomainData(bytes);
     if (rt.source === "ekg") {
       drawEkg(rt, dt, base, alpha);
+      return;
+    }
+    if (rt.source === "transfer") {
+      drawTransfer(rt, base, alpha);
+      return;
+    }
+    if (rt.source === "overlay") {
+      drawOverlay(rt, dt, base, alpha);
       return;
     }
     const pixelated = rt.mode === "pixelated";
@@ -9401,6 +9639,7 @@ function createAnalyserEngine(canvas, get) {
 import { jsx as jsx34, jsxs as jsxs31 } from "react/jsx-runtime";
 function AnalyserVisualization({
   analyser = null,
+  analyserB = null,
   source = "frequency",
   variant = "area",
   mode = "smooth",
@@ -9411,6 +9650,9 @@ function AnalyserVisualization({
   gridSubdivisions = 8,
   waveColor,
   fillColor,
+  waveColorB,
+  transferDraw = "segments",
+  windowSize = null,
   muted = false,
   onMuteChange,
   soloed = false,
@@ -9424,6 +9666,7 @@ function AnalyserVisualization({
   const runtimeRef = useRef24(null);
   runtimeRef.current = {
     analyser,
+    analyserB,
     source,
     variant,
     mode,
@@ -9434,6 +9677,9 @@ function AnalyserVisualization({
     gridSubdivisions,
     waveColor,
     fillColor,
+    waveColorB,
+    transferDraw,
+    windowSize,
     muted,
     rangeHz,
     marker,
@@ -10892,8 +11138,18 @@ function ListScreen({
   const rootRef = useRef29(null);
   useEffect22(() => {
     const root = rootRef.current;
-    root?.querySelector("[data-selected]")?.scrollIntoView?.({ block: follow });
-    root?.toggleAttribute?.("data-over-top", root.scrollTop > 1);
+    if (!root) return;
+    const sync = () => {
+      root.querySelector("[data-selected]")?.scrollIntoView?.({ block: follow });
+      const end = root.scrollHeight - root.clientHeight;
+      root.toggleAttribute?.("data-over-top", root.scrollTop > 1);
+      root.toggleAttribute?.("data-over-bottom", root.scrollTop < end - 1);
+    };
+    sync();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(sync);
+    observer.observe(root);
+    return () => observer.disconnect();
   }, [value, follow, items.length]);
   const rootClassName = ["tweakers-list-screen", className].filter(Boolean).join(" ");
   return /* @__PURE__ */ jsx43(
@@ -10936,6 +11192,8 @@ import { Fragment as Fragment11, jsx as jsx44, jsxs as jsxs39 } from "react/jsx-
 function moveSlotKind(meta, opts = {}) {
   if (meta.type === "color") return "color";
   if (meta.type === "filter") return "filter";
+  if (opts.stage) return "env";
+  if (meta.type === "toggle") return "toggle";
   if (meta.type === "xy") return "xy";
   if (meta.type === "range") return "range";
   const drawing = moveNumericDrawing(meta, opts.value ?? meta.min);
@@ -11007,35 +11265,47 @@ function MoveSlotEnumBody({
   glyph,
   playback
 }) {
-  const picture = playback || shape || glyph;
   const selected = options[activeIdx];
-  const scrolls = !picture && options.length > MOVE_LIST_ROWS;
-  return /* @__PURE__ */ jsxs39(Fragment11, { children: [
-    picture ? /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-tag", children: label }) : /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-head", children: label }),
-    playback && /* @__PURE__ */ jsx44(MoveSlotPlaybackDrawing, { mode: playback }),
-    !playback && shape && /* @__PURE__ */ jsx44(MoveSlotShape, { d: shape }),
-    !playback && glyph && /* @__PURE__ */ jsx44(MoveSlotGlyph, { name: glyph, className: "tweakers-move-dial-icon" }),
-    picture ? /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-option", children: optionLabel }) : /* @__PURE__ */ jsx44(
-      ListScreen,
-      {
-        className: `tweakers-move-dial-list${scrolls ? " tweakers-move-dial-list-long" : ""}`,
-        items: options.map((opt) => ({
-          value: enumOptionValue(opt),
-          label: enumOptionLabel(opt)
-        })),
-        value: selected ? enumOptionValue(selected) : void 0,
-        follow: "center"
-      }
-    ),
-    (picture || scrolls) && /* @__PURE__ */ jsx44("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ jsx44("div", { className: "tweakers-move-dial-enum", children: options.map((opt, j) => /* @__PURE__ */ jsx44(
-      "span",
-      {
-        className: "tweakers-move-dial-enum-cell",
-        "data-on": j === activeIdx || void 0
-      },
-      enumOptionValue(opt)
-    )) }) })
-  ] });
+  if (playback || shape || glyph) {
+    return /* @__PURE__ */ jsxs39(Fragment11, { children: [
+      /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-tag", children: label }),
+      playback && /* @__PURE__ */ jsx44(MoveSlotPlaybackDrawing, { mode: playback }),
+      !playback && shape && /* @__PURE__ */ jsx44(MoveSlotShape, { d: shape }),
+      !playback && glyph && /* @__PURE__ */ jsx44(MoveSlotGlyph, { name: glyph, className: "tweakers-move-dial-icon" }),
+      /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-option", children: optionLabel }),
+      /* @__PURE__ */ jsx44("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ jsx44("div", { className: "tweakers-move-dial-enum", children: options.map((opt, j) => /* @__PURE__ */ jsx44(
+        "span",
+        {
+          className: "tweakers-move-dial-enum-cell",
+          "data-on": j === activeIdx || void 0
+        },
+        enumOptionValue(opt)
+      )) }) })
+    ] });
+  }
+  return /* @__PURE__ */ jsxs39(
+    "div",
+    {
+      className: "tweakers-move-dial-screen",
+      "data-grow": options.length > MOVE_LIST_ROWS || void 0,
+      style: { "--move-list-count": options.length },
+      children: [
+        /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-head", children: label }),
+        /* @__PURE__ */ jsx44(
+          ListScreen,
+          {
+            className: "tweakers-move-dial-list",
+            items: options.map((opt) => ({
+              value: enumOptionValue(opt),
+              label: enumOptionLabel(opt)
+            })),
+            value: selected ? enumOptionValue(selected) : void 0,
+            follow: "center"
+          }
+        )
+      ]
+    }
+  );
 }
 function MoveSlotXYBody({ label, value, position, gridN, shape = null }) {
   return /* @__PURE__ */ jsxs39(Fragment11, { children: [
@@ -11102,6 +11372,52 @@ function MoveSlotColorBody({ label, color, hue: hue2 }) {
     ] })
   ] });
 }
+function MoveSlotEnvBody({
+  points,
+  stages,
+  joints = []
+}) {
+  const d = points.map((v, i) => `${i === 0 ? "M" : "L"} ${i / (points.length - 1) * 100} ${100 - v * 100}`).join(" ");
+  return /* @__PURE__ */ jsxs39(Fragment11, { children: [
+    /* @__PURE__ */ jsxs39("div", { className: "tweakers-move-env-display", children: [
+      /* @__PURE__ */ jsx44(MoveSlotShape, { d, className: "tweakers-move-env-shape" }),
+      joints.map((j) => /* @__PURE__ */ jsx44(
+        "span",
+        {
+          className: "tweakers-move-env-handle",
+          "data-held": j.held || void 0,
+          style: {
+            left: `${j.x * 100}%`,
+            top: `calc(6px + (100% - 12px) * ${(1 - j.y).toFixed(4)})`
+          }
+        },
+        j.stage
+      ))
+    ] }),
+    stages.map((s) => /* @__PURE__ */ jsxs39("div", { className: "tweakers-move-env-readout", "data-stage": s.stage, children: [
+      /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-label", children: s.label }),
+      /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-value", children: s.value })
+    ] }, s.stage))
+  ] });
+}
+function MoveSlotScopeBody({
+  label,
+  value,
+  pct,
+  children
+}) {
+  return /* @__PURE__ */ jsxs39(Fragment11, { children: [
+    /* @__PURE__ */ jsx44("div", { className: "tweakers-move-scope-display", children }),
+    /* @__PURE__ */ jsx44(MoveSlotReadout, { label, value }),
+    /* @__PURE__ */ jsx44("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ jsx44("div", { className: "tweakers-move-dial-fill", style: { width: `${pct}%` } }) })
+  ] });
+}
+function MoveSlotToggleBody({ label, on }) {
+  return /* @__PURE__ */ jsxs39(Fragment11, { children: [
+    /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-toggle-indicator", "data-on": on || void 0 }),
+    /* @__PURE__ */ jsx44("span", { className: "tweakers-move-dial-toggle-label", children: label })
+  ] });
+}
 var MOVE_SLOT_LIBRARY = {
   color: { description: "selected color; hue on the dial, luminosity on volume, tap to edit", component: MoveSlotColorBody },
   opacity: { description: "overlapping circles showing transparency", component: MoveSlotNumericBody },
@@ -11117,7 +11433,10 @@ var MOVE_SLOT_LIBRARY = {
   enum: { description: "stepped option picker showing every option on a list screen", component: MoveSlotEnumBody },
   xy: { description: "two axes in one gesture field, or a live shape preview", component: MoveSlotXYBody },
   range: { description: "two handles on one bar; volume knob is the second hand", component: MoveSlotRangeBody },
-  filter: { description: "2 slots: cutoff + resonance as one response picture", component: MoveSlotFilterBody }
+  filter: { description: "2 slots: cutoff + resonance as one response picture", component: MoveSlotFilterBody },
+  env: { description: "4 slots: the whole ADSR as one shape, a caption per stage", component: MoveSlotEnvBody },
+  scope: { description: "a dial with the live signal filling it behind the readout", component: MoveSlotScopeBody },
+  toggle: { description: "a switch in a big slot \u2014 the pad\u2019s language at slot size", component: MoveSlotToggleBody }
 };
 
 // src/move-surface-store.ts
@@ -11554,6 +11873,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const [panels, setPanels] = useState26([]);
   const [track, setTrack] = useState26(0);
   const [dragPath, setDragPath] = useState26(null);
+  const [bendHeld, setBendHeld] = useState26(null);
+  const bendRef = useRef31(null);
   const [handTouch, setHandTouch] = useState26({});
   const [hwHeld, setHwHeld] = useState26({});
   const [hwLatched, setHwLatched] = useState26({});
@@ -11847,7 +12168,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const padRows = movePadRows(page, appRows);
   const appRowAt = (row) => moveAppPadRow(row, appRows);
   const padAt = (x, y) => surface.pads.find((p) => p.x === x && p.y === y);
-  const visibleCols = appRows > 0 || color ? Array.from({ length: MOVE_PADS }, (_, i) => i) : visibleColumns(page);
+  const visibleCols = settingsPanel ? Array.from({ length: modPageWidth() }, (_, i) => i) : appRows > 0 || color ? Array.from({ length: MOVE_PADS }, (_, i) => i) : visibleColumns(page);
   const volumeReading = liveValue ?? volume?.value;
   const headerCluster = volume && /* @__PURE__ */ jsx46("div", { className: "tweakers-move-actions", children: /* @__PURE__ */ jsxs41("div", { className: "tweakers-move-volume", children: [
     /* @__PURE__ */ jsx46("span", { className: "tweakers-move-volume-tick", style: { background: MOVE_TRACK_COLORS[0] } }),
@@ -12103,6 +12424,140 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
               meta.path
             );
           }
+          if (meta.type === "toggle") {
+            return /* @__PURE__ */ jsxs41(
+              "div",
+              {
+                className: "tweakers-move-dial",
+                "data-kind": "toggle",
+                "data-on": !!values[meta.path] || void 0,
+                onClick: () => TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path]),
+                children: [
+                  /* @__PURE__ */ jsx46(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                  /* @__PURE__ */ jsx46(MoveSlotToggleBody, { label: meta.label, on: !!values[meta.path] })
+                ]
+              },
+              meta.path
+            );
+          }
+          const scopeSlot = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.scope : void 0;
+          if (scopeSlot && modSettings) {
+            return /* @__PURE__ */ jsxs41(
+              "div",
+              {
+                className: "tweakers-move-dial",
+                "data-kind": "scope",
+                "data-active": active || void 0,
+                onPointerDown: (e) => {
+                  try {
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                  } catch {
+                  }
+                  fineRef.current = null;
+                  setDragPath(meta.path);
+                  armMod(meta.path);
+                  dialFromPointer(e, meta);
+                },
+                onPointerMove: (e) => {
+                  if (dragPath === meta.path) dialFromPointer(e, meta);
+                },
+                onPointerUp: () => {
+                  setDragPath(null);
+                  fineRef.current = null;
+                },
+                onPointerCancel: () => {
+                  setDragPath(null);
+                  fineRef.current = null;
+                },
+                children: [
+                  /* @__PURE__ */ jsx46(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                  /* @__PURE__ */ jsx46(
+                    MoveSlotScopeBody,
+                    {
+                      label: meta.label,
+                      value: chipValue(meta).num + (meta.unit ? ` ${meta.unit}` : ""),
+                      pct: dialPercent(meta),
+                      children: /* @__PURE__ */ jsx46(MoveScope, { index: modSettings.index })
+                    }
+                  )
+                ]
+              },
+              meta.path
+            );
+          }
+          const envStage = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.stage : void 0;
+          if (envStage) {
+            const stageDials = (modLayout?.dials ?? []).filter((d) => d.stage).flatMap((d) => {
+              const m = page.dials.find((x) => x?.path === d.path);
+              return m ? [{ stage: d.stage, meta: m }] : [];
+            });
+            if (stageDials[0]?.meta.path !== meta.path) return null;
+            const envParams = {
+              attack: Number(values.attack) || 0,
+              decay: Number(values.decay) || 0,
+              sustain: Number(values.sustain) || 0,
+              release: Number(values.release) || 0,
+              attackCurve: Number(modSlot?.params.attackCurve) || 0,
+              decayCurve: Number(modSlot?.params.decayCurve) || 0,
+              releaseCurve: Number(modSlot?.params.releaseCurve) || 0
+            };
+            const envActive = stageDials.some(
+              (s) => dragPath === s.meta.path || !!handTouch[s.meta.path] || !!hwHeld[s.meta.path]
+            );
+            const reading = (m) => {
+              const v = chipValue(m);
+              return `${v.num}${v.unit ? ` ${v.unit}` : ""}`;
+            };
+            return /* @__PURE__ */ jsxs41(
+              "div",
+              {
+                className: "tweakers-move-dial",
+                "data-kind": "env",
+                "data-active": envActive || void 0,
+                style: { gridColumn: `span ${stageDials.length}` },
+                children: [
+                  /* @__PURE__ */ jsx46(
+                    MoveSlotEnvBody,
+                    {
+                      points: envelopePoints(envParams, 129),
+                      stages: stageDials.map((s) => ({ stage: s.stage, label: s.meta.label, value: reading(s.meta) })),
+                      joints: envelopeJoints(envParams).map((j) => ({ ...j, held: bendHeld === j.stage }))
+                    }
+                  ),
+                  /* @__PURE__ */ jsx46("div", { className: "tweakers-move-env-zones", children: stageDials.map(({ meta: m }) => /* @__PURE__ */ jsx46(
+                    "div",
+                    {
+                      className: "tweakers-move-env-zone",
+                      onPointerDown: (e) => {
+                        try {
+                          e.currentTarget.setPointerCapture(e.pointerId);
+                        } catch {
+                        }
+                        fineRef.current = null;
+                        setDragPath(m.path);
+                        armMod(m.path);
+                        dialFromPointer(e, m);
+                      },
+                      onPointerMove: (e) => {
+                        if (dragPath === m.path) dialFromPointer(e, m);
+                      },
+                      onPointerUp: () => {
+                        setDragPath(null);
+                        fineRef.current = null;
+                      },
+                      onPointerCancel: () => {
+                        setDragPath(null);
+                        fineRef.current = null;
+                      },
+                      children: /* @__PURE__ */ jsx46(MoveModRing, { panelId: page.panel.id, path: m.path })
+                    },
+                    m.path
+                  )) })
+                ]
+              },
+              meta.path
+            );
+          }
           const latchedHere = latched[i]?.path === meta.path || page.values[i]?.path === meta.path && !!hwLatched[meta.path];
           const origin01 = dialOrigin(meta);
           const originPct = origin01 > 0 ? origin01 * 100 : null;
@@ -12199,6 +12654,49 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             );
           }
           const meta = padRows[row][col];
+          const bendStage = !meta && settingsPanel && padRows[row] === page.toggles && modSettings ? modLayout?.dials[col]?.stage : void 0;
+          if (bendStage && ENV_BEND_STAGES.includes(bendStage)) {
+            return /* @__PURE__ */ jsxs41(
+              "button",
+              {
+                className: "tweakers-move-pad",
+                "data-kind": "bend",
+                "data-on": bendHeld === bendStage || void 0,
+                onPointerDown: (e) => {
+                  try {
+                    e.currentTarget.setPointerCapture(e.pointerId);
+                  } catch {
+                  }
+                  setBendHeld(bendStage);
+                  bendRef.current = {
+                    y: e.clientY,
+                    curve: Number(modSlot?.params[envCurveParam(bendStage)]) || 0
+                  };
+                },
+                onPointerMove: (e) => {
+                  if (bendHeld !== bendStage || !bendRef.current) return;
+                  const v = Math.min(1, Math.max(
+                    -1,
+                    bendRef.current.curve + (bendRef.current.y - e.clientY) / 60
+                  ));
+                  ModulationStore.updateSlotParams(modSettings.index, { [envCurveParam(bendStage)]: v });
+                },
+                onPointerUp: () => {
+                  setBendHeld(null);
+                  bendRef.current = null;
+                },
+                onPointerCancel: () => {
+                  setBendHeld(null);
+                  bendRef.current = null;
+                },
+                children: [
+                  /* @__PURE__ */ jsx46("span", { className: "tweakers-move-pad-indicator" }),
+                  /* @__PURE__ */ jsx46("span", { className: "tweakers-move-pad-title", children: "Curve" })
+                ]
+              },
+              `bend-${bendStage}`
+            );
+          }
           if (!meta) return /* @__PURE__ */ jsx46("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
           if (padRows[row] === page.toggles) {
             return /* @__PURE__ */ jsxs41(
@@ -12283,6 +12781,32 @@ function MoveCurveComposer({
       height: MOVE_CURVE_HEIGHT
     }
   ) });
+}
+var SCOPE_SAMPLES = 120;
+function MoveScope({ index }) {
+  const ref = useRef31(null);
+  useEffect23(() => {
+    const now = (ModulationStore.getSignal(index) + 1) / 2;
+    const pts = Array(SCOPE_SAMPLES).fill(now);
+    let raf = requestAnimationFrame(function tick() {
+      pts.push((ModulationStore.getSignal(index) + 1) / 2);
+      pts.shift();
+      ref.current?.setAttribute("d", previewPathData(pts));
+      raf = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [index]);
+  return /* @__PURE__ */ jsx46(
+    "svg",
+    {
+      className: "tweakers-move-scope-wave",
+      "data-scope": "true",
+      viewBox: "0 0 100 100",
+      preserveAspectRatio: "none",
+      "aria-hidden": "true",
+      children: /* @__PURE__ */ jsx46("path", { ref })
+    }
+  );
 }
 function MoveModCircle({ slot }) {
   const dotRef = useRef31(null);
@@ -16005,6 +16529,7 @@ function AudioLevelMeter(props) {
 }
 export {
   ADSR_DEF,
+  ADSR_STAGE_MAX,
   AnalyserRow,
   AnalyserVisualization,
   AudioLevelMeter,
@@ -16031,6 +16556,7 @@ export {
   CurvePreview,
   DEFAULT_GRADIENT,
   DEFAULT_TRIGGER_STEPS,
+  ENV_BEND_STAGES,
   EasingVisualization,
   FILTER_DB_CEIL,
   FILTER_DB_FLOOR,
@@ -16073,13 +16599,16 @@ export {
   MovePanel,
   MoveSlotDefaultBody,
   MoveSlotEnumBody,
+  MoveSlotEnvBody,
   MoveSlotFilterBody,
   MoveSlotGlyph,
   MoveSlotNumericBody,
   MoveSlotPlaybackDrawing,
   MoveSlotRangeBody,
   MoveSlotReadout,
+  MoveSlotScopeBody,
   MoveSlotShape,
+  MoveSlotToggleBody,
   MoveSlotXYBody,
   MoveSurfaceStore,
   MoveVolumeDisplay,
@@ -16139,6 +16668,9 @@ export {
   dialSpan,
   displayHex,
   enumOptionIcon,
+  envCurveParam,
+  envelopeJoints,
+  envelopePoints,
   filterHand01,
   filterHandValue,
   filterResponsePath,
@@ -16171,6 +16703,7 @@ export {
   modColor,
   modKey,
   modPageLayout,
+  modPageWidth,
   modRingArc,
   moveAppPadRow,
   moveNumericDrawing,

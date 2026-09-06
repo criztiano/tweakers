@@ -939,6 +939,8 @@ An item may also carry a `tag` — a short note pinned to the row's right end (a
 />
 ```
 
+The list marks its own scroll edges: `data-over-top` and `data-over-bottom` land on the root whenever rows are hidden that way, so a host can soften exactly the edge that is hiding something (the Move's option slot fades its rows there). They follow both the selection and the element's size, so a screen that grows under the list keeps them honest.
+
 Mark an item `muted` when the row is information rather than a choice — a job still queued, a tag that produced nothing. It walks and selects like any row, so nothing disappears from the list, but it never comes up to full brightness; keep the actions beside the list disabled while such a row is the one reached.
 
 | Prop | Type | Default |
@@ -1028,7 +1030,7 @@ A `select` with options becomes a stepped enum dial. Dragging the slot — or tu
 
 With no picture to stand for the option (see `icon` and `preview` below), the slot shows the choice itself and turns into screen: the [list screen](#listscreen) takes the whole slot, with the control's name on a small head across the top and five option rows under it — the current one lit, the rest dim around it. The list is a readout, not a second control: the slot's own drag and the column's knob are still what step the options.
 
-Past those five rows the list runs behind a still selection: the selected row holds the middle of the screen and the options move past it, and only the two ends of the list push it off centre. A running list also softens: the rows dissolve at the top as they go under the head and at the bottom as they pass beneath the pagination cells — one cell per option, which come out only when the list is longer than the slot, since a list you can see all of already says how long it is. A picture face keeps its cells always, having only ever named one option at a time.
+Past those five rows the list runs behind a still selection: the selected row holds the middle of the screen and the options move past it, and only the two ends of the list push it off centre. **Touch the dial and the screen grows up out of the slot to the whole run**, so the choice can be seen while it is being made — up to half the window, scrolling past that — and drops back when the knob is let go. Rows dissolve at an edge that is hiding something and only there, so the first and last of a list read as its ends rather than as rows cut in half. A list carries no pagination cells: the whole run is on it already. A picture face keeps its cells, having only ever named one option at a time.
 
 An option can name an `icon` from the bundled [lucide](https://lucide.dev) subset (`LUCIDE_ICONS`). The glyph takes the middle of the slot, in place of the name — at arm's length you read a picture, not a word.
 
@@ -1059,6 +1061,18 @@ A picture slot reads top down and drops the label/value crossfade, which has not
 `preview` is a closure, so — like a curve row's `sample` — it is invisible to the serialized config diff and is refreshed through the same sync. That is what lets the drawing track the app's other controls while the picker stays a picker.
 
 Bipolar sliders (`bipolar: true` or an `origin`) keep their character on the dial: the fill anchors at an origin tick and grows toward the handle on either side, and the readout shows the real signed value (`+12`, `-8`) instead of the 0–100 position.
+
+### The big-slot library, and multi-slot controls
+
+Every face a dial slot can wear lives in one dictionary, `MOVE_SLOT_LIBRARY` (`src/components/move-slots.tsx`): `default`, `value`, `icon`, `curve`, `enum`, `xy`, `range`, `filter`, `env`, `scope`. Each entry is a pure body — a drawing of computed props with no gestures of its own — so a new face is added by writing a body and dispatching to it from the MovePanel, and the gestures (pointer capture, fine drag, modulation arming) stay in one place.
+
+Some controls are bigger than one column. A **multi-slot control** follows one pattern, whatever its width:
+
+- The container takes `grid-column: span N` — it owns N consecutive columns, and occupancy checks treat it as sitting in all of them.
+- One display (the dark screen cut into the face) stretches across the whole span, and the drawing is maximised across it.
+- Each column keeps a small caption where its own single slot's label would have been, crossfading to its value on touch — so the hardware's one-knob-per-column rule still holds under the shared picture: every knob edits the hand or stage its column names.
+
+Two ship today: `filter` (2 slots — cutoff and resonance as one magnitude response) and `env` (4 slots — the whole ADSR as one shape on the modulator's settings page, one caption and drag zone per stage).
 
 ### Waveform
 

@@ -5983,6 +5983,237 @@ input.tweakers-list-item-title:focus {
   white-space: nowrap;
 }
 
+/* The 4-slot envelope — the filter's big sibling. One display spans the
+   four stage columns and draws the whole ADSR as one shape; each stage
+   keeps a small caption where its own slot's label would have been, over
+   its own drag zone, so the hardware's one-knob-per-column rule holds
+   under the shared picture. (The span itself is set inline — the control
+   spans however many stage columns the layout gives it.) */
+.tweakers-move-env-display {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 9px;
+  bottom: 28px;
+  background: var(--move-display, #1e1e1e);
+  border-radius: var(--move-radius-small, 8px);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* The drawing runs the display's full width, with a little vertical air so
+   the peak and the floor keep their full stroke. */
+.tweakers-move-env-shape {
+  position: absolute;
+  top: 6px;
+  left: 0;
+  width: 100%;
+  height: calc(100% - 12px);
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* The same ink weight as the filter and the curve-selection slot — every
+   picture on the page from one hand. */
+.tweakers-move-env-shape path {
+  fill: none;
+  stroke: var(--move-text);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.5;
+  transition: opacity 0.12s;
+}
+
+.tweakers-move-dial[data-kind="env"]:hover .tweakers-move-env-shape path,
+.tweakers-move-dial[data-kind="env"][data-active] .tweakers-move-env-shape path {
+  opacity: 1;
+}
+
+/* The joint handles — small squares pinned where the ramps meet (the
+   attack's peak, the decay's landing, the sustain's edge), the design's
+   own marks. They share the line's ink and dim with it; the one whose
+   bend pad is held comes up to full brightness on its own. */
+.tweakers-move-env-handle {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  transform: translate(-50%, -50%);
+  border: 2px solid var(--move-text);
+  border-radius: 3px;
+  background: var(--move-display, #1e1e1e);
+  opacity: 0.5;
+  transition: opacity 0.12s;
+  pointer-events: none;
+}
+
+.tweakers-move-dial[data-kind="env"]:hover .tweakers-move-env-handle,
+.tweakers-move-dial[data-kind="env"][data-active] .tweakers-move-env-handle,
+.tweakers-move-env-handle[data-held] {
+  opacity: 1;
+}
+
+/* A stage caption per column, the filter readout's rule at a quarter of
+   the width — the label sits where its own slot's label would have been,
+   and gives way to its stage's value on touch. */
+.tweakers-move-env-readout {
+  position: absolute;
+  bottom: 6px;
+  width: 25%;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.tweakers-move-env-readout[data-stage="attack"] { left: 0; }
+.tweakers-move-env-readout[data-stage="decay"] { left: 25%; }
+.tweakers-move-env-readout[data-stage="sustain"] { left: 50%; }
+.tweakers-move-env-readout[data-stage="release"] { left: 75%; }
+
+.tweakers-move-env-readout .tweakers-move-dial-label,
+.tweakers-move-env-readout .tweakers-move-dial-value {
+  font-size: 13px;
+  line-height: 16px;
+  white-space: nowrap;
+  -webkit-line-clamp: 1;
+}
+
+/* The drag zones: one per stage column, over the whole slot — the pointer
+   edits the stage whose column it is in. */
+.tweakers-move-env-zones {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.tweakers-move-env-zone {
+  position: relative;
+  flex: 1;
+}
+
+/* The scope lives IN the rate dial: the live signal fills everything above
+   the bar, edge to edge with no title in its way, and the dial's own
+   readout floats over the wave. You turn the wave you're watching. */
+.tweakers-move-scope-display {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  right: 7px;
+  bottom: 21px;
+  background: var(--move-display, #1e1e1e);
+  border-radius: var(--move-radius-small, 8px);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* The wave keeps a little vertical air so its peaks hold their stroke. */
+.tweakers-move-scope-wave {
+  position: absolute;
+  top: 4px;
+  left: 0;
+  width: 100%;
+  height: calc(100% - 8px);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.tweakers-move-scope-wave path {
+  fill: none;
+  stroke: var(--move-text);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.8;
+}
+
+/* The readout reads over the rolling wave the way a shape slot's label
+   reads over its drawing — lifted, with the display's own dark behind it. */
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-readout {
+  z-index: 1;
+}
+
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-label,
+.tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-value {
+  text-shadow: 0 0 6px var(--move-display, #1e1e1e), 0 0 6px var(--move-display, #1e1e1e);
+}
+
+/* A big toggle — the pad's language at slot size: the indicator bar up
+   top, the name centred, the whole slot inverting when it is on. */
+.tweakers-move-dial[data-kind="toggle"][data-on] {
+  background: var(--move-text);
+  color: var(--move-text-inverse);
+}
+
+.tweakers-move-dial-toggle-indicator {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 4px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--move-bg);
+}
+
+.tweakers-move-dial-toggle-indicator[data-on] {
+  background: var(--move-chip);
+}
+
+.tweakers-move-dial-toggle-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--move-font-label);
+  font-size: 16px;
+  line-height: 20px;
+}
+
+/* The plain enum face — the list screen at slot size: the options on the
+   display, dim, the current one bright on its highlight. No pagination
+   cells to count; you see where you are and where a turn takes you. */
+.tweakers-move-enum-list {
+  position: absolute;
+  top: 26px;
+  left: 6px;
+  right: 7px;
+  bottom: 8px;
+  padding: 4px;
+  background: var(--move-display, #1e1e1e);
+  border-radius: var(--move-radius-small, 8px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.tweakers-move-enum-row {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-family: var(--move-font-label);
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--move-text);
+  opacity: 0.22;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity 0.12s, background 0.12s;
+}
+
+.tweakers-move-enum-row[data-selected] {
+  background: rgba(222, 227, 201, 0.1);
+  opacity: 1;
+}
+
 /* Range slot — the bar fills BETWEEN two handle ticks (the span), and the
    ticks poke past the bar so a collapsed range still reads as two hands. */
 .tweakers-move-dial-range {
@@ -6044,23 +6275,50 @@ input.tweakers-list-item-title:focus {
    the whole slot turns into screen: the chip is left as a head at the top
    holding the control's name, and the list takes every pixel under it.
    Nothing is inset — on this instrument a display is a hole cut in the face,
-   and here the hole is the face. */
-.tweakers-move-dial:has(.tweakers-move-dial-list) {
+   and here the hole is the face.
+
+   The band is cut for exactly five rows: pad (3) + 5 rows (20) + 4 gaps (3)
+   + foot (7) = the 122px left below an 18px head. That is what makes "more
+   than five" the moment the list starts to run. */
+.tweakers-move-dial-screen {
+  --move-list-row: 20px;
+  --move-list-gap: 3px;
+  --move-list-pad: 3px;
+  /* The last row sits off the floor: 4px more than the top has, which the
+     gaps give back so the five rows still land exactly. */
+  --move-list-foot: calc(var(--move-list-pad) + 4px);
+  /* The whole run, laid out — what a touch grows the screen to. */
+  --move-screen-full: calc(
+    var(--move-head-h) + var(--move-list-pad) + var(--move-list-foot)
+    + var(--move-list-count, 1) * var(--move-list-row)
+    + (var(--move-list-count, 1) - 1) * var(--move-list-gap)
+  );
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
   background: var(--move-display, #1e1e1e);
+  border-radius: var(--move-radius);
+  overflow: hidden;
+}
+
+/* Touched, a list too long for its slot grows up out of it: the whole run
+   on screen while the knob is going through it, half the window at most,
+   and scrolling past that. It is over the page at that point, so it takes
+   the shadow of something lifted off the face. */
+.tweakers-move-dial[data-active] .tweakers-move-dial-screen[data-grow] {
+  top: auto;
+  height: min(var(--move-screen-full), 50vh);
+  z-index: 6;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
 /* The head: the last of the chip, the width of the slot, rounded to its top
    corners. The name is a caption here, not the headline the list is. */
 .tweakers-move-dial-head {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 1;
-  height: var(--move-head-h);
+  flex: 0 0 var(--move-head-h);
   padding: 0 8px;
   background: var(--move-chip);
-  border-radius: var(--move-radius) var(--move-radius) 0 0;
   color: var(--move-text);
   font-family: var(--move-font-label);
   font-size: 11px;
@@ -6071,57 +6329,33 @@ input.tweakers-list-item-title:focus {
   text-overflow: ellipsis;
 }
 
-/* A wired slot's ring moves into the head, where it has ground of its own —
-   over the screen it would land on a row. */
-.tweakers-move-dial:has(.tweakers-move-dial-list) .tweakers-mod-ring.tweakers-move-dial-mod {
-  top: 2px;
-  right: 4px;
-}
-
-/* The list fills the slot under the head. The band is cut for exactly five
-   rows — pad (3) + 5 rows (20) + 4 gaps (4) + pad (3) = the 122px left below
-   an 18px head — which is what makes "more than five" the moment the list
-   starts to move. Rows and ink are the standalone component's, one size down.
-
-   It is a readout, not a second control — the slot's drag and the column's
-   knob still step the options — so the rows take no pointer of their own. */
+/* Rows and ink are the standalone component's, one size down. It is a
+   readout, not a second control — the slot's drag and the column's knob
+   still step the options — so the rows take no pointer of their own. */
 .tweakers-list-screen.tweakers-move-dial-list {
-  --move-list-row: 20px;
-  --move-list-gap: 4px;
-  --move-list-pad: 3px;
-  position: absolute;
-  top: var(--move-head-h);
-  left: 0;
-  right: 0;
-  bottom: 0;
+  /* The component declares its own row metrics on this very element, so
+     they have to be handed back to the screen's — which is the one place
+     they are stated, since the grown height is measured from them. */
+  --move-list-row: inherit;
+  --move-list-gap: inherit;
+  --move-list-pad: inherit;
+  --move-list-fade-top: 0px;
+  --move-list-fade-bottom: 0px;
+  flex: 1 1 auto;
+  min-height: 0;
   width: auto;
   max-height: none;
-  padding: var(--move-list-pad) 2px;
-  border-radius: 0 0 var(--move-radius) var(--move-radius);
+  padding: var(--move-list-pad) 2px var(--move-list-foot);
+  border-radius: 0;
   background: none;
-  /* Centred while the options fit the slot, from the top once they overflow
-     — a plain \`center\` would strand the first rows out of reach. */
+  /* Centred while the options fit the screen, from the top once they
+     overflow — a plain \`center\` would strand the first rows out of reach. */
   justify-content: center;
   justify-content: safe center;
   pointer-events: none;
-}
-
-.tweakers-move-dial-list .tweakers-list-screen-row {
-  font-size: 14px;
-  line-height: 16px;
-}
-
-/* Long enough to run: the rows fade out instead of being cut. The bottom
-   fade is always on — it is what carries a row away under the pagination
-   cells — while the top one waits until there is something up there to have
-   gone behind the head. */
-.tweakers-list-screen.tweakers-move-dial-list-long {
-  --move-list-fade-top: 0px;
-  --move-list-fade-bottom: 22px;
-  /* The list ends one fade above the floor, so the last option — which is
-     where the selection parks at the end of a run — comes to rest clear of
-     the cells instead of dissolving under them. */
-  padding-bottom: var(--move-list-fade-bottom);
+  /* Rows dissolve at an edge that is hiding something, and only there: at
+     either end of the run the last row must read as the end, not as a row
+     cut in half. Both stops collapse to zero when nothing is behind them. */
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
@@ -6138,14 +6372,17 @@ input.tweakers-list-item-title:focus {
   );
 }
 
-.tweakers-list-screen.tweakers-move-dial-list-long[data-over-top] {
+.tweakers-move-dial-list[data-over-top] {
   --move-list-fade-top: 14px;
 }
 
-/* Over the screen the cells stand on their own — the track would read as a
-   box sat on the display. */
-.tweakers-move-dial-list ~ .tweakers-move-dial-bar {
-  background: none;
+.tweakers-move-dial-list[data-over-bottom] {
+  --move-list-fade-bottom: 14px;
+}
+
+.tweakers-move-dial-list .tweakers-list-screen-row {
+  font-size: 14px;
+  line-height: 16px;
 }
 
 /* XY slot — the pad fills the slot behind the label: crosshair lines meet
@@ -6470,11 +6707,12 @@ input.tweakers-list-item-title:focus {
     font-size: 12px;
     line-height: 14px;
   }
-  /* The same five rows, cut for a 100px slot: 3 + 5×14 + 4×2 + 3 = the 84px
-     left under a 16px head. */
-  .tweakers-list-screen.tweakers-move-dial-list {
+  /* The same five rows, cut for a 100px slot: 3 + 5×14 + 4×1 + 7 = the 84px
+     left under a 16px head. Set on the screen, which is what measures the
+     grown height from them; the list inherits. */
+  .tweakers-move-dial-screen {
     --move-list-row: 14px;
-    --move-list-gap: 2px;
+    --move-list-gap: 1px;
   }
   .tweakers-move-dial-list .tweakers-list-screen-row {
     padding: 1px 0;
