@@ -81,6 +81,10 @@ function stripDialColumns(page, offset, cols = MOVE_DIALS) {
 function stripDialSlots(page, offset, cols = MOVE_DIALS) {
   return stripDialColumns(page, offset, cols).map((col) => col < 0 ? void 0 : page.dials[col]);
 }
+function stripWindowPads(page, offset, cols = MOVE_DIALS) {
+  const row = (cells) => Array.from({ length: cols }, (_, i) => cells[offset + i]);
+  return { toggles: row(page.toggles), values: row(page.values), actions: row(page.actions) };
+}
 var stripSlotCount = (page) => stripStarts(page).length;
 var stripSlotIndex = (page, offset) => stripStarts(page).filter((start) => start < offset).length;
 export {
@@ -94,6 +98,7 @@ export {
   stripOffsets,
   stripSlotCount,
   stripSlotIndex,
-  stripStarts
+  stripStarts,
+  stripWindowPads
 };
 //# sourceMappingURL=move-strip.js.map

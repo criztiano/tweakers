@@ -59,9 +59,20 @@ declare function pageStripOffset(page: MovePage, offset: number, dir: number, co
 declare function stripDialColumns(page: MovePage, offset: number, cols?: number): number[];
 /** The controls those columns hold, in dial order — what the kit is told. */
 declare function stripDialSlots(page: MovePage, offset: number, cols?: number): (ControlMeta | undefined)[];
+/**
+ * The pad rows under that window, in hardware columns — the small slots the
+ * eight pads are showing right now. A pad lives at a strip column like its
+ * slot does, so the window that picks the dials picks these with it: scroll
+ * on and the chip leaves with the dial it belongs to.
+ */
+declare function stripWindowPads(page: MovePage, offset: number, cols?: number): {
+    toggles: (ControlMeta | undefined)[];
+    values: (ControlMeta | undefined)[];
+    actions: (ControlMeta | undefined)[];
+};
 /** How many controls the strip holds — the number the position readout counts. */
 declare const stripSlotCount: (page: MovePage) => number;
 /** Which control the window starts on, 0-based — the other half of that readout. */
 declare const stripSlotIndex: (page: MovePage, offset: number) => number;
 
-export { buildMoveStrip, clampStripOffset, isStripSlot, pageStripOffset, stepStripOffset, stripDialColumns, stripDialSlots, stripOffsets, stripSlotCount, stripSlotIndex, stripStarts };
+export { buildMoveStrip, clampStripOffset, isStripSlot, pageStripOffset, stepStripOffset, stripDialColumns, stripDialSlots, stripOffsets, stripSlotCount, stripSlotIndex, stripStarts, stripWindowPads };
