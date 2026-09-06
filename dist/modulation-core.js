@@ -480,6 +480,17 @@ var secs = (ms) => Math.max(0, Number(ms) || 0) / 1e3;
 var ADSR_STAGE_MAX = { attack: 2e3, decay: 2e3, release: 4e3 };
 var ENV_BEND_STAGES = ["attack", "decay", "release"];
 var envCurveParam = (stage) => `${stage}Curve`;
+var ENV_WAVE_STAGES = ["attack", "decay", "sustain", "release"];
+var envWaveParam = (stage) => `${stage}Wave`;
+var envWaveFlipParam = (stage) => `${stage}WaveFlip`;
+var ENV_SUSTAIN_WAVE_BEATS = 1;
+var ENV_SUSTAIN_WAVE_CYCLES = 2;
+function envStageWave(stage, phase, level, params) {
+  const amount = clamp012(params[envWaveParam(stage)]);
+  if (amount <= 0) return level;
+  const w = amount * (1 - Math.cos(2 * Math.PI * phase)) / 2;
+  return params[envWaveFlipParam(stage)] ? level + (1 - level) * w : level * (1 - w);
+}
 var adsrShape = (p, curve) => {
   const c = clamp(Number(curve) || 0, -1, 1);
   return 1 - Math.pow(1 - p, Math.pow(4, c));
@@ -492,10 +503,20 @@ function envelopePoints(params, count) {
   const wD = share("decay");
   const wR = share("release");
   const at = (t) => {
-    if (t < wA) return adsrShape(t / wA, params.attackCurve);
-    if (t < wA + wD) return 1 - (1 - sustain) * adsrShape((t - wA) / wD, params.decayCurve);
-    if (t < 1 - wR) return sustain;
-    return sustain * (1 - adsrShape((t - (1 - wR)) / wR, params.releaseCurve));
+    if (t < wA) {
+      const p2 = t / wA;
+      return envStageWave("attack", p2, adsrShape(p2, params.attackCurve), params);
+    }
+    if (t < wA + wD) {
+      const p2 = (t - wA) / wD;
+      return envStageWave("decay", p2, 1 - (1 - sustain) * adsrShape(p2, params.decayCurve), params);
+    }
+    if (t < 1 - wR) {
+      const p2 = (t - wA - wD) / (1 - wR - wA - wD);
+      return envStageWave("sustain", p2 * ENV_SUSTAIN_WAVE_CYCLES % 1, sustain, params);
+    }
+    const p = (t - (1 - wR)) / wR;
+    return envStageWave("release", p, sustain * (1 - adsrShape(p, params.releaseCurve)), params);
   };
   return Array.from({ length: n }, (_, i) => at(i / (n - 1)));
 }
@@ -528,7 +549,17 @@ var ADSR_DEF = {
     // as the design draws them — every ramp bendable from its pad.
     attackCurve: 0.5,
     decayCurve: 0,
-    releaseCurve: 0
+    releaseCurve: 0,
+    // Every stage's wave rests at zero: the envelope ships as itself, and
+    // the second dimension arrives only when a pad asks for it.
+    attackWave: 0,
+    decayWave: 0,
+    sustainWave: 0,
+    releaseWave: 0,
+    attackWaveFlip: false,
+    decayWaveFlip: false,
+    sustainWaveFlip: false,
+    releaseWaveFlip: false
   },
   controls: [
     { type: "slider", path: "attack", label: "Attack", min: 0, max: ADSR_STAGE_MAX.attack, step: 1, unit: "ms", envStage: "attack" },
@@ -553,7 +584,7 @@ var ADSR_DEF = {
       s.from = s.env;
     }
   },
-  tick(state, params, dt) {
+  tick(state, params, dt, bpm) {
     const s = state;
     const loop = !!params.loop;
     const sustain = clamp012(params.sustain);
@@ -586,6 +617,11 @@ var ADSR_DEF = {
     else if (s.stage === "sustain") s.env = sustain;
     else if (s.stage === "release") s.env = s.from * (1 - adsrShape(p, params.releaseCurve));
     else s.env = 0;
+    if (s.stage !== "idle") {
+      const beat = 60 / (Number(bpm) || 120) * ENV_SUSTAIN_WAVE_BEATS;
+      const wp = s.stage === "sustain" ? s.t / beat % 1 : p;
+      s.env = envStageWave(s.stage, wp, s.env, params);
+    }
     return clamp012(s.env);
   }
 };
@@ -818,6 +854,8 @@ export {
   CURVE_MAX_DURATION,
   CURVE_MIN_DURATION,
   ENV_BEND_STAGES,
+  ENV_SUSTAIN_WAVE_BEATS,
+  ENV_WAVE_STAGES,
   LFO_DEF,
   LFO_SYNC_DIVISIONS,
   MOD_COLORS,
@@ -831,6 +869,9 @@ export {
   curveComposition,
   curveDuration,
   envCurveParam,
+  envStageWave,
+  envWaveFlipParam,
+  envWaveParam,
   envelopeJoints,
   envelopePoints,
   getModType,

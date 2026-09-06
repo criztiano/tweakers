@@ -482,6 +482,15 @@ var SH_DEF = {
 registerModType(SH_DEF);
 var secs = (ms) => Math.max(0, Number(ms) || 0) / 1e3;
 var ADSR_STAGE_MAX = { attack: 2e3, decay: 2e3, release: 4e3 };
+var envWaveParam = (stage) => `${stage}Wave`;
+var envWaveFlipParam = (stage) => `${stage}WaveFlip`;
+var ENV_SUSTAIN_WAVE_BEATS = 1;
+function envStageWave(stage, phase, level, params) {
+  const amount = clamp012(params[envWaveParam(stage)]);
+  if (amount <= 0) return level;
+  const w = amount * (1 - Math.cos(2 * Math.PI * phase)) / 2;
+  return params[envWaveFlipParam(stage)] ? level + (1 - level) * w : level * (1 - w);
+}
 var adsrShape = (p, curve) => {
   const c = clamp(Number(curve) || 0, -1, 1);
   return 1 - Math.pow(1 - p, Math.pow(4, c));
@@ -505,7 +514,17 @@ var ADSR_DEF = {
     // as the design draws them — every ramp bendable from its pad.
     attackCurve: 0.5,
     decayCurve: 0,
-    releaseCurve: 0
+    releaseCurve: 0,
+    // Every stage's wave rests at zero: the envelope ships as itself, and
+    // the second dimension arrives only when a pad asks for it.
+    attackWave: 0,
+    decayWave: 0,
+    sustainWave: 0,
+    releaseWave: 0,
+    attackWaveFlip: false,
+    decayWaveFlip: false,
+    sustainWaveFlip: false,
+    releaseWaveFlip: false
   },
   controls: [
     { type: "slider", path: "attack", label: "Attack", min: 0, max: ADSR_STAGE_MAX.attack, step: 1, unit: "ms", envStage: "attack" },
@@ -530,7 +549,7 @@ var ADSR_DEF = {
       s.from = s.env;
     }
   },
-  tick(state, params, dt) {
+  tick(state, params, dt, bpm) {
     const s = state;
     const loop = !!params.loop;
     const sustain = clamp012(params.sustain);
@@ -563,6 +582,11 @@ var ADSR_DEF = {
     else if (s.stage === "sustain") s.env = sustain;
     else if (s.stage === "release") s.env = s.from * (1 - adsrShape(p, params.releaseCurve));
     else s.env = 0;
+    if (s.stage !== "idle") {
+      const beat = 60 / (Number(bpm) || 120) * ENV_SUSTAIN_WAVE_BEATS;
+      const wp = s.stage === "sustain" ? s.t / beat % 1 : p;
+      s.env = envStageWave(s.stage, wp, s.env, params);
+    }
     return clamp012(s.env);
   }
 };

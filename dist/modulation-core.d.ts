@@ -251,12 +251,41 @@ declare const ENV_BEND_STAGES: readonly EnvStage[];
 /** A bendable stage's curve param name (`attackCurve`, ...). */
 declare const envCurveParam: (stage: EnvStage) => string;
 /**
+ * Every stage carries a wave too — the sustain included, since a held level
+ * is a segment of the shape like any other.
+ */
+declare const ENV_WAVE_STAGES: readonly EnvStage[];
+/** A stage's wave params: how much of it lands, and which way up it sits. */
+declare const envWaveParam: (stage: EnvStage) => string;
+declare const envWaveFlipParam: (stage: EnvStage) => string;
+/** The sustain has no length to borrow, so its wave rides the clock instead. */
+declare const ENV_SUSTAIN_WAVE_BEATS = 1;
+/**
+ * The stage wave: one sine exactly as long as the stage it rides, worked
+ * into that stage's own level. The sine is nothing at both ends of the
+ * stage and everything through its middle, so the joints stay exactly where
+ * the picture pins them — a stage never falls off a cliff at its edges, it
+ * only breathes between them.
+ *
+ * `amount` is how far that breath goes, and the flip is which way it goes:
+ * down, the sine multiplies the level toward nothing (at 100% the stage
+ * disappears through its own middle); flipped, it multiplies the room left
+ * above the level instead, and the stage swells toward full. Same sine,
+ * mirrored around the ramp it rides.
+ */
+declare function envStageWave(stage: EnvStage, phase: number, level: number, params: ModulationParams): number;
+/**
  * The whole envelope as one drawing: `count` samples, each 0..1, across a
  * single display that spans the four stage columns. Each timed stage takes
  * a share of the width proportional to its own dial (floored so an instant
  * stage still shows its edge, capped so the sustain hold never vanishes),
  * and the sustain level runs flat through whatever width remains — turn any
  * dial and its part of the picture stretches or falls in place.
+ *
+ * Each stage's wave multiplies its own segment here exactly as it does in
+ * the signal, so the drawing IS the modulation. The sustain's wave is the
+ * one approximation: it runs on the clock, not on a width, so the plateau
+ * shows a fixed couple of cycles — the depth is true, the rate is a portrait.
  */
 declare function envelopePoints(params: ModulationParams, count: number): number[];
 /**
@@ -284,6 +313,11 @@ declare function envelopeJoints(params: ModulationParams): {
  * Loop is the exception, for demos and for prototyping with no host: with
  * it on the envelope plays its own gate, running attack → decay → release
  * over and over.
+ *
+ * Every stage has a second dimension beside its bend: a sine the exact
+ * length of that stage, multiplied into it from 0 to 100%. Each one is
+ * independent, so an attack can shudder while the sustain breathes, and
+ * every one of them is in time by construction — the stage IS the cycle.
  */
 declare const ADSR_DEF: ModTypeDef;
 /**
@@ -313,4 +347,4 @@ declare function curveComposition(params: ModulationParams): CurveComposition;
 declare function curveDuration(params: ModulationParams, bpm: number): number;
 declare const CURVE_DEF: ModTypeDef;
 
-export { ADSR_DEF, ADSR_STAGE_MAX, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, ENV_BEND_STAGES, type EnvStage, LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, curveComposition, curveDuration, envCurveParam, envelopeJoints, envelopePoints, getModType, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modPageWidth, modRingArc, registerModType, visibleModControls };
+export { ADSR_DEF, ADSR_STAGE_MAX, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EnvStage, LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, curveComposition, curveDuration, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, getModType, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modPageWidth, modRingArc, registerModType, visibleModControls };
