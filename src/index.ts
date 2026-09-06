@@ -82,6 +82,11 @@ export {
   envelopeJoints,
   envCurveParam,
   ENV_BEND_STAGES,
+  envStageWave,
+  envWaveParam,
+  envWaveFlipParam,
+  ENV_WAVE_STAGES,
+  ENV_SUSTAIN_WAVE_BEATS,
   modPageWidth,
   ADSR_STAGE_MAX,
 } from './modulation-core';

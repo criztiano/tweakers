@@ -1261,6 +1261,22 @@ That is what an app integrates against: your notes, pads, or hardware steps gate
 
 **Loop** is the exception, for demos and for prototyping with no host: with it on the envelope plays its own gate — attack, decay, release, over and over, no sustain hold. The example turns it on so the slot moves on its own; the library ships it off.
 
+**Shaping it.** The four stage dials draw one envelope, and the two pad rows under them shape each stage in two independent dimensions:
+
+| Row | Gesture | What it does |
+| --- | --- | --- |
+| **Curve** | hold and drag up / down | Bends that ramp — up leaps off the mark and tapers in, down creeps and arrives in a rush (`attackCurve`, `decayCurve`, `releaseCurve`, each −1…1). |
+| **Dip / Swell** | hold and drag up / down | Brings that stage's own sine in, 0–100% (`attackWave`, `decayWave`, `sustainWave`, `releaseWave`). |
+| **Dip / Swell** | tap | Flips the sine over (`attackWaveFlip`, …). |
+
+The wave is a **sine exactly as long as the stage it rides** — so it is in time by construction: the stage *is* the cycle, and no stage can drift out of step with the shape. The sine is nothing at both ends of the stage and everything through its middle, so the joints stay exactly where the picture pins them: a stage never falls off a cliff at its edges, it only breathes between them.
+
+The amount is how far that breath goes; the flip is which way. Down, the sine multiplies the level toward nothing — at 100% the stage disappears through its own middle. Flipped, it multiplies the room left above the level instead, and the stage swells toward full. Same sine, mirrored around the ramp it rides. Every stage has its own, so an attack can shudder while the sustain breathes.
+
+The sustain is the one stage with no length of its own — it holds for as long as the gate does — so its wave rides the clock instead, one cycle per beat at the tempo the [bridge kit feeds in](#external-modulation-sources).
+
+The picture on the panel is the signal: bend a ramp or dial a wave in and the drawing moves with the modulation, stage by stage. Both rows write straight into the slot's params, so a shape you like persists and rides a preset like any other setting.
+
 Free-running types (LFO, S&H) ignore the gate, and so do slots pointed at an external source. Gates are live state, never persisted.
 
 ### External modulation sources

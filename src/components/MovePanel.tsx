@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore, useCallback } from '
 import { createPortal } from 'react-dom';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { ModulationStore } from '../store/ModulationStore';
-import { modColor, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, modPageWidth, MOD_SETTINGS_PANEL, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
+import { modColor, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
 import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
@@ -173,6 +173,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // — the envelope's hold-to-curve gesture. The ref anchors the drag.
   const [bendHeld, setBendHeld] = useState<EnvStage | null>(null);
   const bendRef = useRef<{ y: number; curve: number } | null>(null);
+  // A held wave pad: the same vertical drag, one row down, lifting the
+  // stage's own sine into it. `moved` is what tells a drag from a tap —
+  // a tap flips the sine over instead of setting an amount.
+  const [waveHeld, setWaveHeld] = useState<EnvStage | null>(null);
+  const waveRef = useRef<{ y: number; amount: number; moved: boolean } | null>(null);
   // Hardware presence, by control path — from the bridge kit's window events.
   const [handTouch, setHandTouch] = useState<Record<string, boolean>>({});
   // Which point of a transfer curve each knob is holding. One knob shapes a
@@ -1183,8 +1188,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       return m ? [{ stage: d.stage as string, meta: m }] : [];
                     });
                   if (stageDials[0]?.meta.path !== meta.path) return null;
-                  // Times come off the panel's dials; the ramps' bends live
-                  // only in the slot's params, written by the bend pads.
+                  // Times come off the panel's dials; the ramps' bends and
+                  // the stages' waves live only in the slot's params, written
+                  // by the two pad rows underneath.
                   const envParams: ModulationParams = {
                     attack: Number(values.attack) || 0,
                     decay: Number(values.decay) || 0,
@@ -1193,8 +1199,15 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     attackCurve: Number(modSlot?.params.attackCurve) || 0,
                     decayCurve: Number(modSlot?.params.decayCurve) || 0,
                     releaseCurve: Number(modSlot?.params.releaseCurve) || 0,
+                    ...Object.fromEntries(ENV_WAVE_STAGES.flatMap((s) => [
+                      [envWaveParam(s), Number(modSlot?.params[envWaveParam(s)]) || 0],
+                      [envWaveFlipParam(s), !!modSlot?.params[envWaveFlipParam(s)]],
+                    ])),
                   };
-                  const envActive = stageDials.some(
+                  // A wave being dialled in has no handle of its own, so the
+                  // whole picture comes up instead — you watch the shape you
+                  // are shaking.
+                  const envActive = waveHeld !== null || stageDials.some(
                     (s) => dragPath === s.meta.path || !!handTouch[s.meta.path] || !!hwHeld[s.meta.path]
                   );
                   // Stage times read as their real numbers — 300 ms, not a
@@ -1387,6 +1400,60 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                         >
                           <span className="tweakers-move-pad-indicator" />
                           <span className="tweakers-move-pad-title">Curve</span>
+                        </button>
+                      );
+                    }
+                    // The envelope's wave pads, one row below the bends: the
+                    // chip-row cell under each stage column. Hold and drag up
+                    // to bring that stage's own sine in, 0 to 100%; tap to
+                    // flip it over, so the stage swells out of nothing
+                    // instead of dipping through its middle.
+                    const waveStage =
+                      !meta && settingsPanel && padRows[row] === page.values && modSettings
+                        ? modLayout?.dials[col]?.stage
+                        : undefined;
+                    if (waveStage && ENV_WAVE_STAGES.includes(waveStage)) {
+                      const amount = Number(modSlot?.params[envWaveParam(waveStage)]) || 0;
+                      const flipped = !!modSlot?.params[envWaveFlipParam(waveStage)];
+                      return (
+                        <button
+                          key={`wave-${waveStage}`}
+                          className="tweakers-move-pad"
+                          data-kind="wave"
+                          data-on={amount > 0 || undefined}
+                          data-held={waveHeld === waveStage || undefined}
+                          onPointerDown={(e) => {
+                            try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                            setWaveHeld(waveStage);
+                            waveRef.current = { y: e.clientY, amount, moved: false };
+                          }}
+                          onPointerMove={(e) => {
+                            if (waveHeld !== waveStage || !waveRef.current) return;
+                            const dy = waveRef.current.y - e.clientY;
+                            // A finger never holds perfectly still: a few
+                            // pixels of slip stays a tap.
+                            if (!waveRef.current.moved && Math.abs(dy) < 3) return;
+                            waveRef.current.moved = true;
+                            const v = Math.min(1, Math.max(0, waveRef.current.amount + dy / 100));
+                            ModulationStore.updateSlotParams(modSettings!.index, { [envWaveParam(waveStage)]: v });
+                          }}
+                          onPointerUp={() => {
+                            if (waveHeld === waveStage && waveRef.current && !waveRef.current.moved) {
+                              ModulationStore.updateSlotParams(modSettings!.index, {
+                                [envWaveFlipParam(waveStage)]: !flipped,
+                              });
+                            }
+                            setWaveHeld(null);
+                            waveRef.current = null;
+                          }}
+                          onPointerCancel={() => { setWaveHeld(null); waveRef.current = null; }}
+                        >
+                          <span className="tweakers-move-pad-indicator" />
+                          <span className="tweakers-move-pad-title">{flipped ? 'Swell' : 'Dip'}</span>
+                          <span className="tweakers-move-pad-reading">
+                            <span className="tweakers-move-pad-number">{Math.round(amount * 100)}</span>
+                            <span>%</span>
+                          </span>
                         </button>
                       );
                     }

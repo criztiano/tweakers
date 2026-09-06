@@ -34,6 +34,19 @@ for (const [name, level, drive, air] of [
 }
 TweakStore.clearActivePreset('tone');
 
+// A looping ADSR on the first step, driving the tone level, with its
+// settings page already open — so the envelope, its bend pads and its wave
+// pads are the first thing on the surface. A track button puts the plain
+// pages back.
+// The slot persists, so this only lays it out the first time — whatever you
+// shape here survives the reload.
+if (!ModulationStore.getSlot(0)) {
+  ModulationStore.createSlot(0, 'adsr');
+  ModulationStore.updateSlotParams(0, { loop: true, attack: 400, decay: 700, release: 900 });
+  ModulationStore.assign('tone', 'level', 0, 1);
+}
+ModulationStore.openSettings(0);
+
 // Keyboard stand-ins for the hardware. M = the Menu button (tap opens and
 // dismisses; Shift+M is the long press, the save input). Holding C is the
 // Mute button held — the compare, relayed raw like the kit does it.
