@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Move kit — slot library</title>
+    <style>
+      /* Move panel faces (Cri's Figma spec). Commercial typefaces are
+         host-provided by licence and never shipped with the kit: drop them in
+         example/public/fonts/ and the panel wears them, otherwise it falls
+         back to the system face. */
+      @font-face {
+        font-family: 'Ableton Sans Small';
+        src: url('/fonts/AbletonSansSmall-Regular.ttf') format('truetype');
+        font-weight: 400;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'Ableton Sans Small';
+        src: url('/fonts/AbletonSansSmall-Bold.ttf') format('truetype');
+        font-weight: 700;
+        font-style: normal;
+        font-display: swap;
+      }
+      @font-face {
+        font-family: 'System85 Pro';
+        src: url('/fonts/system85-regular-pro.ttf') format('truetype');
+        font-weight: 400;
+        font-style: normal;
+        font-display: swap;
+      }
+      body { margin: 0; background: #141414; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

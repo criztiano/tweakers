@@ -9,15 +9,17 @@ import { MoveFunctions, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_SPEC
 
 describe('move functions', () => {
   it('runs the attached action with the shift flag, and detaches cleanly', () => {
-    const calls: { name: string; shift: boolean }[] = [];
+    const calls: { name: string; shift: boolean; hold?: boolean }[] = [];
     const detach = MoveFunctions.attach('undo', (press) => calls.push(press));
     assert.ok(MoveFunctions.list().includes('undo'));
 
     MoveFunctions.run('undo');
     MoveFunctions.run('undo', { shift: true });
+    // Every press carries both flags: shift, and the long press a button
+    // like Menu answers differently.
     assert.deepEqual(calls, [
-      { name: 'undo', shift: false },
-      { name: 'undo', shift: true },
+      { name: 'undo', shift: false, hold: false },
+      { name: 'undo', shift: true, hold: false },
     ]);
 
     detach();
