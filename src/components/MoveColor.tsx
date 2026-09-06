@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { MoveColorStore, MOVE_COLOR_WHEEL, MOVE_COLOR_STEPS, moveWheelSlot } from '../move-color';
 import { TweakStore, type ControlMeta } from '../store/TweakStore';
 import type { HSLA } from '../color-core';
-import type { TweakTheme } from './TweakRoot';
+import type { TweakTheme } from '../theme';
 import { MoveSlotColorBody } from './move-slots';
 
 export function MoveColorSlot({ panelId, meta, active, open }: {

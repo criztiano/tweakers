@@ -168,7 +168,8 @@ var flat = (controls, out = []) => {
   return out;
 };
 var isEnumDial = (c) => c.type === "select" && Array.isArray(c.options) && c.options.length > 1;
-var isDial = (c) => c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c) || c.type === "number" && c.min != null && c.max != null;
+var isMoveDial = (c) => c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c) || c.type === "number" && c.min != null && c.max != null;
+var isDial = isMoveDial;
 var noChip = (c) => c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c);
 var dialSpan = (c) => c?.type === "filter" ? 2 : 1;
 var isSpanContinuation = (page, i) => i > 0 && page.dials[i] !== void 0 && page.dials[i] === page.dials[i - 1];
@@ -401,6 +402,7 @@ export {
   enumShapePath,
   filterShapePath,
   isEnumDial,
+  isMoveDial,
   isSpanContinuation,
   moveAppPadRow,
   movePadRows,

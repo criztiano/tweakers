@@ -40,6 +40,8 @@ interface MovePage {
 }
 /** A select with real choices becomes an enum dial — the kit's exact rule. */
 declare const isEnumDial: (c: ControlMeta) => boolean;
+/** Everything the hardware turns: the controls that claim a dial slot. */
+declare const isMoveDial: (c: ControlMeta) => boolean;
 /**
  * How many dial columns a control claims. The filter is the kit's first
  * 2-slot control: its picture spans two columns, and on the hardware the
@@ -160,4 +162,4 @@ declare function dialOrigin(meta: ControlMeta): number;
 /** Axis positions 0..1 back to the control's real {x, y}, kit-identical. */
 declare function denormalizeXYDial(meta: ControlMeta, x01: number, y01: number): XYValue;
 
-export { ENUM_SHAPE_SAMPLES, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MovePage, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeXYDial, dialOrigin, dialSpan, enumIndex, enumOptionIcon, enumOptionLabel, enumOptionValue, enumShapePath, filterShapePath, isEnumDial, isSpanContinuation, moveAppPadRow, movePadRows, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeXYDial, visibleColumns };
+export { ENUM_SHAPE_SAMPLES, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MovePage, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeXYDial, dialOrigin, dialSpan, enumIndex, enumOptionIcon, enumOptionLabel, enumOptionValue, enumShapePath, filterShapePath, isEnumDial, isMoveDial, isSpanContinuation, moveAppPadRow, movePadRows, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeXYDial, visibleColumns };

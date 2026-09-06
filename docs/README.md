@@ -11,6 +11,10 @@ in the consuming app.
 - [Component ownership audit](ownership-audit.md): Grasso, Tracker and Move findings.
 - [Adding a component](contributing-components.md): the upstream acceptance checklist.
 
+The library app is the moving version of the dictionary: `npm run build`, then
+`cd example && npm run dev`. Every slot face is in it, live, on one scrolling
+panel — the place to look before adding a face, and the place to add one after.
+
 The [README](../README.md) is the detailed API reference. The export barrels and
 prop types in the installed version are authoritative; this guide does not imply
 framework parity or a registry release newer than the local source.

@@ -7,9 +7,11 @@ import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from '../theme';
-import { buildMovePages, buildModMovePage, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, isEnumDial, isSpanContinuation, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_DIALS, MOVE_PADS } from '../move-layout';
+import { buildMovePages, buildModMovePage, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, isEnumDial, isSpanContinuation, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
+import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
+import { MoveFunctions } from '../move-functions';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody } from './move-slots';
+import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadValueBody, MovePadActionBody, MovePadAppBody } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { valueToBearing, angleFromPointer } from '../angle-core';
 import { normalizeTransfer, movePoint, nearestPoint, sampleTransfer, type TransferValue } from '../transfer-core';
@@ -36,6 +38,13 @@ interface MovePanelProps {
    * read as one group instead of leaving a dead gap between them.
    */
   dock?: 'viewport' | 'flow';
+  /**
+   * The endless strip: a page may carry any number of slots, and the big
+   * wheel scrolls the row through them. Nothing is demoted to a value chip,
+   * and the dots under the row say which 8 the dials are holding — so a
+   * panel of forty parameters is one instrument, not five pages of it.
+   */
+  scroll?: boolean;
 }
 
 /** The Move's four track colours, in track order (Figma node 802:321). */
@@ -55,6 +64,12 @@ const XY_GRID_DEFAULT = 5;
 
 /** Press shorter than this is a tap (latch); longer is a hold (peek). */
 const TAP_MS = 300;
+
+/** Wheel travel that moves the strip on by one slot — a mouse notch is ~100. */
+const WHEEL_SLOT_PX = 60;
+
+/** How often the strip's window is restated for a bridge that bound late. */
+const STRIP_REANNOUNCE_MS = 1000;
 
 /**
  * A readout string with any `:` separators pulled out and rendered bold at
@@ -103,6 +118,14 @@ export const MOVE_LATCH_EVENT = 'move-tweakers:latch';
 export const MOVE_PAGE_EVENT = 'move-tweakers:page';
 /** Out: `{ pageId }` — a screen track tap, for the kit to switch the hardware. */
 export const MOVE_PAGE_SELECT_EVENT = 'move-tweakers:page-select';
+/**
+ * In: `{ delta }` — the big wheel turned, a signed multi-step count (the
+ * bridge kit's `jog`). On a scrolling page one detent is one slot.
+ */
+export const MOVE_JOG_EVENT = 'move-tweakers:jog';
+/** Out: `{ pageId, offset, columns }` — where the strip's window now sits,
+ *  so the kit can point the hardware's dials at the same 8 controls. */
+export const MOVE_STRIP_EVENT = 'move-tweakers:strip';
 
 /**
  * The Move's control surface, laid out to Cri's Figma spec (file
@@ -151,8 +174,14 @@ export const MOVE_PAGE_SELECT_EVENT = 'move-tweakers:page-select';
  * ring — the slot's colour, and an arc running from the control's value to
  * where the modulation is holding it — in the slot's corner, and
  * the track row carries one circle per slot — the on-screen step button.
+ *
+ * With `scroll` the page stops being 8 slots wide. Every control keeps a
+ * full slot, the row scrolls through them — the big wheel on the hardware,
+ * the mouse wheel or a drag on the dot row here — and the 8 dots under the
+ * row say which controls the dials are holding, so all of them can be
+ * reached without a single one shrinking to a chip.
  */
-export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport' }: MovePanelProps) {
+export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport', scroll = false }: MovePanelProps) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [track, setTrack] = useState(0);
@@ -177,6 +206,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const holdStart = useRef(0);
   const [mounted, setMounted] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  // The dot row's drag anchor: pointer x, and the stop it started on.
+  const [dotDrag, setDotDrag] = useState<{ x: number; stop: number } | null>(null);
   // Shift mid-drag = fine mode: pointer travel applies at 0.1× relative to the
   // value snapshot where shift went down; releasing shift rebases at 1× so the
   // value never jumps back to the cursor's absolute position.
@@ -208,9 +239,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     return () => cancelAnimationFrame(raf);
   }, [volume]);
 
-  const onlyKey = Array.isArray(only) ? only.join(' ') : only;
+  // The selection travels as a string so the effect below re-reads only when
+  // the NAMES change, not when the host hands over a fresh array. It is
+  // serialized rather than joined: panel names have spaces in them.
+  const onlyKey = only === undefined ? undefined : JSON.stringify(Array.isArray(only) ? only : [only]);
   const read = useCallback(
-    () => TweakStore.selectPanels(onlyKey === undefined ? undefined : onlyKey.split(' ')),
+    () => TweakStore.selectPanels(onlyKey === undefined ? undefined : (JSON.parse(onlyKey) as string[])),
     [onlyKey]
   );
 
@@ -220,7 +254,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     return TweakStore.subscribeGlobal(() => setPanels(read()));
   }, [read]);
 
-  const pages = buildMovePages(panels);
+  // A scrolling page keeps every control at slot size in one long row; the
+  // ordinary page is 8 slots wide and sends the overflow to value chips.
+  const pages = scroll
+    ? panels.filter((p) => p.kind === undefined).slice(0, MOVE_TRACKS).map(buildMoveStrip)
+    : buildMovePages(panels);
   // An open modulator-settings page takes the surface over; the track
   // buttons put a regular page back (and close the settings with it).
   const modSettings = ModulationStore.getSettings();
@@ -230,6 +268,125 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     ? buildModMovePage(settingsPanel, modLayout)
     : pages[Math.min(track, Math.max(0, pages.length - 1))];
   const pageId = page?.panel.id;
+
+  // The strip's window. A modulator's settings page is the hardware's own
+  // shape and never scrolls, so the wheel and the dots belong to the app's
+  // pages alone. The offset is a column, always the start of a control.
+  const stripMode = scroll && !settingsPanel && !!page;
+  const [offset, setOffset] = useState(0);
+  const stripOffset = stripMode ? clampStripOffset(page, offset) : 0;
+  // The wheel and the hardware both arrive outside React's render, so the
+  // handler reads the live page through a ref instead of closing over it.
+  const stripRef = useRef<{ page: MovePage | undefined; offset: number; on: boolean }>({
+    page: undefined, offset: 0, on: false,
+  });
+  stripRef.current = { page, offset: stripOffset, on: stripMode };
+  const scrollSlots = useCallback((delta: number) => {
+    const { page: pg, offset: cur, on } = stripRef.current;
+    if (!on || !pg || !delta) return;
+    const next = stepStripOffset(pg, cur, delta);
+    if (next !== cur) setOffset(next);
+  }, []);
+  // The arrows turn the page: a whole window of slots, not one control.
+  const scrollPage = useCallback((dir: number) => {
+    const { page: pg, offset: cur, on } = stripRef.current;
+    if (!on || !pg || !dir) return;
+    const next = pageStripOffset(pg, cur, dir);
+    if (next !== cur) setOffset(next);
+  }, []);
+
+  // The window belongs to its page — switching tracks starts at the top.
+  useEffect(() => setOffset(0), [pageId]);
+
+  // The big wheel, from the bridge kit: one detent, one control. The event
+  // goes out cancelable — the kit hands the wheel to whoever takes it — so a
+  // scrolling page answers it and says so, and the waveform's zoom (the
+  // wheel's other job) never fires underneath.
+  useEffect(() => {
+    const onJog = (e: Event) => {
+      if (!stripRef.current.on) return;
+      e.preventDefault();
+      scrollSlots(Math.round(Number((e as CustomEvent).detail?.delta) || 0));
+    };
+    window.addEventListener(MOVE_JOG_EVENT, onJog);
+    return () => window.removeEventListener(MOVE_JOG_EVENT, onJog);
+  }, [scrollSlots]);
+
+  // The Move's arrows turn the page — eight slots, the whole window at once,
+  // for getting across a long strip without spinning the wheel. They are
+  // taken only where the app has left them free: a host that wired its own
+  // meaning to left/right keeps it, and the wheel still walks the strip.
+  useEffect(() => {
+    if (!stripMode) return;
+    const free = (['left', 'right'] as const).filter((name) => !MoveFunctions.list().includes(name));
+    const off = free.map((name) =>
+      MoveFunctions.attach(name, () => scrollPage(name === 'right' ? 1 : -1), { label: name === 'right' ? 'Next 8' : 'Prev 8' })
+    );
+    return () => { for (const detach of off) detach(); };
+  }, [stripMode, scrollPage]);
+
+  // The mouse wheel is the big wheel on this side of the glass, and the whole
+  // panel answers it — the slots, the dots, the header, the surface around
+  // them: anywhere over the instrument is over the wheel. It rides a native
+  // listener because React's is passive: the page must not scroll away under
+  // a gesture the panel has answered. A trackpad's small deltas accumulate,
+  // so a flick moves as far as it looks like it should.
+  const wheelRest = useRef(0);
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!stripRef.current.on) return;
+      const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      if (!d) return;
+      e.preventDefault();
+      wheelRest.current += d;
+      const steps = Math.trunc(wheelRest.current / WHEEL_SLOT_PX);
+      if (!steps) return;
+      wheelRest.current -= steps * WHEEL_SLOT_PX;
+      scrollSlots(steps);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [scrollSlots, mounted, stripMode]);
+
+  // Where the window sits, for the kit to point the hardware's dials at the
+  // same 8 controls the screen is showing. The paths ride with it so the
+  // bridge never has to rebuild the strip rule for itself — the screen has
+  // already decided which control each knob is holding.
+  const announceStrip = useCallback(() => {
+    const { page: pg, offset: at, on } = stripRef.current;
+    if (!on || !pg) return;
+    window.dispatchEvent(new CustomEvent(MOVE_STRIP_EVENT, {
+      detail: {
+        pageId: pg.panel.id,
+        offset: at,
+        columns: stripDialColumns(pg, at),
+        paths: stripDialSlots(pg, at).map((meta) => meta?.path ?? null),
+      },
+    }));
+  }, []);
+  useEffect(() => {
+    announceStrip();
+    // eslint-disable-next-line react-hooks/exhaustive-deps — the page object is
+    // rebuilt every render; its identity is not what changed the window.
+  }, [announceStrip, stripMode, pageId, stripOffset]);
+
+  // A bridge that binds after the panel has settled would never hear the
+  // window at all. The kit streams the page it is showing, so that stream is
+  // the heartbeat: it re-announces on it, once a second at most, and the kit
+  // ignores a window it already has.
+  useEffect(() => {
+    let last = 0;
+    const onPage = () => {
+      const now = Date.now();
+      if (now - last < STRIP_REANNOUNCE_MS) return;
+      last = now;
+      announceStrip();
+    };
+    window.addEventListener(MOVE_PAGE_EVENT, onPage);
+    return () => window.removeEventListener(MOVE_PAGE_EVENT, onPage);
+  }, [announceStrip]);
   useSyncExternalStore(MoveColorStore.subscribe, MoveColorStore.getVersion, () => 0);
   const colorView = MoveColorStore.getView();
   const colorMeta = colorView?.panelId === pageId
@@ -636,11 +793,29 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // type must never reflow the page — the Type dial under your finger, and
   // everything else, stays exactly where it was. An open colour wheel takes
   // the pads too, so it also holds the panel at full width.
-  const visibleCols = settingsPanel
-    ? Array.from({ length: modPageWidth() }, (_, i) => i)
-    : appRows > 0 || color
-      ? Array.from({ length: MOVE_PADS }, (_, i) => i)
-      : visibleColumns(page);
+  // A scrolling page renders every column it has and lets the viewport clip:
+  // the row is longer than the panel by design, and the window decides which
+  // part of it shows.
+  const visibleCols = stripMode
+    ? page.dials.map((_, i) => i)
+    : settingsPanel
+      ? Array.from({ length: modPageWidth() }, (_, i) => i)
+      : appRows > 0 || color
+        ? Array.from({ length: MOVE_PADS }, (_, i) => i)
+        : visibleColumns(page);
+  // The cluster the header and the grid share is never wider than the dials:
+  // a strip of forty slots still shows eight.
+  const clusterCols = stripMode
+    ? Math.min(MOVE_DIALS, visibleCols.length) || MOVE_DIALS
+    : visibleCols.length || MOVE_DIALS;
+  // The dot row: one dot per dial, naming the control that dial is holding,
+  // and where the window sits in the whole set — counted in controls, since
+  // that is what the wheel moves by and what a person is looking for.
+  const dialSlots = stripMode ? stripDialSlots(page, stripOffset) : [];
+  const stripStops = stripMode ? stripOffsets(page) : [];
+  const stripTotal = stripMode ? Math.max(1, stripSlotCount(page)) : 1;
+  const stripFrom = stripMode ? stripSlotIndex(page, stripOffset) : 0;
+  const stripTo = stripMode ? stripSlotIndex(page, stripOffset + MOVE_DIALS) : 0;
 
   // The header cluster: the volume-dial readout, right-aligned. (Action
   // buttons live in the views now — see MoveActionButton.) Nothing
@@ -673,7 +848,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
             selected={clipIndex}
           />
         )}
-        <div className="tweakers-move-inner" style={{ '--move-cols': visibleCols.length || MOVE_DIALS } as React.CSSProperties}>
+        <div className="tweakers-move-inner" style={{ '--move-cols': clusterCols } as React.CSSProperties}>
           {/* Only tracks that carry a page render — a bare coloured marker with
               no name says nothing. The index is still the real track index, so
               the colour never shifts with the visible position. */}
@@ -720,7 +895,18 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
           </div>
 
           {visibleCols.length > 0 && <div className="tweakers-move-grid">
-            <div className="tweakers-move-dials">
+            {/* The window on the strip: the row is as long as the page has
+                slots, and this clips it to the eight the dials hold. It clips
+                sideways only — a touched option list still grows up out of
+                its slot, over the panel. */}
+            <div className="tweakers-move-viewport" data-scroll={stripMode || undefined}>
+            <div
+              className="tweakers-move-dials"
+              data-scroll={stripMode || undefined}
+              style={stripMode
+                ? ({ '--move-strip-len': page.dials.length, '--move-offset': stripOffset } as React.CSSProperties)
+                : undefined}
+            >
               {visibleCols.map((i) => {
                 // A 2-slot dial's second column renders nothing of its own —
                 // the base column's slot spans across it. And a 2-slot dial
@@ -1230,6 +1416,78 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 );
               })}
             </div>
+            </div>
+
+            {/* The dial row, in dots: one per knob, naming the control it is
+                holding — the hardware's own indicator row, and the thing that
+                makes a strip longer than eight slots honest. Drag it, or turn
+                the wheel over the panel, to move the window. */}
+            {stripMode && (
+              <div
+                className="tweakers-move-dots"
+                role="slider"
+                tabIndex={0}
+                aria-label={`Slots ${stripFrom + 1}–${stripTo} of ${stripTotal}`}
+                aria-valuemin={0}
+                aria-valuemax={Math.max(0, stripStops.length - 1)}
+                aria-valuenow={Math.max(0, stripStops.indexOf(stripOffset))}
+                aria-orientation="horizontal"
+                data-scrolling={dotDrag !== null || undefined}
+                onKeyDown={(e) => {
+                  // Shift, or the page keys, jump a whole window — the same
+                  // move the Move's arrows make.
+                  const dir = e.key === 'ArrowRight' || e.key === 'PageDown' ? 1
+                    : e.key === 'ArrowLeft' || e.key === 'PageUp' ? -1 : 0;
+                  const paged = e.shiftKey || e.key === 'PageUp' || e.key === 'PageDown';
+                  if (dir && paged) {
+                    e.preventDefault();
+                    scrollPage(dir);
+                    return;
+                  }
+                  const step = dir || (e.key === 'Home' ? -stripStops.length : e.key === 'End' ? stripStops.length : 0);
+                  if (!step) return;
+                  e.preventDefault();
+                  scrollSlots(step);
+                }}
+                onPointerDown={(e) => {
+                  try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                  setDotDrag({ x: e.clientX, stop: Math.max(0, stripStops.indexOf(stripOffset)) });
+                }}
+                onPointerMove={(e) => {
+                  if (!dotDrag) return;
+                  // One slot per slot-width of travel: the set moves under the
+                  // hand at the rate the slots themselves do.
+                  const slotWidth = e.currentTarget.getBoundingClientRect().width / MOVE_DIALS || 1;
+                  const want = dotDrag.stop + Math.round((e.clientX - dotDrag.x) / slotWidth);
+                  setOffset(stripStops[Math.min(stripStops.length - 1, Math.max(0, want))]);
+                }}
+                onPointerUp={() => setDotDrag(null)}
+                onPointerCancel={() => setDotDrag(null)}
+              >
+                {/* How far along the whole set the window sits — the wheel's
+                    own answer to "where am I". */}
+                <span className="tweakers-move-dots-rail" aria-hidden="true">
+                  {/* Counted in controls, not columns: the window is as wide
+                      as the number of slots actually under the dials, which a
+                      2-column control makes one fewer than eight. */}
+                  <span
+                    className="tweakers-move-dots-window"
+                    style={{
+                      left: `${(stripFrom / stripTotal) * 100}%`,
+                      width: `${((stripTo - stripFrom) / stripTotal) * 100}%`,
+                    }}
+                  />
+                </span>
+                {dialSlots.map((meta, i) => (
+                  <span
+                    key={i}
+                    className="tweakers-move-dot"
+                    data-on={meta ? true : undefined}
+                    title={meta ? `Dial ${i + 1} — ${meta.label}` : `Dial ${i + 1}`}
+                  />
+                ))}
+              </div>
+            )}
 
             {/* Trailing empty pad rows collapse: a row shows only if it, or any
                 row after it, has something in it — so gaps inside the grid hold
@@ -1256,13 +1514,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           data-on={cell.lit || undefined}
                           onClick={() => MoveSurfaceStore.press(col, appRow)}
                         >
-                          {/* the colour is the app's own — a track, a slot, a
-                              slice — so it rides inline, like a mod dot does */}
-                          <span
-                            className="tweakers-move-pad-indicator"
-                            style={cell.color ? { background: cell.color } : undefined}
-                          />
-                          {cell.label && <span className="tweakers-move-pad-title">{cell.label}</span>}
+                          <MovePadAppBody label={cell.label} color={cell.color} />
                         </button>
                       );
                     }
@@ -1299,8 +1551,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           onPointerUp={() => { setBendHeld(null); bendRef.current = null; }}
                           onPointerCancel={() => { setBendHeld(null); bendRef.current = null; }}
                         >
-                          <span className="tweakers-move-pad-indicator" />
-                          <span className="tweakers-move-pad-title">Curve</span>
+                          <MovePadToggleBody label="Curve" />
                         </button>
                       );
                     }
@@ -1314,8 +1565,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           data-on={!!values[meta.path]}
                           onClick={() => TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path])}
                         >
-                          <span className="tweakers-move-pad-indicator" />
-                          <span className="tweakers-move-pad-title">{meta.label}</span>
+                          <MovePadToggleBody label={meta.label} />
                         </button>
                       );
                     }
@@ -1329,7 +1579,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           data-kind="action"
                           onClick={() => TweakStore.triggerAction(page.panel.id, meta.path)}
                         >
-                          <span className="tweakers-move-pad-title">{meta.label}</span>
+                          <MovePadActionBody label={meta.label} />
                         </button>
                       );
                     }
@@ -1345,12 +1595,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                         onPointerUp={() => releaseChip(col, meta)}
                         onPointerCancel={() => setHeld(null)}
                       >
-                        <MoveModRing panelId={page.panel.id} path={meta.path} pad />
-                        <span className="tweakers-move-pad-title">{meta.label}</span>
-                        <span className="tweakers-move-pad-reading">
-                          <span className="tweakers-move-pad-number">{value.num}</span>
-                          {value.unit && <span>{value.unit}</span>}
-                        </span>
+                        <MovePadValueBody label={meta.label} value={value.num} unit={value.unit}>
+                          <MoveModRing panelId={page.panel.id} path={meta.path} pad />
+                        </MovePadValueBody>
                       </button>
                     );
                   })}

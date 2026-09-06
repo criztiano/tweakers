@@ -1095,6 +1095,32 @@ Actions reach the pads **only** through `movePads` — every app has buttons, an
 
 Both variants wear the same surface, padding and slot geometry; only the placement differs. The panel carries `data-dock="viewport" | "flow"` if your own CSS needs to branch on it.
 
+### More slots than dials (`scroll`)
+
+A page is eight slots wide because the Move has eight knobs, and everything past them drops to a value chip. Some pages are not that shape: a library, a preset browser, a synth with forty parameters. `scroll` gives the panel an **endless strip** instead — every control keeps a full slot, the row runs longer than the panel, and the window on it moves:
+
+```tsx
+<MovePanel scroll dock="flow" />
+```
+
+- **The big wheel scrolls it.** One detent, one control — on the hardware, and with the mouse wheel anywhere over the panel (the slots, the dots, the header, the surface around them: the whole instrument is the wheel, and the page underneath stays where it is). The window always starts on a whole control, so a two-column filter is never cut in half at the edge.
+- **The arrows turn the page** — a whole window of eight at a time, for getting across a long strip without spinning the wheel. The panel takes `left` and `right` only where the app has left them free: a host that wired its own meaning to them keeps it. On screen the same jump is shift with the arrow keys, or the page keys, once the dot row has focus.
+- **Eight dots sit under the row**, one per knob, each naming the control that knob is holding — the hardware's own dial-slot indicator, and the thing that makes a row longer than the panel honest. A dot goes dark where the set has run out. Drag the row to move the window, or focus it and use the arrow keys, `Home` and `End`; behind the dots a faint rail says how far along the whole set you are.
+- **Nothing is demoted.** There are no value chips and no pad rows on a scrolling page: a toggle takes a big slot of its own rather than a pad.
+
+Tracks still work — each panel is still a page — and a modulator's settings page is the hardware's own shape, so it never scrolls.
+
+The window travels on two events, alongside the panel's existing ones:
+
+| Event | Direction | Detail |
+|---|---|---|
+| `MOVE_JOG_EVENT` (`move-tweakers:jog`) | in | `{ delta }` — the big wheel turned, a signed multi-step count. The kit sends it cancelable; a scrolling page answers it and calls `preventDefault`, so the wheel's other job (the waveform's zoom) does not fire underneath. |
+| `MOVE_STRIP_EVENT` (`move-tweakers:strip`) | out | `{ pageId, offset, columns, paths }` — where the window now sits and the eight control paths under the dials, so the kit can point the hardware's knobs at the same eight controls the screen is showing. |
+
+The bridge kit reads that announcement and maps knob *i* to `paths[i]`, so the Move's eight knobs turn whatever the screen is showing — turn the wheel and the knobs move with it. A page it has heard no window for keeps the ordinary rule (first eight dials, the rest as chips). The panel restates the window on the kit's own page stream, so a bridge that binds after the panel still catches up within a beat.
+
+The geometry is a core of its own (`move-strip.ts`, exported): `buildMoveStrip` turns a panel into the long row, `stripOffsets` lists the places the window may stop, `stepStripOffset` is the wheel, and `stripDialSlots` is what the dots are naming. The library app (`example/`) is built on it — every slot face in the dictionary, live in one instrument.
+
 An `xy` control claims a dial slot as a 2D pad: the field draws behind the label (no slider at the bottom) and dragging it sets both axes. On the hardware, the column's knob turns the X axis — and while a finger rests on that knob, the volume knob turns Y. The pad honours the XYPad's options: `grid`/`density` draw the same grid overlay (on by default, 5×5), `snap` snaps drags to the grid, bipolar axes keep the escapable centre detent, and `returnToCenter` springs the pad back to its origin on release — on screen when the pointer lifts, and on the hardware when the finger leaves the knob.
 
 A `range` control claims a dial slot too: the bar fills between two handle ticks, and dragging grabs the nearest handle. On the hardware it uses the same two-handed idea as the xy pad — the column's knob edits the low handle, and while a finger rests on that knob, the volume knob edits the high one (the ends never cross).
@@ -1137,7 +1163,7 @@ Bipolar sliders (`bipolar: true` or an `origin`) keep their character on the dia
 
 ### The big-slot library, and multi-slot controls
 
-Every face a dial slot can wear lives in one dictionary, `MOVE_SLOT_LIBRARY` (`src/components/move-slots.tsx`): `default`, `value`, `icon`, `curve`, `enum`, `xy`, `range`, `filter`, `env`, `scope`. Each entry is a pure body — a drawing of computed props with no gestures of its own — so a new face is added by writing a body and dispatching to it from the MovePanel, and the gestures (pointer capture, fine drag, modulation arming) stay in one place.
+Every face a dial slot can wear lives in one dictionary, `MOVE_SLOT_LIBRARY` (`src/components/move-slots.tsx`): `default`, `value`, `icon`, `curve`, `enum`, `xy`, `range`, `filter`, `env`, `scope`, `toggle`, `color`, `transfer`, `ramp`, `dial`, and the specimens (`opacity`, `blur`, `pan`, `stereo-width`, `pitch`, `playback`). The library app (`cd example && npm run dev`) shows every one of them live in a single scrolling panel, with the dictionary's own descriptions beside it. Each entry is a pure body — a drawing of computed props with no gestures of its own — so a new face is added by writing a body and dispatching to it from the MovePanel, and the gestures (pointer capture, fine drag, modulation arming) stay in one place.
 
 Some controls are bigger than one column. A **multi-slot control** follows one pattern, whatever its width:
 
@@ -1146,6 +1172,10 @@ Some controls are bigger than one column. A **multi-slot control** follows one p
 - Each column keeps a small caption where its own single slot's label would have been, crossfading to its value on touch — so the hardware's one-knob-per-column rule still holds under the shared picture: every knob edits the hand or stage its column names.
 
 Two ship today: `filter` (2 slots — cutoff and resonance as one magnitude response) and `env` (4 slots — the whole ADSR as one shape on the modulator's settings page, one caption and drag zone per stage).
+
+### The small slots
+
+The pad row under the dials has its own dictionary, `MOVE_PAD_LIBRARY`, on the same terms — pure bodies, gestures left with the panel: `toggle` (a switch), `value` (a value the dial above can borrow — hold to peek, tap to latch), `action` (a button), `app` (a cell the host paints itself through `MoveSurfaceStore`) and `bend` (hold and drag to bend the envelope ramp above it). The library app draws each of them, and their states.
 
 ### Waveform
 

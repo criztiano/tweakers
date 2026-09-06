@@ -620,6 +620,96 @@
   width: 100%;
 }
 
+/* The endless strip. The dial row keeps its 8-wide slot size and simply runs
+   longer than the panel; the viewport is the window on it. It clips sideways
+   only — a touched option list still grows up out of its slot, over the
+   panel — and the row slides under it by whole slots. */
+.tweakers-move-viewport[data-scroll="true"] {
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+.tweakers-move-dials[data-scroll="true"] {
+  --move-slot-w: calc((100% - 28px) / 8);
+  grid-template-columns: repeat(var(--move-strip-len, 8), var(--move-slot-w));
+  width: 100%;
+  transform: translateX(calc(var(--move-offset, 0) * (var(--move-slot-w) + 4px) * -1));
+  transition: transform 0.16s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-dials[data-scroll="true"] {
+    transition: none;
+  }
+}
+
+/* The dial row in dots: eight lights under the eight slots the knobs hold,
+   the hardware's own indicator row. The rail behind them says how far along
+   the whole set that window sits — the only place a strip longer than the
+   panel can admit how long it is. Drag the row to move the window. */
+.tweakers-move-dots {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 4px;
+  align-items: center;
+  height: 16px;
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tweakers-move-dots:focus-visible {
+  outline: 2px solid var(--move-text);
+  outline-offset: 2px;
+  border-radius: var(--move-radius-small);
+}
+
+.tweakers-move-dots-rail {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+  /* the slot tint, so the track reads as part of the face, not a line on it */
+  background: var(--move-slot);
+}
+
+.tweakers-move-dots-window {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: inherit;
+  background: var(--move-text);
+  opacity: 0.35;
+  transition: left 0.16s ease, opacity 0.12s;
+}
+
+.tweakers-move-dots[data-scrolling="true"] .tweakers-move-dots-window,
+.tweakers-move-dots:hover .tweakers-move-dots-window {
+  opacity: 0.6;
+}
+
+.tweakers-move-dot {
+  position: relative;
+  justify-self: center;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--move-text);
+  opacity: 0.12;
+  transition: opacity 0.12s;
+}
+
+.tweakers-move-dot[data-on="true"] {
+  width: 7px;
+  height: 7px;
+  opacity: 0.85;
+}
+
 .tweakers-move-dial {
   position: relative;
   height: 100%;

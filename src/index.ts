@@ -6,13 +6,30 @@ export type { TweakTheme } from './theme';
 
 // Move surface mirror (docked bottom panel matching the bridge kit's mapping)
 export { MovePanel } from './components/MovePanel';
+// The panel's window events — what the bridge kit sends in and hears back.
+export {
+  MOVE_TOUCH_EVENT,
+  MOVE_OVERRIDE_EVENT,
+  MOVE_LATCH_EVENT,
+  MOVE_PAGE_EVENT,
+  MOVE_PAGE_SELECT_EVENT,
+  MOVE_JOG_EVENT,
+  MOVE_STRIP_EVENT,
+  MOVE_TRACK_COLORS,
+} from './components/MovePanel';
 export { MoveActionButton } from './components/MoveActionButton';
 export type { MoveActionButtonProps } from './components/MoveActionButton';
-export { buildMovePages, buildModMovePage, movePadRows, moveAppPadRow, visibleColumns, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
+export { buildMovePages, buildModMovePage, movePadRows, moveAppPadRow, visibleColumns, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isMoveDial, isSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
 export type { MovePage } from './move-layout';
 
+// The endless strip — a page with more slots than the Move has dials
+export { buildMoveStrip, isStripSlot, stripStarts, stripOffsets, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripSlotCount, stripSlotIndex } from './move-strip';
+
 // The big-slot library — the dictionary of what a Move dial slot can be
-export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotPlaybackDrawing, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
+export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotPlaybackDrawing, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotColorBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
+// The small slots — the pad row under the dials
+export { MOVE_PAD_LIBRARY, MovePadToggleBody, MovePadValueBody, MovePadActionBody, MovePadAppBody } from './components/move-slots';
+export type { MovePadKind } from './components/move-slots';
 export { moveNumericDrawing, movePlaybackMode, moveVisualReading } from './move-visual-core';
 export type { MoveVisual, MoveSliderVisual, MoveSelectVisual, MovePlaybackMode, MoveNumericDrawing } from './move-visual-core';
 export type { MoveSlotKind } from './components/move-slots';

@@ -72,6 +72,7 @@ export default defineConfig([
       'gradient-core': 'src/gradient-core.ts',
       'icons': 'src/icons.ts',
       'move-layout': 'src/move-layout.ts',
+      'move-strip': 'src/move-strip.ts',
       'move-visual-core': 'src/move-visual-core.ts',
       'range-slider-core': 'src/range-slider-core.ts',
       'shortcut-utils': 'src/shortcut-utils.ts',
