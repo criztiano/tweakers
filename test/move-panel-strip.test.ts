@@ -129,15 +129,23 @@ describe('the scrolling panel', () => {
   });
 
   it('tells the bridge which columns the dials now hold', () => {
-    const seen: unknown[] = [];
+    const seen: Record<string, unknown>[] = [];
     window.addEventListener(MOVE_STRIP_EVENT, (e) => seen.push((e as CustomEvent).detail));
     mount(many(20));
     jog(2);
-    expect(seen.at(-1)).toEqual({
+    const { pads, ...window8 } = seen.at(-1)!;
+    expect(window8).toEqual({
       pageId: id,
       offset: 2,
       columns: [2, 3, 4, 5, 6, 7, 8, 9],
       paths: ['p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9'],
+    });
+    // No pads on this page: the rows go out empty rather than absent, so the
+    // hardware's pads go dark instead of keeping the last page's.
+    expect(pads).toEqual({
+      toggles: Array(8).fill(null),
+      values: Array(8).fill(null),
+      actions: Array(8).fill(null),
     });
   });
 
@@ -174,6 +182,21 @@ describe('small slots on the strip', () => {
     expect(labels()).not.toContain('Sync');
     expect(labels()).not.toContain('Drive');
     expect(labels()).toHaveLength(10);
+  });
+
+  it('tells the bridge where the pads are, so the hardware lights them', () => {
+    const seen: Record<string, unknown>[] = [];
+    window.addEventListener(MOVE_STRIP_EVENT, (e) => seen.push((e as CustomEvent).detail));
+    withPads();
+    const pads = seen.at(-1)!.pads as Record<string, (string | null)[]>;
+    expect(pads.toggles[2]).toBe('sync');
+    expect(pads.values[2]).toBe('drive');
+    expect(pads.actions[5]).toBe('clear');
+    // Scrolled on, they ride to the columns their slots moved to.
+    jog(2);
+    const moved = seen.at(-1)!.pads as Record<string, (string | null)[]>;
+    expect(moved.toggles[0]).toBe('sync');
+    expect(moved.actions[3]).toBe('clear');
   });
 
   it('scrolls the pads with the slots — one strip, one window', () => {

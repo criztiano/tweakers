@@ -175,6 +175,22 @@ export function stripDialSlots(
   return stripDialColumns(page, offset, cols).map((col) => (col < 0 ? undefined : page.dials[col]));
 }
 
+/**
+ * The pad rows under that window, in hardware columns — the small slots the
+ * eight pads are showing right now. A pad lives at a strip column like its
+ * slot does, so the window that picks the dials picks these with it: scroll
+ * on and the chip leaves with the dial it belongs to.
+ */
+export function stripWindowPads(
+  page: MovePage,
+  offset: number,
+  cols: number = MOVE_DIALS
+): { toggles: (ControlMeta | undefined)[]; values: (ControlMeta | undefined)[]; actions: (ControlMeta | undefined)[] } {
+  const row = (cells: ControlMeta[]) =>
+    Array.from({ length: cols }, (_, i) => cells[offset + i]);
+  return { toggles: row(page.toggles), values: row(page.values), actions: row(page.actions) };
+}
+
 /** How many controls the strip holds — the number the position readout counts. */
 export const stripSlotCount = (page: MovePage): number => stripStarts(page).length;
 

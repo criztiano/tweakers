@@ -8,7 +8,7 @@ import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from '../theme';
 import { buildMovePages, buildModMovePage, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, isEnumDial, isSpanContinuation, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
-import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
+import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
 import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadValueBody, MovePadActionBody, MovePadAppBody } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
@@ -381,12 +381,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const announceStrip = useCallback(() => {
     const { page: pg, offset: at, on } = stripRef.current;
     if (!on || !pg) return;
+    const pads = stripWindowPads(pg, at);
+    const row = (cells: (ControlMeta | undefined)[]) => cells.map((meta) => meta?.path ?? null);
     window.dispatchEvent(new CustomEvent(MOVE_STRIP_EVENT, {
       detail: {
         pageId: pg.panel.id,
         offset: at,
         columns: stripDialColumns(pg, at),
         paths: stripDialSlots(pg, at).map((meta) => meta?.path ?? null),
+        // The small slots under that window, in hardware columns — without
+        // them the pads under a scrolling page stay dark and dead.
+        pads: { toggles: row(pads.toggles), values: row(pads.values), actions: row(pads.actions) },
       },
     }));
   }, []);
