@@ -17,6 +17,7 @@ import {
   MoveSlotScopeBody,
   MoveSlotEnvBody,
   MovePadToggleBody,
+  MovePadWaveBody,
   MovePadValueBody,
   MovePadActionBody,
   MovePadAppBody,
@@ -350,6 +351,12 @@ export const SMALL_SLOTS: Specimen[] = [
     description: MOVE_PAD_LIBRARY.bend.description,
     note: 'Under each ramp of the envelope, on its page.',
     render: () => <MovePadToggleBody label="Curve" />,
+  },
+  {
+    kind: 'wave',
+    description: MOVE_PAD_LIBRARY.wave.description,
+    note: 'One row below the bends, under every stage. The name says which way the sine goes.',
+    render: () => <MovePadWaveBody label="Dip" percent={40} />,
   },
 ];
 

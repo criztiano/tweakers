@@ -813,6 +813,17 @@ var secs = (ms) => Math.max(0, Number(ms) || 0) / 1e3;
 var ADSR_STAGE_MAX = { attack: 2e3, decay: 2e3, release: 4e3 };
 var ENV_BEND_STAGES = ["attack", "decay", "release"];
 var envCurveParam = (stage) => `${stage}Curve`;
+var ENV_WAVE_STAGES = ["attack", "decay", "sustain", "release"];
+var envWaveParam = (stage) => `${stage}Wave`;
+var envWaveFlipParam = (stage) => `${stage}WaveFlip`;
+var ENV_SUSTAIN_WAVE_BEATS = 1;
+var ENV_SUSTAIN_WAVE_CYCLES = 2;
+function envStageWave(stage, phase, level, params) {
+  const amount = clamp012(params[envWaveParam(stage)]);
+  if (amount <= 0) return level;
+  const w = amount * (1 - Math.cos(2 * Math.PI * phase)) / 2;
+  return params[envWaveFlipParam(stage)] ? level + (1 - level) * w : level * (1 - w);
+}
 var adsrShape = (p, curve) => {
   const c = clamp(Number(curve) || 0, -1, 1);
   return 1 - Math.pow(1 - p, Math.pow(4, c));
@@ -825,10 +836,20 @@ function envelopePoints(params, count) {
   const wD = share("decay");
   const wR = share("release");
   const at = (t) => {
-    if (t < wA) return adsrShape(t / wA, params.attackCurve);
-    if (t < wA + wD) return 1 - (1 - sustain) * adsrShape((t - wA) / wD, params.decayCurve);
-    if (t < 1 - wR) return sustain;
-    return sustain * (1 - adsrShape((t - (1 - wR)) / wR, params.releaseCurve));
+    if (t < wA) {
+      const p2 = t / wA;
+      return envStageWave("attack", p2, adsrShape(p2, params.attackCurve), params);
+    }
+    if (t < wA + wD) {
+      const p2 = (t - wA) / wD;
+      return envStageWave("decay", p2, 1 - (1 - sustain) * adsrShape(p2, params.decayCurve), params);
+    }
+    if (t < 1 - wR) {
+      const p2 = (t - wA - wD) / (1 - wR - wA - wD);
+      return envStageWave("sustain", p2 * ENV_SUSTAIN_WAVE_CYCLES % 1, sustain, params);
+    }
+    const p = (t - (1 - wR)) / wR;
+    return envStageWave("release", p, sustain * (1 - adsrShape(p, params.releaseCurve)), params);
   };
   return Array.from({ length: n }, (_, i) => at(i / (n - 1)));
 }
@@ -861,7 +882,17 @@ var ADSR_DEF = {
     // as the design draws them — every ramp bendable from its pad.
     attackCurve: 0.5,
     decayCurve: 0,
-    releaseCurve: 0
+    releaseCurve: 0,
+    // Every stage's wave rests at zero: the envelope ships as itself, and
+    // the second dimension arrives only when a pad asks for it.
+    attackWave: 0,
+    decayWave: 0,
+    sustainWave: 0,
+    releaseWave: 0,
+    attackWaveFlip: false,
+    decayWaveFlip: false,
+    sustainWaveFlip: false,
+    releaseWaveFlip: false
   },
   controls: [
     { type: "slider", path: "attack", label: "Attack", min: 0, max: ADSR_STAGE_MAX.attack, step: 1, unit: "ms", envStage: "attack" },
@@ -886,7 +917,7 @@ var ADSR_DEF = {
       s.from = s.env;
     }
   },
-  tick(state2, params, dt) {
+  tick(state2, params, dt, bpm) {
     const s = state2;
     const loop = !!params.loop;
     const sustain = clamp012(params.sustain);
@@ -919,6 +950,11 @@ var ADSR_DEF = {
     else if (s.stage === "sustain") s.env = sustain;
     else if (s.stage === "release") s.env = s.from * (1 - adsrShape(p, params.releaseCurve));
     else s.env = 0;
+    if (s.stage !== "idle") {
+      const beat = 60 / (Number(bpm) || 120) * ENV_SUSTAIN_WAVE_BEATS;
+      const wp = s.stage === "sustain" ? s.t / beat % 1 : p;
+      s.env = envStageWave(s.stage, wp, s.env, params);
+    }
     return clamp012(s.env);
   }
 };
@@ -2717,6 +2753,16 @@ function MovePadValueBody({ label, value, unit, children }) {
     ] })
   ] });
 }
+function MovePadWaveBody({ label, percent }) {
+  return /* @__PURE__ */ jsxs4(Fragment3, { children: [
+    /* @__PURE__ */ jsx4("span", { className: "tweakers-move-pad-indicator" }),
+    /* @__PURE__ */ jsx4("span", { className: "tweakers-move-pad-title", children: label }),
+    /* @__PURE__ */ jsxs4("span", { className: "tweakers-move-pad-reading", children: [
+      /* @__PURE__ */ jsx4("span", { className: "tweakers-move-pad-number", children: percent }),
+      /* @__PURE__ */ jsx4("span", { children: "%" })
+    ] })
+  ] });
+}
 function MovePadActionBody({ label }) {
   return /* @__PURE__ */ jsx4("span", { className: "tweakers-move-pad-title", children: label });
 }
@@ -2737,7 +2783,8 @@ var MOVE_PAD_LIBRARY = {
   value: { description: "a value the dial above can borrow \u2014 hold to peek, tap to latch", component: MovePadValueBody },
   action: { description: "a button: a press runs the app\u2019s action", component: MovePadActionBody },
   app: { description: "a cell the app paints itself \u2014 a track, a slice, a step", component: MovePadAppBody },
-  bend: { description: "hold and drag to bend the envelope ramp above it", component: MovePadToggleBody }
+  bend: { description: "hold and drag to bend the envelope ramp above it", component: MovePadToggleBody },
+  wave: { description: "hold and drag for the stage\u2019s own sine, tap to flip it", component: MovePadWaveBody }
 };
 var MOVE_SLOT_LIBRARY = {
   color: { description: "selected color; hue on the dial, luminosity on volume, tap to edit", component: MoveSlotColorBody },
@@ -4002,6 +4049,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const [dragPath, setDragPath] = useState3(null);
   const [bendHeld, setBendHeld] = useState3(null);
   const bendRef = useRef5(null);
+  const [waveHeld, setWaveHeld] = useState3(null);
+  const waveRef = useRef5(null);
   const [handTouch, setHandTouch] = useState3({});
   const [curvePoint, setCurvePoint] = useState3({});
   const [rampStop, setRampStop] = useState3({});
@@ -4984,9 +5033,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                     release: Number(values.release) || 0,
                     attackCurve: Number(modSlot?.params.attackCurve) || 0,
                     decayCurve: Number(modSlot?.params.decayCurve) || 0,
-                    releaseCurve: Number(modSlot?.params.releaseCurve) || 0
+                    releaseCurve: Number(modSlot?.params.releaseCurve) || 0,
+                    ...Object.fromEntries(ENV_WAVE_STAGES.flatMap((s) => [
+                      [envWaveParam(s), Number(modSlot?.params[envWaveParam(s)]) || 0],
+                      [envWaveFlipParam(s), !!modSlot?.params[envWaveFlipParam(s)]]
+                    ]))
                   };
-                  const envActive = stageDials.some(
+                  const envActive = waveHeld !== null || stageDials.some(
                     (s) => dragPath === s.meta.path || !!handTouch[s.meta.path] || !!hwHeld[s.meta.path]
                   );
                   const reading = (m) => {
@@ -5168,6 +5221,51 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                       children: /* @__PURE__ */ jsx7(MovePadToggleBody, { label: "Curve" })
                     },
                     `bend-${bendStage}`
+                  );
+                }
+                const waveStage = !meta && settingsPanel && padRows[row] === page.values && modSettings ? modLayout?.dials[col]?.stage : void 0;
+                if (waveStage && ENV_WAVE_STAGES.includes(waveStage)) {
+                  const amount = Number(modSlot?.params[envWaveParam(waveStage)]) || 0;
+                  const flipped = !!modSlot?.params[envWaveFlipParam(waveStage)];
+                  return /* @__PURE__ */ jsx7(
+                    "button",
+                    {
+                      className: "tweakers-move-pad",
+                      "data-kind": "wave",
+                      "data-on": amount > 0 || void 0,
+                      "data-held": waveHeld === waveStage || void 0,
+                      onPointerDown: (e) => {
+                        try {
+                          e.currentTarget.setPointerCapture(e.pointerId);
+                        } catch {
+                        }
+                        setWaveHeld(waveStage);
+                        waveRef.current = { y: e.clientY, amount, moved: false };
+                      },
+                      onPointerMove: (e) => {
+                        if (waveHeld !== waveStage || !waveRef.current) return;
+                        const dy = waveRef.current.y - e.clientY;
+                        if (!waveRef.current.moved && Math.abs(dy) < 3) return;
+                        waveRef.current.moved = true;
+                        const v = Math.min(1, Math.max(0, waveRef.current.amount + dy / 100));
+                        ModulationStore2.updateSlotParams(modSettings.index, { [envWaveParam(waveStage)]: v });
+                      },
+                      onPointerUp: () => {
+                        if (waveHeld === waveStage && waveRef.current && !waveRef.current.moved) {
+                          ModulationStore2.updateSlotParams(modSettings.index, {
+                            [envWaveFlipParam(waveStage)]: !flipped
+                          });
+                        }
+                        setWaveHeld(null);
+                        waveRef.current = null;
+                      },
+                      onPointerCancel: () => {
+                        setWaveHeld(null);
+                        waveRef.current = null;
+                      },
+                      children: /* @__PURE__ */ jsx7(MovePadWaveBody, { label: flipped ? "Swell" : "Dip", percent: Math.round(amount * 100) })
+                    },
+                    `wave-${waveStage}`
                   );
                 }
                 if (!meta) return /* @__PURE__ */ jsx7("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
@@ -6514,6 +6612,8 @@ export {
   DEFAULT_TRANSFER,
   DEFAULT_TRIGGER_STEPS,
   ENV_BEND_STAGES,
+  ENV_SUSTAIN_WAVE_BEATS,
+  ENV_WAVE_STAGES,
   FILTER_DB_CEIL,
   FILTER_DB_FLOOR,
   ICON_MOVE_CAPTURE,
@@ -6560,6 +6660,7 @@ export {
   MovePadAppBody,
   MovePadToggleBody,
   MovePadValueBody,
+  MovePadWaveBody,
   MovePanel,
   MovePresetStore,
   MoveSlotColorBody,
@@ -6627,6 +6728,9 @@ export {
   displayHex,
   enumOptionIcon,
   envCurveParam,
+  envStageWave,
+  envWaveFlipParam,
+  envWaveParam,
   envelopeJoints,
   envelopePoints,
   filterHand01,

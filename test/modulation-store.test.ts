@@ -1,6 +1,8 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { TweakStore } from '../src/store/TweakStore';
 import { ModulationStore, MOD_TOUCH_GRACE_MS } from '../src/store/ModulationStore';
+import { MOD_SETTINGS_PANEL } from '../src/modulation-core';
+import { buildModMovePage } from '../src/move-layout';
 
 // Each test gets its own panel id; unregister keeps the singletons clean.
 let panelSeq = 0;
@@ -186,5 +188,26 @@ describe('gates', () => {
     ModulationStore.createSlot(0);                           // an LFO
     expect(() => ModulationStore.gate(0, true)).not.toThrow();
     expect(() => ModulationStore.gate(5, true)).not.toThrow(); // empty slot
+  });
+});
+
+describe('the envelope settings page', () => {
+  it('keeps both pad rows free under every stage — the bend and wave gestures sit there', () => {
+    ModulationStore.createSlot(0, 'adsr');
+    ModulationStore.openSettings(0);
+    const layout = ModulationStore.getSettingsLayout()!;
+    const page = buildModMovePage(TweakStore.getPanel(MOD_SETTINGS_PANEL)!, layout);
+
+    const stageCols = layout.dials.flatMap((d, i) => (d.stage ? [i] : []));
+    expect(stageCols).toHaveLength(4);
+    for (const col of stageCols) {
+      expect(page.toggles[col]).toBeUndefined();             // the bend row
+      expect(page.values[col]).toBeUndefined();              // the wave row
+    }
+    // Both rows have to exist at all: the panel collapses away trailing rows
+    // with nothing in them, and would take the gestures with them.
+    expect(page.toggles.length).toBeGreaterThan(0);
+    expect(page.values.length).toBeGreaterThan(0);
+    ModulationStore.closeSettings();
   });
 });

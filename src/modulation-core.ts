@@ -571,6 +571,48 @@ export const ENV_BEND_STAGES: readonly EnvStage[] = ['attack', 'decay', 'release
 export const envCurveParam = (stage: EnvStage) => `${stage}Curve`;
 
 /**
+ * Every stage carries a wave too — the sustain included, since a held level
+ * is a segment of the shape like any other.
+ */
+export const ENV_WAVE_STAGES: readonly EnvStage[] = ['attack', 'decay', 'sustain', 'release'];
+
+/** A stage's wave params: how much of it lands, and which way up it sits. */
+export const envWaveParam = (stage: EnvStage) => `${stage}Wave`;
+export const envWaveFlipParam = (stage: EnvStage) => `${stage}WaveFlip`;
+
+/** The sustain has no length to borrow, so its wave rides the clock instead. */
+export const ENV_SUSTAIN_WAVE_BEATS = 1;
+
+/** The cycles the picture draws across the sustain plateau — a portrait of
+ *  the wobble, not a clock: the real one runs at the tempo, not at the width. */
+const ENV_SUSTAIN_WAVE_CYCLES = 2;
+
+/**
+ * The stage wave: one sine exactly as long as the stage it rides, worked
+ * into that stage's own level. The sine is nothing at both ends of the
+ * stage and everything through its middle, so the joints stay exactly where
+ * the picture pins them — a stage never falls off a cliff at its edges, it
+ * only breathes between them.
+ *
+ * `amount` is how far that breath goes, and the flip is which way it goes:
+ * down, the sine multiplies the level toward nothing (at 100% the stage
+ * disappears through its own middle); flipped, it multiplies the room left
+ * above the level instead, and the stage swells toward full. Same sine,
+ * mirrored around the ramp it rides.
+ */
+export function envStageWave(
+  stage: EnvStage,
+  phase: number,
+  level: number,
+  params: ModulationParams
+): number {
+  const amount = clamp01(params[envWaveParam(stage)]);
+  if (amount <= 0) return level;
+  const w = (amount * (1 - Math.cos(2 * Math.PI * phase))) / 2;   // 0 at both ends
+  return params[envWaveFlipParam(stage)] ? level + (1 - level) * w : level * (1 - w);
+}
+
+/**
  * A stage ramp's shape, bent by its curve: 0 is a straight line, positive
  * leaps off the mark and tapers into the target (+0.5 is the analog ease
  * the attack has always had), negative creeps first and arrives in a rush.
@@ -588,6 +630,11 @@ const adsrShape = (p: number, curve: unknown) => {
  * stage still shows its edge, capped so the sustain hold never vanishes),
  * and the sustain level runs flat through whatever width remains — turn any
  * dial and its part of the picture stretches or falls in place.
+ *
+ * Each stage's wave multiplies its own segment here exactly as it does in
+ * the signal, so the drawing IS the modulation. The sustain's wave is the
+ * one approximation: it runs on the clock, not on a width, so the plateau
+ * shows a fixed couple of cycles — the depth is true, the rate is a portrait.
  */
 export function envelopePoints(params: ModulationParams, count: number): number[] {
   const n = Math.max(2, count);
@@ -598,10 +645,20 @@ export function envelopePoints(params: ModulationParams, count: number): number[
   const wD = share('decay');
   const wR = share('release');
   const at = (t: number): number => {
-    if (t < wA) return adsrShape(t / wA, params.attackCurve);
-    if (t < wA + wD) return 1 - (1 - sustain) * adsrShape((t - wA) / wD, params.decayCurve);
-    if (t < 1 - wR) return sustain;
-    return sustain * (1 - adsrShape((t - (1 - wR)) / wR, params.releaseCurve));
+    if (t < wA) {
+      const p = t / wA;
+      return envStageWave('attack', p, adsrShape(p, params.attackCurve), params);
+    }
+    if (t < wA + wD) {
+      const p = (t - wA) / wD;
+      return envStageWave('decay', p, 1 - (1 - sustain) * adsrShape(p, params.decayCurve), params);
+    }
+    if (t < 1 - wR) {
+      const p = (t - wA - wD) / (1 - wR - wA - wD);
+      return envStageWave('sustain', (p * ENV_SUSTAIN_WAVE_CYCLES) % 1, sustain, params);
+    }
+    const p = (t - (1 - wR)) / wR;
+    return envStageWave('release', p, sustain * (1 - adsrShape(p, params.releaseCurve)), params);
   };
   return Array.from({ length: n }, (_, i) => at(i / (n - 1)));
 }
@@ -648,6 +705,11 @@ function adsrStageLength(stage: AdsrStage, params: ModulationParams): number {
  * Loop is the exception, for demos and for prototyping with no host: with
  * it on the envelope plays its own gate, running attack → decay → release
  * over and over.
+ *
+ * Every stage has a second dimension beside its bend: a sine the exact
+ * length of that stage, multiplied into it from 0 to 100%. Each one is
+ * independent, so an attack can shudder while the sustain breathes, and
+ * every one of them is in time by construction — the stage IS the cycle.
  */
 export const ADSR_DEF: ModTypeDef = {
   type: 'adsr',
@@ -657,6 +719,10 @@ export const ADSR_DEF: ModTypeDef = {
     // The attack keeps its analog leap; decay and release start straight,
     // as the design draws them — every ramp bendable from its pad.
     attackCurve: 0.5, decayCurve: 0, releaseCurve: 0,
+    // Every stage's wave rests at zero: the envelope ships as itself, and
+    // the second dimension arrives only when a pad asks for it.
+    attackWave: 0, decayWave: 0, sustainWave: 0, releaseWave: 0,
+    attackWaveFlip: false, decayWaveFlip: false, sustainWaveFlip: false, releaseWaveFlip: false,
   },
   controls: [
     { type: 'slider', path: 'attack', label: 'Attack', min: 0, max: ADSR_STAGE_MAX.attack, step: 1, unit: 'ms', envStage: 'attack' },
@@ -681,7 +747,7 @@ export const ADSR_DEF: ModTypeDef = {
       s.from = s.env;
     }
   },
-  tick(state, params, dt) {
+  tick(state, params, dt, bpm) {
     const s = state as AdsrState;
     const loop = !!params.loop;
     const sustain = clamp01(params.sustain);
@@ -723,6 +789,16 @@ export const ADSR_DEF: ModTypeDef = {
     else if (s.stage === 'sustain') s.env = sustain;
     else if (s.stage === 'release') s.env = s.from * (1 - adsrShape(p, params.releaseCurve));
     else s.env = 0;
+
+    // Then the stage's own wave works into it: one cycle across the stage,
+    // so it can never drift out of time with the shape. The sustain has no
+    // length to take a cycle from — it holds for as long as the gate does —
+    // so its wave runs on the clock, a cycle per beat.
+    if (s.stage !== 'idle') {
+      const beat = (60 / (Number(bpm) || 120)) * ENV_SUSTAIN_WAVE_BEATS;
+      const wp = s.stage === 'sustain' ? (s.t / beat) % 1 : p;
+      s.env = envStageWave(s.stage, wp, s.env, params);
+    }
     return clamp01(s.env);
   },
 };

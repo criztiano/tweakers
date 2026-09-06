@@ -30,7 +30,7 @@ export { buildMoveStrip, isStripSlot, stripStarts, stripOffsets, clampStripOffse
 // The big-slot library — the dictionary of what a Move dial slot can be
 export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotPlaybackDrawing, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotColorBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
 // The small slots — the pad row under the dials
-export { MOVE_PAD_LIBRARY, MovePadToggleBody, MovePadValueBody, MovePadActionBody, MovePadAppBody } from './components/move-slots';
+export { MOVE_PAD_LIBRARY, MovePadToggleBody, MovePadValueBody, MovePadActionBody, MovePadAppBody, MovePadWaveBody } from './components/move-slots';
 export type { MovePadKind } from './components/move-slots';
 export { moveNumericDrawing, movePlaybackMode, moveVisualReading } from './move-visual-core';
 export type { MoveVisual, MoveSliderVisual, MoveSelectVisual, MovePlaybackMode, MoveNumericDrawing } from './move-visual-core';
@@ -101,6 +101,11 @@ export {
   envelopeJoints,
   envCurveParam,
   ENV_BEND_STAGES,
+  envStageWave,
+  envWaveParam,
+  envWaveFlipParam,
+  ENV_WAVE_STAGES,
+  ENV_SUSTAIN_WAVE_BEATS,
   modPageWidth,
   ADSR_STAGE_MAX,
 } from './modulation-core';
