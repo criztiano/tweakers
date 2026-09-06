@@ -1,9 +1,4 @@
-type AnalyserScale = 'log' | 'linear';
-/** `true` enables the default spring; an object overrides stiffness/damping. */
-type AnalyserSpring = boolean | {
-    stiffness?: number;
-    damping?: number;
-};
+import { AnalyserScale, AnalyserSpring } from './analyser-core.js';
 
 type AnalyserSource = 'frequency' | 'waveform' | 'ekg' | 'transfer' | 'overlay';
 type AnalyserVariant = 'line' | 'area';
@@ -68,4 +63,4 @@ interface AnalyserEngine {
  */
 declare function createAnalyserEngine(canvas: HTMLCanvasElement, get: () => AnalyserRuntime): AnalyserEngine;
 
-export { type AnalyserEngine, type AnalyserMode, type AnalyserRuntime, type AnalyserScale, type AnalyserSource, type AnalyserSpring, type AnalyserTransferDraw, type AnalyserVariant, createAnalyserEngine };
+export { type AnalyserEngine, type AnalyserMode, type AnalyserRuntime, AnalyserScale, type AnalyserSource, AnalyserSpring, type AnalyserTransferDraw, type AnalyserVariant, createAnalyserEngine };

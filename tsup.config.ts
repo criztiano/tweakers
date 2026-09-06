@@ -1,5 +1,4 @@
 import { defineConfig } from 'tsup';
-import { solidPlugin } from 'esbuild-plugin-solid';
 
 // Rewrite the shared TweakStore import to the `tweakers/store` package subpath so
 // framework-neutral bundles reference the single shared store instead of
@@ -15,7 +14,7 @@ const externalizeTweakStore = {
 };
 
 export default defineConfig([
-  // Store build (shared across all framework entries)
+  // Store build (shared across all consumers)
   {
     entry: { index: 'src/store/TweakStore.ts' },
     outDir: 'dist/store',
@@ -35,7 +34,7 @@ export default defineConfig([
     sourcemap: true,
     esbuildPlugins: [externalizeTweakStore],
   },
-  // React build
+  // React build (the Move surface)
   {
     entry: ['src/index.ts'],
     format: ['esm', 'cjs'],
@@ -50,63 +49,40 @@ export default defineConfig([
     },
     onSuccess: 'cp src/styles/theme.css dist/styles.css',
   },
-  // Solid build
-  {
-    entry: { index: 'src/solid/index.ts' },
-    outDir: 'dist/solid',
-    format: ['esm', 'cjs'],
-    dts: {
-      compilerOptions: {
-        jsx: 'preserve',
-        jsxImportSource: 'solid-js',
-      },
-    },
-    splitting: false,
-    sourcemap: true,
-    external: ['solid-js', 'solid-js/web', 'motion'],
-    tsconfig: 'tsconfig.solid.json',
-    esbuildPlugins: [solidPlugin()],
-  },
-  // Vue build
-  {
-    entry: { index: 'src/vue/index.ts' },
-    outDir: 'dist/vue',
-    format: ['esm', 'cjs'],
-    dts: true,
-    splitting: false,
-    sourcemap: true,
-    external: ['vue', 'motion-v'],
-    tsconfig: 'tsconfig.vue.json',
-  },
-  // Shared leaf modules emitted to dist root. The packaged Svelte components keep
-  // their `../../icons` / `../../shortcut-utils` import specifiers (svelte-package
-  // does not reach outside src/svelte), so those files must exist at dist root.
-  // React/Solid/Vue bundle them inline, so this standalone emission is for Svelte.
-  // shortcut-utils references the TweakStore singleton — externalize it to the shared
-  // dist/store rather than inlining a second, desynced store instance.
-  //
-  // THIS LIST MUST COVER EVERY `../../x` SPECIFIER IN src/svelte. It does not
-  // update itself, and a missing entry fails only in a downstream consumer that
-  // bundles tweakers/svelte — never in this repo's own build or example app. Any
-  // new leaf module a Svelte component imports has to be added here in the same
-  // change, or that consumer's build breaks with "Could not resolve ../../x".
+  // Framework-neutral leaf modules that keep their own subpath exports.
+  // Externalize the shared store rather than inlining a second, desynced copy.
   {
     entry: {
-      icons: 'src/icons.ts',
-      'shortcut-utils': 'src/shortcut-utils.ts',
-      'waveform-engine': 'src/waveform-engine.ts',
-      'analyser-engine': 'src/analyser-engine.ts',
       'curve-composer-core': 'src/curve-composer-core.ts',
-      'range-slider-core': 'src/range-slider-core.ts',
-      'color-core': 'src/color-core.ts',
-      'color-palette-store': 'src/color-palette-store.ts',
-      'gradient-core': 'src/gradient-core.ts',
-      'xy-pad-core': 'src/xy-pad-core.ts',
-      'affordance-core': 'src/affordance-core.ts',
       'modulation-core': 'src/modulation-core.ts',
       // ModulationStore sits in src/store, so its TweakStore import is the
       // bare sibling './TweakStore' — the widened filter below catches it.
       'modulation-store': 'src/store/ModulationStore.ts',
+      // Leaf modules the dialkit sidebar package consumes via `tweakers/<name>`.
+      'affordance-core': 'src/affordance-core.ts',
+      'analyser-core': 'src/analyser-core.ts',
+      'analyser-engine': 'src/analyser-engine.ts',
+      'angle-core': 'src/angle-core.ts',
+      'color-core': 'src/color-core.ts',
+      'color-palette-store': 'src/color-palette-store.ts',
+      'copy-instruction': 'src/copy-instruction.ts',
+      'curve-preview-core': 'src/curve-preview-core.ts',
+      'env': 'src/env.ts',
+      'filter-core': 'src/filter-core.ts',
+      'gradient-core': 'src/gradient-core.ts',
+      'icons': 'src/icons.ts',
+      'move-layout': 'src/move-layout.ts',
+      'move-visual-core': 'src/move-visual-core.ts',
+      'range-slider-core': 'src/range-slider-core.ts',
+      'shortcut-utils': 'src/shortcut-utils.ts',
+      'timeline-core': 'src/timeline-core.ts',
+      'transfer-core': 'src/transfer-core.ts',
+      'transition-math': 'src/transition-math.ts',
+      'waveform-dsp': 'src/waveform-dsp.ts',
+      'waveform-engine': 'src/waveform-engine.ts',
+      'xy-pad-core': 'src/xy-pad-core.ts',
+      'store/TimelineStore': 'src/store/TimelineStore.ts',
+      'store/TimelineUiStore': 'src/store/TimelineUiStore.ts',
     },
     outDir: 'dist',
     format: ['esm'],

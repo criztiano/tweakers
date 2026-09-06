@@ -53,6 +53,7 @@ export {
 export type {
   TimelineClipMeta,
   TimelineClipTrackMeta,
+  TimelineLoopRegion,
   TimelineMeta,
   TimelineTransport,
 } from '../store/TimelineStore';

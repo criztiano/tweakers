@@ -4,7 +4,7 @@ import { WaveformVisualization } from './WaveformVisualization';
 import type { WaveformMode, WaveformLoop } from '../waveform-engine';
 import { MoveWaveformStore, type MoveWaveformVariant } from '../move-waveform';
 import { isDevDefault } from '../env';
-import type { TweakTheme } from './TweakRoot';
+import type { TweakTheme } from '../theme';
 
 /** Slot geometry, so a slot-placed waveform lines up with the dial row. */
 const SLOT_HEIGHT = 140;
