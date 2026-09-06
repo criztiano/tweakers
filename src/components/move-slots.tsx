@@ -580,7 +580,7 @@ export function MoveSlotToggleBody({ label, on }: { label: string; on: boolean }
  * drag) stay with the MovePanel. The `data-kind`, `data-on`, `data-held`
  * and `data-latched` states live on the pad the body sits in.
  */
-export type MovePadKind = 'toggle' | 'value' | 'action' | 'app' | 'bend';
+export type MovePadKind = 'toggle' | 'value' | 'action' | 'app' | 'bend' | 'wave';
 
 /** A switch: the indicator top-left, the name beside it, the whole pad
  *  inverting when it is on. */
@@ -614,6 +614,21 @@ export function MovePadValueBody({ label, value, unit, children }: {
   );
 }
 
+/** The envelope's wave pad: which way that stage's sine goes, and how much
+ *  of it is in. Hold it to drag the amount, tap it to flip the direction. */
+export function MovePadWaveBody({ label, percent }: { label: string; percent: number }) {
+  return (
+    <>
+      <span className="tweakers-move-pad-indicator" />
+      <span className="tweakers-move-pad-title">{label}</span>
+      <span className="tweakers-move-pad-reading">
+        <span className="tweakers-move-pad-number">{percent}</span>
+        <span>%</span>
+      </span>
+    </>
+  );
+}
+
 /** A button: no value to carry, so the name has the pad to itself. */
 export function MovePadActionBody({ label }: { label: string }) {
   return <span className="tweakers-move-pad-title">{label}</span>;
@@ -640,6 +655,7 @@ export const MOVE_PAD_LIBRARY = {
   action: { description: 'a button: a press runs the app’s action', component: MovePadActionBody },
   app: { description: 'a cell the app paints itself — a track, a slice, a step', component: MovePadAppBody },
   bend: { description: 'hold and drag to bend the envelope ramp above it', component: MovePadToggleBody },
+  wave: { description: 'hold and drag for the stage’s own sine, tap to flip it', component: MovePadWaveBody },
 } as const satisfies Record<MovePadKind, { description: string; component: unknown }>;
 
 /**

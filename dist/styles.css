@@ -1915,6 +1915,32 @@
   text-align: left;
 }
 
+/* The envelope's two gesture rows — bend above, wave below. Both are held
+   and dragged, so the browser must not read the drag as a scroll. */
+.tweakers-move-pad[data-kind="bend"],
+.tweakers-move-pad[data-kind="wave"] {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* The wave pad reads like a value chip: what the sine does to the stage
+   above it, and how much of it is in. */
+.tweakers-move-pad[data-kind="wave"] {
+  justify-content: space-between;
+  padding: 0 8px 0 14px;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.tweakers-move-pad[data-kind="wave"] .tweakers-move-pad-title {
+  text-align: left;
+}
+
+.tweakers-move-pad[data-kind="wave"]:not([data-on="true"]) .tweakers-move-pad-indicator {
+  opacity: 0.35;
+}
+
 .tweakers-move-pad-reading {
   display: flex;
   align-items: center;
