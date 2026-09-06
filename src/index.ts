@@ -1,10 +1,8 @@
-// Main hook
-export { useTweakers } from './hooks/useTweakers';
-export type { UseTweakersOptions } from './hooks/useTweakers';
+// tweakers — Move-only package: the shared state core plus the Move-hardware
+// bottom-sheet surface. The mouse-driven sidebar UI lives in the dialkit repo.
 
-// Root component (user mounts once)
-export { TweakRoot } from './components/TweakRoot';
-export type { TweakPosition, TweakMode, TweakTheme } from './components/TweakRoot';
+// Shared theme type
+export type { TweakTheme } from './theme';
 
 // Move surface mirror (docked bottom panel matching the bridge kit's mapping)
 export { MovePanel } from './components/MovePanel';
@@ -19,10 +17,9 @@ export { moveNumericDrawing, movePlaybackMode, moveVisualReading } from './move-
 export type { MoveVisual, MoveSliderVisual, MoveSelectVisual, MovePlaybackMode, MoveNumericDrawing } from './move-visual-core';
 export type { MoveSlotKind } from './components/move-slots';
 
-// The filter control — the kit's first 2-slot control (cutoff + resonance)
+// The filter control core — the kit's first 2-slot control (cutoff + resonance)
 export { resolveFilterAxis, normalizeFilterValue, defaultFilterResponse, filterShapeResponse, filterResponsePath, filterHand01, filterHandValue, FILTER_DB_FLOOR, FILTER_DB_CEIL } from './filter-core';
 export type { FilterAxis, FilterAxisConfig, FilterValue, FilterResponse, FilterShapeType } from './filter-core';
-export { FilterControl } from './components/FilterControl';
 export { MoveFunctions, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_SPECIAL_BUTTONS } from './move-functions';
 export type { MoveFunctionButton, MoveFunctionPress, MoveFunctionHandler, MoveFunctionOptions, MoveFunctionRunListener } from './move-functions';
 export { MoveWaveform } from './components/MoveWaveform';
@@ -100,26 +97,9 @@ export type {
   ModPageLayout,
   ModPageSlot,
 } from './modulation-core';
+export { ModRing } from './components/ModRing';
 
-// Timeline (prototype)
-export { useTweakTimeline } from './hooks/useTweakTimeline';
-export type {
-  TimelineClipConfig,
-  TimelineClipCss,
-  TimelineClipLoop,
-  TimelineConfig,
-  TimelineClipValues,
-  TimelineGroupConfig,
-  TimelineGroupValues,
-  TimelinePropConfig,
-  TimelinePropStepConfig,
-  TimelineStepConfig,
-  TimelineStepValues,
-  TweakTimelineValues,
-  UseTweakTimelineOptions,
-} from './hooks/useTweakTimeline';
-export { TweakTimeline } from './components/Timeline/TweakTimeline';
-export type { TweakTimelineProps } from './components/Timeline/TweakTimeline';
+// Timeline stores (headless — the Timeline UI lives in dialkit)
 export { formatClock } from './timeline-core';
 export { TimelineStore } from './store/TimelineStore';
 export type {
@@ -129,39 +109,12 @@ export type {
   TimelineTransport,
 } from './store/TimelineStore';
 
-// Individual components (for advanced usage)
-export { ControlRenderer } from './components/ControlRenderer';
-export { Slider } from './components/Slider';
-export { AngleDial } from './components/AngleDial';
-export { TransferCurve } from './components/TransferCurve';
+// Shared cores and visualizations the Move surface builds on
 export { sampleTransfer, transferLut, normalizeTransfer, insertPoint, removePoint, movePoint, nearestPoint, isIdentityTransfer, DEFAULT_TRANSFER, TRANSFER_MIN_GAP, TRANSFER_MAX_POINTS } from './transfer-core';
 export type { TransferPoint, TransferValue } from './transfer-core';
 export { snapAngle, normalizeAngle, valueToBearing, bearingToValue, angleFromPointer, nudgeAngle, arcPath, ANGLE_DEAD_ZONE_PX } from './angle-core';
-export { NumberControl } from './components/NumberControl';
-export { RangeSlider } from './components/RangeSlider';
-export { Checkbox } from './components/Checkbox';
-export { Toggle } from './components/Toggle';
-export { Folder } from './components/Folder';
-export { ControlShell } from './components/ControlShell';
-export { Module } from './components/Module';
-export { SegmentedControl } from './components/SegmentedControl';
-export { ButtonGroup } from './components/ButtonGroup';
-export { SpringControl } from './components/SpringControl';
-export { SpringVisualization } from './components/SpringVisualization';
-export { TransitionControl } from './components/TransitionControl';
-export { EasingVisualization } from './components/EasingVisualization';
 export { WaveformVisualization } from './components/WaveformVisualization';
 export type { WaveformMode, WaveformLoop } from './components/WaveformVisualization';
-export { AnalyserVisualization } from './components/AnalyserVisualization';
-export type {
-  AnalyserSource,
-  AnalyserVariant,
-  AnalyserMode,
-  AnalyserScale,
-  AnalyserSpring,
-  AnalyserTransferDraw,
-} from './components/AnalyserVisualization';
-export { AnalyserRow } from './components/AnalyserRow';
 export { CurveComposer } from './components/CurveComposer';
 export type { CurveType, CurveSegment, CurveDriver, CurveComposition, DriverDirection } from './components/CurveComposer';
 export {
@@ -210,10 +163,6 @@ export {
   isOutsideSpan,
   handleLeftStyles,
 } from './range-slider-core';
-export { TextControl } from './components/TextControl';
-export { SelectControl } from './components/SelectControl';
-export { ColorControl } from './components/ColorControl';
-export { ColorPickerPanel } from './components/ColorPickerPanel';
 export {
   COLOR_FORMATS,
   parseHex,
@@ -230,8 +179,6 @@ export {
   clampOklchToSrgb,
 } from './color-core';
 export type { RGBA, HSVA, HSLA, OKLCH, ColorFormat } from './color-core';
-export { GradientControl } from './components/GradientControl';
-export { GradientPanel } from './components/GradientPanel';
 export {
   gradientToCss,
   rampCss,
@@ -253,9 +200,6 @@ export {
   MIN_STOPS,
 } from './gradient-core';
 export type { GradientValue, GradientStop, GradientType, GradientTransform } from './gradient-core';
-export { XYPad } from './components/XYPad';
-export type { XYPadProps } from './components/XYPad';
-export { XYControl } from './components/XYControl';
 export {
   XY_DETENT_PX,
   XY_DEFAULT_STEP,
@@ -274,13 +218,6 @@ export {
   normalizeValue,
 } from './xy-pad-core';
 export type { XYValue, AxisSpec, Point } from './xy-pad-core';
-export { GalleryControl } from './components/GalleryControl';
-export { FileControl } from './components/FileControl';
-export { SwatchControl } from './components/SwatchControl';
-export { ChipsControl } from './components/ChipsControl';
-export { MultiSelectControl } from './components/MultiSelectControl';
-export { ListControl } from './components/ListControl';
-export { CurvePreview } from './components/CurvePreview';
 export {
   CURVE_SAMPLE_COUNT,
   CURVE_MIN_HEIGHT,
@@ -294,17 +231,6 @@ export {
   curvePathData,
 } from './curve-preview-core';
 export type { CurvePoint, CurvePlot } from './curve-preview-core';
-export { PresetManager } from './components/PresetManager';
-export { ShortcutsMenu } from './components/ShortcutsMenu';
-export { AudioLevelMeter } from './components/AudioLevelMeter';
-export type {
-  AudioLevelMeterMode,
-  AudioLevelMeterColors,
-  AudioLevelMeterProps,
-  MonoAudioLevelMeterProps,
-  StereoAudioLevelMeterProps,
-  SpectrumAudioLevelMeterProps,
-} from './components/AudioLevelMeter';
 
 // Store (for advanced usage)
 export { TweakStore, TAB_PATH, parseListItemSchema, groupListFields, defaultListItemParams, normalizeListItems, hintDomId } from './store/TweakStore';

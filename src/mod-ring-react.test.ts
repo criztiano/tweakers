@@ -3,15 +3,14 @@ import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer, ReactTestInstance } from 'react-test-renderer';
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { ControlRenderer } from './components/ControlRenderer';
+import { ModRing } from './components/ModRing';
 import { TweakStore } from './store/TweakStore';
 import { ModulationStore } from './store/ModulationStore';
 import { modColor } from './modulation-core';
 
-// Slider binds pointer handlers and the ring asks about reduced motion; node:test
-// has no DOM. `matchMedia` answering "no" keeps the live arc on the frame path,
-// and a rAF that never fires back leaves the engine's clock to the test's own
-// `tick` calls.
+// The ring asks about reduced motion; node:test has no DOM. `matchMedia`
+// answering "no" keeps the live arc on the frame path, and a rAF that never
+// fires back leaves the engine's clock to the test's own `tick` calls.
 const globals = globalThis as { window?: unknown };
 globals.window ??= {
   innerHeight: 800,
@@ -24,7 +23,8 @@ globals.window ??= {
 
 let panelSeq = 0;
 
-/** A panel with one 0..100 slider, its control wired to a fresh slot. */
+/** A panel with one 0..100 slider, its control wired to a fresh slot,
+ *  and the ring rendered directly (the sidebar rows now live in dialkit). */
 function renderModulated(base = 50, amount = 1) {
   const id = `mod-ring-${++panelSeq}`;
   TweakStore.registerPanel(id, id, { amount: [base, 0, 100] });
@@ -34,14 +34,15 @@ function renderModulated(base = 50, amount = 1) {
   ModulationStore.createSlot(slot, 'lfo');
   // A steady signal beats a running LFO: the arc is what's under test.
   ModulationStore.assign(id, 'amount', slot, amount);
+  const assignment = { slot, amount };
 
   let renderer!: ReactTestRenderer;
   act(() => {
     renderer = create(
-      createElement(ControlRenderer, {
+      createElement(ModRing, {
         panelId: id,
-        controls: TweakStore.getPanel(id)?.controls ?? [],
-        values: TweakStore.getValues(id),
+        path: 'amount',
+        assignment,
       })
     );
   });
@@ -54,8 +55,6 @@ function renderModulated(base = 50, amount = 1) {
     slot,
     root: renderer.root,
     arc,
-    /** The arc's drawn length in user units, whatever the dash pattern says. */
-    arcLength: () => Number(String(arc().props['stroke-dasharray'] ?? '0').split(' ')[0]),
     dispose: () => {
       ModulationStore.removeSlot(slot);
       TweakStore.unregisterPanel(id);
@@ -63,35 +62,14 @@ function renderModulated(base = 50, amount = 1) {
   };
 }
 
-/* Attributes land through setAttribute, not props, so the test renderer's
-   snapshot needs the same read the browser does — react-test-renderer has no
-   host nodes, so the ring writes are observed through the store instead. */
 describe('the modulation ring (React)', () => {
   beforeEach(() => ModulationStore.tick(0));
 
-  it('replaces the flat dot with a ring in the slot colour', () => {
+  it('draws the ring and its arc in the slot colour', () => {
     const panel = renderModulated();
-    assert.equal(panel.root.findAllByProps({ className: 'tweakers-mod-dot' }).length, 0);
     assert.equal(panel.root.findAllByProps({ className: 'tweakers-mod-ring' }).length, 1);
     assert.equal(panel.arc().props.stroke, modColor(panel.slot));
     panel.dispose();
-  });
-
-  it('rings only the controls that carry a modulation', () => {
-    const id = `mod-ring-bare-${++panelSeq}`;
-    TweakStore.registerPanel(id, id, { amount: [50, 0, 100] });
-    let renderer!: ReactTestRenderer;
-    act(() => {
-      renderer = create(
-        createElement(ControlRenderer, {
-          panelId: id,
-          controls: TweakStore.getPanel(id)?.controls ?? [],
-          values: TweakStore.getValues(id),
-        })
-      );
-    });
-    assert.equal(renderer.root.findAllByProps({ className: 'tweakers-mod-ring' }).length, 0);
-    TweakStore.unregisterPanel(id);
   });
 
   it('reports the control bounds the arc is drawn against', () => {
