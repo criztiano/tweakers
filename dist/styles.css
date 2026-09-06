@@ -620,6 +620,92 @@
   width: 100%;
 }
 
+/* The endless strip. The rows keep their 8-wide slot size and simply run
+   longer than the panel; the viewport is the window on them. It clips
+   sideways only — a touched option list still grows up out of its slot, over
+   the panel — and the strip slides under it by whole slots, dials and pads
+   together: a chip belongs to the dial above it and must travel with it.
+   Off a scrolling page both wrappers vanish (display: contents), so the
+   ordinary panel keeps exactly the layout it had. */
+.tweakers-move-viewport,
+.tweakers-move-strip {
+  display: contents;
+}
+
+.tweakers-move-viewport[data-scroll="true"] {
+  display: block;
+  overflow-x: clip;
+  overflow-y: visible;
+}
+
+.tweakers-move-strip[data-scroll="true"] {
+  --move-slot-w: calc((100% - 28px) / 8);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  transform: translateX(calc(var(--move-offset, 0) * (var(--move-slot-w) + 4px) * -1));
+  transition: transform 0.16s ease;
+}
+
+.tweakers-move-strip[data-scroll="true"] .tweakers-move-dials,
+.tweakers-move-strip[data-scroll="true"] .tweakers-move-pads {
+  grid-template-columns: repeat(var(--move-strip-len, 8), var(--move-slot-w));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-strip[data-scroll="true"] {
+    transition: none;
+  }
+}
+
+/* Under the strip: how far along the whole set the window sits — the only
+   place a row longer than the panel can admit how long it is. Drag it to
+   move the window; focus it and the arrow keys walk the slots. */
+.tweakers-move-rail {
+  position: relative;
+  height: 10px;
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tweakers-move-rail::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+  /* the slot tint, so the track reads as part of the face, not a line on it */
+  background: var(--move-slot);
+}
+
+.tweakers-move-rail:focus-visible {
+  outline: 2px solid var(--move-text);
+  outline-offset: 2px;
+  border-radius: var(--move-radius-small);
+}
+
+.tweakers-move-rail-window {
+  position: absolute;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+  background: var(--move-text);
+  opacity: 0.35;
+  transition: left 0.16s ease, opacity 0.12s;
+}
+
+.tweakers-move-rail[data-scrolling="true"] .tweakers-move-rail-window,
+.tweakers-move-rail:hover .tweakers-move-rail-window {
+  opacity: 0.6;
+}
+
 .tweakers-move-dial {
   position: relative;
   height: 100%;

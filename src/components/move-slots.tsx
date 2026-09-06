@@ -571,6 +571,94 @@ export function MoveSlotToggleBody({ label, on }: { label: string; on: boolean }
 }
 
 /**
+ * The small slots — the pad row under the dials. Where a big slot is a
+ * column of the dial row, a small slot is one pad: a switch, a value the
+ * dial above it can borrow, a button, or a cell an app paints itself.
+ *
+ * Same discipline as the big slots: each body is a pure drawing of computed
+ * props, and the gestures (the hold-to-peek, the tap-to-latch, the bend
+ * drag) stay with the MovePanel. The `data-kind`, `data-on`, `data-held`
+ * and `data-latched` states live on the pad the body sits in.
+ */
+export type MovePadKind = 'toggle' | 'value' | 'action' | 'app' | 'bend' | 'wave';
+
+/** A switch: the indicator top-left, the name beside it, the whole pad
+ *  inverting when it is on. */
+export function MovePadToggleBody({ label }: { label: string }) {
+  return (
+    <>
+      <span className="tweakers-move-pad-indicator" />
+      <span className="tweakers-move-pad-title">{label}</span>
+    </>
+  );
+}
+
+/** A value chip: the name, and the real value in bold with its unit
+ *  trailing. Hold it to peek at it in the dial above; tap to latch it in. */
+export function MovePadValueBody({ label, value, unit, children }: {
+  label: string;
+  value: ReactNode;
+  unit?: string;
+  /** The modulation ring, where the control is wired to a slot. */
+  children?: ReactNode;
+}) {
+  return (
+    <>
+      {children}
+      <span className="tweakers-move-pad-title">{label}</span>
+      <span className="tweakers-move-pad-reading">
+        <span className="tweakers-move-pad-number">{value}</span>
+        {unit && <span>{unit}</span>}
+      </span>
+    </>
+  );
+}
+
+/** The envelope's wave pad: which way that stage's sine goes, and how much
+ *  of it is in. Hold it to drag the amount, tap it to flip the direction. */
+export function MovePadWaveBody({ label, percent }: { label: string; percent: number }) {
+  return (
+    <>
+      <span className="tweakers-move-pad-indicator" />
+      <span className="tweakers-move-pad-title">{label}</span>
+      <span className="tweakers-move-pad-reading">
+        <span className="tweakers-move-pad-number">{percent}</span>
+        <span>%</span>
+      </span>
+    </>
+  );
+}
+
+/** A button: no value to carry, so the name has the pad to itself. */
+export function MovePadActionBody({ label }: { label: string }) {
+  return <span className="tweakers-move-pad-title">{label}</span>;
+}
+
+/** A cell the app owns — a track, a slice, a step. The colour is the app's
+ *  own, so it rides inline the way a modulation dot does. */
+export function MovePadAppBody({ label, color }: { label?: string; color?: string }) {
+  return (
+    <>
+      <span
+        className="tweakers-move-pad-indicator"
+        style={color ? { background: color } : undefined}
+      />
+      {label && <span className="tweakers-move-pad-title">{label}</span>}
+    </>
+  );
+}
+
+/** The small slot dictionary — every pad face the kit knows. */
+export const MOVE_PAD_LIBRARY = {
+  toggle: { description: 'a switch; the pad inverts when it is on', component: MovePadToggleBody },
+  value: { description: 'a value the dial above can borrow — hold to peek, tap to latch', component: MovePadValueBody },
+  action: { description: 'a button: a press runs the app’s action', component: MovePadActionBody },
+  app: { description: 'a cell the app paints itself — a track, a slice, a step', component: MovePadAppBody },
+  bend: { description: 'hold and drag to bend the envelope ramp above it', component: MovePadToggleBody },
+  wave: { description: 'hold and drag for the stage’s own sine, tap to flip it', component: MovePadWaveBody },
+} as const satisfies Record<MovePadKind, { description: string; component: unknown }>;
+
+/**
  * The dictionary itself — every big-slot case the kit knows, named, with
  * the component that draws it. `value`, `icon`, `curve` and `enum` are
  * faces of shared bodies (the same markup, chosen by `moveSlotKind`);

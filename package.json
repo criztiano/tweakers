@@ -65,6 +65,7 @@
     "build": "rm -rf dist && tsup",
     "prepare": "npm run build",
     "dev": "tsup --watch",
+    "library": "npm --prefix example run dev",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -49,10 +49,13 @@ const flat = (controls: ControlMeta[], out: ControlMeta[] = []): ControlMeta[] =
 export const isEnumDial = (c: ControlMeta) =>
   c.type === 'select' && Array.isArray(c.options) && c.options.length > 1;
 
-const isDial = (c: ControlMeta) =>
+/** Everything the hardware turns: the controls that claim a dial slot. */
+export const isMoveDial = (c: ControlMeta) =>
   c.type === 'slider' || c.type === 'color' || c.type === 'xy' || c.type === 'range' ||
   c.type === 'filter' || c.type === 'transfer' || c.type === 'gradient' || isEnumDial(c) ||
   (c.type === 'number' && c.min != null && c.max != null);
+
+const isDial = isMoveDial;
 
 /** Two-handed dials and enums need a slot of their own, never a value chip. */
 const noChip = (c: ControlMeta) =>
