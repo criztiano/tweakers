@@ -359,3 +359,6 @@ export type {
   ControlMeta,
   PanelConfig,
 } from './store/TweakStore';
+
+export { MoveColorStore, MOVE_COLOR_WHEEL, MOVE_COLOR_HUES, MOVE_COLOR_STEPS, moveWheelSlot } from './move-color';
+export type { MoveColorView } from './move-color';

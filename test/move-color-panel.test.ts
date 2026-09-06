@@ -1,0 +1,137 @@
+import { createElement } from 'react';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MovePanel, MOVE_PAGE_EVENT } from '../src/components/MovePanel';
+import { MoveColorStore, MOVE_COLOR_WHEEL } from '../src/move-color';
+import { TweakStore } from '../src/store/TweakStore';
+import { MoveSurfaceStore } from '../src/move-surface-store';
+import { buildMovePages } from '../src/move-layout';
+import { moveSlotKind } from '../src/components/move-slots';
+
+const id = 'move-color-panel';
+let renderer: ReactTestRenderer | undefined;
+beforeEach(() => { vi.stubGlobal('window', new EventTarget()); });
+afterEach(() => {
+  act(() => renderer?.unmount());
+  renderer = undefined;
+  MoveColorStore.close();
+  TweakStore.unregisterPanel(id);
+  TweakStore.unregisterPanel(`${id}-other`);
+  vi.unstubAllGlobals();
+});
+
+function mount() {
+  TweakStore.registerPanel(id, 'ColorTest', { color: { type: 'color', default: '#ff0000', alpha: false }, toggle: false });
+  act(() => { renderer = create(createElement(MovePanel, { panels: ['ColorTest', 'Other'], dock: 'flow', productionEnabled: true })); });
+}
+const slot = () => renderer!.root.findByProps({ 'data-kind': 'color' });
+const grid = (label: string) => renderer!.root.findByProps({ role: 'group', 'aria-label': label });
+const pointer = (x: number) => ({ clientX: x, clientY: 0, button: 0, pointerId: 1, shiftKey: false,
+  currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ width: 100 }) } });
+
+describe('Move color panel', () => {
+  it('seats colors in dial slots and never in overflow chips', () => {
+    mount();
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    expect(page.dials[0].type).toBe('color');
+    expect(moveSlotKind(page.dials[0])).toBe('color');
+    expect(page.values).toEqual([]);
+    expect(slot().props['aria-expanded']).toBe(false);
+    TweakStore.registerPanel(`${id}-other`, 'Other', {
+      ...Object.fromEntries(Array.from({ length: 8 }, (_, index) => [`dial${index}`, [0.5, 0, 1]])),
+      late: { type: 'color', default: '#00ff00' },
+    });
+    const [fullPage] = buildMovePages([TweakStore.getPanel(`${id}-other`)!]);
+    expect(fullPage.dials).toHaveLength(8);
+    expect(fullPage.values).toEqual([]);
+  });
+
+  it('opens a mirrored hue grid and makes both copies edit the same hue', () => {
+    mount();
+    act(() => slot().props.onClick());
+    expect(renderer!.root.findByProps({ role: 'dialog' }).props['aria-label']).toBe('Color color editor');
+    /* two rows of eight — the hues the Move's pads can actually light */
+    expect(grid('Hue').findAllByType('button')).toHaveLength(16);
+    expect(grid('Move hue grid').findAllByType('button')).toHaveLength(16);
+    act(() => grid('Move hue grid').findAllByType('button')[10].props.onClick());
+    expect(MoveColorStore.read(id, 'color').h).toBe(MOVE_COLOR_WHEEL[10]);
+    expect(grid('Hue').findAllByType('button')[10].props['aria-pressed']).toBe(true);
+    act(() => grid('Hue').findAllByType('button')[3].props.onClick());
+    expect(MoveColorStore.read(id, 'color').h).toBe(MOVE_COLOR_WHEEL[3]);
+    expect(grid('Move hue grid').findAllByType('button')[3].props['aria-pressed']).toBe(true);
+  });
+
+  it('supports opacity endpoints and luminosity without requiring alpha metadata', () => {
+    mount();
+    act(() => MoveColorStore.open(id, 'color'));
+    expect(grid('Color opacity sequencer').findAllByType('button')).toHaveLength(16);
+    act(() => grid('Color opacity sequencer').findAllByType('button')[0].props.onClick());
+    expect(MoveColorStore.read(id, 'color').a).toBe(0);
+    expect(TweakStore.getValue(id, 'color')).toBe('#ff000000');
+    act(() => grid('Color opacity sequencer').findAllByType('button')[15].props.onClick());
+    expect(MoveColorStore.read(id, 'color').a).toBe(1);
+    act(() => renderer!.root.findByProps({ 'aria-label': 'Luminosity' }).props.onChange({ target: { value: '0.25' } }));
+    expect(MoveColorStore.read(id, 'color').l).toBe(0.25);
+    act(() => renderer!.root.findByProps({ 'aria-label': 'Opacity' }).props.onChange({ target: { value: '0.4' } }));
+    expect(MoveColorStore.read(id, 'color').a).toBe(0.4);
+  });
+
+  it('distinguishes a tap from a hue drag and supports keyboard edits while closed', () => {
+    mount();
+    act(() => slot().props.onPointerDown(pointer(10)));
+    act(() => slot().props.onPointerUp());
+    act(() => slot().props.onClick());
+    expect(MoveColorStore.getView()?.path).toBe('color');
+    act(() => slot().props.onClick());
+    act(() => slot().props.onPointerDown(pointer(10)));
+    act(() => slot().props.onPointerMove(pointer(60)));
+    act(() => slot().props.onPointerUp());
+    act(() => slot().props.onClick());
+    expect(MoveColorStore.read(id, 'color').h).toBe(180);
+    expect(MoveColorStore.getView()).toBeNull();
+    act(() => slot().props.onKeyDown({ key: 'ArrowRight', shiftKey: true, preventDefault: vi.fn(), stopPropagation: vi.fn() }));
+    expect(MoveColorStore.read(id, 'color').h).toBeCloseTo(180.1);
+  });
+
+  it('disables the slot and open editor when the control becomes disabled', () => {
+    mount();
+    act(() => MoveColorStore.open(id, 'color'));
+    act(() => TweakStore.setDisabled(id, 'color', true));
+    expect(slot().props.disabled).toBe(true);
+    expect(grid('Hue').findAllByType('button').every(button => button.props.disabled)).toBe(true);
+    expect(renderer!.root.findByProps({ 'aria-label': 'Opacity' }).props.disabled).toBe(true);
+  });
+
+  it('closes on Escape, outside pointer, page change and unmount', () => {
+    TweakStore.registerPanel(`${id}-other`, 'Other', { amount: [0.5, 0, 1] });
+    mount();
+    act(() => MoveColorStore.open(id, 'color'));
+    const escape = new Event('keydown');
+    Object.defineProperty(escape, 'key', { value: 'Escape' });
+    act(() => window.dispatchEvent(escape));
+    expect(MoveColorStore.getView()).toBeNull();
+    act(() => MoveColorStore.open(id, 'color'));
+    act(() => window.dispatchEvent(new Event('pointerdown')));
+    expect(MoveColorStore.getView()).toBeNull();
+    act(() => MoveColorStore.open(id, 'color'));
+    act(() => window.dispatchEvent(new CustomEvent(MOVE_PAGE_EVENT, { detail: { pageId: `${id}-other` } })));
+    expect(MoveColorStore.getView()).toBeNull();
+    act(() => window.dispatchEvent(new CustomEvent(MOVE_PAGE_EVENT, { detail: { pageId: id } })));
+    act(() => MoveColorStore.open(id, 'color'));
+    act(() => renderer!.unmount());
+    renderer = undefined;
+    expect(MoveColorStore.getView()).toBeNull();
+  });
+
+  it('restores the application pad view after the editor closes', () => {
+    mount();
+    const before = MoveSurfaceStore.getState();
+    const toggles = () => renderer!.root.findAllByProps({ 'data-kind': 'toggle' });
+    expect(toggles()).toHaveLength(1);
+    act(() => MoveColorStore.open(id, 'color'));
+    expect(toggles()).toHaveLength(0);
+    act(() => MoveColorStore.close());
+    expect(toggles()).toHaveLength(1);
+    expect(MoveSurfaceStore.getState()).toBe(before);
+  });
+});

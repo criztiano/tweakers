@@ -5389,6 +5389,21 @@ input.tweakers-list-item-title:focus {
   --move-glyph-stroke: 1.25;
   --move-radius-small: 8px;
   --move-font-label: 'Ableton Sans Small', system-ui, -apple-system, sans-serif;
+  --move-color-gap: 8px;
+  --move-color-gap-small: 4px;
+  --move-color-padding: 12px;
+  --move-color-width: 360px;
+  --move-color-hit: 32px;
+  --move-color-step-hit: 24px;
+  --move-color-marker: 8px;
+  --move-color-stroke: 2px;
+  --move-color-font: 12px;
+  --move-color-overlay-z: 10002;
+  --move-color-check-light: #777;
+  --move-color-check-dark: #444;
+  --move-color-marker-light: #fff;
+  --move-color-marker-dark: #171717;
+  --move-color-disabled-opacity: 0.45;
 
   display: flex;
   align-items: flex-end;
@@ -5679,6 +5694,137 @@ input.tweakers-list-item-title:focus {
   opacity: 0.3;
   cursor: default;
 }
+
+/* Color is the specimen. Labels sit on the instrument surface so they stay
+   readable at every hue, luminosity and alpha value. */
+.tweakers-move-dial[data-kind="color"] {
+  border: 0;
+  padding: 0;
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+}
+
+.tweakers-move-color-swatch,
+.tweakers-move-color-preview {
+  overflow: hidden;
+  background: repeating-conic-gradient(var(--move-color-check-light) 0% 25%, var(--move-color-check-dark) 0% 50%) 0 0 / var(--move-color-padding) var(--move-color-padding);
+  border-radius: var(--move-radius-small);
+}
+
+.tweakers-move-color-swatch {
+  position: absolute;
+  inset: var(--move-shape-top) var(--move-color-gap) var(--move-shape-top);
+}
+
+.tweakers-move-color-swatch > span,
+.tweakers-move-color-preview > span { display: block; width: 100%; height: 100%; }
+
+.tweakers-move-color-reading {
+  position: absolute;
+  bottom: var(--move-color-gap);
+  left: var(--move-color-gap);
+  right: var(--move-color-gap);
+  font-size: var(--move-color-font);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.tweakers-move-dial[data-kind="color"][aria-expanded="true"] .tweakers-move-color-swatch,
+.tweakers-move-dial[data-kind="color"]:hover .tweakers-move-color-swatch {
+  box-shadow: 0 0 0 var(--move-color-stroke) var(--move-text);
+}
+
+.tweakers-move-color-display {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--move-color-gap);
+  width: min(var(--move-color-width), calc(100vw - var(--move-color-gap) * 2));
+  max-height: calc(100dvh - var(--move-color-gap) * 2);
+  overflow-y: auto;
+  padding: var(--move-color-padding);
+  border-radius: var(--move-radius);
+  box-shadow: 0 0 0 1px var(--tweak-border), var(--tweak-shadow-dropdown);
+  z-index: var(--move-color-overlay-z);
+  font-family: var(--move-font-label);
+  font-size: var(--move-color-font);
+  font-variant-numeric: tabular-nums;
+}
+
+.tweakers-move-color-heading { display: flex; align-items: center; gap: var(--move-color-gap); }
+.tweakers-move-color-preview { width: var(--move-color-hit); height: var(--move-color-hit); flex-shrink: 0; }
+.tweakers-move-color-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tweakers-move-color-close {
+  width: var(--move-color-hit);
+  height: var(--move-color-hit);
+  border: 0;
+  border-radius: var(--move-radius-small);
+  background: var(--move-chip);
+  color: var(--move-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.tweakers-move-hues {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: var(--move-color-gap-small);
+  width: 100%;
+}
+
+.tweakers-move-hue {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: var(--move-color-hit);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--move-radius-small);
+  cursor: pointer;
+}
+
+.tweakers-move-color-marker {
+  width: var(--move-color-marker);
+  height: var(--move-color-marker);
+  border-radius: 50%;
+  background: var(--move-color-marker-light);
+  box-shadow: 0 0 0 var(--move-color-stroke) var(--move-color-marker-dark);
+}
+
+.tweakers-move-color-range { display: flex; align-items: center; gap: var(--move-color-gap); min-height: var(--move-color-hit); }
+.tweakers-move-color-range > span { flex: 0 0 10ch; }
+.tweakers-move-color-range input { flex: 1; min-width: 0; height: var(--move-color-hit); margin: 0; accent-color: var(--move-text); cursor: pointer; }
+.tweakers-move-color-range output { min-width: 4ch; text-align: right; }
+.tweakers-move-color-steps { display: grid; grid-template-columns: repeat(16, 1fr); }
+.tweakers-move-color-step {
+  width: var(--move-color-step-hit);
+  height: var(--move-color-step-hit);
+  display: grid;
+  place-items: center;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  border-radius: var(--move-radius-small);
+  cursor: pointer;
+}
+.tweakers-move-color-step > span { width: var(--move-color-marker); height: var(--move-color-marker); background: var(--move-text); border-radius: 50%; }
+.tweakers-move-color-step[aria-pressed="true"] { box-shadow: inset 0 0 0 var(--move-color-stroke) var(--move-text); }
+.tweakers-move-color-step:hover,
+.tweakers-move-color-close:hover { background: var(--move-slot); }
+.tweakers-move-hue:hover { box-shadow: inset 0 0 0 var(--move-color-stroke) var(--move-color-marker-dark); }
+.tweakers-move-dial[data-kind="color"]:focus-visible,
+.tweakers-move-hue:focus-visible,
+.tweakers-move-color-close:focus-visible,
+.tweakers-move-color-step:focus-visible,
+.tweakers-move-color-range input:focus-visible { outline: var(--move-color-stroke) solid var(--move-text); outline-offset: var(--move-color-stroke); }
+.tweakers-move-dial[data-kind="color"]:disabled,
+.tweakers-move-color-display :disabled,
+.tweakers-move-hue:disabled,
+.tweakers-move-color-step:disabled { opacity: var(--move-color-disabled-opacity); cursor: default; }
+.tweakers-move-tracks:has(.tweakers-move-color-steps) { grid-template-columns: 1fr auto; row-gap: var(--move-color-gap); }
+.tweakers-move-tracks:has(.tweakers-move-color-steps) .tweakers-move-mods { grid-row: 2; grid-column: 1 / -1; justify-content: center; }
 
 .tweakers-move-dial-readout {
   position: absolute;
