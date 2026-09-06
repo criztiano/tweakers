@@ -11,8 +11,8 @@ import './curve-composer-core.js';
 
 /**
  * What earns a slot on the strip: everything the hardware would turn, plus
- * the switches. With no pad rows under the row there is nowhere else for a
- * toggle to go, and a big toggle slot is a face the kit already has.
+ * the switches — a toggle with no column named for it takes a big slot of its
+ * own, which is a face the kit already has.
  */
 declare const isStripSlot: (c: ControlMeta) => boolean;
 /**
@@ -20,6 +20,12 @@ declare const isStripSlot: (c: ControlMeta) => boolean;
  * filter) sits in both of its columns, the same bookkeeping the 8-wide page
  * keeps — so `isSpanContinuation` and the occupancy checks need no second
  * rule for the strip.
+ *
+ * The small slots come too. `movePads` names the column a pad sits in, and
+ * on a strip that column is a place in the whole row rather than one of
+ * eight — so a chip travels with the dial it belongs to when the wheel moves
+ * them both. A control given a column is a pad and nothing else: it does not
+ * also eat a slot on the way past.
  */
 declare function buildMoveStrip(panel: PanelConfig): MovePage;
 /** The columns where a control begins — the places the window may stop. */
@@ -47,11 +53,11 @@ declare function stepStripOffset(page: MovePage, offset: number, delta: number, 
 declare function pageStripOffset(page: MovePage, offset: number, dir: number, cols?: number): number;
 /**
  * Which strip column each dial is holding, left to right — `-1` for a dial
- * the strip has run out for, which is what draws its dot dark. This is the
- * whole meaning of the dot row: the 8 controls you can turn right now.
+ * the strip has run out for. These are the 8 controls you can turn right now,
+ * and what the bridge points the hardware's knobs at.
  */
 declare function stripDialColumns(page: MovePage, offset: number, cols?: number): number[];
-/** The controls those columns hold — the dot row's titles, in dial order. */
+/** The controls those columns hold, in dial order — what the kit is told. */
 declare function stripDialSlots(page: MovePage, offset: number, cols?: number): (ControlMeta | undefined)[];
 /** How many controls the strip holds — the number the position readout counts. */
 declare const stripSlotCount: (page: MovePage) => number;

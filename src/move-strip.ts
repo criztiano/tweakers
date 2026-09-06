@@ -9,16 +9,16 @@ import { MOVE_DIALS, dialSpan, isMoveDial, type MovePage } from './move-layout';
  * a synth with forty parameters has no such page. The strip keeps every
  * control at full slot size in one long row and shows a window of it: the big
  * wheel moves the window, the 8 dials always hold the 8 slots in view, and the
- * dots under the row say which those are. Nothing is demoted to fit.
+ * pads that belong to them travel alongside. Nothing is demoted to fit.
  *
  * Everything here is the geometry alone — which control sits in which column,
  * and which columns a given scroll position shows. The gestures, the wheel
  * and the drawing stay with the MovePanel, so the whole rule can be read and
  * tested on its own, exactly like `move-layout`.
  *
- * A strip IS a `MovePage`: the same `dials` array, just longer than 8 and with
- * no chip rows under it — so every slot face, span rule and modulation ring
- * the panel already draws works on it unchanged.
+ * A strip IS a `MovePage`: the same four rows, just longer than 8 — so every
+ * slot face, pad face, span rule and modulation ring the panel already draws
+ * works on it unchanged.
  */
 
 const flat = (controls: ControlMeta[], out: ControlMeta[] = []): ControlMeta[] => {
@@ -31,8 +31,8 @@ const flat = (controls: ControlMeta[], out: ControlMeta[] = []): ControlMeta[] =
 
 /**
  * What earns a slot on the strip: everything the hardware would turn, plus
- * the switches. With no pad rows under the row there is nowhere else for a
- * toggle to go, and a big toggle slot is a face the kit already has.
+ * the switches — a toggle with no column named for it takes a big slot of its
+ * own, which is a face the kit already has.
  */
 export const isStripSlot = (c: ControlMeta): boolean =>
   isMoveDial(c) || c.type === 'toggle';
@@ -42,14 +42,38 @@ export const isStripSlot = (c: ControlMeta): boolean =>
  * filter) sits in both of its columns, the same bookkeeping the 8-wide page
  * keeps — so `isSpanContinuation` and the occupancy checks need no second
  * rule for the strip.
+ *
+ * The small slots come too. `movePads` names the column a pad sits in, and
+ * on a strip that column is a place in the whole row rather than one of
+ * eight — so a chip travels with the dial it belongs to when the wheel moves
+ * them both. A control given a column is a pad and nothing else: it does not
+ * also eat a slot on the way past.
  */
 export function buildMoveStrip(panel: PanelConfig): MovePage {
+  const controls = flat(panel.controls);
+  const column = (c: ControlMeta): number | null => {
+    const n = panel.movePads?.[c.path];
+    return typeof n === 'number' && Number.isInteger(n) && n >= 0 ? n : null;
+  };
+
   const dials: ControlMeta[] = [];
-  for (const c of flat(panel.controls)) {
-    if (!isStripSlot(c)) continue;
+  for (const c of controls) {
+    if (!isStripSlot(c) || column(c) !== null) continue;
     for (let s = 0; s < dialSpan(c); s++) dials.push(c);
   }
-  return { panel, dials, toggles: [], values: [], actions: [] };
+
+  // The pad rows, indexed by the same columns the slots use: switches on the
+  // first, values on the second, the app's buttons under those.
+  const toggles: ControlMeta[] = [];
+  const values: ControlMeta[] = [];
+  const actions: ControlMeta[] = [];
+  for (const c of controls) {
+    const col = column(c);
+    if (col === null) continue;
+    const row = c.type === 'toggle' ? toggles : c.type === 'action' ? actions : values;
+    if (row[col] === undefined) row[col] = c;
+  }
+  return { panel, dials, toggles, values, actions };
 }
 
 /** The columns where a control begins — the places the window may stop. */
@@ -128,8 +152,8 @@ export function pageStripOffset(
 
 /**
  * Which strip column each dial is holding, left to right — `-1` for a dial
- * the strip has run out for, which is what draws its dot dark. This is the
- * whole meaning of the dot row: the 8 controls you can turn right now.
+ * the strip has run out for. These are the 8 controls you can turn right now,
+ * and what the bridge points the hardware's knobs at.
  */
 export function stripDialColumns(
   page: MovePage,
@@ -142,7 +166,7 @@ export function stripDialColumns(
   });
 }
 
-/** The controls those columns hold — the dot row's titles, in dial order. */
+/** The controls those columns hold, in dial order — what the kit is told. */
 export function stripDialSlots(
   page: MovePage,
   offset: number,

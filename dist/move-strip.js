@@ -14,12 +14,26 @@ var flat = (controls, out = []) => {
 };
 var isStripSlot = (c) => isMoveDial(c) || c.type === "toggle";
 function buildMoveStrip(panel) {
+  const controls = flat(panel.controls);
+  const column = (c) => {
+    const n = panel.movePads?.[c.path];
+    return typeof n === "number" && Number.isInteger(n) && n >= 0 ? n : null;
+  };
   const dials = [];
-  for (const c of flat(panel.controls)) {
-    if (!isStripSlot(c)) continue;
+  for (const c of controls) {
+    if (!isStripSlot(c) || column(c) !== null) continue;
     for (let s = 0; s < dialSpan(c); s++) dials.push(c);
   }
-  return { panel, dials, toggles: [], values: [], actions: [] };
+  const toggles = [];
+  const values = [];
+  const actions = [];
+  for (const c of controls) {
+    const col = column(c);
+    if (col === null) continue;
+    const row = c.type === "toggle" ? toggles : c.type === "action" ? actions : values;
+    if (row[col] === void 0) row[col] = c;
+  }
+  return { panel, dials, toggles, values, actions };
 }
 function stripStarts(page) {
   const starts = [];

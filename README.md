@@ -1122,10 +1122,11 @@ A page is eight slots wide because the Move has eight knobs, and everything past
 <MovePanel scroll dock="flow" />
 ```
 
-- **The big wheel scrolls it.** One detent, one control — on the hardware, and with the mouse wheel anywhere over the panel (the slots, the dots, the header, the surface around them: the whole instrument is the wheel, and the page underneath stays where it is). The window always starts on a whole control, so a two-column filter is never cut in half at the edge.
-- **The arrows turn the page** — a whole window of eight at a time, for getting across a long strip without spinning the wheel. The panel takes `left` and `right` only where the app has left them free: a host that wired its own meaning to them keeps it. On screen the same jump is shift with the arrow keys, or the page keys, once the dot row has focus.
-- **Eight dots sit under the row**, one per knob, each naming the control that knob is holding — the hardware's own dial-slot indicator, and the thing that makes a row longer than the panel honest. A dot goes dark where the set has run out. Drag the row to move the window, or focus it and use the arrow keys, `Home` and `End`; behind the dots a faint rail says how far along the whole set you are.
-- **Nothing is demoted.** There are no value chips and no pad rows on a scrolling page: a toggle takes a big slot of its own rather than a pad.
+- **The big wheel scrolls it.** One detent, one control — on the hardware, and with the mouse wheel anywhere over the panel (the slots, the pads, the header, the surface around them: the whole instrument is the wheel, and the page underneath stays where it is). The window always starts on a whole control, so a two-column filter is never cut in half at the edge.
+- **The arrows turn the page** — a whole window of eight at a time, for getting across a long strip without spinning the wheel. The panel takes `left` and `right` only where the app has left them free: a host that wired its own meaning to them keeps it. On screen the same jump is shift with the arrow keys, or the page keys, once the rail has focus.
+- **The pads come with it.** The small slots ride under the slots they belong to and scroll with them — `movePads` names the column, and on a strip a column is a place in the whole row rather than one of eight. A control given a column is a pad and nothing else: it does not also eat a slot on the way past.
+- **A rail under the strip** says how far along the whole set the window sits. Drag it to move the window, or focus it and use the arrow keys, `Home` and `End`.
+- **Nothing is demoted.** There is no overflow on a scrolling page: what does not fit is not turned into a chip, it is simply further along the row.
 
 Tracks still work — each panel is still a page — and a modulator's settings page is the hardware's own shape, so it never scrolls.
 
@@ -1138,7 +1139,7 @@ The window travels on two events, alongside the panel's existing ones:
 
 The bridge kit reads that announcement and maps knob *i* to `paths[i]`, so the Move's eight knobs turn whatever the screen is showing — turn the wheel and the knobs move with it. A page it has heard no window for keeps the ordinary rule (first eight dials, the rest as chips). The panel restates the window on the kit's own page stream, so a bridge that binds after the panel still catches up within a beat.
 
-The geometry is a core of its own (`move-strip.ts`, exported): `buildMoveStrip` turns a panel into the long row, `stripOffsets` lists the places the window may stop, `stepStripOffset` is the wheel, and `stripDialSlots` is what the dots are naming. The library app (`example/`) is built on it — every slot face in the dictionary, live in one instrument.
+The geometry is a core of its own (`move-strip.ts`, exported): `buildMoveStrip` turns a panel into the long row, `stripOffsets` lists the places the window may stop, `stepStripOffset` is the wheel, and `stripDialSlots` names the eight controls the knobs are holding. The library app (`example/`) is built on it — every slot face in the dictionary, live in one instrument.
 
 An `xy` control claims a dial slot as a 2D pad: the field draws behind the label (no slider at the bottom) and dragging it sets both axes. On the hardware, the column's knob turns the X axis — and while a finger rests on that knob, the volume knob turns Y. The pad honours the XYPad's options: `grid`/`density` draw the same grid overlay (on by default, 5×5), `snap` snaps drags to the grid, bipolar axes keep the escapable centre detent, and `returnToCenter` springs the pad back to its origin on release — on screen when the pointer lifts, and on the hardware when the finger leaves the knob.
 

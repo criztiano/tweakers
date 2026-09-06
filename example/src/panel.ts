@@ -4,8 +4,8 @@ import { TweakStore, ModulationStore, MoveFunctions, type TweakConfig } from 'tw
  * The library's instrument: one page carrying every face a Move slot can
  * wear. It is deliberately longer than the hardware — twenty slots against
  * eight dials — because that is the thing being shown: the strip scrolls,
- * nothing is demoted to a chip, and the dots say which eight the knobs are
- * holding.
+ * nothing is demoted to a chip, and the eight slots on screen — pads and all
+ * — are the eight the knobs are holding.
  *
  * The order is the library's argument: the slots that fit almost any number
  * come first, and the ones that mean exactly one thing come last. Reading
@@ -56,6 +56,14 @@ export const CONFIG = {
 
   /* ── a switch that earned a slot of its own ───────────────────── */
   hold: false,
+
+  /* ── the small slots: the pad row under the dials. Each one names the
+        column it sits in (see MOVE_PADS below), so it travels with the
+        slot above it when the wheel moves them both. ──────────────── */
+  sync: true,                                                  /* a switch */
+  drive: { type: 'slider', default: 42, min: 0, max: 100, step: 1, unit: '%' },
+  glide: { type: 'slider', default: 120, min: 0, max: 500, step: 1, unit: ' ms' },
+  reset: { type: 'action', label: 'Reset' },                   /* a button */
 
   /* ── two hands on one control: the knob, and the volume knob ──── */
   band: { type: 'range', min: 0, max: 100, default: { min: 20, max: 80 } },
@@ -127,6 +135,30 @@ export const CONFIG = {
   },
 } satisfies TweakConfig;
 
+/**
+ * Where each small slot sits, by strip column. A column on a strip is a
+ * place in the whole row rather than one of eight, so these pads ride under
+ * the slots they belong to: the switch and the value under Amount, the
+ * second value under Bias, the button under Shape.
+ */
+export const MOVE_PADS: Record<string, number> = {
+  sync: 0,
+  drive: 0,
+  glide: 1,
+  reset: 5,
+};
+
+/** The values the page was registered with — what the pad-row button puts
+ *  back, and the thing a preset is measured against. */
+let initialValues: Record<string, unknown> = {};
+
+/** The button on the pad row: put the whole page back where it started. */
+function resetTheStrip() {
+  // An edit follows the loaded preset, so a reset would otherwise rewrite it.
+  TweakStore.clearActivePreset(PANEL_ID);
+  TweakStore.updateValues(PANEL_ID, initialValues as Record<string, never>);
+}
+
 /** The modulation slots the library runs: an LFO, an envelope, a curve. */
 export const MOD_LFO = 0;
 export const MOD_ENV = 1;
@@ -137,7 +169,8 @@ export const MOD_CURVE = 2;
  * at start-up; the modulation guards let a reload keep the slots it had.
  */
 export function registerLibraryPanel() {
-  TweakStore.registerPanel(PANEL_ID, PANEL_NAME, CONFIG);
+  TweakStore.registerPanel(PANEL_ID, PANEL_NAME, CONFIG, undefined, { movePads: MOVE_PADS });
+  initialValues = { ...TweakStore.getValues(PANEL_ID) };
 
   // An LFO breathing Amount: a pulsing circle in the header, and a ring on
   // the slot whose arc runs from the value to where the modulation holds it.
@@ -158,6 +191,12 @@ export function registerLibraryPanel() {
     ModulationStore.createSlot(MOD_CURVE, 'curve');
     ModulationStore.assign(PANEL_ID, 'sweep', MOD_CURVE, 0.8);
   }
+
+  // The pad-row button. An action's presses arrive on the panel's action
+  // channel — the same one the on-screen row fires.
+  TweakStore.subscribeActions(PANEL_ID, (path) => {
+    if (path === 'reset') resetTheStrip();
+  });
 
   seedPresets();
 

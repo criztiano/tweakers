@@ -43,7 +43,7 @@ interface MovePanelProps {
   /**
    * The endless strip: a page may carry any number of slots, and the big
    * wheel scrolls the row through them. Nothing is demoted to a value chip,
-   * and the dots under the row say which 8 the dials are holding — so a
+   * and the small slots ride under the slots they belong to — so a
    * panel of forty parameters is one instrument, not five pages of it.
    */
   scroll?: boolean;
@@ -194,9 +194,9 @@ export const MOVE_STRIP_EVENT = 'move-tweakers:strip';
  *
  * With `scroll` the page stops being 8 slots wide. Every control keeps a
  * full slot, the row scrolls through them — the big wheel on the hardware,
- * the mouse wheel or a drag on the dot row here — and the 8 dots under the
- * row say which controls the dials are holding, so all of them can be
- * reached without a single one shrinking to a chip.
+ * the mouse wheel or a drag on the rail here — and the eight slots on screen
+ * are the eight the dials are holding, their pads with them, so all of them
+ * can be reached without a single one shrinking to a chip.
  */
 export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport', scroll = false }: MovePanelProps) {
   if (!productionEnabled) return null;
@@ -223,7 +223,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const holdStart = useRef(0);
   const [mounted, setMounted] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
-  // The dot row's drag anchor: pointer x, and the stop it started on.
+  // The rail's drag anchor: pointer x, and the stop it started on.
   const [dotDrag, setDotDrag] = useState<{ x: number; stop: number } | null>(null);
   // Shift mid-drag = fine mode: pointer travel applies at 0.1× relative to the
   // value snapshot where shift went down; releasing shift rebases at 1× so the
@@ -287,7 +287,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const pageId = page?.panel.id;
 
   // The strip's window. A modulator's settings page is the hardware's own
-  // shape and never scrolls, so the wheel and the dots belong to the app's
+  // shape and never scrolls, so the wheel and the rail belong to the app's
   // pages alone. The offset is a column, always the start of a control.
   const stripMode = scroll && !settingsPanel && !!page;
   const [offset, setOffset] = useState(0);
@@ -346,7 +346,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   }, [stripMode, scrollPage]);
 
   // The mouse wheel is the big wheel on this side of the glass, and the whole
-  // panel answers it — the slots, the dots, the header, the surface around
+  // panel answers it — the slots, the pads, the header, the surface around
   // them: anywhere over the instrument is over the wheel. It rides a native
   // listener because React's is passive: the page must not scroll away under
   // a gesture the panel has answered. A trackpad's small deltas accumulate,
@@ -904,10 +904,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const clusterCols = stripMode
     ? Math.min(MOVE_DIALS, visibleCols.length) || MOVE_DIALS
     : visibleCols.length || MOVE_DIALS;
-  // The dot row: one dot per dial, naming the control that dial is holding,
-  // and where the window sits in the whole set — counted in controls, since
-  // that is what the wheel moves by and what a person is looking for.
-  const dialSlots = stripMode ? stripDialSlots(page, stripOffset) : [];
+  // Where the window sits in the whole set — counted in controls, since that
+  // is what the wheel moves by and what a person is looking for.
   const stripStops = stripMode ? stripOffsets(page) : [];
   const stripTotal = stripMode ? Math.max(1, stripSlotCount(page)) : 1;
   const stripFrom = stripMode ? stripSlotIndex(page, stripOffset) : 0;
@@ -998,13 +996,16 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 sideways only — a touched option list still grows up out of
                 its slot, over the panel. */}
             <div className="tweakers-move-viewport" data-scroll={stripMode || undefined}>
+            {/* The slots and their pads move as one: a chip belongs to the
+                dial above it, so the wheel has to carry them together. */}
             <div
-              className="tweakers-move-dials"
+              className="tweakers-move-strip"
               data-scroll={stripMode || undefined}
               style={stripMode
                 ? ({ '--move-strip-len': page.dials.length, '--move-offset': stripOffset } as React.CSSProperties)
                 : undefined}
             >
+            <div className="tweakers-move-dials" data-scroll={stripMode || undefined}>
               {visibleCols.map((i) => {
                 // A 2-slot dial's second column renders nothing of its own —
                 // the base column's slot spans across it. And a 2-slot dial
@@ -1514,78 +1515,6 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 );
               })}
             </div>
-            </div>
-
-            {/* The dial row, in dots: one per knob, naming the control it is
-                holding — the hardware's own indicator row, and the thing that
-                makes a strip longer than eight slots honest. Drag it, or turn
-                the wheel over the panel, to move the window. */}
-            {stripMode && (
-              <div
-                className="tweakers-move-dots"
-                role="slider"
-                tabIndex={0}
-                aria-label={`Slots ${stripFrom + 1}–${stripTo} of ${stripTotal}`}
-                aria-valuemin={0}
-                aria-valuemax={Math.max(0, stripStops.length - 1)}
-                aria-valuenow={Math.max(0, stripStops.indexOf(stripOffset))}
-                aria-orientation="horizontal"
-                data-scrolling={dotDrag !== null || undefined}
-                onKeyDown={(e) => {
-                  // Shift, or the page keys, jump a whole window — the same
-                  // move the Move's arrows make.
-                  const dir = e.key === 'ArrowRight' || e.key === 'PageDown' ? 1
-                    : e.key === 'ArrowLeft' || e.key === 'PageUp' ? -1 : 0;
-                  const paged = e.shiftKey || e.key === 'PageUp' || e.key === 'PageDown';
-                  if (dir && paged) {
-                    e.preventDefault();
-                    scrollPage(dir);
-                    return;
-                  }
-                  const step = dir || (e.key === 'Home' ? -stripStops.length : e.key === 'End' ? stripStops.length : 0);
-                  if (!step) return;
-                  e.preventDefault();
-                  scrollSlots(step);
-                }}
-                onPointerDown={(e) => {
-                  try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
-                  setDotDrag({ x: e.clientX, stop: Math.max(0, stripStops.indexOf(stripOffset)) });
-                }}
-                onPointerMove={(e) => {
-                  if (!dotDrag) return;
-                  // One slot per slot-width of travel: the set moves under the
-                  // hand at the rate the slots themselves do.
-                  const slotWidth = e.currentTarget.getBoundingClientRect().width / MOVE_DIALS || 1;
-                  const want = dotDrag.stop + Math.round((e.clientX - dotDrag.x) / slotWidth);
-                  setOffset(stripStops[Math.min(stripStops.length - 1, Math.max(0, want))]);
-                }}
-                onPointerUp={() => setDotDrag(null)}
-                onPointerCancel={() => setDotDrag(null)}
-              >
-                {/* How far along the whole set the window sits — the wheel's
-                    own answer to "where am I". */}
-                <span className="tweakers-move-dots-rail" aria-hidden="true">
-                  {/* Counted in controls, not columns: the window is as wide
-                      as the number of slots actually under the dials, which a
-                      2-column control makes one fewer than eight. */}
-                  <span
-                    className="tweakers-move-dots-window"
-                    style={{
-                      left: `${(stripFrom / stripTotal) * 100}%`,
-                      width: `${((stripTo - stripFrom) / stripTotal) * 100}%`,
-                    }}
-                  />
-                </span>
-                {dialSlots.map((meta, i) => (
-                  <span
-                    key={i}
-                    className="tweakers-move-dot"
-                    data-on={meta ? true : undefined}
-                    title={meta ? `Dial ${i + 1} — ${meta.label}` : `Dial ${i + 1}`}
-                  />
-                ))}
-              </div>
-            )}
 
             {/* Trailing empty pad rows collapse: a row shows only if it, or any
                 row after it, has something in it — so gaps inside the grid hold
@@ -1701,6 +1630,67 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   })}
                 </div>
               ))}
+            </div>
+            </div>
+
+            {/* Where the window sits in the whole set — the wheel's own answer
+                to "where am I", and the thing you can drag when there is no
+                wheel under your hand. Focus it and the arrow keys walk the
+                slots; with shift, or the page keys, they turn the page. */}
+            {stripMode && (
+              <div
+                className="tweakers-move-rail"
+                role="slider"
+                tabIndex={0}
+                aria-label={`Slots ${stripFrom + 1}–${stripTo} of ${stripTotal}`}
+                aria-valuemin={0}
+                aria-valuemax={Math.max(0, stripStops.length - 1)}
+                aria-valuenow={Math.max(0, stripStops.indexOf(stripOffset))}
+                aria-orientation="horizontal"
+                data-scrolling={dotDrag !== null || undefined}
+                onKeyDown={(e) => {
+                  // Shift, or the page keys, jump a whole window — the same
+                  // move the Move's arrows make.
+                  const dir = e.key === 'ArrowRight' || e.key === 'PageDown' ? 1
+                    : e.key === 'ArrowLeft' || e.key === 'PageUp' ? -1 : 0;
+                  const paged = e.shiftKey || e.key === 'PageUp' || e.key === 'PageDown';
+                  if (dir && paged) {
+                    e.preventDefault();
+                    scrollPage(dir);
+                    return;
+                  }
+                  const step = dir || (e.key === 'Home' ? -stripStops.length : e.key === 'End' ? stripStops.length : 0);
+                  if (!step) return;
+                  e.preventDefault();
+                  scrollSlots(step);
+                }}
+                onPointerDown={(e) => {
+                  try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                  setDotDrag({ x: e.clientX, stop: Math.max(0, stripStops.indexOf(stripOffset)) });
+                }}
+                onPointerMove={(e) => {
+                  if (!dotDrag) return;
+                  // One slot per slot-width of travel: the set moves under the
+                  // hand at the rate the slots themselves do.
+                  const slotWidth = e.currentTarget.getBoundingClientRect().width / MOVE_DIALS || 1;
+                  const want = dotDrag.stop + Math.round((e.clientX - dotDrag.x) / slotWidth);
+                  setOffset(stripStops[Math.min(stripStops.length - 1, Math.max(0, want))]);
+                }}
+                onPointerUp={() => setDotDrag(null)}
+                onPointerCancel={() => setDotDrag(null)}
+              >
+                {/* Counted in controls, not columns: the window is as wide as
+                    the number of slots actually under the dials, which a
+                    2-column control makes one fewer than eight. */}
+                <span
+                  className="tweakers-move-rail-window"
+                  style={{
+                    left: `${(stripFrom / stripTotal) * 100}%`,
+                    width: `${((stripTo - stripFrom) / stripTotal) * 100}%`,
+                  }}
+                />
+              </div>
+            )}
           </div>}
         </div>
       </div>

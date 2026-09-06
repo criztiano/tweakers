@@ -62,10 +62,9 @@ export function Library() {
         <p className="kit-lede">
           Every face a dial slot can wear, in one instrument. The page carries more
           slots than the Move has dials, so the row scrolls: turn the big wheel — or
-          the mouse wheel over the panel, or drag the row of dots — and the whole set
-          comes past. The Move’s arrows jump a whole screen of eight. The eight dots
-          under the slots are the eight knobs, and they name whatever they are
-          holding right now.
+          the mouse wheel over the panel, or drag the rail under it — and the whole
+          set comes past. The Move’s arrows jump a whole screen of eight. Whatever is
+          on screen is what the eight knobs are holding, pads and all.
         </p>
         <p className="kit-lede">
           Left to right the slots run from general to specific: a plain value first,
@@ -102,7 +101,7 @@ export function Library() {
       <Section
         id="small"
         title="Small slots"
-        lede="The pad row under the dials: a switch, a value the dial above can borrow, a button, a cell the app paints itself."
+        lede="The pad row under the dials — on the instrument above, too: Sync and Drive ride under Amount, Glide under Bias, Reset under Shape, and they travel with their slots when the wheel moves them. Hold a value chip to peek at it in the dial above; tap to latch it in."
       >
         <ul className="kit-cards">
           {SMALL_SLOTS.map((item) => (
@@ -155,13 +154,18 @@ export function Library() {
           <dt>The arrows</dt>
           <dd>
             A whole screen of eight at a time. On this side of the glass: shift with
-            the arrow keys, or the page keys, once the dot row has focus.
+            the arrow keys, or the page keys, once the rail has focus.
           </dd>
-          <dt>The dots</dt>
+          <dt>The pads</dt>
           <dd>
-            Eight lights for eight knobs, naming what each is holding. A dark dot is
-            a knob the set has run out for; the faint rail behind them says how far
-            along you are.
+            The small slots ride under the slots they belong to, and scroll with
+            them. Hold a value chip to peek at it in the dial above; tap to latch it
+            in.
+          </dd>
+          <dt>The rail</dt>
+          <dd>
+            Under the strip: how far along the whole set the window sits. Drag it to
+            move the window.
           </dd>
           <dt>The circles</dt>
           <dd>
@@ -177,7 +181,7 @@ export function Library() {
           <dd>
             Run the bridge (<code>move</code> repo, port 7787) and the panel mirrors
             the device: the wheel scrolls this strip, the arrows page it, and the
-            eight knobs turn whatever the dots are naming.
+            eight knobs turn the eight slots on screen.
           </dd>
         </dl>
       </Section>
@@ -325,7 +329,7 @@ const CSS = `
   --kit-slot-w: 128px;
   /* the docked panel's own height, kept clear so the last card is readable
      rather than parked behind the instrument */
-  --kit-dock: 232px;
+  --kit-dock: 340px;
   min-height: 100vh;
   padding: var(--kit-space-xl) var(--kit-space-lg) calc(var(--kit-dock) + var(--kit-space-xl));
   background: var(--kit-bg);
