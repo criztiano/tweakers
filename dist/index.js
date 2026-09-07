@@ -2225,6 +2225,17 @@ var ICON_MOVE_ENTER = {
   viewBox: "0 0 12 12",
   circle: { cx: "6", cy: "6", r: "6" }
 };
+var ICON_MOVE_LOOP = {
+  viewBox: "0 0 14 14",
+  paths: ["M10 1L12.5 3.5L10 6", "M1.5 7.5V6C1.5 4.61929 2.61929 3.5 4 3.5H12", "M4 13L1.5 10.5L4 8", "M12.5 6.5V8C12.5 9.38071 11.3807 10.5 10 10.5H2"]
+};
+var ICON_MOVE_COPY = {
+  viewBox: "0 0 14 14",
+  paths: [
+    "M5.5 5.5H12.5V12.5H5.5V5.5Z",
+    "M3.5 8.5H2.5C1.94772 8.5 1.5 8.05228 1.5 7.5V2.5C1.5 1.94772 1.94772 1.5 2.5 1.5H7.5C8.05228 1.5 8.5 1.94772 8.5 2.5V3.5"
+  ]
+};
 var LUCIDE_ICONS = {
   /* directions and traversal */
   "arrow-right": ["M5 12h14", "m12 5 7 7-7 7"],
@@ -2258,7 +2269,49 @@ var LUCIDE_ICONS = {
   "audio-lines": ["M2 10v3", "M6 6v11", "M10 3v18", "M14 8v7", "M18 5v13", "M22 10v3"],
   /* switches — what a boolean is about, drawn */
   repeat: ["m17 2 4 4-4 4", "M3 11v-1a4 4 0 0 1 4-4h14", "m7 22-4-4 4-4", "M21 13v1a4 4 0 0 1-4 4H3"],
-  timer: ["M10 2h4", "M12 14l3-3", "M12 6a8 8 0 1 0 0 16 8 8 0 0 0 0-16z"]
+  timer: ["M10 2h4", "M12 14l3-3", "M12 6a8 8 0 1 0 0 16 8 8 0 0 0 0-16z"],
+  /* restoration — the polish page's five switches */
+  "broom-sparkles": [
+    "M11 2v2",
+    "M12 3h-2",
+    "M13.5 10.5 22 2",
+    "M14.734 13.841a2 2 0 00-.314-2.42L12.58 9.58a2 2 0 00-2.421-.314l-7.657 4.461A1 1 0 002.3 15.3l6.403 6.403a1 1 0 001.571-.204z",
+    "M20 15v4",
+    "M22 17h-4",
+    "M4 4v4",
+    "m5 18 2-2",
+    "M6 6H2",
+    "m7.699 10.7 5.602 5.601"
+  ],
+  stethoscope: [
+    "M11 2v2",
+    "M5 2v2",
+    "M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1",
+    "M8 15a6 6 0 0 0 12 0v-3",
+    "M20 8a2 2 0 1 0 0 4 2 2 0 1 0 0-4"
+  ],
+  "file-volume": [
+    "M4 11.55V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2h-1.95",
+    "M14 2v5a1 1 0 0 0 1 1h5",
+    "M12 15a5 5 0 0 1 0 6",
+    "M8 14.502a.5.5 0 0 0-.826-.381l-1.893 1.631a1 1 0 0 1-.651.243H3.5a.5.5 0 0 0-.5.501v3.006a.5.5 0 0 0 .5.501h1.129a1 1 0 0 1 .652.243l1.893 1.633a.5.5 0 0 0 .826-.38z"
+  ],
+  "cassette-tape": [
+    "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
+    "M8 8a2 2 0 1 0 0 4 2 2 0 1 0 0-4",
+    "M8 12h8",
+    "M16 8a2 2 0 1 0 0 4 2 2 0 1 0 0-4",
+    "m6 20 .7-2.9A1.4 1.4 0 0 1 8.1 16h7.8a1.4 1.4 0 0 1 1.4 1l.7 3"
+  ],
+  "boom-box": [
+    "M4 9V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4",
+    "M8 8v1",
+    "M12 8v1",
+    "M16 8v1",
+    "M4 9h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z",
+    "M8 13a2 2 0 1 0 0 4 2 2 0 1 0 0-4",
+    "M16 13a2 2 0 1 0 0 4 2 2 0 1 0 0-4"
+  ]
 };
 var ICON_BADGE_OFF = "M17.203 19.3594L4.6875 6.7969C3.6094 8.25 3 10.0781 3 12C3 16.9688 7.031 21 12 21C13.969 21 15.75 20.3906 17.203 19.3594ZM19.359 17.2031C20.391 15.75 21 13.9219 21 12C21 7.0312 16.969 3 12 3C10.078 3 8.25 3.6094 6.797 4.6875L19.359 17.2031ZM0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24C5.391 24 0 18.6094 0 12Z";
 var ICON_BADGE_ON = "M12 24C5.391 24 0 18.6094 0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24ZM17.531 6.8438C17.016 6.4688 16.313 6.5625 15.984 7.0781L10.359 14.7656L7.922 12.3281C7.5 11.9062 6.75 11.9062 6.328 12.3281C5.906 12.7969 5.906 13.5 6.328 13.9219L9.703 17.2969C9.937 17.5312 10.266 17.6719 10.594 17.625C10.922 17.625 11.203 17.4375 11.391 17.1562L17.766 8.3906C18.141 7.9219 18.047 7.2188 17.531 6.8438Z";
@@ -2463,6 +2516,21 @@ function ListScreen({
     };
   }, [value, follow, items.length]);
   const rootClassName = ["tweakers-list-screen", className].filter(Boolean).join(" ");
+  const onKeyDown = (event) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    const rows = Array.from(
+      event.currentTarget.querySelectorAll(".tweakers-list-screen-row")
+    );
+    if (!rows.length) return;
+    const active = document.activeElement;
+    const at = active ? rows.indexOf(active) : -1;
+    const fallback = rows.findIndex((row) => row.hasAttribute("data-selected"));
+    const from = at !== -1 ? at : fallback;
+    const next = rows[(from === -1 ? event.key === "ArrowDown" ? -1 : rows.length : from) + (event.key === "ArrowDown" ? 1 : -1)];
+    if (!next) return;
+    event.preventDefault();
+    next.focus();
+  };
   return /* @__PURE__ */ jsx3(
     "div",
     {
@@ -2471,6 +2539,7 @@ function ListScreen({
       style,
       "data-wide": wide || void 0,
       role: "listbox",
+      onKeyDown,
       children: items.map((item) => {
         const rowValue = itemValue(item);
         const selected = rowValue === value;
@@ -4661,8 +4730,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const padRows = movePadRows(page, appRows);
   const appRowAt = (row) => moveAppPadRow(row, appRows);
   const padAt = (x, y) => surface.pads.find((p) => p.x === x && p.y === y);
-  const visibleCols = stripMode ? page.dials.map((_, i) => i) : settingsPanel ? Array.from({ length: modPageWidth() }, (_, i) => i) : appRows > 0 || color ? Array.from({ length: MOVE_PADS }, (_, i) => i) : visibleColumns(page);
-  const clusterCols = stripMode ? Math.min(MOVE_DIALS, visibleCols.length) || MOVE_DIALS : visibleCols.length || MOVE_DIALS;
+  const visibleCols = stripMode ? page.dials.map((_, i) => i) : settingsPanel ? Array.from({ length: modPageWidth() }, (_, i) => i) : color ? Array.from({ length: MOVE_PADS }, (_, i) => i) : visibleColumns(page);
+  const clusterCols = stripMode ? Math.min(MOVE_DIALS, visibleCols.length) || MOVE_DIALS : visibleCols.length;
   const stripStops = stripMode ? stripOffsets(page) : [];
   const stripTotal = stripMode ? Math.max(1, stripSlotCount(page)) : 1;
   const stripFrom = stripMode ? stripSlotIndex(page, stripOffset) : 0;
@@ -4686,845 +4755,859 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         selected: clipIndex
       }
     ),
-    /* @__PURE__ */ jsxs7("div", { className: "tweakers-move-inner", style: { "--move-cols": clusterCols }, children: [
-      /* @__PURE__ */ jsxs7("div", { className: "tweakers-move-tracks", children: [
-        /* @__PURE__ */ jsx7("div", { className: "tweakers-move-tracks-group", children: pages.map((pg, i) => /* @__PURE__ */ jsxs7(
-          "button",
-          {
-            className: "tweakers-move-track",
-            "data-active": pg === page,
-            onClick: () => {
-              ModulationStore2.closeSettings();
-              setTrack(i);
-              window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
-            },
-            children: [
-              /* @__PURE__ */ jsx7("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
-              /* @__PURE__ */ jsx7("span", { className: "tweakers-move-track-label", children: pg.panel.name })
-            ]
-          },
-          pg.panel.id
-        )) }),
-        /* @__PURE__ */ jsx7("div", { className: "tweakers-move-mods", children: color && colorMeta ? /* @__PURE__ */ jsx7(MoveColorSteps, { color, disabled: TweakStore6.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps ? surface.steps.map((s) => /* @__PURE__ */ jsx7("span", { className: "tweakers-move-mod", title: `step ${s.step + 1}`, children: /* @__PURE__ */ jsx7(
-          "span",
-          {
-            className: "tweakers-move-mod-dot",
-            style: { background: s.color ?? "var(--move-text)", opacity: s.lit ? 1 : 0.25 }
-          }
-        ) }, s.step)) : ModulationStore2.getSlots().map((slot) => /* @__PURE__ */ jsx7(MoveModCircle, { slot }, slot.index)) }),
-        headerCluster
-      ] }),
-      /* @__PURE__ */ jsxs7("div", { className: "tweakers-move-controls", children: [
-        screen && /* @__PURE__ */ jsx7("div", { className: "tweakers-move-wheel-screen", role: "group", "aria-label": screen.title ?? "Wheel selection", children: /* @__PURE__ */ jsx7(
-          ListScreen,
-          {
-            items: screen.items.map((row, index) => ({
-              value: String(index),
-              label: moveScreenRowLabel(row),
-              ...typeof row === "string" ? {} : {
-                ...row.detail ? { detail: row.detail } : {},
-                ...row.checked === void 0 ? {} : { checked: row.checked }
+    /* @__PURE__ */ jsxs7(
+      "div",
+      {
+        className: "tweakers-move-inner",
+        style: {
+          "--move-cols": clusterCols,
+          // The header row spans exactly what the controls row shows: the
+          // dial cluster plus, when a wheel screen stands beside it, the
+          // screen and its gap — so the page name sits on the top-left
+          // corner of the first real object and follows every resize.
+          "--move-screen-w": screen ? "calc(var(--move-wheel-width) + 2 * var(--move-gap))" : "0px"
+        },
+        children: [
+          /* @__PURE__ */ jsxs7("div", { className: "tweakers-move-tracks", children: [
+            /* @__PURE__ */ jsx7("div", { className: "tweakers-move-tracks-group", children: pages.length > 1 && pages.map((pg, i) => /* @__PURE__ */ jsxs7(
+              "button",
+              {
+                className: "tweakers-move-track",
+                "data-active": pg === page,
+                onClick: () => {
+                  ModulationStore2.closeSettings();
+                  setTrack(i);
+                  window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
+                },
+                children: [
+                  /* @__PURE__ */ jsx7("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
+                  /* @__PURE__ */ jsx7("span", { className: "tweakers-move-track-label", children: pg.panel.name })
+                ]
+              },
+              pg.panel.id
+            )) }),
+            /* @__PURE__ */ jsx7("div", { className: "tweakers-move-mods", children: color && colorMeta ? /* @__PURE__ */ jsx7(MoveColorSteps, { color, disabled: TweakStore6.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps ? surface.steps.map((s) => /* @__PURE__ */ jsx7("span", { className: "tweakers-move-mod", title: `step ${s.step + 1}`, children: /* @__PURE__ */ jsx7(
+              "span",
+              {
+                className: "tweakers-move-mod-dot",
+                style: { background: s.color ?? "var(--move-text)", opacity: s.lit ? 1 : 0.25 }
               }
-            })),
-            value: String(screen.index),
-            follow: "center",
-            onSelect: (value) => MoveSurfaceStore.selectScreen(Number(value))
-          }
-        ) }),
-        visibleCols.length > 0 && /* @__PURE__ */ jsxs7("div", { className: "tweakers-move-grid", "data-presets": presetScreen?.phase === "open" || void 0, children: [
-          presetScreen && /* @__PURE__ */ jsx7(MovePresetScreen, { view: presetScreen }),
-          /* @__PURE__ */ jsx7("div", { className: "tweakers-move-viewport", "data-scroll": stripMode || void 0, children: /* @__PURE__ */ jsxs7(
-            "div",
-            {
-              className: "tweakers-move-strip",
-              "data-scroll": stripMode || void 0,
-              style: stripMode ? { "--move-strip-len": page.dials.length, "--move-offset": stripOffset } : void 0,
-              children: [
-                /* @__PURE__ */ jsx7("div", { className: "tweakers-move-dials", "data-scroll": stripMode || void 0, children: visibleCols.map((i) => {
-                  if (isSpanContinuation(page, i)) return null;
-                  const meta = page.dials[i]?.type === "filter" ? page.dials[i] : dialAt(i);
-                  if (!meta) return /* @__PURE__ */ jsx7("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
-                  const disabled = TweakStore6.isDisabled(page.panel.id, meta.path);
-                  const active = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
-                  const valueFirst = !!settingsPanel && !(meta.min === 0 && meta.max === 1);
-                  const scopeSlot = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.scope : void 0;
-                  const scope = scopeSlot && modSettings ? /* @__PURE__ */ jsx7(MoveScope, { index: modSettings.index }) : null;
-                  if (meta.type === "color") return /* @__PURE__ */ jsx7(MoveColorSlot, { panelId: page.panel.id, meta, active, open: colorMeta?.path === meta.path }, meta.path);
-                  if (meta.type === "filter") {
-                    const fv = normalizeFilterValue(
-                      values[meta.path],
-                      resolveFilterAxis(meta.cutoffAxis, "cutoff"),
-                      resolveFilterAxis(meta.resonanceAxis, "resonance")
-                    );
-                    const shape = filterShapePath(meta, values[meta.path]);
-                    return /* @__PURE__ */ jsxs7(
-                      "div",
-                      {
-                        className: "tweakers-move-dial",
-                        "data-kind": "filter",
-                        "data-active": active || void 0,
-                        "data-disabled": meta.filterEnabled === false || void 0,
-                        onPointerDown: (e) => {
-                          try {
-                            e.currentTarget.setPointerCapture(e.pointerId);
-                          } catch {
-                          }
-                          fineRef.current = null;
-                          setDragPath(meta.path);
-                          armMod(meta.path);
-                          filterFromPointer(e, meta, true);
-                        },
-                        onPointerMove: (e) => {
-                          if (dragPath === meta.path) filterFromPointer(e, meta, false);
-                        },
-                        onPointerUp: () => {
-                          setDragPath(null);
-                          fineRef.current = null;
-                        },
-                        onPointerCancel: () => {
-                          setDragPath(null);
-                          fineRef.current = null;
-                        },
-                        children: [
-                          /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                          /* @__PURE__ */ jsx7(MoveSlotFilterBody, { meta, value: fv, shape })
-                        ]
-                      },
-                      meta.path
-                    );
+            ) }, s.step)) : ModulationStore2.getSlots().map((slot) => /* @__PURE__ */ jsx7(MoveModCircle, { slot }, slot.index)) }),
+            headerCluster
+          ] }),
+          /* @__PURE__ */ jsxs7("div", { className: "tweakers-move-controls", children: [
+            screen && /* @__PURE__ */ jsx7("div", { className: "tweakers-move-wheel-screen", role: "group", "aria-label": screen.title ?? "Wheel selection", children: /* @__PURE__ */ jsx7(
+              ListScreen,
+              {
+                items: screen.items.map((row, index) => ({
+                  value: String(index),
+                  label: moveScreenRowLabel(row),
+                  ...typeof row === "string" ? {} : {
+                    ...row.detail ? { detail: row.detail } : {},
+                    ...row.checked === void 0 ? {} : { checked: row.checked }
                   }
-                  if (meta.type === "gradient") {
-                    const g = normalizeGradient(values[meta.path]);
-                    const index = Math.min(rampStop[meta.path] ?? 0, g.stops.length - 1);
-                    return /* @__PURE__ */ jsxs7(
-                      "div",
-                      {
-                        className: "tweakers-move-dial",
-                        "data-kind": "ramp",
-                        "data-active": active || void 0,
-                        onPointerDown: (e) => {
-                          try {
-                            e.currentTarget.setPointerCapture(e.pointerId);
-                          } catch {
-                          }
-                          fineRef.current = null;
-                          setDragPath(meta.path);
-                          armMod(meta.path);
-                          rampFromPointer(e, meta, true);
-                        },
-                        onPointerMove: (e) => {
-                          if (dragPath === meta.path) rampFromPointer(e, meta, false);
-                        },
-                        onPointerUp: () => {
-                          setDragPath(null);
-                          fineRef.current = null;
-                        },
-                        onPointerCancel: () => {
-                          setDragPath(null);
-                          fineRef.current = null;
-                        },
-                        children: [
-                          /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                          /* @__PURE__ */ jsx7(
-                            MoveSlotRampBody,
-                            {
-                              label: meta.label,
-                              value: `${index + 1}/${g.stops.length}`,
-                              css: rampCss(g.stops),
-                              stop: g.stops[index]?.position ?? null
-                            }
-                          )
-                        ]
-                      },
-                      meta.path
-                    );
-                  }
-                  if (meta.type === "slider" && meta.display === "dial") {
-                    const min = meta.min ?? 0, max = meta.max ?? 1;
-                    const v = Number(values[meta.path] ?? min);
-                    return /* @__PURE__ */ jsxs7(
-                      "div",
-                      {
-                        className: "tweakers-move-dial",
-                        "data-kind": "dial",
-                        "data-active": active || void 0,
-                        onPointerDown: (e) => {
-                          try {
-                            e.currentTarget.setPointerCapture(e.pointerId);
-                          } catch {
-                          }
-                          fineRef.current = null;
-                          setDragPath(meta.path);
-                          armMod(meta.path);
-                          needleFromPointer(e, meta);
-                        },
-                        onPointerMove: (e) => {
-                          if (dragPath === meta.path) needleFromPointer(e, meta);
-                        },
-                        onPointerUp: () => {
-                          setDragPath(null);
-                          fineRef.current = null;
-                        },
-                        onPointerCancel: () => {
-                          setDragPath(null);
-                          fineRef.current = null;
-                        },
-                        children: [
-                          /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                          /* @__PURE__ */ jsx7(
-                            MoveSlotDialBody,
-                            {
-                              label: meta.label,
-                              value: `${Number(v.toFixed(2))}${meta.unit ?? (Math.abs(max - min) >= 180 ? "\xB0" : "")}`,
-                              bearing: valueToBearing(v, min, max),
-                              origin: valueToBearing(meta.origin ?? min, min, max)
-                            }
-                          )
-                        ]
-                      },
-                      meta.path
-                    );
-                  }
-                  if (meta.type === "transfer") {
-                    const points = normalizeTransfer(values[meta.path]).points;
-                    const index = Math.min(curvePoint[meta.path] ?? 0, points.length - 1);
-                    const held2 = points[index];
-                    const samples = Array.from({ length: 48 }, (_, k) => sampleTransfer(points, k / 47));
-                    return /* @__PURE__ */ jsxs7(
-                      "div",
-                      {
-                        className: "tweakers-move-dial",
-                        "data-kind": "transfer",
-                        "data-active": active || void 0,
-                        onPointerDown: (e) => {
-                          try {
-                            e.currentTarget.setPointerCapture(e.pointerId);
-                          } catch {
-                          }
-                          fineRef.current = null;
-                          setDragPath(meta.path);
-                          armMod(meta.path);
-                          transferFromPointer(e, meta, true);
-                        },
-                        onPointerMove: (e) => {
-                          if (dragPath === meta.path) transferFromPointer(e, meta, false);
-                        },
-                        onPointerUp: () => {
-                          setDragPath(null);
-                          fineRef.current = null;
-                        },
-                        onPointerCancel: () => {
-                          setDragPath(null);
-                          fineRef.current = null;
-                        },
-                        children: [
-                          /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                          /* @__PURE__ */ jsx7(
-                            MoveSlotTransferBody,
-                            {
-                              label: meta.label,
-                              value: `${index + 1}/${points.length}`,
-                              shape: previewPathData(samples),
-                              point: { x: held2.x, y: 1 - held2.y }
-                            }
-                          )
-                        ]
-                      },
-                      meta.path
-                    );
-                  }
-                  if (meta.type === "xy") {
-                    const xa = resolveAxis(meta.xAxis);
-                    const ya = resolveAxis(meta.yAxis);
-                    const pos = pointFromValue(
-                      normalizeValue(values[meta.path], xa, ya),
-                      xa,
-                      ya
-                    );
-                    const preview = meta.path === previewPath ? ModulationStore2.getSettingsPreview() : null;
-                    const gridBase = meta.grid === false ? 0 : typeof meta.grid === "number" ? meta.grid : XY_GRID_DEFAULT;
-                    const gridN = gridBase > 0 ? Math.round(gridBase * Math.max(0, meta.density ?? 1)) : 0;
-                    return /* @__PURE__ */ jsxs7(
-                      "div",
-                      {
-                        className: "tweakers-move-dial",
-                        "data-kind": "xy",
-                        "data-preview": preview ? true : void 0,
-                        "data-sub": valueFirst || void 0,
-                        "data-active": active || void 0,
-                        onPointerDown: (e) => {
-                          try {
-                            e.currentTarget.setPointerCapture(e.pointerId);
-                          } catch {
-                          }
-                          fineRef.current = null;
-                          setDragPath(meta.path);
-                          armMod(meta.path);
-                          xyFromPointer(e, meta);
-                        },
-                        onPointerMove: (e) => {
-                          if (dragPath === meta.path) xyFromPointer(e, meta);
-                        },
-                        onPointerUp: () => xyRelease(meta),
-                        onPointerCancel: () => xyRelease(meta),
-                        children: [
-                          valueFirst && /* @__PURE__ */ jsx7("span", { className: "tweakers-move-dial-sub", children: meta.label }),
-                          /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                          /* @__PURE__ */ jsx7(
-                            MoveSlotXYBody,
-                            {
-                              label: meta.label,
-                              value: preview ? preview.label : `${Math.round(pos.x * 100)}\xB7${Math.round((1 - pos.y) * 100)}`,
-                              position: pos,
-                              gridN,
-                              shape: preview ? previewPathData(preview.points) : null
-                            }
-                          )
-                        ]
-                      },
-                      meta.path
-                    );
-                  }
-                  if (meta.type === "range") {
-                    const pos = normalizeRangeDial(meta, values[meta.path]);
-                    return /* @__PURE__ */ jsxs7(
-                      "div",
-                      {
-                        className: "tweakers-move-dial",
-                        "data-kind": "range",
-                        "data-active": active || void 0,
-                        onPointerDown: (e) => {
-                          try {
-                            e.currentTarget.setPointerCapture(e.pointerId);
-                          } catch {
-                          }
-                          fineRef.current = null;
-                          setDragPath(meta.path);
-                          armMod(meta.path);
-                          rangeFromPointer(e, meta, true);
-                        },
-                        onPointerMove: (e) => {
-                          if (dragPath === meta.path) rangeFromPointer(e, meta, false);
-                        },
-                        onPointerUp: () => {
-                          setDragPath(null);
-                          fineRef.current = null;
-                        },
-                        onPointerCancel: () => {
-                          setDragPath(null);
-                          fineRef.current = null;
-                        },
-                        children: [
-                          /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                          /* @__PURE__ */ jsx7(MoveSlotRangeBody, { label: meta.label, value: rangeReading(meta), lo: pos.lo, hi: pos.hi })
-                        ]
-                      },
-                      meta.path
-                    );
-                  }
-                  if (isEnumDial(meta)) {
-                    const options = meta.options ?? [];
-                    const activeIdx = enumIndex(meta, values[meta.path]);
-                    const option = options[activeIdx];
-                    const optionLabel = enumOptionLabel(option);
-                    const shape = enumShapePath(meta, values[meta.path]);
-                    const glyph = enumOptionIcon(option);
-                    const playback = movePlaybackMode(meta, values[meta.path]);
-                    return /* @__PURE__ */ jsxs7(
-                      "div",
-                      {
-                        className: "tweakers-move-dial",
-                        "data-kind": "enum",
-                        "data-scope": scope ? true : void 0,
-                        "data-visual": playback ? "playback" : void 0,
-                        role: "slider",
-                        tabIndex: disabled ? -1 : 0,
-                        "aria-label": meta.label,
-                        "aria-valuemin": 0,
-                        "aria-valuemax": Math.max(0, options.length - 1),
-                        "aria-valuenow": activeIdx,
-                        "aria-valuetext": optionLabel,
-                        "aria-orientation": "horizontal",
-                        "aria-disabled": disabled || void 0,
-                        "data-disabled": disabled || void 0,
-                        onKeyDown: (e) => dialFromKeyboard(e, meta),
-                        "data-shape": shape ? true : void 0,
-                        "data-active": active || void 0,
-                        onPointerDown: (e) => {
-                          if (TweakStore6.isDisabled(page.panel.id, meta.path)) return;
-                          try {
-                            e.currentTarget.setPointerCapture(e.pointerId);
-                          } catch {
-                          }
-                          fineRef.current = null;
-                          setDragPath(meta.path);
-                          armMod(meta.path);
-                          enumFromPointer(e, meta);
-                        },
-                        onPointerMove: (e) => {
-                          if (!TweakStore6.isDisabled(page.panel.id, meta.path) && dragPath === meta.path) enumFromPointer(e, meta);
-                        },
-                        onPointerUp: () => {
-                          setDragPath(null);
-                          fineRef.current = null;
-                        },
-                        onPointerCancel: () => {
-                          setDragPath(null);
-                          fineRef.current = null;
-                        },
-                        children: [
-                          scope,
-                          /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                          /* @__PURE__ */ jsx7(
-                            MoveSlotEnumBody,
-                            {
-                              label: meta.label,
-                              optionLabel,
-                              options,
-                              activeIdx,
-                              shape,
-                              glyph,
-                              playback,
-                              scoped: !!scope
-                            }
-                          )
-                        ]
-                      },
-                      meta.path
-                    );
-                  }
-                  if (meta.moveBlank) {
-                    return /* @__PURE__ */ jsx7("div", { className: "tweakers-move-dial", "data-kind": "blank", "aria-hidden": "true" }, meta.path);
-                  }
-                  if (meta.type === "toggle") {
-                    const checked = values[meta.path] === true;
-                    return /* @__PURE__ */ jsxs7(
-                      "button",
-                      {
-                        type: "button",
-                        className: "tweakers-move-dial",
-                        "data-kind": meta.icon ? "toggle-icon" : "toggle",
-                        "data-on": checked || void 0,
-                        "data-active": active || void 0,
-                        role: "switch",
-                        "aria-label": meta.label,
-                        "aria-checked": checked,
-                        disabled,
-                        onClick: () => {
-                          if (!TweakStore6.isDisabled(page.panel.id, meta.path)) {
-                            TweakStore6.updateValue(page.panel.id, meta.path, !checked);
-                          }
-                        },
-                        children: [
-                          /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                          /* @__PURE__ */ jsx7(
-                            MoveSlotToggleBody,
-                            {
-                              label: meta.label,
-                              checked,
-                              icon: meta.icon,
-                              onIcon: meta.onIcon,
-                              offIcon: meta.offIcon
-                            }
-                          )
-                        ]
-                      },
-                      meta.path
-                    );
-                  }
-                  if (scope) {
-                    return /* @__PURE__ */ jsxs7(
-                      "div",
-                      {
-                        className: "tweakers-move-dial",
-                        "data-kind": "scope",
-                        "data-active": active || void 0,
-                        onPointerDown: (e) => {
-                          try {
-                            e.currentTarget.setPointerCapture(e.pointerId);
-                          } catch {
-                          }
-                          fineRef.current = null;
-                          setDragPath(meta.path);
-                          armMod(meta.path);
-                          dialFromPointer(e, meta);
-                        },
-                        onPointerMove: (e) => {
-                          if (dragPath === meta.path) dialFromPointer(e, meta);
-                        },
-                        onPointerUp: () => {
-                          setDragPath(null);
-                          fineRef.current = null;
-                        },
-                        onPointerCancel: () => {
-                          setDragPath(null);
-                          fineRef.current = null;
-                        },
-                        children: [
-                          /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                          /* @__PURE__ */ jsx7(
-                            MoveSlotScopeBody,
-                            {
-                              label: meta.label,
-                              value: chipValue(meta).num + (meta.unit ? ` ${meta.unit}` : ""),
-                              pct: dialPercent(meta),
-                              children: scope
-                            }
-                          )
-                        ]
-                      },
-                      meta.path
-                    );
-                  }
-                  const envStage = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.stage : void 0;
-                  if (envStage) {
-                    const stageDials = (modLayout?.dials ?? []).filter((d) => d.stage).flatMap((d) => {
-                      const m = page.dials.find((x) => x?.path === d.path);
-                      return m ? [{ stage: d.stage, meta: m }] : [];
-                    });
-                    if (stageDials[0]?.meta.path !== meta.path) return null;
-                    const envParams = {
-                      attack: Number(values.attack) || 0,
-                      decay: Number(values.decay) || 0,
-                      sustain: Number(values.sustain) || 0,
-                      release: Number(values.release) || 0,
-                      attackCurve: Number(modSlot?.params.attackCurve) || 0,
-                      decayCurve: Number(modSlot?.params.decayCurve) || 0,
-                      releaseCurve: Number(modSlot?.params.releaseCurve) || 0,
-                      ...Object.fromEntries(ENV_WAVE_STAGES.flatMap((s) => [
-                        [envWaveParam(s), Number(modSlot?.params[envWaveParam(s)]) || 0],
-                        [envWaveFlipParam(s), !!modSlot?.params[envWaveFlipParam(s)]]
-                      ]))
-                    };
-                    const envActive = waveHeld !== null || stageDials.some(
-                      (s) => dragPath === s.meta.path || !!handTouch[s.meta.path] || !!hwHeld[s.meta.path]
-                    );
-                    const reading = (m) => {
-                      const v = chipValue(m);
-                      return `${v.num}${v.unit ? ` ${v.unit}` : ""}`;
-                    };
-                    return /* @__PURE__ */ jsxs7(
-                      "div",
-                      {
-                        className: "tweakers-move-dial",
-                        "data-kind": "env",
-                        "data-active": envActive || void 0,
-                        style: { gridColumn: `span ${stageDials.length}` },
-                        children: [
-                          /* @__PURE__ */ jsx7(
-                            MoveSlotEnvBody,
-                            {
-                              points: envelopePoints(envParams, 129),
-                              stages: stageDials.map((s) => ({ stage: s.stage, label: s.meta.label, value: reading(s.meta) })),
-                              joints: envelopeJoints(envParams).map((j) => ({ ...j, held: bendHeld === j.stage }))
-                            }
-                          ),
-                          /* @__PURE__ */ jsx7("div", { className: "tweakers-move-env-zones", children: stageDials.map(({ meta: m }) => /* @__PURE__ */ jsx7(
-                            "div",
-                            {
-                              className: "tweakers-move-env-zone",
-                              onPointerDown: (e) => {
-                                try {
-                                  e.currentTarget.setPointerCapture(e.pointerId);
-                                } catch {
-                                }
-                                fineRef.current = null;
-                                setDragPath(m.path);
-                                armMod(m.path);
-                                dialFromPointer(e, m);
-                              },
-                              onPointerMove: (e) => {
-                                if (dragPath === m.path) dialFromPointer(e, m);
-                              },
-                              onPointerUp: () => {
-                                setDragPath(null);
-                                fineRef.current = null;
-                              },
-                              onPointerCancel: () => {
-                                setDragPath(null);
-                                fineRef.current = null;
-                              },
-                              children: /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: m.path })
-                            },
-                            m.path
-                          )) })
-                        ]
-                      },
-                      meta.path
-                    );
-                  }
-                  const latchedHere = latched[i]?.path === meta.path || page.values[i]?.path === meta.path && !!hwLatched[meta.path];
-                  const origin01 = dialOrigin(meta);
-                  const originPct = origin01 > 0 ? origin01 * 100 : null;
-                  const pct = dialPercent(meta);
-                  const atOrigin = originPct != null && Math.abs(normalizeDial(meta, values[meta.path]) - origin01) < 1e-6;
-                  const drawing = moveNumericDrawing(meta, values[meta.path]);
-                  const subbed = meta !== page.dials[i];
-                  const subValue = subbed || valueFirst ? chipValue(meta) : null;
-                  return /* @__PURE__ */ jsxs7(
-                    "div",
-                    {
-                      className: "tweakers-move-dial",
-                      "data-active": active || void 0,
-                      "data-latched": latchedHere || void 0,
-                      "data-sub": !drawing && (subbed || valueFirst) || void 0,
-                      "data-visual": drawing?.kind,
-                      role: "slider",
-                      tabIndex: disabled ? -1 : 0,
-                      "aria-label": meta.label,
-                      "aria-valuemin": meta.min ?? 0,
-                      "aria-valuemax": meta.max ?? 1,
-                      "aria-valuenow": Number(values[meta.path]),
-                      "aria-valuetext": moveVisualReading(meta, Number(values[meta.path])),
-                      "aria-orientation": "horizontal",
-                      "aria-disabled": disabled || void 0,
-                      "data-disabled": disabled || void 0,
-                      onKeyDown: (e) => dialFromKeyboard(e, meta),
-                      onPointerDown: (e) => {
-                        if (TweakStore6.isDisabled(page.panel.id, meta.path)) return;
-                        try {
-                          e.currentTarget.setPointerCapture(e.pointerId);
-                        } catch {
-                        }
-                        fineRef.current = null;
-                        setDragPath(meta.path);
-                        armMod(meta.path);
-                        dialFromPointer(e, meta);
-                      },
-                      onPointerMove: (e) => {
-                        if (!TweakStore6.isDisabled(page.panel.id, meta.path) && dragPath === meta.path) dialFromPointer(e, meta);
-                      },
-                      onPointerUp: () => {
-                        setDragPath(null);
-                        fineRef.current = null;
-                      },
-                      onPointerCancel: () => {
-                        setDragPath(null);
-                        fineRef.current = null;
-                      },
-                      children: [
-                        !drawing && (subbed || valueFirst) && /* @__PURE__ */ jsx7("span", { className: "tweakers-move-dial-sub", children: meta.label }),
-                        /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                        drawing ? /* @__PURE__ */ jsx7(MoveSlotNumericBody, { label: meta.label, value: moveVisualReading(meta, Number(values[meta.path])), drawing }) : /* @__PURE__ */ jsx7(
-                          MoveSlotDefaultBody,
-                          {
-                            label: meta.label,
-                            value: subValue ? `${subValue.num}${subValue.unit ? ` ${subValue.unit}` : ""}` : dialReading(meta),
-                            pct,
-                            originPct,
-                            atOrigin
-                          }
-                        )
-                      ]
-                    },
-                    meta.path
-                  );
-                }) }),
-                color && colorMeta ? /* @__PURE__ */ jsx7(MoveHueGrid, { color, disabled: TweakStore6.isDisabled(page.panel.id, colorMeta.path), mirror: true }) : Array.from({ length: PAD_ROWS }, (_, row) => row).filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0)).map((row) => /* @__PURE__ */ jsx7("div", { className: "tweakers-move-pads", children: visibleCols.map((col) => {
-                  const appRow = appRowAt(row);
-                  if (appRow !== null) {
-                    const cell = padAt(col, appRow);
-                    if (!cell || cell.empty) {
-                      return /* @__PURE__ */ jsx7("div", { className: "tweakers-move-pad", "data-empty": "true" }, `app-${col}`);
-                    }
-                    return /* @__PURE__ */ jsx7(
-                      "button",
-                      {
-                        className: "tweakers-move-pad",
-                        "data-kind": "app",
-                        "data-on": cell.lit || void 0,
-                        onClick: () => MoveSurfaceStore.press(col, appRow),
-                        children: /* @__PURE__ */ jsx7(MovePadAppBody, { label: cell.label, color: cell.color })
-                      },
-                      `app-${col}`
-                    );
-                  }
-                  const meta = padRows[row][col];
-                  const bendStage = !meta && settingsPanel && padRows[row] === page.toggles && modSettings ? modLayout?.dials[col]?.stage : void 0;
-                  if (bendStage && ENV_BEND_STAGES.includes(bendStage)) {
-                    return /* @__PURE__ */ jsx7(
-                      "button",
-                      {
-                        className: "tweakers-move-pad",
-                        "data-kind": "bend",
-                        "data-on": bendHeld === bendStage || void 0,
-                        onPointerDown: (e) => {
-                          try {
-                            e.currentTarget.setPointerCapture(e.pointerId);
-                          } catch {
-                          }
-                          setBendHeld(bendStage);
-                          bendRef.current = {
-                            y: e.clientY,
-                            curve: Number(modSlot?.params[envCurveParam(bendStage)]) || 0
-                          };
-                        },
-                        onPointerMove: (e) => {
-                          if (bendHeld !== bendStage || !bendRef.current) return;
-                          const v = Math.min(1, Math.max(
-                            -1,
-                            bendRef.current.curve + (bendRef.current.y - e.clientY) / 60
-                          ));
-                          ModulationStore2.updateSlotParams(modSettings.index, { [envCurveParam(bendStage)]: v });
-                        },
-                        onPointerUp: () => {
-                          setBendHeld(null);
-                          bendRef.current = null;
-                        },
-                        onPointerCancel: () => {
-                          setBendHeld(null);
-                          bendRef.current = null;
-                        },
-                        children: /* @__PURE__ */ jsx7(MovePadToggleBody, { label: "Curve" })
-                      },
-                      `bend-${bendStage}`
-                    );
-                  }
-                  const waveStage = !meta && settingsPanel && padRows[row] === page.values && modSettings ? modLayout?.dials[col]?.stage : void 0;
-                  if (waveStage && ENV_WAVE_STAGES.includes(waveStage)) {
-                    const amount = Number(modSlot?.params[envWaveParam(waveStage)]) || 0;
-                    const flipped = !!modSlot?.params[envWaveFlipParam(waveStage)];
-                    return /* @__PURE__ */ jsx7(
-                      "button",
-                      {
-                        className: "tweakers-move-pad",
-                        "data-kind": "wave",
-                        "data-on": amount > 0 || void 0,
-                        "data-held": waveHeld === waveStage || void 0,
-                        onPointerDown: (e) => {
-                          try {
-                            e.currentTarget.setPointerCapture(e.pointerId);
-                          } catch {
-                          }
-                          setWaveHeld(waveStage);
-                          waveRef.current = { y: e.clientY, amount, moved: false };
-                        },
-                        onPointerMove: (e) => {
-                          if (waveHeld !== waveStage || !waveRef.current) return;
-                          const dy = waveRef.current.y - e.clientY;
-                          if (!waveRef.current.moved && Math.abs(dy) < 3) return;
-                          waveRef.current.moved = true;
-                          const v = Math.min(1, Math.max(0, waveRef.current.amount + dy / 100));
-                          ModulationStore2.updateSlotParams(modSettings.index, { [envWaveParam(waveStage)]: v });
-                        },
-                        onPointerUp: () => {
-                          if (waveHeld === waveStage && waveRef.current && !waveRef.current.moved) {
-                            ModulationStore2.updateSlotParams(modSettings.index, {
-                              [envWaveFlipParam(waveStage)]: !flipped
-                            });
-                          }
-                          setWaveHeld(null);
-                          waveRef.current = null;
-                        },
-                        onPointerCancel: () => {
-                          setWaveHeld(null);
-                          waveRef.current = null;
-                        },
-                        children: /* @__PURE__ */ jsx7(MovePadWaveBody, { label: flipped ? "Swell" : "Dip", percent: Math.round(amount * 100) })
-                      },
-                      `wave-${waveStage}`
-                    );
-                  }
-                  if (!meta) return /* @__PURE__ */ jsx7("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
-                  if (padRows[row] === page.toggles) {
-                    return /* @__PURE__ */ jsx7(
-                      "button",
-                      {
-                        className: "tweakers-move-pad",
-                        "data-kind": "toggle",
-                        "data-on": !!values[meta.path],
-                        onClick: () => TweakStore6.updateValue(page.panel.id, meta.path, !values[meta.path]),
-                        children: /* @__PURE__ */ jsx7(MovePadToggleBody, { label: meta.label })
-                      },
-                      meta.path
-                    );
-                  }
-                  if (padRows[row] === page.actions) {
-                    return /* @__PURE__ */ jsx7(
-                      "button",
-                      {
-                        className: "tweakers-move-pad",
-                        "data-kind": "action",
-                        onClick: () => TweakStore6.triggerAction(page.panel.id, meta.path),
-                        children: /* @__PURE__ */ jsx7(MovePadActionBody, { label: meta.label })
-                      },
-                      meta.path
-                    );
-                  }
-                  const value = chipValue(meta);
-                  return /* @__PURE__ */ jsx7(
-                    "button",
-                    {
-                      className: "tweakers-move-pad",
-                      "data-kind": "value",
-                      "data-held": held !== null && held.meta.path === meta.path || hwHeld[meta.path] || void 0,
-                      "data-latched": chipLatched(col, meta) || void 0,
-                      onPointerDown: (e) => pressChip(e, col, meta),
-                      onPointerUp: () => releaseChip(col, meta),
-                      onPointerCancel: () => setHeld(null),
-                      children: /* @__PURE__ */ jsx7(MovePadValueBody, { label: meta.label, value: value.num, unit: value.unit, children: /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path, pad: true }) })
-                    },
-                    meta.path
-                  );
-                }) }, row))
-              ]
-            }
-          ) }),
-          stripMode && /* @__PURE__ */ jsx7(
-            "div",
-            {
-              className: "tweakers-move-rail",
-              role: "slider",
-              tabIndex: 0,
-              "aria-label": `Slots ${stripFrom + 1}\u2013${stripTo} of ${stripTotal}`,
-              "aria-valuemin": 0,
-              "aria-valuemax": Math.max(0, stripStops.length - 1),
-              "aria-valuenow": Math.max(0, stripStops.indexOf(stripOffset)),
-              "aria-orientation": "horizontal",
-              "data-scrolling": dotDrag !== null || void 0,
-              onKeyDown: (e) => {
-                const dir = e.key === "ArrowRight" || e.key === "PageDown" ? 1 : e.key === "ArrowLeft" || e.key === "PageUp" ? -1 : 0;
-                const paged = e.shiftKey || e.key === "PageUp" || e.key === "PageDown";
-                if (dir && paged) {
-                  e.preventDefault();
-                  scrollPage(dir);
-                  return;
-                }
-                const step = dir || (e.key === "Home" ? -stripStops.length : e.key === "End" ? stripStops.length : 0);
-                if (!step) return;
-                e.preventDefault();
-                scrollSlots(step);
-              },
-              onPointerDown: (e) => {
-                try {
-                  e.currentTarget.setPointerCapture(e.pointerId);
-                } catch {
-                }
-                setDotDrag({ x: e.clientX, stop: Math.max(0, stripStops.indexOf(stripOffset)) });
-              },
-              onPointerMove: (e) => {
-                if (!dotDrag) return;
-                const slotWidth = e.currentTarget.getBoundingClientRect().width / MOVE_DIALS || 1;
-                const want = dotDrag.stop + Math.round((e.clientX - dotDrag.x) / slotWidth);
-                setOffset(stripStops[Math.min(stripStops.length - 1, Math.max(0, want))]);
-              },
-              onPointerUp: () => setDotDrag(null),
-              onPointerCancel: () => setDotDrag(null),
-              children: /* @__PURE__ */ jsx7(
-                "span",
+                })),
+                value: String(screen.index),
+                follow: "center",
+                onSelect: (value) => MoveSurfaceStore.selectScreen(Number(value))
+              }
+            ) }),
+            visibleCols.length > 0 && /* @__PURE__ */ jsxs7("div", { className: "tweakers-move-grid", "data-presets": presetScreen?.phase === "open" || void 0, children: [
+              presetScreen && /* @__PURE__ */ jsx7(MovePresetScreen, { view: presetScreen }),
+              /* @__PURE__ */ jsx7("div", { className: "tweakers-move-viewport", "data-scroll": stripMode || void 0, children: /* @__PURE__ */ jsxs7(
+                "div",
                 {
-                  className: "tweakers-move-rail-window",
-                  style: {
-                    left: `${stripFrom / stripTotal * 100}%`,
-                    width: `${(stripTo - stripFrom) / stripTotal * 100}%`
-                  }
+                  className: "tweakers-move-strip",
+                  "data-scroll": stripMode || void 0,
+                  style: stripMode ? { "--move-strip-len": page.dials.length, "--move-offset": stripOffset } : void 0,
+                  children: [
+                    /* @__PURE__ */ jsx7("div", { className: "tweakers-move-dials", "data-scroll": stripMode || void 0, children: visibleCols.map((i) => {
+                      if (isSpanContinuation(page, i)) return null;
+                      const meta = page.dials[i]?.type === "filter" ? page.dials[i] : dialAt(i);
+                      if (!meta) return /* @__PURE__ */ jsx7("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
+                      const disabled = TweakStore6.isDisabled(page.panel.id, meta.path);
+                      const active = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
+                      const valueFirst = !!settingsPanel && !(meta.min === 0 && meta.max === 1);
+                      const scopeSlot = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.scope : void 0;
+                      const scope = scopeSlot && modSettings ? /* @__PURE__ */ jsx7(MoveScope, { index: modSettings.index }) : null;
+                      if (meta.type === "color") return /* @__PURE__ */ jsx7(MoveColorSlot, { panelId: page.panel.id, meta, active, open: colorMeta?.path === meta.path }, meta.path);
+                      if (meta.type === "filter") {
+                        const fv = normalizeFilterValue(
+                          values[meta.path],
+                          resolveFilterAxis(meta.cutoffAxis, "cutoff"),
+                          resolveFilterAxis(meta.resonanceAxis, "resonance")
+                        );
+                        const shape = filterShapePath(meta, values[meta.path]);
+                        return /* @__PURE__ */ jsxs7(
+                          "div",
+                          {
+                            className: "tweakers-move-dial",
+                            "data-kind": "filter",
+                            "data-active": active || void 0,
+                            "data-disabled": meta.filterEnabled === false || void 0,
+                            onPointerDown: (e) => {
+                              try {
+                                e.currentTarget.setPointerCapture(e.pointerId);
+                              } catch {
+                              }
+                              fineRef.current = null;
+                              setDragPath(meta.path);
+                              armMod(meta.path);
+                              filterFromPointer(e, meta, true);
+                            },
+                            onPointerMove: (e) => {
+                              if (dragPath === meta.path) filterFromPointer(e, meta, false);
+                            },
+                            onPointerUp: () => {
+                              setDragPath(null);
+                              fineRef.current = null;
+                            },
+                            onPointerCancel: () => {
+                              setDragPath(null);
+                              fineRef.current = null;
+                            },
+                            children: [
+                              /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                              /* @__PURE__ */ jsx7(MoveSlotFilterBody, { meta, value: fv, shape })
+                            ]
+                          },
+                          meta.path
+                        );
+                      }
+                      if (meta.type === "gradient") {
+                        const g = normalizeGradient(values[meta.path]);
+                        const index = Math.min(rampStop[meta.path] ?? 0, g.stops.length - 1);
+                        return /* @__PURE__ */ jsxs7(
+                          "div",
+                          {
+                            className: "tweakers-move-dial",
+                            "data-kind": "ramp",
+                            "data-active": active || void 0,
+                            onPointerDown: (e) => {
+                              try {
+                                e.currentTarget.setPointerCapture(e.pointerId);
+                              } catch {
+                              }
+                              fineRef.current = null;
+                              setDragPath(meta.path);
+                              armMod(meta.path);
+                              rampFromPointer(e, meta, true);
+                            },
+                            onPointerMove: (e) => {
+                              if (dragPath === meta.path) rampFromPointer(e, meta, false);
+                            },
+                            onPointerUp: () => {
+                              setDragPath(null);
+                              fineRef.current = null;
+                            },
+                            onPointerCancel: () => {
+                              setDragPath(null);
+                              fineRef.current = null;
+                            },
+                            children: [
+                              /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                              /* @__PURE__ */ jsx7(
+                                MoveSlotRampBody,
+                                {
+                                  label: meta.label,
+                                  value: `${index + 1}/${g.stops.length}`,
+                                  css: rampCss(g.stops),
+                                  stop: g.stops[index]?.position ?? null
+                                }
+                              )
+                            ]
+                          },
+                          meta.path
+                        );
+                      }
+                      if (meta.type === "slider" && meta.display === "dial") {
+                        const min = meta.min ?? 0, max = meta.max ?? 1;
+                        const v = Number(values[meta.path] ?? min);
+                        return /* @__PURE__ */ jsxs7(
+                          "div",
+                          {
+                            className: "tweakers-move-dial",
+                            "data-kind": "dial",
+                            "data-active": active || void 0,
+                            onPointerDown: (e) => {
+                              try {
+                                e.currentTarget.setPointerCapture(e.pointerId);
+                              } catch {
+                              }
+                              fineRef.current = null;
+                              setDragPath(meta.path);
+                              armMod(meta.path);
+                              needleFromPointer(e, meta);
+                            },
+                            onPointerMove: (e) => {
+                              if (dragPath === meta.path) needleFromPointer(e, meta);
+                            },
+                            onPointerUp: () => {
+                              setDragPath(null);
+                              fineRef.current = null;
+                            },
+                            onPointerCancel: () => {
+                              setDragPath(null);
+                              fineRef.current = null;
+                            },
+                            children: [
+                              /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                              /* @__PURE__ */ jsx7(
+                                MoveSlotDialBody,
+                                {
+                                  label: meta.label,
+                                  value: `${Number(v.toFixed(2))}${meta.unit ?? (Math.abs(max - min) >= 180 ? "\xB0" : "")}`,
+                                  bearing: valueToBearing(v, min, max),
+                                  origin: valueToBearing(meta.origin ?? min, min, max)
+                                }
+                              )
+                            ]
+                          },
+                          meta.path
+                        );
+                      }
+                      if (meta.type === "transfer") {
+                        const points = normalizeTransfer(values[meta.path]).points;
+                        const index = Math.min(curvePoint[meta.path] ?? 0, points.length - 1);
+                        const held2 = points[index];
+                        const samples = Array.from({ length: 48 }, (_, k) => sampleTransfer(points, k / 47));
+                        return /* @__PURE__ */ jsxs7(
+                          "div",
+                          {
+                            className: "tweakers-move-dial",
+                            "data-kind": "transfer",
+                            "data-active": active || void 0,
+                            onPointerDown: (e) => {
+                              try {
+                                e.currentTarget.setPointerCapture(e.pointerId);
+                              } catch {
+                              }
+                              fineRef.current = null;
+                              setDragPath(meta.path);
+                              armMod(meta.path);
+                              transferFromPointer(e, meta, true);
+                            },
+                            onPointerMove: (e) => {
+                              if (dragPath === meta.path) transferFromPointer(e, meta, false);
+                            },
+                            onPointerUp: () => {
+                              setDragPath(null);
+                              fineRef.current = null;
+                            },
+                            onPointerCancel: () => {
+                              setDragPath(null);
+                              fineRef.current = null;
+                            },
+                            children: [
+                              /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                              /* @__PURE__ */ jsx7(
+                                MoveSlotTransferBody,
+                                {
+                                  label: meta.label,
+                                  value: `${index + 1}/${points.length}`,
+                                  shape: previewPathData(samples),
+                                  point: { x: held2.x, y: 1 - held2.y }
+                                }
+                              )
+                            ]
+                          },
+                          meta.path
+                        );
+                      }
+                      if (meta.type === "xy") {
+                        const xa = resolveAxis(meta.xAxis);
+                        const ya = resolveAxis(meta.yAxis);
+                        const pos = pointFromValue(
+                          normalizeValue(values[meta.path], xa, ya),
+                          xa,
+                          ya
+                        );
+                        const preview = meta.path === previewPath ? ModulationStore2.getSettingsPreview() : null;
+                        const gridBase = meta.grid === false ? 0 : typeof meta.grid === "number" ? meta.grid : XY_GRID_DEFAULT;
+                        const gridN = gridBase > 0 ? Math.round(gridBase * Math.max(0, meta.density ?? 1)) : 0;
+                        return /* @__PURE__ */ jsxs7(
+                          "div",
+                          {
+                            className: "tweakers-move-dial",
+                            "data-kind": "xy",
+                            "data-preview": preview ? true : void 0,
+                            "data-sub": valueFirst || void 0,
+                            "data-active": active || void 0,
+                            onPointerDown: (e) => {
+                              try {
+                                e.currentTarget.setPointerCapture(e.pointerId);
+                              } catch {
+                              }
+                              fineRef.current = null;
+                              setDragPath(meta.path);
+                              armMod(meta.path);
+                              xyFromPointer(e, meta);
+                            },
+                            onPointerMove: (e) => {
+                              if (dragPath === meta.path) xyFromPointer(e, meta);
+                            },
+                            onPointerUp: () => xyRelease(meta),
+                            onPointerCancel: () => xyRelease(meta),
+                            children: [
+                              valueFirst && /* @__PURE__ */ jsx7("span", { className: "tweakers-move-dial-sub", children: meta.label }),
+                              /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                              /* @__PURE__ */ jsx7(
+                                MoveSlotXYBody,
+                                {
+                                  label: meta.label,
+                                  value: preview ? preview.label : `${Math.round(pos.x * 100)}\xB7${Math.round((1 - pos.y) * 100)}`,
+                                  position: pos,
+                                  gridN,
+                                  shape: preview ? previewPathData(preview.points) : null
+                                }
+                              )
+                            ]
+                          },
+                          meta.path
+                        );
+                      }
+                      if (meta.type === "range") {
+                        const pos = normalizeRangeDial(meta, values[meta.path]);
+                        return /* @__PURE__ */ jsxs7(
+                          "div",
+                          {
+                            className: "tweakers-move-dial",
+                            "data-kind": "range",
+                            "data-active": active || void 0,
+                            onPointerDown: (e) => {
+                              try {
+                                e.currentTarget.setPointerCapture(e.pointerId);
+                              } catch {
+                              }
+                              fineRef.current = null;
+                              setDragPath(meta.path);
+                              armMod(meta.path);
+                              rangeFromPointer(e, meta, true);
+                            },
+                            onPointerMove: (e) => {
+                              if (dragPath === meta.path) rangeFromPointer(e, meta, false);
+                            },
+                            onPointerUp: () => {
+                              setDragPath(null);
+                              fineRef.current = null;
+                            },
+                            onPointerCancel: () => {
+                              setDragPath(null);
+                              fineRef.current = null;
+                            },
+                            children: [
+                              /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                              /* @__PURE__ */ jsx7(MoveSlotRangeBody, { label: meta.label, value: rangeReading(meta), lo: pos.lo, hi: pos.hi })
+                            ]
+                          },
+                          meta.path
+                        );
+                      }
+                      if (isEnumDial(meta)) {
+                        const options = meta.options ?? [];
+                        const activeIdx = enumIndex(meta, values[meta.path]);
+                        const option = options[activeIdx];
+                        const optionLabel = enumOptionLabel(option);
+                        const shape = enumShapePath(meta, values[meta.path]);
+                        const glyph = enumOptionIcon(option);
+                        const playback = movePlaybackMode(meta, values[meta.path]);
+                        return /* @__PURE__ */ jsxs7(
+                          "div",
+                          {
+                            className: "tweakers-move-dial",
+                            "data-kind": "enum",
+                            "data-scope": scope ? true : void 0,
+                            "data-visual": playback ? "playback" : void 0,
+                            role: "slider",
+                            tabIndex: disabled ? -1 : 0,
+                            "aria-label": meta.label,
+                            "aria-valuemin": 0,
+                            "aria-valuemax": Math.max(0, options.length - 1),
+                            "aria-valuenow": activeIdx,
+                            "aria-valuetext": optionLabel,
+                            "aria-orientation": "horizontal",
+                            "aria-disabled": disabled || void 0,
+                            "data-disabled": disabled || void 0,
+                            onKeyDown: (e) => dialFromKeyboard(e, meta),
+                            "data-shape": shape ? true : void 0,
+                            "data-active": active || void 0,
+                            onPointerDown: (e) => {
+                              if (TweakStore6.isDisabled(page.panel.id, meta.path)) return;
+                              try {
+                                e.currentTarget.setPointerCapture(e.pointerId);
+                              } catch {
+                              }
+                              fineRef.current = null;
+                              setDragPath(meta.path);
+                              armMod(meta.path);
+                              enumFromPointer(e, meta);
+                            },
+                            onPointerMove: (e) => {
+                              if (!TweakStore6.isDisabled(page.panel.id, meta.path) && dragPath === meta.path) enumFromPointer(e, meta);
+                            },
+                            onPointerUp: () => {
+                              setDragPath(null);
+                              fineRef.current = null;
+                            },
+                            onPointerCancel: () => {
+                              setDragPath(null);
+                              fineRef.current = null;
+                            },
+                            children: [
+                              scope,
+                              /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                              /* @__PURE__ */ jsx7(
+                                MoveSlotEnumBody,
+                                {
+                                  label: meta.label,
+                                  optionLabel,
+                                  options,
+                                  activeIdx,
+                                  shape,
+                                  glyph,
+                                  playback,
+                                  scoped: !!scope
+                                }
+                              )
+                            ]
+                          },
+                          meta.path
+                        );
+                      }
+                      if (meta.moveBlank) {
+                        return /* @__PURE__ */ jsx7("div", { className: "tweakers-move-dial", "data-kind": "blank", "aria-hidden": "true" }, meta.path);
+                      }
+                      if (meta.type === "toggle") {
+                        const checked = values[meta.path] === true;
+                        return /* @__PURE__ */ jsxs7(
+                          "button",
+                          {
+                            type: "button",
+                            className: "tweakers-move-dial",
+                            "data-kind": meta.icon ? "toggle-icon" : "toggle",
+                            "data-on": checked || void 0,
+                            "data-active": active || void 0,
+                            role: "switch",
+                            "aria-label": meta.label,
+                            "aria-checked": checked,
+                            disabled,
+                            onClick: () => {
+                              if (!TweakStore6.isDisabled(page.panel.id, meta.path)) {
+                                TweakStore6.updateValue(page.panel.id, meta.path, !checked);
+                              }
+                            },
+                            children: [
+                              /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                              /* @__PURE__ */ jsx7(
+                                MoveSlotToggleBody,
+                                {
+                                  label: meta.label,
+                                  checked,
+                                  icon: meta.icon,
+                                  onIcon: meta.onIcon,
+                                  offIcon: meta.offIcon
+                                }
+                              )
+                            ]
+                          },
+                          meta.path
+                        );
+                      }
+                      if (scope) {
+                        return /* @__PURE__ */ jsxs7(
+                          "div",
+                          {
+                            className: "tweakers-move-dial",
+                            "data-kind": "scope",
+                            "data-active": active || void 0,
+                            onPointerDown: (e) => {
+                              try {
+                                e.currentTarget.setPointerCapture(e.pointerId);
+                              } catch {
+                              }
+                              fineRef.current = null;
+                              setDragPath(meta.path);
+                              armMod(meta.path);
+                              dialFromPointer(e, meta);
+                            },
+                            onPointerMove: (e) => {
+                              if (dragPath === meta.path) dialFromPointer(e, meta);
+                            },
+                            onPointerUp: () => {
+                              setDragPath(null);
+                              fineRef.current = null;
+                            },
+                            onPointerCancel: () => {
+                              setDragPath(null);
+                              fineRef.current = null;
+                            },
+                            children: [
+                              /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                              /* @__PURE__ */ jsx7(
+                                MoveSlotScopeBody,
+                                {
+                                  label: meta.label,
+                                  value: chipValue(meta).num + (meta.unit ? ` ${meta.unit}` : ""),
+                                  pct: dialPercent(meta),
+                                  children: scope
+                                }
+                              )
+                            ]
+                          },
+                          meta.path
+                        );
+                      }
+                      const envStage = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.stage : void 0;
+                      if (envStage) {
+                        const stageDials = (modLayout?.dials ?? []).filter((d) => d.stage).flatMap((d) => {
+                          const m = page.dials.find((x) => x?.path === d.path);
+                          return m ? [{ stage: d.stage, meta: m }] : [];
+                        });
+                        if (stageDials[0]?.meta.path !== meta.path) return null;
+                        const envParams = {
+                          attack: Number(values.attack) || 0,
+                          decay: Number(values.decay) || 0,
+                          sustain: Number(values.sustain) || 0,
+                          release: Number(values.release) || 0,
+                          attackCurve: Number(modSlot?.params.attackCurve) || 0,
+                          decayCurve: Number(modSlot?.params.decayCurve) || 0,
+                          releaseCurve: Number(modSlot?.params.releaseCurve) || 0,
+                          ...Object.fromEntries(ENV_WAVE_STAGES.flatMap((s) => [
+                            [envWaveParam(s), Number(modSlot?.params[envWaveParam(s)]) || 0],
+                            [envWaveFlipParam(s), !!modSlot?.params[envWaveFlipParam(s)]]
+                          ]))
+                        };
+                        const envActive = waveHeld !== null || stageDials.some(
+                          (s) => dragPath === s.meta.path || !!handTouch[s.meta.path] || !!hwHeld[s.meta.path]
+                        );
+                        const reading = (m) => {
+                          const v = chipValue(m);
+                          return `${v.num}${v.unit ? ` ${v.unit}` : ""}`;
+                        };
+                        return /* @__PURE__ */ jsxs7(
+                          "div",
+                          {
+                            className: "tweakers-move-dial",
+                            "data-kind": "env",
+                            "data-active": envActive || void 0,
+                            style: { gridColumn: `span ${stageDials.length}` },
+                            children: [
+                              /* @__PURE__ */ jsx7(
+                                MoveSlotEnvBody,
+                                {
+                                  points: envelopePoints(envParams, 129),
+                                  stages: stageDials.map((s) => ({ stage: s.stage, label: s.meta.label, value: reading(s.meta) })),
+                                  joints: envelopeJoints(envParams).map((j) => ({ ...j, held: bendHeld === j.stage }))
+                                }
+                              ),
+                              /* @__PURE__ */ jsx7("div", { className: "tweakers-move-env-zones", children: stageDials.map(({ meta: m }) => /* @__PURE__ */ jsx7(
+                                "div",
+                                {
+                                  className: "tweakers-move-env-zone",
+                                  onPointerDown: (e) => {
+                                    try {
+                                      e.currentTarget.setPointerCapture(e.pointerId);
+                                    } catch {
+                                    }
+                                    fineRef.current = null;
+                                    setDragPath(m.path);
+                                    armMod(m.path);
+                                    dialFromPointer(e, m);
+                                  },
+                                  onPointerMove: (e) => {
+                                    if (dragPath === m.path) dialFromPointer(e, m);
+                                  },
+                                  onPointerUp: () => {
+                                    setDragPath(null);
+                                    fineRef.current = null;
+                                  },
+                                  onPointerCancel: () => {
+                                    setDragPath(null);
+                                    fineRef.current = null;
+                                  },
+                                  children: /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: m.path })
+                                },
+                                m.path
+                              )) })
+                            ]
+                          },
+                          meta.path
+                        );
+                      }
+                      const latchedHere = latched[i]?.path === meta.path || page.values[i]?.path === meta.path && !!hwLatched[meta.path];
+                      const origin01 = dialOrigin(meta);
+                      const originPct = origin01 > 0 ? origin01 * 100 : null;
+                      const pct = dialPercent(meta);
+                      const atOrigin = originPct != null && Math.abs(normalizeDial(meta, values[meta.path]) - origin01) < 1e-6;
+                      const drawing = moveNumericDrawing(meta, values[meta.path]);
+                      const subbed = meta !== page.dials[i];
+                      const subValue = subbed || valueFirst ? chipValue(meta) : null;
+                      return /* @__PURE__ */ jsxs7(
+                        "div",
+                        {
+                          className: "tweakers-move-dial",
+                          "data-active": active || void 0,
+                          "data-latched": latchedHere || void 0,
+                          "data-sub": !drawing && (subbed || valueFirst) || void 0,
+                          "data-visual": drawing?.kind,
+                          role: "slider",
+                          tabIndex: disabled ? -1 : 0,
+                          "aria-label": meta.label,
+                          "aria-valuemin": meta.min ?? 0,
+                          "aria-valuemax": meta.max ?? 1,
+                          "aria-valuenow": Number(values[meta.path]),
+                          "aria-valuetext": moveVisualReading(meta, Number(values[meta.path])),
+                          "aria-orientation": "horizontal",
+                          "aria-disabled": disabled || void 0,
+                          "data-disabled": disabled || void 0,
+                          onKeyDown: (e) => dialFromKeyboard(e, meta),
+                          onPointerDown: (e) => {
+                            if (TweakStore6.isDisabled(page.panel.id, meta.path)) return;
+                            try {
+                              e.currentTarget.setPointerCapture(e.pointerId);
+                            } catch {
+                            }
+                            fineRef.current = null;
+                            setDragPath(meta.path);
+                            armMod(meta.path);
+                            dialFromPointer(e, meta);
+                          },
+                          onPointerMove: (e) => {
+                            if (!TweakStore6.isDisabled(page.panel.id, meta.path) && dragPath === meta.path) dialFromPointer(e, meta);
+                          },
+                          onPointerUp: () => {
+                            setDragPath(null);
+                            fineRef.current = null;
+                          },
+                          onPointerCancel: () => {
+                            setDragPath(null);
+                            fineRef.current = null;
+                          },
+                          children: [
+                            !drawing && (subbed || valueFirst) && /* @__PURE__ */ jsx7("span", { className: "tweakers-move-dial-sub", children: meta.label }),
+                            /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                            drawing ? /* @__PURE__ */ jsx7(MoveSlotNumericBody, { label: meta.label, value: moveVisualReading(meta, Number(values[meta.path])), drawing }) : /* @__PURE__ */ jsx7(
+                              MoveSlotDefaultBody,
+                              {
+                                label: meta.label,
+                                value: subValue ? `${subValue.num}${subValue.unit ? ` ${subValue.unit}` : ""}` : dialReading(meta),
+                                pct,
+                                originPct,
+                                atOrigin
+                              }
+                            )
+                          ]
+                        },
+                        meta.path
+                      );
+                    }) }),
+                    color && colorMeta ? /* @__PURE__ */ jsx7(MoveHueGrid, { color, disabled: TweakStore6.isDisabled(page.panel.id, colorMeta.path), mirror: true }) : Array.from({ length: PAD_ROWS }, (_, row) => row).filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0)).map((row) => /* @__PURE__ */ jsx7("div", { className: "tweakers-move-pads", children: (appRowAt(row) !== null ? Array.from({ length: MOVE_PADS }, (_, i) => i) : visibleCols).map((col) => {
+                      const appRow = appRowAt(row);
+                      if (appRow !== null) {
+                        const cell = padAt(col, appRow);
+                        if (!cell || cell.empty) {
+                          return /* @__PURE__ */ jsx7("div", { className: "tweakers-move-pad", "data-empty": "true" }, `app-${col}`);
+                        }
+                        return /* @__PURE__ */ jsx7(
+                          "button",
+                          {
+                            className: "tweakers-move-pad",
+                            "data-kind": "app",
+                            "data-on": cell.lit || void 0,
+                            onClick: () => MoveSurfaceStore.press(col, appRow),
+                            children: /* @__PURE__ */ jsx7(MovePadAppBody, { label: cell.label, color: cell.color })
+                          },
+                          `app-${col}`
+                        );
+                      }
+                      const meta = padRows[row][col];
+                      const bendStage = !meta && settingsPanel && padRows[row] === page.toggles && modSettings ? modLayout?.dials[col]?.stage : void 0;
+                      if (bendStage && ENV_BEND_STAGES.includes(bendStage)) {
+                        return /* @__PURE__ */ jsx7(
+                          "button",
+                          {
+                            className: "tweakers-move-pad",
+                            "data-kind": "bend",
+                            "data-on": bendHeld === bendStage || void 0,
+                            onPointerDown: (e) => {
+                              try {
+                                e.currentTarget.setPointerCapture(e.pointerId);
+                              } catch {
+                              }
+                              setBendHeld(bendStage);
+                              bendRef.current = {
+                                y: e.clientY,
+                                curve: Number(modSlot?.params[envCurveParam(bendStage)]) || 0
+                              };
+                            },
+                            onPointerMove: (e) => {
+                              if (bendHeld !== bendStage || !bendRef.current) return;
+                              const v = Math.min(1, Math.max(
+                                -1,
+                                bendRef.current.curve + (bendRef.current.y - e.clientY) / 60
+                              ));
+                              ModulationStore2.updateSlotParams(modSettings.index, { [envCurveParam(bendStage)]: v });
+                            },
+                            onPointerUp: () => {
+                              setBendHeld(null);
+                              bendRef.current = null;
+                            },
+                            onPointerCancel: () => {
+                              setBendHeld(null);
+                              bendRef.current = null;
+                            },
+                            children: /* @__PURE__ */ jsx7(MovePadToggleBody, { label: "Curve" })
+                          },
+                          `bend-${bendStage}`
+                        );
+                      }
+                      const waveStage = !meta && settingsPanel && padRows[row] === page.values && modSettings ? modLayout?.dials[col]?.stage : void 0;
+                      if (waveStage && ENV_WAVE_STAGES.includes(waveStage)) {
+                        const amount = Number(modSlot?.params[envWaveParam(waveStage)]) || 0;
+                        const flipped = !!modSlot?.params[envWaveFlipParam(waveStage)];
+                        return /* @__PURE__ */ jsx7(
+                          "button",
+                          {
+                            className: "tweakers-move-pad",
+                            "data-kind": "wave",
+                            "data-on": amount > 0 || void 0,
+                            "data-held": waveHeld === waveStage || void 0,
+                            onPointerDown: (e) => {
+                              try {
+                                e.currentTarget.setPointerCapture(e.pointerId);
+                              } catch {
+                              }
+                              setWaveHeld(waveStage);
+                              waveRef.current = { y: e.clientY, amount, moved: false };
+                            },
+                            onPointerMove: (e) => {
+                              if (waveHeld !== waveStage || !waveRef.current) return;
+                              const dy = waveRef.current.y - e.clientY;
+                              if (!waveRef.current.moved && Math.abs(dy) < 3) return;
+                              waveRef.current.moved = true;
+                              const v = Math.min(1, Math.max(0, waveRef.current.amount + dy / 100));
+                              ModulationStore2.updateSlotParams(modSettings.index, { [envWaveParam(waveStage)]: v });
+                            },
+                            onPointerUp: () => {
+                              if (waveHeld === waveStage && waveRef.current && !waveRef.current.moved) {
+                                ModulationStore2.updateSlotParams(modSettings.index, {
+                                  [envWaveFlipParam(waveStage)]: !flipped
+                                });
+                              }
+                              setWaveHeld(null);
+                              waveRef.current = null;
+                            },
+                            onPointerCancel: () => {
+                              setWaveHeld(null);
+                              waveRef.current = null;
+                            },
+                            children: /* @__PURE__ */ jsx7(MovePadWaveBody, { label: flipped ? "Swell" : "Dip", percent: Math.round(amount * 100) })
+                          },
+                          `wave-${waveStage}`
+                        );
+                      }
+                      if (!meta) return /* @__PURE__ */ jsx7("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
+                      if (padRows[row] === page.toggles) {
+                        return /* @__PURE__ */ jsx7(
+                          "button",
+                          {
+                            className: "tweakers-move-pad",
+                            "data-kind": "toggle",
+                            "data-on": !!values[meta.path],
+                            onClick: () => TweakStore6.updateValue(page.panel.id, meta.path, !values[meta.path]),
+                            children: /* @__PURE__ */ jsx7(MovePadToggleBody, { label: meta.label })
+                          },
+                          meta.path
+                        );
+                      }
+                      if (padRows[row] === page.actions) {
+                        return /* @__PURE__ */ jsx7(
+                          "button",
+                          {
+                            className: "tweakers-move-pad",
+                            "data-kind": "action",
+                            onClick: () => TweakStore6.triggerAction(page.panel.id, meta.path),
+                            children: /* @__PURE__ */ jsx7(MovePadActionBody, { label: meta.label })
+                          },
+                          meta.path
+                        );
+                      }
+                      const value = chipValue(meta);
+                      return /* @__PURE__ */ jsx7(
+                        "button",
+                        {
+                          className: "tweakers-move-pad",
+                          "data-kind": "value",
+                          "data-held": held !== null && held.meta.path === meta.path || hwHeld[meta.path] || void 0,
+                          "data-latched": chipLatched(col, meta) || void 0,
+                          onPointerDown: (e) => pressChip(e, col, meta),
+                          onPointerUp: () => releaseChip(col, meta),
+                          onPointerCancel: () => setHeld(null),
+                          children: /* @__PURE__ */ jsx7(MovePadValueBody, { label: meta.label, value: value.num, unit: value.unit, children: /* @__PURE__ */ jsx7(MoveModRing, { panelId: page.panel.id, path: meta.path, pad: true }) })
+                        },
+                        meta.path
+                      );
+                    }) }, row))
+                  ]
+                }
+              ) }),
+              stripMode && /* @__PURE__ */ jsx7(
+                "div",
+                {
+                  className: "tweakers-move-rail",
+                  role: "slider",
+                  tabIndex: 0,
+                  "aria-label": `Slots ${stripFrom + 1}\u2013${stripTo} of ${stripTotal}`,
+                  "aria-valuemin": 0,
+                  "aria-valuemax": Math.max(0, stripStops.length - 1),
+                  "aria-valuenow": Math.max(0, stripStops.indexOf(stripOffset)),
+                  "aria-orientation": "horizontal",
+                  "data-scrolling": dotDrag !== null || void 0,
+                  onKeyDown: (e) => {
+                    const dir = e.key === "ArrowRight" || e.key === "PageDown" ? 1 : e.key === "ArrowLeft" || e.key === "PageUp" ? -1 : 0;
+                    const paged = e.shiftKey || e.key === "PageUp" || e.key === "PageDown";
+                    if (dir && paged) {
+                      e.preventDefault();
+                      scrollPage(dir);
+                      return;
+                    }
+                    const step = dir || (e.key === "Home" ? -stripStops.length : e.key === "End" ? stripStops.length : 0);
+                    if (!step) return;
+                    e.preventDefault();
+                    scrollSlots(step);
+                  },
+                  onPointerDown: (e) => {
+                    try {
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                    } catch {
+                    }
+                    setDotDrag({ x: e.clientX, stop: Math.max(0, stripStops.indexOf(stripOffset)) });
+                  },
+                  onPointerMove: (e) => {
+                    if (!dotDrag) return;
+                    const slotWidth = e.currentTarget.getBoundingClientRect().width / MOVE_DIALS || 1;
+                    const want = dotDrag.stop + Math.round((e.clientX - dotDrag.x) / slotWidth);
+                    setOffset(stripStops[Math.min(stripStops.length - 1, Math.max(0, want))]);
+                  },
+                  onPointerUp: () => setDotDrag(null),
+                  onPointerCancel: () => setDotDrag(null),
+                  children: /* @__PURE__ */ jsx7(
+                    "span",
+                    {
+                      className: "tweakers-move-rail-window",
+                      style: {
+                        left: `${stripFrom / stripTotal * 100}%`,
+                        width: `${(stripTo - stripFrom) / stripTotal * 100}%`
+                      }
+                    }
+                  )
                 }
               )
-            }
-          )
-        ] })
-      ] })
-    ] })
+            ] })
+          ] })
+        ]
+      }
+    )
   ] }) });
   return dock === "flow" ? content : createPortal2(content, document.body);
 }
@@ -5677,7 +5760,9 @@ import { jsx as jsx8, jsxs as jsxs8 } from "react/jsx-runtime";
 var PRESS_FLASH_MS = 160;
 var KIND_FUNCTION = {
   enter: "jog_click",
-  capture: "capture"
+  capture: "capture",
+  loop: "loop",
+  copy: "copy"
 };
 function MoveActionButton({ kind, children, onPress, disabled, className }) {
   const name = kind === "shift" ? null : KIND_FUNCTION[kind];
@@ -5712,7 +5797,21 @@ function MoveActionButton({ kind, children, onPress, disabled, className }) {
         onPress?.();
       },
       children: [
-        kind === "capture" ? /* @__PURE__ */ jsx8("svg", { className: "tweakers-move-action-icon", width: "14", height: "14", viewBox: ICON_MOVE_CAPTURE.viewBox, fill: "none", children: /* @__PURE__ */ jsx8("path", { d: ICON_MOVE_CAPTURE.path, fill: "currentColor" }) }) : (
+        kind === "capture" ? /* @__PURE__ */ jsx8("svg", { className: "tweakers-move-action-icon", width: "14", height: "14", viewBox: ICON_MOVE_CAPTURE.viewBox, fill: "none", children: /* @__PURE__ */ jsx8("path", { d: ICON_MOVE_CAPTURE.path, fill: "currentColor" }) }) : kind === "loop" || kind === "copy" ? (
+          // Stroked, unlike the filled dot and corners: these are the printed
+          // marks off the pale function buttons, which the hardware outlines.
+          /* @__PURE__ */ jsx8(
+            "svg",
+            {
+              className: "tweakers-move-action-icon",
+              width: "14",
+              height: "14",
+              viewBox: (kind === "loop" ? ICON_MOVE_LOOP : ICON_MOVE_COPY).viewBox,
+              fill: "none",
+              children: (kind === "loop" ? ICON_MOVE_LOOP : ICON_MOVE_COPY).paths.map((d) => /* @__PURE__ */ jsx8("path", { d, stroke: "currentColor", strokeWidth: "1.5", strokeLinecap: "round", strokeLinejoin: "round" }, d))
+            }
+          )
+        ) : (
           // Enter and shift share the dot: it is drawn with currentColor, so it
           // comes out light-on-green on the enter pill and black on the light
           // shift pill without a second asset.
