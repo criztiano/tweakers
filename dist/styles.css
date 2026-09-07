@@ -2327,6 +2327,19 @@
   justify-content: center;
 }
 
+/* The transport's state, worn by the clock: play at its left, loop at its
+   right — lit while running, ember while not. */
+.tweakers-move-wave-state {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: #41403e;
+}
+
+.tweakers-move-wave-state[data-on] {
+  color: #dfe2cc;
+}
+
 .tweakers-move-wave-time .tweakers-move-volume-value {
   font-variant-numeric: tabular-nums;
 }

@@ -1607,11 +1607,11 @@ var AUDIO_DEF = {
   },
   controls: [
     /* The main audio dial: it draws the sample itself, and its settings page
-       floats the full waveform above the panel. */
+       floats the full waveform above the panel. Play and loop take no slots
+       — they belong to the hardware's own buttons, and the editor's clock
+       wears their state. */
     { type: "slider", path: "speed", label: "Speed", min: 0.1, max: 4, step: 0.01, unit: "x", drawsPreview: true },
-    { type: "toggle", path: "playing", label: "Play", moveSlot: true, icon: "activity" },
     { type: "slider", path: "depth", label: "Depth", min: 0, max: 1, step: 0.01, scope: true },
-    { type: "toggle", path: "loopOn", label: "Loop", moveSlot: true, icon: "repeat" },
     { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 }
   ],
   createState: () => ({ pos: 0, out: null, seek: null }),
@@ -2405,6 +2405,121 @@ function MoveWaveform({
     document.body
   );
 }
+
+// src/icons.ts
+var ICON_CHEVRON_RIGHT = "M9.5 6L15.5 12L9.5 18";
+var ICON_CHEVRON_LEFT = "M14.5 6L8.5 12L14.5 18";
+var ICON_ELLIPSIS = [
+  { cx: "5.5", cy: "12" },
+  { cx: "12", cy: "12" },
+  { cx: "18.5", cy: "12" }
+];
+var ICON_CHECK = "M5 12.75L10 19L19 5";
+var ICON_PLAY = "M9.24394 2.36758C7.41419 1.18362 5 2.49701 5 4.67639V19.3238C5 21.5032 7.41419 22.8166 9.24394 21.6326L20.5624 14.3089C22.2371 13.2253 22.2372 10.775 20.5624 9.69129L9.24394 2.36758Z";
+var ICON_LOOP = [
+  "M17 2L21 6L17 10",
+  "M3 11V9C3 7.34315 4.34315 6 6 6H21",
+  "M7 22L3 18L7 14",
+  "M21 13V15C21 16.6569 19.6569 18 18 18H3"
+];
+var ICON_MOVE_CAPTURE = {
+  viewBox: "0 0 14 14",
+  path: "M1 0H5V2H2V5H0V0H1ZM2 10V12H5V14H0V9H2V10ZM10 0H14V5H12V2H9V0H10ZM14 10V14H9V12H12V9H14V10Z"
+};
+var ICON_MOVE_ENTER = {
+  viewBox: "0 0 12 12",
+  circle: { cx: "6", cy: "6", r: "6" }
+};
+var ICON_MOVE_LOOP = {
+  viewBox: "0 0 14 14",
+  paths: ["M10 1L12.5 3.5L10 6", "M1.5 7.5V6C1.5 4.61929 2.61929 3.5 4 3.5H12", "M4 13L1.5 10.5L4 8", "M12.5 6.5V8C12.5 9.38071 11.3807 10.5 10 10.5H2"]
+};
+var ICON_MOVE_COPY = {
+  viewBox: "0 0 14 14",
+  paths: [
+    "M5.5 5.5H12.5V12.5H5.5V5.5Z",
+    "M3.5 8.5H2.5C1.94772 8.5 1.5 8.05228 1.5 7.5V2.5C1.5 1.94772 1.94772 1.5 2.5 1.5H7.5C8.05228 1.5 8.5 1.94772 8.5 2.5V3.5"
+  ]
+};
+var LUCIDE_ICONS = {
+  /* directions and traversal */
+  "arrow-right": ["M5 12h14", "m12 5 7 7-7 7"],
+  "arrow-left": ["M19 12H5", "m12 19-7-7 7-7"],
+  "arrow-left-right": ["M8 3 4 7l4 4", "M4 7h16", "m16 21 4-4-4-4", "M20 17H4"],
+  "fold-horizontal": [
+    "M2 12h6",
+    "M22 12h-6",
+    "M12 2v2",
+    "M12 8v2",
+    "M12 14v2",
+    "M12 20v2",
+    "m19 9-3 3 3 3",
+    "m5 15 3-3-3-3"
+  ],
+  scissors: [
+    "M20 4 8.12 15.88",
+    "M14.47 14.48 20 20",
+    "M8.12 8.12 12 12",
+    "M6 3a3 3 0 1 0 0 6 3 3 0 1 0 0-6",
+    "M6 15a3 3 0 1 0 0 6 3 3 0 1 0 0-6"
+  ],
+  /* signal character */
+  "grid-2x2": ["M12 3v18", "M3 12h18", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"],
+  activity: ["M22 12h-4l-3 9L9 3l-3 9H2"],
+  waves: [
+    "M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1",
+    "M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1",
+    "M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"
+  ],
+  "audio-lines": ["M2 10v3", "M6 6v11", "M10 3v18", "M14 8v7", "M18 5v13", "M22 10v3"],
+  /* switches — what a boolean is about, drawn */
+  repeat: ["m17 2 4 4-4 4", "M3 11v-1a4 4 0 0 1 4-4h14", "m7 22-4-4 4-4", "M21 13v1a4 4 0 0 1-4 4H3"],
+  timer: ["M10 2h4", "M12 14l3-3", "M12 6a8 8 0 1 0 0 16 8 8 0 0 0 0-16z"],
+  /* restoration — the polish page's five switches */
+  "broom-sparkles": [
+    "M11 2v2",
+    "M12 3h-2",
+    "M13.5 10.5 22 2",
+    "M14.734 13.841a2 2 0 00-.314-2.42L12.58 9.58a2 2 0 00-2.421-.314l-7.657 4.461A1 1 0 002.3 15.3l6.403 6.403a1 1 0 001.571-.204z",
+    "M20 15v4",
+    "M22 17h-4",
+    "M4 4v4",
+    "m5 18 2-2",
+    "M6 6H2",
+    "m7.699 10.7 5.602 5.601"
+  ],
+  stethoscope: [
+    "M11 2v2",
+    "M5 2v2",
+    "M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1",
+    "M8 15a6 6 0 0 0 12 0v-3",
+    "M20 8a2 2 0 1 0 0 4 2 2 0 1 0 0-4"
+  ],
+  "file-volume": [
+    "M4 11.55V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2h-1.95",
+    "M14 2v5a1 1 0 0 0 1 1h5",
+    "M12 15a5 5 0 0 1 0 6",
+    "M8 14.502a.5.5 0 0 0-.826-.381l-1.893 1.631a1 1 0 0 1-.651.243H3.5a.5.5 0 0 0-.5.501v3.006a.5.5 0 0 0 .5.501h1.129a1 1 0 0 1 .652.243l1.893 1.633a.5.5 0 0 0 .826-.38z"
+  ],
+  "cassette-tape": [
+    "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
+    "M8 8a2 2 0 1 0 0 4 2 2 0 1 0 0-4",
+    "M8 12h8",
+    "M16 8a2 2 0 1 0 0 4 2 2 0 1 0 0-4",
+    "m6 20 .7-2.9A1.4 1.4 0 0 1 8.1 16h7.8a1.4 1.4 0 0 1 1.4 1l.7 3"
+  ],
+  "boom-box": [
+    "M4 9V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4",
+    "M8 8v1",
+    "M12 8v1",
+    "M16 8v1",
+    "M4 9h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z",
+    "M8 13a2 2 0 1 0 0 4 2 2 0 1 0 0-4",
+    "M16 13a2 2 0 1 0 0 4 2 2 0 1 0 0-4"
+  ]
+};
+var ICON_BADGE_OFF = "M17.203 19.3594L4.6875 6.7969C3.6094 8.25 3 10.0781 3 12C3 16.9688 7.031 21 12 21C13.969 21 15.75 20.3906 17.203 19.3594ZM19.359 17.2031C20.391 15.75 21 13.9219 21 12C21 7.0312 16.969 3 12 3C10.078 3 8.25 3.6094 6.797 4.6875L19.359 17.2031ZM0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24C5.391 24 0 18.6094 0 12Z";
+var ICON_BADGE_ON = "M12 24C5.391 24 0 18.6094 0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24ZM17.531 6.8438C17.016 6.4688 16.313 6.5625 15.984 7.0781L10.359 14.7656L7.922 12.3281C7.5 11.9062 6.75 11.9062 6.328 12.3281C5.906 12.7969 5.906 13.5 6.328 13.9219L9.703 17.2969C9.937 17.5312 10.266 17.6719 10.594 17.625C10.922 17.625 11.203 17.4375 11.391 17.1562L17.766 8.3906C18.141 7.9219 18.047 7.2188 17.531 6.8438Z";
 
 // src/components/CurveComposer.tsx
 var import_react3 = require("react");
@@ -3415,114 +3530,6 @@ function moveKeyboardValue(meta, value, key, fine = false) {
   const next = Math.round((value + direction * step * multiplier) / step) * step;
   return Math.max(min, Math.min(max, Number(next.toPrecision(12))));
 }
-
-// src/icons.ts
-var ICON_CHEVRON_RIGHT = "M9.5 6L15.5 12L9.5 18";
-var ICON_CHEVRON_LEFT = "M14.5 6L8.5 12L14.5 18";
-var ICON_ELLIPSIS = [
-  { cx: "5.5", cy: "12" },
-  { cx: "12", cy: "12" },
-  { cx: "18.5", cy: "12" }
-];
-var ICON_CHECK = "M5 12.75L10 19L19 5";
-var ICON_MOVE_CAPTURE = {
-  viewBox: "0 0 14 14",
-  path: "M1 0H5V2H2V5H0V0H1ZM2 10V12H5V14H0V9H2V10ZM10 0H14V5H12V2H9V0H10ZM14 10V14H9V12H12V9H14V10Z"
-};
-var ICON_MOVE_ENTER = {
-  viewBox: "0 0 12 12",
-  circle: { cx: "6", cy: "6", r: "6" }
-};
-var ICON_MOVE_LOOP = {
-  viewBox: "0 0 14 14",
-  paths: ["M10 1L12.5 3.5L10 6", "M1.5 7.5V6C1.5 4.61929 2.61929 3.5 4 3.5H12", "M4 13L1.5 10.5L4 8", "M12.5 6.5V8C12.5 9.38071 11.3807 10.5 10 10.5H2"]
-};
-var ICON_MOVE_COPY = {
-  viewBox: "0 0 14 14",
-  paths: [
-    "M5.5 5.5H12.5V12.5H5.5V5.5Z",
-    "M3.5 8.5H2.5C1.94772 8.5 1.5 8.05228 1.5 7.5V2.5C1.5 1.94772 1.94772 1.5 2.5 1.5H7.5C8.05228 1.5 8.5 1.94772 8.5 2.5V3.5"
-  ]
-};
-var LUCIDE_ICONS = {
-  /* directions and traversal */
-  "arrow-right": ["M5 12h14", "m12 5 7 7-7 7"],
-  "arrow-left": ["M19 12H5", "m12 19-7-7 7-7"],
-  "arrow-left-right": ["M8 3 4 7l4 4", "M4 7h16", "m16 21 4-4-4-4", "M20 17H4"],
-  "fold-horizontal": [
-    "M2 12h6",
-    "M22 12h-6",
-    "M12 2v2",
-    "M12 8v2",
-    "M12 14v2",
-    "M12 20v2",
-    "m19 9-3 3 3 3",
-    "m5 15 3-3-3-3"
-  ],
-  scissors: [
-    "M20 4 8.12 15.88",
-    "M14.47 14.48 20 20",
-    "M8.12 8.12 12 12",
-    "M6 3a3 3 0 1 0 0 6 3 3 0 1 0 0-6",
-    "M6 15a3 3 0 1 0 0 6 3 3 0 1 0 0-6"
-  ],
-  /* signal character */
-  "grid-2x2": ["M12 3v18", "M3 12h18", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"],
-  activity: ["M22 12h-4l-3 9L9 3l-3 9H2"],
-  waves: [
-    "M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1",
-    "M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1",
-    "M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"
-  ],
-  "audio-lines": ["M2 10v3", "M6 6v11", "M10 3v18", "M14 8v7", "M18 5v13", "M22 10v3"],
-  /* switches — what a boolean is about, drawn */
-  repeat: ["m17 2 4 4-4 4", "M3 11v-1a4 4 0 0 1 4-4h14", "m7 22-4-4 4-4", "M21 13v1a4 4 0 0 1-4 4H3"],
-  timer: ["M10 2h4", "M12 14l3-3", "M12 6a8 8 0 1 0 0 16 8 8 0 0 0 0-16z"],
-  /* restoration — the polish page's five switches */
-  "broom-sparkles": [
-    "M11 2v2",
-    "M12 3h-2",
-    "M13.5 10.5 22 2",
-    "M14.734 13.841a2 2 0 00-.314-2.42L12.58 9.58a2 2 0 00-2.421-.314l-7.657 4.461A1 1 0 002.3 15.3l6.403 6.403a1 1 0 001.571-.204z",
-    "M20 15v4",
-    "M22 17h-4",
-    "M4 4v4",
-    "m5 18 2-2",
-    "M6 6H2",
-    "m7.699 10.7 5.602 5.601"
-  ],
-  stethoscope: [
-    "M11 2v2",
-    "M5 2v2",
-    "M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1",
-    "M8 15a6 6 0 0 0 12 0v-3",
-    "M20 8a2 2 0 1 0 0 4 2 2 0 1 0 0-4"
-  ],
-  "file-volume": [
-    "M4 11.55V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2h-1.95",
-    "M14 2v5a1 1 0 0 0 1 1h5",
-    "M12 15a5 5 0 0 1 0 6",
-    "M8 14.502a.5.5 0 0 0-.826-.381l-1.893 1.631a1 1 0 0 1-.651.243H3.5a.5.5 0 0 0-.5.501v3.006a.5.5 0 0 0 .5.501h1.129a1 1 0 0 1 .652.243l1.893 1.633a.5.5 0 0 0 .826-.38z"
-  ],
-  "cassette-tape": [
-    "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
-    "M8 8a2 2 0 1 0 0 4 2 2 0 1 0 0-4",
-    "M8 12h8",
-    "M16 8a2 2 0 1 0 0 4 2 2 0 1 0 0-4",
-    "m6 20 .7-2.9A1.4 1.4 0 0 1 8.1 16h7.8a1.4 1.4 0 0 1 1.4 1l.7 3"
-  ],
-  "boom-box": [
-    "M4 9V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4",
-    "M8 8v1",
-    "M12 8v1",
-    "M16 8v1",
-    "M4 9h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z",
-    "M8 13a2 2 0 1 0 0 4 2 2 0 1 0 0-4",
-    "M16 13a2 2 0 1 0 0 4 2 2 0 1 0 0-4"
-  ]
-};
-var ICON_BADGE_OFF = "M17.203 19.3594L4.6875 6.7969C3.6094 8.25 3 10.0781 3 12C3 16.9688 7.031 21 12 21C13.969 21 15.75 20.3906 17.203 19.3594ZM19.359 17.2031C20.391 15.75 21 13.9219 21 12C21 7.0312 16.969 3 12 3C10.078 3 8.25 3.6094 6.797 4.6875L19.359 17.2031ZM0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24C5.391 24 0 18.6094 0 12Z";
-var ICON_BADGE_ON = "M12 24C5.391 24 0 18.6094 0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24ZM17.531 6.8438C17.016 6.4688 16.313 6.5625 15.984 7.0781L10.359 14.7656L7.922 12.3281C7.5 11.9062 6.75 11.9062 6.328 12.3281C5.906 12.7969 5.906 13.5 6.328 13.9219L9.703 17.2969C9.937 17.5312 10.266 17.6719 10.594 17.625C10.922 17.625 11.203 17.4375 11.391 17.1562L17.766 8.3906C18.141 7.9219 18.047 7.2188 17.531 6.8438Z";
 
 // src/components/move-visuals.tsx
 var import_jsx_runtime4 = require("react/jsx-runtime");
@@ -6957,6 +6964,12 @@ function MoveAudioZoom() {
   ] });
 }
 function MoveAudioTransport({ index }) {
+  (0, import_react7.useSyncExternalStore)(
+    (0, import_react7.useCallback)((cb) => import_ModulationStore2.ModulationStore.subscribe(cb), []),
+    () => import_ModulationStore2.ModulationStore.getVersion(),
+    () => 0
+  );
+  const params = import_ModulationStore2.ModulationStore.getSlot(index)?.params ?? {};
   const clockRef = (0, import_react7.useRef)(null);
   (0, import_react7.useEffect)(() => {
     let raf = requestAnimationFrame(function tick() {
@@ -6996,8 +7009,27 @@ function MoveAudioTransport({ index }) {
       }
     ),
     /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "tweakers-move-volume tweakers-move-wave-time", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "tweakers-move-volume-tick", style: { background: "#3d9bff" } }),
-      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { ref: clockRef, className: "tweakers-move-volume-value", children: "0:00:00" })
+      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+        "svg",
+        {
+          className: "tweakers-move-wave-state",
+          "data-on": params.playing ? true : void 0,
+          viewBox: "0 0 24 24",
+          "aria-hidden": "true",
+          children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("path", { d: ICON_PLAY, fill: "currentColor" })
+        }
+      ),
+      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { ref: clockRef, className: "tweakers-move-volume-value", children: "0:00:00" }),
+      /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+        "svg",
+        {
+          className: "tweakers-move-wave-state",
+          "data-on": params.loopOn ? true : void 0,
+          viewBox: "0 0 24 24",
+          "aria-hidden": "true",
+          children: ICON_LOOP.map((d) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("path", { d, fill: "none", stroke: "currentColor", strokeWidth: "2.4", strokeLinecap: "round", strokeLinejoin: "round" }, d))
+        }
+      )
     ] }),
     /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
       "input",
