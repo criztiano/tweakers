@@ -233,6 +233,49 @@ function triggersCrossed(prevValue, curValue, steps) {
   return fired;
 }
 
+// src/waveform-dsp.ts
+function mixToMono(buffer) {
+  if (buffer.numberOfChannels === 1) return buffer.getChannelData(0);
+  const len = buffer.length;
+  const out = new Float32Array(len);
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    const data = buffer.getChannelData(c);
+    for (let i = 0; i < len; i++) out[i] += data[i] / buffer.numberOfChannels;
+  }
+  return out;
+}
+function fillPeaks(data, cols, min, max) {
+  const step = data.length / cols;
+  for (let x = 0; x < cols; x++) {
+    const start = Math.floor(x * step);
+    const end = Math.max(start + 1, Math.min(data.length, Math.floor((x + 1) * step)));
+    let mn = 1;
+    let mx = -1;
+    for (let i = start; i < end; i++) {
+      const v = data[i];
+      if (v < mn) mn = v;
+      if (v > mx) mx = v;
+    }
+    min[x] = mn;
+    max[x] = mx;
+  }
+}
+function envelope(p, cols, n) {
+  const out = new Array(n);
+  const seg = cols / n;
+  for (let k = 0; k < n; k++) {
+    const start = Math.floor(k * seg);
+    const end = Math.max(start + 1, Math.min(cols, Math.floor((k + 1) * seg)));
+    let a = 0;
+    for (let x = start; x < end; x++) {
+      const m = Math.max(Math.abs(p.min[x]), Math.abs(p.max[x]));
+      if (m > a) a = m;
+    }
+    out[k] = a;
+  }
+  return out;
+}
+
 // src/modulation-core.ts
 var MOD_SLOTS = 16;
 var MOD_COLORS = [
@@ -870,9 +913,129 @@ var CURVE_DEF = {
   }
 };
 registerModType(CURVE_DEF);
+var AUDIO_ENV_COLS = 2048;
+var AUDIO_ENV_SEGMENTS = 512;
+var audioModBuffer = null;
+var audioModEnv = null;
+var audioModDuration = 1;
+var audioModVersion = 0;
+var audioModListeners = /* @__PURE__ */ new Set();
+function setAudioModBuffer(buffer) {
+  audioModBuffer = buffer;
+  if (!buffer || !buffer.length) {
+    audioModEnv = null;
+    audioModDuration = 1;
+  } else {
+    const mono = mixToMono(buffer);
+    const cols = Math.min(AUDIO_ENV_COLS, mono.length);
+    const min = new Float32Array(cols);
+    const max = new Float32Array(cols);
+    fillPeaks(mono, cols, min, max);
+    audioModEnv = envelope({ min, max }, cols, Math.min(AUDIO_ENV_SEGMENTS, cols));
+    audioModDuration = Math.max(0.05, buffer.duration || mono.length / 44100);
+  }
+  audioModVersion += 1;
+  for (const fn of audioModListeners) fn();
+}
+function subscribeAudioMod(fn) {
+  audioModListeners.add(fn);
+  return () => {
+    audioModListeners.delete(fn);
+  };
+}
+var getAudioModVersion = () => audioModVersion;
+var getAudioModBuffer = () => audioModBuffer;
+function audioModLevel(position) {
+  if (!audioModEnv) return 0;
+  const i = Math.floor(clamp012(position) * audioModEnv.length);
+  return audioModEnv[Math.min(audioModEnv.length - 1, i)];
+}
+function audioLoop(params) {
+  const start = clamp012(params.loopStart);
+  const end = clamp012(params.loopEnd);
+  if (end - start < 1e-3 || start === 0 && end === 1) return null;
+  return { start, end };
+}
+var AUDIO_DEF = {
+  type: "audio",
+  label: "Audio",
+  defaults: {
+    speed: 1,
+    depth: 1,
+    smooth: 0,
+    playing: true,
+    loopOn: true,
+    loopStart: 0,
+    loopEnd: 1,
+    position: 0
+  },
+  controls: [
+    /* The main audio dial: it draws the sample itself, and its settings page
+       floats the full waveform above the panel. */
+    { type: "slider", path: "speed", label: "Speed", min: 0.1, max: 4, step: 0.01, unit: "x", drawsPreview: true },
+    { type: "toggle", path: "playing", label: "Play", moveSlot: true, icon: "activity" },
+    { type: "slider", path: "depth", label: "Depth", min: 0, max: 1, step: 0.01, scope: true },
+    { type: "toggle", path: "loopOn", label: "Loop", moveSlot: true, icon: "repeat" },
+    { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 }
+  ],
+  createState: () => ({ pos: 0, out: null, seek: null }),
+  tick(state, params, dt) {
+    const s = state;
+    const seek = clamp012(params.position);
+    if (s.seek !== seek) {
+      s.seek = seek;
+      s.pos = seek;
+    }
+    if (params.playing) {
+      const speed = clamp(Number(params.speed) || 1, 0.05, 16);
+      s.pos += dt * speed / audioModDuration;
+      const loop = params.loopOn ? audioLoop(params) : null;
+      if (loop) {
+        const span = loop.end - loop.start;
+        if (s.pos >= loop.end) s.pos = loop.start + (s.pos - loop.start) % span;
+        else if (s.pos < loop.start) s.pos = loop.start;
+      } else if (s.pos >= 1) {
+        s.pos = params.loopOn ? s.pos % 1 : 1;
+      }
+    }
+    let v = audioModEnv === null ? 0 : (audioModLevel(s.pos) * 2 - 1) * clamp012(params.depth);
+    const smooth = clamp012(params.smooth);
+    if (smooth > 0 && s.out !== null) {
+      const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
+      v = s.out + (v - s.out) * k;
+    }
+    s.out = v;
+    return v;
+  },
+  /* Delete, while the page is open, drops the loop brackets. */
+  buttons: {
+    delete: () => ({ loopStart: 0, loopEnd: 1 })
+  },
+  /** The sample's envelope — the small screens' waveform drawing. */
+  preview(_params, count) {
+    const n = Math.max(2, count);
+    if (!audioModEnv) {
+      return { points: Array.from({ length: n }, () => 0), label: "No sample" };
+    }
+    return {
+      points: Array.from({ length: n }, (_, i) => clamp012(audioModLevel(i / (n - 1)))),
+      label: "Audio"
+    };
+  },
+  phase(state) {
+    return state.pos;
+  },
+  /** Note on rewinds to the last seek — the sample retriggers like a pad. */
+  gate(state, on) {
+    const s = state;
+    if (on) s.pos = s.seek ?? 0;
+  }
+};
+registerModType(AUDIO_DEF);
 export {
   ADSR_DEF,
   ADSR_STAGE_MAX,
+  AUDIO_DEF,
   CURVE_DEF,
   CURVE_LABELS,
   CURVE_MAX_CLIPS,
@@ -893,6 +1056,7 @@ export {
   MOD_SLOTS,
   SH_DEF,
   applyModulation,
+  audioModLevel,
   curveComposition,
   curveDuration,
   envCurveParam,
@@ -901,6 +1065,8 @@ export {
   envWaveParam,
   envelopeJoints,
   envelopePoints,
+  getAudioModBuffer,
+  getAudioModVersion,
   getModType,
   lfoDivisionBeats,
   lfoSyncedHz,
@@ -912,6 +1078,8 @@ export {
   modRingArc,
   registerModType,
   restoreModParams,
+  setAudioModBuffer,
+  subscribeAudioMod,
   visibleModControls
 };
 //# sourceMappingURL=modulation-core.js.map

@@ -1394,6 +1394,14 @@
   opacity: 0.8;
 }
 
+/* The wave preview's playhead — the audio dial's running line. */
+.tweakers-move-scope-wave line {
+  stroke: var(--move-text);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.55;
+}
+
 .tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-readout {
   z-index: 1;
 }

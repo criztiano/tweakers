@@ -7,7 +7,11 @@ import {
   stepPosition,
   loopFromStep,
   loopSteps,
+  visibleWindow,
+  padPosition,
+  padSection,
   MOVE_WAVEFORM_STEPS,
+  MOVE_WAVEFORM_PADS,
 } from '../src/move-waveform';
 import { WAVEFORM_MAX_ZOOM } from '../src/waveform-engine';
 
@@ -121,5 +125,80 @@ describe('the registry', () => {
     expect(MoveWaveformStore.getView().loop).toEqual({ start: 2 / 16, end: 6 / 16 });
     MoveWaveformStore.clearLoop();
     expect(MoveWaveformStore.getView().loop).toBe(null);
+  });
+
+  it('a held step lets the loop go', () => {
+    MoveWaveformStore.pressStep(2);
+    MoveWaveformStore.pressStep(5);
+    expect(MoveWaveformStore.getView().loop).not.toBe(null);
+    MoveWaveformStore.holdStep(3);
+    expect(MoveWaveformStore.getView().loop).toBe(null);
+    expect(MoveWaveformStore.getView().loopAnchor).toBe(null);
+  });
+});
+
+describe('the shown window', () => {
+  it('is the whole sample at zoom 1', () => {
+    expect(visibleWindow(0.5, 1)).toEqual({ start: 0, span: 1 });
+  });
+
+  it('centres on the playhead and clamps to the edges, like the renderer', () => {
+    expect(visibleWindow(0.5, 4)).toEqual({ start: 0.375, span: 0.25 });
+    expect(visibleWindow(0, 4).start).toBe(0);
+    expect(visibleWindow(1, 4).start).toBeCloseTo(0.75, 6);
+  });
+
+  it('addresses its eighths from the pad row', () => {
+    const window = visibleWindow(0.5, 4);
+    expect(padPosition(window, 0)).toBe(window.start);
+    expect(padPosition(window, 4)).toBeCloseTo(0.5, 6);
+    const section = padSection(window, 2);
+    expect(section.start).toBeCloseTo(window.start + (2 / MOVE_WAVEFORM_PADS) * window.span, 6);
+    expect(section.end - section.start).toBeCloseTo(window.span / MOVE_WAVEFORM_PADS, 6);
+  });
+});
+
+describe('the editor claim', () => {
+  it('widens the waveform to the whole row and the pads, and hands back on release', () => {
+    const release = MoveWaveformStore.register();
+    expect(MoveWaveformStore.wantsSteps()).toBe(false);
+    MoveWaveformStore.setEditor(true);
+    expect(MoveWaveformStore.wantsSteps()).toBe(true);
+    expect(MoveWaveformStore.wantsPads()).toBe(true);
+    release();
+    expect(MoveWaveformStore.wantsSteps()).toBe(false);
+    expect(MoveWaveformStore.wantsPads()).toBe(false);
+  });
+
+  it('never claims without a mounted waveform, whatever the editor says', () => {
+    MoveWaveformStore.setEditor(true);
+    expect(MoveWaveformStore.wantsSteps()).toBe(false);
+    MoveWaveformStore.setEditor(false);
+  });
+
+  it('a pad tap jumps the playhead into that eighth of the shown window', () => {
+    const release = MoveWaveformStore.register();
+    MoveWaveformStore.setView({ zoom: 4, position: 0.5 });
+    MoveWaveformStore.pressPad(0);
+    expect(MoveWaveformStore.getView().position).toBeCloseTo(0.375, 6);
+    release();
+  });
+
+  it('a held pad selects that eighth as the loop', () => {
+    const release = MoveWaveformStore.register();
+    MoveWaveformStore.setView({ zoom: 1, position: 0 });
+    MoveWaveformStore.pressPad(2, true);
+    expect(MoveWaveformStore.getView().loop).toEqual({ start: 2 / 8, end: 3 / 8 });
+    release();
+  });
+
+  it('frames on the live playhead when a progress source is set', () => {
+    const release = MoveWaveformStore.register();
+    MoveWaveformStore.setView({ zoom: 4, position: 0 });
+    MoveWaveformStore.setProgressSource(() => 0.5);
+    MoveWaveformStore.pressPad(0);
+    // The window is centred on the playing position, not the last scrub.
+    expect(MoveWaveformStore.getView().position).toBeCloseTo(0.375, 6);
+    release();
   });
 });

@@ -36,6 +36,8 @@ export type MoveWaveformView = {
 };
 
 export const MOVE_WAVEFORM_STEPS = 16;
+/** The bottom pad row: eight subdivisions of the window on screen. */
+export const MOVE_WAVEFORM_PADS = 8;
 
 /** A turn of the volume knob is a small move; a whole sweep crosses the sample. */
 export const SCRUB_PER_DETENT = 0.01;
@@ -100,6 +102,36 @@ export function loopFromStep(
   };
 }
 
+/**
+ * The window the engine is showing: 1/zoom of the sample, centred on the
+ * playhead and clamped to the edges — the same framing the renderer does,
+ * kept pure here so the pad row can address what is actually on screen.
+ */
+export function visibleWindow(position: number, zoom: number): { start: number; span: number } {
+  const span = 1 / Math.max(1, zoom);
+  let start = clamp01(position) - span / 2;
+  if (start < 0) start = 0;
+  else if (start > 1 - span) start = 1 - span;
+  return { start, span };
+}
+
+/** Where pad `index` lands in the shown window, 0..1 of the sample. */
+export const padPosition = (
+  window: { start: number; span: number },
+  index: number,
+  pads = MOVE_WAVEFORM_PADS
+) => clamp01(window.start + (Math.min(pads - 1, Math.max(0, index)) / pads) * window.span);
+
+/** Pad `index`'s subdivision of the shown window, as a loop. */
+export function padSection(
+  window: { start: number; span: number },
+  index: number,
+  pads = MOVE_WAVEFORM_PADS
+): WaveformLoop {
+  const start = padPosition(window, index, pads);
+  return { start, end: clamp01(start + window.span / pads) };
+}
+
 /** Which steps light: the loop's span, or the lone anchor while one is pending. */
 export function loopSteps(view: MoveWaveformView, steps = MOVE_WAVEFORM_STEPS): number[] {
   if (view.loop) {
@@ -123,6 +155,8 @@ type Listener = () => void;
 class MoveWaveformStoreClass {
   private view: MoveWaveformView = defaultView();
   private registered = false;
+  private editor = false;
+  private progressSource: (() => number) | null = null;
   private listeners = new Set<Listener>();
   private version = 0;
 
@@ -132,6 +166,8 @@ class MoveWaveformStoreClass {
     this.notify();
     return () => {
       this.registered = false;
+      this.editor = false;
+      this.progressSource = null;
       this.view = defaultView();
       this.notify();
     };
@@ -139,6 +175,37 @@ class MoveWaveformStoreClass {
 
   isRegistered(): boolean {
     return this.registered;
+  }
+
+  /**
+   * Editor mode — the floating waveform is up and owns the whole surface:
+   * every step is the loop bar (a slot's own step included), and the bottom
+   * pad row addresses the shown window. Off, the waveform keeps its polite
+   * claims: the wheel, the knob, and only the steps nobody else holds.
+   */
+  setEditor(on: boolean): void {
+    if (this.editor === on) return;
+    this.editor = on;
+    this.notify();
+  }
+
+  /** The kit routes every step press here while the editor is up. */
+  wantsSteps(): boolean {
+    return this.registered && this.editor;
+  }
+
+  /** The kit claims and routes the bottom pad row while the editor is up. */
+  wantsPads(): boolean {
+    return this.registered && this.editor;
+  }
+
+  /**
+   * Where the playhead actually is, for framing — during playback the shown
+   * window follows the engine's position, not the last scrub. The editor
+   * mount provides it; without one the scrub position stands in.
+   */
+  setProgressSource(fn: (() => number) | null): void {
+    this.progressSource = fn;
   }
 
   getView(): MoveWaveformView {
@@ -175,6 +242,22 @@ class MoveWaveformStoreClass {
 
   pressStep(index: number): void {
     this.setView(loopFromStep(this.view, index));
+  }
+
+  /** A held step lets the loop go — the remove gesture, from any step. */
+  holdStep(_index: number): void {
+    this.clearLoop();
+  }
+
+  /**
+   * The bottom pad row, over the shown window: a tap jumps the playhead to
+   * that subdivision (preview it), a hold selects it as the loop.
+   */
+  pressPad(index: number, hold = false): void {
+    const at = this.progressSource ? clamp01(this.progressSource()) : this.view.position;
+    const window = visibleWindow(at, this.view.zoom);
+    if (hold) this.setView({ loop: padSection(window, index), loopAnchor: null });
+    else this.setView({ position: padPosition(window, index) });
   }
 
   clearLoop(): void {

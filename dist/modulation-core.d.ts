@@ -40,7 +40,7 @@ declare const MOD_SLOTS = 16;
 declare const MOD_COLORS: string[];
 /** A slot's palette colour — the one constant identity it keeps. */
 declare const modColor: (index: number) => string;
-type ModulationType = 'lfo' | 'adsr' | 'envelope' | 'curve' | 'sh' | 'sequencer';
+type ModulationType = 'lfo' | 'adsr' | 'envelope' | 'curve' | 'sh' | 'sequencer' | 'audio';
 /** The envelope's four stages — the four columns of its picture. */
 type EnvStage = 'attack' | 'decay' | 'sustain' | 'release';
 /**
@@ -362,5 +362,23 @@ declare function curveComposition(params: ModulationParams): CurveComposition;
  */
 declare function curveDuration(params: ModulationParams, bpm: number): number;
 declare const CURVE_DEF: ModTypeDef;
+/** Hand the modulator its sample; null takes it away. */
+declare function setAudioModBuffer(buffer: AudioBuffer | null): void;
+/** Notified when the sample changes — the visualizer re-reads the buffer. */
+declare function subscribeAudioMod(fn: () => void): () => void;
+/** Bumped per `setAudioModBuffer`, for useSyncExternalStore snapshots. */
+declare const getAudioModVersion: () => number;
+/** The sample the audio modulator is reading, for the visualizer to draw. */
+declare const getAudioModBuffer: () => AudioBuffer | null;
+/** Amplitude 0..1 at a play position 0..1; 0 with no sample loaded. */
+declare function audioModLevel(position: number): number;
+/**
+ * Audio: the sample's own amplitude envelope, followed at a play position
+ * that runs like a tape — the transport the floating waveform drives. Play
+ * runs it, the loop brackets hold it, a seek (scrub, pad jump, click) lands
+ * it. What comes out is the sound's dynamics as a control signal: a drum
+ * loop pumps a filter the way it pumps the room.
+ */
+declare const AUDIO_DEF: ModTypeDef;
 
-export { ADSR_DEF, ADSR_STAGE_MAX, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EnvStage, LFO_DEF, LFO_SYNC_DEFAULT, LFO_SYNC_DIVISIONS, LFO_SYNC_OPTIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, curveComposition, curveDuration, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, getModType, lfoDivisionBeats, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modPageWidth, modRingArc, registerModType, restoreModParams, visibleModControls };
+export { ADSR_DEF, ADSR_STAGE_MAX, AUDIO_DEF, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EnvStage, LFO_DEF, LFO_SYNC_DEFAULT, LFO_SYNC_DIVISIONS, LFO_SYNC_OPTIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, audioModLevel, curveComposition, curveDuration, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, getAudioModBuffer, getAudioModVersion, getModType, lfoDivisionBeats, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modPageWidth, modRingArc, registerModType, restoreModParams, setAudioModBuffer, subscribeAudioMod, visibleModControls };

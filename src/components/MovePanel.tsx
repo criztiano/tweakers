@@ -2,7 +2,9 @@ import { useEffect, useRef, useState, useSyncExternalStore, useCallback } from '
 import { createPortal } from 'react-dom';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { ModulationStore } from '../store/ModulationStore';
-import { modColor, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
+import { modColor, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, getAudioModBuffer, subscribeAudioMod, getAudioModVersion, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
+import { MoveWaveform } from './MoveWaveform';
+import { MoveWaveformStore, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_STEPS } from '../move-waveform';
 import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
@@ -330,6 +332,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   useEffect(() => {
     const onJog = (e: Event) => {
       if (e.defaultPrevented || presetNavigatorOpen() || !stripRef.current.on) return;
+      // While the waveform editor floats, the wheel is its zoom — the strip
+      // waits. The event rides on unconsumed, so the kit hands it there.
+      if (MoveWaveformStore.wantsSteps()) return;
       e.preventDefault();
       scrollSlots(Math.round(Number((e as CustomEvent).detail?.delta) || 0));
     };
@@ -362,7 +367,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       const browsing = presetNavigatorOpen();
-      if (!browsing && !stripRef.current.on) return;
+      const editing = MoveWaveformStore.wantsSteps();
+      if (!browsing && !editing && !stripRef.current.on) return;
       const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
       if (!d) return;
       e.preventDefault();
@@ -371,8 +377,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       if (!steps) return;
       wheelRest.current -= steps * WHEEL_SLOT_PX;
       // The same wheel, the same rule as the hardware: while the navigator
-      // is up it walks the preset list, otherwise it moves the strip.
+      // is up it walks the preset list, while the waveform editor floats it
+      // zooms (scroll up goes in), otherwise it moves the strip.
       if (browsing) MovePresetStore.scroll(steps);
+      else if (editing) MoveWaveformStore.zoom(-steps);
       else scrollSlots(steps);
     };
     el.addEventListener('wheel', onWheel, { passive: false });
@@ -508,6 +516,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // are editing — the dial that draws the preview shows that same clip.
   const modSlot = modSettings ? ModulationStore.getSlot(modSettings.index) : null;
   const composition = modSlot?.type === 'curve' ? curveComposition(modSlot.params) : null;
+  // An audio modulator's page floats its waveform the same way — the dial
+  // draws the small sample, the page brings the full editor above the panel.
+  const audioWave = modSlot?.type === 'audio' && modSettings ? modSettings.index : null;
   const clipIndex = composition
     ? Math.min(composition.segments.length - 1, Math.max(0, Math.round(Number(modSlot!.params.selected) || 0)))
     : 0;
@@ -944,7 +955,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     <div className="tweakers-root tweakers-move-root" data-theme={theme} data-dock={dock}>
       {/* While a composer floats above it the whole instrument comes forward,
           over the app's own panels — you are working in it. */}
-      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-overlay={composition || color || presetSave ? true : undefined}>
+      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-overlay={composition || audioWave != null || color || presetSave ? true : undefined}>
         {colorMeta && <MoveColorDisplay panelId={page.panel.id} meta={colorMeta} anchor={panelRef} theme={theme} />}
         {presetSave && <MovePresetSaveInput suggested={presetSave.suggested} />}
         {composition && modSettings && (
@@ -956,6 +967,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
             selected={clipIndex}
           />
         )}
+        {audioWave != null && <MoveAudioWave index={audioWave} theme={theme} />}
         <div className="tweakers-move-inner" style={{ '--move-cols': clusterCols } as React.CSSProperties}>
           {/* Only tracks that carry a page render — a bare coloured marker with
               no name says nothing. The index is still the real track index, so
@@ -1067,8 +1079,18 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 const scopeSlot = settingsPanel
                   ? modLayout?.dials.find((d) => d.path === meta.path)?.scope
                   : undefined;
+                // A preview slot on a plain dial wears the modulator's own
+                // drawing the way the scope slot wears the live signal — the
+                // audio dial's small waveform, with the playhead running
+                // through it. (An xy preview dial — the curve's — draws its
+                // shape in the pad and never reaches here.)
+                const waveSlot = settingsPanel && meta.type !== 'xy'
+                  ? modLayout?.dials.find((d) => d.path === meta.path)?.preview
+                  : undefined;
                 const scope = scopeSlot && modSettings
                   ? <MoveScope index={modSettings.index} />
+                  : waveSlot && modSettings
+                  ? <MoveWavePreview index={modSettings.index} />
                   : null;
                 if (meta.type === 'color') return <MoveColorSlot key={meta.path} panelId={page.panel.id} meta={meta} active={active} open={colorMeta?.path === meta.path} />;
                 // The filter takes two slots as one picture: the magnitude
@@ -1881,6 +1903,111 @@ function MoveCurveComposer({
   );
 }
 
+const clampWave01 = (v: unknown) => Math.min(1, Math.max(0, Number(v) || 0));
+
+/**
+ * An audio modulator's waveform, floating above the panel while its settings
+ * page is open — the sample the slot is following, in the full Move-driven
+ * editor. The hardware becomes a tape deck for as long as it is up: the
+ * wheel zooms, the volume knob scrubs, the step row brackets the loop (a
+ * held step lets it go), the bottom pads jump the playhead around the shown
+ * window (a held pad selects that stretch as the loop), Play runs the
+ * transport and Loop arms the brackets. Every move lands in the slot's
+ * params, where the engine reads them — screen and hardware edit one thing.
+ */
+function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
+  // The sample can arrive after the page opens — re-read it when it does.
+  useSyncExternalStore(
+    useCallback((cb) => subscribeAudioMod(cb), []),
+    () => getAudioModVersion(),
+    () => 0
+  );
+
+  // Seed the shared view from the slot, then let the hardware drive it. The
+  // editor claim widens the waveform's step share to the whole row and takes
+  // the pad row; both hand back on close.
+  useEffect(() => {
+    const params = ModulationStore.getSlot(index)?.params ?? {};
+    const start = clampWave01(params.loopStart);
+    const end = clampWave01(params.loopEnd ?? 1);
+    MoveWaveformStore.setView({
+      position: clampWave01(params.position),
+      loop: end - start > 0.001 && !(start === 0 && end === 1) ? { start, end } : null,
+      loopAnchor: null,
+    });
+    MoveWaveformStore.setProgressSource(() => ModulationStore.getSlotPhase(index));
+    MoveWaveformStore.setEditor(true);
+    return () => {
+      MoveWaveformStore.setEditor(false);
+      MoveWaveformStore.setProgressSource(null);
+    };
+  }, [index]);
+
+  // The transport buttons, borrowed while the editor is up: Play runs the
+  // tape, Loop arms the brackets, Back closes the page (the step that would
+  // close it is busy being a loop bar).
+  useEffect(() => {
+    const toggle = (path: 'playing' | 'loopOn') => () => {
+      const slot = ModulationStore.getSlot(index);
+      if (slot) ModulationStore.updateSlotParams(index, { [path]: !slot.params[path] });
+    };
+    const releases = [
+      MoveFunctions.push('play', toggle('playing'), { label: 'Play' }),
+      MoveFunctions.push('loop', toggle('loopOn'), { label: 'Loop' }),
+      MoveFunctions.push('back', () => ModulationStore.closeSettings(), { label: 'Close' }),
+    ];
+    return () => releases.forEach((release) => release());
+  }, [index]);
+
+  // The surface while the editor is up: the pad row is eight subdivisions of
+  // the shown window, and the step circles mirror the loop bar the hardware
+  // lights. Whatever the app had on the surface comes back on close.
+  useEffect(() => {
+    const prev = MoveSurfaceStore.getState();
+    MoveSurfaceStore.claimRows(1);
+    MoveSurfaceStore.setPads(
+      Array.from({ length: MOVE_WAVEFORM_PADS }, (_, x) => ({
+        x, y: 0 as const, label: `${x + 1}`, color: modColor(index),
+      }))
+    );
+    const paintSteps = () => {
+      const lit = new Set(MoveWaveformStore.loopSteps());
+      MoveSurfaceStore.setSteps(
+        Array.from({ length: MOVE_WAVEFORM_STEPS }, (_, step) => ({
+          step, color: modColor(index), lit: lit.has(step),
+        }))
+      );
+    };
+    paintSteps();
+    const offView = MoveWaveformStore.subscribe(paintSteps);
+    const offPress = MoveSurfaceStore.onPress(({ x, y }) => {
+      if (y === 0) MoveWaveformStore.pressPad(x);
+    });
+    return () => {
+      offView();
+      offPress();
+      MoveSurfaceStore.claimRows(prev.rows);
+      MoveSurfaceStore.setPads(prev.pads);
+      MoveSurfaceStore.setSteps(prev.steps);
+    };
+  }, [index]);
+
+  return (
+    <MoveWaveform
+      variant="dock"
+      theme={theme}
+      buffer={getAudioModBuffer()}
+      getProgress={() => ModulationStore.getSlotPhase(index)}
+      onSeek={(p) => ModulationStore.updateSlotParams(index, { position: p })}
+      onLoopChange={(loop) =>
+        ModulationStore.updateSlotParams(index, loop
+          ? { loopStart: loop.start, loopEnd: loop.end, loopOn: true }
+          : { loopStart: 0, loopEnd: 1 })}
+      waveColor={modColor(index)}
+    />
+  );
+}
+
 /**
  * The preset navigator's screen, at the slot cluster's left edge and its
  * full height. The rows lead the way in: the cluster slides over first and
@@ -1974,6 +2101,39 @@ function MoveScope({ index }: { index: number }) {
       aria-hidden="true"
     >
       <path ref={ref} />
+    </svg>
+  );
+}
+
+/**
+ * The audio dial's face: the settings preview — the sample's envelope — as
+ * a standing wave, with the slot's playhead running through it. The shape
+ * draws once per render; only the playhead line ticks, written straight to
+ * its attributes with the scope's no-re-render discipline.
+ */
+function MoveWavePreview({ index }: { index: number }) {
+  const line = useRef<SVGLineElement>(null);
+  const preview = ModulationStore.getSettingsPreview(64);
+  useEffect(() => {
+    let raf = requestAnimationFrame(function tick() {
+      const x = (ModulationStore.getSlotPhase(index) * 100).toFixed(2);
+      line.current?.setAttribute('x1', x);
+      line.current?.setAttribute('x2', x);
+      raf = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [index]);
+  if (!preview) return null;
+  return (
+    <svg
+      className="tweakers-move-scope-wave"
+      data-scope="true"
+      viewBox="0 0 100 100"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <path d={previewPathData(preview.points)} />
+      <line ref={line} x1="0" y1="0" x2="0" y2="100" />
     </svg>
   );
 }

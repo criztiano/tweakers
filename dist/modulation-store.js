@@ -835,6 +835,95 @@ var CURVE_DEF = {
   }
 };
 registerModType(CURVE_DEF);
+var audioModEnv = null;
+var audioModDuration = 1;
+function audioModLevel(position) {
+  if (!audioModEnv) return 0;
+  const i = Math.floor(clamp012(position) * audioModEnv.length);
+  return audioModEnv[Math.min(audioModEnv.length - 1, i)];
+}
+function audioLoop(params) {
+  const start = clamp012(params.loopStart);
+  const end = clamp012(params.loopEnd);
+  if (end - start < 1e-3 || start === 0 && end === 1) return null;
+  return { start, end };
+}
+var AUDIO_DEF = {
+  type: "audio",
+  label: "Audio",
+  defaults: {
+    speed: 1,
+    depth: 1,
+    smooth: 0,
+    playing: true,
+    loopOn: true,
+    loopStart: 0,
+    loopEnd: 1,
+    position: 0
+  },
+  controls: [
+    /* The main audio dial: it draws the sample itself, and its settings page
+       floats the full waveform above the panel. */
+    { type: "slider", path: "speed", label: "Speed", min: 0.1, max: 4, step: 0.01, unit: "x", drawsPreview: true },
+    { type: "toggle", path: "playing", label: "Play", moveSlot: true, icon: "activity" },
+    { type: "slider", path: "depth", label: "Depth", min: 0, max: 1, step: 0.01, scope: true },
+    { type: "toggle", path: "loopOn", label: "Loop", moveSlot: true, icon: "repeat" },
+    { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 }
+  ],
+  createState: () => ({ pos: 0, out: null, seek: null }),
+  tick(state, params, dt) {
+    const s = state;
+    const seek = clamp012(params.position);
+    if (s.seek !== seek) {
+      s.seek = seek;
+      s.pos = seek;
+    }
+    if (params.playing) {
+      const speed = clamp(Number(params.speed) || 1, 0.05, 16);
+      s.pos += dt * speed / audioModDuration;
+      const loop = params.loopOn ? audioLoop(params) : null;
+      if (loop) {
+        const span = loop.end - loop.start;
+        if (s.pos >= loop.end) s.pos = loop.start + (s.pos - loop.start) % span;
+        else if (s.pos < loop.start) s.pos = loop.start;
+      } else if (s.pos >= 1) {
+        s.pos = params.loopOn ? s.pos % 1 : 1;
+      }
+    }
+    let v = audioModEnv === null ? 0 : (audioModLevel(s.pos) * 2 - 1) * clamp012(params.depth);
+    const smooth = clamp012(params.smooth);
+    if (smooth > 0 && s.out !== null) {
+      const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
+      v = s.out + (v - s.out) * k;
+    }
+    s.out = v;
+    return v;
+  },
+  /* Delete, while the page is open, drops the loop brackets. */
+  buttons: {
+    delete: () => ({ loopStart: 0, loopEnd: 1 })
+  },
+  /** The sample's envelope — the small screens' waveform drawing. */
+  preview(_params, count) {
+    const n = Math.max(2, count);
+    if (!audioModEnv) {
+      return { points: Array.from({ length: n }, () => 0), label: "No sample" };
+    }
+    return {
+      points: Array.from({ length: n }, (_, i) => clamp012(audioModLevel(i / (n - 1)))),
+      label: "Audio"
+    };
+  },
+  phase(state) {
+    return state.pos;
+  },
+  /** Note on rewinds to the last seek — the sample retriggers like a pad. */
+  gate(state, on) {
+    const s = state;
+    if (on) s.pos = s.seek ?? 0;
+  }
+};
+registerModType(AUDIO_DEF);
 
 // src/store/ModulationStore.ts
 var MOD_TOUCH_GRACE_MS = 4e3;
