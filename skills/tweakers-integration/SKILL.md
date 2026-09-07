@@ -240,3 +240,6 @@ them wholesale. The panel's theme is the design anchor for the whole window:
 - A hand-rolled component duplicating something the installed tweakers exports.
 - Presets rebuilt as a folder of select/action rows instead of the toolbar's
   provider-backed preset UI.
+- A Move screen showing a list some control other than the big wheel walks.
+  The hardware screen fits one list and it belongs to the wheel; a view whose
+  wheel drives no list sends `null` rather than borrowing the screen.

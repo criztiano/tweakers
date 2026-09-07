@@ -1076,6 +1076,13 @@ useTweakers('Clip', {
 });
 ```
 
+The blanks follow one rule. In a tabbed group — slots whose content a mode
+switch flips — every tab shows the column count of the group's *largest* tab,
+so flipping modes never shifts the layout under a turning wheel. The padding
+is anonymous: the smaller tab carries blank columns to make up the count, and
+no control reserves a blank of its own inside another tab. The rule holds
+within one group only — a different view lays out its slots from scratch.
+
 `icon` is a glyph from the bundled lucide subset or the URL of an asset the app owns (drawn as a mask, so it takes the slot's colour and states). The slot then reads as that picture with a badge on its corner — a check while the switch is on, a ban while it is off — and its name underneath: what the switch is about, and whether it is doing it. `onIcon` / `offIcon` put the app's own pair of badges there instead. A switch with no picture keeps the plain face: the indicator bar, the name centred, the whole slot inverting when it is on. Naming a column for a bounded number makes it a chip wherever it was declared, so it stops competing for a dial slot — a page can spend all 8 dials on the controls it wants big, whatever else it carries. Controls with no column keep packing left around the named ones, and a column already spoken for falls back to packing rather than dropping the control.
 
 Actions reach the pads **only** through `movePads` — every app has buttons, and none of them expect a hardware pad. Two-handed dials (`xy`, `range`) and enums can't be chips, so a column on one of those is ignored and it keeps its dial slot.
