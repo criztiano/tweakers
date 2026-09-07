@@ -1,7 +1,8 @@
 // src/move-layout.ts
 var MOVE_DIALS = 8;
 var isEnumDial = (c) => c.type === "select" && Array.isArray(c.options) && c.options.length > 1;
-var isMoveDial = (c) => c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c) || c.type === "number" && c.min != null && c.max != null;
+var isToggleDial = (c) => c.type === "toggle" && c.moveSlot === true;
+var isMoveDial = (c) => isToggleDial(c) || c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c) || c.type === "number" && c.min != null && c.max != null;
 var dialSpan = (c) => c?.type === "filter" ? 2 : 1;
 
 // src/move-strip.ts

@@ -1,4 +1,4 @@
-import { P as PanelConfig, C as ControlMeta } from './TweakStore-D-U-7qQl.js';
+import { P as PanelConfig, C as ControlMeta } from './TweakStore-CQsavSGk.js';
 import { ModPageLayout } from './modulation-core.js';
 import { XYValue } from './xy-pad-core.js';
 import { RangeValue } from './range-slider-core.js';
@@ -40,6 +40,8 @@ interface MovePage {
 }
 /** A select with real choices becomes an enum dial — the kit's exact rule. */
 declare const isEnumDial: (c: ControlMeta) => boolean;
+/** A switch the page is about: it claims a dial slot rather than a pad. */
+declare const isToggleDial: (c: ControlMeta) => boolean;
 /** Everything the hardware turns: the controls that claim a dial slot. */
 declare const isMoveDial: (c: ControlMeta) => boolean;
 /**
@@ -93,6 +95,10 @@ declare function moveAppPadRow(row: number, claimedRows: number): 0 | 1 | null;
  * knobs keep agreeing on what column i means.
  */
 declare function visibleColumns(page: MovePage): number[];
+/** A boolean dial's position: exact endpoints, and halfway reads as on — the
+ *  same rule the on-screen slot follows, so the knob and the slot agree. */
+declare const normalizeToggleDial: (value: unknown) => number;
+declare const denormalizeToggleDial: (v01: number) => boolean;
 /** Dial position 0..1 back to the control's real value, kit-identical. */
 declare function denormalizeDial(meta: ControlMeta, v01: number): number;
 /** Dial position 0..1, the same normalization the kit puts on the wire. */
@@ -162,4 +168,4 @@ declare function dialOrigin(meta: ControlMeta): number;
 /** Axis positions 0..1 back to the control's real {x, y}, kit-identical. */
 declare function denormalizeXYDial(meta: ControlMeta, x01: number, y01: number): XYValue;
 
-export { ENUM_SHAPE_SAMPLES, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MovePage, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeXYDial, dialOrigin, dialSpan, enumIndex, enumOptionIcon, enumOptionLabel, enumOptionValue, enumShapePath, filterShapePath, isEnumDial, isMoveDial, isSpanContinuation, moveAppPadRow, movePadRows, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeXYDial, visibleColumns };
+export { ENUM_SHAPE_SAMPLES, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MovePage, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, denormalizeXYDial, dialOrigin, dialSpan, enumIndex, enumOptionIcon, enumOptionLabel, enumOptionValue, enumShapePath, filterShapePath, isEnumDial, isMoveDial, isSpanContinuation, isToggleDial, moveAppPadRow, movePadRows, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeToggleDial, normalizeXYDial, visibleColumns };

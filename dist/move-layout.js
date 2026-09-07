@@ -168,9 +168,10 @@ var flat = (controls, out = []) => {
   return out;
 };
 var isEnumDial = (c) => c.type === "select" && Array.isArray(c.options) && c.options.length > 1;
-var isMoveDial = (c) => c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c) || c.type === "number" && c.min != null && c.max != null;
+var isToggleDial = (c) => c.type === "toggle" && c.moveSlot === true;
+var isMoveDial = (c) => isToggleDial(c) || c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c) || c.type === "number" && c.min != null && c.max != null;
 var isDial = isMoveDial;
-var noChip = (c) => c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c);
+var noChip = (c) => isToggleDial(c) || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c);
 var dialSpan = (c) => c?.type === "filter" ? 2 : 1;
 var isSpanContinuation = (page, i) => i > 0 && page.dials[i] !== void 0 && page.dials[i] === page.dials[i - 1];
 function buildModMovePage(panel, layout) {
@@ -188,7 +189,7 @@ function buildModMovePage(panel, layout) {
   const dials = [];
   const toggles = [];
   for (const c of controls) {
-    if (c.type === "toggle" && !c.big) toggles[Math.max(0, dials.length - 1)] = c;
+    if (c.type === "toggle" && !isToggleDial(c)) toggles[Math.max(0, dials.length - 1)] = c;
     else if (c.type === "toggle" || c.type === "select" || isDial(c)) dials.push(c);
   }
   return { panel, dials: dials.slice(0, MOVE_DIALS), toggles: toggles.slice(0, MOVE_PADS), values: [], actions: [] };
@@ -230,7 +231,7 @@ function buildMovePages(panels) {
     };
     for (const c of controls) {
       const col = padColumn(panel, c);
-      if (c.type === "toggle") place(toggles, c, col);
+      if (c.type === "toggle" && !isToggleDial(c)) place(toggles, c, col);
       else if (c.type === "action") {
         if (col !== null) place(actions, c, col);
       } else if (isDial(c) && !noChip(c) && !dials.includes(c)) place(values, c, col);
@@ -259,6 +260,8 @@ function visibleColumns(page) {
   }
   return cols;
 }
+var normalizeToggleDial = (value) => value === true ? 1 : 0;
+var denormalizeToggleDial = (v01) => Number.isFinite(v01) && v01 >= 0.5;
 function denormalizeDial(meta, v01) {
   const min = meta.min ?? 0;
   const max = meta.max ?? 1;
@@ -392,6 +395,7 @@ export {
   denormalizeEnumDial,
   denormalizeFilterDial,
   denormalizeRangeDial,
+  denormalizeToggleDial,
   denormalizeXYDial,
   dialOrigin,
   dialSpan,
@@ -404,12 +408,14 @@ export {
   isEnumDial,
   isMoveDial,
   isSpanContinuation,
+  isToggleDial,
   moveAppPadRow,
   movePadRows,
   normalizeDial,
   normalizeEnumDial,
   normalizeFilterDial,
   normalizeRangeDial,
+  normalizeToggleDial,
   normalizeXYDial,
   visibleColumns
 };
