@@ -2231,7 +2231,9 @@
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 10000;
+  /* Above the panel even when an open overlay lifts it (10001) — the
+     card's shadow falls ON the instrument, never behind it. */
+  z-index: 10002;
   display: flex;
   justify-content: center;
   pointer-events: none;
