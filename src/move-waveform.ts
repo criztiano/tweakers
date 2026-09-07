@@ -39,10 +39,17 @@ export const MOVE_WAVEFORM_STEPS = 16;
 /** The bottom pad row: eight subdivisions of the window on screen. */
 export const MOVE_WAVEFORM_PADS = 8;
 
-/** A turn of the volume knob is a small move; a whole sweep crosses the sample. */
-export const SCRUB_PER_DETENT = 0.006;
+/** A slow tick of the volume knob — the finest scrub move, a share of the shown window. */
+export const SCRUB_PER_DETENT = 0.002;
 /** Shift is the fine layer everywhere else on this surface; it is here too. */
-export const SCRUB_FINE = 0.001;
+export const SCRUB_FINE = 0.0004;
+/**
+ * The encoder batches a fast turn into one event (±5, ±12 in a single
+ * delta) — the batch size IS the turn's speed. Bending it superlinear
+ * makes the knob two instruments: creep to land on a sample, spin to
+ * cross it.
+ */
+export const SCRUB_ACCEL = 1.6;
 /** A wheel detent is a proportion of the current zoom, so it feels the same
  *  going in as coming out. */
 export const ZOOM_PER_DETENT = 0.08;
@@ -57,11 +64,14 @@ export function defaultView(): MoveWaveformView {
  * The volume knob scrubs: a signed detent count moves the play position. The
  * step is a share of the shown window, not of the sample — zoomed in eight
  * times, a detent moves an eighth as far, so the knob's precision follows
- * the eye's.
+ * the eye's. Speed bends the step: a slow turn (delta ±1) moves by the
+ * finest step, a spin (a batched delta) superlinearly more. Shift stays
+ * plainly linear — the surgical layer never surprises.
  */
 export function scrubBy(position: number, delta: number, fine = false, zoom = 1): number {
+  const magnitude = fine ? Math.abs(delta) : Math.pow(Math.abs(delta), SCRUB_ACCEL);
   const step = (fine ? SCRUB_FINE : SCRUB_PER_DETENT) / Math.max(1, zoom);
-  const next = clamp01(position + delta * step);
+  const next = clamp01(position + Math.sign(delta) * magnitude * step);
   // Snap the ends: a scrub that lands a thousandth short of the start is a
   // scrub to the start, and the number it feeds is a read position.
   return Number(next.toFixed(6));

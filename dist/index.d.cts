@@ -2985,7 +2985,9 @@ declare function defaultView(): MoveWaveformView;
  * The volume knob scrubs: a signed detent count moves the play position. The
  * step is a share of the shown window, not of the sample — zoomed in eight
  * times, a detent moves an eighth as far, so the knob's precision follows
- * the eye's.
+ * the eye's. Speed bends the step: a slow turn (delta ±1) moves by the
+ * finest step, a spin (a batched delta) superlinearly more. Shift stays
+ * plainly linear — the surgical layer never surprises.
  */
 declare function scrubBy(position: number, delta: number, fine?: boolean, zoom?: number): number;
 /**

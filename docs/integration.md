@@ -159,8 +159,9 @@ import('http://localhost:7787/kit.js').then(m =>
 
 Opening an audio slot's settings page floats the full waveform above the panel
 and turns the surface into a tape deck: the big wheel zooms (on screen, the
-mouse wheel does), the volume knob scrubs — a detent moves a share of the
-shown window, so zooming in raises precision — the step row brackets the loop —
+mouse wheel does), the volume knob scrubs — a slow tick moves a fine share of
+the shown window (so zooming in raises precision) and a fast spin accelerates
+superlinearly to travel; Shift stays linear and finer — the step row brackets the loop —
 first press in, second press out, a held step lets it go — and the bottom pad
 row addresses the shown window in eighths: a tap jumps the playhead there, a
 hold selects that stretch as the loop. Play toggles the transport, Loop arms

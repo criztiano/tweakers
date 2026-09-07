@@ -2109,16 +2109,18 @@ function WaveformVisualization({
 // src/move-waveform.ts
 var MOVE_WAVEFORM_STEPS = 16;
 var MOVE_WAVEFORM_PADS = 8;
-var SCRUB_PER_DETENT = 6e-3;
-var SCRUB_FINE = 1e-3;
+var SCRUB_PER_DETENT = 2e-3;
+var SCRUB_FINE = 4e-4;
+var SCRUB_ACCEL = 1.6;
 var ZOOM_PER_DETENT = 0.08;
 var clamp013 = (v) => Math.min(1, Math.max(0, v));
 function defaultView() {
   return { position: 0, zoom: 1, loop: null, loopAnchor: null };
 }
 function scrubBy(position, delta, fine = false, zoom = 1) {
+  const magnitude = fine ? Math.abs(delta) : Math.pow(Math.abs(delta), SCRUB_ACCEL);
   const step = (fine ? SCRUB_FINE : SCRUB_PER_DETENT) / Math.max(1, zoom);
-  const next = clamp013(position + delta * step);
+  const next = clamp013(position + Math.sign(delta) * magnitude * step);
   return Number(next.toFixed(6));
 }
 function zoomBy(zoom, delta) {
