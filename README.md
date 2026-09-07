@@ -1148,7 +1148,7 @@ The window travels on two events, alongside the panel's existing ones:
 | Event | Direction | Detail |
 |---|---|---|
 | `MOVE_JOG_EVENT` (`move-tweakers:jog`) | in | `{ delta }` — the big wheel turned, a signed multi-step count. The kit sends it cancelable; a scrolling page answers it and calls `preventDefault`, so the wheel's other job (the waveform's zoom) does not fire underneath. |
-| `MOVE_STRIP_EVENT` (`move-tweakers:strip`) | out | `{ pageId, offset, columns, paths }` — where the window now sits and the eight control paths under the dials, so the kit can point the hardware's knobs at the same eight controls the screen is showing. |
+| `MOVE_STRIP_EVENT` (`move-tweakers:strip`) | out | `{ pageId, offset, columns, paths, pads }` — where the window now sits, the eight control paths under the dials, and the small slots under those (`pads.toggles`, `pads.values`, `pads.actions`, eight columns each). The kit points the hardware's knobs and pads at exactly what the screen is showing. |
 
 The bridge kit reads that announcement and maps knob *i* to `paths[i]`, so the Move's eight knobs turn whatever the screen is showing — turn the wheel and the knobs move with it. A page it has heard no window for keeps the ordinary rule (first eight dials, the rest as chips). The panel restates the window on the kit's own page stream, so a bridge that binds after the panel still catches up within a beat.
 

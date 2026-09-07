@@ -2098,6 +2098,10 @@ function stripDialColumns(page, offset, cols = MOVE_DIALS) {
 function stripDialSlots(page, offset, cols = MOVE_DIALS) {
   return stripDialColumns(page, offset, cols).map((col) => col < 0 ? void 0 : page.dials[col]);
 }
+function stripWindowPads(page, offset, cols = MOVE_DIALS) {
+  const row = (cells) => Array.from({ length: cols }, (_, i) => cells[offset + i]);
+  return { toggles: row(page.toggles), values: row(page.values), actions: row(page.actions) };
+}
 var stripSlotCount = (page) => stripStarts(page).length;
 var stripSlotIndex = (page, offset) => stripStarts(page).filter((start) => start < offset).length;
 
@@ -4271,12 +4275,17 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const announceStrip = useCallback(() => {
     const { page: pg, offset: at, on } = stripRef.current;
     if (!on || !pg) return;
+    const pads = stripWindowPads(pg, at);
+    const row = (cells) => cells.map((meta) => meta?.path ?? null);
     window.dispatchEvent(new CustomEvent(MOVE_STRIP_EVENT, {
       detail: {
         pageId: pg.panel.id,
         offset: at,
         columns: stripDialColumns(pg, at),
-        paths: stripDialSlots(pg, at).map((meta) => meta?.path ?? null)
+        paths: stripDialSlots(pg, at).map((meta) => meta?.path ?? null),
+        // The small slots under that window, in hardware columns — without
+        // them the pads under a scrolling page stay dark and dead.
+        pads: { toggles: row(pads.toggles), values: row(pads.values), actions: row(pads.actions) }
       }
     }));
   }, []);
@@ -7008,6 +7017,7 @@ export {
   stripSlotCount,
   stripSlotIndex,
   stripStarts,
+  stripWindowPads,
   transferLut,
   triggerLevels,
   triggersCrossed,
