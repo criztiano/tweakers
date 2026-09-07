@@ -1193,11 +1193,11 @@ export const AUDIO_DEF: ModTypeDef = {
   },
   controls: [
     /* The main audio dial: it draws the sample itself, and its settings page
-       floats the full waveform above the panel. */
+       floats the full waveform above the panel. Play and loop take no slots
+       — they belong to the hardware's own buttons, and the editor's clock
+       wears their state. */
     { type: 'slider', path: 'speed', label: 'Speed', min: 0.1, max: 4, step: 0.01, unit: 'x', drawsPreview: true },
-    { type: 'toggle', path: 'playing', label: 'Play', moveSlot: true, icon: 'activity' },
     { type: 'slider', path: 'depth', label: 'Depth', min: 0, max: 1, step: 0.01, scope: true },
-    { type: 'toggle', path: 'loopOn', label: 'Loop', moveSlot: true, icon: 'repeat' },
     { type: 'slider', path: 'smooth', label: 'Smooth', min: 0, max: 1, step: 0.01 },
   ],
   createState: (): AudioState => ({ pos: 0, out: null, seek: null }),

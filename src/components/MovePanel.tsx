@@ -5,6 +5,7 @@ import { ModulationStore } from '../store/ModulationStore';
 import { modColor, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, getAudioModBuffer, setAudioModBuffer, subscribeAudioMod, getAudioModVersion, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
 import { MoveWaveform } from './MoveWaveform';
 import { MoveWaveformStore, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_STEPS } from '../move-waveform';
+import { ICON_PLAY, ICON_LOOP } from '../icons';
 import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
@@ -2072,10 +2073,19 @@ function MoveAudioZoom() {
 
 /**
  * The editor's transport corner, where the volume readout usually sits:
- * the Load pill and the running clock. The clock is written straight to
- * its span every frame at a fixed width, so the pill never breathes.
+ * the Load pill and the running clock, flanked by the transport's state —
+ * play on the left, loop on the right, lit when running. The clock is
+ * written straight to its span every frame at a fixed width, so the pill
+ * never breathes.
  */
 function MoveAudioTransport({ index }: { index: number }) {
+  // The state icons follow the slot's params (Play/Loop button presses).
+  useSyncExternalStore(
+    useCallback((cb) => ModulationStore.subscribe(cb), []),
+    () => ModulationStore.getVersion(),
+    () => 0
+  );
+  const params = ModulationStore.getSlot(index)?.params ?? {};
   const clockRef = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     let raf = requestAnimationFrame(function tick() {
@@ -2118,8 +2128,25 @@ function MoveAudioTransport({ index }: { index: number }) {
         <span>Load</span>
       </button>
       <div className="tweakers-move-volume tweakers-move-wave-time">
-        <span className="tweakers-move-volume-tick" style={{ background: '#3d9bff' }} />
+        <svg
+          className="tweakers-move-wave-state"
+          data-on={params.playing ? true : undefined}
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          <path d={ICON_PLAY} fill="currentColor" />
+        </svg>
         <span ref={clockRef} className="tweakers-move-volume-value">0:00:00</span>
+        <svg
+          className="tweakers-move-wave-state"
+          data-on={params.loopOn ? true : undefined}
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
+          {ICON_LOOP.map((d) => (
+            <path key={d} d={d} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+          ))}
+        </svg>
       </div>
       <input
         ref={fileRef}
