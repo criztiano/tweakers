@@ -2,9 +2,11 @@ import { useEffect, useRef, useState, useSyncExternalStore, useCallback } from '
 import { createPortal } from 'react-dom';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { ModulationStore } from '../store/ModulationStore';
-import { modColor, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, getAudioModBuffer, subscribeAudioMod, getAudioModVersion, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
+import { modColor, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, getAudioModBuffer, setAudioModBuffer, subscribeAudioMod, getAudioModVersion, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
 import { MoveWaveform } from './MoveWaveform';
 import { MoveWaveformStore, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_STEPS } from '../move-waveform';
+import { formatClock } from '../timeline-core';
+import { ICON_MOVE_CAPTURE } from '../icons';
 import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
@@ -1922,6 +1924,47 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
     () => getAudioModVersion(),
     () => 0
   );
+  // The zoom readout follows the shared view (a view change bumps the version).
+  useSyncExternalStore(
+    useCallback((cb) => MoveWaveformStore.subscribe(cb), []),
+    () => MoveWaveformStore.getVersion(),
+    () => 0
+  );
+
+  // The running time, written straight to its spans every frame — the
+  // scope's no-re-render discipline. The colon between them stays put, so
+  // it can carry the readout's bold the way the panel's clock does.
+  const minRef = useRef<HTMLSpanElement>(null);
+  const secRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    let raf = requestAnimationFrame(function tick() {
+      const duration = getAudioModBuffer()?.duration ?? 0;
+      const [minutes, seconds] = formatClock(ModulationStore.getSlotPhase(index) * duration, true).split(':');
+      if (minRef.current && minRef.current.textContent !== minutes) minRef.current.textContent = minutes;
+      if (secRef.current && secRef.current.textContent !== seconds) secRef.current.textContent = seconds;
+      raf = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [index]);
+
+  // Load: pick an audio file, decode it, put it on the shelf. The one place
+  // the library touches an AudioContext — a one-shot decode, closed right
+  // after; playback stays the host's.
+  const fileRef = useRef<HTMLInputElement>(null);
+  const loadFile = async (file: File) => {
+    const bytes = await file.arrayBuffer();
+    const Ctx = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    try {
+      setAudioModBuffer(await ctx.decodeAudioData(bytes));
+      ModulationStore.updateSlotParams(index, { position: 0 });
+    } catch {
+      /* not an audio file the browser can read — the shelf keeps what it had */
+    } finally {
+      void ctx.close();
+    }
+  };
 
   // Seed the shared view from the slot, then let the hardware drive it. The
   // editor claim widens the waveform's step share to the whole row and takes
@@ -2005,13 +2048,54 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
           : { loopStart: 0, loopEnd: 1 })}
       // The editor's card: the sample dark on the light display, lightly
       // smoothed, no centre line — the slot's colour stays on the playhead
-      // and the loop band, so the slot still signs its editor.
+      // and the loop band, so the slot still signs its editor. The frame is
+      // the engine's inset, so the playhead runs the card's full height.
       mode="smooth"
       smoothPoints={200}
       baseline={false}
+      waveInset={12}
       waveColor="#1e1e1e"
       playheadColor={modColor(index)}
-    />
+    >
+      {/* The header cluster, the panel's own readout language: Load in
+          blue, the running time signed with the slot's tick, the zoom. */}
+      <div className="tweakers-move-wave-header">
+        <button
+          type="button"
+          className="tweakers-move-wave-load"
+          title="Load an audio file"
+          onClick={() => fileRef.current?.click()}
+        >
+          <svg viewBox={ICON_MOVE_CAPTURE.viewBox} aria-hidden="true">
+            <path d={ICON_MOVE_CAPTURE.path} />
+          </svg>
+          <span>Load</span>
+        </button>
+        <div className="tweakers-move-volume">
+          <span className="tweakers-move-volume-tick" style={{ background: modColor(index) }} />
+          <span className="tweakers-move-volume-value">
+            <span ref={minRef}>00</span>
+            <span className="tweakers-move-volume-sep">:</span>
+            <span ref={secRef}>00.0</span>
+          </span>
+        </div>
+        <div className="tweakers-move-volume">
+          <span className="tweakers-move-volume-label">Zoom</span>
+          <span className="tweakers-move-volume-value">{MoveWaveformStore.getView().zoom.toFixed(1)}×</span>
+        </div>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="audio/*"
+          hidden
+          onChange={(e) => {
+            const file = e.currentTarget.files?.[0];
+            e.currentTarget.value = '';
+            if (file) void loadFile(file);
+          }}
+        />
+      </div>
+    </MoveWaveform>
   );
 }
 

@@ -1417,15 +1417,17 @@ function createWaveformEngine(canvas, get) {
   let cy = 0;
   let amp = 0;
   let pk = { min: new Float32Array(1), max: new Float32Array(1) };
-  const syncSize = (width, height) => {
+  let lastInset = 0;
+  const syncSize = (width, height, inset = 0) => {
     dpr = readDpr();
     const nw = Math.round(width * dpr);
     const nh = Math.round(height * dpr);
-    if (nw === W && nh === H) return;
+    if (nw === W && nh === H && inset === lastInset) return;
     W = canvas.width = nw;
     H = canvas.height = nh;
+    lastInset = inset;
     cy = H / 2;
-    amp = H * 0.42;
+    amp = Math.max(0, H / 2 - inset * dpr) * 0.84;
     pk = { min: new Float32Array(W), max: new Float32Array(W) };
   };
   let monos = [];
@@ -1544,7 +1546,7 @@ function createWaveformEngine(canvas, get) {
   const frame = () => {
     raf = requestAnimationFrame(frame);
     const rt = get();
-    syncSize(rt.width, rt.height);
+    syncSize(rt.width, rt.height, Math.max(0, rt.waveInset || 0));
     syncMonos(rt.buffer, rt.bands);
     const base = getComputedStyle(canvas).color || "rgb(255,255,255)";
     ctx.globalAlpha = 1;
@@ -1732,6 +1734,7 @@ function WaveformVisualization({
   playheadColor,
   baseline = true,
   smoothPoints = WAVEFORM_SMOOTH_POINTS,
+  waveInset = 0,
   autoZoomOnLoop = false,
   zoom: zoomProp,
   width = 256,
@@ -1757,6 +1760,7 @@ function WaveformVisualization({
     playheadColor,
     baseline,
     smoothPoints,
+    waveInset,
     autoZoomOnLoop,
     loop,
     zoom,
@@ -1793,15 +1797,15 @@ function WaveformVisualization({
 // src/move-waveform.ts
 var MOVE_WAVEFORM_STEPS = 16;
 var MOVE_WAVEFORM_PADS = 8;
-var SCRUB_PER_DETENT = 0.01;
-var SCRUB_FINE = 2e-3;
+var SCRUB_PER_DETENT = 6e-3;
+var SCRUB_FINE = 1e-3;
 var ZOOM_PER_DETENT = 0.08;
 var clamp013 = (v) => Math.min(1, Math.max(0, v));
 function defaultView() {
   return { position: 0, zoom: 1, loop: null, loopAnchor: null };
 }
-function scrubBy(position, delta, fine = false) {
-  const step = fine ? SCRUB_FINE : SCRUB_PER_DETENT;
+function scrubBy(position, delta, fine = false, zoom = 1) {
+  const step = (fine ? SCRUB_FINE : SCRUB_PER_DETENT) / Math.max(1, zoom);
   const next = clamp013(position + delta * step);
   return Number(next.toFixed(6));
 }
@@ -1913,7 +1917,7 @@ var MoveWaveformStoreClass = class {
     this.notify();
   }
   scrub(delta, fine = false) {
-    this.setView({ position: scrubBy(this.view.position, delta, fine) });
+    this.setView({ position: scrubBy(this.view.position, delta, fine, this.view.zoom) });
   }
   zoom(delta) {
     this.setView({ zoom: zoomBy(this.view.zoom, delta) });
@@ -1978,6 +1982,7 @@ function MoveWaveform({
   playheadColor,
   baseline = true,
   smoothPoints,
+  waveInset,
   height,
   children,
   theme = "system",
@@ -2056,6 +2061,7 @@ function MoveWaveform({
       ...playheadColor ? { playheadColor } : {},
       baseline,
       ...smoothPoints != null ? { smoothPoints } : {},
+      ...waveInset != null ? { waveInset } : {},
       loop: state2.loop,
       zoom: variant === "slot" ? Math.max(SLOT_ZOOM, state2.zoom) : state2.zoom,
       onSeek: (p) => MoveWaveformStore.setView({ position: p }),
@@ -2084,6 +2090,381 @@ function MoveWaveform({
     document.body
   );
 }
+
+// src/timeline-core.ts
+import { formatLabel, inferStep, isHexColor, resolveTweakValues } from "tweakers/store";
+
+// src/store/persist.ts
+var STORAGE_VERSION = "v1";
+function resolvePersistTarget(kind, id, persist) {
+  if (!persist) return null;
+  const config = persist === true ? {} : persist;
+  const base = config.key ?? id;
+  if (!base) return null;
+  return {
+    key: `tweakers:${STORAGE_VERSION}:${kind}:${base}`,
+    storage: config.storage ?? "localStorage"
+  };
+}
+function getStorage(name) {
+  try {
+    if (typeof window === "undefined") return null;
+    return name === "sessionStorage" ? window.sessionStorage : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+function loadPersisted(target) {
+  if (!target) return null;
+  try {
+    const storage = getStorage(target.storage);
+    if (!storage) return null;
+    const raw = storage.getItem(target.key);
+    if (raw == null) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+function savePersisted(target, value) {
+  if (!target) return;
+  try {
+    const storage = getStorage(target.storage);
+    if (!storage) return;
+    storage.setItem(target.key, JSON.stringify(value));
+  } catch {
+  }
+}
+function clearPersisted(target) {
+  if (!target) return;
+  try {
+    const storage = getStorage(target.storage);
+    if (!storage) return;
+    storage.removeItem(target.key);
+  } catch {
+  }
+}
+
+// src/store/TimelineStore.ts
+var MIN_LOOP_REGION = 0.02;
+function loopSpan(duration, loopStart, loopEnd) {
+  if (!Number.isFinite(duration) || duration <= 0) return 0;
+  if (!Number.isFinite(loopStart)) loopStart = 0;
+  const end = Number.isFinite(loopEnd) ? Math.min(Math.max(0, loopEnd), duration) : duration;
+  const start = Math.min(Math.max(0, loopStart), duration);
+  const span = end - start;
+  return span > 0 ? span : duration;
+}
+function foldLoopTime(time, duration, loopStart = 0, loopEnd) {
+  if (!Number.isFinite(time) || !Number.isFinite(duration) || duration <= 0) {
+    return { time: 0, wraps: 0 };
+  }
+  const end = Number.isFinite(loopEnd) ? Math.min(Math.max(0, loopEnd), duration) : duration;
+  if (time < end) return { time, wraps: 0 };
+  const span = loopSpan(duration, loopStart, end);
+  const base = end - span;
+  const over = time - base;
+  return { time: base + over % span, wraps: Math.floor(over / span) };
+}
+var EMPTY_TRANSPORT = Object.freeze({ time: 0, playing: false, duration: 0, wraps: 0 });
+var TimelineStoreClass = class {
+  constructor() {
+    this.timelines = /* @__PURE__ */ new Map();
+    this.transports = /* @__PURE__ */ new Map();
+    this.listeners = /* @__PURE__ */ new Map();
+    this.globalListeners = /* @__PURE__ */ new Set();
+    this.registrationCounts = /* @__PURE__ */ new Map();
+    // User-defined loop windows. Absent = loop the whole timeline. The stored
+    // object reference is stable until set/clear so useSyncExternalStore readers
+    // don't churn.
+    this.loopRegions = /* @__PURE__ */ new Map();
+    this.persistTargets = /* @__PURE__ */ new Map();
+    this.listCache = null;
+    this.rafId = null;
+    this.lastTick = 0;
+    this.tick = (now) => {
+      const dt = Math.max(0, (now - this.lastTick) / 1e3);
+      this.lastTick = now;
+      let anyPlaying = false;
+      for (const [id, transport] of this.transports) {
+        if (!transport.playing) continue;
+        const meta = this.timelines.get(id);
+        const duration = meta?.duration ?? transport.duration;
+        if (!Number.isFinite(duration) || duration <= 0) {
+          this.transports.set(id, { time: 0, playing: false, duration: 0, wraps: 0 });
+          this.notify(id);
+          continue;
+        }
+        let time = transport.time + dt;
+        let wraps = transport.wraps;
+        const region = this.effectiveRegion(id, duration);
+        if (time >= region.end) {
+          const folded = foldLoopTime(time, duration, region.start, region.end);
+          time = folded.time;
+          wraps += folded.wraps;
+        }
+        this.transports.set(id, { time, playing: true, duration, wraps });
+        anyPlaying = true;
+        this.notify(id);
+      }
+      this.rafId = anyPlaying ? window.requestAnimationFrame(this.tick) : null;
+    };
+  }
+  register(meta, options) {
+    const existing = this.timelines.get(meta.id);
+    if (existing && existing.name !== meta.name) {
+      console.warn(
+        `[tweakers] Timeline id "${meta.id}" is already registered by "${existing.name}"; "${meta.name}" will share and overwrite that transport.`
+      );
+    }
+    const firstRegistration = !this.registrationCounts.has(meta.id);
+    this.registrationCounts.set(meta.id, (this.registrationCounts.get(meta.id) ?? 0) + 1);
+    if (firstRegistration) {
+      this.persistTargets.set(meta.id, resolvePersistTarget("timeline-loop", meta.id, options.persist));
+      this.hydrateLoopRegion(meta);
+    }
+    this.applyMeta(meta, options.autoplay);
+  }
+  update(meta) {
+    if (!this.timelines.has(meta.id)) return;
+    this.applyMeta(meta, false);
+  }
+  unregister(id) {
+    const nextCount = (this.registrationCounts.get(id) ?? 1) - 1;
+    if (nextCount > 0) {
+      this.registrationCounts.set(id, nextCount);
+      return;
+    }
+    this.registrationCounts.delete(id);
+    this.timelines.delete(id);
+    this.transports.delete(id);
+    this.loopRegions.delete(id);
+    this.persistTargets.delete(id);
+    if (this.listeners.get(id)?.size === 0) this.listeners.delete(id);
+    this.listCache = null;
+    this.notifyGlobal();
+  }
+  /** Restore a persisted loop region, or seed one from a code-defined
+   * `options.loop`. No region at all = loop the whole timeline (the default). */
+  hydrateLoopRegion(meta) {
+    const duration = Number.isFinite(meta.duration) ? Math.max(0, meta.duration) : 0;
+    const persisted = loadPersisted(this.persistTargets.get(meta.id) ?? null);
+    if (persisted && Number.isFinite(persisted.start) && Number.isFinite(persisted.end)) {
+      const region = this.normalizeRegion(persisted.start, persisted.end, duration);
+      if (region) this.loopRegions.set(meta.id, region);
+      return;
+    }
+    if (meta.loop) {
+      const region = this.normalizeRegion(meta.loopStart, duration, duration);
+      if (region) this.loopRegions.set(meta.id, region);
+    }
+  }
+  /** Clamp to [0,duration], order min/max, and reject degenerate widths. */
+  normalizeRegion(start, end, duration) {
+    if (!Number.isFinite(start) || !Number.isFinite(end) || duration <= 0) return null;
+    const lo = Math.min(Math.max(0, Math.min(start, end)), duration);
+    const hi = Math.min(Math.max(0, Math.max(start, end)), duration);
+    if (hi - lo < MIN_LOOP_REGION) return null;
+    return { start: lo, end: hi };
+  }
+  setLoopRegion(id, start, end) {
+    const transport = this.transports.get(id);
+    const duration = transport?.duration ?? this.timelines.get(id)?.duration ?? 0;
+    const region = this.normalizeRegion(start, end, duration);
+    if (!region) return;
+    this.loopRegions.set(id, region);
+    savePersisted(this.persistTargets.get(id) ?? null, region);
+    this.notify(id);
+  }
+  clearLoopRegion(id) {
+    if (!this.loopRegions.has(id)) return;
+    this.loopRegions.delete(id);
+    clearPersisted(this.persistTargets.get(id) ?? null);
+    this.notify(id);
+  }
+  /** The raw user/code region, or undefined when looping the whole timeline.
+   * The reference is stable between changes (safe for useSyncExternalStore). */
+  getLoopRegion(id) {
+    return this.loopRegions.get(id);
+  }
+  /** The region the clock actually loops within: the user/code region, or the
+   * whole timeline `[0, duration]` when none is set. Playback always wraps. */
+  effectiveRegion(id, duration) {
+    const region = this.loopRegions.get(id);
+    if (region) return region;
+    return { start: 0, end: Math.max(0, duration) };
+  }
+  play(id) {
+    const transport = this.transports.get(id);
+    if (!transport || transport.duration <= 0 || transport.playing) return;
+    const region = this.effectiveRegion(id, transport.duration);
+    const restart = transport.time >= region.end;
+    this.transports.set(id, {
+      ...transport,
+      time: restart ? region.start : transport.time,
+      wraps: restart ? 0 : transport.wraps,
+      playing: true
+    });
+    this.notify(id);
+    this.ensureLoop();
+  }
+  pause(id) {
+    const transport = this.transports.get(id);
+    if (!transport || !transport.playing) return;
+    this.transports.set(id, { ...transport, playing: false });
+    this.notify(id);
+  }
+  replay(id) {
+    const transport = this.transports.get(id);
+    if (!transport || transport.duration <= 0) return;
+    const region = this.effectiveRegion(id, transport.duration);
+    this.transports.set(id, { ...transport, time: region.start, wraps: 0, playing: true });
+    this.notify(id);
+    this.ensureLoop();
+  }
+  seek(id, time) {
+    const transport = this.transports.get(id);
+    if (!transport || !Number.isFinite(time)) return;
+    const clamped = Math.min(transport.duration, Math.max(0, time));
+    this.transports.set(id, { ...transport, time: clamped, wraps: 0 });
+    this.notify(id);
+  }
+  getTransport(id) {
+    return this.transports.get(id) ?? EMPTY_TRANSPORT;
+  }
+  getTimeline(id) {
+    return this.timelines.get(id);
+  }
+  getTimelines() {
+    if (!this.listCache) {
+      this.listCache = Array.from(this.timelines.values());
+    }
+    return this.listCache;
+  }
+  subscribe(id, listener) {
+    if (!this.listeners.has(id)) {
+      this.listeners.set(id, /* @__PURE__ */ new Set());
+    }
+    this.listeners.get(id).add(listener);
+    return () => {
+      const listeners2 = this.listeners.get(id);
+      listeners2?.delete(listener);
+      if (listeners2?.size === 0 && !this.timelines.has(id)) {
+        this.listeners.delete(id);
+      }
+    };
+  }
+  subscribeGlobal(listener) {
+    this.globalListeners.add(listener);
+    return () => {
+      this.globalListeners.delete(listener);
+    };
+  }
+  applyMeta(meta, autoplay) {
+    const duration = Number.isFinite(meta.duration) ? Math.max(0, meta.duration) : 0;
+    const loopStart = Number.isFinite(meta.loopStart) ? Math.min(duration, Math.max(0, meta.loopStart)) : 0;
+    const safeMeta = { ...meta, duration, loopStart };
+    this.timelines.set(meta.id, safeMeta);
+    const region = this.loopRegions.get(meta.id);
+    if (region) {
+      const reclamped = this.normalizeRegion(region.start, region.end, duration);
+      if (reclamped) this.loopRegions.set(meta.id, reclamped);
+      else this.loopRegions.delete(meta.id);
+    }
+    const existing = this.transports.get(meta.id);
+    if (existing) {
+      this.transports.set(meta.id, {
+        time: Math.min(existing.time, duration),
+        playing: duration > 0 && existing.playing,
+        duration,
+        wraps: existing.wraps
+      });
+    } else {
+      const playing = duration > 0 && autoplay;
+      this.transports.set(meta.id, { time: 0, playing, duration, wraps: 0 });
+      if (playing) this.ensureLoop();
+    }
+    this.listCache = null;
+    this.notify(meta.id);
+    this.notifyGlobal();
+  }
+  ensureLoop() {
+    if (this.rafId !== null || typeof window === "undefined") return;
+    this.lastTick = performance.now();
+    this.rafId = window.requestAnimationFrame(this.tick);
+  }
+  notify(id) {
+    this.listeners.get(id)?.forEach((fn) => fn());
+  }
+  notifyGlobal() {
+    this.globalListeners.forEach((fn) => fn());
+  }
+};
+var TimelineStore = /* @__PURE__ */ new TimelineStoreClass();
+
+// src/timeline-core.ts
+function formatClock(time, tenths = false) {
+  const safe = Math.max(0, time);
+  const minutes = Math.floor(safe / 60);
+  const seconds = safe - minutes * 60;
+  const secondsText = tenths ? seconds.toFixed(1).padStart(4, "0") : String(Math.floor(seconds)).padStart(2, "0");
+  return `${String(minutes).padStart(2, "0")}:${secondsText}`;
+}
+
+// src/icons.ts
+var ICON_CHEVRON_RIGHT = "M9.5 6L15.5 12L9.5 18";
+var ICON_CHEVRON_LEFT = "M14.5 6L8.5 12L14.5 18";
+var ICON_ELLIPSIS = [
+  { cx: "5.5", cy: "12" },
+  { cx: "12", cy: "12" },
+  { cx: "18.5", cy: "12" }
+];
+var ICON_CHECK = "M5 12.75L10 19L19 5";
+var ICON_MOVE_CAPTURE = {
+  viewBox: "0 0 14 14",
+  path: "M1 0H5V2H2V5H0V0H1ZM2 10V12H5V14H0V9H2V10ZM10 0H14V5H12V2H9V0H10ZM14 10V14H9V12H12V9H14V10Z"
+};
+var ICON_MOVE_ENTER = {
+  viewBox: "0 0 12 12",
+  circle: { cx: "6", cy: "6", r: "6" }
+};
+var LUCIDE_ICONS = {
+  /* directions and traversal */
+  "arrow-right": ["M5 12h14", "m12 5 7 7-7 7"],
+  "arrow-left": ["M19 12H5", "m12 19-7-7 7-7"],
+  "arrow-left-right": ["M8 3 4 7l4 4", "M4 7h16", "m16 21 4-4-4-4", "M20 17H4"],
+  "fold-horizontal": [
+    "M2 12h6",
+    "M22 12h-6",
+    "M12 2v2",
+    "M12 8v2",
+    "M12 14v2",
+    "M12 20v2",
+    "m19 9-3 3 3 3",
+    "m5 15 3-3-3-3"
+  ],
+  scissors: [
+    "M20 4 8.12 15.88",
+    "M14.47 14.48 20 20",
+    "M8.12 8.12 12 12",
+    "M6 3a3 3 0 1 0 0 6 3 3 0 1 0 0-6",
+    "M6 15a3 3 0 1 0 0 6 3 3 0 1 0 0-6"
+  ],
+  /* signal character */
+  "grid-2x2": ["M12 3v18", "M3 12h18", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"],
+  activity: ["M22 12h-4l-3 9L9 3l-3 9H2"],
+  waves: [
+    "M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1",
+    "M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1",
+    "M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"
+  ],
+  "audio-lines": ["M2 10v3", "M6 6v11", "M10 3v18", "M14 8v7", "M18 5v13", "M22 10v3"],
+  /* switches — what a boolean is about, drawn */
+  repeat: ["m17 2 4 4-4 4", "M3 11v-1a4 4 0 0 1 4-4h14", "m7 22-4-4 4-4", "M21 13v1a4 4 0 0 1-4 4H3"],
+  timer: ["M10 2h4", "M12 14l3-3", "M12 6a8 8 0 1 0 0 16 8 8 0 0 0 0-16z"]
+};
+var ICON_BADGE_OFF = "M17.203 19.3594L4.6875 6.7969C3.6094 8.25 3 10.0781 3 12C3 16.9688 7.031 21 12 21C13.969 21 15.75 20.3906 17.203 19.3594ZM19.359 17.2031C20.391 15.75 21 13.9219 21 12C21 7.0312 16.969 3 12 3C10.078 3 8.25 3.6094 6.797 4.6875L19.359 17.2031ZM0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24C5.391 24 0 18.6094 0 12Z";
+var ICON_BADGE_ON = "M12 24C5.391 24 0 18.6094 0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24ZM17.531 6.8438C17.016 6.4688 16.313 6.5625 15.984 7.0781L10.359 14.7656L7.922 12.3281C7.5 11.9062 6.75 11.9062 6.328 12.3281C5.906 12.7969 5.906 13.5 6.328 13.9219L9.703 17.2969C9.937 17.5312 10.266 17.6719 10.594 17.625C10.922 17.625 11.203 17.4375 11.391 17.1562L17.766 8.3906C18.141 7.9219 18.047 7.2188 17.531 6.8438Z";
 
 // src/components/CurveComposer.tsx
 import { useRef as useRef3, useEffect as useEffect3, useMemo, useState as useState3 } from "react";
@@ -3094,61 +3475,6 @@ function moveKeyboardValue(meta, value, key, fine = false) {
   const next = Math.round((value + direction * step * multiplier) / step) * step;
   return Math.max(min, Math.min(max, Number(next.toPrecision(12))));
 }
-
-// src/icons.ts
-var ICON_CHEVRON_RIGHT = "M9.5 6L15.5 12L9.5 18";
-var ICON_CHEVRON_LEFT = "M14.5 6L8.5 12L14.5 18";
-var ICON_ELLIPSIS = [
-  { cx: "5.5", cy: "12" },
-  { cx: "12", cy: "12" },
-  { cx: "18.5", cy: "12" }
-];
-var ICON_CHECK = "M5 12.75L10 19L19 5";
-var ICON_MOVE_CAPTURE = {
-  viewBox: "0 0 14 14",
-  path: "M1 0H5V2H2V5H0V0H1ZM2 10V12H5V14H0V9H2V10ZM10 0H14V5H12V2H9V0H10ZM14 10V14H9V12H12V9H14V10Z"
-};
-var ICON_MOVE_ENTER = {
-  viewBox: "0 0 12 12",
-  circle: { cx: "6", cy: "6", r: "6" }
-};
-var LUCIDE_ICONS = {
-  /* directions and traversal */
-  "arrow-right": ["M5 12h14", "m12 5 7 7-7 7"],
-  "arrow-left": ["M19 12H5", "m12 19-7-7 7-7"],
-  "arrow-left-right": ["M8 3 4 7l4 4", "M4 7h16", "m16 21 4-4-4-4", "M20 17H4"],
-  "fold-horizontal": [
-    "M2 12h6",
-    "M22 12h-6",
-    "M12 2v2",
-    "M12 8v2",
-    "M12 14v2",
-    "M12 20v2",
-    "m19 9-3 3 3 3",
-    "m5 15 3-3-3-3"
-  ],
-  scissors: [
-    "M20 4 8.12 15.88",
-    "M14.47 14.48 20 20",
-    "M8.12 8.12 12 12",
-    "M6 3a3 3 0 1 0 0 6 3 3 0 1 0 0-6",
-    "M6 15a3 3 0 1 0 0 6 3 3 0 1 0 0-6"
-  ],
-  /* signal character */
-  "grid-2x2": ["M12 3v18", "M3 12h18", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"],
-  activity: ["M22 12h-4l-3 9L9 3l-3 9H2"],
-  waves: [
-    "M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1",
-    "M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1",
-    "M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"
-  ],
-  "audio-lines": ["M2 10v3", "M6 6v11", "M10 3v18", "M14 8v7", "M18 5v13", "M22 10v3"],
-  /* switches — what a boolean is about, drawn */
-  repeat: ["m17 2 4 4-4 4", "M3 11v-1a4 4 0 0 1 4-4h14", "m7 22-4-4 4-4", "M21 13v1a4 4 0 0 1-4 4H3"],
-  timer: ["M10 2h4", "M12 14l3-3", "M12 6a8 8 0 1 0 0 16 8 8 0 0 0 0-16z"]
-};
-var ICON_BADGE_OFF = "M17.203 19.3594L4.6875 6.7969C3.6094 8.25 3 10.0781 3 12C3 16.9688 7.031 21 12 21C13.969 21 15.75 20.3906 17.203 19.3594ZM19.359 17.2031C20.391 15.75 21 13.9219 21 12C21 7.0312 16.969 3 12 3C10.078 3 8.25 3.6094 6.797 4.6875L19.359 17.2031ZM0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24C5.391 24 0 18.6094 0 12Z";
-var ICON_BADGE_ON = "M12 24C5.391 24 0 18.6094 0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24ZM17.531 6.8438C17.016 6.4688 16.313 6.5625 15.984 7.0781L10.359 14.7656L7.922 12.3281C7.5 11.9062 6.75 11.9062 6.328 12.3281C5.906 12.7969 5.906 13.5 6.328 13.9219L9.703 17.2969C9.937 17.5312 10.266 17.6719 10.594 17.625C10.922 17.625 11.203 17.4375 11.391 17.1562L17.766 8.3906C18.141 7.9219 18.047 7.2188 17.531 6.8438Z";
 
 // src/components/move-visuals.tsx
 import { Fragment as Fragment2, jsx as jsx4, jsxs as jsxs4 } from "react/jsx-runtime";
@@ -6456,6 +6782,37 @@ function MoveAudioWave({ index, theme }) {
     () => getAudioModVersion(),
     () => 0
   );
+  useSyncExternalStore2(
+    useCallback2((cb) => MoveWaveformStore.subscribe(cb), []),
+    () => MoveWaveformStore.getVersion(),
+    () => 0
+  );
+  const minRef = useRef7(null);
+  const secRef = useRef7(null);
+  useEffect6(() => {
+    let raf = requestAnimationFrame(function tick() {
+      const duration = getAudioModBuffer()?.duration ?? 0;
+      const [minutes, seconds] = formatClock(ModulationStore2.getSlotPhase(index) * duration, true).split(":");
+      if (minRef.current && minRef.current.textContent !== minutes) minRef.current.textContent = minutes;
+      if (secRef.current && secRef.current.textContent !== seconds) secRef.current.textContent = seconds;
+      raf = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [index]);
+  const fileRef = useRef7(null);
+  const loadFile = async (file) => {
+    const bytes = await file.arrayBuffer();
+    const Ctx = window.AudioContext ?? window.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    try {
+      setAudioModBuffer(await ctx.decodeAudioData(bytes));
+      ModulationStore2.updateSlotParams(index, { position: 0 });
+    } catch {
+    } finally {
+      void ctx.close();
+    }
+  };
   useEffect6(() => {
     const params = ModulationStore2.getSlot(index)?.params ?? {};
     const start = clampWave01(params.loopStart);
@@ -6530,8 +6887,53 @@ function MoveAudioWave({ index, theme }) {
       mode: "smooth",
       smoothPoints: 200,
       baseline: false,
+      waveInset: 12,
       waveColor: "#1e1e1e",
-      playheadColor: modColor(index)
+      playheadColor: modColor(index),
+      children: /* @__PURE__ */ jsxs9("div", { className: "tweakers-move-wave-header", children: [
+        /* @__PURE__ */ jsxs9(
+          "button",
+          {
+            type: "button",
+            className: "tweakers-move-wave-load",
+            title: "Load an audio file",
+            onClick: () => fileRef.current?.click(),
+            children: [
+              /* @__PURE__ */ jsx9("svg", { viewBox: ICON_MOVE_CAPTURE.viewBox, "aria-hidden": "true", children: /* @__PURE__ */ jsx9("path", { d: ICON_MOVE_CAPTURE.path }) }),
+              /* @__PURE__ */ jsx9("span", { children: "Load" })
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxs9("div", { className: "tweakers-move-volume", children: [
+          /* @__PURE__ */ jsx9("span", { className: "tweakers-move-volume-tick", style: { background: modColor(index) } }),
+          /* @__PURE__ */ jsxs9("span", { className: "tweakers-move-volume-value", children: [
+            /* @__PURE__ */ jsx9("span", { ref: minRef, children: "00" }),
+            /* @__PURE__ */ jsx9("span", { className: "tweakers-move-volume-sep", children: ":" }),
+            /* @__PURE__ */ jsx9("span", { ref: secRef, children: "00.0" })
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxs9("div", { className: "tweakers-move-volume", children: [
+          /* @__PURE__ */ jsx9("span", { className: "tweakers-move-volume-label", children: "Zoom" }),
+          /* @__PURE__ */ jsxs9("span", { className: "tweakers-move-volume-value", children: [
+            MoveWaveformStore.getView().zoom.toFixed(1),
+            "\xD7"
+          ] })
+        ] }),
+        /* @__PURE__ */ jsx9(
+          "input",
+          {
+            ref: fileRef,
+            type: "file",
+            accept: "audio/*",
+            hidden: true,
+            onChange: (e) => {
+              const file = e.currentTarget.files?.[0];
+              e.currentTarget.value = "";
+              if (file) void loadFile(file);
+            }
+          }
+        )
+      ] })
     }
   );
 }
@@ -6733,328 +7135,6 @@ function MoveActionButton({ kind, children, onPress, disabled, className }) {
 
 // src/index.ts
 import { ModulationStore as ModulationStore3, MOD_TOUCH_GRACE_MS } from "tweakers/modulation-store";
-
-// src/timeline-core.ts
-import { formatLabel, inferStep, isHexColor, resolveTweakValues } from "tweakers/store";
-
-// src/store/persist.ts
-var STORAGE_VERSION = "v1";
-function resolvePersistTarget(kind, id, persist) {
-  if (!persist) return null;
-  const config = persist === true ? {} : persist;
-  const base = config.key ?? id;
-  if (!base) return null;
-  return {
-    key: `tweakers:${STORAGE_VERSION}:${kind}:${base}`,
-    storage: config.storage ?? "localStorage"
-  };
-}
-function getStorage(name) {
-  try {
-    if (typeof window === "undefined") return null;
-    return name === "sessionStorage" ? window.sessionStorage : window.localStorage;
-  } catch {
-    return null;
-  }
-}
-function loadPersisted(target) {
-  if (!target) return null;
-  try {
-    const storage = getStorage(target.storage);
-    if (!storage) return null;
-    const raw = storage.getItem(target.key);
-    if (raw == null) return null;
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-function savePersisted(target, value) {
-  if (!target) return;
-  try {
-    const storage = getStorage(target.storage);
-    if (!storage) return;
-    storage.setItem(target.key, JSON.stringify(value));
-  } catch {
-  }
-}
-function clearPersisted(target) {
-  if (!target) return;
-  try {
-    const storage = getStorage(target.storage);
-    if (!storage) return;
-    storage.removeItem(target.key);
-  } catch {
-  }
-}
-
-// src/store/TimelineStore.ts
-var MIN_LOOP_REGION = 0.02;
-function loopSpan(duration, loopStart, loopEnd) {
-  if (!Number.isFinite(duration) || duration <= 0) return 0;
-  if (!Number.isFinite(loopStart)) loopStart = 0;
-  const end = Number.isFinite(loopEnd) ? Math.min(Math.max(0, loopEnd), duration) : duration;
-  const start = Math.min(Math.max(0, loopStart), duration);
-  const span = end - start;
-  return span > 0 ? span : duration;
-}
-function foldLoopTime(time, duration, loopStart = 0, loopEnd) {
-  if (!Number.isFinite(time) || !Number.isFinite(duration) || duration <= 0) {
-    return { time: 0, wraps: 0 };
-  }
-  const end = Number.isFinite(loopEnd) ? Math.min(Math.max(0, loopEnd), duration) : duration;
-  if (time < end) return { time, wraps: 0 };
-  const span = loopSpan(duration, loopStart, end);
-  const base = end - span;
-  const over = time - base;
-  return { time: base + over % span, wraps: Math.floor(over / span) };
-}
-var EMPTY_TRANSPORT = Object.freeze({ time: 0, playing: false, duration: 0, wraps: 0 });
-var TimelineStoreClass = class {
-  constructor() {
-    this.timelines = /* @__PURE__ */ new Map();
-    this.transports = /* @__PURE__ */ new Map();
-    this.listeners = /* @__PURE__ */ new Map();
-    this.globalListeners = /* @__PURE__ */ new Set();
-    this.registrationCounts = /* @__PURE__ */ new Map();
-    // User-defined loop windows. Absent = loop the whole timeline. The stored
-    // object reference is stable until set/clear so useSyncExternalStore readers
-    // don't churn.
-    this.loopRegions = /* @__PURE__ */ new Map();
-    this.persistTargets = /* @__PURE__ */ new Map();
-    this.listCache = null;
-    this.rafId = null;
-    this.lastTick = 0;
-    this.tick = (now) => {
-      const dt = Math.max(0, (now - this.lastTick) / 1e3);
-      this.lastTick = now;
-      let anyPlaying = false;
-      for (const [id, transport] of this.transports) {
-        if (!transport.playing) continue;
-        const meta = this.timelines.get(id);
-        const duration = meta?.duration ?? transport.duration;
-        if (!Number.isFinite(duration) || duration <= 0) {
-          this.transports.set(id, { time: 0, playing: false, duration: 0, wraps: 0 });
-          this.notify(id);
-          continue;
-        }
-        let time = transport.time + dt;
-        let wraps = transport.wraps;
-        const region = this.effectiveRegion(id, duration);
-        if (time >= region.end) {
-          const folded = foldLoopTime(time, duration, region.start, region.end);
-          time = folded.time;
-          wraps += folded.wraps;
-        }
-        this.transports.set(id, { time, playing: true, duration, wraps });
-        anyPlaying = true;
-        this.notify(id);
-      }
-      this.rafId = anyPlaying ? window.requestAnimationFrame(this.tick) : null;
-    };
-  }
-  register(meta, options) {
-    const existing = this.timelines.get(meta.id);
-    if (existing && existing.name !== meta.name) {
-      console.warn(
-        `[tweakers] Timeline id "${meta.id}" is already registered by "${existing.name}"; "${meta.name}" will share and overwrite that transport.`
-      );
-    }
-    const firstRegistration = !this.registrationCounts.has(meta.id);
-    this.registrationCounts.set(meta.id, (this.registrationCounts.get(meta.id) ?? 0) + 1);
-    if (firstRegistration) {
-      this.persistTargets.set(meta.id, resolvePersistTarget("timeline-loop", meta.id, options.persist));
-      this.hydrateLoopRegion(meta);
-    }
-    this.applyMeta(meta, options.autoplay);
-  }
-  update(meta) {
-    if (!this.timelines.has(meta.id)) return;
-    this.applyMeta(meta, false);
-  }
-  unregister(id) {
-    const nextCount = (this.registrationCounts.get(id) ?? 1) - 1;
-    if (nextCount > 0) {
-      this.registrationCounts.set(id, nextCount);
-      return;
-    }
-    this.registrationCounts.delete(id);
-    this.timelines.delete(id);
-    this.transports.delete(id);
-    this.loopRegions.delete(id);
-    this.persistTargets.delete(id);
-    if (this.listeners.get(id)?.size === 0) this.listeners.delete(id);
-    this.listCache = null;
-    this.notifyGlobal();
-  }
-  /** Restore a persisted loop region, or seed one from a code-defined
-   * `options.loop`. No region at all = loop the whole timeline (the default). */
-  hydrateLoopRegion(meta) {
-    const duration = Number.isFinite(meta.duration) ? Math.max(0, meta.duration) : 0;
-    const persisted = loadPersisted(this.persistTargets.get(meta.id) ?? null);
-    if (persisted && Number.isFinite(persisted.start) && Number.isFinite(persisted.end)) {
-      const region = this.normalizeRegion(persisted.start, persisted.end, duration);
-      if (region) this.loopRegions.set(meta.id, region);
-      return;
-    }
-    if (meta.loop) {
-      const region = this.normalizeRegion(meta.loopStart, duration, duration);
-      if (region) this.loopRegions.set(meta.id, region);
-    }
-  }
-  /** Clamp to [0,duration], order min/max, and reject degenerate widths. */
-  normalizeRegion(start, end, duration) {
-    if (!Number.isFinite(start) || !Number.isFinite(end) || duration <= 0) return null;
-    const lo = Math.min(Math.max(0, Math.min(start, end)), duration);
-    const hi = Math.min(Math.max(0, Math.max(start, end)), duration);
-    if (hi - lo < MIN_LOOP_REGION) return null;
-    return { start: lo, end: hi };
-  }
-  setLoopRegion(id, start, end) {
-    const transport = this.transports.get(id);
-    const duration = transport?.duration ?? this.timelines.get(id)?.duration ?? 0;
-    const region = this.normalizeRegion(start, end, duration);
-    if (!region) return;
-    this.loopRegions.set(id, region);
-    savePersisted(this.persistTargets.get(id) ?? null, region);
-    this.notify(id);
-  }
-  clearLoopRegion(id) {
-    if (!this.loopRegions.has(id)) return;
-    this.loopRegions.delete(id);
-    clearPersisted(this.persistTargets.get(id) ?? null);
-    this.notify(id);
-  }
-  /** The raw user/code region, or undefined when looping the whole timeline.
-   * The reference is stable between changes (safe for useSyncExternalStore). */
-  getLoopRegion(id) {
-    return this.loopRegions.get(id);
-  }
-  /** The region the clock actually loops within: the user/code region, or the
-   * whole timeline `[0, duration]` when none is set. Playback always wraps. */
-  effectiveRegion(id, duration) {
-    const region = this.loopRegions.get(id);
-    if (region) return region;
-    return { start: 0, end: Math.max(0, duration) };
-  }
-  play(id) {
-    const transport = this.transports.get(id);
-    if (!transport || transport.duration <= 0 || transport.playing) return;
-    const region = this.effectiveRegion(id, transport.duration);
-    const restart = transport.time >= region.end;
-    this.transports.set(id, {
-      ...transport,
-      time: restart ? region.start : transport.time,
-      wraps: restart ? 0 : transport.wraps,
-      playing: true
-    });
-    this.notify(id);
-    this.ensureLoop();
-  }
-  pause(id) {
-    const transport = this.transports.get(id);
-    if (!transport || !transport.playing) return;
-    this.transports.set(id, { ...transport, playing: false });
-    this.notify(id);
-  }
-  replay(id) {
-    const transport = this.transports.get(id);
-    if (!transport || transport.duration <= 0) return;
-    const region = this.effectiveRegion(id, transport.duration);
-    this.transports.set(id, { ...transport, time: region.start, wraps: 0, playing: true });
-    this.notify(id);
-    this.ensureLoop();
-  }
-  seek(id, time) {
-    const transport = this.transports.get(id);
-    if (!transport || !Number.isFinite(time)) return;
-    const clamped = Math.min(transport.duration, Math.max(0, time));
-    this.transports.set(id, { ...transport, time: clamped, wraps: 0 });
-    this.notify(id);
-  }
-  getTransport(id) {
-    return this.transports.get(id) ?? EMPTY_TRANSPORT;
-  }
-  getTimeline(id) {
-    return this.timelines.get(id);
-  }
-  getTimelines() {
-    if (!this.listCache) {
-      this.listCache = Array.from(this.timelines.values());
-    }
-    return this.listCache;
-  }
-  subscribe(id, listener) {
-    if (!this.listeners.has(id)) {
-      this.listeners.set(id, /* @__PURE__ */ new Set());
-    }
-    this.listeners.get(id).add(listener);
-    return () => {
-      const listeners2 = this.listeners.get(id);
-      listeners2?.delete(listener);
-      if (listeners2?.size === 0 && !this.timelines.has(id)) {
-        this.listeners.delete(id);
-      }
-    };
-  }
-  subscribeGlobal(listener) {
-    this.globalListeners.add(listener);
-    return () => {
-      this.globalListeners.delete(listener);
-    };
-  }
-  applyMeta(meta, autoplay) {
-    const duration = Number.isFinite(meta.duration) ? Math.max(0, meta.duration) : 0;
-    const loopStart = Number.isFinite(meta.loopStart) ? Math.min(duration, Math.max(0, meta.loopStart)) : 0;
-    const safeMeta = { ...meta, duration, loopStart };
-    this.timelines.set(meta.id, safeMeta);
-    const region = this.loopRegions.get(meta.id);
-    if (region) {
-      const reclamped = this.normalizeRegion(region.start, region.end, duration);
-      if (reclamped) this.loopRegions.set(meta.id, reclamped);
-      else this.loopRegions.delete(meta.id);
-    }
-    const existing = this.transports.get(meta.id);
-    if (existing) {
-      this.transports.set(meta.id, {
-        time: Math.min(existing.time, duration),
-        playing: duration > 0 && existing.playing,
-        duration,
-        wraps: existing.wraps
-      });
-    } else {
-      const playing = duration > 0 && autoplay;
-      this.transports.set(meta.id, { time: 0, playing, duration, wraps: 0 });
-      if (playing) this.ensureLoop();
-    }
-    this.listCache = null;
-    this.notify(meta.id);
-    this.notifyGlobal();
-  }
-  ensureLoop() {
-    if (this.rafId !== null || typeof window === "undefined") return;
-    this.lastTick = performance.now();
-    this.rafId = window.requestAnimationFrame(this.tick);
-  }
-  notify(id) {
-    this.listeners.get(id)?.forEach((fn) => fn());
-  }
-  notifyGlobal() {
-    this.globalListeners.forEach((fn) => fn());
-  }
-};
-var TimelineStore = /* @__PURE__ */ new TimelineStoreClass();
-
-// src/timeline-core.ts
-function formatClock(time, tenths = false) {
-  const safe = Math.max(0, time);
-  const minutes = Math.floor(safe / 60);
-  const seconds = safe - minutes * 60;
-  const secondsText = tenths ? seconds.toFixed(1).padStart(4, "0") : String(Math.floor(seconds)).padStart(2, "0");
-  return `${String(minutes).padStart(2, "0")}:${secondsText}`;
-}
-
-// src/index.ts
 import { TweakStore as TweakStore7, TAB_PATH, parseListItemSchema, groupListFields, defaultListItemParams, normalizeListItems, hintDomId } from "tweakers/store";
 export {
   ADSR_DEF,

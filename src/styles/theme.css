@@ -2244,10 +2244,61 @@
   width: min(1180px, calc(100vw - 40px));
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   pointer-events: auto;
-  /* The editor's display: light card, a 12px frame of it around the wave. */
+  /* The editor's display: light card, a 12px frame of it around the wave.
+     The frame is horizontal only — vertically the wave keeps its distance
+     through the engine's inset, so the playhead runs edge to edge. */
   background: #dfe2cc;
   color: #1e1e1e;
-  padding: 12px;
+  padding: 0 12px;
+}
+
+/* The editor's header cluster, floating at the display's top edge: the
+   Load button, the time, the zoom — the panel's own readout pills, on the
+   light card. */
+.tweakers-move-wave-header {
+  /* The pills are the panel's dark chips wherever they sit — on the light
+     card the panel's text variable is out of scope, so pin it here. */
+  --move-text: #dee3c9;
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.tweakers-move-wave-header > * {
+  pointer-events: auto;
+}
+
+.tweakers-move-wave-header .tweakers-move-volume {
+  min-width: 0;
+}
+
+.tweakers-move-wave-load {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--move-radius-small);
+  background: #1e1e1e;
+  color: #3d9bff;
+  font-family: var(--move-font-label);
+  font-size: 16px;
+  line-height: normal;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.tweakers-move-wave-load svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
 }
 
 .tweakers-list-screen,

@@ -17,15 +17,22 @@ import { WAVEFORM_MAX_ZOOM } from '../src/waveform-engine';
 
 describe('the volume knob scrubs', () => {
   it('moves by detents and stops at both ends', () => {
-    expect(scrubBy(0.5, 10)).toBeCloseTo(0.6, 6);
-    expect(scrubBy(0.5, -10)).toBeCloseTo(0.4, 6);
+    expect(scrubBy(0.5, 10)).toBeCloseTo(0.56, 6);
+    expect(scrubBy(0.5, -10)).toBeCloseTo(0.44, 6);
     expect(scrubBy(0.02, -10)).toBe(0);
     expect(scrubBy(0.98, 10)).toBe(1);
   });
 
   it('gives Shift the fine layer, as the rest of the surface does', () => {
-    expect(scrubBy(0.5, 1, true)).toBeCloseTo(0.502, 6);
-    expect(scrubBy(0.5, 1, false)).toBeCloseTo(0.51, 6);
+    expect(scrubBy(0.5, 1, true)).toBeCloseTo(0.501, 6);
+    expect(scrubBy(0.5, 1, false)).toBeCloseTo(0.506, 6);
+  });
+
+  it('follows the zoom: a detent moves a share of the window, not the sample', () => {
+    expect(scrubBy(0.5, 10, false, 4)).toBeCloseTo(0.515, 6);
+    expect(scrubBy(0.5, 1, true, 8)).toBeCloseTo(0.500125, 6);
+    // Zoomed out it is exactly the plain step.
+    expect(scrubBy(0.5, 10, false, 1)).toBeCloseTo(scrubBy(0.5, 10), 6);
   });
 });
 

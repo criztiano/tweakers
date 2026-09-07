@@ -44,6 +44,8 @@ export interface MoveWaveformProps {
   baseline?: boolean;
   /** Smooth mode: points the envelope simplifies to — more points, less smoothing. */
   smoothPoints?: number;
+  /** Vertical inset (CSS px) the wave keeps from the canvas edges; the playhead and loop still run full height. */
+  waveInset?: number;
   height?: number;
   /** Anything the app draws over the waveform — grain ticks, markers. */
   children?: React.ReactNode;
@@ -76,6 +78,7 @@ export function MoveWaveform({
   playheadColor,
   baseline = true,
   smoothPoints,
+  waveInset,
   height,
   children,
   theme = 'system',
@@ -167,6 +170,7 @@ export function MoveWaveform({
       {...(playheadColor ? { playheadColor } : {})}
       baseline={baseline}
       {...(smoothPoints != null ? { smoothPoints } : {})}
+      {...(waveInset != null ? { waveInset } : {})}
       loop={state.loop}
       zoom={variant === 'slot' ? Math.max(SLOT_ZOOM, state.zoom) : state.zoom}
       onSeek={(p) => MoveWaveformStore.setView({ position: p })}

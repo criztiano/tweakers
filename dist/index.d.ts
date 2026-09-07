@@ -2981,8 +2981,13 @@ declare const MOVE_WAVEFORM_STEPS = 16;
 /** The bottom pad row: eight subdivisions of the window on screen. */
 declare const MOVE_WAVEFORM_PADS = 8;
 declare function defaultView(): MoveWaveformView;
-/** The volume knob scrubs: a signed detent count moves the play position. */
-declare function scrubBy(position: number, delta: number, fine?: boolean): number;
+/**
+ * The volume knob scrubs: a signed detent count moves the play position. The
+ * step is a share of the shown window, not of the sample — zoomed in eight
+ * times, a detent moves an eighth as far, so the knob's precision follows
+ * the eye's.
+ */
+declare function scrubBy(position: number, delta: number, fine?: boolean, zoom?: number): number;
 /**
  * The wheel zooms, proportionally — each detent is a percentage of where you
  * already are, so ten clicks out undo ten clicks in.
@@ -3094,6 +3099,8 @@ interface MoveWaveformProps {
     baseline?: boolean;
     /** Smooth mode: points the envelope simplifies to — more points, less smoothing. */
     smoothPoints?: number;
+    /** Vertical inset (CSS px) the wave keeps from the canvas edges; the playhead and loop still run full height. */
+    waveInset?: number;
     height?: number;
     /** Anything the app draws over the waveform — grain ticks, markers. */
     children?: React.ReactNode;
@@ -3110,7 +3117,7 @@ interface MoveWaveformProps {
  * one wheel, so there is one waveform. The app keeps its own state; this
  * reports moves through `onSeek` / `onLoopChange` like any control.
  */
-declare function MoveWaveform({ buffer, variant, getProgress, progress, onSeek, onLoopChange, mode, pixelSize, grid, bands, waveColor, playheadColor, baseline, smoothPoints, height, children, theme, productionEnabled, className, }: MoveWaveformProps): react_jsx_runtime.JSX.Element | null;
+declare function MoveWaveform({ buffer, variant, getProgress, progress, onSeek, onLoopChange, mode, pixelSize, grid, bands, waveColor, playheadColor, baseline, smoothPoints, waveInset, height, children, theme, productionEnabled, className, }: MoveWaveformProps): react_jsx_runtime.JSX.Element | null;
 
 /**
  * The Move's volume-dial readout, offered to the app as a tiny display slot.
@@ -3743,6 +3750,8 @@ interface WaveformVisualizationProps {
     baseline?: boolean;
     /** Smooth mode: points the envelope simplifies to — more points, less smoothing. */
     smoothPoints?: number;
+    /** Vertical inset (CSS px) the wave keeps from the canvas edges; the playhead and loop still run full height. */
+    waveInset?: number;
     /** When true, selecting a loop auto-zooms to frame it (manual zoom resumes once the loop is cleared). */
     autoZoomOnLoop?: boolean;
     /**
@@ -3754,7 +3763,7 @@ interface WaveformVisualizationProps {
     width?: number;
     height?: number;
 }
-declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, grid, gridSubdivisions, onSeek, loop, onLoopChange, waveColor, playheadColor, baseline, smoothPoints, autoZoomOnLoop, zoom: zoomProp, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
+declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, grid, gridSubdivisions, onSeek, loop, onLoopChange, waveColor, playheadColor, baseline, smoothPoints, waveInset, autoZoomOnLoop, zoom: zoomProp, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
 
 interface CurveComposerProps {
     /** The curve series (controlled). */

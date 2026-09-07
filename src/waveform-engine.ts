@@ -27,6 +27,12 @@ export interface WaveformRuntime {
   baseline: boolean;
   /** Smooth mode: points the envelope simplifies to — more points, less smoothing. */
   smoothPoints: number;
+  /**
+   * Vertical inset (CSS px) the wave keeps from the canvas edges. The
+   * playhead, loop band and grid still run the full height — a frame for
+   * the drawing, not for the instrument.
+   */
+  waveInset: number;
   autoZoomOnLoop: boolean;
   loop: WaveformLoop | null;
   /** Manual zoom level (the wrapper owns the +/− buttons). */
@@ -122,15 +128,17 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
   let amp = 0;
   let pk: Peaks = { min: new Float32Array(1), max: new Float32Array(1) };
 
-  const syncSize = (width: number, height: number) => {
+  let lastInset = 0;
+  const syncSize = (width: number, height: number, inset = 0) => {
     dpr = readDpr();
     const nw = Math.round(width * dpr);
     const nh = Math.round(height * dpr);
-    if (nw === W && nh === H) return;
+    if (nw === W && nh === H && inset === lastInset) return;
     W = canvas.width = nw;
     H = canvas.height = nh;
+    lastInset = inset;
     cy = H / 2;
-    amp = H * 0.42;
+    amp = Math.max(0, H / 2 - inset * dpr) * 0.84;
     pk = { min: new Float32Array(W), max: new Float32Array(W) };
   };
 
@@ -275,7 +283,7 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
   const frame = () => {
     raf = requestAnimationFrame(frame);
     const rt = get();
-    syncSize(rt.width, rt.height);
+    syncSize(rt.width, rt.height, Math.max(0, rt.waveInset || 0));
     syncMonos(rt.buffer, rt.bands);
 
     const base = getComputedStyle(canvas).color || 'rgb(255,255,255)';

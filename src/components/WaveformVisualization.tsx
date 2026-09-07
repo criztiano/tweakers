@@ -57,6 +57,8 @@ interface WaveformVisualizationProps {
   baseline?: boolean;
   /** Smooth mode: points the envelope simplifies to — more points, less smoothing. */
   smoothPoints?: number;
+  /** Vertical inset (CSS px) the wave keeps from the canvas edges; the playhead and loop still run full height. */
+  waveInset?: number;
   /** When true, selecting a loop auto-zooms to frame it (manual zoom resumes once the loop is cleared). */
   autoZoomOnLoop?: boolean;
   /**
@@ -86,6 +88,7 @@ export function WaveformVisualization({
   playheadColor,
   baseline = true,
   smoothPoints = WAVEFORM_SMOOTH_POINTS,
+  waveInset = 0,
   autoZoomOnLoop = false,
   zoom: zoomProp,
   width = 256,
@@ -113,6 +116,7 @@ export function WaveformVisualization({
     playheadColor,
     baseline,
     smoothPoints,
+    waveInset,
     autoZoomOnLoop,
     loop,
     zoom,

@@ -40,9 +40,9 @@ export const MOVE_WAVEFORM_STEPS = 16;
 export const MOVE_WAVEFORM_PADS = 8;
 
 /** A turn of the volume knob is a small move; a whole sweep crosses the sample. */
-export const SCRUB_PER_DETENT = 0.01;
+export const SCRUB_PER_DETENT = 0.006;
 /** Shift is the fine layer everywhere else on this surface; it is here too. */
-export const SCRUB_FINE = 0.002;
+export const SCRUB_FINE = 0.001;
 /** A wheel detent is a proportion of the current zoom, so it feels the same
  *  going in as coming out. */
 export const ZOOM_PER_DETENT = 0.08;
@@ -53,9 +53,14 @@ export function defaultView(): MoveWaveformView {
   return { position: 0, zoom: 1, loop: null, loopAnchor: null };
 }
 
-/** The volume knob scrubs: a signed detent count moves the play position. */
-export function scrubBy(position: number, delta: number, fine = false): number {
-  const step = fine ? SCRUB_FINE : SCRUB_PER_DETENT;
+/**
+ * The volume knob scrubs: a signed detent count moves the play position. The
+ * step is a share of the shown window, not of the sample — zoomed in eight
+ * times, a detent moves an eighth as far, so the knob's precision follows
+ * the eye's.
+ */
+export function scrubBy(position: number, delta: number, fine = false, zoom = 1): number {
+  const step = (fine ? SCRUB_FINE : SCRUB_PER_DETENT) / Math.max(1, zoom);
   const next = clamp01(position + delta * step);
   // Snap the ends: a scrub that lands a thousandth short of the start is a
   // scrub to the start, and the number it feeds is a read position.
@@ -233,7 +238,7 @@ class MoveWaveformStoreClass {
   }
 
   scrub(delta: number, fine = false): void {
-    this.setView({ position: scrubBy(this.view.position, delta, fine) });
+    this.setView({ position: scrubBy(this.view.position, delta, fine, this.view.zoom) });
   }
 
   zoom(delta: number): void {
