@@ -162,6 +162,25 @@ export function ListScreen({
 
   const rootClassName = ['tweakers-list-screen', className].filter(Boolean).join(' ');
 
+  // The keyboard walks the rows the way the wheel does: arrows move focus,
+  // and Enter or Space presses the focused row — which on a multi-select
+  // list is a toggle, because the host's onSelect is the toggle.
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    const rows = Array.from(
+      event.currentTarget.querySelectorAll<HTMLButtonElement>('.tweakers-list-screen-row')
+    );
+    if (!rows.length) return;
+    const active = document.activeElement as HTMLButtonElement | null;
+    const at = active ? rows.indexOf(active) : -1;
+    const fallback = rows.findIndex((row) => row.hasAttribute('data-selected'));
+    const from = at !== -1 ? at : fallback;
+    const next = rows[(from === -1 ? (event.key === 'ArrowDown' ? -1 : rows.length) : from) + (event.key === 'ArrowDown' ? 1 : -1)];
+    if (!next) return;
+    event.preventDefault();
+    next.focus();
+  };
+
   return (
     <div
       ref={rootRef}
@@ -169,6 +188,7 @@ export function ListScreen({
       style={style}
       data-wide={wide || undefined}
       role="listbox"
+      onKeyDown={onKeyDown}
     >
       {items.map((item) => {
         const rowValue = itemValue(item);

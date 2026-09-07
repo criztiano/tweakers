@@ -916,18 +916,22 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // A scrolling page renders every column it has and lets the viewport clip:
   // the row is longer than the panel by design, and the window decides which
   // part of it shows.
+  // A claimed pad row does NOT widen the dial row: the app's pads render at
+  // their own full width below (see the pads map), and the dial faces above
+  // stay at the columns the page actually occupies — an app that claims the
+  // pads but registers one control shows one slot, not eight empties.
   const visibleCols = stripMode
     ? page.dials.map((_, i) => i)
     : settingsPanel
       ? Array.from({ length: modPageWidth() }, (_, i) => i)
-      : appRows > 0 || color
+      : color
         ? Array.from({ length: MOVE_PADS }, (_, i) => i)
         : visibleColumns(page);
   // The cluster the header and the grid share is never wider than the dials:
   // a strip of forty slots still shows eight.
   const clusterCols = stripMode
     ? Math.min(MOVE_DIALS, visibleCols.length) || MOVE_DIALS
-    : visibleCols.length || MOVE_DIALS;
+    : visibleCols.length;
   // Where the window sits in the whole set — counted in controls, since that
   // is what the wheel moves by and what a person is looking for.
   const stripStops = stripMode ? stripOffsets(page) : [];
@@ -968,10 +972,22 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
           />
         )}
         {audioWave != null && <MoveAudioWave index={audioWave} theme={theme} />}
-        <div className="tweakers-move-inner" style={{ '--move-cols': clusterCols } as React.CSSProperties}>
+        <div
+          className="tweakers-move-inner"
+          style={{
+            '--move-cols': clusterCols,
+            // The header row spans exactly what the controls row shows: the
+            // dial cluster plus, when a wheel screen stands beside it, the
+            // screen and its gap — so the page name sits on the top-left
+            // corner of the first real object and follows every resize.
+            '--move-screen-w': screen ? 'calc(var(--move-wheel-width) + 2 * var(--move-gap))' : '0px',
+          } as React.CSSProperties}
+        >
           {/* Only tracks that carry a page render — a bare coloured marker with
               no name says nothing. The index is still the real track index, so
-              the colour never shifts with the visible position. */}
+              the colour never shifts with the visible position. One page is no
+              choice at all: the label row appears only when the track buttons
+              actually switch between pages. */}
           <div className="tweakers-move-tracks">
             {/* While the audio editor floats, the panel's top row works for
                 it: the zoom readout takes the track corner, Load and the
@@ -980,7 +996,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               <MoveAudioZoom />
             ) : (
             <div className="tweakers-move-tracks-group">
-              {pages.map((pg, i) => (
+              {pages.length > 1 && pages.map((pg, i) => (
                 <button
                   key={pg.panel.id}
                   className="tweakers-move-track"
@@ -1634,7 +1650,13 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               .filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0))
               .map((row) => (
                 <div key={row} className="tweakers-move-pads">
-                  {visibleCols.map((col) => {
+                  {/* An app-claimed row spans the whole hardware row — its
+                      pads are the app's own set of eight, not echoes of the
+                      dial columns above. Kit rows keep the dial columns. */}
+                  {(appRowAt(row) !== null
+                    ? Array.from({ length: MOVE_PADS }, (_, i) => i)
+                    : visibleCols
+                  ).map((col) => {
                     // A claimed row is the app's: it paints these, we only show them.
                     const appRow = appRowAt(row);
                     if (appRow !== null) {

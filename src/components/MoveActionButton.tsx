@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { MoveFunctions, type MoveFunctionButton } from '../move-functions';
-import { ICON_MOVE_CAPTURE, ICON_MOVE_ENTER } from '../icons';
+import { ICON_MOVE_CAPTURE, ICON_MOVE_COPY, ICON_MOVE_ENTER, ICON_MOVE_LOOP } from '../icons';
 
 /** How long the button stays lit after a press (screen or hardware). */
 const PRESS_FLASH_MS = 160;
@@ -8,9 +8,11 @@ const PRESS_FLASH_MS = 160;
 /** Which hardware function each kind rides — fixed, like the colours.
  * `shift` is absent on purpose: Shift is reserved and never claimable,
  * so a shift pill rides no function at all. */
-const KIND_FUNCTION: Record<'enter' | 'capture', MoveFunctionButton> = {
+const KIND_FUNCTION: Record<'enter' | 'capture' | 'loop' | 'copy', MoveFunctionButton> = {
   enter: 'jog_click',
   capture: 'capture',
+  loop: 'loop',
+  copy: 'copy',
 };
 
 export interface MoveActionButtonProps {
@@ -18,16 +20,18 @@ export interface MoveActionButtonProps {
    * The hardware button this action rides, which fixes the styling:
    * `enter` is the wheel's click — track 4's green with the dot glyph —
    * `capture` is the capture button — track 1's blue with the
-   * four-corners glyph — and `shift` is the shift key — the surface's
-   * light neutral, wearing the same dot in the pill's dark text colour.
-   * The pairing matches the physical Move, so the on-screen button
-   * always looks like the key that triggers it.
+   * four-corners glyph — `loop` and `copy` are the pale function
+   * buttons, the surface's light neutral wearing their printed glyphs —
+   * and `shift` is the shift key, the same light neutral with the enter
+   * dot in the pill's dark text colour. The pairing matches the
+   * physical Move, so the on-screen button always looks like the key
+   * that triggers it.
    * Shift is reserved on the hardware and never claimable, so
    * `kind="shift"` is purely visual: it runs no Move function, only its
    * own `onPress` — the app wires the hardware gesture (a shift tap)
    * itself.
    */
-  kind: 'enter' | 'capture' | 'shift';
+  kind: 'enter' | 'capture' | 'shift' | 'loop' | 'copy';
   /** The label. */
   children: React.ReactNode;
   /** Runs after the attached Move function, on a screen click. */
@@ -86,6 +90,20 @@ export function MoveActionButton({ kind, children, onPress, disabled, className 
       {kind === 'capture' ? (
         <svg className="tweakers-move-action-icon" width="14" height="14" viewBox={ICON_MOVE_CAPTURE.viewBox} fill="none">
           <path d={ICON_MOVE_CAPTURE.path} fill="currentColor" />
+        </svg>
+      ) : kind === 'loop' || kind === 'copy' ? (
+        // Stroked, unlike the filled dot and corners: these are the printed
+        // marks off the pale function buttons, which the hardware outlines.
+        <svg
+          className="tweakers-move-action-icon"
+          width="14"
+          height="14"
+          viewBox={(kind === 'loop' ? ICON_MOVE_LOOP : ICON_MOVE_COPY).viewBox}
+          fill="none"
+        >
+          {(kind === 'loop' ? ICON_MOVE_LOOP : ICON_MOVE_COPY).paths.map((d) => (
+            <path key={d} d={d} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          ))}
         </svg>
       ) : (
         // Enter and shift share the dot: it is drawn with currentColor, so it

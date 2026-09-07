@@ -47,6 +47,15 @@ master controls require explicit claims and `MoveSurfaceStore` mirroring.
 Do not rebuild page/dial mapping or value synchronization in the app's raw client.
 Do not give modulation and the app sequencer simultaneous ownership of steps.
 
+The Move's own screen shows the list the big wheel walks — always. An app may
+put several lists on the laptop and give each its own control (the wheel for
+one, a dial for another), but the hardware screen has room for one
+`MoveScreenList`, and it belongs to the wheel. Anything else makes the wheel
+move a selection the player cannot see, or makes the screen answer to a control
+that is not under their thumb. A view whose wheel drives no list sends `null`
+and leaves the screen to the frames below it, rather than borrowing it for a
+list some other control owns.
+
 Hardware has four tracks and eight dial columns. `buildMovePages`, `dialSpan`,
 `visibleColumns` and `movePadRows` define the layout, not app CSS. Validate pages
 for overflow, two-column filter boundaries, enums and small-pad placement.

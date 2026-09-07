@@ -367,7 +367,10 @@
   --move-toggle-badge-size: 24px;
   --move-toggle-label-size: 12px;
   --move-toggle-label-inset: 10px;
-  --move-toggle-icon-rise: 2.5px;
+  --move-toggle-icon-rise: 6.5px;
+  /* Lighter than the dial glyphs' hairline, heavier than nothing: the
+     picture is the slot's whole face, so a full 2px reads as a woodcut. */
+  --move-toggle-glyph-stroke: 1.5;
   --move-toggle-off-opacity: 0.2;
   --move-toggle-on: #34c759;
   --move-toggle-off: #ff2d55;
@@ -438,7 +441,10 @@
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  width: var(--move-cluster-w, 100%);
+  /* Exactly the controls row's footprint: the dial cluster plus the wheel
+     screen when one stands beside it — the page name lands on the top-left
+     corner of the first real object, whatever the panel resizes to. */
+  width: calc(max(var(--move-cluster-w, 100%), 0px) + var(--move-screen-w, 0px));
   align-self: center;
   padding: 4px;
 }
@@ -567,6 +573,12 @@
 }
 
 .tweakers-move-action[data-kind="shift"] {
+  background: #dee3c9;
+}
+
+/* The pale function buttons — printed glyph, light neutral, like shift. */
+.tweakers-move-action[data-kind="loop"],
+.tweakers-move-action[data-kind="copy"] {
   background: #dee3c9;
 }
 
@@ -1539,6 +1551,7 @@
 .tweakers-move-toggle-icon {
   width: var(--move-toggle-icon-size);
   height: var(--move-toggle-icon-size);
+  stroke-width: var(--move-toggle-glyph-stroke);
   object-fit: contain;
   /* Off, the picture is still there to be read — just not lit. */
   opacity: var(--move-toggle-off-opacity);
