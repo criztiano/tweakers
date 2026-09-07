@@ -6849,14 +6849,13 @@ function MoveAudioWave({ index, theme }) {
       mode: "smooth",
       smoothPoints: 200,
       baseline: false,
-      waveInset: 12,
       height: MOVE_WAVE_DISPLAY_HEIGHT,
       waveColor: "#1e1e1e",
       playheadColor: modColor(index)
     }
   );
 }
-var MOVE_WAVE_DISPLAY_HEIGHT = 104;
+var MOVE_WAVE_DISPLAY_HEIGHT = 128;
 function MoveAudioZoom() {
   (0, import_react7.useSyncExternalStore)(
     (0, import_react7.useCallback)((cb) => MoveWaveformStore.subscribe(cb), []),

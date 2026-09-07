@@ -2011,14 +2011,13 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
           ? { loopStart: loop.start, loopEnd: loop.end, loopOn: true }
           : { loopStart: 0, loopEnd: 1 })}
       // The editor's card, sized to the mockup: the sample dark on the
-      // light display, lightly smoothed, no centre line — the slot's colour
-      // stays on the playhead and the loop band, so the slot still signs
-      // its editor. The frame is the engine's inset, so the playhead runs
-      // the display's full height.
+      // light display, filling it edge to edge (the frame is all border,
+      // outside the display), lightly smoothed, no centre line — the
+      // slot's colour stays on the playhead and the loop band, so the slot
+      // still signs its editor.
       mode="smooth"
       smoothPoints={200}
       baseline={false}
-      waveInset={12}
       height={MOVE_WAVE_DISPLAY_HEIGHT}
       waveColor="#1e1e1e"
       playheadColor={modColor(index)}
@@ -2026,8 +2025,8 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
   );
 }
 
-/** The editor card's inner display: 728×128 outside a 12px dark border. */
-const MOVE_WAVE_DISPLAY_HEIGHT = 104;
+/** The editor card's display: 728×128, with the 12px border outside it. */
+const MOVE_WAVE_DISPLAY_HEIGHT = 128;
 
 /**
  * The editor's zoom readout, in the panel's track corner while the editor
