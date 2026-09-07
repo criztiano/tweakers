@@ -2244,48 +2244,52 @@
   width: min(1180px, calc(100vw - 40px));
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   pointer-events: auto;
-  /* The editor's display: light card, a 12px frame of it around the wave.
-     The frame is horizontal only — vertically the wave keeps its distance
-     through the engine's inset, so the playhead runs edge to edge. */
+  /* The editor's card, to the mockup: 728×128 outside, a 12px dark border,
+     the light display inside. The side padding keeps the sample's very
+     start clear of the border; vertically the wave keeps its distance
+     through the engine's inset, so the playhead runs the display's full
+     height. */
+  box-sizing: border-box;
+  width: 728px;
+  border: 12px solid #1e1e1e;
   background: #dfe2cc;
   color: #1e1e1e;
   padding: 0 12px;
 }
 
-/* The editor's header cluster, floating at the display's top edge: the
-   Load button, the time, the zoom — the panel's own readout pills, on the
-   light card. */
-.tweakers-move-wave-header {
-  /* The pills are the panel's dark chips wherever they sit — on the light
-     card the panel's text variable is out of scope, so pin it here. */
-  --move-text: #dee3c9;
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  right: 12px;
+/* The editor's zoom readout, in the panel's track corner: a dial dot and
+   the level, reading like a track label. */
+.tweakers-move-wave-zoom {
   display: flex;
-  justify-content: flex-end;
   align-items: center;
-  gap: 8px;
-  z-index: 2;
-  pointer-events: none;
+  gap: 10px;
+  padding: 0 8px;
 }
 
-.tweakers-move-wave-header > * {
-  pointer-events: auto;
+.tweakers-move-wave-zoom-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #1e1e1e;
+  flex-shrink: 0;
 }
 
-.tweakers-move-wave-header .tweakers-move-volume {
-  min-width: 0;
+.tweakers-move-wave-zoom-label {
+  font-family: var(--move-font-label);
+  font-size: 16px;
+  line-height: normal;
+  color: var(--move-text);
+  white-space: nowrap;
 }
 
+/* The Load pill — the set's confirm green, the panel's chip shape. */
 .tweakers-move-wave-load {
   height: 28px;
-  padding: 0 10px;
+  padding: 0 12px;
   border: 0;
-  border-radius: var(--move-radius-small);
-  background: #1e1e1e;
-  color: #3d9bff;
+  border-radius: var(--move-radius-small, 8px);
+  background: #5fe3a1;
+  color: #1e1e1e;
   font-family: var(--move-font-label);
   font-size: 16px;
   line-height: normal;
@@ -2295,10 +2299,22 @@
   cursor: pointer;
 }
 
-.tweakers-move-wave-load svg {
-  width: 14px;
-  height: 14px;
-  fill: currentColor;
+.tweakers-move-wave-load-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #1e1e1e;
+  flex-shrink: 0;
+}
+
+/* The clock holds one width whatever it reads — no breathing per tick. */
+.tweakers-move-wave-time {
+  min-width: 96px;
+  justify-content: center;
+}
+
+.tweakers-move-wave-time .tweakers-move-volume-value {
+  font-variant-numeric: tabular-nums;
 }
 
 .tweakers-list-screen,
