@@ -1406,6 +1406,14 @@
   opacity: 0.8;
 }
 
+/* The wave preview's playhead — the audio dial's running line. */
+.tweakers-move-scope-wave line {
+  stroke: var(--move-text);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.55;
+}
+
 .tweakers-move-dial[data-kind="scope"] .tweakers-move-dial-readout {
   z-index: 1;
 }
@@ -2236,7 +2244,9 @@
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 10000;
+  /* Above the panel even when an open overlay lifts it (10001) — the
+     card's shadow falls ON the instrument, never behind it. */
+  z-index: 10002;
   display: flex;
   justify-content: center;
   pointer-events: none;
@@ -2246,9 +2256,79 @@
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  width: min(1180px, calc(100vw - 40px));
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   pointer-events: auto;
+  /* The editor's card, to the mockup: the display itself is 728×128 and
+     the wave fills it edge to edge — the 12px dark border sits OUTSIDE
+     that, and the outer radius is border + inner, so the display's
+     corners round proportionally inside the frame. The shadow is the
+     design's drop: 0/40, blur 20, spread -24, black at 25%. */
+  box-sizing: content-box;
+  width: 728px;
+  border: 12px solid #1e1e1e;
+  border-radius: 16px;
+  background: #dfe2cc;
+  color: #1e1e1e;
+  box-shadow: 0 40px 20px -24px rgba(0, 0, 0, 0.25);
+}
+
+/* The editor's zoom readout, in the panel's track corner: a dial dot and
+   the level, reading like a track label. */
+.tweakers-move-wave-zoom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px;
+}
+
+.tweakers-move-wave-zoom-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #1e1e1e;
+  flex-shrink: 0;
+}
+
+.tweakers-move-wave-zoom-label {
+  font-family: var(--move-font-label);
+  font-size: 16px;
+  line-height: normal;
+  color: var(--move-text);
+  white-space: nowrap;
+}
+
+/* The Load pill — the set's confirm green, the panel's chip shape. */
+.tweakers-move-wave-load {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--move-radius-small, 8px);
+  background: #5fe3a1;
+  color: #1e1e1e;
+  font-family: var(--move-font-label);
+  font-size: 16px;
+  line-height: normal;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.tweakers-move-wave-load-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #1e1e1e;
+  flex-shrink: 0;
+}
+
+/* The clock holds one width whatever it reads — no breathing per tick. */
+.tweakers-move-wave-time {
+  min-width: 96px;
+  justify-content: center;
+}
+
+.tweakers-move-wave-time .tweakers-move-volume-value {
+  font-variant-numeric: tabular-nums;
 }
 
 .tweakers-list-screen,

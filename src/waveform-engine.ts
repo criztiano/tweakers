@@ -23,6 +23,16 @@ export interface WaveformRuntime {
   gridSubdivisions: number;
   waveColor?: string;
   playheadColor?: string;
+  /** The faint horizontal centre line behind the waveform. */
+  baseline: boolean;
+  /** Smooth mode: points the envelope simplifies to — more points, less smoothing. */
+  smoothPoints: number;
+  /**
+   * Vertical inset (CSS px) the wave keeps from the canvas edges. The
+   * playhead, loop band and grid still run the full height — a frame for
+   * the drawing, not for the instrument.
+   */
+  waveInset: number;
   autoZoomOnLoop: boolean;
   loop: WaveformLoop | null;
   /** Manual zoom level (the wrapper owns the +/− buttons). */
@@ -49,8 +59,8 @@ const BANDS: { type: BiquadFilterType; freq: number; q?: number }[] = [
 // Low / mid / high — purple, cyan, lime.
 const BAND_COLORS = ['#a855f7', '#22d3ee', '#a3e635'];
 
-// Smooth mode: how many points the envelope is simplified to.
-const SIMPLE_POINTS = 46;
+// Smooth mode: how many points the envelope is simplified to by default.
+export const WAVEFORM_SMOOTH_POINTS = 46;
 // Fill opacity used only for the bordered (outlined) variant.
 const BORDER_FILL_ALPHA = 0.2;
 // Pointer travel (CSS px) past which a press becomes a loop-drag rather than a click.
@@ -118,15 +128,17 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
   let amp = 0;
   let pk: Peaks = { min: new Float32Array(1), max: new Float32Array(1) };
 
-  const syncSize = (width: number, height: number) => {
+  let lastInset = 0;
+  const syncSize = (width: number, height: number, inset = 0) => {
     dpr = readDpr();
     const nw = Math.round(width * dpr);
     const nh = Math.round(height * dpr);
-    if (nw === W && nh === H) return;
+    if (nw === W && nh === H && inset === lastInset) return;
     W = canvas.width = nw;
     H = canvas.height = nh;
+    lastInset = inset;
     cy = H / 2;
-    amp = H * 0.42;
+    amp = Math.max(0, H / 2 - inset * dpr) * 0.84;
     pk = { min: new Float32Array(W), max: new Float32Array(W) };
   };
 
@@ -271,7 +283,7 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
   const frame = () => {
     raf = requestAnimationFrame(frame);
     const rt = get();
-    syncSize(rt.width, rt.height);
+    syncSize(rt.width, rt.height, Math.max(0, rt.waveInset || 0));
     syncMonos(rt.buffer, rt.bands);
 
     const base = getComputedStyle(canvas).color || 'rgb(255,255,255)';
@@ -282,14 +294,16 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
     if (rt.grid) drawGrid(base, rt.gridSubdivisions);
 
     // center baseline
-    ctx.strokeStyle = base;
-    ctx.globalAlpha = 0.15;
-    ctx.lineWidth = dpr;
-    ctx.beginPath();
-    ctx.moveTo(0, Math.round(cy) + 0.5);
-    ctx.lineTo(W, Math.round(cy) + 0.5);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+    if (rt.baseline) {
+      ctx.strokeStyle = base;
+      ctx.globalAlpha = 0.15;
+      ctx.lineWidth = dpr;
+      ctx.beginPath();
+      ctx.moveTo(0, Math.round(cy) + 0.5);
+      ctx.lineTo(W, Math.round(cy) + 0.5);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
 
     const wave = rt.waveColor || base;
     const ph = rt.playheadColor || base;
@@ -326,7 +340,7 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
         fillPeaks(slice, W, pk.min, pk.max);
         const color = count === 3 ? BAND_COLORS[i] : wave;
         if (rt.mode === 'pixelated') drawColumns(pk, color, rt.pixelSize);
-        else drawSimplified(envelope(pk, W, SIMPLE_POINTS), color, rt.border);
+        else drawSimplified(envelope(pk, W, Math.max(2, rt.smoothPoints || WAVEFORM_SMOOTH_POINTS)), color, rt.border);
       }
     }
 

@@ -51,7 +51,11 @@ export {
   stepPosition,
   loopFromStep,
   loopSteps,
+  visibleWindow,
+  padPosition,
+  padSection,
   MOVE_WAVEFORM_STEPS,
+  MOVE_WAVEFORM_PADS,
 } from './move-waveform';
 export type { MoveWaveformVariant, MoveWaveformView } from './move-waveform';
 export { MoveVolumeDisplay } from './move-volume';
@@ -83,6 +87,12 @@ export {
   SH_DEF,
   ADSR_DEF,
   CURVE_DEF,
+  AUDIO_DEF,
+  setAudioModBuffer,
+  getAudioModBuffer,
+  subscribeAudioMod,
+  getAudioModVersion,
+  audioModLevel,
   CURVE_LABELS,
   CURVE_MAX_CLIPS,
   CURVE_MIN_DURATION,

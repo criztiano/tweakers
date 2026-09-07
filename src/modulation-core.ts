@@ -12,6 +12,7 @@ import {
   type CurveType,
   type DriverDirection,
 } from './curve-composer-core';
+import { mixToMono, fillPeaks, envelope } from './waveform-dsp';
 
 /**
  * The modulation layer's shared ground — types, palette, math, and the
@@ -68,7 +69,7 @@ export const MOD_COLORS = [
 export const modColor = (index: number) =>
   MOD_COLORS[((index % MOD_SLOTS) + MOD_SLOTS) % MOD_SLOTS];
 
-export type ModulationType = 'lfo' | 'adsr' | 'envelope' | 'curve' | 'sh' | 'sequencer';
+export type ModulationType = 'lfo' | 'adsr' | 'envelope' | 'curve' | 'sh' | 'sequencer' | 'audio';
 
 /** The envelope's four stages — the four columns of its picture. */
 export type EnvStage = 'attack' | 'decay' | 'sustain' | 'release';
@@ -1099,3 +1100,159 @@ export const CURVE_DEF: ModTypeDef = {
 };
 
 registerModType(CURVE_DEF);
+
+/* ── Audio — a sample as a modulation source ──────────────────────────── */
+
+/**
+ * The sample shelf. The library never owns audio: the host decodes its
+ * sample and sets it here, the way it hands an AudioBuffer to the waveform
+ * visualizer. One buffer, shared — there is one waveform on the surface,
+ * so there is one sample the audio modulators read. The buffer itself is
+ * kept for the visualizer; the modulator reads the precomputed amplitude
+ * envelope, so `tick` never touches sample data.
+ */
+const AUDIO_ENV_COLS = 2048;
+const AUDIO_ENV_SEGMENTS = 512;
+
+let audioModBuffer: AudioBuffer | null = null;
+let audioModEnv: number[] | null = null;
+let audioModDuration = 1;
+let audioModVersion = 0;
+const audioModListeners = new Set<() => void>();
+
+/** Hand the modulator its sample; null takes it away. */
+export function setAudioModBuffer(buffer: AudioBuffer | null): void {
+  audioModBuffer = buffer;
+  if (!buffer || !buffer.length) {
+    audioModEnv = null;
+    audioModDuration = 1;
+  } else {
+    const mono = mixToMono(buffer);
+    const cols = Math.min(AUDIO_ENV_COLS, mono.length);
+    const min = new Float32Array(cols);
+    const max = new Float32Array(cols);
+    fillPeaks(mono, cols, min, max);
+    audioModEnv = envelope({ min, max }, cols, Math.min(AUDIO_ENV_SEGMENTS, cols));
+    audioModDuration = Math.max(0.05, buffer.duration || mono.length / 44100);
+  }
+  audioModVersion += 1;
+  for (const fn of audioModListeners) fn();
+}
+
+/** Notified when the sample changes — the visualizer re-reads the buffer. */
+export function subscribeAudioMod(fn: () => void): () => void {
+  audioModListeners.add(fn);
+  return () => {
+    audioModListeners.delete(fn);
+  };
+}
+
+/** Bumped per `setAudioModBuffer`, for useSyncExternalStore snapshots. */
+export const getAudioModVersion = (): number => audioModVersion;
+
+/** The sample the audio modulator is reading, for the visualizer to draw. */
+export const getAudioModBuffer = (): AudioBuffer | null => audioModBuffer;
+
+/** Amplitude 0..1 at a play position 0..1; 0 with no sample loaded. */
+export function audioModLevel(position: number): number {
+  if (!audioModEnv) return 0;
+  const i = Math.floor(clamp01(position) * audioModEnv.length);
+  return audioModEnv[Math.min(audioModEnv.length - 1, i)];
+}
+
+interface AudioState {
+  /** Play position, 0..1 of the sample. */
+  pos: number;
+  /** Last output, for the smooth (slew) filter; null until the first tick. */
+  out: number | null;
+  /** The `position` param last consumed — a change is a seek. */
+  seek: number | null;
+}
+
+/** The loop the params describe, or null when they span the whole sample. */
+function audioLoop(params: ModulationParams): { start: number; end: number } | null {
+  const start = clamp01(params.loopStart);
+  const end = clamp01(params.loopEnd);
+  if (end - start < 0.001 || (start === 0 && end === 1)) return null;
+  return { start, end };
+}
+
+/**
+ * Audio: the sample's own amplitude envelope, followed at a play position
+ * that runs like a tape — the transport the floating waveform drives. Play
+ * runs it, the loop brackets hold it, a seek (scrub, pad jump, click) lands
+ * it. What comes out is the sound's dynamics as a control signal: a drum
+ * loop pumps a filter the way it pumps the room.
+ */
+export const AUDIO_DEF: ModTypeDef = {
+  type: 'audio',
+  label: 'Audio',
+  defaults: {
+    speed: 1, depth: 1, smooth: 0,
+    playing: true, loopOn: true, loopStart: 0, loopEnd: 1, position: 0,
+  },
+  controls: [
+    /* The main audio dial: it draws the sample itself, and its settings page
+       floats the full waveform above the panel. */
+    { type: 'slider', path: 'speed', label: 'Speed', min: 0.1, max: 4, step: 0.01, unit: 'x', drawsPreview: true },
+    { type: 'toggle', path: 'playing', label: 'Play', moveSlot: true, icon: 'activity' },
+    { type: 'slider', path: 'depth', label: 'Depth', min: 0, max: 1, step: 0.01, scope: true },
+    { type: 'toggle', path: 'loopOn', label: 'Loop', moveSlot: true, icon: 'repeat' },
+    { type: 'slider', path: 'smooth', label: 'Smooth', min: 0, max: 1, step: 0.01 },
+  ],
+  createState: (): AudioState => ({ pos: 0, out: null, seek: null }),
+  tick(state, params, dt) {
+    const s = state as AudioState;
+    const seek = clamp01(params.position);
+    if (s.seek !== seek) {
+      s.seek = seek;
+      s.pos = seek;
+    }
+    if (params.playing) {
+      const speed = clamp(Number(params.speed) || 1, 0.05, 16);
+      s.pos += (dt * speed) / audioModDuration;
+      const loop = params.loopOn ? audioLoop(params) : null;
+      if (loop) {
+        const span = loop.end - loop.start;
+        if (s.pos >= loop.end) s.pos = loop.start + ((s.pos - loop.start) % span);
+        else if (s.pos < loop.start) s.pos = loop.start;
+      } else if (s.pos >= 1) {
+        s.pos = params.loopOn ? s.pos % 1 : 1;
+      }
+    }
+    let v = audioModEnv === null ? 0 : (audioModLevel(s.pos) * 2 - 1) * clamp01(params.depth);
+    const smooth = clamp01(params.smooth);
+    if (smooth > 0 && s.out !== null) {
+      // The LFO's one-pole slew, same feel: tau grows with the square.
+      const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
+      v = s.out + (v - s.out) * k;
+    }
+    s.out = v;
+    return v;
+  },
+  /* Delete, while the page is open, drops the loop brackets. */
+  buttons: {
+    delete: () => ({ loopStart: 0, loopEnd: 1 }),
+  },
+  /** The sample's envelope — the small screens' waveform drawing. */
+  preview(_params, count) {
+    const n = Math.max(2, count);
+    if (!audioModEnv) {
+      return { points: Array.from({ length: n }, () => 0), label: 'No sample' };
+    }
+    return {
+      points: Array.from({ length: n }, (_, i) => clamp01(audioModLevel(i / (n - 1)))),
+      label: 'Audio',
+    };
+  },
+  phase(state) {
+    return (state as AudioState).pos;
+  },
+  /** Note on rewinds to the last seek — the sample retriggers like a pad. */
+  gate(state, on) {
+    const s = state as AudioState;
+    if (on) s.pos = s.seek ?? 0;
+  },
+};
+
+registerModType(AUDIO_DEF);

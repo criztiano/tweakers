@@ -16,7 +16,7 @@ const SLOT_HEIGHT = 140;
  */
 const SLOT_ZOOM = 4;
 /** How far a docked waveform floats above the panel. */
-const DOCK_GAP = 10;
+const DOCK_GAP = 14;
 
 export interface MoveWaveformProps {
   /** Decoded sample. */
@@ -40,6 +40,12 @@ export interface MoveWaveformProps {
   bands?: boolean;
   waveColor?: string;
   playheadColor?: string;
+  /** The faint horizontal centre line behind the waveform (default on). */
+  baseline?: boolean;
+  /** Smooth mode: points the envelope simplifies to — more points, less smoothing. */
+  smoothPoints?: number;
+  /** Vertical inset (CSS px) the wave keeps from the canvas edges; the playhead and loop still run full height. */
+  waveInset?: number;
   height?: number;
   /** Anything the app draws over the waveform — grain ticks, markers. */
   children?: React.ReactNode;
@@ -70,6 +76,9 @@ export function MoveWaveform({
   bands = false,
   waveColor,
   playheadColor,
+  baseline = true,
+  smoothPoints,
+  waveInset,
   height,
   children,
   theme = 'system',
@@ -159,6 +168,9 @@ export function MoveWaveform({
       bands={bands}
       {...(waveColor ? { waveColor } : {})}
       {...(playheadColor ? { playheadColor } : {})}
+      baseline={baseline}
+      {...(smoothPoints != null ? { smoothPoints } : {})}
+      {...(waveInset != null ? { waveInset } : {})}
       loop={state.loop}
       zoom={variant === 'slot' ? Math.max(SLOT_ZOOM, state.zoom) : state.zoom}
       onSeek={(p) => MoveWaveformStore.setView({ position: p })}

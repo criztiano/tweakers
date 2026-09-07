@@ -147,3 +147,41 @@ after installing the on-device module update; older modules retain indexed color
 until they advertise RGB support. Grid taps set saturation to maximum while
 preserving the selected luminosity and opacity. This is the single-color foundation for later palette and gradient
 controls.
+
+### Audio modulator
+
+The `audio` modulator type follows a sample's amplitude envelope at a play
+position that runs like a tape. The host decodes the sample and hands it over
+once — the library never owns audio:
+
+```tsx
+import { setAudioModBuffer, ModulationStore, MoveWaveformStore } from 'tweakers';
+
+const buffer = await audioCtx.decodeAudioData(bytes);
+setAudioModBuffer(buffer);
+
+// Bind the waveform store so the hardware drives the editor:
+import('http://localhost:7787/kit.js').then(m =>
+  m.bindMove(TweakStore, { modulation: ModulationStore, waveform: MoveWaveformStore })
+);
+```
+
+Opening an audio slot's settings page floats the full waveform above the panel
+and turns the surface into a tape deck: the big wheel zooms (on screen, the
+mouse wheel does), the volume knob scrubs — a slow tick moves a fine share of
+the shown window (so zooming in raises precision) and a fast spin accelerates
+superlinearly to travel; Shift stays linear and finer — the step row brackets the loop —
+first press in, second press out, a held step lets it go — and the bottom pad
+row addresses the shown window in eighths: a tap jumps the playhead there, a
+hold selects that stretch as the loop. Play toggles the transport, Loop arms
+the brackets, Delete drops them, Back closes the page. Every move lands in the
+slot's params (`position`, `loopStart`, `loopEnd`, `playing`, `loopOn`), so a
+host that plays real audio can follow the same numbers — read the live
+playhead with `ModulationStore.getSlotPhase(slot)`. The editor's header
+carries a blue Load button (file picker → `setAudioModBuffer`, the library's
+one one-shot decode), the running time, and the zoom readout.
+
+Out-of-panel integrations get the same grammar without the modulator: mount
+`MoveWaveform`, and while its editor claim is up (`MoveWaveformStore.setEditor`)
+the kit routes the whole step row, the pad row, and the transport buttons the
+same way.

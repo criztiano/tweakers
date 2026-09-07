@@ -49,7 +49,7 @@ var BANDS = [
   { type: "highpass", freq: 4200 }
 ];
 var BAND_COLORS = ["#a855f7", "#22d3ee", "#a3e635"];
-var SIMPLE_POINTS = 46;
+var WAVEFORM_SMOOTH_POINTS = 46;
 var BORDER_FILL_ALPHA = 0.2;
 var DRAG_THRESHOLD = 3;
 var EDGE_HIT = 6;
@@ -94,15 +94,17 @@ function createWaveformEngine(canvas, get) {
   let cy = 0;
   let amp = 0;
   let pk = { min: new Float32Array(1), max: new Float32Array(1) };
-  const syncSize = (width, height) => {
+  let lastInset = 0;
+  const syncSize = (width, height, inset = 0) => {
     dpr = readDpr();
     const nw = Math.round(width * dpr);
     const nh = Math.round(height * dpr);
-    if (nw === W && nh === H) return;
+    if (nw === W && nh === H && inset === lastInset) return;
     W = canvas.width = nw;
     H = canvas.height = nh;
+    lastInset = inset;
     cy = H / 2;
-    amp = H * 0.42;
+    amp = Math.max(0, H / 2 - inset * dpr) * 0.84;
     pk = { min: new Float32Array(W), max: new Float32Array(W) };
   };
   let monos = [];
@@ -221,21 +223,23 @@ function createWaveformEngine(canvas, get) {
   const frame = () => {
     raf = requestAnimationFrame(frame);
     const rt = get();
-    syncSize(rt.width, rt.height);
+    syncSize(rt.width, rt.height, Math.max(0, rt.waveInset || 0));
     syncMonos(rt.buffer, rt.bands);
     const base = getComputedStyle(canvas).color || "rgb(255,255,255)";
     ctx.globalAlpha = 1;
     ctx.clearRect(0, 0, W, H);
     ctx.imageSmoothingEnabled = rt.mode === "smooth";
     if (rt.grid) drawGrid(base, rt.gridSubdivisions);
-    ctx.strokeStyle = base;
-    ctx.globalAlpha = 0.15;
-    ctx.lineWidth = dpr;
-    ctx.beginPath();
-    ctx.moveTo(0, Math.round(cy) + 0.5);
-    ctx.lineTo(W, Math.round(cy) + 0.5);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+    if (rt.baseline) {
+      ctx.strokeStyle = base;
+      ctx.globalAlpha = 0.15;
+      ctx.lineWidth = dpr;
+      ctx.beginPath();
+      ctx.moveTo(0, Math.round(cy) + 0.5);
+      ctx.lineTo(W, Math.round(cy) + 0.5);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
     const wave = rt.waveColor || base;
     const ph = rt.playheadColor || base;
     const prog = Math.max(0, Math.min(1, (rt.getProgress ? rt.getProgress() : rt.progress) || 0));
@@ -265,7 +269,7 @@ function createWaveformEngine(canvas, get) {
         fillPeaks(slice, W, pk.min, pk.max);
         const color = count === 3 ? BAND_COLORS[i] : wave;
         if (rt.mode === "pixelated") drawColumns(pk, color, rt.pixelSize);
-        else drawSimplified(envelope(pk, W, SIMPLE_POINTS), color, rt.border);
+        else drawSimplified(envelope(pk, W, Math.max(2, rt.smoothPoints || WAVEFORM_SMOOTH_POINTS)), color, rt.border);
       }
     }
     if (drag && drag.moved) {
@@ -389,6 +393,7 @@ function createWaveformEngine(canvas, get) {
 }
 export {
   WAVEFORM_MAX_ZOOM,
+  WAVEFORM_SMOOTH_POINTS,
   createWaveformEngine
 };
 //# sourceMappingURL=waveform-engine.js.map

@@ -6,6 +6,8 @@ import { MoveColorStore } from '../src/move-color';
 import { MoveFunctions } from '../src/move-functions';
 import { MovePresetStore } from '../src/move-presets';
 import { MoveSurfaceStore, type MoveScreenRow } from '../src/move-surface-store';
+import { MoveWaveformStore } from '../src/move-waveform';
+import { setAudioModBuffer } from '../src/modulation-core';
 import '../src/styles/theme.css';
 
 // Two pages, so the track buttons have something to switch between.
@@ -48,6 +50,40 @@ if (!ModulationStore.getSlot(0)) {
 }
 ModulationStore.openSettings(0);
 
+// A sample for the audio modulator — a two-second drum-ish loop, synthesized
+// so the demo needs no files: eight decaying hits, alternating boom and snap.
+// Tap the second step circle to open the slot and float the waveform editor:
+// wheel (or scroll) zooms, volume knob scrubs, steps bracket the loop, the
+// bottom pads jump around the shown window, Play/Loop run the transport.
+{
+  const rate = 44100;
+  const seconds = 2;
+  const data = new Float32Array(rate * seconds);
+  for (let hit = 0; hit < 8; hit++) {
+    const at = Math.floor((hit / 8) * data.length);
+    const boom = hit % 2 === 0;
+    const len = Math.floor(rate * (boom ? 0.22 : 0.12));
+    for (let i = 0; i < len && at + i < data.length; i++) {
+      const t = i / rate;
+      const env = Math.exp(-t * (boom ? 18 : 42));
+      const body = boom ? Math.sin(2 * Math.PI * 55 * t) : Math.sin(2 * Math.PI * 220 * t) * 0.4;
+      const snap = boom ? 0 : (Math.random() * 2 - 1) * 0.5;
+      data[at + i] += (body + snap) * env * 0.9;
+    }
+  }
+  setAudioModBuffer({
+    numberOfChannels: 1,
+    length: data.length,
+    duration: seconds,
+    sampleRate: rate,
+    getChannelData: () => data,
+  } as unknown as AudioBuffer);
+  if (!ModulationStore.getSlot(1)) {
+    ModulationStore.createSlot(1, 'audio');
+    ModulationStore.assign('tone', 'drive', 1, 1);
+  }
+}
+
 // The app's own list, on the wheel screen beside the slots: rows that settle
 // a value where they stand, rows that lead somewhere, and rows you switch on
 // and off. The host owns what a row means — a click is intent, exactly like a
@@ -84,6 +120,8 @@ window.addEventListener('keydown', (e) => {
   if (e.repeat || e.target instanceof HTMLInputElement) return;
   if (e.key.toLowerCase() === 'm') MoveFunctions.run('menu', { shift: e.shiftKey, hold: e.shiftKey });
   else if (e.key.toLowerCase() === 'c') muteEvent(true, e.shiftKey);
+  else if (e.key === ' ') { e.preventDefault(); MoveFunctions.run('play', {}); }
+  else if (e.key.toLowerCase() === 'l') MoveFunctions.run('loop', {});
   else if (e.key === 'Backspace') MoveFunctions.run('back', {});
   else if (e.key === 'Enter') MovePresetStore.confirm();
   else if (e.key === 'ArrowDown') MovePresetStore.scroll(1);
@@ -102,6 +140,7 @@ import(/* @vite-ignore */ 'http://localhost:7787/kit.js')
     functions: MoveFunctions,
     modulation: ModulationStore,
     color: MoveColorStore,
+    waveform: MoveWaveformStore,
   }))
   .catch(() => {});
 
