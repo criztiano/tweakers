@@ -1,4 +1,4 @@
-import { C as ControlMeta } from './TweakStore-D-U-7qQl.js';
+import { C as ControlMeta } from './TweakStore-CQsavSGk.js';
 import { CurveType, CurveComposition } from './curve-composer-core.js';
 import './gradient-core.js';
 import './color-core.js';
@@ -80,8 +80,6 @@ type ModControlMeta = ControlMeta & {
     yParam?: string;
     /** Sits in a small slot under its dial's column instead of taking a big one. */
     chip?: boolean;
-    /** A toggle that takes a big dial slot of its own instead of a pad. */
-    big?: boolean;
     /** Shown only when this says so — a control that belongs to one mode. */
     when?: (params: ModulationParams) => boolean;
     /** This dial draws the modulator's own shape (the type's `preview`). */
@@ -179,6 +177,13 @@ declare const MOD_PAGE_DIALS = 8;
  * disagree about which knob a pad belongs to.
  */
 declare function modPageLayout(controls: ModControlMeta[], params?: ModulationParams): ModPageLayout;
+/**
+ * A saved slot's params read against its type as it stands now: a setting the
+ * type has since gained arrives at its default, and an option saved as the
+ * index it was stepped to becomes the option sitting there — so a page that
+ * grew a picker opens on the setting the slot has been running all along.
+ */
+declare function restoreModParams(def: ModTypeDef, saved: ModulationParams): ModulationParams;
 /** The controls a page actually shows — the mode-specific ones filtered out. */
 declare const visibleModControls: (def: ModTypeDef, params: ModulationParams) => ModControlMeta[];
 /** Plug a modulator type in; registering a type again replaces it. */
@@ -225,8 +230,18 @@ declare const LFO_SYNC_DIVISIONS: {
     label: string;
     beats: number;
 }[];
+/** The division picker's options — the vocabulary a synced page names. */
+declare const LFO_SYNC_OPTIONS: string[];
+/** The default division, and what an unreadable one falls back to: 1/4. */
+declare const LFO_SYNC_DEFAULT = "1/4";
+/**
+ * Which division a param means, in beats. A page writes the division's own
+ * name ('1/4'); a preset saved before the picker existed holds the index it
+ * was stepped to, and means the division sitting there.
+ */
+declare function lfoDivisionBeats(division: unknown): number;
 /** A synced LFO's frequency: the division's cycle length at this tempo. */
-declare function lfoSyncedHz(division: number, bpm: number): number;
+declare function lfoSyncedHz(division: unknown, bpm: number): number;
 /**
  * The LFO: a width-skewed triangle (0.5 symmetric, toward 0/1 a saw either
  * way), phase-offset, with jitter (a random offset renewed each cycle) and
@@ -341,10 +356,11 @@ declare const CURVE_LABELS: Record<CurveType, string>;
 /** The slot's params read as a composition the composer core can play. */
 declare function curveComposition(params: ModulationParams): CurveComposition;
 /**
- * One pass in seconds. Synced, the dial's duration snaps to the nearest
- * tempo division, so a pass locks to the Move's clock without a second dial.
+ * One pass in seconds: the duration dial free-running, and the division the
+ * page is holding once Sync is on — the pass then lasts exactly that many
+ * beats of the Move's clock.
  */
 declare function curveDuration(params: ModulationParams, bpm: number): number;
 declare const CURVE_DEF: ModTypeDef;
 
-export { ADSR_DEF, ADSR_STAGE_MAX, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EnvStage, LFO_DEF, LFO_SYNC_DIVISIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, curveComposition, curveDuration, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, getModType, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modPageWidth, modRingArc, registerModType, visibleModControls };
+export { ADSR_DEF, ADSR_STAGE_MAX, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EnvStage, LFO_DEF, LFO_SYNC_DEFAULT, LFO_SYNC_DIVISIONS, LFO_SYNC_OPTIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, curveComposition, curveDuration, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, getModType, lfoDivisionBeats, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modPageWidth, modRingArc, registerModType, restoreModParams, visibleModControls };

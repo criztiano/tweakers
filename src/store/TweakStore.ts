@@ -60,6 +60,38 @@ export type ActionConfig = {
   caption?: string;
 };
 
+/**
+ * Explicit switch form, for what a bare `false` cannot say: a name a key
+ * cannot spell, a slot of its own on the Move, and a picture to wear there.
+ */
+export type ToggleConfig = {
+  type: 'toggle';
+  default: boolean;
+  /** Overrides the key-derived label — for names a key cannot spell. */
+  label?: string;
+  /**
+   * The switch's own picture: a glyph from `LUCIDE_ICONS`, or the URL of an
+   * asset the app owns (drawn as a mask, so it takes the slot's colour). The
+   * slot then reads as that picture with a state badge on its corner rather
+   * than as a name — what the switch is about, and whether it is doing it.
+   */
+  icon?: string;
+  /** The app's own state badges, in place of the kit's check and ban. */
+  onIcon?: string;
+  offIcon?: string;
+  /**
+   * Take a dial slot of its own instead of a pad — for the switch a page is
+   * about. The bridge sends it out as the two-option enum it already is.
+   */
+  moveSlot?: boolean;
+  /**
+   * Hold the column open and draw nothing: the switch belongs to a mode this
+   * page is not in. A row that keeps its shape can be scrolled past without
+   * the controls moving under the finger doing the scrolling.
+   */
+  moveBlank?: boolean;
+};
+
 export type SelectConfig = {
   type: 'select';
   /** Optional semantic drawing for the Move surface. */
@@ -449,7 +481,7 @@ export type ListField = {
   defaultValue: number | boolean | string;
 };
 
-export type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue | FilterConfig | FilterValue | TransferConfig | TransferValue;
+export type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ToggleConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue | FilterConfig | FilterValue | TransferConfig | TransferValue;
 
 export type TweakConfig = {
   // CurveConfig and AnalyserConfig are not TweakValues: they never enter the
@@ -467,6 +499,8 @@ export type ResolvedValues<T extends TweakConfig> = {
     ? number
     : T[K] extends SliderConfig
     ? number
+    : T[K] extends ToggleConfig
+    ? boolean
     : T[K] extends NumberConfig
     ? number
     : T[K] extends MultiSelectConfig
@@ -582,6 +616,14 @@ export type ControlMeta = {
   /** The synthetic segmented select driving `_tab` — it renders as the panel's tab bar, never as a row. */
   tabBar?: boolean;
   options?: (string | { value: string; label: string; icon?: string })[];
+  /** Toggle's own picture and state badges, from the explicit ToggleConfig form. */
+  icon?: string;
+  onIcon?: string;
+  offIcon?: string;
+  /** Toggle declared `moveSlot` — it claims a dial slot rather than a pad. */
+  moveSlot?: boolean;
+  /** Toggle declared `moveBlank` — its column is held open and drawn empty. */
+  moveBlank?: boolean;
   /** Select's per-option shape sampler — swapped in place by syncCurveConfigs. */
   preview?: (value: string) => ((t: number) => number) | null | undefined;
   /** Select's rendering mode, or a slider's `dial` form. */
@@ -1363,7 +1405,7 @@ class TweakStoreClass {
             control.preview = value.preview;
             changed = true;
           }
-        } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
+        } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isToggleConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
           visit(value as TweakConfig, path);
         }
       }
@@ -1659,7 +1701,7 @@ class TweakStoreClass {
         const hasPhysics = value.stiffness !== undefined || value.damping !== undefined || value.mass !== undefined;
         const hasTime = value.visualDuration !== undefined || value.bounce !== undefined;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? 'advanced' : 'simple';
-      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isCurveConfig(value)) {
+      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isToggleConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isCurveConfig(value)) {
         this.initTransitionModes(value as TweakConfig, path, values);
       }
     }
@@ -1723,6 +1765,18 @@ class TweakStoreClass {
           unit: value.unit,
           formatValue: value.formatValue,
           orientation: value.orientation,
+          shortcut,
+        });
+      } else if (this.isToggleConfig(value)) {
+        controls.push({
+          type: 'toggle',
+          path,
+          label: value.label ?? label,
+          icon: value.icon,
+          onIcon: value.onIcon,
+          offIcon: value.offIcon,
+          moveSlot: value.moveSlot,
+          moveBlank: value.moveBlank,
           shortcut,
         });
       } else if (typeof value === 'boolean') {
@@ -1881,7 +1935,7 @@ class TweakStoreClass {
 
       if (Array.isArray(value) && value.length <= 4 && typeof value[0] === 'number') {
         values[path] = value[0]; // Default value
-      } else if (this.isSliderConfig(value) || this.isNumberConfig(value)) {
+      } else if (this.isSliderConfig(value) || this.isNumberConfig(value) || this.isToggleConfig(value)) {
         values[path] = value.default;
       } else if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string') {
         values[path] = value;
@@ -1969,6 +2023,15 @@ class TweakStoreClass {
       value !== null &&
       'type' in value &&
       (value as ActionConfig).type === 'action'
+    );
+  }
+
+  private isToggleConfig(value: unknown): value is ToggleConfig {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'type' in value &&
+      (value as ToggleConfig).type === 'toggle'
     );
   }
 

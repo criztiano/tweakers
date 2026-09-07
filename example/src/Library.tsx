@@ -309,7 +309,8 @@ function Card({ item, onShow, tall }: { item: Specimen; onShow: (path: string) =
 /** The `data-kind` each face needs on its slot for the stylesheet to place it. */
 const DIAL_KIND: Record<string, string | undefined> = {
   color: 'color', filter: 'filter', xy: 'xy', range: 'range', enum: 'enum',
-  icon: 'enum', curve: 'enum', playback: 'enum', toggle: 'toggle', transfer: 'transfer',
+  icon: 'enum', curve: 'enum', playback: 'enum', toggle: 'toggle', 'toggle-icon': 'toggle-icon',
+  transfer: 'transfer',
   ramp: 'ramp', dial: 'dial', scope: 'scope', env: 'env',
 };
 

@@ -6,6 +6,7 @@ import {
   MOD_SETTINGS_PANEL,
   modKey,
   getModType,
+  restoreModParams,
   listModTypes,
   applyModulation,
   modPageLayout,
@@ -110,8 +111,9 @@ class ModulationStoreClass {
     if (saved) {
       for (const slot of saved.slots ?? []) {
         const i = Math.round(Number(slot?.index));
-        if (i >= 0 && i < MOD_SLOTS && slot.type && slot.params) {
-          this.slots[i] = { ...slot, index: i, params: { ...slot.params } };
+        const def = slot?.type ? getModType(slot.type) : undefined;
+        if (i >= 0 && i < MOD_SLOTS && def && slot.params) {
+          this.slots[i] = { ...slot, index: i, params: restoreModParams(def, slot.params) };
         }
       }
       for (const a of saved.assignments ?? []) {
@@ -404,12 +406,17 @@ class ModulationStoreClass {
       },
     };
     this.settingsShape = this.shapeOf(slot, def);
+    // A modulator's controls declare the faces the kit already draws — a
+    // bipolar bar, a needle, a switch with a picture — so the page is
+    // registered with all of it rather than as bare numbers and booleans.
     for (const c of visibleModControls(def, slot.params)) {
       if (c.type === 'select') {
         config[c.path] = {
           type: 'select',
           options: c.options ?? [],
-          default: String(slot.params[c.path] ?? ''),
+          moveVisual: c.moveVisual,
+          preview: c.preview,
+          default: String(slot.params[c.path] ?? def.defaults[c.path] ?? ''),
         };
       } else if (c.type === 'slider') {
         config[c.path] = {
@@ -418,10 +425,22 @@ class ModulationStoreClass {
           max: c.max ?? 1,
           step: c.step,
           unit: c.unit,
+          moveVisual: c.moveVisual,
+          origin: c.origin,
+          bipolar: c.bipolar,
+          display: c.display === 'dial' ? 'dial' : undefined,
+          wrap: c.wrap,
           default: Number(slot.params[c.path]) || 0,
         };
       } else if (c.type === 'toggle') {
-        config[c.path] = !!slot.params[c.path];
+        config[c.path] = {
+          type: 'toggle',
+          label: c.label,
+          icon: c.icon,
+          offIcon: c.offIcon,
+          moveSlot: c.moveSlot,
+          default: !!slot.params[c.path],
+        };
       } else if (c.type === 'xy' && c.xParam && c.yParam) {
         config[c.path] = {
           type: 'xy',

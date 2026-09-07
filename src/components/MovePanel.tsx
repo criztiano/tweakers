@@ -16,7 +16,7 @@ import { valueToBearing, angleFromPointer } from '../angle-core';
 import { normalizeTransfer, movePoint, nearestPoint, sampleTransfer, type TransferValue } from '../transfer-core';
 import { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveKeyboardValue } from '../move-visual-core';
 import { ModRing } from './ModRing';
-import { MoveSurfaceStore, type MovePadCell } from '../move-surface-store';
+import { MoveSurfaceStore, moveScreenRowLabel, type MovePadCell } from '../move-surface-store';
 import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValue, applyDetentAxis, type XYValue } from '../xy-pad-core';
 import { nearestHandle, type RangeValue } from '../range-slider-core';
 import { fineDragValue } from '../shortcut-utils';
@@ -882,6 +882,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 
   // An app that claimed the bottom pad rows takes them over — movePadRows
   // shuffles the control rows around the claim, exactly as the hardware does.
+  // A modulator's settings page takes the surface over, list included: the
+  // page IS what the wheel is walking while it is open.
+  const screen = settingsPanel ? null : surface.screen;
   const appRows = surface.rows;
   const padRows = movePadRows(page, appRows);
   const appRowAt = (row: number) => moveAppPadRow(row, appRows);
@@ -999,6 +1002,28 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
             {headerCluster}
           </div>
 
+          <div className="tweakers-move-controls">
+          {/* The app's own list, beside the slots: what the wheel is walking,
+              so the page shows the rows and the selection without a glance at
+              the hardware. A click is selection intent — the host owns what
+              the value means, exactly as it does for a wheel turn. */}
+          {screen && (
+            <div className="tweakers-move-wheel-screen" role="group" aria-label={screen.title ?? 'Wheel selection'}>
+              <ListScreen
+                items={screen.items.map((row, index) => ({
+                  value: String(index),
+                  label: moveScreenRowLabel(row),
+                  ...(typeof row === 'string' ? {} : {
+                    ...(row.detail ? { detail: row.detail } : {}),
+                    ...(row.checked === undefined ? {} : { checked: row.checked }),
+                  }),
+                }))}
+                value={String(screen.index)}
+                follow="center"
+                onSelect={(value) => MoveSurfaceStore.selectScreen(Number(value))}
+              />
+            </div>
+          )}
           {visibleCols.length > 0 && <div className="tweakers-move-grid" data-presets={presetScreen?.phase === 'open' || undefined}>
             {presetScreen && <MovePresetScreen view={presetScreen} />}
             {/* The window on the strip: the row is as long as the page has
@@ -1036,6 +1061,15 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 // top and the value takes the slot. Plain 0..1 amounts keep
                 // the big name, since "40%" on its own says nothing.
                 const valueFirst = !!settingsPanel && !(meta.min === 0 && meta.max === 1);
+                // The modulator's oscilloscope belongs to a place on the page,
+                // not to one control: the LFO's first slot shows the live wave
+                // whether it is holding a rate in Hz or a tempo division.
+                const scopeSlot = settingsPanel
+                  ? modLayout?.dials.find((d) => d.path === meta.path)?.scope
+                  : undefined;
+                const scope = scopeSlot && modSettings
+                  ? <MoveScope index={modSettings.index} />
+                  : null;
                 if (meta.type === 'color') return <MoveColorSlot key={meta.path} panelId={page.panel.id} meta={meta} active={active} open={colorMeta?.path === meta.path} />;
                 // The filter takes two slots as one picture: the magnitude
                 // response maximised across both, each hand's small label
@@ -1277,6 +1311,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       key={meta.path}
                       className="tweakers-move-dial"
                       data-kind="enum"
+                      data-scope={scope ? true : undefined}
                       data-visual={playback ? 'playback' : undefined}
                       role="slider"
                       tabIndex={disabled ? -1 : 0}
@@ -1310,6 +1345,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           between, what it is set to underneath. No crossfade:
                           with the name out of the way there is nothing left
                           for the value to replace. */}
+                      {scope}
                       <MoveModRing panelId={page.panel.id} path={meta.path} />
                       <MoveSlotEnumBody
                         label={meta.label}
@@ -1319,33 +1355,59 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                         shape={shape}
                         glyph={glyph}
                         playback={playback}
+                        scoped={!!scope}
                       />
                     </div>
                   );
                 }
+                // A column the page is holding open: the control is here,
+                // but this mode has nothing for it to do, so it draws
+                // nothing rather than letting the row change shape under a
+                // finger that is only scrolling a list.
+                if (meta.moveBlank) {
+                  return <div key={meta.path} className="tweakers-move-dial" data-kind="blank" aria-hidden="true" />;
+                }
                 // A big toggle — a switch that earned a whole slot (the
-                // envelope's Loop): the pad's language at slot size, the
-                // whole slot inverting when it is on.
+                // envelope's Loop, an app's bypass): the pad's language at
+                // slot size, or its own picture where it named one. A real
+                // button, so the keyboard and a screen reader get the switch
+                // the pointer gets.
                 if (meta.type === 'toggle') {
+                  const checked = values[meta.path] === true;
                   return (
-                    <div
+                    <button
                       key={meta.path}
+                      type="button"
                       className="tweakers-move-dial"
-                      data-kind="toggle"
-                      data-on={!!values[meta.path] || undefined}
-                      onClick={() => TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path])}
+                      data-kind={meta.icon ? 'toggle-icon' : 'toggle'}
+                      data-on={checked || undefined}
+                      data-active={active || undefined}
+                      role="switch"
+                      aria-label={meta.label}
+                      aria-checked={checked}
+                      disabled={disabled}
+                      onClick={() => {
+                        if (!TweakStore.isDisabled(page.panel.id, meta.path)) {
+                          TweakStore.updateValue(page.panel.id, meta.path, !checked);
+                        }
+                      }}
                     >
                       <MoveModRing panelId={page.panel.id} path={meta.path} />
-                      <MoveSlotToggleBody label={meta.label} on={!!values[meta.path]} />
-                    </div>
+                      <MoveSlotToggleBody
+                        label={meta.label}
+                        checked={checked}
+                        icon={meta.icon}
+                        onIcon={meta.onIcon}
+                        offIcon={meta.offIcon}
+                      />
+                    </button>
                   );
                 }
                 // A dial with the oscilloscope in it — the Rate slot: the
                 // modulator's live signal fills the slot behind the dial's
                 // own readout and bar, and the drag still turns the rate.
                 // You turn the wave you're watching.
-                const scopeSlot = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.scope : undefined;
-                if (scopeSlot && modSettings) {
+                if (scope) {
                   return (
                     <div
                       key={meta.path}
@@ -1371,7 +1433,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                         value={chipValue(meta).num + (meta.unit ? ` ${meta.unit}` : '')}
                         pct={dialPercent(meta)}
                       >
-                        <MoveScope index={modSettings.index} />
+                        {scope}
                       </MoveSlotScopeBody>
                     </div>
                   );
@@ -1759,6 +1821,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               </div>
             )}
           </div>}
+          </div>
         </div>
       </div>
     </div>

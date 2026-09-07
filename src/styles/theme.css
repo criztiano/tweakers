@@ -357,10 +357,30 @@
 .tweakers-move {
   --move-bg: #302e2e;
   --move-slot: rgba(222, 227, 201, 0.1);
+  /* A column held open by a page that has nothing for it to do — fainter
+     than a slot you can press, so it never reads as a control. */
+  --move-slot-empty: rgba(222, 227, 201, 0.03);
   --move-chip: #41403e;
+  /* The switch that wears a picture: the thing it turns on, and a badge on
+     its corner saying whether it is doing it. */
+  --move-toggle-icon-size: 44px;
+  --move-toggle-badge-size: 24px;
+  --move-toggle-label-size: 12px;
+  --move-toggle-label-inset: 10px;
+  --move-toggle-icon-rise: 2.5px;
+  --move-toggle-off-opacity: 0.2;
+  --move-toggle-on: #34c759;
+  --move-toggle-off: #ff2d55;
+  --move-toggle-halo: 4px;
+  /* The slot's own surface, flattened — the punch-out reads as a gap in the
+     picture, not as a hole down to the panel. */
+  --move-toggle-halo-color: var(--move-chip);
   --move-text: #dee3c9;
   --move-text-inverse: #31322f;
   --move-radius: 12px;
+  --move-slot-height: 140px;
+  --move-gap: 4px;
+  --move-wheel-width: 200px;
   --move-glyph-stroke: 1.25;
   --move-radius-small: 8px;
   --move-font-label: 'Ableton Sans Small', system-ui, -apple-system, sans-serif;
@@ -615,8 +635,8 @@
 .tweakers-move-dials {
   display: grid;
   grid-template-columns: repeat(var(--move-cols, 8), minmax(0, 1fr));
-  gap: 4px;
-  height: 140px;
+  gap: var(--move-gap);
+  height: var(--move-slot-height);
   width: 100%;
 }
 
@@ -1383,6 +1403,21 @@
   text-shadow: 0 0 6px var(--move-display, #1e1e1e), 0 0 6px var(--move-display, #1e1e1e);
 }
 
+/* An option picker holding the scope — the synced rate, whose value is a
+   division rather than a number. The wave runs in the slot's drawing band,
+   under the option's own name. */
+.tweakers-move-dial[data-scope] .tweakers-move-scope-wave {
+  top: var(--move-shape-top);
+  height: calc(100% - var(--move-shape-top) - var(--move-shape-bottom));
+}
+
+.tweakers-move-dial[data-scope] .tweakers-move-dial-option,
+.tweakers-move-dial[data-scope] .tweakers-move-dial-chip {
+  text-shadow: 0 0 6px var(--move-bg), 0 0 6px var(--move-bg);
+}
+
+/* The plain switch states itself by inverting, the way its pad does. The
+   picture face keeps the slot and lets the badge do the talking. */
 .tweakers-move-dial[data-kind="toggle"][data-on] {
   background: var(--move-text);
   color: var(--move-text-inverse);
@@ -1411,6 +1446,150 @@
   font-family: var(--move-font-label);
   font-size: 16px;
   line-height: 20px;
+}
+
+/* A switch is a button, so the slot's own surface has to be restated. */
+.tweakers-move-dial[data-kind="toggle"],
+.tweakers-move-dial[data-kind="toggle-icon"] {
+  border: 0;
+  padding: 0;
+  color: var(--move-text);
+  background: var(--move-slot);
+  appearance: none;
+}
+
+.tweakers-move-dial[data-kind="toggle"]:focus-visible,
+.tweakers-move-dial[data-kind="toggle-icon"]:focus-visible {
+  outline: var(--move-visual-focus-width) solid var(--move-text);
+  outline-offset: var(--move-visual-focus-offset);
+}
+
+.tweakers-move-dial[data-kind="toggle"]:disabled,
+.tweakers-move-dial[data-kind="toggle-icon"]:disabled {
+  opacity: var(--move-visual-disabled-opacity);
+  cursor: not-allowed;
+}
+
+/* The wheel display shares the control row with the slots, two slot gaps
+   apart — one row of things the hands are on. */
+.tweakers-move-controls {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: calc(2 * var(--move-gap));
+  width: 100%;
+  min-width: 0;
+}
+
+.tweakers-move-controls .tweakers-move-grid {
+  min-width: 0;
+  align-self: flex-start;
+}
+
+.tweakers-move-wheel-screen {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 var(--move-wheel-width);
+  min-width: 0;
+  height: var(--move-slot-height);
+  border-radius: var(--move-radius);
+  overflow: hidden;
+  background: var(--move-bg);
+}
+
+.tweakers-move-wheel-screen .tweakers-list-screen {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border-radius: 0;
+  /* Centred while the rows fit the screen, from the top once they overflow —
+     a plain `center` would strand the first rows out of reach. */
+  justify-content: center;
+  justify-content: safe center;
+  overscroll-behavior: contain;
+}
+
+/* A held-open column: fainter than a slot you can press, so the row keeps
+   its shape without the empty columns reading as controls. */
+.tweakers-move-dial[data-kind="blank"] {
+  border: 0;
+  background: var(--move-slot-empty);
+  pointer-events: none;
+}
+
+.tweakers-move-toggle-picture {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Centred on the slot, then lifted clear of the label underneath. */
+  transform: translateY(calc(-1 * var(--move-toggle-icon-rise)));
+  pointer-events: none;
+}
+
+.tweakers-move-toggle-icon {
+  width: var(--move-toggle-icon-size);
+  height: var(--move-toggle-icon-size);
+  object-fit: contain;
+  /* Off, the picture is still there to be read — just not lit. */
+  opacity: var(--move-toggle-off-opacity);
+}
+
+.tweakers-move-dial[data-kind="toggle-icon"][data-on] .tweakers-move-toggle-icon {
+  opacity: 1;
+}
+
+.tweakers-move-toggle-badge {
+  position: absolute;
+  width: var(--move-toggle-badge-size);
+  height: var(--move-toggle-badge-size);
+  /* Centred on the picture's top-right corner, and punched out of the slot
+     so the badge never reads as part of the picture it sits on. */
+  left: calc(50% + var(--move-toggle-icon-size) / 2 - var(--move-toggle-badge-size) / 2);
+  top: calc(50% - var(--move-toggle-icon-size) / 2 - var(--move-toggle-badge-size) / 2);
+  border-radius: 50%;
+  color: var(--move-toggle-off);
+  background: var(--move-toggle-halo-color);
+  box-shadow: 0 0 0 var(--move-toggle-halo) var(--move-toggle-halo-color);
+}
+
+.tweakers-move-dial[data-kind="toggle-icon"][data-on] .tweakers-move-toggle-badge {
+  color: var(--move-toggle-on);
+}
+
+.tweakers-move-toggle-badge > * {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* A host's own picture rides as a mask, so an app's asset takes the slot's
+   colour and its states like a bundled glyph does. */
+.tweakers-move-toggle-picture [data-asset] {
+  display: block;
+  background: currentColor;
+  mask-size: contain;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+}
+
+.tweakers-move-toggle-label {
+  position: absolute;
+  left: var(--move-toggle-label-inset);
+  right: var(--move-toggle-label-inset);
+  bottom: var(--move-toggle-label-inset);
+  font-family: var(--move-font-label);
+  font-size: var(--move-toggle-label-size);
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tweakers-move-enum-list {
@@ -1981,9 +2160,7 @@
 @media (max-width: 720px) {
 .tweakers-move {
     padding: 12px 12px 10px;
-  }
-.tweakers-move-dials {
-    height: 100px;
+    --move-slot-height: 100px;
   }
 .tweakers-move-dial-label {
     font-size: 16px;
@@ -2096,6 +2273,7 @@
 }
 
 .tweakers-list-screen-row {
+  position: relative;
   flex-shrink: 0;
   width: 100%;
   height: var(--move-list-row);
@@ -2169,6 +2347,61 @@
 
 .tweakers-list-screen[data-wide] .tweakers-list-screen-tag {
   flex: 0 1 auto;
+}
+
+/* The destination mark, pinned to the row's end. Out of the flow on purpose:
+   a centred row's name must not shift because the row happens to lead
+   somewhere, and every mark in a list has to stand on the same edge. The
+   label keeps clear of it, so a long name ellipsizes before it collides. */
+.tweakers-list-screen-mark {
+  position: absolute;
+  top: 50%;
+  right: var(--move-list-mark-inset, 6px);
+  width: var(--move-list-mark-size, 14px);
+  height: var(--move-list-mark-size, 14px);
+  transform: translateY(-50%);
+  pointer-events: none;
+  opacity: 0.22;
+  transition: opacity 0.12s;
+}
+
+.tweakers-list-screen-mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* A way back sits at the left end, where the eye looks to leave. */
+.tweakers-list-screen-row[data-detail="back"] .tweakers-list-screen-mark {
+  right: auto;
+  left: var(--move-list-mark-inset, 6px);
+}
+
+/* Both sides, so a centred name stays centred and still ellipsizes before it
+   can reach the mark. A wide row is left-aligned, so it only needs the side
+   the mark is on. */
+.tweakers-list-screen-row[data-detail] .tweakers-list-screen-label {
+  padding: 0 calc(var(--move-list-mark-size, 14px) + var(--move-list-mark-inset, 6px) * 2);
+}
+
+.tweakers-list-screen[data-wide] .tweakers-list-screen-mark {
+  right: 10px;
+}
+
+.tweakers-list-screen[data-wide] .tweakers-list-screen-row[data-detail] .tweakers-list-screen-label {
+  padding-left: 0;
+}
+
+/* Switched on: the row reads at full brightness with its tick, wherever the
+   cursor happens to be. Two questions, two answers — the highlight says where
+   you are, the ink says what is on. */
+.tweakers-list-screen-row[data-checked="true"] .tweakers-list-screen-label,
+.tweakers-list-screen-row[data-checked="true"] .tweakers-list-screen-mark {
+  opacity: 1;
+}
+
+.tweakers-list-screen-row[data-selected] .tweakers-list-screen-mark {
+  opacity: 1;
 }
 
 .tweakers-list-screen-row[data-selected] {

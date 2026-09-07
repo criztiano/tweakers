@@ -271,7 +271,7 @@ var MOD_COLORS = [
 ];
 var modColor = (index) => MOD_COLORS[(index % MOD_SLOTS + MOD_SLOTS) % MOD_SLOTS];
 var MOD_PAGE_DIALS = 8;
-var isModDial = (c) => !c.chip && (c.scope || c.type === "toggle" && c.big || c.type === "select" || c.type === "slider" || c.type === "xy" || c.type === "range" || c.type === "number" && c.min != null && c.max != null);
+var isModDial = (c) => !c.chip && (c.scope || c.type === "toggle" && c.moveSlot || c.type === "select" || c.type === "slider" || c.type === "xy" || c.type === "range" || c.type === "number" && c.min != null && c.max != null);
 var slotOf = (c) => ({
   path: c.path,
   ...c.drawsPreview ? { preview: true } : {},
@@ -295,6 +295,15 @@ function modPageLayout(controls, params = {}) {
   }
   const pad = (row) => Array.from({ length: row.length }, (_, i) => row[i] ?? null);
   return { dials, toggles: pad(toggles), values: pad(values) };
+}
+function restoreModParams(def, saved) {
+  const params = { ...JSON.parse(JSON.stringify(def.defaults)), ...saved };
+  for (const c of def.controls) {
+    const at = params[c.path];
+    const option = c.type === "select" && typeof at === "number" ? c.options?.[at] : void 0;
+    if (option !== void 0) params[c.path] = typeof option === "string" ? option : option.value;
+  }
+  return params;
 }
 var visibleModControls = (def, params) => def.controls.filter((c) => !c.when || c.when(params));
 var registry = /* @__PURE__ */ new Map();
@@ -341,9 +350,18 @@ var LFO_SYNC_DIVISIONS = [
   { label: "1/16", beats: 0.25 },
   { label: "1/32", beats: 0.125 }
 ];
+var LFO_SYNC_OPTIONS = LFO_SYNC_DIVISIONS.map((d) => d.label);
+var LFO_SYNC_DEFAULT = "1/4";
+function lfoDivisionBeats(division) {
+  const named = LFO_SYNC_DIVISIONS.find((d) => d.label === division);
+  if (named) return named.beats;
+  if (typeof division !== "number" || !Number.isFinite(division)) {
+    return LFO_SYNC_DIVISIONS.find((d) => d.label === LFO_SYNC_DEFAULT).beats;
+  }
+  return LFO_SYNC_DIVISIONS[clamp(Math.round(division), 0, LFO_SYNC_DIVISIONS.length - 1)].beats;
+}
 function lfoSyncedHz(division, bpm) {
-  const i = clamp(Math.round(Number(division) || 0), 0, LFO_SYNC_DIVISIONS.length - 1);
-  return (Number(bpm) || 120) / 60 / LFO_SYNC_DIVISIONS[i].beats;
+  return (Number(bpm) || 120) / 60 / lfoDivisionBeats(division);
 }
 var previewNoise = (i, salt = 0) => {
   const x = Math.sin((i + 1) * 12.9898 + salt * 78.233) * 43758.5453;
@@ -359,11 +377,16 @@ function previewSlew(values, smooth) {
 var LFO_DEF = {
   type: "lfo",
   label: "LFO",
-  defaults: { rate: 1, division: 4, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false },
+  defaults: { rate: 1, division: LFO_SYNC_DEFAULT, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false },
   controls: [
-    { type: "slider", path: "rate", label: "Rate", min: 0.02, max: 20, step: 0.01, unit: "Hz", scope: true },
-    { type: "toggle", path: "sync", label: "Sync" },
-    { type: "slider", path: "phase", label: "Phase", min: 0, max: 1, step: 0.01 },
+    /* One slot for how fast, wearing whichever control the moment calls for:
+       free-running it is a rate in Hz, synced it is a division of the bar.
+       Either way the scope runs behind it — you turn the wave you watch. */
+    { type: "slider", path: "rate", label: "Rate", min: 0.02, max: 20, step: 0.01, unit: "Hz", scope: true, when: (p) => !p.sync },
+    { type: "select", path: "division", label: "Division", options: LFO_SYNC_OPTIONS, scope: true, when: (p) => !!p.sync },
+    { type: "toggle", path: "sync", label: "Sync", moveSlot: true, icon: "timer" },
+    /* Phase's two ends are the same place, so it draws a needle, not a bar. */
+    { type: "slider", path: "phase", label: "Phase", min: 0, max: 1, step: 0.01, display: "dial", wrap: true },
     { type: "slider", path: "width", label: "Width", min: 0, max: 1, step: 0.01 },
     { type: "slider", path: "jitter", label: "Jitter", min: 0, max: 1, step: 0.01 },
     { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 }
@@ -371,7 +394,7 @@ var LFO_DEF = {
   createState: () => ({ phase: 0, drift: 0, driftTarget: 0, out: null }),
   tick(state, params, dt, bpm) {
     const s = state;
-    const hz = params.sync ? lfoSyncedHz(Number(params.division) || 0, bpm) : Math.max(0, Number(params.rate) || 0);
+    const hz = params.sync ? lfoSyncedHz(params.division, bpm) : Math.max(0, Number(params.rate) || 0);
     const before = s.phase;
     s.phase = (s.phase + dt * hz) % 1;
     if (s.phase < before) s.driftTarget = (Math.random() * 2 - 1) * clamp012(params.jitter);
@@ -423,7 +446,7 @@ var SH_DEF = {
   controls: [
     { type: "slider", path: "rate", label: "Rate", min: 0.1, max: 30, step: 0.01, unit: "Hz", scope: true },
     { type: "slider", path: "depth", label: "Depth", min: 0, max: 1, step: 0.01 },
-    { type: "slider", path: "offset", label: "Offset", min: -1, max: 1, step: 0.01 },
+    { type: "slider", path: "offset", label: "Offset", min: -1, max: 1, step: 0.01, bipolar: true },
     { type: "slider", path: "jitter", label: "Jitter", min: 0, max: 1, step: 0.01 },
     { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 }
   ],
@@ -568,7 +591,7 @@ var ADSR_DEF = {
     { type: "slider", path: "release", label: "Release", min: 0, max: ADSR_STAGE_MAX.release, step: 1, unit: "ms", envStage: "release" },
     /* A big slot of its own, beside the envelope — the pad row under the
        ramps belongs to the hold-to-bend gesture. */
-    { type: "toggle", path: "loop", label: "Loop", big: true }
+    { type: "toggle", path: "loop", label: "Loop", moveSlot: true, icon: "repeat" }
   ],
   createState: () => ({ stage: "idle", t: 0, from: 0, env: 0, gate: false }),
   gate(state, on) {
@@ -665,15 +688,9 @@ function curveComposition(params) {
   };
 }
 function curveDuration(params, bpm) {
-  const want = clamp(Number(params.duration) || 0, CURVE_MIN_DURATION, CURVE_MAX_DURATION);
-  if (!params.sync) return want;
+  if (!params.sync) return clamp(Number(params.duration) || 0, CURVE_MIN_DURATION, CURVE_MAX_DURATION);
   const beat = 60 / (Number(bpm) || 120);
-  let best = LFO_SYNC_DIVISIONS[0].beats * beat;
-  for (const div of LFO_SYNC_DIVISIONS) {
-    const secs2 = div.beats * beat;
-    if (Math.abs(secs2 - want) < Math.abs(best - want)) best = secs2;
-  }
-  return Math.max(CURVE_MIN_DURATION, best);
+  return Math.max(CURVE_MIN_DURATION, lfoDivisionBeats(params.division) * beat);
 }
 var CURVE_DEF = {
   type: "curve",
@@ -681,6 +698,7 @@ var CURVE_DEF = {
   defaults: {
     duration: 2,
     sync: false,
+    division: LFO_SYNC_DEFAULT,
     signal: "continuous",
     triggers: DEFAULT_TRIGGER_STEPS,
     direction: "forward",
@@ -714,14 +732,21 @@ var CURVE_DEF = {
         return { clips: writeClips(cycleSegmentType(comp, i).segments) };
       }
     },
-    { type: "slider", path: "duration", label: "Duration", min: CURVE_MIN_DURATION, max: CURVE_MAX_DURATION, step: 0.01, unit: "s" },
+    /* How long a pass lasts: seconds free-running, a division of the bar
+       when synced — the same swap the LFO's rate slot makes. */
+    { type: "slider", path: "duration", label: "Duration", min: CURVE_MIN_DURATION, max: CURVE_MAX_DURATION, step: 0.01, unit: "s", when: (p) => !p.sync },
+    { type: "select", path: "division", label: "Division", options: LFO_SYNC_OPTIONS, when: (p) => !!p.sync },
     { type: "toggle", path: "sync", label: "Sync" },
+    /* Continuous or triggering: a running wave against a row of pulses. */
     {
       type: "select",
       path: "signal",
       label: "Signal",
       chip: true,
-      options: [{ value: "continuous", label: "Cont" }, { value: "trigger", label: "Trig" }]
+      options: [
+        { value: "continuous", label: "Cont", icon: "waves" },
+        { value: "trigger", label: "Trig", icon: "audio-lines" }
+      ]
     },
     /* The direction reads as a picture — an arrow says which way the pass
        runs faster than a word does. */
@@ -857,7 +882,9 @@ export {
   ENV_SUSTAIN_WAVE_BEATS,
   ENV_WAVE_STAGES,
   LFO_DEF,
+  LFO_SYNC_DEFAULT,
   LFO_SYNC_DIVISIONS,
+  LFO_SYNC_OPTIONS,
   MOD_COLORS,
   MOD_PAGE_DIALS,
   MOD_RING_CIRCUMFERENCE,
@@ -875,6 +902,7 @@ export {
   envelopeJoints,
   envelopePoints,
   getModType,
+  lfoDivisionBeats,
   lfoSyncedHz,
   listModTypes,
   modColor,
@@ -883,6 +911,7 @@ export {
   modPageWidth,
   modRingArc,
   registerModType,
+  restoreModParams,
   visibleModControls
 };
 //# sourceMappingURL=modulation-core.js.map

@@ -1,12 +1,34 @@
 import { useEffect, useRef, type CSSProperties, type ReactElement } from 'react';
+import { ICON_CHECK, ICON_CHEVRON_LEFT, ICON_CHEVRON_RIGHT, ICON_ELLIPSIS } from '../icons';
 
-/** A row: a plain string, or a value with a separate display label and an
- * optional inline tag pinned to the row's right end. `muted` marks a row the
- * host has nothing to act on — it still walks and selects, it just never
- * brightens, so a list can carry information alongside its choices. */
+/** Where a row goes when it is taken, drawn at its end. `page` is a chevron —
+ * the list is replaced by the one this row leads to, so the same mark reads
+ * as one level of nesting; `back` is that chevron turned around, and sits at
+ * the left end where the eye looks to leave. `dialog` is an ellipsis:
+ * something opens over the list and the list is still there behind it. A row
+ * without a detail settles a value where it stands. */
+export type ListScreenDetail = 'page' | 'dialog' | 'back';
+
+/** A row: a plain string, or a value with a separate display label, an
+ * optional inline tag pinned to the row's right end, and an optional detail
+ * marking where it leads. `muted` marks a row the host has nothing to act on
+ * — it still walks and selects, it just never brightens, so a list can carry
+ * information alongside its choices.
+ *
+ * `checked` is the other axis: where the cursor is, and what is switched on,
+ * are different questions. A list can answer both at once — the cursor rides
+ * the highlight, every switched-on row reads bright and wears a tick — so a
+ * run of choices can be built up without losing your place in it. */
 export type ListScreenItem =
   | string
-  | { value: string; label?: string; tag?: string; muted?: boolean };
+  | {
+      value: string;
+      label?: string;
+      tag?: string;
+      muted?: boolean;
+      detail?: ListScreenDetail;
+      checked?: boolean;
+    };
 
 export interface ListScreenProps {
   /** Rows in display order. */
@@ -44,6 +66,35 @@ function itemMuted(item: ListScreenItem): boolean {
   return typeof item === 'string' ? false : Boolean(item.muted);
 }
 
+function itemDetail(item: ListScreenItem): ListScreenDetail | undefined {
+  return typeof item === 'string' ? undefined : item.detail;
+}
+
+function itemChecked(item: ListScreenItem): boolean | undefined {
+  return typeof item === 'string' ? undefined : item.checked;
+}
+
+/** The row's mark, pinned to an edge rather than laid out beside the label,
+ * so a centred row's name stays exactly where it was. Where a row leads
+ * outranks whether it is switched on: a row that goes somewhere is not a
+ * thing you switch, so the two never really compete. */
+function ListScreenMark({ detail, checked }: { detail?: ListScreenDetail; checked?: boolean }) {
+  const stroke = { stroke: 'currentColor', strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
+  return (
+    <span className="tweakers-list-screen-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none">
+        {detail === 'page' || detail === 'back'
+          ? <path d={detail === 'back' ? ICON_CHEVRON_LEFT : ICON_CHEVRON_RIGHT} strokeWidth="2" {...stroke} />
+          : detail === 'dialog'
+          ? ICON_ELLIPSIS.map((c) => <circle key={c.cx} cx={c.cx} cy={c.cy} r="1.75" fill="currentColor" />)
+          : checked
+          ? <path d={ICON_CHECK} strokeWidth="2.5" {...stroke} />
+          : null}
+      </svg>
+    </span>
+  );
+}
+
 /**
  * The Move's dark list screen (Figma node "list screen"): a column of
  * single-line rows on the display surface. Unselected rows sit dim at 22%
@@ -73,21 +124,40 @@ export function ListScreen({
     // `data-over-top` / `data-over-bottom` mark rows scrolled out of sight,
     // for hosts that soften the edge they went behind: an edge hiding
     // nothing must stay crisp, or the end of a list reads as damage.
-    const sync = () => {
-      root.querySelector('[data-selected]')?.scrollIntoView?.({ block: follow });
+    const syncEdges = () => {
       const end = root.scrollHeight - root.clientHeight;
       root.toggleAttribute?.('data-over-top', root.scrollTop > 1);
       root.toggleAttribute?.('data-over-bottom', root.scrollTop < end - 1);
     };
+    const sync = () => {
+      const selected = root.querySelector<HTMLElement>('[data-selected]');
+      if (selected) {
+        const row = selected.getBoundingClientRect();
+        const box = root.getBoundingClientRect();
+        const top = row.top - box.top + root.scrollTop;
+        const bottom = top + row.height;
+        // Scroll only this display: scrollIntoView also moves the host page,
+        // and a list on the panel is not a reason to move what is behind it.
+        const next = follow === 'center' ? top - (root.clientHeight - row.height) / 2
+          : top < root.scrollTop ? top
+          : bottom > root.scrollTop + root.clientHeight ? bottom - root.clientHeight
+          : root.scrollTop;
+        root.scrollTop = Math.max(0, Math.min(next, root.scrollHeight - root.clientHeight));
+      }
+      syncEdges();
+    };
     sync();
+    root.addEventListener('scroll', syncEdges, { passive: true });
 
     // A host can resize the screen under the list — the Move slot grows one
     // to the whole list while it is touched — which changes both what is
     // hidden and where the middle is.
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(sync);
-    observer.observe(root);
-    return () => observer.disconnect();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(sync);
+    observer?.observe(root);
+    return () => {
+      observer?.disconnect();
+      root.removeEventListener('scroll', syncEdges);
+    };
   }, [value, follow, items.length]);
 
   const rootClassName = ['tweakers-list-screen', className].filter(Boolean).join(' ');
@@ -104,6 +174,8 @@ export function ListScreen({
         const rowValue = itemValue(item);
         const selected = rowValue === value;
         const tag = itemTag(item);
+        const detail = itemDetail(item);
+        const checked = itemChecked(item);
         return (
           <button
             key={rowValue}
@@ -113,11 +185,15 @@ export function ListScreen({
             className="tweakers-list-screen-row"
             data-selected={selected || undefined}
             data-tagged={tag ? true : undefined}
+            data-detail={detail}
+            data-checked={checked}
+            aria-checked={checked}
             data-muted={itemMuted(item) || undefined}
             onClick={() => onSelect?.(rowValue)}
           >
             <span className="tweakers-list-screen-label">{itemLabel(item)}</span>
             {tag && <span className="tweakers-list-screen-tag">{tag}</span>}
+            {(detail || checked) && <ListScreenMark detail={detail} checked={checked} />}
           </button>
         );
       })}

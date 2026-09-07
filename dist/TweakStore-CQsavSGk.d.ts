@@ -95,6 +95,37 @@ type ActionConfig = {
      */
     caption?: string;
 };
+/**
+ * Explicit switch form, for what a bare `false` cannot say: a name a key
+ * cannot spell, a slot of its own on the Move, and a picture to wear there.
+ */
+type ToggleConfig = {
+    type: 'toggle';
+    default: boolean;
+    /** Overrides the key-derived label — for names a key cannot spell. */
+    label?: string;
+    /**
+     * The switch's own picture: a glyph from `LUCIDE_ICONS`, or the URL of an
+     * asset the app owns (drawn as a mask, so it takes the slot's colour). The
+     * slot then reads as that picture with a state badge on its corner rather
+     * than as a name — what the switch is about, and whether it is doing it.
+     */
+    icon?: string;
+    /** The app's own state badges, in place of the kit's check and ban. */
+    onIcon?: string;
+    offIcon?: string;
+    /**
+     * Take a dial slot of its own instead of a pad — for the switch a page is
+     * about. The bridge sends it out as the two-option enum it already is.
+     */
+    moveSlot?: boolean;
+    /**
+     * Hold the column open and draw nothing: the switch belongs to a mode this
+     * page is not in. A row that keeps its shape can be scrolled past without
+     * the controls moving under the finger doing the scrolling.
+     */
+    moveBlank?: boolean;
+};
 type SelectConfig = {
     type: 'select';
     /** Optional semantic drawing for the Move surface. */
@@ -438,14 +469,14 @@ type ListConfig = {
     /** Label for the add affordance. Defaults to 'Add'. */
     addLabel?: string;
 };
-type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue | FilterConfig | FilterValue | TransferConfig | TransferValue;
+type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ToggleConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue | FilterConfig | FilterValue | TransferConfig | TransferValue;
 type TweakConfig = {
     [key: string]: TweakValue | [number, number, number, number?] | CurveConfig | AnalyserConfig | TweakConfig;
 };
 /** UI-only reserved keys: they shape the panel, never resolve to a value. */
 type ReservedKey = '_collapsed' | '_collapsible' | '_tabs';
 type ResolvedValues<T extends TweakConfig> = {
-    [K in keyof T as T[K] extends CurveConfig ? never : T[K] extends AnalyserConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends NumberConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends FilterConfig ? FilterValue : T[K] extends TransferConfig ? TransferValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends TweakConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T as T[K] extends CurveConfig ? never : T[K] extends AnalyserConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends ToggleConfig ? boolean : T[K] extends NumberConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends FilterConfig ? FilterValue : T[K] extends TransferConfig ? TransferValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends TweakConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -525,6 +556,14 @@ type ControlMeta = {
         label: string;
         icon?: string;
     })[];
+    /** Toggle's own picture and state badges, from the explicit ToggleConfig form. */
+    icon?: string;
+    onIcon?: string;
+    offIcon?: string;
+    /** Toggle declared `moveSlot` — it claims a dial slot rather than a pad. */
+    moveSlot?: boolean;
+    /** Toggle declared `moveBlank` — its column is held open and drawn empty. */
+    moveBlank?: boolean;
     /** Select's per-option shape sampler — swapped in place by syncCurveConfigs. */
     preview?: (value: string) => ((t: number) => number) | null | undefined;
     /** Select's rendering mode, or a slider's `dial` form. */

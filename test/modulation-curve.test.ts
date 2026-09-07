@@ -131,11 +131,14 @@ describe('playing a pass', () => {
     expect(rising).toBeLessThanOrEqual(1);
   });
 
-  it('snaps a synced pass to the nearest tempo division', () => {
+  it('a synced pass lasts the division the page is holding', () => {
     expect(curveDuration(params({ duration: 3 }), 120)).toBe(3);
-    // At 120 bpm a beat is 0.5 s: 1.9 s lands on the 1/1 bar (2 s).
-    expect(curveDuration(params({ duration: 1.9, sync: true }), 120)).toBeCloseTo(2, 6);
-    expect(curveDuration(params({ duration: 0.3, sync: true }), 120)).toBeCloseTo(0.25, 6);
+    // At 120 bpm a beat is 0.5 s: the 1/1 bar is 2 s, the 1/8 a quarter.
+    expect(curveDuration(params({ sync: true, division: '1' }), 120)).toBeCloseTo(2, 6);
+    expect(curveDuration(params({ sync: true, division: '1/8' }), 120)).toBeCloseTo(0.25, 6);
+    // A pass saved before the picker existed holds the index it was stepped
+    // to, and still means the same division.
+    expect(curveDuration(params({ sync: true, division: 2 }), 120)).toBeCloseTo(2, 6);
     expect(curveDuration(params({ duration: 999 }), 120)).toBe(60);
   });
 

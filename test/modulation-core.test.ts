@@ -9,6 +9,8 @@ import {
   getModType,
   listModTypes,
   lfoSyncedHz,
+  curveDuration,
+  restoreModParams,
   LFO_DEF,
   LFO_SYNC_DIVISIONS,
   SH_DEF,
@@ -271,7 +273,9 @@ describe('the ADSR', () => {
     ]);
     const loop = ADSR_DEF.controls.find((c) => c.path === 'loop')!;
     expect(loop.type).toBe('toggle');
-    expect(loop.big).toBe(true);
+    expect(loop.moveSlot).toBe(true);
+    // A switch with a slot of its own reads as its picture, not its name.
+    expect(loop.icon).toBe('repeat');
   });
 
   it('rests at zero until something gates it', () => {
@@ -332,5 +336,22 @@ describe('the ADSR', () => {
     const out = run({ attack: 1, decay: 1, sustain: 0.5, release: 500, loop: true }, 2, 16);
     expect(out[0]).toBeLessThan(0.5);
     expect(out[0]).toBeGreaterThan(0);
+  });
+});
+
+describe('a saved slot, read against its type as it stands now', () => {
+  it('opens a page that grew a picker on the setting the slot was running', () => {
+    // 4 was the index of 1/4 before the divisions had names of their own.
+    const params = restoreModParams(LFO_DEF, { sync: true, division: 4, rate: 3 });
+    expect(params.division).toBe('1/4');
+    expect(lfoSyncedHz(params.division, 120)).toBeCloseTo(2, 6);
+    expect(params.rate).toBe(3);
+  });
+
+  it('brings a setting the type has since gained in at its default', () => {
+    const params = restoreModParams(CURVE_DEF, { duration: 2, sync: true });
+    expect(params.division).toBe('1/4');
+    // Nothing readable falls to a quarter, never to the four-bar division.
+    expect(curveDuration({ sync: true, division: '' }, 120)).toBeCloseTo(0.5, 6);
   });
 });
