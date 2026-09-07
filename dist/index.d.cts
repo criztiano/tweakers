@@ -117,16 +117,18 @@ interface MoveActionButtonProps {
      * The hardware button this action rides, which fixes the styling:
      * `enter` is the wheel's click — track 4's green with the dot glyph —
      * `capture` is the capture button — track 1's blue with the
-     * four-corners glyph — and `shift` is the shift key — the surface's
-     * light neutral, wearing the same dot in the pill's dark text colour.
-     * The pairing matches the physical Move, so the on-screen button
-     * always looks like the key that triggers it.
+     * four-corners glyph — `loop` and `copy` are the pale function
+     * buttons, the surface's light neutral wearing their printed glyphs —
+     * and `shift` is the shift key, the same light neutral with the enter
+     * dot in the pill's dark text colour. The pairing matches the
+     * physical Move, so the on-screen button always looks like the key
+     * that triggers it.
      * Shift is reserved on the hardware and never claimable, so
      * `kind="shift"` is purely visual: it runs no Move function, only its
      * own `onPress` — the app wires the hardware gesture (a shift tap)
      * itself.
      */
-    kind: 'enter' | 'capture' | 'shift';
+    kind: 'enter' | 'capture' | 'shift' | 'loop' | 'copy';
     /** The label. */
     children: React$1.ReactNode;
     /** Runs after the attached Move function, on a screen click. */
