@@ -1063,7 +1063,20 @@ useTweakers('Playback', config, {
 });
 ```
 
-A toggle takes the toggle row, a bounded number the value row, an action the row below those. Naming a column for a bounded number makes it a chip wherever it was declared, so it stops competing for a dial slot — a page can spend all 8 dials on the controls it wants big, whatever else it carries. Controls with no column keep packing left around the named ones, and a column already spoken for falls back to packing rather than dropping the control.
+A toggle takes the toggle row, a bounded number the value row, an action the row below those. A switch the page is *about* — a bypass, a loop, a tempo sync — says so and takes a dial slot instead:
+
+```js
+useTweakers('Clip', {
+  loop: { type: 'toggle', default: true, moveSlot: true, icon: 'repeat' },
+  // The app's own artwork, and its own pair of state badges:
+  polish: { type: 'toggle', default: true, moveSlot: true, label: 'MP3 repair',
+            icon: brushSvg, onIcon: checkSvg, offIcon: banSvg },
+  // Belongs to a mode this page is not in: the column stays, drawn empty.
+  restore: { type: 'toggle', default: false, moveSlot: true, moveBlank: true },
+});
+```
+
+`icon` is a glyph from the bundled lucide subset or the URL of an asset the app owns (drawn as a mask, so it takes the slot's colour and states). The slot then reads as that picture with a badge on its corner — a check while the switch is on, a ban while it is off — and its name underneath: what the switch is about, and whether it is doing it. `onIcon` / `offIcon` put the app's own pair of badges there instead. A switch with no picture keeps the plain face: the indicator bar, the name centred, the whole slot inverting when it is on. Naming a column for a bounded number makes it a chip wherever it was declared, so it stops competing for a dial slot — a page can spend all 8 dials on the controls it wants big, whatever else it carries. Controls with no column keep packing left around the named ones, and a column already spoken for falls back to packing rather than dropping the control.
 
 Actions reach the pads **only** through `movePads` — every app has buttons, and none of them expect a hardware pad. Two-handed dials (`xy`, `range`) and enums can't be chips, so a column on one of those is ignored and it keeps its dial slot.
 
@@ -1183,7 +1196,7 @@ Bipolar sliders (`bipolar: true` or an `origin`) keep their character on the dia
 
 ### The big-slot library, and multi-slot controls
 
-Every face a dial slot can wear lives in one dictionary, `MOVE_SLOT_LIBRARY` (`src/components/move-slots.tsx`): `default`, `value`, `icon`, `curve`, `enum`, `xy`, `range`, `filter`, `env`, `scope`, `toggle`, `color`, `transfer`, `ramp`, `dial`, and the specimens (`opacity`, `blur`, `pan`, `stereo-width`, `pitch`, `playback`). The library app (`cd example && npm run dev`) shows every one of them live in a single scrolling panel, with the dictionary's own descriptions beside it. Each entry is a pure body — a drawing of computed props with no gestures of its own — so a new face is added by writing a body and dispatching to it from the MovePanel, and the gestures (pointer capture, fine drag, modulation arming) stay in one place.
+Every face a dial slot can wear lives in one dictionary, `MOVE_SLOT_LIBRARY` (`src/components/move-slots.tsx`): `default`, `value`, `icon`, `curve`, `enum`, `xy`, `range`, `filter`, `env`, `scope`, `toggle`, `toggle-icon`, `color`, `transfer`, `ramp`, `dial`, and the specimens (`opacity`, `blur`, `pan`, `stereo-width`, `pitch`, `playback`). The library app (`cd example && npm run dev`) shows every one of them live in a single scrolling panel, with the dictionary's own descriptions beside it. Each entry is a pure body — a drawing of computed props with no gestures of its own — so a new face is added by writing a body and dispatching to it from the MovePanel, and the gestures (pointer capture, fine drag, modulation arming) stay in one place.
 
 Some controls are bigger than one column. A **multi-slot control** follows one pattern, whatever its width:
 
@@ -1292,7 +1305,7 @@ const params = ModulationStore.getValues('fx');               // whole panel
 
 Because the stored value never moves, presets, persistence, and the bridge kit's diffing all stay quiet — no loops, no thrash. Slots and assignments persist to localStorage (fail-soft), so a prototype's modulation setup survives a reload.
 
-**Settings.** Hold an occupied step (or hold its circle on-screen) and the modulator's settings page takes the surface over: the type enum in the first big slot, then the modulator's own controls — for the LFO: rate (its tempo-sync pad directly below), phase, width, and a jitter/smooth XY. A track button puts a regular page back. Under the hood the page is one hidden TweakStore panel (`MOD_SETTINGS_PANEL`, kind `'modulation'` — never in the dock, never on a track), so the bridge kit syncs it to the hardware like any page and every edit flows into the slot's params.
+**Settings.** Hold an occupied step (or hold its circle on-screen) and the modulator's settings page takes the surface over: the type enum in the first big slot, then the modulator's own controls — for the LFO: how fast, the Sync switch beside it, phase, width, jitter and smooth. The speed slot wears whichever control the moment calls for: free-running it is a rate in Hz, synced it is a division of the bar (4 … 1/32), and the oscilloscope runs behind it either way. A track button puts a regular page back. Under the hood the page is one hidden TweakStore panel (`MOD_SETTINGS_PANEL`, kind `'modulation'` — never in the dock, never on a track), so the bridge kit syncs it to the hardware like any page and every edit flows into the slot's params.
 
 Everything the gesture does is also plain API — `createSlot(step, 'lfo')`, `assign(panelId, path, step, amount)`, `updateSlotParams`, `setSlotType`, `removeSlot`, `openSettings(step)` / `closeSettings()` — and `subscribe` / `subscribeFrames` cover structure and per-frame signals (`getSignal(step)` is the slot's raw −1..1).
 

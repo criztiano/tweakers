@@ -2,6 +2,18 @@
 
 export const ICON_CHEVRON = 'M6 9.5L12 15.5L18 9.5';
 
+// The same chevron turned to point along the row: a list row that leads to
+// another page rather than settling a value where it stands, and its mirror
+// for the row that leads back out.
+export const ICON_CHEVRON_RIGHT = 'M9.5 6L15.5 12L9.5 18';
+export const ICON_CHEVRON_LEFT = 'M14.5 6L8.5 12L14.5 18';
+
+// Three dots — a row that opens something over the page instead of moving to
+// one. Rendered as <circle> elements, like ICON_GRIP.
+export const ICON_ELLIPSIS = [
+  { cx: '5.5', cy: '12' }, { cx: '12', cy: '12' }, { cx: '18.5', cy: '12' },
+];
+
 export const ICON_CHECK = 'M5 12.75L10 19L19 5';
 
 export const ICON_PAUSE = [
@@ -121,4 +133,20 @@ export const LUCIDE_ICONS: Record<string, string[]> = {
     'M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1',
   ],
   'audio-lines': ['M2 10v3', 'M6 6v11', 'M10 3v18', 'M14 8v7', 'M18 5v13', 'M22 10v3'],
+  /* switches — what a boolean is about, drawn */
+  repeat: ['m17 2 4 4-4 4', 'M3 11v-1a4 4 0 0 1 4-4h14', 'm7 22-4-4 4-4', 'M21 13v1a4 4 0 0 1-4 4H3'],
+  timer: ['M10 2h4', 'M12 14l3-3', 'M12 6a8 8 0 1 0 0 16 8 8 0 0 0 0-16z'],
 };
+
+/**
+ * The badge a switch wears on the corner of its picture: a ban while it is
+ * off, a check while it is on. Filled rather than stroked, because at badge
+ * size (24px) a solid mark reads as a state and an outline reads as clutter —
+ * and a host that ships its own pair (`onIcon` / `offIcon`) is drawing the
+ * same two things. Both fill a 24×24 box, like every glyph here.
+ */
+export const ICON_BADGE_OFF =
+  'M17.203 19.3594L4.6875 6.7969C3.6094 8.25 3 10.0781 3 12C3 16.9688 7.031 21 12 21C13.969 21 15.75 20.3906 17.203 19.3594ZM19.359 17.2031C20.391 15.75 21 13.9219 21 12C21 7.0312 16.969 3 12 3C10.078 3 8.25 3.6094 6.797 4.6875L19.359 17.2031ZM0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24C5.391 24 0 18.6094 0 12Z';
+
+export const ICON_BADGE_ON =
+  'M12 24C5.391 24 0 18.6094 0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24ZM17.531 6.8438C17.016 6.4688 16.313 6.5625 15.984 7.0781L10.359 14.7656L7.922 12.3281C7.5 11.9062 6.75 11.9062 6.328 12.3281C5.906 12.7969 5.906 13.5 6.328 13.9219L9.703 17.2969C9.937 17.5312 10.266 17.6719 10.594 17.625C10.922 17.625 11.203 17.4375 11.391 17.1562L17.766 8.3906C18.141 7.9219 18.047 7.2188 17.531 6.8438Z';

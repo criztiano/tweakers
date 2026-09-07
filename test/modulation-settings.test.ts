@@ -36,14 +36,26 @@ describe('the modulator settings page', () => {
     expect(TweakStore.getPanels('panel').some((p) => p.id === MOD_SETTINGS_PANEL)).toBe(false);
   });
 
-  it('lays the page out with type in the first big slot and sync under rate', () => {
+  it('lays the page out with type in the first big slot and sync beside rate', () => {
     ModulationStore.createSlot(0);
     ModulationStore.openSettings(0);
     const page = buildModMovePage(TweakStore.getPanel(MOD_SETTINGS_PANEL)!);
-    expect(page.dials.map((c) => c.path)).toEqual(['type', 'rate', 'phase', 'width', 'jitter', 'smooth']);
-    // Rate sits in dial column 1, so the sync pad sits in pad column 1.
-    expect(page.toggles[0]).toBeUndefined();
-    expect(page.toggles[1]?.path).toBe('sync');
+    // Sync is the switch the rate slot is about, so it takes a slot of its
+    // own next to it rather than a pad underneath — and wears its picture.
+    expect(page.dials.map((c) => c.path)).toEqual(['type', 'rate', 'sync', 'phase', 'width', 'jitter', 'smooth']);
+    expect(page.dials[2]?.icon).toBe('timer');
+    expect(page.toggles.filter(Boolean)).toEqual([]);
+  });
+
+  it('swaps the rate slot for a division picker while synced', () => {
+    ModulationStore.createSlot(0);
+    ModulationStore.openSettings(0);
+    TweakStore.updateValue(MOD_SETTINGS_PANEL, 'sync', true);
+    const page = buildModMovePage(TweakStore.getPanel(MOD_SETTINGS_PANEL)!);
+    expect(page.dials.map((c) => c.path)).toEqual(['type', 'division', 'sync', 'phase', 'width', 'jitter', 'smooth']);
+    // The picker holds the divisions, and the page keeps its scope on that slot.
+    expect(page.dials[1]?.options).toContain('1/4');
+    expect(ModulationStore.getSettingsLayout()!.dials[1]).toEqual({ path: 'division', scope: true });
   });
 
   it('flows panel edits into the slot params, jitter and smooth as their own dials', () => {

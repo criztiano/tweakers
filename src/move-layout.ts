@@ -49,8 +49,12 @@ const flat = (controls: ControlMeta[], out: ControlMeta[] = []): ControlMeta[] =
 export const isEnumDial = (c: ControlMeta) =>
   c.type === 'select' && Array.isArray(c.options) && c.options.length > 1;
 
+/** A switch the page is about: it claims a dial slot rather than a pad. */
+export const isToggleDial = (c: ControlMeta) => c.type === 'toggle' && c.moveSlot === true;
+
 /** Everything the hardware turns: the controls that claim a dial slot. */
 export const isMoveDial = (c: ControlMeta) =>
+  isToggleDial(c) ||
   c.type === 'slider' || c.type === 'color' || c.type === 'xy' || c.type === 'range' ||
   c.type === 'filter' || c.type === 'transfer' || c.type === 'gradient' || isEnumDial(c) ||
   (c.type === 'number' && c.min != null && c.max != null);
@@ -59,7 +63,7 @@ const isDial = isMoveDial;
 
 /** Two-handed dials and enums need a slot of their own, never a value chip. */
 const noChip = (c: ControlMeta) =>
-  c.type === 'color' || c.type === 'xy' || c.type === 'range' || c.type === 'filter' ||
+  isToggleDial(c) || c.type === 'color' || c.type === 'xy' || c.type === 'range' || c.type === 'filter' ||
   c.type === 'transfer' || c.type === 'gradient' || isEnumDial(c);
 
 /**
@@ -103,8 +107,8 @@ export function buildModMovePage(panel: PanelConfig, layout?: ModPageLayout | nu
   for (const c of controls) {
     // The kind picker keeps its slot even while only one modulator type is
     // registered (a 1-option select is not an enum dial by the kit's rule).
-    // A `big` toggle takes a dial slot of its own instead of a pad.
-    if (c.type === 'toggle' && !(c as { big?: boolean }).big) toggles[Math.max(0, dials.length - 1)] = c;
+    // A `moveSlot` toggle takes a dial slot of its own instead of a pad.
+    if (c.type === 'toggle' && !isToggleDial(c)) toggles[Math.max(0, dials.length - 1)] = c;
     else if (c.type === 'toggle' || c.type === 'select' || isDial(c)) dials.push(c);
   }
   return { panel, dials: dials.slice(0, MOVE_DIALS), toggles: toggles.slice(0, MOVE_PADS), values: [], actions: [] };
@@ -171,7 +175,7 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
       };
       for (const c of controls) {
         const col = padColumn(panel, c);
-        if (c.type === 'toggle') place(toggles, c, col);
+        if (c.type === 'toggle' && !isToggleDial(c)) place(toggles, c, col);
         // Actions reach the pads only when the page asks for them by column —
         // every app has buttons, and none of them expect a hardware pad.
         else if (c.type === 'action') { if (col !== null) place(actions, c, col); }
@@ -232,6 +236,11 @@ export function visibleColumns(page: MovePage): number[] {
   }
   return cols;
 }
+
+/** A boolean dial's position: exact endpoints, and halfway reads as on — the
+ *  same rule the on-screen slot follows, so the knob and the slot agree. */
+export const normalizeToggleDial = (value: unknown): number => (value === true ? 1 : 0);
+export const denormalizeToggleDial = (v01: number): boolean => Number.isFinite(v01) && v01 >= 0.5;
 
 /** Dial position 0..1 back to the control's real value, kit-identical. */
 export function denormalizeDial(meta: ControlMeta, v01: number): number {

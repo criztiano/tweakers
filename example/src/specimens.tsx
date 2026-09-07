@@ -206,7 +206,13 @@ export const BIG_SLOTS: Specimen[] = [
   {
     kind: 'toggle', path: 'hold',
     description: MOVE_SLOT_LIBRARY.toggle.description,
-    render: () => <MoveSlotToggleBody label="Hold" on />,
+    render: () => <MoveSlotToggleBody label="Hold" checked />,
+  },
+  {
+    kind: 'toggle-icon', path: 'loop',
+    description: MOVE_SLOT_LIBRARY['toggle-icon'].description,
+    note: 'The switch on the strip is on; this one is drawn off — the badge is the whole difference. An app that ships its own pair of badges (a brush, a check, a ban) passes them as `icon`, `onIcon` and `offIcon`.',
+    render: () => <MoveSlotToggleBody label="Loop" checked={false} icon="repeat" />,
   },
   {
     kind: 'range', path: 'band',

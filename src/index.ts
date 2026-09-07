@@ -21,7 +21,7 @@ export {
 } from './components/MovePanel';
 export { MoveActionButton } from './components/MoveActionButton';
 export type { MoveActionButtonProps } from './components/MoveActionButton';
-export { buildMovePages, buildModMovePage, movePadRows, moveAppPadRow, visibleColumns, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isMoveDial, isSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
+export { buildMovePages, buildModMovePage, movePadRows, moveAppPadRow, visibleColumns, isToggleDial, normalizeToggleDial, denormalizeToggleDial, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isMoveDial, isSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
 export type { MovePage } from './move-layout';
 
 // The endless strip — a page with more slots than the Move has dials
@@ -59,12 +59,12 @@ export type { MoveVolumeDisplayState } from './move-volume';
 export { ICON_MOVE_CAPTURE, ICON_MOVE_ENTER } from './icons';
 // Raw hardware an app claims for itself — the bottom pad rows, the step
 // buttons, the device screen — kept for the on-screen mirror.
-export { MoveSurfaceStore } from './move-surface-store';
-export type { MovePadCell, MoveStepCell, MoveScreenList, MoveSurfaceState } from './move-surface-store';
+export { MoveSurfaceStore, moveScreenRowLabel, moveScreenChecked } from './move-surface-store';
+export type { MovePadCell, MoveStepCell, MoveScreenList, MoveScreenRow, MoveSurfaceState } from './move-surface-store';
 
 // List screen (the Move's dark display list, standalone)
 export { ListScreen } from './components/ListScreen';
-export type { ListScreenProps, ListScreenItem } from './components/ListScreen';
+export type { ListScreenProps, ListScreenItem, ListScreenDetail } from './components/ListScreen';
 
 // Modulation layer — slots, assignments, the engine, and the type registry
 export { ModulationStore, MOD_TOUCH_GRACE_MS } from './store/ModulationStore';
@@ -264,6 +264,7 @@ export type {
   TransitionConfig,
   ActionConfig,
   SelectConfig,
+  ToggleConfig,
   ColorConfig,
   GradientConfig,
   XYConfig,

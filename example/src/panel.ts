@@ -56,6 +56,9 @@ export const CONFIG = {
 
   /* ── a switch that earned a slot of its own ───────────────────── */
   hold: false,
+  /* the same switch, drawn: the picture of the thing it turns on, badged
+     with a check while it is on and a ban while it is off */
+  loop: { type: 'toggle', default: true, icon: 'repeat' },
 
   /* ── the small slots: the pad row under the dials. Each one names the
         column it sits in (see MOVE_PADS below), so it travels with the

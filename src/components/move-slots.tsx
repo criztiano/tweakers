@@ -3,7 +3,7 @@ import { moveNumericDrawing, movePlaybackMode, type MovePlaybackMode } from '../
 import { MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
 export { MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
 import type { ControlMeta } from '../store/TweakStore';
-import { LUCIDE_ICONS } from '../icons';
+import { ICON_BADGE_OFF, ICON_BADGE_ON, LUCIDE_ICONS } from '../icons';
 import { enumOptionLabel, enumOptionValue } from '../move-layout';
 import { arcPath } from '../angle-core';
 import { resolveFilterAxis, type FilterValue } from '../filter-core';
@@ -48,6 +48,9 @@ import { ListScreen } from './ListScreen';
  *   signal fills the slot behind the dial's own readout and bar.
  * - `toggle`  — a switch in a big slot of its own: the pad's language at
  *   slot size, the whole slot inverting when it is on.
+ * - `toggle-icon` — the same switch drawn as its own picture: the glyph of
+ *   the thing it turns on, with a ban struck across it while it is off. What
+ *   the switch does and whether it is doing it become one look.
  *
  * Multi-slot controls (`filter` spans 2 columns, `env` spans 4) follow one
  * pattern: the container takes `grid-column: span N`, the display and its
@@ -76,7 +79,8 @@ export type MoveSlotKind =
   | 'playback'
   | 'env'
   | 'scope'
-  | 'toggle';
+  | 'toggle'
+  | 'toggle-icon';
 
 /** Which face a control wears in its slot, from its meta and moment. */
 export function moveSlotKind(
@@ -86,7 +90,7 @@ export function moveSlotKind(
   if (meta.type === 'color') return 'color';
   if (meta.type === 'filter') return 'filter';
   if (opts.stage) return 'env';
-  if (meta.type === 'toggle') return 'toggle';
+  if (meta.type === 'toggle') return meta.icon ? 'toggle-icon' : 'toggle';
   if (meta.type === 'transfer') return 'transfer';
   if (meta.type === 'gradient') return 'ramp';
   if (meta.type === 'slider' && meta.display === 'dial') return 'dial';
@@ -199,9 +203,13 @@ export const MOVE_LIST_ROWS = 5;
  *  selection — and a touch grows the screen up out of the slot to the whole
  *  list, so the run can be seen while the knob is going through it. It is a
  *  readout, not a second control — the slot's own drag, and the column's
- *  knob, still step the options. */
+ *  knob, still step the options.
+ *
+ *  A slot the page has put its oscilloscope in already has a picture — the
+ *  live wave — so it keeps the named option and drops the list, which the
+ *  wave would be running behind. */
 export function MoveSlotEnumBody({
-  label, optionLabel, options, activeIdx, shape, glyph, playback,
+  label, optionLabel, options, activeIdx, shape, glyph, playback, scoped,
 }: {
   label: string;
   optionLabel: string;
@@ -210,12 +218,14 @@ export function MoveSlotEnumBody({
   shape: string | null;
   glyph: string | null;
   playback?: MovePlaybackMode | null;
+  /** The slot draws the modulator's live signal behind this face. */
+  scoped?: boolean;
 }) {
   const selected = options[activeIdx];
 
   // A picture names one option at a time, so it keeps the pagination cells
   // to say where that one sits. A list has the whole run on it already.
-  if (playback || shape || glyph) {
+  if (playback || shape || glyph || scoped) {
     return (
       <>
         <span className="tweakers-move-dial-tag">{label}</span>
@@ -560,13 +570,72 @@ export function MoveSlotScopeBody({
  * indicator bar up top, the name centred, the whole slot inverting when it
  * is on. For the switches that deserve a column (the envelope's Loop, with
  * its pad row spent on the bend gesture).
+ *
+ * A switch that names a picture wears it instead: the thing it turns on,
+ * drawn big, with a badge on its corner — a check while it is on, a ban
+ * while it is off — and its name underneath. The picture says what the
+ * switch is about and the badge says whether it is doing it, so neither has
+ * to be read as a word. `onIcon` / `offIcon` replace the kit's own badges
+ * where a host has drawn its pair.
  */
-export function MoveSlotToggleBody({ label, on }: { label: string; on: boolean }) {
+export function MoveSlotToggleBody({ label, checked, icon, onIcon, offIcon }: {
+  label: string;
+  checked: boolean;
+  /** The switch's own picture: a glyph name, or a host asset's URL. */
+  icon?: string;
+  /** The host's own state badges, in place of the kit's check and ban. */
+  onIcon?: string;
+  offIcon?: string;
+}) {
+  const badge = checked ? onIcon : offIcon;
+  if (!icon) {
+    return (
+      <>
+        <span className="tweakers-move-dial-toggle-indicator" data-on={checked || undefined} />
+        <span className="tweakers-move-dial-toggle-label">{label}</span>
+      </>
+    );
+  }
   return (
     <>
-      <span className="tweakers-move-dial-toggle-indicator" data-on={on || undefined} />
-      <span className="tweakers-move-dial-toggle-label">{label}</span>
+      <span className="tweakers-move-toggle-picture" aria-hidden="true">
+        <MoveSlotIcon icon={icon} className="tweakers-move-toggle-icon" />
+        <span className="tweakers-move-toggle-badge">
+          {badge
+            ? <MoveSlotIcon icon={badge} className="tweakers-move-toggle-state-icon" />
+            : <MoveSlotBadge on={checked} />}
+        </span>
+      </span>
+      <span className="tweakers-move-toggle-label">{label}</span>
     </>
+  );
+}
+
+/** A bundled glyph or a host-owned asset; both take the slot's own colour. */
+function MoveSlotIcon({ icon, className }: { icon: string; className: string }) {
+  if (LUCIDE_ICONS[icon]) return <MoveSlotGlyph name={icon} className={className} />;
+  const mask = `url(${JSON.stringify(icon)})`;
+  return (
+    <span
+      className={className}
+      data-asset
+      aria-hidden="true"
+      style={{ maskImage: mask, WebkitMaskImage: mask }}
+    />
+  );
+}
+
+/** The kit's own state badge, for a switch that named only its picture. */
+function MoveSlotBadge({ on }: { on: boolean }) {
+  return (
+    <svg
+      className="tweakers-move-toggle-state-icon"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d={on ? ICON_BADGE_ON : ICON_BADGE_OFF} />
+    </svg>
   );
 }
 
@@ -683,6 +752,7 @@ export const MOVE_SLOT_LIBRARY = {
   env: { description: '4 slots: the whole ADSR as one shape, a caption per stage', component: MoveSlotEnvBody },
   scope: { description: 'a dial with the live signal filling it behind the readout', component: MoveSlotScopeBody },
   toggle: { description: 'a switch in a big slot — the pad’s language at slot size', component: MoveSlotToggleBody },
+  'toggle-icon': { description: 'a switch drawn as its own picture — the glyph takes a ban while it is off', component: MoveSlotToggleBody },
   transfer: { description: 'a response curve, one knob holding one of its points', component: MoveSlotTransferBody },
   ramp: { description: 'a colour ramp, one knob holding one of its stops', component: MoveSlotRampBody },
   dial: { description: 'a needle, for values whose two ends are the same place', component: MoveSlotDialBody },

@@ -18,6 +18,8 @@
  * Leave it alone and the panel behaves exactly as it always has.
  */
 
+import type { ListScreenDetail } from './components/ListScreen';
+
 /** One pad on a claimed row. `y` is 0 for the bottom row, 1 for the one above. */
 export interface MovePadCell {
   x: number;
@@ -40,12 +42,28 @@ export interface MoveStepCell {
   lit?: boolean;
 }
 
+/** One row of the app's list. A plain string is a row that settles a value
+ * where it stands; the object form adds where the row leads and whether it is
+ * switched on, which the panel draws as a mark at the row's end. */
+export type MoveScreenRow =
+  | string
+  | { label: string; detail?: ListScreenDetail; checked?: boolean };
+
 /** The app's list on the Move's own 128×64 screen. */
 export interface MoveScreenList {
   title?: string;
-  items: string[];
+  items: MoveScreenRow[];
   index: number;
 }
+
+/** A row's label, whichever form the host wrote it in. */
+export const moveScreenRowLabel = (row: MoveScreenRow): string =>
+  typeof row === 'string' ? row : row.label;
+
+/** The rows a list has switched on, by index — what the hardware screen needs
+ * to mark them, since it takes labels rather than rows. */
+export const moveScreenChecked = (rows: MoveScreenRow[]): number[] =>
+  rows.flatMap((row, i) => (typeof row !== 'string' && row.checked ? [i] : []));
 
 export interface MoveSurfaceState {
   /** Pad rows the app claimed: 0 (none), 1 (the bottom row), or 2. */
@@ -64,6 +82,7 @@ const EMPTY: MoveSurfaceState = { rows: 0, pads: [], steps: null, screen: null }
 let state: MoveSurfaceState = EMPTY;
 const listeners = new Set<Listener>();
 const pressListeners = new Set<PressListener>();
+const screenSelectListeners = new Set<(index: number) => void>();
 
 const emit = () => {
   for (const fn of listeners) fn();
@@ -102,6 +121,18 @@ export const MoveSurfaceStore = {
 
   setScreen(screen: MoveScreenList | null) {
     patch('screen', screen);
+  },
+
+  /** Selection intent from the panel's wheel screen; the host owns the value,
+   *  exactly as it owns what a hardware wheel turn means. */
+  onScreenSelect(fn: (index: number) => void): () => void {
+    screenSelectListeners.add(fn);
+    return () => screenSelectListeners.delete(fn);
+  },
+
+  selectScreen(index: number) {
+    if (!state.screen || !Number.isInteger(index) || index < 0 || index >= state.screen.items.length) return;
+    for (const fn of screenSelectListeners) fn(index);
   },
 
   /** A tap on an on-screen pad, for the host to treat like a hardware press. */

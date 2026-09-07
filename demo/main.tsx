@@ -5,6 +5,7 @@ import { ModulationStore } from '../src/store/ModulationStore';
 import { MoveColorStore } from '../src/move-color';
 import { MoveFunctions } from '../src/move-functions';
 import { MovePresetStore } from '../src/move-presets';
+import { MoveSurfaceStore, type MoveScreenRow } from '../src/move-surface-store';
 import '../src/styles/theme.css';
 
 // Two pages, so the track buttons have something to switch between.
@@ -46,6 +47,32 @@ if (!ModulationStore.getSlot(0)) {
   ModulationStore.assign('tone', 'level', 0, 1);
 }
 ModulationStore.openSettings(0);
+
+// The app's own list, on the wheel screen beside the slots: rows that settle
+// a value where they stand, rows that lead somewhere, and rows you switch on
+// and off. The host owns what a row means — a click is intent, exactly like a
+// wheel turn — so the ticks and the cursor are kept right here. A modulator's
+// settings page takes the surface over, list included: press a track button
+// to put the pages (and this) back.
+const TRACKS: MoveScreenRow[] = [
+  'Drums',
+  { label: 'Bass', checked: true },
+  { label: 'Keys', checked: false },
+  { label: 'Sends', detail: 'page' },
+  { label: 'Rename…', detail: 'dialog' },
+  { label: 'Back', detail: 'back' },
+];
+let cursor = 0;
+const showTracks = () => MoveSurfaceStore.setScreen({ title: 'Tracks', items: TRACKS, index: cursor });
+MoveSurfaceStore.onScreenSelect((index) => {
+  cursor = index;
+  // A row that leads somewhere is not a thing you switch: taking it is the
+  // whole gesture. The others tick on and off under the cursor.
+  const row = TRACKS[index];
+  if (typeof row !== 'string' && row.checked !== undefined) row.checked = !row.checked;
+  showTracks();
+});
+showTracks();
 
 // Keyboard stand-ins for the hardware. M = the Menu button (tap opens and
 // dismisses; Shift+M is the long press, the save input). Holding C is the
