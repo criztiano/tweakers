@@ -23,6 +23,10 @@ export interface WaveformRuntime {
   gridSubdivisions: number;
   waveColor?: string;
   playheadColor?: string;
+  /** The faint horizontal centre line behind the waveform. */
+  baseline: boolean;
+  /** Smooth mode: points the envelope simplifies to — more points, less smoothing. */
+  smoothPoints: number;
   autoZoomOnLoop: boolean;
   loop: WaveformLoop | null;
   /** Manual zoom level (the wrapper owns the +/− buttons). */
@@ -49,8 +53,8 @@ const BANDS: { type: BiquadFilterType; freq: number; q?: number }[] = [
 // Low / mid / high — purple, cyan, lime.
 const BAND_COLORS = ['#a855f7', '#22d3ee', '#a3e635'];
 
-// Smooth mode: how many points the envelope is simplified to.
-const SIMPLE_POINTS = 46;
+// Smooth mode: how many points the envelope is simplified to by default.
+export const WAVEFORM_SMOOTH_POINTS = 46;
 // Fill opacity used only for the bordered (outlined) variant.
 const BORDER_FILL_ALPHA = 0.2;
 // Pointer travel (CSS px) past which a press becomes a loop-drag rather than a click.
@@ -282,14 +286,16 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
     if (rt.grid) drawGrid(base, rt.gridSubdivisions);
 
     // center baseline
-    ctx.strokeStyle = base;
-    ctx.globalAlpha = 0.15;
-    ctx.lineWidth = dpr;
-    ctx.beginPath();
-    ctx.moveTo(0, Math.round(cy) + 0.5);
-    ctx.lineTo(W, Math.round(cy) + 0.5);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+    if (rt.baseline) {
+      ctx.strokeStyle = base;
+      ctx.globalAlpha = 0.15;
+      ctx.lineWidth = dpr;
+      ctx.beginPath();
+      ctx.moveTo(0, Math.round(cy) + 0.5);
+      ctx.lineTo(W, Math.round(cy) + 0.5);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
 
     const wave = rt.waveColor || base;
     const ph = rt.playheadColor || base;
@@ -326,7 +332,7 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
         fillPeaks(slice, W, pk.min, pk.max);
         const color = count === 3 ? BAND_COLORS[i] : wave;
         if (rt.mode === 'pixelated') drawColumns(pk, color, rt.pixelSize);
-        else drawSimplified(envelope(pk, W, SIMPLE_POINTS), color, rt.border);
+        else drawSimplified(envelope(pk, W, Math.max(2, rt.smoothPoints || WAVEFORM_SMOOTH_POINTS)), color, rt.border);
       }
     }
 

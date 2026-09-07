@@ -3090,6 +3090,10 @@ interface MoveWaveformProps {
     bands?: boolean;
     waveColor?: string;
     playheadColor?: string;
+    /** The faint horizontal centre line behind the waveform (default on). */
+    baseline?: boolean;
+    /** Smooth mode: points the envelope simplifies to — more points, less smoothing. */
+    smoothPoints?: number;
     height?: number;
     /** Anything the app draws over the waveform — grain ticks, markers. */
     children?: React.ReactNode;
@@ -3106,7 +3110,7 @@ interface MoveWaveformProps {
  * one wheel, so there is one waveform. The app keeps its own state; this
  * reports moves through `onSeek` / `onLoopChange` like any control.
  */
-declare function MoveWaveform({ buffer, variant, getProgress, progress, onSeek, onLoopChange, mode, pixelSize, grid, bands, waveColor, playheadColor, height, children, theme, productionEnabled, className, }: MoveWaveformProps): react_jsx_runtime.JSX.Element | null;
+declare function MoveWaveform({ buffer, variant, getProgress, progress, onSeek, onLoopChange, mode, pixelSize, grid, bands, waveColor, playheadColor, baseline, smoothPoints, height, children, theme, productionEnabled, className, }: MoveWaveformProps): react_jsx_runtime.JSX.Element | null;
 
 /**
  * The Move's volume-dial readout, offered to the app as a tiny display slot.
@@ -3735,6 +3739,10 @@ interface WaveformVisualizationProps {
     waveColor?: string;
     /** Playhead color; the loop band derives from it at a lower opacity. Defaults to the theme color. */
     playheadColor?: string;
+    /** The faint horizontal centre line behind the waveform (default on). */
+    baseline?: boolean;
+    /** Smooth mode: points the envelope simplifies to — more points, less smoothing. */
+    smoothPoints?: number;
     /** When true, selecting a loop auto-zooms to frame it (manual zoom resumes once the loop is cleared). */
     autoZoomOnLoop?: boolean;
     /**
@@ -3746,7 +3754,7 @@ interface WaveformVisualizationProps {
     width?: number;
     height?: number;
 }
-declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, grid, gridSubdivisions, onSeek, loop, onLoopChange, waveColor, playheadColor, autoZoomOnLoop, zoom: zoomProp, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
+declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, grid, gridSubdivisions, onSeek, loop, onLoopChange, waveColor, playheadColor, baseline, smoothPoints, autoZoomOnLoop, zoom: zoomProp, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
 
 interface CurveComposerProps {
     /** The curve series (controlled). */

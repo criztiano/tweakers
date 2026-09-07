@@ -2244,6 +2244,10 @@
   width: min(1180px, calc(100vw - 40px));
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   pointer-events: auto;
+  /* The editor's display: light card, a 12px frame of it around the wave. */
+  background: #dfe2cc;
+  color: #1e1e1e;
+  padding: 12px;
 }
 
 .tweakers-list-screen,

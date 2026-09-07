@@ -1372,7 +1372,7 @@ var BANDS = [
   { type: "highpass", freq: 4200 }
 ];
 var BAND_COLORS = ["#a855f7", "#22d3ee", "#a3e635"];
-var SIMPLE_POINTS = 46;
+var WAVEFORM_SMOOTH_POINTS = 46;
 var BORDER_FILL_ALPHA = 0.2;
 var DRAG_THRESHOLD2 = 3;
 var EDGE_HIT2 = 6;
@@ -1551,14 +1551,16 @@ function createWaveformEngine(canvas, get) {
     ctx.clearRect(0, 0, W, H);
     ctx.imageSmoothingEnabled = rt.mode === "smooth";
     if (rt.grid) drawGrid(base, rt.gridSubdivisions);
-    ctx.strokeStyle = base;
-    ctx.globalAlpha = 0.15;
-    ctx.lineWidth = dpr;
-    ctx.beginPath();
-    ctx.moveTo(0, Math.round(cy) + 0.5);
-    ctx.lineTo(W, Math.round(cy) + 0.5);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+    if (rt.baseline) {
+      ctx.strokeStyle = base;
+      ctx.globalAlpha = 0.15;
+      ctx.lineWidth = dpr;
+      ctx.beginPath();
+      ctx.moveTo(0, Math.round(cy) + 0.5);
+      ctx.lineTo(W, Math.round(cy) + 0.5);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
     const wave = rt.waveColor || base;
     const ph = rt.playheadColor || base;
     const prog = Math.max(0, Math.min(1, (rt.getProgress ? rt.getProgress() : rt.progress) || 0));
@@ -1588,7 +1590,7 @@ function createWaveformEngine(canvas, get) {
         fillPeaks(slice, W, pk.min, pk.max);
         const color = count === 3 ? BAND_COLORS[i] : wave;
         if (rt.mode === "pixelated") drawColumns(pk, color, rt.pixelSize);
-        else drawSimplified(envelope(pk, W, SIMPLE_POINTS), color, rt.border);
+        else drawSimplified(envelope(pk, W, Math.max(2, rt.smoothPoints || WAVEFORM_SMOOTH_POINTS)), color, rt.border);
       }
     }
     if (drag && drag.moved) {
@@ -1728,6 +1730,8 @@ function WaveformVisualization({
   onLoopChange,
   waveColor,
   playheadColor,
+  baseline = true,
+  smoothPoints = WAVEFORM_SMOOTH_POINTS,
   autoZoomOnLoop = false,
   zoom: zoomProp,
   width = 256,
@@ -1751,6 +1755,8 @@ function WaveformVisualization({
     gridSubdivisions,
     waveColor,
     playheadColor,
+    baseline,
+    smoothPoints,
     autoZoomOnLoop,
     loop,
     zoom,
@@ -1956,7 +1962,7 @@ var isDevDefault = typeof process !== "undefined" && process?.env?.NODE_ENV ? pr
 import { jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
 var SLOT_HEIGHT = 140;
 var SLOT_ZOOM = 4;
-var DOCK_GAP = 10;
+var DOCK_GAP = 14;
 function MoveWaveform({
   buffer = null,
   variant = "page",
@@ -1970,6 +1976,8 @@ function MoveWaveform({
   bands = false,
   waveColor,
   playheadColor,
+  baseline = true,
+  smoothPoints,
   height,
   children,
   theme = "system",
@@ -2046,6 +2054,8 @@ function MoveWaveform({
       bands,
       ...waveColor ? { waveColor } : {},
       ...playheadColor ? { playheadColor } : {},
+      baseline,
+      ...smoothPoints != null ? { smoothPoints } : {},
       loop: state2.loop,
       zoom: variant === "slot" ? Math.max(SLOT_ZOOM, state2.zoom) : state2.zoom,
       onSeek: (p) => MoveWaveformStore.setView({ position: p }),
@@ -6517,7 +6527,11 @@ function MoveAudioWave({ index, theme }) {
       getProgress: () => ModulationStore2.getSlotPhase(index),
       onSeek: (p) => ModulationStore2.updateSlotParams(index, { position: p }),
       onLoopChange: (loop) => ModulationStore2.updateSlotParams(index, loop ? { loopStart: loop.start, loopEnd: loop.end, loopOn: true } : { loopStart: 0, loopEnd: 1 }),
-      waveColor: modColor(index)
+      mode: "smooth",
+      smoothPoints: 200,
+      baseline: false,
+      waveColor: "#1e1e1e",
+      playheadColor: modColor(index)
     }
   );
 }

@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
-import { createWaveformEngine, WAVEFORM_MAX_ZOOM } from '../waveform-engine';
+import { createWaveformEngine, WAVEFORM_MAX_ZOOM, WAVEFORM_SMOOTH_POINTS } from '../waveform-engine';
 import type { WaveformRuntime } from '../waveform-engine';
 
 export type { WaveformMode, WaveformLoop } from '../waveform-engine';
@@ -53,6 +53,10 @@ interface WaveformVisualizationProps {
   waveColor?: string;
   /** Playhead color; the loop band derives from it at a lower opacity. Defaults to the theme color. */
   playheadColor?: string;
+  /** The faint horizontal centre line behind the waveform (default on). */
+  baseline?: boolean;
+  /** Smooth mode: points the envelope simplifies to — more points, less smoothing. */
+  smoothPoints?: number;
   /** When true, selecting a loop auto-zooms to frame it (manual zoom resumes once the loop is cleared). */
   autoZoomOnLoop?: boolean;
   /**
@@ -80,6 +84,8 @@ export function WaveformVisualization({
   onLoopChange,
   waveColor,
   playheadColor,
+  baseline = true,
+  smoothPoints = WAVEFORM_SMOOTH_POINTS,
   autoZoomOnLoop = false,
   zoom: zoomProp,
   width = 256,
@@ -105,6 +111,8 @@ export function WaveformVisualization({
     gridSubdivisions,
     waveColor,
     playheadColor,
+    baseline,
+    smoothPoints,
     autoZoomOnLoop,
     loop,
     zoom,

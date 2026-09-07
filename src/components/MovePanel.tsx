@@ -2003,7 +2003,14 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
         ModulationStore.updateSlotParams(index, loop
           ? { loopStart: loop.start, loopEnd: loop.end, loopOn: true }
           : { loopStart: 0, loopEnd: 1 })}
-      waveColor={modColor(index)}
+      // The editor's card: the sample dark on the light display, lightly
+      // smoothed, no centre line — the slot's colour stays on the playhead
+      // and the loop band, so the slot still signs its editor.
+      mode="smooth"
+      smoothPoints={200}
+      baseline={false}
+      waveColor="#1e1e1e"
+      playheadColor={modColor(index)}
     />
   );
 }
