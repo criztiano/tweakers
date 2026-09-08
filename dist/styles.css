@@ -576,9 +576,12 @@
   background: #dee3c9;
 }
 
-/* The pale function buttons — printed glyph, light neutral, like shift. */
+/* The pale function buttons — printed glyph, light neutral, like shift.
+   Sampling sits with them: on the Move it is one of the pale keys, and it
+   wears the enter dot because it confirms the same way. */
 .tweakers-move-action[data-kind="loop"],
-.tweakers-move-action[data-kind="copy"] {
+.tweakers-move-action[data-kind="copy"],
+.tweakers-move-action[data-kind="sample"] {
   background: #dee3c9;
 }
 
