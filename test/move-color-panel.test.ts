@@ -2,7 +2,7 @@ import { createElement } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MovePanel, MOVE_PAGE_EVENT } from '../src/components/MovePanel';
-import { MoveColorStore, MOVE_COLOR_WHEEL } from '../src/move-color';
+import { MoveColorStore, MOVE_COLOR_PALETTES } from '../src/move-color';
 import { TweakStore } from '../src/store/TweakStore';
 import { MoveSurfaceStore } from '../src/move-surface-store';
 import { buildMovePages } from '../src/move-layout';
@@ -15,6 +15,7 @@ afterEach(() => {
   act(() => renderer?.unmount());
   renderer = undefined;
   MoveColorStore.close();
+  MoveColorStore.setPalette(null);
   TweakStore.unregisterPanel(id);
   TweakStore.unregisterPanel(`${id}-other`);
   vi.unstubAllGlobals();
@@ -46,22 +47,21 @@ describe('Move color panel', () => {
     expect(fullPage.values).toEqual([]);
   });
 
-  it('opens a mirrored hue grid and makes both copies edit the same hue', () => {
+  it('opens the editor with hue and lightness sliders and copiable readouts', () => {
     mount();
     act(() => slot().props.onClick());
     expect(renderer!.root.findByProps({ role: 'dialog' }).props['aria-label']).toBe('Color color editor');
-    /* two rows of eight — the hues the Move's pads can actually light */
-    expect(grid('Hue').findAllByType('button')).toHaveLength(16);
-    expect(grid('Move hue grid').findAllByType('button')).toHaveLength(16);
-    act(() => grid('Move hue grid').findAllByType('button')[10].props.onClick());
-    expect(MoveColorStore.read(id, 'color').h).toBe(MOVE_COLOR_WHEEL[10]);
-    expect(grid('Hue').findAllByType('button')[10].props['aria-pressed']).toBe(true);
-    act(() => grid('Hue').findAllByType('button')[3].props.onClick());
-    expect(MoveColorStore.read(id, 'color').h).toBe(MOVE_COLOR_WHEEL[3]);
-    expect(grid('Move hue grid').findAllByType('button')[3].props['aria-pressed']).toBe(true);
+    act(() => renderer!.root.findByProps({ 'aria-label': 'Hue' }).props.onChange({ target: { value: '120' } }));
+    expect(MoveColorStore.read(id, 'color').h).toBe(120);
+    act(() => renderer!.root.findByProps({ 'aria-label': 'Lightness' }).props.onChange({ target: { value: '0.25' } }));
+    expect(MoveColorStore.read(id, 'color').l).toBe(0.25);
+    /* the three copiable readouts sit in the header */
+    for (const label of ['HSL', 'HEX', 'OKLCH']) {
+      expect(renderer!.root.findByProps({ 'aria-label': `Copy ${label} value` })).toBeTruthy();
+    }
   });
 
-  it('supports opacity endpoints and luminosity without requiring alpha metadata', () => {
+  it('supports opacity endpoints from the sequencer and the first pad row', () => {
     mount();
     act(() => MoveColorStore.open(id, 'color'));
     expect(grid('Color opacity sequencer').findAllByType('button')).toHaveLength(16);
@@ -70,10 +70,36 @@ describe('Move color panel', () => {
     expect(TweakStore.getValue(id, 'color')).toBe('#ff000000');
     act(() => grid('Color opacity sequencer').findAllByType('button')[15].props.onClick());
     expect(MoveColorStore.read(id, 'color').a).toBe(1);
-    act(() => renderer!.root.findByProps({ 'aria-label': 'Luminosity' }).props.onChange({ target: { value: '0.25' } }));
-    expect(MoveColorStore.read(id, 'color').l).toBe(0.25);
-    act(() => renderer!.root.findByProps({ 'aria-label': 'Opacity' }).props.onChange({ target: { value: '0.4' } }));
-    expect(MoveColorStore.read(id, 'color').a).toBe(0.4);
+    /* the mirrored pad row: eight levels, lit progressively up to the level */
+    const pads = grid('Opacity pads').findAllByType('button');
+    expect(pads).toHaveLength(8);
+    act(() => pads[3].props.onClick());
+    expect(MoveColorStore.read(id, 'color').a).toBeCloseTo(3 / 7);
+    const lit = grid('Opacity pads').findAllByType('button').filter(pad => pad.props['data-on']);
+    expect(lit).toHaveLength(4);
+  });
+
+  it('locks the dial to a palette, steps between its colours, and comes back via All colors', () => {
+    mount();
+    act(() => MoveColorStore.open(id, 'color'));
+    act(() => MoveColorStore.openPicker());
+    expect(MoveColorStore.isPickerOpen()).toBe(true);
+    /* row 0 is "All colors"; row 1 the first palette */
+    act(() => MoveColorStore.choosePicker(1));
+    expect(MoveColorStore.getPaletteId()).toBe(MOVE_COLOR_PALETTES[0].id);
+    expect(MoveColorStore.isPickerOpen()).toBe(false);
+    act(() => MoveColorStore.setPaletteColor(5));
+    expect(MoveColorStore.paletteIndex(id, 'color')).toBe(5);
+    /* a turn is a step to the neighbouring palette colour */
+    act(() => MoveColorStore.turn(id, 'color', 1));
+    expect(MoveColorStore.paletteIndex(id, 'color')).toBe(6);
+    act(() => MoveColorStore.turn(id, 'color', -1));
+    expect(MoveColorStore.paletteIndex(id, 'color')).toBe(5);
+    /* free hue writes snap onto the palette while it is locked */
+    act(() => MoveColorStore.update(id, 'color', { h: 3 }));
+    expect(MoveColorStore.paletteIndex(id, 'color')).not.toBeNull();
+    act(() => { MoveColorStore.openPicker(); MoveColorStore.choosePicker(0); });
+    expect(MoveColorStore.getPaletteId()).toBeNull();
   });
 
   it('distinguishes a tap from a hue drag and supports keyboard edits while closed', () => {
@@ -98,8 +124,8 @@ describe('Move color panel', () => {
     act(() => MoveColorStore.open(id, 'color'));
     act(() => TweakStore.setDisabled(id, 'color', true));
     expect(slot().props.disabled).toBe(true);
-    expect(grid('Hue').findAllByType('button').every(button => button.props.disabled)).toBe(true);
-    expect(renderer!.root.findByProps({ 'aria-label': 'Opacity' }).props.disabled).toBe(true);
+    expect(renderer!.root.findByProps({ 'aria-label': 'Hue' }).props.disabled).toBe(true);
+    expect(grid('Opacity pads').findAllByType('button').every(button => button.props.disabled)).toBe(true);
   });
 
   it('closes on Escape, outside pointer, page change and unmount', () => {
