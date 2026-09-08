@@ -123,6 +123,8 @@ __export(index_exports, {
   TRANSFER_MIN_GAP: () => TRANSFER_MIN_GAP,
   TimelineStore: () => TimelineStore,
   TweakStore: () => import_TweakStore8.TweakStore,
+  WAVEFORM_MAX_ZOOM: () => WAVEFORM_MAX_ZOOM,
+  WAVEFORM_SMOOTH_POINTS: () => WAVEFORM_SMOOTH_POINTS,
   WaveformVisualization: () => WaveformVisualization,
   XY_DEFAULT_STEP: () => XY_DEFAULT_STEP,
   XY_DETENT_PX: () => XY_DETENT_PX,
@@ -1679,7 +1681,7 @@ var import_react_dom = require("react-dom");
 var import_react = require("react");
 
 // src/waveform-engine.ts
-var WAVEFORM_MAX_ZOOM = 8;
+var WAVEFORM_MAX_ZOOM = 1024;
 var BANDS = [
   { type: "lowpass", freq: 250 },
   { type: "bandpass", freq: 1100, q: 0.6 },
@@ -8036,6 +8038,8 @@ var import_TweakStore8 = require("tweakers/store");
   TRANSFER_MIN_GAP,
   TimelineStore,
   TweakStore,
+  WAVEFORM_MAX_ZOOM,
+  WAVEFORM_SMOOTH_POINTS,
   WaveformVisualization,
   XY_DEFAULT_STEP,
   XY_DETENT_PX,

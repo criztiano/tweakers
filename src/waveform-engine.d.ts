@@ -29,7 +29,8 @@ export interface WaveformRuntime {
 export interface WaveformEngine {
     destroy(): void;
 }
-export declare const WAVEFORM_MAX_ZOOM = 8;
+export declare const WAVEFORM_MAX_ZOOM = 1024;
+export declare const WAVEFORM_SMOOTH_POINTS = 46;
 /**
  * Mount the renderer on `canvas`, reading the current props from `get()` every
  * frame. Returns a handle whose `destroy()` stops the loop and detaches listeners.

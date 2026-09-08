@@ -1365,7 +1365,7 @@ import { createPortal } from "react-dom";
 import { useRef, useEffect, useState } from "react";
 
 // src/waveform-engine.ts
-var WAVEFORM_MAX_ZOOM = 8;
+var WAVEFORM_MAX_ZOOM = 1024;
 var BANDS = [
   { type: "lowpass", freq: 250 },
   { type: "bandpass", freq: 1100, q: 0.6 },
@@ -7720,6 +7720,8 @@ export {
   TRANSFER_MIN_GAP,
   TimelineStore,
   TweakStore7 as TweakStore,
+  WAVEFORM_MAX_ZOOM,
+  WAVEFORM_SMOOTH_POINTS,
   WaveformVisualization,
   XY_DEFAULT_STEP,
   XY_DETENT_PX,

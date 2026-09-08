@@ -48,7 +48,10 @@ export interface WaveformEngine {
 }
 
 // Each "+" doubles magnification; window = 1 / zoom of the sample's duration.
-export const WAVEFORM_MAX_ZOOM = 8;
+// The ceiling is set by the longest sample, not the shortest: a two-second
+// loop needs eight, but a five-minute track needs a thousand before a single
+// transient is wide enough to place a beat on.
+export const WAVEFORM_MAX_ZOOM = 1024;
 
 // Crossover filters for the optional 3-band EQ split (applied offline to the sample).
 const BANDS: { type: BiquadFilterType; freq: number; q?: number }[] = [

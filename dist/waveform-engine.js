@@ -42,7 +42,7 @@ function envelope(p, cols, n) {
 }
 
 // src/waveform-engine.ts
-var WAVEFORM_MAX_ZOOM = 8;
+var WAVEFORM_MAX_ZOOM = 1024;
 var BANDS = [
   { type: "lowpass", freq: 250 },
   { type: "bandpass", freq: 1100, q: 0.6 },
