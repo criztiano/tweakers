@@ -939,11 +939,12 @@ var TweakStoreClass = class {
           min: tuple[1],
           max: tuple[2],
           step: tuple[3] ?? this.inferStep(tuple[1], tuple[2]),
+          stepInferred: tuple[3] == null,
           shortcut
         });
       } else if (typeof value === "number") {
         const { min, max, step } = this.inferRange(value);
-        controls.push({ type: "slider", path, label, min, max, step, shortcut });
+        controls.push({ type: "slider", path, label, min, max, step, stepInferred: true, shortcut });
       } else if (this.isSliderConfig(value)) {
         controls.push({
           type: "slider",
@@ -953,6 +954,7 @@ var TweakStoreClass = class {
           max: value.max,
           moveVisual: value.moveVisual,
           step: value.step ?? this.inferStep(value.min, value.max),
+          stepInferred: value.step == null,
           unit: value.unit,
           formatValue: value.formatValue,
           origin: value.origin,
@@ -970,6 +972,7 @@ var TweakStoreClass = class {
           min: value.min,
           max: value.max,
           step: value.step ?? this.inferRange(value.default).step,
+          stepInferred: value.step == null,
           unit: value.unit,
           formatValue: value.formatValue,
           orientation: value.orientation,
@@ -1022,6 +1025,7 @@ var TweakStoreClass = class {
           min: value.min,
           max: value.max,
           step: value.step ?? this.inferStep(value.min, value.max),
+          stepInferred: value.step == null,
           rangeDefault: value.default ?? { min: value.min, max: value.max }
         });
       } else if (this.isGalleryConfig(value)) {

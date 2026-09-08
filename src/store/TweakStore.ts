@@ -595,6 +595,8 @@ export type ControlMeta = {
   min?: number;
   max?: number;
   step?: number;
+  /** The step was inferred for pointer UX, not asked for — fine inputs (the Move) may ignore it. */
+  stepInferred?: boolean;
   /** Range control's configured reset target — its `default`, else the full {min,max} span. */
   rangeDefault?: RangeValue;
   /** Gradient's editor form — `ramp` drops the fill-shape chrome. */
@@ -1730,12 +1732,13 @@ class TweakStoreClass {
           min: tuple[1],
           max: tuple[2],
           step: tuple[3] ?? this.inferStep(tuple[1], tuple[2]),
+          stepInferred: tuple[3] == null,
           shortcut,
         });
       } else if (typeof value === 'number') {
         // Single number - auto-infer range
         const { min, max, step } = this.inferRange(value);
-        controls.push({ type: 'slider', path, label, min, max, step, shortcut });
+        controls.push({ type: 'slider', path, label, min, max, step, stepInferred: true, shortcut });
       } else if (this.isSliderConfig(value)) {
         controls.push({
           type: 'slider',
@@ -1745,6 +1748,7 @@ class TweakStoreClass {
           max: value.max,
           moveVisual: value.moveVisual,
           step: value.step ?? this.inferStep(value.min, value.max),
+          stepInferred: value.step == null,
           unit: value.unit,
           formatValue: value.formatValue,
           origin: value.origin,
@@ -1762,6 +1766,7 @@ class TweakStoreClass {
           min: value.min,
           max: value.max,
           step: value.step ?? this.inferRange(value.default).step,
+          stepInferred: value.step == null,
           unit: value.unit,
           formatValue: value.formatValue,
           orientation: value.orientation,
@@ -1809,6 +1814,7 @@ class TweakStoreClass {
         // shortcut path can't drive, and RangeSlider has no shortcut prop.
         controls.push({ type: 'range', path, label, min: value.min, max: value.max,
           step: value.step ?? this.inferStep(value.min, value.max),
+          stepInferred: value.step == null,
           rangeDefault: value.default ?? { min: value.min, max: value.max } });
       } else if (this.isGalleryConfig(value)) {
         controls.push({ type: 'gallery', path, label, items: value.items, columns: value.columns });

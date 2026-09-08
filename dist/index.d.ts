@@ -1167,6 +1167,8 @@ type ControlMeta = {
     min?: number;
     max?: number;
     step?: number;
+    /** The step was inferred for pointer UX, not asked for — fine inputs (the Move) may ignore it. */
+    stepInferred?: boolean;
     /** Range control's configured reset target — its `default`, else the full {min,max} span. */
     rangeDefault?: RangeValue;
     /** Gradient's editor form — `ramp` drops the fill-shape chrome. */
