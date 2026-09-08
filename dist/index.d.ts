@@ -127,8 +127,11 @@ interface MoveActionButtonProps {
      * `kind="shift"` is purely visual: it runs no Move function, only its
      * own `onPress` — the app wires the hardware gesture (a shift tap)
      * itself.
+     * `sample` is the Sampling key — a pale function button like loop and
+     * copy, wearing the enter dot, because it is the surface's second
+     * confirm and confirming is what it now means.
      */
-    kind: 'enter' | 'capture' | 'shift' | 'loop' | 'copy';
+    kind: 'enter' | 'capture' | 'sample' | 'shift' | 'loop' | 'copy';
     /** The label. */
     children: React$1.ReactNode;
     /** Runs after the attached Move function, on a screen click. */

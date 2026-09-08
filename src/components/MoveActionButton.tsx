@@ -8,9 +8,10 @@ const PRESS_FLASH_MS = 160;
 /** Which hardware function each kind rides — fixed, like the colours.
  * `shift` is absent on purpose: Shift is reserved and never claimable,
  * so a shift pill rides no function at all. */
-const KIND_FUNCTION: Record<'enter' | 'capture' | 'loop' | 'copy', MoveFunctionButton> = {
+const KIND_FUNCTION: Record<'enter' | 'capture' | 'sample' | 'loop' | 'copy', MoveFunctionButton> = {
   enter: 'jog_click',
   capture: 'capture',
+  sample: 'sample',
   loop: 'loop',
   copy: 'copy',
 };
@@ -30,8 +31,11 @@ export interface MoveActionButtonProps {
    * `kind="shift"` is purely visual: it runs no Move function, only its
    * own `onPress` — the app wires the hardware gesture (a shift tap)
    * itself.
+   * `sample` is the Sampling key — a pale function button like loop and
+   * copy, wearing the enter dot, because it is the surface's second
+   * confirm and confirming is what it now means.
    */
-  kind: 'enter' | 'capture' | 'shift' | 'loop' | 'copy';
+  kind: 'enter' | 'capture' | 'sample' | 'shift' | 'loop' | 'copy';
   /** The label. */
   children: React.ReactNode;
   /** Runs after the attached Move function, on a screen click. */

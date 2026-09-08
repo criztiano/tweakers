@@ -7547,6 +7547,7 @@ var PRESS_FLASH_MS = 160;
 var KIND_FUNCTION = {
   enter: "jog_click",
   capture: "capture",
+  sample: "sample",
   loop: "loop",
   copy: "copy"
 };
