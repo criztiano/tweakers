@@ -29,11 +29,12 @@ interface WaveformRuntime {
 interface WaveformEngine {
     destroy(): void;
 }
-declare const WAVEFORM_MAX_ZOOM = 8;
+declare const WAVEFORM_MAX_ZOOM = 1024;
+declare const WAVEFORM_SMOOTH_POINTS = 46;
 /**
  * Mount the renderer on `canvas`, reading the current props from `get()` every
  * frame. Returns a handle whose `destroy()` stops the loop and detaches listeners.
  */
 declare function createWaveformEngine(canvas: HTMLCanvasElement, get: () => WaveformRuntime): WaveformEngine;
 
-export { WAVEFORM_MAX_ZOOM, type WaveformEngine, type WaveformLoop, type WaveformMode, type WaveformRuntime, createWaveformEngine };
+export { WAVEFORM_MAX_ZOOM, WAVEFORM_SMOOTH_POINTS, type WaveformEngine, type WaveformLoop, type WaveformMode, type WaveformRuntime, createWaveformEngine };

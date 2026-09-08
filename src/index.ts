@@ -149,6 +149,8 @@ export type { TransferPoint, TransferValue } from './transfer-core';
 export { snapAngle, normalizeAngle, valueToBearing, bearingToValue, angleFromPointer, nudgeAngle, arcPath, ANGLE_DEAD_ZONE_PX } from './angle-core';
 export { WaveformVisualization } from './components/WaveformVisualization';
 export type { WaveformMode, WaveformLoop } from './components/WaveformVisualization';
+// The zoom ceiling belongs with the window maths a host frames against.
+export { WAVEFORM_MAX_ZOOM, WAVEFORM_SMOOTH_POINTS } from './waveform-engine';
 export { CurveComposer } from './components/CurveComposer';
 export type { CurveType, CurveSegment, CurveDriver, CurveComposition, DriverDirection } from './components/CurveComposer';
 export {
