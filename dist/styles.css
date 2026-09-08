@@ -390,7 +390,7 @@
   --move-color-gap: 8px;
   --move-color-gap-small: 4px;
   --move-color-padding: 12px;
-  --move-color-width: 360px;
+  --move-color-width: 704px;
   --move-color-hit: 32px;
   --move-color-step-hit: 24px;
   --move-color-marker: 8px;
@@ -812,51 +812,152 @@
   font-variant-numeric: tabular-nums;
 }
 
-.tweakers-move-color-heading { display: flex; align-items: center; gap: var(--move-color-gap); }
-.tweakers-move-color-preview { width: var(--move-color-hit); height: var(--move-color-hit); flex-shrink: 0; }
-.tweakers-move-color-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tweakers-move-color-close {
-  width: var(--move-color-hit);
-  height: var(--move-color-hit);
-  border: 0;
-  border-radius: var(--move-radius-small);
-  background: var(--move-chip);
-  color: var(--move-text);
-  font: inherit;
-  cursor: pointer;
-}
-
-.tweakers-move-hues {
-  display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
-  gap: var(--move-color-gap-small);
-  width: 100%;
-}
-
-.tweakers-move-hue {
-  position: relative;
-  display: grid;
-  place-items: center;
-  height: var(--move-color-hit);
-  min-width: 0;
+/* The header readouts: HSL, HEX and OKLCH, each a copy-to-clipboard button —
+   dim label, live value, and the copy glyph at the end (Figma 881:2098). */
+.tweakers-move-color-copies { display: flex; align-items: center; justify-content: space-between; gap: var(--move-color-gap); }
+.tweakers-move-color-copy {
+  display: flex;
+  align-items: center;
+  gap: var(--move-color-gap);
+  min-height: var(--move-color-hit);
   padding: 0;
   border: 0;
-  border-radius: var(--move-radius-small);
+  background: transparent;
+  color: var(--move-text);
+  font: inherit;
+  font-size: 16px;
   cursor: pointer;
 }
+.tweakers-move-color-copy-label { opacity: 0.35; }
+.tweakers-move-color-copy svg { width: 14px; height: 14px; opacity: 0.35; }
+.tweakers-move-color-copy:hover svg { opacity: 1; }
 
-.tweakers-move-color-marker {
-  width: var(--move-color-marker);
-  height: var(--move-color-marker);
+/* The two big sliders (Figma "Slider/Hue" and "Slider/Lightness"): a 20px
+   pill of gradient with a 26px round thumb riding it — the thumb's fill
+   follows the value through --move-slider-thumb, set inline. */
+.tweakers-move-color-slider { width: 100%; }
+.tweakers-move-color-slider input {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 30px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.tweakers-move-color-slider[data-kind="hue"] input {
+  --move-slider-track: linear-gradient(to right,
+    hsl(0 100% 50%), hsl(60 100% 50%), hsl(120 100% 50%),
+    hsl(180 100% 50%), hsl(240 100% 50%), hsl(300 100% 50%), hsl(360 100% 50%));
+}
+.tweakers-move-color-slider[data-kind="lightness"] input {
+  --move-slider-track: linear-gradient(to right, #000, rgba(128, 128, 128, 0.6) 50%, #fff);
+}
+.tweakers-move-color-slider input::-webkit-slider-runnable-track {
+  height: 20px;
+  border-radius: 10px;
+  background: var(--move-slider-track);
+}
+.tweakers-move-color-slider input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 26px;
+  height: 26px;
+  margin-top: -3px;
   border-radius: 50%;
-  background: var(--move-color-marker-light);
-  box-shadow: 0 0 0 var(--move-color-stroke) var(--move-color-marker-dark);
+  border: 3px solid #fff;
+  background: var(--move-slider-thumb, #fff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+.tweakers-move-color-slider input::-moz-range-track {
+  height: 20px;
+  border-radius: 10px;
+  background: var(--move-slider-track);
+}
+.tweakers-move-color-slider input::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 3px solid #fff;
+  background: var(--move-slider-thumb, #fff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
-.tweakers-move-color-range { display: flex; align-items: center; gap: var(--move-color-gap); min-height: var(--move-color-hit); }
-.tweakers-move-color-range > span { flex: 0 0 10ch; }
-.tweakers-move-color-range input { flex: 1; min-width: 0; height: var(--move-color-hit); margin: 0; accent-color: var(--move-text); cursor: pointer; }
-.tweakers-move-color-range output { min-width: 4ch; text-align: right; }
+/* The locked palette in the editor's body (Figma 882:2723) and the palette
+   navigator's rows (Figma 817:1163): a dim name over a strip of colours. */
+.tweakers-move-color-palette { display: flex; flex-direction: column; gap: 3px; }
+.tweakers-move-palette-name { font-size: var(--move-color-font); color: var(--move-text); opacity: 0.22; white-space: nowrap; }
+.tweakers-move-palette-strip {
+  display: flex;
+  align-items: stretch;
+  height: 21px;
+  overflow: hidden;
+  border-radius: 4px;
+}
+.tweakers-move-palette-color { flex: 1 0 0; min-width: 1px; border: 0; padding: 0; }
+.tweakers-move-palette-strip button.tweakers-move-palette-color { cursor: pointer; }
+.tweakers-move-palette-color[data-selected] { box-shadow: inset 0 0 0 var(--move-color-stroke) var(--move-color-marker-light); }
+.tweakers-move-palette-color[data-gradient] {
+  background: linear-gradient(to right,
+    hsl(0 100% 50%), hsl(60 100% 50%), hsl(120 100% 50%),
+    hsl(180 100% 50%), hsl(240 100% 50%), hsl(300 100% 50%), hsl(360 100% 50%));
+}
+
+/* The palette navigator, in the preset screen's spot: its own rows — the
+   list screen's dim-until-selected voice, with the strip below the name. */
+.tweakers-move-palette-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 16px 4px;
+  overflow-y: auto;
+  background: #1e1e1e;
+  border-radius: var(--move-radius-small);
+}
+
+/* A whisper of a scrollbar: no track, a 2px semi-transparent handle, held
+   2px off the top, right and bottom edges. */
+.tweakers-move-palette-screen::-webkit-scrollbar { width: 4px; background: transparent; }
+.tweakers-move-palette-screen::-webkit-scrollbar-track { background: transparent; margin: 2px 0; }
+.tweakers-move-palette-screen::-webkit-scrollbar-thumb {
+  background: rgba(222, 227, 201, 0.3);
+  background-clip: padding-box;
+  border-right: 2px solid transparent;
+  border-radius: 1px;
+}
+/* Firefox has no 2px width — thin, with the same colours, is its nearest. */
+@supports not selector(::-webkit-scrollbar) {
+  .tweakers-move-palette-screen { scrollbar-width: thin; scrollbar-color: rgba(222, 227, 201, 0.3) transparent; }
+}
+.tweakers-move-palette-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  padding: 2px 6px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  font-size: var(--move-color-font);
+  text-align: left;
+  cursor: pointer;
+}
+.tweakers-move-palette-row[data-selected] { background: #31322f; }
+.tweakers-move-palette-row[data-selected] .tweakers-move-palette-name { opacity: 1; }
+
+/* The panel's pad rows while the editor is open: the first row alone, an
+   eight-level opacity meter that lights progressively up to the level. */
+.tweakers-move-pads[data-opacity] .tweakers-move-pad[data-kind="opacity"] {
+  background: var(--move-chip);
+  border: 0;
+  cursor: pointer;
+}
+.tweakers-move-pads[data-opacity] .tweakers-move-pad[data-kind="opacity"][data-on] { background: var(--move-text); }
+.tweakers-move-pads[data-opacity] .tweakers-move-pad[data-kind="opacity"]:hover { box-shadow: inset 0 0 0 var(--move-color-stroke) var(--move-text); }
+
 .tweakers-move-color-steps { display: grid; grid-template-columns: repeat(16, 1fr); }
 .tweakers-move-color-step {
   width: var(--move-color-step-hit);
@@ -871,17 +972,17 @@
 }
 .tweakers-move-color-step > span { width: var(--move-color-marker); height: var(--move-color-marker); background: var(--move-text); border-radius: 50%; }
 .tweakers-move-color-step[aria-pressed="true"] { box-shadow: inset 0 0 0 var(--move-color-stroke) var(--move-text); }
-.tweakers-move-color-step:hover,
-.tweakers-move-color-close:hover { background: var(--move-slot); }
-.tweakers-move-hue:hover { box-shadow: inset 0 0 0 var(--move-color-stroke) var(--move-color-marker-dark); }
+.tweakers-move-color-step:hover { background: var(--move-slot); }
 .tweakers-move-dial[data-kind="color"]:focus-visible,
-.tweakers-move-hue:focus-visible,
-.tweakers-move-color-close:focus-visible,
+.tweakers-move-color-copy:focus-visible,
+.tweakers-move-palette-color:focus-visible,
+.tweakers-move-palette-row:focus-visible,
+.tweakers-move-pad[data-kind="opacity"]:focus-visible,
 .tweakers-move-color-step:focus-visible,
-.tweakers-move-color-range input:focus-visible { outline: var(--move-color-stroke) solid var(--move-text); outline-offset: var(--move-color-stroke); }
+.tweakers-move-color-slider input:focus-visible { outline: var(--move-color-stroke) solid var(--move-text); outline-offset: var(--move-color-stroke); }
 .tweakers-move-dial[data-kind="color"]:disabled,
 .tweakers-move-color-display :disabled,
-.tweakers-move-hue:disabled,
+.tweakers-move-pad[data-kind="opacity"]:disabled,
 .tweakers-move-color-step:disabled { opacity: var(--move-color-disabled-opacity); cursor: default; }
 .tweakers-move-tracks:has(.tweakers-move-color-steps) { grid-template-columns: 1fr auto; row-gap: var(--move-color-gap); }
 .tweakers-move-tracks:has(.tweakers-move-color-steps) .tweakers-move-mods { grid-row: 2; grid-column: 1 / -1; justify-content: center; }

@@ -25,7 +25,7 @@ import { nearestHandle, type RangeValue } from '../range-slider-core';
 import { fineDragValue } from '../shortcut-utils';
 import { MoveVolumeDisplay, type MoveVolumeDisplayState } from '../move-volume';
 import { MoveColorStore } from '../move-color';
-import { MoveColorSlot, MoveColorDisplay, MoveHueGrid, MoveColorSteps } from './MoveColor';
+import { MoveColorSlot, MoveColorDisplay, MoveOpacityPads, MoveColorSteps, MovePaletteScreen, copyHslOfHex, copyOklch } from './MoveColor';
 import { MoveFunctions } from '../move-functions';
 import { MovePresetStore, type MovePresetView } from '../move-presets';
 import { ListScreen } from './ListScreen';
@@ -83,6 +83,10 @@ const presetNavigatorOpen = () => {
   const view = MovePresetStore.getView();
   return !!view && view.phase !== 'closing';
 };
+
+/** True while the colour editor's palette navigator is up — the wheel is
+ *  browsing palettes, on the same terms as the preset navigator. */
+const palettePickerOpen = () => MoveColorStore.isPickerOpen();
 
 /**
  * A readout string with any `:` separators pulled out and rendered bold at
@@ -332,7 +336,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // turn is left alone.
   useEffect(() => {
     const onJog = (e: Event) => {
-      if (e.defaultPrevented || presetNavigatorOpen() || !stripRef.current.on) return;
+      // An open colour editor keeps the strip still too: the wheel belongs
+      // to its overlays (the palette list) while the editor is up.
+      if (e.defaultPrevented || presetNavigatorOpen() || MoveColorStore.getView() || !stripRef.current.on) return;
       // While the waveform editor floats, the wheel is its zoom — the strip
       // waits. The event rides on unconsumed, so the kit hands it there.
       if (MoveWaveformStore.wantsSteps()) return;
@@ -368,8 +374,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       const browsing = presetNavigatorOpen();
+      const picking = palettePickerOpen();
       const editing = MoveWaveformStore.wantsSteps();
-      if (!browsing && !editing && !stripRef.current.on) return;
+      if (!browsing && !picking && !editing && !stripRef.current.on) return;
       const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
       if (!d) return;
       e.preventDefault();
@@ -381,6 +388,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       // is up it walks the preset list, while the waveform editor floats it
       // zooms (scroll up goes in), otherwise it moves the strip.
       if (browsing) MovePresetStore.scroll(steps);
+      else if (picking) MoveColorStore.movePickerCursor(steps);
       else if (editing) MoveWaveformStore.zoom(-steps);
       else scrollSlots(steps);
     };
@@ -439,6 +447,52 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   useEffect(() => () => {
     if (MoveColorStore.getView()?.panelId === pageId) MoveColorStore.close();
   }, [pageId]);
+  // While the colour editor is open, Menu is its palette navigator: the
+  // button is borrowed (push, not attach), so the preset navigator's base
+  // meaning steps aside and comes back the moment the editor closes.
+  const colorOpenPanel = colorMeta && colorView ? colorView.panelId : null;
+  useEffect(() => {
+    if (!colorOpenPanel) return;
+    return MoveFunctions.push('menu', () => MoveColorStore.togglePicker(), { label: 'palettes' });
+  }, [colorOpenPanel]);
+  // Copy is the editor's too while it is open: it puts the colour itself on
+  // the clipboard — HEX on a tap, HSL with Shift, OKLCH on a hold — instead
+  // of whatever the app wired the button to.
+  useEffect(() => {
+    if (!colorOpenPanel) return;
+    return MoveFunctions.push('copy', ({ shift, hold }) => {
+      const view = MoveColorStore.getView();
+      if (!view) return;
+      const hex = String(TweakStore.getValue(view.panelId, view.path) ?? '');
+      const text = hold ? copyOklch(hex) : shift ? copyHslOfHex(hex) : hex;
+      navigator.clipboard?.writeText(text).catch(() => {});
+    }, { label: 'copy color' });
+  }, [colorOpenPanel]);
+  const paletteScreen = colorMeta ? MoveColorStore.isPickerOpen() : false;
+  useEffect(() => {
+    if (!paletteScreen) return;
+    return MoveFunctions.push('back', () => MoveColorStore.closePicker(), { label: 'back' });
+  }, [paletteScreen]);
+  // The hardware wheel, while the palette navigator is open: turns walk the
+  // list, the jog click locks the palette in — the preset navigator's terms.
+  useEffect(() => {
+    const onJog = (e: Event) => {
+      if (!palettePickerOpen()) return;
+      e.preventDefault();
+      MoveColorStore.movePickerCursor(Number((e as CustomEvent).detail?.delta) || 0);
+    };
+    const onJogClick = (e: Event) => {
+      if (!palettePickerOpen()) return;
+      e.preventDefault();
+      MoveColorStore.confirmPicker();
+    };
+    window.addEventListener(MOVE_JOG_EVENT, onJog);
+    window.addEventListener(MOVE_JOG_CLICK_EVENT, onJogClick);
+    return () => {
+      window.removeEventListener(MOVE_JOG_EVENT, onJog);
+      window.removeEventListener(MOVE_JOG_CLICK_EVENT, onJogClick);
+    };
+  }, []);
 
   // The preset navigator, behind the hardware Menu button: a press toggles
   // the list screen beside the slots, a long press (or Shift+Menu) opens the
@@ -1060,8 +1114,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               />
             </div>
           )}
-          {visibleCols.length > 0 && <div className="tweakers-move-grid" data-presets={presetScreen?.phase === 'open' || undefined}>
+          {visibleCols.length > 0 && <div className="tweakers-move-grid" data-presets={presetScreen?.phase === 'open' || paletteScreen || undefined}>
             {presetScreen && <MovePresetScreen view={presetScreen} />}
+            {paletteScreen && <MovePaletteScreen />}
             {/* The window on the strip: the row is as long as the page has
                 slots, and this clips it to the eight the dials hold. It clips
                 sideways only — a touched option list still grows up out of
@@ -1647,7 +1702,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 their place, but the panel never ends on dead rows. Columns
                 collapse the same way: cells render only for visible columns,
                 blank pads filling the gaps to keep the grid rectangular. */}
-            {color && colorMeta ? <MoveHueGrid color={color} disabled={TweakStore.isDisabled(page.panel.id, colorMeta.path)} mirror /> : Array.from({ length: PAD_ROWS }, (_, row) => row)
+            {color && colorMeta ? <MoveOpacityPads color={color} disabled={TweakStore.isDisabled(page.panel.id, colorMeta.path)} /> : Array.from({ length: PAD_ROWS }, (_, row) => row)
               .filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0))
               .map((row) => (
                 <div key={row} className="tweakers-move-pads">

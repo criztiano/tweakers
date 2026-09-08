@@ -60,6 +60,7 @@ __export(index_exports, {
   MOD_SLOTS: () => MOD_SLOTS,
   MOD_TOUCH_GRACE_MS: () => import_ModulationStore3.MOD_TOUCH_GRACE_MS,
   MOVE_COLOR_HUES: () => MOVE_COLOR_HUES,
+  MOVE_COLOR_PALETTES: () => MOVE_COLOR_PALETTES,
   MOVE_COLOR_STEPS: () => MOVE_COLOR_STEPS,
   MOVE_COLOR_WHEEL: () => MOVE_COLOR_WHEEL,
   MOVE_DIALS: () => MOVE_DIALS,
@@ -69,6 +70,7 @@ __export(index_exports, {
   MOVE_JOG_EVENT: () => MOVE_JOG_EVENT,
   MOVE_LATCH_EVENT: () => MOVE_LATCH_EVENT,
   MOVE_MUTE_EVENT: () => MOVE_MUTE_EVENT,
+  MOVE_OPACITY_PADS: () => MOVE_OPACITY_PADS,
   MOVE_OVERRIDE_EVENT: () => MOVE_OVERRIDE_EVENT,
   MOVE_PADS: () => MOVE_PADS,
   MOVE_PAD_LIBRARY: () => MOVE_PAD_LIBRARY,
@@ -4805,9 +4807,102 @@ var MoveVolumeDisplay = new MoveVolumeDisplayClass();
 
 // src/move-color.ts
 var import_TweakStore3 = require("tweakers/store");
+var MOVE_COLOR_PALETTES = [
+  { id: "move", name: "Move 16", colors: [
+    "#ff4d07",
+    "#ff9d00",
+    "#ffd500",
+    "#a8e000",
+    "#52bd06",
+    "#00c78b",
+    "#00c2d1",
+    "#4274f4",
+    "#2f5cc4",
+    "#8a5cf5",
+    "#b04cff",
+    "#d83dff",
+    "#ff3d9a",
+    "#ff5d5d",
+    "#c96f4a",
+    "#9e9e88"
+  ] },
+  { id: "ember", name: "Ember", colors: [
+    "#fff3c4",
+    "#ffe28a",
+    "#ffd166",
+    "#ffb703",
+    "#fb8500",
+    "#f77f00",
+    "#f4623a",
+    "#ef476f",
+    "#e63946",
+    "#d62828",
+    "#b5171e",
+    "#9d0208",
+    "#7f1d1d",
+    "#6a040f",
+    "#4a0404",
+    "#2b0000"
+  ] },
+  { id: "ocean", name: "Ocean", colors: [
+    "#e0fbfc",
+    "#bee9e8",
+    "#98f5e1",
+    "#62d9c4",
+    "#2ec4b6",
+    "#06d6a0",
+    "#00b4d8",
+    "#48cae4",
+    "#4cc9f0",
+    "#4895ef",
+    "#4361ee",
+    "#3a0ca3",
+    "#264653",
+    "#1d3557",
+    "#14213d",
+    "#0b132b"
+  ] },
+  { id: "meadow", name: "Meadow", colors: [
+    "#f7ffe0",
+    "#e9f5db",
+    "#d8f3a3",
+    "#ccff33",
+    "#9ef01a",
+    "#70e000",
+    "#52bd06",
+    "#38b000",
+    "#2d6a4f",
+    "#40916c",
+    "#52b788",
+    "#74c69d",
+    "#95d5b2",
+    "#606c38",
+    "#3a5a40",
+    "#283618"
+  ] },
+  { id: "neon", name: "Neon", colors: [
+    "#f5f5f5",
+    "#eaff00",
+    "#c8ff00",
+    "#39ff14",
+    "#00ffab",
+    "#00fff7",
+    "#00d0ff",
+    "#3d5aff",
+    "#7b2bff",
+    "#b026ff",
+    "#e600ff",
+    "#ff00c8",
+    "#ff2079",
+    "#ff3131",
+    "#ff5f1f",
+    "#ff9e00"
+  ] }
+];
 var MOVE_COLOR_WHEEL = [4, 18, 45, 78, 95, 120, 141, 158, 186, 204, 233, 244, 254, 271, 312, 351];
 var MOVE_COLOR_HUES = MOVE_COLOR_WHEEL.length;
 var MOVE_COLOR_STEPS = 16;
+var MOVE_OPACITY_PADS = 8;
 var clamp6 = (n) => Math.max(0, Math.min(1, n));
 var hue = (n) => (n % 360 + 360) % 360;
 var moveWheelSlot = (h) => {
@@ -4822,6 +4917,28 @@ var moveWheelSlot = (h) => {
   });
   return best;
 };
+var paletteCoords = /* @__PURE__ */ new Map();
+var paletteHsl = (palette) => {
+  const cached = paletteCoords.get(palette.id);
+  if (cached) return cached;
+  const coords = palette.colors.map((hex) => rgbToHsl(parseHex(hex) ?? { r: 255, g: 0, b: 0, a: 1 }));
+  paletteCoords.set(palette.id, coords);
+  return coords;
+};
+var paletteSlot = (palette, h) => {
+  const target = hue(h);
+  let best = 0, bestGap = Infinity;
+  paletteHsl(palette).forEach((color, index) => {
+    const gap = Math.min(Math.abs(color.h - target), 360 - Math.abs(color.h - target));
+    if (gap < bestGap) {
+      bestGap = gap;
+      best = index;
+    }
+  });
+  return best;
+};
+var paletteAt = (palette, h) => Math.min(palette.colors.length - 1, Math.floor(hue(h) / 360 * palette.colors.length));
+var paletteCenter = (palette, index) => (index + 0.5) * 360 / palette.colors.length;
 var MoveColorStoreClass = class {
   constructor() {
     this.view = null;
@@ -4829,6 +4946,11 @@ var MoveColorStoreClass = class {
     this.listeners = /* @__PURE__ */ new Set();
     // Remember hue/saturation at black and white, where RGB cannot retain them.
     this.coordinates = /* @__PURE__ */ new Map();
+    /** The palette the dial is locked to — null is the whole wheel. */
+    this.paletteId = null;
+    /** The palette navigator behind Menu while the editor is open. */
+    this.picker = false;
+    this.pickerCursor = 0;
     this.getView = () => this.view;
     this.getVersion = () => this.version;
     this.subscribe = (fn) => {
@@ -4837,6 +4959,11 @@ var MoveColorStoreClass = class {
         this.listeners.delete(fn);
       };
     };
+    /* ---- the palette lock and its navigator ---- */
+    this.getPaletteId = () => this.paletteId;
+    this.getPalette = () => this.paletteId ? MOVE_COLOR_PALETTES.find((p) => p.id === this.paletteId) ?? null : null;
+    this.isPickerOpen = () => this.picker && !!this.view;
+    this.getPickerCursor = () => this.pickerCursor;
   }
   notify() {
     this.version++;
@@ -4848,8 +4975,9 @@ var MoveColorStoreClass = class {
     this.notify();
   }
   close() {
-    if (this.view) {
+    if (this.view || this.picker) {
       this.view = null;
+      this.picker = false;
       this.notify();
     }
   }
@@ -4875,8 +5003,11 @@ var MoveColorStoreClass = class {
     color.s = clamp6(color.s);
     color.l = clamp6(color.l);
     color.a = clamp6(color.a);
+    const palette = this.view?.panelId === panelId && this.view.path === path ? this.getPalette() : null;
+    const snapped = palette ? paletteHsl(palette)[paletteAt(palette, color.h)] : null;
+    const painted = snapped ? { ...color, h: snapped.h, s: snapped.s, l: snapped.l } : color;
     const current = String(import_TweakStore3.TweakStore.getValue(panelId, path) ?? "");
-    const hex = formatHex(hslToRgb(color), color.a < 1 || current.length === 9 || current.length === 5);
+    const hex = formatHex(hslToRgb(painted), painted.a < 1 || current.length === 9 || current.length === 5);
     this.coordinates.set(JSON.stringify([panelId, path]), { hex, color });
     import_TweakStore3.TweakStore.updateValue(panelId, path, hex);
     this.notify();
@@ -4891,10 +5022,77 @@ var MoveColorStoreClass = class {
     if (this.view) this.update(this.view.panelId, this.view.path, { a });
   }
   turn(panelId, path, delta, fine = false) {
+    const palette = this.view?.panelId === panelId && this.view.path === path ? this.getPalette() : null;
+    if (palette && delta) {
+      const at = paletteAt(palette, this.read(panelId, path).h);
+      const next = (at + Math.sign(delta) + palette.colors.length) % palette.colors.length;
+      this.update(panelId, path, { h: paletteCenter(palette, next) });
+      return;
+    }
     this.update(panelId, path, { h: this.read(panelId, path).h + delta * (fine ? 0.1 : 1) });
   }
   turnLuminosity(panelId, path, delta, fine = false) {
     this.update(panelId, path, { l: this.read(panelId, path).l + delta * (fine ? 2e-3 : 0.02) });
+  }
+  /** Which palette colour the open control sits on — null off-palette. */
+  paletteIndex(panelId, path) {
+    const palette = this.getPalette();
+    return palette ? paletteAt(palette, this.read(panelId, path).h) : null;
+  }
+  /** Lock the open editor to a palette (null = back to all colours), and
+   *  bring its colour onto the palette right away — the nearest of its hues,
+   *  then that segment's centre so a turn steps cleanly from there. */
+  setPalette(id) {
+    this.paletteId = id && MOVE_COLOR_PALETTES.some((p) => p.id === id) ? id : null;
+    this.picker = false;
+    const palette = this.getPalette();
+    if (palette && this.view) {
+      const nearest = paletteSlot(palette, this.read(this.view.panelId, this.view.path).h);
+      this.update(this.view.panelId, this.view.path, { h: paletteCenter(palette, nearest) });
+    }
+    this.notify();
+  }
+  /** Jump straight to one of the locked palette's colours. */
+  setPaletteColor(index) {
+    const palette = this.getPalette();
+    if (palette && this.view) this.update(this.view.panelId, this.view.path, { h: paletteCenter(palette, index) });
+  }
+  openPicker() {
+    if (!this.view || this.picker) return;
+    const at = MOVE_COLOR_PALETTES.findIndex((p) => p.id === this.paletteId);
+    this.pickerCursor = at < 0 ? 0 : at + 1;
+    this.picker = true;
+    this.notify();
+  }
+  closePicker() {
+    if (this.picker) {
+      this.picker = false;
+      this.notify();
+    }
+  }
+  togglePicker() {
+    if (this.picker) this.closePicker();
+    else this.openPicker();
+  }
+  /** Walk the navigator's cursor by wheel detents. */
+  movePickerCursor(delta) {
+    if (!this.isPickerOpen() || !delta) return;
+    const step = Math.round(delta) || Math.sign(delta);
+    const next = Math.max(0, Math.min(MOVE_COLOR_PALETTES.length, this.pickerCursor + step));
+    if (next === this.pickerCursor) return;
+    this.pickerCursor = next;
+    this.notify();
+  }
+  /** Keep the cursor's row: the palette locks in and the navigator dismisses. */
+  confirmPicker() {
+    if (!this.isPickerOpen()) return;
+    this.setPalette(this.pickerCursor === 0 ? null : MOVE_COLOR_PALETTES[this.pickerCursor - 1]?.id ?? null);
+  }
+  /** A clicked row: cursor and confirm in one. */
+  choosePicker(cursor) {
+    if (!this.isPickerOpen()) return;
+    this.pickerCursor = Math.max(0, Math.min(MOVE_COLOR_PALETTES.length, cursor));
+    this.confirmPicker();
   }
 };
 var MoveColorStore = new MoveColorStoreClass();
@@ -4973,24 +5171,22 @@ function MoveColorSlot({ panelId, meta, active, open }) {
     }
   );
 }
-function MoveHueGrid({ color, disabled = false, mirror = false }) {
-  const selected = moveWheelSlot(color.h);
-  return /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { className: "tweakers-move-hues", role: "group", "aria-label": mirror ? "Move hue grid" : "Hue", "data-mirror": mirror || void 0, children: MOVE_COLOR_WHEEL.map((h, index) => {
-    return /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
-      "button",
-      {
-        type: "button",
-        className: "tweakers-move-hue",
-        style: { background: `hsl(${h} 100% 50%)` },
-        disabled,
-        "aria-label": `Hue ${Number(h.toFixed(2))} degrees`,
-        "aria-pressed": selected === index,
-        onClick: () => MoveColorStore.setHue(h),
-        children: selected === index && /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "tweakers-move-color-marker", "aria-hidden": "true" })
-      },
-      index
-    );
-  }) });
+function MoveOpacityPads({ color, disabled = false }) {
+  const level = Math.round(color.a * (MOVE_OPACITY_PADS - 1));
+  return /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { className: "tweakers-move-pads", role: "group", "aria-label": "Opacity pads", "data-opacity": true, children: Array.from({ length: MOVE_OPACITY_PADS }, (_, pad) => /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+    "button",
+    {
+      type: "button",
+      className: "tweakers-move-pad",
+      "data-kind": "opacity",
+      "data-on": pad <= level || void 0,
+      "aria-label": `Opacity ${Math.round(pad / (MOVE_OPACITY_PADS - 1) * 100)}%`,
+      "aria-pressed": pad === level,
+      disabled,
+      onClick: () => MoveColorStore.setOpacity(pad / (MOVE_OPACITY_PADS - 1))
+    },
+    pad
+  )) });
 }
 function MoveColorSteps({ color, disabled = false }) {
   const selected = Math.round(color.a * (MOVE_COLOR_STEPS - 1));
@@ -5007,6 +5203,78 @@ function MoveColorSteps({ color, disabled = false }) {
     },
     step
   )) });
+}
+var readingHsl = (c) => `${Math.round(c.h)} ${Math.round(c.s * 100)} ${Math.round(c.l * 100)}`;
+var copyHsl = (c) => `hsl(${Math.round(c.h)} ${Math.round(c.s * 100)}% ${Math.round(c.l * 100)}%${c.a < 1 ? ` / ${Math.round(c.a * 100)}%` : ""})`;
+var copyHslOfHex = (hex) => copyHsl(rgbToHsl(parseHex(hex) ?? { r: 255, g: 0, b: 0, a: 1 }));
+var readingOklch = (hex) => {
+  const rgba = parseHex(hex);
+  if (!rgba) return "0 0 0";
+  const ok = rgbToOklch(rgba);
+  return `${Math.round(ok.l * 100)} ${ok.c.toFixed(2)} ${Math.round(ok.h)}`;
+};
+var copyOklch = (hex) => {
+  const rgba = parseHex(hex);
+  if (!rgba) return "oklch(0% 0 0)";
+  const ok = rgbToOklch(rgba);
+  return `oklch(${Math.round(ok.l * 100)}% ${ok.c.toFixed(3)} ${Math.round(ok.h)}${ok.a < 1 ? ` / ${Math.round(ok.a * 100)}%` : ""})`;
+};
+function MoveColorCopy({ label, reading, copy }) {
+  const [copied, setCopied] = (0, import_react6.useState)(false);
+  const timer = (0, import_react6.useRef)(null);
+  return /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
+    "button",
+    {
+      type: "button",
+      className: "tweakers-move-color-copy",
+      "aria-label": `Copy ${label} value`,
+      onClick: () => {
+        void navigator.clipboard?.writeText(copy);
+        setCopied(true);
+        if (timer.current) clearTimeout(timer.current);
+        timer.current = setTimeout(() => setCopied(false), 1e3);
+      },
+      children: [
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("span", { className: "tweakers-move-color-copy-label", children: [
+          label,
+          ":"
+        ] }),
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "tweakers-move-color-copy-value", children: reading }),
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+          "svg",
+          {
+            viewBox: ICON_MOVE_COPY.viewBox,
+            "aria-hidden": "true",
+            fill: "none",
+            stroke: "currentColor",
+            strokeWidth: "1.25",
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+            children: copied ? /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("path", { d: "M2.5 7.5L6 11L11.5 3.5", strokeWidth: "1.75" }) : ICON_MOVE_COPY.paths.map((d) => /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("path", { d }, d))
+          }
+        )
+      ]
+    }
+  );
+}
+function MoveColorPaletteStrip({ palette, selected, disabled }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "tweakers-move-color-palette", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "tweakers-move-palette-name", children: palette.name }),
+    /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { className: "tweakers-move-palette-strip", role: "group", "aria-label": `${palette.name} colors`, children: palette.colors.map((hex, index) => /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+      "button",
+      {
+        type: "button",
+        className: "tweakers-move-palette-color",
+        style: { background: hex },
+        disabled,
+        "aria-label": `Color ${hex}`,
+        "aria-pressed": index === selected,
+        "data-selected": index === selected || void 0,
+        onClick: () => MoveColorStore.setPaletteColor(index)
+      },
+      index
+    )) })
+  ] });
 }
 function MoveColorDisplay({ panelId, meta, anchor, theme }) {
   const display = (0, import_react6.useRef)(null);
@@ -5055,6 +5323,9 @@ function MoveColorDisplay({ panelId, meta, anchor, theme }) {
       observer?.disconnect();
     };
   }, [anchor]);
+  const hex = String(import_TweakStore4.TweakStore.getValue(panelId, meta.path) ?? "#ff0000");
+  const palette = MoveColorStore.getPalette();
+  const shown = palette ? rgbToHsl(parseHex(hex) ?? { r: 255, g: 0, b: 0, a: 1 }) : color;
   const content = /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
     "div",
     {
@@ -5065,19 +5336,28 @@ function MoveColorDisplay({ panelId, meta, anchor, theme }) {
       "aria-label": `${meta.label} color editor`,
       style: position,
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "tweakers-move-color-heading", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "tweakers-move-color-preview", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { style: { background: String(import_TweakStore4.TweakStore.getValue(panelId, meta.path)) } }) }),
-          /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "tweakers-move-color-name", children: meta.label }),
-          /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("output", { children: [
-            Math.round(color.h),
-            "\xB0"
-          ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("button", { type: "button", className: "tweakers-move-color-close", "aria-label": "Close color editor", onClick: close, children: "\xD7" })
+        /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("div", { className: "tweakers-move-color-copies", children: [
+          /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(MoveColorCopy, { label: "HSL", reading: readingHsl(shown), copy: copyHsl(shown) }),
+          /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(MoveColorCopy, { label: "HEX", reading: displayHex(hex), copy: hex }),
+          /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(MoveColorCopy, { label: "OKLCH", reading: readingOklch(hex), copy: copyOklch(hex) })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(MoveHueGrid, { color, disabled }),
-        /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("label", { className: "tweakers-move-color-range", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { children: "Luminosity" }),
-          /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+        palette ? /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(MoveColorPaletteStrip, { palette, selected: MoveColorStore.paletteIndex(panelId, meta.path), disabled }) : /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(import_jsx_runtime8.Fragment, { children: [
+          /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { className: "tweakers-move-color-slider", "data-kind": "hue", children: /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+            "input",
+            {
+              type: "range",
+              min: "0",
+              max: "360",
+              step: "1",
+              value: Math.round(color.h) % 360,
+              disabled,
+              "aria-label": "Hue",
+              "aria-valuetext": `${Math.round(color.h)} degrees`,
+              style: { "--move-slider-thumb": `hsl(${Math.round(color.h)} 100% 50%)` },
+              onChange: (e) => MoveColorStore.setHue(Number(e.target.value))
+            }
+          ) }),
+          /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("div", { className: "tweakers-move-color-slider", "data-kind": "lightness", children: /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
             "input",
             {
               type: "range",
@@ -5086,41 +5366,66 @@ function MoveColorDisplay({ panelId, meta, anchor, theme }) {
               step: "0.01",
               value: color.l,
               disabled,
-              "aria-label": "Luminosity",
+              "aria-label": "Lightness",
               "aria-valuetext": `${Math.round(color.l * 100)}%`,
+              style: { "--move-slider-thumb": `hsl(0 0% ${Math.round(color.l * 100)}%)` },
               onChange: (e) => MoveColorStore.setLuminosity(Number(e.target.value))
             }
-          ),
-          /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("output", { children: [
-            Math.round(color.l * 100),
-            "%"
-          ] })
-        ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("label", { className: "tweakers-move-color-range", children: [
-          /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { children: "Opacity" }),
-          /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
-            "input",
-            {
-              type: "range",
-              min: "0",
-              max: "1",
-              step: "0.01",
-              value: color.a,
-              disabled,
-              "aria-label": "Opacity",
-              "aria-valuetext": `${Math.round(color.a * 100)}%`,
-              onChange: (e) => MoveColorStore.setOpacity(Number(e.target.value))
-            }
-          ),
-          /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)("output", { children: [
-            Math.round(color.a * 100),
-            "%"
-          ] })
+          ) })
         ] })
       ]
     }
   );
   return typeof document === "undefined" ? content : (0, import_react_dom2.createPortal)(content, document.body);
+}
+function MovePaletteScreen() {
+  const root = (0, import_react6.useRef)(null);
+  const cursor = MoveColorStore.getPickerCursor();
+  const rows = [
+    { name: "All colors", colors: null },
+    ...MOVE_COLOR_PALETTES.map((p) => ({ name: p.name, colors: p.colors }))
+  ];
+  (0, import_react6.useEffect)(() => {
+    const el = root.current;
+    const selected = el?.querySelector("[data-selected]");
+    if (!el || !selected) return;
+    const row = selected.getBoundingClientRect();
+    const box = el.getBoundingClientRect();
+    const top = row.top - box.top + el.scrollTop;
+    const bottom = top + row.height;
+    const next = top < el.scrollTop ? top : bottom > el.scrollTop + el.clientHeight ? bottom - el.clientHeight : el.scrollTop;
+    el.scrollTop = Math.max(0, Math.min(next, el.scrollHeight - el.clientHeight));
+  }, [cursor]);
+  return /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+    "div",
+    {
+      ref: root,
+      className: "tweakers-move-preset-screen tweakers-move-palette-screen",
+      "data-open": true,
+      role: "listbox",
+      "aria-label": "Color palettes",
+      onWheel: (e) => {
+        e.preventDefault();
+        MoveColorStore.movePickerCursor(e.deltaY > 0 ? 1 : -1);
+      },
+      children: rows.map((row, index) => /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
+        "button",
+        {
+          type: "button",
+          role: "option",
+          className: "tweakers-move-palette-row",
+          "aria-selected": index === cursor,
+          "data-selected": index === cursor || void 0,
+          onClick: () => MoveColorStore.choosePicker(index),
+          children: [
+            /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "tweakers-move-palette-name", children: row.name }),
+            /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "tweakers-move-palette-strip", "aria-hidden": "true", children: row.colors ? row.colors.map((hex, i) => /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "tweakers-move-palette-color", style: { background: hex } }, i)) : /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "tweakers-move-palette-color", "data-gradient": true }) })
+          ]
+        },
+        row.name
+      ))
+    }
+  );
 }
 
 // src/move-functions.ts
@@ -5410,6 +5715,7 @@ var presetNavigatorOpen = () => {
   const view = MovePresetStore.getView();
   return !!view && view.phase !== "closing";
 };
+var palettePickerOpen = () => MoveColorStore.isPickerOpen();
 function boldColons(text) {
   if (!text.includes(":")) return text;
   return text.split(":").flatMap(
@@ -5519,7 +5825,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   (0, import_react7.useEffect)(() => setOffset(0), [pageId]);
   (0, import_react7.useEffect)(() => {
     const onJog = (e) => {
-      if (e.defaultPrevented || presetNavigatorOpen() || !stripRef.current.on) return;
+      if (e.defaultPrevented || presetNavigatorOpen() || MoveColorStore.getView() || !stripRef.current.on) return;
       if (MoveWaveformStore.wantsSteps()) return;
       e.preventDefault();
       scrollSlots(Math.round(Number(e.detail?.delta) || 0));
@@ -5543,8 +5849,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     if (!el) return;
     const onWheel = (e) => {
       const browsing = presetNavigatorOpen();
+      const picking = palettePickerOpen();
       const editing = MoveWaveformStore.wantsSteps();
-      if (!browsing && !editing && !stripRef.current.on) return;
+      if (!browsing && !picking && !editing && !stripRef.current.on) return;
       const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
       if (!d) return;
       e.preventDefault();
@@ -5553,6 +5860,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       if (!steps) return;
       wheelRest.current -= steps * WHEEL_SLOT_PX;
       if (browsing) MovePresetStore.scroll(steps);
+      else if (picking) MoveColorStore.movePickerCursor(steps);
       else if (editing) MoveWaveformStore.zoom(-steps);
       else scrollSlots(steps);
     };
@@ -5597,6 +5905,45 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   (0, import_react7.useEffect)(() => () => {
     if (MoveColorStore.getView()?.panelId === pageId) MoveColorStore.close();
   }, [pageId]);
+  const colorOpenPanel = colorMeta && colorView ? colorView.panelId : null;
+  (0, import_react7.useEffect)(() => {
+    if (!colorOpenPanel) return;
+    return MoveFunctions.push("menu", () => MoveColorStore.togglePicker(), { label: "palettes" });
+  }, [colorOpenPanel]);
+  (0, import_react7.useEffect)(() => {
+    if (!colorOpenPanel) return;
+    return MoveFunctions.push("copy", ({ shift, hold }) => {
+      const view = MoveColorStore.getView();
+      if (!view) return;
+      const hex = String(import_TweakStore6.TweakStore.getValue(view.panelId, view.path) ?? "");
+      const text = hold ? copyOklch(hex) : shift ? copyHslOfHex(hex) : hex;
+      navigator.clipboard?.writeText(text).catch(() => {
+      });
+    }, { label: "copy color" });
+  }, [colorOpenPanel]);
+  const paletteScreen = colorMeta ? MoveColorStore.isPickerOpen() : false;
+  (0, import_react7.useEffect)(() => {
+    if (!paletteScreen) return;
+    return MoveFunctions.push("back", () => MoveColorStore.closePicker(), { label: "back" });
+  }, [paletteScreen]);
+  (0, import_react7.useEffect)(() => {
+    const onJog = (e) => {
+      if (!palettePickerOpen()) return;
+      e.preventDefault();
+      MoveColorStore.movePickerCursor(Number(e.detail?.delta) || 0);
+    };
+    const onJogClick = (e) => {
+      if (!palettePickerOpen()) return;
+      e.preventDefault();
+      MoveColorStore.confirmPicker();
+    };
+    window.addEventListener(MOVE_JOG_EVENT, onJog);
+    window.addEventListener(MOVE_JOG_CLICK_EVENT, onJogClick);
+    return () => {
+      window.removeEventListener(MOVE_JOG_EVENT, onJog);
+      window.removeEventListener(MOVE_JOG_CLICK_EVENT, onJogClick);
+    };
+  }, []);
   (0, import_react7.useSyncExternalStore)(MovePresetStore.subscribe, MovePresetStore.getVersion, () => 0);
   const presetView = MovePresetStore.getView();
   const presetSaving = MovePresetStore.getSaving();
@@ -6032,8 +6379,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 onSelect: (value) => MoveSurfaceStore.selectScreen(Number(value))
               }
             ) }),
-            visibleCols.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "tweakers-move-grid", "data-presets": presetScreen?.phase === "open" || void 0, children: [
+            visibleCols.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "tweakers-move-grid", "data-presets": presetScreen?.phase === "open" || paletteScreen || void 0, children: [
               presetScreen && /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MovePresetScreen, { view: presetScreen }),
+              paletteScreen && /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MovePaletteScreen, {}),
               /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "tweakers-move-viewport", "data-scroll": stripMode || void 0, children: /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(
                 "div",
                 {
@@ -6622,7 +6970,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                         meta.path
                       );
                     }) }),
-                    color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveHueGrid, { color, disabled: import_TweakStore6.TweakStore.isDisabled(page.panel.id, colorMeta.path), mirror: true }) : Array.from({ length: PAD_ROWS }, (_, row) => row).filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0)).map((row) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "tweakers-move-pads", children: (appRowAt(row) !== null ? Array.from({ length: MOVE_PADS }, (_, i) => i) : visibleCols).map((col) => {
+                    color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveOpacityPads, { color, disabled: import_TweakStore6.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : Array.from({ length: PAD_ROWS }, (_, row) => row).filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0)).map((row) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "tweakers-move-pads", children: (appRowAt(row) !== null ? Array.from({ length: MOVE_PADS }, (_, i) => i) : visibleCols).map((col) => {
                       const appRow = appRowAt(row);
                       if (appRow !== null) {
                         const cell = padAt(col, appRow);
@@ -7625,6 +7973,7 @@ var import_TweakStore8 = require("tweakers/store");
   MOD_SLOTS,
   MOD_TOUCH_GRACE_MS,
   MOVE_COLOR_HUES,
+  MOVE_COLOR_PALETTES,
   MOVE_COLOR_STEPS,
   MOVE_COLOR_WHEEL,
   MOVE_DIALS,
@@ -7634,6 +7983,7 @@ var import_TweakStore8 = require("tweakers/store");
   MOVE_JOG_EVENT,
   MOVE_LATCH_EVENT,
   MOVE_MUTE_EVENT,
+  MOVE_OPACITY_PADS,
   MOVE_OVERRIDE_EVENT,
   MOVE_PADS,
   MOVE_PAD_LIBRARY,
