@@ -10,8 +10,7 @@
  *
  * Set it from the same code that paints the hardware:
  *
- *   MoveSurfaceStore.claimRows(2);
- *   MoveSurfaceStore.setPads(steps.map((s, i) => ({
+ *   MoveSurfaceStore.setPadRows(2, steps.map((s, i) => ({
  *     x: i % 8, y: i < 8 ? 1 : 0, label: `${i + 17}`, lit: s.on,
  *   })));
  *
@@ -98,6 +97,19 @@ function patch<K extends keyof MoveSurfaceState>(key: K, value: MoveSurfaceState
   emit();
 }
 
+const validPads = (pads: MovePadCell[]): MovePadCell[] =>
+  pads.filter((p) => p.x >= 0 && p.x < 8 && (p.y === 0 || p.y === 1));
+
+/** Rows and their cells are one piece of surface geometry. Publishing them
+ * together prevents subscribers from ever painting the new row count with
+ * the old cells (or the new cells inside the old row count). */
+function patchPadRows(rows: 0 | 1 | 2, pads: MovePadCell[]) {
+  const nextPads = validPads(pads);
+  if (state.rows === rows && JSON.stringify(state.pads) === JSON.stringify(nextPads)) return;
+  state = { ...state, rows, pads: nextPads };
+  emit();
+}
+
 export const MoveSurfaceStore = {
   getState: (): MoveSurfaceState => state,
 
@@ -112,7 +124,12 @@ export const MoveSurfaceStore = {
   },
 
   setPads(pads: MovePadCell[]) {
-    patch('pads', pads.filter((p) => p.x >= 0 && p.x < 8 && (p.y === 0 || p.y === 1)));
+    patch('pads', validPads(pads));
+  },
+
+  /** Publish the claimed row count and its cells as one renderable state. */
+  setPadRows(rows: 0 | 1 | 2, pads: MovePadCell[]) {
+    patchPadRows(rows, pads);
   },
 
   setSteps(steps: MoveStepCell[] | null) {

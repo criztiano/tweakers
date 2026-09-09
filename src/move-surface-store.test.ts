@@ -81,6 +81,26 @@ describe('the surface store', () => {
     off();
   });
 
+  it('publishes row geometry and pad cells atomically', () => {
+    const seen: { rows: number; labels: (string | undefined)[] }[] = [];
+    const off = MoveSurfaceStore.subscribe(() => {
+      const snapshot = MoveSurfaceStore.getState();
+      seen.push({ rows: snapshot.rows, labels: snapshot.pads.map((pad) => pad.label) });
+    });
+
+    MoveSurfaceStore.setPadRows(2, [
+      { x: 0, y: 1, label: 'bar−' },
+      { x: 0, y: 0, label: 'slice 1' },
+    ]);
+    MoveSurfaceStore.setPadRows(2, [
+      { x: 0, y: 1, label: 'bar−' },
+      { x: 0, y: 0, label: 'slice 1' },
+    ]);
+
+    assert.deepEqual(seen, [{ rows: 2, labels: ['bar−', 'slice 1'] }]);
+    off();
+  });
+
   it('keeps a stable snapshot between changes', () => {
     MoveSurfaceStore.claimRows(1);
     const first = MoveSurfaceStore.getState();

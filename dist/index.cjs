@@ -4725,6 +4725,13 @@ function patch(key, value) {
   state = { ...state, [key]: value };
   emit();
 }
+var validPads = (pads) => pads.filter((p) => p.x >= 0 && p.x < 8 && (p.y === 0 || p.y === 1));
+function patchPadRows(rows, pads) {
+  const nextPads = validPads(pads);
+  if (state.rows === rows && JSON.stringify(state.pads) === JSON.stringify(nextPads)) return;
+  state = { ...state, rows, pads: nextPads };
+  emit();
+}
 var MoveSurfaceStore = {
   getState: () => state,
   subscribe(fn) {
@@ -4736,7 +4743,11 @@ var MoveSurfaceStore = {
     patch("rows", rows);
   },
   setPads(pads) {
-    patch("pads", pads.filter((p) => p.x >= 0 && p.x < 8 && (p.y === 0 || p.y === 1)));
+    patch("pads", validPads(pads));
+  },
+  /** Publish the claimed row count and its cells as one renderable state. */
+  setPadRows(rows, pads) {
+    patchPadRows(rows, pads);
   },
   setSteps(steps) {
     patch("steps", steps === null ? null : steps.filter((s) => s.step >= 0 && s.step < 16));
@@ -5793,10 +5804,12 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     return () => cancelAnimationFrame(raf);
   }, [volume]);
   const onlyKey = only === void 0 ? void 0 : JSON.stringify(Array.isArray(only) ? only : [only]);
-  const read = (0, import_react7.useCallback)(
-    () => import_TweakStore6.TweakStore.selectPanels(onlyKey === void 0 ? void 0 : JSON.parse(onlyKey)),
-    [onlyKey]
-  );
+  const read = (0, import_react7.useCallback)(() => {
+    if (onlyKey === void 0) return import_TweakStore6.TweakStore.selectPanels();
+    const requested = JSON.parse(onlyKey);
+    const registered = import_TweakStore6.TweakStore.getPanels("panel");
+    return requested.map((key) => registered.find((panel) => panel.id === key || panel.name === key)).filter((panel) => panel !== void 0);
+  }, [onlyKey]);
   (0, import_react7.useEffect)(() => {
     setMounted(true);
     setPanels(read());
@@ -7311,8 +7324,8 @@ function MoveAudioWave({ index, theme }) {
   }, [index]);
   (0, import_react7.useEffect)(() => {
     const prev = MoveSurfaceStore.getState();
-    MoveSurfaceStore.claimRows(1);
-    MoveSurfaceStore.setPads(
+    MoveSurfaceStore.setPadRows(
+      1,
       Array.from({ length: MOVE_WAVEFORM_PADS }, (_, x) => ({
         x,
         y: 0,
@@ -7338,8 +7351,7 @@ function MoveAudioWave({ index, theme }) {
     return () => {
       offView();
       offPress();
-      MoveSurfaceStore.claimRows(prev.rows);
-      MoveSurfaceStore.setPads(prev.pads);
+      MoveSurfaceStore.setPadRows(prev.rows, prev.pads);
       MoveSurfaceStore.setSteps(prev.steps);
     };
   }, [index]);

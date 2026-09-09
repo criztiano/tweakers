@@ -3258,8 +3258,7 @@ declare function ListScreen({ items, value, onSelect, wide, follow, className, s
  *
  * Set it from the same code that paints the hardware:
  *
- *   MoveSurfaceStore.claimRows(2);
- *   MoveSurfaceStore.setPads(steps.map((s, i) => ({
+ *   MoveSurfaceStore.setPadRows(2, steps.map((s, i) => ({
  *     x: i % 8, y: i < 8 ? 1 : 0, label: `${i + 17}`, lit: s.on,
  *   })));
  *
@@ -3324,6 +3323,8 @@ declare const MoveSurfaceStore: {
     /** How many bottom pad rows the app took (matches `claims.pads` on the wire). */
     claimRows(rows: 0 | 1 | 2): void;
     setPads(pads: MovePadCell[]): void;
+    /** Publish the claimed row count and its cells as one renderable state. */
+    setPadRows(rows: 0 | 1 | 2, pads: MovePadCell[]): void;
     setSteps(steps: MoveStepCell[] | null): void;
     setScreen(screen: MoveScreenList | null): void;
     /** Selection intent from the panel's wheel screen; the host owns the value,

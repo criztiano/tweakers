@@ -285,10 +285,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // the NAMES change, not when the host hands over a fresh array. It is
   // serialized rather than joined: panel names have spaces in them.
   const onlyKey = only === undefined ? undefined : JSON.stringify(Array.isArray(only) ? only : [only]);
-  const read = useCallback(
-    () => TweakStore.selectPanels(onlyKey === undefined ? undefined : (JSON.parse(onlyKey) as string[])),
-    [onlyKey]
-  );
+  const read = useCallback(() => {
+    if (onlyKey === undefined) return TweakStore.selectPanels();
+    const requested = JSON.parse(onlyKey) as string[];
+    const registered = TweakStore.getPanels('panel');
+    // App pages are addressed by stable panel id. Names remain display copy:
+    // changing "snare" to "snare top" must not create a new hardware page.
+    // Name lookup stays as a compatibility path for existing integrations.
+    return requested
+      .map((key) => registered.find((panel) => panel.id === key || panel.name === key))
+      .filter((panel): panel is PanelConfig => panel !== undefined);
+  }, [onlyKey]);
 
   useEffect(() => {
     setMounted(true);
@@ -2121,8 +2128,7 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
   // lights. Whatever the app had on the surface comes back on close.
   useEffect(() => {
     const prev = MoveSurfaceStore.getState();
-    MoveSurfaceStore.claimRows(1);
-    MoveSurfaceStore.setPads(
+    MoveSurfaceStore.setPadRows(1,
       Array.from({ length: MOVE_WAVEFORM_PADS }, (_, x) => ({
         x, y: 0 as const, label: `${x + 1}`, color: modColor(index),
       }))
@@ -2143,8 +2149,7 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
     return () => {
       offView();
       offPress();
-      MoveSurfaceStore.claimRows(prev.rows);
-      MoveSurfaceStore.setPads(prev.pads);
+      MoveSurfaceStore.setPadRows(prev.rows, prev.pads);
       MoveSurfaceStore.setSteps(prev.steps);
     };
   }, [index]);

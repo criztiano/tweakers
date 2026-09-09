@@ -73,6 +73,36 @@ describe('the scrolling panel', () => {
       .toBe(tabs.findAllByProps({ role: 'tab' })[0].props.id);
   });
 
+  it('selects stable page ids while showing real part names and shared controls', () => {
+    const ids = ['extra-part-snare', 'extra-part-kick'];
+    const common: TweakConfig = {
+      BPM: { type: 'slider', default: 126, min: 20, max: 400, step: 0.01 },
+      '÷2  ·  ×2': { type: 'slider', default: 0, min: -1, max: 1, step: 1, origin: 0, bipolar: true },
+    };
+    const options = { labels: { BPM: 'BPM', '÷2  ·  ×2': '÷2 · ×2' } };
+    TweakStore.registerPanel(ids[0], 'SNARE', common, undefined, options);
+    TweakStore.registerPanel(ids[1], 'KICK', common, undefined, options);
+    act(() => {
+      renderer = create(createElement(MovePanel, {
+        panels: ids, dock: 'flow', productionEnabled: true,
+      }));
+    });
+
+    const tabs = renderer!.root.findByProps({ role: 'tablist', 'aria-label': 'Move pages' });
+    expect(tabs.findAllByProps({ role: 'tab' }).map((node) =>
+      node.findByProps({ className: 'tweakers-move-track-label' }).props.children
+    )).toEqual(['SNARE', 'KICK']);
+    expect(labels()).toEqual(['BPM', '÷2 · ×2']);
+
+    act(() => tabs.findAllByProps({ role: 'tab' })[1].props.onClick());
+    expect(labels()).toEqual(['BPM', '÷2 · ×2']);
+    expect(tabs.findAllByProps({ role: 'tab' }).map((node) => node.props['aria-selected']))
+      .toEqual([false, true]);
+
+    TweakStore.unregisterPanel(ids[0]);
+    TweakStore.unregisterPanel(ids[1]);
+  });
+
   it('keeps app pads in the Move matrix when the dial cluster has only two columns', () => {
     MoveSurfaceStore.claimRows(2);
     MoveSurfaceStore.setPads([
