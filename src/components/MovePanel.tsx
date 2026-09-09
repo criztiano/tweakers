@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore, useCallback } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { ModulationStore } from '../store/ModulationStore';
@@ -61,9 +61,11 @@ export interface MovePanelProps {
 /** The Move's four track colours, in track order (Figma node 802:321). */
 export const MOVE_TRACK_COLORS = ['#4274f4', '#d83dff', '#ff4d07', '#52bd06'];
 
-/** The on-screen pad grid mirrors the Move grid's 4 rows (Figma 802:319);
- *  columns follow the occupied set, never the full 8. */
+/** The on-screen pad grid mirrors the Move grid's 4 rows (Figma 802:319). */
 const PAD_ROWS = 4;
+/** Even a sparse screen pad layout keeps enough columns to read as the Move,
+ * rather than turning two occupied columns into a tall button list. */
+const MIN_PAD_COLUMNS = 4;
 
 /** The slider track's inset from the dial slot's edges (Figma 802:767). */
 const DIAL_TRACK_INSET = 10;
@@ -244,6 +246,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const [latched, setLatched] = useState<Record<number, ControlMeta | undefined>>({});
   const holdStart = useRef(0);
   const [mounted, setMounted] = useState(false);
+  const pageTabsId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   // The rail's drag anchor: pointer x, and the stop it started on.
   const [dotDrag, setDotDrag] = useState<{ x: number; stop: number } | null>(null);
@@ -966,6 +969,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const appRowAt = (row: number) => moveAppPadRow(row, appRows);
   const padAt = (x: number, y: 0 | 1): MovePadCell | undefined =>
     surface.pads.find((p) => p.x === x && p.y === y);
+  const shownPadRows = Array.from({ length: PAD_ROWS }, (_, row) => row)
+    .filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0));
 
   // Only occupied columns render — a column with a dial, a toggle chip, or a
   // value chip at its index. Indices stay the hardware knob numbers (hidden
@@ -997,6 +1002,27 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const clusterCols = stripMode
     ? Math.min(MOVE_DIALS, visibleCols.length) || MOVE_DIALS
     : visibleCols.length;
+  // Pads are the Move's own 8-column matrix, not a continuation of however
+  // many parameter dials happen to be above them. App-owned rows therefore
+  // keep all eight physical coordinates; sparse kit rows keep at least four
+  // columns, and extend through their furthest occupied hardware column.
+  const kitPadCols = Math.max(0, ...padRows.map((row) => row.length));
+  const padGridCols = shownPadRows.length === 0
+    ? 0
+    : appRows > 0
+      ? MOVE_PADS
+      : Math.min(MOVE_PADS, Math.max(MIN_PAD_COLUMNS, clusterCols, kitPadCols));
+  const surfaceCols = Math.max(clusterCols, padGridCols);
+  const panelIdForTabs = `${pageTabsId}-panel`;
+  const pageTabIndex = pages.indexOf(page);
+  const selectPage = (index: number) => {
+    const next = pages[index];
+    if (!next) return;
+    ModulationStore.closeSettings();
+    setTrack(index);
+    // Tell the hardware side; the kit relays it when the bridge is up.
+    window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: next.panel.id } }));
+  };
   // Where the window sits in the whole set — counted in controls, since that
   // is what the wheel moves by and what a person is looking for.
   const stripStops = stripMode ? stripOffsets(page) : [];
@@ -1041,6 +1067,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
           className="tweakers-move-inner"
           style={{
             '--move-cols': clusterCols,
+            '--move-surface-cols': surfaceCols,
             // The header row spans exactly what the controls row shows: the
             // dial cluster plus, when a wheel screen stands beside it, the
             // screen and its gap — so the page name sits on the top-left
@@ -1061,25 +1088,42 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               <MoveAudioZoom />
             ) : (
             <div className="tweakers-move-tracks-group">
-              {headerStart}
-              {pages.length > 1 && pages.map((pg, i) => (
-                <button
-                  key={pg.panel.id}
-                  type="button"
-                  className="tweakers-move-track"
-                  data-active={pg === page}
-                  aria-pressed={pg === page}
-                  onClick={() => {
-                    ModulationStore.closeSettings();
-                    setTrack(i);
-                    // Tell the hardware side; the kit relays it when the bridge is up.
-                    window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
-                  }}
-                >
-                  <span className="tweakers-move-track-marker" style={{ background: MOVE_TRACK_COLORS[i] }} />
-                  <span className="tweakers-move-track-label">{pg.panel.name}</span>
-                </button>
-              ))}
+              {pages.length > 1 && (
+                <div className="tweakers-move-pages" role="tablist" aria-label="Move pages">
+                  {pages.map((pg, i) => (
+                    <button
+                      key={pg.panel.id}
+                      id={`${pageTabsId}-tab-${i}`}
+                      type="button"
+                      role="tab"
+                      className="tweakers-move-track"
+                      data-active={pg === page}
+                      aria-selected={pg === page}
+                      aria-controls={panelIdForTabs}
+                      tabIndex={pg === page ? 0 : -1}
+                      onClick={() => selectPage(i)}
+                      onKeyDown={(event) => {
+                        const last = pages.length - 1;
+                        const next = event.key === 'ArrowRight' ? (i + 1) % pages.length
+                          : event.key === 'ArrowLeft' ? (i - 1 + pages.length) % pages.length
+                          : event.key === 'Home' ? 0
+                          : event.key === 'End' ? last
+                          : -1;
+                        if (next < 0) return;
+                        event.preventDefault();
+                        selectPage(next);
+                        event.currentTarget.parentElement
+                          ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]
+                          ?.focus();
+                      }}
+                    >
+                      <span className="tweakers-move-track-marker" style={{ background: MOVE_TRACK_COLORS[i] }} />
+                      <span className="tweakers-move-track-label">{pg.panel.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {headerStart && <div className="tweakers-move-header-start">{headerStart}</div>}
             </div>
             )}
             {/* The step buttons, centred between the track labels and the
@@ -1098,7 +1142,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
             {audioWave != null ? <MoveAudioTransport index={audioWave} /> : headerCluster}
           </div>
 
-          <div className="tweakers-move-controls">
+          <div
+            id={pages.length > 1 && pageTabIndex >= 0 ? panelIdForTabs : undefined}
+            className="tweakers-move-controls"
+            role={pages.length > 1 && pageTabIndex >= 0 ? 'tabpanel' : undefined}
+            aria-labelledby={pages.length > 1 && pageTabIndex >= 0 ? `${pageTabsId}-tab-${pageTabIndex}` : undefined}
+          >
           {/* The app's own list, beside the slots: what the wheel is walking,
               so the page shows the rows and the selection without a glance at
               the hardware. A click is selection intent — the host owns what
@@ -1120,7 +1169,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               />
             </div>
           )}
-          {visibleCols.length > 0 && <div className="tweakers-move-grid" data-presets={presetScreen?.phase === 'open' || paletteScreen || undefined}>
+          {(visibleCols.length > 0 || shownPadRows.length > 0) && <div
+            className="tweakers-move-grid"
+            data-presets={presetScreen?.phase === 'open' || paletteScreen || undefined}
+            data-pad-columns={padGridCols || undefined}
+          >
             {presetScreen && <MovePresetScreen view={presetScreen} />}
             {paletteScreen && <MovePaletteScreen />}
             {/* The window on the strip: the row is as long as the page has
@@ -1708,16 +1761,21 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 their place, but the panel never ends on dead rows. Columns
                 collapse the same way: cells render only for visible columns,
                 blank pads filling the gaps to keep the grid rectangular. */}
-            {color && colorMeta ? <MoveOpacityPads color={color} disabled={TweakStore.isDisabled(page.panel.id, colorMeta.path)} /> : Array.from({ length: PAD_ROWS }, (_, row) => row)
-              .filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0))
+            {color && colorMeta ? <MoveOpacityPads color={color} disabled={TweakStore.isDisabled(page.panel.id, colorMeta.path)} /> : shownPadRows
               .map((row) => (
-                <div key={row} className="tweakers-move-pads">
+                <div
+                  key={row}
+                  className="tweakers-move-pads"
+                  data-pad-row={row}
+                  data-pad-columns={stripMode ? page.dials.length : padGridCols}
+                  style={{ '--move-pad-cols': stripMode ? page.dials.length : padGridCols } as React.CSSProperties}
+                >
                   {/* An app-claimed row spans the whole hardware row — its
                       pads are the app's own set of eight, not echoes of the
                       dial columns above. Kit rows keep the dial columns. */}
-                  {(appRowAt(row) !== null
-                    ? Array.from({ length: MOVE_PADS }, (_, i) => i)
-                    : visibleCols
+                  {(stripMode
+                    ? visibleCols
+                    : Array.from({ length: padGridCols }, (_, i) => i)
                   ).map((col) => {
                     // A claimed row is the app's: it paints these, we only show them.
                     const appRow = appRowAt(row);

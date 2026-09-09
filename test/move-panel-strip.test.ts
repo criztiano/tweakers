@@ -64,7 +64,35 @@ describe('the scrolling panel', () => {
     act(() => {
       renderer = create(createElement(MovePanel, { dock: 'flow', productionEnabled: true }));
     });
-    expect(byClass('tweakers-move-track-label').map((node) => node.props.children)).toEqual(['EXTRA', 'DRUMS']);
+    const tabs = renderer!.root.findByProps({ role: 'tablist', 'aria-label': 'Move pages' });
+    expect(tabs.findAllByProps({ role: 'tab' }).map((node) => node.findByProps({ className: 'tweakers-move-track-label' }).props.children))
+      .toEqual(['EXTRA', 'DRUMS']);
+    expect(tabs.findAllByProps({ role: 'tab' }).map((node) => node.props['aria-selected']))
+      .toEqual([true, false]);
+    expect(renderer!.root.findByProps({ role: 'tabpanel' }).props['aria-labelledby'])
+      .toBe(tabs.findAllByProps({ role: 'tab' })[0].props.id);
+  });
+
+  it('keeps app pads in the Move matrix when the dial cluster has only two columns', () => {
+    MoveSurfaceStore.claimRows(2);
+    MoveSurfaceStore.setPads([
+      ...Array.from({ length: 4 }, (_, x) => ({ x, y: 1 as const, label: `Nav ${x + 1}`, lit: true })),
+      ...Array.from({ length: 8 }, (_, x) => ({ x, y: 0 as const, label: `Slice ${x + 1}`, lit: false })),
+    ]);
+    mount(many(2), false);
+
+    const grid = byClass('tweakers-move-grid')[0];
+    const rows = byClass('tweakers-move-pads');
+    expect(grid.props['data-pad-columns']).toBe(8);
+    expect(rows.length).toBeLessThanOrEqual(4);
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row.props['data-pad-columns']).toBe(8);
+      expect(row.children).toHaveLength(8);
+    }
+    expect(rows[0].findAllByProps({ 'data-kind': 'app' }).map((pad) => pad.findByProps({ className: 'tweakers-move-pad-title' }).props.children))
+      .toEqual(['Nav 1', 'Nav 2', 'Nav 3', 'Nav 4']);
+    expect(rows[1].findAllByProps({ 'data-kind': 'app' })).toHaveLength(8);
   });
 
   it('keeps claimed step/loop points off-screen while retaining pad feedback', () => {

@@ -404,6 +404,7 @@
   --move-color-disabled-opacity: 0.45;
   --move-duration-press: 150ms;
   --move-ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --move-header-control-height: 28px;
 
   display: flex;
   align-items: flex-end;
@@ -427,7 +428,9 @@
      the fixed 8-wide slot size plus the 4px gaps — and centre in the
      panel, so the page name lines up with the first visible slot and a
      slot never changes size; the panel just shows fewer of them. */
-  --move-cluster-w: calc((100% - 28px) / 8 * var(--move-cols, 8) + 4px * (var(--move-cols, 8) - 1));
+  --move-slot-base-w: calc((100% - 7 * var(--move-gap)) / 8);
+  --move-cluster-w: calc(var(--move-slot-base-w) * var(--move-cols, 8) + var(--move-gap) * (var(--move-cols, 8) - 1));
+  --move-surface-w: calc(var(--move-slot-base-w) * var(--move-surface-cols, var(--move-cols, 8)) + var(--move-gap) * (var(--move-surface-cols, var(--move-cols, 8)) - 1));
 
   position: relative;
   flex: 1 0 0;
@@ -446,19 +449,28 @@
   /* Exactly the controls row's footprint: the dial cluster plus the wheel
      screen when one stands beside it — the page name lands on the top-left
      corner of the first real object, whatever the panel resizes to. */
-  width: calc(max(var(--move-cluster-w, 100%), 0px) + var(--move-screen-w, 0px));
+  width: calc(max(var(--move-surface-w, 100%), 0px) + var(--move-screen-w, 0px));
   align-self: center;
   padding: 4px;
 }
 
 .tweakers-move-tracks-group {
-  display: flex;
-  gap: 8px;
-  /* the readout pill is taller than a track tick: centring puts every name in
-     the row on one line with it */
-  align-items: center;
+  display: grid;
+  gap: var(--move-color-gap-small);
+  justify-items: start;
   min-width: 0;
-  overflow: hidden;
+}
+
+.tweakers-move-pages {
+  display: flex;
+  align-items: center;
+  gap: var(--move-color-gap);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tweakers-move-header-start {
+  min-width: 0;
 }
 
 .tweakers-move-track {
@@ -466,7 +478,8 @@
   gap: 9px;
   align-items: center;
   border-radius: var(--move-radius);
-  padding: 0;
+  min-height: var(--move-header-control-height);
+  padding: 0 var(--move-color-gap-small);
   background: none;
   border: none;
   cursor: pointer;
@@ -497,10 +510,19 @@
   white-space: nowrap;
   text-align: left;
   opacity: 0.22;
+  max-width: 10ch;
   transition: opacity var(--move-duration-press) var(--move-ease-out);
 }
 
 .tweakers-move-track[data-active="true"] .tweakers-move-track-label {
+  opacity: 1;
+}
+
+.tweakers-move-track:hover .tweakers-move-track-label {
+  opacity: 0.7;
+}
+
+.tweakers-move-track[data-active="true"]:hover .tweakers-move-track-label {
   opacity: 1;
 }
 
@@ -657,7 +679,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  width: var(--move-cluster-w, 100%);
+  width: var(--move-surface-w, var(--move-cluster-w, 100%));
   align-self: center;
 }
 
@@ -666,7 +688,8 @@
   grid-template-columns: repeat(var(--move-cols, 8), minmax(0, 1fr));
   gap: var(--move-gap);
   height: var(--move-slot-height);
-  width: 100%;
+  width: var(--move-cluster-w, 100%);
+  align-self: center;
 }
 
 /* The endless strip. The rows keep their 8-wide slot size and simply run
@@ -2149,7 +2172,7 @@
 
 .tweakers-move-pads {
   display: grid;
-  grid-template-columns: repeat(var(--move-cols, 8), minmax(0, 1fr));
+  grid-template-columns: repeat(var(--move-pad-cols, var(--move-cols, 8)), minmax(0, 1fr));
   gap: 4px;
   width: 100%;
 }
@@ -2299,6 +2322,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .tweakers-move-pad,
+  .tweakers-move-track,
   .tweakers-move-track-label {
     transition-duration: 0.01ms;
   }
