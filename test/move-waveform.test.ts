@@ -17,29 +17,34 @@ import { WAVEFORM_MAX_ZOOM } from '../src/waveform-engine';
 
 describe('the volume knob scrubs', () => {
   it('moves by the finest step on a slow tick and stops at both ends', () => {
-    expect(scrubBy(0.5, 1)).toBeCloseTo(0.502, 6);
-    expect(scrubBy(0.5, -1)).toBeCloseTo(0.498, 6);
+    expect(scrubBy(0.5, 1)).toBeCloseTo(0.50025, 6);
+    expect(scrubBy(0.5, -1)).toBeCloseTo(0.49975, 6);
     expect(scrubBy(0.001, -20)).toBe(0);
     expect(scrubBy(0.999, 20)).toBe(1);
   });
 
   it('bends a batched (fast) turn superlinear — spin to travel', () => {
     const spin = scrubBy(0.5, 10) - 0.5;
-    expect(spin).toBeCloseTo(Math.pow(10, 1.6) * 0.002, 6);
+    expect(spin).toBeCloseTo(Math.pow(10, 1.2) * 0.00025, 6);
     // Ten slow ticks land short of one batched ten — speed buys reach.
-    expect(spin).toBeGreaterThan(10 * 0.002);
+    expect(spin).toBeGreaterThan(10 * 0.00025);
   });
 
   it('gives Shift the fine layer, linear and unaccelerated', () => {
-    expect(scrubBy(0.5, 1, true)).toBeCloseTo(0.5004, 6);
-    expect(scrubBy(0.5, 10, true)).toBeCloseTo(0.504, 6);
+    expect(scrubBy(0.5, 1, true)).toBeCloseTo(0.50005, 6);
+    expect(scrubBy(0.5, 10, true)).toBeCloseTo(0.5005, 6);
   });
 
   it('follows the zoom: a tick moves a share of the window, not the sample', () => {
-    expect(scrubBy(0.5, 1, false, 4)).toBeCloseTo(0.5005, 6);
-    expect(scrubBy(0.5, 1, true, 8)).toBeCloseTo(0.50005, 6);
+    expect(scrubBy(0.5, 1, false, 4)).toBeCloseTo(0.5000625, 6);
+    expect(scrubBy(0.5, 1, true, 8)).toBeCloseTo(0.50000625, 6);
     // Zoomed out it is exactly the plain step.
     expect(scrubBy(0.5, 1, false, 1)).toBeCloseTo(scrubBy(0.5, 1), 6);
+  });
+
+  it('caps pathological batched deltas from the hardware encoder', () => {
+    expect(scrubBy(0.5, 1000)).toBe(scrubBy(0.5, 24));
+    expect(scrubBy(0.5, -1000, true)).toBe(scrubBy(0.5, -24, true));
   });
 });
 

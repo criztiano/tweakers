@@ -402,6 +402,8 @@
   --move-color-marker-light: #fff;
   --move-color-marker-dark: #171717;
   --move-color-disabled-opacity: 0.45;
+  --move-duration-press: 150ms;
+  --move-ease-out: cubic-bezier(0.2, 0, 0, 1);
 
   display: flex;
   align-items: flex-end;
@@ -451,10 +453,12 @@
 
 .tweakers-move-tracks-group {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   /* the readout pill is taller than a track tick: centring puts every name in
      the row on one line with it */
   align-items: center;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .tweakers-move-track {
@@ -467,6 +471,14 @@
   border: none;
   cursor: pointer;
   color: var(--move-text);
+  min-width: 0;
+  transition: transform var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-track:active { transform: scale(0.97); }
+.tweakers-move-track:focus-visible {
+  outline: var(--move-color-stroke) solid var(--move-text);
+  outline-offset: var(--move-color-stroke);
 }
 
 .tweakers-move-track-marker {
@@ -480,10 +492,12 @@
   font-family: var(--move-font-label);
   font-size: 16px;
   line-height: normal;
-  word-break: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-align: left;
   opacity: 0.22;
-  transition: opacity 0.12s;
+  transition: opacity var(--move-duration-press) var(--move-ease-out);
 }
 
 .tweakers-move-track[data-active="true"] .tweakers-move-track-label {
@@ -2157,6 +2171,18 @@
   line-height: normal;
   white-space: nowrap;
   cursor: pointer;
+  transition: transform var(--move-duration-press) var(--move-ease-out),
+    opacity var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-pad:not([data-empty="true"]):active,
+.tweakers-move-pad[data-held] {
+  transform: scale(0.97);
+}
+
+.tweakers-move-pad:focus-visible {
+  outline: var(--move-color-stroke) solid var(--move-text);
+  outline-offset: var(--move-color-stroke);
 }
 
 .tweakers-move-pad[data-empty="true"] {
@@ -2199,6 +2225,7 @@
 .tweakers-move-pad[data-kind="app"] {
   padding: 0 4px;
   font-weight: 400;
+  min-width: 0;
 }
 
 .tweakers-move-pad[data-kind="app"]:not([data-on="true"]) .tweakers-move-pad-indicator {
@@ -2271,6 +2298,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .tweakers-move-pad,
+  .tweakers-move-track-label {
+    transition-duration: 0.01ms;
+  }
+
 .tweakers-move-pad[data-latched],
   .tweakers-move-dial[data-latched] {
     animation: none;

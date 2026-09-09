@@ -30,7 +30,7 @@ import { MoveFunctions } from '../move-functions';
 import { MovePresetStore, type MovePresetView } from '../move-presets';
 import { ListScreen } from './ListScreen';
 
-interface MovePanelProps {
+export interface MovePanelProps {
   theme?: TweakTheme;
   productionEnabled?: boolean;
   /** Mirror only the named panels, in the order given — same option the bridge kit takes. */
@@ -50,6 +50,12 @@ interface MovePanelProps {
    * panel of forty parameters is one instrument, not five pages of it.
    */
   scroll?: boolean;
+  /**
+   * View-owned status placed in the panel's top-left header slot. This is for
+   * a compact, live readout that belongs beside the panel (for example a
+   * waveform zoom), not for another row of page controls.
+   */
+  headerStart?: React.ReactNode;
 }
 
 /** The Move's four track colours, in track order (Figma node 802:321). */
@@ -205,7 +211,7 @@ export const MOVE_STRIP_EVENT = 'move-tweakers:strip';
  * are the eight the dials are holding, their pads with them, so all of them
  * can be reached without a single one shrinking to a chip.
  */
-export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport', scroll = false }: MovePanelProps) {
+export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport', scroll = false, headerStart }: MovePanelProps) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [track, setTrack] = useState(0);
@@ -229,6 +235,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const [rampStop, setRampStop] = useState<Record<string, number>>({});
   const [hwHeld, setHwHeld] = useState<Record<string, boolean>>({});
   const [hwLatched, setHwLatched] = useState<Record<string, boolean>>({});
+  // A pointer on an app-owned pad lights immediately, before the host has
+  // handled the released gesture. This mirrors the physical pad's momentary
+  // feedback without inventing a latched state for an app action.
+  const [appHeld, setAppHeld] = useState<string | null>(null);
   // Screen-side value-chip substitution: a held chip peeks, a tapped chip latches.
   const [held, setHeld] = useState<{ col: number; meta: ControlMeta } | null>(null);
   const [latched, setLatched] = useState<Record<number, ControlMeta | undefined>>({});
@@ -1051,11 +1061,14 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               <MoveAudioZoom />
             ) : (
             <div className="tweakers-move-tracks-group">
+              {headerStart}
               {pages.length > 1 && pages.map((pg, i) => (
                 <button
                   key={pg.panel.id}
+                  type="button"
                   className="tweakers-move-track"
                   data-active={pg === page}
+                  aria-pressed={pg === page}
                   onClick={() => {
                     ModulationStore.closeSettings();
                     setTrack(i);
@@ -1076,18 +1089,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
             <div className="tweakers-move-mods">
               {color && colorMeta
                 ? <MoveColorSteps color={color} disabled={TweakStore.isDisabled(page.panel.id, colorMeta.path)} />
-                : surface.steps
-                ? surface.steps.map((s) => (
-                    <span key={s.step} className="tweakers-move-mod" title={`step ${s.step + 1}`}>
-                      <span
-                        className="tweakers-move-mod-dot"
-                        style={{ background: s.color ?? 'var(--move-text)', opacity: s.lit ? 1 : 0.25 }}
-                      />
-                    </span>
-                  ))
-                : ModulationStore.getSlots().map((slot) => (
+                : surface.steps === null
+                ? ModulationStore.getSlots().map((slot) => (
                     <MoveModCircle key={slot.index} slot={slot} />
-                  ))}
+                  ))
+                : null}
             </div>
             {audioWave != null ? <MoveAudioTransport index={audioWave} /> : headerCluster}
           </div>
@@ -1723,9 +1729,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       return (
                         <button
                           key={`app-${col}`}
+                          type="button"
                           className="tweakers-move-pad"
                           data-kind="app"
-                          data-on={cell.lit || undefined}
+                          data-on={cell.lit || appHeld === `${appRow}:${col}` || undefined}
+                          data-held={appHeld === `${appRow}:${col}` || undefined}
+                          onPointerDown={(e) => {
+                            try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                            setAppHeld(`${appRow}:${col}`);
+                          }}
+                          onPointerUp={() => setAppHeld(null)}
+                          onPointerCancel={() => setAppHeld(null)}
                           onClick={() => MoveSurfaceStore.press(col, appRow)}
                         >
                           <MovePadAppBody label={cell.label} color={cell.color} />

@@ -5,6 +5,7 @@ import { MovePanel, MOVE_JOG_EVENT, MOVE_STRIP_EVENT } from '../src/components/M
 import { TweakStore, type TweakConfig } from '../src/store/TweakStore';
 import { MOVE_DIALS } from '../src/move-layout';
 import { MoveFunctions } from '../src/move-functions';
+import { MoveSurfaceStore } from '../src/move-surface-store';
 
 let renderer: ReactTestRenderer | undefined;
 const id = 'move-strip-panel';
@@ -16,6 +17,8 @@ afterEach(() => {
   act(() => renderer?.unmount());
   renderer = undefined;
   TweakStore.unregisterPanel(id);
+  TweakStore.unregisterPanel(`${id}-second`);
+  MoveSurfaceStore.reset();
   vi.unstubAllGlobals();
 });
 
@@ -25,11 +28,12 @@ const many = (count: number): TweakConfig =>
     Array.from({ length: count }, (_, i) => [`p${i}`, { type: 'slider', min: 0, max: 1, default: 0.5 }])
   ) as TweakConfig;
 
-function mount(config: TweakConfig, scroll = true, options?: { movePads?: Record<string, number> }) {
+function mount(config: TweakConfig, scroll = true, options?: { movePads?: Record<string, number> }, headerStart?: React.ReactNode) {
   TweakStore.registerPanel(id, 'Strip', config, undefined, options);
   act(() => {
     renderer = create(createElement(MovePanel, {
       panels: 'Strip', dock: 'flow', productionEnabled: true, scroll,
+      headerStart,
     }));
   });
 }
@@ -48,6 +52,35 @@ const jog = (delta: number) => {
 };
 
 describe('the scrolling panel', () => {
+  it('places a view status in the start of the native panel header', () => {
+    mount(many(1), false, undefined, createElement('output', { 'data-testid': 'view-status' }, 'Zoom 4×'));
+    const header = byClass('tweakers-move-tracks-group')[0];
+    expect(header.findByProps({ 'data-testid': 'view-status' }).props.children).toBe('Zoom 4×');
+  });
+
+  it('shows native page labels in the top-left header when tracks paginate', () => {
+    TweakStore.registerPanel(id, 'EXTRA', many(1));
+    TweakStore.registerPanel(`${id}-second`, 'DRUMS', many(1));
+    act(() => {
+      renderer = create(createElement(MovePanel, { dock: 'flow', productionEnabled: true }));
+    });
+    expect(byClass('tweakers-move-track-label').map((node) => node.props.children)).toEqual(['EXTRA', 'DRUMS']);
+  });
+
+  it('keeps claimed step/loop points off-screen while retaining pad feedback', () => {
+    MoveSurfaceStore.setSteps([{ step: 0, lit: true }, { step: 7, lit: false }]);
+    MoveSurfaceStore.claimRows(1);
+    MoveSurfaceStore.setPads([{ x: 0, y: 0, label: 'Slice 1', lit: false }]);
+    mount(many(1), false);
+
+    expect(byClass('tweakers-move-mod-dot')).toHaveLength(0);
+    const pad = renderer!.root.findByProps({ 'data-kind': 'app' });
+    act(() => pad.props.onPointerDown({ pointerId: 1, currentTarget: { setPointerCapture: vi.fn() } }));
+    expect(renderer!.root.findByProps({ 'data-kind': 'app' }).props['data-held']).toBe(true);
+    act(() => renderer!.root.findByProps({ 'data-kind': 'app' }).props.onPointerCancel());
+    expect(renderer!.root.findByProps({ 'data-kind': 'app' }).props['data-held']).toBeUndefined();
+  });
+
   it('keeps every control at slot size instead of demoting the overflow', () => {
     mount(many(20));
     expect(labels()).toHaveLength(20);

@@ -2113,16 +2113,18 @@ function WaveformVisualization({
 // src/move-waveform.ts
 var MOVE_WAVEFORM_STEPS = 16;
 var MOVE_WAVEFORM_PADS = 8;
-var SCRUB_PER_DETENT = 2e-3;
-var SCRUB_FINE = 4e-4;
-var SCRUB_ACCEL = 1.6;
+var SCRUB_PER_DETENT = 25e-5;
+var SCRUB_FINE = 5e-5;
+var SCRUB_ACCEL = 1.2;
+var SCRUB_MAX_BATCH = 24;
 var ZOOM_PER_DETENT = 0.08;
 var clamp013 = (v) => Math.min(1, Math.max(0, v));
 function defaultView() {
   return { position: 0, zoom: 1, loop: null, loopAnchor: null };
 }
 function scrubBy(position, delta, fine = false, zoom = 1) {
-  const magnitude = fine ? Math.abs(delta) : Math.pow(Math.abs(delta), SCRUB_ACCEL);
+  const detents = Math.min(SCRUB_MAX_BATCH, Math.abs(delta));
+  const magnitude = fine ? detents : Math.pow(detents, SCRUB_ACCEL);
   const step = (fine ? SCRUB_FINE : SCRUB_PER_DETENT) / Math.max(1, zoom);
   const next = clamp013(position + Math.sign(delta) * magnitude * step);
   return Number(next.toFixed(6));
@@ -5746,7 +5748,7 @@ var MOVE_JOG_EVENT = "move-tweakers:jog";
 var MOVE_JOG_CLICK_EVENT = "move-tweakers:jog-click";
 var MOVE_MUTE_EVENT = "move-tweakers:mute";
 var MOVE_STRIP_EVENT = "move-tweakers:strip";
-function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only, dock = "viewport", scroll = false }) {
+function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only, dock = "viewport", scroll = false, headerStart }) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = (0, import_react7.useState)([]);
   const [track, setTrack] = (0, import_react7.useState)(0);
@@ -5760,6 +5762,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const [rampStop, setRampStop] = (0, import_react7.useState)({});
   const [hwHeld, setHwHeld] = (0, import_react7.useState)({});
   const [hwLatched, setHwLatched] = (0, import_react7.useState)({});
+  const [appHeld, setAppHeld] = (0, import_react7.useState)(null);
   const [held, setHeld] = (0, import_react7.useState)(null);
   const [latched, setLatched] = (0, import_react7.useState)({});
   const holdStart = (0, import_react7.useRef)(0);
@@ -6338,30 +6341,29 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         },
         children: [
           /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "tweakers-move-tracks", children: [
-            audioWave != null ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveAudioZoom, {}) : /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "tweakers-move-tracks-group", children: pages.length > 1 && pages.map((pg, i) => /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(
-              "button",
-              {
-                className: "tweakers-move-track",
-                "data-active": pg === page,
-                onClick: () => {
-                  import_ModulationStore2.ModulationStore.closeSettings();
-                  setTrack(i);
-                  window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
+            audioWave != null ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveAudioZoom, {}) : /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "tweakers-move-tracks-group", children: [
+              headerStart,
+              pages.length > 1 && pages.map((pg, i) => /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(
+                "button",
+                {
+                  type: "button",
+                  className: "tweakers-move-track",
+                  "data-active": pg === page,
+                  "aria-pressed": pg === page,
+                  onClick: () => {
+                    import_ModulationStore2.ModulationStore.closeSettings();
+                    setTrack(i);
+                    window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
+                  },
+                  children: [
+                    /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
+                    /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "tweakers-move-track-label", children: pg.panel.name })
+                  ]
                 },
-                children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
-                  /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "tweakers-move-track-label", children: pg.panel.name })
-                ]
-              },
-              pg.panel.id
-            )) }),
-            /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "tweakers-move-mods", children: color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveColorSteps, { color, disabled: import_TweakStore6.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps ? surface.steps.map((s) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "tweakers-move-mod", title: `step ${s.step + 1}`, children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
-              "span",
-              {
-                className: "tweakers-move-mod-dot",
-                style: { background: s.color ?? "var(--move-text)", opacity: s.lit ? 1 : 0.25 }
-              }
-            ) }, s.step)) : import_ModulationStore2.ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveModCircle, { slot }, slot.index)) }),
+                pg.panel.id
+              ))
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "tweakers-move-mods", children: color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveColorSteps, { color, disabled: import_TweakStore6.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? import_ModulationStore2.ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveModCircle, { slot }, slot.index)) : null }),
             audioWave != null ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveAudioTransport, { index: audioWave }) : headerCluster
           ] }),
           /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "tweakers-move-controls", children: [
@@ -6982,9 +6984,20 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                         return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
                           "button",
                           {
+                            type: "button",
                             className: "tweakers-move-pad",
                             "data-kind": "app",
-                            "data-on": cell.lit || void 0,
+                            "data-on": cell.lit || appHeld === `${appRow}:${col}` || void 0,
+                            "data-held": appHeld === `${appRow}:${col}` || void 0,
+                            onPointerDown: (e) => {
+                              try {
+                                e.currentTarget.setPointerCapture(e.pointerId);
+                              } catch {
+                              }
+                              setAppHeld(`${appRow}:${col}`);
+                            },
+                            onPointerUp: () => setAppHeld(null),
+                            onPointerCancel: () => setAppHeld(null),
                             onClick: () => MoveSurfaceStore.press(col, appRow),
                             children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MovePadAppBody, { label: cell.label, color: cell.color })
                           },
