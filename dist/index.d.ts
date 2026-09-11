@@ -2938,6 +2938,7 @@ declare const MOVE_FUNCTION_MANIFEST: readonly [{
 }, {
     readonly name: "setup";
     readonly step: 1;
+    readonly host: true;
 }, {
     readonly name: "workflow";
     readonly step: 2;
@@ -2971,6 +2972,7 @@ declare const MOVE_FUNCTION_MANIFEST: readonly [{
 }, {
     readonly name: "step13";
     readonly step: 12;
+    readonly host: true;
 }, {
     readonly name: "step14";
     readonly step: 13;

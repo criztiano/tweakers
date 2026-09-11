@@ -5251,10 +5251,12 @@ var MOVE_FUNCTION_MANIFEST = [
   { name: "jog_click", special: true },
   /* The Shift layer of the step row: the sixteen labels printed under the
      step buttons, in step order (`step` is the index). Four steps carry no
-     print and are named by position. Holding Shift on the hardware shows
-     which of these the app carries; a press arrives with `step` set. */
+     print and are named by position. Holding Shift on the hardware lights
+     the label icon under each one the app carries; a press arrives with
+     `step` set. `host` marks the two schwung keeps for itself (Settings on
+     Shift+Step 2, Tools on Shift+Step 13): attachable, never delivered. */
   { name: "set_overview", step: 0 },
-  { name: "setup", step: 1 },
+  { name: "setup", step: 1, host: true },
   { name: "workflow", step: 2 },
   { name: "step4", step: 3 },
   { name: "tempo", step: 4 },
@@ -5265,7 +5267,7 @@ var MOVE_FUNCTION_MANIFEST = [
   { name: "full_velocity", step: 9 },
   { name: "repeat", step: 10 },
   { name: "step12", step: 11 },
-  { name: "step13", step: 12 },
+  { name: "step13", step: 12, host: true },
   { name: "step14", step: 13 },
   { name: "double_loop", step: 14 },
   { name: "quantize", step: 15 }
