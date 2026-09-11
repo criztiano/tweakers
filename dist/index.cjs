@@ -3256,11 +3256,10 @@ function buildMovePages(panels) {
   }
   return plain.slice(0, MOVE_TRACKS).map((panel) => {
     const controls = flat(panel.controls);
-    const chipPlaced = (c) => padColumn(panel, c) !== null && !noChip(c);
     const dials = [];
     let nextCol = 0;
     for (const c of controls) {
-      if (!isDial(c) || chipPlaced(c)) continue;
+      if (!isDial(c)) continue;
       const span = dialSpan(c);
       if (nextCol + span > MOVE_DIALS) {
         if (nextCol >= MOVE_DIALS) break;
@@ -3299,8 +3298,15 @@ function buildMovePages(panels) {
       if (c.type === "toggle" && !isToggleDial(c)) place(toggles, "toggle", c, col);
       else if (c.type === "action") {
         if (col !== null) place(actions, "action", c, col);
-      } else if (isDial(c) && !noChip(c) && !dials.includes(c)) place(values, "value", c, col);
-      else if (isDial(c) && noChip(c) && !dials.includes(c)) {
+      } else if (dials.includes(c)) {
+        if (col !== null) {
+          reportMoveLayoutIssue(
+            "pad-column-on-dial",
+            `panel '${panel.id}': control '${c.path}' holds a dial slot \u2014 movePads column ${col} ignored; pads never mirror dials`
+          );
+        }
+      } else if (isDial(c) && !noChip(c)) place(values, "value", c, col);
+      else if (isDial(c) && noChip(c)) {
         reportMoveLayoutIssue(
           "dial-dropped",
           `panel '${panel.id}': control '${c.path}' (${c.type}) needs a dial column and none is left \u2014 dropped`

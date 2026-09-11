@@ -73,7 +73,7 @@ declare function buildModMovePage(panel: PanelConfig, layout?: ModPageLayout | n
  * Tests (and apps that want the feed) can swap the sink with
  * `setMoveLayoutReporter`; `null` restores the deduped console.warn.
  */
-type MoveLayoutIssueCode = 'panel-dropped' | 'dial-dropped' | 'pad-column-invalid' | 'pad-column-taken' | 'pad-row-full';
+type MoveLayoutIssueCode = 'panel-dropped' | 'dial-dropped' | 'pad-column-invalid' | 'pad-column-on-dial' | 'pad-column-taken' | 'pad-row-full';
 type MoveLayoutReporter = (code: MoveLayoutIssueCode, message: string) => void;
 declare function setMoveLayoutReporter(fn: MoveLayoutReporter | null): void;
 declare function reportMoveLayoutIssue(code: MoveLayoutIssueCode, message: string): void;
