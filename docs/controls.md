@@ -34,6 +34,7 @@ and the formatted readout. It retains every gesture and store subscription.
 | `MoveActionButton` / `MoveFunctions` | Hardware-named action pills and one shared action registry |
 | `MoveWaveform` / `MoveWaveformStore` | Sample display, navigation, loop and scrub state |
 | `MoveVolumeDisplay` | Contextual volume-knob readout |
+| `MOVE_PALETTE` | The Move's colours on screen — the same set the hardware lights, matched by eye against the device's LED palette. `MOVE_TRACK_COLORS` is built from it. Colour on this surface always means something; never decoration. |
 | `MoveSurfaceStore` | Mirror app-owned raw pads, step buttons and screen state |
 | `ListScreen` | Controlled list presentation matching the device display |
 | `ModulationStore` | LFO, sample-and-hold, ADSR and curve modulation; settings layouts and assignments |
