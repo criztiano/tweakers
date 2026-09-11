@@ -5942,13 +5942,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         sawSettings.current = true;
         return;
       }
-      if (sawSettings.current) {
-        sawSettings.current = false;
-        ModulationStore2.closeSettings();
-      }
       if (id !== void 0 && id === settingsRoomIdRef.current) {
         if (MoveSettingsView.isOpen()) sawRoom.current = true;
         return;
+      }
+      if (sawSettings.current) {
+        sawSettings.current = false;
+        ModulationStore2.closeSettings();
       }
       if (sawRoom.current) {
         sawRoom.current = false;

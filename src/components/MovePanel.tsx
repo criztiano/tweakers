@@ -748,17 +748,20 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
         sawSettings.current = true;
         return;
       }
-      if (sawSettings.current) {
-        sawSettings.current = false;
-        ModulationStore.closeSettings();
-      }
-      // The settings room, on the same terms as a modulator's page: frames
-      // showing the room mark it seen, and the first regular page after it
-      // (a hardware track press) walks out. Frames from before the room has
+      // The settings room, before the modulator-exit check below: the room
+      // is a detour, and its frames must not read as "left the modulator" —
+      // that closed the view waiting underneath, reshuffled the page list
+      // mid-steer, and every later cycle landed on shifted indexes. Frames
+      // showing the room mark it seen; the first regular page after it (a
+      // hardware track press) walks out. Frames from before the room has
       // shown must not close a door that just opened.
       if (id !== undefined && id === settingsRoomIdRef.current) {
         if (MoveSettingsView.isOpen()) sawRoom.current = true;
         return;
+      }
+      if (sawSettings.current) {
+        sawSettings.current = false;
+        ModulationStore.closeSettings();
       }
       if (sawRoom.current) {
         sawRoom.current = false;
