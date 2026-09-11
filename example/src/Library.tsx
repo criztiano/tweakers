@@ -1,8 +1,9 @@
-import { Fragment, useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import {
   MovePanel,
   MovePresetStore,
+  MoveSurfaceStore,
   MOVE_JOG_EVENT,
   MOVE_STRIP_EVENT,
   TweakStore,
@@ -28,10 +29,41 @@ export function Library() {
   // Where the strip's window sits, straight from the panel — the same event
   // the bridge kit reads to point the hardware's knobs at these eight.
   const [offset, setOffset] = useState(0);
+  // The pad handler below is registered once and must not go stale: it reads
+  // the window through a ref rather than closing over a render's value.
+  const offsetRef = useRef(0);
+  offsetRef.current = offset;
   useEffect(() => {
     const onStrip = (e: Event) => setOffset(Number((e as CustomEvent).detail?.offset) || 0);
     window.addEventListener(MOVE_STRIP_EVENT, onStrip);
     return () => window.removeEventListener(MOVE_STRIP_EVENT, onStrip);
+  }, []);
+
+  // The reserved row, worked for real. A page that claims it owns eight pads
+  // the kit knows nothing about, so the page has to say what they do — here
+  // they are eight places along this dictionary, the same gesture the
+  // waveform gives a sample. Claim it, paint it, name it, hand it back.
+  useEffect(() => {
+    const jumpTo = (x: number) => {
+      const panel = TweakStore.getPanel(PANEL_ID);
+      if (!panel) return;
+      const stops = stripOffsets(buildMoveStrip(panel));
+      const stop = Math.min(stops.length - 1, Math.round((x / 7) * (stops.length - 1)));
+      const here = stops.findIndex((s) => s >= offsetRef.current);
+      window.dispatchEvent(new CustomEvent(MOVE_JOG_EVENT, {
+        detail: { delta: stops[stop] - stops[Math.max(0, here)] },
+      }));
+    };
+    MoveSurfaceStore.setPadRows(
+      1,
+      Array.from({ length: 8 }, (_, x) => ({ x, y: 0 as const, label: `${x + 1}` })),
+      'jump to a part of the library'
+    );
+    const offPress = MoveSurfaceStore.onPress(({ x, y }) => { if (y === 0) jumpTo(x); });
+    return () => {
+      offPress();
+      MoveSurfaceStore.setPadRows(0, [], null);
+    };
   }, []);
 
   // Bring a control under the first dial: the wheel counts controls, so the
