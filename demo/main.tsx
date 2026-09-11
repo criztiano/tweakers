@@ -24,6 +24,16 @@ TweakStore.registerPanel('space', 'Space', {
   mix: [0.3, 0, 1],
 });
 
+// The settings room: master controls behind the Set Overview button
+// (Shift + Step 1 on the hardware, the S key here). Named in MovePanel's
+// `settings` prop below, so it never takes a track.
+TweakStore.registerPanel('settings', 'Settings', {
+  output: [0.8, 0, 1],
+  latency: [0.2, 0, 1],
+  brightness: [0.6, 0, 1],
+  autosave: true,
+});
+
 // A few presets to walk through on the wheel.
 for (const [name, level, drive, air] of [
   ['Clean', 0.5, 0.05, 0.3],
@@ -123,6 +133,7 @@ window.addEventListener('keydown', (e) => {
   else if (e.key.toLowerCase() === 'c') muteEvent(true, e.shiftKey);
   else if (e.key === ' ') { e.preventDefault(); MoveFunctions.run('play', {}); }
   else if (e.key.toLowerCase() === 'l') MoveFunctions.run('loop', {});
+  else if (e.key.toLowerCase() === 's') MoveFunctions.run('set_overview', { shift: true, step: 0 });
   else if (e.key === 'Backspace') MoveFunctions.run('back', {});
   else if (e.key === 'Enter') MovePresetStore.confirm();
   else if (e.key === 'ArrowDown') MovePresetStore.scroll(1);
@@ -150,5 +161,5 @@ import(/* @vite-ignore */ 'http://localhost:7787/kit.js')
 (window as any).__tweakers = { TweakStore, MovePresetStore, MoveFunctions };
 
 createRoot(document.getElementById('root')!).render(
-  <MovePanel productionEnabled theme="dark" />
+  <MovePanel productionEnabled theme="dark" settings="Settings" />
 );

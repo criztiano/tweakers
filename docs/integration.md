@@ -113,6 +113,39 @@ it does not prove the build is current. The explicit build gate above does that.
 - Binding, function listeners, timers and subscriptions cleaned up.
 - Snapshot provenance, full vendor package and matching lockfile committed.
 
+### Settings view (Set Overview)
+
+Every app has master settings — output level, latency, autosave, a MIDI
+channel: controls that concern the whole instrument rather than any one page.
+Put them in one dedicated panel and name it in `MovePanel`'s `settings` prop.
+This is workflow organization, not a new control kind: inside, the panel works
+exactly like any page — any control type, the same layout rules, the same
+hardware sync path.
+
+```tsx
+useTweakers('Settings', {
+  output: [0.8, 0, 1],
+  latency: [0.2, 0, 1],
+  autosave: true,
+});
+
+<MovePanel panels={PANELS} settings="Settings" productionEnabled />
+```
+
+The named panel leaves the page row and waits behind the Move's Set Overview
+button (Shift + Step 1): the panel attaches `set_overview` itself, so do not
+attach it in the app. A press toggles the view — the surface inverts to the
+settings palette (dark neutral grey), and the header carries the room's name
+with a marker that blinks while the view is open — the pulse the hardware's
+Set Overview step icon is meant to carry too, once the surface module learns
+to blink the Shift layer. Back, any track button, or a second press
+walks out. A host UI can drive the same door with `MoveSettingsView.toggle()`.
+
+Keep the settings panel out of the `panels` list (both `MovePanel`'s and
+`bindMove`'s) — it must never occupy a track. Do not put per-page or
+performance controls here; if a control belongs to one instrument page, it
+belongs on that page.
+
 ### Move color slot
 
 A `color` control now occupies one Move dial slot. Its face shows the selected

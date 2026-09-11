@@ -98,6 +98,7 @@ __export(index_exports, {
   MovePadWaveBody: () => MovePadWaveBody,
   MovePanel: () => MovePanel,
   MovePresetStore: () => MovePresetStore,
+  MoveSettingsView: () => MoveSettingsView,
   MoveSlotColorBody: () => MoveSlotColorBody,
   MoveSlotDefaultBody: () => MoveSlotDefaultBody,
   MoveSlotDialBody: () => MoveSlotDialBody,
@@ -5224,7 +5225,7 @@ var import_react6 = require("react");
 var import_react_dom2 = require("react-dom");
 var import_TweakStore4 = require("tweakers/store");
 var import_jsx_runtime8 = require("react/jsx-runtime");
-function MoveColorSlot({ panelId, meta, active, open }) {
+function MoveColorSlot({ panelId, meta, active, open: open2 }) {
   const gesture = (0, import_react6.useRef)(null);
   const suppressClick = (0, import_react6.useRef)(false);
   const disabled = import_TweakStore4.TweakStore.isDisabled(panelId, meta.path);
@@ -5235,10 +5236,10 @@ function MoveColorSlot({ panelId, meta, active, open }) {
       type: "button",
       className: "tweakers-move-dial",
       "data-kind": "color",
-      "data-active": active || open || void 0,
+      "data-active": active || open2 || void 0,
       "data-disabled": disabled || void 0,
       "aria-label": `${meta.label}, hue ${Math.round(color.h)} degrees. Open color editor`,
-      "aria-expanded": open,
+      "aria-expanded": open2,
       "aria-haspopup": "dialog",
       disabled,
       onClick: () => {
@@ -5668,6 +5669,25 @@ var MoveFunctionsClass = class {
 };
 var MoveFunctions = new MoveFunctionsClass();
 
+// src/move-settings.ts
+var open = false;
+var listeners2 = /* @__PURE__ */ new Set();
+var set = (next) => {
+  if (open === next) return;
+  open = next;
+  for (const fn of listeners2) fn();
+};
+var MoveSettingsView = {
+  isOpen: () => open,
+  open: () => set(true),
+  close: () => set(false),
+  toggle: () => set(!open),
+  subscribe(fn) {
+    listeners2.add(fn);
+    return () => listeners2.delete(fn);
+  }
+};
+
 // src/move-presets.ts
 var import_TweakStore5 = require("tweakers/store");
 var CHOSEN_LINGER_MS = 800;
@@ -5889,7 +5909,7 @@ var MOVE_JOG_EVENT = "move-tweakers:jog";
 var MOVE_JOG_CLICK_EVENT = "move-tweakers:jog-click";
 var MOVE_MUTE_EVENT = "move-tweakers:mute";
 var MOVE_STRIP_EVENT = "move-tweakers:strip";
-function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only, dock = "viewport", scroll = false, headerStart }) {
+function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only, dock = "viewport", scroll = false, headerStart, settings }) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = (0, import_react7.useState)([]);
   const [track, setTrack] = (0, import_react7.useState)(0);
@@ -5944,12 +5964,33 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     setPanels(read());
     return import_TweakStore6.TweakStore.subscribeGlobal(() => setPanels(read()));
   }, [read]);
-  const pages = scroll ? panels.filter((p) => p.kind === void 0).slice(0, MOVE_TRACKS).map(buildMoveStrip) : buildMovePages(panels);
+  const settingsRoom = settings === void 0 ? void 0 : import_TweakStore6.TweakStore.getPanels("panel").find((p) => p.id === settings || p.name === settings);
+  const settingsOpen = (0, import_react7.useSyncExternalStore)(
+    (0, import_react7.useCallback)((cb) => MoveSettingsView.subscribe(cb), []),
+    () => MoveSettingsView.isOpen(),
+    () => false
+  ) && settingsRoom !== void 0;
+  const pagePanels = settingsRoom ? panels.filter((p) => p.id !== settingsRoom.id) : panels;
+  const pages = scroll ? pagePanels.filter((p) => p.kind === void 0).slice(0, MOVE_TRACKS).map(buildMoveStrip) : buildMovePages(pagePanels);
   const modSettings = import_ModulationStore2.ModulationStore.getSettings();
   const settingsPanel = modSettings ? import_TweakStore6.TweakStore.getPanel(modSettings.panelId) : void 0;
   const modLayout = settingsPanel ? import_ModulationStore2.ModulationStore.getSettingsLayout() : null;
-  const page = settingsPanel ? buildModMovePage(settingsPanel, modLayout) : pages[Math.min(track, Math.max(0, pages.length - 1))];
+  const settingsPage = settingsOpen && settingsRoom ? scroll ? buildMoveStrip(settingsRoom) : buildMovePages([settingsRoom])[0] : void 0;
+  const page = settingsPanel ? buildModMovePage(settingsPanel, modLayout) : settingsPage ?? pages[Math.min(track, Math.max(0, pages.length - 1))];
   const pageId = page?.panel.id;
+  const settingsRoomId = settingsRoom?.id;
+  (0, import_react7.useEffect)(() => {
+    if (settingsRoomId === void 0) return;
+    const detach = MoveFunctions.attach("set_overview", () => MoveSettingsView.toggle(), { label: "Settings" });
+    return () => {
+      detach();
+      MoveSettingsView.close();
+    };
+  }, [settingsRoomId]);
+  (0, import_react7.useEffect)(() => {
+    if (!settingsOpen) return;
+    return MoveFunctions.push("back", () => MoveSettingsView.close(), { label: "Close" });
+  }, [settingsOpen]);
   const stripMode = scroll && !settingsPanel && !!page;
   const [offset, setOffset] = (0, import_react7.useState)(0);
   const stripOffset = stripMode ? clampStripOffset(page, offset) : 0;
@@ -6458,6 +6499,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     const next = pages[index];
     if (!next) return;
     import_ModulationStore2.ModulationStore.closeSettings();
+    MoveSettingsView.close();
     setTrack(index);
     window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: next.panel.id } }));
   };
@@ -6471,7 +6513,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     volume.label && volumeReading != null && /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "tweakers-move-volume-label", children: volume.label }),
     /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "tweakers-move-volume-value", children: boldColons(volumeReading ?? volume.label ?? "") })
   ] }) });
-  const content = /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-overlay": composition || audioWave != null || color || presetSave ? true : void 0, children: [
+  const content = /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-settings": settingsOpen || void 0, "data-overlay": composition || audioWave != null || color || presetSave ? true : void 0, children: [
     colorMeta && /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveColorDisplay, { panelId: page.panel.id, meta: colorMeta, anchor: panelRef, theme }),
     presetSave && /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MovePresetSaveInput, { suggested: presetSave.suggested }),
     composition && modSettings && /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
@@ -6501,6 +6543,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         children: [
           /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "tweakers-move-tracks", children: [
             audioWave != null ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveAudioZoom, {}) : /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "tweakers-move-tracks-group", children: [
+              settingsOpen && /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("div", { className: "tweakers-move-settings-title", children: [
+                /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "tweakers-move-settings-blink" }),
+                /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "tweakers-move-track-label", children: page.panel.name })
+              ] }),
               pages.length > 1 && /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Move pages", children: pages.map((pg, i) => /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(
                 "button",
                 {
@@ -7751,8 +7797,8 @@ function MoveModCircle({ slot }) {
       onPointerUp: () => {
         const tapped = Date.now() - pressAt.current < TAP_MS;
         if (tapped && import_ModulationStore2.ModulationStore.assignFromStep(slot.index).action !== "none") return;
-        const open = import_ModulationStore2.ModulationStore.getSettings();
-        if (tapped && open && open.index === slot.index) import_ModulationStore2.ModulationStore.closeSettings();
+        const open2 = import_ModulationStore2.ModulationStore.getSettings();
+        if (tapped && open2 && open2.index === slot.index) import_ModulationStore2.ModulationStore.closeSettings();
         else import_ModulationStore2.ModulationStore.openSettings(slot.index);
       },
       children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
@@ -8096,9 +8142,9 @@ var TimelineStoreClass = class {
     }
     this.listeners.get(id).add(listener);
     return () => {
-      const listeners2 = this.listeners.get(id);
-      listeners2?.delete(listener);
-      if (listeners2?.size === 0 && !this.timelines.has(id)) {
+      const listeners3 = this.listeners.get(id);
+      listeners3?.delete(listener);
+      if (listeners3?.size === 0 && !this.timelines.has(id)) {
         this.listeners.delete(id);
       }
     };
@@ -8241,6 +8287,7 @@ var import_TweakStore8 = require("tweakers/store");
   MovePadWaveBody,
   MovePanel,
   MovePresetStore,
+  MoveSettingsView,
   MoveSlotColorBody,
   MoveSlotDefaultBody,
   MoveSlotDialBody,

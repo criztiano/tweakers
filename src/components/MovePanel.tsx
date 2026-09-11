@@ -28,6 +28,7 @@ import { MoveVolumeDisplay, type MoveVolumeDisplayState } from '../move-volume';
 import { MoveColorStore } from '../move-color';
 import { MoveColorSlot, MoveColorDisplay, MoveOpacityPads, MoveColorSteps, MovePaletteScreen, copyHslOfHex, copyOklch } from './MoveColor';
 import { MoveFunctions } from '../move-functions';
+import { MoveSettingsView } from '../move-settings';
 import { MovePresetStore, type MovePresetView } from '../move-presets';
 import { ListScreen } from './ListScreen';
 
@@ -36,6 +37,14 @@ export interface MovePanelProps {
   productionEnabled?: boolean;
   /** Mirror only the named panels, in the order given — same option the bridge kit takes. */
   panels?: string | string[];
+  /**
+   * The app's settings room: a registered panel (by id or name) held out of
+   * the page row and shown only in the settings view. The Move's Set
+   * Overview button (Shift + Step 1) toggles the view — the panel attaches
+   * `set_overview` itself — the surface inverts to the settings palette,
+   * and Back (or any track) walks out. Inside, it works like any panel.
+   */
+  settings?: string;
   /**
    * Where the panel sits. `viewport` (the default) portals it to `<body>` and
    * pins it to the window's bottom edge — for apps whose content fills the
@@ -217,7 +226,7 @@ export const MOVE_STRIP_EVENT = 'move-tweakers:strip';
  * are the eight the dials are holding, their pads with them, so all of them
  * can be reached without a single one shrinking to a chip.
  */
-export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport', scroll = false, headerStart }: MovePanelProps) {
+export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport', scroll = false, headerStart, settings }: MovePanelProps) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [track, setTrack] = useState(0);
@@ -307,24 +316,68 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     return TweakStore.subscribeGlobal(() => setPanels(read()));
   }, [read]);
 
+  // The settings room: the named panel leaves the page row and waits behind
+  // the Set Overview button. The store only says whether the door is open;
+  // which panel is inside is decided here, by the prop.
+  const settingsRoom = settings === undefined
+    ? undefined
+    : TweakStore.getPanels('panel').find((p) => p.id === settings || p.name === settings);
+  const settingsOpen = useSyncExternalStore(
+    useCallback((cb) => MoveSettingsView.subscribe(cb), []),
+    () => MoveSettingsView.isOpen(),
+    () => false
+  ) && settingsRoom !== undefined;
+
   // A scrolling page keeps every control at slot size in one long row; the
   // ordinary page is 8 slots wide and sends the overflow to value chips.
+  const pagePanels = settingsRoom ? panels.filter((p) => p.id !== settingsRoom.id) : panels;
   const pages = scroll
-    ? panels.filter((p) => p.kind === undefined).slice(0, MOVE_TRACKS).map(buildMoveStrip)
-    : buildMovePages(panels);
+    ? pagePanels.filter((p) => p.kind === undefined).slice(0, MOVE_TRACKS).map(buildMoveStrip)
+    : buildMovePages(pagePanels);
   // An open modulator-settings page takes the surface over; the track
   // buttons put a regular page back (and close the settings with it).
   const modSettings = ModulationStore.getSettings();
   const settingsPanel = modSettings ? TweakStore.getPanel(modSettings.panelId) : undefined;
   const modLayout = settingsPanel ? ModulationStore.getSettingsLayout() : null;
+  // The settings room shows the same way a page does — full slots on a
+  // scrolling panel, chips past eight otherwise. A modulator's settings
+  // page still wins while it is up: the thing in front of you owns the
+  // surface, and closing it lands back in the room.
+  const settingsPage = settingsOpen && settingsRoom
+    ? (scroll ? buildMoveStrip(settingsRoom) : buildMovePages([settingsRoom])[0])
+    : undefined;
   const page = settingsPanel
     ? buildModMovePage(settingsPanel, modLayout)
-    : pages[Math.min(track, Math.max(0, pages.length - 1))];
+    : settingsPage ?? pages[Math.min(track, Math.max(0, pages.length - 1))];
   const pageId = page?.panel.id;
+
+  // The Set Overview button (Shift + Step 1) is the settings room's door,
+  // attached for as long as a room is named — attaching is also what lights
+  // the label icon on the hardware's Shift layer. Back walks out while the
+  // door stands open; unmounting (or unnaming the room) closes it.
+  const settingsRoomId = settingsRoom?.id;
+  useEffect(() => {
+    if (settingsRoomId === undefined) return;
+    const detach = MoveFunctions.attach('set_overview', () => {
+      // Walking in must land in the room, whatever page stood in front —
+      // an open modulator's settings page steps aside like any other.
+      if (!MoveSettingsView.isOpen()) ModulationStore.closeSettings();
+      MoveSettingsView.toggle();
+    }, { label: 'Settings' });
+    return () => {
+      detach();
+      MoveSettingsView.close();
+    };
+  }, [settingsRoomId]);
+  useEffect(() => {
+    if (!settingsOpen) return;
+    return MoveFunctions.push('back', () => MoveSettingsView.close(), { label: 'Close' });
+  }, [settingsOpen]);
 
   // The strip's window. A modulator's settings page is the hardware's own
   // shape and never scrolls, so the wheel and the rail belong to the app's
-  // pages alone. The offset is a column, always the start of a control.
+  // pages (and the settings room) alone. The offset is a column, always the
+  // start of a control.
   const stripMode = scroll && !settingsPanel && !!page;
   const [offset, setOffset] = useState(0);
   const stripOffset = stripMode ? clampStripOffset(page, offset) : 0;
@@ -1032,6 +1085,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     const next = pages[index];
     if (!next) return;
     ModulationStore.closeSettings();
+    MoveSettingsView.close();
     setTrack(index);
     // Tell the hardware side; the kit relays it when the bridge is up.
     window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: next.panel.id } }));
@@ -1063,7 +1117,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     <div className="tweakers-root tweakers-move-root" data-theme={theme} data-dock={dock}>
       {/* While a composer floats above it the whole instrument comes forward,
           over the app's own panels — you are working in it. */}
-      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-overlay={composition || audioWave != null || color || presetSave ? true : undefined}>
+      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-settings={settingsOpen || undefined} data-overlay={composition || audioWave != null || color || presetSave ? true : undefined}>
         {colorMeta && <MoveColorDisplay panelId={page.panel.id} meta={colorMeta} anchor={panelRef} theme={theme} />}
         {presetSave && <MovePresetSaveInput suggested={presetSave.suggested} />}
         {composition && modSettings && (
@@ -1101,6 +1155,15 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               <MoveAudioZoom />
             ) : (
             <div className="tweakers-move-tracks-group">
+              {/* The settings room's name plate: the marker blinks for as
+                  long as the room is open — the same pulse the hardware's
+                  step icon carries — so the inverted surface names itself. */}
+              {settingsOpen && (
+                <div className="tweakers-move-settings-title">
+                  <span className="tweakers-move-settings-blink" />
+                  <span className="tweakers-move-track-label">{page.panel.name}</span>
+                </div>
+              )}
               {pages.length > 1 && (
                 <div className="tweakers-move-pages" role="tablist" aria-label="Move pages">
                   {pages.map((pg, i) => (
