@@ -5973,7 +5973,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   ) && settingsRoom !== void 0;
   const pagePanels = settingsRoom ? panels.filter((p) => p.id !== settingsRoom.id) : panels;
   const pages = scroll ? pagePanels.filter((p) => p.kind === void 0).slice(0, MOVE_TRACKS).map(buildMoveStrip) : buildMovePages(pagePanels);
-  const modSettings = import_ModulationStore2.ModulationStore.getSettings();
+  const underModSettings = import_ModulationStore2.ModulationStore.getSettings();
+  const modSettings = settingsOpen ? null : underModSettings;
   const settingsPanel = modSettings ? import_TweakStore6.TweakStore.getPanel(modSettings.panelId) : void 0;
   const modLayout = settingsPanel ? import_ModulationStore2.ModulationStore.getSettingsLayout() : null;
   const settingsPage = settingsOpen && settingsRoom ? scroll ? buildMoveStrip(settingsRoom) : buildMovePages([settingsRoom])[0] : void 0;
@@ -5982,10 +5983,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const settingsRoomId = settingsRoom?.id;
   (0, import_react7.useEffect)(() => {
     if (settingsRoomId === void 0) return;
-    const detach = MoveFunctions.attach("set_overview", () => {
-      if (!MoveSettingsView.isOpen()) import_ModulationStore2.ModulationStore.closeSettings();
-      MoveSettingsView.toggle();
-    }, { label: "Settings" });
+    const detach = MoveFunctions.attach("set_overview", () => MoveSettingsView.toggle(), { label: "Settings" });
     return () => {
       detach();
       MoveSettingsView.close();
@@ -5995,7 +5993,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     if (!settingsOpen) return;
     return MoveFunctions.push("back", () => MoveSettingsView.close(), { label: "Close" });
   }, [settingsOpen]);
-  const regularPageId = pages[Math.min(track, Math.max(0, pages.length - 1))]?.panel.id;
+  const regularPageId = underModSettings?.panelId ?? pages[Math.min(track, Math.max(0, pages.length - 1))]?.panel.id;
   (0, import_react7.useEffect)(() => {
     if (settingsRoomId === void 0 || typeof window === "undefined") return;
     const announce = () => window.dispatchEvent(new CustomEvent(MOVE_SETTINGS_EVENT, {
@@ -6601,7 +6599,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
               )) }),
               headerStart && /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "tweakers-move-header-start", children: headerStart })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "tweakers-move-mods", children: color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveColorSteps, { color, disabled: import_TweakStore6.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? import_ModulationStore2.ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveModCircle, { slot }, slot.index)) : null }),
+            /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "tweakers-move-mods", children: settingsOpen ? null : color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveColorSteps, { color, disabled: import_TweakStore6.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? import_ModulationStore2.ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveModCircle, { slot }, slot.index)) : null }),
             audioWave != null ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveAudioTransport, { index: audioWave }) : headerCluster
           ] }),
           /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(
