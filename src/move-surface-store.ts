@@ -68,6 +68,11 @@ export interface MoveSurfaceState {
   /** Pad rows the app claimed: 0 (none), 1 (the bottom row), or 2. */
   rows: 0 | 1 | 2;
   pads: MovePadCell[];
+  /** What the claimed rows do in this view, in one short phrase. The panel
+   *  draws the claimed area as a single slot carrying this, because eight
+   *  pads only the app understands read as one instrument, not eight
+   *  controls. */
+  padsLabel: string | null;
   /** null hands the step circles back to the modulation slots. */
   steps: MoveStepCell[] | null;
   screen: MoveScreenList | null;
@@ -76,7 +81,7 @@ export interface MoveSurfaceState {
 type Listener = () => void;
 type PressListener = (pad: { x: number; y: 0 | 1 }) => void;
 
-const EMPTY: MoveSurfaceState = { rows: 0, pads: [], steps: null, screen: null };
+const EMPTY: MoveSurfaceState = { rows: 0, pads: [], padsLabel: null, steps: null, screen: null };
 
 let state: MoveSurfaceState = EMPTY;
 const listeners = new Set<Listener>();
@@ -103,10 +108,15 @@ const validPads = (pads: MovePadCell[]): MovePadCell[] =>
 /** Rows and their cells are one piece of surface geometry. Publishing them
  * together prevents subscribers from ever painting the new row count with
  * the old cells (or the new cells inside the old row count). */
-function patchPadRows(rows: 0 | 1 | 2, pads: MovePadCell[]) {
+function patchPadRows(rows: 0 | 1 | 2, pads: MovePadCell[], label?: string | null) {
   const nextPads = validPads(pads);
-  if (state.rows === rows && JSON.stringify(state.pads) === JSON.stringify(nextPads)) return;
-  state = { ...state, rows, pads: nextPads };
+  const nextLabel = label === undefined ? state.padsLabel : label;
+  if (
+    state.rows === rows &&
+    state.padsLabel === nextLabel &&
+    JSON.stringify(state.pads) === JSON.stringify(nextPads)
+  ) return;
+  state = { ...state, rows, pads: nextPads, padsLabel: nextLabel };
   emit();
 }
 
@@ -127,9 +137,16 @@ export const MoveSurfaceStore = {
     patch('pads', validPads(pads));
   },
 
-  /** Publish the claimed row count and its cells as one renderable state. */
-  setPadRows(rows: 0 | 1 | 2, pads: MovePadCell[]) {
-    patchPadRows(rows, pads);
+  /** Publish the claimed row count and its cells as one renderable state.
+   *  `label` says what the row does here — pass it whenever the meaning
+   *  changes, so the panel never captions the pads with a stale phrase. */
+  setPadRows(rows: 0 | 1 | 2, pads: MovePadCell[], label?: string | null) {
+    patchPadRows(rows, pads, label);
+  },
+
+  /** What the claimed rows control in this view. */
+  setPadsLabel(label: string | null) {
+    patch('padsLabel', label);
   },
 
   setSteps(steps: MoveStepCell[] | null) {
