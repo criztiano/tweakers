@@ -141,10 +141,18 @@ Set Overview step icon is meant to carry too, once the surface module learns
 to blink the Shift layer. Back, any track button, or a second press
 walks out. A host UI can drive the same door with `MoveSettingsView.toggle()`.
 
-Keep the settings panel out of the `panels` list (both `MovePanel`'s and
-`bindMove`'s) — it must never occupy a track. Do not put per-page or
-performance controls here; if a control belongs to one instrument page, it
-belongs on that page.
+The hardware follows on the modulator-page rails: the panel announces the
+room on window (`move-tweakers:settings`), the kit keeps that panel off the
+track row and appends it after the pages, and an open steers the Move onto
+it — knobs, pads, lights and value sync work there exactly as on any page —
+while a close (or a hardware track press) steers it back to the page the
+panel shows. This needs the current bridge kit; an older kit leaves the
+hardware on the page underneath while the screen shows the room.
+
+The settings panel may appear in the app's `panels` lists or not — the kit
+removes it from the track row either way once the panel announces it. Do not
+put per-page or performance controls here; if a control belongs to one
+instrument page, it belongs on that page.
 
 ### Move color slot
 
