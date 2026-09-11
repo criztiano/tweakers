@@ -53,6 +53,29 @@ describe('slots', () => {
     expect(ModulationStore.getAssignment(id, 'speed')).toBeUndefined();
     expect(ModulationStore.getSignal(0)).toBe(0);
   });
+
+  // The long-press delete's guard: taking one modulator out must not disturb
+  // the others' wires, and only its own settings view closes with it.
+  it('deletes one slot without disturbing the others', () => {
+    const a = freshId();
+    const b = freshId();
+    register(a, { speed: [50, 0, 100] as [number, number, number] });
+    register(b, { depth: [10, 0, 100] as [number, number, number] });
+    ModulationStore.createSlot(0);
+    ModulationStore.createSlot(1);
+    ModulationStore.assign(a, 'speed', 0);
+    ModulationStore.assign(b, 'depth', 1);
+
+    ModulationStore.openSettings(1);
+    ModulationStore.removeSlot(0);
+    expect(ModulationStore.getSlot(0)).toBeNull();
+    expect(ModulationStore.getAssignment(a, 'speed')).toBeUndefined();
+    expect(ModulationStore.getAssignment(b, 'depth')?.slot).toBe(1);   // untouched
+    expect(ModulationStore.getSettings()?.index).toBe(1);              // another slot's view stays
+
+    ModulationStore.removeSlot(1);
+    expect(ModulationStore.getSettings()).toBeNull();                  // its own view closes
+  });
 });
 
 describe('assignments', () => {
