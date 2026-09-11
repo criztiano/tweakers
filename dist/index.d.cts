@@ -2211,12 +2211,12 @@ declare const MOVE_PADS = 8;
 interface MovePage {
     panel: PanelConfig;
     dials: ControlMeta[];
-    /** Switch chips — the hardware's toggle pad row (y=3 on the device). */
+    /** Switch chips — the hardware's top pad row (y=3 on the device). */
     toggles: ControlMeta[];
-    /** Overflow value chips — the hardware's value pad row (y=1). Value i sits
+    /** Overflow value chips — the hardware's value pad row (y=2). Value i sits
      *  at column i on both surfaces, pairing it with the dial in that column. */
     values: ControlMeta[];
-    /** Action pads — the row under the values (the device's bottom pad row).
+    /** Action pads — the row under the values (y=1 on the device).
      *  Placed by hand only, through the panel's `movePads` map. */
     actions: ControlMeta[];
 }
@@ -2249,15 +2249,14 @@ declare function buildMovePages(panels: PanelConfig[]): MovePage[];
  * The pad grid's four rows, top to bottom, exactly as the hardware stacks
  * them — screen row 0 is the row nearest the knobs.
  *
- * Plain: y=3 is the dial-slot indicator (the dials draw it, so it is not a
- * row here), y=2 the switches, y=1 the value chips, y=0 the ALT pad. An app
- * that claims both bottom rows takes y=1 and y=0, and the chips move up above
- * the switches — the same shuffle the surface makes, so a dial column keeps
- * its chip AND its switch underneath it (see PROTOCOL.md).
+ * The pad grid is its own instrument: it never reports a dial's state. Where
+ * a dial lives, and at what value, is said by the dot under its knob alone.
  *
- * Hand-placed action pads take the row under the values. A single-row claim
- * is the bottom row alone, so the actions keep theirs; a two-row claim takes
- * both bottom rows, and the actions have nowhere left to sit.
+ * Plain: y=3 the switches — the first row of small slots, the one drawn
+ * directly under the dials — y=2 the value chips, y=1 the action pads, y=0
+ * the ALT pad. An app that claims both bottom rows takes y=1 and y=0, so the
+ * actions have nowhere left to sit; a single-row claim is the bottom row
+ * alone and the actions keep theirs (see PROTOCOL.md).
  */
 declare function movePadRows(page: MovePage, claimedRows: number): ControlMeta[][];
 /**
@@ -3046,6 +3045,7 @@ declare class MoveWaveformStoreClass {
     private registered;
     private editor;
     private progressSource;
+    private duration;
     private listeners;
     private version;
     /** Claim the wheel, the volume knob and the step row. Returns the release. */
@@ -3068,6 +3068,14 @@ declare class MoveWaveformStoreClass {
      * mount provides it; without one the scrub position stands in.
      */
     setProgressSource(fn: (() => number) | null): void;
+    /**
+     * How long the sample is, in seconds. With it the volume readout counts
+     * real time; without it the same readout is a percentage of the sample,
+     * which is still true — a position always reads as something.
+     */
+    setDuration(seconds: number | null): void;
+    /** What the volume knob is editing right now, ready to print. */
+    readout(): string;
     getView(): MoveWaveformView;
     getVersion(): number;
     /** Patch the view. A patch that changes nothing notifies nobody. */
@@ -3308,6 +3316,11 @@ interface MoveSurfaceState {
     /** Pad rows the app claimed: 0 (none), 1 (the bottom row), or 2. */
     rows: 0 | 1 | 2;
     pads: MovePadCell[];
+    /** What the claimed rows do in this view, in one short phrase. The panel
+     *  draws the claimed area as a single slot carrying this, because eight
+     *  pads only the app understands read as one instrument, not eight
+     *  controls. */
+    padsLabel: string | null;
     /** null hands the step circles back to the modulation slots. */
     steps: MoveStepCell[] | null;
     screen: MoveScreenList | null;
@@ -3323,8 +3336,12 @@ declare const MoveSurfaceStore: {
     /** How many bottom pad rows the app took (matches `claims.pads` on the wire). */
     claimRows(rows: 0 | 1 | 2): void;
     setPads(pads: MovePadCell[]): void;
-    /** Publish the claimed row count and its cells as one renderable state. */
-    setPadRows(rows: 0 | 1 | 2, pads: MovePadCell[]): void;
+    /** Publish the claimed row count and its cells as one renderable state.
+     *  `label` says what the row does here — pass it whenever the meaning
+     *  changes, so the panel never captions the pads with a stale phrase. */
+    setPadRows(rows: 0 | 1 | 2, pads: MovePadCell[], label?: string | null): void;
+    /** What the claimed rows control in this view. */
+    setPadsLabel(label: string | null): void;
     setSteps(steps: MoveStepCell[] | null): void;
     setScreen(screen: MoveScreenList | null): void;
     /** Selection intent from the panel's wheel screen; the host owns the value,

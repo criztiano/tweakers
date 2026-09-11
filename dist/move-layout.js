@@ -194,12 +194,39 @@ function buildModMovePage(panel, layout) {
   }
   return { panel, dials: dials.slice(0, MOVE_DIALS), toggles: toggles.slice(0, MOVE_PADS), values: [], actions: [] };
 }
+var warnedIssues = /* @__PURE__ */ new Set();
+var issueReporter = null;
+function setMoveLayoutReporter(fn) {
+  issueReporter = fn;
+}
+function reportMoveLayoutIssue(code, message) {
+  if (issueReporter) {
+    issueReporter(code, message);
+    return;
+  }
+  if (warnedIssues.has(message)) return;
+  warnedIssues.add(message);
+  console.warn(`Move layout: ${message}`);
+}
 var padColumn = (panel, c) => {
   const col = panel.movePads?.[c.path];
-  return typeof col === "number" && Number.isInteger(col) && col >= 0 && col < MOVE_PADS ? col : null;
+  if (col === void 0) return null;
+  if (typeof col === "number" && Number.isInteger(col) && col >= 0 && col < MOVE_PADS) return col;
+  reportMoveLayoutIssue(
+    "pad-column-invalid",
+    `panel '${panel.id}': control '${c.path}': movePads column ${JSON.stringify(col)} is off the ${MOVE_PADS}-wide grid \u2014 ignored`
+  );
+  return null;
 };
 function buildMovePages(panels) {
-  return panels.filter((p) => p.kind === void 0).slice(0, MOVE_TRACKS).map((panel) => {
+  const plain = panels.filter((p) => p.kind === void 0);
+  for (const p of plain.slice(MOVE_TRACKS)) {
+    reportMoveLayoutIssue(
+      "panel-dropped",
+      `panel '${p.id}' dropped \u2014 hardware has ${MOVE_TRACKS} tracks`
+    );
+  }
+  return plain.slice(0, MOVE_TRACKS).map((panel) => {
     const controls = flat(panel.controls);
     const chipPlaced = (c) => padColumn(panel, c) !== null && !noChip(c);
     const dials = [];
@@ -217,24 +244,40 @@ function buildMovePages(panels) {
     const toggles = [];
     const values = [];
     const actions = [];
-    const place = (row, c, col) => {
+    const place = (row, rowName, c, col) => {
       if (col !== null && row[col] === void 0) {
         row[col] = c;
         return;
       }
       for (let i = 0; i < MOVE_PADS; i++) {
         if (row[i] === void 0) {
+          if (col !== null) {
+            reportMoveLayoutIssue(
+              "pad-column-taken",
+              `panel '${panel.id}': control '${c.path}': ${rowName} column ${col} already occupied by '${row[col].path}' \u2014 moved to column ${i}`
+            );
+          }
           row[i] = c;
           return;
         }
       }
+      reportMoveLayoutIssue(
+        "pad-row-full",
+        `panel '${panel.id}': control '${c.path}': the ${rowName} row's ${MOVE_PADS} pads are all taken \u2014 dropped`
+      );
     };
     for (const c of controls) {
       const col = padColumn(panel, c);
-      if (c.type === "toggle" && !isToggleDial(c)) place(toggles, c, col);
+      if (c.type === "toggle" && !isToggleDial(c)) place(toggles, "toggle", c, col);
       else if (c.type === "action") {
-        if (col !== null) place(actions, c, col);
-      } else if (isDial(c) && !noChip(c) && !dials.includes(c)) place(values, c, col);
+        if (col !== null) place(actions, "action", c, col);
+      } else if (isDial(c) && !noChip(c) && !dials.includes(c)) place(values, "value", c, col);
+      else if (isDial(c) && noChip(c) && !dials.includes(c)) {
+        reportMoveLayoutIssue(
+          "dial-dropped",
+          `panel '${panel.id}': control '${c.path}' (${c.type}) needs a dial column and none is left \u2014 dropped`
+        );
+      }
     }
     return {
       panel,
@@ -246,7 +289,7 @@ function buildMovePages(panels) {
   });
 }
 function movePadRows(page, claimedRows) {
-  if (claimedRows >= 2) return [page.values, page.toggles, [], []];
+  if (claimedRows >= 2) return [page.toggles, page.values, [], []];
   return [page.toggles, page.values, page.actions, []];
 }
 function moveAppPadRow(row, claimedRows) {
@@ -417,6 +460,8 @@ export {
   normalizeRangeDial,
   normalizeToggleDial,
   normalizeXYDial,
+  reportMoveLayoutIssue,
+  setMoveLayoutReporter,
   visibleColumns
 };
 //# sourceMappingURL=move-layout.js.map
