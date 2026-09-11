@@ -1,5 +1,8 @@
 # Kit guidebook
 
+Agents start at [AGENTS.md](../AGENTS.md) — the binding rules. This guidebook
+explains; that file decides.
+
 The repository is called `dialkit`; the package and public import are `tweakers`.
 The Move hardware bridge lives in the separate `move` repository. Reusable UI
 belongs here; transport and device protocol belong there; engine behavior belongs
