@@ -3985,6 +3985,7 @@ var MOVE_SLOT_LIBRARY = {
 
 // src/color-core.ts
 var COLOR_FORMATS = ["hex", "rgb", "hsl", "oklch"];
+var LONG_PRESS_MS = 500;
 var HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
 var clamp5 = (n, min, max) => Math.min(max, Math.max(min, n));
 var clamp015 = (n) => clamp5(n, 0, 1);
@@ -7533,7 +7534,12 @@ function MoveModCircle({ slot }) {
         pressAt.current = Date.now();
       },
       onPointerUp: () => {
-        const tapped = Date.now() - pressAt.current < TAP_MS;
+        const held = Date.now() - pressAt.current;
+        if (held >= LONG_PRESS_MS) {
+          ModulationStore2.removeSlot(slot.index);
+          return;
+        }
+        const tapped = held < TAP_MS;
         if (tapped && ModulationStore2.assignFromStep(slot.index).action !== "none") return;
         const open2 = ModulationStore2.getSettings();
         if (tapped && open2 && open2.index === slot.index) ModulationStore2.closeSettings();
