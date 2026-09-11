@@ -49,10 +49,35 @@ export const MOVE_FUNCTION_MANIFEST = [
   { name: 'menu', special: true },
   { name: 'back', special: true },
   { name: 'jog_click', special: true },
+  /* The Shift layer of the step row: the sixteen labels printed under the
+     step buttons, in step order (`step` is the index). Four steps carry no
+     print and are named by position. Holding Shift on the hardware lights
+     the label icon under each one the app carries; a press arrives with
+     `step` set. `host` marks the two schwung keeps for itself (Settings on
+     Shift+Step 2, Tools on Shift+Step 13): attachable, never delivered. */
+  { name: 'set_overview', step: 0 },
+  { name: 'setup', step: 1, host: true },
+  { name: 'workflow', step: 2 },
+  { name: 'step4', step: 3 },
+  { name: 'tempo', step: 4 },
+  { name: 'metronome', step: 5 },
+  { name: 'groove', step: 6 },
+  { name: 'pitches_16', step: 7 },
+  { name: 'scale', step: 8 },
+  { name: 'full_velocity', step: 9 },
+  { name: 'repeat', step: 10 },
+  { name: 'step12', step: 11 },
+  { name: 'step13', step: 12, host: true },
+  { name: 'step14', step: 13 },
+  { name: 'double_loop', step: 14 },
+  { name: 'quantize', step: 15 },
 ] as const;
 
 /** The attachable function names, manifest order. */
 export const MOVE_FUNCTION_BUTTONS = MOVE_FUNCTION_MANIFEST.map((b) => b.name);
+
+/** The Shift+step second functions, in step order (index = step 0-15). */
+export const MOVE_STEP_FUNCTIONS = MOVE_FUNCTION_MANIFEST.filter((b) => 'step' in b).map((b) => b.name);
 
 /** The special buttons — free for app-specific meanings. */
 export const MOVE_SPECIAL_BUTTONS = MOVE_FUNCTION_MANIFEST.filter((b) => 'special' in b && b.special).map((b) => b.name);
@@ -63,6 +88,8 @@ export interface MoveFunctionPress {
   name: MoveFunctionButton;
   /** True when Shift was held on the hardware — a second-function layer. */
   shift: boolean;
+  /** The step index (0-15) when the press was a Shift+step second function. */
+  step?: number;
   /**
    * True when the kit read the press as a long press. Older kits never set
    * it, so a handler treating hold as a second function should accept
@@ -140,7 +167,7 @@ class MoveFunctionsClass {
 
   /** Run the action attached to a button, if any. Called by the kit per press. */
   run(name: MoveFunctionButton, press?: Partial<MoveFunctionPress>): void {
-    const full: MoveFunctionPress = { name, shift: !!press?.shift, hold: !!press?.hold };
+    const full: MoveFunctionPress = { name, shift: !!press?.shift, hold: !!press?.hold, ...(typeof press?.step === 'number' ? { step: press.step } : {}) };
     this.handlers.get(name)?.(full);
     for (const l of this.runListeners) l(name, full);
   }
