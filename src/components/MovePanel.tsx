@@ -341,7 +341,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     : buildMovePages(pagePanels);
   // An open modulator-settings page takes the surface over; the track
   // buttons put a regular page back (and close the settings with it).
-  const modSettings = ModulationStore.getSettings();
+  // The settings room stands in front of even that: while it is open the
+  // modulator view (and its floating composer) waits underneath, untouched,
+  // and walking out of the room finds it exactly as it was left.
+  const underModSettings = ModulationStore.getSettings();
+  const modSettings = settingsOpen ? null : underModSettings;
   const settingsPanel = modSettings ? TweakStore.getPanel(modSettings.panelId) : undefined;
   const modLayout = settingsPanel ? ModulationStore.getSettingsLayout() : null;
   // The settings room shows the same way a page does — full slots on a
@@ -363,12 +367,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const settingsRoomId = settingsRoom?.id;
   useEffect(() => {
     if (settingsRoomId === undefined) return;
-    const detach = MoveFunctions.attach('set_overview', () => {
-      // Walking in must land in the room, whatever page stood in front —
-      // an open modulator's settings page steps aside like any other.
-      if (!MoveSettingsView.isOpen()) ModulationStore.closeSettings();
-      MoveSettingsView.toggle();
-    }, { label: 'Settings' });
+    const detach = MoveFunctions.attach('set_overview', () => MoveSettingsView.toggle(), { label: 'Settings' });
     return () => {
       detach();
       MoveSettingsView.close();
@@ -380,10 +379,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   }, [settingsOpen]);
 
   // Tell the kit about the room: its panel, whether the door stands open,
-  // and the regular page to come back to. Announced on every change and
+  // and the page to come back to — the modulator view when one waits
+  // underneath, the regular page otherwise. Announced on every change and
   // re-announced on the strip's beat, so a kit that binds late still keeps
   // the room off the track row.
-  const regularPageId = pages[Math.min(track, Math.max(0, pages.length - 1))]?.panel.id;
+  const regularPageId = underModSettings?.panelId
+    ?? pages[Math.min(track, Math.max(0, pages.length - 1))]?.panel.id;
   useEffect(() => {
     if (settingsRoomId === undefined || typeof window === 'undefined') return;
     const announce = () => window.dispatchEvent(new CustomEvent(MOVE_SETTINGS_EVENT, {
@@ -1243,9 +1244,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
             {/* The step buttons, centred between the track labels and the
                 volume readout — one circle each. Normally the modulation
                 slots; an app that claimed the row paints them itself, and
-                its picture wins. */}
+                its picture wins. The settings room shows neither — master
+                settings are no place to reach for a modulator. */}
             <div className="tweakers-move-mods">
-              {color && colorMeta
+              {settingsOpen
+                ? null
+                : color && colorMeta
                 ? <MoveColorSteps color={color} disabled={TweakStore.isDisabled(page.panel.id, colorMeta.path)} />
                 : surface.steps === null
                 ? ModulationStore.getSlots().map((slot) => (
