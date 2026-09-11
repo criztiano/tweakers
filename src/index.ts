@@ -59,6 +59,8 @@ export {
   MOVE_WAVEFORM_PADS,
 } from './move-waveform';
 export type { MoveWaveformVariant, MoveWaveformView } from './move-waveform';
+export { MOVE_PALETTE } from './move-palette';
+export type { MovePaletteName } from './move-palette';
 export { MoveVolumeDisplay } from './move-volume';
 export type { MoveVolumeDisplayState } from './move-volume';
 export { ICON_MOVE_CAPTURE, ICON_MOVE_ENTER } from './icons';

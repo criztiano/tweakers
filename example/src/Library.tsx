@@ -4,6 +4,7 @@ import {
   MovePanel,
   MovePresetStore,
   MoveSurfaceStore,
+  MOVE_PALETTE,
   MOVE_JOG_EVENT,
   MOVE_STRIP_EVENT,
   TweakStore,
@@ -171,6 +172,26 @@ export function Library() {
               </div>
               <p>{item.description}</p>
               {item.note && <p className="kit-card-note">{item.note}</p>}
+            </li>
+          ))}
+        </ul>
+      </Section>
+
+      <Section id="palette" title="The palette">
+        <p className="kit-lede">
+          The colours the Move lights, on screen. The hardware's LED palette is a
+          fixed table of 128 and the index-to-colour map is not guessable — every
+          one of these was picked by eye against the device, so a thing that is
+          lime in the hand is the same lime here. Colour always means something on
+          this surface: a track's identity, a modulation assignment, a switch that
+          is on.
+        </p>
+        <ul className="kit-swatches">
+          {Object.entries(MOVE_PALETTE).map(([name, hex]) => (
+            <li key={name}>
+              <span className="kit-swatch" style={{ background: hex }} />
+              <b>{name}</b>
+              <code>{hex}</code>
             </li>
           ))}
         </ul>
@@ -418,6 +439,11 @@ const CSS = `
 .kit-notes { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 8px var(--kit-space); margin: 0; max-width: 780px; }
 .kit-notes dt { font-weight: 500; }
 .kit-notes dd { margin: 0; color: var(--kit-dim); }
+.kit-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--kit-space); list-style: none; padding: 0; margin: 0; }
+.kit-swatches li { display: grid; grid-template-columns: 28px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 10px; align-items: center; }
+.kit-swatch { grid-row: span 2; width: 28px; height: 28px; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
+.kit-swatches b { font-weight: 500; align-self: end; }
+.kit-swatches code { color: var(--kit-dim); font-size: 12px; align-self: start; }
 @media (max-width: 700px) {
   .kit-page { padding: var(--kit-space-lg) var(--kit-space); }
   .kit-notes { grid-template-columns: minmax(0, 1fr); }

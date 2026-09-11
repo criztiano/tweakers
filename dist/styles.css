@@ -361,6 +361,23 @@
      than a slot you can press, so it never reads as a control. */
   --move-slot-empty: rgba(222, 227, 201, 0.03);
   --move-chip: #41403e;
+  /* The Move's colours on screen — the same set the hardware lights, matched
+     by eye against the device's LED palette (see src/move-palette.ts). Colour
+     on this surface always means something: a track's identity, a modulation
+     assignment, a switch that is on. Never decoration. */
+  --move-red: #fd3c57;
+  --move-orange: #fd6b59;
+  --move-yellow: #f2cf43;
+  --move-lime: #a3f243;
+  --move-emerald: #00ed95;
+  --move-blue: #698eff;
+  --move-indigo: #8660c3;
+  --move-pink: #fe92d5;
+  --move-white: #ffffff;
+  --move-gray-light: #cac5cc;
+  --move-gray: #555162;
+  --move-black: #0e0e16;
+  --move-brown: #856643;
   /* The switch that wears a picture: the thing it turns on, and a badge on
      its corner saying whether it is doing it. */
   --move-toggle-icon-size: 44px;

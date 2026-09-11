@@ -76,6 +76,7 @@ __export(index_exports, {
   MOVE_PAD_LIBRARY: () => MOVE_PAD_LIBRARY,
   MOVE_PAGE_EVENT: () => MOVE_PAGE_EVENT,
   MOVE_PAGE_SELECT_EVENT: () => MOVE_PAGE_SELECT_EVENT,
+  MOVE_PALETTE: () => MOVE_PALETTE,
   MOVE_SLOT_LIBRARY: () => MOVE_SLOT_LIBRARY,
   MOVE_SPECIAL_BUTTONS: () => MOVE_SPECIAL_BUTTONS,
   MOVE_STRIP_EVENT: () => MOVE_STRIP_EVENT,
@@ -4804,6 +4805,40 @@ function ModRing({
   );
 }
 
+// src/move-palette.ts
+var MOVE_PALETTE = {
+  /* the hues, in the order a colour wheel runs */
+  red: "#fd3c57",
+  // hardware 2
+  orange: "#fd6b59",
+  // hardware 4
+  yellow: "#f2cf43",
+  // hardware 29
+  lime: "#a3f243",
+  // hardware 31
+  emerald: "#00ed95",
+  // hardware 32
+  blue: "#698eff",
+  // hardware 125
+  indigo: "#8660c3",
+  // hardware 19
+  pink: "#fe92d5",
+  // hardware 25
+  /* the neutrals, which the hardware has no use for — its unlit state is
+     darkness, and its dimmed colours are the hues' own twins */
+  white: "#ffffff",
+  grayLight: "#cac5cc",
+  gray: "#555162",
+  black: "#0e0e16",
+  brown: "#856643"
+};
+var MOVE_TRACK_COLORS = [
+  MOVE_PALETTE.blue,
+  MOVE_PALETTE.pink,
+  MOVE_PALETTE.orange,
+  MOVE_PALETTE.lime
+];
+
 // src/move-surface-store.ts
 var moveScreenRowLabel = (row) => typeof row === "string" ? row : row.label;
 var moveScreenChecked = (rows) => rows.flatMap((row, i) => typeof row !== "string" && row.checked ? [i] : []);
@@ -5789,7 +5824,6 @@ var MovePresetStore = new MovePresetStoreClass();
 
 // src/components/MovePanel.tsx
 var import_jsx_runtime9 = require("react/jsx-runtime");
-var MOVE_TRACK_COLORS = ["#4274f4", "#d83dff", "#ff4d07", "#52bd06"];
 var PAD_ROWS = 4;
 var MIN_PAD_COLUMNS = 4;
 var DIAL_TRACK_INSET = 10;
@@ -8161,6 +8195,7 @@ var import_TweakStore8 = require("tweakers/store");
   MOVE_PAD_LIBRARY,
   MOVE_PAGE_EVENT,
   MOVE_PAGE_SELECT_EVENT,
+  MOVE_PALETTE,
   MOVE_SLOT_LIBRARY,
   MOVE_SPECIAL_BUTTONS,
   MOVE_STRIP_EVENT,

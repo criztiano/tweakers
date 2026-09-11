@@ -19,6 +19,7 @@ import { valueToBearing, angleFromPointer } from '../angle-core';
 import { normalizeTransfer, movePoint, nearestPoint, sampleTransfer, type TransferValue } from '../transfer-core';
 import { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveKeyboardValue } from '../move-visual-core';
 import { ModRing } from './ModRing';
+import { MOVE_TRACK_COLORS } from '../move-palette';
 import { MoveSurfaceStore, moveScreenRowLabel, type MovePadCell } from '../move-surface-store';
 import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValue, applyDetentAxis, type XYValue } from '../xy-pad-core';
 import { nearestHandle, type RangeValue } from '../range-slider-core';
@@ -59,7 +60,10 @@ export interface MovePanelProps {
 }
 
 /** The Move's four track colours, in track order (Figma node 802:321). */
-export const MOVE_TRACK_COLORS = ['#4274f4', '#d83dff', '#ff4d07', '#52bd06'];
+/* The track hues now live with the rest of the Move's screen palette, matched
+   to the colours the hardware lights. Re-exported here because this is where
+   callers have always imported them from. */
+export { MOVE_TRACK_COLORS };
 
 /** The on-screen pad grid mirrors the Move grid's 4 rows (Figma 802:319). */
 const PAD_ROWS = 4;
