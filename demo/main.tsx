@@ -31,7 +31,15 @@ TweakStore.registerPanel('settings', 'Settings', {
   output: [0.8, 0, 1],
   latency: [0.2, 0, 1],
   brightness: [0.6, 0, 1],
+  contrast: [0.5, 0, 1],
+  midiChannel: { type: 'select', default: '1', options: ['1', '2', '3', '4'] },
+  tuning: [440, 400, 480, 1],
+  sleep: [0.3, 0, 1],
+  ghost: [0.1, 0, 1],
+  wake: [0.5, 0, 1],
+  dim: [0.4, 0, 1],
   autosave: true,
+  clicks: false,
 });
 
 // A few presets to walk through on the wheel.

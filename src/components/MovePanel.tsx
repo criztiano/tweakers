@@ -171,6 +171,11 @@ export const MOVE_MUTE_EVENT = 'move-tweakers:mute';
  *  window now sits, so the kit can point the hardware's dials at the same 8
  *  controls the screen is showing. */
 export const MOVE_STRIP_EVENT = 'move-tweakers:strip';
+/** Out: `{ panelId, open, pageId }` — the settings room: which panel it is,
+ *  whether it stands open, and the regular page to come back to. Re-announced
+ *  every second so a kit that binds late still learns to keep the room off
+ *  the track row; the kit steers the hardware in and out on `open` edges. */
+export const MOVE_SETTINGS_EVENT = 'move-tweakers:settings';
 
 /**
  * The Move's control surface, laid out to Cri's Figma spec (file
@@ -373,6 +378,21 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     if (!settingsOpen) return;
     return MoveFunctions.push('back', () => MoveSettingsView.close(), { label: 'Close' });
   }, [settingsOpen]);
+
+  // Tell the kit about the room: its panel, whether the door stands open,
+  // and the regular page to come back to. Announced on every change and
+  // re-announced on the strip's beat, so a kit that binds late still keeps
+  // the room off the track row.
+  const regularPageId = pages[Math.min(track, Math.max(0, pages.length - 1))]?.panel.id;
+  useEffect(() => {
+    if (settingsRoomId === undefined || typeof window === 'undefined') return;
+    const announce = () => window.dispatchEvent(new CustomEvent(MOVE_SETTINGS_EVENT, {
+      detail: { panelId: settingsRoomId, open: settingsOpen, pageId: regularPageId },
+    }));
+    announce();
+    const timer = setInterval(announce, STRIP_REANNOUNCE_MS);
+    return () => clearInterval(timer);
+  }, [settingsRoomId, settingsOpen, regularPageId]);
 
   // The strip's window. A modulator's settings page is the hardware's own
   // shape and never scrolls, so the wheel and the rail belong to the app's
@@ -716,7 +736,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // just-opened settings view before the hardware gets there.
   const pagesRef = useRef(pages);
   pagesRef.current = pages;
+  const settingsRoomIdRef = useRef(settingsRoomId);
+  settingsRoomIdRef.current = settingsRoomId;
   const sawSettings = useRef(false);
+  const sawRoom = useRef(false);
   useEffect(() => {
     const onPage = (e: Event) => {
       const id = (e as CustomEvent).detail?.pageId;
@@ -727,6 +750,18 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       if (sawSettings.current) {
         sawSettings.current = false;
         ModulationStore.closeSettings();
+      }
+      // The settings room, on the same terms as a modulator's page: frames
+      // showing the room mark it seen, and the first regular page after it
+      // (a hardware track press) walks out. Frames from before the room has
+      // shown must not close a door that just opened.
+      if (id !== undefined && id === settingsRoomIdRef.current) {
+        if (MoveSettingsView.isOpen()) sawRoom.current = true;
+        return;
+      }
+      if (sawRoom.current) {
+        sawRoom.current = false;
+        MoveSettingsView.close();
       }
       const i = pagesRef.current.findIndex((pg) => pg.panel.id === id);
       if (i >= 0) setTrack(i);
@@ -1026,9 +1061,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // An app that claimed the bottom pad rows takes them over — movePadRows
   // shuffles the control rows around the claim, exactly as the hardware does.
   // A modulator's settings page takes the surface over, list included: the
-  // page IS what the wheel is walking while it is open.
-  const screen = settingsPanel ? null : surface.screen;
-  const appRows = surface.rows;
+  // page IS what the wheel is walking while it is open. The settings room
+  // takes it all the same way — the wheel screen, the claimed rows and the
+  // step circles belong to the view underneath, and drawing them beside the
+  // room's own eight slots also overflows the panel.
+  const screen = settingsPanel || settingsOpen ? null : surface.screen;
+  const appRows = settingsOpen ? 0 : surface.rows;
   const padRows = movePadRows(page, appRows);
   const appRowAt = (row: number) => moveAppPadRow(row, appRows);
   const padAt = (x: number, y: 0 | 1): MovePadCell | undefined =>

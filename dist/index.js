@@ -5589,6 +5589,7 @@ var MOVE_JOG_EVENT = "move-tweakers:jog";
 var MOVE_JOG_CLICK_EVENT = "move-tweakers:jog-click";
 var MOVE_MUTE_EVENT = "move-tweakers:mute";
 var MOVE_STRIP_EVENT = "move-tweakers:strip";
+var MOVE_SETTINGS_EVENT = "move-tweakers:settings";
 function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only, dock = "viewport", scroll = false, headerStart, settings }) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState5([]);
@@ -5661,7 +5662,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const settingsRoomId = settingsRoom?.id;
   useEffect7(() => {
     if (settingsRoomId === void 0) return;
-    const detach = MoveFunctions.attach("set_overview", () => MoveSettingsView.toggle(), { label: "Settings" });
+    const detach = MoveFunctions.attach("set_overview", () => {
+      if (!MoveSettingsView.isOpen()) ModulationStore2.closeSettings();
+      MoveSettingsView.toggle();
+    }, { label: "Settings" });
     return () => {
       detach();
       MoveSettingsView.close();
@@ -5671,6 +5675,16 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     if (!settingsOpen) return;
     return MoveFunctions.push("back", () => MoveSettingsView.close(), { label: "Close" });
   }, [settingsOpen]);
+  const regularPageId = pages[Math.min(track, Math.max(0, pages.length - 1))]?.panel.id;
+  useEffect7(() => {
+    if (settingsRoomId === void 0 || typeof window === "undefined") return;
+    const announce = () => window.dispatchEvent(new CustomEvent(MOVE_SETTINGS_EVENT, {
+      detail: { panelId: settingsRoomId, open: settingsOpen, pageId: regularPageId }
+    }));
+    announce();
+    const timer = setInterval(announce, STRIP_REANNOUNCE_MS);
+    return () => clearInterval(timer);
+  }, [settingsRoomId, settingsOpen, regularPageId]);
   const stripMode = scroll && !settingsPanel && !!page;
   const [offset, setOffset] = useState5(0);
   const stripOffset = stripMode ? clampStripOffset(page, offset) : 0;
@@ -5919,7 +5933,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   }, [pageId]);
   const pagesRef = useRef7(pages);
   pagesRef.current = pages;
+  const settingsRoomIdRef = useRef7(settingsRoomId);
+  settingsRoomIdRef.current = settingsRoomId;
   const sawSettings = useRef7(false);
+  const sawRoom = useRef7(false);
   useEffect7(() => {
     const onPage = (e) => {
       const id = e.detail?.pageId;
@@ -5930,6 +5947,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       if (sawSettings.current) {
         sawSettings.current = false;
         ModulationStore2.closeSettings();
+      }
+      if (id !== void 0 && id === settingsRoomIdRef.current) {
+        if (MoveSettingsView.isOpen()) sawRoom.current = true;
+        return;
+      }
+      if (sawRoom.current) {
+        sawRoom.current = false;
+        MoveSettingsView.close();
       }
       const i = pagesRef.current.findIndex((pg) => pg.panel.id === id);
       if (i >= 0) setTrack(i);
@@ -6161,8 +6186,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       detail: { pageId: page.panel.id, path: meta.path, latched: !wasLatched }
     }));
   };
-  const screen = settingsPanel ? null : surface.screen;
-  const appRows = surface.rows;
+  const screen = settingsPanel || settingsOpen ? null : surface.screen;
+  const appRows = settingsOpen ? 0 : surface.rows;
   const padRows = movePadRows(page, appRows);
   const appRowAt = (row) => moveAppPadRow(row, appRows);
   const padAt = (x, y) => surface.pads.find((p) => p.x === x && p.y === y);
