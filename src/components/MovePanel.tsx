@@ -978,6 +978,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     surface.pads.find((p) => p.x === x && p.y === y);
   const shownPadRows = Array.from({ length: PAD_ROWS }, (_, row) => row)
     .filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0));
+  // The claimed rows draw as one block, anchored on the topmost of them.
+  const firstAppScreenRow = shownPadRows.find((row) => appRowAt(row) !== null) ?? -1;
 
   // Only occupied columns render — a column with a dial, a toggle chip, or a
   // value chip at its index. Indices stay the hardware knob numbers (hidden
@@ -1769,7 +1771,30 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 collapse the same way: cells render only for visible columns,
                 blank pads filling the gaps to keep the grid rectangular. */}
             {color && colorMeta ? <MoveOpacityPads color={color} disabled={TweakStore.isDisabled(page.panel.id, colorMeta.path)} /> : shownPadRows
-              .map((row) => (
+              .map((row) => {
+                // The app's reserved rows are one instrument, not sixteen
+                // controls: what those pads mean is the app's business and
+                // only the app can say it. So the whole claimed area draws as
+                // a single slot carrying that sentence, once — the rows after
+                // the first fold into it.
+                if (appRowAt(row) !== null) {
+                  if (row > firstAppScreenRow) return null;
+                  return (
+                    <div
+                      key="app-rows"
+                      className="tweakers-move-app-row"
+                      data-rows={appRows}
+                      onPointerDown={(e) => {
+                        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                      }}
+                    >
+                      <span className="tweakers-move-app-row-label">
+                        {surface.padsLabel ?? 'the app’s pads'}
+                      </span>
+                    </div>
+                  );
+                }
+                return (
                 <div
                   key={row}
                   className="tweakers-move-pads"
@@ -1944,7 +1969,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     );
                   })}
                 </div>
-              ))}
+                );
+              })}
             </div>
             </div>
 
@@ -2131,7 +2157,8 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
     MoveSurfaceStore.setPadRows(1,
       Array.from({ length: MOVE_WAVEFORM_PADS }, (_, x) => ({
         x, y: 0 as const, label: `${x + 1}`, color: modColor(index),
-      }))
+      })),
+      'tap to jump the playhead · hold to loop that part'
     );
     const paintSteps = () => {
       const lit = new Set(MoveWaveformStore.loopSteps());
@@ -2149,7 +2176,7 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
     return () => {
       offView();
       offPress();
-      MoveSurfaceStore.setPadRows(prev.rows, prev.pads);
+      MoveSurfaceStore.setPadRows(prev.rows, prev.pads, prev.padsLabel);
       MoveSurfaceStore.setSteps(prev.steps);
     };
   }, [index]);

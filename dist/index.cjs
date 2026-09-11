@@ -2110,6 +2110,37 @@ function WaveformVisualization({
   ] });
 }
 
+// src/move-volume.ts
+var MoveVolumeDisplayClass = class {
+  constructor() {
+    this.state = null;
+    this.listeners = /* @__PURE__ */ new Set();
+  }
+  /** Show the pill with this readout — replaces any previous one. */
+  set(state2) {
+    this.state = state2;
+    this.notify();
+  }
+  /** Hide the pill. */
+  clear() {
+    this.state = null;
+    this.notify();
+  }
+  /** The current readout, or null when the pill is hidden. */
+  get() {
+    return this.state;
+  }
+  /** Notified when the readout is set or cleared. */
+  subscribe(listener) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+  notify() {
+    for (const l of this.listeners) l();
+  }
+};
+var MoveVolumeDisplay = new MoveVolumeDisplayClass();
+
 // src/move-waveform.ts
 var MOVE_WAVEFORM_STEPS = 16;
 var MOVE_WAVEFORM_PADS = 8;
@@ -2176,18 +2207,22 @@ var MoveWaveformStoreClass = class {
     this.registered = false;
     this.editor = false;
     this.progressSource = null;
+    this.duration = null;
     this.listeners = /* @__PURE__ */ new Set();
     this.version = 0;
   }
   /** Claim the wheel, the volume knob and the step row. Returns the release. */
   register() {
     this.registered = true;
+    MoveVolumeDisplay.set({ label: "time", getValue: () => this.readout() });
     this.notify();
     return () => {
       this.registered = false;
       this.editor = false;
       this.progressSource = null;
+      this.duration = null;
       this.view = defaultView();
+      MoveVolumeDisplay.clear();
       this.notify();
     };
   }
@@ -2220,6 +2255,23 @@ var MoveWaveformStoreClass = class {
    */
   setProgressSource(fn) {
     this.progressSource = fn;
+  }
+  /**
+   * How long the sample is, in seconds. With it the volume readout counts
+   * real time; without it the same readout is a percentage of the sample,
+   * which is still true — a position always reads as something.
+   */
+  setDuration(seconds) {
+    this.duration = seconds != null && seconds > 0 && Number.isFinite(seconds) ? seconds : null;
+  }
+  /** What the volume knob is editing right now, ready to print. */
+  readout() {
+    const at = clamp013(this.progressSource ? this.progressSource() : this.view.position);
+    if (this.duration === null) return `${Math.round(at * 100)}%`;
+    const total = at * this.duration;
+    const minutes = Math.floor(total / 60);
+    const seconds = total - minutes * 60;
+    return `${minutes}:${seconds < 10 ? "0" : ""}${seconds.toFixed(1)}`;
   }
   getView() {
     return this.view;
@@ -2323,6 +2375,9 @@ function MoveWaveform({
     setMounted(true);
     return MoveWaveformStore.register();
   }, [productionEnabled]);
+  (0, import_react2.useEffect)(() => {
+    MoveWaveformStore.setDuration(buffer?.duration ?? null);
+  }, [buffer]);
   const view = (0, import_react2.useSyncExternalStore)(
     (0, import_react2.useCallback)((cb) => MoveWaveformStore.subscribe(cb), []),
     () => MoveWaveformStore.getVersion(),
@@ -3167,12 +3222,36 @@ function buildModMovePage(panel, layout) {
   }
   return { panel, dials: dials.slice(0, MOVE_DIALS), toggles: toggles.slice(0, MOVE_PADS), values: [], actions: [] };
 }
+var warnedIssues = /* @__PURE__ */ new Set();
+var issueReporter = null;
+function reportMoveLayoutIssue(code, message) {
+  if (issueReporter) {
+    issueReporter(code, message);
+    return;
+  }
+  if (warnedIssues.has(message)) return;
+  warnedIssues.add(message);
+  console.warn(`Move layout: ${message}`);
+}
 var padColumn = (panel, c) => {
   const col = panel.movePads?.[c.path];
-  return typeof col === "number" && Number.isInteger(col) && col >= 0 && col < MOVE_PADS ? col : null;
+  if (col === void 0) return null;
+  if (typeof col === "number" && Number.isInteger(col) && col >= 0 && col < MOVE_PADS) return col;
+  reportMoveLayoutIssue(
+    "pad-column-invalid",
+    `panel '${panel.id}': control '${c.path}': movePads column ${JSON.stringify(col)} is off the ${MOVE_PADS}-wide grid \u2014 ignored`
+  );
+  return null;
 };
 function buildMovePages(panels) {
-  return panels.filter((p) => p.kind === void 0).slice(0, MOVE_TRACKS).map((panel) => {
+  const plain = panels.filter((p) => p.kind === void 0);
+  for (const p of plain.slice(MOVE_TRACKS)) {
+    reportMoveLayoutIssue(
+      "panel-dropped",
+      `panel '${p.id}' dropped \u2014 hardware has ${MOVE_TRACKS} tracks`
+    );
+  }
+  return plain.slice(0, MOVE_TRACKS).map((panel) => {
     const controls = flat(panel.controls);
     const chipPlaced = (c) => padColumn(panel, c) !== null && !noChip(c);
     const dials = [];
@@ -3190,24 +3269,40 @@ function buildMovePages(panels) {
     const toggles = [];
     const values = [];
     const actions = [];
-    const place = (row, c, col) => {
+    const place = (row, rowName, c, col) => {
       if (col !== null && row[col] === void 0) {
         row[col] = c;
         return;
       }
       for (let i = 0; i < MOVE_PADS; i++) {
         if (row[i] === void 0) {
+          if (col !== null) {
+            reportMoveLayoutIssue(
+              "pad-column-taken",
+              `panel '${panel.id}': control '${c.path}': ${rowName} column ${col} already occupied by '${row[col].path}' \u2014 moved to column ${i}`
+            );
+          }
           row[i] = c;
           return;
         }
       }
+      reportMoveLayoutIssue(
+        "pad-row-full",
+        `panel '${panel.id}': control '${c.path}': the ${rowName} row's ${MOVE_PADS} pads are all taken \u2014 dropped`
+      );
     };
     for (const c of controls) {
       const col = padColumn(panel, c);
-      if (c.type === "toggle" && !isToggleDial(c)) place(toggles, c, col);
+      if (c.type === "toggle" && !isToggleDial(c)) place(toggles, "toggle", c, col);
       else if (c.type === "action") {
-        if (col !== null) place(actions, c, col);
-      } else if (isDial(c) && !noChip(c) && !dials.includes(c)) place(values, c, col);
+        if (col !== null) place(actions, "action", c, col);
+      } else if (isDial(c) && !noChip(c) && !dials.includes(c)) place(values, "value", c, col);
+      else if (isDial(c) && noChip(c) && !dials.includes(c)) {
+        reportMoveLayoutIssue(
+          "dial-dropped",
+          `panel '${panel.id}': control '${c.path}' (${c.type}) needs a dial column and none is left \u2014 dropped`
+        );
+      }
     }
     return {
       panel,
@@ -3219,7 +3314,7 @@ function buildMovePages(panels) {
   });
 }
 function movePadRows(page, claimedRows) {
-  if (claimedRows >= 2) return [page.values, page.toggles, [], []];
+  if (claimedRows >= 2) return [page.toggles, page.values, [], []];
   return [page.toggles, page.values, page.actions, []];
 }
 function moveAppPadRow(row, claimedRows) {
@@ -4712,7 +4807,7 @@ function ModRing({
 // src/move-surface-store.ts
 var moveScreenRowLabel = (row) => typeof row === "string" ? row : row.label;
 var moveScreenChecked = (rows) => rows.flatMap((row, i) => typeof row !== "string" && row.checked ? [i] : []);
-var EMPTY = { rows: 0, pads: [], steps: null, screen: null };
+var EMPTY = { rows: 0, pads: [], padsLabel: null, steps: null, screen: null };
 var state = EMPTY;
 var listeners = /* @__PURE__ */ new Set();
 var pressListeners = /* @__PURE__ */ new Set();
@@ -4726,10 +4821,11 @@ function patch(key, value) {
   emit();
 }
 var validPads = (pads) => pads.filter((p) => p.x >= 0 && p.x < 8 && (p.y === 0 || p.y === 1));
-function patchPadRows(rows, pads) {
+function patchPadRows(rows, pads, label) {
   const nextPads = validPads(pads);
-  if (state.rows === rows && JSON.stringify(state.pads) === JSON.stringify(nextPads)) return;
-  state = { ...state, rows, pads: nextPads };
+  const nextLabel = label === void 0 ? state.padsLabel : label;
+  if (state.rows === rows && state.padsLabel === nextLabel && JSON.stringify(state.pads) === JSON.stringify(nextPads)) return;
+  state = { ...state, rows, pads: nextPads, padsLabel: nextLabel };
   emit();
 }
 var MoveSurfaceStore = {
@@ -4745,9 +4841,15 @@ var MoveSurfaceStore = {
   setPads(pads) {
     patch("pads", validPads(pads));
   },
-  /** Publish the claimed row count and its cells as one renderable state. */
-  setPadRows(rows, pads) {
-    patchPadRows(rows, pads);
+  /** Publish the claimed row count and its cells as one renderable state.
+   *  `label` says what the row does here — pass it whenever the meaning
+   *  changes, so the panel never captions the pads with a stale phrase. */
+  setPadRows(rows, pads, label) {
+    patchPadRows(rows, pads, label);
+  },
+  /** What the claimed rows control in this view. */
+  setPadsLabel(label) {
+    patch("padsLabel", label);
   },
   setSteps(steps) {
     patch("steps", steps === null ? null : steps.filter((s) => s.step >= 0 && s.step < 16));
@@ -4788,37 +4890,6 @@ function fineDragValue(opts) {
   const delta = (pos - startPos) / (extentPx || 1) * (max - min) * factor;
   return Math.max(min, Math.min(max, startValue + delta));
 }
-
-// src/move-volume.ts
-var MoveVolumeDisplayClass = class {
-  constructor() {
-    this.state = null;
-    this.listeners = /* @__PURE__ */ new Set();
-  }
-  /** Show the pill with this readout — replaces any previous one. */
-  set(state2) {
-    this.state = state2;
-    this.notify();
-  }
-  /** Hide the pill. */
-  clear() {
-    this.state = null;
-    this.notify();
-  }
-  /** The current readout, or null when the pill is hidden. */
-  get() {
-    return this.state;
-  }
-  /** Notified when the readout is set or cleared. */
-  subscribe(listener) {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-  notify() {
-    for (const l of this.listeners) l();
-  }
-};
-var MoveVolumeDisplay = new MoveVolumeDisplayClass();
 
 // src/move-color.ts
 var import_TweakStore3 = require("tweakers/store");
@@ -6317,6 +6388,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const appRowAt = (row) => moveAppPadRow(row, appRows);
   const padAt = (x, y) => surface.pads.find((p) => p.x === x && p.y === y);
   const shownPadRows = Array.from({ length: PAD_ROWS }, (_, row) => row).filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0));
+  const firstAppScreenRow = shownPadRows.find((row) => appRowAt(row) !== null) ?? -1;
   const visibleCols = stripMode ? page.dials.map((_, i) => i) : settingsPanel ? Array.from({ length: modPageWidth() }, (_, i) => i) : color ? Array.from({ length: MOVE_PADS }, (_, i) => i) : visibleColumns(page);
   const clusterCols = stripMode ? Math.min(MOVE_DIALS, visibleCols.length) || MOVE_DIALS : visibleCols.length;
   const kitPadCols = Math.max(0, ...padRows.map((row) => row.length));
@@ -7024,174 +7096,194 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                 meta.path
                               );
                             }) }),
-                            color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveOpacityPads, { color, disabled: import_TweakStore6.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : shownPadRows.map((row) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
-                              "div",
-                              {
-                                className: "tweakers-move-pads",
-                                "data-pad-row": row,
-                                "data-pad-columns": stripMode ? page.dials.length : padGridCols,
-                                style: { "--move-pad-cols": stripMode ? page.dials.length : padGridCols },
-                                children: (stripMode ? visibleCols : Array.from({ length: padGridCols }, (_, i) => i)).map((col) => {
-                                  const appRow = appRowAt(row);
-                                  if (appRow !== null) {
-                                    const cell = padAt(col, appRow);
-                                    if (!cell || cell.empty) {
-                                      return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "tweakers-move-pad", "data-empty": "true" }, `app-${col}`);
-                                    }
-                                    return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
-                                      "button",
-                                      {
-                                        type: "button",
-                                        className: "tweakers-move-pad",
-                                        "data-kind": "app",
-                                        "data-on": cell.lit || appHeld === `${appRow}:${col}` || void 0,
-                                        "data-held": appHeld === `${appRow}:${col}` || void 0,
-                                        onPointerDown: (e) => {
-                                          try {
-                                            e.currentTarget.setPointerCapture(e.pointerId);
-                                          } catch {
-                                          }
-                                          setAppHeld(`${appRow}:${col}`);
-                                        },
-                                        onPointerUp: () => setAppHeld(null),
-                                        onPointerCancel: () => setAppHeld(null),
-                                        onClick: () => MoveSurfaceStore.press(col, appRow),
-                                        children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MovePadAppBody, { label: cell.label, color: cell.color })
-                                      },
-                                      `app-${col}`
-                                    );
-                                  }
-                                  const meta = padRows[row][col];
-                                  const bendStage = !meta && settingsPanel && padRows[row] === page.toggles && modSettings ? modLayout?.dials[col]?.stage : void 0;
-                                  if (bendStage && ENV_BEND_STAGES.includes(bendStage)) {
-                                    return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
-                                      "button",
-                                      {
-                                        className: "tweakers-move-pad",
-                                        "data-kind": "bend",
-                                        "data-on": bendHeld === bendStage || void 0,
-                                        onPointerDown: (e) => {
-                                          try {
-                                            e.currentTarget.setPointerCapture(e.pointerId);
-                                          } catch {
-                                          }
-                                          setBendHeld(bendStage);
-                                          bendRef.current = {
-                                            y: e.clientY,
-                                            curve: Number(modSlot?.params[envCurveParam(bendStage)]) || 0
-                                          };
-                                        },
-                                        onPointerMove: (e) => {
-                                          if (bendHeld !== bendStage || !bendRef.current) return;
-                                          const v = Math.min(1, Math.max(
-                                            -1,
-                                            bendRef.current.curve + (bendRef.current.y - e.clientY) / 60
-                                          ));
-                                          import_ModulationStore2.ModulationStore.updateSlotParams(modSettings.index, { [envCurveParam(bendStage)]: v });
-                                        },
-                                        onPointerUp: () => {
-                                          setBendHeld(null);
-                                          bendRef.current = null;
-                                        },
-                                        onPointerCancel: () => {
-                                          setBendHeld(null);
-                                          bendRef.current = null;
-                                        },
-                                        children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MovePadToggleBody, { label: "Curve" })
-                                      },
-                                      `bend-${bendStage}`
-                                    );
-                                  }
-                                  const waveStage = !meta && settingsPanel && padRows[row] === page.values && modSettings ? modLayout?.dials[col]?.stage : void 0;
-                                  if (waveStage && ENV_WAVE_STAGES.includes(waveStage)) {
-                                    const amount = Number(modSlot?.params[envWaveParam(waveStage)]) || 0;
-                                    const flipped = !!modSlot?.params[envWaveFlipParam(waveStage)];
-                                    return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
-                                      "button",
-                                      {
-                                        className: "tweakers-move-pad",
-                                        "data-kind": "wave",
-                                        "data-on": amount > 0 || void 0,
-                                        "data-held": waveHeld === waveStage || void 0,
-                                        onPointerDown: (e) => {
-                                          try {
-                                            e.currentTarget.setPointerCapture(e.pointerId);
-                                          } catch {
-                                          }
-                                          setWaveHeld(waveStage);
-                                          waveRef.current = { y: e.clientY, amount, moved: false };
-                                        },
-                                        onPointerMove: (e) => {
-                                          if (waveHeld !== waveStage || !waveRef.current) return;
-                                          const dy = waveRef.current.y - e.clientY;
-                                          if (!waveRef.current.moved && Math.abs(dy) < 3) return;
-                                          waveRef.current.moved = true;
-                                          const v = Math.min(1, Math.max(0, waveRef.current.amount + dy / 100));
-                                          import_ModulationStore2.ModulationStore.updateSlotParams(modSettings.index, { [envWaveParam(waveStage)]: v });
-                                        },
-                                        onPointerUp: () => {
-                                          if (waveHeld === waveStage && waveRef.current && !waveRef.current.moved) {
-                                            import_ModulationStore2.ModulationStore.updateSlotParams(modSettings.index, {
-                                              [envWaveFlipParam(waveStage)]: !flipped
-                                            });
-                                          }
-                                          setWaveHeld(null);
-                                          waveRef.current = null;
-                                        },
-                                        onPointerCancel: () => {
-                                          setWaveHeld(null);
-                                          waveRef.current = null;
-                                        },
-                                        children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MovePadWaveBody, { label: flipped ? "Swell" : "Dip", percent: Math.round(amount * 100) })
-                                      },
-                                      `wave-${waveStage}`
-                                    );
-                                  }
-                                  if (!meta) return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
-                                  if (padRows[row] === page.toggles) {
-                                    return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
-                                      "button",
-                                      {
-                                        className: "tweakers-move-pad",
-                                        "data-kind": "toggle",
-                                        "data-on": !!values[meta.path],
-                                        onClick: () => import_TweakStore6.TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path]),
-                                        children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MovePadToggleBody, { label: meta.label })
-                                      },
-                                      meta.path
-                                    );
-                                  }
-                                  if (padRows[row] === page.actions) {
-                                    return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
-                                      "button",
-                                      {
-                                        className: "tweakers-move-pad",
-                                        "data-kind": "action",
-                                        onClick: () => import_TweakStore6.TweakStore.triggerAction(page.panel.id, meta.path),
-                                        children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MovePadActionBody, { label: meta.label })
-                                      },
-                                      meta.path
-                                    );
-                                  }
-                                  const value = chipValue(meta);
-                                  return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
-                                    "button",
-                                    {
-                                      className: "tweakers-move-pad",
-                                      "data-kind": "value",
-                                      "data-held": held !== null && held.meta.path === meta.path || hwHeld[meta.path] || void 0,
-                                      "data-latched": chipLatched(col, meta) || void 0,
-                                      onPointerDown: (e) => pressChip(e, col, meta),
-                                      onPointerUp: () => releaseChip(col, meta),
-                                      onPointerCancel: () => setHeld(null),
-                                      children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MovePadValueBody, { label: meta.label, value: value.num, unit: value.unit, children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveModRing, { panelId: page.panel.id, path: meta.path, pad: true }) })
+                            color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveOpacityPads, { color, disabled: import_TweakStore6.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : shownPadRows.map((row) => {
+                              if (appRowAt(row) !== null) {
+                                if (row > firstAppScreenRow) return null;
+                                return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+                                  "div",
+                                  {
+                                    className: "tweakers-move-app-row",
+                                    "data-rows": appRows,
+                                    onPointerDown: (e) => {
+                                      try {
+                                        e.currentTarget.setPointerCapture(e.pointerId);
+                                      } catch {
+                                      }
                                     },
-                                    meta.path
-                                  );
-                                })
-                              },
-                              row
-                            ))
+                                    children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("span", { className: "tweakers-move-app-row-label", children: surface.padsLabel ?? "the app\u2019s pads" })
+                                  },
+                                  "app-rows"
+                                );
+                              }
+                              return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+                                "div",
+                                {
+                                  className: "tweakers-move-pads",
+                                  "data-pad-row": row,
+                                  "data-pad-columns": stripMode ? page.dials.length : padGridCols,
+                                  style: { "--move-pad-cols": stripMode ? page.dials.length : padGridCols },
+                                  children: (stripMode ? visibleCols : Array.from({ length: padGridCols }, (_, i) => i)).map((col) => {
+                                    const appRow = appRowAt(row);
+                                    if (appRow !== null) {
+                                      const cell = padAt(col, appRow);
+                                      if (!cell || cell.empty) {
+                                        return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "tweakers-move-pad", "data-empty": "true" }, `app-${col}`);
+                                      }
+                                      return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+                                        "button",
+                                        {
+                                          type: "button",
+                                          className: "tweakers-move-pad",
+                                          "data-kind": "app",
+                                          "data-on": cell.lit || appHeld === `${appRow}:${col}` || void 0,
+                                          "data-held": appHeld === `${appRow}:${col}` || void 0,
+                                          onPointerDown: (e) => {
+                                            try {
+                                              e.currentTarget.setPointerCapture(e.pointerId);
+                                            } catch {
+                                            }
+                                            setAppHeld(`${appRow}:${col}`);
+                                          },
+                                          onPointerUp: () => setAppHeld(null),
+                                          onPointerCancel: () => setAppHeld(null),
+                                          onClick: () => MoveSurfaceStore.press(col, appRow),
+                                          children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MovePadAppBody, { label: cell.label, color: cell.color })
+                                        },
+                                        `app-${col}`
+                                      );
+                                    }
+                                    const meta = padRows[row][col];
+                                    const bendStage = !meta && settingsPanel && padRows[row] === page.toggles && modSettings ? modLayout?.dials[col]?.stage : void 0;
+                                    if (bendStage && ENV_BEND_STAGES.includes(bendStage)) {
+                                      return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+                                        "button",
+                                        {
+                                          className: "tweakers-move-pad",
+                                          "data-kind": "bend",
+                                          "data-on": bendHeld === bendStage || void 0,
+                                          onPointerDown: (e) => {
+                                            try {
+                                              e.currentTarget.setPointerCapture(e.pointerId);
+                                            } catch {
+                                            }
+                                            setBendHeld(bendStage);
+                                            bendRef.current = {
+                                              y: e.clientY,
+                                              curve: Number(modSlot?.params[envCurveParam(bendStage)]) || 0
+                                            };
+                                          },
+                                          onPointerMove: (e) => {
+                                            if (bendHeld !== bendStage || !bendRef.current) return;
+                                            const v = Math.min(1, Math.max(
+                                              -1,
+                                              bendRef.current.curve + (bendRef.current.y - e.clientY) / 60
+                                            ));
+                                            import_ModulationStore2.ModulationStore.updateSlotParams(modSettings.index, { [envCurveParam(bendStage)]: v });
+                                          },
+                                          onPointerUp: () => {
+                                            setBendHeld(null);
+                                            bendRef.current = null;
+                                          },
+                                          onPointerCancel: () => {
+                                            setBendHeld(null);
+                                            bendRef.current = null;
+                                          },
+                                          children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MovePadToggleBody, { label: "Curve" })
+                                        },
+                                        `bend-${bendStage}`
+                                      );
+                                    }
+                                    const waveStage = !meta && settingsPanel && padRows[row] === page.values && modSettings ? modLayout?.dials[col]?.stage : void 0;
+                                    if (waveStage && ENV_WAVE_STAGES.includes(waveStage)) {
+                                      const amount = Number(modSlot?.params[envWaveParam(waveStage)]) || 0;
+                                      const flipped = !!modSlot?.params[envWaveFlipParam(waveStage)];
+                                      return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+                                        "button",
+                                        {
+                                          className: "tweakers-move-pad",
+                                          "data-kind": "wave",
+                                          "data-on": amount > 0 || void 0,
+                                          "data-held": waveHeld === waveStage || void 0,
+                                          onPointerDown: (e) => {
+                                            try {
+                                              e.currentTarget.setPointerCapture(e.pointerId);
+                                            } catch {
+                                            }
+                                            setWaveHeld(waveStage);
+                                            waveRef.current = { y: e.clientY, amount, moved: false };
+                                          },
+                                          onPointerMove: (e) => {
+                                            if (waveHeld !== waveStage || !waveRef.current) return;
+                                            const dy = waveRef.current.y - e.clientY;
+                                            if (!waveRef.current.moved && Math.abs(dy) < 3) return;
+                                            waveRef.current.moved = true;
+                                            const v = Math.min(1, Math.max(0, waveRef.current.amount + dy / 100));
+                                            import_ModulationStore2.ModulationStore.updateSlotParams(modSettings.index, { [envWaveParam(waveStage)]: v });
+                                          },
+                                          onPointerUp: () => {
+                                            if (waveHeld === waveStage && waveRef.current && !waveRef.current.moved) {
+                                              import_ModulationStore2.ModulationStore.updateSlotParams(modSettings.index, {
+                                                [envWaveFlipParam(waveStage)]: !flipped
+                                              });
+                                            }
+                                            setWaveHeld(null);
+                                            waveRef.current = null;
+                                          },
+                                          onPointerCancel: () => {
+                                            setWaveHeld(null);
+                                            waveRef.current = null;
+                                          },
+                                          children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MovePadWaveBody, { label: flipped ? "Swell" : "Dip", percent: Math.round(amount * 100) })
+                                        },
+                                        `wave-${waveStage}`
+                                      );
+                                    }
+                                    if (!meta) return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
+                                    if (padRows[row] === page.toggles) {
+                                      return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+                                        "button",
+                                        {
+                                          className: "tweakers-move-pad",
+                                          "data-kind": "toggle",
+                                          "data-on": !!values[meta.path],
+                                          onClick: () => import_TweakStore6.TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path]),
+                                          children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MovePadToggleBody, { label: meta.label })
+                                        },
+                                        meta.path
+                                      );
+                                    }
+                                    if (padRows[row] === page.actions) {
+                                      return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+                                        "button",
+                                        {
+                                          className: "tweakers-move-pad",
+                                          "data-kind": "action",
+                                          onClick: () => import_TweakStore6.TweakStore.triggerAction(page.panel.id, meta.path),
+                                          children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MovePadActionBody, { label: meta.label })
+                                        },
+                                        meta.path
+                                      );
+                                    }
+                                    const value = chipValue(meta);
+                                    return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+                                      "button",
+                                      {
+                                        className: "tweakers-move-pad",
+                                        "data-kind": "value",
+                                        "data-held": held !== null && held.meta.path === meta.path || hwHeld[meta.path] || void 0,
+                                        "data-latched": chipLatched(col, meta) || void 0,
+                                        onPointerDown: (e) => pressChip(e, col, meta),
+                                        onPointerUp: () => releaseChip(col, meta),
+                                        onPointerCancel: () => setHeld(null),
+                                        children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MovePadValueBody, { label: meta.label, value: value.num, unit: value.unit, children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveModRing, { panelId: page.panel.id, path: meta.path, pad: true }) })
+                                      },
+                                      meta.path
+                                    );
+                                  })
+                                },
+                                row
+                              );
+                            })
                           ]
                         }
                       ) }),
@@ -7331,7 +7423,8 @@ function MoveAudioWave({ index, theme }) {
         y: 0,
         label: `${x + 1}`,
         color: modColor(index)
-      }))
+      })),
+      "tap to jump the playhead \xB7 hold to loop that part"
     );
     const paintSteps = () => {
       const lit = new Set(MoveWaveformStore.loopSteps());
@@ -7351,7 +7444,7 @@ function MoveAudioWave({ index, theme }) {
     return () => {
       offView();
       offPress();
-      MoveSurfaceStore.setPadRows(prev.rows, prev.pads);
+      MoveSurfaceStore.setPadRows(prev.rows, prev.pads, prev.padsLabel);
       MoveSurfaceStore.setSteps(prev.steps);
     };
   }, [index]);

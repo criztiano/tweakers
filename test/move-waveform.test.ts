@@ -14,6 +14,7 @@ import {
   MOVE_WAVEFORM_PADS,
 } from '../src/move-waveform';
 import { WAVEFORM_MAX_ZOOM } from '../src/waveform-engine';
+import { MoveVolumeDisplay } from '../src/move-volume';
 
 describe('the volume knob scrubs', () => {
   it('moves by the finest step on a slow tick and stops at both ends', () => {
@@ -115,6 +116,47 @@ describe('the registry', () => {
     expect(MoveWaveformStore.isRegistered()).toBe(true);
     release();
     expect(MoveWaveformStore.isRegistered()).toBe(false);
+  });
+
+  it('names the volume knob while it holds it, and hands the pill back', () => {
+    expect(MoveVolumeDisplay.get()).toBe(null);
+    const release = MoveWaveformStore.register();
+    const pill = MoveVolumeDisplay.get();
+    expect(pill?.label).toBe('time');
+    expect(typeof pill?.getValue).toBe('function');
+    release();
+    expect(MoveVolumeDisplay.get()).toBe(null);
+  });
+
+  it('reads the playhead as a time once the sample length is known', () => {
+    const release = MoveWaveformStore.register();
+    // With no duration a position is still readable — as a percentage.
+    MoveWaveformStore.setView({ position: 0.5 });
+    expect(MoveVolumeDisplay.get()?.getValue?.()).toBe('50%');
+    MoveWaveformStore.setDuration(90);
+    expect(MoveVolumeDisplay.get()?.getValue?.()).toBe('0:45.0');
+    MoveWaveformStore.setView({ position: 1 });
+    expect(MoveVolumeDisplay.get()?.getValue?.()).toBe('1:30.0');
+    release();
+  });
+
+  it('reads the engine playhead during playback, not the last scrub', () => {
+    const release = MoveWaveformStore.register();
+    MoveWaveformStore.setDuration(10);
+    MoveWaveformStore.setView({ position: 0 });
+    MoveWaveformStore.setProgressSource(() => 0.25);
+    expect(MoveVolumeDisplay.get()?.getValue?.()).toBe('0:02.5');
+    release();
+  });
+
+  it('forgets the sample length on release', () => {
+    const first = MoveWaveformStore.register();
+    MoveWaveformStore.setDuration(60);
+    first();
+    const second = MoveWaveformStore.register();
+    MoveWaveformStore.setView({ position: 0.5 });
+    expect(MoveVolumeDisplay.get()?.getValue?.()).toBe('50%');
+    second();
   });
 
   it('resets the view on release, so the next waveform starts clean', () => {

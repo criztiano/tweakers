@@ -103,40 +103,43 @@ describe('the scrolling panel', () => {
     TweakStore.unregisterPanel(ids[1]);
   });
 
-  it('keeps app pads in the Move matrix when the dial cluster has only two columns', () => {
-    MoveSurfaceStore.claimRows(2);
-    MoveSurfaceStore.setPads([
-      ...Array.from({ length: 4 }, (_, x) => ({ x, y: 1 as const, label: `Nav ${x + 1}`, lit: true })),
-      ...Array.from({ length: 8 }, (_, x) => ({ x, y: 0 as const, label: `Slice ${x + 1}`, lit: false })),
-    ]);
+  it('draws the claimed rows as one slot naming what they do', () => {
+    MoveSurfaceStore.setPadRows(
+      2,
+      [
+        ...Array.from({ length: 4 }, (_, x) => ({ x, y: 1 as const, label: `Nav ${x + 1}`, lit: true })),
+        ...Array.from({ length: 8 }, (_, x) => ({ x, y: 0 as const, label: `Slice ${x + 1}`, lit: false })),
+      ],
+      'jump to a slice of the sample'
+    );
     mount(many(2), false);
 
-    const grid = byClass('tweakers-move-grid')[0];
-    const rows = byClass('tweakers-move-pads');
-    expect(grid.props['data-pad-columns']).toBe(8);
-    expect(rows.length).toBeLessThanOrEqual(4);
-    expect(rows).toHaveLength(2);
-    for (const row of rows) {
-      expect(row.props['data-pad-columns']).toBe(8);
-      expect(row.children).toHaveLength(8);
-    }
-    expect(rows[0].findAllByProps({ 'data-kind': 'app' }).map((pad) => pad.findByProps({ className: 'tweakers-move-pad-title' }).props.children))
-      .toEqual(['Nav 1', 'Nav 2', 'Nav 3', 'Nav 4']);
-    expect(rows[1].findAllByProps({ 'data-kind': 'app' })).toHaveLength(8);
+    // The app's pads are its own instrument: the panel names it once rather
+    // than drawing sixteen controls it cannot explain.
+    const claimed = byClass('tweakers-move-app-row');
+    expect(claimed).toHaveLength(1);
+    expect(claimed[0].props['data-rows']).toBe(2);
+    expect(renderer!.root.findByProps({ className: 'tweakers-move-app-row-label' }).props.children)
+      .toBe('jump to a slice of the sample');
+    expect(renderer!.root.findAllByProps({ 'data-kind': 'app' })).toHaveLength(0);
   });
 
-  it('keeps claimed step/loop points off-screen while retaining pad feedback', () => {
+  it('falls back to a plain name when the app leaves the rows unlabelled', () => {
+    MoveSurfaceStore.setPadRows(1, [{ x: 0, y: 0, label: 'Slice 1' }], null);
+    mount(many(2), false);
+    expect(renderer!.root.findByProps({ className: 'tweakers-move-app-row-label' }).props.children)
+      .toBeTruthy();
+  });
+
+  it('keeps claimed step/loop points off-screen', () => {
     MoveSurfaceStore.setSteps([{ step: 0, lit: true }, { step: 7, lit: false }]);
-    MoveSurfaceStore.claimRows(1);
-    MoveSurfaceStore.setPads([{ x: 0, y: 0, label: 'Slice 1', lit: false }]);
+    MoveSurfaceStore.setPadRows(1, [{ x: 0, y: 0, label: 'Slice 1', lit: false }], 'scrub the sample');
     mount(many(1), false);
 
     expect(byClass('tweakers-move-mod-dot')).toHaveLength(0);
-    const pad = renderer!.root.findByProps({ 'data-kind': 'app' });
-    act(() => pad.props.onPointerDown({ pointerId: 1, currentTarget: { setPointerCapture: vi.fn() } }));
-    expect(renderer!.root.findByProps({ 'data-kind': 'app' }).props['data-held']).toBe(true);
-    act(() => renderer!.root.findByProps({ 'data-kind': 'app' }).props.onPointerCancel());
-    expect(renderer!.root.findByProps({ 'data-kind': 'app' }).props['data-held']).toBeUndefined();
+    expect(byClass('tweakers-move-app-row')).toHaveLength(1);
+    expect(renderer!.root.findByProps({ className: 'tweakers-move-app-row-label' }).props.children)
+      .toBe('scrub the sample');
   });
 
   it('keeps every control at slot size instead of demoting the overflow', () => {

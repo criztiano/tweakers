@@ -7,6 +7,7 @@ import { MoveFunctions } from '../src/move-functions';
 import { MovePresetStore } from '../src/move-presets';
 import { MoveSurfaceStore, type MoveScreenRow } from '../src/move-surface-store';
 import { MoveWaveformStore } from '../src/move-waveform';
+import { MoveVolumeDisplay } from '../src/move-volume';
 import { setAudioModBuffer } from '../src/modulation-core';
 import '../src/styles/theme.css';
 
@@ -141,6 +142,7 @@ import(/* @vite-ignore */ 'http://localhost:7787/kit.js')
     modulation: ModulationStore,
     color: MoveColorStore,
     waveform: MoveWaveformStore,
+    volume: MoveVolumeDisplay,
   }))
   .catch(() => {});
 

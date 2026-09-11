@@ -1,5 +1,6 @@
 import { WAVEFORM_MAX_ZOOM } from './waveform-engine';
 import type { WaveformLoop } from './waveform-engine';
+import { MoveVolumeDisplay } from './move-volume';
 
 /**
  * A waveform on the Move surface.
@@ -175,18 +176,24 @@ class MoveWaveformStoreClass {
   private registered = false;
   private editor = false;
   private progressSource: (() => number) | null = null;
+  private duration: number | null = null;
   private listeners = new Set<Listener>();
   private version = 0;
 
   /** Claim the wheel, the volume knob and the step row. Returns the release. */
   register(): () => void {
     this.registered = true;
+    // The knob is ours now, so it says so: the volume readout follows the
+    // playhead for as long as we hold the claim, and is handed back with it.
+    MoveVolumeDisplay.set({ label: 'time', getValue: () => this.readout() });
     this.notify();
     return () => {
       this.registered = false;
       this.editor = false;
       this.progressSource = null;
+      this.duration = null;
       this.view = defaultView();
+      MoveVolumeDisplay.clear();
       this.notify();
     };
   }
@@ -224,6 +231,25 @@ class MoveWaveformStoreClass {
    */
   setProgressSource(fn: (() => number) | null): void {
     this.progressSource = fn;
+  }
+
+  /**
+   * How long the sample is, in seconds. With it the volume readout counts
+   * real time; without it the same readout is a percentage of the sample,
+   * which is still true — a position always reads as something.
+   */
+  setDuration(seconds: number | null): void {
+    this.duration = seconds != null && seconds > 0 && Number.isFinite(seconds) ? seconds : null;
+  }
+
+  /** What the volume knob is editing right now, ready to print. */
+  readout(): string {
+    const at = clamp01(this.progressSource ? this.progressSource() : this.view.position);
+    if (this.duration === null) return `${Math.round(at * 100)}%`;
+    const total = at * this.duration;
+    const minutes = Math.floor(total / 60);
+    const seconds = total - minutes * 60;
+    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds.toFixed(1)}`;
   }
 
   getView(): MoveWaveformView {
