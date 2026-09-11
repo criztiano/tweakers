@@ -2936,11 +2936,10 @@ function buildMovePages(panels) {
   }
   return plain.slice(0, MOVE_TRACKS).map((panel) => {
     const controls = flat(panel.controls);
-    const chipPlaced = (c) => padColumn(panel, c) !== null && !noChip(c);
     const dials = [];
     let nextCol = 0;
     for (const c of controls) {
-      if (!isDial(c) || chipPlaced(c)) continue;
+      if (!isDial(c)) continue;
       const span = dialSpan(c);
       if (nextCol + span > MOVE_DIALS) {
         if (nextCol >= MOVE_DIALS) break;
@@ -2979,8 +2978,15 @@ function buildMovePages(panels) {
       if (c.type === "toggle" && !isToggleDial(c)) place(toggles, "toggle", c, col);
       else if (c.type === "action") {
         if (col !== null) place(actions, "action", c, col);
-      } else if (isDial(c) && !noChip(c) && !dials.includes(c)) place(values, "value", c, col);
-      else if (isDial(c) && noChip(c) && !dials.includes(c)) {
+      } else if (dials.includes(c)) {
+        if (col !== null) {
+          reportMoveLayoutIssue(
+            "pad-column-on-dial",
+            `panel '${panel.id}': control '${c.path}' holds a dial slot \u2014 movePads column ${col} ignored; pads never mirror dials`
+          );
+        }
+      } else if (isDial(c) && !noChip(c)) place(values, "value", c, col);
+      else if (isDial(c) && noChip(c)) {
         reportMoveLayoutIssue(
           "dial-dropped",
           `panel '${panel.id}': control '${c.path}' (${c.type}) needs a dial column and none is left \u2014 dropped`
@@ -3979,6 +3985,7 @@ var MOVE_SLOT_LIBRARY = {
 
 // src/color-core.ts
 var COLOR_FORMATS = ["hex", "rgb", "hsl", "oklch"];
+var LONG_PRESS_MS = 500;
 var HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
 var clamp5 = (n, min, max) => Math.min(max, Math.max(min, n));
 var clamp015 = (n) => clamp5(n, 0, 1);
@@ -7527,7 +7534,12 @@ function MoveModCircle({ slot }) {
         pressAt.current = Date.now();
       },
       onPointerUp: () => {
-        const tapped = Date.now() - pressAt.current < TAP_MS;
+        const held = Date.now() - pressAt.current;
+        if (held >= LONG_PRESS_MS) {
+          ModulationStore2.removeSlot(slot.index);
+          return;
+        }
+        const tapped = held < TAP_MS;
         if (tapped && ModulationStore2.assignFromStep(slot.index).action !== "none") return;
         const open2 = ModulationStore2.getSettings();
         if (tapped && open2 && open2.index === slot.index) ModulationStore2.closeSettings();

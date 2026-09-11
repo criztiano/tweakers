@@ -15,6 +15,7 @@ import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, str
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
 import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadValueBody, MovePadActionBody, MovePadAppBody, MovePadWaveBody } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
+import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing, angleFromPointer } from '../angle-core';
 import { normalizeTransfer, movePoint, nearestPoint, sampleTransfer, type TransferValue } from '../transfer-core';
 import { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveKeyboardValue } from '../move-visual-core';
@@ -2616,6 +2617,8 @@ function MoveWavePreview({ index }: { index: number }) {
  * step button, with the hardware step's gestures: a tap with a control
  * armed (just touched) wires it on or off; a tap with nothing armed opens
  * the modulator's settings page (tap again to close); a hold opens it too.
+ * A LONG press deletes the modulator — slot, wires, and its settings page
+ * when it was the open one — and never also fires the tap.
  */
 function MoveModCircle({ slot }: { slot: ModulationSlot }) {
   const dotRef = useRef<HTMLSpanElement>(null);
@@ -2641,7 +2644,12 @@ function MoveModCircle({ slot }: { slot: ModulationSlot }) {
         pressAt.current = Date.now();
       }}
       onPointerUp={() => {
-        const tapped = Date.now() - pressAt.current < TAP_MS;
+        const held = Date.now() - pressAt.current;
+        if (held >= LONG_PRESS_MS) {
+          ModulationStore.removeSlot(slot.index);
+          return;
+        }
+        const tapped = held < TAP_MS;
         if (tapped && ModulationStore.assignFromStep(slot.index).action !== 'none') return;
         const open = ModulationStore.getSettings();
         if (tapped && open && open.index === slot.index) ModulationStore.closeSettings();

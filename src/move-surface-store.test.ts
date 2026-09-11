@@ -41,11 +41,12 @@ describe('pad rows under a claim', () => {
     assert.equal(rows[2], p.actions);
   });
 
-  it('lifts the chips above the switches when both rows are claimed', () => {
+  it('keeps switches above chips when both rows are claimed — the actions yield', () => {
     const p = page();
     const rows = movePadRows(p, 2);
-    assert.equal(rows[0], p.values);
-    assert.equal(rows[1], p.toggles);
+    assert.equal(rows[0], p.toggles);
+    assert.equal(rows[1], p.values);
+    assert.deepEqual(rows[2], []);
   });
 
   it('places the claimed rows where the hardware puts them', () => {
@@ -138,6 +139,6 @@ describe('the surface store', () => {
     MoveSurfaceStore.claimRows(2);
     MoveSurfaceStore.setScreen({ items: ['a', 'b'], index: 1 });
     MoveSurfaceStore.reset();
-    assert.deepEqual(MoveSurfaceStore.getState(), { rows: 0, pads: [], steps: null, screen: null });
+    assert.deepEqual(MoveSurfaceStore.getState(), { rows: 0, pads: [], padsLabel: null, steps: null, screen: null });
   });
 });

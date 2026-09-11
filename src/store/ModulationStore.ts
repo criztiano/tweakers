@@ -47,7 +47,10 @@ import {
  * The assignment gesture: touching a control (`noteTouch`, wired into the
  * panel and the bridge kit) arms it for a few seconds; a step-button press
  * (`assignFromStep`) then creates the slot's modulation if needed and
- * toggles the control onto it.
+ * toggles the control onto it. An arm is spent by the wire it makes — the
+ * next step press with no fresh touch opens the slot's settings instead of
+ * toggling the wire back off — and the settings page's own controls never
+ * arm at all (they cannot take a modulation).
  *
  * Slots and assignments persist to localStorage (fail-soft, like panel
  * values), so a prototype's modulation setup survives a reload.
@@ -94,7 +97,7 @@ class ModulationStoreClass {
   private sourceValues = new Map<string, number>();
   private metas = new Map<string, NumericMeta | null>();
   private bpm = 120;
-  private touched: { panelId: string; path: string; at: number } | null = null;
+  private touched: { panelId: string; path: string; at: number; used: boolean } | null = null;
   private settingsIndex: number | null = null;
   private settingsUnsub: (() => void) | null = null;
   /** The control set the open page was built from — see `shapeOf`. */
@@ -224,6 +227,13 @@ class ModulationStoreClass {
       slot,
       amount: clamp(Number(amount) || 0, 0, 1),
     });
+    // The wire spends the arm that made it. The kit's mapping gesture (hold
+    // a step, touch a knob) calls assign directly, so the spend lives here:
+    // the very next step press means "open the settings", not "toggle the
+    // wire I just made back off".
+    if (this.touched && this.touched.panelId === panelId && this.touched.path === path) {
+      this.touched.used = true;
+    }
     this.changed();
     return true;
   }
@@ -253,9 +263,21 @@ class ModulationStoreClass {
 
   /* ── the assignment gesture ───────────────────────────────────────── */
 
-  /** A finger on a control — panel pointer, hardware knob. Arms assignment. */
-  noteTouch(panelId: string, path: string): void {
-    this.touched = { panelId, path, at: Date.now() };
+  /**
+   * A finger on a control — panel pointer, hardware knob. Arms assignment.
+   *
+   * `sustain` marks the repeats of one continuing touch (the kit's ~10 Hz
+   * state frames re-note a finger resting on a knob): it keeps the arm
+   * fresh without re-arming a control whose gesture was already spent —
+   * only a fresh touch re-arms. The settings page's own controls never arm:
+   * they cannot take a modulation, and a stale arm from them is what made
+   * creating new slots impossible while a settings view stood open.
+   */
+  noteTouch(panelId: string, path: string, sustain = false): void {
+    if (panelId === MOD_SETTINGS_PANEL) return;
+    const t = this.touched;
+    const continued = sustain && t !== null && t.panelId === panelId && t.path === path;
+    this.touched = { panelId, path, at: Date.now(), used: continued ? t.used : false };
   }
 
   /**
@@ -265,11 +287,12 @@ class ModulationStoreClass {
    */
   assignFromStep(index: number): { action: ModStepAction; slot: ModulationSlot | null } {
     const t = this.touched;
-    const armed = t && Date.now() - t.at < MOD_TOUCH_GRACE_MS;
+    const armed = t && !t.used && Date.now() - t.at < MOD_TOUCH_GRACE_MS;
     if (!armed) return { action: 'none', slot: this.getSlot(index) };
 
     const existing = this.assignments.get(modKey(t.panelId, t.path));
     if (this.slots[index] && existing?.slot === index) {
+      t.used = true;                 // the arm is spent: the next press opens
       this.unassign(t.panelId, t.path);
       return { action: 'unassigned', slot: this.getSlot(index) };
     }

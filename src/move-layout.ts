@@ -127,6 +127,7 @@ export type MoveLayoutIssueCode =
   | 'panel-dropped'
   | 'dial-dropped'
   | 'pad-column-invalid'
+  | 'pad-column-on-dial'
   | 'pad-column-taken'
   | 'pad-row-full';
 
@@ -178,19 +179,18 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
     .slice(0, MOVE_TRACKS)
     .map((panel) => {
       const controls = flat(panel.controls);
-      // A bounded control sent to a pad is a value chip wherever it was
-      // declared, so it must not eat a dial slot on the way past. Two-handed
-      // dials and enums can't be chips at all, so a pad column on one of
-      // those is ignored and it keeps its slot.
-      const chipPlaced = (c: ControlMeta) => padColumn(panel, c) !== null && !noChip(c);
       // Dials pack left to right, each claiming its span of columns — a
       // span-2 control sits in both of its columns, so occupancy checks and
       // the knob-number rule need no second bookkeeping. A wide control that
       // no longer fits is passed over; a narrow one behind it may still land.
+      // A `movePads` column never enters this race: the pad grid is its own
+      // instrument, and a control that fits the dials keeps its dial slot no
+      // matter what the panel's map says. Only a bounded param that genuinely
+      // doesn't fit the 8 columns falls through to the value row.
       const dials: ControlMeta[] = [];
       let nextCol = 0;
       for (const c of controls) {
-        if (!isDial(c) || chipPlaced(c)) continue;
+        if (!isDial(c)) continue;
         const span = dialSpan(c);
         if (nextCol + span > MOVE_DIALS) {
           if (nextCol >= MOVE_DIALS) break;
@@ -234,11 +234,22 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         // Actions reach the pads only when the page asks for them by column —
         // every app has buttons, and none of them expect a hardware pad.
         else if (c.type === 'action') { if (col !== null) place(actions, 'action', c, col); }
+        // A control holding a dial slot never reaches the pads — the pad grid
+        // must not mirror a dial. A movePads column on one is ignored, out
+        // loud, so a page that still maps its dials to pads announces itself.
+        else if (dials.includes(c)) {
+          if (col !== null) {
+            reportMoveLayoutIssue(
+              'pad-column-on-dial',
+              `panel '${panel.id}': control '${c.path}' holds a dial slot — movePads column ${col} ignored; pads never mirror dials`
+            );
+          }
+        }
         /* xy pads and ranges need a dial slot — past the 8 dials they don't fit a chip */
-        else if (isDial(c) && !noChip(c) && !dials.includes(c)) place(values, 'value', c, col);
+        else if (isDial(c) && !noChip(c)) place(values, 'value', c, col);
         // A two-handed dial or enum past the last column has no chip to fall
         // back on — it simply vanishes from the surface, which deserves a say.
-        else if (isDial(c) && noChip(c) && !dials.includes(c)) {
+        else if (isDial(c) && noChip(c)) {
           reportMoveLayoutIssue(
             'dial-dropped',
             `panel '${panel.id}': control '${c.path}' (${c.type}) needs a dial column and none is left — dropped`

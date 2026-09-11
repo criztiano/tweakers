@@ -3513,7 +3513,10 @@ declare const MoveSurfaceStore: {
  * The assignment gesture: touching a control (`noteTouch`, wired into the
  * panel and the bridge kit) arms it for a few seconds; a step-button press
  * (`assignFromStep`) then creates the slot's modulation if needed and
- * toggles the control onto it.
+ * toggles the control onto it. An arm is spent by the wire it makes — the
+ * next step press with no fresh touch opens the slot's settings instead of
+ * toggling the wire back off — and the settings page's own controls never
+ * arm at all (they cannot take a modulation).
  *
  * Slots and assignments persist to localStorage (fail-soft, like panel
  * values), so a prototype's modulation setup survives a reload.
@@ -3580,8 +3583,17 @@ declare class ModulationStoreClass {
     getAssignments(): ModulationAssignment[];
     assignmentsForSlot(index: number): ModulationAssignment[];
     setAmount(panelId: string, path: string, amount: number): void;
-    /** A finger on a control — panel pointer, hardware knob. Arms assignment. */
-    noteTouch(panelId: string, path: string): void;
+    /**
+     * A finger on a control — panel pointer, hardware knob. Arms assignment.
+     *
+     * `sustain` marks the repeats of one continuing touch (the kit's ~10 Hz
+     * state frames re-note a finger resting on a knob): it keeps the arm
+     * fresh without re-arming a control whose gesture was already spent —
+     * only a fresh touch re-arms. The settings page's own controls never arm:
+     * they cannot take a modulation, and a stale arm from them is what made
+     * creating new slots impossible while a settings view stood open.
+     */
+    noteTouch(panelId: string, path: string, sustain?: boolean): void;
     /**
      * A step-button press (hardware step or on-screen circle): with a control
      * armed, create the slot's modulation if needed and toggle the control
