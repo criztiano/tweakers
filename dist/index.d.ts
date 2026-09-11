@@ -48,13 +48,15 @@ interface MovePanelProps {
     /** Mirror only the named panels, in the order given — same option the bridge kit takes. */
     panels?: string | string[];
     /**
-     * The app's settings room: a registered panel (by id or name) held out of
-     * the page row and shown only in the settings view. The Move's Set
-     * Overview button (Shift + Step 1) toggles the view — the panel attaches
-     * `set_overview` itself — the surface inverts to the settings palette,
-     * and Back (or any track) walks out. Inside, it works like any panel.
+     * The app's settings room: one or more registered panels (by id or name)
+     * held out of the page row and shown only in the settings view. The
+     * Move's Set Overview button (Shift + Step 1) toggles the view — the
+     * panel attaches `set_overview` itself — the surface inverts to the
+     * settings palette, and Back walks out. Inside, each named panel is a
+     * room page of its own: the track buttons (and the room's tab row)
+     * switch between them, completely separate from the app's pages.
      */
-    settings?: string;
+    settings?: string | string[];
     /**
      * Where the panel sits. `viewport` (the default) portals it to `<body>` and
      * pins it to the window's bottom edge — for apps whose content fills the

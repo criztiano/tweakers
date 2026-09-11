@@ -38,13 +38,15 @@ export interface MovePanelProps {
   /** Mirror only the named panels, in the order given — same option the bridge kit takes. */
   panels?: string | string[];
   /**
-   * The app's settings room: a registered panel (by id or name) held out of
-   * the page row and shown only in the settings view. The Move's Set
-   * Overview button (Shift + Step 1) toggles the view — the panel attaches
-   * `set_overview` itself — the surface inverts to the settings palette,
-   * and Back (or any track) walks out. Inside, it works like any panel.
+   * The app's settings room: one or more registered panels (by id or name)
+   * held out of the page row and shown only in the settings view. The
+   * Move's Set Overview button (Shift + Step 1) toggles the view — the
+   * panel attaches `set_overview` itself — the surface inverts to the
+   * settings palette, and Back walks out. Inside, each named panel is a
+   * room page of its own: the track buttons (and the room's tab row)
+   * switch between them, completely separate from the app's pages.
    */
-  settings?: string;
+  settings?: string | string[];
   /**
    * Where the panel sits. `viewport` (the default) portals it to `<body>` and
    * pins it to the window's bottom edge — for apps whose content fills the
@@ -321,21 +323,27 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     return TweakStore.subscribeGlobal(() => setPanels(read()));
   }, [read]);
 
-  // The settings room: the named panel leaves the page row and waits behind
-  // the Set Overview button. The store only says whether the door is open;
-  // which panel is inside is decided here, by the prop.
-  const settingsRoom = settings === undefined
-    ? undefined
-    : TweakStore.getPanels('panel').find((p) => p.id === settings || p.name === settings);
+  // The settings room: the named panels leave the page row and wait behind
+  // the Set Overview button, each one a room page of its own. The store only
+  // says whether the door is open; what is inside is decided here, by the
+  // prop. The key keeps identity stable when the host hands over fresh
+  // arrays, exactly like the panels selection above.
+  const settingsKey = settings === undefined ? undefined : JSON.stringify(Array.isArray(settings) ? settings : [settings]);
+  const settingsRooms = settingsKey === undefined
+    ? []
+    : (JSON.parse(settingsKey) as string[])
+        .map((key) => TweakStore.getPanels('panel').find((p) => p.id === key || p.name === key))
+        .filter((p): p is PanelConfig => p !== undefined);
+  const roomIds = settingsRooms.map((p) => p.id);
   const settingsOpen = useSyncExternalStore(
     useCallback((cb) => MoveSettingsView.subscribe(cb), []),
     () => MoveSettingsView.isOpen(),
     () => false
-  ) && settingsRoom !== undefined;
+  ) && settingsRooms.length > 0;
 
   // A scrolling page keeps every control at slot size in one long row; the
   // ordinary page is 8 slots wide and sends the overflow to value chips.
-  const pagePanels = settingsRoom ? panels.filter((p) => p.id !== settingsRoom.id) : panels;
+  const pagePanels = roomIds.length ? panels.filter((p) => !roomIds.includes(p.id)) : panels;
   const pages = scroll
     ? pagePanels.filter((p) => p.kind === undefined).slice(0, MOVE_TRACKS).map(buildMoveStrip)
     : buildMovePages(pagePanels);
@@ -348,52 +356,57 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const modSettings = settingsOpen ? null : underModSettings;
   const settingsPanel = modSettings ? TweakStore.getPanel(modSettings.panelId) : undefined;
   const modLayout = settingsPanel ? ModulationStore.getSettingsLayout() : null;
-  // The settings room shows the same way a page does — full slots on a
-  // scrolling panel, chips past eight otherwise. A modulator's settings
-  // page still wins while it is up: the thing in front of you owns the
-  // surface, and closing it lands back in the room.
-  const settingsPage = settingsOpen && settingsRoom
-    ? (scroll ? buildMoveStrip(settingsRoom) : buildMovePages([settingsRoom])[0])
-    : undefined;
+  // The room's pages show the way any page does — full slots on a scrolling
+  // panel, chips past eight otherwise — and the room keeps its own track
+  // cursor, completely separate from the app's. A modulator's settings page
+  // still wins while it is up: the thing in front of you owns the surface,
+  // and closing it lands back in the room.
+  const [roomTrack, setRoomTrack] = useState(0);
+  const roomPages = settingsOpen
+    ? (scroll ? settingsRooms.slice(0, MOVE_TRACKS).map(buildMoveStrip) : buildMovePages(settingsRooms))
+    : [];
+  const roomPage = roomPages[Math.min(roomTrack, Math.max(0, roomPages.length - 1))];
   const page = settingsPanel
     ? buildModMovePage(settingsPanel, modLayout)
-    : settingsPage ?? pages[Math.min(track, Math.max(0, pages.length - 1))];
+    : roomPage ?? pages[Math.min(track, Math.max(0, pages.length - 1))];
   const pageId = page?.panel.id;
 
   // The Set Overview button (Shift + Step 1) is the settings room's door,
   // attached for as long as a room is named — attaching is also what lights
   // the label icon on the hardware's Shift layer. Back walks out while the
   // door stands open; unmounting (or unnaming the room) closes it.
-  const settingsRoomId = settingsRoom?.id;
+  const roomKey = roomIds.join(' ');
   useEffect(() => {
-    if (settingsRoomId === undefined) return;
+    if (!roomKey) return;
     const detach = MoveFunctions.attach('set_overview', () => MoveSettingsView.toggle(), { label: 'Settings' });
     return () => {
       detach();
       MoveSettingsView.close();
     };
-  }, [settingsRoomId]);
+  }, [roomKey]);
   useEffect(() => {
     if (!settingsOpen) return;
     return MoveFunctions.push('back', () => MoveSettingsView.close(), { label: 'Close' });
   }, [settingsOpen]);
 
-  // Tell the kit about the room: its panel, whether the door stands open,
-  // and the page to come back to — the modulator view when one waits
-  // underneath, the regular page otherwise. Announced on every change and
-  // re-announced on the strip's beat, so a kit that binds late still keeps
-  // the room off the track row.
+  // Tell the kit about the room: its panels, whether the door stands open,
+  // which room page the panel is showing, and the page to come back to —
+  // the modulator view when one waits underneath, the regular page
+  // otherwise. Announced on every change and re-announced on the strip's
+  // beat, so a kit that binds late still keeps the room off the track row.
   const regularPageId = underModSettings?.panelId
     ?? pages[Math.min(track, Math.max(0, pages.length - 1))]?.panel.id;
+  const roomPageId = roomPage?.panel.id;
   useEffect(() => {
-    if (settingsRoomId === undefined || typeof window === 'undefined') return;
+    if (!roomKey || typeof window === 'undefined') return;
+    const ids = roomKey.split(' ');
     const announce = () => window.dispatchEvent(new CustomEvent(MOVE_SETTINGS_EVENT, {
-      detail: { panelId: settingsRoomId, open: settingsOpen, pageId: regularPageId },
+      detail: { panelIds: ids, open: settingsOpen, pageId: regularPageId, roomPageId },
     }));
     announce();
     const timer = setInterval(announce, STRIP_REANNOUNCE_MS);
     return () => clearInterval(timer);
-  }, [settingsRoomId, settingsOpen, regularPageId]);
+  }, [roomKey, settingsOpen, regularPageId, roomPageId]);
 
   // The strip's window. A modulator's settings page is the hardware's own
   // shape and never scrolls, so the wheel and the rail belong to the app's
@@ -737,8 +750,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // just-opened settings view before the hardware gets there.
   const pagesRef = useRef(pages);
   pagesRef.current = pages;
-  const settingsRoomIdRef = useRef(settingsRoomId);
-  settingsRoomIdRef.current = settingsRoomId;
+  const roomIdsRef = useRef(roomIds);
+  roomIdsRef.current = roomIds;
   const sawSettings = useRef(false);
   const sawRoom = useRef(false);
   useEffect(() => {
@@ -752,11 +765,16 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       // is a detour, and its frames must not read as "left the modulator" —
       // that closed the view waiting underneath, reshuffled the page list
       // mid-steer, and every later cycle landed on shifted indexes. Frames
-      // showing the room mark it seen; the first regular page after it (a
-      // hardware track press) walks out. Frames from before the room has
-      // shown must not close a door that just opened.
-      if (id !== undefined && id === settingsRoomIdRef.current) {
-        if (MoveSettingsView.isOpen()) sawRoom.current = true;
+      // showing a room page mark the room seen and steer the room's own
+      // track cursor — a hardware track press inside the room switches room
+      // pages, never the app's. Frames from before the room has shown must
+      // not close a door that just opened.
+      const roomIndex = id === undefined ? -1 : roomIdsRef.current.indexOf(id);
+      if (roomIndex >= 0) {
+        if (MoveSettingsView.isOpen()) {
+          sawRoom.current = true;
+          setRoomTrack(roomIndex);
+        }
         return;
       }
       if (sawSettings.current) {
@@ -1199,14 +1217,40 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
             <div className="tweakers-move-tracks-group">
               {/* The settings room's name plate: the marker blinks for as
                   long as the room is open — the same pulse the hardware's
-                  step icon carries — so the inverted surface names itself. */}
+                  step icon carries — so the inverted surface names itself.
+                  A room of several pages carries its own tab row, in place
+                  of the app's: the two rows are completely separate, on
+                  screen as on the track buttons. */}
               {settingsOpen && (
                 <div className="tweakers-move-settings-title">
                   <span className="tweakers-move-settings-blink" />
-                  <span className="tweakers-move-track-label">{page.panel.name}</span>
+                  {roomPages.length > 1 ? (
+                    <div className="tweakers-move-pages" role="tablist" aria-label="Settings pages">
+                      {roomPages.map((pg, i) => (
+                        <button
+                          key={pg.panel.id}
+                          type="button"
+                          role="tab"
+                          className="tweakers-move-track"
+                          data-active={pg === page}
+                          aria-selected={pg === page}
+                          tabIndex={pg === page ? 0 : -1}
+                          onClick={() => {
+                            setRoomTrack(i);
+                            window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
+                          }}
+                        >
+                          <span className="tweakers-move-track-marker" style={{ background: MOVE_TRACK_COLORS[i] }} />
+                          <span className="tweakers-move-track-label">{pg.panel.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="tweakers-move-track-label">{page.panel.name}</span>
+                  )}
                 </div>
               )}
-              {pages.length > 1 && (
+              {!settingsOpen && pages.length > 1 && (
                 <div className="tweakers-move-pages" role="tablist" aria-label="Move pages">
                   {pages.map((pg, i) => (
                     <button

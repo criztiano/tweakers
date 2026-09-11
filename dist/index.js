@@ -5645,44 +5645,50 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     setPanels(read());
     return TweakStore6.subscribeGlobal(() => setPanels(read()));
   }, [read]);
-  const settingsRoom = settings === void 0 ? void 0 : TweakStore6.getPanels("panel").find((p) => p.id === settings || p.name === settings);
+  const settingsKey = settings === void 0 ? void 0 : JSON.stringify(Array.isArray(settings) ? settings : [settings]);
+  const settingsRooms = settingsKey === void 0 ? [] : JSON.parse(settingsKey).map((key) => TweakStore6.getPanels("panel").find((p) => p.id === key || p.name === key)).filter((p) => p !== void 0);
+  const roomIds = settingsRooms.map((p) => p.id);
   const settingsOpen = useSyncExternalStore2(
     useCallback2((cb) => MoveSettingsView.subscribe(cb), []),
     () => MoveSettingsView.isOpen(),
     () => false
-  ) && settingsRoom !== void 0;
-  const pagePanels = settingsRoom ? panels.filter((p) => p.id !== settingsRoom.id) : panels;
+  ) && settingsRooms.length > 0;
+  const pagePanels = roomIds.length ? panels.filter((p) => !roomIds.includes(p.id)) : panels;
   const pages = scroll ? pagePanels.filter((p) => p.kind === void 0).slice(0, MOVE_TRACKS).map(buildMoveStrip) : buildMovePages(pagePanels);
   const underModSettings = ModulationStore2.getSettings();
   const modSettings = settingsOpen ? null : underModSettings;
   const settingsPanel = modSettings ? TweakStore6.getPanel(modSettings.panelId) : void 0;
   const modLayout = settingsPanel ? ModulationStore2.getSettingsLayout() : null;
-  const settingsPage = settingsOpen && settingsRoom ? scroll ? buildMoveStrip(settingsRoom) : buildMovePages([settingsRoom])[0] : void 0;
-  const page = settingsPanel ? buildModMovePage(settingsPanel, modLayout) : settingsPage ?? pages[Math.min(track, Math.max(0, pages.length - 1))];
+  const [roomTrack, setRoomTrack] = useState5(0);
+  const roomPages = settingsOpen ? scroll ? settingsRooms.slice(0, MOVE_TRACKS).map(buildMoveStrip) : buildMovePages(settingsRooms) : [];
+  const roomPage = roomPages[Math.min(roomTrack, Math.max(0, roomPages.length - 1))];
+  const page = settingsPanel ? buildModMovePage(settingsPanel, modLayout) : roomPage ?? pages[Math.min(track, Math.max(0, pages.length - 1))];
   const pageId = page?.panel.id;
-  const settingsRoomId = settingsRoom?.id;
+  const roomKey = roomIds.join("\0");
   useEffect7(() => {
-    if (settingsRoomId === void 0) return;
+    if (!roomKey) return;
     const detach = MoveFunctions.attach("set_overview", () => MoveSettingsView.toggle(), { label: "Settings" });
     return () => {
       detach();
       MoveSettingsView.close();
     };
-  }, [settingsRoomId]);
+  }, [roomKey]);
   useEffect7(() => {
     if (!settingsOpen) return;
     return MoveFunctions.push("back", () => MoveSettingsView.close(), { label: "Close" });
   }, [settingsOpen]);
   const regularPageId = underModSettings?.panelId ?? pages[Math.min(track, Math.max(0, pages.length - 1))]?.panel.id;
+  const roomPageId = roomPage?.panel.id;
   useEffect7(() => {
-    if (settingsRoomId === void 0 || typeof window === "undefined") return;
+    if (!roomKey || typeof window === "undefined") return;
+    const ids = roomKey.split("\0");
     const announce = () => window.dispatchEvent(new CustomEvent(MOVE_SETTINGS_EVENT, {
-      detail: { panelId: settingsRoomId, open: settingsOpen, pageId: regularPageId }
+      detail: { panelIds: ids, open: settingsOpen, pageId: regularPageId, roomPageId }
     }));
     announce();
     const timer = setInterval(announce, STRIP_REANNOUNCE_MS);
     return () => clearInterval(timer);
-  }, [settingsRoomId, settingsOpen, regularPageId]);
+  }, [roomKey, settingsOpen, regularPageId, roomPageId]);
   const stripMode = scroll && !settingsPanel && !!page;
   const [offset, setOffset] = useState5(0);
   const stripOffset = stripMode ? clampStripOffset(page, offset) : 0;
@@ -5931,8 +5937,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   }, [pageId]);
   const pagesRef = useRef7(pages);
   pagesRef.current = pages;
-  const settingsRoomIdRef = useRef7(settingsRoomId);
-  settingsRoomIdRef.current = settingsRoomId;
+  const roomIdsRef = useRef7(roomIds);
+  roomIdsRef.current = roomIds;
   const sawSettings = useRef7(false);
   const sawRoom = useRef7(false);
   useEffect7(() => {
@@ -5942,8 +5948,12 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         sawSettings.current = true;
         return;
       }
-      if (id !== void 0 && id === settingsRoomIdRef.current) {
-        if (MoveSettingsView.isOpen()) sawRoom.current = true;
+      const roomIndex = id === void 0 ? -1 : roomIdsRef.current.indexOf(id);
+      if (roomIndex >= 0) {
+        if (MoveSettingsView.isOpen()) {
+          sawRoom.current = true;
+          setRoomTrack(roomIndex);
+        }
         return;
       }
       if (sawSettings.current) {
@@ -6248,9 +6258,28 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             audioWave != null ? /* @__PURE__ */ jsx9(MoveAudioZoom, {}) : /* @__PURE__ */ jsxs9("div", { className: "tweakers-move-tracks-group", children: [
               settingsOpen && /* @__PURE__ */ jsxs9("div", { className: "tweakers-move-settings-title", children: [
                 /* @__PURE__ */ jsx9("span", { className: "tweakers-move-settings-blink" }),
-                /* @__PURE__ */ jsx9("span", { className: "tweakers-move-track-label", children: page.panel.name })
+                roomPages.length > 1 ? /* @__PURE__ */ jsx9("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Settings pages", children: roomPages.map((pg, i) => /* @__PURE__ */ jsxs9(
+                  "button",
+                  {
+                    type: "button",
+                    role: "tab",
+                    className: "tweakers-move-track",
+                    "data-active": pg === page,
+                    "aria-selected": pg === page,
+                    tabIndex: pg === page ? 0 : -1,
+                    onClick: () => {
+                      setRoomTrack(i);
+                      window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
+                    },
+                    children: [
+                      /* @__PURE__ */ jsx9("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
+                      /* @__PURE__ */ jsx9("span", { className: "tweakers-move-track-label", children: pg.panel.name })
+                    ]
+                  },
+                  pg.panel.id
+                )) }) : /* @__PURE__ */ jsx9("span", { className: "tweakers-move-track-label", children: page.panel.name })
               ] }),
-              pages.length > 1 && /* @__PURE__ */ jsx9("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Move pages", children: pages.map((pg, i) => /* @__PURE__ */ jsxs9(
+              !settingsOpen && pages.length > 1 && /* @__PURE__ */ jsx9("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Move pages", children: pages.map((pg, i) => /* @__PURE__ */ jsxs9(
                 "button",
                 {
                   id: `${pageTabsId}-tab-${i}`,

@@ -41,6 +41,13 @@ TweakStore.registerPanel('settings', 'Settings', {
   autosave: true,
   clicks: false,
 });
+// A second room page — the track buttons switch between these while the
+// room is open, completely separate from Tone/Space.
+TweakStore.registerPanel('system', 'System', {
+  cpuGuard: [0.5, 0, 1],
+  logLevel: { type: 'select', default: 'warn', options: ['off', 'warn', 'info', 'debug'] },
+  telemetry: false,
+});
 
 // A few presets to walk through on the wheel.
 for (const [name, level, drive, air] of [
@@ -169,5 +176,5 @@ import(/* @vite-ignore */ 'http://localhost:7787/kit.js')
 (window as any).__tweakers = { TweakStore, MovePresetStore, MoveFunctions };
 
 createRoot(document.getElementById('root')!).render(
-  <MovePanel productionEnabled theme="dark" settings="Settings" />
+  <MovePanel productionEnabled theme="dark" settings={['Settings', 'System']} />
 );
