@@ -431,6 +431,49 @@
   color: var(--move-text);
 }
 
+/* The settings room: the whole surface changes clothes while the view is
+   open — the warm instrument grey inverts to a cold neutral one, so a
+   glance says you are in the app's master settings, not on a page. The
+   controls underneath wear the same geometry; only the palette flips. */
+.tweakers-move[data-settings] {
+  --move-bg: #1c1c1f;
+  --move-slot: rgba(255, 255, 255, 0.09);
+  --move-slot-empty: rgba(255, 255, 255, 0.03);
+  --move-chip: #2e2e33;
+  --move-toggle-halo-color: var(--move-chip);
+  --move-text: #f0f0ee;
+  --move-text-inverse: #1c1c1f;
+}
+
+/* The room's name plate, where the page name normally sits: the marker
+   blinks while the view is open — the same pulse the hardware's Set
+   Overview step icon carries. */
+.tweakers-move-settings-title {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  min-height: var(--move-header-control-height);
+  padding: 0 var(--move-color-gap-small);
+}
+
+.tweakers-move-settings-title .tweakers-move-track-label {
+  opacity: 1;
+}
+
+.tweakers-move-settings-blink {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--move-text);
+  animation: tweakers-move-latch 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-settings-blink {
+    animation: none;
+  }
+}
+
 .tweakers-move[data-dock="viewport"] {
   position: fixed;
   bottom: 0;

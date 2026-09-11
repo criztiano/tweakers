@@ -4905,7 +4905,7 @@ import { useEffect as useEffect6, useLayoutEffect, useRef as useRef6, useState a
 import { createPortal as createPortal2 } from "react-dom";
 import { TweakStore as TweakStore4 } from "tweakers/store";
 import { Fragment as Fragment4, jsx as jsx8, jsxs as jsxs8 } from "react/jsx-runtime";
-function MoveColorSlot({ panelId, meta, active, open }) {
+function MoveColorSlot({ panelId, meta, active, open: open2 }) {
   const gesture = useRef6(null);
   const suppressClick = useRef6(false);
   const disabled = TweakStore4.isDisabled(panelId, meta.path);
@@ -4916,10 +4916,10 @@ function MoveColorSlot({ panelId, meta, active, open }) {
       type: "button",
       className: "tweakers-move-dial",
       "data-kind": "color",
-      "data-active": active || open || void 0,
+      "data-active": active || open2 || void 0,
       "data-disabled": disabled || void 0,
       "aria-label": `${meta.label}, hue ${Math.round(color.h)} degrees. Open color editor`,
-      "aria-expanded": open,
+      "aria-expanded": open2,
       "aria-haspopup": "dialog",
       disabled,
       onClick: () => {
@@ -5349,6 +5349,25 @@ var MoveFunctionsClass = class {
 };
 var MoveFunctions = new MoveFunctionsClass();
 
+// src/move-settings.ts
+var open = false;
+var listeners2 = /* @__PURE__ */ new Set();
+var set = (next) => {
+  if (open === next) return;
+  open = next;
+  for (const fn of listeners2) fn();
+};
+var MoveSettingsView = {
+  isOpen: () => open,
+  open: () => set(true),
+  close: () => set(false),
+  toggle: () => set(!open),
+  subscribe(fn) {
+    listeners2.add(fn);
+    return () => listeners2.delete(fn);
+  }
+};
+
 // src/move-presets.ts
 import { TweakStore as TweakStore5 } from "tweakers/store";
 var CHOSEN_LINGER_MS = 800;
@@ -5570,7 +5589,7 @@ var MOVE_JOG_EVENT = "move-tweakers:jog";
 var MOVE_JOG_CLICK_EVENT = "move-tweakers:jog-click";
 var MOVE_MUTE_EVENT = "move-tweakers:mute";
 var MOVE_STRIP_EVENT = "move-tweakers:strip";
-function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only, dock = "viewport", scroll = false, headerStart }) {
+function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only, dock = "viewport", scroll = false, headerStart, settings }) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState5([]);
   const [track, setTrack] = useState5(0);
@@ -5625,12 +5644,33 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     setPanels(read());
     return TweakStore6.subscribeGlobal(() => setPanels(read()));
   }, [read]);
-  const pages = scroll ? panels.filter((p) => p.kind === void 0).slice(0, MOVE_TRACKS).map(buildMoveStrip) : buildMovePages(panels);
+  const settingsRoom = settings === void 0 ? void 0 : TweakStore6.getPanels("panel").find((p) => p.id === settings || p.name === settings);
+  const settingsOpen = useSyncExternalStore2(
+    useCallback2((cb) => MoveSettingsView.subscribe(cb), []),
+    () => MoveSettingsView.isOpen(),
+    () => false
+  ) && settingsRoom !== void 0;
+  const pagePanels = settingsRoom ? panels.filter((p) => p.id !== settingsRoom.id) : panels;
+  const pages = scroll ? pagePanels.filter((p) => p.kind === void 0).slice(0, MOVE_TRACKS).map(buildMoveStrip) : buildMovePages(pagePanels);
   const modSettings = ModulationStore2.getSettings();
   const settingsPanel = modSettings ? TweakStore6.getPanel(modSettings.panelId) : void 0;
   const modLayout = settingsPanel ? ModulationStore2.getSettingsLayout() : null;
-  const page = settingsPanel ? buildModMovePage(settingsPanel, modLayout) : pages[Math.min(track, Math.max(0, pages.length - 1))];
+  const settingsPage = settingsOpen && settingsRoom ? scroll ? buildMoveStrip(settingsRoom) : buildMovePages([settingsRoom])[0] : void 0;
+  const page = settingsPanel ? buildModMovePage(settingsPanel, modLayout) : settingsPage ?? pages[Math.min(track, Math.max(0, pages.length - 1))];
   const pageId = page?.panel.id;
+  const settingsRoomId = settingsRoom?.id;
+  useEffect7(() => {
+    if (settingsRoomId === void 0) return;
+    const detach = MoveFunctions.attach("set_overview", () => MoveSettingsView.toggle(), { label: "Settings" });
+    return () => {
+      detach();
+      MoveSettingsView.close();
+    };
+  }, [settingsRoomId]);
+  useEffect7(() => {
+    if (!settingsOpen) return;
+    return MoveFunctions.push("back", () => MoveSettingsView.close(), { label: "Close" });
+  }, [settingsOpen]);
   const stripMode = scroll && !settingsPanel && !!page;
   const [offset, setOffset] = useState5(0);
   const stripOffset = stripMode ? clampStripOffset(page, offset) : 0;
@@ -6139,6 +6179,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     const next = pages[index];
     if (!next) return;
     ModulationStore2.closeSettings();
+    MoveSettingsView.close();
     setTrack(index);
     window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: next.panel.id } }));
   };
@@ -6152,7 +6193,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     volume.label && volumeReading != null && /* @__PURE__ */ jsx9("span", { className: "tweakers-move-volume-label", children: volume.label }),
     /* @__PURE__ */ jsx9("span", { className: "tweakers-move-volume-value", children: boldColons(volumeReading ?? volume.label ?? "") })
   ] }) });
-  const content = /* @__PURE__ */ jsx9("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: /* @__PURE__ */ jsxs9("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-overlay": composition || audioWave != null || color || presetSave ? true : void 0, children: [
+  const content = /* @__PURE__ */ jsx9("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: /* @__PURE__ */ jsxs9("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-settings": settingsOpen || void 0, "data-overlay": composition || audioWave != null || color || presetSave ? true : void 0, children: [
     colorMeta && /* @__PURE__ */ jsx9(MoveColorDisplay, { panelId: page.panel.id, meta: colorMeta, anchor: panelRef, theme }),
     presetSave && /* @__PURE__ */ jsx9(MovePresetSaveInput, { suggested: presetSave.suggested }),
     composition && modSettings && /* @__PURE__ */ jsx9(
@@ -6182,6 +6223,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         children: [
           /* @__PURE__ */ jsxs9("div", { className: "tweakers-move-tracks", children: [
             audioWave != null ? /* @__PURE__ */ jsx9(MoveAudioZoom, {}) : /* @__PURE__ */ jsxs9("div", { className: "tweakers-move-tracks-group", children: [
+              settingsOpen && /* @__PURE__ */ jsxs9("div", { className: "tweakers-move-settings-title", children: [
+                /* @__PURE__ */ jsx9("span", { className: "tweakers-move-settings-blink" }),
+                /* @__PURE__ */ jsx9("span", { className: "tweakers-move-track-label", children: page.panel.name })
+              ] }),
               pages.length > 1 && /* @__PURE__ */ jsx9("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Move pages", children: pages.map((pg, i) => /* @__PURE__ */ jsxs9(
                 "button",
                 {
@@ -7432,8 +7477,8 @@ function MoveModCircle({ slot }) {
       onPointerUp: () => {
         const tapped = Date.now() - pressAt.current < TAP_MS;
         if (tapped && ModulationStore2.assignFromStep(slot.index).action !== "none") return;
-        const open = ModulationStore2.getSettings();
-        if (tapped && open && open.index === slot.index) ModulationStore2.closeSettings();
+        const open2 = ModulationStore2.getSettings();
+        if (tapped && open2 && open2.index === slot.index) ModulationStore2.closeSettings();
         else ModulationStore2.openSettings(slot.index);
       },
       children: /* @__PURE__ */ jsx9(
@@ -7777,9 +7822,9 @@ var TimelineStoreClass = class {
     }
     this.listeners.get(id).add(listener);
     return () => {
-      const listeners2 = this.listeners.get(id);
-      listeners2?.delete(listener);
-      if (listeners2?.size === 0 && !this.timelines.has(id)) {
+      const listeners3 = this.listeners.get(id);
+      listeners3?.delete(listener);
+      if (listeners3?.size === 0 && !this.timelines.has(id)) {
         this.listeners.delete(id);
       }
     };
@@ -7921,6 +7966,7 @@ export {
   MovePadWaveBody,
   MovePanel,
   MovePresetStore,
+  MoveSettingsView,
   MoveSlotColorBody,
   MoveSlotDefaultBody,
   MoveSlotDialBody,
