@@ -436,13 +436,15 @@
    glance says you are in the app's master settings, not on a page. The
    controls underneath wear the same geometry; only the palette flips. */
 .tweakers-move[data-settings] {
-  --move-bg: #1c1c1f;
+  /* the enum/list screens' own dark grey — the settings room wears the same
+     surface those system-feeling controls already use */
+  --move-bg: #1e1e1e;
   --move-slot: rgba(255, 255, 255, 0.09);
   --move-slot-empty: rgba(255, 255, 255, 0.03);
-  --move-chip: #2e2e33;
+  --move-chip: #2e2e30;
   --move-toggle-halo-color: var(--move-chip);
   --move-text: #f0f0ee;
-  --move-text-inverse: #1c1c1f;
+  --move-text-inverse: #1e1e1e;
 }
 
 /* The room's name plate, where the page name normally sits: the marker

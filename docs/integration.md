@@ -117,7 +117,8 @@ it does not prove the build is current. The explicit build gate above does that.
 
 Every app has master settings — output level, latency, autosave, a MIDI
 channel: controls that concern the whole instrument rather than any one page.
-Put them in one dedicated panel and name it in `MovePanel`'s `settings` prop.
+Put them in one dedicated panel — or several — and name them in `MovePanel`'s
+`settings` prop (a name or an array of names, one room page each).
 This is workflow organization, not a new control kind: inside, the panel works
 exactly like any page — any control type, the same layout rules, the same
 hardware sync path.
@@ -130,6 +131,7 @@ useTweakers('Settings', {
 });
 
 <MovePanel panels={PANELS} settings="Settings" productionEnabled />
+// or several room pages: settings={['Settings', 'System']}
 ```
 
 The named panel leaves the page row and waits behind the Move's Set Overview
@@ -138,16 +140,21 @@ attach it in the app. A press toggles the view — the surface inverts to the
 settings palette (dark neutral grey), and the header carries the room's name
 with a marker that blinks while the view is open — the pulse the hardware's
 Set Overview step icon is meant to carry too, once the surface module learns
-to blink the Shift layer. Back, any track button, or a second press
-walks out. A host UI can drive the same door with `MoveSettingsView.toggle()`.
+to blink the Shift layer. Back or a second press walks out — the track
+buttons stay inside the room, switching its pages. A host UI can drive the
+same door with `MoveSettingsView.toggle()`.
 
 The hardware follows on the modulator-page rails: the panel announces the
-room on window (`move-tweakers:settings`), the kit keeps that panel off the
-track row and appends it after the pages, and an open steers the Move onto
-it — knobs, pads, lights and value sync work there exactly as on any page —
-while a close (or a hardware track press) steers it back to the page the
-panel shows. This needs the current bridge kit; an older kit leaves the
-hardware on the page underneath while the screen shows the room.
+room on window (`move-tweakers:settings`), the kit keeps those panels off the
+main track row and appends them as their own page group, and an open steers
+the Move onto the room — knobs, pads, lights and value sync work there
+exactly as on any page — while a close steers it back to the view the panel
+shows. The room is another mode, fully detached: while it is open the four
+track buttons switch between the room's own pages (and light for them), the
+modulation step lights go dark, step gestures are inert, and the claimed
+bottom rows return to the app only on exit. This needs the current bridge
+kit and surface module; older ones leave the hardware on the page underneath
+while the screen shows the room.
 
 The settings panel may appear in the app's `panels` lists or not — the kit
 removes it from the track row either way once the panel announces it. Do not
