@@ -40,7 +40,7 @@ export type { MoveSlotKind } from './components/move-slots';
 // The filter control core — the kit's first 2-slot control (cutoff + resonance)
 export { resolveFilterAxis, normalizeFilterValue, defaultFilterResponse, filterShapeResponse, filterResponsePath, filterHand01, filterHandValue, FILTER_DB_FLOOR, FILTER_DB_CEIL } from './filter-core';
 export type { FilterAxis, FilterAxisConfig, FilterValue, FilterResponse, FilterShapeType } from './filter-core';
-export { MoveFunctions, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_SPECIAL_BUTTONS } from './move-functions';
+export { MoveFunctions, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_SPECIAL_BUTTONS, MOVE_STEP_FUNCTIONS } from './move-functions';
 export type { MoveFunctionButton, MoveFunctionPress, MoveFunctionHandler, MoveFunctionOptions, MoveFunctionRunListener } from './move-functions';
 export { MoveWaveform } from './components/MoveWaveform';
 export type { MoveWaveformProps } from './components/MoveWaveform';

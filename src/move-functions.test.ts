@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { MoveFunctions, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_SPECIAL_BUTTONS } from './move-functions';
+import { MoveFunctions, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_SPECIAL_BUTTONS, MOVE_STEP_FUNCTIONS } from './move-functions';
 
 // The function library: the app attaches actions to the Move's function
 // buttons (undo, copy, arrows...), the bridge kit lists the attached names
@@ -124,6 +124,16 @@ describe('move functions', () => {
 
     // Special buttons carry no fixed meaning — each app decides.
     assert.deepEqual(MOVE_SPECIAL_BUTTONS, ['sample', 'loop', 'capture', 'menu', 'back', 'jog_click']);
+    // The Shift layer of the step row: one name per step, in step order.
+    assert.equal(MOVE_STEP_FUNCTIONS.length, 16);
+    assert.equal(MOVE_STEP_FUNCTIONS[0], 'set_overview');
+    assert.equal(MOVE_STEP_FUNCTIONS[15], 'quantize');
+    assert.ok(MOVE_FUNCTION_BUTTONS.includes('setup'));
+    const stepCalls: unknown[] = [];
+    const detachSetup = MoveFunctions.attach('setup', (press) => stepCalls.push(press));
+    MoveFunctions.run('setup', { shift: true, step: 1 });
+    assert.deepEqual(stepCalls, [{ name: 'setup', shift: true, hold: false, step: 1 }]);
+    detachSetup();
 
     const calls: string[] = [];
     const detach = MoveFunctions.attach('sample', ({ name }) => calls.push(name));

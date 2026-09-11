@@ -5248,9 +5248,30 @@ var MOVE_FUNCTION_MANIFEST = [
   { name: "capture", special: true },
   { name: "menu", special: true },
   { name: "back", special: true },
-  { name: "jog_click", special: true }
+  { name: "jog_click", special: true },
+  /* The Shift layer of the step row: the sixteen labels printed under the
+     step buttons, in step order (`step` is the index). Four steps carry no
+     print and are named by position. Holding Shift on the hardware shows
+     which of these the app carries; a press arrives with `step` set. */
+  { name: "set_overview", step: 0 },
+  { name: "setup", step: 1 },
+  { name: "workflow", step: 2 },
+  { name: "step4", step: 3 },
+  { name: "tempo", step: 4 },
+  { name: "metronome", step: 5 },
+  { name: "groove", step: 6 },
+  { name: "pitches_16", step: 7 },
+  { name: "scale", step: 8 },
+  { name: "full_velocity", step: 9 },
+  { name: "repeat", step: 10 },
+  { name: "step12", step: 11 },
+  { name: "step13", step: 12 },
+  { name: "step14", step: 13 },
+  { name: "double_loop", step: 14 },
+  { name: "quantize", step: 15 }
 ];
 var MOVE_FUNCTION_BUTTONS = MOVE_FUNCTION_MANIFEST.map((b) => b.name);
+var MOVE_STEP_FUNCTIONS = MOVE_FUNCTION_MANIFEST.filter((b) => "step" in b).map((b) => b.name);
 var MOVE_SPECIAL_BUTTONS = MOVE_FUNCTION_MANIFEST.filter((b) => "special" in b && b.special).map((b) => b.name);
 var MoveFunctionsClass = class {
   constructor() {
@@ -5306,7 +5327,7 @@ var MoveFunctionsClass = class {
   }
   /** Run the action attached to a button, if any. Called by the kit per press. */
   run(name, press) {
-    const full = { name, shift: !!press?.shift, hold: !!press?.hold };
+    const full = { name, shift: !!press?.shift, hold: !!press?.hold, ...typeof press?.step === "number" ? { step: press.step } : {} };
     this.handlers.get(name)?.(full);
     for (const l of this.runListeners) l(name, full);
   }
@@ -7879,6 +7900,7 @@ export {
   MOVE_PALETTE,
   MOVE_SLOT_LIBRARY,
   MOVE_SPECIAL_BUTTONS,
+  MOVE_STEP_FUNCTIONS,
   MOVE_STRIP_EVENT,
   MOVE_TOUCH_EVENT,
   MOVE_TRACKS,
