@@ -1,4 +1,4 @@
-import { P as PanelConfig, C as ControlMeta } from './TweakStore-DAd_7fkv.js';
+import { P as PanelConfig, C as ControlMeta } from './TweakStore-Bm9zJFG-.js';
 import { ModPageLayout } from './modulation-core.js';
 import { XYValue } from './xy-pad-core.js';
 import { RangeValue } from './range-slider-core.js';
@@ -40,6 +40,39 @@ interface MovePage {
 }
 /** A select with real choices becomes an enum dial — the kit's exact rule. */
 declare const isEnumDial: (c: ControlMeta) => boolean;
+/**
+ * The tabs strip: a select laid across the small slots instead of taking a
+ * dial. One pad per option, side by side in the switch row, the current one
+ * lit — the mode a page is in, said where the hand already is. It is the pad
+ * grid's first multi-slot control, the filter's small sibling.
+ */
+declare const isMoveTabs: (c: ControlMeta) => boolean;
+/** The strip spends its leading pad on the select's own name. */
+declare const isNamedTabs: (c: ControlMeta) => boolean;
+/**
+ * How many pads a control claims on the small grid. Everything but a tabs
+ * strip is one pad; a strip is one per option, plus its name pad — 2 pads at
+ * the least, and never more than the row is wide.
+ */
+declare const padSpan: (c: ControlMeta | undefined) => number;
+/** True when pad column i only continues the strip sitting at i-1. */
+declare const isPadSpanContinuation: (row: ControlMeta[], i: number) => boolean;
+/** One pad of a tabs strip: its name pad, or the option that pad selects. */
+type MoveTabCell = {
+    meta: ControlMeta;
+    /** The strip's name pad — it selects nothing, and stays dark on the grid. */
+    head: boolean;
+    /** The option's value, null on the name pad. */
+    option: string | null;
+    /** What that pad says. */
+    label: string;
+};
+/**
+ * What the pad at column `i` of a small-slot row is, read from the row alone
+ * — the one answer the screen, the bridge and the hardware all lay the strip
+ * out from, so a tab lights and answers on the pad it is drawn on.
+ */
+declare function moveTabCell(row: (ControlMeta | undefined)[], i: number): MoveTabCell | null;
 /** A switch the page is about: it claims a dial slot rather than a pad. */
 declare const isToggleDial: (c: ControlMeta) => boolean;
 /** Everything the hardware turns: the controls that claim a dial slot. */
@@ -73,7 +106,7 @@ declare function buildModMovePage(panel: PanelConfig, layout?: ModPageLayout | n
  * Tests (and apps that want the feed) can swap the sink with
  * `setMoveLayoutReporter`; `null` restores the deduped console.warn.
  */
-type MoveLayoutIssueCode = 'panel-dropped' | 'dial-dropped' | 'pad-column-invalid' | 'pad-column-on-dial' | 'pad-column-taken' | 'pad-row-full';
+type MoveLayoutIssueCode = 'panel-dropped' | 'dial-dropped' | 'pad-column-invalid' | 'pad-column-on-dial' | 'pad-column-taken' | 'pad-row-full' | 'tabs-oversized' | 'tabs-no-room';
 type MoveLayoutReporter = (code: MoveLayoutIssueCode, message: string) => void;
 declare function setMoveLayoutReporter(fn: MoveLayoutReporter | null): void;
 declare function reportMoveLayoutIssue(code: MoveLayoutIssueCode, message: string): void;
@@ -180,4 +213,4 @@ declare function dialOrigin(meta: ControlMeta): number;
 /** Axis positions 0..1 back to the control's real {x, y}, kit-identical. */
 declare function denormalizeXYDial(meta: ControlMeta, x01: number, y01: number): XYValue;
 
-export { ENUM_SHAPE_SAMPLES, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MoveLayoutIssueCode, type MovePage, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, denormalizeXYDial, dialOrigin, dialSpan, enumIndex, enumOptionIcon, enumOptionLabel, enumOptionValue, enumShapePath, filterShapePath, isEnumDial, isMoveDial, isSpanContinuation, isToggleDial, moveAppPadRow, movePadRows, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeToggleDial, normalizeXYDial, reportMoveLayoutIssue, setMoveLayoutReporter, visibleColumns };
+export { ENUM_SHAPE_SAMPLES, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MoveLayoutIssueCode, type MovePage, type MoveTabCell, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, denormalizeXYDial, dialOrigin, dialSpan, enumIndex, enumOptionIcon, enumOptionLabel, enumOptionValue, enumShapePath, filterShapePath, isEnumDial, isMoveDial, isMoveTabs, isNamedTabs, isPadSpanContinuation, isSpanContinuation, isToggleDial, moveAppPadRow, movePadRows, moveTabCell, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeToggleDial, normalizeXYDial, padSpan, reportMoveLayoutIssue, setMoveLayoutReporter, visibleColumns };

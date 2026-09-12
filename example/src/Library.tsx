@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import {
   MoveNotifications,
   MovePanel,
@@ -405,6 +405,20 @@ function Card({ item, onShow, tall }: { item: Specimen; onShow: (path: string) =
               data-visual={NUMERIC_KINDS.includes(item.kind) ? item.kind : undefined}
               data-shape={item.kind === 'curve' || undefined}
               style={item.span && item.span > 1 ? { width: `calc(${item.span} * var(--kit-slot-w) + ${(item.span - 1) * 4}px)` } : undefined}
+            >
+              {item.render()}
+            </div>
+          ) : item.span && item.span > 1 ? (
+            // A small slot that claims a run of pads draws as its own strip,
+            // re-cut into the pad columns it spans — the same container the
+            // panel gives it.
+            <div
+              className="tweakers-move-tabs"
+              data-kind={item.kind}
+              style={{
+                '--move-tabs-cols': item.span,
+                width: `calc(${item.span} * var(--kit-slot-w) + ${(item.span - 1) * 4}px)`,
+              } as CSSProperties}
             >
               {item.render()}
             </div>

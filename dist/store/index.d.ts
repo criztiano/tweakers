@@ -184,6 +184,15 @@ type SelectConfig = {
     /** 'segmented' renders the options as an inline segmented control instead of a dropdown. Suits 2–4 short options. */
     display?: 'dropdown' | 'segmented';
     /**
+     * Take the small slots instead of a dial: the options lie side by side in
+     * the Move's switch row, one pad each, the current one lit. For the mode a
+     * page is in — the thing you want to see and reach without turning
+     * anything. `'named'` spends the leading pad on the select's own name, so
+     * the strip says what it is switching; `true` gives every pad to an option.
+     * The strip claims 2 to 8 pads in one run and never wraps.
+     */
+    moveTabs?: boolean | 'named';
+    /**
      * The shape an option stands for: `t` in [0,1] → y, auto-fitted and drawn
      * in the Move slot in place of the option's name, which moves to a small
      * tag at the top. Return `null` for options that have no shape.
@@ -632,6 +641,9 @@ type ControlMeta = {
     moveBlank?: boolean;
     /** Select's per-option shape sampler — swapped in place by syncCurveConfigs. */
     preview?: (value: string) => ((t: number) => number) | null | undefined;
+    /** Select declared `moveTabs` — it lies across the small slots as a tabs
+     *  strip instead of claiming a dial; `'named'` adds its leading name pad. */
+    moveTabs?: boolean | 'named';
     /** Select's rendering mode, or a slider's `dial` form. */
     display?: 'dropdown' | 'segmented' | 'track' | 'dial';
     /** Dial slider: wrap past the ends instead of stopping. */
