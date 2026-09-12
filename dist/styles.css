@@ -520,6 +520,13 @@
      screen when one stands beside it — the page name lands on the top-left
      corner of the first real object, whatever the panel resizes to. */
   width: calc(max(var(--move-surface-w, 100%), 0px) + var(--move-screen-w, 0px));
+  /* Never past the panel's own box: with a wheel screen standing beside the
+     cluster the slot-base %-math resolves against a row that already holds
+     the screen, so the sum runs one screen too wide and the header's right
+     cluster (the clock, the function chips) hangs off the instrument. The
+     row is a child of that box — its true footprint can never exceed it
+     (the 8px keeps the padded box inside too). */
+  max-width: calc(100% - 8px);
   align-self: center;
   padding: 4px;
 }
