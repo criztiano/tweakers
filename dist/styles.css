@@ -2430,6 +2430,117 @@
   box-shadow: -2px 2px 0 0 var(--move-bg), -3px 3px 0 0 var(--move-text);
 }
 
+/* The tabs strip — the pad grid's multi-slot control. It spans its run and
+   re-cuts that run into the same columns and the same 4px gap the grid uses,
+   so every tab lands exactly on the hardware pad that selects it. */
+.tweakers-move-tabs {
+  display: grid;
+  grid-template-columns: repeat(var(--move-tabs-cols, 2), minmax(0, 1fr));
+  gap: 4px;
+  position: relative;
+}
+
+/* The options are one bar across their pads: the ground belongs to the run,
+   and the gaps between the tabs are the run showing through. */
+.tweakers-move-tabs-run {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 4px;
+  background: var(--move-chip);
+  border-radius: var(--move-radius-small);
+}
+
+.tweakers-move-tabs-head + .tweakers-move-tabs-run {
+  grid-column: 2 / -1;
+}
+
+.tweakers-move-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  min-width: 0;
+  padding: 0 6px;
+  border-radius: var(--move-radius-small);
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: normal;
+}
+
+/* Only the mode you are in wears a fill. An available mode says so by being
+   on the bar — giving it a chip of its own would make every tab look chosen. */
+.tweakers-move-tab[data-on] {
+  background: var(--move-text);
+  color: var(--move-text-inverse);
+}
+
+/* The name is a head, not a choice: no ground of its own, and set against
+   the run it names. */
+.tweakers-move-tabs-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 32px;
+  padding-right: 8px;
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  opacity: 0.55;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tweakers-move-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tweakers-move-tab-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+/* The real controls, over the drawing: one button per option, on the column
+   its tab is drawn in. Transparent, so the strip keeps the face above. */
+.tweakers-move-tab-zones {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--move-tabs-cols, 2), minmax(0, 1fr));
+  gap: 4px;
+}
+
+/* No press treatment of its own: the tab lights the instant it is chosen,
+   and that IS the answer to the press. */
+.tweakers-move-tab-zone {
+  grid-row: 1;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--move-radius-small);
+  color: transparent;
+  font-size: 0;
+  cursor: pointer;
+}
+
+.tweakers-move-tab-zone:focus-visible {
+  outline: var(--move-color-stroke) solid var(--move-text);
+  outline-offset: var(--move-color-stroke);
+}
+
+.tweakers-move-tab-zone:disabled {
+  cursor: default;
+}
+
 @media (max-width: 720px) {
 .tweakers-move {
     padding: 12px 12px 10px;

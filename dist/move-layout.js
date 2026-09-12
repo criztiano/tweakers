@@ -168,8 +168,30 @@ var flat = (controls, out = []) => {
   return out;
 };
 var isEnumDial = (c) => c.type === "select" && Array.isArray(c.options) && c.options.length > 1;
+var isMoveTabs = (c) => !!c.moveTabs && isEnumDial(c);
+var isNamedTabs = (c) => c.moveTabs === "named";
+var padSpan = (c) => c && isMoveTabs(c) ? c.options.length + (isNamedTabs(c) ? 1 : 0) : 1;
+var isPadSpanContinuation = (row, i) => i > 0 && row[i] !== void 0 && row[i] === row[i - 1];
+function moveTabCell(row, i) {
+  const meta = row[i];
+  if (!meta || !isMoveTabs(meta)) return null;
+  let start = i;
+  while (start > 0 && row[start - 1] === meta) start--;
+  const offset = i - start;
+  if (isNamedTabs(meta) && offset === 0) {
+    return { meta, head: true, option: null, label: meta.label };
+  }
+  const opt = meta.options[offset - (isNamedTabs(meta) ? 1 : 0)];
+  if (opt === void 0) return null;
+  return {
+    meta,
+    head: false,
+    option: enumOptionValue(opt),
+    label: enumOptionLabel(opt)
+  };
+}
 var isToggleDial = (c) => c.type === "toggle" && c.moveSlot === true;
-var isMoveDial = (c) => isToggleDial(c) || c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c) || c.type === "number" && c.min != null && c.max != null;
+var isMoveDial = (c) => isToggleDial(c) || c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c) && !isMoveTabs(c) || c.type === "number" && c.min != null && c.max != null;
 var isDial = isMoveDial;
 var noChip = (c) => isToggleDial(c) || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c);
 var dialSpan = (c) => c?.type === "filter" ? 2 : 1;
@@ -265,9 +287,44 @@ function buildMovePages(panels) {
         `panel '${panel.id}': control '${c.path}': the ${rowName} row's ${MOVE_PADS} pads are all taken \u2014 dropped`
       );
     };
+    const placeTabs = (c, col) => {
+      const span = padSpan(c);
+      if (span > MOVE_PADS) {
+        reportMoveLayoutIssue(
+          "tabs-oversized",
+          `panel '${panel.id}': control '${c.path}': a ${span}-pad tabs strip is wider than the ${MOVE_PADS}-wide grid \u2014 dropped`
+        );
+        return;
+      }
+      const fits = (start2) => start2 >= 0 && start2 + span <= MOVE_PADS && Array.from({ length: span }, (_, k) => toggles[start2 + k]).every((p) => p === void 0);
+      let start = col !== null && fits(col) ? col : -1;
+      if (start < 0) {
+        for (let i = 0; i + span <= MOVE_PADS; i++) {
+          if (fits(i)) {
+            start = i;
+            break;
+          }
+        }
+        if (start >= 0 && col !== null) {
+          reportMoveLayoutIssue(
+            "pad-column-taken",
+            `panel '${panel.id}': control '${c.path}': tabs column ${col} has no run of ${span} free pads \u2014 moved to column ${start}`
+          );
+        }
+      }
+      if (start < 0) {
+        reportMoveLayoutIssue(
+          "tabs-no-room",
+          `panel '${panel.id}': control '${c.path}': the toggle row has no run of ${span} free pads \u2014 dropped`
+        );
+        return;
+      }
+      for (let k = 0; k < span; k++) toggles[start + k] = c;
+    };
     for (const c of controls) {
       const col = padColumn(panel, c);
-      if (c.type === "toggle" && !isToggleDial(c)) place(toggles, "toggle", c, col);
+      if (isMoveTabs(c)) placeTabs(c, col);
+      else if (c.type === "toggle" && !isToggleDial(c)) place(toggles, "toggle", c, col);
       else if (c.type === "action") {
         if (col !== null) place(actions, "action", c, col);
       } else if (dials.includes(c)) {
@@ -456,16 +513,21 @@ export {
   filterShapePath,
   isEnumDial,
   isMoveDial,
+  isMoveTabs,
+  isNamedTabs,
+  isPadSpanContinuation,
   isSpanContinuation,
   isToggleDial,
   moveAppPadRow,
   movePadRows,
+  moveTabCell,
   normalizeDial,
   normalizeEnumDial,
   normalizeFilterDial,
   normalizeRangeDial,
   normalizeToggleDial,
   normalizeXYDial,
+  padSpan,
   reportMoveLayoutIssue,
   setMoveLayoutReporter,
   visibleColumns

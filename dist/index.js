@@ -2879,8 +2879,30 @@ var flat = (controls, out = []) => {
   return out;
 };
 var isEnumDial = (c) => c.type === "select" && Array.isArray(c.options) && c.options.length > 1;
+var isMoveTabs = (c) => !!c.moveTabs && isEnumDial(c);
+var isNamedTabs = (c) => c.moveTabs === "named";
+var padSpan = (c) => c && isMoveTabs(c) ? c.options.length + (isNamedTabs(c) ? 1 : 0) : 1;
+var isPadSpanContinuation = (row, i) => i > 0 && row[i] !== void 0 && row[i] === row[i - 1];
+function moveTabCell(row, i) {
+  const meta = row[i];
+  if (!meta || !isMoveTabs(meta)) return null;
+  let start = i;
+  while (start > 0 && row[start - 1] === meta) start--;
+  const offset = i - start;
+  if (isNamedTabs(meta) && offset === 0) {
+    return { meta, head: true, option: null, label: meta.label };
+  }
+  const opt = meta.options[offset - (isNamedTabs(meta) ? 1 : 0)];
+  if (opt === void 0) return null;
+  return {
+    meta,
+    head: false,
+    option: enumOptionValue(opt),
+    label: enumOptionLabel(opt)
+  };
+}
 var isToggleDial = (c) => c.type === "toggle" && c.moveSlot === true;
-var isMoveDial = (c) => isToggleDial(c) || c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c) || c.type === "number" && c.min != null && c.max != null;
+var isMoveDial = (c) => isToggleDial(c) || c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c) && !isMoveTabs(c) || c.type === "number" && c.min != null && c.max != null;
 var isDial = isMoveDial;
 var noChip = (c) => isToggleDial(c) || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c);
 var dialSpan = (c) => c?.type === "filter" ? 2 : 1;
@@ -2973,9 +2995,44 @@ function buildMovePages(panels) {
         `panel '${panel.id}': control '${c.path}': the ${rowName} row's ${MOVE_PADS} pads are all taken \u2014 dropped`
       );
     };
+    const placeTabs = (c, col) => {
+      const span = padSpan(c);
+      if (span > MOVE_PADS) {
+        reportMoveLayoutIssue(
+          "tabs-oversized",
+          `panel '${panel.id}': control '${c.path}': a ${span}-pad tabs strip is wider than the ${MOVE_PADS}-wide grid \u2014 dropped`
+        );
+        return;
+      }
+      const fits = (start2) => start2 >= 0 && start2 + span <= MOVE_PADS && Array.from({ length: span }, (_, k) => toggles[start2 + k]).every((p) => p === void 0);
+      let start = col !== null && fits(col) ? col : -1;
+      if (start < 0) {
+        for (let i = 0; i + span <= MOVE_PADS; i++) {
+          if (fits(i)) {
+            start = i;
+            break;
+          }
+        }
+        if (start >= 0 && col !== null) {
+          reportMoveLayoutIssue(
+            "pad-column-taken",
+            `panel '${panel.id}': control '${c.path}': tabs column ${col} has no run of ${span} free pads \u2014 moved to column ${start}`
+          );
+        }
+      }
+      if (start < 0) {
+        reportMoveLayoutIssue(
+          "tabs-no-room",
+          `panel '${panel.id}': control '${c.path}': the toggle row has no run of ${span} free pads \u2014 dropped`
+        );
+        return;
+      }
+      for (let k = 0; k < span; k++) toggles[start + k] = c;
+    };
     for (const c of controls) {
       const col = padColumn(panel, c);
-      if (c.type === "toggle" && !isToggleDial(c)) place(toggles, "toggle", c, col);
+      if (isMoveTabs(c)) placeTabs(c, col);
+      else if (c.type === "toggle" && !isToggleDial(c)) place(toggles, "toggle", c, col);
       else if (c.type === "action") {
         if (col !== null) place(actions, "action", c, col);
       } else if (dials.includes(c)) {
@@ -3157,7 +3214,20 @@ function buildMoveStrip(panel) {
   const toggles = [];
   const values = [];
   const actions = [];
+  const placeRun = (c, col) => {
+    const span = padSpan(c);
+    const fits = (start2) => Array.from({ length: span }, (_, k) => toggles[start2 + k]).every((p) => p === void 0);
+    let start = col !== null && fits(col) ? col : -1;
+    for (let i = 0; start < 0; i++) {
+      if (fits(i)) start = i;
+    }
+    for (let k = 0; k < span; k++) toggles[start + k] = c;
+  };
   for (const c of controls) {
+    if (isMoveTabs(c)) {
+      placeRun(c, column(c));
+      continue;
+    }
     const col = column(c);
     if (col === null) continue;
     const row = c.type === "toggle" ? toggles : c.type === "action" ? actions : values;
@@ -3938,6 +4008,23 @@ function MovePadWaveBody({ label, percent }) {
 function MovePadActionBody({ label }) {
   return /* @__PURE__ */ jsx6("span", { className: "tweakers-move-pad-title", children: label });
 }
+function MovePadTabsBody({ name, options, activeIdx }) {
+  return /* @__PURE__ */ jsxs6(Fragment3, { children: [
+    name != null && /* @__PURE__ */ jsx6("span", { className: "tweakers-move-tabs-head", children: name }),
+    /* @__PURE__ */ jsx6("div", { className: "tweakers-move-tabs-run", children: options.map((opt, i) => {
+      const glyph = enumOptionIcon(opt);
+      return /* @__PURE__ */ jsx6(
+        "span",
+        {
+          className: "tweakers-move-tab",
+          "data-on": i === activeIdx || void 0,
+          children: glyph ? /* @__PURE__ */ jsx6(MoveSlotGlyph, { name: glyph, className: "tweakers-move-tab-icon" }) : /* @__PURE__ */ jsx6("span", { className: "tweakers-move-tab-title", children: enumOptionLabel(opt) })
+        },
+        enumOptionValue(opt)
+      );
+    }) })
+  ] });
+}
 function MovePadAppBody({ label, color }) {
   return /* @__PURE__ */ jsxs6(Fragment3, { children: [
     /* @__PURE__ */ jsx6(
@@ -3956,7 +4043,8 @@ var MOVE_PAD_LIBRARY = {
   action: { description: "a button: a press runs the app\u2019s action", component: MovePadActionBody },
   app: { description: "a cell the app paints itself \u2014 a track, a slice, a step", component: MovePadAppBody },
   bend: { description: "hold and drag to bend the envelope ramp above it", component: MovePadToggleBody },
-  wave: { description: "hold and drag for the stage\u2019s own sine, tap to flip it", component: MovePadWaveBody }
+  wave: { description: "hold and drag for the stage\u2019s own sine, tap to flip it", component: MovePadWaveBody },
+  tabs: { description: "2 to 8 pads: the page\u2019s modes side by side, the current one lit \u2014 a name pad optional", component: MovePadTabsBody }
 };
 var MOVE_SLOT_LIBRARY = {
   color: { description: "selected color; hue on the dial, luminosity on volume, tap to edit", component: MoveSlotColorBody },
@@ -5767,6 +5855,12 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     if (!on || !pg) return;
     const pads = stripWindowPads(pg, at);
     const row = (cells) => cells.map((meta) => meta?.path ?? null);
+    const switchRow = pads.toggles.map((meta, i) => {
+      if (!meta) return null;
+      const tab = moveTabCell(pg.toggles, at + i);
+      if (!tab) return meta.path;
+      return tab.head ? { path: tab.meta.path, tab: true, head: true, label: tab.label } : { path: tab.meta.path, tab: true, option: tab.option, label: tab.label };
+    });
     window.dispatchEvent(new CustomEvent(MOVE_STRIP_EVENT, {
       detail: {
         pageId: pg.panel.id,
@@ -5775,7 +5869,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         paths: stripDialSlots(pg, at).map((meta) => meta?.path ?? null),
         // The small slots under that window, in hardware columns — without
         // them the pads under a scrolling page stay dark and dead.
-        pads: { toggles: row(pads.toggles), values: row(pads.values), actions: row(pads.actions) }
+        pads: { toggles: switchRow, values: row(pads.values), actions: row(pads.actions) }
       }
     }));
   }, []);
@@ -6996,6 +7090,50 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       );
                                     }
                                     const meta = padRows[row][col];
+                                    if (meta && isMoveTabs(meta)) {
+                                      if (isPadSpanContinuation(padRows[row], col)) return null;
+                                      const span = padSpan(meta);
+                                      const named = isNamedTabs(meta);
+                                      const options = meta.options ?? [];
+                                      const active = enumIndex(meta, values[meta.path]);
+                                      return /* @__PURE__ */ jsxs9(
+                                        "div",
+                                        {
+                                          className: "tweakers-move-tabs",
+                                          "data-kind": "tabs",
+                                          style: { gridColumn: `span ${span}`, "--move-tabs-cols": span },
+                                          children: [
+                                            /* @__PURE__ */ jsx9(
+                                              MovePadTabsBody,
+                                              {
+                                                name: named ? meta.label : null,
+                                                options,
+                                                activeIdx: active
+                                              }
+                                            ),
+                                            /* @__PURE__ */ jsx9("div", { className: "tweakers-move-tab-zones", role: "tablist", "aria-label": meta.label, children: options.map((opt, i) => /* @__PURE__ */ jsx9(
+                                              "button",
+                                              {
+                                                type: "button",
+                                                role: "tab",
+                                                className: "tweakers-move-tab-zone",
+                                                style: { gridColumnStart: (named ? 2 : 1) + i },
+                                                "aria-selected": i === active,
+                                                disabled: TweakStore6.isDisabled(page.panel.id, meta.path),
+                                                onClick: () => TweakStore6.updateValue(
+                                                  page.panel.id,
+                                                  meta.path,
+                                                  enumOptionValue(opt)
+                                                ),
+                                                children: enumOptionLabel(opt)
+                                              },
+                                              enumOptionValue(opt)
+                                            )) })
+                                          ]
+                                        },
+                                        meta.path
+                                      );
+                                    }
                                     const bendStage = !meta && settingsPanel && padRows[row] === page.toggles && modSettings ? modLayout?.dials[col]?.stage : void 0;
                                     if (bendStage && ENV_BEND_STAGES.includes(bendStage)) {
                                       return /* @__PURE__ */ jsx9(
@@ -8025,6 +8163,7 @@ export {
   MoveFunctions,
   MovePadActionBody,
   MovePadAppBody,
+  MovePadTabsBody,
   MovePadToggleBody,
   MovePadValueBody,
   MovePadWaveBody,
@@ -8133,7 +8272,10 @@ export {
   invertY,
   isIdentityTransfer,
   isMoveDial,
+  isMoveTabs,
+  isNamedTabs,
   isOutsideSpan,
+  isPadSpanContinuation,
   isSpanContinuation,
   isStripSlot,
   isToggleDial,
@@ -8155,6 +8297,7 @@ export {
   moveScreenRowLabel,
   moveSlotKind,
   moveStop,
+  moveTabCell,
   moveVisualReading,
   defaultView as moveWaveformDefaultView,
   moveWheelSlot,
@@ -8182,6 +8325,7 @@ export {
   orderRange,
   padPosition,
   padSection,
+  padSpan,
   pageStripOffset,
   parseHex,
   parseListItemSchema,
