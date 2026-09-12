@@ -41,7 +41,10 @@ export default defineConfig([
     dts: true,
     splitting: false,
     sourcemap: true,
-    external: ['react', 'react-dom', 'motion'],
+    // Base UI carries the notification stack. It stays external: the toast
+    // manager is a module singleton, and a second inlined copy is a second
+    // world where half the app's messages never reach the screen.
+    external: ['react', 'react-dom', 'motion', /^@base-ui\/react/],
     // The Move surface must live on the same shared stores the sidebar
     // package (dialkit) uses — an inlined copy is a second, desynced world
     // where the panel sees no panels and presets land nowhere.

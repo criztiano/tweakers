@@ -2166,6 +2166,7 @@ var ICON_LOOP = [
   "M7 22L3 18L7 14",
   "M21 13V15C21 16.6569 19.6569 18 18 18H3"
 ];
+var ICON_CLOSE = "M6 6L18 18M6 18L18 6";
 var ICON_MOVE_CAPTURE = {
   viewBox: "0 0 14 14",
   path: "M1 0H5V2H2V5H0V0H1ZM2 10V12H5V14H0V9H2V10ZM10 0H14V5H12V2H9V0H10ZM14 10V14H9V12H12V9H14V10Z"
@@ -7627,6 +7628,100 @@ function MoveActionButton({ kind, children, onPress, disabled, className }) {
   );
 }
 
+// src/components/MoveNotifications.tsx
+import { useEffect as useEffect9, useState as useState7 } from "react";
+import { createPortal as createPortal4 } from "react-dom";
+import { Toast } from "@base-ui/react/toast";
+
+// src/move-notify.ts
+var MOVE_NOTIFY_KINDS = ["info", "success", "warning", "error"];
+var MOVE_NOTIFY_GAP = 14;
+var MOVE_FLOAT_SELECTOR = [
+  ".tweakers-move-root .tweakers-move",
+  '.tweakers-move-wave[data-variant="dock"]',
+  ".tweakers-move-curve",
+  ".tweakers-move-preset-save",
+  "[data-move-float]"
+].join(", ");
+function notifyDockBottom(tops, viewportHeight, gap = MOVE_NOTIFY_GAP) {
+  let highest = Infinity;
+  for (const top of tops) {
+    if (Number.isFinite(top) && top < highest) highest = top;
+  }
+  if (!Number.isFinite(highest)) return gap;
+  return Math.max(gap, Math.round(viewportHeight - highest) + gap);
+}
+
+// src/components/MoveNotifications.tsx
+import { jsx as jsx11, jsxs as jsxs11 } from "react/jsx-runtime";
+var manager = Toast.createToastManager();
+var moveNotify = manager;
+var MEASURE_MS = 100;
+function useDockBottom(active) {
+  const [bottom, setBottom] = useState7(MOVE_NOTIFY_GAP);
+  useEffect9(() => {
+    if (!active || typeof window === "undefined") return;
+    let frame = 0;
+    let last = 0;
+    const measure = () => {
+      const tops = [];
+      document.querySelectorAll(MOVE_FLOAT_SELECTOR).forEach((el) => {
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) tops.push(rect.top);
+      });
+      const next = notifyDockBottom(tops, window.innerHeight);
+      setBottom((prev) => prev === next ? prev : next);
+    };
+    const tick = (now) => {
+      if (now - last >= MEASURE_MS) {
+        last = now;
+        measure();
+      }
+      frame = window.requestAnimationFrame(tick);
+    };
+    measure();
+    frame = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frame);
+  }, [active]);
+  return bottom;
+}
+function NotifyStack({ className }) {
+  const { toasts } = Toast.useToastManager();
+  const bottom = useDockBottom(toasts.length > 0);
+  return /* @__PURE__ */ jsx11(
+    Toast.Viewport,
+    {
+      className: `tweakers-move-notify${className ? ` ${className}` : ""}`,
+      style: { bottom: `${bottom}px` },
+      children: toasts.map((toast) => /* @__PURE__ */ jsx11(Toast.Root, { toast, className: "tweakers-move-notify-card", children: /* @__PURE__ */ jsxs11(Toast.Content, { className: "tweakers-move-notify-body", children: [
+        /* @__PURE__ */ jsxs11("div", { className: "tweakers-move-notify-text", children: [
+          toast.type && toast.type !== "info" && /* @__PURE__ */ jsxs11("span", { className: "tweakers-move-notify-kind", children: [
+            /* @__PURE__ */ jsx11("span", { className: "tweakers-move-notify-dot", "aria-hidden": "true" }),
+            toast.type
+          ] }),
+          toast.title != null && /* @__PURE__ */ jsx11(Toast.Title, { className: "tweakers-move-notify-title" }),
+          toast.description != null && /* @__PURE__ */ jsx11(Toast.Description, { className: "tweakers-move-notify-description" })
+        ] }),
+        /* @__PURE__ */ jsx11(Toast.Action, { className: "tweakers-move-notify-action" }),
+        /* @__PURE__ */ jsx11(Toast.Close, { className: "tweakers-move-notify-close", "aria-label": "Dismiss", children: /* @__PURE__ */ jsx11("svg", { viewBox: "0 0 24 24", width: "14", height: "14", "aria-hidden": "true", children: /* @__PURE__ */ jsx11("path", { d: ICON_CLOSE }) }) })
+      ] }) }, toast.id))
+    }
+  );
+}
+function MoveNotifications({
+  limit = 3,
+  timeout = 5e3,
+  className
+}) {
+  const [mounted, setMounted] = useState7(false);
+  useEffect9(() => setMounted(true), []);
+  if (!mounted || typeof document === "undefined") return null;
+  return createPortal4(
+    /* @__PURE__ */ jsx11("div", { className: "tweakers-root tweakers-move-surface tweakers-move-notify-root", children: /* @__PURE__ */ jsx11(Toast.Provider, { toastManager: manager, limit, timeout, children: /* @__PURE__ */ jsx11(NotifyStack, { ...className ? { className } : {} }) }) }),
+    document.body
+  );
+}
+
 // src/index.ts
 import { ModulationStore as ModulationStore3, MOD_TOUCH_GRACE_MS } from "tweakers/modulation-store";
 
@@ -7996,12 +8091,15 @@ export {
   MOVE_COLOR_STEPS,
   MOVE_COLOR_WHEEL,
   MOVE_DIALS,
+  MOVE_FLOAT_SELECTOR,
   MOVE_FUNCTION_BUTTONS,
   MOVE_FUNCTION_MANIFEST,
   MOVE_JOG_CLICK_EVENT,
   MOVE_JOG_EVENT,
   MOVE_LATCH_EVENT,
   MOVE_MUTE_EVENT,
+  MOVE_NOTIFY_GAP,
+  MOVE_NOTIFY_KINDS,
   MOVE_OPACITY_PADS,
   MOVE_OVERRIDE_EVENT,
   MOVE_PADS,
@@ -8023,6 +8121,7 @@ export {
   MoveActionButton,
   MoveColorStore,
   MoveFunctions,
+  MoveNotifications,
   MovePadActionBody,
   MovePadAppBody,
   MovePadToggleBody,
@@ -8147,6 +8246,7 @@ export {
   modPageWidth,
   modRingArc,
   moveAppPadRow,
+  moveNotify,
   moveNumericDrawing,
   movePadRows,
   movePlaybackMode,
@@ -8175,6 +8275,7 @@ export {
   normalizeTransfer,
   normalizeValue,
   normalizeXYDial,
+  notifyDockBottom,
   nudge,
   nudgeAngle,
   oklchToRgb,
