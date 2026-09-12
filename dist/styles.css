@@ -362,6 +362,10 @@
 .tweakers-move,
 .tweakers-move-surface {
   --move-bg: #302e2e;
+  /* The 8-slot cluster's width cap — the instrument's whole maximum. The
+     wheel-screen list lives inside this budget and never widens the panel
+     beyond it. */
+  --move-cluster-max: 1180px;
   --move-slot: rgba(222, 227, 201, 0.1);
   /* A column held open by a page that has nothing for it to do — fainter
      than a slot you can press, so it never reads as a control. */
@@ -435,6 +439,13 @@
   align-items: flex-end;
   justify-content: center;
   padding: 16px 48px 14px;
+  /* The panel is never wider than its own 8-slot cluster (plus this box's
+     padding) — the cap is measured on the slots alone, and a wheel-screen
+     list beside them shares that budget rather than widening the panel. A
+     host that hands the panel a wider stage gets it centred at this width,
+     not stretched across the page. */
+  max-width: calc(var(--move-cluster-max) + 2 * 48px);
+  margin-inline: auto;
   background: var(--move-bg);
   color: var(--move-text);
 }
@@ -505,7 +516,7 @@
   position: relative;
   flex: 1 0 0;
   min-width: 1px;
-  max-width: 1180px;
+  max-width: var(--move-cluster-max);
   display: flex;
   flex-direction: column;
   gap: 8px;
