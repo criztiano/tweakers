@@ -745,6 +745,79 @@
   font-size: 14px;
 }
 
+/* ------------------------------------------------------------------------
+   Move function chips (MoveFunctionChips) — the attached-function row.
+   Provisional skin: the action pills' idiom (height, radius, label face,
+   the hardware's colour pairing — capture blue, enter green, the pale
+   function-button neutral for the rest), sized to sit in a row. The Figma
+   skin replaces this block and nothing else; the component only names
+   `.tweakers-move-chips`, `.tweakers-move-chip[data-name][data-pressed]`
+   and `.tweakers-move-chip-icon`.
+   ------------------------------------------------------------------------ */
+
+.tweakers-move-chips {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  min-width: 0;
+}
+
+/* The `tracks` placement: the chips ride the same line as the track labels,
+   to their right. Scoped to the chips' presence, so a group without them
+   keeps its stacked flow (the headerStart slot). */
+.tweakers-move-tracks-group:has(> .tweakers-move-chips) {
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.tweakers-move-chip {
+  position: relative;
+  height: 28px;
+  padding: 0 10px 0 26px;
+  border: none;
+  border-radius: var(--move-radius-small, 8px);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-family: var(--move-font-label, 'Ableton Sans Small', system-ui, -apple-system, sans-serif);
+  font-size: 16px;
+  line-height: normal;
+  white-space: nowrap;
+  color: #1e1e1e;
+  background: #dee3c9;
+  transition: filter 0.12s, transform 0.12s;
+}
+
+/* The hardware pairing, like MoveActionButton's kinds: the capture key's
+   blue, the jog click's green; every other key is a pale function button. */
+.tweakers-move-chip[data-name="capture"] {
+  background: #4274f4;
+}
+
+.tweakers-move-chip[data-name="jog_click"] {
+  background: #52bd06;
+}
+
+.tweakers-move-chip:hover {
+  filter: brightness(1.08);
+}
+
+.tweakers-move-chip[data-pressed] {
+  filter: brightness(1.25);
+  transform: scale(0.96);
+  transition-duration: 0.04s;
+}
+
+.tweakers-move-chip-icon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* End of the Move function chips skin block. */
+
 .tweakers-move-grid {
   display: flex;
   flex-direction: column;
