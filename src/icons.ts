@@ -113,8 +113,9 @@ export const ICON_MOVE_COPY = {
 /**
  * A function chip's glyph. `paths` are stroked, like the hardware's printed
  * marks; `fills` are the filled marks (the capture corners); `circles` are
- * filled circles (the enter dot, rec's core). All share one viewBox and the
- * size the chip draws them at.
+ * filled circles (the enter dot, rec's core); `text` is a letter mark set in
+ * Helvetica (mute's "M"). All share one viewBox and the size the chip draws
+ * them at.
  */
 export interface MoveFunctionGlyph {
   viewBox: string;
@@ -122,7 +123,11 @@ export interface MoveFunctionGlyph {
   paths?: string[];
   fills?: string[];
   circles?: { cx: string; cy: string; r: string }[];
+  text?: string;
 }
+
+/** The letter marks' face — Helvetica, with the system stack behind it. */
+export const MOVE_GLYPH_TEXT_FONT = "Helvetica, 'Helvetica Neue', Arial, system-ui, sans-serif";
 
 /** The enter dot, as a chip glyph — jog click, and Sampling's confirm. */
 const MOVE_GLYPH_DOT: MoveFunctionGlyph = {
@@ -157,11 +162,9 @@ export const MOVE_FUNCTION_ICONS: Record<string, MoveFunctionGlyph> = {
     paths: ['M7 2.5A4.5 4.5 0 1 0 7 11.5A4.5 4.5 0 1 0 7 2.5Z'],
     circles: [{ cx: '7', cy: '7', r: '2' }],
   },
-  mute: {
-    viewBox: '0 0 14 14',
-    size: 14,
-    paths: ['M2 5.5H4.25L7.5 2.75V11.25L4.25 8.5H2V5.5Z', 'M9.75 5.5L12.75 8.5', 'M12.75 5.5L9.75 8.5'],
-  },
+  /* Mute is a letter, not a drawing: the "M", set in Helvetica on the same
+     14px grid as the drawn marks. */
+  mute: { viewBox: '0 0 14 14', size: 14, text: 'M' },
   undo: {
     viewBox: '0 0 14 14',
     size: 14,

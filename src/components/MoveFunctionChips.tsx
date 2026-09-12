@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { MoveFunctions, type MoveFunctionChip } from '../move-functions';
 import { MOVE_PALETTE } from '../move-palette';
-import { MOVE_FUNCTION_ICONS, type MoveFunctionGlyph } from '../icons';
+import { MOVE_FUNCTION_ICONS, MOVE_GLYPH_TEXT_FONT, type MoveFunctionGlyph } from '../icons';
 
 /** How long a chip stays lit after a press (screen or hardware). */
 const PRESS_FLASH_MS = 160;
@@ -19,6 +19,22 @@ function ChipGlyph({ glyph }: { glyph: MoveFunctionGlyph }) {
       {glyph.circles?.map((c) => (
         <circle key={`${c.cx},${c.cy}`} {...c} fill="currentColor" />
       ))}
+      {glyph.text && (
+        // A letter mark (mute's "M"): Helvetica, centred on the same grid
+        // the drawn marks share, weighted to read like their 1.5px stroke.
+        <text
+          x="7"
+          y="7.5"
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontFamily={MOVE_GLYPH_TEXT_FONT}
+          fontSize="12"
+          fontWeight="bold"
+          fill="currentColor"
+        >
+          {glyph.text}
+        </text>
+      )}
     </svg>
   );
 }

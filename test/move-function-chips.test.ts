@@ -104,6 +104,10 @@ describe('MoveFunctionChips', () => {
     // Only the kit's own palette ever colours a chip.
     expect(mute.props['data-color']).toBe('blue');
     expect(mute.props.style).toEqual({ background: MOVE_PALETTE.blue });
+    // Mute's canonical icon is the Helvetica letter mark, not a drawing.
+    const letter = mute.findByType('text');
+    expect(letter.children).toEqual(['M']);
+    expect(letter.props.fontFamily).toMatch(/^Helvetica/);
   });
 
   it('reflects a push while it holds the button, and the release restores', () => {
