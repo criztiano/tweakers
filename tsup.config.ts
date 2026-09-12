@@ -68,7 +68,7 @@ export default defineConfig([
         js: '"use client";',
       };
     },
-    onSuccess: 'cp src/styles/theme.css dist/styles.css',
+    onSuccess: 'cp src/styles/theme.css dist/styles.css && mkdir -p dist/fonts && cp src/styles/fonts/* dist/fonts/',
   },
   // Framework-neutral leaf modules that keep their own subpath exports.
   // Externalize the shared store rather than inlining a second, desynced copy.

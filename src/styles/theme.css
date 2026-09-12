@@ -1,3 +1,15 @@
+/* Geist Pixel, the kit's face. OFL, so it ships next to this sheet — no
+   host-provided fonts needed. One variable file; ELSH is its shape axis
+   (0 regular, 1 square, 20 circle, 40 grid, 60 triangle, 80 line): the
+   text runs regular, the big readouts run line. */
+@font-face {
+  font-family: 'Geist Pixel';
+  src: url('./fonts/GeistPixel.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 .tweakers-root {
   /* Surfaces */
   --tweak-surface: rgba(44, 44, 44, 0.7);
@@ -42,9 +54,9 @@
   --tweak-track-fill: rgba(228, 228, 228, 0.3);
   --tweak-track-fill-strong: #e4e4e4;
 
-  /* Type — labels are uppercase mono, values are the reading face */
-  --tweak-font-label: 'System85 Mono Pro', 'Geist Mono', ui-monospace, monospace;
-  --tweak-font-value: 'System85 Pro', system-ui, -apple-system, sans-serif;
+  /* Type — one face for labels and values, the kit's own */
+  --tweak-font-label: 'Geist Pixel', 'Geist Mono', ui-monospace, monospace;
+  --tweak-font-value: 'Geist Pixel', system-ui, -apple-system, sans-serif;
   --tweak-font-size: 12px;
   --tweak-value-opacity: 0.7;
 
@@ -78,9 +90,8 @@
 
   /* Fonts */
   font-family: var(--tweak-font-value);
-  /* System85 reports a line box shorter than its glyphs. Without an explicit
-     line-height every clipping container (ellipsized rows, folder titles)
-     shears the caps off. */
+  /* An explicit line-height keeps clipping containers (ellipsized rows,
+     folder titles) from shearing the caps off. */
   line-height: 1.35;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -354,6 +365,8 @@
 .tweakers-move-surface,
 .tweakers-move-surface * {
   box-sizing: border-box;
+  /* One weight in the face; a faked bold smears the pixels. */
+  font-synthesis: none;
 }
 
 /* The instrument's tokens. The panel is the usual carrier, but a surface that
@@ -388,7 +401,7 @@
      its corner saying whether it is doing it. */
   --move-toggle-icon-size: 44px;
   --move-toggle-badge-size: 24px;
-  --move-toggle-label-size: 12px;
+  --move-toggle-label-size: 15px;
   --move-toggle-label-inset: 10px;
   --move-toggle-icon-rise: 6.5px;
   /* Lighter than the dial glyphs' hairline, heavier than nothing: the
@@ -409,7 +422,10 @@
   --move-wheel-width: 200px;
   --move-glyph-stroke: 1.25;
   --move-radius-small: 8px;
-  --move-font-label: 'Ableton Sans Small', system-ui, -apple-system, sans-serif;
+  --move-font-label: 'Geist Pixel', system-ui, -apple-system, sans-serif;
+  /* The big readouts — a dial's value, the volume pill — run the line shape. */
+  --move-font-value: var(--move-font-label);
+  --move-font-value-shape: 'ELSH' 80;
   --move-color-gap: 8px;
   --move-color-gap-small: 4px;
   --move-color-padding: 12px;
@@ -573,7 +589,7 @@
 
 .tweakers-move-track-label {
   font-family: var(--move-font-label);
-  font-size: 16px;
+  font-size: 15px;
   line-height: normal;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -663,7 +679,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-family: var(--move-font-label, 'Ableton Sans Small', system-ui, -apple-system, sans-serif);
+  font-family: var(--move-font-label);
   font-size: 16px;
   line-height: normal;
   color: #1e1e1e;
@@ -736,12 +752,17 @@
   white-space: nowrap;
 }
 
+.tweakers-move-volume-value {
+  font-family: var(--move-font-value);
+  font-variation-settings: var(--move-font-value-shape);
+}
+
 .tweakers-move-volume-label {
   opacity: 0.5;
 }
 
 .tweakers-move-volume-sep {
-  font-weight: 700;
+  font-variation-settings: normal;
   font-size: 14px;
 }
 
@@ -1130,8 +1151,28 @@
 }
 
 .tweakers-move-dial-value {
-  font-size: 24px;
+  font-family: var(--move-font-value);
+  font-variation-settings: var(--move-font-value-shape);
+  font-size: 40px;
   opacity: 0;
+  /* number over its unit — "250" with "ms" underneath, in the plain shape */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  white-space: nowrap;
+}
+
+/* The number's box hugs its digits (the face carries a deep descent the
+   digits never use), so the unit can sit a clear 10px under them. */
+.tweakers-move-dial-number {
+  line-height: 0.8;
+}
+
+.tweakers-move-dial-unit {
+  font-variation-settings: normal;
+  font-size: 18px;
+  line-height: 1;
+  margin-top: 3px;
 }
 
 .tweakers-move-dial:hover .tweakers-move-dial-label,
@@ -1164,7 +1205,7 @@
   border-radius: 999px;
   background: var(--move-chip);
   font-family: var(--move-font-label);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 16px;
   white-space: nowrap;
   overflow: hidden;
@@ -1183,7 +1224,7 @@
   background: var(--move-bg);
   color: var(--move-text);
   font-family: var(--move-font-label);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 16px;
   white-space: nowrap;
   overflow: hidden;
@@ -1207,7 +1248,7 @@
   right: 9px;
   bottom: var(--move-option-bottom);
   font-family: var(--move-font-label);
-  font-size: 13px;
+  font-size: 15px;
   line-height: 16px;
   text-align: center;
   white-space: nowrap;
@@ -1327,14 +1368,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 15px;
   color: var(--move-text);
   opacity: 0.75;
 }
 
 .tweakers-move-slot-foot-value {
   flex: none;
-  font-size: 13px;
+  font-size: 15px;
   color: var(--move-text);
   font-variant-numeric: tabular-nums;
 }
@@ -1485,6 +1526,8 @@
 }
 
 .tweakers-move-filter-readout .tweakers-move-dial-value {
+  display: block;
+  font-variation-settings: normal;
   font-size: 13px;
   line-height: 16px;
   white-space: nowrap;
@@ -1568,6 +1611,7 @@
 
 .tweakers-move-env-readout .tweakers-move-dial-label,
 .tweakers-move-env-readout .tweakers-move-dial-value {
+  font-variation-settings: normal;
   font-size: 13px;
   line-height: 16px;
   white-space: nowrap;
@@ -1950,7 +1994,7 @@
   background: var(--move-chip);
   color: var(--move-text);
   font-family: var(--move-font-label);
-  font-size: 11px;
+  font-size: 13px;
   line-height: var(--move-head-h);
   text-align: center;
   white-space: nowrap;
@@ -2111,7 +2155,8 @@
 .tweakers-move-dial[data-preview] .tweakers-move-dial-value {
   left: 0;
   right: 0;
-  font-size: 11px;
+  font-variation-settings: normal;
+  font-size: 13px;
   white-space: nowrap;
 }
 
@@ -2259,8 +2304,7 @@
   border-radius: var(--move-radius-small);
   color: var(--move-text);
   font-family: var(--move-font-label);
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 15px;
   line-height: normal;
   white-space: nowrap;
   cursor: pointer;
@@ -2306,7 +2350,7 @@
 
 .tweakers-move-app-row-label {
   font-family: var(--move-font-label);
-  font-size: 12px;
+  font-size: 13px;
   color: var(--move-text);
   text-align: center;
   overflow: hidden;
@@ -2347,7 +2391,6 @@
 
 .tweakers-move-pad[data-kind="app"] {
   padding: 0 4px;
-  font-weight: 400;
   min-width: 0;
 }
 
@@ -2358,8 +2401,7 @@
 .tweakers-move-pad[data-kind="value"] {
   justify-content: space-between;
   padding: 0 10px;
-  font-size: 13px;
-  font-weight: 400;
+  font-size: 15px;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -2383,8 +2425,7 @@
 .tweakers-move-pad[data-kind="wave"] {
   justify-content: space-between;
   padding: 0 8px 0 14px;
-  font-size: 13px;
-  font-weight: 400;
+  font-size: 15px;
 }
 
 .tweakers-move-pad[data-kind="wave"] .tweakers-move-pad-title {
@@ -2399,10 +2440,6 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
-}
-
-.tweakers-move-pad-number {
-  font-weight: 700;
 }
 
 .tweakers-move-pad[data-held],
@@ -2558,7 +2595,11 @@
     font-size: 16px;
   }
 .tweakers-move-dial-value {
-    font-size: 18px;
+    font-size: 30px;
+  }
+.tweakers-move-dial-unit {
+    font-size: 14px;
+    margin-top: 2px;
   }
 .tweakers-move-dial {
     --move-shape-top: 32px;
@@ -2566,7 +2607,7 @@
     --move-head-h: 16px;
   }
 .tweakers-move-dial-option {
-    font-size: 12px;
+    font-size: 13px;
     line-height: 14px;
   }
 .tweakers-move-dial-screen {
@@ -2575,8 +2616,8 @@
   }
 .tweakers-move-dial-list .tweakers-list-screen-row {
     padding: 1px 0;
-    font-size: 12px;
-    line-height: 12px;
+    font-size: 13px;
+    line-height: 13px;
   }
 }
 
@@ -2759,7 +2800,7 @@
   background: none;
   border-radius: 4px;
   cursor: pointer;
-  font-family: var(--move-font-label, 'Ableton Sans Small', system-ui, -apple-system, sans-serif);
+  font-family: var(--move-font-label);
   font-size: 16px;
   line-height: 20px;
   color: #dee3c9;
@@ -2807,7 +2848,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: right;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 20px;
   opacity: 0.22;
   transition: opacity 0.12s;

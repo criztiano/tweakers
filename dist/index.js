@@ -3689,10 +3689,19 @@ function MoveSlotGlyph({ name, className }) {
     }
   );
 }
+function splitReadoutUnit(value) {
+  const m = /^(.*\d)\s*([^\d\s][^\d]*)$/.exec(value.trim());
+  const unit = m ? m[2].trim() : "";
+  return m && unit.length > 1 ? { num: m[1], unit } : { num: value, unit: null };
+}
 function MoveSlotReadout({ label, value }) {
+  const split = typeof value === "string" ? splitReadoutUnit(value) : null;
   return /* @__PURE__ */ jsxs6("div", { className: "tweakers-move-dial-readout", children: [
     /* @__PURE__ */ jsx6("span", { className: "tweakers-move-dial-label", "data-long": label.length > 9 || void 0, children: label }),
-    /* @__PURE__ */ jsx6("span", { className: "tweakers-move-dial-value", children: value })
+    /* @__PURE__ */ jsx6("span", { className: "tweakers-move-dial-value", children: split?.unit ? /* @__PURE__ */ jsxs6(Fragment3, { children: [
+      /* @__PURE__ */ jsx6("span", { className: "tweakers-move-dial-number", children: split.num }),
+      /* @__PURE__ */ jsx6("span", { className: "tweakers-move-dial-unit", children: split.unit })
+    ] }) : value })
   ] });
 }
 function MoveSlotShape({ d, className = "tweakers-move-dial-shape" }) {
