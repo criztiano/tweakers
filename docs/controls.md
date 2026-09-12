@@ -21,6 +21,12 @@ adjustment, modulation, readouts and hardware column alignment.
 | `range` | Low/high bounds of one interval | `range`; `MoveSlotRangeBody` | Column knob low, touched + volume high |
 | `filter` | Cutoff and resonance with a response display | `filter`; `MoveSlotFilterBody` | 2 adjacent dials |
 
+The panel's standard surface is the fixed eight-column cluster: parameters past
+the eight dials become value chips on the pad row per the layout rules, and a
+two-column dial that would start past column 8 is dropped with a layout
+warning. `MovePanel`'s `scroll` strip is strictly opt-in — never enable it by
+default in an integration; it is used only on Cri's direct request for that app.
+
 `MoveSlotGlyph`, `MoveSlotReadout`, and `MoveSlotShape` provide the shared visual
 parts. The XY face also accepts a shape path for the modulation curve preview.
 The parent supplies normalized screen coordinates (Y down), grid division count,

@@ -62,6 +62,11 @@ export interface MovePanelProps {
    * wheel scrolls the row through them. Nothing is demoted to a value chip,
    * and the small slots ride under the slots they belong to — so a
    * panel of forty parameters is one instrument, not five pages of it.
+   *
+   * Strictly opt-in, and not a default for integrations: the standard
+   * panel is the fixed eight-column surface (overflow becomes value chips
+   * per the layout rules). Enable the strip only on Cri's direct request
+   * for that app.
    */
   scroll?: boolean;
   /**
