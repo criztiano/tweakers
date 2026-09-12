@@ -2166,6 +2166,7 @@ var ICON_LOOP = [
   "M7 22L3 18L7 14",
   "M21 13V15C21 16.6569 19.6569 18 18 18H3"
 ];
+var ICON_CLOSE = "M6 6L18 18M6 18L18 6";
 var ICON_MOVE_CAPTURE = {
   viewBox: "0 0 14 14",
   path: "M1 0H5V2H2V5H0V0H1ZM2 10V12H5V14H0V9H2V10ZM10 0H14V5H12V2H9V0H10ZM14 10V14H9V12H12V9H14V10Z"
@@ -2879,8 +2880,30 @@ var flat = (controls, out = []) => {
   return out;
 };
 var isEnumDial = (c) => c.type === "select" && Array.isArray(c.options) && c.options.length > 1;
+var isMoveTabs = (c) => !!c.moveTabs && isEnumDial(c);
+var isNamedTabs = (c) => c.moveTabs === "named";
+var padSpan = (c) => c && isMoveTabs(c) ? c.options.length + (isNamedTabs(c) ? 1 : 0) : 1;
+var isPadSpanContinuation = (row, i) => i > 0 && row[i] !== void 0 && row[i] === row[i - 1];
+function moveTabCell(row, i) {
+  const meta = row[i];
+  if (!meta || !isMoveTabs(meta)) return null;
+  let start = i;
+  while (start > 0 && row[start - 1] === meta) start--;
+  const offset = i - start;
+  if (isNamedTabs(meta) && offset === 0) {
+    return { meta, head: true, option: null, label: meta.label };
+  }
+  const opt = meta.options[offset - (isNamedTabs(meta) ? 1 : 0)];
+  if (opt === void 0) return null;
+  return {
+    meta,
+    head: false,
+    option: enumOptionValue(opt),
+    label: enumOptionLabel(opt)
+  };
+}
 var isToggleDial = (c) => c.type === "toggle" && c.moveSlot === true;
-var isMoveDial = (c) => isToggleDial(c) || c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c) || c.type === "number" && c.min != null && c.max != null;
+var isMoveDial = (c) => isToggleDial(c) || c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c) && !isMoveTabs(c) || c.type === "number" && c.min != null && c.max != null;
 var isDial = isMoveDial;
 var noChip = (c) => isToggleDial(c) || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c);
 var dialSpan = (c) => c?.type === "filter" ? 2 : 1;
@@ -2973,9 +2996,44 @@ function buildMovePages(panels) {
         `panel '${panel.id}': control '${c.path}': the ${rowName} row's ${MOVE_PADS} pads are all taken \u2014 dropped`
       );
     };
+    const placeTabs = (c, col) => {
+      const span = padSpan(c);
+      if (span > MOVE_PADS) {
+        reportMoveLayoutIssue(
+          "tabs-oversized",
+          `panel '${panel.id}': control '${c.path}': a ${span}-pad tabs strip is wider than the ${MOVE_PADS}-wide grid \u2014 dropped`
+        );
+        return;
+      }
+      const fits = (start2) => start2 >= 0 && start2 + span <= MOVE_PADS && Array.from({ length: span }, (_, k) => toggles[start2 + k]).every((p) => p === void 0);
+      let start = col !== null && fits(col) ? col : -1;
+      if (start < 0) {
+        for (let i = 0; i + span <= MOVE_PADS; i++) {
+          if (fits(i)) {
+            start = i;
+            break;
+          }
+        }
+        if (start >= 0 && col !== null) {
+          reportMoveLayoutIssue(
+            "pad-column-taken",
+            `panel '${panel.id}': control '${c.path}': tabs column ${col} has no run of ${span} free pads \u2014 moved to column ${start}`
+          );
+        }
+      }
+      if (start < 0) {
+        reportMoveLayoutIssue(
+          "tabs-no-room",
+          `panel '${panel.id}': control '${c.path}': the toggle row has no run of ${span} free pads \u2014 dropped`
+        );
+        return;
+      }
+      for (let k = 0; k < span; k++) toggles[start + k] = c;
+    };
     for (const c of controls) {
       const col = padColumn(panel, c);
-      if (c.type === "toggle" && !isToggleDial(c)) place(toggles, "toggle", c, col);
+      if (isMoveTabs(c)) placeTabs(c, col);
+      else if (c.type === "toggle" && !isToggleDial(c)) place(toggles, "toggle", c, col);
       else if (c.type === "action") {
         if (col !== null) place(actions, "action", c, col);
       } else if (dials.includes(c)) {
@@ -3157,7 +3215,20 @@ function buildMoveStrip(panel) {
   const toggles = [];
   const values = [];
   const actions = [];
+  const placeRun = (c, col) => {
+    const span = padSpan(c);
+    const fits = (start2) => Array.from({ length: span }, (_, k) => toggles[start2 + k]).every((p) => p === void 0);
+    let start = col !== null && fits(col) ? col : -1;
+    for (let i = 0; start < 0; i++) {
+      if (fits(i)) start = i;
+    }
+    for (let k = 0; k < span; k++) toggles[start + k] = c;
+  };
   for (const c of controls) {
+    if (isMoveTabs(c)) {
+      placeRun(c, column(c));
+      continue;
+    }
     const col = column(c);
     if (col === null) continue;
     const row = c.type === "toggle" ? toggles : c.type === "action" ? actions : values;
@@ -3947,6 +4018,23 @@ function MovePadWaveBody({ label, percent }) {
 function MovePadActionBody({ label }) {
   return /* @__PURE__ */ jsx6("span", { className: "tweakers-move-pad-title", children: label });
 }
+function MovePadTabsBody({ name, options, activeIdx }) {
+  return /* @__PURE__ */ jsxs6(Fragment3, { children: [
+    name != null && /* @__PURE__ */ jsx6("span", { className: "tweakers-move-tabs-head", children: name }),
+    /* @__PURE__ */ jsx6("div", { className: "tweakers-move-tabs-run", children: options.map((opt, i) => {
+      const glyph = enumOptionIcon(opt);
+      return /* @__PURE__ */ jsx6(
+        "span",
+        {
+          className: "tweakers-move-tab",
+          "data-on": i === activeIdx || void 0,
+          children: glyph ? /* @__PURE__ */ jsx6(MoveSlotGlyph, { name: glyph, className: "tweakers-move-tab-icon" }) : /* @__PURE__ */ jsx6("span", { className: "tweakers-move-tab-title", children: enumOptionLabel(opt) })
+        },
+        enumOptionValue(opt)
+      );
+    }) })
+  ] });
+}
 function MovePadAppBody({ label, color }) {
   return /* @__PURE__ */ jsxs6(Fragment3, { children: [
     /* @__PURE__ */ jsx6(
@@ -3965,7 +4053,8 @@ var MOVE_PAD_LIBRARY = {
   action: { description: "a button: a press runs the app\u2019s action", component: MovePadActionBody },
   app: { description: "a cell the app paints itself \u2014 a track, a slice, a step", component: MovePadAppBody },
   bend: { description: "hold and drag to bend the envelope ramp above it", component: MovePadToggleBody },
-  wave: { description: "hold and drag for the stage\u2019s own sine, tap to flip it", component: MovePadWaveBody }
+  wave: { description: "hold and drag for the stage\u2019s own sine, tap to flip it", component: MovePadWaveBody },
+  tabs: { description: "2 to 8 pads: the page\u2019s modes side by side, the current one lit \u2014 a name pad optional", component: MovePadTabsBody }
 };
 var MOVE_SLOT_LIBRARY = {
   color: { description: "selected color; hue on the dial, luminosity on volume, tap to edit", component: MoveSlotColorBody },
@@ -5776,6 +5865,12 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     if (!on || !pg) return;
     const pads = stripWindowPads(pg, at);
     const row = (cells) => cells.map((meta) => meta?.path ?? null);
+    const switchRow = pads.toggles.map((meta, i) => {
+      if (!meta) return null;
+      const tab = moveTabCell(pg.toggles, at + i);
+      if (!tab) return meta.path;
+      return tab.head ? { path: tab.meta.path, tab: true, head: true, label: tab.label } : { path: tab.meta.path, tab: true, option: tab.option, label: tab.label };
+    });
     window.dispatchEvent(new CustomEvent(MOVE_STRIP_EVENT, {
       detail: {
         pageId: pg.panel.id,
@@ -5784,7 +5879,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         paths: stripDialSlots(pg, at).map((meta) => meta?.path ?? null),
         // The small slots under that window, in hardware columns — without
         // them the pads under a scrolling page stay dark and dead.
-        pads: { toggles: row(pads.toggles), values: row(pads.values), actions: row(pads.actions) }
+        pads: { toggles: switchRow, values: row(pads.values), actions: row(pads.actions) }
       }
     }));
   }, []);
@@ -7005,6 +7100,50 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       );
                                     }
                                     const meta = padRows[row][col];
+                                    if (meta && isMoveTabs(meta)) {
+                                      if (isPadSpanContinuation(padRows[row], col)) return null;
+                                      const span = padSpan(meta);
+                                      const named = isNamedTabs(meta);
+                                      const options = meta.options ?? [];
+                                      const active = enumIndex(meta, values[meta.path]);
+                                      return /* @__PURE__ */ jsxs9(
+                                        "div",
+                                        {
+                                          className: "tweakers-move-tabs",
+                                          "data-kind": "tabs",
+                                          style: { gridColumn: `span ${span}`, "--move-tabs-cols": span },
+                                          children: [
+                                            /* @__PURE__ */ jsx9(
+                                              MovePadTabsBody,
+                                              {
+                                                name: named ? meta.label : null,
+                                                options,
+                                                activeIdx: active
+                                              }
+                                            ),
+                                            /* @__PURE__ */ jsx9("div", { className: "tweakers-move-tab-zones", role: "tablist", "aria-label": meta.label, children: options.map((opt, i) => /* @__PURE__ */ jsx9(
+                                              "button",
+                                              {
+                                                type: "button",
+                                                role: "tab",
+                                                className: "tweakers-move-tab-zone",
+                                                style: { gridColumnStart: (named ? 2 : 1) + i },
+                                                "aria-selected": i === active,
+                                                disabled: TweakStore6.isDisabled(page.panel.id, meta.path),
+                                                onClick: () => TweakStore6.updateValue(
+                                                  page.panel.id,
+                                                  meta.path,
+                                                  enumOptionValue(opt)
+                                                ),
+                                                children: enumOptionLabel(opt)
+                                              },
+                                              enumOptionValue(opt)
+                                            )) })
+                                          ]
+                                        },
+                                        meta.path
+                                      );
+                                    }
                                     const bendStage = !meta && settingsPanel && padRows[row] === page.toggles && modSettings ? modLayout?.dials[col]?.stage : void 0;
                                     if (bendStage && ENV_BEND_STAGES.includes(bendStage)) {
                                       return /* @__PURE__ */ jsx9(
@@ -7636,6 +7775,100 @@ function MoveActionButton({ kind, children, onPress, disabled, className }) {
   );
 }
 
+// src/components/MoveNotifications.tsx
+import { useEffect as useEffect9, useState as useState7 } from "react";
+import { createPortal as createPortal4 } from "react-dom";
+import { Toast } from "@base-ui/react/toast";
+
+// src/move-notify.ts
+var MOVE_NOTIFY_KINDS = ["info", "success", "warning", "error"];
+var MOVE_NOTIFY_GAP = 14;
+var MOVE_FLOAT_SELECTOR = [
+  ".tweakers-move-root .tweakers-move",
+  '.tweakers-move-wave[data-variant="dock"]',
+  ".tweakers-move-curve",
+  ".tweakers-move-preset-save",
+  "[data-move-float]"
+].join(", ");
+function notifyDockBottom(tops, viewportHeight, gap = MOVE_NOTIFY_GAP) {
+  let highest = Infinity;
+  for (const top of tops) {
+    if (Number.isFinite(top) && top < highest) highest = top;
+  }
+  if (!Number.isFinite(highest)) return gap;
+  return Math.max(gap, Math.round(viewportHeight - highest) + gap);
+}
+
+// src/components/MoveNotifications.tsx
+import { jsx as jsx11, jsxs as jsxs11 } from "react/jsx-runtime";
+var manager = Toast.createToastManager();
+var moveNotify = manager;
+var MEASURE_MS = 100;
+function useDockBottom(active) {
+  const [bottom, setBottom] = useState7(MOVE_NOTIFY_GAP);
+  useEffect9(() => {
+    if (!active || typeof window === "undefined") return;
+    let frame = 0;
+    let last = 0;
+    const measure = () => {
+      const tops = [];
+      document.querySelectorAll(MOVE_FLOAT_SELECTOR).forEach((el) => {
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) tops.push(rect.top);
+      });
+      const next = notifyDockBottom(tops, window.innerHeight);
+      setBottom((prev) => prev === next ? prev : next);
+    };
+    const tick = (now) => {
+      if (now - last >= MEASURE_MS) {
+        last = now;
+        measure();
+      }
+      frame = window.requestAnimationFrame(tick);
+    };
+    measure();
+    frame = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frame);
+  }, [active]);
+  return bottom;
+}
+function NotifyStack({ className }) {
+  const { toasts } = Toast.useToastManager();
+  const bottom = useDockBottom(toasts.length > 0);
+  return /* @__PURE__ */ jsx11(
+    Toast.Viewport,
+    {
+      className: `tweakers-move-notify${className ? ` ${className}` : ""}`,
+      style: { bottom: `${bottom}px` },
+      children: toasts.map((toast) => /* @__PURE__ */ jsx11(Toast.Root, { toast, className: "tweakers-move-notify-card", children: /* @__PURE__ */ jsxs11(Toast.Content, { className: "tweakers-move-notify-body", children: [
+        /* @__PURE__ */ jsxs11("div", { className: "tweakers-move-notify-text", children: [
+          toast.type && toast.type !== "info" && /* @__PURE__ */ jsxs11("span", { className: "tweakers-move-notify-kind", children: [
+            /* @__PURE__ */ jsx11("span", { className: "tweakers-move-notify-dot", "aria-hidden": "true" }),
+            toast.type
+          ] }),
+          toast.title != null && /* @__PURE__ */ jsx11(Toast.Title, { className: "tweakers-move-notify-title" }),
+          toast.description != null && /* @__PURE__ */ jsx11(Toast.Description, { className: "tweakers-move-notify-description" })
+        ] }),
+        /* @__PURE__ */ jsx11(Toast.Action, { className: "tweakers-move-notify-action" }),
+        /* @__PURE__ */ jsx11(Toast.Close, { className: "tweakers-move-notify-close", "aria-label": "Dismiss", children: /* @__PURE__ */ jsx11("svg", { viewBox: "0 0 24 24", width: "14", height: "14", "aria-hidden": "true", children: /* @__PURE__ */ jsx11("path", { d: ICON_CLOSE }) }) })
+      ] }) }, toast.id))
+    }
+  );
+}
+function MoveNotifications({
+  limit = 3,
+  timeout = 5e3,
+  className
+}) {
+  const [mounted, setMounted] = useState7(false);
+  useEffect9(() => setMounted(true), []);
+  if (!mounted || typeof document === "undefined") return null;
+  return createPortal4(
+    /* @__PURE__ */ jsx11("div", { className: "tweakers-root tweakers-move-surface tweakers-move-notify-root", children: /* @__PURE__ */ jsx11(Toast.Provider, { toastManager: manager, limit, timeout, children: /* @__PURE__ */ jsx11(NotifyStack, { ...className ? { className } : {} }) }) }),
+    document.body
+  );
+}
+
 // src/index.ts
 import { ModulationStore as ModulationStore3, MOD_TOUCH_GRACE_MS } from "tweakers/modulation-store";
 
@@ -8005,12 +8238,15 @@ export {
   MOVE_COLOR_STEPS,
   MOVE_COLOR_WHEEL,
   MOVE_DIALS,
+  MOVE_FLOAT_SELECTOR,
   MOVE_FUNCTION_BUTTONS,
   MOVE_FUNCTION_MANIFEST,
   MOVE_JOG_CLICK_EVENT,
   MOVE_JOG_EVENT,
   MOVE_LATCH_EVENT,
   MOVE_MUTE_EVENT,
+  MOVE_NOTIFY_GAP,
+  MOVE_NOTIFY_KINDS,
   MOVE_OPACITY_PADS,
   MOVE_OVERRIDE_EVENT,
   MOVE_PADS,
@@ -8032,8 +8268,10 @@ export {
   MoveActionButton,
   MoveColorStore,
   MoveFunctions,
+  MoveNotifications,
   MovePadActionBody,
   MovePadAppBody,
+  MovePadTabsBody,
   MovePadToggleBody,
   MovePadValueBody,
   MovePadWaveBody,
@@ -8142,7 +8380,10 @@ export {
   invertY,
   isIdentityTransfer,
   isMoveDial,
+  isMoveTabs,
+  isNamedTabs,
   isOutsideSpan,
+  isPadSpanContinuation,
   isSpanContinuation,
   isStripSlot,
   isToggleDial,
@@ -8156,6 +8397,7 @@ export {
   modPageWidth,
   modRingArc,
   moveAppPadRow,
+  moveNotify,
   moveNumericDrawing,
   movePadRows,
   movePlaybackMode,
@@ -8164,6 +8406,7 @@ export {
   moveScreenRowLabel,
   moveSlotKind,
   moveStop,
+  moveTabCell,
   moveVisualReading,
   defaultView as moveWaveformDefaultView,
   moveWheelSlot,
@@ -8184,6 +8427,7 @@ export {
   normalizeTransfer,
   normalizeValue,
   normalizeXYDial,
+  notifyDockBottom,
   nudge,
   nudgeAngle,
   oklchToRgb,
@@ -8191,6 +8435,7 @@ export {
   orderRange,
   padPosition,
   padSection,
+  padSpan,
   pageStripOffset,
   parseHex,
   parseListItemSchema,

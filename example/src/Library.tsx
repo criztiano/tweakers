@@ -1,14 +1,17 @@
 import { Fragment, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import {
+  MoveNotifications,
   MovePanel,
   MovePresetStore,
   MoveSurfaceStore,
+  MOVE_NOTIFY_KINDS,
   MOVE_PALETTE,
   MOVE_JOG_EVENT,
   MOVE_STRIP_EVENT,
   TweakStore,
   buildMoveStrip,
+  moveNotify,
   stripOffsets,
 } from 'tweakers';
 import { PANEL_ID, PANEL_NAME } from './panel';
@@ -111,6 +114,10 @@ export function Library() {
           has to keep its own bottom clear. */}
       <MovePanel panels={PANEL_NAME} theme="dark" scroll productionEnabled />
 
+      {/* The app's messages, in the same air as the floating displays. One
+          mount, anywhere; every `moveNotify.add` in the app lands here. */}
+      <MoveNotifications />
+
       <Section
         id="big"
         title="Big slots"
@@ -175,6 +182,14 @@ export function Library() {
             </li>
           ))}
         </ul>
+      </Section>
+
+      <Section
+        id="notify"
+        title="Notifications"
+        lede="What the app has to say, standing where the floating displays stand: centred over the instrument, one gap above whatever is already up there. The newest card is in front and the run behind it peeks out under it — rest the pointer on the stack to fan the whole set open. Hold a modulation circle to bring a modulator’s curve up first, then fire one: the stack rises over the display rather than burying it, and settles back when the display goes."
+      >
+        <NotifyPanel />
       </Section>
 
       <Section id="palette" title="The palette">
@@ -311,6 +326,53 @@ function PresetPanel() {
   );
 }
 
+/**
+ * The four things a notification can be, in the words an app would really
+ * use — a kind with no sentence behind it teaches nobody what it is for.
+ */
+const NOTIFY_COPY = {
+  info: { title: 'Bridge connected', description: 'The Move is answering on port 7787.' },
+  success: { title: 'Preset saved', description: 'Bass 03 is on the wheel.' },
+  warning: { title: 'The loop bar gave way', description: 'Two step buttons belong to a modulator.' },
+  error: { title: 'Sample not loaded', description: 'kick-07.wav could not be decoded.' },
+} as const;
+
+/**
+ * Notifications, worked for real. The kinds fire one each; the last button
+ * carries an action, which is the one thing a message is allowed to offer to
+ * do about itself.
+ */
+function NotifyPanel() {
+  return (
+    <div className="kit-presets">
+      <div className="kit-preset-actions">
+        {MOVE_NOTIFY_KINDS.map((kind) => (
+          <button key={kind} type="button" onClick={() => moveNotify.add({ type: kind, ...NOTIFY_COPY[kind] })}>
+            {kind}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => moveNotify.add({
+            type: 'success',
+            title: 'Preset replaced',
+            description: 'Bass 03 was written over Bass 01.',
+            actionProps: { children: 'Undo', onClick: () => moveNotify.add({ title: 'Put back', description: 'Bass 01 is on the wheel again.' }) },
+          })}
+        >
+          with an action
+        </button>
+        <button type="button" onClick={() => moveNotify.close()}>clear the stack</button>
+      </div>
+      <p className="kit-card-note">
+        Fire three or four in a row to see the stack: only the front card reads,
+        the rest show an edge until you rest the pointer on them. A card goes on
+        its close key, on a swipe, or on its own after five seconds.
+      </p>
+    </div>
+  );
+}
+
 function Section({ id, title, lede, children }: {
   id: string; title: string; lede?: string; children: ReactNode;
 }) {
@@ -343,6 +405,20 @@ function Card({ item, onShow, tall }: { item: Specimen; onShow: (path: string) =
               data-visual={NUMERIC_KINDS.includes(item.kind) ? item.kind : undefined}
               data-shape={item.kind === 'curve' || undefined}
               style={item.span && item.span > 1 ? { width: `calc(${item.span} * var(--kit-slot-w) + ${(item.span - 1) * 4}px)` } : undefined}
+            >
+              {item.render()}
+            </div>
+          ) : item.span && item.span > 1 ? (
+            // A small slot that claims a run of pads draws as its own strip,
+            // re-cut into the pad columns it spans — the same container the
+            // panel gives it.
+            <div
+              className="tweakers-move-tabs"
+              data-kind={item.kind}
+              style={{
+                '--move-tabs-cols': item.span,
+                width: `calc(${item.span} * var(--kit-slot-w) + ${(item.span - 1) * 4}px)`,
+              } as CSSProperties}
             >
               {item.render()}
             </div>

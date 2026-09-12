@@ -361,13 +361,19 @@
 }
 
 .tweakers-move,
-.tweakers-move * {
+.tweakers-move *,
+.tweakers-move-surface,
+.tweakers-move-surface * {
   box-sizing: border-box;
   /* One weight in the face; a faked bold smears the pixels. */
   font-synthesis: none;
 }
 
-.tweakers-move {
+/* The instrument's tokens. The panel is the usual carrier, but a surface that
+   floats outside it — the notification stack — wears `tweakers-move-surface`
+   to read from the same set rather than keeping a second palette. */
+.tweakers-move,
+.tweakers-move-surface {
   --move-bg: #302e2e;
   --move-slot: rgba(222, 227, 201, 0.1);
   /* A column held open by a page that has nothing for it to do — fainter
@@ -438,7 +444,9 @@
   --move-duration-press: 150ms;
   --move-ease-out: cubic-bezier(0.2, 0, 0, 1);
   --move-header-control-height: 28px;
+}
 
+.tweakers-move {
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -2467,6 +2475,117 @@
   box-shadow: -2px 2px 0 0 var(--move-bg), -3px 3px 0 0 var(--move-text);
 }
 
+/* The tabs strip — the pad grid's multi-slot control. It spans its run and
+   re-cuts that run into the same columns and the same 4px gap the grid uses,
+   so every tab lands exactly on the hardware pad that selects it. */
+.tweakers-move-tabs {
+  display: grid;
+  grid-template-columns: repeat(var(--move-tabs-cols, 2), minmax(0, 1fr));
+  gap: 4px;
+  position: relative;
+}
+
+/* The options are one bar across their pads: the ground belongs to the run,
+   and the gaps between the tabs are the run showing through. */
+.tweakers-move-tabs-run {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 4px;
+  background: var(--move-chip);
+  border-radius: var(--move-radius-small);
+}
+
+.tweakers-move-tabs-head + .tweakers-move-tabs-run {
+  grid-column: 2 / -1;
+}
+
+.tweakers-move-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  min-width: 0;
+  padding: 0 6px;
+  border-radius: var(--move-radius-small);
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: normal;
+}
+
+/* Only the mode you are in wears a fill. An available mode says so by being
+   on the bar — giving it a chip of its own would make every tab look chosen. */
+.tweakers-move-tab[data-on] {
+  background: var(--move-text);
+  color: var(--move-text-inverse);
+}
+
+/* The name is a head, not a choice: no ground of its own, and set against
+   the run it names. */
+.tweakers-move-tabs-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 32px;
+  padding-right: 8px;
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  opacity: 0.55;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tweakers-move-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tweakers-move-tab-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+/* The real controls, over the drawing: one button per option, on the column
+   its tab is drawn in. Transparent, so the strip keeps the face above. */
+.tweakers-move-tab-zones {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--move-tabs-cols, 2), minmax(0, 1fr));
+  gap: 4px;
+}
+
+/* No press treatment of its own: the tab lights the instant it is chosen,
+   and that IS the answer to the press. */
+.tweakers-move-tab-zone {
+  grid-row: 1;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--move-radius-small);
+  color: transparent;
+  font-size: 0;
+  cursor: pointer;
+}
+
+.tweakers-move-tab-zone:focus-visible {
+  outline: var(--move-color-stroke) solid var(--move-text);
+  outline-offset: var(--move-color-stroke);
+}
+
+.tweakers-move-tab-zone:disabled {
+  cursor: default;
+}
+
 @media (max-width: 720px) {
 .tweakers-move {
     padding: 12px 12px 10px;
@@ -2906,4 +3025,272 @@
 .tweakers-move-dial[data-visual] .tweakers-move-visual,
 .tweakers-move-dial[data-visual] .tweakers-move-dial-icon {
   transform: translateY(8px);
+}
+
+/* ---------------------------------------------------------------------------
+   Notifications
+
+   The app's messages, standing in the same air as the floating displays:
+   centred over the instrument, one gap above whatever is up there. The card
+   wears the panel's own surface and the curve frame's drop, so a message reads
+   as a thing the instrument said rather than a thing the browser said.
+
+   The stack is the Sonner shape Base UI draws: newest in front, the run behind
+   it peeking out by a sliver, and the whole set fanning open on hover or
+   focus. Base UI hands us the measurements (--toast-index, --toast-height,
+   --toast-offset-y, the swipe offsets); the arithmetic below only spends them.
+   --------------------------------------------------------------------------- */
+
+.tweakers-move-notify {
+  /* A message is narrower than a display on purpose — it is a sentence, not a
+     workspace, and the display it floats over must still read past it. */
+  --move-notify-width: 380px;
+  /* The air between two fanned-out cards, and the sliver a stacked one shows. */
+  --move-notify-gap: 10px;
+  --move-notify-peek: 8px;
+
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  width: var(--move-notify-width);
+  /* Over the panel (9990), over an open overlay (10001), over a docked display
+     (10002) — a message nobody can see is a message nobody was given. */
+  z-index: 10003;
+}
+
+.tweakers-move-notify-card {
+  --move-notify-scale: calc(max(0, 1 - (var(--toast-index) * 0.06)));
+  --move-notify-shrink: calc(1 - var(--move-notify-scale));
+  --move-notify-height: var(--toast-frontmost-height, var(--toast-height));
+  --move-notify-open-y: calc(
+    var(--toast-offset-y) * -1 + (var(--toast-index) * var(--move-notify-gap) * -1) +
+      var(--toast-swipe-movement-y)
+  );
+
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: var(--move-notify-height);
+  border-radius: var(--move-radius);
+  background: var(--move-bg);
+  color: var(--move-text);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  transform-origin: bottom center;
+  -webkit-user-select: none;
+  user-select: none;
+  z-index: calc(1000 - var(--toast-index));
+  transform: translateX(var(--toast-swipe-movement-x))
+    translateY(
+      calc(
+        var(--toast-swipe-movement-y) - (var(--toast-index) * var(--move-notify-peek)) -
+          (var(--move-notify-shrink) * var(--move-notify-height))
+      )
+    )
+    scale(var(--move-notify-scale));
+  transition:
+    transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.4s var(--move-ease-out),
+    height 0.15s;
+}
+
+/* Fanned open — every card at full size, stacked upward by its own height. */
+.tweakers-move-notify-card[data-expanded] {
+  height: var(--toast-height);
+  transform: translateX(var(--toast-swipe-movement-x)) translateY(var(--move-notify-open-y));
+}
+
+/* Arriving and leaving: a message rises out of the instrument and sinks back
+   into it, which is where it came from. */
+.tweakers-move-notify-card[data-starting-style],
+.tweakers-move-notify-card[data-ending-style] {
+  opacity: 0;
+  transform: translateY(150%);
+}
+
+.tweakers-move-notify-card[data-limited] {
+  opacity: 0;
+}
+
+.tweakers-move-notify-card[data-ending-style][data-swipe-direction='up'] {
+  transform: translateY(calc(var(--toast-swipe-movement-y) - 150%));
+}
+
+.tweakers-move-notify-card[data-ending-style][data-swipe-direction='down'] {
+  transform: translateY(calc(var(--toast-swipe-movement-y) + 150%));
+}
+
+.tweakers-move-notify-card[data-ending-style][data-swipe-direction='left'] {
+  transform: translateX(calc(var(--toast-swipe-movement-x) - 150%))
+    translateY(var(--move-notify-open-y));
+}
+
+.tweakers-move-notify-card[data-ending-style][data-swipe-direction='right'] {
+  transform: translateX(calc(var(--toast-swipe-movement-x) + 150%))
+    translateY(var(--move-notify-open-y));
+}
+
+/* The bridge that keeps the fan open while the pointer crosses the gap
+   between two cards. */
+.tweakers-move-notify-card::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  height: calc(var(--move-notify-gap) + 1px);
+}
+
+.tweakers-move-notify-card:focus-visible {
+  outline: var(--move-color-stroke) solid var(--move-text);
+  outline-offset: var(--move-color-stroke);
+}
+
+.tweakers-move-notify-body {
+  display: flex;
+  align-items: center;
+  gap: var(--move-color-gap);
+  padding: 12px;
+  overflow: hidden;
+  transition: opacity 0.25s var(--move-ease-out);
+}
+
+/* A card behind the front one shows its edge, not its words — the stack is a
+   count at rest and a list once it is opened. */
+.tweakers-move-notify-body[data-behind] {
+  opacity: 0;
+}
+
+.tweakers-move-notify-body[data-expanded] {
+  opacity: 1;
+}
+
+.tweakers-move-notify-text {
+  display: flex;
+  flex: 1 0 0;
+  min-width: 1px;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* What kind of message this is, in a word. The hue beside it repeats the word
+   and never replaces it. */
+.tweakers-move-notify-kind {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+  font-family: var(--move-font-label);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--move-text);
+  opacity: 0.7;
+}
+
+.tweakers-move-notify-dot {
+  width: var(--move-color-marker);
+  height: var(--move-color-marker);
+  border-radius: 50%;
+  background: var(--move-text);
+}
+
+.tweakers-move-notify-card[data-type='success'] .tweakers-move-notify-dot {
+  background: var(--move-lime);
+}
+
+.tweakers-move-notify-card[data-type='warning'] .tweakers-move-notify-dot {
+  background: var(--move-yellow);
+}
+
+.tweakers-move-notify-card[data-type='error'] .tweakers-move-notify-dot {
+  background: var(--move-red);
+}
+
+.tweakers-move-notify-title {
+  margin: 0;
+  font-family: var(--move-font-label);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 18px;
+  color: var(--move-text);
+}
+
+.tweakers-move-notify-description {
+  margin: 0;
+  font-family: var(--move-font-label);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  color: var(--move-text);
+  opacity: 0.7;
+}
+
+/* The one thing a message can offer to do about itself. */
+.tweakers-move-notify-action {
+  flex: 0 0 auto;
+  height: var(--move-header-control-height);
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--move-radius-small);
+  background: var(--move-chip);
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: normal;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-notify-action:active {
+  transform: scale(0.97);
+}
+
+.tweakers-move-notify-close {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--move-radius-small);
+  background: none;
+  color: var(--move-text);
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-notify-close:hover {
+  opacity: 1;
+}
+
+.tweakers-move-notify-close path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--move-glyph-stroke);
+  stroke-linecap: round;
+}
+
+.tweakers-move-notify-action:focus-visible,
+.tweakers-move-notify-close:focus-visible {
+  outline: var(--move-color-stroke) solid var(--move-text);
+  outline-offset: var(--move-color-stroke);
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-notify-card,
+  .tweakers-move-notify-body,
+  .tweakers-move-notify-action,
+  .tweakers-move-notify-close {
+    transition: none;
+  }
 }

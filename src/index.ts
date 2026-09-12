@@ -22,7 +22,7 @@ export {
 } from './components/MovePanel';
 export { MoveActionButton } from './components/MoveActionButton';
 export type { MoveActionButtonProps } from './components/MoveActionButton';
-export { buildMovePages, buildModMovePage, movePadRows, moveAppPadRow, visibleColumns, isToggleDial, normalizeToggleDial, denormalizeToggleDial, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isMoveDial, isSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
+export { buildMovePages, buildModMovePage, movePadRows, moveAppPadRow, visibleColumns, isToggleDial, normalizeToggleDial, denormalizeToggleDial, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, padSpan, isMoveDial, isMoveTabs, isNamedTabs, moveTabCell, isSpanContinuation, isPadSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
 export type { MovePage } from './move-layout';
 
 // The endless strip — a page with more slots than the Move has dials
@@ -31,7 +31,7 @@ export { buildMoveStrip, isStripSlot, stripStarts, stripOffsets, clampStripOffse
 // The big-slot library — the dictionary of what a Move dial slot can be
 export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotPlaybackDrawing, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotColorBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
 // The small slots — the pad row under the dials
-export { MOVE_PAD_LIBRARY, MovePadToggleBody, MovePadValueBody, MovePadActionBody, MovePadAppBody, MovePadWaveBody } from './components/move-slots';
+export { MOVE_PAD_LIBRARY, MovePadToggleBody, MovePadValueBody, MovePadActionBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody } from './components/move-slots';
 export type { MovePadKind } from './components/move-slots';
 export { moveNumericDrawing, movePlaybackMode, moveVisualReading } from './move-visual-core';
 export type { MoveVisual, MoveSliderVisual, MoveSelectVisual, MovePlaybackMode, MoveNumericDrawing } from './move-visual-core';
@@ -59,6 +59,12 @@ export {
   MOVE_WAVEFORM_PADS,
 } from './move-waveform';
 export type { MoveWaveformVariant, MoveWaveformView } from './move-waveform';
+// Notifications — the app's messages, floating over the instrument and over
+// whatever display is already up there.
+export { MoveNotifications, moveNotify } from './components/MoveNotifications';
+export type { MoveNotificationsProps, MoveNotifyOptions } from './components/MoveNotifications';
+export { MOVE_NOTIFY_KINDS, MOVE_NOTIFY_GAP, MOVE_FLOAT_SELECTOR, notifyDockBottom } from './move-notify';
+export type { MoveNotifyKind } from './move-notify';
 export { MOVE_PALETTE } from './move-palette';
 export type { MovePaletteName } from './move-palette';
 export { MoveSettingsView } from './move-settings';

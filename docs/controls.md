@@ -28,12 +28,31 @@ and the formatted readout. It retains every gesture and store subscription.
 
 ### Small slots and companion components
 
+`MOVE_PAD_LIBRARY` is the small-slot dictionary, checked against `MovePadKind`.
+A small slot is one pad — except `tabs`, the pad grid's first multi-slot
+control.
+
+| Kind | Choose for | Configuration / body | Hardware space |
+| --- | --- | --- | --- |
+| `toggle` | A switch under its dial | `toggle` with a `movePads` column; `MovePadToggleBody` | 1 pad |
+| `value` | A bounded number the dial above can borrow | Bounded `slider` / `number`; `MovePadValueBody` | 1 pad |
+| `action` | A button the page wants on the surface | `action` with a `movePads` column; `MovePadActionBody` | 1 pad |
+| `app` | A cell the app paints — a track, a slice, a step | `MoveSurfaceStore`; `MovePadAppBody` | 1 pad |
+| `tabs` | The mode a page is in, reachable without turning anything | `select` with `moveTabs` (`true`, or `'named'` for the name pad); `MovePadTabsBody` | 2–8 adjacent pads, switch row |
+
+A `moveTabs` select stops competing for a dial: it is a pad strip and nothing
+else. It lands as one piece or not at all — the builder reports `tabs-oversized`
+when the strip is wider than the 8-pad row and `tabs-no-room` when no run that
+long is left, rather than shortening a mode picker. `movePads` names the column
+its run **starts** in.
+
 | Component / API | Purpose |
 | --- | --- |
-| `movePads` option | Place toggles, numeric value chips, and explicitly mapped actions under their related dial columns |
+| `movePads` option | Place toggles, numeric value chips, explicitly mapped actions and tabs strips under their related dial columns |
 | `MoveActionButton` / `MoveFunctions` | Hardware-named action pills and one shared action registry |
 | `MoveWaveform` / `MoveWaveformStore` | Sample display, navigation, loop and scrub state |
 | `MoveVolumeDisplay` | Contextual volume-knob readout |
+| `MoveNotifications` / `moveNotify` | The app's messages, stacked over the instrument. Mount the component once; call `moveNotify.add({ type, title, description })` from anywhere. `type` is `info`, `success`, `warning` or `error` — the card says the kind in a word and repeats it in the palette's hue, never in hue alone. The stack clears the panel and any display floating over it (curve composer, docked waveform, save input); an app-drawn float opts in with `data-move-float`. |
 | `MOVE_PALETTE` | The Move's colours on screen — the same set the hardware lights, matched by eye against the device's LED palette. `MOVE_TRACK_COLORS` is built from it. Colour on this surface always means something; never decoration. |
 | `MoveSurfaceStore` | Mirror app-owned raw pads, step buttons and screen state |
 | `ListScreen` | Controlled list presentation matching the device display |

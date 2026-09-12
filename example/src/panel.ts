@@ -68,6 +68,19 @@ export const CONFIG = {
   glide: { type: 'slider', default: 120, min: 0, max: 500, step: 1, unit: ' ms' },
   reset: { type: 'action', label: 'Reset' },                   /* a button */
 
+  /* ── the small slots' own multi-slot control: a mode picker lying across
+        the pads, one per option, the current one lit. Named, so the run
+        says what it is switching. ─────────────────────────────────── */
+  take: {
+    type: 'select', default: 'b',
+    options: [
+      { value: 'a', label: 'A' },
+      { value: 'b', label: 'B' },
+      { value: 'c', label: 'C' },
+    ],
+    moveTabs: 'named',
+  },
+
   /* ── two hands on one control: the knob, and the volume knob ──── */
   band: { type: 'range', min: 0, max: 100, default: { min: 20, max: 80 } },
   spot: {
@@ -149,6 +162,7 @@ export const MOVE_PADS: Record<string, number> = {
   drive: 0,
   glide: 1,
   reset: 5,
+  take: 2,          /* a strip: the column its run starts in, four pads wide */
 };
 
 /** The values the page was registered with — what the pad-row button puts
