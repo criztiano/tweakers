@@ -11,13 +11,17 @@ import { MoveVolumeDisplay } from '../src/move-volume';
 import { setAudioModBuffer } from '../src/modulation-core';
 import '../src/styles/theme.css';
 
-// Two pages, so the track buttons have something to switch between.
+// Two pages, so the track buttons have something to switch between. Tone
+// carries a stacked pair of pads under Level, so the page has the full
+// slot-and-pads height — the wheel screen beside it runs the same height.
 TweakStore.registerPanel('tone', 'Tone', {
   level: [0.6, 0, 1],
   drive: [0.25, 0, 1],
   air: [0.4, 0, 1],
   width: [0.5, 0, 1],
-});
+  punch: true,
+  soft: false,
+}, undefined, { movePads: { punch: 0, soft: 0 } });
 TweakStore.registerPanel('space', 'Space', {
   size: [0.35, 0, 1],
   decay: [0.5, 0, 1],
@@ -136,6 +140,37 @@ MoveSurfaceStore.onScreenSelect((index) => {
 });
 showTracks();
 
+// The app's own function buttons — attached means lit on the hardware, and
+// a labelled chip button (capture, loop, mute, sample) gets its header chip
+// for free: one function, two surfaces. Capture snapshots the tone page
+// into a preset — dressed in the kit's blue to show the palette option —
+// and Loop flips the first modulator's loop in the quiet slot voice. Undo
+// resets the dials with no chip: a printed key says what it does from the
+// hardware.
+let takes = 0;
+MoveFunctions.attach('capture', () => {
+  TweakStore.savePreset('tone', `Take ${++takes}`);
+}, { label: 'Snapshot', chip: { color: 'blue' } });
+MoveFunctions.attach('undo', () => {
+  for (const [path, value] of [['level', 0.6], ['drive', 0.25], ['air', 0.4], ['width', 0.5]] as const) {
+    TweakStore.updateValue('tone', path, value);
+  }
+});
+MoveFunctions.attach('loop', () => {
+  const slot = ModulationStore.getSlot(0);
+  if (slot) ModulationStore.updateSlotParams(0, { loop: !slot.params.loop });
+}, { label: 'Env loop' });
+
+// The volume dial reads as the demo's session clock, so the header pill has
+// a live readout beside the chips.
+const startedAt = Date.now();
+MoveVolumeDisplay.set({
+  getValue: () => {
+    const s = Math.floor((Date.now() - startedAt) / 1000);
+    return `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  },
+});
+
 // Keyboard stand-ins for the hardware. M = the Menu button (tap opens and
 // dismisses; Shift+M is the long press, the save input). Holding C is the
 // Mute button held — the compare, relayed raw like the kit does it.
@@ -176,5 +211,5 @@ import(/* @vite-ignore */ 'http://localhost:7787/kit.js')
 (window as any).__tweakers = { TweakStore, MovePresetStore, MoveFunctions };
 
 createRoot(document.getElementById('root')!).render(
-  <MovePanel productionEnabled theme="dark" settings={['Settings', 'System']} />
+  <MovePanel productionEnabled theme="dark" settings={["Settings", "System"]} />
 );

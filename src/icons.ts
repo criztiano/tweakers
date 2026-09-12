@@ -110,6 +110,98 @@ export const ICON_MOVE_COPY = {
   ],
 };
 
+/**
+ * A function chip's glyph. `paths` are stroked, like the hardware's printed
+ * marks; `fills` are the filled marks (the capture corners); `circles` are
+ * filled circles (the enter dot, rec's core); `text` is a letter mark set in
+ * Helvetica (mute's "M"). All share one viewBox and the size the chip draws
+ * them at.
+ */
+export interface MoveFunctionGlyph {
+  viewBox: string;
+  size: number;
+  paths?: string[];
+  fills?: string[];
+  circles?: { cx: string; cy: string; r: string }[];
+  text?: string;
+}
+
+/** The letter marks' face — Helvetica, with the system stack behind it. */
+export const MOVE_GLYPH_TEXT_FONT = "Helvetica, 'Helvetica Neue', Arial, system-ui, sans-serif";
+
+/** The enter dot, as a chip glyph — jog click, and Sampling's confirm. */
+const MOVE_GLYPH_DOT: MoveFunctionGlyph = {
+  viewBox: ICON_MOVE_ENTER.viewBox,
+  size: 12,
+  circles: [ICON_MOVE_ENTER.circle],
+};
+
+/**
+ * The Shift-layer stand-in: a step button with its printed label under it.
+ * The sixteen label marks are distinct on the hardware; until each gets its
+ * own drawing, every Shift+step function wears this one, so a chip still
+ * says "this rides a step's second function" at a glance.
+ */
+const MOVE_GLYPH_STEP: MoveFunctionGlyph = {
+  viewBox: '0 0 14 14',
+  size: 14,
+  paths: ['M3 1.5H11V9.5H3V1.5Z', 'M4.5 12.5H9.5'],
+};
+
+/**
+ * The canonical glyph per Move function button — every app shows the same
+ * icon for the same hardware key, so the chips read like the instrument.
+ * Drawn on the capture glyph's 14px grid (dots on the enter dot's 12px),
+ * stroked like the printed marks unless the hardware fills them.
+ */
+export const MOVE_FUNCTION_ICONS: Record<string, MoveFunctionGlyph> = {
+  play: { viewBox: '0 0 14 14', size: 14, paths: ['M4 2.5L11.5 7L4 11.5V2.5Z'] },
+  rec: {
+    viewBox: '0 0 14 14',
+    size: 14,
+    paths: ['M7 2.5A4.5 4.5 0 1 0 7 11.5A4.5 4.5 0 1 0 7 2.5Z'],
+    circles: [{ cx: '7', cy: '7', r: '2' }],
+  },
+  /* Mute is a letter, not a drawing: the "M", set in Helvetica on the same
+     14px grid as the drawn marks. */
+  mute: { viewBox: '0 0 14 14', size: 14, text: 'M' },
+  undo: {
+    viewBox: '0 0 14 14',
+    size: 14,
+    paths: ['M5.5 2.5L3 5L5.5 7.5', 'M3 5H8.5C10.7091 5 12.5 6.79086 12.5 9V9C12.5 11.2091 10.7091 13 8.5 13H5.5'],
+  },
+  copy: { viewBox: ICON_MOVE_COPY.viewBox, size: 14, paths: [...ICON_MOVE_COPY.paths] },
+  delete: { viewBox: '0 0 14 14', size: 14, paths: ['M3.25 3.25L10.75 10.75', 'M10.75 3.25L3.25 10.75'] },
+  up: { viewBox: '0 0 14 14', size: 14, paths: ['M3.5 8.75L7 5.25L10.5 8.75'] },
+  down: { viewBox: '0 0 14 14', size: 14, paths: ['M3.5 5.25L7 8.75L10.5 5.25'] },
+  left: { viewBox: '0 0 14 14', size: 14, paths: ['M8.75 3.5L5.25 7L8.75 10.5'] },
+  right: { viewBox: '0 0 14 14', size: 14, paths: ['M5.25 3.5L8.75 7L5.25 10.5'] },
+  /* Sampling wears the enter dot — the surface's second confirm. */
+  sample: MOVE_GLYPH_DOT,
+  loop: { viewBox: ICON_MOVE_LOOP.viewBox, size: 14, paths: [...ICON_MOVE_LOOP.paths] },
+  capture: { viewBox: ICON_MOVE_CAPTURE.viewBox, size: 14, fills: [ICON_MOVE_CAPTURE.path] },
+  menu: { viewBox: '0 0 14 14', size: 14, paths: ['M2.5 3.5H11.5', 'M2.5 7H11.5', 'M2.5 10.5H11.5'] },
+  back: { viewBox: '0 0 14 14', size: 14, paths: ['M5.5 3L2.5 6L5.5 9', 'M2.5 6H9.5C11.1569 6 12.5 7.34315 12.5 9V11.5'] },
+  jog_click: MOVE_GLYPH_DOT,
+  /* The Shift layer — one stand-in mark for now (see MOVE_GLYPH_STEP). */
+  set_overview: MOVE_GLYPH_STEP,
+  setup: MOVE_GLYPH_STEP,
+  workflow: MOVE_GLYPH_STEP,
+  step4: MOVE_GLYPH_STEP,
+  tempo: MOVE_GLYPH_STEP,
+  metronome: MOVE_GLYPH_STEP,
+  groove: MOVE_GLYPH_STEP,
+  pitches_16: MOVE_GLYPH_STEP,
+  scale: MOVE_GLYPH_STEP,
+  full_velocity: MOVE_GLYPH_STEP,
+  repeat: MOVE_GLYPH_STEP,
+  step12: MOVE_GLYPH_STEP,
+  step13: MOVE_GLYPH_STEP,
+  step14: MOVE_GLYPH_STEP,
+  double_loop: MOVE_GLYPH_STEP,
+  quantize: MOVE_GLYPH_STEP,
+};
+
 export const ICON_PANEL = {
   path: 'M6.84766 11.75C6.78583 11.9899 6.75 12.2408 6.75 12.5C6.75 12.7592 6.78583 13.0101 6.84766 13.25H2C1.58579 13.25 1.25 12.9142 1.25 12.5C1.25 12.0858 1.58579 11.75 2 11.75H6.84766ZM14 11.75C14.4142 11.75 14.75 12.0858 14.75 12.5C14.75 12.9142 14.4142 13.25 14 13.25H12.6523C12.7142 13.0101 12.75 12.7592 12.75 12.5C12.75 12.2408 12.7142 11.9899 12.6523 11.75H14ZM3.09766 7.25C3.03583 7.48994 3 7.74075 3 8C3 8.25925 3.03583 8.51006 3.09766 8.75H2C1.58579 8.75 1.25 8.41421 1.25 8C1.25 7.58579 1.58579 7.25 2 7.25H3.09766ZM14 7.25C14.4142 7.25 14.75 7.58579 14.75 8C14.75 8.41421 14.4142 8.75 14 8.75H8.90234C8.96417 8.51006 9 8.25925 9 8C9 7.74075 8.96417 7.48994 8.90234 7.25H14ZM7.59766 2.75C7.53583 2.98994 7.5 3.24075 7.5 3.5C7.5 3.75925 7.53583 4.01006 7.59766 4.25H2C1.58579 4.25 1.25 3.91421 1.25 3.5C1.25 3.08579 1.58579 2.75 2 2.75H7.59766ZM14 2.75C14.4142 2.75 14.75 3.08579 14.75 3.5C14.75 3.91421 14.4142 4.25 14 4.25H13.4023C13.4642 4.01006 13.5 3.75925 13.5 3.5C13.5 3.24075 13.4642 2.98994 13.4023 2.75H14Z',
   circles: [

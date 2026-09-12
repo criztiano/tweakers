@@ -21,6 +21,12 @@ adjustment, modulation, readouts and hardware column alignment.
 | `range` | Low/high bounds of one interval | `range`; `MoveSlotRangeBody` | Column knob low, touched + volume high |
 | `filter` | Cutoff and resonance with a response display | `filter`; `MoveSlotFilterBody` | 2 adjacent dials |
 
+The panel's standard surface is the fixed eight-column cluster: parameters past
+the eight dials become value chips on the pad row per the layout rules, and a
+two-column dial that would start past column 8 is dropped with a layout
+warning. `MovePanel`'s `scroll` strip is strictly opt-in — never enable it by
+default in an integration; it is used only on Cri's direct request for that app.
+
 `MoveSlotGlyph`, `MoveSlotReadout`, and `MoveSlotShape` provide the shared visual
 parts. The XY face also accepts a shape path for the modulation curve preview.
 The parent supplies normalized screen coordinates (Y down), grid division count,
@@ -50,6 +56,7 @@ its run **starts** in.
 | --- | --- |
 | `movePads` option | Place toggles, numeric value chips, explicitly mapped actions and tabs strips under their related dial columns |
 | `MoveActionButton` / `MoveFunctions` | Hardware-named action pills and one shared action registry |
+| `MoveFunctionChips` | The attached functions as header chips, for free — but only for `MOVE_CHIP_BUTTONS` (`sample`, `capture`, `mute`, `loop`: the keys whose meaning is the app's to give), and only with a `label` saying what the button does in this app. A chip never wears a hardware name; unlabelled or non-chip-button attachments light the key and nothing else (Play is the time indicator's story). Naming: `sample` is the printed Sampling key — the surface's second confirm, often called "the enter button"; `jog_click` is the wheel pressed, never a chip. Clicking a chip runs the hardware key's handler. Default dress is the slot idiom; `chip: { variant: 'highlight' }` is the pale key look, `chip: { color }` takes a `MOVE_PALETTE` name only. `MovePanel` places the row by its `functionChips` option — `clock` (default, left of the volume readout), `tracks` (after the track labels), `none`. `chip: false` hides one. |
 | `MoveWaveform` / `MoveWaveformStore` | Sample display, navigation, loop and scrub state |
 | `MoveVolumeDisplay` | Contextual volume-knob readout |
 | `MoveNotifications` / `moveNotify` | The app's messages, stacked over the instrument. Mount the component once; call `moveNotify.add({ type, title, description })` from anywhere. `type` is `info`, `success`, `warning` or `error` — the card says the kind in a word and repeats it in the palette's hue, never in hue alone. The stack clears the panel and any display floating over it (curve composer, docked waveform, save input); an app-drawn float opts in with `data-move-float`. |

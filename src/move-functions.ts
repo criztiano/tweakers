@@ -24,6 +24,8 @@
  * the four track buttons always switch pages.
  */
 
+import { MOVE_PALETTE, type MovePaletteName } from './move-palette';
+
 /**
  * The manifest of attachable buttons — each named exactly as printed on the
  * hardware, so integration talk stays unambiguous ("wire the sample button").
@@ -100,20 +102,64 @@ export interface MoveFunctionPress {
 
 export type MoveFunctionHandler = (press: MoveFunctionPress) => void;
 
+/**
+ * How an attachment's chip may dress. The default wears the slot idiom —
+ * the same quiet surface as everything else on the panel. `highlight` pops
+ * it out as the pale hardware-key look, and `color` may name one of the
+ * kit's own palette colours (`MOVE_PALETTE`) — never an arbitrary CSS
+ * colour, so a chip's hue always means something the two surfaces agree on.
+ */
+export interface MoveFunctionChipStyle {
+  variant?: 'highlight';
+  color?: MovePaletteName;
+}
+
 export interface MoveFunctionOptions {
   /**
-   * A screen name for the action, readable back via `label(name)`. The
-   * screen-side pills are MoveActionButtons now, which carry their own
-   * labels — this stays for kits and views that want a registry name.
+   * What the button does in this app, readable back via `label(name)` and
+   * worn by the on-screen chip. A chip's label always describes the app's
+   * action ("Load video"), never the hardware key's name — a chip-worthy
+   * attachment without a label renders no chip at all.
    */
   label?: string;
+  /**
+   * The on-screen chip: `false` hides it (the panel's own plumbing — strip
+   * arrows, an overlay's borrowed Back — belongs to the instrument, not the
+   * app's function row), a style object dresses it. Chips render only for
+   * the buttons in MOVE_CHIP_BUTTONS, and only with a `label`.
+   */
+  chip?: boolean | MoveFunctionChipStyle;
 }
+
+/** One attached function, as the panel's chip row shows it. */
+export interface MoveFunctionChip {
+  name: MoveFunctionButton;
+  /** What the button does here — the attach's label, always present. */
+  label: string;
+  variant?: 'highlight';
+  color?: MovePaletteName;
+}
+
+/**
+ * The buttons that may carry an on-screen chip — a system rule, the same in
+ * every app. Play is already told by the time indicator; the printed keys
+ * (Undo, Copy, Delete, the arrows) say what they do from the hardware and
+ * stay light-only; the wheel's click (`jog_click`) is a gesture, not a key
+ * a chip can stand for; the Shift layer and the host's own shortcuts never
+ * surface. What remains are the keys whose meaning is the app's to give.
+ *
+ * Naming, once and for all: `sample` is the hardware's printed Sampling
+ * key — the surface's second confirm, so it wears the enter dot and is
+ * often called "the enter button". `jog_click` is the wheel pressed as a
+ * button. Neither is named "enter" in this manifest.
+ */
+export const MOVE_CHIP_BUTTONS = ['sample', 'capture', 'mute', 'loop'] as const;
 
 export type MoveFunctionRunListener = (name: MoveFunctionButton, press: MoveFunctionPress) => void;
 
 class MoveFunctionsClass {
   private handlers = new Map<MoveFunctionButton, MoveFunctionHandler>();
-  private labels = new Map<MoveFunctionButton, string>();
+  private options = new Map<MoveFunctionButton, MoveFunctionOptions>();
   private listeners = new Set<() => void>();
   private runListeners = new Set<MoveFunctionRunListener>();
 
@@ -127,13 +173,13 @@ class MoveFunctionsClass {
       return () => {};
     }
     this.handlers.set(name, handler);
-    if (options?.label != null) this.labels.set(name, options.label);
-    else this.labels.delete(name);
+    if (options) this.options.set(name, options);
+    else this.options.delete(name);
     this.notify();
     return () => {
       if (this.handlers.get(name) === handler) {
         this.handlers.delete(name);
-        this.labels.delete(name);
+        this.options.delete(name);
         this.notify();
       }
     };
@@ -145,24 +191,48 @@ class MoveFunctionsClass {
   }
 
   /**
+   * The attachments the panel's chip row shows, in manifest order. A chip
+   * renders only for a MOVE_CHIP_BUTTONS key, only while a handler is
+   * attached, and only with a `label` — a chip says what the button does in
+   * this app, so an attachment that names nothing shows nothing (the key
+   * still lights). `chip: false` hides one outright. A push overlay
+   * replaces the underlying chip while it holds the button — the chip
+   * always says what a press runs right now.
+   */
+  chips(): MoveFunctionChip[] {
+    return MOVE_FUNCTION_MANIFEST
+      .filter((b) => (MOVE_CHIP_BUTTONS as readonly string[]).includes(b.name) && this.handlers.has(b.name))
+      .map((b) => ({ name: b.name, options: this.options.get(b.name) }))
+      .filter(({ options }) => options?.chip !== false && !!options?.label)
+      .map(({ name, options }) => ({
+        name,
+        label: options!.label!,
+        ...(typeof options!.chip === 'object' && options!.chip.variant ? { variant: options!.chip.variant } : {}),
+        ...(typeof options!.chip === 'object' && options!.chip.color != null && options!.chip.color in MOVE_PALETTE
+          ? { color: options!.chip.color }
+          : {}),
+      }));
+  }
+
+  /**
    * Attach on top of whatever is there; the returned release puts the
    * previous attachment back. For overlays that borrow a button while they
    * are open — the preset navigator takes Back, and hands it back on close.
    */
   push(name: MoveFunctionButton, handler: MoveFunctionHandler, options?: MoveFunctionOptions): () => void {
     const prevHandler = this.handlers.get(name);
-    const prevLabel = this.labels.get(name);
+    const prevOptions = this.options.get(name);
     const detach = this.attach(name, handler, options);
     return () => {
       if (this.handlers.get(name) !== handler) return; // someone else took it since
       detach();
-      if (prevHandler) this.attach(name, prevHandler, prevLabel != null ? { label: prevLabel } : undefined);
+      if (prevHandler) this.attach(name, prevHandler, prevOptions);
     };
   }
 
   /** The screen name an attachment carries, if any. */
   label(name: MoveFunctionButton): string | undefined {
-    return this.labels.get(name);
+    return this.options.get(name)?.label;
   }
 
   /** Run the action attached to a button, if any. Called by the kit per press. */

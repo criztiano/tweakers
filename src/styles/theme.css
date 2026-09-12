@@ -375,6 +375,10 @@
 .tweakers-move,
 .tweakers-move-surface {
   --move-bg: #302e2e;
+  /* The 8-slot cluster's width cap — the instrument's whole maximum. The
+     wheel-screen list lives inside this budget and never widens the panel
+     beyond it. */
+  --move-cluster-max: 1180px;
   --move-slot: rgba(222, 227, 201, 0.1);
   /* A column held open by a page that has nothing for it to do — fainter
      than a slot you can press, so it never reads as a control. */
@@ -451,6 +455,13 @@
   align-items: flex-end;
   justify-content: center;
   padding: 16px 48px 14px;
+  /* The panel is never wider than its own 8-slot cluster (plus this box's
+     padding) — the cap is measured on the slots alone, and a wheel-screen
+     list beside them shares that budget rather than widening the panel. A
+     host that hands the panel a wider stage gets it centred at this width,
+     not stretched across the page. */
+  max-width: calc(var(--move-cluster-max) + 2 * 48px);
+  margin-inline: auto;
   background: var(--move-bg);
   color: var(--move-text);
 }
@@ -521,7 +532,7 @@
   position: relative;
   flex: 1 0 0;
   min-width: 1px;
-  max-width: 1180px;
+  max-width: var(--move-cluster-max);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -536,6 +547,13 @@
      screen when one stands beside it — the page name lands on the top-left
      corner of the first real object, whatever the panel resizes to. */
   width: calc(max(var(--move-surface-w, 100%), 0px) + var(--move-screen-w, 0px));
+  /* Never past the panel's own box: with a wheel screen standing beside the
+     cluster the slot-base %-math resolves against a row that already holds
+     the screen, so the sum runs one screen too wide and the header's right
+     cluster (the clock, the function chips) hangs off the instrument. The
+     row is a child of that box — its true footprint can never exceed it
+     (the 8px keeps the padded box inside too). */
+  max-width: calc(100% - 8px);
   align-self: center;
   padding: 4px;
 }
@@ -766,6 +784,92 @@
   font-size: 14px;
 }
 
+/* ------------------------------------------------------------------------
+   Move function chips (MoveFunctionChips) — the attached-function row.
+   Default dress is the slot idiom — the panel's own quiet surface and
+   voice — so the chips read as part of the instrument. `highlight` is the
+   pale hardware-key look, for the one action a view leans on; a palette
+   colour (set inline from MOVE_PALETTE, never an arbitrary hue) rides the
+   same inverse voice. The component names `.tweakers-move-chips`,
+   `.tweakers-move-chip[data-name][data-variant][data-color][data-pressed]`
+   and `.tweakers-move-chip-icon` — restyle here, not there.
+   ------------------------------------------------------------------------ */
+
+.tweakers-move-chips {
+  display: flex;
+  /* An app that attaches many functions grows a second chip line rather
+     than clipping — every attached function stays visible, like every
+     attached key stays lit. */
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  min-width: 0;
+}
+
+/* In the header cluster the chips hang off the right edge, so wrapped
+   lines keep ranging from it. */
+.tweakers-move-actions .tweakers-move-chips {
+  justify-content: flex-end;
+}
+
+/* The `tracks` placement: the chips ride the same line as the track labels,
+   to their right. Scoped to the chips' presence, so a group without them
+   keeps its stacked flow (the headerStart slot). */
+.tweakers-move-tracks-group:has(> .tweakers-move-chips) {
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.tweakers-move-chip {
+  position: relative;
+  height: 28px;
+  padding: 0 10px 0 26px;
+  border: none;
+  border-radius: var(--move-radius-small, 8px);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-family: var(--move-font-label, 'Ableton Sans Small', system-ui, -apple-system, sans-serif);
+  font-size: 16px;
+  line-height: normal;
+  white-space: nowrap;
+  color: var(--move-text);
+  background: var(--move-chip);
+  transition: filter 0.12s, transform 0.12s;
+}
+
+/* The pop-out dress: the pale hardware-key look, and any palette colour
+   (background set inline from MOVE_PALETTE) — both speak in the inverse
+   voice, dark on light. */
+.tweakers-move-chip[data-variant="highlight"] {
+  background: #dee3c9;
+}
+
+.tweakers-move-chip[data-variant="highlight"],
+.tweakers-move-chip[data-color] {
+  color: #1e1e1e;
+}
+
+.tweakers-move-chip:hover {
+  filter: brightness(1.08);
+}
+
+.tweakers-move-chip[data-pressed] {
+  filter: brightness(1.25);
+  transform: scale(0.96);
+  transition-duration: 0.04s;
+}
+
+.tweakers-move-chip-icon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* End of the Move function chips skin block. */
+
 .tweakers-move-grid {
   display: flex;
   flex-direction: column;
@@ -802,7 +906,15 @@
 }
 
 .tweakers-move-strip[data-scroll="true"] {
-  --move-slot-w: calc((100% - 28px) / 8);
+  /* One slot, at the panel's own 8-wide size. Percentages in here resolve
+     against the window, not the panel — the grid above is already only
+     --move-surface-cols slots wide — so the slot is recovered by dividing
+     the window by its own column count. A flat /8 recovered it only for an
+     8-column window: a shorter strip shrank the window first and then took
+     an eighth of it, squeezing every slot to a pill. */
+  --move-slot-w: calc(
+    (100% - (var(--move-surface-cols, 8) - 1) * var(--move-gap)) / var(--move-surface-cols, 8)
+  );
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -814,6 +926,12 @@
 .tweakers-move-strip[data-scroll="true"] .tweakers-move-dials,
 .tweakers-move-strip[data-scroll="true"] .tweakers-move-pads {
   grid-template-columns: repeat(var(--move-strip-len, 8), var(--move-slot-w));
+  /* Full window width, not the cluster's: --move-cluster-w is a fraction of
+     its containing block, and inside the strip that block is the window —
+     already narrowed once. Taking a fraction of it again is the same
+     double-shrink the slot formula above escapes. The rows overflow this
+     width by design; the viewport clips them. */
+  width: 100%;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1762,19 +1880,27 @@
 }
 
 .tweakers-move-wheel-screen {
-  display: flex;
-  flex-direction: column;
+  position: relative;
   flex: 0 1 var(--move-wheel-width);
   min-width: 0;
-  height: var(--move-slot-height);
+  /* The whole cluster's height — the slot row and the pad rows below it —
+     the same full-height presentation the preset navigator's screen has.
+     The grid beside it is the height authority: the screen stretches to the
+     row the grid sets, and the list inside is pinned to the screen's box
+     (out of the flow, like the navigator's own screen against the grid), so
+     a long list can never grow the panel. Without a grid — an empty page —
+     the screen keeps the single slot height it has always had. */
+  align-self: stretch;
+  min-height: var(--move-slot-height);
   border-radius: var(--move-radius);
   overflow: hidden;
   background: var(--move-bg);
 }
 
 .tweakers-move-wheel-screen .tweakers-list-screen {
-  flex: 1;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
+  max-height: none;
   width: 100%;
   border-radius: 0;
   /* Centred while the rows fit the screen, from the top once they overflow —
@@ -2228,6 +2354,18 @@
   opacity: 1;
   transform: none;
   transition-delay: 0.12s;
+}
+
+/* A page with a wheel screen already has a display at the cluster's left
+   edge, at the same full height the navigator wants. So the navigator takes
+   that screen over — the Move has one display — landing exactly on its box:
+   no slide, and the slots stay under the hands. */
+.tweakers-move-controls:has(> .tweakers-move-wheel-screen) .tweakers-move-grid[data-presets] {
+  transform: none;
+}
+
+.tweakers-move-controls:has(> .tweakers-move-wheel-screen) .tweakers-move-preset-screen {
+  right: calc(100% + 2 * var(--move-gap));
 }
 
 .tweakers-move-preset-screen .tweakers-list-screen {

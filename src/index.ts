@@ -22,6 +22,8 @@ export {
 } from './components/MovePanel';
 export { MoveActionButton } from './components/MoveActionButton';
 export type { MoveActionButtonProps } from './components/MoveActionButton';
+export { MoveFunctionChips } from './components/MoveFunctionChips';
+export type { MoveFunctionChipsProps } from './components/MoveFunctionChips';
 export { buildMovePages, buildModMovePage, movePadRows, moveAppPadRow, visibleColumns, isToggleDial, normalizeToggleDial, denormalizeToggleDial, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, padSpan, isMoveDial, isMoveTabs, isNamedTabs, moveTabCell, isSpanContinuation, isPadSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
 export type { MovePage } from './move-layout';
 
@@ -40,8 +42,8 @@ export type { MoveSlotKind } from './components/move-slots';
 // The filter control core — the kit's first 2-slot control (cutoff + resonance)
 export { resolveFilterAxis, normalizeFilterValue, defaultFilterResponse, filterShapeResponse, filterResponsePath, filterHand01, filterHandValue, FILTER_DB_FLOOR, FILTER_DB_CEIL } from './filter-core';
 export type { FilterAxis, FilterAxisConfig, FilterValue, FilterResponse, FilterShapeType } from './filter-core';
-export { MoveFunctions, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_SPECIAL_BUTTONS, MOVE_STEP_FUNCTIONS } from './move-functions';
-export type { MoveFunctionButton, MoveFunctionPress, MoveFunctionHandler, MoveFunctionOptions, MoveFunctionRunListener } from './move-functions';
+export { MoveFunctions, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_SPECIAL_BUTTONS, MOVE_STEP_FUNCTIONS, MOVE_CHIP_BUTTONS } from './move-functions';
+export type { MoveFunctionButton, MoveFunctionPress, MoveFunctionHandler, MoveFunctionOptions, MoveFunctionChip, MoveFunctionChipStyle, MoveFunctionRunListener } from './move-functions';
 export { MoveWaveform } from './components/MoveWaveform';
 export type { MoveWaveformProps } from './components/MoveWaveform';
 export {
@@ -70,7 +72,8 @@ export type { MovePaletteName } from './move-palette';
 export { MoveSettingsView } from './move-settings';
 export { MoveVolumeDisplay } from './move-volume';
 export type { MoveVolumeDisplayState } from './move-volume';
-export { ICON_MOVE_CAPTURE, ICON_MOVE_ENTER } from './icons';
+export { ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, MOVE_FUNCTION_ICONS } from './icons';
+export type { MoveFunctionGlyph } from './icons';
 // Raw hardware an app claims for itself — the bottom pad rows, the step
 // buttons, the device screen — kept for the on-screen mirror.
 export { MoveSurfaceStore, moveScreenRowLabel, moveScreenChecked } from './move-surface-store';
