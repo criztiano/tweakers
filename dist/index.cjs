@@ -3940,7 +3940,8 @@ function MoveSlotGlyph({ name, className }) {
 }
 function splitReadoutUnit(value) {
   const m = /^(.*\d)\s*([^\d\s][^\d]*)$/.exec(value.trim());
-  return m ? { num: m[1], unit: m[2].trim() } : { num: value, unit: null };
+  const unit = m ? m[2].trim() : "";
+  return m && unit.length > 1 ? { num: m[1], unit } : { num: value, unit: null };
 }
 function MoveSlotReadout({ label, value }) {
   const split = typeof value === "string" ? splitReadoutUnit(value) : null;

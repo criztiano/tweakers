@@ -128,13 +128,15 @@ export function MoveSlotGlyph({ name, className }: { name: string; className: st
 }
 
 /**
- * A readout string split into the number and whatever trails it: "250 ms"
- * is 250 over ms, "64%" is 64 over %, "1/16" and "Sine" stay whole. The
- * unit is the run after the last digit — letters, a sign, a degree.
+ * A readout string split into the number and the unit that trails it:
+ * "250 ms" is 250 over ms, "-6.0 dB" is -6.0 over dB. A one-character
+ * unit stays on the line ("64%", "12°"), as do "1/16" and "Sine". The unit
+ * is the run after the last digit — letters, a slash, a sign.
  */
 export function splitReadoutUnit(value: string): { num: string; unit: string | null } {
   const m = /^(.*\d)\s*([^\d\s][^\d]*)$/.exec(value.trim());
-  return m ? { num: m[1], unit: m[2].trim() } : { num: value, unit: null };
+  const unit = m ? m[2].trim() : '';
+  return m && unit.length > 1 ? { num: m[1], unit } : { num: value, unit: null };
 }
 
 /** The slot's centred name, and the value that takes its place on touch. */

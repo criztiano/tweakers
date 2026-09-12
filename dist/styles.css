@@ -1153,11 +1153,17 @@
   white-space: nowrap;
 }
 
+/* The number's box hugs its digits (the face carries a deep descent the
+   digits never use), so the unit can sit a clear 10px under them. */
+.tweakers-move-dial-number {
+  line-height: 0.8;
+}
+
 .tweakers-move-dial-unit {
   font-variation-settings: normal;
   font-size: 18px;
   line-height: 1;
-  margin-top: 2px;
+  margin-top: 3px;
 }
 
 .tweakers-move-dial:hover .tweakers-move-dial-label,
@@ -2481,6 +2487,7 @@
   }
 .tweakers-move-dial-unit {
     font-size: 14px;
+    margin-top: 2px;
   }
 .tweakers-move-dial {
     --move-shape-top: 32px;

@@ -7,14 +7,13 @@ import { MoveSlotReadout, splitReadoutUnit } from './components/move-slots';
 describe('splitReadoutUnit', () => {
   it('lifts the unit off the number', () => {
     assert.deepEqual(splitReadoutUnit('250 ms'), { num: '250', unit: 'ms' });
-    assert.deepEqual(splitReadoutUnit('64%'), { num: '64', unit: '%' });
     assert.deepEqual(splitReadoutUnit('-6.0 dB'), { num: '-6.0', unit: 'dB' });
-    assert.deepEqual(splitReadoutUnit('12°'), { num: '12', unit: '°' });
+    assert.deepEqual(splitReadoutUnit('+3 st'), { num: '+3', unit: 'st' });
     assert.deepEqual(splitReadoutUnit('-12 dB/oct'), { num: '-12', unit: 'dB/oct' });
   });
 
-  it('leaves a bare number, a fraction, a range and a name whole', () => {
-    for (const v of ['+0.5', '1/16', '0.20–0.80', 'Sine', 'C#4']) {
+  it('keeps a one-character unit on the line, and leaves a bare number, a fraction, a range and a name whole', () => {
+    for (const v of ['64%', '12°', '+0.5', '1/16', '0.20–0.80', 'Sine', 'C#4']) {
       assert.deepEqual(splitReadoutUnit(v), { num: v, unit: null });
     }
   });
