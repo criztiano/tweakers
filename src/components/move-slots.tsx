@@ -127,14 +127,32 @@ export function MoveSlotGlyph({ name, className }: { name: string; className: st
   );
 }
 
+/**
+ * A readout string split into the number and whatever trails it: "250 ms"
+ * is 250 over ms, "64%" is 64 over %, "1/16" and "Sine" stay whole. The
+ * unit is the run after the last digit — letters, a sign, a degree.
+ */
+export function splitReadoutUnit(value: string): { num: string; unit: string | null } {
+  const m = /^(.*\d)\s*([^\d\s][^\d]*)$/.exec(value.trim());
+  return m ? { num: m[1], unit: m[2].trim() } : { num: value, unit: null };
+}
+
 /** The slot's centred name, and the value that takes its place on touch. */
 export function MoveSlotReadout({ label, value }: { label: string; value: ReactNode }) {
+  const split = typeof value === 'string' ? splitReadoutUnit(value) : null;
   return (
     <div className="tweakers-move-dial-readout">
       <span className="tweakers-move-dial-label" data-long={label.length > 9 || undefined}>
         {label}
       </span>
-      <span className="tweakers-move-dial-value">{value}</span>
+      <span className="tweakers-move-dial-value">
+        {split?.unit ? (
+          <>
+            <span className="tweakers-move-dial-number">{split.num}</span>
+            <span className="tweakers-move-dial-unit">{split.unit}</span>
+          </>
+        ) : value}
+      </span>
     </div>
   );
 }
