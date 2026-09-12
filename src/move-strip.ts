@@ -1,5 +1,5 @@
 import type { PanelConfig, ControlMeta } from './store/TweakStore';
-import { MOVE_DIALS, dialSpan, isMoveDial, type MovePage } from './move-layout';
+import { MOVE_DIALS, dialSpan, padSpan, isMoveDial, isMoveTabs, type MovePage } from './move-layout';
 
 /**
  * The endless strip — a page with more slots than the Move has dials.
@@ -67,7 +67,25 @@ export function buildMoveStrip(panel: PanelConfig): MovePage {
   const toggles: ControlMeta[] = [];
   const values: ControlMeta[] = [];
   const actions: ControlMeta[] = [];
+  // A tabs strip claims a RUN of pads in the switch row, not a pad — the same
+  // multi-slot rule the 8-wide page keeps, on the strip's own unbounded row.
+  // It starts at the column it names, and packs left when it names none;
+  // there is always a run free out past the end, so it never disappears.
+  const placeRun = (c: ControlMeta, col: number | null) => {
+    const span = padSpan(c);
+    const fits = (start: number) =>
+      Array.from({ length: span }, (_, k) => toggles[start + k]).every((p) => p === undefined);
+    let start = col !== null && fits(col) ? col : -1;
+    for (let i = 0; start < 0; i++) {
+      if (fits(i)) start = i;
+    }
+    for (let k = 0; k < span; k++) toggles[start + k] = c;
+  };
   for (const c of controls) {
+    if (isMoveTabs(c)) {
+      placeRun(c, column(c));
+      continue;
+    }
     const col = column(c);
     if (col === null) continue;
     const row = c.type === 'toggle' ? toggles : c.type === 'action' ? actions : values;

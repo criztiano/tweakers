@@ -49,6 +49,64 @@ const flat = (controls: ControlMeta[], out: ControlMeta[] = []): ControlMeta[] =
 export const isEnumDial = (c: ControlMeta) =>
   c.type === 'select' && Array.isArray(c.options) && c.options.length > 1;
 
+/**
+ * The tabs strip: a select laid across the small slots instead of taking a
+ * dial. One pad per option, side by side in the switch row, the current one
+ * lit — the mode a page is in, said where the hand already is. It is the pad
+ * grid's first multi-slot control, the filter's small sibling.
+ */
+export const isMoveTabs = (c: ControlMeta) => !!c.moveTabs && isEnumDial(c);
+
+/** The strip spends its leading pad on the select's own name. */
+export const isNamedTabs = (c: ControlMeta) => c.moveTabs === 'named';
+
+/**
+ * How many pads a control claims on the small grid. Everything but a tabs
+ * strip is one pad; a strip is one per option, plus its name pad — 2 pads at
+ * the least, and never more than the row is wide.
+ */
+export const padSpan = (c: ControlMeta | undefined): number =>
+  c && isMoveTabs(c) ? c.options!.length + (isNamedTabs(c) ? 1 : 0) : 1;
+
+/** True when pad column i only continues the strip sitting at i-1. */
+export const isPadSpanContinuation = (row: ControlMeta[], i: number): boolean =>
+  i > 0 && row[i] !== undefined && row[i] === row[i - 1];
+
+/** One pad of a tabs strip: its name pad, or the option that pad selects. */
+export type MoveTabCell = {
+  meta: ControlMeta;
+  /** The strip's name pad — it selects nothing, and stays dark on the grid. */
+  head: boolean;
+  /** The option's value, null on the name pad. */
+  option: string | null;
+  /** What that pad says. */
+  label: string;
+};
+
+/**
+ * What the pad at column `i` of a small-slot row is, read from the row alone
+ * — the one answer the screen, the bridge and the hardware all lay the strip
+ * out from, so a tab lights and answers on the pad it is drawn on.
+ */
+export function moveTabCell(row: (ControlMeta | undefined)[], i: number): MoveTabCell | null {
+  const meta = row[i];
+  if (!meta || !isMoveTabs(meta)) return null;
+  let start = i;
+  while (start > 0 && row[start - 1] === meta) start--;
+  const offset = i - start;
+  if (isNamedTabs(meta) && offset === 0) {
+    return { meta, head: true, option: null, label: meta.label };
+  }
+  const opt = meta.options![offset - (isNamedTabs(meta) ? 1 : 0)];
+  if (opt === undefined) return null;
+  return {
+    meta,
+    head: false,
+    option: enumOptionValue(opt as never),
+    label: enumOptionLabel(opt as never),
+  };
+}
+
 /** A switch the page is about: it claims a dial slot rather than a pad. */
 export const isToggleDial = (c: ControlMeta) => c.type === 'toggle' && c.moveSlot === true;
 
@@ -56,7 +114,8 @@ export const isToggleDial = (c: ControlMeta) => c.type === 'toggle' && c.moveSlo
 export const isMoveDial = (c: ControlMeta) =>
   isToggleDial(c) ||
   c.type === 'slider' || c.type === 'color' || c.type === 'xy' || c.type === 'range' ||
-  c.type === 'filter' || c.type === 'transfer' || c.type === 'gradient' || isEnumDial(c) ||
+  c.type === 'filter' || c.type === 'transfer' || c.type === 'gradient' ||
+  (isEnumDial(c) && !isMoveTabs(c)) ||
   (c.type === 'number' && c.min != null && c.max != null);
 
 const isDial = isMoveDial;
@@ -129,7 +188,9 @@ export type MoveLayoutIssueCode =
   | 'pad-column-invalid'
   | 'pad-column-on-dial'
   | 'pad-column-taken'
-  | 'pad-row-full';
+  | 'pad-row-full'
+  | 'tabs-oversized'
+  | 'tabs-no-room';
 
 type MoveLayoutReporter = (code: MoveLayoutIssueCode, message: string) => void;
 
@@ -228,9 +289,51 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
           `panel '${panel.id}': control '${c.path}': the ${rowName} row's ${MOVE_PADS} pads are all taken — dropped`
         );
       };
+      // A tabs strip is the pad grid's multi-slot control, so it lands as one
+      // piece or not at all: it needs a RUN of free pads, not a free pad. The
+      // strip sits in the switch row — it is a switch, however many ways it
+      // goes — and a named column is where the run starts. A run that does not
+      // fit there falls back to the leftmost one that does, the same courtesy
+      // a single pad gets; a strip with nowhere to sit is said out loud rather
+      // than quietly shortened, because a mode picker missing two of its modes
+      // is a worse lie than a mode picker that is missing.
+      const placeTabs = (c: ControlMeta, col: number | null) => {
+        const span = padSpan(c);
+        if (span > MOVE_PADS) {
+          reportMoveLayoutIssue(
+            'tabs-oversized',
+            `panel '${panel.id}': control '${c.path}': a ${span}-pad tabs strip is wider than the ${MOVE_PADS}-wide grid — dropped`
+          );
+          return;
+        }
+        const fits = (start: number) =>
+          start >= 0 && start + span <= MOVE_PADS &&
+          Array.from({ length: span }, (_, k) => toggles[start + k]).every((p) => p === undefined);
+        let start = col !== null && fits(col) ? col : -1;
+        if (start < 0) {
+          for (let i = 0; i + span <= MOVE_PADS; i++) {
+            if (fits(i)) { start = i; break; }
+          }
+          if (start >= 0 && col !== null) {
+            reportMoveLayoutIssue(
+              'pad-column-taken',
+              `panel '${panel.id}': control '${c.path}': tabs column ${col} has no run of ${span} free pads — moved to column ${start}`
+            );
+          }
+        }
+        if (start < 0) {
+          reportMoveLayoutIssue(
+            'tabs-no-room',
+            `panel '${panel.id}': control '${c.path}': the toggle row has no run of ${span} free pads — dropped`
+          );
+          return;
+        }
+        for (let k = 0; k < span; k++) toggles[start + k] = c;
+      };
       for (const c of controls) {
         const col = padColumn(panel, c);
-        if (c.type === 'toggle' && !isToggleDial(c)) place(toggles, 'toggle', c, col);
+        if (isMoveTabs(c)) placeTabs(c, col);
+        else if (c.type === 'toggle' && !isToggleDial(c)) place(toggles, 'toggle', c, col);
         // Actions reach the pads only when the page asks for them by column —
         // every app has buttons, and none of them expect a hardware pad.
         else if (c.type === 'action') { if (col !== null) place(actions, 'action', c, col); }
