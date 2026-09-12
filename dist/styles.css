@@ -1732,19 +1732,27 @@
 }
 
 .tweakers-move-wheel-screen {
-  display: flex;
-  flex-direction: column;
+  position: relative;
   flex: 0 1 var(--move-wheel-width);
   min-width: 0;
-  height: var(--move-slot-height);
+  /* The whole cluster's height — the slot row and the pad rows below it —
+     the same full-height presentation the preset navigator's screen has.
+     The grid beside it is the height authority: the screen stretches to the
+     row the grid sets, and the list inside is pinned to the screen's box
+     (out of the flow, like the navigator's own screen against the grid), so
+     a long list can never grow the panel. Without a grid — an empty page —
+     the screen keeps the single slot height it has always had. */
+  align-self: stretch;
+  min-height: var(--move-slot-height);
   border-radius: var(--move-radius);
   overflow: hidden;
   background: var(--move-bg);
 }
 
 .tweakers-move-wheel-screen .tweakers-list-screen {
-  flex: 1;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
+  max-height: none;
   width: 100%;
   border-radius: 0;
   /* Centred while the rows fit the screen, from the top once they overflow —
@@ -2197,6 +2205,18 @@
   opacity: 1;
   transform: none;
   transition-delay: 0.12s;
+}
+
+/* A page with a wheel screen already has a display at the cluster's left
+   edge, at the same full height the navigator wants. So the navigator takes
+   that screen over — the Move has one display — landing exactly on its box:
+   no slide, and the slots stay under the hands. */
+.tweakers-move-controls:has(> .tweakers-move-wheel-screen) .tweakers-move-grid[data-presets] {
+  transform: none;
+}
+
+.tweakers-move-controls:has(> .tweakers-move-wheel-screen) .tweakers-move-preset-screen {
+  right: calc(100% + 2 * var(--move-gap));
 }
 
 .tweakers-move-preset-screen .tweakers-list-screen {
