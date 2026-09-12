@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import {
   MoveNotifications,
   MovePanel,
@@ -408,6 +408,20 @@ function Card({ item, onShow, tall }: { item: Specimen; onShow: (path: string) =
             >
               {item.render()}
             </div>
+          ) : item.span && item.span > 1 ? (
+            // A small slot that claims a run of pads draws as its own strip,
+            // re-cut into the pad columns it spans — the same container the
+            // panel gives it.
+            <div
+              className="tweakers-move-tabs"
+              data-kind={item.kind}
+              style={{
+                '--move-tabs-cols': item.span,
+                width: `calc(${item.span} * var(--kit-slot-w) + ${(item.span - 1) * 4}px)`,
+              } as CSSProperties}
+            >
+              {item.render()}
+            </div>
           ) : (
             <button type="button" className="tweakers-move-pad" data-kind={item.kind === 'bend' ? 'bend' : item.kind}>
               {item.render()}
@@ -450,7 +464,7 @@ const CSS = `
   padding: var(--kit-space-xl) var(--kit-space-lg) calc(var(--kit-dock) + var(--kit-space-xl));
   background: var(--kit-bg);
   color: var(--kit-fg);
-  font-family: 'Ableton Sans Small', system-ui, -apple-system, sans-serif;
+  font-family: 'Geist Pixel', system-ui, -apple-system, sans-serif;
   font-size: 14px;
   line-height: 1.6;
 }

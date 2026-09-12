@@ -34,9 +34,27 @@ and the formatted readout. It retains every gesture and store subscription.
 
 ### Small slots and companion components
 
+`MOVE_PAD_LIBRARY` is the small-slot dictionary, checked against `MovePadKind`.
+A small slot is one pad — except `tabs`, the pad grid's first multi-slot
+control.
+
+| Kind | Choose for | Configuration / body | Hardware space |
+| --- | --- | --- | --- |
+| `toggle` | A switch under its dial | `toggle` with a `movePads` column; `MovePadToggleBody` | 1 pad |
+| `value` | A bounded number the dial above can borrow | Bounded `slider` / `number`; `MovePadValueBody` | 1 pad |
+| `action` | A button the page wants on the surface | `action` with a `movePads` column; `MovePadActionBody` | 1 pad |
+| `app` | A cell the app paints — a track, a slice, a step | `MoveSurfaceStore`; `MovePadAppBody` | 1 pad |
+| `tabs` | The mode a page is in, reachable without turning anything | `select` with `moveTabs` (`true`, or `'named'` for the name pad); `MovePadTabsBody` | 2–8 adjacent pads, switch row |
+
+A `moveTabs` select stops competing for a dial: it is a pad strip and nothing
+else. It lands as one piece or not at all — the builder reports `tabs-oversized`
+when the strip is wider than the 8-pad row and `tabs-no-room` when no run that
+long is left, rather than shortening a mode picker. `movePads` names the column
+its run **starts** in.
+
 | Component / API | Purpose |
 | --- | --- |
-| `movePads` option | Place toggles, numeric value chips, and explicitly mapped actions under their related dial columns |
+| `movePads` option | Place toggles, numeric value chips, explicitly mapped actions and tabs strips under their related dial columns |
 | `MoveActionButton` / `MoveFunctions` | Hardware-named action pills and one shared action registry |
 | `MoveFunctionChips` | The attached functions as header chips, for free — but only for `MOVE_CHIP_BUTTONS` (`sample`, `capture`, `mute`, `loop`: the keys whose meaning is the app's to give), and only with a `label` saying what the button does in this app. A chip never wears a hardware name; unlabelled or non-chip-button attachments light the key and nothing else (Play is the time indicator's story). Naming: `sample` is the printed Sampling key — the surface's second confirm, often called "the enter button"; `jog_click` is the wheel pressed, never a chip. Clicking a chip runs the hardware key's handler. Default dress is the slot idiom; `chip: { variant: 'highlight' }` is the pale key look, `chip: { color }` takes a `MOVE_PALETTE` name only. `MovePanel` places the row by its `functionChips` option — `clock` (default, left of the volume readout), `tracks` (after the track labels), `none`. `chip: false` hides one. |
 | `MoveWaveform` / `MoveWaveformStore` | Sample display, navigation, loop and scrub state |

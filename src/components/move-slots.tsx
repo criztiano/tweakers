@@ -4,7 +4,7 @@ import { MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
 export { MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
 import type { ControlMeta } from '../store/TweakStore';
 import { ICON_BADGE_OFF, ICON_BADGE_ON, LUCIDE_ICONS } from '../icons';
-import { enumOptionLabel, enumOptionValue } from '../move-layout';
+import { enumOptionIcon, enumOptionLabel, enumOptionValue } from '../move-layout';
 import { arcPath } from '../angle-core';
 import { resolveFilterAxis, type FilterValue } from '../filter-core';
 import { ListScreen } from './ListScreen';
@@ -127,14 +127,34 @@ export function MoveSlotGlyph({ name, className }: { name: string; className: st
   );
 }
 
+/**
+ * A readout string split into the number and the unit that trails it:
+ * "250 ms" is 250 over ms, "-6.0 dB" is -6.0 over dB. A one-character
+ * unit stays on the line ("64%", "12°"), as do "1/16" and "Sine". The unit
+ * is the run after the last digit — letters, a slash, a sign.
+ */
+export function splitReadoutUnit(value: string): { num: string; unit: string | null } {
+  const m = /^(.*\d)\s*([^\d\s][^\d]*)$/.exec(value.trim());
+  const unit = m ? m[2].trim() : '';
+  return m && unit.length > 1 ? { num: m[1], unit } : { num: value, unit: null };
+}
+
 /** The slot's centred name, and the value that takes its place on touch. */
 export function MoveSlotReadout({ label, value }: { label: string; value: ReactNode }) {
+  const split = typeof value === 'string' ? splitReadoutUnit(value) : null;
   return (
     <div className="tweakers-move-dial-readout">
       <span className="tweakers-move-dial-label" data-long={label.length > 9 || undefined}>
         {label}
       </span>
-      <span className="tweakers-move-dial-value">{value}</span>
+      <span className="tweakers-move-dial-value">
+        {split?.unit ? (
+          <>
+            <span className="tweakers-move-dial-number">{split.num}</span>
+            <span className="tweakers-move-dial-unit">{split.unit}</span>
+          </>
+        ) : value}
+      </span>
     </div>
   );
 }
@@ -648,8 +668,14 @@ function MoveSlotBadge({ on }: { on: boolean }) {
  * props, and the gestures (the hold-to-peek, the tap-to-latch, the bend
  * drag) stay with the MovePanel. The `data-kind`, `data-on`, `data-held`
  * and `data-latched` states live on the pad the body sits in.
+ *
+ * `tabs` is the first small slot to claim more than one pad, and it follows
+ * the big slots' multi-slot pattern exactly: the container takes
+ * `grid-column: span N`, the drawing stretches across the whole run, and
+ * every pad in it keeps one option — so the hardware's one-thing-per-pad
+ * rule still holds under the shared strip.
  */
-export type MovePadKind = 'toggle' | 'value' | 'action' | 'app' | 'bend' | 'wave';
+export type MovePadKind = 'toggle' | 'value' | 'action' | 'app' | 'bend' | 'wave' | 'tabs';
 
 /** A switch: the indicator top-left, the name beside it, the whole pad
  *  inverting when it is on. */
@@ -703,6 +729,51 @@ export function MovePadActionBody({ label }: { label: string }) {
   return <span className="tweakers-move-pad-title">{label}</span>;
 }
 
+/**
+ * The tabs strip — the mode a page is in, spread across the pads it has
+ * modes. One bar over its run of pads, one cell per option, and a fill on
+ * the one you are in: the page never has to be turned through to be read,
+ * and the mode is reachable where the hand already is.
+ *
+ * An option that names a glyph wears it instead of its word, the same trade
+ * the big `icon` slot makes — a pad is narrow, and a picture survives the
+ * width a name loses. A strip declared `'named'` spends its leading pad on
+ * the select's own name, set against the run it names; that pad is a head,
+ * not a choice — nothing selects it, and on the hardware it stays dark.
+ */
+export function MovePadTabsBody({ name, options, activeIdx }: {
+  /** The leading name pad's text, or null when every pad is an option. */
+  name?: string | null;
+  options: NonNullable<ControlMeta['options']>;
+  activeIdx: number;
+}) {
+  return (
+    <>
+      {name != null && <span className="tweakers-move-tabs-head">{name}</span>}
+      {/* The options are ONE bar, not a row of chips: the ground belongs to
+          the run, and the only thing wearing a fill of its own is the mode
+          you are in. A pad that is merely available says so by being on the
+          bar, which is what the bar is for. */}
+      <div className="tweakers-move-tabs-run">
+        {options.map((opt, i) => {
+          const glyph = enumOptionIcon(opt as never);
+          return (
+            <span
+              key={enumOptionValue(opt as never)}
+              className="tweakers-move-tab"
+              data-on={i === activeIdx || undefined}
+            >
+              {glyph
+                ? <MoveSlotGlyph name={glyph} className="tweakers-move-tab-icon" />
+                : <span className="tweakers-move-tab-title">{enumOptionLabel(opt as never)}</span>}
+            </span>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
 /** A cell the app owns — a track, a slice, a step. The colour is the app's
  *  own, so it rides inline the way a modulation dot does. */
 export function MovePadAppBody({ label, color }: { label?: string; color?: string }) {
@@ -725,6 +796,7 @@ export const MOVE_PAD_LIBRARY = {
   app: { description: 'a cell the app paints itself — a track, a slice, a step', component: MovePadAppBody },
   bend: { description: 'hold and drag to bend the envelope ramp above it', component: MovePadToggleBody },
   wave: { description: 'hold and drag for the stage’s own sine, tap to flip it', component: MovePadWaveBody },
+  tabs: { description: '2 to 8 pads: the page’s modes side by side, the current one lit — a name pad optional', component: MovePadTabsBody },
 } as const satisfies Record<MovePadKind, { description: string; component: unknown }>;
 
 /**

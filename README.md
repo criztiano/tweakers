@@ -1087,6 +1087,31 @@ within one group only — a different view lays out its slots from scratch.
 
 Actions reach the pads **only** through `movePads` — every app has buttons, and none of them expect a hardware pad. Two-handed dials (`xy`, `range`) and enums can't be chips, so a column on one of those is ignored and it keeps its dial slot.
 
+### Tabs across the pads
+
+The mode a page is in does not want a knob. `moveTabs` lays a select across the small slots instead — one pad per option, side by side in the switch row, the current one lit — so the mode can be read without turning anything and reached where the hand already is. It is the pad grid's first multi-slot control, the filter's small sibling.
+
+```js
+useTweakers('Clip', {
+  take: {
+    type: 'select', default: 'b',
+    options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }, { value: 'c', label: 'C' }],
+    moveTabs: 'named',            // the leading pad carries the name, "Take"
+  },
+  warp: {
+    type: 'select', default: 'beats',
+    options: ['Beats', 'Tones', 'Texture', 'Re-pitch'],
+    moveTabs: true,               // every pad is an option
+  },
+}, {
+  movePads: { take: 0, warp: 4 }, // the column each run STARTS in
+});
+```
+
+A strip claims **2 to 8 pads in one run**: one per option, plus the name pad when it is `'named'`. An option that names an `icon` wears the glyph instead of its word, the same trade the big `icon` slot makes. The select stops competing for a dial — it is a pad strip and nothing else.
+
+It lands as one piece or not at all. A run that does not fit the column you named falls back to the leftmost one that does; a strip wider than the row, or one with no run left, is dropped and said out loud on the layout channel (`tabs-oversized`, `tabs-no-room`) — a mode picker missing two of its modes is a worse lie than a mode picker that is missing.
+
 ### Where the panel sits
 
 `dock` decides how the panel joins the page:

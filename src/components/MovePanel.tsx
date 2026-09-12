@@ -10,10 +10,10 @@ import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from '../theme';
-import { buildMovePages, buildModMovePage, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, isEnumDial, isSpanContinuation, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
+import { buildMovePages, buildModMovePage, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadValueBody, MovePadActionBody, MovePadAppBody, MovePadWaveBody } from './move-slots';
+import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadValueBody, MovePadActionBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing, angleFromPointer } from '../angle-core';
@@ -532,6 +532,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     if (!on || !pg) return;
     const pads = stripWindowPads(pg, at);
     const row = (cells: (ControlMeta | undefined)[]) => cells.map((meta) => meta?.path ?? null);
+    // The switch row can carry a tabs strip, and a strip's pads are not all
+    // the same thing: each says whether it is the name or which option it
+    // picks, so the bridge never has to re-derive the run for itself.
+    const switchRow = pads.toggles.map((meta, i) => {
+      if (!meta) return null;
+      const tab = moveTabCell(pg.toggles, at + i);
+      if (!tab) return meta.path;
+      return tab.head
+        ? { path: tab.meta.path, tab: true, head: true, label: tab.label }
+        : { path: tab.meta.path, tab: true, option: tab.option, label: tab.label };
+    });
     window.dispatchEvent(new CustomEvent(MOVE_STRIP_EVENT, {
       detail: {
         pageId: pg.panel.id,
@@ -540,7 +551,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
         paths: stripDialSlots(pg, at).map((meta) => meta?.path ?? null),
         // The small slots under that window, in hardware columns — without
         // them the pads under a scrolling page stay dark and dead.
-        pads: { toggles: row(pads.toggles), values: row(pads.values), actions: row(pads.actions) },
+        pads: { toggles: switchRow, values: row(pads.values), actions: row(pads.actions) },
       },
     }));
   }, []);
@@ -2015,6 +2026,50 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       );
                     }
                     const meta = padRows[row][col];
+                    // A tabs strip renders ONCE, out of the first pad of its
+                    // run; the rest of the run yields to its span, the way
+                    // the filter's second column yields to its picture. The
+                    // options are real buttons over the drawing — the strip's
+                    // only gesture is a tap, and it belongs to the panel.
+                    if (meta && isMoveTabs(meta)) {
+                      if (isPadSpanContinuation(padRows[row], col)) return null;
+                      const span = padSpan(meta);
+                      const named = isNamedTabs(meta);
+                      const options = meta.options ?? [];
+                      const active = enumIndex(meta, values[meta.path]);
+                      return (
+                        <div
+                          key={meta.path}
+                          className="tweakers-move-tabs"
+                          data-kind="tabs"
+                          style={{ gridColumn: `span ${span}`, '--move-tabs-cols': span } as React.CSSProperties}
+                        >
+                          <MovePadTabsBody
+                            name={named ? meta.label : null}
+                            options={options}
+                            activeIdx={active}
+                          />
+                          <div className="tweakers-move-tab-zones" role="tablist" aria-label={meta.label}>
+                            {options.map((opt, i) => (
+                              <button
+                                key={enumOptionValue(opt as never)}
+                                type="button"
+                                role="tab"
+                                className="tweakers-move-tab-zone"
+                                style={{ gridColumnStart: (named ? 2 : 1) + i }}
+                                aria-selected={i === active}
+                                disabled={TweakStore.isDisabled(page.panel.id, meta.path)}
+                                onClick={() => TweakStore.updateValue(
+                                  page.panel.id, meta.path, enumOptionValue(opt as never)
+                                )}
+                              >
+                                {enumOptionLabel(opt as never)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
                     // The envelope's bend pads: the free toggle-row cell
                     // under each ramp column. Hold the pad and drag up or
                     // down to bend the ramp above it — the joint handle
