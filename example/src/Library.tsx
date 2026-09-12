@@ -388,7 +388,7 @@ const CSS = `
   padding: var(--kit-space-xl) var(--kit-space-lg) calc(var(--kit-dock) + var(--kit-space-xl));
   background: var(--kit-bg);
   color: var(--kit-fg);
-  font-family: 'Ableton Sans Small', system-ui, -apple-system, sans-serif;
+  font-family: 'Geist Pixel', system-ui, -apple-system, sans-serif;
   font-size: 14px;
   line-height: 1.6;
 }

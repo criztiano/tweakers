@@ -1,3 +1,15 @@
+/* Geist Pixel, the kit's face. OFL, so it ships next to this sheet — no
+   host-provided fonts needed. One variable file; ELSH is its shape axis
+   (0 regular, 1 square, 20 circle, 40 grid, 60 triangle, 80 line): the
+   text runs regular, the big readouts run line. */
+@font-face {
+  font-family: 'Geist Pixel';
+  src: url('./fonts/GeistPixel.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 .tweakers-root {
   /* Surfaces */
   --tweak-surface: rgba(44, 44, 44, 0.7);
@@ -42,9 +54,9 @@
   --tweak-track-fill: rgba(228, 228, 228, 0.3);
   --tweak-track-fill-strong: #e4e4e4;
 
-  /* Type — labels are uppercase mono, values are the reading face */
-  --tweak-font-label: 'System85 Mono Pro', 'Geist Mono', ui-monospace, monospace;
-  --tweak-font-value: 'System85 Pro', system-ui, -apple-system, sans-serif;
+  /* Type — one face for labels and values, the kit's own */
+  --tweak-font-label: 'Geist Pixel', 'Geist Mono', ui-monospace, monospace;
+  --tweak-font-value: 'Geist Pixel', system-ui, -apple-system, sans-serif;
   --tweak-font-size: 12px;
   --tweak-value-opacity: 0.7;
 
@@ -78,9 +90,8 @@
 
   /* Fonts */
   font-family: var(--tweak-font-value);
-  /* System85 reports a line box shorter than its glyphs. Without an explicit
-     line-height every clipping container (ellipsized rows, folder titles)
-     shears the caps off. */
+  /* An explicit line-height keeps clipping containers (ellipsized rows,
+     folder titles) from shearing the caps off. */
   line-height: 1.35;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -349,18 +360,6 @@
   text-transform: capitalize;
 }
 
-/* Geist Pixel, the face of the Move's big readouts. OFL, so it ships next
-   to this sheet — the other panel faces stay host-provided. One variable
-   file; ELSH is its shape axis (0 regular, 1 square, 20 circle, 40 grid,
-   60 triangle, 80 line). */
-@font-face {
-  font-family: 'Geist Pixel';
-  src: url('./fonts/GeistPixel.woff2') format('woff2');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
 .tweakers-move,
 .tweakers-move * {
   box-sizing: border-box;
@@ -415,9 +414,10 @@
   --move-wheel-width: 200px;
   --move-glyph-stroke: 1.25;
   --move-radius-small: 8px;
-  --move-font-label: 'Ableton Sans Small', system-ui, -apple-system, sans-serif;
-  /* Big readouts only — a dial's value, the volume pill. Small values keep the label face. */
-  --move-font-value: 'Geist Pixel', var(--move-font-label);
+  --move-font-label: 'Geist Pixel', system-ui, -apple-system, sans-serif;
+  /* The big readouts — a dial's value, the volume pill — run the line shape. */
+  --move-font-value: var(--move-font-label);
+  --move-font-value-shape: 'ELSH' 80;
   --move-color-gap: 8px;
   --move-color-gap-small: 4px;
   --move-color-padding: 12px;
@@ -669,7 +669,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-family: var(--move-font-label, 'Ableton Sans Small', system-ui, -apple-system, sans-serif);
+  font-family: var(--move-font-label);
   font-size: 16px;
   line-height: normal;
   color: #1e1e1e;
@@ -744,6 +744,7 @@
 
 .tweakers-move-volume-value {
   font-family: var(--move-font-value);
+  font-variation-settings: var(--move-font-value-shape);
 }
 
 .tweakers-move-volume-label {
@@ -751,7 +752,7 @@
 }
 
 .tweakers-move-volume-sep {
-  font-family: var(--move-font-label);
+  font-variation-settings: normal;
   font-weight: 700;
   font-size: 14px;
 }
@@ -1142,7 +1143,8 @@
 
 .tweakers-move-dial-value {
   font-family: var(--move-font-value);
-  font-size: 24px;
+  font-variation-settings: var(--move-font-value-shape);
+  font-size: 40px;
   opacity: 0;
 }
 
@@ -1497,7 +1499,7 @@
 }
 
 .tweakers-move-filter-readout .tweakers-move-dial-value {
-  font-family: var(--move-font-label);
+  font-variation-settings: normal;
   font-size: 13px;
   line-height: 16px;
   white-space: nowrap;
@@ -1581,7 +1583,7 @@
 
 .tweakers-move-env-readout .tweakers-move-dial-label,
 .tweakers-move-env-readout .tweakers-move-dial-value {
-  font-family: var(--move-font-label);
+  font-variation-settings: normal;
   font-size: 13px;
   line-height: 16px;
   white-space: nowrap;
@@ -2125,7 +2127,7 @@
 .tweakers-move-dial[data-preview] .tweakers-move-dial-value {
   left: 0;
   right: 0;
-  font-family: var(--move-font-label);
+  font-variation-settings: normal;
   font-size: 11px;
   white-space: nowrap;
 }
@@ -2462,7 +2464,7 @@
     font-size: 16px;
   }
 .tweakers-move-dial-value {
-    font-size: 18px;
+    font-size: 30px;
   }
 .tweakers-move-dial {
     --move-shape-top: 32px;
@@ -2663,7 +2665,7 @@
   background: none;
   border-radius: 4px;
   cursor: pointer;
-  font-family: var(--move-font-label, 'Ableton Sans Small', system-ui, -apple-system, sans-serif);
+  font-family: var(--move-font-label);
   font-size: 16px;
   line-height: 20px;
   color: #dee3c9;

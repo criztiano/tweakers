@@ -12,12 +12,11 @@ shell so app-owned chrome inherits `--tweak-*` tokens. Tokens are class-scoped,
 not global. Portalled panels own their theme; pass their `theme` explicitly.
 
 Use `--tweak-font-label` for labels and section names, and `--tweak-font-value`
-for values. Labels are uppercase mono; values use the reading face and
-`--tweak-value-opacity`. System85 fonts are host-provided under the host's
-license; preserve the built-in fallback stacks. The Move panel's big readouts
-(a dial's value, the volume pill) wear Geist Pixel via `--move-font-value`;
-it is OFL and ships with the stylesheet, so nothing to provide. Small labels
-and small values stay on `--move-font-label`. Use the actual surface, text,
+for values. Labels are uppercase; values sit at `--tweak-value-opacity`. The
+kit's face is Geist Pixel everywhere — it is OFL and ships with the stylesheet,
+so the host provides nothing. The Move panel's big readouts (a dial's value,
+the volume pill) run its line shape (`--move-font-value-shape`); every label
+and small value runs the regular shape. Use the actual surface, text,
 radius and spacing tokens rather than copying numeric values from a screenshot.
 Different components have different geometry; do not impose one radius on all.
 
