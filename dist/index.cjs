@@ -2515,6 +2515,7 @@ var ICON_MOVE_COPY = {
     "M3.5 8.5H2.5C1.94772 8.5 1.5 8.05228 1.5 7.5V2.5C1.5 1.94772 1.94772 1.5 2.5 1.5H7.5C8.05228 1.5 8.5 1.94772 8.5 2.5V3.5"
   ]
 };
+var MOVE_GLYPH_TEXT_FONT = "Helvetica, 'Helvetica Neue', Arial, system-ui, sans-serif";
 var MOVE_GLYPH_DOT = {
   viewBox: ICON_MOVE_ENTER.viewBox,
   size: 12,
@@ -2533,11 +2534,9 @@ var MOVE_FUNCTION_ICONS = {
     paths: ["M7 2.5A4.5 4.5 0 1 0 7 11.5A4.5 4.5 0 1 0 7 2.5Z"],
     circles: [{ cx: "7", cy: "7", r: "2" }]
   },
-  mute: {
-    viewBox: "0 0 14 14",
-    size: 14,
-    paths: ["M2 5.5H4.25L7.5 2.75V11.25L4.25 8.5H2V5.5Z", "M9.75 5.5L12.75 8.5", "M12.75 5.5L9.75 8.5"]
-  },
+  /* Mute is a letter, not a drawing: the "M", set in Helvetica on the same
+     14px grid as the drawn marks. */
+  mute: { viewBox: "0 0 14 14", size: 14, text: "M" },
   undo: {
     viewBox: "0 0 14 14",
     size: 14,
@@ -5771,7 +5770,23 @@ function ChipGlyph({ glyph }) {
   return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("svg", { className: "tweakers-move-chip-icon", width: glyph.size, height: glyph.size, viewBox: glyph.viewBox, fill: "none", children: [
     glyph.paths?.map((d) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("path", { d, stroke: "currentColor", strokeWidth: "1.5", strokeLinecap: "round", strokeLinejoin: "round" }, d)),
     glyph.fills?.map((d) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("path", { d, fill: "currentColor" }, d)),
-    glyph.circles?.map((c) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("circle", { ...c, fill: "currentColor" }, `${c.cx},${c.cy}`))
+    glyph.circles?.map((c) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("circle", { ...c, fill: "currentColor" }, `${c.cx},${c.cy}`)),
+    glyph.text && // A letter mark (mute's "M"): Helvetica, centred on the same grid
+    // the drawn marks share, weighted to read like their 1.5px stroke.
+    /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
+      "text",
+      {
+        x: "7",
+        y: "7.5",
+        textAnchor: "middle",
+        dominantBaseline: "central",
+        fontFamily: MOVE_GLYPH_TEXT_FONT,
+        fontSize: "12",
+        fontWeight: "bold",
+        fill: "currentColor",
+        children: glyph.text
+      }
+    )
   ] });
 }
 function Chip({ chip }) {
