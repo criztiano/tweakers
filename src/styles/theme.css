@@ -781,7 +781,15 @@
 }
 
 .tweakers-move-strip[data-scroll="true"] {
-  --move-slot-w: calc((100% - 28px) / 8);
+  /* One slot, at the panel's own 8-wide size. Percentages in here resolve
+     against the window, not the panel — the grid above is already only
+     --move-surface-cols slots wide — so the slot is recovered by dividing
+     the window by its own column count. A flat /8 recovered it only for an
+     8-column window: a shorter strip shrank the window first and then took
+     an eighth of it, squeezing every slot to a pill. */
+  --move-slot-w: calc(
+    (100% - (var(--move-surface-cols, 8) - 1) * var(--move-gap)) / var(--move-surface-cols, 8)
+  );
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -793,6 +801,12 @@
 .tweakers-move-strip[data-scroll="true"] .tweakers-move-dials,
 .tweakers-move-strip[data-scroll="true"] .tweakers-move-pads {
   grid-template-columns: repeat(var(--move-strip-len, 8), var(--move-slot-w));
+  /* Full window width, not the cluster's: --move-cluster-w is a fraction of
+     its containing block, and inside the strip that block is the window —
+     already narrowed once. Taking a fraction of it again is the same
+     double-shrink the slot formula above escapes. The rows overflow this
+     width by design; the viewport clips them. */
+  width: 100%;
 }
 
 @media (prefers-reduced-motion: reduce) {
