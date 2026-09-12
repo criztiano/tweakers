@@ -103,17 +103,44 @@ export type MoveFunctionHandler = (press: MoveFunctionPress) => void;
 export interface MoveFunctionOptions {
   /**
    * A screen name for the action, readable back via `label(name)`. The
-   * screen-side pills are MoveActionButtons now, which carry their own
-   * labels — this stays for kits and views that want a registry name.
+   * panel's chip row (`MoveFunctionChips`) shows it on the chip; without
+   * one the chip wears the name as the hardware prints it.
    */
   label?: string;
+  /**
+   * Whether the attachment shows as an on-screen chip in the MovePanel
+   * header (default true — attached means lit, on both surfaces). The
+   * panel's own plumbing passes false: the strip arrows, an overlay's
+   * borrowed Back, the preset navigator's Menu belong to the instrument,
+   * not to the app's function row.
+   */
+  chip?: boolean;
 }
+
+/** One attached function, as the panel's chip row shows it. */
+export interface MoveFunctionChip {
+  name: MoveFunctionButton;
+  /** The attachment's screen label, when one was given. */
+  label?: string;
+  /** The step index for a Shift-layer second function — its press carries it. */
+  step?: number;
+}
+
+/**
+ * Names that never render as app chips: the host's own shortcuts (Settings
+ * on Shift+Step 2, Tools on Shift+Step 13 — the surface drops them from the
+ * claim anyway) and the settings-room door the panel wires itself.
+ */
+const CHIPLESS = new Set<MoveFunctionButton>([
+  'set_overview',
+  ...MOVE_FUNCTION_MANIFEST.filter((b) => 'host' in b && b.host).map((b) => b.name),
+]);
 
 export type MoveFunctionRunListener = (name: MoveFunctionButton, press: MoveFunctionPress) => void;
 
 class MoveFunctionsClass {
   private handlers = new Map<MoveFunctionButton, MoveFunctionHandler>();
-  private labels = new Map<MoveFunctionButton, string>();
+  private options = new Map<MoveFunctionButton, MoveFunctionOptions>();
   private listeners = new Set<() => void>();
   private runListeners = new Set<MoveFunctionRunListener>();
 
@@ -127,13 +154,13 @@ class MoveFunctionsClass {
       return () => {};
     }
     this.handlers.set(name, handler);
-    if (options?.label != null) this.labels.set(name, options.label);
-    else this.labels.delete(name);
+    if (options) this.options.set(name, options);
+    else this.options.delete(name);
     this.notify();
     return () => {
       if (this.handlers.get(name) === handler) {
         this.handlers.delete(name);
-        this.labels.delete(name);
+        this.options.delete(name);
         this.notify();
       }
     };
@@ -145,24 +172,40 @@ class MoveFunctionsClass {
   }
 
   /**
+   * The attachments the panel's chip row shows, in manifest order: every
+   * attached button except the reserved names and the ones attached with
+   * `chip: false`. A push overlay replaces the underlying chip while it
+   * holds the button — the chip always says what a press runs right now.
+   */
+  chips(): MoveFunctionChip[] {
+    return MOVE_FUNCTION_MANIFEST
+      .filter((b) => this.handlers.has(b.name) && !CHIPLESS.has(b.name) && this.options.get(b.name)?.chip !== false)
+      .map((b) => ({
+        name: b.name,
+        ...(this.options.get(b.name)?.label != null ? { label: this.options.get(b.name)!.label } : {}),
+        ...('step' in b ? { step: b.step } : {}),
+      }));
+  }
+
+  /**
    * Attach on top of whatever is there; the returned release puts the
    * previous attachment back. For overlays that borrow a button while they
    * are open — the preset navigator takes Back, and hands it back on close.
    */
   push(name: MoveFunctionButton, handler: MoveFunctionHandler, options?: MoveFunctionOptions): () => void {
     const prevHandler = this.handlers.get(name);
-    const prevLabel = this.labels.get(name);
+    const prevOptions = this.options.get(name);
     const detach = this.attach(name, handler, options);
     return () => {
       if (this.handlers.get(name) !== handler) return; // someone else took it since
       detach();
-      if (prevHandler) this.attach(name, prevHandler, prevLabel != null ? { label: prevLabel } : undefined);
+      if (prevHandler) this.attach(name, prevHandler, prevOptions);
     };
   }
 
   /** The screen name an attachment carries, if any. */
   label(name: MoveFunctionButton): string | undefined {
-    return this.labels.get(name);
+    return this.options.get(name)?.label;
   }
 
   /** Run the action attached to a button, if any. Called by the kit per press. */

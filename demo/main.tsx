@@ -136,6 +136,34 @@ MoveSurfaceStore.onScreenSelect((index) => {
 });
 showTracks();
 
+// The app's own function buttons — attached means lit on the hardware and a
+// chip in the panel header: one function, two surfaces. Capture snapshots
+// the tone page into a preset, Undo puts its dials back to their defaults,
+// and Loop flips the first modulator's loop — each visible on screen.
+let takes = 0;
+MoveFunctions.attach('capture', () => {
+  TweakStore.savePreset('tone', `Take ${++takes}`);
+}, { label: 'Snapshot' });
+MoveFunctions.attach('undo', () => {
+  for (const [path, value] of [['level', 0.6], ['drive', 0.25], ['air', 0.4], ['width', 0.5]] as const) {
+    TweakStore.updateValue('tone', path, value);
+  }
+});
+MoveFunctions.attach('loop', () => {
+  const slot = ModulationStore.getSlot(0);
+  if (slot) ModulationStore.updateSlotParams(0, { loop: !slot.params.loop });
+});
+
+// The volume dial reads as the demo's session clock, so the header pill has
+// a live readout beside the chips.
+const startedAt = Date.now();
+MoveVolumeDisplay.set({
+  getValue: () => {
+    const s = Math.floor((Date.now() - startedAt) / 1000);
+    return `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  },
+});
+
 // Keyboard stand-ins for the hardware. M = the Menu button (tap opens and
 // dismisses; Shift+M is the long press, the save input). Holding C is the
 // Mute button held — the compare, relayed raw like the kit does it.
@@ -176,5 +204,5 @@ import(/* @vite-ignore */ 'http://localhost:7787/kit.js')
 (window as any).__tweakers = { TweakStore, MovePresetStore, MoveFunctions };
 
 createRoot(document.getElementById('root')!).render(
-  <MovePanel productionEnabled theme="dark" settings={['Settings', 'System']} />
+  <MovePanel productionEnabled theme="dark" settings={["Settings", "System"]} />
 );

@@ -29,6 +29,7 @@ import { MoveVolumeDisplay, type MoveVolumeDisplayState } from '../move-volume';
 import { MoveColorStore } from '../move-color';
 import { MoveColorSlot, MoveColorDisplay, MoveOpacityPads, MoveColorSteps, MovePaletteScreen, copyHslOfHex, copyOklch } from './MoveColor';
 import { MoveFunctions } from '../move-functions';
+import { MoveFunctionChips } from './MoveFunctionChips';
 import { MoveSettingsView } from '../move-settings';
 import { MovePresetStore, type MovePresetView } from '../move-presets';
 import { ListScreen } from './ListScreen';
@@ -69,6 +70,15 @@ export interface MovePanelProps {
    * waveform zoom), not for another row of page controls.
    */
   headerStart?: React.ReactNode;
+  /**
+   * Where the attached-function chips sit (see `MoveFunctionChips`): every
+   * function the app attaches renders as a chip that runs the same handler
+   * as the hardware key. `clock` (the default) puts the row immediately
+   * left of the volume readout, at the header's right end; `tracks` puts it
+   * after the track labels at the other end; `none` leaves the chips to the
+   * host (mount `MoveFunctionChips` yourself, or go without).
+   */
+  functionChips?: 'clock' | 'tracks' | 'none';
 }
 
 /** The Move's four track colours, in track order (Figma node 802:321). */
@@ -234,7 +244,7 @@ export const MOVE_SETTINGS_EVENT = 'move-tweakers:settings';
  * are the eight the dials are holding, their pads with them, so all of them
  * can be reached without a single one shrinking to a chip.
  */
-export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport', scroll = false, headerStart, settings }: MovePanelProps) {
+export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport', scroll = false, headerStart, settings, functionChips = 'clock' }: MovePanelProps) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [track, setTrack] = useState(0);
@@ -387,7 +397,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   }, [roomKey]);
   useEffect(() => {
     if (!settingsOpen) return;
-    return MoveFunctions.push('back', () => MoveSettingsView.close(), { label: 'Close' });
+    return MoveFunctions.push('back', () => MoveSettingsView.close(), { label: 'Close', chip: false });
   }, [settingsOpen]);
 
   // Tell the kit about the room: its panels, whether the door stands open,
@@ -469,7 +479,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     if (!stripMode) return;
     const free = (['left', 'right'] as const).filter((name) => !MoveFunctions.list().includes(name));
     const off = free.map((name) =>
-      MoveFunctions.attach(name, () => scrollPage(name === 'right' ? 1 : -1), { label: name === 'right' ? 'Next 8' : 'Prev 8' })
+      MoveFunctions.attach(name, () => scrollPage(name === 'right' ? 1 : -1), { label: name === 'right' ? 'Next 8' : 'Prev 8', chip: false })
     );
     return () => { for (const detach of off) detach(); };
   }, [stripMode, scrollPage]);
@@ -565,7 +575,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const colorOpenPanel = colorMeta && colorView ? colorView.panelId : null;
   useEffect(() => {
     if (!colorOpenPanel) return;
-    return MoveFunctions.push('menu', () => MoveColorStore.togglePicker(), { label: 'palettes' });
+    return MoveFunctions.push('menu', () => MoveColorStore.togglePicker(), { label: 'palettes', chip: false });
   }, [colorOpenPanel]);
   // Copy is the editor's too while it is open: it puts the colour itself on
   // the clipboard — HEX on a tap, HSL with Shift, OKLCH on a hold — instead
@@ -578,12 +588,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       const hex = String(TweakStore.getValue(view.panelId, view.path) ?? '');
       const text = hold ? copyOklch(hex) : shift ? copyHslOfHex(hex) : hex;
       navigator.clipboard?.writeText(text).catch(() => {});
-    }, { label: 'copy color' });
+    }, { label: 'copy color', chip: false });
   }, [colorOpenPanel]);
   const paletteScreen = colorMeta ? MoveColorStore.isPickerOpen() : false;
   useEffect(() => {
     if (!paletteScreen) return;
-    return MoveFunctions.push('back', () => MoveColorStore.closePicker(), { label: 'back' });
+    return MoveFunctions.push('back', () => MoveColorStore.closePicker(), { label: 'back', chip: false });
   }, [paletteScreen]);
   // The hardware wheel, while the palette navigator is open: turns walk the
   // list, the jog click locks the palette in — the preset navigator's terms.
@@ -620,7 +630,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     return MoveFunctions.attach('menu', ({ shift, hold }) => {
       if (shift || hold) MovePresetStore.beginSave(pageId);
       else MovePresetStore.toggle(pageId);
-    }, { label: 'presets' });
+    }, { label: 'presets', chip: false });
   }, [pageId]);
   useEffect(() => () => {
     if (MovePresetStore.getView()?.panelId === pageId) MovePresetStore.cancel();
@@ -632,7 +642,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const presetOpenPanel = presetScreen && presetScreen.phase !== 'closing' ? presetScreen.panelId : null;
   useEffect(() => {
     if (!presetOpenPanel) return;
-    return MoveFunctions.push('back', () => MovePresetStore.cancel(), { label: 'revert' });
+    return MoveFunctions.push('back', () => MovePresetStore.cancel(), { label: 'revert', chip: false });
   }, [presetOpenPanel]);
   // The hardware wheel, while the navigator is open: turns walk the list,
   // the jog click confirms. Mute's raw presses arrive here too: holding it
@@ -1158,19 +1168,24 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const stripFrom = stripMode ? stripSlotIndex(page, stripOffset) : 0;
   const stripTo = stripMode ? stripSlotIndex(page, stripOffset + MOVE_DIALS) : 0;
 
-  // The header cluster: the volume-dial readout, right-aligned. (Action
-  // buttons live in the views now — see MoveActionButton.) Nothing
-  // registered = no cluster, header unchanged.
+  // The header cluster: the attached-function chips (in their default seat,
+  // immediately left of the readout), then the volume-dial readout,
+  // right-aligned. (View-placed action pills remain MoveActionButton's
+  // business.) Nothing registered and nothing attached = no cluster, header
+  // unchanged.
   const volumeReading = liveValue ?? volume?.value;
-  const headerCluster = volume && (
+  const headerCluster = (volume || functionChips === 'clock') && (
     <div className="tweakers-move-actions">
-      <div className="tweakers-move-volume">
-        <span className="tweakers-move-volume-tick" style={{ background: MOVE_TRACK_COLORS[0] }} />
-        {volume.label && volumeReading != null && (
-          <span className="tweakers-move-volume-label">{volume.label}</span>
-        )}
-        <span className="tweakers-move-volume-value">{boldColons(volumeReading ?? volume.label ?? '')}</span>
-      </div>
+      {functionChips === 'clock' && <MoveFunctionChips />}
+      {volume && (
+        <div className="tweakers-move-volume">
+          <span className="tweakers-move-volume-tick" style={{ background: MOVE_TRACK_COLORS[0] }} />
+          {volume.label && volumeReading != null && (
+            <span className="tweakers-move-volume-label">{volume.label}</span>
+          )}
+          <span className="tweakers-move-volume-value">{boldColons(volumeReading ?? volume.label ?? '')}</span>
+        </div>
+      )}
     </div>
   );
 
@@ -1286,6 +1301,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   ))}
                 </div>
               )}
+              {functionChips === 'tracks' && <MoveFunctionChips />}
               {headerStart && <div className="tweakers-move-header-start">{headerStart}</div>}
             </div>
             )}
@@ -2299,9 +2315,9 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
       if (slot) ModulationStore.updateSlotParams(index, { [path]: !slot.params[path] });
     };
     const releases = [
-      MoveFunctions.push('play', toggle('playing'), { label: 'Play' }),
-      MoveFunctions.push('loop', toggle('loopOn'), { label: 'Loop' }),
-      MoveFunctions.push('back', () => ModulationStore.closeSettings(), { label: 'Close' }),
+      MoveFunctions.push('play', toggle('playing'), { label: 'Play', chip: false }),
+      MoveFunctions.push('loop', toggle('loopOn'), { label: 'Loop', chip: false }),
+      MoveFunctions.push('back', () => ModulationStore.closeSettings(), { label: 'Close', chip: false }),
     ];
     return () => releases.forEach((release) => release());
   }, [index]);

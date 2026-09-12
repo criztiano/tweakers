@@ -32,6 +32,7 @@ and the formatted readout. It retains every gesture and store subscription.
 | --- | --- |
 | `movePads` option | Place toggles, numeric value chips, and explicitly mapped actions under their related dial columns |
 | `MoveActionButton` / `MoveFunctions` | Hardware-named action pills and one shared action registry |
+| `MoveFunctionChips` | The attached functions as header chips, for free: `MoveFunctions.attach` shows the chip (canonical icon per button, the attach's `label` or the printed name) and a click runs the hardware key's handler. `MovePanel` places the row by its `functionChips` option — `clock` (default, left of the volume readout), `tracks` (after the track labels), `none`. Reserved buttons and `chip: false` attachments never render. |
 | `MoveWaveform` / `MoveWaveformStore` | Sample display, navigation, loop and scrub state |
 | `MoveVolumeDisplay` | Contextual volume-knob readout |
 | `MoveNotifications` / `moveNotify` | The app's messages, stacked over the instrument. Mount the component once; call `moveNotify.add({ type, title, description })` from anywhere. `type` is `info`, `success`, `warning` or `error` — the card says the kind in a word and repeats it in the palette's hue, never in hue alone. The stack clears the panel and any display floating over it (curve composer, docked waveform, save input); an app-drawn float opts in with `data-move-float`. |

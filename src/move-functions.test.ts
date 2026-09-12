@@ -117,6 +117,59 @@ describe('move functions', () => {
     detach();
   });
 
+  it('lists chips for attached buttons in manifest order, with labels and steps', () => {
+    const detachLoop = MoveFunctions.attach('loop', () => {});
+    const detachUndo = MoveFunctions.attach('undo', () => {}, { label: 'History back' });
+    const detachQuantize = MoveFunctions.attach('quantize', () => {});
+
+    // Manifest order, not attach order — the chip row never reshuffles.
+    assert.deepEqual(MoveFunctions.chips(), [
+      { name: 'undo', label: 'History back' },
+      { name: 'loop' },
+      { name: 'quantize', step: 15 },
+    ]);
+
+    detachUndo();
+    assert.deepEqual(MoveFunctions.chips().map((c) => c.name), ['loop', 'quantize']);
+    detachLoop();
+    detachQuantize();
+    assert.deepEqual(MoveFunctions.chips(), []);
+  });
+
+  it('keeps reserved names and chip:false attachments out of the chip row', () => {
+    // The host's own shortcuts and the settings door: attachable, listed for
+    // the kit, never an app chip.
+    const offs = (['set_overview', 'setup', 'step13'] as const).map((name) =>
+      MoveFunctions.attach(name, () => {})
+    );
+    // The panel's plumbing opts out per attachment.
+    offs.push(MoveFunctions.attach('right', () => {}, { label: 'Next 8', chip: false }));
+
+    assert.equal(MoveFunctions.list().length, 4);
+    assert.deepEqual(MoveFunctions.chips(), []);
+    for (const off of offs) off();
+  });
+
+  it('push replaces the chip while held; release restores label and visibility', () => {
+    const detach = MoveFunctions.attach('copy', () => {}, { label: 'Copy notes' });
+    assert.deepEqual(MoveFunctions.chips(), [{ name: 'copy', label: 'Copy notes' }]);
+
+    // A visible overlay stands in — the chip says what a press runs now.
+    const releaseVisible = MoveFunctions.push('copy', () => {}, { label: 'copy color' });
+    assert.deepEqual(MoveFunctions.chips(), [{ name: 'copy', label: 'copy color' }]);
+    releaseVisible();
+    assert.deepEqual(MoveFunctions.chips(), [{ name: 'copy', label: 'Copy notes' }]);
+
+    // A chipless overlay hides the chip — same reason, other direction.
+    const releaseHidden = MoveFunctions.push('copy', () => {}, { chip: false });
+    assert.deepEqual(MoveFunctions.chips(), []);
+    releaseHidden();
+    assert.deepEqual(MoveFunctions.chips(), [{ name: 'copy', label: 'Copy notes' }]);
+
+    detach();
+    assert.deepEqual(MoveFunctions.chips(), []);
+  });
+
   it('names buttons as the hardware prints them, and marks the special ones', () => {
     // Names match the wire protocol — no aliases, no integration confusion.
     assert.ok(MOVE_FUNCTION_BUTTONS.includes('sample'));
