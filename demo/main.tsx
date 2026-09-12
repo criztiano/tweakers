@@ -140,14 +140,17 @@ MoveSurfaceStore.onScreenSelect((index) => {
 });
 showTracks();
 
-// The app's own function buttons — attached means lit on the hardware and a
-// chip in the panel header: one function, two surfaces. Capture snapshots
-// the tone page into a preset, Undo puts its dials back to their defaults,
-// and Loop flips the first modulator's loop — each visible on screen.
+// The app's own function buttons — attached means lit on the hardware, and
+// a labelled chip button (capture, loop, mute, sample) gets its header chip
+// for free: one function, two surfaces. Capture snapshots the tone page
+// into a preset — dressed in the kit's blue to show the palette option —
+// and Loop flips the first modulator's loop in the quiet slot voice. Undo
+// resets the dials with no chip: a printed key says what it does from the
+// hardware.
 let takes = 0;
 MoveFunctions.attach('capture', () => {
   TweakStore.savePreset('tone', `Take ${++takes}`);
-}, { label: 'Snapshot' });
+}, { label: 'Snapshot', chip: { color: 'blue' } });
 MoveFunctions.attach('undo', () => {
   for (const [path, value] of [['level', 0.6], ['drive', 0.25], ['air', 0.4], ['width', 0.5]] as const) {
     TweakStore.updateValue('tone', path, value);
@@ -156,7 +159,7 @@ MoveFunctions.attach('undo', () => {
 MoveFunctions.attach('loop', () => {
   const slot = ModulationStore.getSlot(0);
   if (slot) ModulationStore.updateSlotParams(0, { loop: !slot.params.loop });
-});
+}, { label: 'Env loop' });
 
 // The volume dial reads as the demo's session clock, so the header pill has
 // a live readout beside the chips.

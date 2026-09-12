@@ -754,12 +754,13 @@
 
 /* ------------------------------------------------------------------------
    Move function chips (MoveFunctionChips) — the attached-function row.
-   Provisional skin: the action pills' idiom (height, radius, label face,
-   the hardware's colour pairing — capture blue, enter green, the pale
-   function-button neutral for the rest), sized to sit in a row. The Figma
-   skin replaces this block and nothing else; the component only names
-   `.tweakers-move-chips`, `.tweakers-move-chip[data-name][data-pressed]`
-   and `.tweakers-move-chip-icon`.
+   Default dress is the slot idiom — the panel's own quiet surface and
+   voice — so the chips read as part of the instrument. `highlight` is the
+   pale hardware-key look, for the one action a view leans on; a palette
+   colour (set inline from MOVE_PALETTE, never an arbitrary hue) rides the
+   same inverse voice. The component names `.tweakers-move-chips`,
+   `.tweakers-move-chip[data-name][data-variant][data-color][data-pressed]`
+   and `.tweakers-move-chip-icon` — restyle here, not there.
    ------------------------------------------------------------------------ */
 
 .tweakers-move-chips {
@@ -801,19 +802,21 @@
   font-size: 16px;
   line-height: normal;
   white-space: nowrap;
-  color: #1e1e1e;
-  background: #dee3c9;
+  color: var(--move-text);
+  background: var(--move-chip);
   transition: filter 0.12s, transform 0.12s;
 }
 
-/* The hardware pairing, like MoveActionButton's kinds: the capture key's
-   blue, the jog click's green; every other key is a pale function button. */
-.tweakers-move-chip[data-name="capture"] {
-  background: #4274f4;
+/* The pop-out dress: the pale hardware-key look, and any palette colour
+   (background set inline from MOVE_PALETTE) — both speak in the inverse
+   voice, dark on light. */
+.tweakers-move-chip[data-variant="highlight"] {
+  background: #dee3c9;
 }
 
-.tweakers-move-chip[data-name="jog_click"] {
-  background: #52bd06;
+.tweakers-move-chip[data-variant="highlight"],
+.tweakers-move-chip[data-color] {
+  color: #1e1e1e;
 }
 
 .tweakers-move-chip:hover {

@@ -5,13 +5,15 @@ import { MoveFunctionChips } from '../src/components/MoveFunctionChips';
 import { MovePanel } from '../src/components/MovePanel';
 import { MoveFunctions, type MoveFunctionPress } from '../src/move-functions';
 import { MOVE_FUNCTION_ICONS } from '../src/icons';
+import { MOVE_PALETTE } from '../src/move-palette';
 import { TweakStore } from '../src/store/TweakStore';
 
-// The store→component lifecycle: an app attaches a function and the chip
-// row shows it — same icon everywhere, the attach's label (or the printed
-// name), and a click that runs the very handler the hardware key runs.
-// Detach removes it, a push stands in while it holds the button, and the
-// reserved names never render.
+// The store→component lifecycle: an app attaches a chip-button function
+// with a label and the chip row shows it — the key's canonical icon, the
+// label saying what the button does HERE, and a click that runs the very
+// handler the hardware key runs. No label = no chip (a chip never wears a
+// hardware name); buttons outside MOVE_CHIP_BUTTONS never chip; a push
+// stands in while it holds the button.
 
 let renderer: ReactTestRenderer | undefined;
 const offs: (() => void)[] = [];
@@ -40,7 +42,7 @@ const chipText = (chip: ReturnType<typeof chips>[number]) =>
   chip.children.filter((c): c is string => typeof c === 'string').join('');
 
 describe('MoveFunctionChips', () => {
-  it('shows a chip per attached function and removes it on detach', () => {
+  it('shows a labelled chip per attached chip button and removes it on detach', () => {
     mount();
     expect(chips()).toHaveLength(0);
 
@@ -50,74 +52,87 @@ describe('MoveFunctionChips', () => {
     expect(all).toHaveLength(1);
     expect(all[0].props['data-name']).toBe('capture');
     expect(chipText(all[0])).toBe('Load video');
+    // The key's canonical icon, from the shared map — apps cannot drift.
+    expect(all[0].findByType('svg').props.viewBox).toBe(MOVE_FUNCTION_ICONS.capture.viewBox);
 
     act(() => detach());
     expect(chips()).toHaveLength(0);
   });
 
-  it('wears the printed name without a label, and the canonical icon always', () => {
-    attach('undo', () => {});
-    attach('jog_click', () => {});
+  it('renders no chip without a label — a chip never wears a hardware name', () => {
+    // This is the double-chip bug's pin: an unlabelled jog_click once drew a
+    // generic "Enter" beside the Sampling key's labelled chip. Unlabelled
+    // attachments light the key and nothing else.
+    attach('sample', () => {}, { label: 'Snapshot' });
+    attach('mute', () => {});
+    attach('jog_click', () => {}, { label: 'Replay' }); // wheel click: never a chip
     mount();
-    const [undo, enter] = chips();
-    expect(chipText(undo)).toBe('Undo');
-    expect(chipText(enter)).toBe('Enter');
-    // One icon per hardware key, from the shared map — apps cannot drift.
-    expect(undo.findByType('svg').props.viewBox).toBe(MOVE_FUNCTION_ICONS.undo.viewBox);
-    expect(enter.findByType('svg').props.viewBox).toBe(MOVE_FUNCTION_ICONS.jog_click.viewBox);
+    const all = chips();
+    expect(all).toHaveLength(1);
+    expect(chipText(all[0])).toBe('Snapshot');
+  });
+
+  it('never chips buttons outside the whitelist, however labelled', () => {
+    for (const name of ['play', 'undo', 'copy', 'delete', 'left', 'right', 'up', 'down'] as const) {
+      attach(name, () => {}, { label: 'Real action' });
+    }
+    mount();
+    expect(chips()).toHaveLength(0);
   });
 
   it('runs the attached handler on click — one function, two surfaces', () => {
     const presses: MoveFunctionPress[] = [];
-    attach('loop', (press) => presses.push(press));
-    attach('quantize', (press) => presses.push(press));
+    attach('loop', (press) => presses.push(press), { label: 'Random image' });
     mount();
-    const [loop, quantize] = chips();
-    act(() => loop.props.onClick());
-    // A Shift-layer chip presses as the hardware does: shift, with its step.
-    act(() => quantize.props.onClick());
-    expect(presses).toEqual([
-      { name: 'loop', shift: false, hold: false },
-      { name: 'quantize', shift: true, hold: false, step: 15 },
-    ]);
+    act(() => chips()[0].props.onClick());
+    expect(presses).toEqual([{ name: 'loop', shift: false, hold: false }]);
+  });
+
+  it('dresses in the slot voice by default, highlight or palette colour on request', () => {
+    attach('capture', () => {}, { label: 'Load video' });
+    attach('loop', () => {}, { label: 'Random image', chip: { variant: 'highlight' } });
+    attach('mute', () => {}, { label: 'Bypass', chip: { color: 'blue' } });
+    mount();
+    const [mute, loop, capture] = [
+      chips().find((c) => c.props['data-name'] === 'mute')!,
+      chips().find((c) => c.props['data-name'] === 'loop')!,
+      chips().find((c) => c.props['data-name'] === 'capture')!,
+    ];
+    expect(capture.props['data-variant']).toBeUndefined();
+    expect(capture.props.style).toBeUndefined();
+    expect(loop.props['data-variant']).toBe('highlight');
+    // Only the kit's own palette ever colours a chip.
+    expect(mute.props['data-color']).toBe('blue');
+    expect(mute.props.style).toEqual({ background: MOVE_PALETTE.blue });
   });
 
   it('reflects a push while it holds the button, and the release restores', () => {
-    attach('back', () => {}, { label: 'Leave' });
+    attach('mute', () => {}, { label: 'Bypass' });
     mount();
-    expect(chipText(chips()[0])).toBe('Leave');
+    expect(chipText(chips()[0])).toBe('Bypass');
 
     let release!: () => void;
-    act(() => { release = MoveFunctions.push('back', () => {}, { label: 'revert' }); });
-    expect(chipText(chips()[0])).toBe('revert');
+    act(() => { release = MoveFunctions.push('mute', () => {}, { label: 'Compare' }); });
+    expect(chipText(chips()[0])).toBe('Compare');
 
-    // The panel's own borrows are chipless — the chip hides rather than lie.
+    // An unlabelled borrow hides the chip rather than lie about the press.
     let releaseHidden!: () => void;
-    act(() => { releaseHidden = MoveFunctions.push('back', () => {}, { chip: false }); });
+    act(() => { releaseHidden = MoveFunctions.push('mute', () => {}); });
     expect(chips()).toHaveLength(0);
     act(() => releaseHidden());
-    expect(chipText(chips()[0])).toBe('revert');
+    expect(chipText(chips()[0])).toBe('Compare');
 
     act(() => release());
-    expect(chipText(chips()[0])).toBe('Leave');
-  });
-
-  it('never renders the reserved buttons or chip:false attachments', () => {
-    attach('set_overview', () => {});
-    attach('setup', () => {});
-    attach('step13', () => {});
-    attach('right', () => {}, { label: 'Next 8', chip: false });
-    mount();
-    expect(chips()).toHaveLength(0);
+    expect(chipText(chips()[0])).toBe('Bypass');
   });
 
   it('flashes on a hardware run, and rests after the flash', () => {
     vi.useFakeTimers();
     try {
-      attach('play', () => {});
+      attach('loop', () => {}, { label: 'Random image' });
       mount();
       expect(chips()[0].props['data-pressed']).toBeUndefined();
-      act(() => MoveFunctions.run('play'));
+      act(() => MoveFunctions.run('loop'));
       expect(chips()[0].props['data-pressed']).toBe(true);
       act(() => { vi.runAllTimers(); });
       expect(chips()[0].props['data-pressed']).toBeUndefined();
@@ -140,19 +155,19 @@ describe('MovePanel function chip placement', () => {
   };
 
   it('defaults to the clock seat — the header cluster, left of the readout', () => {
-    attach('capture', () => {});
+    attach('capture', () => {}, { label: 'Load video' });
     mountPanel();
     expect(rowClass()).toBe('tweakers-move-actions');
   });
 
   it('moves to the track-label end on functionChips="tracks"', () => {
-    attach('capture', () => {});
+    attach('capture', () => {}, { label: 'Load video' });
     mountPanel('tracks');
     expect(rowClass()).toBe('tweakers-move-tracks-group');
   });
 
   it('renders no chips on functionChips="none"', () => {
-    attach('capture', () => {});
+    attach('capture', () => {}, { label: 'Load video' });
     mountPanel('none');
     expect(renderer!.root.findAllByProps({ className: 'tweakers-move-chips' })).toHaveLength(0);
   });

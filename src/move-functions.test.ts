@@ -117,54 +117,80 @@ describe('move functions', () => {
     detach();
   });
 
-  it('lists chips for attached buttons in manifest order, with labels and steps', () => {
-    const detachLoop = MoveFunctions.attach('loop', () => {});
-    const detachUndo = MoveFunctions.attach('undo', () => {}, { label: 'History back' });
-    const detachQuantize = MoveFunctions.attach('quantize', () => {});
+  it('lists chips in manifest order, only for chip buttons carrying a label', () => {
+    const detachLoop = MoveFunctions.attach('loop', () => {}, { label: 'Cycle take' });
+    const detachCapture = MoveFunctions.attach('capture', () => {}, { label: 'Grab frame' });
 
     // Manifest order, not attach order — the chip row never reshuffles.
     assert.deepEqual(MoveFunctions.chips(), [
-      { name: 'undo', label: 'History back' },
-      { name: 'loop' },
-      { name: 'quantize', step: 15 },
+      { name: 'loop', label: 'Cycle take' },
+      { name: 'capture', label: 'Grab frame' },
     ]);
 
-    detachUndo();
-    assert.deepEqual(MoveFunctions.chips().map((c) => c.name), ['loop', 'quantize']);
+    detachCapture();
+    assert.deepEqual(MoveFunctions.chips().map((c) => c.name), ['loop']);
     detachLoop();
-    detachQuantize();
     assert.deepEqual(MoveFunctions.chips(), []);
   });
 
-  it('keeps reserved names and chip:false attachments out of the chip row', () => {
-    // The host's own shortcuts and the settings door: attachable, listed for
-    // the kit, never an app chip.
-    const offs = (['set_overview', 'setup', 'step13'] as const).map((name) =>
-      MoveFunctions.attach(name, () => {})
+  it('never chips a button outside MOVE_CHIP_BUTTONS, however labelled', () => {
+    // Play is the time indicator's story; the printed keys and the wheel
+    // click stay hardware-only lights; the Shift layer never surfaces.
+    const offs = (['play', 'undo', 'copy', 'delete', 'up', 'jog_click', 'quantize', 'set_overview'] as const).map(
+      (name) => MoveFunctions.attach(name, () => {}, { label: 'Something real' })
     );
-    // The panel's plumbing opts out per attachment.
-    offs.push(MoveFunctions.attach('right', () => {}, { label: 'Next 8', chip: false }));
-
-    assert.equal(MoveFunctions.list().length, 4);
+    assert.equal(MoveFunctions.list().length, 8);
     assert.deepEqual(MoveFunctions.chips(), []);
     for (const off of offs) off();
   });
 
+  it('no label, no chip — a chip describes the app action, never the key', () => {
+    const detach = MoveFunctions.attach('sample', () => {});
+    assert.ok(MoveFunctions.list().includes('sample')); // still lit on the hardware
+    assert.deepEqual(MoveFunctions.chips(), []);
+    detach();
+
+    // chip: false hides one even with a label — the panel's own plumbing.
+    const detach2 = MoveFunctions.attach('loop', () => {}, { label: 'Loop', chip: false });
+    assert.deepEqual(MoveFunctions.chips(), []);
+    detach2();
+  });
+
+  it('dresses a chip only in the kit palette; junk colours are dropped', () => {
+    const detach = MoveFunctions.attach('capture', () => {}, {
+      label: 'Grab frame',
+      chip: { variant: 'highlight', color: 'blue' },
+    });
+    assert.deepEqual(MoveFunctions.chips(), [
+      { name: 'capture', label: 'Grab frame', variant: 'highlight', color: 'blue' },
+    ]);
+    detach();
+
+    // A colour outside MOVE_PALETTE never reaches the screen.
+    const detach2 = MoveFunctions.attach('capture', () => {}, {
+      label: 'Grab frame',
+      chip: { color: '#ff0000' as never },
+    });
+    assert.deepEqual(MoveFunctions.chips(), [{ name: 'capture', label: 'Grab frame' }]);
+    detach2();
+  });
+
   it('push replaces the chip while held; release restores label and visibility', () => {
-    const detach = MoveFunctions.attach('copy', () => {}, { label: 'Copy notes' });
-    assert.deepEqual(MoveFunctions.chips(), [{ name: 'copy', label: 'Copy notes' }]);
+    const detach = MoveFunctions.attach('mute', () => {}, { label: 'Bypass' });
+    assert.deepEqual(MoveFunctions.chips(), [{ name: 'mute', label: 'Bypass' }]);
 
     // A visible overlay stands in — the chip says what a press runs now.
-    const releaseVisible = MoveFunctions.push('copy', () => {}, { label: 'copy color' });
-    assert.deepEqual(MoveFunctions.chips(), [{ name: 'copy', label: 'copy color' }]);
+    const releaseVisible = MoveFunctions.push('mute', () => {}, { label: 'Compare' });
+    assert.deepEqual(MoveFunctions.chips(), [{ name: 'mute', label: 'Compare' }]);
     releaseVisible();
-    assert.deepEqual(MoveFunctions.chips(), [{ name: 'copy', label: 'Copy notes' }]);
+    assert.deepEqual(MoveFunctions.chips(), [{ name: 'mute', label: 'Bypass' }]);
 
-    // A chipless overlay hides the chip — same reason, other direction.
-    const releaseHidden = MoveFunctions.push('copy', () => {}, { chip: false });
+    // An unlabelled overlay hides the chip — it would otherwise lie about
+    // what a press runs.
+    const releaseHidden = MoveFunctions.push('mute', () => {});
     assert.deepEqual(MoveFunctions.chips(), []);
     releaseHidden();
-    assert.deepEqual(MoveFunctions.chips(), [{ name: 'copy', label: 'Copy notes' }]);
+    assert.deepEqual(MoveFunctions.chips(), [{ name: 'mute', label: 'Bypass' }]);
 
     detach();
     assert.deepEqual(MoveFunctions.chips(), []);

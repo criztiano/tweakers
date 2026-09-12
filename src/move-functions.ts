@@ -24,6 +24,8 @@
  * the four track buttons always switch pages.
  */
 
+import { MOVE_PALETTE, type MovePaletteName } from './move-palette';
+
 /**
  * The manifest of attachable buttons — each named exactly as printed on the
  * hardware, so integration talk stays unambiguous ("wire the sample button").
@@ -100,41 +102,58 @@ export interface MoveFunctionPress {
 
 export type MoveFunctionHandler = (press: MoveFunctionPress) => void;
 
+/**
+ * How an attachment's chip may dress. The default wears the slot idiom —
+ * the same quiet surface as everything else on the panel. `highlight` pops
+ * it out as the pale hardware-key look, and `color` may name one of the
+ * kit's own palette colours (`MOVE_PALETTE`) — never an arbitrary CSS
+ * colour, so a chip's hue always means something the two surfaces agree on.
+ */
+export interface MoveFunctionChipStyle {
+  variant?: 'highlight';
+  color?: MovePaletteName;
+}
+
 export interface MoveFunctionOptions {
   /**
-   * A screen name for the action, readable back via `label(name)`. The
-   * panel's chip row (`MoveFunctionChips`) shows it on the chip; without
-   * one the chip wears the name as the hardware prints it.
+   * What the button does in this app, readable back via `label(name)` and
+   * worn by the on-screen chip. A chip's label always describes the app's
+   * action ("Load video"), never the hardware key's name — a chip-worthy
+   * attachment without a label renders no chip at all.
    */
   label?: string;
   /**
-   * Whether the attachment shows as an on-screen chip in the MovePanel
-   * header (default true — attached means lit, on both surfaces). The
-   * panel's own plumbing passes false: the strip arrows, an overlay's
-   * borrowed Back, the preset navigator's Menu belong to the instrument,
-   * not to the app's function row.
+   * The on-screen chip: `false` hides it (the panel's own plumbing — strip
+   * arrows, an overlay's borrowed Back — belongs to the instrument, not the
+   * app's function row), a style object dresses it. Chips render only for
+   * the buttons in MOVE_CHIP_BUTTONS, and only with a `label`.
    */
-  chip?: boolean;
+  chip?: boolean | MoveFunctionChipStyle;
 }
 
 /** One attached function, as the panel's chip row shows it. */
 export interface MoveFunctionChip {
   name: MoveFunctionButton;
-  /** The attachment's screen label, when one was given. */
-  label?: string;
-  /** The step index for a Shift-layer second function — its press carries it. */
-  step?: number;
+  /** What the button does here — the attach's label, always present. */
+  label: string;
+  variant?: 'highlight';
+  color?: MovePaletteName;
 }
 
 /**
- * Names that never render as app chips: the host's own shortcuts (Settings
- * on Shift+Step 2, Tools on Shift+Step 13 — the surface drops them from the
- * claim anyway) and the settings-room door the panel wires itself.
+ * The buttons that may carry an on-screen chip — a system rule, the same in
+ * every app. Play is already told by the time indicator; the printed keys
+ * (Undo, Copy, Delete, the arrows) say what they do from the hardware and
+ * stay light-only; the wheel's click (`jog_click`) is a gesture, not a key
+ * a chip can stand for; the Shift layer and the host's own shortcuts never
+ * surface. What remains are the keys whose meaning is the app's to give.
+ *
+ * Naming, once and for all: `sample` is the hardware's printed Sampling
+ * key — the surface's second confirm, so it wears the enter dot and is
+ * often called "the enter button". `jog_click` is the wheel pressed as a
+ * button. Neither is named "enter" in this manifest.
  */
-const CHIPLESS = new Set<MoveFunctionButton>([
-  'set_overview',
-  ...MOVE_FUNCTION_MANIFEST.filter((b) => 'host' in b && b.host).map((b) => b.name),
-]);
+export const MOVE_CHIP_BUTTONS = ['sample', 'capture', 'mute', 'loop'] as const;
 
 export type MoveFunctionRunListener = (name: MoveFunctionButton, press: MoveFunctionPress) => void;
 
@@ -172,18 +191,26 @@ class MoveFunctionsClass {
   }
 
   /**
-   * The attachments the panel's chip row shows, in manifest order: every
-   * attached button except the reserved names and the ones attached with
-   * `chip: false`. A push overlay replaces the underlying chip while it
-   * holds the button — the chip always says what a press runs right now.
+   * The attachments the panel's chip row shows, in manifest order. A chip
+   * renders only for a MOVE_CHIP_BUTTONS key, only while a handler is
+   * attached, and only with a `label` — a chip says what the button does in
+   * this app, so an attachment that names nothing shows nothing (the key
+   * still lights). `chip: false` hides one outright. A push overlay
+   * replaces the underlying chip while it holds the button — the chip
+   * always says what a press runs right now.
    */
   chips(): MoveFunctionChip[] {
     return MOVE_FUNCTION_MANIFEST
-      .filter((b) => this.handlers.has(b.name) && !CHIPLESS.has(b.name) && this.options.get(b.name)?.chip !== false)
-      .map((b) => ({
-        name: b.name,
-        ...(this.options.get(b.name)?.label != null ? { label: this.options.get(b.name)!.label } : {}),
-        ...('step' in b ? { step: b.step } : {}),
+      .filter((b) => (MOVE_CHIP_BUTTONS as readonly string[]).includes(b.name) && this.handlers.has(b.name))
+      .map((b) => ({ name: b.name, options: this.options.get(b.name) }))
+      .filter(({ options }) => options?.chip !== false && !!options?.label)
+      .map(({ name, options }) => ({
+        name,
+        label: options!.label!,
+        ...(typeof options!.chip === 'object' && options!.chip.variant ? { variant: options!.chip.variant } : {}),
+        ...(typeof options!.chip === 'object' && options!.chip.color != null && options!.chip.color in MOVE_PALETTE
+          ? { color: options!.chip.color }
+          : {}),
       }));
   }
 
