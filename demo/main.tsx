@@ -11,13 +11,17 @@ import { MoveVolumeDisplay } from '../src/move-volume';
 import { setAudioModBuffer } from '../src/modulation-core';
 import '../src/styles/theme.css';
 
-// Two pages, so the track buttons have something to switch between.
+// Two pages, so the track buttons have something to switch between. Tone
+// carries a stacked pair of pads under Level, so the page has the full
+// slot-and-pads height — the wheel screen beside it runs the same height.
 TweakStore.registerPanel('tone', 'Tone', {
   level: [0.6, 0, 1],
   drive: [0.25, 0, 1],
   air: [0.4, 0, 1],
   width: [0.5, 0, 1],
-});
+  punch: true,
+  soft: false,
+}, undefined, { movePads: { punch: 0, soft: 0 } });
 TweakStore.registerPanel('space', 'Space', {
   size: [0.35, 0, 1],
   decay: [0.5, 0, 1],
