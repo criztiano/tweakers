@@ -5342,10 +5342,7 @@ var MOVE_FUNCTION_MANIFEST = [
 var MOVE_FUNCTION_BUTTONS = MOVE_FUNCTION_MANIFEST.map((b) => b.name);
 var MOVE_STEP_FUNCTIONS = MOVE_FUNCTION_MANIFEST.filter((b) => "step" in b).map((b) => b.name);
 var MOVE_SPECIAL_BUTTONS = MOVE_FUNCTION_MANIFEST.filter((b) => "special" in b && b.special).map((b) => b.name);
-var CHIPLESS = /* @__PURE__ */ new Set([
-  "set_overview",
-  ...MOVE_FUNCTION_MANIFEST.filter((b) => "host" in b && b.host).map((b) => b.name)
-]);
+var MOVE_CHIP_BUTTONS = ["sample", "capture", "mute", "loop"];
 var MoveFunctionsClass = class {
   constructor() {
     this.handlers = /* @__PURE__ */ new Map();
@@ -5380,16 +5377,20 @@ var MoveFunctionsClass = class {
     return [...this.handlers.keys()];
   }
   /**
-   * The attachments the panel's chip row shows, in manifest order: every
-   * attached button except the reserved names and the ones attached with
-   * `chip: false`. A push overlay replaces the underlying chip while it
-   * holds the button — the chip always says what a press runs right now.
+   * The attachments the panel's chip row shows, in manifest order. A chip
+   * renders only for a MOVE_CHIP_BUTTONS key, only while a handler is
+   * attached, and only with a `label` — a chip says what the button does in
+   * this app, so an attachment that names nothing shows nothing (the key
+   * still lights). `chip: false` hides one outright. A push overlay
+   * replaces the underlying chip while it holds the button — the chip
+   * always says what a press runs right now.
    */
   chips() {
-    return MOVE_FUNCTION_MANIFEST.filter((b) => this.handlers.has(b.name) && !CHIPLESS.has(b.name) && this.options.get(b.name)?.chip !== false).map((b) => ({
-      name: b.name,
-      ...this.options.get(b.name)?.label != null ? { label: this.options.get(b.name).label } : {},
-      ..."step" in b ? { step: b.step } : {}
+    return MOVE_FUNCTION_MANIFEST.filter((b) => MOVE_CHIP_BUTTONS.includes(b.name) && this.handlers.has(b.name)).map((b) => ({ name: b.name, options: this.options.get(b.name) })).filter(({ options }) => options?.chip !== false && !!options?.label).map(({ name, options }) => ({
+      name,
+      label: options.label,
+      ...typeof options.chip === "object" && options.chip.variant ? { variant: options.chip.variant } : {},
+      ...typeof options.chip === "object" && options.chip.color != null && options.chip.color in MOVE_PALETTE ? { color: options.chip.color } : {}
     }));
   }
   /**
@@ -5437,16 +5438,6 @@ var MoveFunctions = new MoveFunctionsClass();
 import { useEffect as useEffect7, useRef as useRef7, useState as useState5 } from "react";
 import { jsx as jsx9, jsxs as jsxs9 } from "react/jsx-runtime";
 var PRESS_FLASH_MS = 160;
-var CHIP_NAMES = {
-  jog_click: "Enter",
-  pitches_16: "16 Pitches",
-  step4: "Step 4",
-  step12: "Step 12",
-  step14: "Step 14"
-};
-function moveFunctionChipName(name) {
-  return CHIP_NAMES[name] ?? name.split("_").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
-}
 function ChipGlyph({ glyph }) {
   return /* @__PURE__ */ jsxs9("svg", { className: "tweakers-move-chip-icon", width: glyph.size, height: glyph.size, viewBox: glyph.viewBox, fill: "none", children: [
     glyph.paths?.map((d) => /* @__PURE__ */ jsx9("path", { d, stroke: "currentColor", strokeWidth: "1.5", strokeLinecap: "round", strokeLinejoin: "round" }, d)),
@@ -5475,15 +5466,14 @@ function Chip({ chip }) {
       type: "button",
       className: "tweakers-move-chip",
       "data-name": chip.name,
+      "data-variant": chip.variant,
+      "data-color": chip.color,
       "data-pressed": pressed || void 0,
-      onClick: () => (
-        // A Shift-layer function's press always carries its shift and step —
-        // the chip is that gesture on this side of the glass.
-        MoveFunctions.run(chip.name, chip.step != null ? { shift: true, step: chip.step } : { shift: false })
-      ),
+      style: chip.color ? { background: MOVE_PALETTE[chip.color] } : void 0,
+      onClick: () => MoveFunctions.run(chip.name, { shift: false }),
       children: [
         /* @__PURE__ */ jsx9(ChipGlyph, { glyph: MOVE_FUNCTION_ICONS[chip.name] }),
-        chip.label ?? moveFunctionChipName(chip.name)
+        chip.label
       ]
     }
   );
@@ -8231,6 +8221,7 @@ export {
   MOD_SETTINGS_PANEL,
   MOD_SLOTS,
   MOD_TOUCH_GRACE_MS,
+  MOVE_CHIP_BUTTONS,
   MOVE_COLOR_HUES,
   MOVE_COLOR_PALETTES,
   MOVE_COLOR_STEPS,
@@ -8393,7 +8384,6 @@ export {
   modPageWidth,
   modRingArc,
   moveAppPadRow,
-  moveFunctionChipName,
   moveNotify,
   moveNumericDrawing,
   movePadRows,
