@@ -52,6 +52,7 @@ its run **starts** in.
 | `MoveActionButton` / `MoveFunctions` | Hardware-named action pills and one shared action registry |
 | `MoveWaveform` / `MoveWaveformStore` | Sample display, navigation, loop and scrub state |
 | `MoveVolumeDisplay` | Contextual volume-knob readout |
+| `MoveNotifications` / `moveNotify` | The app's messages, stacked over the instrument. Mount the component once; call `moveNotify.add({ type, title, description })` from anywhere. `type` is `info`, `success`, `warning` or `error` — the card says the kind in a word and repeats it in the palette's hue, never in hue alone. The stack clears the panel and any display floating over it (curve composer, docked waveform, save input); an app-drawn float opts in with `data-move-float`. |
 | `MOVE_PALETTE` | The Move's colours on screen — the same set the hardware lights, matched by eye against the device's LED palette. `MOVE_TRACK_COLORS` is built from it. Colour on this surface always means something; never decoration. |
 | `MoveSurfaceStore` | Mirror app-owned raw pads, step buttons and screen state |
 | `ListScreen` | Controlled list presentation matching the device display |

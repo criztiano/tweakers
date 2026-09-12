@@ -59,6 +59,12 @@ export {
   MOVE_WAVEFORM_PADS,
 } from './move-waveform';
 export type { MoveWaveformVariant, MoveWaveformView } from './move-waveform';
+// Notifications — the app's messages, floating over the instrument and over
+// whatever display is already up there.
+export { MoveNotifications, moveNotify } from './components/MoveNotifications';
+export type { MoveNotificationsProps, MoveNotifyOptions } from './components/MoveNotifications';
+export { MOVE_NOTIFY_KINDS, MOVE_NOTIFY_GAP, MOVE_FLOAT_SELECTOR, notifyDockBottom } from './move-notify';
+export type { MoveNotifyKind } from './move-notify';
 export { MOVE_PALETTE } from './move-palette';
 export type { MovePaletteName } from './move-palette';
 export { MoveSettingsView } from './move-settings';
