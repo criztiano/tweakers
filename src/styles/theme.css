@@ -363,6 +363,8 @@
 .tweakers-move,
 .tweakers-move * {
   box-sizing: border-box;
+  /* One weight in the face; a faked bold smears the pixels. */
+  font-synthesis: none;
 }
 
 .tweakers-move {
@@ -579,7 +581,7 @@
 
 .tweakers-move-track-label {
   font-family: var(--move-font-label);
-  font-size: 16px;
+  font-size: 15px;
   line-height: normal;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -753,7 +755,6 @@
 
 .tweakers-move-volume-sep {
   font-variation-settings: normal;
-  font-weight: 700;
   font-size: 14px;
 }
 
@@ -2296,7 +2297,6 @@
   color: var(--move-text);
   font-family: var(--move-font-label);
   font-size: 15px;
-  font-weight: 700;
   line-height: normal;
   white-space: nowrap;
   cursor: pointer;
@@ -2383,7 +2383,6 @@
 
 .tweakers-move-pad[data-kind="app"] {
   padding: 0 4px;
-  font-weight: 400;
   min-width: 0;
 }
 
@@ -2395,7 +2394,6 @@
   justify-content: space-between;
   padding: 0 10px;
   font-size: 15px;
-  font-weight: 400;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -2420,7 +2418,6 @@
   justify-content: space-between;
   padding: 0 8px 0 14px;
   font-size: 15px;
-  font-weight: 400;
 }
 
 .tweakers-move-pad[data-kind="wave"] .tweakers-move-pad-title {
@@ -2435,10 +2432,6 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
-}
-
-.tweakers-move-pad-number {
-  font-weight: 700;
 }
 
 .tweakers-move-pad[data-held],
