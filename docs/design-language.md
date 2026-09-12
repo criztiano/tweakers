@@ -14,7 +14,10 @@ not global. Portalled panels own their theme; pass their `theme` explicitly.
 Use `--tweak-font-label` for labels and section names, and `--tweak-font-value`
 for values. Labels are uppercase mono; values use the reading face and
 `--tweak-value-opacity`. System85 fonts are host-provided under the host's
-license; preserve the built-in fallback stacks. Use the actual surface, text,
+license; preserve the built-in fallback stacks. The Move panel's big readouts
+(a dial's value, the volume pill) wear Geist Pixel via `--move-font-value`;
+it is OFL and ships with the stylesheet, so nothing to provide. Small labels
+and small values stay on `--move-font-label`. Use the actual surface, text,
 radius and spacing tokens rather than copying numeric values from a screenshot.
 Different components have different geometry; do not impose one radius on all.
 

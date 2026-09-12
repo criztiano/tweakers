@@ -349,6 +349,18 @@
   text-transform: capitalize;
 }
 
+/* Geist Pixel, the face of the Move's big readouts. OFL, so it ships next
+   to this sheet — the other panel faces stay host-provided. One variable
+   file; ELSH is its shape axis (0 regular, 1 square, 20 circle, 40 grid,
+   60 triangle, 80 line). */
+@font-face {
+  font-family: 'Geist Pixel';
+  src: url('./fonts/GeistPixel.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 .tweakers-move,
 .tweakers-move * {
   box-sizing: border-box;
@@ -404,6 +416,8 @@
   --move-glyph-stroke: 1.25;
   --move-radius-small: 8px;
   --move-font-label: 'Ableton Sans Small', system-ui, -apple-system, sans-serif;
+  /* Big readouts only — a dial's value, the volume pill. Small values keep the label face. */
+  --move-font-value: 'Geist Pixel', var(--move-font-label);
   --move-color-gap: 8px;
   --move-color-gap-small: 4px;
   --move-color-padding: 12px;
@@ -728,11 +742,16 @@
   white-space: nowrap;
 }
 
+.tweakers-move-volume-value {
+  font-family: var(--move-font-value);
+}
+
 .tweakers-move-volume-label {
   opacity: 0.5;
 }
 
 .tweakers-move-volume-sep {
+  font-family: var(--move-font-label);
   font-weight: 700;
   font-size: 14px;
 }
@@ -1122,6 +1141,7 @@
 }
 
 .tweakers-move-dial-value {
+  font-family: var(--move-font-value);
   font-size: 24px;
   opacity: 0;
 }
@@ -1477,6 +1497,7 @@
 }
 
 .tweakers-move-filter-readout .tweakers-move-dial-value {
+  font-family: var(--move-font-label);
   font-size: 13px;
   line-height: 16px;
   white-space: nowrap;
@@ -1560,6 +1581,7 @@
 
 .tweakers-move-env-readout .tweakers-move-dial-label,
 .tweakers-move-env-readout .tweakers-move-dial-value {
+  font-family: var(--move-font-label);
   font-size: 13px;
   line-height: 16px;
   white-space: nowrap;
@@ -2103,6 +2125,7 @@
 .tweakers-move-dial[data-preview] .tweakers-move-dial-value {
   left: 0;
   right: 0;
+  font-family: var(--move-font-label);
   font-size: 11px;
   white-space: nowrap;
 }
