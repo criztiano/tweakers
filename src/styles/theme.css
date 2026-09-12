@@ -757,9 +757,19 @@
 
 .tweakers-move-chips {
   display: flex;
+  /* An app that attaches many functions grows a second chip line rather
+     than clipping — every attached function stays visible, like every
+     attached key stays lit. */
+  flex-wrap: wrap;
   gap: 4px;
   align-items: center;
   min-width: 0;
+}
+
+/* In the header cluster the chips hang off the right edge, so wrapped
+   lines keep ranging from it. */
+.tweakers-move-actions .tweakers-move-chips {
+  justify-content: flex-end;
 }
 
 /* The `tracks` placement: the chips ride the same line as the track labels,
