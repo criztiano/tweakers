@@ -23,9 +23,17 @@ function buildMoveStrip(panel) {
     const n = panel.movePads?.[c.path];
     return typeof n === "number" && Number.isInteger(n) && n >= 0 ? n : null;
   };
+  const balanceRefs = /* @__PURE__ */ new Map();
+  for (const c of controls) {
+    if (c.type !== "balance") continue;
+    for (const path of [c.balanceA, c.balanceB]) {
+      const ref = controls.find((x) => x.path === path && x.type === "color");
+      if (ref && !balanceRefs.has(ref)) balanceRefs.set(ref, c);
+    }
+  }
   const dials = [];
   for (const c of controls) {
-    if (!isStripSlot(c) || column(c) !== null) continue;
+    if (!isStripSlot(c) || column(c) !== null || balanceRefs.has(c)) continue;
     for (let s = 0; s < dialSpan(c); s++) dials.push(c);
   }
   const toggles = [];
@@ -45,10 +53,17 @@ function buildMoveStrip(panel) {
       placeRun(c, column(c));
       continue;
     }
+    if (balanceRefs.has(c)) continue;
     const col = column(c);
     if (col === null) continue;
     const row = c.type === "toggle" ? toggles : c.type === "action" ? actions : values;
     if (row[col] === void 0) row[col] = c;
+  }
+  for (const [ref, bal] of balanceRefs) {
+    const col = dials.indexOf(bal);
+    if (col < 0) continue;
+    const row = ref.path === bal.balanceA ? toggles : values;
+    if (row[col] === void 0) row[col] = ref;
   }
   return { panel, dials, toggles, values, actions };
 }

@@ -3019,11 +3019,19 @@ function buildMovePages(panels) {
   return plain.slice(0, MOVE_TRACKS).map((panel) => {
     const controls = flat(panel.controls);
     const padCols = new Map(controls.map((c) => [c, padColumn(panel, c)]));
+    const balanceRefs = /* @__PURE__ */ new Map();
+    for (const c of controls) {
+      if (c.type !== "balance") continue;
+      for (const path of [c.balanceA, c.balanceB]) {
+        const ref = controls.find((x) => x.path === path && x.type === "color");
+        if (ref && !balanceRefs.has(ref)) balanceRefs.set(ref, c);
+      }
+    }
     const isPadColor = (c) => c.type === "color" && padCols.get(c) != null;
     const dials = [];
     let nextCol = 0;
     for (const c of controls) {
-      if (!isDial(c) || isPadColor(c)) continue;
+      if (!isDial(c) || isPadColor(c) || balanceRefs.has(c)) continue;
       const span = dialSpan(c);
       if (nextCol + span > MOVE_DIALS) {
         if (nextCol >= MOVE_DIALS) break;
@@ -3031,6 +3039,12 @@ function buildMovePages(panels) {
       }
       for (let s = 0; s < span; s++) dials[nextCol + s] = c;
       nextCol += span;
+    }
+    const balanceSeat = /* @__PURE__ */ new Map();
+    for (const [ref, bal] of balanceRefs) {
+      const col = dials.indexOf(bal);
+      if (col < 0) continue;
+      balanceSeat.set(ref, { col, first: ref.path === bal.balanceA });
     }
     const toggles = [];
     const values = [];
@@ -3097,7 +3111,17 @@ function buildMovePages(panels) {
       else if (c.type === "toggle" && !isToggleDial(c)) place(toggles, "toggle", c, col);
       else if (c.type === "action") {
         if (col !== null) place(actions, "action", c, col);
-      } else if (isPadColor(c)) place(values, "value", c, col);
+      } else if (balanceSeat.has(c)) {
+        if (col !== null) {
+          reportMoveLayoutIssue(
+            "balance-color-placed",
+            `panel '${panel.id}': control '${c.path}' is placed by its balance \u2014 movePads column ${col} ignored; a balance seats its own colours`
+          );
+        }
+        const seat = balanceSeat.get(c);
+        place(seat.first ? toggles : values, seat.first ? "toggle" : "value", c, seat.col);
+      } else if (balanceRefs.has(c)) place(values, "value", c, col);
+      else if (isPadColor(c)) place(values, "value", c, col);
       else if (dials.includes(c)) {
         if (col !== null) {
           reportMoveLayoutIssue(
@@ -3269,9 +3293,17 @@ function buildMoveStrip(panel) {
     const n = panel.movePads?.[c.path];
     return typeof n === "number" && Number.isInteger(n) && n >= 0 ? n : null;
   };
+  const balanceRefs = /* @__PURE__ */ new Map();
+  for (const c of controls) {
+    if (c.type !== "balance") continue;
+    for (const path of [c.balanceA, c.balanceB]) {
+      const ref = controls.find((x) => x.path === path && x.type === "color");
+      if (ref && !balanceRefs.has(ref)) balanceRefs.set(ref, c);
+    }
+  }
   const dials = [];
   for (const c of controls) {
-    if (!isStripSlot(c) || column(c) !== null) continue;
+    if (!isStripSlot(c) || column(c) !== null || balanceRefs.has(c)) continue;
     for (let s = 0; s < dialSpan(c); s++) dials.push(c);
   }
   const toggles = [];
@@ -3291,10 +3323,17 @@ function buildMoveStrip(panel) {
       placeRun(c, column(c));
       continue;
     }
+    if (balanceRefs.has(c)) continue;
     const col = column(c);
     if (col === null) continue;
     const row = c.type === "toggle" ? toggles : c.type === "action" ? actions : values;
     if (row[col] === void 0) row[col] = c;
+  }
+  for (const [ref, bal] of balanceRefs) {
+    const col = dials.indexOf(bal);
+    if (col < 0) continue;
+    const row = ref.path === bal.balanceA ? toggles : values;
+    if (row[col] === void 0) row[col] = ref;
   }
   return { panel, dials, toggles, values, actions };
 }
@@ -6333,7 +6372,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   useSyncExternalStore2(MoveColorStore.subscribe, MoveColorStore.getVersion, () => 0);
   const colorView = MoveColorStore.getView();
   const gradientEditable = (meta) => meta.type === "gradient" && pageId !== void 0 && (MoveColorStore.gradient(pageId, meta.path)?.stops.length ?? 0) <= MOVE_GRADIENT_STOPS;
-  const colorMeta = colorView?.panelId === pageId && page ? [...page.dials, ...page.values].find((meta) => meta && meta.path === colorView.path && (meta.type === "color" || gradientEditable(meta))) : void 0;
+  const colorMeta = colorView?.panelId === pageId && page ? [...page.dials, ...page.toggles, ...page.values].find((meta) => meta && meta.path === colorView.path && (meta.type === "color" || gradientEditable(meta))) : void 0;
   const color = colorMeta && pageId ? MoveColorStore.read(pageId, colorMeta.path) : null;
   const gradientMeta = colorMeta?.type === "gradient" ? colorMeta : null;
   const gradientValue = gradientMeta && pageId ? MoveColorStore.gradient(pageId, gradientMeta.path) : null;
@@ -7822,6 +7861,24 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       );
                                     }
                                     if (!meta) return /* @__PURE__ */ jsx10("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
+                                    if (meta.type === "color") {
+                                      const open2 = colorMeta?.path === meta.path;
+                                      return /* @__PURE__ */ jsx10(
+                                        "button",
+                                        {
+                                          className: "tweakers-move-pad",
+                                          "data-kind": "color",
+                                          "data-on": open2 || void 0,
+                                          "aria-expanded": open2,
+                                          "aria-haspopup": "dialog",
+                                          "aria-label": `${meta.label}. Open color editor`,
+                                          disabled: TweakStore6.isDisabled(page.panel.id, meta.path),
+                                          onClick: () => MoveColorStore.toggle(page.panel.id, meta.path),
+                                          children: /* @__PURE__ */ jsx10(MovePadColorBody, { label: meta.label, color: String(values[meta.path]) })
+                                        },
+                                        meta.path
+                                      );
+                                    }
                                     if (padRows[row] === page.toggles) {
                                       return /* @__PURE__ */ jsx10(
                                         "button",
@@ -7843,24 +7900,6 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           "data-kind": "action",
                                           onClick: () => TweakStore6.triggerAction(page.panel.id, meta.path),
                                           children: /* @__PURE__ */ jsx10(MovePadActionBody, { label: meta.label })
-                                        },
-                                        meta.path
-                                      );
-                                    }
-                                    if (meta.type === "color") {
-                                      const open2 = colorMeta?.path === meta.path;
-                                      return /* @__PURE__ */ jsx10(
-                                        "button",
-                                        {
-                                          className: "tweakers-move-pad",
-                                          "data-kind": "color",
-                                          "data-on": open2 || void 0,
-                                          "aria-expanded": open2,
-                                          "aria-haspopup": "dialog",
-                                          "aria-label": `${meta.label}. Open color editor`,
-                                          disabled: TweakStore6.isDisabled(page.panel.id, meta.path),
-                                          onClick: () => MoveColorStore.toggle(page.panel.id, meta.path),
-                                          children: /* @__PURE__ */ jsx10(MovePadColorBody, { label: meta.label, color: String(values[meta.path]) })
                                         },
                                         meta.path
                                       );

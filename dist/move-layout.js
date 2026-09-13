@@ -251,11 +251,19 @@ function buildMovePages(panels) {
   return plain.slice(0, MOVE_TRACKS).map((panel) => {
     const controls = flat(panel.controls);
     const padCols = new Map(controls.map((c) => [c, padColumn(panel, c)]));
+    const balanceRefs = /* @__PURE__ */ new Map();
+    for (const c of controls) {
+      if (c.type !== "balance") continue;
+      for (const path of [c.balanceA, c.balanceB]) {
+        const ref = controls.find((x) => x.path === path && x.type === "color");
+        if (ref && !balanceRefs.has(ref)) balanceRefs.set(ref, c);
+      }
+    }
     const isPadColor = (c) => c.type === "color" && padCols.get(c) != null;
     const dials = [];
     let nextCol = 0;
     for (const c of controls) {
-      if (!isDial(c) || isPadColor(c)) continue;
+      if (!isDial(c) || isPadColor(c) || balanceRefs.has(c)) continue;
       const span = dialSpan(c);
       if (nextCol + span > MOVE_DIALS) {
         if (nextCol >= MOVE_DIALS) break;
@@ -263,6 +271,12 @@ function buildMovePages(panels) {
       }
       for (let s = 0; s < span; s++) dials[nextCol + s] = c;
       nextCol += span;
+    }
+    const balanceSeat = /* @__PURE__ */ new Map();
+    for (const [ref, bal] of balanceRefs) {
+      const col = dials.indexOf(bal);
+      if (col < 0) continue;
+      balanceSeat.set(ref, { col, first: ref.path === bal.balanceA });
     }
     const toggles = [];
     const values = [];
@@ -329,7 +343,17 @@ function buildMovePages(panels) {
       else if (c.type === "toggle" && !isToggleDial(c)) place(toggles, "toggle", c, col);
       else if (c.type === "action") {
         if (col !== null) place(actions, "action", c, col);
-      } else if (isPadColor(c)) place(values, "value", c, col);
+      } else if (balanceSeat.has(c)) {
+        if (col !== null) {
+          reportMoveLayoutIssue(
+            "balance-color-placed",
+            `panel '${panel.id}': control '${c.path}' is placed by its balance \u2014 movePads column ${col} ignored; a balance seats its own colours`
+          );
+        }
+        const seat = balanceSeat.get(c);
+        place(seat.first ? toggles : values, seat.first ? "toggle" : "value", c, seat.col);
+      } else if (balanceRefs.has(c)) place(values, "value", c, col);
+      else if (isPadColor(c)) place(values, "value", c, col);
       else if (dials.includes(c)) {
         if (col !== null) {
           reportMoveLayoutIssue(
