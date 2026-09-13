@@ -5623,6 +5623,8 @@ var MoveFunctionsClass = class {
     this.options = /* @__PURE__ */ new Map();
     this.listeners = /* @__PURE__ */ new Set();
     this.runListeners = /* @__PURE__ */ new Set();
+    /** Attachments put to sleep by `suspend` — attached, but not in this view. */
+    this.dormant = null;
   }
   /**
    * Attach an action to a function button; returns a detach function.
@@ -5637,6 +5639,7 @@ var MoveFunctionsClass = class {
     this.handlers.set(name, handler);
     if (options) this.options.set(name, options);
     else this.options.delete(name);
+    this.dormant?.delete(name);
     this.notify();
     return () => {
       if (this.handlers.get(name) === handler) {
@@ -5648,7 +5651,26 @@ var MoveFunctionsClass = class {
   }
   /** The attached button names — what the kit claims on the hardware. */
   list() {
-    return [...this.handlers.keys()];
+    return [...this.handlers.keys()].filter((name) => !this.dormant?.has(name));
+  }
+  /**
+   * Another view takes the surface — the settings room — and the app's
+   * buttons do not belong in it: a key that does nothing there must be
+   * dark there. Everything attached goes dormant except `keep`; whatever is
+   * attached or pushed while the view is up is the view's own and stays
+   * live. The kit reads `list`, so the keys go dark on the hardware and
+   * the chips leave the header, with no second bookkeeping. The returned
+   * release wakes everything as it was.
+   */
+  suspend(keep = []) {
+    const dormant = new Set([...this.handlers.keys()].filter((name) => !keep.includes(name)));
+    this.dormant = dormant;
+    this.notify();
+    return () => {
+      if (this.dormant !== dormant) return;
+      this.dormant = null;
+      this.notify();
+    };
   }
   /**
    * The attachments the panel's chip row shows, in manifest order. A chip
@@ -5660,7 +5682,7 @@ var MoveFunctionsClass = class {
    * always says what a press runs right now.
    */
   chips() {
-    return MOVE_FUNCTION_MANIFEST.filter((b) => MOVE_CHIP_BUTTONS.includes(b.name) && this.handlers.has(b.name)).map((b) => ({ name: b.name, options: this.options.get(b.name) })).filter(({ options }) => options?.chip !== false && !!options?.label).map(({ name, options }) => ({
+    return MOVE_FUNCTION_MANIFEST.filter((b) => MOVE_CHIP_BUTTONS.includes(b.name) && this.handlers.has(b.name) && !this.dormant?.has(b.name)).map((b) => ({ name: b.name, options: this.options.get(b.name) })).filter(({ options }) => options?.chip !== false && !!options?.label).map(({ name, options }) => ({
       name,
       label: options.label,
       ...typeof options.chip === "object" && options.chip.variant ? { variant: options.chip.variant } : {},
@@ -5689,6 +5711,7 @@ var MoveFunctionsClass = class {
   /** Run the action attached to a button, if any. Called by the kit per press. */
   run(name, press) {
     const full = { name, shift: !!press?.shift, hold: !!press?.hold, ...typeof press?.step === "number" ? { step: press.step } : {} };
+    if (this.dormant?.has(name)) return;
     this.handlers.get(name)?.(full);
     for (const l of this.runListeners) l(name, full);
   }
@@ -6107,7 +6130,12 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   }, [roomKey]);
   useEffect8(() => {
     if (!settingsOpen) return;
-    return MoveFunctions.push("back", () => MoveSettingsView.close(), { label: "Close", chip: false });
+    const wake = MoveFunctions.suspend(["set_overview"]);
+    const releaseBack = MoveFunctions.push("back", () => MoveSettingsView.close(), { label: "Close", chip: false });
+    return () => {
+      releaseBack();
+      wake();
+    };
   }, [settingsOpen]);
   const regularPageId = underModSettings?.panelId ?? pages[Math.min(track, Math.max(0, pages.length - 1))]?.panel.id;
   const roomPageId = roomPage?.panel.id;

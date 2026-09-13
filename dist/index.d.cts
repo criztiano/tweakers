@@ -3194,6 +3194,8 @@ declare class MoveFunctionsClass {
     private options;
     private listeners;
     private runListeners;
+    /** Attachments put to sleep by `suspend` — attached, but not in this view. */
+    private dormant;
     /**
      * Attach an action to a function button; returns a detach function.
      * One action per button — attaching again replaces the previous one.
@@ -3201,6 +3203,16 @@ declare class MoveFunctionsClass {
     attach(name: MoveFunctionButton, handler: MoveFunctionHandler, options?: MoveFunctionOptions): () => void;
     /** The attached button names — what the kit claims on the hardware. */
     list(): MoveFunctionButton[];
+    /**
+     * Another view takes the surface — the settings room — and the app's
+     * buttons do not belong in it: a key that does nothing there must be
+     * dark there. Everything attached goes dormant except `keep`; whatever is
+     * attached or pushed while the view is up is the view's own and stays
+     * live. The kit reads `list`, so the keys go dark on the hardware and
+     * the chips leave the header, with no second bookkeeping. The returned
+     * release wakes everything as it was.
+     */
+    suspend(keep?: MoveFunctionButton[]): () => void;
     /**
      * The attachments the panel's chip row shows, in manifest order. A chip
      * renders only for a MOVE_CHIP_BUTTONS key, only while a handler is
