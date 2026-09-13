@@ -2389,51 +2389,64 @@
   opacity: 0.45;
 }
 
-/* The search's line, at the top of the list it narrows: the list screen's
-   own surface, the magnifier dim like an unselected row, the query at full
-   brightness — it is what the wheel is answering to. One row tall, so the
-   rows below simply start one row lower. */
+/* The search's field, at the top of the list it narrows (Figma 828:656):
+   a pale pill one row tall — the hardware-key look, dark text on the
+   readout colour — with the magnifier pinned at its left edge and the
+   query centred like a row's name. It sits in the list's own top padding,
+   as the first row would, and the rows the query keeps run down from it. */
 .tweakers-move-search {
-  --move-search-h: 40px;
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: var(--move-search-h);
-  padding: 0 12px;
+  height: 24px;
+  margin: var(--move-list-pad, 16px) 4px var(--move-list-gap, 7px);
+  padding: 2px 10px;
   flex-shrink: 0;
-  background: #1e1e1e;
-  color: var(--move-text);
+  border-radius: 4px;
+  background: var(--move-text);
+  color: #1e1e1e;
   font-family: var(--move-font-label);
   font-size: 16px;
   line-height: 20px;
 }
 
 .tweakers-move-search-icon {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-  opacity: 0.22;
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 .tweakers-move-search-input {
   flex: 1 1 0;
   min-width: 0;
-  padding: 0;
+  padding: 0 18px;
   border: none;
   outline: none;
   background: none;
   color: inherit;
   font: inherit;
+  text-align: center;
   caret-color: currentColor;
 }
 
 .tweakers-move-search-input::placeholder {
   color: inherit;
-  opacity: 0.22;
+  opacity: 1;
 }
 
 /* On the wheel screen the list is pinned to the screen's box; while a
-   search runs its line takes the top row and the list is pinned below it. */
+   search runs the field takes the top and the list is pinned below it —
+   and the rows read from the top, not from the middle: a narrowed list
+   is a result, and results start where the query is. */
+.tweakers-move-wheel-screen[data-search] {
+  background: #1e1e1e;
+}
+
 .tweakers-move-wheel-screen[data-search] .tweakers-move-search {
   position: absolute;
   top: 0;
@@ -2443,19 +2456,24 @@
 }
 
 .tweakers-move-wheel-screen[data-search] .tweakers-list-screen {
-  top: 40px;
+  top: 47px; /* the list pad, the field, the row gap */
+  padding-top: 0;
+  justify-content: flex-start;
 }
 
-/* The navigator screens stack their line above the rows. */
+/* The navigator screens stack the field above the rows. */
 .tweakers-move-preset-screen[data-search] {
   display: flex;
   flex-direction: column;
+  background: #1e1e1e;
+  border-radius: 8px;
 }
 
 .tweakers-move-preset-screen[data-search] > .tweakers-list-screen {
   flex: 1 1 auto;
   min-height: 0;
   height: auto;
+  padding-top: 0;
 }
 
 .tweakers-move-palette-screen[data-search] {
@@ -2465,7 +2483,7 @@
 .tweakers-move-palette-screen[data-search] > .tweakers-move-search {
   position: sticky;
   top: 0;
-  margin: 0 -4px 12px;
+  margin: 16px 0 12px;
 }
 
 .tweakers-move-palette-empty {
