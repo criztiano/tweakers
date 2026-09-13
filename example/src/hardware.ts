@@ -1,4 +1,4 @@
-import { MoveFunctions, MovePresetStore, MOVE_JOG_EVENT, MOVE_JOG_CLICK_EVENT, MOVE_MUTE_EVENT, MOVE_SEARCH_EVENT } from 'tweakers';
+import { MoveFunctions, MovePresetStore, PresetExplorationStore, MOVE_JOG_EVENT, MOVE_JOG_CLICK_EVENT, MOVE_MUTE_EVENT, MOVE_SEARCH_EVENT } from 'tweakers';
 
 /**
  * The Move's buttons, on a keyboard — so the library can be worked without
@@ -11,7 +11,8 @@ import { MoveFunctions, MovePresetStore, MOVE_JOG_EVENT, MOVE_JOG_CLICK_EVENT, M
  */
 export const KEYS: { keys: string; button: string; what: string }[] = [
   { keys: 'M', button: 'Menu', what: 'opens the preset navigator — tap again to put your settings back' },
-  { keys: 'Shift M', button: 'Menu, held', what: 'the save input: name what is on the slots now' },
+  { keys: 'Shift M', button: 'Shift + Menu', what: 'the save input: name what is on the slots now' },
+  { keys: 'Alt M', button: 'Menu, held', what: 'opens generative preset exploration' },
   { keys: '↑ ↓', button: 'the big wheel', what: 'walks the open list — every row plays as you rest on it' },
   { keys: '← →', button: 'the arrows', what: 'pages the slots, eight at a time' },
   { keys: 'Enter', button: 'the wheel pressed', what: 'keeps the row you are on' },
@@ -34,7 +35,12 @@ export function bindKeyboardHardware(): () => void {
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.repeat || typing(e)) return;
     const key = e.key.toLowerCase();
-    if (key === 'm') MoveFunctions.run('menu', { shift: e.shiftKey, hold: e.shiftKey });
+    if (PresetExplorationStore.getState() && ['ArrowUp','ArrowDown','Enter'].includes(e.key)) {
+      if (e.key === 'Enter') PresetExplorationStore.toggleParent();
+      else PresetExplorationStore.jog(e.key === 'ArrowDown' ? 1 : -1);
+      e.preventDefault(); return;
+    }
+    if (key === 'm') MoveFunctions.run('menu', { shift: e.shiftKey, hold: e.altKey });
     else if (key === 'c') mute(true, e.shiftKey);
     else if (key === 'f') window.dispatchEvent(new CustomEvent(MOVE_SEARCH_EVENT, { detail: { shift: e.shiftKey }, cancelable: true }));
     else if (e.key === 'Backspace') MoveFunctions.run('back', {});
