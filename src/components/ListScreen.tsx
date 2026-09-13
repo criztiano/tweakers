@@ -28,6 +28,10 @@ export type ListScreenItem =
       muted?: boolean;
       detail?: ListScreenDetail;
       checked?: boolean;
+      /** A small picture at the row's left end — an app's icon, a file
+       * kind — as an image URL. Pinned to the edge like the mark, so a
+       * centred name stays put. The hardware screen has no room for it. */
+      icon?: string;
     };
 
 export interface ListScreenProps {
@@ -72,6 +76,10 @@ function itemDetail(item: ListScreenItem): ListScreenDetail | undefined {
 
 function itemChecked(item: ListScreenItem): boolean | undefined {
   return typeof item === 'string' ? undefined : item.checked;
+}
+
+function itemIcon(item: ListScreenItem): string | undefined {
+  return typeof item === 'string' ? undefined : item.icon;
 }
 
 /** The row's mark, pinned to an edge rather than laid out beside the label,
@@ -196,6 +204,7 @@ export function ListScreen({
         const tag = itemTag(item);
         const detail = itemDetail(item);
         const checked = itemChecked(item);
+        const icon = itemIcon(item);
         return (
           <button
             key={rowValue}
@@ -209,8 +218,10 @@ export function ListScreen({
             data-checked={checked}
             aria-checked={checked}
             data-muted={itemMuted(item) || undefined}
+            data-icon={icon ? true : undefined}
             onClick={() => onSelect?.(rowValue)}
           >
+            {icon && <img className="tweakers-list-screen-icon" src={icon} alt="" aria-hidden="true" />}
             <span className="tweakers-list-screen-label">{itemLabel(item)}</span>
             {tag && <span className="tweakers-list-screen-tag">{tag}</span>}
             {(detail || checked) && <ListScreenMark detail={detail} checked={checked} />}

@@ -871,6 +871,87 @@
 
 /* End of the Move function chips skin block. */
 
+/* -- The action deck ------------------------------------------------------
+   A view's whole surface when it has nothing to set yet: up to four
+   buttons, one per chip key, in the chip voice (Figma 935:537) — the quiet
+   slot surface by default, the pale key look for the one the view leans on
+   — each wearing its key's glyph or an icon of its own. Names:
+   `.tweakers-move-deck`, `.tweakers-move-deck-action[data-name]
+   [data-variant][data-pressed]`, `.tweakers-move-deck-icon`, `-label`,
+   `-detail`.
+   ------------------------------------------------------------------------ */
+
+.tweakers-move-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 200px;
+  margin: 0 auto;
+}
+
+.tweakers-move-deck-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--move-radius-small, 8px);
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--move-font-label);
+  font-size: 20px;
+  line-height: normal;
+  color: var(--move-text);
+  background: var(--move-chip);
+  transition: filter 0.12s, transform 0.12s;
+}
+
+/* The pop-out dress: the pale hardware-key look, dark on light. */
+.tweakers-move-deck-action[data-variant="highlight"] {
+  background: #dee3c9;
+  color: #1e1e1e;
+}
+
+.tweakers-move-deck-action:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.tweakers-move-deck-action[data-pressed] {
+  filter: brightness(1.25);
+  transform: scale(0.96);
+  transition-duration: 0.04s;
+}
+
+.tweakers-move-deck-action:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tweakers-move-deck-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+
+.tweakers-move-deck-label {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A quieter word at the row's end, when the action has one. */
+.tweakers-move-deck-detail {
+  margin-left: auto;
+  font-size: 13px;
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
+/* End of the action deck skin block. */
+
 .tweakers-move-grid {
   display: flex;
   flex-direction: column;
@@ -3132,6 +3213,34 @@
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* A row's picture — an app's icon — at the left end, pinned like the mark
+   so a centred name stays put; it dims and brightens with the label. */
+.tweakers-list-screen-icon {
+  position: absolute;
+  top: 50%;
+  left: var(--move-list-mark-inset, 6px);
+  width: var(--move-list-icon-size, 16px);
+  height: var(--move-list-icon-size, 16px);
+  transform: translateY(-50%);
+  border-radius: 3px;
+  pointer-events: none;
+  opacity: 0.4;
+  transition: opacity 0.12s;
+}
+
+.tweakers-list-screen-row[data-icon] .tweakers-list-screen-label {
+  padding: 0 calc(var(--move-list-icon-size, 16px) + var(--move-list-mark-inset, 6px) * 2);
+}
+
+.tweakers-list-screen[data-wide] .tweakers-list-screen-row[data-icon] .tweakers-list-screen-label {
+  padding-right: 0;
+}
+
+.tweakers-list-screen-row[data-selected] .tweakers-list-screen-icon,
+.tweakers-list-screen-row[data-checked="true"] .tweakers-list-screen-icon {
+  opacity: 1;
 }
 
 /* A way back sits at the left end, where the eye looks to leave. */

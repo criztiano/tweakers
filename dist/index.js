@@ -1998,6 +1998,9 @@ function itemDetail(item) {
 function itemChecked(item) {
   return typeof item === "string" ? void 0 : item.checked;
 }
+function itemIcon(item) {
+  return typeof item === "string" ? void 0 : item.icon;
+}
 function ListScreenMark({ detail, checked }) {
   const stroke = { stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" };
   return /* @__PURE__ */ jsx2("span", { className: "tweakers-list-screen-mark", "aria-hidden": "true", children: /* @__PURE__ */ jsx2("svg", { viewBox: "0 0 24 24", fill: "none", children: detail === "page" || detail === "back" ? /* @__PURE__ */ jsx2("path", { d: detail === "back" ? ICON_CHEVRON_LEFT : ICON_CHEVRON_RIGHT, strokeWidth: "2", ...stroke }) : detail === "dialog" ? ICON_ELLIPSIS.map((c) => /* @__PURE__ */ jsx2("circle", { cx: c.cx, cy: c.cy, r: "1.75", fill: "currentColor" }, c.cx)) : checked ? /* @__PURE__ */ jsx2("path", { d: ICON_CHECK, strokeWidth: "2.5", ...stroke }) : null }) });
@@ -2072,6 +2075,7 @@ function ListScreen({
         const tag = itemTag(item);
         const detail = itemDetail(item);
         const checked = itemChecked(item);
+        const icon = itemIcon(item);
         return /* @__PURE__ */ jsxs2(
           "button",
           {
@@ -2085,8 +2089,10 @@ function ListScreen({
             "data-checked": checked,
             "aria-checked": checked,
             "data-muted": itemMuted(item) || void 0,
+            "data-icon": icon ? true : void 0,
             onClick: () => onSelect?.(rowValue),
             children: [
+              icon && /* @__PURE__ */ jsx2("img", { className: "tweakers-list-screen-icon", src: icon, alt: "", "aria-hidden": "true" }),
               /* @__PURE__ */ jsx2("span", { className: "tweakers-list-screen-label", children: itemLabel(item) }),
               tag && /* @__PURE__ */ jsx2("span", { className: "tweakers-list-screen-tag", children: tag }),
               (detail || checked) && /* @__PURE__ */ jsx2(ListScreenMark, { detail, checked })
@@ -7109,8 +7115,8 @@ function MovePaletteScreen({ kept = null, children }) {
 import { useEffect as useEffect8, useRef as useRef8, useState as useState6 } from "react";
 import { jsx as jsx10, jsxs as jsxs10 } from "react/jsx-runtime";
 var PRESS_FLASH_MS = 160;
-function ChipGlyph({ glyph }) {
-  return /* @__PURE__ */ jsxs10("svg", { className: "tweakers-move-chip-icon", width: glyph.size, height: glyph.size, viewBox: glyph.viewBox, fill: "none", children: [
+function MoveFunctionGlyphIcon({ glyph, className = "tweakers-move-chip-icon" }) {
+  return /* @__PURE__ */ jsxs10("svg", { className, width: glyph.size, height: glyph.size, viewBox: glyph.viewBox, fill: "none", children: [
     glyph.paths?.map((d) => /* @__PURE__ */ jsx10("path", { d, stroke: "currentColor", strokeWidth: "1.5", strokeLinecap: "round", strokeLinejoin: "round" }, d)),
     glyph.fills?.map((d) => /* @__PURE__ */ jsx10("path", { d, fill: "currentColor" }, d)),
     glyph.circles?.map((c) => /* @__PURE__ */ jsx10("circle", { ...c, fill: "currentColor" }, `${c.cx},${c.cy}`)),
@@ -7159,7 +7165,7 @@ function Chip({ chip }) {
       style: chip.color ? { background: MOVE_PALETTE[chip.color] } : void 0,
       onClick: () => MoveFunctions.run(chip.name, { shift: false }),
       children: [
-        /* @__PURE__ */ jsx10(ChipGlyph, { glyph: MOVE_FUNCTION_ICONS[chip.name] }),
+        /* @__PURE__ */ jsx10(MoveFunctionGlyphIcon, { glyph: MOVE_FUNCTION_ICONS[chip.name] }),
         chip.label
       ]
     }
@@ -9705,8 +9711,102 @@ function MoveActionButton({ kind, children, onPress, disabled, className }) {
   );
 }
 
+// src/components/MoveActionDeck.tsx
+import { useEffect as useEffect11, useMemo as useMemo3, useRef as useRef11, useState as useState9 } from "react";
+
+// src/move-deck-core.ts
+var MOVE_DECK_MAX = MOVE_CHIP_BUTTONS.length;
+function normalizeDeck(actions) {
+  const kept = [];
+  const warnings = [];
+  const taken = /* @__PURE__ */ new Set();
+  for (const action of actions) {
+    if (!MOVE_CHIP_BUTTONS.includes(action.button)) {
+      warnings.push(`"${action.button}" is not a deck key; expected one of: ${MOVE_CHIP_BUTTONS.join(", ")}`);
+      continue;
+    }
+    if (taken.has(action.button)) {
+      warnings.push(`"${action.button}" already carries "${kept.find((a) => a.button === action.button)?.label}"; "${action.label}" dropped`);
+      continue;
+    }
+    if (kept.length >= MOVE_DECK_MAX) {
+      warnings.push(`a deck carries at most ${MOVE_DECK_MAX} actions; "${action.label}" dropped`);
+      continue;
+    }
+    taken.add(action.button);
+    kept.push(action);
+  }
+  return { actions: kept, warnings };
+}
+
+// src/components/MoveActionDeck.tsx
+import { jsx as jsx13, jsxs as jsxs13 } from "react/jsx-runtime";
+var PRESS_FLASH_MS3 = 160;
+function DeckButton({ action }) {
+  const [pressed, setPressed] = useState9(false);
+  const flashTimer = useRef11(void 0);
+  useEffect11(() => {
+    const unsubscribe = MoveFunctions.subscribeRuns((ran) => {
+      if (ran !== action.button) return;
+      setPressed(true);
+      clearTimeout(flashTimer.current);
+      flashTimer.current = setTimeout(() => setPressed(false), PRESS_FLASH_MS3);
+    });
+    return () => {
+      unsubscribe();
+      clearTimeout(flashTimer.current);
+    };
+  }, [action.button]);
+  return /* @__PURE__ */ jsxs13(
+    "button",
+    {
+      type: "button",
+      className: "tweakers-move-deck-action",
+      "data-name": action.button,
+      "data-variant": action.variant,
+      "data-pressed": pressed || void 0,
+      disabled: action.disabled,
+      onClick: () => {
+        if (action.disabled) return;
+        MoveFunctions.run(action.button, { shift: false });
+      },
+      children: [
+        action.icon ?? /* @__PURE__ */ jsx13(MoveFunctionGlyphIcon, { glyph: MOVE_FUNCTION_ICONS[action.button], className: "tweakers-move-deck-icon" }),
+        /* @__PURE__ */ jsx13("span", { className: "tweakers-move-deck-label", children: action.label }),
+        action.detail && /* @__PURE__ */ jsx13("span", { className: "tweakers-move-deck-detail", children: action.detail })
+      ]
+    }
+  );
+}
+function MoveActionDeck({ actions, className }) {
+  const { actions: shown, warnings } = useMemo3(
+    () => normalizeDeck(actions),
+    [actions]
+  );
+  useEffect11(() => {
+    for (const warning of warnings) console.warn(`[tweakers] action deck: ${warning}`);
+  }, [warnings]);
+  const shownRef = useRef11(shown);
+  shownRef.current = shown;
+  const signature = shown.map((a) => `${a.button}:${a.disabled ? "-" : "+"}${a.label}`).join("|");
+  useEffect11(() => {
+    const detaches = shownRef.current.filter((a) => !a.disabled).map(
+      (a) => MoveFunctions.attach(
+        a.button,
+        (press) => shownRef.current.find((x) => x.button === a.button)?.onPress(press),
+        { label: a.label, chip: false }
+      )
+    );
+    return () => {
+      for (const detach of detaches) detach();
+    };
+  }, [signature]);
+  if (!shown.length) return null;
+  return /* @__PURE__ */ jsx13("div", { className: className ? `tweakers-move-deck ${className}` : "tweakers-move-deck", children: shown.map((action) => /* @__PURE__ */ jsx13(DeckButton, { action }, action.button)) });
+}
+
 // src/components/MoveNotifications.tsx
-import { useEffect as useEffect11, useState as useState9 } from "react";
+import { useEffect as useEffect12, useState as useState10 } from "react";
 import { createPortal as createPortal4 } from "react-dom";
 import { Toast } from "@base-ui/react/toast";
 
@@ -9730,13 +9830,13 @@ function notifyDockBottom(tops, viewportHeight, gap = MOVE_NOTIFY_GAP) {
 }
 
 // src/components/MoveNotifications.tsx
-import { jsx as jsx13, jsxs as jsxs13 } from "react/jsx-runtime";
+import { jsx as jsx14, jsxs as jsxs14 } from "react/jsx-runtime";
 var manager = Toast.createToastManager();
 var moveNotify = manager;
 var MEASURE_MS = 100;
 function useDockBottom(active) {
-  const [bottom, setBottom] = useState9(MOVE_NOTIFY_GAP);
-  useEffect11(() => {
+  const [bottom, setBottom] = useState10(MOVE_NOTIFY_GAP);
+  useEffect12(() => {
     if (!active || typeof window === "undefined") return;
     let frame = 0;
     let last = 0;
@@ -9765,22 +9865,22 @@ function useDockBottom(active) {
 function NotifyStack({ className }) {
   const { toasts } = Toast.useToastManager();
   const bottom = useDockBottom(toasts.length > 0);
-  return /* @__PURE__ */ jsx13(
+  return /* @__PURE__ */ jsx14(
     Toast.Viewport,
     {
       className: `tweakers-move-notify${className ? ` ${className}` : ""}`,
       style: { bottom: `${bottom}px` },
-      children: toasts.map((toast) => /* @__PURE__ */ jsx13(Toast.Root, { toast, className: "tweakers-move-notify-card", children: /* @__PURE__ */ jsxs13(Toast.Content, { className: "tweakers-move-notify-body", children: [
-        /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-notify-text", children: [
-          toast.type && toast.type !== "info" && /* @__PURE__ */ jsxs13("span", { className: "tweakers-move-notify-kind", children: [
-            /* @__PURE__ */ jsx13("span", { className: "tweakers-move-notify-dot", "aria-hidden": "true" }),
+      children: toasts.map((toast) => /* @__PURE__ */ jsx14(Toast.Root, { toast, className: "tweakers-move-notify-card", children: /* @__PURE__ */ jsxs14(Toast.Content, { className: "tweakers-move-notify-body", children: [
+        /* @__PURE__ */ jsxs14("div", { className: "tweakers-move-notify-text", children: [
+          toast.type && toast.type !== "info" && /* @__PURE__ */ jsxs14("span", { className: "tweakers-move-notify-kind", children: [
+            /* @__PURE__ */ jsx14("span", { className: "tweakers-move-notify-dot", "aria-hidden": "true" }),
             toast.type
           ] }),
-          toast.title != null && /* @__PURE__ */ jsx13(Toast.Title, { className: "tweakers-move-notify-title" }),
-          toast.description != null && /* @__PURE__ */ jsx13(Toast.Description, { className: "tweakers-move-notify-description" })
+          toast.title != null && /* @__PURE__ */ jsx14(Toast.Title, { className: "tweakers-move-notify-title" }),
+          toast.description != null && /* @__PURE__ */ jsx14(Toast.Description, { className: "tweakers-move-notify-description" })
         ] }),
-        /* @__PURE__ */ jsx13(Toast.Action, { className: "tweakers-move-notify-action" }),
-        /* @__PURE__ */ jsx13(Toast.Close, { className: "tweakers-move-notify-close", "aria-label": "Dismiss", children: /* @__PURE__ */ jsx13("svg", { viewBox: "0 0 24 24", width: "14", height: "14", "aria-hidden": "true", children: /* @__PURE__ */ jsx13("path", { d: ICON_CLOSE }) }) })
+        /* @__PURE__ */ jsx14(Toast.Action, { className: "tweakers-move-notify-action" }),
+        /* @__PURE__ */ jsx14(Toast.Close, { className: "tweakers-move-notify-close", "aria-label": "Dismiss", children: /* @__PURE__ */ jsx14("svg", { viewBox: "0 0 24 24", width: "14", height: "14", "aria-hidden": "true", children: /* @__PURE__ */ jsx14("path", { d: ICON_CLOSE }) }) })
       ] }) }, toast.id))
     }
   );
@@ -9790,11 +9890,11 @@ function MoveNotifications({
   timeout = 5e3,
   className
 }) {
-  const [mounted, setMounted] = useState9(false);
-  useEffect11(() => setMounted(true), []);
+  const [mounted, setMounted] = useState10(false);
+  useEffect12(() => setMounted(true), []);
   if (!mounted || typeof document === "undefined") return null;
   return createPortal4(
-    /* @__PURE__ */ jsx13("div", { className: "tweakers-root tweakers-move-surface tweakers-move-notify-root", children: /* @__PURE__ */ jsx13(Toast.Provider, { toastManager: manager, limit, timeout, children: /* @__PURE__ */ jsx13(NotifyStack, { ...className ? { className } : {} }) }) }),
+    /* @__PURE__ */ jsx14("div", { className: "tweakers-root tweakers-move-surface tweakers-move-notify-root", children: /* @__PURE__ */ jsx14(Toast.Provider, { toastManager: manager, limit, timeout, children: /* @__PURE__ */ jsx14(NotifyStack, { ...className ? { className } : {} }) }) }),
     document.body
   );
 }
@@ -10168,6 +10268,7 @@ export {
   MOVE_COLOR_PALETTES,
   MOVE_COLOR_STEPS,
   MOVE_COLOR_WHEEL,
+  MOVE_DECK_MAX,
   MOVE_DIALS,
   MOVE_FLOAT_SELECTOR,
   MOVE_FUNCTION_BUTTONS,
@@ -10199,6 +10300,7 @@ export {
   ModRing,
   ModulationStore3 as ModulationStore,
   MoveActionButton,
+  MoveActionDeck,
   MoveColorStore,
   MoveFunctionChips,
   MoveFunctions,
@@ -10360,6 +10462,7 @@ export {
   normToValue,
   normalizeAngle,
   normalizeCurveMarkers,
+  normalizeDeck,
   normalizeDial,
   normalizeEnumDial,
   normalizeFilterDial,

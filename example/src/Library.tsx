@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import {
+  MoveActionDeck,
   MoveNotifications,
   MovePanel,
   MovePresetStore,
@@ -183,6 +184,14 @@ export function Library() {
             </li>
           ))}
         </ul>
+      </Section>
+
+      <Section
+        id="deck"
+        title="The action deck"
+        lede="A view with nothing to set yet — a start screen — shows neither a list nor a panel: up to four buttons, one per chip key, in the chip voice, wired to the key. The pale one is the action the view leans on, wearing an icon of its own. Click one, or press the key on the Move; both flash it and run one handler. The greyed one has left its key dark."
+      >
+        <DeckPanel />
       </Section>
 
       <Section
@@ -391,6 +400,21 @@ function NotifyPanel() {
   );
 }
 
+/** The deck, live: four actions, one switched off, each press announced. */
+function DeckPanel() {
+  const say = (what: string) => moveNotify.add({ type: 'info', title: what, description: 'from the deck, or the key' });
+  return (
+    <MoveActionDeck
+      actions={[
+        { button: 'capture', label: 'Load file', onPress: () => say('Load file') },
+        { button: 'sample', label: 'Record from…', variant: 'highlight', icon: <span className="kit-rec-dot" />, onPress: () => say('Record from…') },
+        { button: 'loop', label: 'Loop last take', onPress: () => say('Loop last take') },
+        { button: 'mute', label: 'Nothing to mute', onPress: () => say('Mute'), disabled: true },
+      ]}
+    />
+  );
+}
+
 function Section({ id, title, lede, children }: {
   id: string; title: string; lede?: string; children: ReactNode;
 }) {
@@ -464,6 +488,8 @@ const DIAL_KIND: Record<string, string | undefined> = {
 const NUMERIC_KINDS = ['opacity', 'blur', 'pan', 'stereo-width', 'pitch'];
 
 const CSS = `
+  .kit-rec-dot { flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%; background: #fd3c57; }
+
 .kit-page {
   --kit-bg: #141414;
   --kit-fg: #e8e6e1;

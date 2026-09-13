@@ -6,10 +6,11 @@ import { MOVE_FUNCTION_ICONS, MOVE_GLYPH_TEXT_FONT, type MoveFunctionGlyph } fro
 /** How long a chip stays lit after a press (screen or hardware). */
 const PRESS_FLASH_MS = 160;
 
-/** One glyph, drawn as the icon map says: stroked prints, filled marks, dots. */
-function ChipGlyph({ glyph }: { glyph: MoveFunctionGlyph }) {
+/** One glyph, drawn as the icon map says: stroked prints, filled marks, dots.
+ * Shared with the action deck, which draws the same marks bigger. */
+export function MoveFunctionGlyphIcon({ glyph, className = 'tweakers-move-chip-icon' }: { glyph: MoveFunctionGlyph; className?: string }) {
   return (
-    <svg className="tweakers-move-chip-icon" width={glyph.size} height={glyph.size} viewBox={glyph.viewBox} fill="none">
+    <svg className={className} width={glyph.size} height={glyph.size} viewBox={glyph.viewBox} fill="none">
       {glyph.paths?.map((d) => (
         <path key={d} d={d} stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
       ))}
@@ -72,7 +73,7 @@ function Chip({ chip }: { chip: MoveFunctionChip }) {
       style={chip.color ? { background: MOVE_PALETTE[chip.color] } : undefined}
       onClick={() => MoveFunctions.run(chip.name, { shift: false })}
     >
-      <ChipGlyph glyph={MOVE_FUNCTION_ICONS[chip.name]} />
+      <MoveFunctionGlyphIcon glyph={MOVE_FUNCTION_ICONS[chip.name]} />
       {chip.label}
     </button>
   );
