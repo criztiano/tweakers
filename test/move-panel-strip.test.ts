@@ -103,7 +103,7 @@ describe('the scrolling panel', () => {
     TweakStore.unregisterPanel(ids[1]);
   });
 
-  it('draws the claimed rows as one slot naming what they do', () => {
+  it('draws the pads the app painted on its claimed rows, the sentence on their tooltip', () => {
     MoveSurfaceStore.setPadRows(
       2,
       [
@@ -114,18 +114,27 @@ describe('the scrolling panel', () => {
     );
     mount(many(2), false);
 
-    // The app's pads are its own instrument: the panel names it once rather
-    // than drawing sixteen controls it cannot explain.
+    // The app's pads are its own instrument, and it painted them: they draw
+    // as the pads they are, each carrying the app's sentence as its title.
+    expect(byClass('tweakers-move-app-row')).toHaveLength(0);
+    const pads = renderer!.root.findAllByProps({ 'data-kind': 'app' });
+    expect(pads).toHaveLength(12);
+    expect(pads[0].props.title).toBe('jump to a slice of the sample');
+    expect(pads.filter((pad) => pad.props['data-on']).length).toBe(4);
+  });
+
+  it('draws an unpainted claim as one slot naming what it does', () => {
+    MoveSurfaceStore.setPadRows(1, [], 'scrub the sample');
+    mount(many(2), false);
     const claimed = byClass('tweakers-move-app-row');
     expect(claimed).toHaveLength(1);
-    expect(claimed[0].props['data-rows']).toBe(2);
     expect(renderer!.root.findByProps({ className: 'tweakers-move-app-row-label' }).props.children)
-      .toBe('jump to a slice of the sample');
+      .toBe('scrub the sample');
     expect(renderer!.root.findAllByProps({ 'data-kind': 'app' })).toHaveLength(0);
   });
 
-  it('falls back to a plain name when the app leaves the rows unlabelled', () => {
-    MoveSurfaceStore.setPadRows(1, [{ x: 0, y: 0, label: 'Slice 1' }], null);
+  it('falls back to a plain name when the app leaves an unpainted claim unlabelled', () => {
+    MoveSurfaceStore.setPadRows(1, [], null);
     mount(many(2), false);
     expect(renderer!.root.findByProps({ className: 'tweakers-move-app-row-label' }).props.children)
       .toBeTruthy();
@@ -137,9 +146,7 @@ describe('the scrolling panel', () => {
     mount(many(1), false);
 
     expect(byClass('tweakers-move-mod-dot')).toHaveLength(0);
-    expect(byClass('tweakers-move-app-row')).toHaveLength(1);
-    expect(renderer!.root.findByProps({ className: 'tweakers-move-app-row-label' }).props.children)
-      .toBe('scrub the sample');
+    expect(renderer!.root.findAllByProps({ 'data-kind': 'app' })).toHaveLength(1);
   });
 
   it('keeps every control at slot size instead of demoting the overflow', () => {

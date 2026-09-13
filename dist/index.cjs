@@ -9518,7 +9518,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                               );
                             }) }),
                             color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveOpacityPads, { color, disabled: import_TweakStore8.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : shownPadRows.map((row) => {
-                              if (appRowAt(row) !== null) {
+                              if (appRowAt(row) !== null && !surface.pads.length) {
                                 if (row > firstAppScreenRow) return null;
                                 return /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
                                   "div",
@@ -9556,6 +9556,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           type: "button",
                                           className: "tweakers-move-pad",
                                           "data-kind": "app",
+                                          title: surface.padsLabel ?? void 0,
                                           "data-on": cell.lit || appHeld === `${appRow}:${col}` || void 0,
                                           "data-held": appHeld === `${appRow}:${col}` || void 0,
                                           onPointerDown: (e) => {

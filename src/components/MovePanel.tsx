@@ -2166,10 +2166,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               .map((row) => {
                 // The app's reserved rows are one instrument, not sixteen
                 // controls: what those pads mean is the app's business and
-                // only the app can say it. So the whole claimed area draws as
-                // a single slot carrying that sentence, once — the rows after
-                // the first fold into it.
-                if (appRowAt(row) !== null) {
+                // only the app can say it. A claimed area the app has not
+                // painted draws as a single slot carrying that sentence,
+                // once — the rows after the first fold into it. Painted cells
+                // draw as the pads they are, tappable, the sentence on their
+                // tooltip.
+                if (appRowAt(row) !== null && !surface.pads.length) {
                   if (row > firstAppScreenRow) return null;
                   return (
                     <div
@@ -2214,6 +2216,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           type="button"
                           className="tweakers-move-pad"
                           data-kind="app"
+                          title={surface.padsLabel ?? undefined}
                           data-on={cell.lit || appHeld === `${appRow}:${col}` || undefined}
                           data-held={appHeld === `${appRow}:${col}` || undefined}
                           onPointerDown={(e) => {
