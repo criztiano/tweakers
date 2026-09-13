@@ -1809,6 +1809,9 @@ function buildMovePages(panels) {
       }
       for (let k = 0; k < span; k++) toggles[start + k] = c;
     };
+    const lift = panel.moveTopRow ?? [];
+    const liftedChips = [];
+    const chips = [];
     for (const c of controls) {
       const col = padColumn(panel, c);
       if (isMoveTabs(c)) placeTabs(c, col);
@@ -1822,7 +1825,7 @@ function buildMovePages(panels) {
             `panel '${panel.id}': control '${c.path}' holds a dial slot \u2014 movePads column ${col} ignored; pads never mirror dials`
           );
         }
-      } else if (isDial(c) && !noChip(c)) place(values, "value", c, col);
+      } else if (isDial(c) && !noChip(c)) (lift.includes(c.path) ? liftedChips : chips).push(c);
       else if (isDial(c) && noChip(c)) {
         reportMoveLayoutIssue(
           "dial-dropped",
@@ -1830,38 +1833,41 @@ function buildMovePages(panels) {
         );
       }
     }
-    const lift = panel.moveTopRow ?? [];
-    const lifted = [];
-    for (let i = 0; i < MOVE_PADS; i++) {
-      const v = values[i];
-      if (v && lift.includes(v.path) && toggles[i] === void 0) lifted[i] = true;
-      else if (v && lift.includes(v.path)) {
+    const topValues = [];
+    for (const c of liftedChips) {
+      const col = padColumn(panel, c);
+      const at = col ?? Array.from({ length: MOVE_PADS }, (_, i) => i).find((i) => toggles[i] === void 0 && topValues[i] === void 0);
+      if (at !== void 0 && toggles[at] === void 0 && topValues[at] === void 0) {
+        topValues[at] = c;
+        continue;
+      }
+      if (at !== void 0 && toggles[at] !== void 0) {
         reportMoveLayoutIssue(
           "top-row-taken",
-          `panel '${panel.id}': control '${v.path}': top-row column ${i} holds '${toggles[i].path}' \u2014 the chip keeps the value row`
+          `panel '${panel.id}': control '${c.path}': top-row column ${at} holds '${toggles[at].path}' \u2014 the chip keeps the value row`
         );
       }
+      place(values, "value", c, col);
     }
+    for (const c of chips) place(values, "value", c, padColumn(panel, c));
     return {
       panel,
       dials,
       toggles: toggles.slice(0, MOVE_PADS),
       values: values.slice(0, MOVE_PADS),
       actions: actions.slice(0, MOVE_PADS),
-      ...lifted.length ? { lifted } : {}
+      ...topValues.length ? { topValues: topValues.slice(0, MOVE_PADS) } : {}
     };
   });
 }
 function movePadRows(page, claimedRows) {
   let top = page.toggles;
-  let values = page.values;
-  if (page.lifted?.some(Boolean)) {
+  const values = page.values;
+  if (page.topValues?.some(Boolean)) {
     top = [];
-    values = [];
     for (let i = 0; i < MOVE_PADS; i++) {
-      if (page.toggles[i]) top[i] = page.toggles[i];
-      if (page.values[i] && page.lifted[i]) top[i] = page.values[i];
-      else if (page.values[i]) values[i] = page.values[i];
+      const cell = page.toggles[i] ?? page.topValues[i];
+      if (cell) top[i] = cell;
     }
   }
   if (claimedRows >= 2) return [top, values, [], []];
@@ -8625,11 +8631,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const armMod = (path) => ModulationStore2.noteTouch(page.panel.id, path);
   const dialAt = (col) => {
     if (held && held.col === col) return held.meta;
-    const hw = page.values[col];
-    if (hw && hwHeld[hw.path]) return hw;
+    const hw = [page.topValues?.[col], page.values[col]].filter((m) => !!m);
+    const hwHeldChip = hw.find((m) => hwHeld[m.path]);
+    if (hwHeldChip) return hwHeldChip;
     if (latched[col]) return latched[col];
-    if (hw && hwLatched[hw.path]) return hw;
-    return page.dials[col];
+    return hw.find((m) => hwLatched[m.path]) ?? page.dials[col];
   };
   const pressChip = (e, col, meta) => {
     try {
@@ -9340,7 +9346,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   meta.path
                                 );
                               }
-                              const latchedHere = latched[i]?.path === meta.path || page.values[i]?.path === meta.path && !!hwLatched[meta.path];
+                              const latchedHere = latched[i]?.path === meta.path || (page.values[i]?.path === meta.path || page.topValues?.[i]?.path === meta.path) && !!hwLatched[meta.path];
                               const origin01 = dialOrigin(meta);
                               const originPct = origin01 > 0 ? origin01 * 100 : null;
                               const pct = dialPercent(meta);

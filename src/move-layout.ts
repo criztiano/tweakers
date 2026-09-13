@@ -35,9 +35,10 @@ export interface MovePage {
   /** Action pads — the row under the values (y=1 on the device).
    *  Placed by hand only, through the panel's `movePads` map. */
   actions: ControlMeta[];
-  /** Columns whose value chip rides the top pad row (the panel's
-   *  `moveTopRow`, where no switch holds that column). Absent: none. */
-  lifted?: boolean[];
+  /** Value chips riding the top pad row — the panel's `moveTopRow`, each in
+   *  its column where no switch holds it. A column may carry one here and
+   *  another in `values` under it; both take that column's knob. Absent: none. */
+  topValues?: ControlMeta[];
 }
 
 const flat = (controls: ControlMeta[], out: ControlMeta[] = []): ControlMeta[] => {
@@ -336,6 +337,12 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         }
         for (let k = 0; k < span; k++) toggles[start + k] = c;
       };
+      // Value chips the panel asks up top wait until the switches have their
+      // cells, so a chip only takes a column no switch holds; the ordinary
+      // chips follow, and a column's value cell stays free for one of them.
+      const lift = panel.moveTopRow ?? [];
+      const liftedChips: ControlMeta[] = [];
+      const chips: ControlMeta[] = [];
       for (const c of controls) {
         const col = padColumn(panel, c);
         if (isMoveTabs(c)) placeTabs(c, col);
@@ -355,7 +362,7 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
           }
         }
         /* xy pads and ranges need a dial slot — past the 8 dials they don't fit a chip */
-        else if (isDial(c) && !noChip(c)) place(values, 'value', c, col);
+        else if (isDial(c) && !noChip(c)) (lift.includes(c.path) ? liftedChips : chips).push(c);
         // A two-handed dial or enum past the last column has no chip to fall
         // back on — it simply vanishes from the surface, which deserves a say.
         else if (isDial(c) && noChip(c)) {
@@ -366,26 +373,33 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         }
       }
       // A value chip the panel asked up top takes the switch row's cell in
-      // its own column — when no switch is there. It stays a value chip.
-      const lift = panel.moveTopRow ?? [];
-      const lifted: boolean[] = [];
-      for (let i = 0; i < MOVE_PADS; i++) {
-        const v = values[i];
-        if (v && lift.includes(v.path) && toggles[i] === undefined) lifted[i] = true;
-        else if (v && lift.includes(v.path)) {
+      // its own column — when no switch is there. It stays a value chip; a
+      // chip whose column holds a switch keeps the value row.
+      const topValues: ControlMeta[] = [];
+      for (const c of liftedChips) {
+        const col = padColumn(panel, c);
+        const at = col ?? Array.from({ length: MOVE_PADS }, (_, i) => i)
+          .find((i) => toggles[i] === undefined && topValues[i] === undefined);
+        if (at !== undefined && toggles[at] === undefined && topValues[at] === undefined) {
+          topValues[at] = c;
+          continue;
+        }
+        if (at !== undefined && toggles[at] !== undefined) {
           reportMoveLayoutIssue(
             'top-row-taken',
-            `panel '${panel.id}': control '${v.path}': top-row column ${i} holds '${toggles[i]!.path}' — the chip keeps the value row`
+            `panel '${panel.id}': control '${c.path}': top-row column ${at} holds '${toggles[at]!.path}' — the chip keeps the value row`
           );
         }
+        place(values, 'value', c, col);
       }
+      for (const c of chips) place(values, 'value', c, padColumn(panel, c));
       return {
         panel,
         dials,
         toggles: toggles.slice(0, MOVE_PADS),
         values: values.slice(0, MOVE_PADS),
         actions: actions.slice(0, MOVE_PADS),
-        ...(lifted.length ? { lifted } : {}),
+        ...(topValues.length ? { topValues: topValues.slice(0, MOVE_PADS) } : {}),
       };
     });
 }
@@ -405,15 +419,13 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
  */
 export function movePadRows(page: MovePage, claimedRows: number): ControlMeta[][] {
   let top = page.toggles;
-  let values = page.values;
-  if (page.lifted?.some(Boolean)) {
-    // lifted chips move up into the switch row; the value row keeps the rest
+  const values = page.values;
+  if (page.topValues?.some(Boolean)) {
+    // the chips asked up top share the switch row, each in its own column
     top = [];
-    values = [];
     for (let i = 0; i < MOVE_PADS; i++) {
-      if (page.toggles[i]) top[i] = page.toggles[i];
-      if (page.values[i] && page.lifted[i]) top[i] = page.values[i];
-      else if (page.values[i]) values[i] = page.values[i];
+      const cell = page.toggles[i] ?? page.topValues[i];
+      if (cell) top[i] = cell;
     }
   }
   if (claimedRows >= 2) return [top, values, [], []];

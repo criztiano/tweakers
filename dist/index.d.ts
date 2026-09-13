@@ -2806,9 +2806,10 @@ interface MovePage {
     /** Action pads — the row under the values (y=1 on the device).
      *  Placed by hand only, through the panel's `movePads` map. */
     actions: ControlMeta[];
-    /** Columns whose value chip rides the top pad row (the panel's
-     *  `moveTopRow`, where no switch holds that column). Absent: none. */
-    lifted?: boolean[];
+    /** Value chips riding the top pad row — the panel's `moveTopRow`, each in
+     *  its column where no switch holds it. A column may carry one here and
+     *  another in `values` under it; both take that column's knob. Absent: none. */
+    topValues?: ControlMeta[];
 }
 /**
  * The tabs strip: a select laid across the small slots instead of taking a

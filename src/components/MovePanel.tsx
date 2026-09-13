@@ -1292,11 +1292,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // then a latched one, then the column's own dial.
   const dialAt = (col: number): ControlMeta | undefined => {
     if (held && held.col === col) return held.meta;
-    const hw = page.values[col];
-    if (hw && hwHeld[hw.path]) return hw;
+    // a column may carry two chips — one up top, one under it
+    const hw = [page.topValues?.[col], page.values[col]].filter((m): m is ControlMeta => !!m);
+    const hwHeldChip = hw.find((m) => hwHeld[m.path]);
+    if (hwHeldChip) return hwHeldChip;
     if (latched[col]) return latched[col];
-    if (hw && hwLatched[hw.path]) return hw;
-    return page.dials[col];
+    return hw.find((m) => hwLatched[m.path]) ?? page.dials[col];
   };
 
   const pressChip = (e: React.PointerEvent<HTMLElement>, col: number, meta: ControlMeta) => {
@@ -2121,7 +2122,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 }
                 // The slot pulses with its chip while a latched value sits in it.
                 const latchedHere =
-                  latched[i]?.path === meta.path || (page.values[i]?.path === meta.path && !!hwLatched[meta.path]);
+                  latched[i]?.path === meta.path ||
+                  ((page.values[i]?.path === meta.path || page.topValues?.[i]?.path === meta.path) && !!hwLatched[meta.path]);
                 // A bipolar/origin dial anchors the fill at the origin mark and
                 // grows toward the handle on either side, like the Slider.
                 const origin01 = dialOrigin(meta);
