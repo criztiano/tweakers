@@ -1389,7 +1389,7 @@ type PanelConfig = {
      * its title carries the switch. Same idiom as a module folder, one level up.
      */
     module?: boolean;
-    kind?: 'timeline' | 'modulation';
+    kind?: 'timeline' | 'modulation' | 'kit';
 };
 type Listener$5 = () => void;
 type ActionListener = (action: string) => void;
@@ -1494,8 +1494,10 @@ type TweakStorePanelOptions = {
      */
     movePads?: Record<string, number>;
     /** Timeline panels render in TweakTimeline; modulation panels are the Move's
-     * modulator settings pages — both are filtered out of the panel dock. */
-    kind?: 'timeline' | 'modulation';
+     * modulator settings pages; kit panels are the Move kit's own settings
+     * pages (the waveform's look), shown only in the settings room — all three
+     * are filtered out of the panel dock and off the track row. */
+    kind?: 'timeline' | 'modulation' | 'kit';
 };
 /**
  * DOM id for a control's hint tooltip. `aria-describedby` holds a space-separated
@@ -2274,6 +2276,20 @@ declare function subscribeAudioMod(fn: () => void): () => void;
 declare const getAudioModVersion: () => number;
 /** The sample the audio modulator is reading, for the visualizer to draw. */
 declare const getAudioModBuffer: () => AudioBuffer | null;
+/** A stretch of the sample, 0..1: where it starts and how much it spans. */
+type AudioModWindow = {
+    start: number;
+    span: number;
+};
+/**
+ * The stretch of the sample the small screens draw. Unset, the whole
+ * sample; while the floating editor is zoomed in, the editor's own shown
+ * window — the dial face and the Move's screen then show the part the big
+ * display shows, not a whole-sample thumbnail the hand cannot place.
+ */
+declare function setAudioModWindowSource(fn: (() => AudioModWindow) | null): void;
+/** The stretch the small screens are drawing right now. */
+declare function getAudioModWindow(): AudioModWindow;
 /** Amplitude 0..1 at a play position 0..1; 0 with no sample loaded. */
 declare function audioModLevel(position: number): number;
 /**
@@ -3213,7 +3229,14 @@ declare class MoveFunctionsClass {
 }
 declare const MoveFunctions: MoveFunctionsClass;
 
-type WaveformMode = 'smooth' | 'pixelated';
+/**
+ * How the sample is drawn. `smooth` is the simplified envelope; `pixelated`
+ * is one chunky min/max bar per column; `striped` is the pixelated bar with
+ * a gap the same width after it — each bar then stands for twice the
+ * samples, so the wave keeps every transient and loses only resolution.
+ */
+type WaveformMode = 'smooth' | 'pixelated' | 'striped';
+declare const WAVEFORM_MODES: WaveformMode[];
 /** A loop region over the sample, as normalized 0..1 positions. */
 type WaveformLoop = {
     start: number;
@@ -3253,6 +3276,27 @@ type MoveWaveformView = {
     /** The step a pending loop started from, or null when no loop is being drawn. */
     loopAnchor: number | null;
 };
+/**
+ * How the waveform is drawn — the look, as distinct from the view. The look
+ * is the user's, not the app's: it lives on the kit's own settings page in
+ * the settings room and persists per machine, so a sample reads the same
+ * way in every app on this Move.
+ */
+type MoveWaveformStyle = {
+    mode: WaveformMode;
+    /** Pixelated / striped: the bar width multiplier, one of `MOVE_WAVEFORM_PIXEL_SIZES`. */
+    pixelSize: number;
+    grid: boolean;
+    bands: boolean;
+    baseline: boolean;
+};
+/** The kit's waveform settings page — a hidden `kit` panel, room-only. */
+declare const MOVE_WAVEFORM_PANEL = "move-waveform";
+/** The bar widths the settings page offers, as the old resolution slider did. */
+declare const MOVE_WAVEFORM_PIXEL_SIZES: number[];
+declare function defaultStyle(): MoveWaveformStyle;
+/** The settings page's values, read back as a style; anything unset falls to `base`. */
+declare function styleFromValues(values: Record<string, TweakValue> | undefined, base: MoveWaveformStyle): MoveWaveformStyle;
 declare const MOVE_WAVEFORM_STEPS = 16;
 /** The bottom pad row: eight subdivisions of the window on screen. */
 declare const MOVE_WAVEFORM_PADS = 8;
@@ -3310,9 +3354,27 @@ declare class MoveWaveformStoreClass {
     private duration;
     private listeners;
     private version;
-    /** Claim the wheel, the volume knob and the step row. Returns the release. */
-    register(): () => void;
+    /**
+     * Claim the wheel, the volume knob and the step row. Returns the release.
+     * The first claim also puts the kit's Waveform page in the settings room,
+     * seeded with the app's own look (`style`); the page stays once it is
+     * there — a room does not lose a page because the display it dresses is
+     * off screen for a moment — and its saved values win over the seed.
+     */
+    register(style?: Partial<MoveWaveformStyle>): () => void;
     isRegistered(): boolean;
+    /**
+     * The kit's Waveform settings page: how the sample is drawn — the style,
+     * the bar width, the grid, the EQ bands and the centre line. One hidden
+     * `kit` panel that `MovePanel` shows in the settings room and the bridge
+     * kit syncs like any page, so the look is set from the hardware too.
+     */
+    private registerSettings;
+    /** The look the settings page holds right now (the defaults until one is registered). */
+    getStyle(): MoveWaveformStyle;
+    /** The settings page's values, a stable snapshot per change — for `useSyncExternalStore`. */
+    getStyleSnapshot(): Record<string, TweakValue>;
+    subscribeStyle(fn: Listener$4): () => void;
     /**
      * Editor mode — the floating waveform is up and owns the whole surface:
      * every step is the loop bar (a slot's own step included), and the bottom
@@ -3376,6 +3438,12 @@ interface MoveWaveformProps {
     onSeek?: (position: number) => void;
     /** Reports the loop the step row (or a drag) set, or null when it is cleared. */
     onLoopChange?: (loop: WaveformLoop | null) => void;
+    /**
+     * The look — style, bar width, grid, EQ bands, centre line — is the
+     * user's: it lives on the kit's Waveform page in the settings room and
+     * persists per machine. These props seed that page the first time a
+     * waveform claims the surface; after that the page's values win.
+     */
     mode?: WaveformMode;
     pixelSize?: number;
     grid?: boolean;
@@ -4166,6 +4234,8 @@ interface WaveformVisualizationProps {
      * 'smooth' — a simplified, SVG-like envelope: few points, Catmull-Rom
      * interpolation, solid fill (the gist of the sample's dynamics).
      * 'pixelated' — crisp, chunky per-column min/max bars.
+     * 'striped' — the same bars with a gap the bar's own width after each;
+     * every bar reads its peaks over bar and gap, so nothing is masked.
      */
     mode?: WaveformMode;
     /**
@@ -4485,4 +4555,4 @@ declare class MovePresetStoreClass {
 }
 declare const MovePresetStore: MovePresetStoreClass;
 
-export { ADSR_DEF, ADSR_STAGE_MAX, ANGLE_DEAD_ZONE_PX, AUDIO_DEF, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AxisSpec, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, type ChipOption, type ChipsConfig, type ColorConfig, type ColorFormat, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRANSFER, DEFAULT_TRIGGER_STEPS, type DriverDirection, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EasingConfig, type EnvStage, FILTER_DB_CEIL, FILTER_DB_FLOOR, type FileConfig, type FilterAxis, type FilterAxisConfig, type FilterConfig, type FilterResponse, type FilterShapeType, type FilterValue, type GalleryConfig, type GalleryItem, type GradientConfig, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenDetail, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_CHIP_BUTTONS, MOVE_COLOR_HUES, MOVE_COLOR_PALETTES, MOVE_COLOR_STEPS, MOVE_COLOR_WHEEL, MOVE_DIALS, MOVE_FLOAT_SELECTOR, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_ICONS, MOVE_FUNCTION_MANIFEST, MOVE_JOG_CLICK_EVENT, MOVE_JOG_EVENT, MOVE_LATCH_EVENT, MOVE_MUTE_EVENT, MOVE_NOTIFY_GAP, MOVE_NOTIFY_KINDS, MOVE_OPACITY_PADS, MOVE_OVERRIDE_EVENT, MOVE_PADS, MOVE_PAD_LIBRARY, MOVE_PAGE_EVENT, MOVE_PAGE_SELECT_EVENT, MOVE_PALETTE, MOVE_SLOT_LIBRARY, MOVE_SPECIAL_BUTTONS, MOVE_STEP_FUNCTIONS, MOVE_STRIP_EVENT, MOVE_TOUCH_EVENT, MOVE_TRACKS, MOVE_TRACK_COLORS, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_STEPS, type ModControlMeta, type ModPageLayout, type ModPageSlot, ModRing, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, MoveActionButton, type MoveActionButtonProps, type MoveColorPalette, MoveColorStore, type MoveColorView, type MoveFunctionButton, type MoveFunctionChip, type MoveFunctionChipStyle, MoveFunctionChips, type MoveFunctionChipsProps, type MoveFunctionGlyph, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, MoveNotifications, type MoveNotificationsProps, type MoveNotifyKind, type MoveNotifyOptions, type MoveNumericDrawing, MovePadActionBody, MovePadAppBody, type MovePadCell, type MovePadKind, MovePadTabsBody, MovePadToggleBody, MovePadValueBody, MovePadWaveBody, type MovePage, type MovePaletteName, MovePanel, type MovePanelProps, type MovePlaybackMode, type MovePresetItem, type MovePresetPhase, type MovePresetSave, MovePresetStore, type MovePresetView, type MoveScreenList, type MoveScreenRow, type MoveSelectVisual, MoveSettingsView, type MoveSliderVisual, MoveSlotColorBody, MoveSlotDefaultBody, MoveSlotDialBody, MoveSlotEnumBody, MoveSlotEnvBody, MoveSlotFilterBody, MoveSlotGlyph, type MoveSlotKind, MoveSlotNumericBody, MoveSlotPlaybackDrawing, MoveSlotRampBody, MoveSlotRangeBody, MoveSlotReadout, MoveSlotScopeBody, MoveSlotShape, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotXYBody, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, type MoveVisual, MoveVolumeDisplay, type MoveVolumeDisplayState, MoveWaveform, type MoveWaveformProps, MoveWaveformStore, type MoveWaveformVariant, type MoveWaveformView, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SpringifyOptions, type SwatchConfig, type SwatchOption, TAB_PATH, TRANSFER_MAX_POINTS, TRANSFER_MIN_GAP, type TextConfig, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineMeta, TimelineStore, type TimelineTransport, type ToggleConfig, type TransferPoint, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakTheme, type TweakValue, WAVEFORM_MAX_ZOOM, WAVEFORM_SMOOTH_POINTS, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, angleFromPointer, applyDetentAxis, applyModulation, arcPath, audioModLevel, bearingToValue, buildModMovePage, buildMovePages, buildMoveStrip, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, clampStripOffset, colorAtPosition, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultFilterResponse, defaultListItemParams, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, dialOrigin, dialSpan, displayHex, enumOptionIcon, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, filterHand01, filterHandValue, filterResponsePath, filterShapePath, filterShapeResponse, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getAudioModBuffer, getAudioModVersion, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, insertPoint, invertY, isIdentityTransfer, isMoveDial, isMoveTabs, isNamedTabs, isOutsideSpan, isPadSpanContinuation, isSpanContinuation, isStripSlot, isToggleDial, lfoSyncedHz, listModTypes, loopFromStep, loopSteps, modColor, modKey, modPageLayout, modPageWidth, modRingArc, moveAppPadRow, moveNotify, moveNumericDrawing, movePadRows, movePlaybackMode, movePoint, moveScreenChecked, moveScreenRowLabel, moveSlotKind, moveStop, moveTabCell, moveVisualReading, defaultView as moveWaveformDefaultView, moveWheelSlot, nearestHandle, nearestPoint, normToValue, normalizeAngle, normalizeCurveMarkers, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeFilterValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeToggleDial, normalizeTransfer, normalizeValue, normalizeXYDial, notifyDockBottom, nudge, nudgeAngle, oklchToRgb, opacityPercent, orderRange, padPosition, padSection, padSpan, pageStripOffset, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, rampCss, readComposition, redistributeWeight, registerModType, removeDriver, removePoint, removeSegment, removeStop, resolveAxis, resolveFilterAxis, rgbToHsl, rgbToHsv, rgbToOklch, sampleTransfer, scrubBy, setAudioModBuffer, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapAngle, snapToStep, splitSegment, springify, stepPosition, stepStripOffset, stripDialColumns, stripDialSlots, stripOffsets, stripSlotCount, stripSlotIndex, stripStarts, stripWindowPads, subscribeAudioMod, transferLut, triggerLevels, triggersCrossed, valueFromPoint, valueToBearing, valueToNorm, valueToPercent, visibleColumns, visibleModControls, visibleWindow, zoomBy };
+export { ADSR_DEF, ADSR_STAGE_MAX, ANGLE_DEAD_ZONE_PX, AUDIO_DEF, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AudioModWindow, type AxisSpec, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, type ChipOption, type ChipsConfig, type ColorConfig, type ColorFormat, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRANSFER, DEFAULT_TRIGGER_STEPS, type DriverDirection, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EasingConfig, type EnvStage, FILTER_DB_CEIL, FILTER_DB_FLOOR, type FileConfig, type FilterAxis, type FilterAxisConfig, type FilterConfig, type FilterResponse, type FilterShapeType, type FilterValue, type GalleryConfig, type GalleryItem, type GradientConfig, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenDetail, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_CHIP_BUTTONS, MOVE_COLOR_HUES, MOVE_COLOR_PALETTES, MOVE_COLOR_STEPS, MOVE_COLOR_WHEEL, MOVE_DIALS, MOVE_FLOAT_SELECTOR, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_ICONS, MOVE_FUNCTION_MANIFEST, MOVE_JOG_CLICK_EVENT, MOVE_JOG_EVENT, MOVE_LATCH_EVENT, MOVE_MUTE_EVENT, MOVE_NOTIFY_GAP, MOVE_NOTIFY_KINDS, MOVE_OPACITY_PADS, MOVE_OVERRIDE_EVENT, MOVE_PADS, MOVE_PAD_LIBRARY, MOVE_PAGE_EVENT, MOVE_PAGE_SELECT_EVENT, MOVE_PALETTE, MOVE_SLOT_LIBRARY, MOVE_SPECIAL_BUTTONS, MOVE_STEP_FUNCTIONS, MOVE_STRIP_EVENT, MOVE_TOUCH_EVENT, MOVE_TRACKS, MOVE_TRACK_COLORS, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_PANEL, MOVE_WAVEFORM_PIXEL_SIZES, MOVE_WAVEFORM_STEPS, type ModControlMeta, type ModPageLayout, type ModPageSlot, ModRing, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, MoveActionButton, type MoveActionButtonProps, type MoveColorPalette, MoveColorStore, type MoveColorView, type MoveFunctionButton, type MoveFunctionChip, type MoveFunctionChipStyle, MoveFunctionChips, type MoveFunctionChipsProps, type MoveFunctionGlyph, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, MoveNotifications, type MoveNotificationsProps, type MoveNotifyKind, type MoveNotifyOptions, type MoveNumericDrawing, MovePadActionBody, MovePadAppBody, type MovePadCell, type MovePadKind, MovePadTabsBody, MovePadToggleBody, MovePadValueBody, MovePadWaveBody, type MovePage, type MovePaletteName, MovePanel, type MovePanelProps, type MovePlaybackMode, type MovePresetItem, type MovePresetPhase, type MovePresetSave, MovePresetStore, type MovePresetView, type MoveScreenList, type MoveScreenRow, type MoveSelectVisual, MoveSettingsView, type MoveSliderVisual, MoveSlotColorBody, MoveSlotDefaultBody, MoveSlotDialBody, MoveSlotEnumBody, MoveSlotEnvBody, MoveSlotFilterBody, MoveSlotGlyph, type MoveSlotKind, MoveSlotNumericBody, MoveSlotPlaybackDrawing, MoveSlotRampBody, MoveSlotRangeBody, MoveSlotReadout, MoveSlotScopeBody, MoveSlotShape, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotXYBody, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, type MoveVisual, MoveVolumeDisplay, type MoveVolumeDisplayState, MoveWaveform, type MoveWaveformProps, MoveWaveformStore, type MoveWaveformStyle, type MoveWaveformVariant, type MoveWaveformView, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SpringifyOptions, type SwatchConfig, type SwatchOption, TAB_PATH, TRANSFER_MAX_POINTS, TRANSFER_MIN_GAP, type TextConfig, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineMeta, TimelineStore, type TimelineTransport, type ToggleConfig, type TransferPoint, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakTheme, type TweakValue, WAVEFORM_MAX_ZOOM, WAVEFORM_MODES, WAVEFORM_SMOOTH_POINTS, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, angleFromPointer, applyDetentAxis, applyModulation, arcPath, audioModLevel, bearingToValue, buildModMovePage, buildMovePages, buildMoveStrip, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, clampStripOffset, colorAtPosition, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultFilterResponse, defaultListItemParams, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, dialOrigin, dialSpan, displayHex, enumOptionIcon, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, filterHand01, filterHandValue, filterResponsePath, filterShapePath, filterShapeResponse, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getAudioModBuffer, getAudioModVersion, getAudioModWindow, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, insertPoint, invertY, isIdentityTransfer, isMoveDial, isMoveTabs, isNamedTabs, isOutsideSpan, isPadSpanContinuation, isSpanContinuation, isStripSlot, isToggleDial, lfoSyncedHz, listModTypes, loopFromStep, loopSteps, modColor, modKey, modPageLayout, modPageWidth, modRingArc, moveAppPadRow, moveNotify, moveNumericDrawing, movePadRows, movePlaybackMode, movePoint, moveScreenChecked, moveScreenRowLabel, moveSlotKind, moveStop, moveTabCell, moveVisualReading, defaultStyle as moveWaveformDefaultStyle, defaultView as moveWaveformDefaultView, styleFromValues as moveWaveformStyleFromValues, moveWheelSlot, nearestHandle, nearestPoint, normToValue, normalizeAngle, normalizeCurveMarkers, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeFilterValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeToggleDial, normalizeTransfer, normalizeValue, normalizeXYDial, notifyDockBottom, nudge, nudgeAngle, oklchToRgb, opacityPercent, orderRange, padPosition, padSection, padSpan, pageStripOffset, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, rampCss, readComposition, redistributeWeight, registerModType, removeDriver, removePoint, removeSegment, removeStop, resolveAxis, resolveFilterAxis, rgbToHsl, rgbToHsv, rgbToOklch, sampleTransfer, scrubBy, setAudioModBuffer, setAudioModWindowSource, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapAngle, snapToStep, splitSegment, springify, stepPosition, stepStripOffset, stripDialColumns, stripDialSlots, stripOffsets, stripSlotCount, stripSlotIndex, stripStarts, stripWindowPads, subscribeAudioMod, transferLut, triggerLevels, triggersCrossed, valueFromPoint, valueToBearing, valueToNorm, valueToPercent, visibleColumns, visibleModControls, visibleWindow, zoomBy };

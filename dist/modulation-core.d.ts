@@ -1,4 +1,4 @@
-import { C as ControlMeta } from './TweakStore-Bm9zJFG-.js';
+import { C as ControlMeta } from './TweakStore-CM1V7K0V.js';
 import { CurveType, CurveComposition } from './curve-composer-core.js';
 import './gradient-core.js';
 import './color-core.js';
@@ -370,6 +370,20 @@ declare function subscribeAudioMod(fn: () => void): () => void;
 declare const getAudioModVersion: () => number;
 /** The sample the audio modulator is reading, for the visualizer to draw. */
 declare const getAudioModBuffer: () => AudioBuffer | null;
+/** A stretch of the sample, 0..1: where it starts and how much it spans. */
+type AudioModWindow = {
+    start: number;
+    span: number;
+};
+/**
+ * The stretch of the sample the small screens draw. Unset, the whole
+ * sample; while the floating editor is zoomed in, the editor's own shown
+ * window — the dial face and the Move's screen then show the part the big
+ * display shows, not a whole-sample thumbnail the hand cannot place.
+ */
+declare function setAudioModWindowSource(fn: (() => AudioModWindow) | null): void;
+/** The stretch the small screens are drawing right now. */
+declare function getAudioModWindow(): AudioModWindow;
 /** Amplitude 0..1 at a play position 0..1; 0 with no sample loaded. */
 declare function audioModLevel(position: number): number;
 /**
@@ -381,4 +395,4 @@ declare function audioModLevel(position: number): number;
  */
 declare const AUDIO_DEF: ModTypeDef;
 
-export { ADSR_DEF, ADSR_STAGE_MAX, AUDIO_DEF, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EnvStage, LFO_DEF, LFO_SYNC_DEFAULT, LFO_SYNC_DIVISIONS, LFO_SYNC_OPTIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, audioModLevel, curveComposition, curveDuration, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, getAudioModBuffer, getAudioModVersion, getModType, lfoDivisionBeats, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modPageWidth, modRingArc, registerModType, restoreModParams, setAudioModBuffer, subscribeAudioMod, visibleModControls };
+export { ADSR_DEF, ADSR_STAGE_MAX, AUDIO_DEF, type AudioModWindow, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EnvStage, LFO_DEF, LFO_SYNC_DEFAULT, LFO_SYNC_DIVISIONS, LFO_SYNC_OPTIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, audioModLevel, curveComposition, curveDuration, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, getAudioModBuffer, getAudioModVersion, getAudioModWindow, getModType, lfoDivisionBeats, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modPageWidth, modRingArc, registerModType, restoreModParams, setAudioModBuffer, setAudioModWindowSource, subscribeAudioMod, visibleModControls };

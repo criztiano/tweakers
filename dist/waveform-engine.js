@@ -25,6 +25,20 @@ function fillPeaks(data, cols, min, max) {
     max[x] = mx;
   }
 }
+function barPeaks(p, cols, pitch) {
+  const step = Math.max(1, Math.round(pitch));
+  const out = [];
+  for (let x = 0; x < cols; x += step) {
+    let mn = 1;
+    let mx = -1;
+    for (let i = x; i < x + step && i < cols; i++) {
+      if (p.min[i] < mn) mn = p.min[i];
+      if (p.max[i] > mx) mx = p.max[i];
+    }
+    out.push({ x, min: mn, max: mx });
+  }
+  return out;
+}
 function envelope(p, cols, n) {
   const out = new Array(n);
   const seg = cols / n;
@@ -42,6 +56,7 @@ function envelope(p, cols, n) {
 }
 
 // src/waveform-engine.ts
+var WAVEFORM_MODES = ["smooth", "pixelated", "striped"];
 var WAVEFORM_MAX_ZOOM = 1024;
 var BANDS = [
   { type: "lowpass", freq: 250 },
@@ -136,20 +151,14 @@ function createWaveformEngine(canvas, get) {
   const columnWidth = (pixelSize) => Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSize)));
   const windowState = { start: 0, win: 1 };
   let drag = null;
-  const drawColumns = (p, color, pixelSize) => {
+  const drawColumns = (p, color, pixelSize, striped) => {
     const colW = columnWidth(pixelSize);
     ctx.fillStyle = color;
     ctx.globalAlpha = 1;
-    for (let x = 0; x < W; x += colW) {
-      let mn = 1;
-      let mx = -1;
-      for (let i = x; i < x + colW && i < W; i++) {
-        if (p.min[i] < mn) mn = p.min[i];
-        if (p.max[i] > mx) mx = p.max[i];
-      }
-      const yTop = Math.round(cy - mx * amp);
-      const yBot = Math.round(cy - mn * amp);
-      ctx.fillRect(x, yTop, colW, Math.max(1, yBot - yTop));
+    for (const bar of barPeaks(p, W, striped ? colW * 2 : colW)) {
+      const yTop = Math.round(cy - bar.max * amp);
+      const yBot = Math.round(cy - bar.min * amp);
+      ctx.fillRect(bar.x, yTop, colW, Math.max(1, yBot - yTop));
     }
   };
   const drawSimplified = (env, color, outline) => {
@@ -268,7 +277,7 @@ function createWaveformEngine(canvas, get) {
         const slice = s1 > s0 ? mono.subarray(s0, s1) : mono;
         fillPeaks(slice, W, pk.min, pk.max);
         const color = count === 3 ? BAND_COLORS[i] : wave;
-        if (rt.mode === "pixelated") drawColumns(pk, color, rt.pixelSize);
+        if (rt.mode !== "smooth") drawColumns(pk, color, rt.pixelSize, rt.mode === "striped");
         else drawSimplified(envelope(pk, W, Math.max(2, rt.smoothPoints || WAVEFORM_SMOOTH_POINTS)), color, rt.border);
       }
     }
@@ -393,6 +402,7 @@ function createWaveformEngine(canvas, get) {
 }
 export {
   WAVEFORM_MAX_ZOOM,
+  WAVEFORM_MODES,
   WAVEFORM_SMOOTH_POINTS,
   createWaveformEngine
 };
