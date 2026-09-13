@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mixToMono, fillPeaks, envelope, type Peaks } from '../src/waveform-dsp';
+import { mixToMono, fillPeaks, envelope, barPeaks, type Peaks } from '../src/waveform-dsp';
 
 // mixToMono only touches numberOfChannels, length, and getChannelData(c), so a
 // hand-built object exposing those three stands in for a real Web Audio AudioBuffer.
@@ -102,5 +102,34 @@ describe('envelope', () => {
     };
     // 4 segments over 2 cols -> segments map onto cols 0,0,1,1
     expect(envelope(p, 2, 4)).toEqual([0.75, 0.75, 0.25, 0.25]);
+  });
+});
+
+describe('barPeaks', () => {
+  const peaks: Peaks = {
+    min: Float32Array.from([-0.25, -0.875, -0.125, -0.375, -0.5, 0, 0, -0.75]),
+    max: Float32Array.from([0.5, 0.125, 0.75, 0.25, 0.25, 0.125, 0.0625, 0.5]),
+  };
+
+  it('at a pitch of one is the per-pixel peaks, one bar per column', () => {
+    const bars = barPeaks(peaks, 8, 1);
+    expect(bars.map((b) => b.x)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+    expect(bars[1]).toEqual({ x: 1, min: -0.875, max: 0.125 });
+  });
+
+  it('a bar stands for its whole pitch, so no column is left out', () => {
+    // Pitch 4: the loudest sample in column 1 (-0.875) still sets the first
+    // bar's floor, and column 7 (-0.75) the second's.
+    const bars = barPeaks(peaks, 8, 4);
+    expect(bars).toEqual([
+      { x: 0, min: -0.875, max: 0.75 },
+      { x: 4, min: -0.75, max: 0.5 },
+    ]);
+  });
+
+  it('keeps a short last bar rather than dropping the tail of the window', () => {
+    const bars = barPeaks(peaks, 7, 4);
+    expect(bars.map((b) => b.x)).toEqual([0, 4]);
+    expect(bars[1]).toEqual({ x: 4, min: -0.5, max: 0.25 });
   });
 });

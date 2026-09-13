@@ -65,8 +65,15 @@ export {
   padSection,
   MOVE_WAVEFORM_STEPS,
   MOVE_WAVEFORM_PADS,
+  MOVE_WAVEFORM_PANEL,
+  MOVE_WAVEFORM_PIXEL_RANGE,
+  MOVE_WAVEFORM_DEMO_SECONDS,
+  moveWaveformDemoSample,
+  toAudioBuffer,
+  defaultStyle as moveWaveformDefaultStyle,
+  styleFromValues as moveWaveformStyleFromValues,
 } from './move-waveform';
-export type { MoveWaveformVariant, MoveWaveformView } from './move-waveform';
+export type { MoveWaveformVariant, MoveWaveformView, MoveWaveformStyle } from './move-waveform';
 // Notifications — the app's messages, floating over the instrument and over
 // whatever display is already up there.
 export { MoveNotifications, moveNotify } from './components/MoveNotifications';
@@ -112,6 +119,8 @@ export {
   subscribeAudioMod,
   getAudioModVersion,
   audioModLevel,
+  setAudioModWindowSource,
+  getAudioModWindow,
   CURVE_LABELS,
   CURVE_MAX_CLIPS,
   CURVE_MIN_DURATION,
@@ -149,6 +158,7 @@ export type {
   ModControlMeta,
   ModPageLayout,
   ModPageSlot,
+  AudioModWindow,
 } from './modulation-core';
 export { ModRing } from './components/ModRing';
 
@@ -169,7 +179,7 @@ export { snapAngle, normalizeAngle, valueToBearing, bearingToValue, angleFromPoi
 export { WaveformVisualization } from './components/WaveformVisualization';
 export type { WaveformMode, WaveformLoop } from './components/WaveformVisualization';
 // The zoom ceiling belongs with the window maths a host frames against.
-export { WAVEFORM_MAX_ZOOM, WAVEFORM_SMOOTH_POINTS } from './waveform-engine';
+export { WAVEFORM_MAX_ZOOM, WAVEFORM_SMOOTH_POINTS, WAVEFORM_MODES } from './waveform-engine';
 export { CurveComposer } from './components/CurveComposer';
 export type { CurveType, CurveSegment, CurveDriver, CurveComposition, DriverDirection } from './components/CurveComposer';
 export {

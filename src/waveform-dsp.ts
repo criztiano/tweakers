@@ -38,6 +38,32 @@ export function fillPeaks(data: Float32Array, cols: number, min: Float32Array, m
   }
 }
 
+/**
+ * One drawn bar of the pixelated waveform: where it starts, and the min/max
+ * over every source column it stands for.
+ */
+export type Bar = { x: number; min: number; max: number };
+
+/**
+ * Group per-pixel peaks into bars `pitch` pixels apart. Each bar reads the
+ * min/max of its whole pitch, so no column's sample is left out of the bar
+ * that stands for it.
+ */
+export function barPeaks(p: Peaks, cols: number, pitch: number): Bar[] {
+  const step = Math.max(1, Math.round(pitch));
+  const out: Bar[] = [];
+  for (let x = 0; x < cols; x += step) {
+    let mn = 1;
+    let mx = -1;
+    for (let i = x; i < x + step && i < cols; i++) {
+      if (p.min[i] < mn) mn = p.min[i];
+      if (p.max[i] > mx) mx = p.max[i];
+    }
+    out.push({ x, min: mn, max: mx });
+  }
+  return out;
+}
+
 // Simplified symmetric envelope: peak amplitude over each of `n` evenly-spaced segments.
 export function envelope(p: Peaks, cols: number, n: number): number[] {
   const out = new Array<number>(n);

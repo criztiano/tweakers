@@ -4,9 +4,19 @@
 // pointer interaction, reading the current props through a `get()` callback so it
 // never needs to be torn down when a prop changes.
 
-import { mixToMono, fillPeaks, envelope, type Peaks } from './waveform-dsp';
+import { mixToMono, fillPeaks, envelope, barPeaks, type Peaks } from './waveform-dsp';
 
-export type WaveformMode = 'smooth' | 'pixelated';
+/**
+ * How the sample is drawn. `smooth` is the simplified envelope; `pixelated`
+ * is one chunky min/max bar per column; `striped` is the pixelated bar,
+ * untouched, with a gap its own width after it — no sample is lost and no
+ * bar coarsens, the wave is simply twice as long, so the same zoom shows
+ * half as much of it.
+ */
+export type WaveformMode = 'smooth' | 'pixelated' | 'striped';
+export const WAVEFORM_MODES: WaveformMode[] = ['smooth', 'pixelated', 'striped'];
+/** Striped bars make the wave this many times longer at a given zoom. */
+export const WAVEFORM_STRIPE_STRETCH = 2;
 /** A loop region over the sample, as normalized 0..1 positions. */
 export type WaveformLoop = { start: number; end: number };
 
@@ -188,21 +198,18 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
   // The in-progress loop drag, if any.
   let drag: Drag | null = null;
 
-  // Chunky, full-opacity min/max columns.
-  const drawColumns = (p: Peaks, color: string, pixelSize: number) => {
+  // Chunky, full-opacity min/max columns. Striped, the peaks were read over
+  // half the window into half the columns, so every bar is exactly the
+  // pixelated bar; it is drawn at twice its column, leaving the gap.
+  const drawColumns = (p: Peaks, color: string, pixelSize: number, striped: boolean) => {
     const colW = columnWidth(pixelSize);
     ctx.fillStyle = color;
     ctx.globalAlpha = 1;
-    for (let x = 0; x < W; x += colW) {
-      let mn = 1;
-      let mx = -1;
-      for (let i = x; i < x + colW && i < W; i++) {
-        if (p.min[i] < mn) mn = p.min[i];
-        if (p.max[i] > mx) mx = p.max[i];
-      }
-      const yTop = Math.round(cy - mx * amp);
-      const yBot = Math.round(cy - mn * amp);
-      ctx.fillRect(x, yTop, colW, Math.max(1, yBot - yTop));
+    const stretch = striped ? WAVEFORM_STRIPE_STRETCH : 1;
+    for (const bar of barPeaks(p, Math.floor(W / stretch), colW)) {
+      const yTop = Math.round(cy - bar.max * amp);
+      const yBot = Math.round(cy - bar.min * amp);
+      ctx.fillRect(bar.x * stretch, yTop, colW, Math.max(1, yBot - yTop));
     }
   };
 
@@ -323,7 +330,8 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
       win = Math.min(1, Math.max(1 / WAVEFORM_MAX_ZOOM, span * 1.2));
       start = (activeLoop.start + activeLoop.end) / 2 - win / 2;
     } else {
-      win = 1 / Math.max(1, rt.zoom);
+      // Striped bars make the wave twice as long: the same zoom shows half.
+      win = 1 / Math.max(1, rt.zoom) / (rt.mode === 'striped' ? WAVEFORM_STRIPE_STRETCH : 1);
       start = prog - win / 2;
     }
     if (start < 0) start = 0;
@@ -340,9 +348,9 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
         const s0 = Math.max(0, Math.floor(start * mono.length));
         const s1 = Math.min(mono.length, Math.ceil(end * mono.length));
         const slice = s1 > s0 ? mono.subarray(s0, s1) : mono;
-        fillPeaks(slice, W, pk.min, pk.max);
+        fillPeaks(slice, rt.mode === 'striped' ? Math.floor(W / WAVEFORM_STRIPE_STRETCH) : W, pk.min, pk.max);
         const color = count === 3 ? BAND_COLORS[i] : wave;
-        if (rt.mode === 'pixelated') drawColumns(pk, color, rt.pixelSize);
+        if (rt.mode !== 'smooth') drawColumns(pk, color, rt.pixelSize, rt.mode === 'striped');
         else drawSimplified(envelope(pk, W, Math.max(2, rt.smoothPoints || WAVEFORM_SMOOTH_POINTS)), color, rt.border);
       }
     }

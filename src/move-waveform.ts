@@ -1,6 +1,7 @@
-import { WAVEFORM_MAX_ZOOM } from './waveform-engine';
-import type { WaveformLoop } from './waveform-engine';
+import { WAVEFORM_MAX_ZOOM, WAVEFORM_MODES, WAVEFORM_STRIPE_STRETCH } from './waveform-engine';
+import type { WaveformLoop, WaveformMode } from './waveform-engine';
 import { MoveVolumeDisplay } from './move-volume';
+import { TweakStore, type TweakValue } from './store/TweakStore';
 
 /**
  * A waveform on the Move surface.
@@ -35,6 +36,51 @@ export type MoveWaveformView = {
   /** The step a pending loop started from, or null when no loop is being drawn. */
   loopAnchor: number | null;
 };
+
+/**
+ * How the waveform is drawn — the look, as distinct from the view. The look
+ * is the user's, not the app's: it lives on the kit's own settings page in
+ * the settings room and persists per machine, so a sample reads the same
+ * way in every app on this Move.
+ */
+export type MoveWaveformStyle = {
+  mode: WaveformMode;
+  /** Pixelated / striped: the bar width multiplier, an integer in `MOVE_WAVEFORM_PIXEL_RANGE`. */
+  pixelSize: number;
+  grid: boolean;
+  bands: boolean;
+  baseline: boolean;
+};
+
+/** The kit's waveform settings page — a hidden `kit` panel, room-only. */
+export const MOVE_WAVEFORM_PANEL = 'move-waveform';
+/** The bar widths the settings page offers: 1× to 6×, every integer. */
+export const MOVE_WAVEFORM_PIXEL_RANGE = [1, 6] as const;
+
+const MODE_LABELS: Record<WaveformMode, string> = { smooth: 'Smooth', pixelated: 'Pixel', striped: 'Striped' };
+const clampPixelSize = (v: number) =>
+  Math.min(MOVE_WAVEFORM_PIXEL_RANGE[1], Math.max(MOVE_WAVEFORM_PIXEL_RANGE[0], Math.round(v)));
+
+export function defaultStyle(): MoveWaveformStyle {
+  return { mode: 'pixelated', pixelSize: 2, grid: false, bands: false, baseline: true };
+}
+
+/** The settings page's values, read back as a style; anything unset falls to `base`. */
+export function styleFromValues(values: Record<string, TweakValue> | undefined, base: MoveWaveformStyle): MoveWaveformStyle {
+  if (!values) return base;
+  const mode = WAVEFORM_MODES.find((m) => m === values.style) ?? base.mode;
+  const size = typeof values.resolution === 'number' && Number.isFinite(values.resolution)
+    ? clampPixelSize(values.resolution)
+    : base.pixelSize;
+  const flag = (v: TweakValue, fallback: boolean) => (typeof v === 'boolean' ? v : fallback);
+  return {
+    mode,
+    pixelSize: size,
+    grid: flag(values.grid, base.grid),
+    bands: flag(values.bands, base.bands),
+    baseline: flag(values.baseline, base.baseline),
+  };
+}
 
 export const MOVE_WAVEFORM_STEPS = 16;
 /** The bottom pad row: eight subdivisions of the window on screen. */
@@ -173,25 +219,42 @@ type Listener = () => void;
 
 class MoveWaveformStoreClass {
   private view: MoveWaveformView = defaultView();
-  private registered = false;
+  /** Live claims — the app's display and the room's preview can both be up. */
+  private claims = 0;
+  private buffer: AudioBuffer | null = null;
   private editor = false;
   private progressSource: (() => number) | null = null;
   private duration: number | null = null;
   private listeners = new Set<Listener>();
   private version = 0;
 
-  /** Claim the wheel, the volume knob and the step row. Returns the release. */
-  register(): () => void {
-    this.registered = true;
+  /**
+   * Claim the wheel, the volume knob and the step row. Returns the release.
+   * The first claim also puts the kit's Waveform page in the settings room,
+   * seeded with the app's own look (`style`); the page stays once it is
+   * there — a room does not lose a page because the display it dresses is
+   * off screen for a moment — and its saved values win over the seed.
+   */
+  register(style?: Partial<MoveWaveformStyle>): () => void {
+    this.claims += 1;
+    this.ensureSettings(style);
     // The knob is ours now, so it says so: the volume readout follows the
     // playhead for as long as we hold the claim, and is handed back with it.
-    MoveVolumeDisplay.set({ label: 'time', getValue: () => this.readout() });
+    if (this.claims === 1) MoveVolumeDisplay.set({ label: 'time', getValue: () => this.readout() });
     this.notify();
+    let released = false;
     return () => {
-      this.registered = false;
+      if (released) return;
+      released = true;
+      this.claims -= 1;
+      if (this.claims > 0) {
+        this.notify();
+        return;
+      }
       this.editor = false;
       this.progressSource = null;
       this.duration = null;
+      this.buffer = null;
       this.view = defaultView();
       MoveVolumeDisplay.clear();
       this.notify();
@@ -199,7 +262,86 @@ class MoveWaveformStoreClass {
   }
 
   isRegistered(): boolean {
-    return this.registered;
+    return this.claims > 0;
+  }
+
+  /** The sample on the surface right now — what the room's preview shows. */
+  setBuffer(buffer: AudioBuffer | null): void {
+    this.buffer = buffer;
+    this.setDuration(buffer?.duration ?? null);
+  }
+
+  getBuffer(): AudioBuffer | null {
+    return this.buffer;
+  }
+
+  /**
+   * The kit's Waveform settings page: how the sample is drawn — the style,
+   * the bar width, the grid, the EQ bands and the centre line. One hidden
+   * `kit` panel that `MovePanel` shows in the settings room and the bridge
+   * kit syncs like any page, so the look is set from the hardware too.
+   * Idempotent: the panel puts it there at mount, a claiming waveform
+   * seeds it if it gets there first, and saved values win over any seed.
+   */
+  ensureSettings(style?: Partial<MoveWaveformStyle>): void {
+    if (TweakStore.getPanel(MOVE_WAVEFORM_PANEL)) return;
+    const seed = { ...defaultStyle(), ...style };
+    TweakStore.registerPanel(
+      MOVE_WAVEFORM_PANEL,
+      'Waveform',
+      {
+        style: {
+          type: 'select',
+          default: seed.mode,
+          options: WAVEFORM_MODES.map((m) => ({ value: m, label: MODE_LABELS[m] })),
+        },
+        // The bar width as the headline value — "2×" — the way the old
+        // resolution slider read.
+        resolution: {
+          type: 'slider',
+          default: clampPixelSize(seed.pixelSize),
+          min: MOVE_WAVEFORM_PIXEL_RANGE[0],
+          max: MOVE_WAVEFORM_PIXEL_RANGE[1],
+          step: 1,
+          formatValue: (v: number) => `${Math.round(v)}×`,
+        },
+        // The three overlays as pictures with a state badge — what each
+        // switch is about, and whether it is on.
+        grid: { type: 'toggle', default: seed.grid, moveSlot: true, icon: 'grid-2x2' },
+        bands: { type: 'toggle', default: seed.bands, moveSlot: true, label: 'EQ bands', icon: 'audio-lines' },
+        baseline: { type: 'toggle', default: seed.baseline, moveSlot: true, label: 'Centre line', icon: 'activity' },
+      },
+      undefined,
+      { kind: 'kit', persist: true }
+    );
+    // A saved value from an older page shape (the width was once a named
+    // option) is not a value the dial can show: it goes back to the seed.
+    const saved = TweakStore.getValues(MOVE_WAVEFORM_PANEL);
+    if (typeof saved.resolution !== 'number') TweakStore.updateValue(MOVE_WAVEFORM_PANEL, 'resolution', clampPixelSize(seed.pixelSize));
+  }
+
+  /**
+   * The zoom the display is really at: striped bars stretch the wave, so
+   * the shown window is that much narrower than the view's zoom says. The
+   * pads and the small screens frame by this, so they show what the card
+   * shows.
+   */
+  shownZoom(): number {
+    return this.view.zoom * (this.getStyle().mode === 'striped' ? WAVEFORM_STRIPE_STRETCH : 1);
+  }
+
+  /** The look the settings page holds right now (the defaults until one is registered). */
+  getStyle(): MoveWaveformStyle {
+    return styleFromValues(TweakStore.getPanel(MOVE_WAVEFORM_PANEL) && TweakStore.getValues(MOVE_WAVEFORM_PANEL), defaultStyle());
+  }
+
+  /** The settings page's values, a stable snapshot per change — for `useSyncExternalStore`. */
+  getStyleSnapshot(): Record<string, TweakValue> {
+    return TweakStore.getValues(MOVE_WAVEFORM_PANEL);
+  }
+
+  subscribeStyle(fn: Listener): () => void {
+    return TweakStore.subscribe(MOVE_WAVEFORM_PANEL, fn);
   }
 
   /**
@@ -216,12 +358,12 @@ class MoveWaveformStoreClass {
 
   /** The kit routes every step press here while the editor is up. */
   wantsSteps(): boolean {
-    return this.registered && this.editor;
+    return this.claims > 0 && this.editor;
   }
 
   /** The kit claims and routes the bottom pad row while the editor is up. */
   wantsPads(): boolean {
-    return this.registered && this.editor;
+    return this.claims > 0 && this.editor;
   }
 
   /**
@@ -299,7 +441,7 @@ class MoveWaveformStoreClass {
    */
   pressPad(index: number, hold = false): void {
     const at = this.progressSource ? clamp01(this.progressSource()) : this.view.position;
-    const window = visibleWindow(at, this.view.zoom);
+    const window = visibleWindow(at, this.shownZoom());
     if (hold) this.setView({ loop: padSection(window, index), loopAnchor: null });
     else this.setView({ position: padPosition(window, index) });
   }
@@ -327,3 +469,75 @@ class MoveWaveformStoreClass {
 }
 
 export const MoveWaveformStore = new MoveWaveformStoreClass();
+
+/** The stand-in loop's length, seconds — two bars at 120. */
+export const MOVE_WAVEFORM_DEMO_SECONDS = 4;
+
+let demoSample: AudioBuffer | null = null;
+
+/**
+ * A sample to look at when the app has none on the surface: two bars of
+ * kick, snare and hat, synthesized once and kept — so the Waveform page
+ * always has a wave to dress, whatever the app has loaded. Duck-typed the
+ * way every reader here reads a buffer, so it needs no AudioContext.
+ */
+export function moveWaveformDemoSample(): AudioBuffer {
+  if (demoSample) return demoSample;
+  const rate = 44100;
+  const data = new Float32Array(rate * MOVE_WAVEFORM_DEMO_SECONDS);
+  // A deterministic noise, so the snare reads the same on every load.
+  let seed = 7;
+  const noise = () => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return (seed / 0x7fffffff) * 2 - 1;
+  };
+  const beat = rate / 2;
+  for (let n = 0; n < 8; n++) {
+    const at = n * beat;
+    // Kick on every beat: a sine that drops from 120 Hz to 45 Hz.
+    for (let i = 0; i < rate * 0.3 && at + i < data.length; i++) {
+      const t = i / rate;
+      const f = 45 + 75 * Math.exp(-t * 30);
+      data[at + i] += Math.sin(2 * Math.PI * f * t) * Math.exp(-t * 9) * 0.9;
+    }
+    // Snare on 2 and 4: noise with a short body.
+    if (n % 2 === 1) {
+      for (let i = 0; i < rate * 0.18 && at + i < data.length; i++) {
+        const t = i / rate;
+        data[at + i] += (noise() * 0.6 + Math.sin(2 * Math.PI * 190 * t) * 0.3) * Math.exp(-t * 22);
+      }
+    }
+    // Hats on the off-beats: a tick of bright noise.
+    const off = at + beat / 2;
+    for (let i = 0; i < rate * 0.05 && off + i < data.length; i++) {
+      data[off + i] += noise() * 0.25 * Math.exp(-(i / rate) * 90);
+    }
+  }
+  demoSample = toAudioBuffer(data, rate);
+  return demoSample;
+}
+
+/**
+ * Mono samples as an AudioBuffer: a real one where the browser has the
+ * constructor — the EQ split renders offline and needs the real thing —
+ * and a duck-typed stand-in elsewhere (node, the tests), which every reader
+ * here reads the same way.
+ */
+export function toAudioBuffer(data: Float32Array, sampleRate: number): AudioBuffer {
+  if (typeof AudioBuffer !== 'undefined') {
+    try {
+      const buffer = new AudioBuffer({ length: data.length, sampleRate, numberOfChannels: 1 });
+      buffer.copyToChannel(data as Float32Array<ArrayBuffer>, 0);
+      return buffer;
+    } catch {
+      /* no constructor support — the stand-in below reads the same */
+    }
+  }
+  return {
+    numberOfChannels: 1,
+    length: data.length,
+    duration: data.length / sampleRate,
+    sampleRate,
+    getChannelData: () => data,
+  } as unknown as AudioBuffer;
+}

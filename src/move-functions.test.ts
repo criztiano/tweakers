@@ -220,4 +220,29 @@ describe('move functions', () => {
     assert.deepEqual(calls, ['sample']);
     detach();
   });
+
+  it('suspends the app\'s buttons for another view, keeping what the view names', () => {
+    let ran = '';
+    const detachLoop = MoveFunctions.attach('loop', () => { ran = 'loop'; }, { label: 'Env loop' });
+    const detachDoor = MoveFunctions.attach('set_overview', () => { ran = 'door'; });
+    const wake = MoveFunctions.suspend(['set_overview']);
+    assert.deepEqual(MoveFunctions.list(), ['set_overview']);
+    assert.deepEqual(MoveFunctions.chips(), []);
+    MoveFunctions.run('loop');
+    assert.equal(ran, '');
+    MoveFunctions.run('set_overview');
+    assert.equal(ran, 'door');
+    // What the view attaches while it is up is the view's own — live.
+    const releaseBack = MoveFunctions.push('back', () => { ran = 'back'; });
+    assert.deepEqual(MoveFunctions.list(), ['set_overview', 'back']);
+    MoveFunctions.run('back');
+    assert.equal(ran, 'back');
+    releaseBack();
+    wake();
+    assert.deepEqual(MoveFunctions.list(), ['loop', 'set_overview']);
+    MoveFunctions.run('loop');
+    assert.equal(ran, 'loop');
+    detachLoop();
+    detachDoor();
+  });
 });

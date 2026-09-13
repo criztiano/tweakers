@@ -229,7 +229,9 @@ const padColumn = (panel: PanelConfig, c: ControlMeta): number | null => {
 };
 
 export function buildMovePages(panels: PanelConfig[]): MovePage[] {
-  const plain = panels.filter((p) => p.kind === undefined);
+  // The kit's own settings pages lay out like the app's; the panel decides
+  // where they show (the settings room), never the builder.
+  const plain = panels.filter((p) => p.kind === undefined || p.kind === 'kit');
   for (const p of plain.slice(MOVE_TRACKS)) {
     reportMoveLayoutIssue(
       'panel-dropped',

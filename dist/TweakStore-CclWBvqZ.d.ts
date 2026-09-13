@@ -656,7 +656,7 @@ type PanelConfig = {
      * its title carries the switch. Same idiom as a module folder, one level up.
      */
     module?: boolean;
-    kind?: 'timeline' | 'modulation';
+    kind?: 'timeline' | 'modulation' | 'kit';
 };
 
 export { type ControlMeta as C, type MoveNumericDrawing as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, type MovePlaybackMode as d, type MoveSelectVisual as e, type MoveSliderVisual as f, type MoveVisual as g, moveNumericDrawing as h, movePlaybackMode as i, moveVisualReading as j, moveKeyboardValue as m };

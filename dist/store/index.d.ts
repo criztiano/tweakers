@@ -745,7 +745,7 @@ type PanelConfig = {
      * its title carries the switch. Same idiom as a module folder, one level up.
      */
     module?: boolean;
-    kind?: 'timeline' | 'modulation';
+    kind?: 'timeline' | 'modulation' | 'kit';
 };
 type Listener = () => void;
 type ActionListener = (action: string) => void;
@@ -860,8 +860,10 @@ type TweakStorePanelOptions = {
      */
     movePads?: Record<string, number>;
     /** Timeline panels render in TweakTimeline; modulation panels are the Move's
-     * modulator settings pages — both are filtered out of the panel dock. */
-    kind?: 'timeline' | 'modulation';
+     * modulator settings pages; kit panels are the Move kit's own settings
+     * pages (the waveform's look), shown only in the settings room — all three
+     * are filtered out of the panel dock and off the track row. */
+    kind?: 'timeline' | 'modulation' | 'kit';
 };
 /** camelCase → Title Case, the label rule used everywhere a key becomes UI text. */
 declare function formatLabel(key: string): string;
