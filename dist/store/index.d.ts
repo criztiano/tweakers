@@ -881,6 +881,14 @@ declare class TweakStoreClass {
     updatePanel(id: string, name: string, config: TweakConfig, shortcuts?: Record<string, ShortcutConfig>, options?: TweakStorePanelOptions): void;
     unregisterPanel(id: string): void;
     private overlayPersistedValues;
+    /**
+     * One persisted/preset entry against the control now standing at its path.
+     * Returns the value to keep — normalized/clamped by the control's own
+     * rules — or `undefined` when the entry no longer fits and must be dropped.
+     * Transition `.__mode` companions reconcile through their transition
+     * control; the active tab reconciles through the tab bar's own select.
+     */
+    private reconcileValue;
     private savePanelValues;
     updateValue(panelId: string, path: string, value: TweakValue): void;
     updateValues(panelId: string, updates: Record<string, TweakValue>): void;
@@ -944,6 +952,16 @@ declare class TweakStoreClass {
      * record doesn't, so browsing can never rewrite a saved preset.
      */
     previewValues(panelId: string, values: Record<string, TweakValue>): void;
+    /**
+     * A captured snapshot (a preset, a preview) against the panel's CURRENT
+     * registration — the preset half of the lego rule. A preset is never
+     * invalidated wholesale for one dead path: its living paths apply
+     * (normalized by the control now at each path), its dead ones are silently
+     * ignored, and paths the snapshot never named keep the panel's current
+     * values. A config that later regains a path revives the preset's value
+     * for it, because reconciliation happens at apply time, not capture time.
+     */
+    private reconcileSnapshot;
     savePreset(panelId: string, name: string): string;
     loadPreset(panelId: string, presetId: string): void;
     deletePreset(panelId: string, presetId: string): void;

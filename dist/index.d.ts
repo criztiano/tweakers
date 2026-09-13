@@ -1540,6 +1540,14 @@ declare class TweakStoreClass {
     updatePanel(id: string, name: string, config: TweakConfig, shortcuts?: Record<string, ShortcutConfig>, options?: TweakStorePanelOptions): void;
     unregisterPanel(id: string): void;
     private overlayPersistedValues;
+    /**
+     * One persisted/preset entry against the control now standing at its path.
+     * Returns the value to keep — normalized/clamped by the control's own
+     * rules — or `undefined` when the entry no longer fits and must be dropped.
+     * Transition `.__mode` companions reconcile through their transition
+     * control; the active tab reconciles through the tab bar's own select.
+     */
+    private reconcileValue;
     private savePanelValues;
     updateValue(panelId: string, path: string, value: TweakValue): void;
     updateValues(panelId: string, updates: Record<string, TweakValue>): void;
@@ -1603,6 +1611,16 @@ declare class TweakStoreClass {
      * record doesn't, so browsing can never rewrite a saved preset.
      */
     previewValues(panelId: string, values: Record<string, TweakValue>): void;
+    /**
+     * A captured snapshot (a preset, a preview) against the panel's CURRENT
+     * registration — the preset half of the lego rule. A preset is never
+     * invalidated wholesale for one dead path: its living paths apply
+     * (normalized by the control now at each path), its dead ones are silently
+     * ignored, and paths the snapshot never named keep the panel's current
+     * values. A config that later regains a path revives the preset's value
+     * for it, because reconciliation happens at apply time, not capture time.
+     */
+    private reconcileSnapshot;
     savePreset(panelId: string, name: string): string;
     loadPreset(panelId: string, presetId: string): void;
     deletePreset(panelId: string, presetId: string): void;
@@ -2006,6 +2024,14 @@ interface ModulationAssignment {
     slot: number;
     /** Sweep depth 0..1 — at 1 the signal swings the control's full span. */
     amount: number;
+    /**
+     * The panel's registered NAME — the wire's stable identity across reloads.
+     * Panel ids may be positional (a gallery minting `gallery-N` per mount),
+     * so a persisted assignment carries the name and re-binds to whichever id
+     * that name registers under next; the id alone is trusted only for legacy
+     * records that never saved one.
+     */
+    panelName?: string;
 }
 /**
  * Settings-page control metadata — ControlMeta plus what the Move page needs:
@@ -3862,6 +3888,15 @@ type Listener$1 = () => void;
 declare class ModulationStoreClass {
     private slots;
     private assignments;
+    /**
+     * Persisted assignments waiting for their panel: a saved wire names its
+     * panel (`panelName`) because panel IDS can be positional (`gallery-N`)
+     * and land on a different panel after a reload. A named record stays here
+     * — driving nothing — until a panel registers under that name, then binds
+     * to whatever id the name carries now. Records without a name (older
+     * shelves) bind by id as they always did.
+     */
+    private pending;
     private states;
     private signals;
     private sources;
@@ -3880,6 +3915,14 @@ declare class ModulationStoreClass {
     private rafId;
     private lastTick;
     constructor();
+    /**
+     * Follow every named wire to where its panel lives NOW. A pending record
+     * whose panel name is registered binds to that id; a live record whose id
+     * has gone (the panel unmounted and re-registered under a fresh positional
+     * id) re-keys to the same name's new id. Names are the stable identity;
+     * ids are just where the name is standing today.
+     */
+    private rebindAssignments;
     /** Create a modulation in a step's slot; an occupied slot is returned as-is. */
     createSlot(index: number, type?: ModulationType): ModulationSlot | null;
     getSlot(index: number): ModulationSlot | null;
