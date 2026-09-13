@@ -871,60 +871,55 @@
 /* End of the Move function chips skin block. */
 
 /* -- The action deck ------------------------------------------------------
-   A view's whole surface when it has nothing to set yet: up to four big
-   buttons, one per chip key, each dressed like the hardware key it rides
-   (the same colours as .tweakers-move-action) and sized to be the page's
-   one gesture. The glyph is the key's canonical mark (icons.ts), drawn at
-   twice the chip's size. Names: `.tweakers-move-deck`,
-   `.tweakers-move-deck-action[data-name][data-pressed]`,
-   `.tweakers-move-deck-icon`, `-label`, `-detail`.
+   A view's whole surface when it has nothing to set yet: up to four
+   buttons, one per chip key, in the chip voice (Figma 935:537) — the quiet
+   slot surface by default, the pale key look for the one the view leans on
+   — each wearing its key's glyph or an icon of its own. Names:
+   `.tweakers-move-deck`, `.tweakers-move-deck-action[data-name]
+   [data-variant][data-pressed]`, `.tweakers-move-deck-icon`, `-label`,
+   `-detail`.
    ------------------------------------------------------------------------ */
 
 .tweakers-move-deck {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  width: min(440px, 100%);
+  width: 200px;
   margin: 0 auto;
 }
 
 .tweakers-move-deck-action {
-  position: relative;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-areas: 'icon label' 'icon detail';
+  display: flex;
   align-items: center;
-  column-gap: 16px;
+  gap: 12px;
   width: 100%;
-  min-height: 88px;
-  padding: 16px 24px;
+  height: 44px;
+  padding: 0 12px;
   border: none;
-  border-radius: 20px;
+  border-radius: var(--move-radius-small, 8px);
   text-align: left;
   cursor: pointer;
-  font-family: var(--move-font-label, 'Geist Pixel', system-ui, -apple-system, sans-serif);
-  color: #1e1e1e;
+  font-family: var(--move-font-label);
+  font-size: 20px;
+  line-height: normal;
+  color: var(--move-text);
+  background: var(--move-chip);
   transition: filter 0.12s, transform 0.12s;
 }
 
-.tweakers-move-deck-action[data-name="capture"] {
-  background: #4274f4;
-}
-
-/* The pale function keys — Sampling (the enter dot), Loop and Mute. */
-.tweakers-move-deck-action[data-name="sample"],
-.tweakers-move-deck-action[data-name="loop"],
-.tweakers-move-deck-action[data-name="mute"] {
+/* The pop-out dress: the pale hardware-key look, dark on light. */
+.tweakers-move-deck-action[data-variant="highlight"] {
   background: #dee3c9;
+  color: #1e1e1e;
 }
 
 .tweakers-move-deck-action:hover:not(:disabled) {
-  filter: brightness(1.06);
+  filter: brightness(1.08);
 }
 
 .tweakers-move-deck-action[data-pressed] {
   filter: brightness(1.25);
-  transform: scale(0.98);
+  transform: scale(0.96);
   transition-duration: 0.04s;
 }
 
@@ -934,29 +929,24 @@
 }
 
 .tweakers-move-deck-icon {
-  grid-area: icon;
-  width: 24px;
-  height: 24px;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
 }
 
 .tweakers-move-deck-label {
-  grid-area: label;
-  align-self: end;
-  font-size: 20px;
-  line-height: 1.2;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+/* A quieter word at the row's end, when the action has one. */
 .tweakers-move-deck-detail {
-  grid-area: detail;
-  align-self: start;
+  margin-left: auto;
   font-size: 13px;
-  line-height: 1.4;
   opacity: 0.6;
-}
-
-/* A one-line action centres its word on the icon. */
-.tweakers-move-deck-action:not(:has(.tweakers-move-deck-detail)) .tweakers-move-deck-label {
-  align-self: center;
+  white-space: nowrap;
 }
 
 /* End of the action deck skin block. */

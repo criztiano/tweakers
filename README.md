@@ -1312,7 +1312,7 @@ A disabled button dims to 40% and runs nothing. `MoveFunctions.subscribeRuns((na
 
 ### Action deck
 
-A view that has nothing to set yet — a start screen, a "what now" page — shows neither a list nor a panel but an **action deck**: up to four big buttons in the page's middle, one per key whose meaning is the app's to give (the Sampling key, Capture, Loop, Mute). Each is dressed like the hardware key it rides, the way `MoveActionButton` is, and the deck attaches the handler to that key itself — a screen click and a hardware press run one function, both flash the button, and the key lights only while its action is live:
+A view that has nothing to set yet — a start screen, a "what now" page — shows neither a list nor a panel but an **action deck**: up to four buttons in the page's middle, one per key whose meaning is the app's to give (the Sampling key, Capture, Loop, Mute). Each speaks the chip voice — the slot surface by default, `variant: 'highlight'` for the pale key look on the one action the view leans on — wearing its key's glyph unless it brings an `icon` of its own, and the deck attaches the handler to that key itself — a screen click and a hardware press run one function, both flash the button, and the key lights only while its action is live:
 
 ```tsx
 import { MoveActionDeck } from 'tweakers';
@@ -1320,7 +1320,7 @@ import { MoveActionDeck } from 'tweakers';
 <MoveActionDeck
   actions={[
     { button: 'capture', label: 'Load file', detail: 'or drop one anywhere', onPress: () => openPicker() },
-    { button: 'sample', label: 'Record', onPress: () => startTake() },
+    { button: 'sample', label: 'Record from…', variant: 'highlight', icon: <RecDot />, onPress: () => pickSource() },
     { button: 'loop', label: 'Recent', onPress: () => showRecent(), disabled: !recent.length },
   ]}
 />

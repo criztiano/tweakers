@@ -8574,6 +8574,7 @@ function DeckButton({ action }) {
       type: "button",
       className: "tweakers-move-deck-action",
       "data-name": action.button,
+      "data-variant": action.variant,
       "data-pressed": pressed || void 0,
       disabled: action.disabled,
       onClick: () => {
@@ -8581,7 +8582,7 @@ function DeckButton({ action }) {
         MoveFunctions.run(action.button, { shift: false });
       },
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveFunctionGlyphIcon, { glyph: MOVE_FUNCTION_ICONS[action.button], className: "tweakers-move-deck-icon" }),
+        action.icon ?? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveFunctionGlyphIcon, { glyph: MOVE_FUNCTION_ICONS[action.button], className: "tweakers-move-deck-icon" }),
         /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "tweakers-move-deck-label", children: action.label }),
         action.detail && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "tweakers-move-deck-detail", children: action.detail })
       ]
@@ -8589,7 +8590,10 @@ function DeckButton({ action }) {
   );
 }
 function MoveActionDeck({ actions, className }) {
-  const { actions: shown, warnings } = (0, import_react10.useMemo)(() => normalizeDeck(actions), [actions]);
+  const { actions: shown, warnings } = (0, import_react10.useMemo)(
+    () => normalizeDeck(actions),
+    [actions]
+  );
   (0, import_react10.useEffect)(() => {
     for (const warning of warnings) console.warn(`[tweakers] action deck: ${warning}`);
   }, [warnings]);

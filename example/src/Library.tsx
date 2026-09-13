@@ -188,7 +188,7 @@ export function Library() {
       <Section
         id="deck"
         title="The action deck"
-        lede="A view with nothing to set yet — a start screen — shows neither a list nor a panel: up to four big buttons, one per chip key, each dressed like the hardware key it rides and wired to it. Click one, or press the key on the Move; both flash it and run one handler. The greyed one has left its key dark."
+        lede="A view with nothing to set yet — a start screen — shows neither a list nor a panel: up to four buttons, one per chip key, in the chip voice, wired to the key. The pale one is the action the view leans on, wearing an icon of its own. Click one, or press the key on the Move; both flash it and run one handler. The greyed one has left its key dark."
       >
         <DeckPanel />
       </Section>
@@ -388,8 +388,8 @@ function DeckPanel() {
   return (
     <MoveActionDeck
       actions={[
-        { button: 'capture', label: 'Load file', detail: 'or drop one anywhere on the page', onPress: () => say('Load file') },
-        { button: 'sample', label: 'Record', onPress: () => say('Record') },
+        { button: 'capture', label: 'Load file', onPress: () => say('Load file') },
+        { button: 'sample', label: 'Record from…', variant: 'highlight', icon: <span className="kit-rec-dot" />, onPress: () => say('Record from…') },
         { button: 'loop', label: 'Loop last take', onPress: () => say('Loop last take') },
         { button: 'mute', label: 'Nothing to mute', onPress: () => say('Mute'), disabled: true },
       ]}
@@ -470,6 +470,8 @@ const DIAL_KIND: Record<string, string | undefined> = {
 const NUMERIC_KINDS = ['opacity', 'blur', 'pan', 'stereo-width', 'pitch'];
 
 const CSS = `
+  .kit-rec-dot { flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%; background: #fd3c57; }
+
 .kit-page {
   --kit-bg: #141414;
   --kit-fg: #e8e6e1;
