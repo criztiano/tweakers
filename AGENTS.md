@@ -144,3 +144,13 @@ and a retune in one commit — that is how a deleted feature ships unnoticed.
 Run `npx vitest run` and `npx tsc --noEmit` before you report done. State
 plainly what you ran and what you did not. Never imply a check passed that you
 did not run.
+
+**A browser check never touches the live Move.** The kit gives the hardware
+to whichever tab is on screen, and a headless tab always reads as on screen
+— so a check left running in a hidden browser takes the Move out of Cri's
+hand and paints its own layout over his. The kit refuses to bind the live
+bridge from an automated browser (its hard rule). To check against a bridge,
+run a private local-engine one on a spare port — in the move repo,
+`PORT=7799 MOVE_HOST=127.0.0.1 MOVE_ENGINE=local node app/server.mjs` — and
+open the demo with `?bridge=http://localhost:7799`. Close every headless tab
+when you are done.

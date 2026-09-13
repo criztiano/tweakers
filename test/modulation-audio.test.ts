@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { AUDIO_DEF, setAudioModBuffer, getAudioModBuffer, audioModLevel } from '../src/modulation-core';
+import { AUDIO_DEF, setAudioModBuffer, getAudioModBuffer, audioModLevel, setAudioModWindowSource, getAudioModWindow } from '../src/modulation-core';
 
 /**
  * A sample the tests can reason about: one second, silent in the first half,
@@ -116,5 +116,31 @@ describe('the audio modulator', () => {
     expect(label).toBe('Audio');
     expect(points[4]).toBe(0);
     expect(points[28]).toBeCloseTo(1, 2);
+  });
+});
+
+describe('the small screens follow the editor', () => {
+  afterEach(() => setAudioModWindowSource(null));
+
+  it('draw the whole sample until a window is set', () => {
+    expect(getAudioModWindow()).toEqual({ start: 0, span: 1 });
+  });
+
+  it('draw the shown window while the editor is zoomed in', () => {
+    setAudioModBuffer(halfLoudBuffer());
+    setAudioModWindowSource(() => ({ start: 0.5, span: 0.25 }));
+    expect(getAudioModWindow()).toEqual({ start: 0.5, span: 0.25 });
+    // Every point of the window is in the loud half.
+    const { points } = AUDIO_DEF.preview!({}, 16);
+    expect(Math.min(...points)).toBeCloseTo(1, 2);
+  });
+
+  it('treat a whole-sample window as no window, and keep the window inside the sample', () => {
+    setAudioModWindowSource(() => ({ start: 0.2, span: 1 }));
+    expect(getAudioModWindow()).toEqual({ start: 0, span: 1 });
+    setAudioModWindowSource(() => ({ start: 0.9, span: 0.25 }));
+    const win = getAudioModWindow();
+    expect(win.start).toBe(0.9);
+    expect(win.span).toBeCloseTo(0.1, 6);
   });
 });

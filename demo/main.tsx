@@ -6,7 +6,7 @@ import { MoveColorStore } from '../src/move-color';
 import { MoveFunctions } from '../src/move-functions';
 import { MovePresetStore } from '../src/move-presets';
 import { MoveSurfaceStore, type MoveScreenRow } from '../src/move-surface-store';
-import { MoveWaveformStore } from '../src/move-waveform';
+import { MoveWaveformStore, toAudioBuffer } from '../src/move-waveform';
 import { MoveVolumeDisplay } from '../src/move-volume';
 import { setAudioModBuffer } from '../src/modulation-core';
 import '../src/styles/theme.css';
@@ -101,13 +101,7 @@ ModulationStore.openSettings(0);
       data[at + i] += (body + snap) * env * 0.9;
     }
   }
-  setAudioModBuffer({
-    numberOfChannels: 1,
-    length: data.length,
-    duration: seconds,
-    sampleRate: rate,
-    getChannelData: () => data,
-  } as unknown as AudioBuffer);
+  setAudioModBuffer(toAudioBuffer(data, rate));
   if (!ModulationStore.getSlot(1)) {
     ModulationStore.createSlot(1, 'audio');
     ModulationStore.assign('tone', 'drive', 1, 1);
@@ -196,9 +190,13 @@ window.addEventListener('keyup', (e) => {
 
 // The hardware, when the bridge is up: knobs, track buttons, Menu, wheel.
 // No bridge (or no Move) is fine — the keyboard stand-ins above still work.
+// `?bridge=http://localhost:7799` points the demo at another bridge — a
+// local-engine one, so a check never touches the Move someone is playing.
+const bridge = new URLSearchParams(location.search).get('bridge') ?? 'http://localhost:7787';
 // @ts-ignore — remote module, no types
-import(/* @vite-ignore */ 'http://localhost:7787/kit.js')
+import(/* @vite-ignore */ `${bridge}/kit.js`)
   .then((m) => m.bindMove(TweakStore, {
+    url: bridge,
     functions: MoveFunctions,
     modulation: ModulationStore,
     color: MoveColorStore,

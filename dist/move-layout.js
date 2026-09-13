@@ -241,7 +241,7 @@ var padColumn = (panel, c) => {
   return null;
 };
 function buildMovePages(panels) {
-  const plain = panels.filter((p) => p.kind === void 0);
+  const plain = panels.filter((p) => p.kind === void 0 || p.kind === "kit");
   for (const p of plain.slice(MOVE_TRACKS)) {
     reportMoveLayoutIssue(
       "panel-dropped",

@@ -945,6 +945,15 @@ function subscribeAudioMod(fn) {
 }
 var getAudioModVersion = () => audioModVersion;
 var getAudioModBuffer = () => audioModBuffer;
+var audioModWindow = null;
+function setAudioModWindowSource(fn) {
+  audioModWindow = fn;
+}
+function getAudioModWindow() {
+  const win = audioModWindow?.();
+  if (!win || !(win.span > 0) || win.span >= 1) return { start: 0, span: 1 };
+  return { start: clamp012(win.start), span: Math.min(win.span, 1 - clamp012(win.start)) };
+}
 function audioModLevel(position) {
   if (!audioModEnv) return 0;
   const i = Math.floor(clamp012(position) * audioModEnv.length);
@@ -1011,14 +1020,18 @@ var AUDIO_DEF = {
   buttons: {
     delete: () => ({ loopStart: 0, loopEnd: 1 })
   },
-  /** The sample's envelope — the small screens' waveform drawing. */
+  /**
+   * The sample's envelope — the small screens' waveform drawing. Over the
+   * whole sample, or over the editor's shown window while it is zoomed in.
+   */
   preview(_params, count) {
     const n = Math.max(2, count);
     if (!audioModEnv) {
       return { points: Array.from({ length: n }, () => 0), label: "No sample" };
     }
+    const { start, span } = getAudioModWindow();
     return {
-      points: Array.from({ length: n }, (_, i) => clamp012(audioModLevel(i / (n - 1)))),
+      points: Array.from({ length: n }, (_, i) => clamp012(audioModLevel(start + i / (n - 1) * span))),
       label: "Audio"
     };
   },
@@ -1067,6 +1080,7 @@ export {
   envelopePoints,
   getAudioModBuffer,
   getAudioModVersion,
+  getAudioModWindow,
   getModType,
   lfoDivisionBeats,
   lfoSyncedHz,
@@ -1079,6 +1093,7 @@ export {
   registerModType,
   restoreModParams,
   setAudioModBuffer,
+  setAudioModWindowSource,
   subscribeAudioMod,
   visibleModControls
 };

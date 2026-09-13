@@ -91,7 +91,10 @@ __export(index_exports, {
   MOVE_TOUCH_EVENT: () => MOVE_TOUCH_EVENT,
   MOVE_TRACKS: () => MOVE_TRACKS,
   MOVE_TRACK_COLORS: () => MOVE_TRACK_COLORS,
+  MOVE_WAVEFORM_DEMO_SECONDS: () => MOVE_WAVEFORM_DEMO_SECONDS,
   MOVE_WAVEFORM_PADS: () => MOVE_WAVEFORM_PADS,
+  MOVE_WAVEFORM_PANEL: () => MOVE_WAVEFORM_PANEL,
+  MOVE_WAVEFORM_PIXEL_RANGE: () => MOVE_WAVEFORM_PIXEL_RANGE,
   MOVE_WAVEFORM_STEPS: () => MOVE_WAVEFORM_STEPS,
   MOVE_WAVE_FRAME: () => MOVE_WAVE_FRAME,
   MOVE_WAVE_MAX_DISPLAY: () => MOVE_WAVE_MAX_DISPLAY,
@@ -138,12 +141,13 @@ __export(index_exports, {
   MoveWaveformStore: () => MoveWaveformStore,
   PresetExplorationStore: () => PresetExplorationStore,
   SH_DEF: () => SH_DEF,
-  TAB_PATH: () => import_TweakStore10.TAB_PATH,
+  TAB_PATH: () => import_TweakStore11.TAB_PATH,
   TRANSFER_MAX_POINTS: () => TRANSFER_MAX_POINTS,
   TRANSFER_MIN_GAP: () => TRANSFER_MIN_GAP,
   TimelineStore: () => TimelineStore,
-  TweakStore: () => import_TweakStore10.TweakStore,
+  TweakStore: () => import_TweakStore11.TweakStore,
   WAVEFORM_MAX_ZOOM: () => WAVEFORM_MAX_ZOOM,
+  WAVEFORM_MODES: () => WAVEFORM_MODES,
   WAVEFORM_SMOOTH_POINTS: () => WAVEFORM_SMOOTH_POINTS,
   WaveformVisualization: () => WaveformVisualization,
   XY_DEFAULT_STEP: () => XY_DEFAULT_STEP,
@@ -179,7 +183,7 @@ __export(index_exports, {
   cycleSegmentType: () => cycleSegmentType,
   defaultComposition: () => defaultComposition,
   defaultFilterResponse: () => defaultFilterResponse,
-  defaultListItemParams: () => import_TweakStore10.defaultListItemParams,
+  defaultListItemParams: () => import_TweakStore11.defaultListItemParams,
   denormalizeEnumDial: () => denormalizeEnumDial,
   denormalizeFilterDial: () => denormalizeFilterDial,
   denormalizeRangeDial: () => denormalizeRangeDial,
@@ -210,13 +214,14 @@ __export(index_exports, {
   geneBounds: () => geneBounds,
   getAudioModBuffer: () => getAudioModBuffer,
   getAudioModVersion: () => getAudioModVersion,
+  getAudioModWindow: () => getAudioModWindow,
   getModType: () => getModType,
   gradientFillBox: () => gradientFillBox,
   gradientToCss: () => gradientToCss,
   gradientToTransform: () => gradientToTransform,
-  groupListFields: () => import_TweakStore10.groupListFields,
+  groupListFields: () => import_TweakStore11.groupListFields,
   handleLeftStyles: () => handleLeftStyles,
-  hintDomId: () => import_TweakStore10.hintDomId,
+  hintDomId: () => import_TweakStore11.hintDomId,
   hslToRgb: () => hslToRgb,
   hsvToRgb: () => hsvToRgb,
   insertPoint: () => insertPoint,
@@ -254,7 +259,10 @@ __export(index_exports, {
   moveStop: () => moveStop,
   moveTabCell: () => moveTabCell,
   moveVisualReading: () => moveVisualReading,
+  moveWaveformDefaultStyle: () => defaultStyle,
   moveWaveformDefaultView: () => defaultView,
+  moveWaveformDemoSample: () => moveWaveformDemoSample,
+  moveWaveformStyleFromValues: () => styleFromValues,
   moveWheelSlot: () => moveWheelSlot,
   nearestHandle: () => nearestHandle,
   nearestPoint: () => nearestPoint,
@@ -269,7 +277,7 @@ __export(index_exports, {
   normalizeFilterValue: () => normalizeFilterValue,
   normalizeGradient: () => normalizeGradient,
   normalizeHex: () => normalizeHex,
-  normalizeListItems: () => import_TweakStore10.normalizeListItems,
+  normalizeListItems: () => import_TweakStore11.normalizeListItems,
   normalizeRangeDial: () => normalizeRangeDial,
   normalizeToggleDial: () => normalizeToggleDial,
   normalizeTransfer: () => normalizeTransfer,
@@ -286,7 +294,7 @@ __export(index_exports, {
   padSpan: () => padSpan,
   pageStripOffset: () => pageStripOffset,
   parseHex: () => parseHex,
-  parseListItemSchema: () => import_TweakStore10.parseListItemSchema,
+  parseListItemSchema: () => import_TweakStore11.parseListItemSchema,
   percentToValue: () => percentToValue,
   pickDragTarget: () => pickDragTarget,
   plotCurve: () => plotCurve,
@@ -311,6 +319,7 @@ __export(index_exports, {
   scrubBy: () => scrubBy,
   seedDNA: () => seedDNA,
   setAudioModBuffer: () => setAudioModBuffer,
+  setAudioModWindowSource: () => setAudioModWindowSource,
   setDriverAnticipate: () => setDriverAnticipate,
   setDriverCurvature: () => setDriverCurvature,
   setDriverOvershoot: () => setDriverOvershoot,
@@ -343,6 +352,7 @@ __export(index_exports, {
   stripStarts: () => stripStarts,
   stripWindowPads: () => stripWindowPads,
   subscribeAudioMod: () => subscribeAudioMod,
+  toAudioBuffer: () => toAudioBuffer,
   transferLut: () => transferLut,
   triggerLevels: () => triggerLevels,
   triggersCrossed: () => triggersCrossed,
@@ -449,6 +459,8 @@ var MoveFunctionsClass = class {
     this.options = /* @__PURE__ */ new Map();
     this.listeners = /* @__PURE__ */ new Set();
     this.runListeners = /* @__PURE__ */ new Set();
+    /** Attachments put to sleep by `suspend` — attached, but not in this view. */
+    this.dormant = null;
   }
   /**
    * Attach an action to a function button; returns a detach function.
@@ -463,6 +475,7 @@ var MoveFunctionsClass = class {
     this.handlers.set(name, handler);
     if (options) this.options.set(name, options);
     else this.options.delete(name);
+    this.dormant?.delete(name);
     this.notify();
     return () => {
       if (this.handlers.get(name) === handler) {
@@ -474,7 +487,26 @@ var MoveFunctionsClass = class {
   }
   /** The attached button names — what the kit claims on the hardware. */
   list() {
-    return [...this.handlers.keys()];
+    return [...this.handlers.keys()].filter((name) => !this.dormant?.has(name));
+  }
+  /**
+   * Another view takes the surface — the settings room — and the app's
+   * buttons do not belong in it: a key that does nothing there must be
+   * dark there. Everything attached goes dormant except `keep`; whatever is
+   * attached or pushed while the view is up is the view's own and stays
+   * live. The kit reads `list`, so the keys go dark on the hardware and
+   * the chips leave the header, with no second bookkeeping. The returned
+   * release wakes everything as it was.
+   */
+  suspend(keep = []) {
+    const dormant = new Set([...this.handlers.keys()].filter((name) => !keep.includes(name)));
+    this.dormant = dormant;
+    this.notify();
+    return () => {
+      if (this.dormant !== dormant) return;
+      this.dormant = null;
+      this.notify();
+    };
   }
   /**
    * The attachments the panel's chip row shows, in manifest order. A chip
@@ -486,7 +518,7 @@ var MoveFunctionsClass = class {
    * always says what a press runs right now.
    */
   chips() {
-    return MOVE_FUNCTION_MANIFEST.filter((b) => MOVE_CHIP_BUTTONS.includes(b.name) && this.handlers.has(b.name)).map((b) => ({ name: b.name, options: this.options.get(b.name) })).filter(({ options }) => options?.chip !== false && !!options?.label).map(({ name, options }) => ({
+    return MOVE_FUNCTION_MANIFEST.filter((b) => MOVE_CHIP_BUTTONS.includes(b.name) && this.handlers.has(b.name) && !this.dormant?.has(b.name)).map((b) => ({ name: b.name, options: this.options.get(b.name) })).filter(({ options }) => options?.chip !== false && !!options?.label).map(({ name, options }) => ({
       name,
       label: options.label,
       ...typeof options.chip === "object" && options.chip.variant ? { variant: options.chip.variant } : {},
@@ -515,6 +547,7 @@ var MoveFunctionsClass = class {
   /** Run the action attached to a button, if any. Called by the kit per press. */
   run(name, press) {
     const full = { name, shift: !!press?.shift, hold: !!press?.hold, ...typeof press?.step === "number" ? { step: press.step } : {} };
+    if (this.dormant?.has(name)) return;
     this.handlers.get(name)?.(full);
     for (const l of this.runListeners) l(name, full);
   }
@@ -2063,7 +2096,7 @@ var padColumn = (panel, c) => {
   return null;
 };
 function buildMovePages(panels) {
-  const plain = panels.filter((p) => p.kind === void 0);
+  const plain = panels.filter((p) => p.kind === void 0 || p.kind === "kit");
   for (const p of plain.slice(MOVE_TRACKS)) {
     reportMoveLayoutIssue(
       "panel-dropped",
@@ -3686,7 +3719,7 @@ function XYSurface({ label, x, y, disabled, onChange }) {
 // src/components/MovePanel.tsx
 var import_react10 = require("react");
 var import_react_dom3 = require("react-dom");
-var import_TweakStore8 = require("tweakers/store");
+var import_TweakStore9 = require("tweakers/store");
 var import_ModulationStore2 = require("tweakers/modulation-store");
 
 // src/curve-composer-core.ts
@@ -4275,6 +4308,20 @@ function fillPeaks(data, cols, min, max) {
     min[x] = mn;
     max[x] = mx;
   }
+}
+function barPeaks(p, cols, pitch) {
+  const step = Math.max(1, Math.round(pitch));
+  const out = [];
+  for (let x = 0; x < cols; x += step) {
+    let mn = 1;
+    let mx = -1;
+    for (let i = x; i < x + step && i < cols; i++) {
+      if (p.min[i] < mn) mn = p.min[i];
+      if (p.max[i] > mx) mx = p.max[i];
+    }
+    out.push({ x, min: mn, max: mx });
+  }
+  return out;
 }
 function envelope(p, cols, n) {
   const out = new Array(n);
@@ -4952,6 +4999,15 @@ function subscribeAudioMod(fn) {
 }
 var getAudioModVersion = () => audioModVersion;
 var getAudioModBuffer = () => audioModBuffer;
+var audioModWindow = null;
+function setAudioModWindowSource(fn) {
+  audioModWindow = fn;
+}
+function getAudioModWindow() {
+  const win = audioModWindow?.();
+  if (!win || !(win.span > 0) || win.span >= 1) return { start: 0, span: 1 };
+  return { start: clamp013(win.start), span: Math.min(win.span, 1 - clamp013(win.start)) };
+}
 function audioModLevel(position) {
   if (!audioModEnv) return 0;
   const i = Math.floor(clamp013(position) * audioModEnv.length);
@@ -5018,14 +5074,18 @@ var AUDIO_DEF = {
   buttons: {
     delete: () => ({ loopStart: 0, loopEnd: 1 })
   },
-  /** The sample's envelope — the small screens' waveform drawing. */
+  /**
+   * The sample's envelope — the small screens' waveform drawing. Over the
+   * whole sample, or over the editor's shown window while it is zoomed in.
+   */
   preview(_params, count) {
     const n = Math.max(2, count);
     if (!audioModEnv) {
       return { points: Array.from({ length: n }, () => 0), label: "No sample" };
     }
+    const { start, span } = getAudioModWindow();
     return {
-      points: Array.from({ length: n }, (_, i) => clamp013(audioModLevel(i / (n - 1)))),
+      points: Array.from({ length: n }, (_, i) => clamp013(audioModLevel(start + i / (n - 1) * span))),
       label: "Audio"
     };
   },
@@ -5048,6 +5108,8 @@ var import_react_dom = require("react-dom");
 var import_react4 = require("react");
 
 // src/waveform-engine.ts
+var WAVEFORM_MODES = ["smooth", "pixelated", "striped"];
+var WAVEFORM_STRIPE_STRETCH = 2;
 var WAVEFORM_MAX_ZOOM = 1024;
 var BANDS = [
   { type: "lowpass", freq: 250 },
@@ -5175,20 +5237,15 @@ function createWaveformEngine(canvas, get) {
     return piece.x0 + (span > 0 ? (p - piece.a) / span * (piece.x1 - piece.x0) : 0);
   };
   let drag = null;
-  const drawColumns = (p, cols, x0, color, pixelSize) => {
+  const drawColumns = (p, cols, x0, color, pixelSize, striped) => {
     const colW = columnWidth(pixelSize);
     ctx.fillStyle = color;
     ctx.globalAlpha = 1;
-    for (let x = 0; x < cols; x += colW) {
-      let mn = 1;
-      let mx = -1;
-      for (let i = x; i < x + colW && i < cols; i++) {
-        if (p.min[i] < mn) mn = p.min[i];
-        if (p.max[i] > mx) mx = p.max[i];
-      }
-      const yTop = Math.round(cy - mx * amp);
-      const yBot = Math.round(cy - mn * amp);
-      ctx.fillRect(x0 + x, yTop, colW, Math.max(1, yBot - yTop));
+    const stretch = striped ? WAVEFORM_STRIPE_STRETCH : 1;
+    for (const bar of barPeaks(p, Math.floor(cols / stretch), colW)) {
+      const yTop = Math.round(cy - bar.max * amp);
+      const yBot = Math.round(cy - bar.min * amp);
+      ctx.fillRect(x0 + bar.x * stretch, yTop, colW, Math.max(1, yBot - yTop));
     }
   };
   const drawSimplified = (env, x0, x1, color, outline2) => {
@@ -5318,7 +5375,7 @@ function createWaveformEngine(canvas, get) {
       win = Math.min(1, Math.max(1 / WAVEFORM_MAX_ZOOM, span * 1.2));
       start = (activeLoop.start + activeLoop.end) / 2 - win / 2;
     } else {
-      win = 1 / Math.max(1, rt.zoom);
+      win = 1 / Math.max(1, rt.zoom) / (rt.mode === "striped" ? WAVEFORM_STRIPE_STRETCH : 1);
       start = prog - win / 2;
     }
     if (start < 0) start = 0;
@@ -5331,6 +5388,7 @@ function createWaveformEngine(canvas, get) {
       for (let i = 0; i < count; i++) {
         const mono = monos[i];
         const color = count === 3 ? BAND_COLORS[i] : wave;
+        const striped = rt.mode === "striped";
         for (const piece of pieces) {
           const cols = Math.max(1, Math.round(piece.x1) - Math.round(piece.x0));
           const s0 = Math.max(0, Math.floor(piece.a * mono.length));
@@ -5338,9 +5396,9 @@ function createWaveformEngine(canvas, get) {
           const slice = s1 > s0 ? mono.subarray(s0, s1) : mono;
           const pmin = pk.min.subarray(0, cols);
           const pmax = pk.max.subarray(0, cols);
-          fillPeaks(slice, cols, pmin, pmax);
+          fillPeaks(slice, striped ? Math.max(1, Math.floor(cols / WAVEFORM_STRIPE_STRETCH)) : cols, pmin, pmax);
           const x0 = Math.round(piece.x0);
-          if (rt.mode === "pixelated") drawColumns({ min: pmin, max: pmax }, cols, x0, color, rt.pixelSize);
+          if (rt.mode !== "smooth") drawColumns({ min: pmin, max: pmax }, cols, x0, color, rt.pixelSize, striped);
           else {
             const points = Math.max(2, Math.round((rt.smoothPoints || WAVEFORM_SMOOTH_POINTS) * (cols / W)));
             drawSimplified(envelope({ min: pmin, max: pmax }, cols, points), x0, x0 + cols, color, rt.border);
@@ -5565,11 +5623,63 @@ function WaveformVisualization({
   ] });
 }
 
+// src/move-volume.ts
+var MoveVolumeDisplayClass = class {
+  constructor() {
+    this.state = null;
+    this.listeners = /* @__PURE__ */ new Set();
+  }
+  /** Show the pill with this readout — replaces any previous one. */
+  set(state2) {
+    this.state = state2;
+    this.notify();
+  }
+  /** Hide the pill. */
+  clear() {
+    this.state = null;
+    this.notify();
+  }
+  /** The current readout, or null when the pill is hidden. */
+  get() {
+    return this.state;
+  }
+  /** Notified when the readout is set or cleared. */
+  subscribe(listener) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+  notify() {
+    for (const l of this.listeners) l();
+  }
+};
+var MoveVolumeDisplay = new MoveVolumeDisplayClass();
+
 // src/move-waveform.ts
+var import_TweakStore3 = require("tweakers/store");
 var MOVE_WAVE_FRAME = 12;
 var MOVE_WAVE_MAX_WIDTH = 1200;
 var MOVE_WAVE_MAX_HEIGHT = 176;
 var MOVE_WAVE_MAX_DISPLAY = MOVE_WAVE_MAX_HEIGHT - 2 * MOVE_WAVE_FRAME;
+var MOVE_WAVEFORM_PANEL = "move-waveform";
+var MOVE_WAVEFORM_PIXEL_RANGE = [1, 6];
+var MODE_LABELS = { smooth: "Smooth", pixelated: "Pixel", striped: "Striped" };
+var clampPixelSize = (v) => Math.min(MOVE_WAVEFORM_PIXEL_RANGE[1], Math.max(MOVE_WAVEFORM_PIXEL_RANGE[0], Math.round(v)));
+function defaultStyle() {
+  return { mode: "pixelated", pixelSize: 2, grid: false, bands: false, baseline: true };
+}
+function styleFromValues(values, base) {
+  if (!values) return base;
+  const mode = WAVEFORM_MODES.find((m) => m === values.style) ?? base.mode;
+  const size = typeof values.resolution === "number" && Number.isFinite(values.resolution) ? clampPixelSize(values.resolution) : base.pixelSize;
+  const flag = (v, fallback) => typeof v === "boolean" ? v : fallback;
+  return {
+    mode,
+    pixelSize: size,
+    grid: flag(values.grid, base.grid),
+    bands: flag(values.bands, base.bands),
+    baseline: flag(values.baseline, base.baseline)
+  };
+}
 var MOVE_WAVEFORM_STEPS = 16;
 var MOVE_WAVEFORM_PADS = 8;
 var SCRUB_PER_DETENT = 25e-5;
@@ -5637,7 +5747,9 @@ function loopSteps(view, steps = MOVE_WAVEFORM_STEPS) {
 var MoveWaveformStoreClass = class {
   constructor() {
     this.view = defaultView();
-    this.registered = false;
+    /** Live claims — the app's display and the room's preview can both be up. */
+    this.claims = 0;
+    this.buffer = null;
     this.editor = false;
     this.progressSource = null;
     this.duration = null;
@@ -5646,23 +5758,35 @@ var MoveWaveformStoreClass = class {
     this.listeners = /* @__PURE__ */ new Set();
     this.version = 0;
   }
-  /** Claim the wheel, the volume knob and the step row. Returns the release.
-   *
-   * The knob is ours now, so the panel says so: while a waveform is
-   * registered its volume corner carries the clock — the playhead's time
-   * with the transport's state around it — in place of whatever readout the
-   * app had put there, and hands the corner back with the claim. */
-  register() {
-    this.registered = true;
-    this.lastScrubAt = 0;
+  /**
+   * Claim the wheel, the volume knob and the step row. Returns the release.
+   * The first claim also puts the kit's Waveform page in the settings room,
+   * seeded with the app's own look (`style`); the page stays once it is
+   * there — a room does not lose a page because the display it dresses is
+   * off screen for a moment — and its saved values win over the seed.
+   */
+  register(style) {
+    this.claims += 1;
+    if (this.claims === 1) this.lastScrubAt = 0;
+    this.ensureSettings(style);
+    if (this.claims === 1) MoveVolumeDisplay.set({ label: "time", getValue: () => this.readout() });
     this.notify();
+    let released = false;
     return () => {
-      this.registered = false;
+      if (released) return;
+      released = true;
+      this.claims -= 1;
+      if (this.claims > 0) {
+        this.notify();
+        return;
+      }
       this.editor = false;
       this.progressSource = null;
       this.duration = null;
       this.transport = null;
+      this.buffer = null;
       this.view = defaultView();
+      MoveVolumeDisplay.clear();
       this.notify();
     };
   }
@@ -5694,7 +5818,77 @@ var MoveWaveformStoreClass = class {
     return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}:${String(cc).padStart(2, "0")}`;
   }
   isRegistered() {
-    return this.registered;
+    return this.claims > 0;
+  }
+  /** The sample on the surface right now — what the room's preview shows. */
+  setBuffer(buffer) {
+    this.buffer = buffer;
+    this.setDuration(buffer?.duration ?? null);
+  }
+  getBuffer() {
+    return this.buffer;
+  }
+  /**
+   * The kit's Waveform settings page: how the sample is drawn — the style,
+   * the bar width, the grid, the EQ bands and the centre line. One hidden
+   * `kit` panel that `MovePanel` shows in the settings room and the bridge
+   * kit syncs like any page, so the look is set from the hardware too.
+   * Idempotent: the panel puts it there at mount, a claiming waveform
+   * seeds it if it gets there first, and saved values win over any seed.
+   */
+  ensureSettings(style) {
+    if (import_TweakStore3.TweakStore.getPanel(MOVE_WAVEFORM_PANEL)) return;
+    const seed = { ...defaultStyle(), ...style };
+    import_TweakStore3.TweakStore.registerPanel(
+      MOVE_WAVEFORM_PANEL,
+      "Waveform",
+      {
+        style: {
+          type: "select",
+          default: seed.mode,
+          options: WAVEFORM_MODES.map((m) => ({ value: m, label: MODE_LABELS[m] }))
+        },
+        // The bar width as the headline value — "2×" — the way the old
+        // resolution slider read.
+        resolution: {
+          type: "slider",
+          default: clampPixelSize(seed.pixelSize),
+          min: MOVE_WAVEFORM_PIXEL_RANGE[0],
+          max: MOVE_WAVEFORM_PIXEL_RANGE[1],
+          step: 1,
+          formatValue: (v) => `${Math.round(v)}\xD7`
+        },
+        // The three overlays as pictures with a state badge — what each
+        // switch is about, and whether it is on.
+        grid: { type: "toggle", default: seed.grid, moveSlot: true, icon: "grid-2x2" },
+        bands: { type: "toggle", default: seed.bands, moveSlot: true, label: "EQ bands", icon: "audio-lines" },
+        baseline: { type: "toggle", default: seed.baseline, moveSlot: true, label: "Centre line", icon: "activity" }
+      },
+      void 0,
+      { kind: "kit", persist: true }
+    );
+    const saved = import_TweakStore3.TweakStore.getValues(MOVE_WAVEFORM_PANEL);
+    if (typeof saved.resolution !== "number") import_TweakStore3.TweakStore.updateValue(MOVE_WAVEFORM_PANEL, "resolution", clampPixelSize(seed.pixelSize));
+  }
+  /**
+   * The zoom the display is really at: striped bars stretch the wave, so
+   * the shown window is that much narrower than the view's zoom says. The
+   * pads and the small screens frame by this, so they show what the card
+   * shows.
+   */
+  shownZoom() {
+    return this.view.zoom * (this.getStyle().mode === "striped" ? WAVEFORM_STRIPE_STRETCH : 1);
+  }
+  /** The look the settings page holds right now (the defaults until one is registered). */
+  getStyle() {
+    return styleFromValues(import_TweakStore3.TweakStore.getPanel(MOVE_WAVEFORM_PANEL) && import_TweakStore3.TweakStore.getValues(MOVE_WAVEFORM_PANEL), defaultStyle());
+  }
+  /** The settings page's values, a stable snapshot per change — for `useSyncExternalStore`. */
+  getStyleSnapshot() {
+    return import_TweakStore3.TweakStore.getValues(MOVE_WAVEFORM_PANEL);
+  }
+  subscribeStyle(fn) {
+    return import_TweakStore3.TweakStore.subscribe(MOVE_WAVEFORM_PANEL, fn);
   }
   /**
    * Editor mode — the floating waveform is up and owns the whole surface:
@@ -5709,11 +5903,11 @@ var MoveWaveformStoreClass = class {
   }
   /** The kit routes every step press here while the editor is up. */
   wantsSteps() {
-    return this.registered && this.editor;
+    return this.claims > 0 && this.editor;
   }
   /** The kit claims and routes the bottom pad row while the editor is up. */
   wantsPads() {
-    return this.registered && this.editor;
+    return this.claims > 0 && this.editor;
   }
   /**
    * Where the playhead actually is, for framing — during playback the shown
@@ -5781,7 +5975,7 @@ var MoveWaveformStoreClass = class {
    */
   pressPad(index, hold = false) {
     const at = this.progressSource ? clamp014(this.progressSource()) : this.view.position;
-    const window2 = visibleWindow(at, this.view.zoom);
+    const window2 = visibleWindow(at, this.shownZoom());
     if (hold) this.setView({ loop: padSection(window2, index), loopAnchor: null });
     else this.setView({ position: padPosition(window2, index) });
   }
@@ -5804,6 +5998,56 @@ var MoveWaveformStoreClass = class {
   }
 };
 var MoveWaveformStore = new MoveWaveformStoreClass();
+var MOVE_WAVEFORM_DEMO_SECONDS = 4;
+var demoSample = null;
+function moveWaveformDemoSample() {
+  if (demoSample) return demoSample;
+  const rate = 44100;
+  const data = new Float32Array(rate * MOVE_WAVEFORM_DEMO_SECONDS);
+  let seed = 7;
+  const noise = () => {
+    seed = seed * 1103515245 + 12345 & 2147483647;
+    return seed / 2147483647 * 2 - 1;
+  };
+  const beat = rate / 2;
+  for (let n = 0; n < 8; n++) {
+    const at = n * beat;
+    for (let i = 0; i < rate * 0.3 && at + i < data.length; i++) {
+      const t = i / rate;
+      const f = 45 + 75 * Math.exp(-t * 30);
+      data[at + i] += Math.sin(2 * Math.PI * f * t) * Math.exp(-t * 9) * 0.9;
+    }
+    if (n % 2 === 1) {
+      for (let i = 0; i < rate * 0.18 && at + i < data.length; i++) {
+        const t = i / rate;
+        data[at + i] += (noise() * 0.6 + Math.sin(2 * Math.PI * 190 * t) * 0.3) * Math.exp(-t * 22);
+      }
+    }
+    const off = at + beat / 2;
+    for (let i = 0; i < rate * 0.05 && off + i < data.length; i++) {
+      data[off + i] += noise() * 0.25 * Math.exp(-(i / rate) * 90);
+    }
+  }
+  demoSample = toAudioBuffer(data, rate);
+  return demoSample;
+}
+function toAudioBuffer(data, sampleRate) {
+  if (typeof AudioBuffer !== "undefined") {
+    try {
+      const buffer = new AudioBuffer({ length: data.length, sampleRate, numberOfChannels: 1 });
+      buffer.copyToChannel(data, 0);
+      return buffer;
+    } catch {
+    }
+  }
+  return {
+    numberOfChannels: 1,
+    length: data.length,
+    duration: data.length / sampleRate,
+    sampleRate,
+    getChannelData: () => data
+  };
+}
 
 // src/move-surface-store.ts
 var moveScreenRowLabel = (row) => typeof row === "string" ? row : row.label;
@@ -5933,10 +6177,11 @@ function MoveWaveform({
   seekRef.current = onSeek;
   const loopRef = (0, import_react5.useRef)(onLoopChange);
   loopRef.current = onLoopChange;
+  const seedRef = (0, import_react5.useRef)({ mode, pixelSize, grid, bands, baseline });
   (0, import_react5.useEffect)(() => {
     if (!productionEnabled) return;
     setMounted(true);
-    return MoveWaveformStore.register();
+    return MoveWaveformStore.register(seedRef.current);
   }, [productionEnabled]);
   (0, import_react5.useEffect)(() => {
     if (!productionEnabled) return;
@@ -5981,8 +6226,14 @@ function MoveWaveform({
       MoveSurfaceStore.setSteps(prev);
     };
   }, [productionEnabled, accent]);
+  const styleValues = (0, import_react5.useSyncExternalStore)(
+    (0, import_react5.useCallback)((cb) => MoveWaveformStore.subscribeStyle(cb), []),
+    () => MoveWaveformStore.getStyleSnapshot(),
+    () => MoveWaveformStore.getStyleSnapshot()
+  );
+  const look = styleFromValues(styleValues, { mode, pixelSize, grid, bands, baseline });
   (0, import_react5.useEffect)(() => {
-    MoveWaveformStore.setDuration(buffer?.duration ?? null);
+    MoveWaveformStore.setBuffer(buffer);
   }, [buffer]);
   const view = (0, import_react5.useSyncExternalStore)(
     (0, import_react5.useCallback)((cb) => MoveWaveformStore.subscribe(cb), []),
@@ -6035,13 +6286,13 @@ function MoveWaveform({
     {
       buffer,
       ...getProgress ? { getProgress: () => MoveWaveformStore.isScrubbing() ? MoveWaveformStore.getView().position : getProgress() } : { progress: progress ?? state2.position },
-      mode,
-      pixelSize,
-      grid,
-      bands,
+      mode: look.mode,
+      pixelSize: look.pixelSize,
+      grid: look.grid,
+      bands: look.bands,
       waveColor,
       playheadColor: playheadColor ?? accent,
-      baseline,
+      baseline: look.baseline,
       ...smoothPoints != null ? { smoothPoints } : {},
       ...waveInset != null ? { waveInset } : {},
       loop: state2.loop,
@@ -6924,7 +7175,7 @@ function isIdentityTransfer(points) {
 
 // src/components/ModRing.tsx
 var import_react7 = require("react");
-var import_TweakStore3 = require("tweakers/store");
+var import_TweakStore4 = require("tweakers/store");
 var import_ModulationStore = require("tweakers/modulation-store");
 var import_jsx_runtime8 = require("react/jsx-runtime");
 function ModRing({
@@ -6945,14 +7196,14 @@ function ModRing({
     };
     const bounds = import_ModulationStore.ModulationStore.getBounds(panelId, path);
     const span = bounds ? bounds.max - bounds.min : 0;
-    const base01 = () => span ? (Number(import_TweakStore3.TweakStore.getValue(panelId, path)) - bounds.min) / span : 0;
+    const base01 = () => span ? (Number(import_TweakStore4.TweakStore.getValue(panelId, path)) - bounds.min) / span : 0;
     if (!span) return;
     const still = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (still) {
       const reach = assignment.amount / 2;
       const drawReach = () => draw(base01() - reach, base01() + reach);
       drawReach();
-      return import_TweakStore3.TweakStore.subscribe(panelId, drawReach);
+      return import_TweakStore4.TweakStore.subscribe(panelId, drawReach);
     }
     return import_ModulationStore.ModulationStore.subscribeFrames(() => {
       const b = base01();
@@ -6985,46 +7236,15 @@ function ModRing({
 }
 
 // src/shortcut-utils.ts
-var import_TweakStore4 = require("tweakers/store");
+var import_TweakStore5 = require("tweakers/store");
 function fineDragValue(opts) {
   const { startValue, startPos, pos, extentPx, min, max, factor = 0.1 } = opts;
   const delta = (pos - startPos) / (extentPx || 1) * (max - min) * factor;
   return Math.max(min, Math.min(max, startValue + delta));
 }
 
-// src/move-volume.ts
-var MoveVolumeDisplayClass = class {
-  constructor() {
-    this.state = null;
-    this.listeners = /* @__PURE__ */ new Set();
-  }
-  /** Show the pill with this readout — replaces any previous one. */
-  set(state2) {
-    this.state = state2;
-    this.notify();
-  }
-  /** Hide the pill. */
-  clear() {
-    this.state = null;
-    this.notify();
-  }
-  /** The current readout, or null when the pill is hidden. */
-  get() {
-    return this.state;
-  }
-  /** Notified when the readout is set or cleared. */
-  subscribe(listener) {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-  notify() {
-    for (const l of this.listeners) l();
-  }
-};
-var MoveVolumeDisplay = new MoveVolumeDisplayClass();
-
 // src/move-color.ts
-var import_TweakStore5 = require("tweakers/store");
+var import_TweakStore6 = require("tweakers/store");
 var MOVE_COLOR_PALETTES = [
   { id: "move", name: "Move 16", colors: [
     "#ff4d07",
@@ -7204,7 +7424,7 @@ var MoveColorStoreClass = class {
     else this.open(panelId, path);
   }
   read(panelId, path) {
-    const hex = String(import_TweakStore5.TweakStore.getValue(panelId, path) ?? "#ff0000");
+    const hex = String(import_TweakStore6.TweakStore.getValue(panelId, path) ?? "#ff0000");
     const cached = this.coordinates.get(JSON.stringify([panelId, path]));
     if (cached?.hex === hex) return { ...cached.color };
     const color = rgbToHsl(parseHex(hex) ?? { r: 255, g: 0, b: 0, a: 1 });
@@ -7215,7 +7435,7 @@ var MoveColorStoreClass = class {
     return color;
   }
   update(panelId, path, patch2) {
-    if (!import_TweakStore5.TweakStore.getPanel(panelId) || import_TweakStore5.TweakStore.isDisabled(panelId, path) || Object.values(patch2).some((n) => !Number.isFinite(n))) return;
+    if (!import_TweakStore6.TweakStore.getPanel(panelId) || import_TweakStore6.TweakStore.isDisabled(panelId, path) || Object.values(patch2).some((n) => !Number.isFinite(n))) return;
     const color = { ...this.read(panelId, path), ...patch2 };
     color.h = hue(color.h);
     color.s = clamp8(color.s);
@@ -7224,10 +7444,10 @@ var MoveColorStoreClass = class {
     const palette = this.view?.panelId === panelId && this.view.path === path ? this.getPalette() : null;
     const snapped = palette ? paletteHsl(palette)[paletteAt(palette, color.h)] : null;
     const painted = snapped ? { ...color, h: snapped.h, s: snapped.s, l: snapped.l } : color;
-    const current = String(import_TweakStore5.TweakStore.getValue(panelId, path) ?? "");
+    const current = String(import_TweakStore6.TweakStore.getValue(panelId, path) ?? "");
     const hex = formatHex(hslToRgb(painted), painted.a < 1 || current.length === 9 || current.length === 5);
     this.coordinates.set(JSON.stringify([panelId, path]), { hex, color });
-    import_TweakStore5.TweakStore.updateValue(panelId, path, hex);
+    import_TweakStore6.TweakStore.updateValue(panelId, path, hex);
     this.notify();
   }
   setHue(h) {
@@ -7377,12 +7597,12 @@ var MoveSearchStore = new MoveSearchStoreClass();
 // src/components/MoveColor.tsx
 var import_react8 = require("react");
 var import_react_dom2 = require("react-dom");
-var import_TweakStore6 = require("tweakers/store");
+var import_TweakStore7 = require("tweakers/store");
 var import_jsx_runtime9 = require("react/jsx-runtime");
 function MoveColorSlot({ panelId, meta, active, open: open2 }) {
   const gesture = (0, import_react8.useRef)(null);
   const suppressClick = (0, import_react8.useRef)(false);
-  const disabled = import_TweakStore6.TweakStore.isDisabled(panelId, meta.path);
+  const disabled = import_TweakStore7.TweakStore.isDisabled(panelId, meta.path);
   const color = MoveColorStore.read(panelId, meta.path);
   return /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(
     "button",
@@ -7444,7 +7664,7 @@ function MoveColorSlot({ panelId, meta, active, open: open2 }) {
       onLostPointerCapture: () => {
         gesture.current = null;
       },
-      children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveSlotColorBody, { label: meta.label, color: String(import_TweakStore6.TweakStore.getValue(panelId, meta.path)), hue: color.h })
+      children: /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveSlotColorBody, { label: meta.label, color: String(import_TweakStore7.TweakStore.getValue(panelId, meta.path)), hue: color.h })
     }
   );
 }
@@ -7557,7 +7777,7 @@ function MoveColorDisplay({ panelId, meta, anchor, theme }) {
   const display = (0, import_react8.useRef)(null);
   const [position, setPosition] = (0, import_react8.useState)({ left: 0, top: 0 });
   const color = MoveColorStore.read(panelId, meta.path);
-  const disabled = import_TweakStore6.TweakStore.isDisabled(panelId, meta.path);
+  const disabled = import_TweakStore7.TweakStore.isDisabled(panelId, meta.path);
   const close = () => {
     if (display.current?.contains(document.activeElement)) {
       anchor.current?.querySelector('[data-kind="color"][aria-expanded="true"]')?.focus();
@@ -7600,7 +7820,7 @@ function MoveColorDisplay({ panelId, meta, anchor, theme }) {
       observer?.disconnect();
     };
   }, [anchor]);
-  const hex = String(import_TweakStore6.TweakStore.getValue(panelId, meta.path) ?? "#ff0000");
+  const hex = String(import_TweakStore7.TweakStore.getValue(panelId, meta.path) ?? "#ff0000");
   const palette = MoveColorStore.getPalette();
   const shown = palette ? rgbToHsl(parseHex(hex) ?? { r: 255, g: 0, b: 0, a: 1 }) : color;
   const content = /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)(
@@ -7800,7 +8020,7 @@ var MoveSettingsView = {
 };
 
 // src/move-presets.ts
-var import_TweakStore7 = require("tweakers/store");
+var import_TweakStore8 = require("tweakers/store");
 var CHOSEN_LINGER_MS = 800;
 var CLOSE_ANIM_MS = 450;
 var ENTER_MS = 20;
@@ -7849,23 +8069,23 @@ var MovePresetStoreClass = class {
   }
   /** The panel's presets as screen rows — provider list when one is set. */
   items(panelId) {
-    const provider = import_TweakStore7.TweakStore.getPresetProvider(panelId);
+    const provider = import_TweakStore8.TweakStore.getPresetProvider(panelId);
     if (provider) return provider.presets.map((p) => ({ id: p.id, label: p.label }));
-    return import_TweakStore7.TweakStore.getPresets(panelId).map((p) => ({ id: p.id, label: p.name }));
+    return import_TweakStore8.TweakStore.getPresets(panelId).map((p) => ({ id: p.id, label: p.name }));
   }
   /** Play a row's values without recording them — the browsing preview. */
   applyPreview(id) {
     const view = this.view;
     if (!view || !id || !this.previewEnabled || !this.original) return;
-    const preset = import_TweakStore7.TweakStore.getPresets(view.panelId).find((p) => p.id === id);
-    if (preset) import_TweakStore7.TweakStore.previewValues(view.panelId, preset.values);
+    const preset = import_TweakStore8.TweakStore.getPresets(view.panelId).find((p) => p.id === id);
+    if (preset) import_TweakStore8.TweakStore.previewValues(view.panelId, preset.values);
   }
   open(panelId) {
     this.clearTimers();
-    const active = import_TweakStore7.TweakStore.getActivePresetId(panelId);
+    const active = import_TweakStore8.TweakStore.getActivePresetId(panelId);
     const items = this.items(panelId);
     const cursor = (active && items.some((i) => i.id === active) ? active : items[0]?.id) ?? null;
-    this.original = import_TweakStore7.TweakStore.getPresetProvider(panelId) ? null : { ...import_TweakStore7.TweakStore.getValues(panelId) };
+    this.original = import_TweakStore8.TweakStore.getPresetProvider(panelId) ? null : { ...import_TweakStore8.TweakStore.getValues(panelId) };
     this.view = { panelId, phase: "enter", cursor, chosen: null, comparing: false };
     this.notify();
     this.later(ENTER_MS, () => {
@@ -7896,7 +8116,7 @@ var MovePresetStoreClass = class {
   cancel() {
     const view = this.view;
     if (!view || view.phase === "closing" || view.chosen) return;
-    if (this.original) import_TweakStore7.TweakStore.previewValues(view.panelId, this.original);
+    if (this.original) import_TweakStore8.TweakStore.previewValues(view.panelId, this.original);
     this.view = { ...view, comparing: false };
     this.close();
   }
@@ -7935,7 +8155,7 @@ var MovePresetStoreClass = class {
     if (!view || view.phase !== "open" || view.chosen || view.comparing) return;
     if (!this.previewEnabled || !this.original) return;
     this.view = { ...view, comparing: true };
-    import_TweakStore7.TweakStore.previewValues(view.panelId, this.original);
+    import_TweakStore8.TweakStore.previewValues(view.panelId, this.original);
     this.notify();
   }
   /** Menu released: back to the previewed row. */
@@ -7954,9 +8174,9 @@ var MovePresetStoreClass = class {
     const view = this.view;
     if (!view || view.phase !== "open" || view.chosen) return;
     if (!this.items(view.panelId).some((i) => i.id === id)) return;
-    const provider = import_TweakStore7.TweakStore.getPresetProvider(view.panelId);
+    const provider = import_TweakStore8.TweakStore.getPresetProvider(view.panelId);
     if (provider) void provider.onSelect(id);
-    else import_TweakStore7.TweakStore.loadPreset(view.panelId, id);
+    else import_TweakStore8.TweakStore.loadPreset(view.panelId, id);
     this.view = { ...view, cursor: id, chosen: id, comparing: false };
     this.notify();
     this.later(CHOSEN_LINGER_MS, () => this.close());
@@ -7979,9 +8199,9 @@ var MovePresetStoreClass = class {
     const saving = this.saving;
     if (!saving) return;
     const label = name.trim() || saving.suggested;
-    const provider = import_TweakStore7.TweakStore.getPresetProvider(saving.panelId);
+    const provider = import_TweakStore8.TweakStore.getPresetProvider(saving.panelId);
     if (provider) void provider.onCreate(label);
-    else import_TweakStore7.TweakStore.savePreset(saving.panelId, label);
+    else import_TweakStore8.TweakStore.savePreset(saving.panelId, label);
     this.saving = null;
     this.notify();
   }
@@ -8144,18 +8364,21 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   }, [volume]);
   const onlyKey = only === void 0 ? void 0 : JSON.stringify(Array.isArray(only) ? only : [only]);
   const read2 = (0, import_react10.useCallback)(() => {
-    if (onlyKey === void 0) return import_TweakStore8.TweakStore.selectPanels();
+    if (onlyKey === void 0) return import_TweakStore9.TweakStore.selectPanels();
     const requested = JSON.parse(onlyKey);
-    const registered = import_TweakStore8.TweakStore.getPanels("panel");
+    const registered = import_TweakStore9.TweakStore.getPanels("panel");
     return requested.map((key) => registered.find((panel) => panel.id === key || panel.name === key)).filter((panel) => panel !== void 0);
   }, [onlyKey]);
   (0, import_react10.useEffect)(() => {
     setMounted(true);
+    MoveWaveformStore.ensureSettings();
     setPanels(read2());
-    return import_TweakStore8.TweakStore.subscribeGlobal(() => setPanels(read2()));
+    return import_TweakStore9.TweakStore.subscribeGlobal(() => setPanels(read2()));
   }, [read2]);
   const settingsKey = settings2 === void 0 ? void 0 : JSON.stringify(Array.isArray(settings2) ? settings2 : [settings2]);
-  const settingsRooms = settingsKey === void 0 ? [] : JSON.parse(settingsKey).map((key) => import_TweakStore8.TweakStore.getPanels("panel").find((p) => p.id === key || p.name === key)).filter((p) => p !== void 0);
+  const namedRooms = settingsKey === void 0 ? [] : JSON.parse(settingsKey).map((key) => import_TweakStore9.TweakStore.getPanels("panel").find((p) => p.id === key || p.name === key)).filter((p) => p !== void 0);
+  const waveRoom = import_TweakStore9.TweakStore.getPanel(MOVE_WAVEFORM_PANEL);
+  const settingsRooms = waveRoom ? [...namedRooms, waveRoom] : namedRooms;
   const roomIds = settingsRooms.map((p) => p.id);
   const settingsOpen = (0, import_react10.useSyncExternalStore)(
     (0, import_react10.useCallback)((cb) => MoveSettingsView.subscribe(cb), []),
@@ -8166,7 +8389,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const pages = scroll ? pagePanels.filter((p) => p.kind === void 0).slice(0, MOVE_TRACKS).map(buildMoveStrip) : buildMovePages(pagePanels);
   const underModSettings = import_ModulationStore2.ModulationStore.getSettings();
   const modSettings = settingsOpen ? null : underModSettings;
-  const settingsPanel = modSettings ? import_TweakStore8.TweakStore.getPanel(modSettings.panelId) : void 0;
+  const settingsPanel = modSettings ? import_TweakStore9.TweakStore.getPanel(modSettings.panelId) : void 0;
   const modLayout = settingsPanel ? import_ModulationStore2.ModulationStore.getSettingsLayout() : null;
   const [roomTrack, setRoomTrack] = (0, import_react10.useState)(0);
   const roomPages = settingsOpen ? scroll ? settingsRooms.slice(0, MOVE_TRACKS).map(buildMoveStrip) : buildMovePages(settingsRooms) : [];
@@ -8182,9 +8405,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       MoveSettingsView.close();
     };
   }, [roomKey]);
-  (0, import_react10.useEffect)(() => {
+  (0, import_react10.useLayoutEffect)(() => {
     if (!settingsOpen) return;
-    return MoveFunctions.push("back", () => MoveSettingsView.close(), { label: "Close", chip: false });
+    const wake = MoveFunctions.suspend(["set_overview"]);
+    const releaseBack = MoveFunctions.push("back", () => MoveSettingsView.close(), { label: "Close", chip: false });
+    return () => {
+      releaseBack();
+      wake();
+    };
   }, [settingsOpen]);
   const regularPageId = underModSettings?.panelId ?? pages[Math.min(track, Math.max(0, pages.length - 1))]?.panel.id;
   const roomPageId = roomPage?.panel.id;
@@ -8328,7 +8556,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     return MoveFunctions.push("copy", ({ shift, hold }) => {
       const view = MoveColorStore.getView();
       if (!view) return;
-      const hex = String(import_TweakStore8.TweakStore.getValue(view.panelId, view.path) ?? "");
+      const hex = String(import_TweakStore9.TweakStore.getValue(view.panelId, view.path) ?? "");
       const text = hold ? copyOklch(hex) : shift ? copyHslOfHex(hex) : hex;
       navigator.clipboard?.writeText(text).catch(() => {
       });
@@ -8477,17 +8705,18 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const modSlot = modSettings ? import_ModulationStore2.ModulationStore.getSlot(modSettings.index) : null;
   const composition = modSlot?.type === "curve" ? curveComposition(modSlot.params) : null;
   const audioWave = modSlot?.type === "audio" && modSettings ? modSettings.index : null;
+  const roomWave = settingsOpen && page?.panel.id === MOVE_WAVEFORM_PANEL;
   const clipIndex = composition ? Math.min(composition.segments.length - 1, Math.max(0, Math.round(Number(modSlot.params.selected) || 0))) : 0;
   const previewPath = modLayout?.dials.find((d) => d.preview)?.path ?? null;
   const values = (0, import_react10.useSyncExternalStore)(
-    (0, import_react10.useCallback)((cb) => pageId ? import_TweakStore8.TweakStore.subscribe(pageId, cb) : () => {
+    (0, import_react10.useCallback)((cb) => pageId ? import_TweakStore9.TweakStore.subscribe(pageId, cb) : () => {
     }, [pageId]),
-    () => pageId ? import_TweakStore8.TweakStore.getValues(pageId) : void 0,
+    () => pageId ? import_TweakStore9.TweakStore.getValues(pageId) : void 0,
     () => void 0
   );
   const [, bumpControlState] = (0, import_react10.useState)(0);
   (0, import_react10.useEffect)(
-    () => pageId ? import_TweakStore8.TweakStore.subscribeControlState(pageId, () => bumpControlState((n) => n + 1)) : void 0,
+    () => pageId ? import_TweakStore9.TweakStore.subscribeControlState(pageId, () => bumpControlState((n) => n + 1)) : void 0,
     [pageId]
   );
   (0, import_react10.useSyncExternalStore)(
@@ -8586,20 +8815,20 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     return fineRef.current;
   };
   const dialFromKeyboard = (e, meta) => {
-    if (e.altKey || e.ctrlKey || e.metaKey || import_TweakStore8.TweakStore.isDisabled(page.panel.id, meta.path)) return;
+    if (e.altKey || e.ctrlKey || e.metaKey || import_TweakStore9.TweakStore.isDisabled(page.panel.id, meta.path)) return;
     const next = moveKeyboardValue(meta, values[meta.path], e.key, e.shiftKey);
     if (next === null) return;
     e.preventDefault();
     e.stopPropagation();
     armMod(meta.path);
-    import_TweakStore8.TweakStore.updateValue(page.panel.id, meta.path, next);
+    import_TweakStore9.TweakStore.updateValue(page.panel.id, meta.path, next);
   };
   const dialFromPointer = (e, meta) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const span = rect.width - DIAL_TRACK_INSET * 2;
     const fine = fineAnchor(e, () => normalizeDial(meta, values[meta.path]));
     const v01 = fine ? fineDragValue({ startValue: fine.v, startPos: fine.x, pos: e.clientX, extentPx: span || 1, min: 0, max: 1, factor: fine.shift ? 0.1 : 1 }) : Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
-    import_TweakStore8.TweakStore.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
+    import_TweakStore9.TweakStore.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
   };
   const xyFromPointer = (e, meta) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -8623,7 +8852,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     }
     const raw = valueFromPoint({ x: px, y: py }, xa, ya, !!meta.snap);
     const origin = pointFromValue(centerValue(xa, ya), xa, ya);
-    import_TweakStore8.TweakStore.updateValue(page.panel.id, meta.path, {
+    import_TweakStore9.TweakStore.updateValue(page.panel.id, meta.path, {
       x: applyDetentAxis(raw.x, xa, Math.abs(px - origin.x) * (w || 1)),
       y: applyDetentAxis(raw.y, ya, Math.abs(py - origin.y) * (h || 1))
     });
@@ -8642,7 +8871,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       setCurvePoint((prev) => ({ ...prev, [meta.path]: Math.min(index, points.length - 1) }));
     }
     index = Math.min(index, points.length - 1);
-    import_TweakStore8.TweakStore.updateValue(page.panel.id, meta.path, { points: movePoint(points, index, x, y) });
+    import_TweakStore9.TweakStore.updateValue(page.panel.id, meta.path, { points: movePoint(points, index, x, y) });
   };
   const needleFromPointer = (e, meta) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -8657,7 +8886,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       meta.step ?? 1,
       wraps
     );
-    if (next !== null) import_TweakStore8.TweakStore.updateValue(page.panel.id, meta.path, next);
+    if (next !== null) import_TweakStore9.TweakStore.updateValue(page.panel.id, meta.path, next);
   };
   const rampFromPointer = (e, meta, down) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -8676,7 +8905,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     const lo = index > 0 ? g.stops[index - 1].position : 0;
     const hi = index < g.stops.length - 1 ? g.stops[index + 1].position : 1;
     const stops = g.stops.map((st, i) => i === index ? { ...st, position: Math.min(hi, Math.max(lo, x)) } : st);
-    import_TweakStore8.TweakStore.updateValue(page.panel.id, meta.path, { ...g, stops });
+    import_TweakStore9.TweakStore.updateValue(page.panel.id, meta.path, { ...g, stops });
   };
   const xyRelease = (meta) => {
     setDragPath(null);
@@ -8684,7 +8913,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     if (!meta.returnToCenter) return;
     const xa = resolveAxis(meta.xAxis);
     const ya = resolveAxis(meta.yAxis);
-    import_TweakStore8.TweakStore.updateValue(page.panel.id, meta.path, normalizeValue(centerValue(xa, ya), xa, ya, !!meta.snap));
+    import_TweakStore9.TweakStore.updateValue(page.panel.id, meta.path, normalizeValue(centerValue(xa, ya), xa, ya, !!meta.snap));
   };
   const rangeFromPointer = (e, meta, down) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -8706,7 +8935,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       });
     }
     const next = rangeHandleRef.current === "min" ? { lo: Math.min(p01, cur.hi), hi: cur.hi } : { lo: cur.lo, hi: Math.max(p01, cur.lo) };
-    import_TweakStore8.TweakStore.updateValue(page.panel.id, meta.path, denormalizeRangeDial(meta, next.lo, next.hi));
+    import_TweakStore9.TweakStore.updateValue(page.panel.id, meta.path, denormalizeRangeDial(meta, next.lo, next.hi));
   };
   const filterFromPointer = (e, meta, down) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -8733,13 +8962,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       v01 = Math.min(1, Math.max(0, (e.clientX - left) / (span || 1)));
     }
     const next = hand === "cutoff" ? denormalizeFilterDial(meta, v01, cur.resonance) : denormalizeFilterDial(meta, cur.cutoff, v01);
-    import_TweakStore8.TweakStore.updateValue(page.panel.id, meta.path, next);
+    import_TweakStore9.TweakStore.updateValue(page.panel.id, meta.path, next);
   };
   const enumFromPointer = (e, meta) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const span = rect.width - DIAL_TRACK_INSET * 2;
     const v01 = Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
-    import_TweakStore8.TweakStore.updateValue(page.panel.id, meta.path, denormalizeEnumDial(meta, v01));
+    import_TweakStore9.TweakStore.updateValue(page.panel.id, meta.path, denormalizeEnumDial(meta, v01));
   };
   const dialReading = (meta) => {
     const n = Number(values[meta.path]);
@@ -8822,7 +9051,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "tweakers-move-volume-value", children: boldColons(volumeReading ?? volume.label ?? "") })
     ] })
   ] });
-  const content = /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-settings": settingsOpen || void 0, "data-overlay": explorationOpen || composition || audioWave != null || color || presetSave ? true : void 0, children: [
+  const content = /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-settings": settingsOpen || void 0, "data-overlay": explorationOpen || composition || audioWave != null || roomWave || color || presetSave ? true : void 0, children: [
     !explorationOpen && colorMeta && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveColorDisplay, { panelId: page.panel.id, meta: colorMeta, anchor: panelRef, theme }),
     /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(PresetExploration, {}),
     presetSave && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MovePresetSaveInput, { suggested: presetSave.suggested }),
@@ -8837,6 +9066,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       }
     ),
     !explorationOpen && audioWave != null && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveAudioWave, { index: audioWave, theme }),
+    !explorationOpen && roomWave && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveRoomWave, { theme }),
     /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
       "div",
       {
@@ -8909,8 +9139,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 headerStart && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "tweakers-move-header-start", children: headerStart })
               ] })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "tweakers-move-mods", children: settingsOpen ? null : color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveColorSteps, { color, disabled: import_TweakStore8.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? import_ModulationStore2.ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveModCircle, { slot }, slot.index)) : null }),
-            audioWave != null ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveAudioTransport, { index: audioWave }) : headerCluster
+            /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "tweakers-move-mods", children: settingsOpen ? roomWave ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveAudioZoom, {}) : null : color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveColorSteps, { color, disabled: import_TweakStore9.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? import_ModulationStore2.ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveModCircle, { slot }, slot.index)) : null }),
+            audioWave != null ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveAudioTransport, { index: audioWave }) : roomWave ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveRoomTransport, {}) : headerCluster
           ] }),
           /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
             "div",
@@ -8968,9 +9198,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                               if (isSpanContinuation(page, i)) return null;
                               const meta = page.dials[i]?.type === "filter" ? page.dials[i] : dialAt(i);
                               if (!meta) return /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
-                              const disabled = import_TweakStore8.TweakStore.isDisabled(page.panel.id, meta.path);
+                              const disabled = import_TweakStore9.TweakStore.isDisabled(page.panel.id, meta.path);
                               const active = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
-                              const valueFirst = !!settingsPanel && !(meta.min === 0 && meta.max === 1);
+                              const valueFirst = (!!settingsPanel || page.panel.kind === "kit") && !(meta.min === 0 && meta.max === 1);
                               const scopeSlot = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.scope : void 0;
                               const waveSlot = settingsPanel && meta.type !== "xy" ? modLayout?.dials.find((d) => d.path === meta.path)?.preview : void 0;
                               const scope = scopeSlot && modSettings ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveScope, { index: modSettings.index }) : waveSlot && modSettings ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveWavePreview, { index: modSettings.index }) : null;
@@ -9276,7 +9506,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     "data-shape": shape ? true : void 0,
                                     "data-active": active || void 0,
                                     onPointerDown: (e) => {
-                                      if (import_TweakStore8.TweakStore.isDisabled(page.panel.id, meta.path)) return;
+                                      if (import_TweakStore9.TweakStore.isDisabled(page.panel.id, meta.path)) return;
                                       try {
                                         e.currentTarget.setPointerCapture(e.pointerId);
                                       } catch {
@@ -9287,7 +9517,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       enumFromPointer(e, meta);
                                     },
                                     onPointerMove: (e) => {
-                                      if (!import_TweakStore8.TweakStore.isDisabled(page.panel.id, meta.path) && dragPath === meta.path) enumFromPointer(e, meta);
+                                      if (!import_TweakStore9.TweakStore.isDisabled(page.panel.id, meta.path) && dragPath === meta.path) enumFromPointer(e, meta);
                                     },
                                     onPointerUp: () => {
                                       setDragPath(null);
@@ -9336,8 +9566,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     "aria-checked": checked,
                                     disabled,
                                     onClick: () => {
-                                      if (!import_TweakStore8.TweakStore.isDisabled(page.panel.id, meta.path)) {
-                                        import_TweakStore8.TweakStore.updateValue(page.panel.id, meta.path, !checked);
+                                      if (!import_TweakStore9.TweakStore.isDisabled(page.panel.id, meta.path)) {
+                                        import_TweakStore9.TweakStore.updateValue(page.panel.id, meta.path, !checked);
                                       }
                                     },
                                     children: [
@@ -9506,7 +9736,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   "data-disabled": disabled || void 0,
                                   onKeyDown: (e) => dialFromKeyboard(e, meta),
                                   onPointerDown: (e) => {
-                                    if (import_TweakStore8.TweakStore.isDisabled(page.panel.id, meta.path)) return;
+                                    if (import_TweakStore9.TweakStore.isDisabled(page.panel.id, meta.path)) return;
                                     try {
                                       e.currentTarget.setPointerCapture(e.pointerId);
                                     } catch {
@@ -9517,7 +9747,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     dialFromPointer(e, meta);
                                   },
                                   onPointerMove: (e) => {
-                                    if (!import_TweakStore8.TweakStore.isDisabled(page.panel.id, meta.path) && dragPath === meta.path) dialFromPointer(e, meta);
+                                    if (!import_TweakStore9.TweakStore.isDisabled(page.panel.id, meta.path) && dragPath === meta.path) dialFromPointer(e, meta);
                                   },
                                   onPointerUp: () => {
                                     setDragPath(null);
@@ -9545,7 +9775,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                 meta.path
                               );
                             }) }),
-                            color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveOpacityPads, { color, disabled: import_TweakStore8.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : shownPadRows.map((row) => {
+                            color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveOpacityPads, { color, disabled: import_TweakStore9.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : shownPadRows.map((row) => {
                               if (appRowAt(row) !== null && !surface.pads.length) {
                                 if (row > firstAppScreenRow) return null;
                                 return /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
@@ -9632,8 +9862,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                                 className: "tweakers-move-tab-zone",
                                                 style: { gridColumnStart: (named ? 2 : 1) + i },
                                                 "aria-selected": i === active,
-                                                disabled: import_TweakStore8.TweakStore.isDisabled(page.panel.id, meta.path),
-                                                onClick: () => import_TweakStore8.TweakStore.updateValue(
+                                                disabled: import_TweakStore9.TweakStore.isDisabled(page.panel.id, meta.path),
+                                                onClick: () => import_TweakStore9.TweakStore.updateValue(
                                                   page.panel.id,
                                                   meta.path,
                                                   enumOptionValue(opt)
@@ -9740,7 +9970,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           className: "tweakers-move-pad",
                                           "data-kind": "toggle",
                                           "data-on": !!values[meta.path],
-                                          onClick: () => import_TweakStore8.TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path]),
+                                          onClick: () => import_TweakStore9.TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path]),
                                           children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MovePadToggleBody, { label: meta.label })
                                         },
                                         meta.path
@@ -9752,7 +9982,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         {
                                           className: "tweakers-move-pad",
                                           "data-kind": "action",
-                                          onClick: () => import_TweakStore8.TweakStore.triggerAction(page.panel.id, meta.path),
+                                          onClick: () => import_TweakStore9.TweakStore.triggerAction(page.panel.id, meta.path),
                                           children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MovePadActionBody, { label: meta.label })
                                         },
                                         meta.path
@@ -9881,20 +10111,34 @@ function MoveAudioWave({ index, theme }) {
     () => 0
   );
   (0, import_react10.useEffect)(() => {
-    const params2 = import_ModulationStore2.ModulationStore.getSlot(index)?.params ?? {};
-    const start = clampWave01(params2.loopStart);
-    const end = clampWave01(params2.loopEnd ?? 1);
+    const params = import_ModulationStore2.ModulationStore.getSlot(index)?.params ?? {};
+    const start = clampWave01(params.loopStart);
+    const end = clampWave01(params.loopEnd ?? 1);
     MoveWaveformStore.setView({
-      position: clampWave01(params2.position),
+      position: clampWave01(params.position),
       loop: end - start > 1e-3 && !(start === 0 && end === 1) ? { start, end } : null,
       loopAnchor: null
     });
     MoveWaveformStore.setProgressSource(() => import_ModulationStore2.ModulationStore.getSlotPhase(index));
     MoveWaveformStore.setEditor(true);
+    setAudioModWindowSource(() => visibleWindow(import_ModulationStore2.ModulationStore.getSlotPhase(index), MoveWaveformStore.shownZoom()));
     return () => {
+      setAudioModWindowSource(null);
       MoveWaveformStore.setEditor(false);
       MoveWaveformStore.setProgressSource(null);
     };
+  }, [index]);
+  (0, import_react10.useEffect)(() => {
+    const toggle = (path) => () => {
+      const slot = import_ModulationStore2.ModulationStore.getSlot(index);
+      if (slot) import_ModulationStore2.ModulationStore.updateSlotParams(index, { [path]: !slot.params[path] });
+    };
+    const releases = [
+      MoveFunctions.push("play", toggle("playing"), { label: "Play", chip: false }),
+      MoveFunctions.push("loop", toggle("loopOn"), { label: "Loop", chip: false }),
+      MoveFunctions.push("back", () => import_ModulationStore2.ModulationStore.closeSettings(), { label: "Close", chip: false })
+    ];
+    return () => releases.forEach((release) => release());
   }, [index]);
   (0, import_react10.useEffect)(() => {
     const prev = MoveSurfaceStore.getState();
@@ -9916,20 +10160,6 @@ function MoveAudioWave({ index, theme }) {
       MoveSurfaceStore.setPadRows(prev.rows, prev.pads, prev.padsLabel);
     };
   }, [index]);
-  (0, import_react10.useEffect)(
-    () => MoveFunctions.push("back", () => import_ModulationStore2.ModulationStore.closeSettings(), { label: "Close", chip: false }),
-    [index]
-  );
-  (0, import_react10.useSyncExternalStore)(
-    (0, import_react10.useCallback)((cb) => import_ModulationStore2.ModulationStore.subscribe(cb), []),
-    () => import_ModulationStore2.ModulationStore.getVersion(),
-    () => 0
-  );
-  const params = import_ModulationStore2.ModulationStore.getSlot(index)?.params ?? {};
-  const toggle = (path) => () => {
-    const slot = import_ModulationStore2.ModulationStore.getSlot(index);
-    if (slot) import_ModulationStore2.ModulationStore.updateSlotParams(index, { [path]: !slot.params[path] });
-  };
   return /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
     MoveWaveform,
     {
@@ -9939,16 +10169,103 @@ function MoveAudioWave({ index, theme }) {
       getProgress: () => import_ModulationStore2.ModulationStore.getSlotPhase(index),
       onSeek: (p) => import_ModulationStore2.ModulationStore.updateSlotParams(index, { position: p }),
       onLoopChange: (loop) => import_ModulationStore2.ModulationStore.updateSlotParams(index, loop ? { loopStart: loop.start, loopEnd: loop.end, loopOn: true } : { loopStart: 0, loopEnd: 1 }),
-      transport: {
-        playing: !!params.playing,
-        loopOn: !!params.loopOn,
-        onPlay: toggle("playing"),
-        onLoop: toggle("loopOn")
-      },
+      mode: "smooth",
+      smoothPoints: 200,
+      baseline: false,
+      height: MOVE_WAVE_DISPLAY_HEIGHT,
+      waveColor: "#1e1e1e",
+      playheadColor: modColor(index),
       accent: modColor(index)
     }
   );
 }
+var MOVE_WAVE_DISPLAY_HEIGHT = 128;
+function MoveRoomWave({ theme }) {
+  (0, import_react10.useSyncExternalStore)(
+    (0, import_react10.useCallback)((cb) => subscribeAudioMod(cb), []),
+    () => getAudioModVersion(),
+    () => 0
+  );
+  const buffer = MoveWaveformStore.getBuffer() ?? getAudioModBuffer() ?? moveWaveformDemoSample();
+  roomClock.duration = buffer.duration || 1;
+  (0, import_react10.useEffect)(() => {
+    let last = null;
+    let raf = requestAnimationFrame(function tick(now) {
+      raf = requestAnimationFrame(tick);
+      if (!roomClock.playing) {
+        last = null;
+        return;
+      }
+      if (last != null) roomClock.advance((now - last) / 1e3, MoveWaveformStore.getView().loop);
+      last = now;
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  (0, import_react10.useEffect)(() => {
+    MoveWaveformStore.setProgressSource(() => roomClock.pos);
+    const releases = [
+      MoveFunctions.push("play", () => roomClock.toggle("playing"), { label: "Play", chip: false }),
+      MoveFunctions.push("loop", () => roomClock.toggle("loopOn"), { label: "Loop", chip: false })
+    ];
+    return () => {
+      releases.forEach((release) => release());
+      MoveWaveformStore.setProgressSource(null);
+    };
+  }, []);
+  return /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+    MoveWaveform,
+    {
+      variant: "dock",
+      theme,
+      buffer,
+      getProgress: () => roomClock.pos,
+      onSeek: (p) => roomClock.seek(p),
+      onLoopChange: () => {
+      },
+      height: MOVE_WAVE_DISPLAY_HEIGHT,
+      waveColor: "#1e1e1e"
+    }
+  );
+}
+var roomClock = {
+  playing: true,
+  loopOn: true,
+  pos: 0,
+  duration: 1,
+  version: 0,
+  listeners: /* @__PURE__ */ new Set(),
+  subscribe(fn) {
+    roomClock.listeners.add(fn);
+    return () => {
+      roomClock.listeners.delete(fn);
+    };
+  },
+  notify() {
+    roomClock.version += 1;
+    for (const fn of roomClock.listeners) fn();
+  },
+  toggle(key) {
+    roomClock[key] = !roomClock[key];
+    if (key === "playing" && roomClock.playing && roomClock.pos >= 1) roomClock.pos = 0;
+    roomClock.notify();
+  },
+  seek(p) {
+    roomClock.pos = Math.min(1, Math.max(0, p));
+  },
+  advance(dt, loop) {
+    let pos = roomClock.pos + dt / roomClock.duration;
+    if (roomClock.loopOn) {
+      const start = loop ? loop.start : 0;
+      const end = loop ? loop.end : 1;
+      const span = Math.max(1e-4, end - start);
+      if (pos >= end) pos = start + (pos - start) % span;
+      else if (pos < start) pos = start;
+    } else if (pos >= 1) {
+      pos = 1;
+    }
+    roomClock.pos = pos;
+  }
+};
 function MoveAudioZoom() {
   (0, import_react10.useSyncExternalStore)(
     (0, import_react10.useCallback)((cb) => MoveWaveformStore.subscribe(cb), []),
@@ -9987,6 +10304,52 @@ function MoveWaveClock() {
   ] });
 }
 function MoveAudioTransport({ index }) {
+  (0, import_react10.useSyncExternalStore)(
+    (0, import_react10.useCallback)((cb) => import_ModulationStore2.ModulationStore.subscribe(cb), []),
+    () => import_ModulationStore2.ModulationStore.getVersion(),
+    () => 0
+  );
+  const params = import_ModulationStore2.ModulationStore.getSlot(index)?.params ?? {};
+  return /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+    MoveWaveTransport,
+    {
+      playing: !!params.playing,
+      loopOn: !!params.loopOn,
+      getSeconds: () => import_ModulationStore2.ModulationStore.getSlotPhase(index) * (getAudioModBuffer()?.duration ?? 0),
+      onLoaded: () => import_ModulationStore2.ModulationStore.updateSlotParams(index, { position: 0 })
+    }
+  );
+}
+function MoveRoomTransport() {
+  (0, import_react10.useSyncExternalStore)(
+    (0, import_react10.useCallback)((cb) => roomClock.subscribe(cb), []),
+    () => roomClock.version,
+    () => 0
+  );
+  return /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+    MoveWaveTransport,
+    {
+      playing: roomClock.playing,
+      loopOn: roomClock.loopOn,
+      getSeconds: () => roomClock.pos * roomClock.duration,
+      onLoaded: () => roomClock.seek(0)
+    }
+  );
+}
+function MoveWaveTransport({ playing, loopOn, getSeconds, onLoaded }) {
+  const params = { playing, loopOn };
+  const clockRef = (0, import_react10.useRef)(null);
+  const secondsRef = (0, import_react10.useRef)(getSeconds);
+  secondsRef.current = getSeconds;
+  (0, import_react10.useEffect)(() => {
+    let raf = requestAnimationFrame(function tick() {
+      const t = secondsRef.current();
+      const text = `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}:${String(Math.floor(t % 1 * 100)).padStart(2, "0")}`;
+      if (clockRef.current && clockRef.current.textContent !== text) clockRef.current.textContent = text;
+      raf = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
   const fileRef = (0, import_react10.useRef)(null);
   const loadFile = async (file) => {
     const bytes = await file.arrayBuffer();
@@ -9995,7 +10358,7 @@ function MoveAudioTransport({ index }) {
     const ctx = new Ctx();
     try {
       setAudioModBuffer(await ctx.decodeAudioData(bytes));
-      import_ModulationStore2.ModulationStore.updateSlotParams(index, { position: 0 });
+      onLoaded?.();
     } catch {
     } finally {
       void ctx.close();
@@ -10015,7 +10378,29 @@ function MoveAudioTransport({ index }) {
         ]
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveWaveClock, {}),
+    /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "tweakers-move-volume tweakers-move-wave-time", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+        "svg",
+        {
+          className: "tweakers-move-wave-state",
+          "data-on": params.playing ? true : void 0,
+          viewBox: "0 0 24 24",
+          "aria-hidden": "true",
+          children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("path", { d: ICON_PLAY, fill: "currentColor" })
+        }
+      ),
+      /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { ref: clockRef, className: "tweakers-move-volume-value", children: "0:00:00" }),
+      /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
+        "svg",
+        {
+          className: "tweakers-move-wave-state",
+          "data-on": params.loopOn ? true : void 0,
+          viewBox: "0 0 24 24",
+          "aria-hidden": "true",
+          children: ICON_LOOP.map((d) => /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("path", { d, fill: "none", stroke: "currentColor", strokeWidth: "2.4", strokeLinecap: "round", strokeLinejoin: "round" }, d))
+        }
+      )
+    ] }),
     /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
       "input",
       {
@@ -10150,11 +10535,21 @@ function MoveScope({ index }) {
   );
 }
 function MoveWavePreview({ index }) {
+  const path = (0, import_react10.useRef)(null);
   const line = (0, import_react10.useRef)(null);
   const preview = import_ModulationStore2.ModulationStore.getSettingsPreview(64);
   (0, import_react10.useEffect)(() => {
+    let shown = "";
     let raf = requestAnimationFrame(function tick() {
-      const x = (import_ModulationStore2.ModulationStore.getSlotPhase(index) * 100).toFixed(2);
+      const { start, span } = getAudioModWindow();
+      const key = `${start.toFixed(5)}|${span.toFixed(5)}`;
+      if (key !== shown) {
+        shown = key;
+        const p = import_ModulationStore2.ModulationStore.getSettingsPreview(64);
+        if (p) path.current?.setAttribute("d", previewPathData(p.points));
+      }
+      const at = (import_ModulationStore2.ModulationStore.getSlotPhase(index) - start) / span;
+      const x = (Math.min(1, Math.max(0, at)) * 100).toFixed(2);
       line.current?.setAttribute("x1", x);
       line.current?.setAttribute("x2", x);
       raf = requestAnimationFrame(tick);
@@ -10171,7 +10566,7 @@ function MoveWavePreview({ index }) {
       preserveAspectRatio: "none",
       "aria-hidden": "true",
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("path", { d: previewPathData(preview.points) }),
+        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("path", { ref: path, d: previewPathData(preview.points) }),
         /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("line", { ref: line, x1: "0", y1: "0", x2: "0", y2: "100" })
       ]
     }
@@ -10485,7 +10880,7 @@ function MoveNotifications({
 var import_ModulationStore3 = require("tweakers/modulation-store");
 
 // src/timeline-core.ts
-var import_TweakStore9 = require("tweakers/store");
+var import_TweakStore10 = require("tweakers/store");
 
 // src/store/persist.ts
 var STORAGE_VERSION = "v1";
@@ -10805,7 +11200,7 @@ function formatClock(time, tenths = false) {
 }
 
 // src/index.ts
-var import_TweakStore10 = require("tweakers/store");
+var import_TweakStore11 = require("tweakers/store");
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   ADSR_DEF,
@@ -10878,7 +11273,10 @@ var import_TweakStore10 = require("tweakers/store");
   MOVE_TOUCH_EVENT,
   MOVE_TRACKS,
   MOVE_TRACK_COLORS,
+  MOVE_WAVEFORM_DEMO_SECONDS,
   MOVE_WAVEFORM_PADS,
+  MOVE_WAVEFORM_PANEL,
+  MOVE_WAVEFORM_PIXEL_RANGE,
   MOVE_WAVEFORM_STEPS,
   MOVE_WAVE_FRAME,
   MOVE_WAVE_MAX_DISPLAY,
@@ -10931,6 +11329,7 @@ var import_TweakStore10 = require("tweakers/store");
   TimelineStore,
   TweakStore,
   WAVEFORM_MAX_ZOOM,
+  WAVEFORM_MODES,
   WAVEFORM_SMOOTH_POINTS,
   WaveformVisualization,
   XY_DEFAULT_STEP,
@@ -10997,6 +11396,7 @@ var import_TweakStore10 = require("tweakers/store");
   geneBounds,
   getAudioModBuffer,
   getAudioModVersion,
+  getAudioModWindow,
   getModType,
   gradientFillBox,
   gradientToCss,
@@ -11041,7 +11441,10 @@ var import_TweakStore10 = require("tweakers/store");
   moveStop,
   moveTabCell,
   moveVisualReading,
+  moveWaveformDefaultStyle,
   moveWaveformDefaultView,
+  moveWaveformDemoSample,
+  moveWaveformStyleFromValues,
   moveWheelSlot,
   nearestHandle,
   nearestPoint,
@@ -11098,6 +11501,7 @@ var import_TweakStore10 = require("tweakers/store");
   scrubBy,
   seedDNA,
   setAudioModBuffer,
+  setAudioModWindowSource,
   setDriverAnticipate,
   setDriverCurvature,
   setDriverOvershoot,
@@ -11130,6 +11534,7 @@ var import_TweakStore10 = require("tweakers/store");
   stripStarts,
   stripWindowPads,
   subscribeAudioMod,
+  toAudioBuffer,
   transferLut,
   triggerLevels,
   triggersCrossed,

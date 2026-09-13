@@ -12,8 +12,15 @@ import {
   padSection,
   MOVE_WAVEFORM_STEPS,
   MOVE_WAVEFORM_PADS,
+  MOVE_WAVEFORM_PANEL,
+  MOVE_WAVEFORM_PIXEL_RANGE,
+  moveWaveformDemoSample,
+  defaultStyle,
+  styleFromValues,
 } from '../src/move-waveform';
 import { WAVEFORM_MAX_ZOOM } from '../src/waveform-engine';
+import { MoveVolumeDisplay } from '../src/move-volume';
+import { TweakStore } from '../src/store/TweakStore';
 
 describe('the volume knob scrubs', () => {
   it('moves by the finest step on a slow tick and stops at both ends', () => {
@@ -299,5 +306,110 @@ describe('the editor claim', () => {
     // The window is centred on the playing position, not the last scrub.
     expect(MoveWaveformStore.getView().position).toBeCloseTo(0.375, 6);
     release();
+  });
+});
+
+describe('the look lives in the settings room', () => {
+  beforeEach(() => TweakStore.unregisterPanel(MOVE_WAVEFORM_PANEL));
+
+  it('puts the Waveform page in the room on the first claim, seeded with the app\'s look', () => {
+    expect(TweakStore.getPanel(MOVE_WAVEFORM_PANEL)).toBeUndefined();
+    const release = MoveWaveformStore.register({ mode: 'striped', pixelSize: 4, grid: true });
+    const page = TweakStore.getPanel(MOVE_WAVEFORM_PANEL);
+    expect(page?.kind).toBe('kit');
+    expect(page?.name).toBe('Waveform');
+    expect(MoveWaveformStore.getStyle()).toEqual({ mode: 'striped', pixelSize: 4, grid: true, bands: false, baseline: true });
+    release();
+    // The page stays: a room does not lose a page because its display is off screen.
+    expect(TweakStore.getPanel(MOVE_WAVEFORM_PANEL)).toBeDefined();
+  });
+
+  it('is there from the panel\'s mount, before any sample has shown', () => {
+    MoveWaveformStore.ensureSettings();
+    expect(TweakStore.getPanel(MOVE_WAVEFORM_PANEL)?.kind).toBe('kit');
+    // A later claim keeps the page as it is — no re-seed, no duplicate.
+    MoveWaveformStore.ensureSettings({ mode: 'striped' });
+    expect(MoveWaveformStore.getStyle().mode).toBe('pixelated');
+  });
+
+  it('never sits on the app\'s own page row', () => {
+    const release = MoveWaveformStore.register();
+    expect(TweakStore.getPanels('panel').some((p) => p.id === MOVE_WAVEFORM_PANEL)).toBe(false);
+    release();
+  });
+
+  it('reads the page\'s values back as the style every waveform draws with', () => {
+    const release = MoveWaveformStore.register();
+    TweakStore.updateValue(MOVE_WAVEFORM_PANEL, 'style', 'smooth');
+    TweakStore.updateValue(MOVE_WAVEFORM_PANEL, 'resolution', 6);
+    TweakStore.updateValue(MOVE_WAVEFORM_PANEL, 'baseline', false);
+    expect(MoveWaveformStore.getStyle()).toEqual({ mode: 'smooth', pixelSize: 6, grid: false, bands: false, baseline: false });
+    release();
+  });
+
+  it('offers bar widths from 1× to 6× as the headline value, and every style', () => {
+    expect(MOVE_WAVEFORM_PIXEL_RANGE).toEqual([1, 6]);
+    expect(styleFromValues({ style: 'striped', resolution: 1 }, defaultStyle()).mode).toBe('striped');
+    expect(styleFromValues({ style: 'striped', resolution: 1 }, defaultStyle()).pixelSize).toBe(1);
+    // Off the range it clamps; anything unset — or nonsense — falls back to
+    // the app's own look.
+    expect(styleFromValues({ resolution: 40 }, defaultStyle()).pixelSize).toBe(6);
+    expect(styleFromValues({ style: 'neon', resolution: '3×' }, defaultStyle())).toEqual(defaultStyle());
+    expect(styleFromValues(undefined, defaultStyle())).toEqual(defaultStyle());
+  });
+
+  it('shows the three overlays as pictures and the bar width as a value', () => {
+    MoveWaveformStore.ensureSettings();
+    const controls = TweakStore.getPanel(MOVE_WAVEFORM_PANEL)!.controls;
+    const by = (path: string) => controls.find((c) => c.path === path)!;
+    expect(by('grid').icon).toBe('grid-2x2');
+    expect(by('bands').icon).toBe('audio-lines');
+    expect(by('baseline').icon).toBe('activity');
+    expect(by('resolution').type).toBe('slider');
+    expect(by('resolution').formatValue?.(2)).toBe('2×');
+  });
+});
+
+describe('striped bars stretch the wave', () => {
+  beforeEach(() => TweakStore.unregisterPanel(MOVE_WAVEFORM_PANEL));
+
+  it('so the pads and the small screens frame half the window the zoom names', () => {
+    const release = MoveWaveformStore.register();
+    MoveWaveformStore.setView({ zoom: 2, position: 0.5 });
+    expect(MoveWaveformStore.shownZoom()).toBe(2);
+    TweakStore.updateValue(MOVE_WAVEFORM_PANEL, 'style', 'striped');
+    expect(MoveWaveformStore.shownZoom()).toBe(4);
+    // Pad 0 lands at the start of the window the card actually shows.
+    MoveWaveformStore.pressPad(0);
+    expect(MoveWaveformStore.getView().position).toBeCloseTo(0.375, 6);
+    release();
+  });
+});
+
+describe('two displays can hold the claim', () => {
+  it('keeps the hardware until the last one lets go', () => {
+    const a = MoveWaveformStore.register();
+    const b = MoveWaveformStore.register();
+    expect(MoveWaveformStore.isRegistered()).toBe(true);
+    a();
+    expect(MoveWaveformStore.isRegistered()).toBe(true);
+    expect(MoveVolumeDisplay.get()?.label).toBe('time');
+    b();
+    expect(MoveWaveformStore.isRegistered()).toBe(false);
+    expect(MoveVolumeDisplay.get()).toBe(null);
+    // A release used twice is one release.
+    a();
+    expect(MoveWaveformStore.isRegistered()).toBe(false);
+  });
+
+  it('remembers the sample on the surface, and forgets it with the last claim', () => {
+    const release = MoveWaveformStore.register();
+    const sample = moveWaveformDemoSample();
+    MoveWaveformStore.setBuffer(sample);
+    expect(MoveWaveformStore.getBuffer()).toBe(sample);
+    expect(sample.duration).toBe(4);
+    expect(sample.getChannelData(0).some((v) => Math.abs(v) > 0.5)).toBe(true);
+    release();
+    expect(MoveWaveformStore.getBuffer()).toBe(null);
   });
 });

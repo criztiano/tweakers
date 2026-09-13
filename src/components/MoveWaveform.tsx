@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import { createPortal } from 'react-dom';
 import { WaveformVisualization } from './WaveformVisualization';
 import type { WaveformMode, WaveformLoop } from '../waveform-engine';
-import { MoveWaveformStore, MOVE_WAVE_MAX_DISPLAY, MOVE_WAVEFORM_STEPS, type MoveWaveformVariant } from '../move-waveform';
+import { MoveWaveformStore, MOVE_WAVE_MAX_DISPLAY, MOVE_WAVEFORM_STEPS, styleFromValues, type MoveWaveformVariant } from '../move-waveform';
 import { MoveFunctions } from '../move-functions';
 import { MoveSurfaceStore } from '../move-surface-store';
 import { isDevDefault } from '../env';
@@ -62,6 +62,12 @@ export interface MoveWaveformProps {
    * straight across — the playhead, a loop edge, a click all skip the gap.
    */
   cuts?: number[];
+  /**
+   * The look — style, bar width, grid, EQ bands, centre line — is the
+   * user's: it lives on the kit's Waveform page in the settings room and
+   * persists per machine. These props seed that page the first time a
+   * waveform claims the surface; after that the page's values win.
+   */
   mode?: WaveformMode;
   pixelSize?: number;
   grid?: boolean;
@@ -126,11 +132,14 @@ export function MoveWaveform({
   const loopRef = useRef(onLoopChange);
   loopRef.current = onLoopChange;
 
-  // Claim the hardware for as long as this is on screen.
+  // Claim the hardware for as long as this is on screen. The look props
+  // seed the settings page once; they are read here, not tracked — a page
+  // the user has already set is not re-seeded by a re-render.
+  const seedRef = useRef({ mode, pixelSize, grid, bands, baseline });
   useEffect(() => {
     if (!productionEnabled) return;
     setMounted(true);
-    return MoveWaveformStore.register();
+    return MoveWaveformStore.register(seedRef.current);
   }, [productionEnabled]);
 
   // The wheel is the card's zoom while it is up, and the wheel's press is
@@ -190,10 +199,19 @@ export function MoveWaveform({
     };
   }, [productionEnabled, accent]);
 
+  // The look, from the settings room — set there, on screen or from the
+  // hardware, and every waveform on the surface follows.
+  const styleValues = useSyncExternalStore(
+    useCallback((cb) => MoveWaveformStore.subscribeStyle(cb), []),
+    () => MoveWaveformStore.getStyleSnapshot(),
+    () => MoveWaveformStore.getStyleSnapshot()
+  );
+  const look = styleFromValues(styleValues, { mode, pixelSize, grid, bands, baseline });
+
   // The sample's length, so the volume readout counts seconds rather than
   // percent — it follows the buffer, which an app can swap under us.
   useEffect(() => {
-    MoveWaveformStore.setDuration(buffer?.duration ?? null);
+    MoveWaveformStore.setBuffer(buffer);
   }, [buffer]);
 
   const view = useSyncExternalStore(
@@ -262,13 +280,13 @@ export function MoveWaveform({
       {...(getProgress
         ? { getProgress: () => (MoveWaveformStore.isScrubbing() ? MoveWaveformStore.getView().position : getProgress()) }
         : { progress: progress ?? state.position })}
-      mode={mode}
-      pixelSize={pixelSize}
-      grid={grid}
-      bands={bands}
+      mode={look.mode}
+      pixelSize={look.pixelSize}
+      grid={look.grid}
+      bands={look.bands}
       waveColor={waveColor}
       playheadColor={playheadColor ?? accent}
-      baseline={baseline}
+      baseline={look.baseline}
       {...(smoothPoints != null ? { smoothPoints } : {})}
       {...(waveInset != null ? { waveInset } : {})}
       loop={state.loop}
