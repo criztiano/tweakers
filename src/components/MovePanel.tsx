@@ -5,7 +5,7 @@ import { ModulationStore } from '../store/ModulationStore';
 import { modColor, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, getAudioModBuffer, setAudioModBuffer, subscribeAudioMod, getAudioModVersion, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
 import { MoveWaveform } from './MoveWaveform';
 import { MoveWaveformStore, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_STEPS } from '../move-waveform';
-import { ICON_PLAY, ICON_LOOP } from '../icons';
+import { ICON_PLAY, ICON_LOOP, ICON_SEARCH } from '../icons';
 import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
@@ -26,7 +26,8 @@ import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValu
 import { nearestHandle, type RangeValue } from '../range-slider-core';
 import { fineDragValue } from '../shortcut-utils';
 import { MoveVolumeDisplay, type MoveVolumeDisplayState } from '../move-volume';
-import { MoveColorStore } from '../move-color';
+import { MoveColorStore, MOVE_COLOR_PALETTES } from '../move-color';
+import { MoveSearchStore, moveSearchFilter, type MoveSearchTarget, type MoveSearchView } from '../move-search';
 import { MoveColorSlot, MoveColorDisplay, MoveOpacityPads, MoveColorSteps, MovePaletteScreen, copyHslOfHex, copyOklch } from './MoveColor';
 import { MoveFunctions } from '../move-functions';
 import { MoveFunctionChips } from './MoveFunctionChips';
@@ -128,6 +129,81 @@ const presetNavigatorOpen = () => {
 const palettePickerOpen = () => MoveColorStore.isPickerOpen();
 
 /**
+ * The list a search is running on, read as one shape whichever store owns
+ * it: its labels in row order, the row the wheel rests on, and the two
+ * things the search does to it — rest the wheel on a row (the next match,
+ * previewed exactly as a wheel turn is) and take a row (which ends the
+ * search). Null when the list has gone from under the search.
+ */
+interface SearchRows {
+  labels: string[];
+  cursor: number;
+  rest: (index: number) => void;
+  take: (index: number) => void;
+}
+function searchRows(view: MoveSearchView): SearchRows | null {
+  if (view.target === 'screen') {
+    const screen = MoveSurfaceStore.getState().screen;
+    if (!screen) return null;
+    return {
+      labels: screen.items.map(moveScreenRowLabel),
+      cursor: view.cursor,
+      rest: (index) => MoveSearchStore.setCursor(index),
+      take: (index) => { MoveSearchStore.close(); MoveSurfaceStore.selectScreen(index); },
+    };
+  }
+  if (view.target === 'presets') {
+    const preset = MovePresetStore.getView();
+    if (!preset || preset.phase === 'closing') return null;
+    const items = MovePresetStore.items(preset.panelId);
+    return {
+      labels: items.map((i) => i.label),
+      cursor: items.findIndex((i) => i.id === preset.cursor),
+      rest: (index) => MovePresetStore.rest(items[index].id),
+      take: (index) => { MoveSearchStore.close(); MovePresetStore.choose(items[index].id); },
+    };
+  }
+  if (!palettePickerOpen()) return null;
+  return {
+    labels: ['All colors', ...MOVE_COLOR_PALETTES.map((p) => p.name)],
+    cursor: MoveColorStore.getPickerCursor(),
+    rest: (index) => MoveColorStore.setPickerCursor(index),
+    take: (index) => { MoveSearchStore.close(); MoveColorStore.choosePicker(index); },
+  };
+}
+
+/** The rows the search's query keeps, by index into the list. */
+const searchKept = (rows: SearchRows, view: MoveSearchView) => moveSearchFilter(rows.labels, view.query);
+
+/** Walk the wheel by detents through the rows the query keeps. */
+function searchStep(view: MoveSearchView, delta: number) {
+  const rows = searchRows(view);
+  if (!rows || !delta) return;
+  const kept = searchKept(rows, view);
+  if (!kept.length) return;
+  const at = kept.indexOf(rows.cursor);
+  const next = kept[Math.max(0, Math.min(kept.length - 1, (at < 0 ? 0 : at) + delta))];
+  if (next !== rows.cursor) rows.rest(next);
+}
+
+/** Take the row the wheel rests on — only a row the query keeps. */
+function searchTake(view: MoveSearchView) {
+  const rows = searchRows(view);
+  if (rows && searchKept(rows, view).includes(rows.cursor)) rows.take(rows.cursor);
+}
+
+/** Type into the search: the rows narrow, and a wheel left on a row the
+ *  query dropped moves to the first one it keeps. */
+function searchType(query: string) {
+  MoveSearchStore.setQuery(query);
+  const view = MoveSearchStore.getView();
+  const rows = view && searchRows(view);
+  if (!view || !rows) return;
+  const kept = searchKept(rows, view);
+  if (kept.length && !kept.includes(rows.cursor)) rows.rest(kept[0]);
+}
+
+/**
  * A readout string with any `:` separators pulled out and rendered bold at
  * 14px — a `0:00:00` time reads as digit groups, not a colon soup. Strings
  * without colons pass through untouched.
@@ -185,6 +261,11 @@ export const MOVE_JOG_CLICK_EVENT = 'move-tweakers:jog-click';
  *  release. An open preset navigator consumes them: holding Mute plays the
  *  pre-navigator sound to compare. Unconsumed, Mute stays the app's. */
 export const MOVE_MUTE_EVENT = 'move-tweakers:mute';
+/** In, cancelable: `{ shift }` — the Capture key held. The panel takes it
+ *  when a list has the wheel (the app's wheel list, an open navigator) and
+ *  opens a search on that list; unconsumed, the hold is the app's own
+ *  Capture action. Held again while searching, it closes the search. */
+export const MOVE_SEARCH_EVENT = 'move-tweakers:search';
 /** Out: `{ pageId, offset, columns, paths }` — where a scrolling page's
  *  window now sits, so the kit can point the hardware's dials at the same 8
  *  controls the screen is showing. */
@@ -500,10 +581,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     const el = panelRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
+      const searching = MoveSearchStore.getView();
       const browsing = presetNavigatorOpen();
       const picking = palettePickerOpen();
       const editing = MoveWaveformStore.wantsSteps();
-      if (!browsing && !picking && !editing && !stripRef.current.on) return;
+      if (!searching && !browsing && !picking && !editing && !stripRef.current.on) return;
       const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
       if (!d) return;
       e.preventDefault();
@@ -511,10 +593,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       const steps = Math.trunc(wheelRest.current / WHEEL_SLOT_PX);
       if (!steps) return;
       wheelRest.current -= steps * WHEEL_SLOT_PX;
-      // The same wheel, the same rule as the hardware: while the navigator
-      // is up it walks the preset list, while the waveform editor floats it
-      // zooms (scroll up goes in), otherwise it moves the strip.
-      if (browsing) MovePresetStore.scroll(steps);
+      // The same wheel, the same rule as the hardware: a running search
+      // walks what the query kept, while the navigator is up it walks the
+      // preset list, while the waveform editor floats it zooms (scroll up
+      // goes in), otherwise it moves the strip.
+      if (searching) searchStep(searching, steps);
+      else if (browsing) MovePresetStore.scroll(steps);
       else if (picking) MoveColorStore.movePickerCursor(steps);
       else if (editing) MoveWaveformStore.zoom(-steps);
       else scrollSlots(steps);
@@ -615,12 +699,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // list, the jog click locks the palette in — the preset navigator's terms.
   useEffect(() => {
     const onJog = (e: Event) => {
-      if (!palettePickerOpen()) return;
+      if (e.defaultPrevented || !palettePickerOpen()) return;
       e.preventDefault();
       MoveColorStore.movePickerCursor(Number((e as CustomEvent).detail?.delta) || 0);
     };
     const onJogClick = (e: Event) => {
-      if (!palettePickerOpen()) return;
+      if (e.defaultPrevented || !palettePickerOpen()) return;
       e.preventDefault();
       MoveColorStore.confirmPicker();
     };
@@ -671,12 +755,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       return view && view.phase !== 'closing' ? view : null;
     };
     const onJog = (e: Event) => {
-      if (!openView()) return;
+      if (e.defaultPrevented || !openView()) return;
       e.preventDefault();
       MovePresetStore.scroll(Number((e as CustomEvent).detail?.delta) || 0);
     };
     const onJogClick = (e: Event) => {
-      if (!openView()) return;
+      if (e.defaultPrevented || !openView()) return;
       e.preventDefault();
       MovePresetStore.confirm();
     };
@@ -703,6 +787,64 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       window.removeEventListener(MOVE_MUTE_EVENT, onMute);
     };
   }, []);
+
+  // Search, behind a held Capture key: it opens on whichever list has the
+  // wheel right now — the palette navigator, then the preset navigator, then
+  // the app's own wheel list — and while it runs the wheel walks only the
+  // rows the typed query keeps. The kit's event is cancelable: taken here,
+  // the hold never reaches the app's Capture action; with no list to search
+  // it rides on untouched. A second hold closes the search.
+  useSyncExternalStore(MoveSearchStore.subscribe, MoveSearchStore.getVersion, () => 0);
+  const search = MoveSearchStore.getView();
+  // Whether the wheel list is on screen is the render's decision (the
+  // settings room and a modulator's page both hide it); the listener reads
+  // it from here.
+  const screenShown = useRef(false);
+  useEffect(() => {
+    const onSearch = (e: Event) => {
+      if (e.defaultPrevented) return;
+      if (MoveSearchStore.isOpen()) { e.preventDefault(); MoveSearchStore.close(); return; }
+      const target: MoveSearchTarget | null = palettePickerOpen() ? 'palette'
+        : presetNavigatorOpen() ? 'presets'
+        : screenShown.current ? 'screen'
+        : null;
+      if (!target) return;
+      e.preventDefault();
+      MoveSearchStore.open(target, target === 'screen' ? MoveSurfaceStore.getState().screen?.index ?? 0 : 0);
+    };
+    window.addEventListener(MOVE_SEARCH_EVENT, onSearch);
+    return () => window.removeEventListener(MOVE_SEARCH_EVENT, onSearch);
+  }, []);
+  // The wheel and its click, while a search runs: capture-phase listeners,
+  // so they answer before the list's own handlers and the host's — whoever
+  // registered first — and a consumed turn is never walked twice.
+  useEffect(() => {
+    const onJog = (e: Event) => {
+      const view = MoveSearchStore.getView();
+      if (!view || e.defaultPrevented) return;
+      e.preventDefault();
+      searchStep(view, Math.round(Number((e as CustomEvent).detail?.delta) || 0));
+    };
+    const onJogClick = (e: Event) => {
+      const view = MoveSearchStore.getView();
+      if (!view || e.defaultPrevented) return;
+      e.preventDefault();
+      searchTake(view);
+    };
+    window.addEventListener(MOVE_JOG_EVENT, onJog, { capture: true });
+    window.addEventListener(MOVE_JOG_CLICK_EVENT, onJogClick, { capture: true });
+    return () => {
+      window.removeEventListener(MOVE_JOG_EVENT, onJog, { capture: true });
+      window.removeEventListener(MOVE_JOG_CLICK_EVENT, onJogClick, { capture: true });
+    };
+  }, []);
+  // Back closes the search and nothing else — the list underneath stays,
+  // and the button goes back to whoever held it (a navigator's own Back).
+  const searchOpen = !!search;
+  useEffect(() => {
+    if (!searchOpen) return;
+    return MoveFunctions.push('back', () => MoveSearchStore.close(), { label: 'end search', chip: false });
+  }, [searchOpen]);
 
   // A curve modulator's page brings its composition with it: the composer
   // floats above the panel, and its selected clip is what the shape dials
@@ -824,6 +966,24 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     setHeld(null);
     setLatched({});
   }, [pageId]);
+
+  // An app that claimed the bottom pad rows takes them over — movePadRows
+  // shuffles the control rows around the claim, exactly as the hardware does.
+  // A modulator's settings page takes the surface over, list included: the
+  // page IS what the wheel is walking while it is open. The settings room
+  // takes it all the same way — the wheel screen, the claimed rows and the
+  // step circles belong to the view underneath, and drawing them beside the
+  // room's own eight slots also overflows the panel.
+  const screen = settingsPanel || settingsOpen ? null : surface.screen;
+  // A search outlives nothing: the list it ran on going away takes it too.
+  const searchTarget = search?.target ?? null;
+  const screenSearch = searchTarget === 'screen' && screen ? search : null;
+  const presetSearch = searchTarget === 'presets' && presetOpenPanel ? search : null;
+  const paletteSearch = searchTarget === 'palette' && paletteScreen ? search : null;
+  useEffect(() => {
+    screenShown.current = !!screen;
+    if (searchTarget && !screenSearch && !presetSearch && !paletteSearch) MoveSearchStore.close();
+  });
 
   if (!mounted || typeof window === 'undefined' || pages.length === 0 || !page || !values) return null;
 
@@ -1107,14 +1267,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     }));
   };
 
-  // An app that claimed the bottom pad rows takes them over — movePadRows
-  // shuffles the control rows around the claim, exactly as the hardware does.
-  // A modulator's settings page takes the surface over, list included: the
-  // page IS what the wheel is walking while it is open. The settings room
-  // takes it all the same way — the wheel screen, the claimed rows and the
-  // step circles belong to the view underneath, and drawing them beside the
-  // room's own eight slots also overflows the panel.
-  const screen = settingsPanel || settingsOpen ? null : surface.screen;
+  // The claimed pad rows, on the same terms as the wheel screen above: the
+  // settings room hides them with it.
   const appRows = settingsOpen ? 0 : surface.rows;
   const padRows = movePadRows(page, appRows);
   const appRowAt = (row: number) => moveAppPadRow(row, appRows);
@@ -1351,19 +1505,27 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               the hardware. A click is selection intent — the host owns what
               the value means, exactly as it does for a wheel turn. */}
           {screen && (
-            <div className="tweakers-move-wheel-screen" role="group" aria-label={screen.title ?? 'Wheel selection'}>
+            <div className="tweakers-move-wheel-screen" role="group" aria-label={screen.title ?? 'Wheel selection'} data-search={screenSearch ? true : undefined}>
+              {screenSearch && <MoveSearchBar view={screenSearch} />}
               <ListScreen
-                items={screen.items.map((row, index) => ({
-                  value: String(index),
-                  label: moveScreenRowLabel(row),
-                  ...(typeof row === 'string' ? {} : {
-                    ...(row.detail ? { detail: row.detail } : {}),
-                    ...(row.checked === undefined ? {} : { checked: row.checked }),
-                  }),
-                }))}
-                value={String(screen.index)}
+                items={searchedRows(
+                  screen.items.map((row, index) => ({
+                    value: String(index),
+                    label: moveScreenRowLabel(row),
+                    ...(typeof row === 'string' ? {} : {
+                      ...(row.detail ? { detail: row.detail } : {}),
+                      ...(row.checked === undefined ? {} : { checked: row.checked }),
+                    }),
+                  })),
+                  screenSearch
+                )}
+                value={String(screenSearch ? screenSearch.cursor : screen.index)}
                 follow="center"
-                onSelect={(value) => MoveSurfaceStore.selectScreen(Number(value))}
+                onSelect={(value) => {
+                  if (!value) return;
+                  if (screenSearch) MoveSearchStore.close();
+                  MoveSurfaceStore.selectScreen(Number(value));
+                }}
               />
             </div>
           )}
@@ -1372,8 +1534,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
             data-presets={presetScreen?.phase === 'open' || paletteScreen || undefined}
             data-pad-columns={padGridCols || undefined}
           >
-            {presetScreen && <MovePresetScreen view={presetScreen} />}
-            {paletteScreen && <MovePaletteScreen />}
+            {presetScreen && <MovePresetScreen view={presetScreen} search={presetSearch} />}
+            {paletteScreen && (
+              <MovePaletteScreen kept={paletteSearch ? moveSearchFilter(['All colors', ...MOVE_COLOR_PALETTES.map((p) => p.name)], paletteSearch.query) : null}>
+                {paletteSearch && <MoveSearchBar view={paletteSearch} />}
+              </MovePaletteScreen>
+            )}
             {/* The window on the strip: the row is as long as the page has
                 slots, and this clips it to the eight the dials hold. It clips
                 sideways only — a touched option list still grows up out of
@@ -2566,10 +2732,10 @@ function MoveAudioTransport({ index }: { index: number }) {
  * list is not what's sounding). The confirmed row reads in the enter-pill
  * green while the screen lingers, then it dismisses itself.
  */
-function MovePresetScreen({ view }: { view: MovePresetView }) {
+function MovePresetScreen({ view, search }: { view: MovePresetView; search: MoveSearchView | null }) {
   const items = MovePresetStore.items(view.panelId);
   const rows = items.length
-    ? items.map((i) => ({ value: i.id, label: i.label }))
+    ? searchedRows(items.map((i) => ({ value: i.id, label: i.label })), search)
     : [{ value: '', label: 'No presets', muted: true }];
   return (
     <div
@@ -2577,15 +2743,72 @@ function MovePresetScreen({ view }: { view: MovePresetView }) {
       data-open={view.phase === 'open' || undefined}
       data-chosen={view.chosen ? true : undefined}
       data-comparing={view.comparing || undefined}
+      data-search={search ? true : undefined}
       onWheel={(e) => {
         e.preventDefault();
-        MovePresetStore.scroll(e.deltaY > 0 ? 1 : -1);
+        // A running search walks its own rows — the panel's wheel handler
+        // has it, so this must not step the full list underneath.
+        if (!search) MovePresetStore.scroll(e.deltaY > 0 ? 1 : -1);
       }}
     >
+      {search && <MoveSearchBar view={search} />}
       <ListScreen
         items={rows}
         value={view.chosen ?? view.cursor ?? undefined}
-        onSelect={(id) => { if (id) MovePresetStore.choose(id); }}
+        onSelect={(id) => {
+          if (!id) return;
+          if (search) MoveSearchStore.close();
+          MovePresetStore.choose(id);
+        }}
+      />
+    </div>
+  );
+}
+
+/** A list's rows narrowed to what the search keeps — or the one muted row
+ *  that says nothing matched, so the screen never reads as empty. No search,
+ *  the rows as they were. */
+function searchedRows<T extends { value: string; label: string }>(rows: T[], search: MoveSearchView | null): (T | { value: string; label: string; muted: true })[] {
+  if (!search) return rows;
+  const kept = moveSearchFilter(rows.map((r) => r.label), search.query);
+  return kept.length ? kept.map((i) => rows[i]) : [{ value: '', label: 'No matches', muted: true }];
+}
+
+/**
+ * The search's own line, at the top of the list it narrows: the magnifier
+ * and the query as it is typed. The computer keyboard is the only keyboard
+ * here — the field takes focus as it opens, Enter takes the row the wheel
+ * rests on, the arrows walk it, Escape ends the search. Losing focus does
+ * not close it: a click on a row is a take, and it must land on the rows the
+ * query kept.
+ */
+function MoveSearchBar({ view }: { view: MoveSearchView }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { inputRef.current?.focus(); }, []);
+  return (
+    <div className="tweakers-move-search" role="search">
+      <svg className="tweakers-move-search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d={ICON_SEARCH} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <input
+        ref={inputRef}
+        className="tweakers-move-search-input"
+        type="text"
+        value={view.query}
+        placeholder="Search"
+        aria-label="Search the list"
+        spellCheck={false}
+        autoComplete="off"
+        onChange={(e) => searchType(e.currentTarget.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') searchTake(view);
+          else if (e.key === 'Escape') MoveSearchStore.close();
+          else if (e.key === 'ArrowDown') searchStep(view, 1);
+          else if (e.key === 'ArrowUp') searchStep(view, -1);
+          else return;
+          e.preventDefault();
+          e.stopPropagation();
+        }}
       />
     </div>
   );

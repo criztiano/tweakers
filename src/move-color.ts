@@ -215,6 +215,14 @@ class MoveColorStoreClass {
     this.pickerCursor = next;
     this.notify();
   }
+  /** Rest the cursor on a row — a search landing the wheel on the next match. */
+  setPickerCursor(cursor: number) {
+    if (!this.isPickerOpen()) return;
+    const next = Math.max(0, Math.min(MOVE_COLOR_PALETTES.length, cursor));
+    if (next === this.pickerCursor) return;
+    this.pickerCursor = next;
+    this.notify();
+  }
   /** Keep the cursor's row: the palette locks in and the navigator dismisses. */
   confirmPicker() {
     if (!this.isPickerOpen()) return;
