@@ -8322,11 +8322,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     TweakStore8.updateValue(page.panel.id, meta.path, denormalizeEnumDial(meta, v01));
   };
   const dialReading = (meta) => {
-    if (dialOrigin(meta) <= 0) return `${dialPercent(meta)}%`;
     const n = Number(values[meta.path]);
+    const bipolar = dialOrigin(meta) > 0;
+    if (!bipolar && !meta.formatValue && !meta.unit) return `${dialPercent(meta)}%`;
     if (!Number.isFinite(n)) return "";
     if (meta.formatValue) return meta.formatValue(n);
     const num = Math.abs(n) >= 100 ? Math.round(n).toString() : Number(n.toFixed(2)).toString();
+    if (!bipolar) return `${num}${meta.unit ?? ""}`;
     return n > 0 ? `+${num}` : num;
   };
   const rangeReading = (meta) => {

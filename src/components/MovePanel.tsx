@@ -1235,12 +1235,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 
   // A bipolar (origin-anchored) dial reads out its real signed value; plain
   // dials keep the 0–100 position the Move itself works in.
+  // A dial reads out in its own domain when it has one — a formatter or a
+  // unit ("2.84 s", "48 px") — and as the Move's 0–100 position otherwise.
+  // A bipolar dial keeps its signed number either way.
   const dialReading = (meta: ControlMeta): string => {
-    if (dialOrigin(meta) <= 0) return `${dialPercent(meta)}%`;
     const n = Number(values[meta.path]);
+    const bipolar = dialOrigin(meta) > 0;
+    if (!bipolar && !meta.formatValue && !meta.unit) return `${dialPercent(meta)}%`;
     if (!Number.isFinite(n)) return '';
     if (meta.formatValue) return meta.formatValue(n);
     const num = Math.abs(n) >= 100 ? Math.round(n).toString() : Number(n.toFixed(2)).toString();
+    if (!bipolar) return `${num}${meta.unit ?? ''}`;
     return n > 0 ? `+${num}` : num;
   };
 
