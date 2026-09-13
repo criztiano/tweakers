@@ -347,8 +347,15 @@ export type { MoveColorView, MoveColorPalette } from './move-color';
 
 // The preset navigator behind the hardware Menu button — the store the
 // bridge kit drives (scroll on wheel turns, confirm on jog click,
-// beginSave on a long press).
+// beginSave on Shift+Menu; a hold opens generative exploration).
 export { MovePresetStore } from './move-presets';
 export { MoveSearchStore, moveSearchMatch, moveSearchFilter } from './move-search';
 export type { MoveSearchTarget, MoveSearchView } from './move-search';
 export type { MovePresetItem, MovePresetView, MovePresetSave, MovePresetPhase } from './move-presets';
+
+export { PresetExplorationStore } from './preset-exploration';
+export type { ExplorationState, ExplorationSlot, ExplorationView } from './preset-exploration';
+export * from './preset-genetics';
+export type { PresetExplorationAdapter } from './store/TweakStore';
+
+export { presetFlowerSeed, presetFlowerSvg } from './preset-flower';

@@ -5,6 +5,7 @@ import {
   MoveNotifications,
   MovePanel,
   MovePresetStore,
+  PresetExplorationStore,
   MoveSurfaceStore,
   MOVE_NOTIFY_KINDS,
   MOVE_PALETTE,
@@ -274,6 +275,14 @@ export function Library() {
  * navigator rather than describing it.
  */
 function PresetPanel() {
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const held = useRef(false);
+  const cancelHold = () => { if (holdTimer.current) clearTimeout(holdTimer.current); holdTimer.current = null; };
+  useEffect(() => () => { if (holdTimer.current) clearTimeout(holdTimer.current); }, []);
+  const explore = () => {
+    MovePresetStore.cancel();
+    void PresetExplorationStore.open(PANEL_ID);
+  };
   useSyncExternalStore(MovePresetStore.subscribe, MovePresetStore.getVersion, () => 0);
   // The active preset lives in the panel's own channel, and loading one
   // rewrites every value on it — so this row follows both.
@@ -287,10 +296,18 @@ function PresetPanel() {
   const active = TweakStore.getActivePresetId(PANEL_ID);
   return (
     <div className="kit-presets">
-      <div className="kit-preset-actions">
-        <button type="button" onClick={() => openPresets(PANEL_ID)}>
+      <div className="kit-preset-actions" onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') event.stopPropagation(); }}>
+        <button type="button" aria-describedby="kit-explore-hint"
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            cancelHold(); held.current = false;
+            holdTimer.current = setTimeout(() => { held.current = true; holdTimer.current = null; explore(); }, 450);
+          }}
+          onPointerUp={cancelHold} onPointerCancel={cancelHold} onPointerLeave={cancelHold}
+          onClick={() => { if (held.current) { held.current = false; return; } openPresets(PANEL_ID); }}>
           {open && open.phase !== 'closing' ? 'Close the navigator' : 'Open the navigator'}
         </button>
+        <button type="button" onClick={explore}>Explore presets</button>
         <button type="button" onClick={() => savePreset(PANEL_ID)}>Save what is on the slots</button>
         <span className="kit-preset-state">
           {open && open.phase !== 'closing'
@@ -302,6 +319,7 @@ function PresetPanel() {
               : 'no preset loaded'}
         </span>
       </div>
+      <p id="kit-explore-hint" className="kit-card-note">Hold the navigator button to explore preset variations. Back restores your original sound.</p>
       <ul className="kit-preset-list">
         {items.map((item) => (
           <li key={item.id}>
