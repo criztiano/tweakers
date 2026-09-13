@@ -2,9 +2,9 @@ import { useEffect, useId, useRef, useState, useSyncExternalStore, useCallback }
 import { createPortal } from 'react-dom';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { ModulationStore } from '../store/ModulationStore';
-import { modColor, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, getAudioModBuffer, setAudioModBuffer, subscribeAudioMod, getAudioModVersion, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
+import { modColor, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, getAudioModBuffer, setAudioModBuffer, subscribeAudioMod, getAudioModVersion, setAudioModWindowSource, getAudioModWindow, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
 import { MoveWaveform } from './MoveWaveform';
-import { MoveWaveformStore, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_STEPS } from '../move-waveform';
+import { MoveWaveformStore, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_STEPS, MOVE_WAVEFORM_PANEL, visibleWindow } from '../move-waveform';
 import { ICON_PLAY, ICON_LOOP } from '../icons';
 import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
@@ -345,11 +345,16 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // prop. The key keeps identity stable when the host hands over fresh
   // arrays, exactly like the panels selection above.
   const settingsKey = settings === undefined ? undefined : JSON.stringify(Array.isArray(settings) ? settings : [settings]);
-  const settingsRooms = settingsKey === undefined
+  const namedRooms = settingsKey === undefined
     ? []
     : (JSON.parse(settingsKey) as string[])
         .map((key) => TweakStore.getPanels('panel').find((p) => p.id === key || p.name === key))
         .filter((p): p is PanelConfig => p !== undefined);
+  // The kit's own pages ride after the app's: the waveform's look, once a
+  // waveform has claimed the surface. An app with no room of its own still
+  // gets the door, because the page behind it is the kit's.
+  const waveRoom = TweakStore.getPanel(MOVE_WAVEFORM_PANEL);
+  const settingsRooms = waveRoom ? [...namedRooms, waveRoom] : namedRooms;
   const roomIds = settingsRooms.map((p) => p.id);
   const settingsOpen = useSyncExternalStore(
     useCallback((cb) => MoveSettingsView.subscribe(cb), []),
@@ -2360,7 +2365,12 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
     });
     MoveWaveformStore.setProgressSource(() => ModulationStore.getSlotPhase(index));
     MoveWaveformStore.setEditor(true);
+    // The small screens follow the big one: zoomed in, the dial face and
+    // the Move's screen draw the shown window, framed as the editor frames it.
+    setAudioModWindowSource(() =>
+      visibleWindow(ModulationStore.getSlotPhase(index), MoveWaveformStore.getView().zoom));
     return () => {
+      setAudioModWindowSource(null);
       MoveWaveformStore.setEditor(false);
       MoveWaveformStore.setProgressSource(null);
     };
@@ -2654,16 +2664,28 @@ function MoveScope({ index }: { index: number }) {
 
 /**
  * The audio dial's face: the settings preview — the sample's envelope — as
- * a standing wave, with the slot's playhead running through it. The shape
- * draws once per render; only the playhead line ticks, written straight to
- * its attributes with the scope's no-re-render discipline.
+ * a standing wave, with the slot's playhead running through it. Over the
+ * whole sample the shape draws once per render and only the playhead line
+ * ticks. While the floating editor is zoomed in, the face shows the part
+ * the editor shows — a window that rides with the playhead — so the shape
+ * is rewritten on the same tick, with the scope's no-re-render discipline.
  */
 function MoveWavePreview({ index }: { index: number }) {
+  const path = useRef<SVGPathElement>(null);
   const line = useRef<SVGLineElement>(null);
   const preview = ModulationStore.getSettingsPreview(64);
   useEffect(() => {
+    let shown = '';
     let raf = requestAnimationFrame(function tick() {
-      const x = (ModulationStore.getSlotPhase(index) * 100).toFixed(2);
+      const { start, span } = getAudioModWindow();
+      const key = `${start.toFixed(5)}|${span.toFixed(5)}`;
+      if (key !== shown) {
+        shown = key;
+        const p = ModulationStore.getSettingsPreview(64);
+        if (p) path.current?.setAttribute('d', previewPathData(p.points));
+      }
+      const at = (ModulationStore.getSlotPhase(index) - start) / span;
+      const x = (Math.min(1, Math.max(0, at)) * 100).toFixed(2);
       line.current?.setAttribute('x1', x);
       line.current?.setAttribute('x2', x);
       raf = requestAnimationFrame(tick);
@@ -2679,7 +2701,7 @@ function MoveWavePreview({ index }: { index: number }) {
       preserveAspectRatio="none"
       aria-hidden="true"
     >
-      <path d={previewPathData(preview.points)} />
+      <path ref={path} d={previewPathData(preview.points)} />
       <line ref={line} x1="0" y1="0" x2="0" y2="100" />
     </svg>
   );
