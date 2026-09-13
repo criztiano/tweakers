@@ -409,9 +409,16 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       MoveSettingsView.close();
     };
   }, [roomKey]);
+  // The room is another mode: the app's buttons sleep while it is open
+  // (dark on the hardware, gone from the header), the door and Back stay.
   useEffect(() => {
     if (!settingsOpen) return;
-    return MoveFunctions.push('back', () => MoveSettingsView.close(), { label: 'Close', chip: false });
+    const wake = MoveFunctions.suspend(['set_overview']);
+    const releaseBack = MoveFunctions.push('back', () => MoveSettingsView.close(), { label: 'Close', chip: false });
+    return () => {
+      releaseBack();
+      wake();
+    };
   }, [settingsOpen]);
 
   // Tell the kit about the room: its panels, whether the door stands open,
