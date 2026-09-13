@@ -5079,15 +5079,20 @@ var SCRUB_PER_DETENT = 25e-5;
 var SCRUB_FINE = 5e-5;
 var SCRUB_ACCEL = 1.2;
 var SCRUB_MAX_BATCH = 24;
+var SCRUB_MIN_MS = 25;
+var SCRUB_FINE_MIN_MS = 5;
+var SCRUB_CHAIN_MS = 250;
 var ZOOM_PER_DETENT = 0.08;
 var clamp014 = (v) => Math.min(1, Math.max(0, v));
 function defaultView() {
   return { position: 0, zoom: 1, loop: null, loopAnchor: null };
 }
-function scrubBy(position, delta, fine = false, zoom = 1) {
+function scrubBy(position, delta, fine = false, zoom = 1, durationSec) {
   const detents = Math.min(SCRUB_MAX_BATCH, Math.abs(delta));
   const magnitude = fine ? detents : Math.pow(detents, SCRUB_ACCEL);
-  const step = (fine ? SCRUB_FINE : SCRUB_PER_DETENT) / Math.max(1, zoom);
+  const share = fine ? SCRUB_FINE : SCRUB_PER_DETENT;
+  const floor = durationSec && durationSec > 0 ? (fine ? SCRUB_FINE_MIN_MS : SCRUB_MIN_MS) / 1e3 / durationSec : 0;
+  const step = Math.max(share, floor) / Math.max(1, zoom);
   const next = clamp014(position + Math.sign(delta) * magnitude * step);
   return Number(next.toFixed(6));
 }
@@ -5140,6 +5145,7 @@ var MoveWaveformStoreClass = class {
     this.progressSource = null;
     this.duration = null;
     this.transport = null;
+    this.lastScrubAt = 0;
     this.listeners = /* @__PURE__ */ new Set();
     this.version = 0;
   }
@@ -5151,6 +5157,7 @@ var MoveWaveformStoreClass = class {
    * app had put there, and hands the corner back with the claim. */
   register() {
     this.registered = true;
+    this.lastScrubAt = 0;
     this.notify();
     return () => {
       this.registered = false;
@@ -5245,9 +5252,14 @@ var MoveWaveformStoreClass = class {
   }
   /** A detent moves the playhead from where it is — the engine's position
    *  while one reports, so a scrub mid-play carries on from the play, never
-   *  from the spot the last scrub left. */
-  scrub(delta, fine = false) {
-    this.setView({ position: scrubBy(this.playhead(), delta, fine, this.view.zoom) });
+   *  from the spot an earlier scrub left. Within a turn the detents chain
+   *  from each other: the engine's seek lands a beat later than the knob
+   *  turns, and a turn read against it would lose every detent but the first. */
+  scrub(delta, fine = false, now = Date.now()) {
+    const chained = now - this.lastScrubAt < SCRUB_CHAIN_MS;
+    this.lastScrubAt = now;
+    const from = chained ? this.view.position : this.playhead();
+    this.setView({ position: scrubBy(from, delta, fine, this.view.zoom, this.duration ?? void 0) });
   }
   zoom(delta) {
     this.setView({ zoom: zoomBy(this.view.zoom, delta) });
@@ -8372,7 +8384,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 pg.panel.id
               )) }),
               functionChips === "tracks" && /* @__PURE__ */ jsx11(MoveFunctionChips, {}),
-              headerStart && /* @__PURE__ */ jsx11("div", { className: "tweakers-move-header-start", children: headerStart })
+              headerStart && /* @__PURE__ */ jsx11("div", { className: "tweakers-move-header-start", children: headerStart }),
+              waveClaimed && /* @__PURE__ */ jsx11(MoveAudioZoom, {})
             ] }),
             /* @__PURE__ */ jsx11("div", { className: "tweakers-move-mods", children: settingsOpen ? null : color && colorMeta ? /* @__PURE__ */ jsx11(MoveColorSteps, { color, disabled: TweakStore8.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? ModulationStore2.getSlots().map((slot) => /* @__PURE__ */ jsx11(MoveModCircle, { slot }, slot.index)) : null }),
             audioWave != null ? /* @__PURE__ */ jsx11(MoveAudioTransport, { index: audioWave }) : headerCluster

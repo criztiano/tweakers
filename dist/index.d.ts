@@ -3487,7 +3487,7 @@ declare function defaultView(): MoveWaveformView;
  * finest step, a spin (a batched delta) superlinearly more. Shift stays
  * plainly linear — the surgical layer never surprises.
  */
-declare function scrubBy(position: number, delta: number, fine?: boolean, zoom?: number): number;
+declare function scrubBy(position: number, delta: number, fine?: boolean, zoom?: number, durationSec?: number): number;
 /**
  * The wheel zooms, proportionally — each detent is a percentage of where you
  * already are, so ten clicks out undo ten clicks in.
@@ -3531,6 +3531,7 @@ declare class MoveWaveformStoreClass {
     private progressSource;
     private duration;
     private transport;
+    private lastScrubAt;
     private listeners;
     private version;
     /** Claim the wheel, the volume knob and the step row. Returns the release.
@@ -3579,8 +3580,10 @@ declare class MoveWaveformStoreClass {
     setView(patch: Partial<MoveWaveformView>): void;
     /** A detent moves the playhead from where it is — the engine's position
      *  while one reports, so a scrub mid-play carries on from the play, never
-     *  from the spot the last scrub left. */
-    scrub(delta: number, fine?: boolean): void;
+     *  from the spot an earlier scrub left. Within a turn the detents chain
+     *  from each other: the engine's seek lands a beat later than the knob
+     *  turns, and a turn read against it would lose every detent but the first. */
+    scrub(delta: number, fine?: boolean, now?: number): void;
     zoom(delta: number): void;
     pressStep(index: number): void;
     /** A held step lets the loop go — the remove gesture, from any step. */

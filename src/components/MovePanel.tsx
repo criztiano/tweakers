@@ -1499,6 +1499,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               )}
               {functionChips === 'tracks' && <MoveFunctionChips />}
               {headerStart && <div className="tweakers-move-header-start">{headerStart}</div>}
+              {/* A host's card gets the editor's zoom readout too, at the
+                  row's end — the other end from its clock. */}
+              {waveClaimed && <MoveAudioZoom />}
             </div>
             )}
             {/* The step buttons, centred between the track labels and the

@@ -145,9 +145,33 @@ describe('the registry', () => {
     const release = MoveWaveformStore.register();
     MoveWaveformStore.setView({ position: 0 });
     MoveWaveformStore.setProgressSource(() => 0.5);
-    MoveWaveformStore.scrub(1);
+    MoveWaveformStore.scrub(1, false, 1000);
     expect(MoveWaveformStore.getView().position).toBeCloseTo(scrubBy(0.5, 1), 6);
     release();
+  });
+
+  it('chains the detents of one turn, so a lagging seek loses none of them', () => {
+    const release = MoveWaveformStore.register();
+    MoveWaveformStore.setView({ position: 0 });
+    MoveWaveformStore.setProgressSource(() => 0.5); // the engine, still where the turn began
+    MoveWaveformStore.scrub(1, false, 1000);
+    MoveWaveformStore.scrub(1, false, 1050);
+    MoveWaveformStore.scrub(1, false, 1100);
+    expect(MoveWaveformStore.getView().position).toBeCloseTo(scrubBy(scrubBy(scrubBy(0.5, 1), 1), 1), 6);
+    // A new turn, later, starts from the engine again.
+    MoveWaveformStore.scrub(1, false, 5000);
+    expect(MoveWaveformStore.getView().position).toBeCloseTo(scrubBy(0.5, 1), 6);
+    release();
+  });
+
+  it('never moves less than real time on a short sample', () => {
+    // Long sample: the share rules, as approved.
+    expect(scrubBy(0.5, 1, false, 1, 180)).toBeCloseTo(scrubBy(0.5, 1), 6);
+    // Five seconds: a slow detent is 25 ms of it, Shift 5 ms.
+    expect(scrubBy(0.5, 1, false, 1, 5) - 0.5).toBeCloseTo(0.025 / 5, 6);
+    expect(scrubBy(0.5, 1, true, 1, 5) - 0.5).toBeCloseTo(0.005 / 5, 6);
+    // The floor follows the zoom like the share does.
+    expect(scrubBy(0.5, 1, false, 4, 5) - 0.5).toBeCloseTo(0.025 / 5 / 4, 6);
   });
 
   it('wears the host transport and drops it with the claim', () => {

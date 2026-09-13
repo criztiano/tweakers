@@ -66,6 +66,19 @@ export const SCRUB_FINE = 0.00005;
 export const SCRUB_ACCEL = 1.2;
 /** Ignore pathological encoder batches beyond a deliberate fast spin. */
 export const SCRUB_MAX_BATCH = 24;
+/**
+ * A share of the sample is the wrong unit for a short one: on a five-second
+ * take the finest step above is a millisecond, and a whole turn goes
+ * nowhere. So a detent is never less than this much real time, once the
+ * sample's length is known — long samples keep the share, short ones get
+ * a knob that actually travels.
+ */
+export const SCRUB_MIN_MS = 25;
+export const SCRUB_FINE_MIN_MS = 5;
+/** A turn in progress chains from its own last landing for this long — the
+ *  engine's seek lags a detent or two behind, and reading it mid-turn would
+ *  start every detent from where the first one left off. */
+export const SCRUB_CHAIN_MS = 250;
 /** A wheel detent is a proportion of the current zoom, so it feels the same
  *  going in as coming out. */
 export const ZOOM_PER_DETENT = 0.08;
@@ -84,10 +97,12 @@ export function defaultView(): MoveWaveformView {
  * finest step, a spin (a batched delta) superlinearly more. Shift stays
  * plainly linear — the surgical layer never surprises.
  */
-export function scrubBy(position: number, delta: number, fine = false, zoom = 1): number {
+export function scrubBy(position: number, delta: number, fine = false, zoom = 1, durationSec?: number): number {
   const detents = Math.min(SCRUB_MAX_BATCH, Math.abs(delta));
   const magnitude = fine ? detents : Math.pow(detents, SCRUB_ACCEL);
-  const step = (fine ? SCRUB_FINE : SCRUB_PER_DETENT) / Math.max(1, zoom);
+  const share = fine ? SCRUB_FINE : SCRUB_PER_DETENT;
+  const floor = durationSec && durationSec > 0 ? (fine ? SCRUB_FINE_MIN_MS : SCRUB_MIN_MS) / 1000 / durationSec : 0;
+  const step = Math.max(share, floor) / Math.max(1, zoom);
   const next = clamp01(position + Math.sign(delta) * magnitude * step);
   // Snap the ends: a scrub that lands a thousandth short of the start is a
   // scrub to the start, and the number it feeds is a read position.
@@ -191,6 +206,7 @@ class MoveWaveformStoreClass {
   private progressSource: (() => number) | null = null;
   private duration: number | null = null;
   private transport: MoveWaveformTransport | null = null;
+  private lastScrubAt = 0;
   private listeners = new Set<Listener>();
   private version = 0;
 
@@ -202,6 +218,7 @@ class MoveWaveformStoreClass {
    * app had put there, and hands the corner back with the claim. */
   register(): () => void {
     this.registered = true;
+    this.lastScrubAt = 0;
     this.notify();
     return () => {
       this.registered = false;
@@ -321,9 +338,14 @@ class MoveWaveformStoreClass {
 
   /** A detent moves the playhead from where it is — the engine's position
    *  while one reports, so a scrub mid-play carries on from the play, never
-   *  from the spot the last scrub left. */
-  scrub(delta: number, fine = false): void {
-    this.setView({ position: scrubBy(this.playhead(), delta, fine, this.view.zoom) });
+   *  from the spot an earlier scrub left. Within a turn the detents chain
+   *  from each other: the engine's seek lands a beat later than the knob
+   *  turns, and a turn read against it would lose every detent but the first. */
+  scrub(delta: number, fine = false, now = Date.now()): void {
+    const chained = now - this.lastScrubAt < SCRUB_CHAIN_MS;
+    this.lastScrubAt = now;
+    const from = chained ? this.view.position : this.playhead();
+    this.setView({ position: scrubBy(from, delta, fine, this.view.zoom, this.duration ?? undefined) });
   }
 
   zoom(delta: number): void {
