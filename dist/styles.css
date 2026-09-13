@@ -2788,6 +2788,10 @@
 
 .tweakers-move-wave .tweakers-waveform-viz {
   display: block;
+  /* The grid, the centre line and the default wave are drawn in the
+     canvas's colour — the card's ink, not the sidebar's white: white lines
+     on the light editor card are lines nobody sees. */
+  color: inherit;
   width: 100% !important;
   background: transparent;
   border-radius: 0;

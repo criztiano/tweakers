@@ -2020,6 +2020,8 @@ var MoveWaveformStoreClass = class {
       void 0,
       { kind: "kit", persist: true }
     );
+    const saved = TweakStore.getValues(MOVE_WAVEFORM_PANEL);
+    if (typeof saved.resolution !== "number") TweakStore.updateValue(MOVE_WAVEFORM_PANEL, "resolution", clampPixelSize(seed.pixelSize));
   }
   /** The look the settings page holds right now (the defaults until one is registered). */
   getStyle() {
@@ -2163,14 +2165,25 @@ function moveWaveformDemoSample() {
       data[off + i] += noise() * 0.25 * Math.exp(-(i / rate) * 90);
     }
   }
-  demoSample = {
+  demoSample = toAudioBuffer(data, rate);
+  return demoSample;
+}
+function toAudioBuffer(data, sampleRate) {
+  if (typeof AudioBuffer !== "undefined") {
+    try {
+      const buffer = new AudioBuffer({ length: data.length, sampleRate, numberOfChannels: 1 });
+      buffer.copyToChannel(data, 0);
+      return buffer;
+    } catch {
+    }
+  }
+  return {
     numberOfChannels: 1,
     length: data.length,
-    duration: MOVE_WAVEFORM_DEMO_SECONDS,
-    sampleRate: rate,
+    duration: data.length / sampleRate,
+    sampleRate,
     getChannelData: () => data
   };
-  return demoSample;
 }
 
 // src/env.ts
@@ -8863,6 +8876,7 @@ export {
   stripStarts,
   stripWindowPads,
   subscribeAudioMod,
+  toAudioBuffer,
   transferLut,
   triggerLevels,
   triggersCrossed,
