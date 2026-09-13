@@ -12,9 +12,14 @@ import {
   padSection,
   MOVE_WAVEFORM_STEPS,
   MOVE_WAVEFORM_PADS,
+  MOVE_WAVEFORM_PANEL,
+  MOVE_WAVEFORM_PIXEL_SIZES,
+  defaultStyle,
+  styleFromValues,
 } from '../src/move-waveform';
 import { WAVEFORM_MAX_ZOOM } from '../src/waveform-engine';
 import { MoveVolumeDisplay } from '../src/move-volume';
+import { TweakStore } from '../src/store/TweakStore';
 
 describe('the volume knob scrubs', () => {
   it('moves by the finest step on a slow tick and stops at both ends', () => {
@@ -261,5 +266,45 @@ describe('the editor claim', () => {
     // The window is centred on the playing position, not the last scrub.
     expect(MoveWaveformStore.getView().position).toBeCloseTo(0.375, 6);
     release();
+  });
+});
+
+describe('the look lives in the settings room', () => {
+  beforeEach(() => TweakStore.unregisterPanel(MOVE_WAVEFORM_PANEL));
+
+  it('puts the Waveform page in the room on the first claim, seeded with the app\'s look', () => {
+    expect(TweakStore.getPanel(MOVE_WAVEFORM_PANEL)).toBeUndefined();
+    const release = MoveWaveformStore.register({ mode: 'striped', pixelSize: 4, grid: true });
+    const page = TweakStore.getPanel(MOVE_WAVEFORM_PANEL);
+    expect(page?.kind).toBe('kit');
+    expect(page?.name).toBe('Waveform');
+    expect(MoveWaveformStore.getStyle()).toEqual({ mode: 'striped', pixelSize: 4, grid: true, bands: false, baseline: true });
+    release();
+    // The page stays: a room does not lose a page because its display is off screen.
+    expect(TweakStore.getPanel(MOVE_WAVEFORM_PANEL)).toBeDefined();
+  });
+
+  it('never sits on the app\'s own page row', () => {
+    const release = MoveWaveformStore.register();
+    expect(TweakStore.getPanels('panel').some((p) => p.id === MOVE_WAVEFORM_PANEL)).toBe(false);
+    release();
+  });
+
+  it('reads the page\'s values back as the style every waveform draws with', () => {
+    const release = MoveWaveformStore.register();
+    TweakStore.updateValue(MOVE_WAVEFORM_PANEL, 'style', 'smooth');
+    TweakStore.updateValue(MOVE_WAVEFORM_PANEL, 'resolution', '6×');
+    TweakStore.updateValue(MOVE_WAVEFORM_PANEL, 'baseline', false);
+    expect(MoveWaveformStore.getStyle()).toEqual({ mode: 'smooth', pixelSize: 6, grid: false, bands: false, baseline: false });
+    release();
+  });
+
+  it('offers the four bar widths the old resolution slider had, and every style', () => {
+    expect(MOVE_WAVEFORM_PIXEL_SIZES).toEqual([1, 2, 4, 6]);
+    expect(styleFromValues({ style: 'striped', resolution: '1×' }, defaultStyle()).mode).toBe('striped');
+    expect(styleFromValues({ style: 'striped', resolution: '1×' }, defaultStyle()).pixelSize).toBe(1);
+    // Anything unset — or nonsense — falls back to the app's own look.
+    expect(styleFromValues({ style: 'neon', resolution: '3×' }, defaultStyle())).toEqual(defaultStyle());
+    expect(styleFromValues(undefined, defaultStyle())).toEqual(defaultStyle());
   });
 });

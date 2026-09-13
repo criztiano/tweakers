@@ -1,6 +1,7 @@
-import { WAVEFORM_MAX_ZOOM } from './waveform-engine';
-import type { WaveformLoop } from './waveform-engine';
+import { WAVEFORM_MAX_ZOOM, WAVEFORM_MODES } from './waveform-engine';
+import type { WaveformLoop, WaveformMode } from './waveform-engine';
 import { MoveVolumeDisplay } from './move-volume';
+import { TweakStore, type TweakValue } from './store/TweakStore';
 
 /**
  * A waveform on the Move surface.
@@ -35,6 +36,48 @@ export type MoveWaveformView = {
   /** The step a pending loop started from, or null when no loop is being drawn. */
   loopAnchor: number | null;
 };
+
+/**
+ * How the waveform is drawn — the look, as distinct from the view. The look
+ * is the user's, not the app's: it lives on the kit's own settings page in
+ * the settings room and persists per machine, so a sample reads the same
+ * way in every app on this Move.
+ */
+export type MoveWaveformStyle = {
+  mode: WaveformMode;
+  /** Pixelated / striped: the bar width multiplier, one of `MOVE_WAVEFORM_PIXEL_SIZES`. */
+  pixelSize: number;
+  grid: boolean;
+  bands: boolean;
+  baseline: boolean;
+};
+
+/** The kit's waveform settings page — a hidden `kit` panel, room-only. */
+export const MOVE_WAVEFORM_PANEL = 'move-waveform';
+/** The bar widths the settings page offers, as the old resolution slider did. */
+export const MOVE_WAVEFORM_PIXEL_SIZES = [1, 2, 4, 6];
+
+const MODE_LABELS: Record<WaveformMode, string> = { smooth: 'Smooth', pixelated: 'Pixel', striped: 'Striped' };
+const sizeOption = (size: number) => `${size}×`;
+
+export function defaultStyle(): MoveWaveformStyle {
+  return { mode: 'pixelated', pixelSize: 2, grid: false, bands: false, baseline: true };
+}
+
+/** The settings page's values, read back as a style; anything unset falls to `base`. */
+export function styleFromValues(values: Record<string, TweakValue> | undefined, base: MoveWaveformStyle): MoveWaveformStyle {
+  if (!values) return base;
+  const mode = WAVEFORM_MODES.find((m) => m === values.style) ?? base.mode;
+  const size = MOVE_WAVEFORM_PIXEL_SIZES.find((s) => sizeOption(s) === values.resolution) ?? base.pixelSize;
+  const flag = (v: TweakValue, fallback: boolean) => (typeof v === 'boolean' ? v : fallback);
+  return {
+    mode,
+    pixelSize: size,
+    grid: flag(values.grid, base.grid),
+    bands: flag(values.bands, base.bands),
+    baseline: flag(values.baseline, base.baseline),
+  };
+}
 
 export const MOVE_WAVEFORM_STEPS = 16;
 /** The bottom pad row: eight subdivisions of the window on screen. */
@@ -180,9 +223,16 @@ class MoveWaveformStoreClass {
   private listeners = new Set<Listener>();
   private version = 0;
 
-  /** Claim the wheel, the volume knob and the step row. Returns the release. */
-  register(): () => void {
+  /**
+   * Claim the wheel, the volume knob and the step row. Returns the release.
+   * The first claim also puts the kit's Waveform page in the settings room,
+   * seeded with the app's own look (`style`); the page stays once it is
+   * there — a room does not lose a page because the display it dresses is
+   * off screen for a moment — and its saved values win over the seed.
+   */
+  register(style?: Partial<MoveWaveformStyle>): () => void {
     this.registered = true;
+    this.registerSettings({ ...defaultStyle(), ...style });
     // The knob is ours now, so it says so: the volume readout follows the
     // playhead for as long as we hold the claim, and is handed back with it.
     MoveVolumeDisplay.set({ label: 'time', getValue: () => this.readout() });
@@ -200,6 +250,51 @@ class MoveWaveformStoreClass {
 
   isRegistered(): boolean {
     return this.registered;
+  }
+
+  /**
+   * The kit's Waveform settings page: how the sample is drawn — the style,
+   * the bar width, the grid, the EQ bands and the centre line. One hidden
+   * `kit` panel that `MovePanel` shows in the settings room and the bridge
+   * kit syncs like any page, so the look is set from the hardware too.
+   */
+  private registerSettings(seed: MoveWaveformStyle): void {
+    if (TweakStore.getPanel(MOVE_WAVEFORM_PANEL)) return;
+    TweakStore.registerPanel(
+      MOVE_WAVEFORM_PANEL,
+      'Waveform',
+      {
+        style: {
+          type: 'select',
+          default: seed.mode,
+          options: WAVEFORM_MODES.map((m) => ({ value: m, label: MODE_LABELS[m] })),
+        },
+        resolution: {
+          type: 'select',
+          default: sizeOption(MOVE_WAVEFORM_PIXEL_SIZES.includes(seed.pixelSize) ? seed.pixelSize : 2),
+          options: MOVE_WAVEFORM_PIXEL_SIZES.map(sizeOption),
+        },
+        grid: { type: 'toggle', default: seed.grid, moveSlot: true },
+        bands: { type: 'toggle', default: seed.bands, moveSlot: true, label: 'EQ bands' },
+        baseline: { type: 'toggle', default: seed.baseline, moveSlot: true, label: 'Centre line' },
+      },
+      undefined,
+      { kind: 'kit', persist: true }
+    );
+  }
+
+  /** The look the settings page holds right now (the defaults until one is registered). */
+  getStyle(): MoveWaveformStyle {
+    return styleFromValues(TweakStore.getPanel(MOVE_WAVEFORM_PANEL) && TweakStore.getValues(MOVE_WAVEFORM_PANEL), defaultStyle());
+  }
+
+  /** The settings page's values, a stable snapshot per change — for `useSyncExternalStore`. */
+  getStyleSnapshot(): Record<string, TweakValue> {
+    return TweakStore.getValues(MOVE_WAVEFORM_PANEL);
+  }
+
+  subscribeStyle(fn: Listener): () => void {
+    return TweakStore.subscribe(MOVE_WAVEFORM_PANEL, fn);
   }
 
   /**
