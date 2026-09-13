@@ -1,4 +1,4 @@
-import { WAVEFORM_MAX_ZOOM, WAVEFORM_MODES } from './waveform-engine';
+import { WAVEFORM_MAX_ZOOM, WAVEFORM_MODES, WAVEFORM_STRIPE_STRETCH } from './waveform-engine';
 import type { WaveformLoop, WaveformMode } from './waveform-engine';
 import { MoveVolumeDisplay } from './move-volume';
 import { TweakStore, type TweakValue } from './store/TweakStore';
@@ -57,7 +57,7 @@ export const MOVE_WAVEFORM_PANEL = 'move-waveform';
 /** The bar widths the settings page offers: 1× to 6×, every integer. */
 export const MOVE_WAVEFORM_PIXEL_RANGE = [1, 6] as const;
 
-const MODE_LABELS: Record<WaveformMode, string> = { smooth: 'Smooth', pixelated: 'Pixel', striped: 'Striped', spaced: 'Spaced' };
+const MODE_LABELS: Record<WaveformMode, string> = { smooth: 'Smooth', pixelated: 'Pixel', striped: 'Striped' };
 const clampPixelSize = (v: number) =>
   Math.min(MOVE_WAVEFORM_PIXEL_RANGE[1], Math.max(MOVE_WAVEFORM_PIXEL_RANGE[0], Math.round(v)));
 
@@ -320,6 +320,16 @@ class MoveWaveformStoreClass {
     if (typeof saved.resolution !== 'number') TweakStore.updateValue(MOVE_WAVEFORM_PANEL, 'resolution', clampPixelSize(seed.pixelSize));
   }
 
+  /**
+   * The zoom the display is really at: striped bars stretch the wave, so
+   * the shown window is that much narrower than the view's zoom says. The
+   * pads and the small screens frame by this, so they show what the card
+   * shows.
+   */
+  shownZoom(): number {
+    return this.view.zoom * (this.getStyle().mode === 'striped' ? WAVEFORM_STRIPE_STRETCH : 1);
+  }
+
   /** The look the settings page holds right now (the defaults until one is registered). */
   getStyle(): MoveWaveformStyle {
     return styleFromValues(TweakStore.getPanel(MOVE_WAVEFORM_PANEL) && TweakStore.getValues(MOVE_WAVEFORM_PANEL), defaultStyle());
@@ -431,7 +441,7 @@ class MoveWaveformStoreClass {
    */
   pressPad(index: number, hold = false): void {
     const at = this.progressSource ? clamp01(this.progressSource()) : this.view.position;
-    const window = visibleWindow(at, this.view.zoom);
+    const window = visibleWindow(at, this.shownZoom());
     if (hold) this.setView({ loop: padSection(window, index), loopAnchor: null });
     else this.setView({ position: padPosition(window, index) });
   }

@@ -2390,7 +2390,7 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
     // The small screens follow the big one: zoomed in, the dial face and
     // the Move's screen draw the shown window, framed as the editor frames it.
     setAudioModWindowSource(() =>
-      visibleWindow(ModulationStore.getSlotPhase(index), MoveWaveformStore.getView().zoom));
+      visibleWindow(ModulationStore.getSlotPhase(index), MoveWaveformStore.shownZoom()));
     return () => {
       setAudioModWindowSource(null);
       MoveWaveformStore.setEditor(false);

@@ -331,6 +331,22 @@ describe('the look lives in the settings room', () => {
   });
 });
 
+describe('striped bars stretch the wave', () => {
+  beforeEach(() => TweakStore.unregisterPanel(MOVE_WAVEFORM_PANEL));
+
+  it('so the pads and the small screens frame half the window the zoom names', () => {
+    const release = MoveWaveformStore.register();
+    MoveWaveformStore.setView({ zoom: 2, position: 0.5 });
+    expect(MoveWaveformStore.shownZoom()).toBe(2);
+    TweakStore.updateValue(MOVE_WAVEFORM_PANEL, 'style', 'striped');
+    expect(MoveWaveformStore.shownZoom()).toBe(4);
+    // Pad 0 lands at the start of the window the card actually shows.
+    MoveWaveformStore.pressPad(0);
+    expect(MoveWaveformStore.getView().position).toBeCloseTo(0.375, 6);
+    release();
+  });
+});
+
 describe('two displays can hold the claim', () => {
   it('keeps the hardware until the last one lets go', () => {
     const a = MoveWaveformStore.register();

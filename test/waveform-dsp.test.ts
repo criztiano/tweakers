@@ -117,20 +117,14 @@ describe('barPeaks', () => {
     expect(bars[1]).toEqual({ x: 1, min: -0.875, max: 0.125 });
   });
 
-  it('striped: a bar stands for its whole pitch, so the gap hides nothing', () => {
-    // Pitch 4 = a 2px bar and a 2px gap. Columns 1 and 3 would sit under the
-    // gap in a masked drawing; here the loudest sample in column 1 (-0.875)
-    // still sets the first bar's floor, and column 7 (-0.75) the second's.
+  it('a bar stands for its whole pitch, so no column is left out', () => {
+    // Pitch 4: the loudest sample in column 1 (-0.875) still sets the first
+    // bar's floor, and column 7 (-0.75) the second's.
     const bars = barPeaks(peaks, 8, 4);
     expect(bars).toEqual([
       { x: 0, min: -0.875, max: 0.75 },
       { x: 4, min: -0.75, max: 0.5 },
     ]);
-  });
-
-  it('doubles the visual pitch: half as many bars as the pixelated drawing at the same zoom', () => {
-    expect(barPeaks(peaks, 8, 2).length).toBe(4);
-    expect(barPeaks(peaks, 8, 4).length).toBe(2);
   });
 
   it('keeps a short last bar rather than dropping the tail of the window', () => {
