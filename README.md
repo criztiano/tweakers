@@ -1272,6 +1272,10 @@ Three placements, one look — all of them on the hardware's own display surface
 
 `children` render over the waveform, so an app can lay its own markers on top without fighting the canvas's sizing. Every prop `WaveformVisualization` takes is passed through; `WaveformVisualization` itself now also accepts a controlled `zoom`, which is how the wheel drives it.
 
+**The look is the user's.** How the sample is drawn — the style, the bar width, the grid, the EQ bands, the centre line — lives on the kit's own **Waveform** page in the settings room (behind the Move's Set Overview button, Shift + Step 1), not in the app: the first waveform to claim the surface puts the page there (seeded with its `mode` / `pixelSize` / `grid` / `bands` / `baseline` props), it persists per machine, and every waveform on the surface follows it, on screen and from the hardware. Three styles: `smooth` (the simplified envelope), `pixelated` (one min/max bar per column) and `striped` — the pixelated bar with a gap its own width after it. A striped bar reads its peaks over bar *and* gap, so the gap masks nothing: a transient under the gap still lifts the bar beside it. The wave keeps every sample and loses only resolution; at the same zoom each step is twice as wide.
+
+While the audio modulator's floating editor is zoomed in, the small screens — the audio dial's face and the Move's own display — show the part the editor shows, framed on the playhead, rather than a whole-sample thumbnail.
+
 ### Function buttons
 
 The Move's named function buttons attach to your app's own actions through the function library. Names match the printed hardware labels, and the manifest (`MOVE_FUNCTION_MANIFEST`) splits them in two groups:
