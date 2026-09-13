@@ -7071,7 +7071,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         },
         children: [
           /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "tweakers-move-tracks", children: [
-            audioWave != null || roomWave ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MoveAudioZoom, {}) : /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "tweakers-move-tracks-group", children: [
+            audioWave != null ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MoveAudioZoom, {}) : /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "tweakers-move-tracks-group", children: [
               settingsOpen && /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "tweakers-move-settings-title", children: [
                 /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "tweakers-move-settings-blink" }),
                 roomPages.length > 1 ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Settings pages", children: roomPages.map((pg, i) => /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(
@@ -7125,7 +7125,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
               functionChips === "tracks" && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MoveFunctionChips, {}),
               headerStart && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: "tweakers-move-header-start", children: headerStart })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: "tweakers-move-mods", children: settingsOpen ? null : color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MoveColorSteps, { color, disabled: import_TweakStore7.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? import_ModulationStore2.ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MoveModCircle, { slot }, slot.index)) : null }),
+            /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: "tweakers-move-mods", children: settingsOpen ? roomWave ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MoveAudioZoom, {}) : null : color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MoveColorSteps, { color, disabled: import_TweakStore7.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? import_ModulationStore2.ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MoveModCircle, { slot }, slot.index)) : null }),
             audioWave != null ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MoveAudioTransport, { index: audioWave }) : roomWave ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MoveRoomTransport, {}) : headerCluster
           ] }),
           /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(

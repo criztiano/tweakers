@@ -6726,7 +6726,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         },
         children: [
           /* @__PURE__ */ jsxs10("div", { className: "tweakers-move-tracks", children: [
-            audioWave != null || roomWave ? /* @__PURE__ */ jsx10(MoveAudioZoom, {}) : /* @__PURE__ */ jsxs10("div", { className: "tweakers-move-tracks-group", children: [
+            audioWave != null ? /* @__PURE__ */ jsx10(MoveAudioZoom, {}) : /* @__PURE__ */ jsxs10("div", { className: "tweakers-move-tracks-group", children: [
               settingsOpen && /* @__PURE__ */ jsxs10("div", { className: "tweakers-move-settings-title", children: [
                 /* @__PURE__ */ jsx10("span", { className: "tweakers-move-settings-blink" }),
                 roomPages.length > 1 ? /* @__PURE__ */ jsx10("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Settings pages", children: roomPages.map((pg, i) => /* @__PURE__ */ jsxs10(
@@ -6780,7 +6780,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
               functionChips === "tracks" && /* @__PURE__ */ jsx10(MoveFunctionChips, {}),
               headerStart && /* @__PURE__ */ jsx10("div", { className: "tweakers-move-header-start", children: headerStart })
             ] }),
-            /* @__PURE__ */ jsx10("div", { className: "tweakers-move-mods", children: settingsOpen ? null : color && colorMeta ? /* @__PURE__ */ jsx10(MoveColorSteps, { color, disabled: TweakStore7.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? ModulationStore2.getSlots().map((slot) => /* @__PURE__ */ jsx10(MoveModCircle, { slot }, slot.index)) : null }),
+            /* @__PURE__ */ jsx10("div", { className: "tweakers-move-mods", children: settingsOpen ? roomWave ? /* @__PURE__ */ jsx10(MoveAudioZoom, {}) : null : color && colorMeta ? /* @__PURE__ */ jsx10(MoveColorSteps, { color, disabled: TweakStore7.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? ModulationStore2.getSlots().map((slot) => /* @__PURE__ */ jsx10(MoveModCircle, { slot }, slot.index)) : null }),
             audioWave != null ? /* @__PURE__ */ jsx10(MoveAudioTransport, { index: audioWave }) : roomWave ? /* @__PURE__ */ jsx10(MoveRoomTransport, {}) : headerCluster
           ] }),
           /* @__PURE__ */ jsxs10(
