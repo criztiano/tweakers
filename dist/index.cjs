@@ -8742,9 +8742,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 pg.panel.id
               )) }),
               functionChips === "tracks" && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveFunctionChips, {}),
-              headerStart && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "tweakers-move-header-start", children: headerStart }),
-              waveClaimed && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveAudioZoom, {})
+              headerStart && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "tweakers-move-header-start", children: headerStart })
             ] }),
+            audioWave == null && waveClaimed && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveAudioZoom, {}),
             /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "tweakers-move-mods", children: settingsOpen ? null : color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveColorSteps, { color, disabled: import_TweakStore8.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? import_ModulationStore2.ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveModCircle, { slot }, slot.index)) : null }),
             audioWave != null ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveAudioTransport, { index: audioWave }) : headerCluster
           ] }),

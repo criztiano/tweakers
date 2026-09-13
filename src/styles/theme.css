@@ -566,6 +566,21 @@
   min-width: 0;
 }
 
+/* The zoom readout beside the page names, on a host's card: the first
+   header cell holds both, the readout after the names. */
+.tweakers-move-tracks > .tweakers-move-tracks-group:has(+ .tweakers-move-wave-zoom) {
+  grid-column: 1;
+  justify-self: start;
+}
+.tweakers-move-tracks > .tweakers-move-wave-zoom {
+  grid-column: 1;
+  justify-self: end;
+  grid-row: 1;
+}
+.tweakers-move-tracks > .tweakers-move-tracks-group {
+  grid-row: 1;
+}
+
 .tweakers-move-pages {
   display: flex;
   align-items: center;

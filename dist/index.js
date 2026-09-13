@@ -8384,9 +8384,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 pg.panel.id
               )) }),
               functionChips === "tracks" && /* @__PURE__ */ jsx11(MoveFunctionChips, {}),
-              headerStart && /* @__PURE__ */ jsx11("div", { className: "tweakers-move-header-start", children: headerStart }),
-              waveClaimed && /* @__PURE__ */ jsx11(MoveAudioZoom, {})
+              headerStart && /* @__PURE__ */ jsx11("div", { className: "tweakers-move-header-start", children: headerStart })
             ] }),
+            audioWave == null && waveClaimed && /* @__PURE__ */ jsx11(MoveAudioZoom, {}),
             /* @__PURE__ */ jsx11("div", { className: "tweakers-move-mods", children: settingsOpen ? null : color && colorMeta ? /* @__PURE__ */ jsx11(MoveColorSteps, { color, disabled: TweakStore8.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? ModulationStore2.getSlots().map((slot) => /* @__PURE__ */ jsx11(MoveModCircle, { slot }, slot.index)) : null }),
             audioWave != null ? /* @__PURE__ */ jsx11(MoveAudioTransport, { index: audioWave }) : headerCluster
           ] }),

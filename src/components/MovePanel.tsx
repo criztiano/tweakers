@@ -1499,11 +1499,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               )}
               {functionChips === 'tracks' && <MoveFunctionChips />}
               {headerStart && <div className="tweakers-move-header-start">{headerStart}</div>}
-              {/* A host's card gets the editor's zoom readout too, at the
-                  row's end — the other end from its clock. */}
-              {waveClaimed && <MoveAudioZoom />}
             </div>
             )}
+            {/* A host's card gets the editor's zoom readout too, beside the
+                page names — the other end of the row from its clock. */}
+            {audioWave == null && waveClaimed && <MoveAudioZoom />}
             {/* The step buttons, centred between the track labels and the
                 volume readout — one circle each. Normally the modulation
                 slots; an app that claimed the row paints them itself, and
