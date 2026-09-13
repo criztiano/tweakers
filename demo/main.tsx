@@ -28,6 +28,21 @@ TweakStore.registerPanel('space', 'Space', {
   mix: [0.3, 0, 1],
 });
 
+// The colour system, all three faces on one page: the integrated gradient
+// editor in a big slot (tap it — the track row becomes its stops), two small
+// colour selectors on the pad row, and the balance dial blending them.
+TweakStore.registerPanel('paint', 'Paint', {
+  ramp: { type: 'gradient', default: { type: 'linear', angle: 90, stops: [
+    { color: '#1b2a4aff', position: 0 },
+    { color: '#eb644dff', position: 0.55 },
+    { color: '#f7e6b0ff', position: 1 },
+  ] } },
+  glow: [0.4, 0, 1],
+  inkA: { type: 'color', default: '#632ad5' },
+  inkB: { type: 'color', default: '#fccff7' },
+  blend: { type: 'balance', a: 'inkA', b: 'inkB', default: 0.5 },
+}, undefined, { movePads: { inkA: 2, inkB: 3 } });
+
 // The settings room: master controls behind the Set Overview button
 // (Shift + Step 1 on the hardware, the S key here). Named in MovePanel's
 // `settings` prop below, so it never takes a track.

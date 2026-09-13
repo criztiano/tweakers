@@ -20,6 +20,9 @@ adjustment, modulation, readouts and hardware column alignment.
 | `xy` | Two axes that form one gesture | `xy`; `MoveSlotXYBody` | Column knob X, touched + volume Y |
 | `range` | Low/high bounds of one interval | `range`; `MoveSlotRangeBody` | Column knob low, touched + volume high |
 | `filter` | Cutoff and resonance with a response display | `filter`; `MoveSlotFilterBody` | 2 adjacent dials |
+| `color` | One colour the page is about | `color` config; `MoveSlotColorBody` | 1 dial; hue on the knob, luminosity on volume, tap opens the editor |
+| `ramp` | A colour gradient of 2–4 stops, editable in place | `gradient` config; `MoveSlotRampBody` | 1 dial; tap opens the editor — the track buttons become the stops |
+| `balance` | A 0..1 mix between two sibling colour params | `balance` config (`{ type: 'balance', a, b }`); `MoveSlotRampBody` | 1 dial, a plain normalized value on the wire |
 
 The panel's standard surface is the fixed eight-column cluster: parameters past
 the eight dials become value chips on the pad row per the layout rules, and a
@@ -45,12 +48,45 @@ control.
 | `action` | A button the page wants on the surface | `action` with a `movePads` column; `MovePadActionBody` | 1 pad |
 | `app` | A cell the app paints — a track, a slice, a step | `MoveSurfaceStore`; `MovePadAppBody` | 1 pad |
 | `tabs` | The mode a page is in, reachable without turning anything | `select` with `moveTabs` (`true`, or `'named'` for the name pad); `MovePadTabsBody` | 2–8 adjacent pads, switch row |
+| `color` | A single colour where colour is not the page's big control | `color` config with a `movePads` column; `MovePadColorBody` | 1 pad, value row; tap opens the colour editor |
 
 A `moveTabs` select stops competing for a dial: it is a pad strip and nothing
 else. It lands as one piece or not at all — the builder reports `tabs-oversized`
 when the strip is wider than the 8-pad row and `tabs-no-room` when no run that
 long is left, rather than shortening a mode picker. `movePads` names the column
 its run **starts** in.
+
+### Color: the integrated gradient editor and the balance pattern
+
+A `gradient` of 2–4 stops carries the full colour editor in its slot: tap the
+ramp (screen) or its knob (hardware) and the four track buttons become the
+stops, lit in each stop's colour — select one and the colour dial + volume
+dial edit that stop's hue and luminosity exactly as they edit a single
+colour; hold a track button and the colour dial slides that stop along the
+ramp instead; pads and steps set the selected stop's opacity. The track
+buttons return to page duty the moment the editor closes (the settings
+room's suppress/restore precedent). Palette locks apply per stop. A gradient
+with more than four stops keeps the plain ramp slot and its on-screen drag.
+
+A `color` control given a `movePads` column becomes the **small colour
+selector**: a swatch chip on the value row for pages where colour is not the
+big control. A tap — screen pad or hardware pad — opens the same editor.
+
+The **balance pattern** expresses "this effect's colour is a mix of two":
+two small colour selectors plus one big slot blending between them.
+
+```tsx
+useTweakers('Noise', {
+  colorA: { type: 'color', default: '#632ad5' },
+  colorB: { type: 'color', default: '#fccff7' },
+  balance: { type: 'balance', a: 'colorA', b: 'colorB', default: 0.5 },
+}, { movePads: { colorA: 0, colorB: 1 } });
+```
+
+`balance` resolves to a plain 0..1 number (0 all `a`, 1 all `b`) — on the
+wire it is an ordinary dial, so modulation, presets and hardware sync need
+nothing new — while its slot draws the two referenced colours' ramp with the
+mix position as the tick.
 
 | Component / API | Purpose |
 | --- | --- |

@@ -199,8 +199,17 @@ surface. The updated Bridge module uses direct RGB for 32 distinct hues at maxim
 saturation and fixed lightness, matching the on-screen grid. Reopen Bridge once
 after installing the on-device module update; older modules retain indexed colors
 until they advertise RGB support. Grid taps set saturation to maximum while
-preserving the selected luminosity and opacity. This is the single-color foundation for later palette and gradient
-controls.
+preserving the selected luminosity and opacity.
+
+The same editor now drives gradients and small colours (see
+`docs/controls.md`, "Color: the integrated gradient editor and the balance
+pattern"): a 2–4 stop `gradient` opens the editor from its ramp slot and
+claims the track buttons as its stops for as long as it stands open; a
+`color` with a `movePads` column is a swatch chip on the value row whose tap
+opens the editor; and `balance` blends two sibling colours on a plain 0..1
+dial. On the wire the gradient dial rides as a colour dial carrying `stops`,
+and the stop gestures are `color-stop` / `stop-position` — see the move
+repo's `PROTOCOL.md`.
 
 ### Audio modulator
 
