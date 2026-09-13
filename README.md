@@ -1050,11 +1050,13 @@ Mark an item `muted` when the row is information rather than a choice — a job 
 tweakers apps can be driven by an Ableton Move over the bridge kit (the `move` repo's app server). The app binds once and both surfaces stay in sync:
 
 ```tsx
-import { TweakStore, MovePanel } from 'tweakers';
+import { TweakStore, MovePanel, moveKitOptions } from 'tweakers';
 
-// Bind the hardware bridge when it's running (no-op otherwise).
+// Bind the hardware bridge when it's running (no-op otherwise). The bundle is
+// every registry the kit reads — never list them by hand; the kit warns when
+// the page needs one the bind lacks.
 import('http://localhost:7787/kit.js')
-  .then(m => m.bindMove(TweakStore))
+  .then(m => m.bindMove(TweakStore, moveKitOptions()))
   .catch(() => {});
 
 // Optional on-screen mirror of the Move surface, docked to the bottom edge.
@@ -1264,12 +1266,13 @@ The pad row under the dials has its own dictionary, `MOVE_PAD_LIBRARY`, on the s
 The panel gives an app its knobs; `MoveWaveform` gives it the sample they are acting on, on the same surface and driven by the same hardware.
 
 ```tsx
-import { MoveWaveform, MoveWaveformStore } from 'tweakers';
+import { MoveWaveform, TweakStore, moveKitOptions } from 'tweakers';
 
 <MoveWaveform buffer={buffer} getProgress={() => playhead} onSeek={setPosition} onLoopChange={setLoop} />
 
+// moveKitOptions() already carries MoveWaveformStore as `waveform`
 import('http://localhost:7787/kit.js')
-  .then(m => m.bindMove(TweakStore, { waveform: MoveWaveformStore }))
+  .then(m => m.bindMove(TweakStore, moveKitOptions()))
   .catch(() => {});
 ```
 
@@ -1297,14 +1300,15 @@ The Move's named function buttons attach to your app's own actions through the f
 - **Special** — `sample`, `loop`, `capture`, `menu`, `back`, `jog_click` (also exported as `MOVE_SPECIAL_BUTTONS`). These carry no fixed meaning; each app decides what they do — `sample` often acts as the confirm key.
 
 ```tsx
-import { TweakStore, MoveFunctions } from 'tweakers';
+import { TweakStore, MoveFunctions, moveKitOptions } from 'tweakers';
 
 MoveFunctions.attach('undo', () => history.undo());
 MoveFunctions.attach('copy', ({ shift }) => (shift ? copyAll() : copySelection()));
 MoveFunctions.attach('sample', () => confirmSelection());
 
+// moveKitOptions() already carries MoveFunctions as `functions`
 import('http://localhost:7787/kit.js')
-  .then(m => m.bindMove(TweakStore, { functions: MoveFunctions }))
+  .then(m => m.bindMove(TweakStore, moveKitOptions()))
   .catch(() => {});
 ```
 

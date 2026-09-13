@@ -1,6 +1,6 @@
 import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { TweakStore, ModulationStore, MoveFunctions, MoveColorStore, MovePresetStore, MoveSurfaceStore, MoveVolumeDisplay, sampleTransfer, movePoint } from 'tweakers';
+import { TweakStore, ModulationStore, MoveFunctions, MovePresetStore, moveKitOptions } from 'tweakers';
 import 'tweakers/styles.css';
 import { Library } from './Library';
 import { registerLibraryPanel } from './panel';
@@ -27,19 +27,9 @@ function MoveBridge() {
     import(/* @vite-ignore */ `http://localhost:7787/kit.js?v=${Date.now()}`)
       .then((m) => {
         if (cancelled) return;
-        unbind = m.bindMove(TweakStore, {
-          functions: MoveFunctions,
-          modulation: ModulationStore,
-          color: MoveColorStore,
-          // The curve maths a knob needs to hold one of a transfer's points:
-          // read the shape, and move the point it is holding. Without it the
-          // kit shows that slot but cannot turn it.
-          transfer: { sample: sampleTransfer, move: movePoint },
-          // Whatever the volume knob means here also reaches the Move's screen.
-          volume: MoveVolumeDisplay,
-          // ...and the reserved pad row the library claims reaches the pads.
-          surface: MoveSurfaceStore,
-        });
+        // Every registry the kit reads, in one piece — the kit warns when the
+        // page needs one a bind lacks, so none is ever listed by hand.
+        unbind = m.bindMove(TweakStore, moveKitOptions());
       })
       .catch((error) => { if (!cancelled) console.warn('Move bridge could not connect', error); });
     return () => { cancelled = true; unbind?.(); };

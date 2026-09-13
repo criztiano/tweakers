@@ -25,6 +25,7 @@
  */
 
 import { MOVE_PALETTE, type MovePaletteName } from './move-palette';
+import { TweakStore } from './store/TweakStore';
 
 /**
  * The manifest of attachable buttons — each named exactly as printed on the
@@ -172,6 +173,8 @@ class MoveFunctionsClass {
       console.warn(`[tweakers] "${name}" is not a Move function button; expected one of: ${MOVE_FUNCTION_BUTTONS.join(', ')}`);
       return () => {};
     }
+    // a hardware press reaches this only through the kit's `functions` option
+    TweakStore.noteMoveKitUse('functions');
     this.handlers.set(name, handler);
     if (options) this.options.set(name, options);
     else this.options.delete(name);

@@ -2,12 +2,11 @@ import { createRoot } from 'react-dom/client';
 import { MovePanel } from '../src/components/MovePanel';
 import { TweakStore } from '../src/store/TweakStore';
 import { ModulationStore } from '../src/store/ModulationStore';
-import { MoveColorStore } from '../src/move-color';
 import { MoveFunctions } from '../src/move-functions';
 import { MovePresetStore } from '../src/move-presets';
 import { MoveSurfaceStore, type MoveScreenRow } from '../src/move-surface-store';
-import { MoveWaveformStore } from '../src/move-waveform';
 import { MoveVolumeDisplay } from '../src/move-volume';
+import { moveKitOptions } from '../src/move-kit';
 import { setAudioModBuffer } from '../src/modulation-core';
 import '../src/styles/theme.css';
 
@@ -222,14 +221,7 @@ const bridge = (new URLSearchParams(location.search).get('bridge') || 'http://lo
   .replace(/\/+$/, '');
 // @ts-ignore — remote module, no types
 import(/* @vite-ignore */ `${bridge}/kit.js`)
-  .then((m) => m.bindMove(TweakStore, {
-    url: bridge,
-    functions: MoveFunctions,
-    modulation: ModulationStore,
-    color: MoveColorStore,
-    waveform: MoveWaveformStore,
-    volume: MoveVolumeDisplay,
-  }))
+  .then((m) => m.bindMove(TweakStore, moveKitOptions({ url: bridge })))
   .catch(() => {});
 
 // Debug handles for poking the live stores from the console.

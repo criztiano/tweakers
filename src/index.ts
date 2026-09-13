@@ -75,6 +75,12 @@ export { MoveVolumeDisplay } from './move-volume';
 export type { MoveVolumeDisplayState } from './move-volume';
 export { ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, MOVE_FUNCTION_ICONS } from './icons';
 export type { MoveFunctionGlyph } from './icons';
+// The one bind: every registry the bridge kit reads, keyed by its option
+// name — bindMove(TweakStore, moveKitOptions()).
+export { moveKitOptions } from './move-kit';
+export type { MoveKitOptions, MoveKitOverrides } from './move-kit';
+export type { MoveKitRegistry } from './store/TweakStore';
+
 // Raw hardware an app claims for itself — the bottom pad rows, the step
 // buttons, the device screen — kept for the on-screen mirror.
 export { MoveSurfaceStore, moveScreenRowLabel, moveScreenChecked } from './move-surface-store';

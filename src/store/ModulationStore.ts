@@ -126,6 +126,7 @@ class ModulationStoreClass {
         const def = slot?.type ? getModType(slot.type) : undefined;
         if (i >= 0 && i < MOD_SLOTS && def && slot.params) {
           this.slots[i] = { ...slot, index: i, params: restoreModParams(def, slot.params) };
+          TweakStore.noteMoveKitUse('modulation');
         }
       }
       for (const a of saved.assignments ?? []) {
@@ -197,6 +198,9 @@ class ModulationStoreClass {
       return null;
     }
     const slot: ModulationSlot = { index, type, params: freshParams(def) };
+    // a modulator lights and assigns from the step row only through the
+    // kit's `modulation` option
+    TweakStore.noteMoveKitUse('modulation');
     this.slots[index] = slot;
     this.states.set(index, def.createState());
     this.changed();

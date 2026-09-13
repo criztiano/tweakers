@@ -1,6 +1,7 @@
 import { WAVEFORM_MAX_ZOOM } from './waveform-engine';
 import type { WaveformLoop } from './waveform-engine';
 import { MoveVolumeDisplay } from './move-volume';
+import { TweakStore } from './store/TweakStore';
 
 /**
  * A waveform on the Move surface.
@@ -182,6 +183,8 @@ class MoveWaveformStoreClass {
 
   /** Claim the wheel, the volume knob and the step row. Returns the release. */
   register(): () => void {
+    // the knob, wheel and step row drive it only through the kit's `waveform`
+    TweakStore.noteMoveKitUse('waveform');
     this.registered = true;
     // The knob is ours now, so it says so: the volume readout follows the
     // playhead for as long as we hold the claim, and is handed back with it.

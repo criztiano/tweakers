@@ -855,6 +855,16 @@ export type TweakStorePanelOptions = {
   kind?: 'timeline' | 'modulation';
 };
 
+/**
+ * The registries the Move bridge kit reads, by their `bindMove` option names.
+ * The kit ships alone and cannot import them, so an app hands them over —
+ * `moveKitOptions()` bundles every one. Each registry notes here when the page
+ * puts it to use (`noteMoveKitUse`), so the kit can say out loud when it was
+ * bound without one the page needs, instead of dropping that feature on the
+ * hardware in silence.
+ */
+export type MoveKitRegistry = 'functions' | 'modulation' | 'color' | 'surface' | 'waveform' | 'volume' | 'transfer';
+
 /** camelCase → Title Case, the label rule used everywhere a key becomes UI text. */
 export function formatLabel(key: string): string {
   return key
@@ -980,6 +990,10 @@ class TweakStoreClass {
   // Resolved storage target per panel (null = persistence off). Absent = not
   // yet registered.
   private persistTargets: Map<string, PersistTarget | null> = new Map();
+
+  // The Move-kit registries this page has put to use. Only ever grows: a
+  // page that once claimed the pads is a page whose binding needs them.
+  private moveKitUses: Set<MoveKitRegistry> = new Set();
 
   registerPanel(id: string, name: string, config: TweakConfig, shortcuts?: Record<string, ShortcutConfig>, options: TweakStorePanelOptions = {}): void {
     const existingPanel = this.panels.get(id);
@@ -1300,6 +1314,18 @@ class TweakStoreClass {
         this.listeners.delete(panelId);
       }
     };
+  }
+
+  /** A registry says the page uses it (see MoveKitRegistry). Silent: this is
+   *  bookkeeping for the bridge kit, not a change anything should render. */
+  noteMoveKitUse(registry: MoveKitRegistry): void {
+    this.moveKitUses.add(registry);
+  }
+
+  /** The Move-kit registries this page has put to use — what the bridge kit
+   *  checks its binding against. */
+  getMoveKitUses(): MoveKitRegistry[] {
+    return [...this.moveKitUses];
   }
 
   subscribeGlobal(listener: Listener): () => void {

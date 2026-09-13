@@ -34,9 +34,35 @@ surface: the development default otherwise hides the panel in production.
 ## Hardware connection
 
 The separate Move server serves `bindMove` at `http://localhost:7787/kit.js`.
-Bind once per active surface/profile. Supply exactly the same ordered panel
-names to `MovePanel` and `bindMove`, and the registries for features the app uses:
-`functions`, `waveform`, `modulation`. The bridge returns an unbind function;
+Bind once per active surface/profile, always with the one bundle:
+
+```tsx
+import { TweakStore, moveKitOptions } from 'tweakers';
+
+import(/* @vite-ignore */ 'http://localhost:7787/kit.js')
+  .then(m => m.bindMove(TweakStore, moveKitOptions({ panels: PANELS })));
+```
+
+`moveKitOptions()` carries every registry the kit reads — `functions`,
+`modulation`, `color`, `surface`, `waveform`, `volume`, and the `transfer` curve
+maths. Do not list them by hand: the kit ships alone, and each registry left out
+switches its feature off on the hardware only, while the screen looks right
+(a balance without `color` cannot seat its colours; a wheel list without
+`surface` never reaches the Move's screen). Every registry is inert until the
+page uses it, so the bundle costs nothing. A registry the app owns itself is
+declined by name with `null` — `modulation: null` for an app sequencer on the
+step row, `surface: null` for a raw client that owns the pads.
+
+The kit checks the bind against the page and warns once per gap: colour,
+gradient or balance controls without `color`, a transfer curve without
+`transfer`, and — noted by the registries as the page uses them — pads, steps
+or a wheel list without `surface`, attached buttons without `functions`, a
+modulator without `modulation`, a mounted waveform without `waveform`, a
+volume readout without `volume`. A warning is a broken bind; `null` is how an
+intended gap is said.
+
+Supply exactly the same ordered panel names to `MovePanel` and `bindMove`
+(`panels`). The bridge returns an unbind function;
 call it on unmount and before rebinding. Cancel pending import/retry work on
 unmount so a late import cannot create an orphan connection.
 
@@ -174,15 +200,15 @@ color over a transparency checker. Drag or use arrow keys to change hue; tap to
 open a floating 32-color hue display and mirror it on the Move grid.
 
 ```tsx
-import { MoveColorStore, TweakStore, useTweakers } from 'tweakers';
+import { moveKitOptions, TweakStore, useTweakers } from 'tweakers';
 
 const values = useTweakers('Color', {
   tint: { type: 'color', default: '#eb644dff', alpha: true },
 });
 
-// Alongside any existing functions/modulation/waveform options:
+// The one bind already carries MoveColorStore as `color`:
 import('http://localhost:7787/kit.js').then(m =>
-  m.bindMove(TweakStore, { color: MoveColorStore })
+  m.bindMove(TweakStore, moveKitOptions())
 );
 ```
 
@@ -218,14 +244,14 @@ position that runs like a tape. The host decodes the sample and hands it over
 once — the library never owns audio:
 
 ```tsx
-import { setAudioModBuffer, ModulationStore, MoveWaveformStore } from 'tweakers';
+import { setAudioModBuffer, moveKitOptions, TweakStore } from 'tweakers';
 
 const buffer = await audioCtx.decodeAudioData(bytes);
 setAudioModBuffer(buffer);
 
-// Bind the waveform store so the hardware drives the editor:
+// The one bind carries the waveform store, so the hardware drives the editor:
 import('http://localhost:7787/kit.js').then(m =>
-  m.bindMove(TweakStore, { modulation: ModulationStore, waveform: MoveWaveformStore })
+  m.bindMove(TweakStore, moveKitOptions())
 );
 ```
 

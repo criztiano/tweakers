@@ -114,6 +114,16 @@ whether a standalone color is a page's big control (a dial) or a detail (a
 chip, said by naming its column). Everything else the kit decides, and a
 map entry it ignores is announced as a layout warning, never silently obeyed.
 
+The hardware bind is a brick too, and it has one shape:
+`m.bindMove(TweakStore, moveKitOptions())` — every registry the kit reads,
+bundled (other options ride inside: `moveKitOptions({ url, panels })`). Never
+list registries by hand: each one forgotten switches a feature off on the
+hardware only (a balance without `color` loses its colors; a wheel list without
+`surface` never reaches the Move's screen). A registry the app keeps for itself
+is declined with `null` (`modulation: null` for an app sequencer on the step
+row). A kit console warning that names a registry is a bug in the bind, not
+noise.
+
 ### The fork every integration hits: config-driven panel vs standalone components
 
 tweakers can be consumed two ways: the declarative `useTweakers` config +
@@ -257,6 +267,8 @@ them wholesale. The panel's theme is the design anchor for the whole window:
 - A hand-rolled component duplicating something the installed tweakers exports.
 - Presets rebuilt as a folder of select/action rows instead of the toolbar's
   provider-backed preset UI.
+- A `bindMove` call that lists registries by hand instead of spreading
+  `moveKitOptions()`, or a kit warning naming a registry left standing.
 - A Move screen showing a list some control other than the big wheel walks.
   The hardware screen fits one list and it belongs to the wheel; a view whose
   wheel drives no list sends `null` rather than borrowing the screen.
