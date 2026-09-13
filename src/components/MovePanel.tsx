@@ -6,7 +6,7 @@ import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { ModulationStore } from '../store/ModulationStore';
 import { modColor, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, getAudioModBuffer, setAudioModBuffer, subscribeAudioMod, getAudioModVersion, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
 import { MoveWaveform } from './MoveWaveform';
-import { MoveWaveformStore, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_STEPS } from '../move-waveform';
+import { MoveWaveformStore, MOVE_WAVEFORM_PADS } from '../move-waveform';
 import { ICON_PLAY, ICON_LOOP, ICON_SEARCH } from '../icons';
 import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
@@ -382,6 +382,14 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // Volume-dial readout: a static value renders as set; a getValue is polled
   // per animation frame while mounted, for readouts that move (a playhead).
   const [volume, setVolume] = useState<MoveVolumeDisplayState | null>(() => MoveVolumeDisplay.get());
+  // A mounted waveform holds the knob, so its clock takes the corner: the
+  // playhead's time with the transport's state around it. That is the one
+  // readout a waveform gets, whichever host mounts it.
+  const waveClaimed = useSyncExternalStore(
+    useCallback((cb) => MoveWaveformStore.subscribe(cb), []),
+    () => MoveWaveformStore.isRegistered(),
+    () => false
+  );
   const [liveValue, setLiveValue] = useState<string | null>(null);
   useEffect(() => {
     setVolume(MoveVolumeDisplay.get());
@@ -1359,10 +1367,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // business.) Nothing registered and nothing attached = no cluster, header
   // unchanged.
   const volumeReading = liveValue ?? volume?.value;
-  const headerCluster = (volume || functionChips === 'clock') && (
+  const headerCluster = (waveClaimed || volume || functionChips === 'clock') && (
     <div className="tweakers-move-actions">
       {functionChips === 'clock' && <MoveFunctionChips />}
-      {volume && (
+      {waveClaimed ? (
+        <MoveWaveClock />
+      ) : volume && (
         <div className="tweakers-move-volume">
           <span className="tweakers-move-volume-tick" style={{ background: MOVE_TRACK_COLORS[0] }} />
           {volume.label && volumeReading != null && (
@@ -2549,25 +2559,10 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
     };
   }, [index]);
 
-  // The transport buttons, borrowed while the editor is up: Play runs the
-  // tape, Loop arms the brackets, Back closes the page (the step that would
-  // close it is busy being a loop bar).
-  useEffect(() => {
-    const toggle = (path: 'playing' | 'loopOn') => () => {
-      const slot = ModulationStore.getSlot(index);
-      if (slot) ModulationStore.updateSlotParams(index, { [path]: !slot.params[path] });
-    };
-    const releases = [
-      MoveFunctions.push('play', toggle('playing'), { label: 'Play', chip: false }),
-      MoveFunctions.push('loop', toggle('loopOn'), { label: 'Loop', chip: false }),
-      MoveFunctions.push('back', () => ModulationStore.closeSettings(), { label: 'Close', chip: false }),
-    ];
-    return () => releases.forEach((release) => release());
-  }, [index]);
-
   // The surface while the editor is up: the pad row is eight subdivisions of
-  // the shown window, and the step circles mirror the loop bar the hardware
-  // lights. Whatever the app had on the surface comes back on close.
+  // the shown window. (The step circles are the card's own business — it
+  // paints the loop bar in its accent.) Whatever the app had on the pads
+  // comes back on close.
   useEffect(() => {
     const prev = MoveSurfaceStore.getState();
     MoveSurfaceStore.setPadRows(1,
@@ -2576,26 +2571,31 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
       })),
       'tap to jump the playhead · hold to loop that part'
     );
-    const paintSteps = () => {
-      const lit = new Set(MoveWaveformStore.loopSteps());
-      MoveSurfaceStore.setSteps(
-        Array.from({ length: MOVE_WAVEFORM_STEPS }, (_, step) => ({
-          step, color: modColor(index), lit: lit.has(step),
-        }))
-      );
-    };
-    paintSteps();
-    const offView = MoveWaveformStore.subscribe(paintSteps);
     const offPress = MoveSurfaceStore.onPress(({ x, y }) => {
       if (y === 0) MoveWaveformStore.pressPad(x);
     });
     return () => {
-      offView();
       offPress();
       MoveSurfaceStore.setPadRows(prev.rows, prev.pads, prev.padsLabel);
-      MoveSurfaceStore.setSteps(prev.steps);
     };
   }, [index]);
+
+  // Back closes the page (the step that would close it is busy being a loop
+  // bar); Play and Loop are the card's, run against the slot's params.
+  useEffect(
+    () => MoveFunctions.push('back', () => ModulationStore.closeSettings(), { label: 'Close', chip: false }),
+    [index]
+  );
+  useSyncExternalStore(
+    useCallback((cb) => ModulationStore.subscribe(cb), []),
+    () => ModulationStore.getVersion(),
+    () => 0
+  );
+  const params = ModulationStore.getSlot(index)?.params ?? {};
+  const toggle = (path: 'playing' | 'loopOn') => () => {
+    const slot = ModulationStore.getSlot(index);
+    if (slot) ModulationStore.updateSlotParams(index, { [path]: !slot.params[path] });
+  };
 
   return (
     <MoveWaveform
@@ -2608,23 +2608,18 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
         ModulationStore.updateSlotParams(index, loop
           ? { loopStart: loop.start, loopEnd: loop.end, loopOn: true }
           : { loopStart: 0, loopEnd: 1 })}
-      // The editor's card, sized to the mockup: the sample dark on the
-      // light display, filling it edge to edge (the frame is all border,
-      // outside the display), lightly smoothed, no centre line — the
-      // slot's colour stays on the playhead and the loop band, so the slot
-      // still signs its editor.
-      mode="smooth"
-      smoothPoints={200}
-      baseline={false}
-      height={MOVE_WAVE_DISPLAY_HEIGHT}
-      waveColor="#1e1e1e"
-      playheadColor={modColor(index)}
+      transport={{
+        playing: !!params.playing,
+        loopOn: !!params.loopOn,
+        onPlay: toggle('playing'),
+        onLoop: toggle('loopOn'),
+      }}
+      // The card is the kit's; the slot signs it with its colour on the
+      // playhead, the loop band and the lit steps.
+      accent={modColor(index)}
     />
   );
 }
-
-/** The editor card's display: 728×128, with the 12px border outside it. */
-const MOVE_WAVE_DISPLAY_HEIGHT = 128;
 
 /**
  * The editor's zoom readout, in the panel's track corner while the editor
@@ -2647,31 +2642,50 @@ function MoveAudioZoom() {
 }
 
 /**
- * The editor's transport corner, where the volume readout usually sits:
- * the Load pill and the running clock, flanked by the transport's state —
- * play on the left, loop on the right, lit when running. The clock is
- * written straight to its span every frame at a fixed width, so the pill
- * never breathes.
+ * The clock every mounted waveform gets, in the panel's volume corner: the
+ * playhead's time, flanked by the transport's state — play on the left,
+ * loop on the right, lit when running. The time is written straight to its
+ * span every frame at a fixed width, so the pill never breathes.
  */
-function MoveAudioTransport({ index }: { index: number }) {
-  // The state icons follow the slot's params (Play/Loop button presses).
+function MoveWaveClock() {
   useSyncExternalStore(
-    useCallback((cb) => ModulationStore.subscribe(cb), []),
-    () => ModulationStore.getVersion(),
+    useCallback((cb) => MoveWaveformStore.subscribe(cb), []),
+    () => MoveWaveformStore.getVersion(),
     () => 0
   );
-  const params = ModulationStore.getSlot(index)?.params ?? {};
+  const transport = MoveWaveformStore.getTransport();
   const clockRef = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     let raf = requestAnimationFrame(function tick() {
-      const t = ModulationStore.getSlotPhase(index) * (getAudioModBuffer()?.duration ?? 0);
-      const text = `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}:${String(Math.floor((t % 1) * 100)).padStart(2, '0')}`;
+      const text = MoveWaveformStore.clock();
       if (clockRef.current && clockRef.current.textContent !== text) clockRef.current.textContent = text;
       raf = requestAnimationFrame(tick);
     });
     return () => cancelAnimationFrame(raf);
-  }, [index]);
+  }, []);
+  return (
+    <div className="tweakers-move-volume tweakers-move-wave-time" data-transport={transport ? true : undefined}>
+      {transport && (
+        <svg className="tweakers-move-wave-state" data-on={transport.playing || undefined} viewBox="0 0 24 24" aria-hidden="true">
+          <path d={ICON_PLAY} fill="currentColor" />
+        </svg>
+      )}
+      <span ref={clockRef} className="tweakers-move-volume-value">{MoveWaveformStore.clock()}</span>
+      {transport && (
+        <svg className="tweakers-move-wave-state" data-on={transport.loopOn || undefined} viewBox="0 0 24 24" aria-hidden="true">
+          {ICON_LOOP.map((d) => (
+            <path key={d} d={d} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+          ))}
+        </svg>
+      )}
+    </div>
+  );
+}
 
+/**
+ * The audio editor's transport corner: the Load pill and the card's clock.
+ */
+function MoveAudioTransport({ index }: { index: number }) {
   // Load: pick an audio file, decode it, put it on the shelf. The one place
   // the library touches an AudioContext — a one-shot decode, closed right
   // after; playback stays the host's.
@@ -2702,27 +2716,7 @@ function MoveAudioTransport({ index }: { index: number }) {
         <span className="tweakers-move-wave-load-dot" />
         <span>Load</span>
       </button>
-      <div className="tweakers-move-volume tweakers-move-wave-time">
-        <svg
-          className="tweakers-move-wave-state"
-          data-on={params.playing ? true : undefined}
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          <path d={ICON_PLAY} fill="currentColor" />
-        </svg>
-        <span ref={clockRef} className="tweakers-move-volume-value">0:00:00</span>
-        <svg
-          className="tweakers-move-wave-state"
-          data-on={params.loopOn ? true : undefined}
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          {ICON_LOOP.map((d) => (
-            <path key={d} d={d} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-          ))}
-        </svg>
-      </div>
+      <MoveWaveClock />
       <input
         ref={fileRef}
         type="file"

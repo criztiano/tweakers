@@ -5068,38 +5068,11 @@ function WaveformVisualization({
   ] });
 }
 
-// src/move-volume.ts
-var MoveVolumeDisplayClass = class {
-  constructor() {
-    this.state = null;
-    this.listeners = /* @__PURE__ */ new Set();
-  }
-  /** Show the pill with this readout — replaces any previous one. */
-  set(state2) {
-    this.state = state2;
-    this.notify();
-  }
-  /** Hide the pill. */
-  clear() {
-    this.state = null;
-    this.notify();
-  }
-  /** The current readout, or null when the pill is hidden. */
-  get() {
-    return this.state;
-  }
-  /** Notified when the readout is set or cleared. */
-  subscribe(listener) {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-  notify() {
-    for (const l of this.listeners) l();
-  }
-};
-var MoveVolumeDisplay = new MoveVolumeDisplayClass();
-
 // src/move-waveform.ts
+var MOVE_WAVE_FRAME = 12;
+var MOVE_WAVE_MAX_WIDTH = 1200;
+var MOVE_WAVE_MAX_HEIGHT = 176;
+var MOVE_WAVE_MAX_DISPLAY = MOVE_WAVE_MAX_HEIGHT - 2 * MOVE_WAVE_FRAME;
 var MOVE_WAVEFORM_STEPS = 16;
 var MOVE_WAVEFORM_PADS = 8;
 var SCRUB_PER_DETENT = 25e-5;
@@ -5166,23 +5139,47 @@ var MoveWaveformStoreClass = class {
     this.editor = false;
     this.progressSource = null;
     this.duration = null;
+    this.transport = null;
     this.listeners = /* @__PURE__ */ new Set();
     this.version = 0;
   }
-  /** Claim the wheel, the volume knob and the step row. Returns the release. */
+  /** Claim the wheel, the volume knob and the step row. Returns the release.
+   *
+   * The knob is ours now, so the panel says so: while a waveform is
+   * registered its volume corner carries the clock — the playhead's time
+   * with the transport's state around it — in place of whatever readout the
+   * app had put there, and hands the corner back with the claim. */
   register() {
     this.registered = true;
-    MoveVolumeDisplay.set({ label: "time", getValue: () => this.readout() });
     this.notify();
     return () => {
       this.registered = false;
       this.editor = false;
       this.progressSource = null;
       this.duration = null;
+      this.transport = null;
       this.view = defaultView();
-      MoveVolumeDisplay.clear();
       this.notify();
     };
+  }
+  /** The host's transport, for the clock to wear; null when it runs none. */
+  setTransport(transport) {
+    if (transport?.playing === this.transport?.playing && transport?.loopOn === this.transport?.loopOn && transport === null === (this.transport === null)) return;
+    this.transport = transport;
+    this.notify();
+  }
+  getTransport() {
+    return this.transport;
+  }
+  /** Where the playhead is right now, 0..1: the engine's while one reports, else the last scrub. */
+  playhead() {
+    return clamp014(this.progressSource ? this.progressSource() : this.view.position);
+  }
+  /** The clock the panel shows for the knob: m:ss:cc of the playhead. */
+  clock() {
+    const t = this.playhead() * (this.duration ?? 0);
+    const cc = Math.floor(t % 1 * 100);
+    return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}:${String(cc).padStart(2, "0")}`;
   }
   isRegistered() {
     return this.registered;
@@ -5224,7 +5221,7 @@ var MoveWaveformStoreClass = class {
   }
   /** What the volume knob is editing right now, ready to print. */
   readout() {
-    const at = clamp014(this.progressSource ? this.progressSource() : this.view.position);
+    const at = this.playhead();
     if (this.duration === null) return `${Math.round(at * 100)}%`;
     const total = at * this.duration;
     const minutes = Math.floor(total / 60);
@@ -5246,8 +5243,11 @@ var MoveWaveformStoreClass = class {
     this.view = next;
     this.notify();
   }
+  /** A detent moves the playhead from where it is — the engine's position
+   *  while one reports, so a scrub mid-play carries on from the play, never
+   *  from the spot the last scrub left. */
   scrub(delta, fine = false) {
-    this.setView({ position: scrubBy(this.view.position, delta, fine, this.view.zoom) });
+    this.setView({ position: scrubBy(this.playhead(), delta, fine, this.view.zoom) });
   }
   zoom(delta) {
     this.setView({ zoom: zoomBy(this.view.zoom, delta) });
@@ -5289,12 +5289,98 @@ var MoveWaveformStoreClass = class {
 };
 var MoveWaveformStore = new MoveWaveformStoreClass();
 
+// src/move-surface-store.ts
+var moveScreenRowLabel = (row) => typeof row === "string" ? row : row.label;
+var moveScreenChecked = (rows) => rows.flatMap((row, i) => typeof row !== "string" && row.checked ? [i] : []);
+var EMPTY = { rows: 0, pads: [], padsLabel: null, steps: null, screen: null, search: null };
+var state = EMPTY;
+var listeners = /* @__PURE__ */ new Set();
+var pressListeners = /* @__PURE__ */ new Set();
+var screenSelectListeners = /* @__PURE__ */ new Set();
+var emit = () => {
+  for (const fn of listeners) fn();
+};
+function patch(key, value) {
+  if (JSON.stringify(state[key]) === JSON.stringify(value)) return;
+  state = { ...state, [key]: value };
+  emit();
+}
+var validPads = (pads) => pads.filter((p) => p.x >= 0 && p.x < 8 && (p.y === 0 || p.y === 1));
+function patchPadRows(rows, pads, label) {
+  const nextPads = validPads(pads);
+  const nextLabel = label === void 0 ? state.padsLabel : label;
+  if (state.rows === rows && state.padsLabel === nextLabel && JSON.stringify(state.pads) === JSON.stringify(nextPads)) return;
+  state = { ...state, rows, pads: nextPads, padsLabel: nextLabel };
+  emit();
+}
+var MoveSurfaceStore = {
+  getState: () => state,
+  subscribe(fn) {
+    listeners.add(fn);
+    return () => listeners.delete(fn);
+  },
+  /** How many bottom pad rows the app took (matches `claims.pads` on the wire). */
+  claimRows(rows) {
+    patch("rows", rows);
+  },
+  setPads(pads) {
+    patch("pads", validPads(pads));
+  },
+  /** Publish the claimed row count and its cells as one renderable state.
+   *  `label` says what the row does here — pass it whenever the meaning
+   *  changes, so the panel never captions the pads with a stale phrase. */
+  setPadRows(rows, pads, label) {
+    patchPadRows(rows, pads, label);
+  },
+  /** What the claimed rows control in this view. */
+  setPadsLabel(label) {
+    patch("padsLabel", label);
+  },
+  setSteps(steps) {
+    patch("steps", steps === null ? null : steps.filter((s) => s.step >= 0 && s.step < 16));
+  },
+  setScreen(screen) {
+    patch("screen", screen);
+  },
+  /** The search narrowing the wheel list — MoveSearchStore's to write. */
+  setSearch(search) {
+    patch("search", search);
+  },
+  /** Selection intent from the panel's wheel screen; the host owns the value,
+   *  exactly as it owns what a hardware wheel turn means. */
+  onScreenSelect(fn) {
+    screenSelectListeners.add(fn);
+    return () => screenSelectListeners.delete(fn);
+  },
+  selectScreen(index) {
+    if (!state.screen || !Number.isInteger(index) || index < 0 || index >= state.screen.items.length) return;
+    for (const fn of screenSelectListeners) fn(index);
+  },
+  /** A tap on an on-screen pad, for the host to treat like a hardware press. */
+  onPress(fn) {
+    pressListeners.add(fn);
+    return () => pressListeners.delete(fn);
+  },
+  press(x, y) {
+    for (const fn of pressListeners) fn({ x, y });
+  },
+  /** Hand the whole surface back — the panel returns to its plain layout. */
+  reset() {
+    if (state === EMPTY) return;
+    state = EMPTY;
+    emit();
+  }
+};
+
 // src/env.ts
 var isDevDefault = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import.meta !== "undefined" && import.meta.env?.MODE ? import.meta.env.MODE !== "production" : true;
 
 // src/components/MoveWaveform.tsx
 import { jsx as jsx6, jsxs as jsxs6 } from "react/jsx-runtime";
 var SLOT_HEIGHT = 140;
+var DISPLAY_HEIGHT = 128;
+var WAVE_INK = "#1e1e1e";
+var DEFAULT_ACCENT = "#3d9bff";
 var SLOT_ZOOM = 4;
 var DOCK_GAP = 14;
 function MoveWaveform({
@@ -5304,14 +5390,16 @@ function MoveWaveform({
   progress,
   onSeek,
   onLoopChange,
-  mode = "pixelated",
+  transport,
+  accent = DEFAULT_ACCENT,
+  mode = "smooth",
   pixelSize = 2,
   grid = false,
   bands = false,
-  waveColor,
+  waveColor = WAVE_INK,
   playheadColor,
-  baseline = true,
-  smoothPoints,
+  baseline = false,
+  smoothPoints = 200,
   waveInset,
   height,
   children,
@@ -5332,6 +5420,39 @@ function MoveWaveform({
     setMounted(true);
     return MoveWaveformStore.register();
   }, [productionEnabled]);
+  const transportRef = useRef4(transport);
+  transportRef.current = transport;
+  const hasTransport = !!transport;
+  useEffect4(() => {
+    if (!productionEnabled || !hasTransport) return;
+    const releases = [
+      MoveFunctions.push("play", () => transportRef.current?.onPlay(), { label: "Play", chip: false }),
+      MoveFunctions.push("loop", () => transportRef.current?.onLoop(), { label: "Loop", chip: false })
+    ];
+    return () => releases.forEach((release) => release());
+  }, [productionEnabled, hasTransport]);
+  const playing = transport?.playing ?? false;
+  const loopOn = transport?.loopOn ?? false;
+  useEffect4(() => {
+    if (!productionEnabled) return;
+    MoveWaveformStore.setTransport(hasTransport ? { playing, loopOn } : null);
+  }, [productionEnabled, hasTransport, playing, loopOn]);
+  useEffect4(() => {
+    if (!productionEnabled) return;
+    const prev = MoveSurfaceStore.getState().steps;
+    const paint = () => {
+      const lit = new Set(MoveWaveformStore.loopSteps());
+      MoveSurfaceStore.setSteps(
+        Array.from({ length: MOVE_WAVEFORM_STEPS }, (_, step) => ({ step, color: accent, lit: lit.has(step) }))
+      );
+    };
+    paint();
+    const off = MoveWaveformStore.subscribe(paint);
+    return () => {
+      off();
+      MoveSurfaceStore.setSteps(prev);
+    };
+  }, [productionEnabled, accent]);
   useEffect4(() => {
     MoveWaveformStore.setDuration(buffer?.duration ?? null);
   }, [buffer]);
@@ -5380,7 +5501,7 @@ function MoveWaveform({
     };
   }, [variant, mounted]);
   if (!productionEnabled) return null;
-  const boxHeight = height ?? (variant === "slot" ? SLOT_HEIGHT : 180);
+  const boxHeight = Math.min(MOVE_WAVE_MAX_DISPLAY, height ?? (variant === "slot" ? SLOT_HEIGHT : DISPLAY_HEIGHT));
   const wave = /* @__PURE__ */ jsx6(
     WaveformVisualization,
     {
@@ -5390,8 +5511,8 @@ function MoveWaveform({
       pixelSize,
       grid,
       bands,
-      ...waveColor ? { waveColor } : {},
-      ...playheadColor ? { playheadColor } : {},
+      waveColor,
+      playheadColor: playheadColor ?? accent,
       baseline,
       ...smoothPoints != null ? { smoothPoints } : {},
       ...waveInset != null ? { waveInset } : {},
@@ -6333,89 +6454,6 @@ function ModRing({
   );
 }
 
-// src/move-surface-store.ts
-var moveScreenRowLabel = (row) => typeof row === "string" ? row : row.label;
-var moveScreenChecked = (rows) => rows.flatMap((row, i) => typeof row !== "string" && row.checked ? [i] : []);
-var EMPTY = { rows: 0, pads: [], padsLabel: null, steps: null, screen: null, search: null };
-var state = EMPTY;
-var listeners = /* @__PURE__ */ new Set();
-var pressListeners = /* @__PURE__ */ new Set();
-var screenSelectListeners = /* @__PURE__ */ new Set();
-var emit = () => {
-  for (const fn of listeners) fn();
-};
-function patch(key, value) {
-  if (JSON.stringify(state[key]) === JSON.stringify(value)) return;
-  state = { ...state, [key]: value };
-  emit();
-}
-var validPads = (pads) => pads.filter((p) => p.x >= 0 && p.x < 8 && (p.y === 0 || p.y === 1));
-function patchPadRows(rows, pads, label) {
-  const nextPads = validPads(pads);
-  const nextLabel = label === void 0 ? state.padsLabel : label;
-  if (state.rows === rows && state.padsLabel === nextLabel && JSON.stringify(state.pads) === JSON.stringify(nextPads)) return;
-  state = { ...state, rows, pads: nextPads, padsLabel: nextLabel };
-  emit();
-}
-var MoveSurfaceStore = {
-  getState: () => state,
-  subscribe(fn) {
-    listeners.add(fn);
-    return () => listeners.delete(fn);
-  },
-  /** How many bottom pad rows the app took (matches `claims.pads` on the wire). */
-  claimRows(rows) {
-    patch("rows", rows);
-  },
-  setPads(pads) {
-    patch("pads", validPads(pads));
-  },
-  /** Publish the claimed row count and its cells as one renderable state.
-   *  `label` says what the row does here — pass it whenever the meaning
-   *  changes, so the panel never captions the pads with a stale phrase. */
-  setPadRows(rows, pads, label) {
-    patchPadRows(rows, pads, label);
-  },
-  /** What the claimed rows control in this view. */
-  setPadsLabel(label) {
-    patch("padsLabel", label);
-  },
-  setSteps(steps) {
-    patch("steps", steps === null ? null : steps.filter((s) => s.step >= 0 && s.step < 16));
-  },
-  setScreen(screen) {
-    patch("screen", screen);
-  },
-  /** The search narrowing the wheel list — MoveSearchStore's to write. */
-  setSearch(search) {
-    patch("search", search);
-  },
-  /** Selection intent from the panel's wheel screen; the host owns the value,
-   *  exactly as it owns what a hardware wheel turn means. */
-  onScreenSelect(fn) {
-    screenSelectListeners.add(fn);
-    return () => screenSelectListeners.delete(fn);
-  },
-  selectScreen(index) {
-    if (!state.screen || !Number.isInteger(index) || index < 0 || index >= state.screen.items.length) return;
-    for (const fn of screenSelectListeners) fn(index);
-  },
-  /** A tap on an on-screen pad, for the host to treat like a hardware press. */
-  onPress(fn) {
-    pressListeners.add(fn);
-    return () => pressListeners.delete(fn);
-  },
-  press(x, y) {
-    for (const fn of pressListeners) fn({ x, y });
-  },
-  /** Hand the whole surface back — the panel returns to its plain layout. */
-  reset() {
-    if (state === EMPTY) return;
-    state = EMPTY;
-    emit();
-  }
-};
-
 // src/shortcut-utils.ts
 import { TweakStore as TweakStore4 } from "tweakers/store";
 function fineDragValue(opts) {
@@ -6423,6 +6461,37 @@ function fineDragValue(opts) {
   const delta = (pos - startPos) / (extentPx || 1) * (max - min) * factor;
   return Math.max(min, Math.min(max, startValue + delta));
 }
+
+// src/move-volume.ts
+var MoveVolumeDisplayClass = class {
+  constructor() {
+    this.state = null;
+    this.listeners = /* @__PURE__ */ new Set();
+  }
+  /** Show the pill with this readout — replaces any previous one. */
+  set(state2) {
+    this.state = state2;
+    this.notify();
+  }
+  /** Hide the pill. */
+  clear() {
+    this.state = null;
+    this.notify();
+  }
+  /** The current readout, or null when the pill is hidden. */
+  get() {
+    return this.state;
+  }
+  /** Notified when the readout is set or cleared. */
+  subscribe(listener) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+  notify() {
+    for (const l of this.listeners) l();
+  }
+};
+var MoveVolumeDisplay = new MoveVolumeDisplayClass();
 
 // src/move-color.ts
 import { TweakStore as TweakStore5 } from "tweakers/store";
@@ -7521,6 +7590,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const rangeHandleRef = useRef9("min");
   const filterHandRef = useRef9("cutoff");
   const [volume, setVolume] = useState7(() => MoveVolumeDisplay.get());
+  const waveClaimed = useSyncExternalStore3(
+    useCallback2((cb) => MoveWaveformStore.subscribe(cb), []),
+    () => MoveWaveformStore.isRegistered(),
+    () => false
+  );
   const [liveValue, setLiveValue] = useState7(null);
   useEffect9(() => {
     setVolume(MoveVolumeDisplay.get());
@@ -8208,9 +8282,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const stripFrom = stripMode ? stripSlotIndex(page, stripOffset) : 0;
   const stripTo = stripMode ? stripSlotIndex(page, stripOffset + MOVE_DIALS) : 0;
   const volumeReading = liveValue ?? volume?.value;
-  const headerCluster = (volume || functionChips === "clock") && /* @__PURE__ */ jsxs11("div", { className: "tweakers-move-actions", children: [
+  const headerCluster = (waveClaimed || volume || functionChips === "clock") && /* @__PURE__ */ jsxs11("div", { className: "tweakers-move-actions", children: [
     functionChips === "clock" && /* @__PURE__ */ jsx11(MoveFunctionChips, {}),
-    volume && /* @__PURE__ */ jsxs11("div", { className: "tweakers-move-volume", children: [
+    waveClaimed ? /* @__PURE__ */ jsx11(MoveWaveClock, {}) : volume && /* @__PURE__ */ jsxs11("div", { className: "tweakers-move-volume", children: [
       /* @__PURE__ */ jsx11("span", { className: "tweakers-move-volume-tick", style: { background: MOVE_TRACK_COLORS[0] } }),
       volume.label && volumeReading != null && /* @__PURE__ */ jsx11("span", { className: "tweakers-move-volume-label", children: volume.label }),
       /* @__PURE__ */ jsx11("span", { className: "tweakers-move-volume-value", children: boldColons(volumeReading ?? volume.label ?? "") })
@@ -9271,11 +9345,11 @@ function MoveAudioWave({ index, theme }) {
     () => 0
   );
   useEffect9(() => {
-    const params = ModulationStore2.getSlot(index)?.params ?? {};
-    const start = clampWave01(params.loopStart);
-    const end = clampWave01(params.loopEnd ?? 1);
+    const params2 = ModulationStore2.getSlot(index)?.params ?? {};
+    const start = clampWave01(params2.loopStart);
+    const end = clampWave01(params2.loopEnd ?? 1);
     MoveWaveformStore.setView({
-      position: clampWave01(params.position),
+      position: clampWave01(params2.position),
       loop: end - start > 1e-3 && !(start === 0 && end === 1) ? { start, end } : null,
       loopAnchor: null
     });
@@ -9285,18 +9359,6 @@ function MoveAudioWave({ index, theme }) {
       MoveWaveformStore.setEditor(false);
       MoveWaveformStore.setProgressSource(null);
     };
-  }, [index]);
-  useEffect9(() => {
-    const toggle = (path) => () => {
-      const slot = ModulationStore2.getSlot(index);
-      if (slot) ModulationStore2.updateSlotParams(index, { [path]: !slot.params[path] });
-    };
-    const releases = [
-      MoveFunctions.push("play", toggle("playing"), { label: "Play", chip: false }),
-      MoveFunctions.push("loop", toggle("loopOn"), { label: "Loop", chip: false }),
-      MoveFunctions.push("back", () => ModulationStore2.closeSettings(), { label: "Close", chip: false })
-    ];
-    return () => releases.forEach((release) => release());
   }, [index]);
   useEffect9(() => {
     const prev = MoveSurfaceStore.getState();
@@ -9310,28 +9372,28 @@ function MoveAudioWave({ index, theme }) {
       })),
       "tap to jump the playhead \xB7 hold to loop that part"
     );
-    const paintSteps = () => {
-      const lit = new Set(MoveWaveformStore.loopSteps());
-      MoveSurfaceStore.setSteps(
-        Array.from({ length: MOVE_WAVEFORM_STEPS }, (_, step) => ({
-          step,
-          color: modColor(index),
-          lit: lit.has(step)
-        }))
-      );
-    };
-    paintSteps();
-    const offView = MoveWaveformStore.subscribe(paintSteps);
     const offPress = MoveSurfaceStore.onPress(({ x, y }) => {
       if (y === 0) MoveWaveformStore.pressPad(x);
     });
     return () => {
-      offView();
       offPress();
       MoveSurfaceStore.setPadRows(prev.rows, prev.pads, prev.padsLabel);
-      MoveSurfaceStore.setSteps(prev.steps);
     };
   }, [index]);
+  useEffect9(
+    () => MoveFunctions.push("back", () => ModulationStore2.closeSettings(), { label: "Close", chip: false }),
+    [index]
+  );
+  useSyncExternalStore3(
+    useCallback2((cb) => ModulationStore2.subscribe(cb), []),
+    () => ModulationStore2.getVersion(),
+    () => 0
+  );
+  const params = ModulationStore2.getSlot(index)?.params ?? {};
+  const toggle = (path) => () => {
+    const slot = ModulationStore2.getSlot(index);
+    if (slot) ModulationStore2.updateSlotParams(index, { [path]: !slot.params[path] });
+  };
   return /* @__PURE__ */ jsx11(
     MoveWaveform,
     {
@@ -9341,16 +9403,16 @@ function MoveAudioWave({ index, theme }) {
       getProgress: () => ModulationStore2.getSlotPhase(index),
       onSeek: (p) => ModulationStore2.updateSlotParams(index, { position: p }),
       onLoopChange: (loop) => ModulationStore2.updateSlotParams(index, loop ? { loopStart: loop.start, loopEnd: loop.end, loopOn: true } : { loopStart: 0, loopEnd: 1 }),
-      mode: "smooth",
-      smoothPoints: 200,
-      baseline: false,
-      height: MOVE_WAVE_DISPLAY_HEIGHT,
-      waveColor: "#1e1e1e",
-      playheadColor: modColor(index)
+      transport: {
+        playing: !!params.playing,
+        loopOn: !!params.loopOn,
+        onPlay: toggle("playing"),
+        onLoop: toggle("loopOn")
+      },
+      accent: modColor(index)
     }
   );
 }
-var MOVE_WAVE_DISPLAY_HEIGHT = 128;
 function MoveAudioZoom() {
   useSyncExternalStore3(
     useCallback2((cb) => MoveWaveformStore.subscribe(cb), []),
@@ -9366,23 +9428,29 @@ function MoveAudioZoom() {
     ] })
   ] });
 }
-function MoveAudioTransport({ index }) {
+function MoveWaveClock() {
   useSyncExternalStore3(
-    useCallback2((cb) => ModulationStore2.subscribe(cb), []),
-    () => ModulationStore2.getVersion(),
+    useCallback2((cb) => MoveWaveformStore.subscribe(cb), []),
+    () => MoveWaveformStore.getVersion(),
     () => 0
   );
-  const params = ModulationStore2.getSlot(index)?.params ?? {};
+  const transport = MoveWaveformStore.getTransport();
   const clockRef = useRef9(null);
   useEffect9(() => {
     let raf = requestAnimationFrame(function tick() {
-      const t = ModulationStore2.getSlotPhase(index) * (getAudioModBuffer()?.duration ?? 0);
-      const text = `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}:${String(Math.floor(t % 1 * 100)).padStart(2, "0")}`;
+      const text = MoveWaveformStore.clock();
       if (clockRef.current && clockRef.current.textContent !== text) clockRef.current.textContent = text;
       raf = requestAnimationFrame(tick);
     });
     return () => cancelAnimationFrame(raf);
-  }, [index]);
+  }, []);
+  return /* @__PURE__ */ jsxs11("div", { className: "tweakers-move-volume tweakers-move-wave-time", "data-transport": transport ? true : void 0, children: [
+    transport && /* @__PURE__ */ jsx11("svg", { className: "tweakers-move-wave-state", "data-on": transport.playing || void 0, viewBox: "0 0 24 24", "aria-hidden": "true", children: /* @__PURE__ */ jsx11("path", { d: ICON_PLAY, fill: "currentColor" }) }),
+    /* @__PURE__ */ jsx11("span", { ref: clockRef, className: "tweakers-move-volume-value", children: MoveWaveformStore.clock() }),
+    transport && /* @__PURE__ */ jsx11("svg", { className: "tweakers-move-wave-state", "data-on": transport.loopOn || void 0, viewBox: "0 0 24 24", "aria-hidden": "true", children: ICON_LOOP.map((d) => /* @__PURE__ */ jsx11("path", { d, fill: "none", stroke: "currentColor", strokeWidth: "2.4", strokeLinecap: "round", strokeLinejoin: "round" }, d)) })
+  ] });
+}
+function MoveAudioTransport({ index }) {
   const fileRef = useRef9(null);
   const loadFile = async (file) => {
     const bytes = await file.arrayBuffer();
@@ -9411,29 +9479,7 @@ function MoveAudioTransport({ index }) {
         ]
       }
     ),
-    /* @__PURE__ */ jsxs11("div", { className: "tweakers-move-volume tweakers-move-wave-time", children: [
-      /* @__PURE__ */ jsx11(
-        "svg",
-        {
-          className: "tweakers-move-wave-state",
-          "data-on": params.playing ? true : void 0,
-          viewBox: "0 0 24 24",
-          "aria-hidden": "true",
-          children: /* @__PURE__ */ jsx11("path", { d: ICON_PLAY, fill: "currentColor" })
-        }
-      ),
-      /* @__PURE__ */ jsx11("span", { ref: clockRef, className: "tweakers-move-volume-value", children: "0:00:00" }),
-      /* @__PURE__ */ jsx11(
-        "svg",
-        {
-          className: "tweakers-move-wave-state",
-          "data-on": params.loopOn ? true : void 0,
-          viewBox: "0 0 24 24",
-          "aria-hidden": "true",
-          children: ICON_LOOP.map((d) => /* @__PURE__ */ jsx11("path", { d, fill: "none", stroke: "currentColor", strokeWidth: "2.4", strokeLinecap: "round", strokeLinejoin: "round" }, d))
-        }
-      )
-    ] }),
+    /* @__PURE__ */ jsx11(MoveWaveClock, {}),
     /* @__PURE__ */ jsx11(
       "input",
       {
@@ -10297,6 +10343,10 @@ export {
   MOVE_TRACK_COLORS,
   MOVE_WAVEFORM_PADS,
   MOVE_WAVEFORM_STEPS,
+  MOVE_WAVE_FRAME,
+  MOVE_WAVE_MAX_DISPLAY,
+  MOVE_WAVE_MAX_HEIGHT,
+  MOVE_WAVE_MAX_WIDTH,
   ModRing,
   ModulationStore3 as ModulationStore,
   MoveActionButton,

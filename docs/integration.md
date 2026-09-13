@@ -236,6 +236,16 @@ carries a blue Load button (file picker → `setAudioModBuffer`, the library's
 one one-shot decode), the running time, and the zoom readout.
 
 Out-of-panel integrations get the same grammar without the modulator: mount
-`MoveWaveform`, and while its editor claim is up (`MoveWaveformStore.setEditor`)
-the kit routes the whole step row, the pad row, and the transport buttons the
-same way.
+`MoveWaveform` with the decoded buffer, `getProgress` (the engine's playhead,
+read every frame), `onSeek` and `onLoopChange`. The card is the kit's and is
+not restyled by the host: the light display with the sample dark on it inside
+the 12px frame, at most 1200 wide and 176 tall (`MOVE_WAVE_MAX_*`), whichever
+`variant` and `height` the host asks for. While it is mounted the wheel zooms,
+the volume knob scrubs from the live playhead (Shift for the fine layer), the
+step row sets the loop and lights it in the card's `accent`, and the panel's
+volume corner carries the card's clock — `m:ss:cc` of the playhead — in place
+of any `MoveVolumeDisplay` readout. Pass `transport` (`playing`, `loopOn`,
+`onPlay`, `onLoop`) and the card takes the Move's Play and Loop keys for the
+host's tape too, with both states lit on the clock. `MoveWaveformStore.setEditor`
+widens the claim to the whole step row and the pad row, as the audio
+modulator's editor does.

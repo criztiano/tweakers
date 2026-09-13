@@ -54,6 +54,10 @@ export { MoveWaveform } from './components/MoveWaveform';
 export type { MoveWaveformProps } from './components/MoveWaveform';
 export {
   MoveWaveformStore,
+  MOVE_WAVE_FRAME,
+  MOVE_WAVE_MAX_WIDTH,
+  MOVE_WAVE_MAX_HEIGHT,
+  MOVE_WAVE_MAX_DISPLAY,
   defaultView as moveWaveformDefaultView,
   scrubBy,
   zoomBy,
@@ -66,7 +70,7 @@ export {
   MOVE_WAVEFORM_STEPS,
   MOVE_WAVEFORM_PADS,
 } from './move-waveform';
-export type { MoveWaveformVariant, MoveWaveformView } from './move-waveform';
+export type { MoveWaveformVariant, MoveWaveformView, MoveWaveformTransport } from './move-waveform';
 // Notifications — the app's messages, floating over the instrument and over
 // whatever display is already up there.
 export { MoveNotifications, moveNotify } from './components/MoveNotifications';

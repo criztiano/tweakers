@@ -1,6 +1,5 @@
 import { WAVEFORM_MAX_ZOOM } from './waveform-engine';
 import type { WaveformLoop } from './waveform-engine';
-import { MoveVolumeDisplay } from './move-volume';
 
 /**
  * A waveform on the Move surface.
@@ -24,6 +23,20 @@ export type MoveWaveformVariant =
   | 'slot'
   /** Floating above the Move panel, the width of the surface it belongs to. */
   | 'dock';
+
+/** The transport the waveform's host runs, as the clock wears it. */
+export type MoveWaveformTransport = {
+  playing: boolean;
+  loopOn: boolean;
+};
+
+/** The one card every waveform wears: at most this wide and this tall, the
+ *  12px frame included — the mockup's display is 728×128 inside it. */
+export const MOVE_WAVE_FRAME = 12;
+export const MOVE_WAVE_MAX_WIDTH = 1200;
+export const MOVE_WAVE_MAX_HEIGHT = 176;
+/** The display's height budget once the frame has taken its share. */
+export const MOVE_WAVE_MAX_DISPLAY = MOVE_WAVE_MAX_HEIGHT - 2 * MOVE_WAVE_FRAME;
 
 /** The view state the hardware drives, shared by every surface showing it. */
 export type MoveWaveformView = {
@@ -177,25 +190,55 @@ class MoveWaveformStoreClass {
   private editor = false;
   private progressSource: (() => number) | null = null;
   private duration: number | null = null;
+  private transport: MoveWaveformTransport | null = null;
   private listeners = new Set<Listener>();
   private version = 0;
 
-  /** Claim the wheel, the volume knob and the step row. Returns the release. */
+  /** Claim the wheel, the volume knob and the step row. Returns the release.
+   *
+   * The knob is ours now, so the panel says so: while a waveform is
+   * registered its volume corner carries the clock — the playhead's time
+   * with the transport's state around it — in place of whatever readout the
+   * app had put there, and hands the corner back with the claim. */
   register(): () => void {
     this.registered = true;
-    // The knob is ours now, so it says so: the volume readout follows the
-    // playhead for as long as we hold the claim, and is handed back with it.
-    MoveVolumeDisplay.set({ label: 'time', getValue: () => this.readout() });
     this.notify();
     return () => {
       this.registered = false;
       this.editor = false;
       this.progressSource = null;
       this.duration = null;
+      this.transport = null;
       this.view = defaultView();
-      MoveVolumeDisplay.clear();
       this.notify();
     };
+  }
+
+  /** The host's transport, for the clock to wear; null when it runs none. */
+  setTransport(transport: MoveWaveformTransport | null): void {
+    if (
+      transport?.playing === this.transport?.playing &&
+      transport?.loopOn === this.transport?.loopOn &&
+      (transport === null) === (this.transport === null)
+    ) return;
+    this.transport = transport;
+    this.notify();
+  }
+
+  getTransport(): MoveWaveformTransport | null {
+    return this.transport;
+  }
+
+  /** Where the playhead is right now, 0..1: the engine's while one reports, else the last scrub. */
+  playhead(): number {
+    return clamp01(this.progressSource ? this.progressSource() : this.view.position);
+  }
+
+  /** The clock the panel shows for the knob: m:ss:cc of the playhead. */
+  clock(): string {
+    const t = this.playhead() * (this.duration ?? 0);
+    const cc = Math.floor((t % 1) * 100);
+    return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}:${String(cc).padStart(2, '0')}`;
   }
 
   isRegistered(): boolean {
@@ -244,7 +287,7 @@ class MoveWaveformStoreClass {
 
   /** What the volume knob is editing right now, ready to print. */
   readout(): string {
-    const at = clamp01(this.progressSource ? this.progressSource() : this.view.position);
+    const at = this.playhead();
     if (this.duration === null) return `${Math.round(at * 100)}%`;
     const total = at * this.duration;
     const minutes = Math.floor(total / 60);
@@ -276,8 +319,11 @@ class MoveWaveformStoreClass {
     this.notify();
   }
 
+  /** A detent moves the playhead from where it is — the engine's position
+   *  while one reports, so a scrub mid-play carries on from the play, never
+   *  from the spot the last scrub left. */
   scrub(delta: number, fine = false): void {
-    this.setView({ position: scrubBy(this.view.position, delta, fine, this.view.zoom) });
+    this.setView({ position: scrubBy(this.playhead(), delta, fine, this.view.zoom) });
   }
 
   zoom(delta: number): void {
