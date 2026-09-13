@@ -19,6 +19,8 @@ interface WaveformVisualizationProps {
    * 'smooth' — a simplified, SVG-like envelope: few points, Catmull-Rom
    * interpolation, solid fill (the gist of the sample's dynamics).
    * 'pixelated' — crisp, chunky per-column min/max bars.
+   * 'striped' — the same bars with a gap the bar's own width after each;
+   * every bar reads its peaks over bar and gap, so nothing is masked.
    */
   mode?: WaveformMode;
   /**
