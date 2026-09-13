@@ -60,7 +60,9 @@ export {
   MOVE_WAVEFORM_STEPS,
   MOVE_WAVEFORM_PADS,
   MOVE_WAVEFORM_PANEL,
-  MOVE_WAVEFORM_PIXEL_SIZES,
+  MOVE_WAVEFORM_PIXEL_RANGE,
+  MOVE_WAVEFORM_DEMO_SECONDS,
+  moveWaveformDemoSample,
   defaultStyle as moveWaveformDefaultStyle,
   styleFromValues as moveWaveformStyleFromValues,
 } from './move-waveform';

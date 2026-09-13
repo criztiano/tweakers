@@ -123,7 +123,7 @@ export function MoveWaveform({
   // The sample's length, so the volume readout counts seconds rather than
   // percent — it follows the buffer, which an app can swap under us.
   useEffect(() => {
-    MoveWaveformStore.setDuration(buffer?.duration ?? null);
+    MoveWaveformStore.setBuffer(buffer);
   }, [buffer]);
 
   const view = useSyncExternalStore(

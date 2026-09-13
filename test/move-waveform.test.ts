@@ -13,7 +13,8 @@ import {
   MOVE_WAVEFORM_STEPS,
   MOVE_WAVEFORM_PADS,
   MOVE_WAVEFORM_PANEL,
-  MOVE_WAVEFORM_PIXEL_SIZES,
+  MOVE_WAVEFORM_PIXEL_RANGE,
+  moveWaveformDemoSample,
   defaultStyle,
   styleFromValues,
 } from '../src/move-waveform';
@@ -301,18 +302,59 @@ describe('the look lives in the settings room', () => {
   it('reads the page\'s values back as the style every waveform draws with', () => {
     const release = MoveWaveformStore.register();
     TweakStore.updateValue(MOVE_WAVEFORM_PANEL, 'style', 'smooth');
-    TweakStore.updateValue(MOVE_WAVEFORM_PANEL, 'resolution', '6×');
+    TweakStore.updateValue(MOVE_WAVEFORM_PANEL, 'resolution', 6);
     TweakStore.updateValue(MOVE_WAVEFORM_PANEL, 'baseline', false);
     expect(MoveWaveformStore.getStyle()).toEqual({ mode: 'smooth', pixelSize: 6, grid: false, bands: false, baseline: false });
     release();
   });
 
-  it('offers the four bar widths the old resolution slider had, and every style', () => {
-    expect(MOVE_WAVEFORM_PIXEL_SIZES).toEqual([1, 2, 4, 6]);
-    expect(styleFromValues({ style: 'striped', resolution: '1×' }, defaultStyle()).mode).toBe('striped');
-    expect(styleFromValues({ style: 'striped', resolution: '1×' }, defaultStyle()).pixelSize).toBe(1);
-    // Anything unset — or nonsense — falls back to the app's own look.
+  it('offers bar widths from 1× to 6× as the headline value, and every style', () => {
+    expect(MOVE_WAVEFORM_PIXEL_RANGE).toEqual([1, 6]);
+    expect(styleFromValues({ style: 'striped', resolution: 1 }, defaultStyle()).mode).toBe('striped');
+    expect(styleFromValues({ style: 'striped', resolution: 1 }, defaultStyle()).pixelSize).toBe(1);
+    // Off the range it clamps; anything unset — or nonsense — falls back to
+    // the app's own look.
+    expect(styleFromValues({ resolution: 40 }, defaultStyle()).pixelSize).toBe(6);
     expect(styleFromValues({ style: 'neon', resolution: '3×' }, defaultStyle())).toEqual(defaultStyle());
     expect(styleFromValues(undefined, defaultStyle())).toEqual(defaultStyle());
+  });
+
+  it('shows the three overlays as pictures and the bar width as a value', () => {
+    MoveWaveformStore.ensureSettings();
+    const controls = TweakStore.getPanel(MOVE_WAVEFORM_PANEL)!.controls;
+    const by = (path: string) => controls.find((c) => c.path === path)!;
+    expect(by('grid').icon).toBe('grid-2x2');
+    expect(by('bands').icon).toBe('audio-lines');
+    expect(by('baseline').icon).toBe('activity');
+    expect(by('resolution').type).toBe('slider');
+    expect(by('resolution').formatValue?.(2)).toBe('2×');
+  });
+});
+
+describe('two displays can hold the claim', () => {
+  it('keeps the hardware until the last one lets go', () => {
+    const a = MoveWaveformStore.register();
+    const b = MoveWaveformStore.register();
+    expect(MoveWaveformStore.isRegistered()).toBe(true);
+    a();
+    expect(MoveWaveformStore.isRegistered()).toBe(true);
+    expect(MoveVolumeDisplay.get()?.label).toBe('time');
+    b();
+    expect(MoveWaveformStore.isRegistered()).toBe(false);
+    expect(MoveVolumeDisplay.get()).toBe(null);
+    // A release used twice is one release.
+    a();
+    expect(MoveWaveformStore.isRegistered()).toBe(false);
+  });
+
+  it('remembers the sample on the surface, and forgets it with the last claim', () => {
+    const release = MoveWaveformStore.register();
+    const sample = moveWaveformDemoSample();
+    MoveWaveformStore.setBuffer(sample);
+    expect(MoveWaveformStore.getBuffer()).toBe(sample);
+    expect(sample.duration).toBe(4);
+    expect(sample.getChannelData(0).some((v) => Math.abs(v) > 0.5)).toBe(true);
+    release();
+    expect(MoveWaveformStore.getBuffer()).toBe(null);
   });
 });
