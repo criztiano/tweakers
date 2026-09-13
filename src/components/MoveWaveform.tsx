@@ -234,7 +234,11 @@ export function MoveWaveform({
   const wave = (
     <WaveformVisualization
       buffer={buffer}
-      {...(getProgress ? { getProgress } : { progress: progress ?? state.position })}
+      // The host's playhead for the drawing — except mid-turn, when the
+      // knob's own landing leads and the host's seek trails it.
+      {...(getProgress
+        ? { getProgress: () => (MoveWaveformStore.isScrubbing() ? MoveWaveformStore.getView().position : getProgress()) }
+        : { progress: progress ?? state.position })}
       mode={mode}
       pixelSize={pixelSize}
       grid={grid}

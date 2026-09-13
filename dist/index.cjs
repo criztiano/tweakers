@@ -5535,8 +5535,16 @@ var MoveWaveformStoreClass = class {
   getTransport() {
     return this.transport;
   }
-  /** Where the playhead is right now, 0..1: the engine's while one reports, else the last scrub. */
-  playhead() {
+  /** A turn of the knob in progress: its last detent landed within the chain window. */
+  isScrubbing(now = Date.now()) {
+    return now - this.lastScrubAt < SCRUB_CHAIN_MS;
+  }
+  /** Where the playhead is right now, 0..1: the knob's landing while a turn
+   *  is in progress (the engine is a beat behind it, and drawing the lag is
+   *  what makes a scrub look like it stutters), else the engine's while one
+   *  reports, else the last scrub. */
+  playhead(now = Date.now()) {
+    if (this.isScrubbing(now)) return clamp014(this.view.position);
     return clamp014(this.progressSource ? this.progressSource() : this.view.position);
   }
   /** The clock the panel shows for the knob: m:ss:cc of the playhead. */
@@ -5613,9 +5621,8 @@ var MoveWaveformStoreClass = class {
    *  from each other: the engine's seek lands a beat later than the knob
    *  turns, and a turn read against it would lose every detent but the first. */
   scrub(delta, fine = false, now = Date.now()) {
-    const chained = now - this.lastScrubAt < SCRUB_CHAIN_MS;
+    const from = this.playhead(now);
     this.lastScrubAt = now;
-    const from = chained ? this.view.position : this.playhead();
     this.setView({ position: scrubBy(from, delta, fine, this.view.zoom, this.duration ?? void 0) });
   }
   zoom(delta) {
@@ -5876,7 +5883,7 @@ function MoveWaveform({
     WaveformVisualization,
     {
       buffer,
-      ...getProgress ? { getProgress } : { progress: progress ?? state2.position },
+      ...getProgress ? { getProgress: () => MoveWaveformStore.isScrubbing() ? MoveWaveformStore.getView().position : getProgress() } : { progress: progress ?? state2.position },
       mode,
       pixelSize,
       grid,
@@ -8690,21 +8697,51 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         },
         children: [
           /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "tweakers-move-tracks", children: [
-            audioWave != null ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveAudioZoom, {}) : /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "tweakers-move-tracks-group", children: [
-              settingsOpen && /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "tweakers-move-settings-title", children: [
-                /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "tweakers-move-settings-blink" }),
-                roomPages.length > 1 ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Settings pages", children: roomPages.map((pg, i) => /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
+            audioWave != null ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveAudioZoom, {}) : /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "tweakers-move-tracks-lead", children: [
+              waveClaimed && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveAudioZoom, {}),
+              /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "tweakers-move-tracks-group", children: [
+                settingsOpen && /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)("div", { className: "tweakers-move-settings-title", children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "tweakers-move-settings-blink" }),
+                  roomPages.length > 1 ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Settings pages", children: roomPages.map((pg, i) => /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
+                    "button",
+                    {
+                      type: "button",
+                      role: "tab",
+                      className: "tweakers-move-track",
+                      "data-active": pg === page,
+                      "aria-selected": pg === page,
+                      tabIndex: pg === page ? 0 : -1,
+                      onClick: () => {
+                        setRoomTrack(i);
+                        window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
+                      },
+                      children: [
+                        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
+                        /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "tweakers-move-track-label", children: pg.panel.name })
+                      ]
+                    },
+                    pg.panel.id
+                  )) }) : /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "tweakers-move-track-label", children: page.panel.name })
+                ] }),
+                !settingsOpen && pages.length > 1 && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Move pages", children: pages.map((pg, i) => /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
                   "button",
                   {
+                    id: `${pageTabsId}-tab-${i}`,
                     type: "button",
                     role: "tab",
                     className: "tweakers-move-track",
                     "data-active": pg === page,
                     "aria-selected": pg === page,
+                    "aria-controls": panelIdForTabs,
                     tabIndex: pg === page ? 0 : -1,
-                    onClick: () => {
-                      setRoomTrack(i);
-                      window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
+                    onClick: () => selectPage(i),
+                    onKeyDown: (event) => {
+                      const last = pages.length - 1;
+                      const next = event.key === "ArrowRight" ? (i + 1) % pages.length : event.key === "ArrowLeft" ? (i - 1 + pages.length) % pages.length : event.key === "Home" ? 0 : event.key === "End" ? last : -1;
+                      if (next < 0) return;
+                      event.preventDefault();
+                      selectPage(next);
+                      event.currentTarget.parentElement?.querySelectorAll('[role="tab"]')[next]?.focus();
                     },
                     children: [
                       /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
@@ -8712,39 +8749,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                     ]
                   },
                   pg.panel.id
-                )) }) : /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "tweakers-move-track-label", children: page.panel.name })
-              ] }),
-              !settingsOpen && pages.length > 1 && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Move pages", children: pages.map((pg, i) => /* @__PURE__ */ (0, import_jsx_runtime11.jsxs)(
-                "button",
-                {
-                  id: `${pageTabsId}-tab-${i}`,
-                  type: "button",
-                  role: "tab",
-                  className: "tweakers-move-track",
-                  "data-active": pg === page,
-                  "aria-selected": pg === page,
-                  "aria-controls": panelIdForTabs,
-                  tabIndex: pg === page ? 0 : -1,
-                  onClick: () => selectPage(i),
-                  onKeyDown: (event) => {
-                    const last = pages.length - 1;
-                    const next = event.key === "ArrowRight" ? (i + 1) % pages.length : event.key === "ArrowLeft" ? (i - 1 + pages.length) % pages.length : event.key === "Home" ? 0 : event.key === "End" ? last : -1;
-                    if (next < 0) return;
-                    event.preventDefault();
-                    selectPage(next);
-                    event.currentTarget.parentElement?.querySelectorAll('[role="tab"]')[next]?.focus();
-                  },
-                  children: [
-                    /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
-                    /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("span", { className: "tweakers-move-track-label", children: pg.panel.name })
-                  ]
-                },
-                pg.panel.id
-              )) }),
-              functionChips === "tracks" && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveFunctionChips, {}),
-              headerStart && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "tweakers-move-header-start", children: headerStart })
+                )) }),
+                functionChips === "tracks" && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveFunctionChips, {}),
+                headerStart && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "tweakers-move-header-start", children: headerStart })
+              ] })
             ] }),
-            audioWave == null && waveClaimed && /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveAudioZoom, {}),
             /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "tweakers-move-mods", children: settingsOpen ? null : color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveColorSteps, { color, disabled: import_TweakStore8.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? import_ModulationStore2.ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveModCircle, { slot }, slot.index)) : null }),
             audioWave != null ? /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveAudioTransport, { index: audioWave }) : headerCluster
           ] }),

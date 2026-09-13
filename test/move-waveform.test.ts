@@ -158,7 +158,11 @@ describe('the registry', () => {
     MoveWaveformStore.scrub(1, false, 1050);
     MoveWaveformStore.scrub(1, false, 1100);
     expect(MoveWaveformStore.getView().position).toBeCloseTo(scrubBy(scrubBy(scrubBy(0.5, 1), 1), 1), 6);
+    // Mid-turn the knob's landing is the playhead, for the drawing and the clock.
+    expect(MoveWaveformStore.isScrubbing(1200)).toBe(true);
+    expect(MoveWaveformStore.playhead(1200)).toBeCloseTo(MoveWaveformStore.getView().position, 6);
     // A new turn, later, starts from the engine again.
+    expect(MoveWaveformStore.isScrubbing(5000)).toBe(false);
     MoveWaveformStore.scrub(1, false, 5000);
     expect(MoveWaveformStore.getView().position).toBeCloseTo(scrubBy(0.5, 1), 6);
     release();

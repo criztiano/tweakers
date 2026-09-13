@@ -1426,6 +1426,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
             {audioWave != null ? (
               <MoveAudioZoom />
             ) : (
+            <div className="tweakers-move-tracks-lead">
+            {/* A host's card gets the editor's zoom readout too, leading the
+                page names — the far end of the row from its clock. */}
+            {waveClaimed && <MoveAudioZoom />}
             <div className="tweakers-move-tracks-group">
               {/* The settings room's name plate: the marker blinks for as
                   long as the room is open — the same pulse the hardware's
@@ -1500,10 +1504,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               {functionChips === 'tracks' && <MoveFunctionChips />}
               {headerStart && <div className="tweakers-move-header-start">{headerStart}</div>}
             </div>
+            </div>
             )}
-            {/* A host's card gets the editor's zoom readout too, beside the
-                page names — the other end of the row from its clock. */}
-            {audioWave == null && waveClaimed && <MoveAudioZoom />}
             {/* The step buttons, centred between the track labels and the
                 volume readout — one circle each. Normally the modulation
                 slots; an app that claimed the row paints them itself, and

@@ -246,8 +246,17 @@ class MoveWaveformStoreClass {
     return this.transport;
   }
 
-  /** Where the playhead is right now, 0..1: the engine's while one reports, else the last scrub. */
-  playhead(): number {
+  /** A turn of the knob in progress: its last detent landed within the chain window. */
+  isScrubbing(now = Date.now()): boolean {
+    return now - this.lastScrubAt < SCRUB_CHAIN_MS;
+  }
+
+  /** Where the playhead is right now, 0..1: the knob's landing while a turn
+   *  is in progress (the engine is a beat behind it, and drawing the lag is
+   *  what makes a scrub look like it stutters), else the engine's while one
+   *  reports, else the last scrub. */
+  playhead(now = Date.now()): number {
+    if (this.isScrubbing(now)) return clamp01(this.view.position);
     return clamp01(this.progressSource ? this.progressSource() : this.view.position);
   }
 
@@ -342,9 +351,8 @@ class MoveWaveformStoreClass {
    *  from each other: the engine's seek lands a beat later than the knob
    *  turns, and a turn read against it would lose every detent but the first. */
   scrub(delta: number, fine = false, now = Date.now()): void {
-    const chained = now - this.lastScrubAt < SCRUB_CHAIN_MS;
+    const from = this.playhead(now);
     this.lastScrubAt = now;
-    const from = chained ? this.view.position : this.playhead();
     this.setView({ position: scrubBy(from, delta, fine, this.view.zoom, this.duration ?? undefined) });
   }
 
