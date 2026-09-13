@@ -105,6 +105,14 @@ export interface ModulationAssignment {
   slot: number;
   /** Sweep depth 0..1 — at 1 the signal swings the control's full span. */
   amount: number;
+  /**
+   * The panel's registered NAME — the wire's stable identity across reloads.
+   * Panel ids may be positional (a gallery minting `gallery-N` per mount),
+   * so a persisted assignment carries the name and re-binds to whichever id
+   * that name registers under next; the id alone is trusted only for legacy
+   * records that never saved one.
+   */
+  panelName?: string;
 }
 
 /**

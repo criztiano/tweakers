@@ -91,6 +91,15 @@ const freshParams = (def: ModTypeDef): ModulationParams =>
 class ModulationStoreClass {
   private slots: (ModulationSlot | null)[] = Array(MOD_SLOTS).fill(null);
   private assignments = new Map<string, ModulationAssignment>();
+  /**
+   * Persisted assignments waiting for their panel: a saved wire names its
+   * panel (`panelName`) because panel IDS can be positional (`gallery-N`)
+   * and land on a different panel after a reload. A named record stays here
+   * — driving nothing — until a panel registers under that name, then binds
+   * to whatever id the name carries now. Records without a name (older
+   * shelves) bind by id as they always did.
+   */
+  private pending: ModulationAssignment[] = [];
   private states = new Map<number, unknown>();
   private signals: number[] = Array(MOD_SLOTS).fill(0);
   private sources = new Map<string, ModulationSourceConfig>();
@@ -120,15 +129,59 @@ class ModulationStoreClass {
         }
       }
       for (const a of saved.assignments ?? []) {
-        if (a?.panelId && a.path && this.slots[a.slot]) {
-          this.assignments.set(modKey(a.panelId, a.path), { ...a });
-        }
+        if (!a?.panelId || !a.path || !this.slots[a.slot]) continue;
+        // A named record must wait for its name: its saved id may belong to
+        // a different panel now. Only nameless legacy records bind by id.
+        if (a.panelName) this.pending.push({ ...a });
+        else this.assignments.set(modKey(a.panelId, a.path), { ...a });
       }
     }
     // Control bounds are cached per assignment; panel add/remove (the only
-    // structural signal the TweakStore emits) invalidates the cache.
-    TweakStore.subscribeGlobal(() => this.metas.clear());
+    // structural signal the TweakStore emits) invalidates the cache — and is
+    // the moment a pending assignment's panel may have arrived.
+    TweakStore.subscribeGlobal(() => {
+      this.metas.clear();
+      this.rebindAssignments();
+    });
     this.ensureLoop();
+  }
+
+  /**
+   * Follow every named wire to where its panel lives NOW. A pending record
+   * whose panel name is registered binds to that id; a live record whose id
+   * has gone (the panel unmounted and re-registered under a fresh positional
+   * id) re-keys to the same name's new id. Names are the stable identity;
+   * ids are just where the name is standing today.
+   */
+  private rebindAssignments(): void {
+    const idFor = (name: string): string | null =>
+      TweakStore.getPanels().find((p) => p.name === name)?.id ?? null;
+
+    let moved = false;
+
+    for (let i = this.pending.length - 1; i >= 0; i--) {
+      const a = this.pending[i];
+      if (!this.slots[a.slot]) { this.pending.splice(i, 1); moved = true; continue; }
+      const id = a.panelName ? idFor(a.panelName) : null;
+      if (!id) continue;
+      const key = modKey(id, a.path);
+      this.pending.splice(i, 1);
+      // A wire made this session outranks the shelf's memory of one.
+      if (!this.assignments.has(key)) this.assignments.set(key, { ...a, panelId: id });
+      moved = true;
+    }
+
+    for (const [key, a] of this.assignments) {
+      if (!a.panelName || TweakStore.getPanel(a.panelId)) continue;
+      const id = idFor(a.panelName);
+      if (!id || id === a.panelId) continue;
+      this.assignments.delete(key);
+      const nextKey = modKey(id, a.path);
+      if (!this.assignments.has(nextKey)) this.assignments.set(nextKey, { ...a, panelId: id });
+      moved = true;
+    }
+
+    if (moved) this.changed();
   }
 
   /* ── slots ────────────────────────────────────────────────────────── */
@@ -203,6 +256,7 @@ class ModulationStoreClass {
     for (const [key, a] of this.assignments) {
       if (a.slot === index) this.assignments.delete(key);
     }
+    this.pending = this.pending.filter((a) => a.slot !== index);
     this.changed();
   }
 
@@ -226,6 +280,10 @@ class ModulationStoreClass {
       path,
       slot,
       amount: clamp(Number(amount) || 0, 0, 1),
+      // The stable identity the wire persists under (ids can be positional).
+      // A panel accepted on trust has no name yet; `changed` fills it in at
+      // save time once the panel registers.
+      panelName: TweakStore.getPanel(panelId)?.name,
     });
     // The wire spends the arm that made it. The kit's mapping gesture (hold
     // a step, touch a knob) calls assign directly, so the spend lives here:
@@ -712,6 +770,7 @@ class ModulationStoreClass {
     this.closeSettings();
     this.slots.fill(null);
     this.assignments.clear();
+    this.pending = [];
     this.states.clear();
     this.signals.fill(0);
     this.touched = null;
@@ -754,7 +813,17 @@ class ModulationStoreClass {
     this.version++;
     savePersisted(PERSIST_TARGET, {
       slots: this.getSlots(),
-      assignments: this.getAssignments(),
+      // Every saved wire carries its panel's NAME when one is knowable — the
+      // identity a reload re-binds by. Pending wires (their panel never
+      // registered this session) ride along unchanged, so an unopened
+      // effect's setup survives any number of reloads.
+      assignments: [
+        ...this.getAssignments().map((a) => ({
+          ...a,
+          panelName: a.panelName ?? TweakStore.getPanel(a.panelId)?.name,
+        })),
+        ...this.pending,
+      ],
     } satisfies PersistedModulation);
     this.structListeners.forEach((fn) => fn());
     this.ensureLoop();
