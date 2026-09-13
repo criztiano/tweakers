@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import {
+  MoveActionDeck,
   MoveNotifications,
   MovePanel,
   MovePresetStore,
@@ -182,6 +183,14 @@ export function Library() {
             </li>
           ))}
         </ul>
+      </Section>
+
+      <Section
+        id="deck"
+        title="The action deck"
+        lede="A view with nothing to set yet — a start screen — shows neither a list nor a panel: up to four big buttons, one per chip key, each dressed like the hardware key it rides and wired to it. Click one, or press the key on the Move; both flash it and run one handler. The greyed one has left its key dark."
+      >
+        <DeckPanel />
       </Section>
 
       <Section
@@ -370,6 +379,21 @@ function NotifyPanel() {
         its close key, on a swipe, or on its own after five seconds.
       </p>
     </div>
+  );
+}
+
+/** The deck, live: four actions, one switched off, each press announced. */
+function DeckPanel() {
+  const say = (what: string) => moveNotify.add({ type: 'info', title: what, description: 'from the deck, or the key' });
+  return (
+    <MoveActionDeck
+      actions={[
+        { button: 'capture', label: 'Load file', detail: 'or drop one anywhere on the page', onPress: () => say('Load file') },
+        { button: 'sample', label: 'Record', onPress: () => say('Record') },
+        { button: 'loop', label: 'Loop last take', onPress: () => say('Loop last take') },
+        { button: 'mute', label: 'Nothing to mute', onPress: () => say('Mute'), disabled: true },
+      ]}
+    />
   );
 }
 

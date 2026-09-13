@@ -64,6 +64,7 @@ __export(index_exports, {
   MOVE_COLOR_PALETTES: () => MOVE_COLOR_PALETTES,
   MOVE_COLOR_STEPS: () => MOVE_COLOR_STEPS,
   MOVE_COLOR_WHEEL: () => MOVE_COLOR_WHEEL,
+  MOVE_DECK_MAX: () => MOVE_DECK_MAX,
   MOVE_DIALS: () => MOVE_DIALS,
   MOVE_FLOAT_SELECTOR: () => MOVE_FLOAT_SELECTOR,
   MOVE_FUNCTION_BUTTONS: () => MOVE_FUNCTION_BUTTONS,
@@ -95,6 +96,7 @@ __export(index_exports, {
   ModRing: () => ModRing,
   ModulationStore: () => import_ModulationStore3.ModulationStore,
   MoveActionButton: () => MoveActionButton,
+  MoveActionDeck: () => MoveActionDeck,
   MoveColorStore: () => MoveColorStore,
   MoveFunctionChips: () => MoveFunctionChips,
   MoveFunctions: () => MoveFunctions,
@@ -248,6 +250,7 @@ __export(index_exports, {
   normToValue: () => normToValue,
   normalizeAngle: () => normalizeAngle,
   normalizeCurveMarkers: () => normalizeCurveMarkers,
+  normalizeDeck: () => normalizeDeck,
   normalizeDial: () => normalizeDial,
   normalizeEnumDial: () => normalizeEnumDial,
   normalizeFilterDial: () => normalizeFilterDial,
@@ -5942,8 +5945,8 @@ var MoveFunctions = new MoveFunctionsClass();
 var import_react7 = require("react");
 var import_jsx_runtime9 = require("react/jsx-runtime");
 var PRESS_FLASH_MS = 160;
-function ChipGlyph({ glyph }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("svg", { className: "tweakers-move-chip-icon", width: glyph.size, height: glyph.size, viewBox: glyph.viewBox, fill: "none", children: [
+function MoveFunctionGlyphIcon({ glyph, className = "tweakers-move-chip-icon" }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime9.jsxs)("svg", { className, width: glyph.size, height: glyph.size, viewBox: glyph.viewBox, fill: "none", children: [
     glyph.paths?.map((d) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("path", { d, stroke: "currentColor", strokeWidth: "1.5", strokeLinecap: "round", strokeLinejoin: "round" }, d)),
     glyph.fills?.map((d) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("path", { d, fill: "currentColor" }, d)),
     glyph.circles?.map((c) => /* @__PURE__ */ (0, import_jsx_runtime9.jsx)("circle", { ...c, fill: "currentColor" }, `${c.cx},${c.cy}`)),
@@ -5992,7 +5995,7 @@ function Chip({ chip }) {
       style: chip.color ? { background: MOVE_PALETTE[chip.color] } : void 0,
       onClick: () => MoveFunctions.run(chip.name, { shift: false }),
       children: [
-        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(ChipGlyph, { glyph: MOVE_FUNCTION_ICONS[chip.name] }),
+        /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveFunctionGlyphIcon, { glyph: MOVE_FUNCTION_ICONS[chip.name] }),
         chip.label
       ]
     }
@@ -8513,8 +8516,98 @@ function MoveActionButton({ kind, children, onPress, disabled, className }) {
   );
 }
 
-// src/components/MoveNotifications.tsx
+// src/components/MoveActionDeck.tsx
 var import_react10 = require("react");
+
+// src/move-deck-core.ts
+var MOVE_DECK_MAX = MOVE_CHIP_BUTTONS.length;
+function normalizeDeck(actions) {
+  const kept = [];
+  const warnings = [];
+  const taken = /* @__PURE__ */ new Set();
+  for (const action of actions) {
+    if (!MOVE_CHIP_BUTTONS.includes(action.button)) {
+      warnings.push(`"${action.button}" is not a deck key; expected one of: ${MOVE_CHIP_BUTTONS.join(", ")}`);
+      continue;
+    }
+    if (taken.has(action.button)) {
+      warnings.push(`"${action.button}" already carries "${kept.find((a) => a.button === action.button)?.label}"; "${action.label}" dropped`);
+      continue;
+    }
+    if (kept.length >= MOVE_DECK_MAX) {
+      warnings.push(`a deck carries at most ${MOVE_DECK_MAX} actions; "${action.label}" dropped`);
+      continue;
+    }
+    taken.add(action.button);
+    kept.push(action);
+  }
+  return { actions: kept, warnings };
+}
+
+// src/components/MoveActionDeck.tsx
+var import_jsx_runtime12 = require("react/jsx-runtime");
+var PRESS_FLASH_MS3 = 160;
+function DeckButton({ action }) {
+  const [pressed, setPressed] = (0, import_react10.useState)(false);
+  const flashTimer = (0, import_react10.useRef)(void 0);
+  (0, import_react10.useEffect)(() => {
+    const unsubscribe = MoveFunctions.subscribeRuns((ran) => {
+      if (ran !== action.button) return;
+      setPressed(true);
+      clearTimeout(flashTimer.current);
+      flashTimer.current = setTimeout(() => setPressed(false), PRESS_FLASH_MS3);
+    });
+    return () => {
+      unsubscribe();
+      clearTimeout(flashTimer.current);
+    };
+  }, [action.button]);
+  return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(
+    "button",
+    {
+      type: "button",
+      className: "tweakers-move-deck-action",
+      "data-name": action.button,
+      "data-pressed": pressed || void 0,
+      disabled: action.disabled,
+      onClick: () => {
+        if (action.disabled) return;
+        MoveFunctions.run(action.button, { shift: false });
+      },
+      children: [
+        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveFunctionGlyphIcon, { glyph: MOVE_FUNCTION_ICONS[action.button], className: "tweakers-move-deck-icon" }),
+        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "tweakers-move-deck-label", children: action.label }),
+        action.detail && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "tweakers-move-deck-detail", children: action.detail })
+      ]
+    }
+  );
+}
+function MoveActionDeck({ actions, className }) {
+  const { actions: shown, warnings } = (0, import_react10.useMemo)(() => normalizeDeck(actions), [actions]);
+  (0, import_react10.useEffect)(() => {
+    for (const warning of warnings) console.warn(`[tweakers] action deck: ${warning}`);
+  }, [warnings]);
+  const shownRef = (0, import_react10.useRef)(shown);
+  shownRef.current = shown;
+  const signature = shown.map((a) => `${a.button}:${a.disabled ? "-" : "+"}${a.label}`).join("|");
+  (0, import_react10.useEffect)(() => {
+    const detaches = shownRef.current.filter((a) => !a.disabled).map(
+      (a) => MoveFunctions.attach(
+        a.button,
+        (press) => shownRef.current.find((x) => x.button === a.button)?.onPress(press),
+        { label: a.label, chip: false }
+      )
+    );
+    return () => {
+      for (const detach of detaches) detach();
+    };
+  }, [signature]);
+  if (!shown.length) return null;
+  return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: className ? `tweakers-move-deck ${className}` : "tweakers-move-deck", children: shown.map((action) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(DeckButton, { action }, action.button)) });
+}
+
+// src/components/MoveNotifications.tsx
+var import_react11 = require("react");
 var import_react_dom4 = require("react-dom");
 var import_toast = require("@base-ui/react/toast");
 
@@ -8538,13 +8631,13 @@ function notifyDockBottom(tops, viewportHeight, gap = MOVE_NOTIFY_GAP) {
 }
 
 // src/components/MoveNotifications.tsx
-var import_jsx_runtime12 = require("react/jsx-runtime");
+var import_jsx_runtime13 = require("react/jsx-runtime");
 var manager = import_toast.Toast.createToastManager();
 var moveNotify = manager;
 var MEASURE_MS = 100;
 function useDockBottom(active) {
-  const [bottom, setBottom] = (0, import_react10.useState)(MOVE_NOTIFY_GAP);
-  (0, import_react10.useEffect)(() => {
+  const [bottom, setBottom] = (0, import_react11.useState)(MOVE_NOTIFY_GAP);
+  (0, import_react11.useEffect)(() => {
     if (!active || typeof window === "undefined") return;
     let frame = 0;
     let last = 0;
@@ -8573,22 +8666,22 @@ function useDockBottom(active) {
 function NotifyStack({ className }) {
   const { toasts } = import_toast.Toast.useToastManager();
   const bottom = useDockBottom(toasts.length > 0);
-  return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(
     import_toast.Toast.Viewport,
     {
       className: `tweakers-move-notify${className ? ` ${className}` : ""}`,
       style: { bottom: `${bottom}px` },
-      children: toasts.map((toast) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(import_toast.Toast.Root, { toast, className: "tweakers-move-notify-card", children: /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(import_toast.Toast.Content, { className: "tweakers-move-notify-body", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "tweakers-move-notify-text", children: [
-          toast.type && toast.type !== "info" && /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("span", { className: "tweakers-move-notify-kind", children: [
-            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "tweakers-move-notify-dot", "aria-hidden": "true" }),
+      children: toasts.map((toast) => /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(import_toast.Toast.Root, { toast, className: "tweakers-move-notify-card", children: /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)(import_toast.Toast.Content, { className: "tweakers-move-notify-body", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("div", { className: "tweakers-move-notify-text", children: [
+          toast.type && toast.type !== "info" && /* @__PURE__ */ (0, import_jsx_runtime13.jsxs)("span", { className: "tweakers-move-notify-kind", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("span", { className: "tweakers-move-notify-dot", "aria-hidden": "true" }),
             toast.type
           ] }),
-          toast.title != null && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(import_toast.Toast.Title, { className: "tweakers-move-notify-title" }),
-          toast.description != null && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(import_toast.Toast.Description, { className: "tweakers-move-notify-description" })
+          toast.title != null && /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(import_toast.Toast.Title, { className: "tweakers-move-notify-title" }),
+          toast.description != null && /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(import_toast.Toast.Description, { className: "tweakers-move-notify-description" })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(import_toast.Toast.Action, { className: "tweakers-move-notify-action" }),
-        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(import_toast.Toast.Close, { className: "tweakers-move-notify-close", "aria-label": "Dismiss", children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("svg", { viewBox: "0 0 24 24", width: "14", height: "14", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("path", { d: ICON_CLOSE }) }) })
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(import_toast.Toast.Action, { className: "tweakers-move-notify-action" }),
+        /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(import_toast.Toast.Close, { className: "tweakers-move-notify-close", "aria-label": "Dismiss", children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("svg", { viewBox: "0 0 24 24", width: "14", height: "14", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("path", { d: ICON_CLOSE }) }) })
       ] }) }, toast.id))
     }
   );
@@ -8598,11 +8691,11 @@ function MoveNotifications({
   timeout = 5e3,
   className
 }) {
-  const [mounted, setMounted] = (0, import_react10.useState)(false);
-  (0, import_react10.useEffect)(() => setMounted(true), []);
+  const [mounted, setMounted] = (0, import_react11.useState)(false);
+  (0, import_react11.useEffect)(() => setMounted(true), []);
   if (!mounted || typeof document === "undefined") return null;
   return (0, import_react_dom4.createPortal)(
-    /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "tweakers-root tweakers-move-surface tweakers-move-notify-root", children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(import_toast.Toast.Provider, { toastManager: manager, limit, timeout, children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(NotifyStack, { ...className ? { className } : {} }) }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime13.jsx)("div", { className: "tweakers-root tweakers-move-surface tweakers-move-notify-root", children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(import_toast.Toast.Provider, { toastManager: manager, limit, timeout, children: /* @__PURE__ */ (0, import_jsx_runtime13.jsx)(NotifyStack, { ...className ? { className } : {} }) }) }),
     document.body
   );
 }
@@ -8977,6 +9070,7 @@ var import_TweakStore8 = require("tweakers/store");
   MOVE_COLOR_PALETTES,
   MOVE_COLOR_STEPS,
   MOVE_COLOR_WHEEL,
+  MOVE_DECK_MAX,
   MOVE_DIALS,
   MOVE_FLOAT_SELECTOR,
   MOVE_FUNCTION_BUTTONS,
@@ -9008,6 +9102,7 @@ var import_TweakStore8 = require("tweakers/store");
   ModRing,
   ModulationStore,
   MoveActionButton,
+  MoveActionDeck,
   MoveColorStore,
   MoveFunctionChips,
   MoveFunctions,
@@ -9161,6 +9256,7 @@ var import_TweakStore8 = require("tweakers/store");
   normToValue,
   normalizeAngle,
   normalizeCurveMarkers,
+  normalizeDeck,
   normalizeDial,
   normalizeEnumDial,
   normalizeFilterDial,

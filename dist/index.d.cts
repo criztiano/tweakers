@@ -225,6 +225,43 @@ interface MoveActionButtonProps {
  */
 declare function MoveActionButton({ kind, children, onPress, disabled, className }: MoveActionButtonProps): react_jsx_runtime.JSX.Element;
 
+declare const ICON_MOVE_CAPTURE: {
+    viewBox: string;
+    path: string;
+};
+declare const ICON_MOVE_ENTER: {
+    viewBox: string;
+    circle: {
+        cx: string;
+        cy: string;
+        r: string;
+    };
+};
+/**
+ * A function chip's glyph. `paths` are stroked, like the hardware's printed
+ * marks; `fills` are the filled marks (the capture corners); `circles` are
+ * filled circles (the enter dot, rec's core). All share one viewBox and the
+ * size the chip draws them at.
+ */
+interface MoveFunctionGlyph {
+    viewBox: string;
+    size: number;
+    paths?: string[];
+    fills?: string[];
+    circles?: {
+        cx: string;
+        cy: string;
+        r: string;
+    }[];
+}
+/**
+ * The canonical glyph per Move function button — every app shows the same
+ * icon for the same hardware key, so the chips read like the instrument.
+ * Drawn on the capture glyph's 14px grid (dots on the enter dot's 12px),
+ * stroked like the printed marks unless the hardware fills them.
+ */
+declare const MOVE_FUNCTION_ICONS: Record<string, MoveFunctionGlyph>;
+
 interface MoveFunctionChipsProps {
     className?: string;
 }
@@ -243,6 +280,297 @@ interface MoveFunctionChipsProps {
  * with its own chrome may also place it directly.
  */
 declare function MoveFunctionChips({ className }: MoveFunctionChipsProps): react_jsx_runtime.JSX.Element | null;
+
+/**
+ * The Move's function buttons, offered to the app as a function library.
+ *
+ * The hardware carries a row of named buttons — Undo, Copy, Delete, Mute,
+ * the arrows and friends. The app attaches its own actions to them:
+ *
+ *   import { MoveFunctions } from 'tweakers';
+ *
+ *   MoveFunctions.attach('undo', () => history.undo());
+ *   MoveFunctions.attach('copy', ({ shift }) => shift ? copyAll() : copySelection());
+ *   MoveFunctions.attach('sample', () => confirmSelection());
+ *
+ * and hands the registry to the bridge kit when binding:
+ *
+ *   import('http://localhost:7787/kit.js')
+ *     .then(m => m.bindMove(TweakStore, { functions: MoveFunctions }))
+ *     .catch(() => {});
+ *
+ * The kit tells the Move which buttons are attached (they light up on the
+ * hardware) and relays every press back here; `attach` returns a detach
+ * function. Buttons left unattached keep the surface's built-in behavior
+ * (Undo resets the page's dials, Delete clears the sequencer, Play runs it).
+ * Shift never appears here — it rides along as a flag on every press — and
+ * the four track buttons always switch pages.
+ */
+
+/**
+ * The manifest of attachable buttons — each named exactly as printed on the
+ * hardware, so integration talk stays unambiguous ("wire the sample button").
+ * `special` marks the Move-specific buttons that carry no fixed meaning —
+ * each app decides what they do (sample often acts as the confirm key). The
+ * rest should do what their printed label says (Undo undoes, Copy copies),
+ * so every app feels the same in the hand.
+ */
+declare const MOVE_FUNCTION_MANIFEST: readonly [{
+    readonly name: "play";
+}, {
+    readonly name: "rec";
+}, {
+    readonly name: "mute";
+}, {
+    readonly name: "undo";
+}, {
+    readonly name: "copy";
+}, {
+    readonly name: "delete";
+}, {
+    readonly name: "up";
+}, {
+    readonly name: "down";
+}, {
+    readonly name: "left";
+}, {
+    readonly name: "right";
+}, {
+    readonly name: "sample";
+    readonly special: true;
+}, {
+    readonly name: "loop";
+    readonly special: true;
+}, {
+    readonly name: "capture";
+    readonly special: true;
+}, {
+    readonly name: "menu";
+    readonly special: true;
+}, {
+    readonly name: "back";
+    readonly special: true;
+}, {
+    readonly name: "jog_click";
+    readonly special: true;
+}, {
+    readonly name: "set_overview";
+    readonly step: 0;
+}, {
+    readonly name: "setup";
+    readonly step: 1;
+    readonly host: true;
+}, {
+    readonly name: "workflow";
+    readonly step: 2;
+}, {
+    readonly name: "step4";
+    readonly step: 3;
+}, {
+    readonly name: "tempo";
+    readonly step: 4;
+}, {
+    readonly name: "metronome";
+    readonly step: 5;
+}, {
+    readonly name: "groove";
+    readonly step: 6;
+}, {
+    readonly name: "pitches_16";
+    readonly step: 7;
+}, {
+    readonly name: "scale";
+    readonly step: 8;
+}, {
+    readonly name: "full_velocity";
+    readonly step: 9;
+}, {
+    readonly name: "repeat";
+    readonly step: 10;
+}, {
+    readonly name: "step12";
+    readonly step: 11;
+}, {
+    readonly name: "step13";
+    readonly step: 12;
+    readonly host: true;
+}, {
+    readonly name: "step14";
+    readonly step: 13;
+}, {
+    readonly name: "double_loop";
+    readonly step: 14;
+}, {
+    readonly name: "quantize";
+    readonly step: 15;
+}];
+/** The attachable function names, manifest order. */
+declare const MOVE_FUNCTION_BUTTONS: ("scale" | "repeat" | "sample" | "loop" | "left" | "right" | "delete" | "copy" | "play" | "menu" | "rec" | "mute" | "undo" | "up" | "down" | "capture" | "back" | "jog_click" | "set_overview" | "setup" | "workflow" | "step4" | "tempo" | "metronome" | "groove" | "pitches_16" | "full_velocity" | "step12" | "step13" | "step14" | "double_loop" | "quantize")[];
+/** The Shift+step second functions, in step order (index = step 0-15). */
+declare const MOVE_STEP_FUNCTIONS: ("scale" | "repeat" | "set_overview" | "setup" | "workflow" | "step4" | "tempo" | "metronome" | "groove" | "pitches_16" | "full_velocity" | "step12" | "step13" | "step14" | "double_loop" | "quantize")[];
+/** The special buttons — free for app-specific meanings. */
+declare const MOVE_SPECIAL_BUTTONS: ("scale" | "repeat" | "sample" | "loop" | "left" | "right" | "delete" | "copy" | "play" | "menu" | "rec" | "mute" | "undo" | "up" | "down" | "capture" | "back" | "jog_click" | "set_overview" | "setup" | "workflow" | "step4" | "tempo" | "metronome" | "groove" | "pitches_16" | "full_velocity" | "step12" | "step13" | "step14" | "double_loop" | "quantize")[];
+type MoveFunctionButton = (typeof MOVE_FUNCTION_MANIFEST)[number]['name'];
+interface MoveFunctionPress {
+    name: MoveFunctionButton;
+    /** True when Shift was held on the hardware — a second-function layer. */
+    shift: boolean;
+    /** The step index (0-15) when the press was a Shift+step second function. */
+    step?: number;
+    /**
+     * True when the kit read the press as a long press. Older kits never set
+     * it, so a handler treating hold as a second function should accept
+     * Shift as the equivalent trigger.
+     */
+    hold?: boolean;
+}
+type MoveFunctionHandler = (press: MoveFunctionPress) => void;
+/**
+ * How an attachment's chip may dress. The default wears the slot idiom —
+ * the same quiet surface as everything else on the panel. `highlight` pops
+ * it out as the pale hardware-key look, and `color` may name one of the
+ * kit's own palette colours (`MOVE_PALETTE`) — never an arbitrary CSS
+ * colour, so a chip's hue always means something the two surfaces agree on.
+ */
+interface MoveFunctionChipStyle {
+    variant?: 'highlight';
+    color?: MovePaletteName;
+}
+interface MoveFunctionOptions {
+    /**
+     * What the button does in this app, readable back via `label(name)` and
+     * worn by the on-screen chip. A chip's label always describes the app's
+     * action ("Load video"), never the hardware key's name — a chip-worthy
+     * attachment without a label renders no chip at all.
+     */
+    label?: string;
+    /**
+     * The on-screen chip: `false` hides it (the panel's own plumbing — strip
+     * arrows, an overlay's borrowed Back — belongs to the instrument, not the
+     * app's function row), a style object dresses it. Chips render only for
+     * the buttons in MOVE_CHIP_BUTTONS, and only with a `label`.
+     */
+    chip?: boolean | MoveFunctionChipStyle;
+}
+/** One attached function, as the panel's chip row shows it. */
+interface MoveFunctionChip {
+    name: MoveFunctionButton;
+    /** What the button does here — the attach's label, always present. */
+    label: string;
+    variant?: 'highlight';
+    color?: MovePaletteName;
+}
+/**
+ * The buttons that may carry an on-screen chip — a system rule, the same in
+ * every app. Play is already told by the time indicator; the printed keys
+ * (Undo, Copy, Delete, the arrows) say what they do from the hardware and
+ * stay light-only; the wheel's click (`jog_click`) is a gesture, not a key
+ * a chip can stand for; the Shift layer and the host's own shortcuts never
+ * surface. What remains are the keys whose meaning is the app's to give.
+ *
+ * Naming, once and for all: `sample` is the hardware's printed Sampling
+ * key — the surface's second confirm, so it wears the enter dot and is
+ * often called "the enter button". `jog_click` is the wheel pressed as a
+ * button. Neither is named "enter" in this manifest.
+ */
+declare const MOVE_CHIP_BUTTONS: readonly ["sample", "capture", "mute", "loop"];
+type MoveFunctionRunListener = (name: MoveFunctionButton, press: MoveFunctionPress) => void;
+declare class MoveFunctionsClass {
+    private handlers;
+    private options;
+    private listeners;
+    private runListeners;
+    /**
+     * Attach an action to a function button; returns a detach function.
+     * One action per button — attaching again replaces the previous one.
+     */
+    attach(name: MoveFunctionButton, handler: MoveFunctionHandler, options?: MoveFunctionOptions): () => void;
+    /** The attached button names — what the kit claims on the hardware. */
+    list(): MoveFunctionButton[];
+    /**
+     * The attachments the panel's chip row shows, in manifest order. A chip
+     * renders only for a MOVE_CHIP_BUTTONS key, only while a handler is
+     * attached, and only with a `label` — a chip says what the button does in
+     * this app, so an attachment that names nothing shows nothing (the key
+     * still lights). `chip: false` hides one outright. A push overlay
+     * replaces the underlying chip while it holds the button — the chip
+     * always says what a press runs right now.
+     */
+    chips(): MoveFunctionChip[];
+    /**
+     * Attach on top of whatever is there; the returned release puts the
+     * previous attachment back. For overlays that borrow a button while they
+     * are open — the preset navigator takes Back, and hands it back on close.
+     */
+    push(name: MoveFunctionButton, handler: MoveFunctionHandler, options?: MoveFunctionOptions): () => void;
+    /** The screen name an attachment carries, if any. */
+    label(name: MoveFunctionButton): string | undefined;
+    /** Run the action attached to a button, if any. Called by the kit per press. */
+    run(name: MoveFunctionButton, press?: Partial<MoveFunctionPress>): void;
+    /** Notified when attachments change, so the kit can reconfigure the Move. */
+    subscribe(listener: () => void): () => void;
+    /** Notified on every run — the MovePanel flashes its pills on hardware presses. */
+    subscribeRuns(listener: MoveFunctionRunListener): () => void;
+    private notify;
+}
+declare const MoveFunctions: MoveFunctionsClass;
+
+/**
+ * The action deck's rule, on its own so node can test it without React: a
+ * view that has nothing to set yet — a start screen, a "what now" page —
+ * hands the Move at most four actions, one per key whose meaning is the
+ * app's to give (`MOVE_CHIP_BUTTONS`: Sampling, Capture, Mute, Loop). The
+ * deck shows each as a big button in the page's middle and attaches the same
+ * handler to the hardware key, so the screen and the hand agree.
+ */
+
+/** The keys a deck action may ride — the four chip buttons, no others. */
+type MoveDeckButton = (typeof MOVE_CHIP_BUTTONS)[number];
+/** How many actions a deck carries at most: one per deck key. */
+declare const MOVE_DECK_MAX: 4;
+interface MoveDeckAction {
+    /** The hardware key this action rides; it fixes the button's look. */
+    button: MoveDeckButton;
+    /** What the action does in this app — the big button's word. */
+    label: string;
+    /** A quieter second line under the label ("or drop a file here"). */
+    detail?: string;
+    /** Runs on a screen click and on the hardware press alike. */
+    onPress: (press: MoveFunctionPress) => void;
+    /** A disabled action dims, runs nothing and leaves its key dark. */
+    disabled?: boolean;
+}
+/**
+ * Keep what the deck can show, in the order given: an action on a key that
+ * is not a deck key is dropped, a second action on a key already taken is
+ * dropped (the first wins — one key, one meaning), and anything past the
+ * fourth is dropped. Every drop is named so the app can hear about it.
+ */
+declare function normalizeDeck(actions: readonly MoveDeckAction[]): {
+    actions: MoveDeckAction[];
+    warnings: string[];
+};
+
+interface MoveActionDeckProps {
+    /** Up to four, one per deck key, in display order — see `normalizeDeck`. */
+    actions: readonly MoveDeckAction[];
+    className?: string;
+}
+/**
+ * The action deck: a view's whole surface when it has nothing to set yet —
+ * a start screen, a "what now" page — as up to four big buttons in the
+ * page's middle, one per key whose meaning is the app's to give (the
+ * Sampling key, Capture, Loop, Mute). Each is dressed like the hardware key
+ * it rides, the way `MoveActionButton` is, and the deck attaches the same
+ * handler to that key through `MoveFunctions`: a screen click and a hardware
+ * press run one function, both flash the button, and the key lights only
+ * while its action is live — a disabled action leaves it dark. The deck is
+ * the chip: its attachments render no header chip of their own.
+ *
+ * An alternative to the list screen and to a full panel, not a companion:
+ * a view shows one of the three.
+ */
+declare function MoveActionDeck({ actions, className }: MoveActionDeckProps): react_jsx_runtime.JSX.Element | null;
 
 /** Opt-in meanings for numeric Move faces. Values keep the host's units. */
 type MoveSliderVisual = {
@@ -2984,240 +3312,6 @@ declare const MOVE_SLOT_LIBRARY: {
     };
 };
 
-/**
- * The Move's function buttons, offered to the app as a function library.
- *
- * The hardware carries a row of named buttons — Undo, Copy, Delete, Mute,
- * the arrows and friends. The app attaches its own actions to them:
- *
- *   import { MoveFunctions } from 'tweakers';
- *
- *   MoveFunctions.attach('undo', () => history.undo());
- *   MoveFunctions.attach('copy', ({ shift }) => shift ? copyAll() : copySelection());
- *   MoveFunctions.attach('sample', () => confirmSelection());
- *
- * and hands the registry to the bridge kit when binding:
- *
- *   import('http://localhost:7787/kit.js')
- *     .then(m => m.bindMove(TweakStore, { functions: MoveFunctions }))
- *     .catch(() => {});
- *
- * The kit tells the Move which buttons are attached (they light up on the
- * hardware) and relays every press back here; `attach` returns a detach
- * function. Buttons left unattached keep the surface's built-in behavior
- * (Undo resets the page's dials, Delete clears the sequencer, Play runs it).
- * Shift never appears here — it rides along as a flag on every press — and
- * the four track buttons always switch pages.
- */
-
-/**
- * The manifest of attachable buttons — each named exactly as printed on the
- * hardware, so integration talk stays unambiguous ("wire the sample button").
- * `special` marks the Move-specific buttons that carry no fixed meaning —
- * each app decides what they do (sample often acts as the confirm key). The
- * rest should do what their printed label says (Undo undoes, Copy copies),
- * so every app feels the same in the hand.
- */
-declare const MOVE_FUNCTION_MANIFEST: readonly [{
-    readonly name: "play";
-}, {
-    readonly name: "rec";
-}, {
-    readonly name: "mute";
-}, {
-    readonly name: "undo";
-}, {
-    readonly name: "copy";
-}, {
-    readonly name: "delete";
-}, {
-    readonly name: "up";
-}, {
-    readonly name: "down";
-}, {
-    readonly name: "left";
-}, {
-    readonly name: "right";
-}, {
-    readonly name: "sample";
-    readonly special: true;
-}, {
-    readonly name: "loop";
-    readonly special: true;
-}, {
-    readonly name: "capture";
-    readonly special: true;
-}, {
-    readonly name: "menu";
-    readonly special: true;
-}, {
-    readonly name: "back";
-    readonly special: true;
-}, {
-    readonly name: "jog_click";
-    readonly special: true;
-}, {
-    readonly name: "set_overview";
-    readonly step: 0;
-}, {
-    readonly name: "setup";
-    readonly step: 1;
-    readonly host: true;
-}, {
-    readonly name: "workflow";
-    readonly step: 2;
-}, {
-    readonly name: "step4";
-    readonly step: 3;
-}, {
-    readonly name: "tempo";
-    readonly step: 4;
-}, {
-    readonly name: "metronome";
-    readonly step: 5;
-}, {
-    readonly name: "groove";
-    readonly step: 6;
-}, {
-    readonly name: "pitches_16";
-    readonly step: 7;
-}, {
-    readonly name: "scale";
-    readonly step: 8;
-}, {
-    readonly name: "full_velocity";
-    readonly step: 9;
-}, {
-    readonly name: "repeat";
-    readonly step: 10;
-}, {
-    readonly name: "step12";
-    readonly step: 11;
-}, {
-    readonly name: "step13";
-    readonly step: 12;
-    readonly host: true;
-}, {
-    readonly name: "step14";
-    readonly step: 13;
-}, {
-    readonly name: "double_loop";
-    readonly step: 14;
-}, {
-    readonly name: "quantize";
-    readonly step: 15;
-}];
-/** The attachable function names, manifest order. */
-declare const MOVE_FUNCTION_BUTTONS: ("scale" | "repeat" | "sample" | "loop" | "left" | "right" | "delete" | "copy" | "play" | "menu" | "rec" | "mute" | "undo" | "up" | "down" | "capture" | "back" | "jog_click" | "set_overview" | "setup" | "workflow" | "step4" | "tempo" | "metronome" | "groove" | "pitches_16" | "full_velocity" | "step12" | "step13" | "step14" | "double_loop" | "quantize")[];
-/** The Shift+step second functions, in step order (index = step 0-15). */
-declare const MOVE_STEP_FUNCTIONS: ("scale" | "repeat" | "set_overview" | "setup" | "workflow" | "step4" | "tempo" | "metronome" | "groove" | "pitches_16" | "full_velocity" | "step12" | "step13" | "step14" | "double_loop" | "quantize")[];
-/** The special buttons — free for app-specific meanings. */
-declare const MOVE_SPECIAL_BUTTONS: ("scale" | "repeat" | "sample" | "loop" | "left" | "right" | "delete" | "copy" | "play" | "menu" | "rec" | "mute" | "undo" | "up" | "down" | "capture" | "back" | "jog_click" | "set_overview" | "setup" | "workflow" | "step4" | "tempo" | "metronome" | "groove" | "pitches_16" | "full_velocity" | "step12" | "step13" | "step14" | "double_loop" | "quantize")[];
-type MoveFunctionButton = (typeof MOVE_FUNCTION_MANIFEST)[number]['name'];
-interface MoveFunctionPress {
-    name: MoveFunctionButton;
-    /** True when Shift was held on the hardware — a second-function layer. */
-    shift: boolean;
-    /** The step index (0-15) when the press was a Shift+step second function. */
-    step?: number;
-    /**
-     * True when the kit read the press as a long press. Older kits never set
-     * it, so a handler treating hold as a second function should accept
-     * Shift as the equivalent trigger.
-     */
-    hold?: boolean;
-}
-type MoveFunctionHandler = (press: MoveFunctionPress) => void;
-/**
- * How an attachment's chip may dress. The default wears the slot idiom —
- * the same quiet surface as everything else on the panel. `highlight` pops
- * it out as the pale hardware-key look, and `color` may name one of the
- * kit's own palette colours (`MOVE_PALETTE`) — never an arbitrary CSS
- * colour, so a chip's hue always means something the two surfaces agree on.
- */
-interface MoveFunctionChipStyle {
-    variant?: 'highlight';
-    color?: MovePaletteName;
-}
-interface MoveFunctionOptions {
-    /**
-     * What the button does in this app, readable back via `label(name)` and
-     * worn by the on-screen chip. A chip's label always describes the app's
-     * action ("Load video"), never the hardware key's name — a chip-worthy
-     * attachment without a label renders no chip at all.
-     */
-    label?: string;
-    /**
-     * The on-screen chip: `false` hides it (the panel's own plumbing — strip
-     * arrows, an overlay's borrowed Back — belongs to the instrument, not the
-     * app's function row), a style object dresses it. Chips render only for
-     * the buttons in MOVE_CHIP_BUTTONS, and only with a `label`.
-     */
-    chip?: boolean | MoveFunctionChipStyle;
-}
-/** One attached function, as the panel's chip row shows it. */
-interface MoveFunctionChip {
-    name: MoveFunctionButton;
-    /** What the button does here — the attach's label, always present. */
-    label: string;
-    variant?: 'highlight';
-    color?: MovePaletteName;
-}
-/**
- * The buttons that may carry an on-screen chip — a system rule, the same in
- * every app. Play is already told by the time indicator; the printed keys
- * (Undo, Copy, Delete, the arrows) say what they do from the hardware and
- * stay light-only; the wheel's click (`jog_click`) is a gesture, not a key
- * a chip can stand for; the Shift layer and the host's own shortcuts never
- * surface. What remains are the keys whose meaning is the app's to give.
- *
- * Naming, once and for all: `sample` is the hardware's printed Sampling
- * key — the surface's second confirm, so it wears the enter dot and is
- * often called "the enter button". `jog_click` is the wheel pressed as a
- * button. Neither is named "enter" in this manifest.
- */
-declare const MOVE_CHIP_BUTTONS: readonly ["sample", "capture", "mute", "loop"];
-type MoveFunctionRunListener = (name: MoveFunctionButton, press: MoveFunctionPress) => void;
-declare class MoveFunctionsClass {
-    private handlers;
-    private options;
-    private listeners;
-    private runListeners;
-    /**
-     * Attach an action to a function button; returns a detach function.
-     * One action per button — attaching again replaces the previous one.
-     */
-    attach(name: MoveFunctionButton, handler: MoveFunctionHandler, options?: MoveFunctionOptions): () => void;
-    /** The attached button names — what the kit claims on the hardware. */
-    list(): MoveFunctionButton[];
-    /**
-     * The attachments the panel's chip row shows, in manifest order. A chip
-     * renders only for a MOVE_CHIP_BUTTONS key, only while a handler is
-     * attached, and only with a `label` — a chip says what the button does in
-     * this app, so an attachment that names nothing shows nothing (the key
-     * still lights). `chip: false` hides one outright. A push overlay
-     * replaces the underlying chip while it holds the button — the chip
-     * always says what a press runs right now.
-     */
-    chips(): MoveFunctionChip[];
-    /**
-     * Attach on top of whatever is there; the returned release puts the
-     * previous attachment back. For overlays that borrow a button while they
-     * are open — the preset navigator takes Back, and hands it back on close.
-     */
-    push(name: MoveFunctionButton, handler: MoveFunctionHandler, options?: MoveFunctionOptions): () => void;
-    /** The screen name an attachment carries, if any. */
-    label(name: MoveFunctionButton): string | undefined;
-    /** Run the action attached to a button, if any. Called by the kit per press. */
-    run(name: MoveFunctionButton, press?: Partial<MoveFunctionPress>): void;
-    /** Notified when attachments change, so the kit can reconfigure the Move. */
-    subscribe(listener: () => void): () => void;
-    /** Notified on every run — the MovePanel flashes its pills on hardware presses. */
-    subscribeRuns(listener: MoveFunctionRunListener): () => void;
-    private notify;
-}
-declare const MoveFunctions: MoveFunctionsClass;
-
 type WaveformMode = 'smooth' | 'pixelated';
 /** A loop region over the sample, as normalized 0..1 positions. */
 type WaveformLoop = {
@@ -3571,43 +3665,6 @@ declare class MoveVolumeDisplayClass {
     private notify;
 }
 declare const MoveVolumeDisplay: MoveVolumeDisplayClass;
-
-declare const ICON_MOVE_CAPTURE: {
-    viewBox: string;
-    path: string;
-};
-declare const ICON_MOVE_ENTER: {
-    viewBox: string;
-    circle: {
-        cx: string;
-        cy: string;
-        r: string;
-    };
-};
-/**
- * A function chip's glyph. `paths` are stroked, like the hardware's printed
- * marks; `fills` are the filled marks (the capture corners); `circles` are
- * filled circles (the enter dot, rec's core). All share one viewBox and the
- * size the chip draws them at.
- */
-interface MoveFunctionGlyph {
-    viewBox: string;
-    size: number;
-    paths?: string[];
-    fills?: string[];
-    circles?: {
-        cx: string;
-        cy: string;
-        r: string;
-    }[];
-}
-/**
- * The canonical glyph per Move function button — every app shows the same
- * icon for the same hardware key, so the chips read like the instrument.
- * Drawn on the capture glyph's 14px grid (dots on the enter dot's 12px),
- * stroked like the printed marks unless the hardware fills them.
- */
-declare const MOVE_FUNCTION_ICONS: Record<string, MoveFunctionGlyph>;
 
 /** Where a row goes when it is taken, drawn at its end. `page` is a chevron —
  * the list is replaced by the one this row leads to, so the same mark reads
@@ -4554,4 +4611,4 @@ declare class MoveSearchStoreClass {
 }
 declare const MoveSearchStore: MoveSearchStoreClass;
 
-export { ADSR_DEF, ADSR_STAGE_MAX, ANGLE_DEAD_ZONE_PX, AUDIO_DEF, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AxisSpec, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, type ChipOption, type ChipsConfig, type ColorConfig, type ColorFormat, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRANSFER, DEFAULT_TRIGGER_STEPS, type DriverDirection, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EasingConfig, type EnvStage, FILTER_DB_CEIL, FILTER_DB_FLOOR, type FileConfig, type FilterAxis, type FilterAxisConfig, type FilterConfig, type FilterResponse, type FilterShapeType, type FilterValue, type GalleryConfig, type GalleryItem, type GradientConfig, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenDetail, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_CHIP_BUTTONS, MOVE_COLOR_HUES, MOVE_COLOR_PALETTES, MOVE_COLOR_STEPS, MOVE_COLOR_WHEEL, MOVE_DIALS, MOVE_FLOAT_SELECTOR, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_ICONS, MOVE_FUNCTION_MANIFEST, MOVE_JOG_CLICK_EVENT, MOVE_JOG_EVENT, MOVE_LATCH_EVENT, MOVE_MUTE_EVENT, MOVE_NOTIFY_GAP, MOVE_NOTIFY_KINDS, MOVE_OPACITY_PADS, MOVE_OVERRIDE_EVENT, MOVE_PADS, MOVE_PAD_LIBRARY, MOVE_PAGE_EVENT, MOVE_PAGE_SELECT_EVENT, MOVE_PALETTE, MOVE_SEARCH_EVENT, MOVE_SLOT_LIBRARY, MOVE_SPECIAL_BUTTONS, MOVE_STEP_FUNCTIONS, MOVE_STRIP_EVENT, MOVE_TOUCH_EVENT, MOVE_TRACKS, MOVE_TRACK_COLORS, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_STEPS, type ModControlMeta, type ModPageLayout, type ModPageSlot, ModRing, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, MoveActionButton, type MoveActionButtonProps, type MoveColorPalette, MoveColorStore, type MoveColorView, type MoveFunctionButton, type MoveFunctionChip, type MoveFunctionChipStyle, MoveFunctionChips, type MoveFunctionChipsProps, type MoveFunctionGlyph, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, MoveNotifications, type MoveNotificationsProps, type MoveNotifyKind, type MoveNotifyOptions, type MoveNumericDrawing, MovePadActionBody, MovePadAppBody, type MovePadCell, type MovePadKind, MovePadTabsBody, MovePadToggleBody, MovePadValueBody, MovePadWaveBody, type MovePage, type MovePaletteName, MovePanel, type MovePanelProps, type MovePlaybackMode, type MovePresetItem, type MovePresetPhase, type MovePresetSave, MovePresetStore, type MovePresetView, type MoveScreenList, type MoveScreenRow, type MoveScreenSearch, MoveSearchStore, type MoveSearchTarget, type MoveSearchView, type MoveSelectVisual, MoveSettingsView, type MoveSliderVisual, MoveSlotColorBody, MoveSlotDefaultBody, MoveSlotDialBody, MoveSlotEnumBody, MoveSlotEnvBody, MoveSlotFilterBody, MoveSlotGlyph, type MoveSlotKind, MoveSlotNumericBody, MoveSlotPlaybackDrawing, MoveSlotRampBody, MoveSlotRangeBody, MoveSlotReadout, MoveSlotScopeBody, MoveSlotShape, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotXYBody, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, type MoveVisual, MoveVolumeDisplay, type MoveVolumeDisplayState, MoveWaveform, type MoveWaveformProps, MoveWaveformStore, type MoveWaveformVariant, type MoveWaveformView, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SpringifyOptions, type SwatchConfig, type SwatchOption, TAB_PATH, TRANSFER_MAX_POINTS, TRANSFER_MIN_GAP, type TextConfig, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineMeta, TimelineStore, type TimelineTransport, type ToggleConfig, type TransferPoint, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakTheme, type TweakValue, WAVEFORM_MAX_ZOOM, WAVEFORM_SMOOTH_POINTS, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, angleFromPointer, applyDetentAxis, applyModulation, arcPath, audioModLevel, bearingToValue, buildModMovePage, buildMovePages, buildMoveStrip, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, clampStripOffset, colorAtPosition, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultFilterResponse, defaultListItemParams, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, dialOrigin, dialSpan, displayHex, enumOptionIcon, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, filterHand01, filterHandValue, filterResponsePath, filterShapePath, filterShapeResponse, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getAudioModBuffer, getAudioModVersion, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, insertPoint, invertY, isIdentityTransfer, isMoveDial, isMoveTabs, isNamedTabs, isOutsideSpan, isPadSpanContinuation, isSpanContinuation, isStripSlot, isToggleDial, lfoSyncedHz, listModTypes, loopFromStep, loopSteps, modColor, modKey, modPageLayout, modPageWidth, modRingArc, moveAppPadRow, moveNotify, moveNumericDrawing, movePadRows, movePlaybackMode, movePoint, moveScreenChecked, moveScreenRowLabel, moveSearchFilter, moveSearchMatch, moveSlotKind, moveStop, moveTabCell, moveVisualReading, defaultView as moveWaveformDefaultView, moveWheelSlot, nearestHandle, nearestPoint, normToValue, normalizeAngle, normalizeCurveMarkers, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeFilterValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeToggleDial, normalizeTransfer, normalizeValue, normalizeXYDial, notifyDockBottom, nudge, nudgeAngle, oklchToRgb, opacityPercent, orderRange, padPosition, padSection, padSpan, pageStripOffset, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, rampCss, readComposition, redistributeWeight, registerModType, removeDriver, removePoint, removeSegment, removeStop, resolveAxis, resolveFilterAxis, rgbToHsl, rgbToHsv, rgbToOklch, sampleTransfer, scrubBy, setAudioModBuffer, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapAngle, snapToStep, splitSegment, springify, stepPosition, stepStripOffset, stripDialColumns, stripDialSlots, stripOffsets, stripSlotCount, stripSlotIndex, stripStarts, stripWindowPads, subscribeAudioMod, transferLut, triggerLevels, triggersCrossed, valueFromPoint, valueToBearing, valueToNorm, valueToPercent, visibleColumns, visibleModControls, visibleWindow, zoomBy };
+export { ADSR_DEF, ADSR_STAGE_MAX, ANGLE_DEAD_ZONE_PX, AUDIO_DEF, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AxisSpec, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, type ChipOption, type ChipsConfig, type ColorConfig, type ColorFormat, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRANSFER, DEFAULT_TRIGGER_STEPS, type DriverDirection, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EasingConfig, type EnvStage, FILTER_DB_CEIL, FILTER_DB_FLOOR, type FileConfig, type FilterAxis, type FilterAxisConfig, type FilterConfig, type FilterResponse, type FilterShapeType, type FilterValue, type GalleryConfig, type GalleryItem, type GradientConfig, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenDetail, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_CHIP_BUTTONS, MOVE_COLOR_HUES, MOVE_COLOR_PALETTES, MOVE_COLOR_STEPS, MOVE_COLOR_WHEEL, MOVE_DECK_MAX, MOVE_DIALS, MOVE_FLOAT_SELECTOR, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_ICONS, MOVE_FUNCTION_MANIFEST, MOVE_JOG_CLICK_EVENT, MOVE_JOG_EVENT, MOVE_LATCH_EVENT, MOVE_MUTE_EVENT, MOVE_NOTIFY_GAP, MOVE_NOTIFY_KINDS, MOVE_OPACITY_PADS, MOVE_OVERRIDE_EVENT, MOVE_PADS, MOVE_PAD_LIBRARY, MOVE_PAGE_EVENT, MOVE_PAGE_SELECT_EVENT, MOVE_PALETTE, MOVE_SEARCH_EVENT, MOVE_SLOT_LIBRARY, MOVE_SPECIAL_BUTTONS, MOVE_STEP_FUNCTIONS, MOVE_STRIP_EVENT, MOVE_TOUCH_EVENT, MOVE_TRACKS, MOVE_TRACK_COLORS, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_STEPS, type ModControlMeta, type ModPageLayout, type ModPageSlot, ModRing, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, MoveActionButton, type MoveActionButtonProps, MoveActionDeck, type MoveActionDeckProps, type MoveColorPalette, MoveColorStore, type MoveColorView, type MoveDeckAction, type MoveDeckButton, type MoveFunctionButton, type MoveFunctionChip, type MoveFunctionChipStyle, MoveFunctionChips, type MoveFunctionChipsProps, type MoveFunctionGlyph, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, MoveNotifications, type MoveNotificationsProps, type MoveNotifyKind, type MoveNotifyOptions, type MoveNumericDrawing, MovePadActionBody, MovePadAppBody, type MovePadCell, type MovePadKind, MovePadTabsBody, MovePadToggleBody, MovePadValueBody, MovePadWaveBody, type MovePage, type MovePaletteName, MovePanel, type MovePanelProps, type MovePlaybackMode, type MovePresetItem, type MovePresetPhase, type MovePresetSave, MovePresetStore, type MovePresetView, type MoveScreenList, type MoveScreenRow, type MoveScreenSearch, MoveSearchStore, type MoveSearchTarget, type MoveSearchView, type MoveSelectVisual, MoveSettingsView, type MoveSliderVisual, MoveSlotColorBody, MoveSlotDefaultBody, MoveSlotDialBody, MoveSlotEnumBody, MoveSlotEnvBody, MoveSlotFilterBody, MoveSlotGlyph, type MoveSlotKind, MoveSlotNumericBody, MoveSlotPlaybackDrawing, MoveSlotRampBody, MoveSlotRangeBody, MoveSlotReadout, MoveSlotScopeBody, MoveSlotShape, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotXYBody, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, type MoveVisual, MoveVolumeDisplay, type MoveVolumeDisplayState, MoveWaveform, type MoveWaveformProps, MoveWaveformStore, type MoveWaveformVariant, type MoveWaveformView, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SpringifyOptions, type SwatchConfig, type SwatchOption, TAB_PATH, TRANSFER_MAX_POINTS, TRANSFER_MIN_GAP, type TextConfig, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineMeta, TimelineStore, type TimelineTransport, type ToggleConfig, type TransferPoint, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakTheme, type TweakValue, WAVEFORM_MAX_ZOOM, WAVEFORM_SMOOTH_POINTS, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, angleFromPointer, applyDetentAxis, applyModulation, arcPath, audioModLevel, bearingToValue, buildModMovePage, buildMovePages, buildMoveStrip, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, clampStripOffset, colorAtPosition, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultFilterResponse, defaultListItemParams, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, dialOrigin, dialSpan, displayHex, enumOptionIcon, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, filterHand01, filterHandValue, filterResponsePath, filterShapePath, filterShapeResponse, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getAudioModBuffer, getAudioModVersion, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, insertPoint, invertY, isIdentityTransfer, isMoveDial, isMoveTabs, isNamedTabs, isOutsideSpan, isPadSpanContinuation, isSpanContinuation, isStripSlot, isToggleDial, lfoSyncedHz, listModTypes, loopFromStep, loopSteps, modColor, modKey, modPageLayout, modPageWidth, modRingArc, moveAppPadRow, moveNotify, moveNumericDrawing, movePadRows, movePlaybackMode, movePoint, moveScreenChecked, moveScreenRowLabel, moveSearchFilter, moveSearchMatch, moveSlotKind, moveStop, moveTabCell, moveVisualReading, defaultView as moveWaveformDefaultView, moveWheelSlot, nearestHandle, nearestPoint, normToValue, normalizeAngle, normalizeCurveMarkers, normalizeDeck, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeFilterValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeToggleDial, normalizeTransfer, normalizeValue, normalizeXYDial, notifyDockBottom, nudge, nudgeAngle, oklchToRgb, opacityPercent, orderRange, padPosition, padSection, padSpan, pageStripOffset, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, rampCss, readComposition, redistributeWeight, registerModType, removeDriver, removePoint, removeSegment, removeStop, resolveAxis, resolveFilterAxis, rgbToHsl, rgbToHsv, rgbToOklch, sampleTransfer, scrubBy, setAudioModBuffer, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapAngle, snapToStep, splitSegment, springify, stepPosition, stepStripOffset, stripDialColumns, stripDialSlots, stripOffsets, stripSlotCount, stripSlotIndex, stripStarts, stripWindowPads, subscribeAudioMod, transferLut, triggerLevels, triggersCrossed, valueFromPoint, valueToBearing, valueToNorm, valueToPercent, visibleColumns, visibleModControls, visibleWindow, zoomBy };

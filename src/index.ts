@@ -25,6 +25,11 @@ export { MoveActionButton } from './components/MoveActionButton';
 export type { MoveActionButtonProps } from './components/MoveActionButton';
 export { MoveFunctionChips } from './components/MoveFunctionChips';
 export type { MoveFunctionChipsProps } from './components/MoveFunctionChips';
+// The action deck — a view's whole surface as up to four big key-dressed buttons
+export { MoveActionDeck } from './components/MoveActionDeck';
+export type { MoveActionDeckProps } from './components/MoveActionDeck';
+export { normalizeDeck, MOVE_DECK_MAX } from './move-deck-core';
+export type { MoveDeckAction, MoveDeckButton } from './move-deck-core';
 export { buildMovePages, buildModMovePage, movePadRows, moveAppPadRow, visibleColumns, isToggleDial, normalizeToggleDial, denormalizeToggleDial, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, padSpan, isMoveDial, isMoveTabs, isNamedTabs, moveTabCell, isSpanContinuation, isPadSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
 export type { MovePage } from './move-layout';
 
