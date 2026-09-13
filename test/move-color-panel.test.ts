@@ -178,7 +178,7 @@ describe('Move gradient, balance and small colour panel', () => {
       colorA: { type: 'color', default: '#ff0000' },
       colorB: { type: 'color', default: '#0000ff' },
       mix: { type: 'balance', a: 'colorA', b: 'colorB', default: 0.5 },
-    }, undefined, { movePads: { colorA: 0, colorB: 1 } });
+    });
     act(() => { renderer = create(createElement(MovePanel, { panels: ['Ramp'], dock: 'flow', productionEnabled: true })); });
   }
   afterEach(() => { TweakStore.unregisterPanel(gid); });
@@ -223,7 +223,24 @@ describe('Move gradient, balance and small colour panel', () => {
     expect(MoveColorStore.getStop()).toBe(1);
   });
 
-  it('small colour pads open the shared editor from the value row', () => {
+  it('a balance seats its colours in its own column, wearing their store values', () => {
+    mountGradient();
+    // Zero movePads declared: the balance placed both — a on the switch row,
+    // b on the value row of its own column (dial 2, after ramp).
+    const [page] = buildMovePages([TweakStore.getPanel(gid)!]);
+    const at = page.dials.findIndex((d) => d?.path === 'mix');
+    expect(page.toggles[at]?.path).toBe('colorA');
+    expect(page.values[at]?.path).toBe('colorB');
+    // The swatches carry the store's colours with no app wiring.
+    const pads = renderer!.root.findAllByProps({ 'data-kind': 'color' }).filter((n) => n.type === 'button');
+    const swatch = (pad: (typeof pads)[number]) =>
+      pad.findByProps({ className: 'tweakers-move-pad-swatch' }).findAllByType('span').at(-1)!.props.style.background;
+    expect(pads.map(swatch)).toEqual(['#ff0000', '#0000ff']);
+    act(() => TweakStore.updateValue(gid, 'colorA', '#00ff00'));
+    expect(swatch(renderer!.root.findAllByProps({ 'data-kind': 'color' }).filter((n) => n.type === 'button')[0])).toBe('#00ff00');
+  });
+
+  it('small colour pads open the shared editor from the pad rows', () => {
     mountGradient();
     const pads = renderer!.root.findAllByProps({ 'data-kind': 'color' }).filter((n) => n.type === 'button');
     expect(pads).toHaveLength(2);

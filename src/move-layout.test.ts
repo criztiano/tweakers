@@ -138,18 +138,39 @@ describe('move layout', () => {
     assert.deepEqual(issues, []);
   });
 
-  it('a balance claims a dial slot and never falls back to a chip', () => {
+  it('a balance seats its own colours in its column — zero layout to declare', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, {
+      gain: [0.5, 0, 1],
+      colorA: { type: 'color', default: '#ff0000' },
+      colorB: { type: 'color', default: '#0000ff' },
+      mix: { type: 'balance', a: 'colorA', b: 'colorB', default: 0.5 },
+    } as never);
+    const { result: [page], issues } = capturingIssues(() => buildMovePages([TweakStore.getPanel(id)!]));
+    // The colours never race for dials; they stack in the balance's column —
+    // a on the switch row, b on the value row, the blend's own column group.
+    assert.deepEqual(page.dials.map((d) => d.path), ['gain', 'mix']);
+    assert.equal(page.toggles[1]?.path, 'colorA');
+    assert.equal(page.values[1]?.path, 'colorB');
+    assert.equal(page.toggles[0], undefined);
+    assert.deepEqual(issues, []);
+  });
+
+  it('a hand-named column on a balance colour is ignored, out loud', () => {
     const id = nextId();
     TweakStore.registerPanel(id, id, {
       colorA: { type: 'color', default: '#ff0000' },
       colorB: { type: 'color', default: '#0000ff' },
       mix: { type: 'balance', a: 'colorA', b: 'colorB', default: 0.5 },
-    } as never, undefined, { movePads: { colorA: 0, colorB: 1 } });
+    } as never, undefined, { movePads: { colorA: 5 } });
     const { result: [page], issues } = capturingIssues(() => buildMovePages([TweakStore.getPanel(id)!]));
-    assert.deepEqual(page.dials.map((d) => d.path), ['mix']);
-    assert.deepEqual(page.values.map((v) => v?.path), ['colorA', 'colorB']);
-    assert.deepEqual(issues, []);
+    assert.equal(page.toggles[0]?.path, 'colorA');   /* the balance's column, not 5 */
+    assert.equal(page.values[0]?.path, 'colorB');
+    assert.deepEqual(issues.map(([code]) => code), ['balance-color-placed']);
+    assert.match(issues[0][1], /colorA/);
+  });
 
+  it('a balance never falls back to a chip', () => {
     // Past the eight columns a balance is dropped out loud, never chipped.
     const over = nextId();
     const config: Record<string, unknown> = {};

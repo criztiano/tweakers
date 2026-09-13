@@ -87,7 +87,8 @@ adjusted to what the inventory actually contains:
 | Any curve or shape parameter (easing, envelope, transfer curve, probability distribution) | CurveComposer / EasingVisualization / SpringVisualization — the visual editor, never a row of numeric sliders |
 | Parameters that *indirectly* shape a curve (a shape enum plus width/offset/amount modifiers) | Keep the individual controls, and add a live curve-preview row sampling the resulting curve — the user must SEE what the combination produces |
 | Animation feel | Spring control (visual editor) |
-| Color / gradient | Color control (with `palette` where reuse matters) / Gradient control |
+| Color / gradient | Color control (with `palette` where reuse matters) / Gradient control (2–4 stops carries the integrated Move editor) |
+| A color that is a mix of two | `balance` (`{ type: 'balance', a, b }`) plus its two `color` params — declare the three params and STOP: the kit seats the two colors itself, stacked in the balance's own column, lit in their colors, tap-to-edit. No `movePads`, no wiring |
 | Audio or signal level | AudioLevelMeter / AnalyserVisualization |
 | Loaded sample or buffer | WaveformVisualization — interactive, in the main pane |
 | Ordered variable-length collection (layers, effects chain, voices) | List control with item types |
@@ -96,6 +97,22 @@ adjusted to what the inventory actually contains:
 Only after the mapping is complete, look at what's left over. A leftover means
 either a missing tweakers component (build it *in tweakers's idiom*, or flag it)
 or an app concept that should be redesigned to fit the system.
+
+### The lego principle: the kit maps things itself
+
+Building a panel is snapping bricks together, not drawing a floor plan. Most
+layout rules are deterministic and the KIT applies them: dials pack left to
+right, overflow becomes value chips, a balance seats its two colors in its
+own column (lit in their colors, tap-to-edit — declaring the three params is
+the whole job), a 2–4 stop gradient carries its editor, and every chip's
+face reads straight from the store's value. If an integration is hand-naming
+columns to reproduce something the kit could know from the config alone,
+stop: that rule belongs in `move-layout.ts`, upstream, where every app gets
+it. `movePads` exists only for the decisions the config genuinely cannot
+answer — WHICH dial a toggle qualifies, WHERE a hand-placed action sits,
+whether a standalone color is a page's big control (a dial) or a detail (a
+chip, said by naming its column). Everything else the kit decides, and a
+map entry it ignores is announced as a layout warning, never silently obeyed.
 
 ### The fork every integration hits: config-driven panel vs standalone components
 

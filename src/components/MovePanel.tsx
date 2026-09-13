@@ -671,9 +671,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     meta.type === 'gradient' && pageId !== undefined &&
     (MoveColorStore.gradient(pageId, meta.path)?.stops.length ?? 0) <= MOVE_GRADIENT_STOPS;
   // The editor's target may hold a dial slot (a colour, an editable
-  // gradient) or sit on the value row (the small colour selector).
+  // gradient) or sit on the pad rows (the small colour selector — a
+  // balance's colours stack on the switch and value rows of its column).
   const colorMeta = colorView?.panelId === pageId && page
-    ? [...page.dials, ...page.values].find((meta) =>
+    ? [...page.dials, ...page.toggles, ...page.values].find((meta) =>
         meta && meta.path === colorView.path &&
         (meta.type === 'color' || gradientEditable(meta)))
     : undefined;
@@ -2440,6 +2441,29 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       );
                     }
                     if (!meta) return <div key={`empty-${col}`} className="tweakers-move-pad" data-empty="true" />;
+                    // The small colour selector — whichever row it sits on
+                    // (a balance stacks its two on the switch and value rows
+                    // of its own column). The swatch is the store's value,
+                    // nothing wired by the app; a tap opens the same colour
+                    // editor the big slot's colour uses.
+                    if (meta.type === 'color') {
+                      const open = colorMeta?.path === meta.path;
+                      return (
+                        <button
+                          key={meta.path}
+                          className="tweakers-move-pad"
+                          data-kind="color"
+                          data-on={open || undefined}
+                          aria-expanded={open}
+                          aria-haspopup="dialog"
+                          aria-label={`${meta.label}. Open color editor`}
+                          disabled={TweakStore.isDisabled(page.panel.id, meta.path)}
+                          onClick={() => MoveColorStore.toggle(page.panel.id, meta.path)}
+                        >
+                          <MovePadColorBody label={meta.label} color={String(values[meta.path])} />
+                        </button>
+                      );
+                    }
                     if (padRows[row] === page.toggles) {
                       return (
                         <button
@@ -2464,27 +2488,6 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           onClick={() => TweakStore.triggerAction(page.panel.id, meta.path)}
                         >
                           <MovePadActionBody label={meta.label} />
-                        </button>
-                      );
-                    }
-                    // The small colour selector: a swatch in the chip's
-                    // shape; a tap opens the same colour editor the big
-                    // slot's colour uses — no hold-to-peek, no latch.
-                    if (meta.type === 'color') {
-                      const open = colorMeta?.path === meta.path;
-                      return (
-                        <button
-                          key={meta.path}
-                          className="tweakers-move-pad"
-                          data-kind="color"
-                          data-on={open || undefined}
-                          aria-expanded={open}
-                          aria-haspopup="dialog"
-                          aria-label={`${meta.label}. Open color editor`}
-                          disabled={TweakStore.isDisabled(page.panel.id, meta.path)}
-                          onClick={() => MoveColorStore.toggle(page.panel.id, meta.path)}
-                        >
-                          <MovePadColorBody label={meta.label} color={String(values[meta.path])} />
                         </button>
                       );
                     }

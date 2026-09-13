@@ -41,7 +41,7 @@ TweakStore.registerPanel('paint', 'Paint', {
   inkA: { type: 'color', default: '#632ad5' },
   inkB: { type: 'color', default: '#fccff7' },
   blend: { type: 'balance', a: 'inkA', b: 'inkB', default: 0.5 },
-}, undefined, { movePads: { inkA: 2, inkB: 3 } });
+});
 
 // The settings room: master controls behind the Set Overview button
 // (Shift + Step 1 on the hardware, the S key here). Named in MovePanel's

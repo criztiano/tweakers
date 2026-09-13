@@ -56,9 +56,21 @@ export function buildMoveStrip(panel: PanelConfig): MovePage {
     return typeof n === 'number' && Number.isInteger(n) && n >= 0 ? n : null;
   };
 
+  // The two colours a balance references never take slots of their own: the
+  // balance seats them itself, stacked in its column — the same zero-config
+  // rule the 8-wide page keeps.
+  const balanceRefs = new Map<ControlMeta, ControlMeta>();
+  for (const c of controls) {
+    if (c.type !== 'balance') continue;
+    for (const path of [c.balanceA, c.balanceB]) {
+      const ref = controls.find((x) => x.path === path && x.type === 'color');
+      if (ref && !balanceRefs.has(ref)) balanceRefs.set(ref, c);
+    }
+  }
+
   const dials: ControlMeta[] = [];
   for (const c of controls) {
-    if (!isStripSlot(c) || column(c) !== null) continue;
+    if (!isStripSlot(c) || column(c) !== null || balanceRefs.has(c)) continue;
     for (let s = 0; s < dialSpan(c); s++) dials.push(c);
   }
 
@@ -86,10 +98,19 @@ export function buildMoveStrip(panel: PanelConfig): MovePage {
       placeRun(c, column(c));
       continue;
     }
+    if (balanceRefs.has(c)) continue;   /* seated by its balance below */
     const col = column(c);
     if (col === null) continue;
     const row = c.type === 'toggle' ? toggles : c.type === 'action' ? actions : values;
     if (row[col] === undefined) row[col] = c;
+  }
+  // Each balance's colours, under the balance itself: `a` on the switch row,
+  // `b` on the value row of the balance's own column.
+  for (const [ref, bal] of balanceRefs) {
+    const col = dials.indexOf(bal);
+    if (col < 0) continue;
+    const row = ref.path === bal.balanceA ? toggles : values;
+    if (row[col] === undefined) row[col] = ref;
   }
   return { panel, dials, toggles, values, actions };
 }

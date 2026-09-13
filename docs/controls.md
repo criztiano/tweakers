@@ -48,7 +48,7 @@ control.
 | `action` | A button the page wants on the surface | `action` with a `movePads` column; `MovePadActionBody` | 1 pad |
 | `app` | A cell the app paints — a track, a slice, a step | `MoveSurfaceStore`; `MovePadAppBody` | 1 pad |
 | `tabs` | The mode a page is in, reachable without turning anything | `select` with `moveTabs` (`true`, or `'named'` for the name pad); `MovePadTabsBody` | 2–8 adjacent pads, switch row |
-| `color` | A single colour where colour is not the page's big control | `color` config with a `movePads` column; `MovePadColorBody` | 1 pad, value row; tap opens the colour editor |
+| `color` | A single colour where colour is not the page's big control | `color` config with a `movePads` column — or nothing at all when a `balance` references it (the kit seats those itself); `MovePadColorBody` | 1 pad, switch or value row; lit in its colour, tap opens the editor |
 
 A `moveTabs` select stops competing for a dial: it is a pad strip and nothing
 else. It lands as one piece or not at all — the builder reports `tabs-oversized`
@@ -73,20 +73,37 @@ selector**: a swatch chip on the value row for pages where colour is not the
 big control. A tap — screen pad or hardware pad — opens the same editor.
 
 The **balance pattern** expresses "this effect's colour is a mix of two":
-two small colour selectors plus one big slot blending between them.
+two small colour selectors plus one big slot blending between them. Declaring
+the three params is the whole job — the lego principle:
 
 ```tsx
 useTweakers('Noise', {
   colorA: { type: 'color', default: '#632ad5' },
   colorB: { type: 'color', default: '#fccff7' },
   balance: { type: 'balance', a: 'colorA', b: 'colorB', default: 0.5 },
-}, { movePads: { colorA: 0, colorB: 1 } });
+});
 ```
+
+The kit seats the two referenced colours ITSELF: stacked in the balance's
+own column — `a` on the switch row, `b` on the value row — so the blend and
+its two ends read as one column group, on screen and on the hardware alike.
+No `movePads` for them (a hand-named column on one is ignored with a
+`balance-color-placed` warning, the pads-never-mirror-dials rule's sibling).
+Every colour chip wears its live store value: the swatch on screen, and on
+the device the pad lights in the colour itself — true RGB where the module
+advertises `pad_rgb`, the nearest named hue otherwise.
 
 `balance` resolves to a plain 0..1 number (0 all `a`, 1 all `b`) — on the
 wire it is an ordinary dial, so modulation, presets and hardware sync need
 nothing new — while its slot draws the two referenced colours' ramp with the
 mix position as the tick.
+
+What stays a hand decision, and why: a STANDALONE colour is a dial by
+default and becomes a chip only when its `movePads` column says so — whether
+colour is the page's big control is page design, not something the config
+can know; a toggle's column (which dial it qualifies) and a hand-placed
+action's seat are the app's vocabulary for the same reason. Everything the
+config can answer, the kit answers.
 
 | Component / API | Purpose |
 | --- | --- |

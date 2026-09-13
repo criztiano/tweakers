@@ -188,6 +188,7 @@ export type MoveLayoutIssueCode =
   | 'dial-dropped'
   | 'pad-column-invalid'
   | 'pad-column-on-dial'
+  | 'balance-color-placed'
   | 'pad-column-taken'
   | 'pad-row-full'
   | 'tabs-oversized'
@@ -252,6 +253,17 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
       // Each control's hand-named pad column, read once — the reporter must
       // hear about an invalid column exactly once per control.
       const padCols = new Map(controls.map((c) => [c, padColumn(panel, c)] as const));
+      // The two colours a balance references never enter the dial race: the
+      // balance places them ITSELF — stacked in its own column, switch row
+      // over value row — so the pattern needs zero layout from the panel.
+      const balanceRefs = new Map<ControlMeta, ControlMeta>();
+      for (const c of controls) {
+        if (c.type !== 'balance') continue;
+        for (const path of [c.balanceA, c.balanceB]) {
+          const ref = controls.find((x) => x.path === path && x.type === 'color');
+          if (ref && !balanceRefs.has(ref)) balanceRefs.set(ref, c);
+        }
+      }
       // A colour with a NAMED pad column steps out of the dial race: it is
       // the small colour selector — a swatch chip on the value row that opens
       // the same editor — for pages where colour is not the big control. The
@@ -260,7 +272,7 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
       const dials: ControlMeta[] = [];
       let nextCol = 0;
       for (const c of controls) {
-        if (!isDial(c) || isPadColor(c)) continue;
+        if (!isDial(c) || isPadColor(c) || balanceRefs.has(c)) continue;
         const span = dialSpan(c);
         if (nextCol + span > MOVE_DIALS) {
           if (nextCol >= MOVE_DIALS) break;
@@ -268,6 +280,16 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         }
         for (let s = 0; s < span; s++) dials[nextCol + s] = c;
         nextCol += span;
+      }
+      // Where each balance's colours land, now the dials are settled: `a` on
+      // the switch row of the balance's column, `b` on the value row below it
+      // — the blend and its two ends read as one column group. A balance that
+      // never landed a column leaves its colours to the ordinary rules.
+      const balanceSeat = new Map<ControlMeta, { col: number; first: boolean }>();
+      for (const [ref, bal] of balanceRefs) {
+        const col = dials.indexOf(bal);
+        if (col < 0) continue;
+        balanceSeat.set(ref, { col, first: ref.path === bal.balanceA });
       }
 
       const toggles: ControlMeta[] = [];
@@ -346,6 +368,22 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         // Actions reach the pads only when the page asks for them by column —
         // every app has buttons, and none of them expect a hardware pad.
         else if (c.type === 'action') { if (col !== null) place(actions, 'action', c, col); }
+        // A balance's colours place themselves — a hand-named column on one
+        // is ignored, out loud, the way a dial-holder's is: the placement is
+        // the balance's, not the map's.
+        else if (balanceSeat.has(c)) {
+          if (col !== null) {
+            reportMoveLayoutIssue(
+              'balance-color-placed',
+              `panel '${panel.id}': control '${c.path}' is placed by its balance — movePads column ${col} ignored; a balance seats its own colours`
+            );
+          }
+          const seat = balanceSeat.get(c)!;
+          place(seat.first ? toggles : values, seat.first ? 'toggle' : 'value', c, seat.col);
+        }
+        // A balance's colour whose balance never landed a column falls back
+        // to the ordinary chip: the value row, leftmost free (or as named).
+        else if (balanceRefs.has(c)) place(values, 'value', c, col);
         // The small colour selector: a swatch on the value row, in its named
         // column; a tap opens the same editor the big slot's colour uses.
         else if (isPadColor(c)) place(values, 'value', c, col);
