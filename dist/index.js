@@ -6106,7 +6106,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   useEffect8(() => setOffset(0), [pageId]);
   useEffect8(() => {
     const onJog = (e) => {
-      if (e.defaultPrevented || presetNavigatorOpen() || MoveColorStore.getView() || !stripRef.current.on) return;
+      if (e.defaultPrevented || MoveSearchStore.isOpen() || presetNavigatorOpen() || MoveColorStore.getView() || !stripRef.current.on) return;
       if (MoveWaveformStore.wantsSteps()) return;
       e.preventDefault();
       scrollSlots(Math.round(Number(e.detail?.delta) || 0));
@@ -6217,12 +6217,12 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   }, [paletteScreen]);
   useEffect8(() => {
     const onJog = (e) => {
-      if (e.defaultPrevented || !palettePickerOpen()) return;
+      if (e.defaultPrevented || MoveSearchStore.isOpen() || !palettePickerOpen()) return;
       e.preventDefault();
       MoveColorStore.movePickerCursor(Number(e.detail?.delta) || 0);
     };
     const onJogClick = (e) => {
-      if (e.defaultPrevented || !palettePickerOpen()) return;
+      if (e.defaultPrevented || MoveSearchStore.isOpen() || !palettePickerOpen()) return;
       e.preventDefault();
       MoveColorStore.confirmPicker();
     };
@@ -6260,12 +6260,12 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       return view && view.phase !== "closing" ? view : null;
     };
     const onJog = (e) => {
-      if (e.defaultPrevented || !openView()) return;
+      if (e.defaultPrevented || MoveSearchStore.isOpen() || !openView()) return;
       e.preventDefault();
       MovePresetStore.scroll(Number(e.detail?.delta) || 0);
     };
     const onJogClick = (e) => {
-      if (e.defaultPrevented || !openView()) return;
+      if (e.defaultPrevented || MoveSearchStore.isOpen() || !openView()) return;
       e.preventDefault();
       MovePresetStore.confirm();
     };
@@ -6314,13 +6314,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   useEffect8(() => {
     const onJog = (e) => {
       const view = MoveSearchStore.getView();
-      if (!view || e.defaultPrevented) return;
+      if (!view) return;
       e.preventDefault();
       searchStep(view, Math.round(Number(e.detail?.delta) || 0));
     };
     const onJogClick = (e) => {
       const view = MoveSearchStore.getView();
-      if (!view || e.defaultPrevented) return;
+      if (!view) return;
       e.preventDefault();
       searchTake(view);
     };

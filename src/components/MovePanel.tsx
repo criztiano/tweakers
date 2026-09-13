@@ -546,7 +546,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     const onJog = (e: Event) => {
       // An open colour editor keeps the strip still too: the wheel belongs
       // to its overlays (the palette list) while the editor is up.
-      if (e.defaultPrevented || presetNavigatorOpen() || MoveColorStore.getView() || !stripRef.current.on) return;
+      if (e.defaultPrevented || MoveSearchStore.isOpen() || presetNavigatorOpen() || MoveColorStore.getView() || !stripRef.current.on) return;
       // While the waveform editor floats, the wheel is its zoom — the strip
       // waits. The event rides on unconsumed, so the kit hands it there.
       if (MoveWaveformStore.wantsSteps()) return;
@@ -699,12 +699,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // list, the jog click locks the palette in — the preset navigator's terms.
   useEffect(() => {
     const onJog = (e: Event) => {
-      if (e.defaultPrevented || !palettePickerOpen()) return;
+      if (e.defaultPrevented || MoveSearchStore.isOpen() || !palettePickerOpen()) return;
       e.preventDefault();
       MoveColorStore.movePickerCursor(Number((e as CustomEvent).detail?.delta) || 0);
     };
     const onJogClick = (e: Event) => {
-      if (e.defaultPrevented || !palettePickerOpen()) return;
+      if (e.defaultPrevented || MoveSearchStore.isOpen() || !palettePickerOpen()) return;
       e.preventDefault();
       MoveColorStore.confirmPicker();
     };
@@ -755,12 +755,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       return view && view.phase !== 'closing' ? view : null;
     };
     const onJog = (e: Event) => {
-      if (e.defaultPrevented || !openView()) return;
+      if (e.defaultPrevented || MoveSearchStore.isOpen() || !openView()) return;
       e.preventDefault();
       MovePresetStore.scroll(Number((e as CustomEvent).detail?.delta) || 0);
     };
     const onJogClick = (e: Event) => {
-      if (e.defaultPrevented || !openView()) return;
+      if (e.defaultPrevented || MoveSearchStore.isOpen() || !openView()) return;
       e.preventDefault();
       MovePresetStore.confirm();
     };
@@ -815,19 +815,23 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     window.addEventListener(MOVE_SEARCH_EVENT, onSearch);
     return () => window.removeEventListener(MOVE_SEARCH_EVENT, onSearch);
   }, []);
-  // The wheel and its click, while a search runs: capture-phase listeners,
-  // so they answer before the list's own handlers and the host's — whoever
-  // registered first — and a consumed turn is never walked twice.
+  // The wheel and its click, while a search runs. Registration order does
+  // not decide who wins: the search takes every turn while it is open, and
+  // every other reader of the wheel — the navigators, the strip, a host's
+  // own list — yields on MoveSearchStore.isOpen() rather than on the
+  // event's consumed flag, so a turn is never walked twice whoever hears it
+  // first. (Capture phase only for good measure; it does not order same-
+  // target listeners reliably.)
   useEffect(() => {
     const onJog = (e: Event) => {
       const view = MoveSearchStore.getView();
-      if (!view || e.defaultPrevented) return;
+      if (!view) return;
       e.preventDefault();
       searchStep(view, Math.round(Number((e as CustomEvent).detail?.delta) || 0));
     };
     const onJogClick = (e: Event) => {
       const view = MoveSearchStore.getView();
-      if (!view || e.defaultPrevented) return;
+      if (!view) return;
       e.preventDefault();
       searchTake(view);
     };
