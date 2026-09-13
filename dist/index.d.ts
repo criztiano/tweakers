@@ -659,6 +659,12 @@ type MoveSliderVisual = {
 } | {
     kind: 'pitch';
     unit?: 'semitones' | 'cents';
+}
+/** One edge of a take: the bar is the whole of it, the kept part is filled
+ *  from this edge's far end to the value, the edge itself is the marker. */
+ | {
+    kind: 'trim';
+    edge: 'start' | 'end';
 };
 type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
 type MoveSelectVisual = {
@@ -684,6 +690,10 @@ type MoveNumericDrawing = {
     kind: 'pitch';
     position: number;
     zero: number | null;
+} | {
+    kind: 'trim';
+    edge: 'start' | 'end';
+    position: number;
 };
 /** Invalid or incompatible metadata falls back to the ordinary face. No label inference. */
 declare function moveNumericDrawing(meta: ControlMeta, value: unknown): MoveNumericDrawing | null;
@@ -2996,8 +3006,9 @@ declare function MoveSlotPlaybackDrawing({ mode }: {
  *   knob turns X and the volume knob turns Y while touched.
  * - `range`   — two handles on one bar; column knob = low end, volume
  *   knob = high end while touched.
- * - `opacity`, `blur`, `pan`, `stereo-width`, `pitch` — explicit numeric
- *   meanings, drawn as specimens or positioned against domain references.
+ * - `opacity`, `blur`, `pan`, `stereo-width`, `pitch`, `trim` — explicit
+ *   numeric meanings, drawn as specimens or positioned against domain
+ *   references (`trim`: one edge of a take, the kept part filled).
  * - `playback` — an explicitly mapped playback icon.
  * - `filter`  — the 2-slot control: cutoff and resonance as one picture,
  *   the magnitude response maximised across both columns, each hand's
@@ -3019,7 +3030,7 @@ declare function MoveSlotPlaybackDrawing({ mode }: {
  * small caption where its own single slot's label would have been — so the
  * hardware's one-knob-per-column rule still holds under the shared picture.
  */
-type MoveSlotKind = 'default' | 'value' | 'icon' | 'curve' | 'enum' | 'xy' | 'range' | 'filter' | 'color' | 'transfer' | 'ramp' | 'dial' | 'opacity' | 'blur' | 'pan' | 'stereo-width' | 'pitch' | 'playback' | 'env' | 'scope' | 'toggle' | 'toggle-icon';
+type MoveSlotKind = 'default' | 'value' | 'icon' | 'curve' | 'enum' | 'xy' | 'range' | 'filter' | 'color' | 'transfer' | 'ramp' | 'dial' | 'opacity' | 'blur' | 'pan' | 'stereo-width' | 'pitch' | 'trim' | 'playback' | 'env' | 'scope' | 'toggle' | 'toggle-icon';
 /** Which face a control wears in its slot, from its meta and moment. */
 declare function moveSlotKind(meta: ControlMeta, opts?: {
     enum?: boolean;
@@ -3355,6 +3366,10 @@ declare const MOVE_SLOT_LIBRARY: {
     };
     readonly pitch: {
         readonly description: "signed pitch ruler with a zero reference";
+        readonly component: typeof MoveSlotNumericBody;
+    };
+    readonly trim: {
+        readonly description: "one edge of a take — the kept part filled from the far end, the value beneath";
         readonly component: typeof MoveSlotNumericBody;
     };
     readonly playback: {

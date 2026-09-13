@@ -1335,6 +1335,9 @@ function moveNumericDrawing(meta, value) {
     case "pitch":
       if (visual.unit !== void 0 && visual.unit !== "semitones" && visual.unit !== "cents") return null;
       return { kind: "pitch", position: (v - lo) / (hi - lo), zero: between(0, lo, hi) ? -lo / (hi - lo) : null };
+    case "trim":
+      if (visual.edge !== "start" && visual.edge !== "end") return null;
+      return { kind: "trim", edge: visual.edge, position: clamp01((v - lo) / (hi - lo)) };
     default:
       return null;
   }
@@ -1368,6 +1371,8 @@ function moveVisualReading(meta, value) {
       return value === (visual.mono ?? 0) ? "Mono" : `${Number(((value - (visual.mono ?? 0)) / ((visual.unity ?? 1) - (visual.mono ?? 0))).toFixed(2))}\xD7`;
     case "pitch":
       return `${value > 0 ? "+" : ""}${number} ${visual.unit === "cents" ? "ct" : "st"}`;
+    case "trim":
+      return `${number} s`;
     default:
       return number;
   }
@@ -1621,6 +1626,24 @@ function MoveSlotNumericBody({ label, value, drawing }) {
           /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ellipse", { cx: 50 - drawing.separation * 28, cy: "30", rx: "12", ry: "17" }),
           /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ellipse", { cx: 50 + drawing.separation * 28, cy: "30", rx: "12", ry: "17" })
         ] })
+      ] }),
+      drawing.kind === "trim" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { className: "tweakers-move-visual-guide", d: "M8 30H92" }),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+          "path",
+          {
+            className: "tweakers-move-visual-line",
+            d: drawing.edge === "start" ? `M${8 + drawing.position * 84} 30H92` : `M8 30H${8 + drawing.position * 84}`
+          }
+        ),
+        /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+          "path",
+          {
+            className: "tweakers-move-visual-pitch-marker",
+            "data-offset": (drawing.edge === "start" ? drawing.position > 1e-9 : drawing.position < 1 - 1e-9) || void 0,
+            d: `M${8 + drawing.position * 84} 22l-5 -7h10z`
+          }
+        )
       ] }),
       drawing.kind === "pitch" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("g", { children: [
         /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { className: "tweakers-move-visual-guide", d: "M8 30H92M8 25V35M29 27V33M50 25V35M71 27V33M92 25V35" }),
@@ -2876,6 +2899,7 @@ var MOVE_SLOT_LIBRARY = {
   pan: { description: "position between L, C and R references", component: MoveSlotNumericBody },
   "stereo-width": { description: "stereo separation with a unity reference", component: MoveSlotNumericBody },
   pitch: { description: "signed pitch ruler with a zero reference", component: MoveSlotNumericBody },
+  trim: { description: "one edge of a take \u2014 the kept part filled from the far end, the value beneath", component: MoveSlotNumericBody },
   playback: { description: "explicit playback traversal with a named mode", component: MoveSlotEnumBody },
   default: { description: "name centred, value on touch, fill bar", component: MoveSlotDefaultBody },
   value: { description: "value-first: the value is the headline, the name a tag on top", component: MoveSlotDefaultBody },
@@ -5885,6 +5909,16 @@ function MoveWaveform({
     if (!productionEnabled) return;
     setMounted(true);
     return MoveWaveformStore.register();
+  }, [productionEnabled]);
+  (0, import_react5.useEffect)(() => {
+    if (!productionEnabled) return;
+    const onJogClick = (event) => {
+      if (!MoveWaveformStore.isRegistered()) return;
+      event.preventDefault();
+      MoveWaveformStore.setView({ zoom: 1 });
+    };
+    window.addEventListener("move-tweakers:jog-click", onJogClick);
+    return () => window.removeEventListener("move-tweakers:jog-click", onJogClick);
   }, [productionEnabled]);
   const transportRef = (0, import_react5.useRef)(transport);
   transportRef.current = transport;

@@ -32,6 +32,13 @@ describe('semantic Move metadata', () => {
 });
 
 describe('value geometry and references', () => {
+  it('trim fills the kept part from the far end to the edge, and reads in seconds', () => {
+    expect(moveNumericDrawing(numeric({ kind: 'trim', edge: 'start' }, 0, 8), 2)).toEqual({ kind: 'trim', edge: 'start', position: 0.25 });
+    expect(moveNumericDrawing(numeric({ kind: 'trim', edge: 'end' }, 0, 8), 6)).toEqual({ kind: 'trim', edge: 'end', position: 0.75 });
+    expect(moveNumericDrawing(numeric({ kind: 'trim', edge: 'middle' as never }, 0, 8), 6)).toBeNull();
+    expect(moveVisualReading(numeric({ kind: 'trim', edge: 'end' }, 0, 8), 6)).toBe('6 s');
+  });
+
   it('opacity uses actual alpha, including partial and percentage domains', () => {
     expect(moveNumericDrawing(numeric({ kind: 'opacity' }, 0.2, 0.8), 0.5)).toEqual({ kind: 'opacity', alpha: 0.5 });
     expect(moveNumericDrawing(numeric({ kind: 'opacity', opaqueValue: 100 }, 0, 100), 25)).toEqual({ kind: 'opacity', alpha: 0.25 });

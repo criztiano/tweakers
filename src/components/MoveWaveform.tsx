@@ -133,6 +133,22 @@ export function MoveWaveform({
     return MoveWaveformStore.register();
   }, [productionEnabled]);
 
+  // The wheel is the card's zoom while it is up, and the wheel's press is
+  // the zoom's reset: back to the whole sample, wherever the card is
+  // mounted. Consumed, so the app's own jog-click action never hears it.
+  // (The event name is MovePanel's MOVE_JOG_CLICK_EVENT; spelt here to keep
+  // the card free of the panel.)
+  useEffect(() => {
+    if (!productionEnabled) return;
+    const onJogClick = (event: Event) => {
+      if (!MoveWaveformStore.isRegistered()) return;
+      event.preventDefault();
+      MoveWaveformStore.setView({ zoom: 1 });
+    };
+    window.addEventListener('move-tweakers:jog-click', onJogClick);
+    return () => window.removeEventListener('move-tweakers:jog-click', onJogClick);
+  }, [productionEnabled]);
+
   // The transport, when the host runs one: Play and Loop are its keys while
   // the card is up (pushed, so whatever the app had on them comes back), and
   // the clock reads their state.

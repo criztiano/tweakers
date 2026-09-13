@@ -22,6 +22,12 @@ type MoveSliderVisual = {
 } | {
     kind: 'pitch';
     unit?: 'semitones' | 'cents';
+}
+/** One edge of a take: the bar is the whole of it, the kept part is filled
+ *  from this edge's far end to the value, the edge itself is the marker. */
+ | {
+    kind: 'trim';
+    edge: 'start' | 'end';
 };
 type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
 type MoveSelectVisual = {
@@ -47,6 +53,10 @@ type MoveNumericDrawing = {
     kind: 'pitch';
     position: number;
     zero: number | null;
+} | {
+    kind: 'trim';
+    edge: 'start' | 'end';
+    position: number;
 };
 /** Invalid or incompatible metadata falls back to the ordinary face. No label inference. */
 declare function moveNumericDrawing(meta: ControlMeta, value: unknown): MoveNumericDrawing | null;

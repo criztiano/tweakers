@@ -34,6 +34,12 @@ type MoveSliderVisual = {
 } | {
     kind: 'pitch';
     unit?: 'semitones' | 'cents';
+}
+/** One edge of a take: the bar is the whole of it, the kept part is filled
+ *  from this edge's far end to the value, the edge itself is the marker. */
+ | {
+    kind: 'trim';
+    edge: 'start' | 'end';
 };
 type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
 type MoveSelectVisual = {
