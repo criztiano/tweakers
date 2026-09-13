@@ -31,8 +31,8 @@ describe('value chips on the top row', () => {
       moveTopRow: ['inA', 'inB'],
     });
     const [page] = buildMovePages([TweakStore.getPanel(id)!]);
-    assert.equal(page.values[0]?.path, 'inA');
-    assert.deepEqual([page.lifted?.[0], page.lifted?.[7]], [true, true]);
+    assert.deepEqual([page.topValues?.[0]?.path, page.topValues?.[7]?.path], ['inA', 'inB']);
+    assert.equal(page.values[0], undefined);
     const [top, values] = movePadRows(page, 0);
     assert.deepEqual([top[0]?.path, top[1]?.path, top[7]?.path], ['inA', 'snap', 'inB']);
     assert.equal(values.length, 0);
@@ -53,6 +53,23 @@ describe('value chips on the top row', () => {
     assert.equal(top[0]?.path, 'snap');
     assert.equal(values[0]?.path, 'inA');
     assert.ok(issues.some(([code]) => code === 'top-row-taken'));
+    TweakStore.unregisterPanel(id);
+  });
+
+  it('stacks a second chip under a lifted one in the same column', () => {
+    const id = nextId();
+    const dials = Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`d${i}`, [0.5, 0, 1] as [number, number, number]]));
+    const { result: page, issues } = capturingIssues(() => {
+      TweakStore.registerPanel(id, id, { ...dials, loopIn: [0, 0, 1], loopOut: [1, 0, 1], fadeIn: [0, 0, 1], fadeOut: [0, 0, 1] }, undefined, {
+        movePads: { loopIn: 0, loopOut: 7, fadeIn: 0, fadeOut: 7 },
+        moveTopRow: ['loopIn', 'loopOut'],
+      });
+      return buildMovePages([TweakStore.getPanel(id)!])[0];
+    });
+    const [top, values] = movePadRows(page, 1);
+    assert.deepEqual([top[0]?.path, top[7]?.path], ['loopIn', 'loopOut']);
+    assert.deepEqual([values[0]?.path, values[7]?.path], ['fadeIn', 'fadeOut']);
+    assert.deepEqual(issues, []);
     TweakStore.unregisterPanel(id);
   });
 
