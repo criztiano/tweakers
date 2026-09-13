@@ -3949,6 +3949,9 @@ function itemDetail(item) {
 function itemChecked(item) {
   return typeof item === "string" ? void 0 : item.checked;
 }
+function itemIcon(item) {
+  return typeof item === "string" ? void 0 : item.icon;
+}
 function ListScreenMark({ detail, checked }) {
   const stroke = { stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" };
   return /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "tweakers-list-screen-mark", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", children: detail === "page" || detail === "back" ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("path", { d: detail === "back" ? ICON_CHEVRON_LEFT : ICON_CHEVRON_RIGHT, strokeWidth: "2", ...stroke }) : detail === "dialog" ? ICON_ELLIPSIS.map((c) => /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("circle", { cx: c.cx, cy: c.cy, r: "1.75", fill: "currentColor" }, c.cx)) : checked ? /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("path", { d: ICON_CHECK, strokeWidth: "2.5", ...stroke }) : null }) });
@@ -4023,6 +4026,7 @@ function ListScreen({
         const tag = itemTag(item);
         const detail = itemDetail(item);
         const checked = itemChecked(item);
+        const icon = itemIcon(item);
         return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(
           "button",
           {
@@ -4036,8 +4040,10 @@ function ListScreen({
             "data-checked": checked,
             "aria-checked": checked,
             "data-muted": itemMuted(item) || void 0,
+            "data-icon": icon ? true : void 0,
             onClick: () => onSelect?.(rowValue),
             children: [
+              icon && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("img", { className: "tweakers-list-screen-icon", src: icon, alt: "", "aria-hidden": "true" }),
               /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "tweakers-list-screen-label", children: itemLabel(item) }),
               tag && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "tweakers-list-screen-tag", children: tag }),
               (detail || checked) && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(ListScreenMark, { detail, checked })

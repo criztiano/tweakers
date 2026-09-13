@@ -3224,6 +3224,34 @@
   height: 100%;
 }
 
+/* A row's picture — an app's icon — at the left end, pinned like the mark
+   so a centred name stays put; it dims and brightens with the label. */
+.tweakers-list-screen-icon {
+  position: absolute;
+  top: 50%;
+  left: var(--move-list-mark-inset, 6px);
+  width: var(--move-list-icon-size, 16px);
+  height: var(--move-list-icon-size, 16px);
+  transform: translateY(-50%);
+  border-radius: 3px;
+  pointer-events: none;
+  opacity: 0.4;
+  transition: opacity 0.12s;
+}
+
+.tweakers-list-screen-row[data-icon] .tweakers-list-screen-label {
+  padding: 0 calc(var(--move-list-icon-size, 16px) + var(--move-list-mark-inset, 6px) * 2);
+}
+
+.tweakers-list-screen[data-wide] .tweakers-list-screen-row[data-icon] .tweakers-list-screen-label {
+  padding-right: 0;
+}
+
+.tweakers-list-screen-row[data-selected] .tweakers-list-screen-icon,
+.tweakers-list-screen-row[data-checked="true"] .tweakers-list-screen-icon {
+  opacity: 1;
+}
+
 /* A way back sits at the left end, where the eye looks to leave. */
 .tweakers-list-screen-row[data-detail="back"] .tweakers-list-screen-mark {
   right: auto;

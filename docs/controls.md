@@ -64,7 +64,7 @@ its run **starts** in.
 | `MOVE_PALETTE` | The Move's colours on screen — the same set the hardware lights, matched by eye against the device's LED palette. `MOVE_TRACK_COLORS` is built from it. Colour on this surface always means something; never decoration. |
 | `MoveSurfaceStore` | Mirror app-owned raw pads, step buttons and screen state |
 | `MoveSearchStore` | Search on whichever list has the wheel — a system gesture, the same in every app, nothing to wire. Holding **Capture** opens it on the list in focus (the palette navigator, else the preset navigator, else the app's wheel list); typing on the computer keyboard narrows the rows as the letters land, the wheel (and ↑ ↓) walks what is left, taking a row (jog click, Enter, a click) or Back ends it, and holding Capture again closes it. The device's screen narrows with the wheel list and shows the query as its title. A host reading the wheel itself checks `MoveSearchStore.isOpen()` before taking a turn (the panel consumes the events first, but a listener registered ahead of it must still yield). `moveSearchMatch` / `moveSearchFilter` are the rule: every word of the query, any case, any order. |
-| `ListScreen` | Controlled list presentation matching the device display |
+| `ListScreen` | Controlled list presentation matching the device display. A row may carry `icon` (an image URL) at its left end — an app's icon, a file kind — pinned like the mark so a centred name stays put; the hardware screen has no room for it and takes the label alone |
 | `ModulationStore` | LFO, sample-and-hold, ADSR and curve modulation; settings layouts and assignments |
 
 ## General controls and artifacts

@@ -3690,6 +3690,10 @@ type ListScreenItem = string | {
     muted?: boolean;
     detail?: ListScreenDetail;
     checked?: boolean;
+    /** A small picture at the row's left end — an app's icon, a file
+     * kind — as an image URL. Pinned to the edge like the mark, so a
+     * centred name stays put. The hardware screen has no room for it. */
+    icon?: string;
 };
 interface ListScreenProps {
     /** Rows in display order. */
