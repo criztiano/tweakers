@@ -63,6 +63,7 @@ export {
   MOVE_WAVEFORM_PIXEL_RANGE,
   MOVE_WAVEFORM_DEMO_SECONDS,
   moveWaveformDemoSample,
+  toAudioBuffer,
   defaultStyle as moveWaveformDefaultStyle,
   styleFromValues as moveWaveformStyleFromValues,
 } from './move-waveform';

@@ -314,6 +314,10 @@ class MoveWaveformStoreClass {
       undefined,
       { kind: 'kit', persist: true }
     );
+    // A saved value from an older page shape (the width was once a named
+    // option) is not a value the dial can show: it goes back to the seed.
+    const saved = TweakStore.getValues(MOVE_WAVEFORM_PANEL);
+    if (typeof saved.resolution !== 'number') TweakStore.updateValue(MOVE_WAVEFORM_PANEL, 'resolution', clampPixelSize(seed.pixelSize));
   }
 
   /** The look the settings page holds right now (the defaults until one is registered). */
@@ -499,12 +503,31 @@ export function moveWaveformDemoSample(): AudioBuffer {
       data[off + i] += noise() * 0.25 * Math.exp(-(i / rate) * 90);
     }
   }
-  demoSample = {
+  demoSample = toAudioBuffer(data, rate);
+  return demoSample;
+}
+
+/**
+ * Mono samples as an AudioBuffer: a real one where the browser has the
+ * constructor — the EQ split renders offline and needs the real thing —
+ * and a duck-typed stand-in elsewhere (node, the tests), which every reader
+ * here reads the same way.
+ */
+export function toAudioBuffer(data: Float32Array, sampleRate: number): AudioBuffer {
+  if (typeof AudioBuffer !== 'undefined') {
+    try {
+      const buffer = new AudioBuffer({ length: data.length, sampleRate, numberOfChannels: 1 });
+      buffer.copyToChannel(data as Float32Array<ArrayBuffer>, 0);
+      return buffer;
+    } catch {
+      /* no constructor support — the stand-in below reads the same */
+    }
+  }
+  return {
     numberOfChannels: 1,
     length: data.length,
-    duration: MOVE_WAVEFORM_DEMO_SECONDS,
-    sampleRate: rate,
+    duration: data.length / sampleRate,
+    sampleRate,
     getChannelData: () => data,
   } as unknown as AudioBuffer;
-  return demoSample;
 }

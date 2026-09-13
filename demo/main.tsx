@@ -6,7 +6,7 @@ import { MoveColorStore } from '../src/move-color';
 import { MoveFunctions } from '../src/move-functions';
 import { MovePresetStore } from '../src/move-presets';
 import { MoveSurfaceStore, type MoveScreenRow } from '../src/move-surface-store';
-import { MoveWaveformStore } from '../src/move-waveform';
+import { MoveWaveformStore, toAudioBuffer } from '../src/move-waveform';
 import { MoveVolumeDisplay } from '../src/move-volume';
 import { setAudioModBuffer } from '../src/modulation-core';
 import '../src/styles/theme.css';
@@ -101,13 +101,7 @@ ModulationStore.openSettings(0);
       data[at + i] += (body + snap) * env * 0.9;
     }
   }
-  setAudioModBuffer({
-    numberOfChannels: 1,
-    length: data.length,
-    duration: seconds,
-    sampleRate: rate,
-    getChannelData: () => data,
-  } as unknown as AudioBuffer);
+  setAudioModBuffer(toAudioBuffer(data, rate));
   if (!ModulationStore.getSlot(1)) {
     ModulationStore.createSlot(1, 'audio');
     ModulationStore.assign('tone', 'drive', 1, 1);
