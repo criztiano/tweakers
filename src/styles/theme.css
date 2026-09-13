@@ -1932,6 +1932,17 @@
   line-height: 20px;
 }
 
+/* A switch named by a number: the dial value's face — the number in the
+   value shape at the value's size, the unit small beneath. */
+.tweakers-move-dial-toggle-label[data-value] {
+  flex-direction: column;
+  font-family: var(--move-font-value);
+  font-variation-settings: var(--move-font-value-shape);
+  font-size: 40px;
+  line-height: normal;
+  white-space: nowrap;
+}
+
 /* A switch is a button, so the slot's own surface has to be restated. */
 .tweakers-move-dial[data-kind="toggle"],
 .tweakers-move-dial[data-kind="toggle-icon"] {

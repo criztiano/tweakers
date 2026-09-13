@@ -611,10 +611,20 @@ export function MoveSlotToggleBody({ label, checked, icon, onIcon, offIcon }: {
 }) {
   const badge = checked ? onIcon : offIcon;
   if (!icon) {
+    // A switch named by a number with a unit ("72.1 BPM") wears it the way a
+    // dial wears its value: the number big, the unit small beneath it.
+    const split = /\d/.test(label[0] ?? '') ? splitReadoutUnit(label) : null;
     return (
       <>
         <span className="tweakers-move-dial-toggle-indicator" data-on={checked || undefined} />
-        <span className="tweakers-move-dial-toggle-label">{label}</span>
+        {split?.unit ? (
+          <span className="tweakers-move-dial-toggle-label" data-value>
+            <span className="tweakers-move-dial-number">{split.num}</span>
+            <span className="tweakers-move-dial-unit">{split.unit}</span>
+          </span>
+        ) : (
+          <span className="tweakers-move-dial-toggle-label">{label}</span>
+        )}
       </>
     );
   }

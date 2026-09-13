@@ -2811,9 +2811,13 @@ function MoveSlotScopeBody({
 function MoveSlotToggleBody({ label, checked, icon, onIcon, offIcon }) {
   const badge = checked ? onIcon : offIcon;
   if (!icon) {
+    const split = /\d/.test(label[0] ?? "") ? splitReadoutUnit(label) : null;
     return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
       /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-toggle-indicator", "data-on": checked || void 0 }),
-      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-toggle-label", children: label })
+      split?.unit ? /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("span", { className: "tweakers-move-dial-toggle-label", "data-value": true, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-number", children: split.num }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-unit", children: split.unit })
+      ] }) : /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-toggle-label", children: label })
     ] });
   }
   return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
