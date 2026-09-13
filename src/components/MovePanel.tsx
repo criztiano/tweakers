@@ -2362,7 +2362,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       );
                     }
                     if (!meta) return <div key={`empty-${col}`} className="tweakers-move-pad" data-empty="true" />;
-                    if (padRows[row] === page.toggles) {
+                    // What a pad is comes from the control, not the row it
+                    // sits in: a value chip lifted onto the top row is still
+                    // a value chip.
+                    if (page.toggles[col] === meta) {
                       return (
                         <button
                           key={meta.path}
@@ -2377,7 +2380,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     }
                     // Action pads carry no value — a press just runs the
                     // app's action, the same as the row's button on screen.
-                    if (padRows[row] === page.actions) {
+                    if (page.actions[col] === meta) {
                       return (
                         <button
                           key={meta.path}

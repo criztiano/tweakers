@@ -62,6 +62,10 @@ typing narrows it, the wheel walks what is left, taking a row or Back ends it.
 A host that reads the wheel events for its own list yields while
 `MoveSearchStore.isOpen()`, exactly as it yields to an open navigator.
 
+A page whose top pad row is free can seat value chips there, directly under
+the dial each pairs with: name them in the panel's `moveTopRow` (control
+paths). A chip keeps the value row when a switch already holds its column.
+
 Hardware has four tracks and eight dial columns. `buildMovePages`, `dialSpan`,
 `visibleColumns` and `movePadRows` define the layout, not app CSS. Validate pages
 for overflow, two-column filter boundaries, enums and small-pad placement.

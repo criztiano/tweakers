@@ -746,6 +746,8 @@ type PanelConfig = {
     labels?: Record<string, string>;
     /** Move pad columns by control path, retained on the same terms as `hints`. */
     movePads?: Record<string, number>;
+    /** Value chips lifted onto the top pad row, retained on the same terms as `hints`. */
+    moveTopRow?: string[];
     /**
      * Config declared `_enabled` at its root — the whole panel is a module, and
      * its title carries the switch. Same idiom as a module folder, one level up.
@@ -865,6 +867,14 @@ type TweakStorePanelOptions = {
      * has), actions the row under those.
      */
     movePads?: Record<string, number>;
+    /**
+     * Value chips, by control path, that sit on the top pad row instead of the
+     * value row — for a page whose switches leave that row free, so the chip
+     * sits right under the dial it pairs with. A chip keeps the value row when
+     * a switch already holds its column up top. Same column, same gestures
+     * (hold to peek, tap to latch), on the screen and on the hardware.
+     */
+    moveTopRow?: string[];
     /** Timeline panels render in TweakTimeline; modulation panels are the Move's
      * modulator settings pages — both are filtered out of the panel dock. */
     kind?: 'timeline' | 'modulation';

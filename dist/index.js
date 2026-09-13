@@ -1807,18 +1807,42 @@ function buildMovePages(panels) {
         );
       }
     }
+    const lift = panel.moveTopRow ?? [];
+    const lifted = [];
+    for (let i = 0; i < MOVE_PADS; i++) {
+      const v = values[i];
+      if (v && lift.includes(v.path) && toggles[i] === void 0) lifted[i] = true;
+      else if (v && lift.includes(v.path)) {
+        reportMoveLayoutIssue(
+          "top-row-taken",
+          `panel '${panel.id}': control '${v.path}': top-row column ${i} holds '${toggles[i].path}' \u2014 the chip keeps the value row`
+        );
+      }
+    }
     return {
       panel,
       dials,
       toggles: toggles.slice(0, MOVE_PADS),
       values: values.slice(0, MOVE_PADS),
-      actions: actions.slice(0, MOVE_PADS)
+      actions: actions.slice(0, MOVE_PADS),
+      ...lifted.length ? { lifted } : {}
     };
   });
 }
 function movePadRows(page, claimedRows) {
-  if (claimedRows >= 2) return [page.toggles, page.values, [], []];
-  return [page.toggles, page.values, page.actions, []];
+  let top = page.toggles;
+  let values = page.values;
+  if (page.lifted?.some(Boolean)) {
+    top = [];
+    values = [];
+    for (let i = 0; i < MOVE_PADS; i++) {
+      if (page.toggles[i]) top[i] = page.toggles[i];
+      if (page.values[i] && page.lifted[i]) top[i] = page.values[i];
+      else if (page.values[i]) values[i] = page.values[i];
+    }
+  }
+  if (claimedRows >= 2) return [top, values, [], []];
+  return [top, values, page.actions, []];
 }
 function moveAppPadRow(row, claimedRows) {
   if (claimedRows >= 2) return row === 2 ? 1 : row === 3 ? 0 : null;
@@ -9347,7 +9371,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       );
                                     }
                                     if (!meta) return /* @__PURE__ */ jsx11("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
-                                    if (padRows[row] === page.toggles) {
+                                    if (page.toggles[col] === meta) {
                                       return /* @__PURE__ */ jsx11(
                                         "button",
                                         {
@@ -9360,7 +9384,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         meta.path
                                       );
                                     }
-                                    if (padRows[row] === page.actions) {
+                                    if (page.actions[col] === meta) {
                                       return /* @__PURE__ */ jsx11(
                                         "button",
                                         {

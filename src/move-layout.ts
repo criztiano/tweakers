@@ -35,6 +35,9 @@ export interface MovePage {
   /** Action pads — the row under the values (y=1 on the device).
    *  Placed by hand only, through the panel's `movePads` map. */
   actions: ControlMeta[];
+  /** Columns whose value chip rides the top pad row (the panel's
+   *  `moveTopRow`, where no switch holds that column). Absent: none. */
+  lifted?: boolean[];
 }
 
 const flat = (controls: ControlMeta[], out: ControlMeta[] = []): ControlMeta[] => {
@@ -188,6 +191,7 @@ export type MoveLayoutIssueCode =
   | 'pad-column-invalid'
   | 'pad-column-on-dial'
   | 'pad-column-taken'
+  | 'top-row-taken'
   | 'pad-row-full'
   | 'tabs-oversized'
   | 'tabs-no-room';
@@ -359,12 +363,27 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
           );
         }
       }
+      // A value chip the panel asked up top takes the switch row's cell in
+      // its own column — when no switch is there. It stays a value chip.
+      const lift = panel.moveTopRow ?? [];
+      const lifted: boolean[] = [];
+      for (let i = 0; i < MOVE_PADS; i++) {
+        const v = values[i];
+        if (v && lift.includes(v.path) && toggles[i] === undefined) lifted[i] = true;
+        else if (v && lift.includes(v.path)) {
+          reportMoveLayoutIssue(
+            'top-row-taken',
+            `panel '${panel.id}': control '${v.path}': top-row column ${i} holds '${toggles[i]!.path}' — the chip keeps the value row`
+          );
+        }
+      }
       return {
         panel,
         dials,
         toggles: toggles.slice(0, MOVE_PADS),
         values: values.slice(0, MOVE_PADS),
         actions: actions.slice(0, MOVE_PADS),
+        ...(lifted.length ? { lifted } : {}),
       };
     });
 }
@@ -383,8 +402,20 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
  * alone and the actions keep theirs (see PROTOCOL.md).
  */
 export function movePadRows(page: MovePage, claimedRows: number): ControlMeta[][] {
-  if (claimedRows >= 2) return [page.toggles, page.values, [], []];
-  return [page.toggles, page.values, page.actions, []];
+  let top = page.toggles;
+  let values = page.values;
+  if (page.lifted?.some(Boolean)) {
+    // lifted chips move up into the switch row; the value row keeps the rest
+    top = [];
+    values = [];
+    for (let i = 0; i < MOVE_PADS; i++) {
+      if (page.toggles[i]) top[i] = page.toggles[i];
+      if (page.values[i] && page.lifted[i]) top[i] = page.values[i];
+      else if (page.values[i]) values[i] = page.values[i];
+    }
+  }
+  if (claimedRows >= 2) return [top, values, [], []];
+  return [top, values, page.actions, []];
 }
 
 /**

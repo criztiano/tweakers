@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { TweakStore } from './store/TweakStore';
-import { buildMovePages, visibleColumns, enumOptionIcon, enumShapePath, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, setMoveLayoutReporter, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage, type MoveLayoutIssueCode } from './move-layout';
+import { buildMovePages, movePadRows, visibleColumns, enumOptionIcon, enumShapePath, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, setMoveLayoutReporter, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage, type MoveLayoutIssueCode } from './move-layout';
 
 /** Run `fn` with the issue feed captured, restoring the console sink after. */
 function capturingIssues<T>(fn: () => T): { result: T; issues: [MoveLayoutIssueCode, string][] } {
@@ -21,6 +21,51 @@ function capturingIssues<T>(fn: () => T): { result: T; issues: [MoveLayoutIssueC
 
 let seq = 0;
 const nextId = () => `move-layout-${++seq}`;
+
+describe('value chips on the top row', () => {
+  it('lifts a named chip into a free switch column, keeping it a value chip', () => {
+    const id = nextId();
+    const dials = Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`d${i}`, [0.5, 0, 1] as [number, number, number]]));
+    TweakStore.registerPanel(id, id, { ...dials, inA: [0, 0, 1], inB: [1, 0, 1], snap: false }, undefined, {
+      movePads: { inA: 0, inB: 7, snap: 1 },
+      moveTopRow: ['inA', 'inB'],
+    });
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    assert.equal(page.values[0]?.path, 'inA');
+    assert.deepEqual([page.lifted?.[0], page.lifted?.[7]], [true, true]);
+    const [top, values] = movePadRows(page, 0);
+    assert.deepEqual([top[0]?.path, top[1]?.path, top[7]?.path], ['inA', 'snap', 'inB']);
+    assert.equal(values.length, 0);
+    TweakStore.unregisterPanel(id);
+  });
+
+  it('keeps a chip on the value row when a switch holds its column up top', () => {
+    const id = nextId();
+    const dials = Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`d${i}`, [0.5, 0, 1] as [number, number, number]]));
+    const { result: page, issues } = capturingIssues(() => {
+      TweakStore.registerPanel(id, id, { ...dials, inA: [0, 0, 1], snap: false }, undefined, {
+        movePads: { inA: 0, snap: 0 },
+        moveTopRow: ['inA'],
+      });
+      return buildMovePages([TweakStore.getPanel(id)!])[0];
+    });
+    const [top, values] = movePadRows(page, 0);
+    assert.equal(top[0]?.path, 'snap');
+    assert.equal(values[0]?.path, 'inA');
+    assert.ok(issues.some(([code]) => code === 'top-row-taken'));
+    TweakStore.unregisterPanel(id);
+  });
+
+  it('leaves the rows as they were when nothing is lifted', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, { gain: [0.5, 0, 1], on: false });
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    const [top, values] = movePadRows(page, 0);
+    assert.equal(top, page.toggles);
+    assert.equal(values, page.values);
+    TweakStore.unregisterPanel(id);
+  });
+});
 
 describe('move layout', () => {
   it('maps sliders and bounded numbers to dials, toggles to pads', () => {
