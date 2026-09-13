@@ -4168,7 +4168,7 @@ var MOVE_PAD_LIBRARY = {
   bend: { description: "hold and drag to bend the envelope ramp above it", component: MovePadToggleBody },
   wave: { description: "hold and drag for the stage\u2019s own sine, tap to flip it", component: MovePadWaveBody },
   tabs: { description: "2 to 8 pads: the page\u2019s modes side by side, the current one lit \u2014 a name pad optional", component: MovePadTabsBody },
-  color: { description: "a single colour in a small slot \u2014 tap to open the colour editor", component: MovePadColorBody }
+  color: { description: "a single colour in a small slot \u2014 tap latches it onto the dial above, hold peeks; that dial edits and opens it", component: MovePadColorBody }
 };
 var MOVE_SLOT_LIBRARY = {
   color: { description: "selected color; hue on the dial, luminosity on volume, tap to edit", component: MoveSlotColorBody },
@@ -5273,7 +5273,7 @@ import { useEffect as useEffect6, useLayoutEffect, useRef as useRef6, useState a
 import { createPortal as createPortal2 } from "react-dom";
 import { TweakStore as TweakStore7 } from "tweakers/store";
 import { Fragment as Fragment4, jsx as jsx8, jsxs as jsxs8 } from "react/jsx-runtime";
-function MoveColorSlot({ panelId, meta, active, open: open2 }) {
+function MoveColorSlot({ panelId, meta, active, open: open2, latched = false }) {
   const gesture = useRef6(null);
   const suppressClick = useRef6(false);
   const disabled = TweakStore7.isDisabled(panelId, meta.path);
@@ -5285,6 +5285,7 @@ function MoveColorSlot({ panelId, meta, active, open: open2 }) {
       className: "tweakers-move-dial",
       "data-kind": "color",
       "data-active": active || open2 || void 0,
+      "data-latched": latched || void 0,
       "data-disabled": disabled || void 0,
       "aria-label": `${meta.label}, hue ${Math.round(color.h)} degrees. Open color editor`,
       "aria-expanded": open2,
@@ -6823,13 +6824,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   };
   const chipLatched = (col, meta) => latched[col]?.path === meta.path || !!hwLatched[meta.path];
   const armMod = (path) => ModulationStore2.noteTouch(page.panel.id, path);
+  const chipsAt = (col) => [page.toggles[col]?.type === "color" ? page.toggles[col] : void 0, page.values[col]].filter((m) => !!m);
   const dialAt = (col) => {
     if (held && held.col === col) return held.meta;
-    const hw = page.values[col];
-    if (hw && hwHeld[hw.path]) return hw;
+    const chips = chipsAt(col);
+    const hwHeldChip = chips.find((m) => hwHeld[m.path]);
+    if (hwHeldChip) return hwHeldChip;
     if (latched[col]) return latched[col];
-    if (hw && hwLatched[hw.path]) return hw;
-    return page.dials[col];
+    return chips.find((m) => hwLatched[m.path]) ?? page.dials[col];
   };
   const pressChip = (e, col, meta) => {
     try {
@@ -7049,7 +7051,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                               const scopeSlot = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.scope : void 0;
                               const waveSlot = settingsPanel && meta.type !== "xy" ? modLayout?.dials.find((d) => d.path === meta.path)?.preview : void 0;
                               const scope = scopeSlot && modSettings ? /* @__PURE__ */ jsx10(MoveScope, { index: modSettings.index }) : waveSlot && modSettings ? /* @__PURE__ */ jsx10(MoveWavePreview, { index: modSettings.index }) : null;
-                              if (meta.type === "color") return /* @__PURE__ */ jsx10(MoveColorSlot, { panelId: page.panel.id, meta, active, open: colorMeta?.path === meta.path }, meta.path);
+                              if (meta.type === "color") return /* @__PURE__ */ jsx10(MoveColorSlot, { panelId: page.panel.id, meta, active, open: colorMeta?.path === meta.path, latched: meta !== page.dials[i] && chipLatched(i, meta) }, meta.path);
                               if (meta.type === "filter") {
                                 const fv = normalizeFilterValue(
                                   values[meta.path],
@@ -7620,7 +7622,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   meta.path
                                 );
                               }
-                              const latchedHere = latched[i]?.path === meta.path || page.values[i]?.path === meta.path && !!hwLatched[meta.path];
+                              const latchedHere = meta !== page.dials[i] && chipLatched(i, meta);
                               const origin01 = dialOrigin(meta);
                               const originPct = origin01 > 0 ? origin01 * 100 : null;
                               const pct = dialPercent(meta);
@@ -7874,25 +7876,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       );
                                     }
                                     if (!meta) return /* @__PURE__ */ jsx10("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
-                                    if (meta.type === "color") {
-                                      const open2 = colorMeta?.path === meta.path;
-                                      return /* @__PURE__ */ jsx10(
-                                        "button",
-                                        {
-                                          className: "tweakers-move-pad",
-                                          "data-kind": "color",
-                                          "data-on": open2 || void 0,
-                                          "aria-expanded": open2,
-                                          "aria-haspopup": "dialog",
-                                          "aria-label": `${meta.label}. Open color editor`,
-                                          disabled: TweakStore10.isDisabled(page.panel.id, meta.path),
-                                          onClick: () => MoveColorStore.toggle(page.panel.id, meta.path),
-                                          children: /* @__PURE__ */ jsx10(MovePadColorBody, { label: meta.label, color: String(values[meta.path]) })
-                                        },
-                                        meta.path
-                                      );
-                                    }
-                                    if (padRows[row] === page.toggles) {
+                                    if (padRows[row] === page.toggles && meta.type !== "color") {
                                       return /* @__PURE__ */ jsx10(
                                         "button",
                                         {
@@ -7917,18 +7901,20 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         meta.path
                                       );
                                     }
-                                    const value = chipValue(meta);
+                                    const isColor = meta.type === "color";
+                                    const value = isColor ? null : chipValue(meta);
                                     return /* @__PURE__ */ jsx10(
                                       "button",
                                       {
                                         className: "tweakers-move-pad",
-                                        "data-kind": "value",
+                                        "data-kind": isColor ? "color" : "value",
                                         "data-held": held !== null && held.meta.path === meta.path || hwHeld[meta.path] || void 0,
                                         "data-latched": chipLatched(col, meta) || void 0,
+                                        "aria-label": isColor ? meta.label : void 0,
                                         onPointerDown: (e) => pressChip(e, col, meta),
                                         onPointerUp: () => releaseChip(col, meta),
                                         onPointerCancel: () => setHeld(null),
-                                        children: /* @__PURE__ */ jsx10(MovePadValueBody, { label: meta.label, value: value.num, unit: value.unit, children: /* @__PURE__ */ jsx10(MoveModRing, { panelId: page.panel.id, path: meta.path, pad: true }) })
+                                        children: isColor ? /* @__PURE__ */ jsx10(MovePadColorBody, { label: meta.label, color: String(values[meta.path]) }) : /* @__PURE__ */ jsx10(MovePadValueBody, { label: meta.label, value: value.num, unit: value.unit, children: /* @__PURE__ */ jsx10(MoveModRing, { panelId: page.panel.id, path: meta.path, pad: true }) })
                                       },
                                       meta.path
                                     );
