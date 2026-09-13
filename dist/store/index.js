@@ -316,6 +316,9 @@ var TweakStoreClass = class {
     // Resolved storage target per panel (null = persistence off). Absent = not
     // yet registered.
     this.persistTargets = /* @__PURE__ */ new Map();
+    // The Move-kit registries this page has put to use. Only ever grows: a
+    // page that once claimed the pads is a page whose binding needs them.
+    this.moveKitUses = /* @__PURE__ */ new Set();
   }
   registerPanel(id, name, config, shortcuts, options = {}) {
     const existingPanel = this.panels.get(id);
@@ -561,6 +564,16 @@ var TweakStoreClass = class {
         this.listeners.delete(panelId);
       }
     };
+  }
+  /** A registry says the page uses it (see MoveKitRegistry). Silent: this is
+   *  bookkeeping for the bridge kit, not a change anything should render. */
+  noteMoveKitUse(registry) {
+    this.moveKitUses.add(registry);
+  }
+  /** The Move-kit registries this page has put to use — what the bridge kit
+   *  checks its binding against. */
+  getMoveKitUses() {
+    return [...this.moveKitUses];
   }
   subscribeGlobal(listener) {
     this.globalListeners.add(listener);

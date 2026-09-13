@@ -1514,6 +1514,15 @@ type TweakStorePanelOptions = {
     kind?: 'timeline' | 'modulation';
 };
 /**
+ * The registries the Move bridge kit reads, by their `bindMove` option names.
+ * The kit ships alone and cannot import them, so an app hands them over —
+ * `moveKitOptions()` bundles every one. Each registry notes here when the page
+ * puts it to use (`noteMoveKitUse`), so the kit can say out loud when it was
+ * bound without one the page needs, instead of dropping that feature on the
+ * hardware in silence.
+ */
+type MoveKitRegistry = 'functions' | 'modulation' | 'color' | 'surface' | 'waveform' | 'volume' | 'transfer';
+/**
  * DOM id for a control's hint tooltip. `aria-describedby` holds a space-separated
  * list of ids, so any whitespace — panel names and list labels are free text —
  * would silently split one reference into two dangling ones.
@@ -1536,6 +1545,7 @@ declare class TweakStoreClass {
     private presetsHidden;
     private baseValues;
     private persistTargets;
+    private moveKitUses;
     registerPanel(id: string, name: string, config: TweakConfig, shortcuts?: Record<string, ShortcutConfig>, options?: TweakStorePanelOptions): void;
     updatePanel(id: string, name: string, config: TweakConfig, shortcuts?: Record<string, ShortcutConfig>, options?: TweakStorePanelOptions): void;
     unregisterPanel(id: string): void;
@@ -1568,6 +1578,12 @@ declare class TweakStoreClass {
     selectPanels(only?: string | string[]): PanelConfig[];
     getPanel(id: string): PanelConfig | undefined;
     subscribe(panelId: string, listener: Listener$5): () => void;
+    /** A registry says the page uses it (see MoveKitRegistry). Silent: this is
+     *  bookkeeping for the bridge kit, not a change anything should render. */
+    noteMoveKitUse(registry: MoveKitRegistry): void;
+    /** The Move-kit registries this page has put to use — what the bridge kit
+     *  checks its binding against. */
+    getMoveKitUses(): MoveKitRegistry[];
     subscribeGlobal(listener: Listener$5): () => void;
     subscribeActions(panelId: string, listener: ActionListener): () => void;
     triggerAction(panelId: string, path: string): void;
@@ -3667,6 +3683,121 @@ interface MoveFunctionGlyph {
  */
 declare const MOVE_FUNCTION_ICONS: Record<string, MoveFunctionGlyph>;
 
+interface MoveColorView {
+    panelId: string;
+    path: string;
+}
+/** How many stops the Move's gradient editor drives — one per track button.
+ *  A gradient with more stops keeps the plain ramp slot (drag its stops on
+ *  screen); the integrated editor is for the 2–4 stop ramps the hardware can
+ *  hold in one hand. */
+declare const MOVE_GRADIENT_STOPS = 4;
+/** A named palette the colour dial can be locked to: sixteen colours, the
+ *  dial stepping between them instead of sweeping the whole wheel. */
+interface MoveColorPalette {
+    id: string;
+    name: string;
+    colors: string[];
+}
+/** The built-in palettes the menu button offers while the editor is open. */
+declare const MOVE_COLOR_PALETTES: MoveColorPalette[];
+/**
+ * The colour wheel, in the hues the Move can actually light.
+ *
+ * The device drops the RGB command that would give a smooth ramp (verified on
+ * hardware — every such pad came back the plain switch-on red), so the wheel is
+ * its own pad palette: the entries that are saturated AND sit at one
+ * brightness, sorted by hue. Sixteen of them, two rows of eight — the same
+ * sixteen the pads show, so screen and hand pick from one wheel.
+ */
+declare const MOVE_COLOR_WHEEL: number[];
+declare const MOVE_COLOR_HUES: number;
+declare const MOVE_COLOR_STEPS = 16;
+/** The first pad row while the editor is open: an eight-level opacity bar. */
+declare const MOVE_OPACITY_PADS = 8;
+/** Which slot of the wheel a colour sits nearest, the long way round included. */
+declare const moveWheelSlot: (h: number) => number;
+/** Shared editor selection and color coordinates for the panel and Move bridge.
+ *  One editor serves two value shapes: a plain hex colour, and a gradient —
+ *  there the editor holds a SELECTED STOP (one of up to four, the track
+ *  buttons' count) and every hue/luminosity/opacity edit lands on that stop. */
+declare class MoveColorStoreClass {
+    private view;
+    private version;
+    private listeners;
+    private coordinates;
+    /** The palette the dial is locked to — null is the whole wheel. */
+    private paletteId;
+    /** The palette navigator behind Menu while the editor is open. */
+    private picker;
+    private pickerCursor;
+    /** The gradient stop the editor is on — meaningless for a plain colour. */
+    private stop;
+    getView: () => MoveColorView | null;
+    getVersion: () => number;
+    subscribe: (fn: () => void) => (() => void);
+    private notify;
+    open(panelId: string, path: string): void;
+    close(): void;
+    toggle(panelId: string, path: string): void;
+    /** The control's gradient value, or null when it holds a plain colour. */
+    gradient(panelId: string, path: string): GradientValue | null;
+    /** How many stops the editor can hold — 0 for a plain colour. */
+    stopCount(panelId: string, path: string): number;
+    getStop: () => number;
+    /** Land the editor on a stop — the track buttons' gesture. */
+    selectStop(index: number): void;
+    /** A stop's position along the ramp, 0..1 — 0 when out of range. */
+    stopPosition(panelId: string, path: string, index: number): number;
+    /** Slide a stop, clamped between its neighbours so the held stop never
+     *  changes identity under the hand moving it — the ramp slot's own rule. */
+    moveStop(panelId: string, path: string, index: number, position: number): void;
+    /** Slide the selected stop by wheel/dial detents — the hold-a-track gesture. */
+    turnStop(panelId: string, path: string, delta: number, fine?: boolean): void;
+    /** Where a control's colour lives: the hex itself, or the stop's colour. */
+    private hexAt;
+    /** The selected coordinate target: the stop the editor is on, when the
+     *  control is a gradient; the control itself otherwise. */
+    private targetStop;
+    read(panelId: string, path: string): HSLA;
+    /** The colour under the editor as hex — the selected stop's for a gradient. */
+    hex(panelId: string, path: string): string;
+    /** A specific stop's coordinates (null = the plain colour) — what the stop
+     *  row and the hardware's track lights paint. */
+    readStop(panelId: string, path: string, stop: number | null): HSLA;
+    update(panelId: string, path: string, patch: Partial<HSLA>): void;
+    updateStop(panelId: string, path: string, stop: number | null, patch: Partial<HSLA>): void;
+    setHue(h: number): void;
+    setLuminosity(l: number): void;
+    setOpacity(a: number): void;
+    turn(panelId: string, path: string, delta: number, fine?: boolean): void;
+    turnLuminosity(panelId: string, path: string, delta: number, fine?: boolean): void;
+    getPaletteId: () => string | null;
+    getPalette: () => MoveColorPalette | null;
+    /** Which palette colour the open control sits on — null off-palette. */
+    paletteIndex(panelId: string, path: string): number | null;
+    /** Lock the open editor to a palette (null = back to all colours), and
+     *  bring its colour onto the palette right away — the nearest of its hues,
+     *  then that segment's centre so a turn steps cleanly from there. */
+    setPalette(id: string | null): void;
+    /** Jump straight to one of the locked palette's colours. */
+    setPaletteColor(index: number): void;
+    isPickerOpen: () => boolean;
+    getPickerCursor: () => number;
+    openPicker(): void;
+    closePicker(): void;
+    togglePicker(): void;
+    /** Walk the navigator's cursor by wheel detents. */
+    movePickerCursor(delta: number): void;
+    /** Rest the cursor on a row — a search landing the wheel on the next match. */
+    setPickerCursor(cursor: number): void;
+    /** Keep the cursor's row: the palette locks in and the navigator dismisses. */
+    confirmPicker(): void;
+    /** A clicked row: cursor and confirm in one. */
+    choosePicker(cursor: number): void;
+}
+declare const MoveColorStore: MoveColorStoreClass;
+
 /** Where a row goes when it is taken, drawn at its end. `page` is a chevron —
  * the list is replaced by the one this row leads to, so the same mark reads
  * as one level of nesting; `back` is that chevron turned around, and sits at
@@ -4076,6 +4207,51 @@ declare class ModulationStoreClass {
 declare const ModulationStore: ModulationStoreClass;
 
 /**
+ * Everything the Move bridge kit reads, in one piece.
+ *
+ * The kit (`bindMove`, served by the move repo at /kit.js) ships alone: it
+ * cannot import this package, so the registries it drives are handed to it.
+ * Handing them one by one is how integrations break — a forgotten `color`
+ * leaves every colour a dead slot and a balance unable to seat its colours,
+ * a forgotten `surface` keeps the wheel's list off the Move's screen — and
+ * only on the hardware, where nobody is looking while building. So there is
+ * one bind, and it carries all of them:
+ *
+ *   import { TweakStore, moveKitOptions } from 'tweakers';
+ *
+ *   import('http://localhost:7787/kit.js')
+ *     .then(m => m.bindMove(TweakStore, moveKitOptions()));
+ *
+ * Anything else the bind takes rides in the same call:
+ * `moveKitOptions({ url, panels })`. A registry the app must keep for itself
+ * — a sequencer that owns the step row, a raw client that owns the pads — is
+ * declined by name with `null` (`moveKitOptions({ modulation: null })`), which
+ * also tells the kit the gap is on purpose. Every registry is inert until the
+ * page uses it, so carrying one the app never touches costs nothing.
+ */
+
+interface MoveKitOptions {
+    functions: typeof MoveFunctions;
+    modulation: typeof ModulationStore;
+    color: typeof MoveColorStore;
+    surface: typeof MoveSurfaceStore;
+    waveform: typeof MoveWaveformStore;
+    volume: typeof MoveVolumeDisplay;
+    /** The curve maths a knob needs to hold one of a transfer's points. */
+    transfer: {
+        sample: typeof sampleTransfer;
+        move: typeof movePoint;
+    };
+}
+/** What may ride along: any other bind option, and `null` to decline a
+ *  registry on purpose. */
+type MoveKitOverrides = {
+    [K in MoveKitRegistry]?: MoveKitOptions[K] | null;
+} & Record<string, unknown>;
+/** Every registry the bridge kit reads, keyed by its `bindMove` option. */
+declare function moveKitOptions<T extends MoveKitOverrides>(overrides?: T): Omit<MoveKitOptions, keyof T> & T;
+
+/**
  * The modulation ring: a control wired to a slot wears a small dial in the
  * slot's palette colour, and an arc running from the control's own value to
  * where the modulation is holding it right now. The arc dances at the
@@ -4405,121 +4581,6 @@ declare function curveY(v: number, height: number, pad?: number): number;
 /** SVG path data for a plot's segments; each segment is its own subpath. */
 declare function curvePathData(segments: CurvePoint[][], width: number, height: number, pad?: number): string;
 
-interface MoveColorView {
-    panelId: string;
-    path: string;
-}
-/** How many stops the Move's gradient editor drives — one per track button.
- *  A gradient with more stops keeps the plain ramp slot (drag its stops on
- *  screen); the integrated editor is for the 2–4 stop ramps the hardware can
- *  hold in one hand. */
-declare const MOVE_GRADIENT_STOPS = 4;
-/** A named palette the colour dial can be locked to: sixteen colours, the
- *  dial stepping between them instead of sweeping the whole wheel. */
-interface MoveColorPalette {
-    id: string;
-    name: string;
-    colors: string[];
-}
-/** The built-in palettes the menu button offers while the editor is open. */
-declare const MOVE_COLOR_PALETTES: MoveColorPalette[];
-/**
- * The colour wheel, in the hues the Move can actually light.
- *
- * The device drops the RGB command that would give a smooth ramp (verified on
- * hardware — every such pad came back the plain switch-on red), so the wheel is
- * its own pad palette: the entries that are saturated AND sit at one
- * brightness, sorted by hue. Sixteen of them, two rows of eight — the same
- * sixteen the pads show, so screen and hand pick from one wheel.
- */
-declare const MOVE_COLOR_WHEEL: number[];
-declare const MOVE_COLOR_HUES: number;
-declare const MOVE_COLOR_STEPS = 16;
-/** The first pad row while the editor is open: an eight-level opacity bar. */
-declare const MOVE_OPACITY_PADS = 8;
-/** Which slot of the wheel a colour sits nearest, the long way round included. */
-declare const moveWheelSlot: (h: number) => number;
-/** Shared editor selection and color coordinates for the panel and Move bridge.
- *  One editor serves two value shapes: a plain hex colour, and a gradient —
- *  there the editor holds a SELECTED STOP (one of up to four, the track
- *  buttons' count) and every hue/luminosity/opacity edit lands on that stop. */
-declare class MoveColorStoreClass {
-    private view;
-    private version;
-    private listeners;
-    private coordinates;
-    /** The palette the dial is locked to — null is the whole wheel. */
-    private paletteId;
-    /** The palette navigator behind Menu while the editor is open. */
-    private picker;
-    private pickerCursor;
-    /** The gradient stop the editor is on — meaningless for a plain colour. */
-    private stop;
-    getView: () => MoveColorView | null;
-    getVersion: () => number;
-    subscribe: (fn: () => void) => (() => void);
-    private notify;
-    open(panelId: string, path: string): void;
-    close(): void;
-    toggle(panelId: string, path: string): void;
-    /** The control's gradient value, or null when it holds a plain colour. */
-    gradient(panelId: string, path: string): GradientValue | null;
-    /** How many stops the editor can hold — 0 for a plain colour. */
-    stopCount(panelId: string, path: string): number;
-    getStop: () => number;
-    /** Land the editor on a stop — the track buttons' gesture. */
-    selectStop(index: number): void;
-    /** A stop's position along the ramp, 0..1 — 0 when out of range. */
-    stopPosition(panelId: string, path: string, index: number): number;
-    /** Slide a stop, clamped between its neighbours so the held stop never
-     *  changes identity under the hand moving it — the ramp slot's own rule. */
-    moveStop(panelId: string, path: string, index: number, position: number): void;
-    /** Slide the selected stop by wheel/dial detents — the hold-a-track gesture. */
-    turnStop(panelId: string, path: string, delta: number, fine?: boolean): void;
-    /** Where a control's colour lives: the hex itself, or the stop's colour. */
-    private hexAt;
-    /** The selected coordinate target: the stop the editor is on, when the
-     *  control is a gradient; the control itself otherwise. */
-    private targetStop;
-    read(panelId: string, path: string): HSLA;
-    /** The colour under the editor as hex — the selected stop's for a gradient. */
-    hex(panelId: string, path: string): string;
-    /** A specific stop's coordinates (null = the plain colour) — what the stop
-     *  row and the hardware's track lights paint. */
-    readStop(panelId: string, path: string, stop: number | null): HSLA;
-    update(panelId: string, path: string, patch: Partial<HSLA>): void;
-    updateStop(panelId: string, path: string, stop: number | null, patch: Partial<HSLA>): void;
-    setHue(h: number): void;
-    setLuminosity(l: number): void;
-    setOpacity(a: number): void;
-    turn(panelId: string, path: string, delta: number, fine?: boolean): void;
-    turnLuminosity(panelId: string, path: string, delta: number, fine?: boolean): void;
-    getPaletteId: () => string | null;
-    getPalette: () => MoveColorPalette | null;
-    /** Which palette colour the open control sits on — null off-palette. */
-    paletteIndex(panelId: string, path: string): number | null;
-    /** Lock the open editor to a palette (null = back to all colours), and
-     *  bring its colour onto the palette right away — the nearest of its hues,
-     *  then that segment's centre so a turn steps cleanly from there. */
-    setPalette(id: string | null): void;
-    /** Jump straight to one of the locked palette's colours. */
-    setPaletteColor(index: number): void;
-    isPickerOpen: () => boolean;
-    getPickerCursor: () => number;
-    openPicker(): void;
-    closePicker(): void;
-    togglePicker(): void;
-    /** Walk the navigator's cursor by wheel detents. */
-    movePickerCursor(delta: number): void;
-    /** Rest the cursor on a row — a search landing the wheel on the next match. */
-    setPickerCursor(cursor: number): void;
-    /** Keep the cursor's row: the palette locks in and the navigator dismisses. */
-    confirmPicker(): void;
-    /** A clicked row: cursor and confirm in one. */
-    choosePicker(cursor: number): void;
-}
-declare const MoveColorStore: MoveColorStoreClass;
-
 /** A row of the preset screen — one shape for built-in and provider presets. */
 interface MovePresetItem {
     id: string;
@@ -4664,4 +4725,4 @@ declare class MoveSearchStoreClass {
 }
 declare const MoveSearchStore: MoveSearchStoreClass;
 
-export { ADSR_DEF, ADSR_STAGE_MAX, ANGLE_DEAD_ZONE_PX, AUDIO_DEF, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AxisSpec, type BalanceConfig, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, type ChipOption, type ChipsConfig, type ColorConfig, type ColorFormat, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRANSFER, DEFAULT_TRIGGER_STEPS, type DriverDirection, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EasingConfig, type EnvStage, FILTER_DB_CEIL, FILTER_DB_FLOOR, type FileConfig, type FilterAxis, type FilterAxisConfig, type FilterConfig, type FilterResponse, type FilterShapeType, type FilterValue, type GalleryConfig, type GalleryItem, type GradientConfig, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenDetail, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_CHIP_BUTTONS, MOVE_COLOR_HUES, MOVE_COLOR_PALETTES, MOVE_COLOR_STEPS, MOVE_COLOR_WHEEL, MOVE_DIALS, MOVE_FLOAT_SELECTOR, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_ICONS, MOVE_FUNCTION_MANIFEST, MOVE_GRADIENT_STOPS, MOVE_JOG_CLICK_EVENT, MOVE_JOG_EVENT, MOVE_LATCH_EVENT, MOVE_MUTE_EVENT, MOVE_NOTIFY_GAP, MOVE_NOTIFY_KINDS, MOVE_OPACITY_PADS, MOVE_OVERRIDE_EVENT, MOVE_PADS, MOVE_PAD_LIBRARY, MOVE_PAGE_EVENT, MOVE_PAGE_SELECT_EVENT, MOVE_PALETTE, MOVE_SEARCH_EVENT, MOVE_SLOT_LIBRARY, MOVE_SPECIAL_BUTTONS, MOVE_STEP_FUNCTIONS, MOVE_STRIP_EVENT, MOVE_TOUCH_EVENT, MOVE_TRACKS, MOVE_TRACK_COLORS, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_STEPS, type ModControlMeta, type ModPageLayout, type ModPageSlot, ModRing, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, MoveActionButton, type MoveActionButtonProps, type MoveColorPalette, MoveColorStore, type MoveColorView, type MoveFunctionButton, type MoveFunctionChip, type MoveFunctionChipStyle, MoveFunctionChips, type MoveFunctionChipsProps, type MoveFunctionGlyph, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, MoveNotifications, type MoveNotificationsProps, type MoveNotifyKind, type MoveNotifyOptions, type MoveNumericDrawing, MovePadActionBody, MovePadAppBody, type MovePadCell, MovePadColorBody, type MovePadKind, MovePadTabsBody, MovePadToggleBody, MovePadValueBody, MovePadWaveBody, type MovePage, type MovePaletteName, MovePanel, type MovePanelProps, type MovePlaybackMode, type MovePresetItem, type MovePresetPhase, type MovePresetSave, MovePresetStore, type MovePresetView, type MoveScreenList, type MoveScreenRow, type MoveScreenSearch, MoveSearchStore, type MoveSearchTarget, type MoveSearchView, type MoveSelectVisual, MoveSettingsView, type MoveSliderVisual, MoveSlotColorBody, MoveSlotDefaultBody, MoveSlotDialBody, MoveSlotEnumBody, MoveSlotEnvBody, MoveSlotFilterBody, MoveSlotGlyph, type MoveSlotKind, MoveSlotNumericBody, MoveSlotPlaybackDrawing, MoveSlotRampBody, MoveSlotRangeBody, MoveSlotReadout, MoveSlotScopeBody, MoveSlotShape, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotXYBody, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, type MoveVisual, MoveVolumeDisplay, type MoveVolumeDisplayState, MoveWaveform, type MoveWaveformProps, MoveWaveformStore, type MoveWaveformVariant, type MoveWaveformView, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SpringifyOptions, type SwatchConfig, type SwatchOption, TAB_PATH, TRANSFER_MAX_POINTS, TRANSFER_MIN_GAP, type TextConfig, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineMeta, TimelineStore, type TimelineTransport, type ToggleConfig, type TransferPoint, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakTheme, type TweakValue, WAVEFORM_MAX_ZOOM, WAVEFORM_SMOOTH_POINTS, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, angleFromPointer, applyDetentAxis, applyModulation, arcPath, audioModLevel, bearingToValue, buildModMovePage, buildMovePages, buildMoveStrip, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, clampStripOffset, colorAtPosition, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultFilterResponse, defaultListItemParams, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, dialOrigin, dialSpan, displayHex, enumOptionIcon, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, filterHand01, filterHandValue, filterResponsePath, filterShapePath, filterShapeResponse, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getAudioModBuffer, getAudioModVersion, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, insertPoint, invertY, isIdentityTransfer, isMoveDial, isMoveTabs, isNamedTabs, isOutsideSpan, isPadSpanContinuation, isSpanContinuation, isStripSlot, isToggleDial, lfoSyncedHz, listModTypes, loopFromStep, loopSteps, modColor, modKey, modPageLayout, modPageWidth, modRingArc, moveAppPadRow, moveNotify, moveNumericDrawing, movePadRows, movePlaybackMode, movePoint, moveScreenChecked, moveScreenRowLabel, moveSearchFilter, moveSearchMatch, moveSlotKind, moveStop, moveTabCell, moveVisualReading, defaultView as moveWaveformDefaultView, moveWheelSlot, nearestHandle, nearestPoint, normToValue, normalizeAngle, normalizeCurveMarkers, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeFilterValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeToggleDial, normalizeTransfer, normalizeValue, normalizeXYDial, notifyDockBottom, nudge, nudgeAngle, oklchToRgb, opacityPercent, orderRange, padPosition, padSection, padSpan, pageStripOffset, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, rampCss, readComposition, redistributeWeight, registerModType, removeDriver, removePoint, removeSegment, removeStop, resolveAxis, resolveFilterAxis, rgbToHsl, rgbToHsv, rgbToOklch, sampleTransfer, scrubBy, setAudioModBuffer, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapAngle, snapToStep, splitSegment, springify, stepPosition, stepStripOffset, stripDialColumns, stripDialSlots, stripOffsets, stripSlotCount, stripSlotIndex, stripStarts, stripWindowPads, subscribeAudioMod, transferLut, triggerLevels, triggersCrossed, valueFromPoint, valueToBearing, valueToNorm, valueToPercent, visibleColumns, visibleModControls, visibleWindow, zoomBy };
+export { ADSR_DEF, ADSR_STAGE_MAX, ANGLE_DEAD_ZONE_PX, AUDIO_DEF, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AxisSpec, type BalanceConfig, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, type ChipOption, type ChipsConfig, type ColorConfig, type ColorFormat, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRANSFER, DEFAULT_TRIGGER_STEPS, type DriverDirection, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EasingConfig, type EnvStage, FILTER_DB_CEIL, FILTER_DB_FLOOR, type FileConfig, type FilterAxis, type FilterAxisConfig, type FilterConfig, type FilterResponse, type FilterShapeType, type FilterValue, type GalleryConfig, type GalleryItem, type GradientConfig, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenDetail, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_CHIP_BUTTONS, MOVE_COLOR_HUES, MOVE_COLOR_PALETTES, MOVE_COLOR_STEPS, MOVE_COLOR_WHEEL, MOVE_DIALS, MOVE_FLOAT_SELECTOR, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_ICONS, MOVE_FUNCTION_MANIFEST, MOVE_GRADIENT_STOPS, MOVE_JOG_CLICK_EVENT, MOVE_JOG_EVENT, MOVE_LATCH_EVENT, MOVE_MUTE_EVENT, MOVE_NOTIFY_GAP, MOVE_NOTIFY_KINDS, MOVE_OPACITY_PADS, MOVE_OVERRIDE_EVENT, MOVE_PADS, MOVE_PAD_LIBRARY, MOVE_PAGE_EVENT, MOVE_PAGE_SELECT_EVENT, MOVE_PALETTE, MOVE_SEARCH_EVENT, MOVE_SLOT_LIBRARY, MOVE_SPECIAL_BUTTONS, MOVE_STEP_FUNCTIONS, MOVE_STRIP_EVENT, MOVE_TOUCH_EVENT, MOVE_TRACKS, MOVE_TRACK_COLORS, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_STEPS, type ModControlMeta, type ModPageLayout, type ModPageSlot, ModRing, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, MoveActionButton, type MoveActionButtonProps, type MoveColorPalette, MoveColorStore, type MoveColorView, type MoveFunctionButton, type MoveFunctionChip, type MoveFunctionChipStyle, MoveFunctionChips, type MoveFunctionChipsProps, type MoveFunctionGlyph, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, type MoveKitOptions, type MoveKitOverrides, type MoveKitRegistry, MoveNotifications, type MoveNotificationsProps, type MoveNotifyKind, type MoveNotifyOptions, type MoveNumericDrawing, MovePadActionBody, MovePadAppBody, type MovePadCell, MovePadColorBody, type MovePadKind, MovePadTabsBody, MovePadToggleBody, MovePadValueBody, MovePadWaveBody, type MovePage, type MovePaletteName, MovePanel, type MovePanelProps, type MovePlaybackMode, type MovePresetItem, type MovePresetPhase, type MovePresetSave, MovePresetStore, type MovePresetView, type MoveScreenList, type MoveScreenRow, type MoveScreenSearch, MoveSearchStore, type MoveSearchTarget, type MoveSearchView, type MoveSelectVisual, MoveSettingsView, type MoveSliderVisual, MoveSlotColorBody, MoveSlotDefaultBody, MoveSlotDialBody, MoveSlotEnumBody, MoveSlotEnvBody, MoveSlotFilterBody, MoveSlotGlyph, type MoveSlotKind, MoveSlotNumericBody, MoveSlotPlaybackDrawing, MoveSlotRampBody, MoveSlotRangeBody, MoveSlotReadout, MoveSlotScopeBody, MoveSlotShape, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotXYBody, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, type MoveVisual, MoveVolumeDisplay, type MoveVolumeDisplayState, MoveWaveform, type MoveWaveformProps, MoveWaveformStore, type MoveWaveformVariant, type MoveWaveformView, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type OKLCH, type PanelConfig, type Point, type Preset, type PresetItem, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SpringifyOptions, type SwatchConfig, type SwatchOption, TAB_PATH, TRANSFER_MAX_POINTS, TRANSFER_MIN_GAP, type TextConfig, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineMeta, TimelineStore, type TimelineTransport, type ToggleConfig, type TransferPoint, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakTheme, type TweakValue, WAVEFORM_MAX_ZOOM, WAVEFORM_SMOOTH_POINTS, type WaveformLoop, type WaveformMode, WaveformVisualization, type XYAxis, type XYConfig, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, angleFromPointer, applyDetentAxis, applyModulation, arcPath, audioModLevel, bearingToValue, buildModMovePage, buildMovePages, buildMoveStrip, buildSamplers, centerValue, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, clampStripOffset, colorAtPosition, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultFilterResponse, defaultListItemParams, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, dialOrigin, dialSpan, displayHex, enumOptionIcon, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, filterHand01, filterHandValue, filterResponsePath, filterShapePath, filterShapeResponse, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, formatClock, formatHex, getAudioModBuffer, getAudioModVersion, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, insertPoint, invertY, isIdentityTransfer, isMoveDial, isMoveTabs, isNamedTabs, isOutsideSpan, isPadSpanContinuation, isSpanContinuation, isStripSlot, isToggleDial, lfoSyncedHz, listModTypes, loopFromStep, loopSteps, modColor, modKey, modPageLayout, modPageWidth, modRingArc, moveAppPadRow, moveKitOptions, moveNotify, moveNumericDrawing, movePadRows, movePlaybackMode, movePoint, moveScreenChecked, moveScreenRowLabel, moveSearchFilter, moveSearchMatch, moveSlotKind, moveStop, moveTabCell, moveVisualReading, defaultView as moveWaveformDefaultView, moveWheelSlot, nearestHandle, nearestPoint, normToValue, normalizeAngle, normalizeCurveMarkers, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeFilterValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeToggleDial, normalizeTransfer, normalizeValue, normalizeXYDial, notifyDockBottom, nudge, nudgeAngle, oklchToRgb, opacityPercent, orderRange, padPosition, padSection, padSpan, pageStripOffset, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, rampCss, readComposition, redistributeWeight, registerModType, removeDriver, removePoint, removeSegment, removeStop, resolveAxis, resolveFilterAxis, rgbToHsl, rgbToHsv, rgbToOklch, sampleTransfer, scrubBy, setAudioModBuffer, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, snapAngle, snapToStep, splitSegment, springify, stepPosition, stepStripOffset, stripDialColumns, stripDialSlots, stripOffsets, stripSlotCount, stripSlotIndex, stripStarts, stripWindowPads, subscribeAudioMod, transferLut, triggerLevels, triggersCrossed, valueFromPoint, valueToBearing, valueToNorm, valueToPercent, visibleColumns, visibleModControls, visibleWindow, zoomBy };

@@ -841,6 +841,15 @@ type TweakStorePanelOptions = {
      * modulator settings pages — both are filtered out of the panel dock. */
     kind?: 'timeline' | 'modulation';
 };
+/**
+ * The registries the Move bridge kit reads, by their `bindMove` option names.
+ * The kit ships alone and cannot import them, so an app hands them over —
+ * `moveKitOptions()` bundles every one. Each registry notes here when the page
+ * puts it to use (`noteMoveKitUse`), so the kit can say out loud when it was
+ * bound without one the page needs, instead of dropping that feature on the
+ * hardware in silence.
+ */
+type MoveKitRegistry = 'functions' | 'modulation' | 'color' | 'surface' | 'waveform' | 'volume' | 'transfer';
 /** camelCase → Title Case, the label rule used everywhere a key becomes UI text. */
 declare function formatLabel(key: string): string;
 /**
@@ -877,6 +886,7 @@ declare class TweakStoreClass {
     private presetsHidden;
     private baseValues;
     private persistTargets;
+    private moveKitUses;
     registerPanel(id: string, name: string, config: TweakConfig, shortcuts?: Record<string, ShortcutConfig>, options?: TweakStorePanelOptions): void;
     updatePanel(id: string, name: string, config: TweakConfig, shortcuts?: Record<string, ShortcutConfig>, options?: TweakStorePanelOptions): void;
     unregisterPanel(id: string): void;
@@ -909,6 +919,12 @@ declare class TweakStoreClass {
     selectPanels(only?: string | string[]): PanelConfig[];
     getPanel(id: string): PanelConfig | undefined;
     subscribe(panelId: string, listener: Listener): () => void;
+    /** A registry says the page uses it (see MoveKitRegistry). Silent: this is
+     *  bookkeeping for the bridge kit, not a change anything should render. */
+    noteMoveKitUse(registry: MoveKitRegistry): void;
+    /** The Move-kit registries this page has put to use — what the bridge kit
+     *  checks its binding against. */
+    getMoveKitUses(): MoveKitRegistry[];
     subscribeGlobal(listener: Listener): () => void;
     subscribeActions(panelId: string, listener: ActionListener): () => void;
     triggerAction(panelId: string, path: string): void;
@@ -1091,4 +1107,4 @@ declare function defaultListItemParams(schema: Record<string, ListItemField>): R
 declare function normalizeListItems(config: ListConfig): ListItemValue[];
 declare const TweakStore: TweakStoreClass;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type BalanceConfig, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type CurveConfig, type EasingConfig, type FileConfig, type FilterConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type MovePlaybackMode, type MoveSelectVisual, type MoveSliderVisual, type MoveVisual, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type PanelConfig, type Preset, type PresetItem, type PresetProvider, type PresetProviderPreset, type RangeConfig, type RangeValue, type ReservedKey, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SwatchConfig, type SwatchOption, TAB_PATH, type TextConfig, type ToggleConfig, type TransferConfig, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakStorePanelOptions, type TweakValue, type TweakersPersistOptions, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, groupListFields, hintDomId, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveTweakValues };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type BalanceConfig, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type CurveConfig, type EasingConfig, type FileConfig, type FilterConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type MoveKitRegistry, type MovePlaybackMode, type MoveSelectVisual, type MoveSliderVisual, type MoveVisual, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type PanelConfig, type Preset, type PresetItem, type PresetProvider, type PresetProviderPreset, type RangeConfig, type RangeValue, type ReservedKey, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SwatchConfig, type SwatchOption, TAB_PATH, type TextConfig, type ToggleConfig, type TransferConfig, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakStorePanelOptions, type TweakValue, type TweakersPersistOptions, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, groupListFields, hintDomId, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveTweakValues };

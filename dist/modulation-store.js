@@ -972,6 +972,7 @@ var ModulationStoreClass = class {
         const def = slot?.type ? getModType(slot.type) : void 0;
         if (i >= 0 && i < MOD_SLOTS && def && slot.params) {
           this.slots[i] = { ...slot, index: i, params: restoreModParams(def, slot.params) };
+          TweakStore.noteMoveKitUse("modulation");
         }
       }
       for (const a of saved.assignments ?? []) {
@@ -1033,6 +1034,7 @@ var ModulationStoreClass = class {
       return null;
     }
     const slot = { index, type, params: freshParams(def) };
+    TweakStore.noteMoveKitUse("modulation");
     this.slots[index] = slot;
     this.states.set(index, def.createState());
     this.changed();
