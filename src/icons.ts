@@ -16,6 +16,9 @@ export const ICON_ELLIPSIS = [
 
 export const ICON_CHECK = 'M5 12.75L10 19L19 5';
 
+// A magnifier — the search running on a list. Stroked like the check.
+export const ICON_SEARCH = 'M10.5 4.5C7.18629 4.5 4.5 7.18629 4.5 10.5C4.5 13.8137 7.18629 16.5 10.5 16.5C13.8137 16.5 16.5 13.8137 16.5 10.5C16.5 7.18629 13.8137 4.5 10.5 4.5ZM15 15L20 20';
+
 export const ICON_PAUSE = [
   'M6.75 3C5.23122 3 4 4.23122 4 5.75V18.25C4 19.7688 5.23122 21 6.75 21H7.25C8.76878 21 10 19.7688 10 18.25V5.75C10 4.23122 8.76878 3 7.25 3H6.75Z',
   'M16.75 3C15.2312 3 14 4.23122 14 5.75V18.25C14 19.7688 15.2312 21 16.75 21H17.25C18.7688 21 20 19.7688 20 18.25V5.75C20 4.23122 18.7688 3 17.25 3H16.75Z',
@@ -108,6 +111,98 @@ export const ICON_MOVE_COPY = {
     'M5.5 5.5H12.5V12.5H5.5V5.5Z',
     'M3.5 8.5H2.5C1.94772 8.5 1.5 8.05228 1.5 7.5V2.5C1.5 1.94772 1.94772 1.5 2.5 1.5H7.5C8.05228 1.5 8.5 1.94772 8.5 2.5V3.5',
   ],
+};
+
+/**
+ * A function chip's glyph. `paths` are stroked, like the hardware's printed
+ * marks; `fills` are the filled marks (the capture corners); `circles` are
+ * filled circles (the enter dot, rec's core); `text` is a letter mark set in
+ * Helvetica (mute's "M"). All share one viewBox and the size the chip draws
+ * them at.
+ */
+export interface MoveFunctionGlyph {
+  viewBox: string;
+  size: number;
+  paths?: string[];
+  fills?: string[];
+  circles?: { cx: string; cy: string; r: string }[];
+  text?: string;
+}
+
+/** The letter marks' face — Helvetica, with the system stack behind it. */
+export const MOVE_GLYPH_TEXT_FONT = "Helvetica, 'Helvetica Neue', Arial, system-ui, sans-serif";
+
+/** The enter dot, as a chip glyph — jog click, and Sampling's confirm. */
+const MOVE_GLYPH_DOT: MoveFunctionGlyph = {
+  viewBox: ICON_MOVE_ENTER.viewBox,
+  size: 12,
+  circles: [ICON_MOVE_ENTER.circle],
+};
+
+/**
+ * The Shift-layer stand-in: a step button with its printed label under it.
+ * The sixteen label marks are distinct on the hardware; until each gets its
+ * own drawing, every Shift+step function wears this one, so a chip still
+ * says "this rides a step's second function" at a glance.
+ */
+const MOVE_GLYPH_STEP: MoveFunctionGlyph = {
+  viewBox: '0 0 14 14',
+  size: 14,
+  paths: ['M3 1.5H11V9.5H3V1.5Z', 'M4.5 12.5H9.5'],
+};
+
+/**
+ * The canonical glyph per Move function button — every app shows the same
+ * icon for the same hardware key, so the chips read like the instrument.
+ * Drawn on the capture glyph's 14px grid (dots on the enter dot's 12px),
+ * stroked like the printed marks unless the hardware fills them.
+ */
+export const MOVE_FUNCTION_ICONS: Record<string, MoveFunctionGlyph> = {
+  play: { viewBox: '0 0 14 14', size: 14, paths: ['M4 2.5L11.5 7L4 11.5V2.5Z'] },
+  rec: {
+    viewBox: '0 0 14 14',
+    size: 14,
+    paths: ['M7 2.5A4.5 4.5 0 1 0 7 11.5A4.5 4.5 0 1 0 7 2.5Z'],
+    circles: [{ cx: '7', cy: '7', r: '2' }],
+  },
+  /* Mute is a letter, not a drawing: the "M", set in Helvetica on the same
+     14px grid as the drawn marks. */
+  mute: { viewBox: '0 0 14 14', size: 14, text: 'M' },
+  undo: {
+    viewBox: '0 0 14 14',
+    size: 14,
+    paths: ['M5.5 2.5L3 5L5.5 7.5', 'M3 5H8.5C10.7091 5 12.5 6.79086 12.5 9V9C12.5 11.2091 10.7091 13 8.5 13H5.5'],
+  },
+  copy: { viewBox: ICON_MOVE_COPY.viewBox, size: 14, paths: [...ICON_MOVE_COPY.paths] },
+  delete: { viewBox: '0 0 14 14', size: 14, paths: ['M3.25 3.25L10.75 10.75', 'M10.75 3.25L3.25 10.75'] },
+  up: { viewBox: '0 0 14 14', size: 14, paths: ['M3.5 8.75L7 5.25L10.5 8.75'] },
+  down: { viewBox: '0 0 14 14', size: 14, paths: ['M3.5 5.25L7 8.75L10.5 5.25'] },
+  left: { viewBox: '0 0 14 14', size: 14, paths: ['M8.75 3.5L5.25 7L8.75 10.5'] },
+  right: { viewBox: '0 0 14 14', size: 14, paths: ['M5.25 3.5L8.75 7L5.25 10.5'] },
+  /* Sampling wears the enter dot — the surface's second confirm. */
+  sample: MOVE_GLYPH_DOT,
+  loop: { viewBox: ICON_MOVE_LOOP.viewBox, size: 14, paths: [...ICON_MOVE_LOOP.paths] },
+  capture: { viewBox: ICON_MOVE_CAPTURE.viewBox, size: 14, fills: [ICON_MOVE_CAPTURE.path] },
+  menu: { viewBox: '0 0 14 14', size: 14, paths: ['M2.5 3.5H11.5', 'M2.5 7H11.5', 'M2.5 10.5H11.5'] },
+  back: { viewBox: '0 0 14 14', size: 14, paths: ['M5.5 3L2.5 6L5.5 9', 'M2.5 6H9.5C11.1569 6 12.5 7.34315 12.5 9V11.5'] },
+  jog_click: MOVE_GLYPH_DOT,
+  /* The Shift layer — one stand-in mark for now (see MOVE_GLYPH_STEP). */
+  set_overview: MOVE_GLYPH_STEP,
+  setup: MOVE_GLYPH_STEP,
+  workflow: MOVE_GLYPH_STEP,
+  step4: MOVE_GLYPH_STEP,
+  tempo: MOVE_GLYPH_STEP,
+  metronome: MOVE_GLYPH_STEP,
+  groove: MOVE_GLYPH_STEP,
+  pitches_16: MOVE_GLYPH_STEP,
+  scale: MOVE_GLYPH_STEP,
+  full_velocity: MOVE_GLYPH_STEP,
+  repeat: MOVE_GLYPH_STEP,
+  step12: MOVE_GLYPH_STEP,
+  step13: MOVE_GLYPH_STEP,
+  step14: MOVE_GLYPH_STEP,
+  double_loop: MOVE_GLYPH_STEP,
+  quantize: MOVE_GLYPH_STEP,
 };
 
 export const ICON_PANEL = {

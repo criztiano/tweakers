@@ -27,12 +27,12 @@ export const MOVE_PADS = 8;
 export interface MovePage {
   panel: PanelConfig;
   dials: ControlMeta[];
-  /** Switch chips — the hardware's toggle pad row (y=3 on the device). */
+  /** Switch chips — the hardware's top pad row (y=3 on the device). */
   toggles: ControlMeta[];
-  /** Overflow value chips — the hardware's value pad row (y=1). Value i sits
+  /** Overflow value chips — the hardware's value pad row (y=2). Value i sits
    *  at column i on both surfaces, pairing it with the dial in that column. */
   values: ControlMeta[];
-  /** Action pads — the row under the values (the device's bottom pad row).
+  /** Action pads — the row under the values (y=1 on the device).
    *  Placed by hand only, through the panel's `movePads` map. */
   actions: ControlMeta[];
 }
@@ -49,6 +49,64 @@ const flat = (controls: ControlMeta[], out: ControlMeta[] = []): ControlMeta[] =
 export const isEnumDial = (c: ControlMeta) =>
   c.type === 'select' && Array.isArray(c.options) && c.options.length > 1;
 
+/**
+ * The tabs strip: a select laid across the small slots instead of taking a
+ * dial. One pad per option, side by side in the switch row, the current one
+ * lit — the mode a page is in, said where the hand already is. It is the pad
+ * grid's first multi-slot control, the filter's small sibling.
+ */
+export const isMoveTabs = (c: ControlMeta) => !!c.moveTabs && isEnumDial(c);
+
+/** The strip spends its leading pad on the select's own name. */
+export const isNamedTabs = (c: ControlMeta) => c.moveTabs === 'named';
+
+/**
+ * How many pads a control claims on the small grid. Everything but a tabs
+ * strip is one pad; a strip is one per option, plus its name pad — 2 pads at
+ * the least, and never more than the row is wide.
+ */
+export const padSpan = (c: ControlMeta | undefined): number =>
+  c && isMoveTabs(c) ? c.options!.length + (isNamedTabs(c) ? 1 : 0) : 1;
+
+/** True when pad column i only continues the strip sitting at i-1. */
+export const isPadSpanContinuation = (row: ControlMeta[], i: number): boolean =>
+  i > 0 && row[i] !== undefined && row[i] === row[i - 1];
+
+/** One pad of a tabs strip: its name pad, or the option that pad selects. */
+export type MoveTabCell = {
+  meta: ControlMeta;
+  /** The strip's name pad — it selects nothing, and stays dark on the grid. */
+  head: boolean;
+  /** The option's value, null on the name pad. */
+  option: string | null;
+  /** What that pad says. */
+  label: string;
+};
+
+/**
+ * What the pad at column `i` of a small-slot row is, read from the row alone
+ * — the one answer the screen, the bridge and the hardware all lay the strip
+ * out from, so a tab lights and answers on the pad it is drawn on.
+ */
+export function moveTabCell(row: (ControlMeta | undefined)[], i: number): MoveTabCell | null {
+  const meta = row[i];
+  if (!meta || !isMoveTabs(meta)) return null;
+  let start = i;
+  while (start > 0 && row[start - 1] === meta) start--;
+  const offset = i - start;
+  if (isNamedTabs(meta) && offset === 0) {
+    return { meta, head: true, option: null, label: meta.label };
+  }
+  const opt = meta.options![offset - (isNamedTabs(meta) ? 1 : 0)];
+  if (opt === undefined) return null;
+  return {
+    meta,
+    head: false,
+    option: enumOptionValue(opt as never),
+    label: enumOptionLabel(opt as never),
+  };
+}
+
 /** A switch the page is about: it claims a dial slot rather than a pad. */
 export const isToggleDial = (c: ControlMeta) => c.type === 'toggle' && c.moveSlot === true;
 
@@ -56,7 +114,8 @@ export const isToggleDial = (c: ControlMeta) => c.type === 'toggle' && c.moveSlo
 export const isMoveDial = (c: ControlMeta) =>
   isToggleDial(c) ||
   c.type === 'slider' || c.type === 'color' || c.type === 'xy' || c.type === 'range' ||
-  c.type === 'filter' || c.type === 'transfer' || c.type === 'gradient' || isEnumDial(c) ||
+  c.type === 'filter' || c.type === 'transfer' || c.type === 'gradient' ||
+  (isEnumDial(c) && !isMoveTabs(c)) ||
   (c.type === 'number' && c.min != null && c.max != null);
 
 const isDial = isMoveDial;
@@ -115,6 +174,44 @@ export function buildModMovePage(panel: PanelConfig, layout?: ModPageLayout | nu
 }
 
 /**
+ * The builder's warning channel. The layout itself never changes — panels
+ * past the 4 tracks still drop, oversized dials still pass over, colliding
+ * pad columns still relocate — but each of those quiet decisions is said
+ * out loud here, once per unique message, so a layout that "works until
+ * you look at the hardware" announces itself in the console instead.
+ * Tests (and apps that want the feed) can swap the sink with
+ * `setMoveLayoutReporter`; `null` restores the deduped console.warn.
+ */
+export type MoveLayoutIssueCode =
+  | 'panel-dropped'
+  | 'dial-dropped'
+  | 'pad-column-invalid'
+  | 'pad-column-on-dial'
+  | 'pad-column-taken'
+  | 'pad-row-full'
+  | 'tabs-oversized'
+  | 'tabs-no-room';
+
+type MoveLayoutReporter = (code: MoveLayoutIssueCode, message: string) => void;
+
+const warnedIssues = new Set<string>();
+let issueReporter: MoveLayoutReporter | null = null;
+
+export function setMoveLayoutReporter(fn: MoveLayoutReporter | null): void {
+  issueReporter = fn;
+}
+
+export function reportMoveLayoutIssue(code: MoveLayoutIssueCode, message: string): void {
+  if (issueReporter) {
+    issueReporter(code, message);
+    return;
+  }
+  if (warnedIssues.has(message)) return;
+  warnedIssues.add(message);
+  console.warn(`Move layout: ${message}`);
+}
+
+/**
  * A hand-placed pad's column, or null when the panel leaves the control to
  * the automatic packing. Out-of-range columns are ignored rather than
  * clamped: silently stacking two pads on column 7 would read as a layout
@@ -122,30 +219,39 @@ export function buildModMovePage(panel: PanelConfig, layout?: ModPageLayout | nu
  */
 const padColumn = (panel: PanelConfig, c: ControlMeta): number | null => {
   const col = panel.movePads?.[c.path];
-  return typeof col === 'number' && Number.isInteger(col) && col >= 0 && col < MOVE_PADS
-    ? col
-    : null;
+  if (col === undefined) return null;
+  if (typeof col === 'number' && Number.isInteger(col) && col >= 0 && col < MOVE_PADS) return col;
+  reportMoveLayoutIssue(
+    'pad-column-invalid',
+    `panel '${panel.id}': control '${c.path}': movePads column ${JSON.stringify(col)} is off the ${MOVE_PADS}-wide grid — ignored`
+  );
+  return null;
 };
 
 export function buildMovePages(panels: PanelConfig[]): MovePage[] {
-  return panels
-    .filter((p) => p.kind === undefined)
+  const plain = panels.filter((p) => p.kind === undefined);
+  for (const p of plain.slice(MOVE_TRACKS)) {
+    reportMoveLayoutIssue(
+      'panel-dropped',
+      `panel '${p.id}' dropped — hardware has ${MOVE_TRACKS} tracks`
+    );
+  }
+  return plain
     .slice(0, MOVE_TRACKS)
     .map((panel) => {
       const controls = flat(panel.controls);
-      // A bounded control sent to a pad is a value chip wherever it was
-      // declared, so it must not eat a dial slot on the way past. Two-handed
-      // dials and enums can't be chips at all, so a pad column on one of
-      // those is ignored and it keeps its slot.
-      const chipPlaced = (c: ControlMeta) => padColumn(panel, c) !== null && !noChip(c);
       // Dials pack left to right, each claiming its span of columns — a
       // span-2 control sits in both of its columns, so occupancy checks and
       // the knob-number rule need no second bookkeeping. A wide control that
       // no longer fits is passed over; a narrow one behind it may still land.
+      // A `movePads` column never enters this race: the pad grid is its own
+      // instrument, and a control that fits the dials keeps its dial slot no
+      // matter what the panel's map says. Only a bounded param that genuinely
+      // doesn't fit the 8 columns falls through to the value row.
       const dials: ControlMeta[] = [];
       let nextCol = 0;
       for (const c of controls) {
-        if (!isDial(c) || chipPlaced(c)) continue;
+        if (!isDial(c)) continue;
         const span = dialSpan(c);
         if (nextCol + span > MOVE_DIALS) {
           if (nextCol >= MOVE_DIALS) break;
@@ -161,26 +267,97 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
       // A named column is taken as read; everything else — and anything whose
       // column is already spoken for — packs into the leftmost free one, which
       // is the whole rule for a panel that names no columns at all.
-      const place = (row: ControlMeta[], c: ControlMeta, col: number | null) => {
+      const place = (row: ControlMeta[], rowName: string, c: ControlMeta, col: number | null) => {
         if (col !== null && row[col] === undefined) {
           row[col] = c;
           return;
         }
         for (let i = 0; i < MOVE_PADS; i++) {
           if (row[i] === undefined) {
+            if (col !== null) {
+              reportMoveLayoutIssue(
+                'pad-column-taken',
+                `panel '${panel.id}': control '${c.path}': ${rowName} column ${col} already occupied by '${row[col]!.path}' — moved to column ${i}`
+              );
+            }
             row[i] = c;
             return;
           }
         }
+        reportMoveLayoutIssue(
+          'pad-row-full',
+          `panel '${panel.id}': control '${c.path}': the ${rowName} row's ${MOVE_PADS} pads are all taken — dropped`
+        );
+      };
+      // A tabs strip is the pad grid's multi-slot control, so it lands as one
+      // piece or not at all: it needs a RUN of free pads, not a free pad. The
+      // strip sits in the switch row — it is a switch, however many ways it
+      // goes — and a named column is where the run starts. A run that does not
+      // fit there falls back to the leftmost one that does, the same courtesy
+      // a single pad gets; a strip with nowhere to sit is said out loud rather
+      // than quietly shortened, because a mode picker missing two of its modes
+      // is a worse lie than a mode picker that is missing.
+      const placeTabs = (c: ControlMeta, col: number | null) => {
+        const span = padSpan(c);
+        if (span > MOVE_PADS) {
+          reportMoveLayoutIssue(
+            'tabs-oversized',
+            `panel '${panel.id}': control '${c.path}': a ${span}-pad tabs strip is wider than the ${MOVE_PADS}-wide grid — dropped`
+          );
+          return;
+        }
+        const fits = (start: number) =>
+          start >= 0 && start + span <= MOVE_PADS &&
+          Array.from({ length: span }, (_, k) => toggles[start + k]).every((p) => p === undefined);
+        let start = col !== null && fits(col) ? col : -1;
+        if (start < 0) {
+          for (let i = 0; i + span <= MOVE_PADS; i++) {
+            if (fits(i)) { start = i; break; }
+          }
+          if (start >= 0 && col !== null) {
+            reportMoveLayoutIssue(
+              'pad-column-taken',
+              `panel '${panel.id}': control '${c.path}': tabs column ${col} has no run of ${span} free pads — moved to column ${start}`
+            );
+          }
+        }
+        if (start < 0) {
+          reportMoveLayoutIssue(
+            'tabs-no-room',
+            `panel '${panel.id}': control '${c.path}': the toggle row has no run of ${span} free pads — dropped`
+          );
+          return;
+        }
+        for (let k = 0; k < span; k++) toggles[start + k] = c;
       };
       for (const c of controls) {
         const col = padColumn(panel, c);
-        if (c.type === 'toggle' && !isToggleDial(c)) place(toggles, c, col);
+        if (isMoveTabs(c)) placeTabs(c, col);
+        else if (c.type === 'toggle' && !isToggleDial(c)) place(toggles, 'toggle', c, col);
         // Actions reach the pads only when the page asks for them by column —
         // every app has buttons, and none of them expect a hardware pad.
-        else if (c.type === 'action') { if (col !== null) place(actions, c, col); }
+        else if (c.type === 'action') { if (col !== null) place(actions, 'action', c, col); }
+        // A control holding a dial slot never reaches the pads — the pad grid
+        // must not mirror a dial. A movePads column on one is ignored, out
+        // loud, so a page that still maps its dials to pads announces itself.
+        else if (dials.includes(c)) {
+          if (col !== null) {
+            reportMoveLayoutIssue(
+              'pad-column-on-dial',
+              `panel '${panel.id}': control '${c.path}' holds a dial slot — movePads column ${col} ignored; pads never mirror dials`
+            );
+          }
+        }
         /* xy pads and ranges need a dial slot — past the 8 dials they don't fit a chip */
-        else if (isDial(c) && !noChip(c) && !dials.includes(c)) place(values, c, col);
+        else if (isDial(c) && !noChip(c)) place(values, 'value', c, col);
+        // A two-handed dial or enum past the last column has no chip to fall
+        // back on — it simply vanishes from the surface, which deserves a say.
+        else if (isDial(c) && noChip(c)) {
+          reportMoveLayoutIssue(
+            'dial-dropped',
+            `panel '${panel.id}': control '${c.path}' (${c.type}) needs a dial column and none is left — dropped`
+          );
+        }
       }
       return {
         panel,
@@ -196,18 +373,17 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
  * The pad grid's four rows, top to bottom, exactly as the hardware stacks
  * them — screen row 0 is the row nearest the knobs.
  *
- * Plain: y=3 is the dial-slot indicator (the dials draw it, so it is not a
- * row here), y=2 the switches, y=1 the value chips, y=0 the ALT pad. An app
- * that claims both bottom rows takes y=1 and y=0, and the chips move up above
- * the switches — the same shuffle the surface makes, so a dial column keeps
- * its chip AND its switch underneath it (see PROTOCOL.md).
+ * The pad grid is its own instrument: it never reports a dial's state. Where
+ * a dial lives, and at what value, is said by the dot under its knob alone.
  *
- * Hand-placed action pads take the row under the values. A single-row claim
- * is the bottom row alone, so the actions keep theirs; a two-row claim takes
- * both bottom rows, and the actions have nowhere left to sit.
+ * Plain: y=3 the switches — the first row of small slots, the one drawn
+ * directly under the dials — y=2 the value chips, y=1 the action pads, y=0
+ * the ALT pad. An app that claims both bottom rows takes y=1 and y=0, so the
+ * actions have nowhere left to sit; a single-row claim is the bottom row
+ * alone and the actions keep theirs (see PROTOCOL.md).
  */
 export function movePadRows(page: MovePage, claimedRows: number): ControlMeta[][] {
-  if (claimedRows >= 2) return [page.values, page.toggles, [], []];
+  if (claimedRows >= 2) return [page.toggles, page.values, [], []];
   return [page.toggles, page.values, page.actions, []];
 }
 

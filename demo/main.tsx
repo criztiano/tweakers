@@ -7,20 +7,50 @@ import { MoveFunctions } from '../src/move-functions';
 import { MovePresetStore } from '../src/move-presets';
 import { MoveSurfaceStore, type MoveScreenRow } from '../src/move-surface-store';
 import { MoveWaveformStore } from '../src/move-waveform';
+import { MoveVolumeDisplay } from '../src/move-volume';
 import { setAudioModBuffer } from '../src/modulation-core';
 import '../src/styles/theme.css';
 
-// Two pages, so the track buttons have something to switch between.
+// Two pages, so the track buttons have something to switch between. Tone
+// carries a stacked pair of pads under Level, so the page has the full
+// slot-and-pads height — the wheel screen beside it runs the same height.
 TweakStore.registerPanel('tone', 'Tone', {
   level: [0.6, 0, 1],
   drive: [0.25, 0, 1],
   air: [0.4, 0, 1],
   width: [0.5, 0, 1],
-});
+  punch: true,
+  soft: false,
+}, undefined, { movePads: { punch: 0, soft: 0 } });
 TweakStore.registerPanel('space', 'Space', {
   size: [0.35, 0, 1],
   decay: [0.5, 0, 1],
   mix: [0.3, 0, 1],
+});
+
+// The settings room: master controls behind the Set Overview button
+// (Shift + Step 1 on the hardware, the S key here). Named in MovePanel's
+// `settings` prop below, so it never takes a track.
+TweakStore.registerPanel('settings', 'Settings', {
+  output: [0.8, 0, 1],
+  latency: [0.2, 0, 1],
+  brightness: [0.6, 0, 1],
+  contrast: [0.5, 0, 1],
+  midiChannel: { type: 'select', default: '1', options: ['1', '2', '3', '4'] },
+  tuning: [440, 400, 480, 1],
+  sleep: [0.3, 0, 1],
+  ghost: [0.1, 0, 1],
+  wake: [0.5, 0, 1],
+  dim: [0.4, 0, 1],
+  autosave: true,
+  clicks: false,
+});
+// A second room page — the track buttons switch between these while the
+// room is open, completely separate from Tone/Space.
+TweakStore.registerPanel('system', 'System', {
+  cpuGuard: [0.5, 0, 1],
+  logLevel: { type: 'select', default: 'warn', options: ['off', 'warn', 'info', 'debug'] },
+  telemetry: false,
 });
 
 // A few presets to walk through on the wheel.
@@ -110,6 +140,37 @@ MoveSurfaceStore.onScreenSelect((index) => {
 });
 showTracks();
 
+// The app's own function buttons — attached means lit on the hardware, and
+// a labelled chip button (capture, loop, mute, sample) gets its header chip
+// for free: one function, two surfaces. Capture snapshots the tone page
+// into a preset — dressed in the kit's blue to show the palette option —
+// and Loop flips the first modulator's loop in the quiet slot voice. Undo
+// resets the dials with no chip: a printed key says what it does from the
+// hardware.
+let takes = 0;
+MoveFunctions.attach('capture', () => {
+  TweakStore.savePreset('tone', `Take ${++takes}`);
+}, { label: 'Snapshot', chip: { color: 'blue' } });
+MoveFunctions.attach('undo', () => {
+  for (const [path, value] of [['level', 0.6], ['drive', 0.25], ['air', 0.4], ['width', 0.5]] as const) {
+    TweakStore.updateValue('tone', path, value);
+  }
+});
+MoveFunctions.attach('loop', () => {
+  const slot = ModulationStore.getSlot(0);
+  if (slot) ModulationStore.updateSlotParams(0, { loop: !slot.params.loop });
+}, { label: 'Env loop' });
+
+// The volume dial reads as the demo's session clock, so the header pill has
+// a live readout beside the chips.
+const startedAt = Date.now();
+MoveVolumeDisplay.set({
+  getValue: () => {
+    const s = Math.floor((Date.now() - startedAt) / 1000);
+    return `${Math.floor(s / 3600)}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+  },
+});
+
 // Keyboard stand-ins for the hardware. M = the Menu button (tap opens and
 // dismisses; Shift+M is the long press, the save input). Holding C is the
 // Mute button held — the compare, relayed raw like the kit does it.
@@ -122,6 +183,7 @@ window.addEventListener('keydown', (e) => {
   else if (e.key.toLowerCase() === 'c') muteEvent(true, e.shiftKey);
   else if (e.key === ' ') { e.preventDefault(); MoveFunctions.run('play', {}); }
   else if (e.key.toLowerCase() === 'l') MoveFunctions.run('loop', {});
+  else if (e.key.toLowerCase() === 's') MoveFunctions.run('set_overview', { shift: true, step: 0 });
   else if (e.key === 'Backspace') MoveFunctions.run('back', {});
   else if (e.key === 'Enter') MovePresetStore.confirm();
   else if (e.key === 'ArrowDown') MovePresetStore.scroll(1);
@@ -141,6 +203,7 @@ import(/* @vite-ignore */ 'http://localhost:7787/kit.js')
     modulation: ModulationStore,
     color: MoveColorStore,
     waveform: MoveWaveformStore,
+    volume: MoveVolumeDisplay,
   }))
   .catch(() => {});
 
@@ -148,5 +211,5 @@ import(/* @vite-ignore */ 'http://localhost:7787/kit.js')
 (window as any).__tweakers = { TweakStore, MovePresetStore, MoveFunctions };
 
 createRoot(document.getElementById('root')!).render(
-  <MovePanel productionEnabled theme="dark" />
+  <MovePanel productionEnabled theme="dark" settings={["Settings", "System"]} />
 );

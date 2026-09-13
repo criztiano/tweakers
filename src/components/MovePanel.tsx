@@ -1,42 +1,57 @@
 import { PresetExploration, PresetExplorationSlots } from './PresetExploration';
 import { PresetExplorationStore } from '../preset-exploration';
-import { useEffect, useRef, useState, useSyncExternalStore, useCallback } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { ModulationStore } from '../store/ModulationStore';
 import { modColor, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, getAudioModBuffer, setAudioModBuffer, subscribeAudioMod, getAudioModVersion, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
 import { MoveWaveform } from './MoveWaveform';
 import { MoveWaveformStore, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_STEPS } from '../move-waveform';
-import { ICON_PLAY, ICON_LOOP } from '../icons';
+import { ICON_PLAY, ICON_LOOP, ICON_SEARCH } from '../icons';
 import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from '../theme';
-import { buildMovePages, buildModMovePage, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, isEnumDial, isSpanContinuation, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
+import { buildMovePages, buildModMovePage, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadValueBody, MovePadActionBody, MovePadAppBody, MovePadWaveBody } from './move-slots';
+import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadValueBody, MovePadActionBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
+import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing, angleFromPointer } from '../angle-core';
 import { normalizeTransfer, movePoint, nearestPoint, sampleTransfer, type TransferValue } from '../transfer-core';
 import { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveKeyboardValue } from '../move-visual-core';
 import { ModRing } from './ModRing';
+import { MOVE_TRACK_COLORS } from '../move-palette';
 import { MoveSurfaceStore, moveScreenRowLabel, type MovePadCell } from '../move-surface-store';
 import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValue, applyDetentAxis, type XYValue } from '../xy-pad-core';
 import { nearestHandle, type RangeValue } from '../range-slider-core';
 import { fineDragValue } from '../shortcut-utils';
 import { MoveVolumeDisplay, type MoveVolumeDisplayState } from '../move-volume';
-import { MoveColorStore } from '../move-color';
+import { MoveColorStore, MOVE_COLOR_PALETTES } from '../move-color';
+import { MoveSearchStore, moveSearchFilter, type MoveSearchTarget, type MoveSearchView } from '../move-search';
 import { MoveColorSlot, MoveColorDisplay, MoveOpacityPads, MoveColorSteps, MovePaletteScreen, copyHslOfHex, copyOklch } from './MoveColor';
 import { MoveFunctions } from '../move-functions';
+import { MoveFunctionChips } from './MoveFunctionChips';
+import { MoveSettingsView } from '../move-settings';
 import { MovePresetStore, type MovePresetView } from '../move-presets';
 import { ListScreen } from './ListScreen';
 
-interface MovePanelProps {
+export interface MovePanelProps {
   theme?: TweakTheme;
   productionEnabled?: boolean;
   /** Mirror only the named panels, in the order given — same option the bridge kit takes. */
   panels?: string | string[];
+  /**
+   * The app's settings room: one or more registered panels (by id or name)
+   * held out of the page row and shown only in the settings view. The
+   * Move's Set Overview button (Shift + Step 1) toggles the view — the
+   * panel attaches `set_overview` itself — the surface inverts to the
+   * settings palette, and Back walks out. Inside, each named panel is a
+   * room page of its own: the track buttons (and the room's tab row)
+   * switch between them, completely separate from the app's pages.
+   */
+  settings?: string | string[];
   /**
    * Where the panel sits. `viewport` (the default) portals it to `<body>` and
    * pins it to the window's bottom edge — for apps whose content fills the
@@ -50,16 +65,41 @@ interface MovePanelProps {
    * wheel scrolls the row through them. Nothing is demoted to a value chip,
    * and the small slots ride under the slots they belong to — so a
    * panel of forty parameters is one instrument, not five pages of it.
+   *
+   * Strictly opt-in, and not a default for integrations: the standard
+   * panel is the fixed eight-column surface (overflow becomes value chips
+   * per the layout rules). Enable the strip only on Cri's direct request
+   * for that app.
    */
   scroll?: boolean;
+  /**
+   * View-owned status placed in the panel's top-left header slot. This is for
+   * a compact, live readout that belongs beside the panel (for example a
+   * waveform zoom), not for another row of page controls.
+   */
+  headerStart?: React.ReactNode;
+  /**
+   * Where the attached-function chips sit (see `MoveFunctionChips`): every
+   * function the app attaches renders as a chip that runs the same handler
+   * as the hardware key. `clock` (the default) puts the row immediately
+   * left of the volume readout, at the header's right end; `tracks` puts it
+   * after the track labels at the other end; `none` leaves the chips to the
+   * host (mount `MoveFunctionChips` yourself, or go without).
+   */
+  functionChips?: 'clock' | 'tracks' | 'none';
 }
 
 /** The Move's four track colours, in track order (Figma node 802:321). */
-export const MOVE_TRACK_COLORS = ['#4274f4', '#d83dff', '#ff4d07', '#52bd06'];
+/* The track hues now live with the rest of the Move's screen palette, matched
+   to the colours the hardware lights. Re-exported here because this is where
+   callers have always imported them from. */
+export { MOVE_TRACK_COLORS };
 
-/** The on-screen pad grid mirrors the Move grid's 4 rows (Figma 802:319);
- *  columns follow the occupied set, never the full 8. */
+/** The on-screen pad grid mirrors the Move grid's 4 rows (Figma 802:319). */
 const PAD_ROWS = 4;
+/** Even a sparse screen pad layout keeps enough columns to read as the Move,
+ * rather than turning two occupied columns into a tall button list. */
+const MIN_PAD_COLUMNS = 4;
 
 /** The slider track's inset from the dial slot's edges (Figma 802:767). */
 const DIAL_TRACK_INSET = 10;
@@ -89,6 +129,81 @@ const presetNavigatorOpen = () => {
 /** True while the colour editor's palette navigator is up — the wheel is
  *  browsing palettes, on the same terms as the preset navigator. */
 const palettePickerOpen = () => MoveColorStore.isPickerOpen();
+
+/**
+ * The list a search is running on, read as one shape whichever store owns
+ * it: its labels in row order, the row the wheel rests on, and the two
+ * things the search does to it — rest the wheel on a row (the next match,
+ * previewed exactly as a wheel turn is) and take a row (which ends the
+ * search). Null when the list has gone from under the search.
+ */
+interface SearchRows {
+  labels: string[];
+  cursor: number;
+  rest: (index: number) => void;
+  take: (index: number) => void;
+}
+function searchRows(view: MoveSearchView): SearchRows | null {
+  if (view.target === 'screen') {
+    const screen = MoveSurfaceStore.getState().screen;
+    if (!screen) return null;
+    return {
+      labels: screen.items.map(moveScreenRowLabel),
+      cursor: view.cursor,
+      rest: (index) => MoveSearchStore.setCursor(index),
+      take: (index) => { MoveSearchStore.close(); MoveSurfaceStore.selectScreen(index); },
+    };
+  }
+  if (view.target === 'presets') {
+    const preset = MovePresetStore.getView();
+    if (!preset || preset.phase === 'closing') return null;
+    const items = MovePresetStore.items(preset.panelId);
+    return {
+      labels: items.map((i) => i.label),
+      cursor: items.findIndex((i) => i.id === preset.cursor),
+      rest: (index) => MovePresetStore.rest(items[index].id),
+      take: (index) => { MoveSearchStore.close(); MovePresetStore.choose(items[index].id); },
+    };
+  }
+  if (!palettePickerOpen()) return null;
+  return {
+    labels: ['All colors', ...MOVE_COLOR_PALETTES.map((p) => p.name)],
+    cursor: MoveColorStore.getPickerCursor(),
+    rest: (index) => MoveColorStore.setPickerCursor(index),
+    take: (index) => { MoveSearchStore.close(); MoveColorStore.choosePicker(index); },
+  };
+}
+
+/** The rows the search's query keeps, by index into the list. */
+const searchKept = (rows: SearchRows, view: MoveSearchView) => moveSearchFilter(rows.labels, view.query);
+
+/** Walk the wheel by detents through the rows the query keeps. */
+function searchStep(view: MoveSearchView, delta: number) {
+  const rows = searchRows(view);
+  if (!rows || !delta) return;
+  const kept = searchKept(rows, view);
+  if (!kept.length) return;
+  const at = kept.indexOf(rows.cursor);
+  const next = kept[Math.max(0, Math.min(kept.length - 1, (at < 0 ? 0 : at) + delta))];
+  if (next !== rows.cursor) rows.rest(next);
+}
+
+/** Take the row the wheel rests on — only a row the query keeps. */
+function searchTake(view: MoveSearchView) {
+  const rows = searchRows(view);
+  if (rows && searchKept(rows, view).includes(rows.cursor)) rows.take(rows.cursor);
+}
+
+/** Type into the search: the rows narrow, and a wheel left on a row the
+ *  query dropped moves to the first one it keeps. */
+function searchType(query: string) {
+  MoveSearchStore.setQuery(query);
+  const view = MoveSearchStore.getView();
+  const rows = view && searchRows(view);
+  if (!view || !rows) return;
+  const kept = searchKept(rows, view);
+  if (kept.length && !kept.includes(rows.cursor)) rows.rest(kept[0]);
+}
 
 /**
  * A readout string with any `:` separators pulled out and rendered bold at
@@ -148,10 +263,20 @@ export const MOVE_JOG_CLICK_EVENT = 'move-tweakers:jog-click';
  *  release. An open preset navigator consumes them: holding Mute plays the
  *  pre-navigator sound to compare. Unconsumed, Mute stays the app's. */
 export const MOVE_MUTE_EVENT = 'move-tweakers:mute';
+/** In, cancelable: `{ shift }` — the Capture key held. The panel takes it
+ *  when a list has the wheel (the app's wheel list, an open navigator) and
+ *  opens a search on that list; unconsumed, the hold is the app's own
+ *  Capture action. Held again while searching, it closes the search. */
+export const MOVE_SEARCH_EVENT = 'move-tweakers:search';
 /** Out: `{ pageId, offset, columns, paths }` — where a scrolling page's
  *  window now sits, so the kit can point the hardware's dials at the same 8
  *  controls the screen is showing. */
 export const MOVE_STRIP_EVENT = 'move-tweakers:strip';
+/** Out: `{ panelId, open, pageId }` — the settings room: which panel it is,
+ *  whether it stands open, and the regular page to come back to. Re-announced
+ *  every second so a kit that binds late still learns to keep the room off
+ *  the track row; the kit steers the hardware in and out on `open` edges. */
+export const MOVE_SETTINGS_EVENT = 'move-tweakers:settings';
 
 /**
  * The Move's control surface, laid out to Cri's Figma spec (file
@@ -207,7 +332,7 @@ export const MOVE_STRIP_EVENT = 'move-tweakers:strip';
  * are the eight the dials are holding, their pads with them, so all of them
  * can be reached without a single one shrinking to a chip.
  */
-export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport', scroll = false }: MovePanelProps) {
+export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport', scroll = false, headerStart, settings, functionChips = 'clock' }: MovePanelProps) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [track, setTrack] = useState(0);
@@ -231,11 +356,16 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const [rampStop, setRampStop] = useState<Record<string, number>>({});
   const [hwHeld, setHwHeld] = useState<Record<string, boolean>>({});
   const [hwLatched, setHwLatched] = useState<Record<string, boolean>>({});
+  // A pointer on an app-owned pad lights immediately, before the host has
+  // handled the released gesture. This mirrors the physical pad's momentary
+  // feedback without inventing a latched state for an app action.
+  const [appHeld, setAppHeld] = useState<string | null>(null);
   // Screen-side value-chip substitution: a held chip peeks, a tapped chip latches.
   const [held, setHeld] = useState<{ col: number; meta: ControlMeta } | null>(null);
   const [latched, setLatched] = useState<Record<number, ControlMeta | undefined>>({});
   const holdStart = useRef(0);
   const [mounted, setMounted] = useState(false);
+  const pageTabsId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
   // The rail's drag anchor: pointer x, and the stop it started on.
   const [dotDrag, setDotDrag] = useState<{ x: number; stop: number } | null>(null);
@@ -274,10 +404,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // the NAMES change, not when the host hands over a fresh array. It is
   // serialized rather than joined: panel names have spaces in them.
   const onlyKey = only === undefined ? undefined : JSON.stringify(Array.isArray(only) ? only : [only]);
-  const read = useCallback(
-    () => TweakStore.selectPanels(onlyKey === undefined ? undefined : (JSON.parse(onlyKey) as string[])),
-    [onlyKey]
-  );
+  const read = useCallback(() => {
+    if (onlyKey === undefined) return TweakStore.selectPanels();
+    const requested = JSON.parse(onlyKey) as string[];
+    const registered = TweakStore.getPanels('panel');
+    // App pages are addressed by stable panel id. Names remain display copy:
+    // changing "snare" to "snare top" must not create a new hardware page.
+    // Name lookup stays as a compatibility path for existing integrations.
+    return requested
+      .map((key) => registered.find((panel) => panel.id === key || panel.name === key))
+      .filter((panel): panel is PanelConfig => panel !== undefined);
+  }, [onlyKey]);
 
   useEffect(() => {
     setMounted(true);
@@ -285,24 +422,95 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     return TweakStore.subscribeGlobal(() => setPanels(read()));
   }, [read]);
 
+  // The settings room: the named panels leave the page row and wait behind
+  // the Set Overview button, each one a room page of its own. The store only
+  // says whether the door is open; what is inside is decided here, by the
+  // prop. The key keeps identity stable when the host hands over fresh
+  // arrays, exactly like the panels selection above.
+  const settingsKey = settings === undefined ? undefined : JSON.stringify(Array.isArray(settings) ? settings : [settings]);
+  const settingsRooms = settingsKey === undefined
+    ? []
+    : (JSON.parse(settingsKey) as string[])
+        .map((key) => TweakStore.getPanels('panel').find((p) => p.id === key || p.name === key))
+        .filter((p): p is PanelConfig => p !== undefined);
+  const roomIds = settingsRooms.map((p) => p.id);
+  const settingsOpen = useSyncExternalStore(
+    useCallback((cb) => MoveSettingsView.subscribe(cb), []),
+    () => MoveSettingsView.isOpen(),
+    () => false
+  ) && settingsRooms.length > 0;
+
   // A scrolling page keeps every control at slot size in one long row; the
   // ordinary page is 8 slots wide and sends the overflow to value chips.
+  const pagePanels = roomIds.length ? panels.filter((p) => !roomIds.includes(p.id)) : panels;
   const pages = scroll
-    ? panels.filter((p) => p.kind === undefined).slice(0, MOVE_TRACKS).map(buildMoveStrip)
-    : buildMovePages(panels);
+    ? pagePanels.filter((p) => p.kind === undefined).slice(0, MOVE_TRACKS).map(buildMoveStrip)
+    : buildMovePages(pagePanels);
   // An open modulator-settings page takes the surface over; the track
   // buttons put a regular page back (and close the settings with it).
-  const modSettings = ModulationStore.getSettings();
+  // The settings room stands in front of even that: while it is open the
+  // modulator view (and its floating composer) waits underneath, untouched,
+  // and walking out of the room finds it exactly as it was left.
+  const underModSettings = ModulationStore.getSettings();
+  const modSettings = settingsOpen ? null : underModSettings;
   const settingsPanel = modSettings ? TweakStore.getPanel(modSettings.panelId) : undefined;
   const modLayout = settingsPanel ? ModulationStore.getSettingsLayout() : null;
+  // The room's pages show the way any page does — full slots on a scrolling
+  // panel, chips past eight otherwise — and the room keeps its own track
+  // cursor, completely separate from the app's. A modulator's settings page
+  // still wins while it is up: the thing in front of you owns the surface,
+  // and closing it lands back in the room.
+  const [roomTrack, setRoomTrack] = useState(0);
+  const roomPages = settingsOpen
+    ? (scroll ? settingsRooms.slice(0, MOVE_TRACKS).map(buildMoveStrip) : buildMovePages(settingsRooms))
+    : [];
+  const roomPage = roomPages[Math.min(roomTrack, Math.max(0, roomPages.length - 1))];
   const page = settingsPanel
     ? buildModMovePage(settingsPanel, modLayout)
-    : pages[Math.min(track, Math.max(0, pages.length - 1))];
+    : roomPage ?? pages[Math.min(track, Math.max(0, pages.length - 1))];
   const pageId = page?.panel.id;
+
+  // The Set Overview button (Shift + Step 1) is the settings room's door,
+  // attached for as long as a room is named — attaching is also what lights
+  // the label icon on the hardware's Shift layer. Back walks out while the
+  // door stands open; unmounting (or unnaming the room) closes it.
+  const roomKey = roomIds.join(' ');
+  useEffect(() => {
+    if (!roomKey) return;
+    const detach = MoveFunctions.attach('set_overview', () => MoveSettingsView.toggle(), { label: 'Settings' });
+    return () => {
+      detach();
+      MoveSettingsView.close();
+    };
+  }, [roomKey]);
+  useEffect(() => {
+    if (!settingsOpen) return;
+    return MoveFunctions.push('back', () => MoveSettingsView.close(), { label: 'Close', chip: false });
+  }, [settingsOpen]);
+
+  // Tell the kit about the room: its panels, whether the door stands open,
+  // which room page the panel is showing, and the page to come back to —
+  // the modulator view when one waits underneath, the regular page
+  // otherwise. Announced on every change and re-announced on the strip's
+  // beat, so a kit that binds late still keeps the room off the track row.
+  const regularPageId = underModSettings?.panelId
+    ?? pages[Math.min(track, Math.max(0, pages.length - 1))]?.panel.id;
+  const roomPageId = roomPage?.panel.id;
+  useEffect(() => {
+    if (!roomKey || typeof window === 'undefined') return;
+    const ids = roomKey.split(' ');
+    const announce = () => window.dispatchEvent(new CustomEvent(MOVE_SETTINGS_EVENT, {
+      detail: { panelIds: ids, open: settingsOpen, pageId: regularPageId, roomPageId },
+    }));
+    announce();
+    const timer = setInterval(announce, STRIP_REANNOUNCE_MS);
+    return () => clearInterval(timer);
+  }, [roomKey, settingsOpen, regularPageId, roomPageId]);
 
   // The strip's window. A modulator's settings page is the hardware's own
   // shape and never scrolls, so the wheel and the rail belong to the app's
-  // pages alone. The offset is a column, always the start of a control.
+  // pages (and the settings room) alone. The offset is a column, always the
+  // start of a control.
   const stripMode = scroll && !settingsPanel && !!page;
   const [offset, setOffset] = useState(0);
   const stripOffset = stripMode ? clampStripOffset(page, offset) : 0;
@@ -341,7 +549,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       if (PresetExplorationStore.getState()) { e.preventDefault(); PresetExplorationStore.jog(Number((e as CustomEvent).detail?.delta) || 0); return; }
       // An open colour editor keeps the strip still too: the wheel belongs
       // to its overlays (the palette list) while the editor is up.
-      if (e.defaultPrevented || presetNavigatorOpen() || MoveColorStore.getView() || !stripRef.current.on) return;
+      if (e.defaultPrevented || MoveSearchStore.isOpen() || presetNavigatorOpen() || MoveColorStore.getView() || !stripRef.current.on) return;
       // While the waveform editor floats, the wheel is its zoom — the strip
       // waits. The event rides on unconsumed, so the kit hands it there.
       if (MoveWaveformStore.wantsSteps()) return;
@@ -360,7 +568,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     if (!stripMode) return;
     const free = (['left', 'right'] as const).filter((name) => !MoveFunctions.list().includes(name));
     const off = free.map((name) =>
-      MoveFunctions.attach(name, () => scrollPage(name === 'right' ? 1 : -1), { label: name === 'right' ? 'Next 8' : 'Prev 8' })
+      MoveFunctions.attach(name, () => scrollPage(name === 'right' ? 1 : -1), { label: name === 'right' ? 'Next 8' : 'Prev 8', chip: false })
     );
     return () => { for (const detach of off) detach(); };
   }, [stripMode, scrollPage]);
@@ -378,10 +586,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     const onWheel = (e: WheelEvent) => {
       if (e.target instanceof Element && e.target.closest('.tweakers-exploration')) return;
       const exploring = !!PresetExplorationStore.getState();
+      const searching = MoveSearchStore.getView();
       const browsing = presetNavigatorOpen();
       const picking = palettePickerOpen();
       const editing = MoveWaveformStore.wantsSteps();
-      if (!exploring && !browsing && !picking && !editing && !stripRef.current.on) return;
+      if (!exploring && !searching && !browsing && !picking && !editing && !stripRef.current.on) return;
       const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
       if (!d) return;
       e.preventDefault();
@@ -389,10 +598,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       const steps = Math.trunc(wheelRest.current / WHEEL_SLOT_PX);
       if (!steps) return;
       wheelRest.current -= steps * WHEEL_SLOT_PX;
-      // The same wheel, the same rule as the hardware: while the navigator
-      // is up it walks the preset list, while the waveform editor floats it
-      // zooms (scroll up goes in), otherwise it moves the strip.
+      // The same wheel, the same rule as the hardware: a running search
+      // walks what the query kept, while the navigator is up it walks the
+      // preset list, while the waveform editor floats it zooms (scroll up
+      // goes in), otherwise it moves the strip.
       if (exploring) PresetExplorationStore.jog(steps);
+      else if (searching) searchStep(searching, steps);
       else if (browsing) MovePresetStore.scroll(steps);
       else if (picking) MoveColorStore.movePickerCursor(steps);
       else if (editing) MoveWaveformStore.zoom(-steps);
@@ -411,6 +622,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     if (!on || !pg) return;
     const pads = stripWindowPads(pg, at);
     const row = (cells: (ControlMeta | undefined)[]) => cells.map((meta) => meta?.path ?? null);
+    // The switch row can carry a tabs strip, and a strip's pads are not all
+    // the same thing: each says whether it is the name or which option it
+    // picks, so the bridge never has to re-derive the run for itself.
+    const switchRow = pads.toggles.map((meta, i) => {
+      if (!meta) return null;
+      const tab = moveTabCell(pg.toggles, at + i);
+      if (!tab) return meta.path;
+      return tab.head
+        ? { path: tab.meta.path, tab: true, head: true, label: tab.label }
+        : { path: tab.meta.path, tab: true, option: tab.option, label: tab.label };
+    });
     window.dispatchEvent(new CustomEvent(MOVE_STRIP_EVENT, {
       detail: {
         pageId: pg.panel.id,
@@ -419,7 +641,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
         paths: stripDialSlots(pg, at).map((meta) => meta?.path ?? null),
         // The small slots under that window, in hardware columns — without
         // them the pads under a scrolling page stay dark and dead.
-        pads: { toggles: row(pads.toggles), values: row(pads.values), actions: row(pads.actions) },
+        pads: { toggles: switchRow, values: row(pads.values), actions: row(pads.actions) },
       },
     }));
   }, []);
@@ -459,7 +681,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const colorOpenPanel = colorMeta && colorView ? colorView.panelId : null;
   useEffect(() => {
     if (!colorOpenPanel) return;
-    return MoveFunctions.push('menu', () => MoveColorStore.togglePicker(), { label: 'palettes' });
+    return MoveFunctions.push('menu', () => MoveColorStore.togglePicker(), { label: 'palettes', chip: false });
   }, [colorOpenPanel]);
   // Copy is the editor's too while it is open: it puts the colour itself on
   // the clipboard — HEX on a tap, HSL with Shift, OKLCH on a hold — instead
@@ -472,23 +694,23 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       const hex = String(TweakStore.getValue(view.panelId, view.path) ?? '');
       const text = hold ? copyOklch(hex) : shift ? copyHslOfHex(hex) : hex;
       navigator.clipboard?.writeText(text).catch(() => {});
-    }, { label: 'copy color' });
+    }, { label: 'copy color', chip: false });
   }, [colorOpenPanel]);
   const paletteScreen = colorMeta ? MoveColorStore.isPickerOpen() : false;
   useEffect(() => {
     if (!paletteScreen) return;
-    return MoveFunctions.push('back', () => MoveColorStore.closePicker(), { label: 'back' });
+    return MoveFunctions.push('back', () => MoveColorStore.closePicker(), { label: 'back', chip: false });
   }, [paletteScreen]);
   // The hardware wheel, while the palette navigator is open: turns walk the
   // list, the jog click locks the palette in — the preset navigator's terms.
   useEffect(() => {
     const onJog = (e: Event) => {
-      if (!palettePickerOpen()) return;
+      if (e.defaultPrevented || MoveSearchStore.isOpen() || !palettePickerOpen()) return;
       e.preventDefault();
       MoveColorStore.movePickerCursor(Number((e as CustomEvent).detail?.delta) || 0);
     };
     const onJogClick = (e: Event) => {
-      if (!palettePickerOpen()) return;
+      if (e.defaultPrevented || MoveSearchStore.isOpen() || !palettePickerOpen()) return;
       e.preventDefault();
       MoveColorStore.confirmPicker();
     };
@@ -517,7 +739,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       if (shift) MovePresetStore.beginSave(pageId);
       else if (hold) { MovePresetStore.cancel(); void PresetExplorationStore.open(pageId); }
       else MovePresetStore.toggle(pageId);
-    }, { label: 'presets' });
+    }, { label: 'presets', chip: false });
   }, [pageId]);
   useEffect(() => () => {
     if (MovePresetStore.getView()?.panelId === pageId) MovePresetStore.cancel();
@@ -530,7 +752,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const presetOpenPanel = presetScreen && presetScreen.phase !== 'closing' ? presetScreen.panelId : null;
   useEffect(() => {
     if (!presetOpenPanel) return;
-    return MoveFunctions.push('back', () => MovePresetStore.cancel(), { label: 'revert' });
+    return MoveFunctions.push('back', () => MovePresetStore.cancel(), { label: 'revert', chip: false });
   }, [presetOpenPanel]);
   // The hardware wheel, while the navigator is open: turns walk the list,
   // the jog click confirms. Mute's raw presses arrive here too: holding it
@@ -543,13 +765,13 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       return view && view.phase !== 'closing' ? view : null;
     };
     const onJog = (e: Event) => {
-      if (!openView()) return;
+      if (e.defaultPrevented || MoveSearchStore.isOpen() || !openView()) return;
       e.preventDefault();
       MovePresetStore.scroll(Number((e as CustomEvent).detail?.delta) || 0);
     };
     const onJogClick = (e: Event) => {
       if (PresetExplorationStore.getState()) { e.preventDefault(); PresetExplorationStore.toggleParent(); return; }
-      if (!openView()) return;
+      if (e.defaultPrevented || MoveSearchStore.isOpen() || !openView()) return;
       e.preventDefault();
       MovePresetStore.confirm();
     };
@@ -576,6 +798,68 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       window.removeEventListener(MOVE_MUTE_EVENT, onMute);
     };
   }, []);
+
+  // Search, behind a held Capture key: it opens on whichever list has the
+  // wheel right now — the palette navigator, then the preset navigator, then
+  // the app's own wheel list — and while it runs the wheel walks only the
+  // rows the typed query keeps. The kit's event is cancelable: taken here,
+  // the hold never reaches the app's Capture action; with no list to search
+  // it rides on untouched. A second hold closes the search.
+  useSyncExternalStore(MoveSearchStore.subscribe, MoveSearchStore.getVersion, () => 0);
+  const search = MoveSearchStore.getView();
+  // Whether the wheel list is on screen is the render's decision (the
+  // settings room and a modulator's page both hide it); the listener reads
+  // it from here.
+  const screenShown = useRef(false);
+  useEffect(() => {
+    const onSearch = (e: Event) => {
+      if (e.defaultPrevented) return;
+      if (MoveSearchStore.isOpen()) { e.preventDefault(); MoveSearchStore.close(); return; }
+      const target: MoveSearchTarget | null = palettePickerOpen() ? 'palette'
+        : presetNavigatorOpen() ? 'presets'
+        : screenShown.current ? 'screen'
+        : null;
+      if (!target) return;
+      e.preventDefault();
+      MoveSearchStore.open(target, target === 'screen' ? MoveSurfaceStore.getState().screen?.index ?? 0 : 0);
+    };
+    window.addEventListener(MOVE_SEARCH_EVENT, onSearch);
+    return () => window.removeEventListener(MOVE_SEARCH_EVENT, onSearch);
+  }, []);
+  // The wheel and its click, while a search runs. Registration order does
+  // not decide who wins: the search takes every turn while it is open, and
+  // every other reader of the wheel — the navigators, the strip, a host's
+  // own list — yields on MoveSearchStore.isOpen() rather than on the
+  // event's consumed flag, so a turn is never walked twice whoever hears it
+  // first. (Capture phase only for good measure; it does not order same-
+  // target listeners reliably.)
+  useEffect(() => {
+    const onJog = (e: Event) => {
+      const view = MoveSearchStore.getView();
+      if (!view) return;
+      e.preventDefault();
+      searchStep(view, Math.round(Number((e as CustomEvent).detail?.delta) || 0));
+    };
+    const onJogClick = (e: Event) => {
+      const view = MoveSearchStore.getView();
+      if (!view) return;
+      e.preventDefault();
+      searchTake(view);
+    };
+    window.addEventListener(MOVE_JOG_EVENT, onJog, { capture: true });
+    window.addEventListener(MOVE_JOG_CLICK_EVENT, onJogClick, { capture: true });
+    return () => {
+      window.removeEventListener(MOVE_JOG_EVENT, onJog, { capture: true });
+      window.removeEventListener(MOVE_JOG_CLICK_EVENT, onJogClick, { capture: true });
+    };
+  }, []);
+  // Back closes the search and nothing else — the list underneath stays,
+  // and the button goes back to whoever held it (a navigator's own Back).
+  const searchOpen = !!search;
+  useEffect(() => {
+    if (!searchOpen) return;
+    return MoveFunctions.push('back', () => MoveSearchStore.close(), { label: 'end search', chip: false });
+  }, [searchOpen]);
 
   // A curve modulator's page brings its composition with it: the composer
   // floats above the panel, and its selected clip is what the shape dials
@@ -650,7 +934,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // just-opened settings view before the hardware gets there.
   const pagesRef = useRef(pages);
   pagesRef.current = pages;
+  const roomIdsRef = useRef(roomIds);
+  roomIdsRef.current = roomIds;
   const sawSettings = useRef(false);
+  const sawRoom = useRef(false);
   useEffect(() => {
     const onPage = (e: Event) => {
       const id = (e as CustomEvent).detail?.pageId;
@@ -658,9 +945,29 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
         sawSettings.current = true;
         return;
       }
+      // The settings room, before the modulator-exit check below: the room
+      // is a detour, and its frames must not read as "left the modulator" —
+      // that closed the view waiting underneath, reshuffled the page list
+      // mid-steer, and every later cycle landed on shifted indexes. Frames
+      // showing a room page mark the room seen and steer the room's own
+      // track cursor — a hardware track press inside the room switches room
+      // pages, never the app's. Frames from before the room has shown must
+      // not close a door that just opened.
+      const roomIndex = id === undefined ? -1 : roomIdsRef.current.indexOf(id);
+      if (roomIndex >= 0) {
+        if (MoveSettingsView.isOpen()) {
+          sawRoom.current = true;
+          setRoomTrack(roomIndex);
+        }
+        return;
+      }
       if (sawSettings.current) {
         sawSettings.current = false;
         ModulationStore.closeSettings();
+      }
+      if (sawRoom.current) {
+        sawRoom.current = false;
+        MoveSettingsView.close();
       }
       const i = pagesRef.current.findIndex((pg) => pg.panel.id === id);
       if (i >= 0) setTrack(i);
@@ -674,6 +981,24 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     setHeld(null);
     setLatched({});
   }, [pageId]);
+
+  // An app that claimed the bottom pad rows takes them over — movePadRows
+  // shuffles the control rows around the claim, exactly as the hardware does.
+  // A modulator's settings page takes the surface over, list included: the
+  // page IS what the wheel is walking while it is open. The settings room
+  // takes it all the same way — the wheel screen, the claimed rows and the
+  // step circles belong to the view underneath, and drawing them beside the
+  // room's own eight slots also overflows the panel.
+  const screen = settingsPanel || settingsOpen || explorationOpen ? null : surface.screen;
+  // A search outlives nothing: the list it ran on going away takes it too.
+  const searchTarget = search?.target ?? null;
+  const screenSearch = searchTarget === 'screen' && screen ? search : null;
+  const presetSearch = searchTarget === 'presets' && presetOpenPanel ? search : null;
+  const paletteSearch = searchTarget === 'palette' && paletteScreen ? search : null;
+  useEffect(() => {
+    screenShown.current = !!screen;
+    if (searchTarget && !screenSearch && !presetSearch && !paletteSearch) MoveSearchStore.close();
+  });
 
   if (!mounted || typeof window === 'undefined' || pages.length === 0 || !page || !values) return null;
 
@@ -957,16 +1282,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     }));
   };
 
-  // An app that claimed the bottom pad rows takes them over — movePadRows
-  // shuffles the control rows around the claim, exactly as the hardware does.
-  // A modulator's settings page takes the surface over, list included: the
-  // page IS what the wheel is walking while it is open.
-  const screen = settingsPanel || explorationOpen ? null : surface.screen;
-  const appRows = surface.rows;
+  // The claimed pad rows, on the same terms as the wheel screen above: the
+  // settings room hides them with it.
+  const appRows = (settingsOpen || explorationOpen) ? 0 : surface.rows;
   const padRows = movePadRows(page, appRows);
   const appRowAt = (row: number) => moveAppPadRow(row, appRows);
   const padAt = (x: number, y: 0 | 1): MovePadCell | undefined =>
     surface.pads.find((p) => p.x === x && p.y === y);
+  const shownPadRows = Array.from({ length: PAD_ROWS }, (_, row) => row)
+    .filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0));
+  // The claimed rows draw as one block, anchored on the topmost of them.
+  const firstAppScreenRow = shownPadRows.find((row) => appRowAt(row) !== null) ?? -1;
 
   // Only occupied columns render — a column with a dial, a toggle chip, or a
   // value chip at its index. Indices stay the hardware knob numbers (hidden
@@ -998,6 +1324,28 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const clusterCols = explorationOpen ? MOVE_DIALS : stripMode
     ? Math.min(MOVE_DIALS, visibleCols.length) || MOVE_DIALS
     : visibleCols.length;
+  // Pads are the Move's own 8-column matrix, not a continuation of however
+  // many parameter dials happen to be above them. App-owned rows therefore
+  // keep all eight physical coordinates; sparse kit rows keep at least four
+  // columns, and extend through their furthest occupied hardware column.
+  const kitPadCols = Math.max(0, ...padRows.map((row) => row.length));
+  const padGridCols = shownPadRows.length === 0
+    ? 0
+    : appRows > 0
+      ? MOVE_PADS
+      : Math.min(MOVE_PADS, Math.max(MIN_PAD_COLUMNS, clusterCols, kitPadCols));
+  const surfaceCols = Math.max(clusterCols, padGridCols);
+  const panelIdForTabs = `${pageTabsId}-panel`;
+  const pageTabIndex = pages.indexOf(page);
+  const selectPage = (index: number) => {
+    const next = pages[index];
+    if (!next) return;
+    ModulationStore.closeSettings();
+    MoveSettingsView.close();
+    setTrack(index);
+    // Tell the hardware side; the kit relays it when the bridge is up.
+    window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: next.panel.id } }));
+  };
   // Where the window sits in the whole set — counted in controls, since that
   // is what the wheel moves by and what a person is looking for.
   const stripStops = stripMode ? stripOffsets(page) : [];
@@ -1005,19 +1353,24 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const stripFrom = stripMode ? stripSlotIndex(page, stripOffset) : 0;
   const stripTo = stripMode ? stripSlotIndex(page, stripOffset + MOVE_DIALS) : 0;
 
-  // The header cluster: the volume-dial readout, right-aligned. (Action
-  // buttons live in the views now — see MoveActionButton.) Nothing
-  // registered = no cluster, header unchanged.
+  // The header cluster: the attached-function chips (in their default seat,
+  // immediately left of the readout), then the volume-dial readout,
+  // right-aligned. (View-placed action pills remain MoveActionButton's
+  // business.) Nothing registered and nothing attached = no cluster, header
+  // unchanged.
   const volumeReading = liveValue ?? volume?.value;
-  const headerCluster = volume && (
+  const headerCluster = (volume || functionChips === 'clock') && (
     <div className="tweakers-move-actions">
-      <div className="tweakers-move-volume">
-        <span className="tweakers-move-volume-tick" style={{ background: MOVE_TRACK_COLORS[0] }} />
-        {volume.label && volumeReading != null && (
-          <span className="tweakers-move-volume-label">{volume.label}</span>
-        )}
-        <span className="tweakers-move-volume-value">{boldColons(volumeReading ?? volume.label ?? '')}</span>
-      </div>
+      {functionChips === 'clock' && <MoveFunctionChips />}
+      {volume && (
+        <div className="tweakers-move-volume">
+          <span className="tweakers-move-volume-tick" style={{ background: MOVE_TRACK_COLORS[0] }} />
+          {volume.label && volumeReading != null && (
+            <span className="tweakers-move-volume-label">{volume.label}</span>
+          )}
+          <span className="tweakers-move-volume-value">{boldColons(volumeReading ?? volume.label ?? '')}</span>
+        </div>
+      )}
     </div>
   );
 
@@ -1025,7 +1378,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     <div className="tweakers-root tweakers-move-root" data-theme={theme} data-dock={dock}>
       {/* While a composer floats above it the whole instrument comes forward,
           over the app's own panels — you are working in it. */}
-      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-overlay={explorationOpen || composition || audioWave != null || color || presetSave ? true : undefined}>
+      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-settings={settingsOpen || undefined} data-overlay={explorationOpen || composition || audioWave != null || color || presetSave ? true : undefined}>
         {!explorationOpen && colorMeta && <MoveColorDisplay panelId={page.panel.id} meta={colorMeta} anchor={panelRef} theme={theme} />}
         <PresetExploration />
         {presetSave && <MovePresetSaveInput suggested={presetSave.suggested} />}
@@ -1043,6 +1396,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
           className="tweakers-move-inner"
           style={{
             '--move-cols': clusterCols,
+            '--move-surface-cols': surfaceCols,
             // The header row spans exactly what the controls row shows: the
             // dial cluster plus, when a wheel screen stands beside it, the
             // screen and its gap — so the page name sits on the top-left
@@ -1063,73 +1417,146 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               <MoveAudioZoom />
             ) : (
             <div className="tweakers-move-tracks-group">
-              {pages.length > 1 && pages.map((pg, i) => (
-                <button
-                  key={pg.panel.id}
-                  className="tweakers-move-track"
-                  data-active={pg === page}
-                  onClick={() => {
-                    ModulationStore.closeSettings();
-                    setTrack(i);
-                    // Tell the hardware side; the kit relays it when the bridge is up.
-                    window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
-                  }}
-                >
-                  <span className="tweakers-move-track-marker" style={{ background: MOVE_TRACK_COLORS[i] }} />
-                  <span className="tweakers-move-track-label">{pg.panel.name}</span>
-                </button>
-              ))}
+              {/* The settings room's name plate: the marker blinks for as
+                  long as the room is open — the same pulse the hardware's
+                  step icon carries — so the inverted surface names itself.
+                  A room of several pages carries its own tab row, in place
+                  of the app's: the two rows are completely separate, on
+                  screen as on the track buttons. */}
+              {settingsOpen && (
+                <div className="tweakers-move-settings-title">
+                  <span className="tweakers-move-settings-blink" />
+                  {roomPages.length > 1 ? (
+                    <div className="tweakers-move-pages" role="tablist" aria-label="Settings pages">
+                      {roomPages.map((pg, i) => (
+                        <button
+                          key={pg.panel.id}
+                          type="button"
+                          role="tab"
+                          className="tweakers-move-track"
+                          data-active={pg === page}
+                          aria-selected={pg === page}
+                          tabIndex={pg === page ? 0 : -1}
+                          onClick={() => {
+                            setRoomTrack(i);
+                            window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
+                          }}
+                        >
+                          <span className="tweakers-move-track-marker" style={{ background: MOVE_TRACK_COLORS[i] }} />
+                          <span className="tweakers-move-track-label">{pg.panel.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="tweakers-move-track-label">{page.panel.name}</span>
+                  )}
+                </div>
+              )}
+              {!settingsOpen && pages.length > 1 && (
+                <div className="tweakers-move-pages" role="tablist" aria-label="Move pages">
+                  {pages.map((pg, i) => (
+                    <button
+                      key={pg.panel.id}
+                      id={`${pageTabsId}-tab-${i}`}
+                      type="button"
+                      role="tab"
+                      className="tweakers-move-track"
+                      data-active={pg === page}
+                      aria-selected={pg === page}
+                      aria-controls={panelIdForTabs}
+                      tabIndex={pg === page ? 0 : -1}
+                      onClick={() => selectPage(i)}
+                      onKeyDown={(event) => {
+                        const last = pages.length - 1;
+                        const next = event.key === 'ArrowRight' ? (i + 1) % pages.length
+                          : event.key === 'ArrowLeft' ? (i - 1 + pages.length) % pages.length
+                          : event.key === 'Home' ? 0
+                          : event.key === 'End' ? last
+                          : -1;
+                        if (next < 0) return;
+                        event.preventDefault();
+                        selectPage(next);
+                        event.currentTarget.parentElement
+                          ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]
+                          ?.focus();
+                      }}
+                    >
+                      <span className="tweakers-move-track-marker" style={{ background: MOVE_TRACK_COLORS[i] }} />
+                      <span className="tweakers-move-track-label">{pg.panel.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {functionChips === 'tracks' && <MoveFunctionChips />}
+              {headerStart && <div className="tweakers-move-header-start">{headerStart}</div>}
             </div>
             )}
             {/* The step buttons, centred between the track labels and the
                 volume readout — one circle each. Normally the modulation
                 slots; an app that claimed the row paints them itself, and
-                its picture wins. */}
+                its picture wins. The settings room shows neither — master
+                settings are no place to reach for a modulator. */}
             <div className="tweakers-move-mods">
-              {color && colorMeta
+              {settingsOpen
+                ? null
+                : color && colorMeta
                 ? <MoveColorSteps color={color} disabled={TweakStore.isDisabled(page.panel.id, colorMeta.path)} />
-                : surface.steps
-                ? surface.steps.map((s) => (
-                    <span key={s.step} className="tweakers-move-mod" title={`step ${s.step + 1}`}>
-                      <span
-                        className="tweakers-move-mod-dot"
-                        style={{ background: s.color ?? 'var(--move-text)', opacity: s.lit ? 1 : 0.25 }}
-                      />
-                    </span>
-                  ))
-                : ModulationStore.getSlots().map((slot) => (
+                : surface.steps === null
+                ? ModulationStore.getSlots().map((slot) => (
                     <MoveModCircle key={slot.index} slot={slot} />
-                  ))}
+                  ))
+                : null}
             </div>
             {audioWave != null ? <MoveAudioTransport index={audioWave} /> : headerCluster}
           </div>
 
-          <div className="tweakers-move-controls">
+          <div
+            id={pages.length > 1 && pageTabIndex >= 0 ? panelIdForTabs : undefined}
+            className="tweakers-move-controls"
+            role={pages.length > 1 && pageTabIndex >= 0 ? 'tabpanel' : undefined}
+            aria-labelledby={pages.length > 1 && pageTabIndex >= 0 ? `${pageTabsId}-tab-${pageTabIndex}` : undefined}
+          >
           {/* The app's own list, beside the slots: what the wheel is walking,
               so the page shows the rows and the selection without a glance at
               the hardware. A click is selection intent — the host owns what
               the value means, exactly as it does for a wheel turn. */}
           {screen && (
-            <div className="tweakers-move-wheel-screen" role="group" aria-label={screen.title ?? 'Wheel selection'}>
+            <div className="tweakers-move-wheel-screen" role="group" aria-label={screen.title ?? 'Wheel selection'} data-search={screenSearch ? true : undefined}>
+              {screenSearch && <MoveSearchBar view={screenSearch} />}
               <ListScreen
-                items={screen.items.map((row, index) => ({
-                  value: String(index),
-                  label: moveScreenRowLabel(row),
-                  ...(typeof row === 'string' ? {} : {
-                    ...(row.detail ? { detail: row.detail } : {}),
-                    ...(row.checked === undefined ? {} : { checked: row.checked }),
-                  }),
-                }))}
-                value={String(screen.index)}
+                items={searchedRows(
+                  screen.items.map((row, index) => ({
+                    value: String(index),
+                    label: moveScreenRowLabel(row),
+                    ...(typeof row === 'string' ? {} : {
+                      ...(row.detail ? { detail: row.detail } : {}),
+                      ...(row.checked === undefined ? {} : { checked: row.checked }),
+                    }),
+                  })),
+                  screenSearch
+                )}
+                value={String(screenSearch ? screenSearch.cursor : screen.index)}
                 follow="center"
-                onSelect={(value) => MoveSurfaceStore.selectScreen(Number(value))}
+                onSelect={(value) => {
+                  if (!value) return;
+                  if (screenSearch) MoveSearchStore.close();
+                  MoveSurfaceStore.selectScreen(Number(value));
+                }}
               />
             </div>
           )}
           {explorationOpen && <PresetExplorationSlots />}
-          {visibleCols.length > 0 && <div style={explorationOpen ? { display: 'none' } : undefined} className="tweakers-move-grid" data-presets={presetScreen?.phase === 'open' || paletteScreen || undefined}>
-            {presetScreen && <MovePresetScreen view={presetScreen} />}
-            {paletteScreen && <MovePaletteScreen />}
+          {(visibleCols.length > 0 || shownPadRows.length > 0) && <div
+            style={explorationOpen ? { display: 'none' } : undefined} className="tweakers-move-grid"
+            data-presets={presetScreen?.phase === 'open' || paletteScreen || undefined}
+            data-pad-columns={padGridCols || undefined}
+          >
+            {presetScreen && <MovePresetScreen view={presetScreen} search={presetSearch} />}
+            {paletteScreen && (
+              <MovePaletteScreen kept={paletteSearch ? moveSearchFilter(['All colors', ...MOVE_COLOR_PALETTES.map((p) => p.name)], paletteSearch.query) : null}>
+                {paletteSearch && <MoveSearchBar view={paletteSearch} />}
+              </MovePaletteScreen>
+            )}
             {/* The window on the strip: the row is as long as the page has
                 slots, and this clips it to the eight the dials hold. It clips
                 sideways only — a touched option list still grows up out of
@@ -1715,16 +2142,44 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 their place, but the panel never ends on dead rows. Columns
                 collapse the same way: cells render only for visible columns,
                 blank pads filling the gaps to keep the grid rectangular. */}
-            {color && colorMeta ? <MoveOpacityPads color={color} disabled={TweakStore.isDisabled(page.panel.id, colorMeta.path)} /> : Array.from({ length: PAD_ROWS }, (_, row) => row)
-              .filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0))
-              .map((row) => (
-                <div key={row} className="tweakers-move-pads">
+            {color && colorMeta ? <MoveOpacityPads color={color} disabled={TweakStore.isDisabled(page.panel.id, colorMeta.path)} /> : shownPadRows
+              .map((row) => {
+                // The app's reserved rows are one instrument, not sixteen
+                // controls: what those pads mean is the app's business and
+                // only the app can say it. So the whole claimed area draws as
+                // a single slot carrying that sentence, once — the rows after
+                // the first fold into it.
+                if (appRowAt(row) !== null) {
+                  if (row > firstAppScreenRow) return null;
+                  return (
+                    <div
+                      key="app-rows"
+                      className="tweakers-move-app-row"
+                      data-rows={appRows}
+                      onPointerDown={(e) => {
+                        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                      }}
+                    >
+                      <span className="tweakers-move-app-row-label">
+                        {surface.padsLabel ?? 'the app’s pads'}
+                      </span>
+                    </div>
+                  );
+                }
+                return (
+                <div
+                  key={row}
+                  className="tweakers-move-pads"
+                  data-pad-row={row}
+                  data-pad-columns={stripMode ? page.dials.length : padGridCols}
+                  style={{ '--move-pad-cols': stripMode ? page.dials.length : padGridCols } as React.CSSProperties}
+                >
                   {/* An app-claimed row spans the whole hardware row — its
                       pads are the app's own set of eight, not echoes of the
                       dial columns above. Kit rows keep the dial columns. */}
-                  {(appRowAt(row) !== null
-                    ? Array.from({ length: MOVE_PADS }, (_, i) => i)
-                    : visibleCols
+                  {(stripMode
+                    ? visibleCols
+                    : Array.from({ length: padGridCols }, (_, i) => i)
                   ).map((col) => {
                     // A claimed row is the app's: it paints these, we only show them.
                     const appRow = appRowAt(row);
@@ -1736,9 +2191,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       return (
                         <button
                           key={`app-${col}`}
+                          type="button"
                           className="tweakers-move-pad"
                           data-kind="app"
-                          data-on={cell.lit || undefined}
+                          data-on={cell.lit || appHeld === `${appRow}:${col}` || undefined}
+                          data-held={appHeld === `${appRow}:${col}` || undefined}
+                          onPointerDown={(e) => {
+                            try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                            setAppHeld(`${appRow}:${col}`);
+                          }}
+                          onPointerUp={() => setAppHeld(null)}
+                          onPointerCancel={() => setAppHeld(null)}
                           onClick={() => MoveSurfaceStore.press(col, appRow)}
                         >
                           <MovePadAppBody label={cell.label} color={cell.color} />
@@ -1746,6 +2209,50 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       );
                     }
                     const meta = padRows[row][col];
+                    // A tabs strip renders ONCE, out of the first pad of its
+                    // run; the rest of the run yields to its span, the way
+                    // the filter's second column yields to its picture. The
+                    // options are real buttons over the drawing — the strip's
+                    // only gesture is a tap, and it belongs to the panel.
+                    if (meta && isMoveTabs(meta)) {
+                      if (isPadSpanContinuation(padRows[row], col)) return null;
+                      const span = padSpan(meta);
+                      const named = isNamedTabs(meta);
+                      const options = meta.options ?? [];
+                      const active = enumIndex(meta, values[meta.path]);
+                      return (
+                        <div
+                          key={meta.path}
+                          className="tweakers-move-tabs"
+                          data-kind="tabs"
+                          style={{ gridColumn: `span ${span}`, '--move-tabs-cols': span } as React.CSSProperties}
+                        >
+                          <MovePadTabsBody
+                            name={named ? meta.label : null}
+                            options={options}
+                            activeIdx={active}
+                          />
+                          <div className="tweakers-move-tab-zones" role="tablist" aria-label={meta.label}>
+                            {options.map((opt, i) => (
+                              <button
+                                key={enumOptionValue(opt as never)}
+                                type="button"
+                                role="tab"
+                                className="tweakers-move-tab-zone"
+                                style={{ gridColumnStart: (named ? 2 : 1) + i }}
+                                aria-selected={i === active}
+                                disabled={TweakStore.isDisabled(page.panel.id, meta.path)}
+                                onClick={() => TweakStore.updateValue(
+                                  page.panel.id, meta.path, enumOptionValue(opt as never)
+                                )}
+                              >
+                                {enumOptionLabel(opt as never)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
                     // The envelope's bend pads: the free toggle-row cell
                     // under each ramp column. Hold the pad and drag up or
                     // down to bend the ramp above it — the joint handle
@@ -1878,7 +2385,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     );
                   })}
                 </div>
-              ))}
+                );
+              })}
             </div>
             </div>
 
@@ -2050,9 +2558,9 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
       if (slot) ModulationStore.updateSlotParams(index, { [path]: !slot.params[path] });
     };
     const releases = [
-      MoveFunctions.push('play', toggle('playing'), { label: 'Play' }),
-      MoveFunctions.push('loop', toggle('loopOn'), { label: 'Loop' }),
-      MoveFunctions.push('back', () => ModulationStore.closeSettings(), { label: 'Close' }),
+      MoveFunctions.push('play', toggle('playing'), { label: 'Play', chip: false }),
+      MoveFunctions.push('loop', toggle('loopOn'), { label: 'Loop', chip: false }),
+      MoveFunctions.push('back', () => ModulationStore.closeSettings(), { label: 'Close', chip: false }),
     ];
     return () => releases.forEach((release) => release());
   }, [index]);
@@ -2062,11 +2570,11 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
   // lights. Whatever the app had on the surface comes back on close.
   useEffect(() => {
     const prev = MoveSurfaceStore.getState();
-    MoveSurfaceStore.claimRows(1);
-    MoveSurfaceStore.setPads(
+    MoveSurfaceStore.setPadRows(1,
       Array.from({ length: MOVE_WAVEFORM_PADS }, (_, x) => ({
         x, y: 0 as const, label: `${x + 1}`, color: modColor(index),
-      }))
+      })),
+      'tap to jump the playhead · hold to loop that part'
     );
     const paintSteps = () => {
       const lit = new Set(MoveWaveformStore.loopSteps());
@@ -2084,8 +2592,7 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
     return () => {
       offView();
       offPress();
-      MoveSurfaceStore.claimRows(prev.rows);
-      MoveSurfaceStore.setPads(prev.pads);
+      MoveSurfaceStore.setPadRows(prev.rows, prev.pads, prev.padsLabel);
       MoveSurfaceStore.setSteps(prev.steps);
     };
   }, [index]);
@@ -2242,10 +2749,10 @@ function MoveAudioTransport({ index }: { index: number }) {
  * list is not what's sounding). The confirmed row reads in the enter-pill
  * green while the screen lingers, then it dismisses itself.
  */
-function MovePresetScreen({ view }: { view: MovePresetView }) {
+function MovePresetScreen({ view, search }: { view: MovePresetView; search: MoveSearchView | null }) {
   const items = MovePresetStore.items(view.panelId);
   const rows = items.length
-    ? items.map((i) => ({ value: i.id, label: i.label }))
+    ? searchedRows(items.map((i) => ({ value: i.id, label: i.label })), search)
     : [{ value: '', label: 'No presets', muted: true }];
   return (
     <div
@@ -2253,15 +2760,72 @@ function MovePresetScreen({ view }: { view: MovePresetView }) {
       data-open={view.phase === 'open' || undefined}
       data-chosen={view.chosen ? true : undefined}
       data-comparing={view.comparing || undefined}
+      data-search={search ? true : undefined}
       onWheel={(e) => {
         e.preventDefault();
-        MovePresetStore.scroll(e.deltaY > 0 ? 1 : -1);
+        // A running search walks its own rows — the panel's wheel handler
+        // has it, so this must not step the full list underneath.
+        if (!search) MovePresetStore.scroll(e.deltaY > 0 ? 1 : -1);
       }}
     >
+      {search && <MoveSearchBar view={search} />}
       <ListScreen
         items={rows}
         value={view.chosen ?? view.cursor ?? undefined}
-        onSelect={(id) => { if (id) MovePresetStore.choose(id); }}
+        onSelect={(id) => {
+          if (!id) return;
+          if (search) MoveSearchStore.close();
+          MovePresetStore.choose(id);
+        }}
+      />
+    </div>
+  );
+}
+
+/** A list's rows narrowed to what the search keeps — or the one muted row
+ *  that says nothing matched, so the screen never reads as empty. No search,
+ *  the rows as they were. */
+function searchedRows<T extends { value: string; label: string }>(rows: T[], search: MoveSearchView | null): (T | { value: string; label: string; muted: true })[] {
+  if (!search) return rows;
+  const kept = moveSearchFilter(rows.map((r) => r.label), search.query);
+  return kept.length ? kept.map((i) => rows[i]) : [{ value: '', label: 'No matches', muted: true }];
+}
+
+/**
+ * The search's own line, at the top of the list it narrows: the magnifier
+ * and the query as it is typed. The computer keyboard is the only keyboard
+ * here — the field takes focus as it opens, Enter takes the row the wheel
+ * rests on, the arrows walk it, Escape ends the search. Losing focus does
+ * not close it: a click on a row is a take, and it must land on the rows the
+ * query kept.
+ */
+function MoveSearchBar({ view }: { view: MoveSearchView }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { inputRef.current?.focus(); }, []);
+  return (
+    <div className="tweakers-move-search" role="search">
+      <svg className="tweakers-move-search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d={ICON_SEARCH} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <input
+        ref={inputRef}
+        className="tweakers-move-search-input"
+        type="text"
+        value={view.query}
+        placeholder="Search"
+        aria-label="Search the list"
+        spellCheck={false}
+        autoComplete="off"
+        onChange={(e) => searchType(e.currentTarget.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') searchTake(view);
+          else if (e.key === 'Escape') MoveSearchStore.close();
+          else if (e.key === 'ArrowDown') searchStep(view, 1);
+          else if (e.key === 'ArrowUp') searchStep(view, -1);
+          else return;
+          e.preventDefault();
+          e.stopPropagation();
+        }}
       />
     </div>
   );
@@ -2369,6 +2933,8 @@ function MoveWavePreview({ index }: { index: number }) {
  * step button, with the hardware step's gestures: a tap with a control
  * armed (just touched) wires it on or off; a tap with nothing armed opens
  * the modulator's settings page (tap again to close); a hold opens it too.
+ * A LONG press deletes the modulator — slot, wires, and its settings page
+ * when it was the open one — and never also fires the tap.
  */
 function MoveModCircle({ slot }: { slot: ModulationSlot }) {
   const dotRef = useRef<HTMLSpanElement>(null);
@@ -2394,7 +2960,12 @@ function MoveModCircle({ slot }: { slot: ModulationSlot }) {
         pressAt.current = Date.now();
       }}
       onPointerUp={() => {
-        const tapped = Date.now() - pressAt.current < TAP_MS;
+        const held = Date.now() - pressAt.current;
+        if (held >= LONG_PRESS_MS) {
+          ModulationStore.removeSlot(slot.index);
+          return;
+        }
+        const tapped = held < TAP_MS;
         if (tapped && ModulationStore.assignFromStep(slot.index).action !== 'none') return;
         const open = ModulationStore.getSettings();
         if (tapped && open && open.index === slot.index) ModulationStore.closeSettings();

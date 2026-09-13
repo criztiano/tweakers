@@ -1060,6 +1060,9 @@ var ModulationStoreClass = class {
       slot,
       amount: clamp2(Number(amount) || 0, 0, 1)
     });
+    if (this.touched && this.touched.panelId === panelId && this.touched.path === path) {
+      this.touched.used = true;
+    }
     this.changed();
     return true;
   }
@@ -1082,9 +1085,21 @@ var ModulationStoreClass = class {
     this.changed();
   }
   /* ── the assignment gesture ───────────────────────────────────────── */
-  /** A finger on a control — panel pointer, hardware knob. Arms assignment. */
-  noteTouch(panelId, path) {
-    this.touched = { panelId, path, at: Date.now() };
+  /**
+   * A finger on a control — panel pointer, hardware knob. Arms assignment.
+   *
+   * `sustain` marks the repeats of one continuing touch (the kit's ~10 Hz
+   * state frames re-note a finger resting on a knob): it keeps the arm
+   * fresh without re-arming a control whose gesture was already spent —
+   * only a fresh touch re-arms. The settings page's own controls never arm:
+   * they cannot take a modulation, and a stale arm from them is what made
+   * creating new slots impossible while a settings view stood open.
+   */
+  noteTouch(panelId, path, sustain = false) {
+    if (panelId === MOD_SETTINGS_PANEL) return;
+    const t = this.touched;
+    const continued = sustain && t !== null && t.panelId === panelId && t.path === path;
+    this.touched = { panelId, path, at: Date.now(), used: continued ? t.used : false };
   }
   /**
    * A step-button press (hardware step or on-screen circle): with a control
@@ -1093,10 +1108,11 @@ var ModulationStoreClass = class {
    */
   assignFromStep(index) {
     const t = this.touched;
-    const armed = t && Date.now() - t.at < MOD_TOUCH_GRACE_MS;
+    const armed = t && !t.used && Date.now() - t.at < MOD_TOUCH_GRACE_MS;
     if (!armed) return { action: "none", slot: this.getSlot(index) };
     const existing = this.assignments.get(modKey(t.panelId, t.path));
     if (this.slots[index] && existing?.slot === index) {
+      t.used = true;
       this.unassign(t.panelId, t.path);
       return { action: "unassigned", slot: this.getSlot(index) };
     }

@@ -53,6 +53,29 @@ describe('slots', () => {
     expect(ModulationStore.getAssignment(id, 'speed')).toBeUndefined();
     expect(ModulationStore.getSignal(0)).toBe(0);
   });
+
+  // The long-press delete's guard: taking one modulator out must not disturb
+  // the others' wires, and only its own settings view closes with it.
+  it('deletes one slot without disturbing the others', () => {
+    const a = freshId();
+    const b = freshId();
+    register(a, { speed: [50, 0, 100] as [number, number, number] });
+    register(b, { depth: [10, 0, 100] as [number, number, number] });
+    ModulationStore.createSlot(0);
+    ModulationStore.createSlot(1);
+    ModulationStore.assign(a, 'speed', 0);
+    ModulationStore.assign(b, 'depth', 1);
+
+    ModulationStore.openSettings(1);
+    ModulationStore.removeSlot(0);
+    expect(ModulationStore.getSlot(0)).toBeNull();
+    expect(ModulationStore.getAssignment(a, 'speed')).toBeUndefined();
+    expect(ModulationStore.getAssignment(b, 'depth')?.slot).toBe(1);   // untouched
+    expect(ModulationStore.getSettings()?.index).toBe(1);              // another slot's view stays
+
+    ModulationStore.removeSlot(1);
+    expect(ModulationStore.getSettings()).toBeNull();                  // its own view closes
+  });
 });
 
 describe('assignments', () => {
@@ -121,6 +144,69 @@ describe('the assignment gesture', () => {
     ModulationStore.noteTouch(id, 'speed');
     vi.setSystemTime(MOD_TOUCH_GRACE_MS + 1);
     expect(ModulationStore.assignFromStep(2).action).toBe('none');
+  });
+
+  // The owner's hardware bug: a freshly created modulator would not open its
+  // settings — the touch that created it stayed armed for the whole grace,
+  // so the next tap read as "toggle the wire off" instead of "open".
+  it('spends the arm on use: a fresh slot opens on the very next tap', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const id = freshId();
+    register(id, { speed: [50, 0, 100] as [number, number, number] });
+
+    // Touch a knob, tap a step: the modulator is created and wired.
+    ModulationStore.noteTouch(id, 'speed');
+    expect(ModulationStore.assignFromStep(2).action).toBe('created');
+
+    // The immediate re-press — still inside the touch grace — must report
+    // none (so the caller opens the settings view), not unwire the slot.
+    vi.setSystemTime(500);
+    expect(ModulationStore.assignFromStep(2).action).toBe('none');
+    expect(ModulationStore.getAssignment(id, 'speed')?.slot).toBe(2);
+  });
+
+  it('the kit mapping gesture (hold + touch calls assign directly) spends the arm too', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const id = freshId();
+    register(id, { speed: [50, 0, 100] as [number, number, number] });
+
+    // The kit's hold-a-step-touch-a-knob path: createSlot + assign, with the
+    // ~10 Hz state stream sustaining the touch on every following frame.
+    ModulationStore.noteTouch(id, 'speed');
+    ModulationStore.createSlot(3);
+    expect(ModulationStore.assign(id, 'speed', 3)).toBe(true);
+    vi.setSystemTime(100);
+    ModulationStore.noteTouch(id, 'speed', true);
+    vi.setSystemTime(200);
+    ModulationStore.noteTouch(id, 'speed', true);
+
+    // The finger lifts; the very next tap opens instead of unwiring.
+    vi.setSystemTime(700);
+    expect(ModulationStore.assignFromStep(3).action).toBe('none');
+    expect(ModulationStore.getAssignment(id, 'speed')?.slot).toBe(3);
+
+    // A FRESH touch re-arms: now the tap is the deliberate unwire.
+    ModulationStore.noteTouch(id, 'speed');
+    expect(ModulationStore.assignFromStep(3).action).toBe('unassigned');
+  });
+
+  // The owner's other hardware bug: with a settings view open, its own knobs
+  // armed themselves, and every attempt to add a modulator created a slot
+  // only to roll it straight back — "i tried to add more and I just can't".
+  it('the settings page arms nothing, so an open view cannot block new slots', () => {
+    const id = freshId();
+    register(id, { speed: [50, 0, 100] as [number, number, number] });
+    ModulationStore.createSlot(0);
+    ModulationStore.openSettings(0);
+    ModulationStore.noteTouch(MOD_SETTINGS_PANEL, 'rate');
+    const version = ModulationStore.getVersion();
+    expect(ModulationStore.assignFromStep(5).action).toBe('none');
+    expect(ModulationStore.getSlot(5)).toBeNull();
+    // No create-and-roll-back churn either — the press was simply not armed.
+    expect(ModulationStore.getVersion()).toBe(version);
+    ModulationStore.closeSettings();
   });
 
   it('rolls back a slot created for a control that refuses the wire', () => {

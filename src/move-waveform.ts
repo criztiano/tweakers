@@ -1,5 +1,6 @@
 import { WAVEFORM_MAX_ZOOM } from './waveform-engine';
 import type { WaveformLoop } from './waveform-engine';
+import { MoveVolumeDisplay } from './move-volume';
 
 /**
  * A waveform on the Move surface.
@@ -40,16 +41,18 @@ export const MOVE_WAVEFORM_STEPS = 16;
 export const MOVE_WAVEFORM_PADS = 8;
 
 /** A slow tick of the volume knob — the finest scrub move, a share of the shown window. */
-export const SCRUB_PER_DETENT = 0.002;
+export const SCRUB_PER_DETENT = 0.00025;
 /** Shift is the fine layer everywhere else on this surface; it is here too. */
-export const SCRUB_FINE = 0.0004;
+export const SCRUB_FINE = 0.00005;
 /**
  * The encoder batches a fast turn into one event (±5, ±12 in a single
  * delta) — the batch size IS the turn's speed. Bending it superlinear
  * makes the knob two instruments: creep to land on a sample, spin to
  * cross it.
  */
-export const SCRUB_ACCEL = 1.6;
+export const SCRUB_ACCEL = 1.2;
+/** Ignore pathological encoder batches beyond a deliberate fast spin. */
+export const SCRUB_MAX_BATCH = 24;
 /** A wheel detent is a proportion of the current zoom, so it feels the same
  *  going in as coming out. */
 export const ZOOM_PER_DETENT = 0.08;
@@ -69,7 +72,8 @@ export function defaultView(): MoveWaveformView {
  * plainly linear — the surgical layer never surprises.
  */
 export function scrubBy(position: number, delta: number, fine = false, zoom = 1): number {
-  const magnitude = fine ? Math.abs(delta) : Math.pow(Math.abs(delta), SCRUB_ACCEL);
+  const detents = Math.min(SCRUB_MAX_BATCH, Math.abs(delta));
+  const magnitude = fine ? detents : Math.pow(detents, SCRUB_ACCEL);
   const step = (fine ? SCRUB_FINE : SCRUB_PER_DETENT) / Math.max(1, zoom);
   const next = clamp01(position + Math.sign(delta) * magnitude * step);
   // Snap the ends: a scrub that lands a thousandth short of the start is a
@@ -172,18 +176,24 @@ class MoveWaveformStoreClass {
   private registered = false;
   private editor = false;
   private progressSource: (() => number) | null = null;
+  private duration: number | null = null;
   private listeners = new Set<Listener>();
   private version = 0;
 
   /** Claim the wheel, the volume knob and the step row. Returns the release. */
   register(): () => void {
     this.registered = true;
+    // The knob is ours now, so it says so: the volume readout follows the
+    // playhead for as long as we hold the claim, and is handed back with it.
+    MoveVolumeDisplay.set({ label: 'time', getValue: () => this.readout() });
     this.notify();
     return () => {
       this.registered = false;
       this.editor = false;
       this.progressSource = null;
+      this.duration = null;
       this.view = defaultView();
+      MoveVolumeDisplay.clear();
       this.notify();
     };
   }
@@ -221,6 +231,25 @@ class MoveWaveformStoreClass {
    */
   setProgressSource(fn: (() => number) | null): void {
     this.progressSource = fn;
+  }
+
+  /**
+   * How long the sample is, in seconds. With it the volume readout counts
+   * real time; without it the same readout is a percentage of the sample,
+   * which is still true — a position always reads as something.
+   */
+  setDuration(seconds: number | null): void {
+    this.duration = seconds != null && seconds > 0 && Number.isFinite(seconds) ? seconds : null;
+  }
+
+  /** What the volume knob is editing right now, ready to print. */
+  readout(): string {
+    const at = clamp01(this.progressSource ? this.progressSource() : this.view.position);
+    if (this.duration === null) return `${Math.round(at * 100)}%`;
+    const total = at * this.duration;
+    const minutes = Math.floor(total / 60);
+    const seconds = total - minutes * 60;
+    return `${minutes}:${seconds < 10 ? '0' : ''}${seconds.toFixed(1)}`;
   }
 
   getView(): MoveWaveformView {

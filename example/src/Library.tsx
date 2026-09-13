@@ -1,13 +1,18 @@
 import { Fragment, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import {
+  MoveNotifications,
   MovePanel,
   MovePresetStore,
   PresetExplorationStore,
+  MoveSurfaceStore,
+  MOVE_NOTIFY_KINDS,
+  MOVE_PALETTE,
   MOVE_JOG_EVENT,
   MOVE_STRIP_EVENT,
   TweakStore,
   buildMoveStrip,
+  moveNotify,
   stripOffsets,
 } from 'tweakers';
 import { PANEL_ID, PANEL_NAME } from './panel';
@@ -29,10 +34,41 @@ export function Library() {
   // Where the strip's window sits, straight from the panel — the same event
   // the bridge kit reads to point the hardware's knobs at these eight.
   const [offset, setOffset] = useState(0);
+  // The pad handler below is registered once and must not go stale: it reads
+  // the window through a ref rather than closing over a render's value.
+  const offsetRef = useRef(0);
+  offsetRef.current = offset;
   useEffect(() => {
     const onStrip = (e: Event) => setOffset(Number((e as CustomEvent).detail?.offset) || 0);
     window.addEventListener(MOVE_STRIP_EVENT, onStrip);
     return () => window.removeEventListener(MOVE_STRIP_EVENT, onStrip);
+  }, []);
+
+  // The reserved row, worked for real. A page that claims it owns eight pads
+  // the kit knows nothing about, so the page has to say what they do — here
+  // they are eight places along this dictionary, the same gesture the
+  // waveform gives a sample. Claim it, paint it, name it, hand it back.
+  useEffect(() => {
+    const jumpTo = (x: number) => {
+      const panel = TweakStore.getPanel(PANEL_ID);
+      if (!panel) return;
+      const stops = stripOffsets(buildMoveStrip(panel));
+      const stop = Math.min(stops.length - 1, Math.round((x / 7) * (stops.length - 1)));
+      const here = stops.findIndex((s) => s >= offsetRef.current);
+      window.dispatchEvent(new CustomEvent(MOVE_JOG_EVENT, {
+        detail: { delta: stops[stop] - stops[Math.max(0, here)] },
+      }));
+    };
+    MoveSurfaceStore.setPadRows(
+      1,
+      Array.from({ length: 8 }, (_, x) => ({ x, y: 0 as const, label: `${x + 1}` })),
+      'jump to a part of the library'
+    );
+    const offPress = MoveSurfaceStore.onPress(({ x, y }) => { if (y === 0) jumpTo(x); });
+    return () => {
+      offPress();
+      MoveSurfaceStore.setPadRows(0, [], null);
+    };
   }, []);
 
   // Bring a control under the first dial: the wheel counts controls, so the
@@ -78,6 +114,10 @@ export function Library() {
           it. `viewport` docking portals it out of this tree — the page only
           has to keep its own bottom clear. */}
       <MovePanel panels={PANEL_NAME} theme="dark" scroll productionEnabled />
+
+      {/* The app's messages, in the same air as the floating displays. One
+          mount, anywhere; every `moveNotify.add` in the app lands here. */}
+      <MoveNotifications />
 
       <Section
         id="big"
@@ -140,6 +180,34 @@ export function Library() {
               </div>
               <p>{item.description}</p>
               {item.note && <p className="kit-card-note">{item.note}</p>}
+            </li>
+          ))}
+        </ul>
+      </Section>
+
+      <Section
+        id="notify"
+        title="Notifications"
+        lede="What the app has to say, standing where the floating displays stand: centred over the instrument, one gap above whatever is already up there. The newest card is in front and the run behind it peeks out under it — rest the pointer on the stack to fan the whole set open. Hold a modulation circle to bring a modulator’s curve up first, then fire one: the stack rises over the display rather than burying it, and settles back when the display goes."
+      >
+        <NotifyPanel />
+      </Section>
+
+      <Section id="palette" title="The palette">
+        <p className="kit-lede">
+          The colours the Move lights, on screen. The hardware's LED palette is a
+          fixed table of 128 and the index-to-colour map is not guessable — every
+          one of these was picked by eye against the device, so a thing that is
+          lime in the hand is the same lime here. Colour always means something on
+          this surface: a track's identity, a modulation assignment, a switch that
+          is on.
+        </p>
+        <ul className="kit-swatches">
+          {Object.entries(MOVE_PALETTE).map(([name, hex]) => (
+            <li key={name}>
+              <span className="kit-swatch" style={{ background: hex }} />
+              <b>{name}</b>
+              <code>{hex}</code>
             </li>
           ))}
         </ul>
@@ -276,6 +344,53 @@ function PresetPanel() {
   );
 }
 
+/**
+ * The four things a notification can be, in the words an app would really
+ * use — a kind with no sentence behind it teaches nobody what it is for.
+ */
+const NOTIFY_COPY = {
+  info: { title: 'Bridge connected', description: 'The Move is answering on port 7787.' },
+  success: { title: 'Preset saved', description: 'Bass 03 is on the wheel.' },
+  warning: { title: 'The loop bar gave way', description: 'Two step buttons belong to a modulator.' },
+  error: { title: 'Sample not loaded', description: 'kick-07.wav could not be decoded.' },
+} as const;
+
+/**
+ * Notifications, worked for real. The kinds fire one each; the last button
+ * carries an action, which is the one thing a message is allowed to offer to
+ * do about itself.
+ */
+function NotifyPanel() {
+  return (
+    <div className="kit-presets">
+      <div className="kit-preset-actions">
+        {MOVE_NOTIFY_KINDS.map((kind) => (
+          <button key={kind} type="button" onClick={() => moveNotify.add({ type: kind, ...NOTIFY_COPY[kind] })}>
+            {kind}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => moveNotify.add({
+            type: 'success',
+            title: 'Preset replaced',
+            description: 'Bass 03 was written over Bass 01.',
+            actionProps: { children: 'Undo', onClick: () => moveNotify.add({ title: 'Put back', description: 'Bass 01 is on the wheel again.' }) },
+          })}
+        >
+          with an action
+        </button>
+        <button type="button" onClick={() => moveNotify.close()}>clear the stack</button>
+      </div>
+      <p className="kit-card-note">
+        Fire three or four in a row to see the stack: only the front card reads,
+        the rest show an edge until you rest the pointer on them. A card goes on
+        its close key, on a swipe, or on its own after five seconds.
+      </p>
+    </div>
+  );
+}
+
 function Section({ id, title, lede, children }: {
   id: string; title: string; lede?: string; children: ReactNode;
 }) {
@@ -308,6 +423,20 @@ function Card({ item, onShow, tall }: { item: Specimen; onShow: (path: string) =
               data-visual={NUMERIC_KINDS.includes(item.kind) ? item.kind : undefined}
               data-shape={item.kind === 'curve' || undefined}
               style={item.span && item.span > 1 ? { width: `calc(${item.span} * var(--kit-slot-w) + ${(item.span - 1) * 4}px)` } : undefined}
+            >
+              {item.render()}
+            </div>
+          ) : item.span && item.span > 1 ? (
+            // A small slot that claims a run of pads draws as its own strip,
+            // re-cut into the pad columns it spans — the same container the
+            // panel gives it.
+            <div
+              className="tweakers-move-tabs"
+              data-kind={item.kind}
+              style={{
+                '--move-tabs-cols': item.span,
+                width: `calc(${item.span} * var(--kit-slot-w) + ${(item.span - 1) * 4}px)`,
+              } as CSSProperties}
             >
               {item.render()}
             </div>
@@ -353,7 +482,7 @@ const CSS = `
   padding: var(--kit-space-xl) var(--kit-space-lg) calc(var(--kit-dock) + var(--kit-space-xl));
   background: var(--kit-bg);
   color: var(--kit-fg);
-  font-family: 'Ableton Sans Small', system-ui, -apple-system, sans-serif;
+  font-family: 'Geist Pixel', system-ui, -apple-system, sans-serif;
   font-size: 14px;
   line-height: 1.6;
 }
@@ -404,6 +533,11 @@ const CSS = `
 .kit-notes { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 8px var(--kit-space); margin: 0; max-width: 780px; }
 .kit-notes dt { font-weight: 500; }
 .kit-notes dd { margin: 0; color: var(--kit-dim); }
+.kit-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--kit-space); list-style: none; padding: 0; margin: 0; }
+.kit-swatches li { display: grid; grid-template-columns: 28px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 10px; align-items: center; }
+.kit-swatch { grid-row: span 2; width: 28px; height: 28px; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
+.kit-swatches b { font-weight: 500; align-self: end; }
+.kit-swatches code { color: var(--kit-dim); font-size: 12px; align-self: start; }
 @media (max-width: 700px) {
   .kit-page { padding: var(--kit-space-lg) var(--kit-space); }
   .kit-notes { grid-template-columns: minmax(0, 1fr); }

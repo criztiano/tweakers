@@ -10,8 +10,7 @@
  *
  * Set it from the same code that paints the hardware:
  *
- *   MoveSurfaceStore.claimRows(2);
- *   MoveSurfaceStore.setPads(steps.map((s, i) => ({
+ *   MoveSurfaceStore.setPadRows(2, steps.map((s, i) => ({
  *     x: i % 8, y: i < 8 ? 1 : 0, label: `${i + 17}`, lit: s.on,
  *   })));
  *
@@ -69,15 +68,30 @@ export interface MoveSurfaceState {
   /** Pad rows the app claimed: 0 (none), 1 (the bottom row), or 2. */
   rows: 0 | 1 | 2;
   pads: MovePadCell[];
+  /** What the claimed rows do in this view, in one short phrase. The panel
+   *  draws the claimed area as a single slot carrying this, because eight
+   *  pads only the app understands read as one instrument, not eight
+   *  controls. */
+  padsLabel: string | null;
   /** null hands the step circles back to the modulation slots. */
   steps: MoveStepCell[] | null;
   screen: MoveScreenList | null;
+  /** A search running on `screen`: the typed query and the row (index into
+   *  the full list) the wheel rests on. The kit narrows the device's list
+   *  by it, the same way the panel narrows the on-screen one. Written by
+   *  MoveSearchStore, never by the host. */
+  search: MoveScreenSearch | null;
+}
+
+export interface MoveScreenSearch {
+  query: string;
+  index: number;
 }
 
 type Listener = () => void;
 type PressListener = (pad: { x: number; y: 0 | 1 }) => void;
 
-const EMPTY: MoveSurfaceState = { rows: 0, pads: [], steps: null, screen: null };
+const EMPTY: MoveSurfaceState = { rows: 0, pads: [], padsLabel: null, steps: null, screen: null, search: null };
 
 let state: MoveSurfaceState = EMPTY;
 const listeners = new Set<Listener>();
@@ -98,6 +112,24 @@ function patch<K extends keyof MoveSurfaceState>(key: K, value: MoveSurfaceState
   emit();
 }
 
+const validPads = (pads: MovePadCell[]): MovePadCell[] =>
+  pads.filter((p) => p.x >= 0 && p.x < 8 && (p.y === 0 || p.y === 1));
+
+/** Rows and their cells are one piece of surface geometry. Publishing them
+ * together prevents subscribers from ever painting the new row count with
+ * the old cells (or the new cells inside the old row count). */
+function patchPadRows(rows: 0 | 1 | 2, pads: MovePadCell[], label?: string | null) {
+  const nextPads = validPads(pads);
+  const nextLabel = label === undefined ? state.padsLabel : label;
+  if (
+    state.rows === rows &&
+    state.padsLabel === nextLabel &&
+    JSON.stringify(state.pads) === JSON.stringify(nextPads)
+  ) return;
+  state = { ...state, rows, pads: nextPads, padsLabel: nextLabel };
+  emit();
+}
+
 export const MoveSurfaceStore = {
   getState: (): MoveSurfaceState => state,
 
@@ -112,7 +144,19 @@ export const MoveSurfaceStore = {
   },
 
   setPads(pads: MovePadCell[]) {
-    patch('pads', pads.filter((p) => p.x >= 0 && p.x < 8 && (p.y === 0 || p.y === 1)));
+    patch('pads', validPads(pads));
+  },
+
+  /** Publish the claimed row count and its cells as one renderable state.
+   *  `label` says what the row does here — pass it whenever the meaning
+   *  changes, so the panel never captions the pads with a stale phrase. */
+  setPadRows(rows: 0 | 1 | 2, pads: MovePadCell[], label?: string | null) {
+    patchPadRows(rows, pads, label);
+  },
+
+  /** What the claimed rows control in this view. */
+  setPadsLabel(label: string | null) {
+    patch('padsLabel', label);
   },
 
   setSteps(steps: MoveStepCell[] | null) {
@@ -121,6 +165,11 @@ export const MoveSurfaceStore = {
 
   setScreen(screen: MoveScreenList | null) {
     patch('screen', screen);
+  },
+
+  /** The search narrowing the wheel list — MoveSearchStore's to write. */
+  setSearch(search: MoveScreenSearch | null) {
+    patch('search', search);
   },
 
   /** Selection intent from the panel's wheel screen; the host owns the value,

@@ -1,4 +1,4 @@
-import { MoveFunctions, MovePresetStore, PresetExplorationStore, MOVE_JOG_EVENT, MOVE_JOG_CLICK_EVENT, MOVE_MUTE_EVENT } from 'tweakers';
+import { MoveFunctions, MovePresetStore, PresetExplorationStore, MOVE_JOG_EVENT, MOVE_JOG_CLICK_EVENT, MOVE_MUTE_EVENT, MOVE_SEARCH_EVENT } from 'tweakers';
 
 /**
  * The Move's buttons, on a keyboard — so the library can be worked without
@@ -18,6 +18,7 @@ export const KEYS: { keys: string; button: string; what: string }[] = [
   { keys: 'Enter', button: 'the wheel pressed', what: 'keeps the row you are on' },
   { keys: 'Backspace', button: 'Back', what: 'puts your old settings back and dismisses' },
   { keys: 'C held', button: 'Mute, held', what: 'plays the settings you came in with, to compare' },
+  { keys: 'F', button: 'Capture, held', what: 'searches the open list — type to narrow it, the wheel walks what is left, Back ends it' },
   { keys: 'wheel', button: 'the big wheel', what: 'over the panel: the strip, or the open list' },
 ];
 
@@ -41,6 +42,7 @@ export function bindKeyboardHardware(): () => void {
     }
     if (key === 'm') MoveFunctions.run('menu', { shift: e.shiftKey, hold: e.altKey });
     else if (key === 'c') mute(true, e.shiftKey);
+    else if (key === 'f') window.dispatchEvent(new CustomEvent(MOVE_SEARCH_EVENT, { detail: { shift: e.shiftKey }, cancelable: true }));
     else if (e.key === 'Backspace') MoveFunctions.run('back', {});
     else if (e.key === 'Enter') window.dispatchEvent(new CustomEvent(MOVE_JOG_CLICK_EVENT, { detail: { shift: e.shiftKey }, cancelable: true }));
     else if (e.key === 'ArrowDown') jog(1, e.shiftKey);

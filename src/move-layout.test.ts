@@ -1,7 +1,18 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { TweakStore } from './store/TweakStore';
-import { buildMovePages, visibleColumns, enumOptionIcon, enumShapePath, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from './move-layout';
+import { buildMovePages, visibleColumns, enumOptionIcon, enumShapePath, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, setMoveLayoutReporter, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage, type MoveLayoutIssueCode } from './move-layout';
+
+/** Run `fn` with the issue feed captured, restoring the console sink after. */
+function capturingIssues<T>(fn: () => T): { result: T; issues: [MoveLayoutIssueCode, string][] } {
+  const issues: [MoveLayoutIssueCode, string][] = [];
+  setMoveLayoutReporter((code, message) => issues.push([code, message]));
+  try {
+    return { result: fn(), issues };
+  } finally {
+    setMoveLayoutReporter(null);
+  }
+}
 
 // The MovePanel mirrors the bridge kit's v0 mapping: first 4 panels are the
 // track pages, sliders and bounded numbers fill the 8 dials, toggles the
@@ -81,15 +92,45 @@ describe('move layout', () => {
       sync: false,
       loose: false,
     } as never, undefined, { movePads: { scan: 2, scanSpeed: 2, sync: 3 } });
-    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
-    // The placed chip leaves the dial pool even though slots were free.
-    assert.deepEqual(page.dials.map((d) => d.path), ['density', 'size', 'speed', 'tempo']);
+    const { result: [page], issues } = capturingIssues(() => buildMovePages([TweakStore.getPanel(id)!]));
+    // scanSpeed fits the dials, so its movePads column is ignored — the pad
+    // grid never mirrors a dial — and the layout says so out loud.
+    assert.deepEqual(page.dials.map((d) => d.path), ['density', 'size', 'speed', 'tempo', 'scanSpeed']);
     assert.equal(page.toggles[2].path, 'scan');
     assert.equal(page.toggles[3].path, 'sync');
     assert.equal(page.toggles[0].path, 'loose');   /* unplaced: leftmost free */
     assert.equal(page.toggles[1], undefined);
-    assert.equal(page.values[2].path, 'scanSpeed');
-    assert.equal(page.values[0], undefined);
+    assert.equal(page.values.filter(Boolean).length, 0);
+    assert.deepEqual(issues.map(([code]) => code), ['pad-column-on-dial']);
+    assert.match(issues[0][1], /scanSpeed/);
+  });
+
+  it('keeps a dial-holding control on its dial slot, ignoring and reporting its pad column', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, {
+      gain: [0.5, 0, 1],
+      depth: [0.2, 0, 1],
+      mute: false,
+    } as never, undefined, { movePads: { depth: 0, mute: 1 } });
+    const { result: [page], issues } = capturingIssues(() => buildMovePages([TweakStore.getPanel(id)!]));
+    assert.deepEqual(page.dials.map((d) => d.path), ['gain', 'depth']);
+    assert.equal(page.toggles[1].path, 'mute');    /* toggle placement untouched */
+    assert.equal(page.values.filter(Boolean).length, 0);
+    assert.deepEqual(issues, [[
+      'pad-column-on-dial',
+      `panel '${id}': control 'depth' holds a dial slot — movePads column 0 ignored; pads never mirror dials`,
+    ]]);
+  });
+
+  it('still chips a genuine overflow param, honouring its named column', () => {
+    const id = nextId();
+    const config: Record<string, unknown> = {};
+    for (let i = 0; i < 9; i++) config[`dial${i}`] = [0.5, 0, 1];
+    TweakStore.registerPanel(id, id, config as never, undefined, { movePads: { dial8: 5 } });
+    const { result: [page], issues } = capturingIssues(() => buildMovePages([TweakStore.getPanel(id)!]));
+    assert.equal(page.dials.length, MOVE_DIALS);
+    assert.equal(page.values[5].path, 'dial8');    /* past the 8: a chip, where asked */
+    assert.deepEqual(issues, []);
   });
 
   it('puts hand-placed actions on the action row and leaves the rest off the surface', () => {
@@ -110,9 +151,10 @@ describe('move layout', () => {
       shape: { type: 'select', options: ['a', 'b'], default: 'a' },
       band: { type: 'range', min: 0, max: 1 },
     } as never, undefined, { movePads: { shape: 4, band: 5 } });
-    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    const { result: [page], issues } = capturingIssues(() => buildMovePages([TweakStore.getPanel(id)!]));
     assert.deepEqual(page.dials.map((d) => d.path), ['shape', 'band']);
     assert.equal(page.values.filter(Boolean).length, 0);
+    assert.deepEqual(issues.map(([code]) => code), ['pad-column-on-dial', 'pad-column-on-dial']);
   });
 
   it('packs a pad whose column is taken rather than dropping it', () => {
@@ -400,15 +442,17 @@ describe('move layout', () => {
       act: { type: 'action' },
       t2: false,
     } as never, undefined, { movePads: { s1: 6, s2: 2, act: 3, t2: 5 } });
-    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
-    /* chip-placed s1/s2 never eat a dial slot on the way past */
-    assert.deepEqual(page.dials.map((d) => d.path), ['d1', 'd2', 'e1', 'e2', 'e3', 'e4', 'e5', 'e6']);
+    const { result: [page], issues } = capturingIssues(() => buildMovePages([TweakStore.getPanel(id)!]));
+    /* s1/s2 fit the dials, so their movePads columns are ignored (and said) */
+    assert.deepEqual(page.dials.map((d) => d.path), ['d1', 'd2', 's1', 's2', 'e1', 'e2', 'e3', 'e4']);
+    assert.deepEqual(issues.map(([code]) => code), ['pad-column-on-dial', 'pad-column-on-dial']);
     /* named columns win; the unnamed pack leftmost-free */
     assert.equal(page.toggles[0]?.path, 't1');
     assert.equal(page.toggles[5]?.path, 't2');
-    assert.equal(page.values[6]?.path, 's1');
-    assert.equal(page.values[2]?.path, 's2');
-    assert.equal(page.values[0]?.path, 'e7');      /* past the dial budget */
+    /* past the dial budget: genuine overflow, packed leftmost-free */
+    assert.equal(page.values[0]?.path, 'e5');
+    assert.equal(page.values[1]?.path, 'e6');
+    assert.equal(page.values[2]?.path, 'e7');
     assert.equal(page.values.filter(Boolean).length, 3);
     /* an action reaches the pads only through a named column */
     assert.equal(page.actions[3]?.path, 'act');

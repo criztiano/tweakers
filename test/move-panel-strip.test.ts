@@ -5,6 +5,7 @@ import { MovePanel, MOVE_JOG_EVENT, MOVE_STRIP_EVENT } from '../src/components/M
 import { TweakStore, type TweakConfig } from '../src/store/TweakStore';
 import { MOVE_DIALS } from '../src/move-layout';
 import { MoveFunctions } from '../src/move-functions';
+import { MoveSurfaceStore } from '../src/move-surface-store';
 
 let renderer: ReactTestRenderer | undefined;
 const id = 'move-strip-panel';
@@ -16,6 +17,8 @@ afterEach(() => {
   act(() => renderer?.unmount());
   renderer = undefined;
   TweakStore.unregisterPanel(id);
+  TweakStore.unregisterPanel(`${id}-second`);
+  MoveSurfaceStore.reset();
   vi.unstubAllGlobals();
 });
 
@@ -25,11 +28,12 @@ const many = (count: number): TweakConfig =>
     Array.from({ length: count }, (_, i) => [`p${i}`, { type: 'slider', min: 0, max: 1, default: 0.5 }])
   ) as TweakConfig;
 
-function mount(config: TweakConfig, scroll = true, options?: { movePads?: Record<string, number> }) {
+function mount(config: TweakConfig, scroll = true, options?: { movePads?: Record<string, number> }, headerStart?: React.ReactNode) {
   TweakStore.registerPanel(id, 'Strip', config, undefined, options);
   act(() => {
     renderer = create(createElement(MovePanel, {
       panels: 'Strip', dock: 'flow', productionEnabled: true, scroll,
+      headerStart,
     }));
   });
 }
@@ -48,6 +52,96 @@ const jog = (delta: number) => {
 };
 
 describe('the scrolling panel', () => {
+  it('places a view status in the start of the native panel header', () => {
+    mount(many(1), false, undefined, createElement('output', { 'data-testid': 'view-status' }, 'Zoom 4×'));
+    const header = byClass('tweakers-move-tracks-group')[0];
+    expect(header.findByProps({ 'data-testid': 'view-status' }).props.children).toBe('Zoom 4×');
+  });
+
+  it('shows native page labels in the top-left header when tracks paginate', () => {
+    TweakStore.registerPanel(id, 'EXTRA', many(1));
+    TweakStore.registerPanel(`${id}-second`, 'DRUMS', many(1));
+    act(() => {
+      renderer = create(createElement(MovePanel, { dock: 'flow', productionEnabled: true }));
+    });
+    const tabs = renderer!.root.findByProps({ role: 'tablist', 'aria-label': 'Move pages' });
+    expect(tabs.findAllByProps({ role: 'tab' }).map((node) => node.findByProps({ className: 'tweakers-move-track-label' }).props.children))
+      .toEqual(['EXTRA', 'DRUMS']);
+    expect(tabs.findAllByProps({ role: 'tab' }).map((node) => node.props['aria-selected']))
+      .toEqual([true, false]);
+    expect(renderer!.root.findByProps({ role: 'tabpanel' }).props['aria-labelledby'])
+      .toBe(tabs.findAllByProps({ role: 'tab' })[0].props.id);
+  });
+
+  it('selects stable page ids while showing real part names and shared controls', () => {
+    const ids = ['extra-part-snare', 'extra-part-kick'];
+    const common: TweakConfig = {
+      BPM: { type: 'slider', default: 126, min: 20, max: 400, step: 0.01 },
+      '÷2  ·  ×2': { type: 'slider', default: 0, min: -1, max: 1, step: 1, origin: 0, bipolar: true },
+    };
+    const options = { labels: { BPM: 'BPM', '÷2  ·  ×2': '÷2 · ×2' } };
+    TweakStore.registerPanel(ids[0], 'SNARE', common, undefined, options);
+    TweakStore.registerPanel(ids[1], 'KICK', common, undefined, options);
+    act(() => {
+      renderer = create(createElement(MovePanel, {
+        panels: ids, dock: 'flow', productionEnabled: true,
+      }));
+    });
+
+    const tabs = renderer!.root.findByProps({ role: 'tablist', 'aria-label': 'Move pages' });
+    expect(tabs.findAllByProps({ role: 'tab' }).map((node) =>
+      node.findByProps({ className: 'tweakers-move-track-label' }).props.children
+    )).toEqual(['SNARE', 'KICK']);
+    expect(labels()).toEqual(['BPM', '÷2 · ×2']);
+
+    act(() => tabs.findAllByProps({ role: 'tab' })[1].props.onClick());
+    expect(labels()).toEqual(['BPM', '÷2 · ×2']);
+    expect(tabs.findAllByProps({ role: 'tab' }).map((node) => node.props['aria-selected']))
+      .toEqual([false, true]);
+
+    TweakStore.unregisterPanel(ids[0]);
+    TweakStore.unregisterPanel(ids[1]);
+  });
+
+  it('draws the claimed rows as one slot naming what they do', () => {
+    MoveSurfaceStore.setPadRows(
+      2,
+      [
+        ...Array.from({ length: 4 }, (_, x) => ({ x, y: 1 as const, label: `Nav ${x + 1}`, lit: true })),
+        ...Array.from({ length: 8 }, (_, x) => ({ x, y: 0 as const, label: `Slice ${x + 1}`, lit: false })),
+      ],
+      'jump to a slice of the sample'
+    );
+    mount(many(2), false);
+
+    // The app's pads are its own instrument: the panel names it once rather
+    // than drawing sixteen controls it cannot explain.
+    const claimed = byClass('tweakers-move-app-row');
+    expect(claimed).toHaveLength(1);
+    expect(claimed[0].props['data-rows']).toBe(2);
+    expect(renderer!.root.findByProps({ className: 'tweakers-move-app-row-label' }).props.children)
+      .toBe('jump to a slice of the sample');
+    expect(renderer!.root.findAllByProps({ 'data-kind': 'app' })).toHaveLength(0);
+  });
+
+  it('falls back to a plain name when the app leaves the rows unlabelled', () => {
+    MoveSurfaceStore.setPadRows(1, [{ x: 0, y: 0, label: 'Slice 1' }], null);
+    mount(many(2), false);
+    expect(renderer!.root.findByProps({ className: 'tweakers-move-app-row-label' }).props.children)
+      .toBeTruthy();
+  });
+
+  it('keeps claimed step/loop points off-screen', () => {
+    MoveSurfaceStore.setSteps([{ step: 0, lit: true }, { step: 7, lit: false }]);
+    MoveSurfaceStore.setPadRows(1, [{ x: 0, y: 0, label: 'Slice 1', lit: false }], 'scrub the sample');
+    mount(many(1), false);
+
+    expect(byClass('tweakers-move-mod-dot')).toHaveLength(0);
+    expect(byClass('tweakers-move-app-row')).toHaveLength(1);
+    expect(renderer!.root.findByProps({ className: 'tweakers-move-app-row-label' }).props.children)
+      .toBe('scrub the sample');
+  });
+
   it('keeps every control at slot size instead of demoting the overflow', () => {
     mount(many(20));
     expect(labels()).toHaveLength(20);

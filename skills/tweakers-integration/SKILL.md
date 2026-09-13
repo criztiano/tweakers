@@ -194,11 +194,11 @@ them wholesale. The panel's theme is the design anchor for the whole window:
   bars, headers — so panel and stage read as one instrument, not a panel
   bolted onto a foreign app.
 - Match the two typographic voices: every label and section title is uppercase
-  mono (`--tweak-font-label`), every value is the reading face
-  (`--tweak-font-value`) at `--tweak-value-opacity`. Labels name things, values
-  report them; nothing in the app should speak in a third voice.
-- Both faces are host-provided by licence: load System85 in the app, and keep
-  the fallback stacks in the tokens intact.
+  (`--tweak-font-label`), every value sits at `--tweak-value-opacity`
+  (`--tweak-font-value`). Labels name things, values report them; nothing in
+  the app should speak in a third voice.
+- The face is Geist Pixel, bundled with the kit's stylesheet (OFL) — nothing
+  to load in the app; keep the fallback stacks in the tokens intact.
 - **No dividers, anywhere.** The set separates things with space and with the
   card each row already carries — never with a rule. If a layout looks like it
   needs a line between two things, the answer is spacing, a section, or an

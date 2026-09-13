@@ -14,32 +14,38 @@ import {
   MOVE_WAVEFORM_PADS,
 } from '../src/move-waveform';
 import { WAVEFORM_MAX_ZOOM } from '../src/waveform-engine';
+import { MoveVolumeDisplay } from '../src/move-volume';
 
 describe('the volume knob scrubs', () => {
   it('moves by the finest step on a slow tick and stops at both ends', () => {
-    expect(scrubBy(0.5, 1)).toBeCloseTo(0.502, 6);
-    expect(scrubBy(0.5, -1)).toBeCloseTo(0.498, 6);
+    expect(scrubBy(0.5, 1)).toBeCloseTo(0.50025, 6);
+    expect(scrubBy(0.5, -1)).toBeCloseTo(0.49975, 6);
     expect(scrubBy(0.001, -20)).toBe(0);
     expect(scrubBy(0.999, 20)).toBe(1);
   });
 
   it('bends a batched (fast) turn superlinear — spin to travel', () => {
     const spin = scrubBy(0.5, 10) - 0.5;
-    expect(spin).toBeCloseTo(Math.pow(10, 1.6) * 0.002, 6);
+    expect(spin).toBeCloseTo(Math.pow(10, 1.2) * 0.00025, 6);
     // Ten slow ticks land short of one batched ten — speed buys reach.
-    expect(spin).toBeGreaterThan(10 * 0.002);
+    expect(spin).toBeGreaterThan(10 * 0.00025);
   });
 
   it('gives Shift the fine layer, linear and unaccelerated', () => {
-    expect(scrubBy(0.5, 1, true)).toBeCloseTo(0.5004, 6);
-    expect(scrubBy(0.5, 10, true)).toBeCloseTo(0.504, 6);
+    expect(scrubBy(0.5, 1, true)).toBeCloseTo(0.50005, 6);
+    expect(scrubBy(0.5, 10, true)).toBeCloseTo(0.5005, 6);
   });
 
   it('follows the zoom: a tick moves a share of the window, not the sample', () => {
-    expect(scrubBy(0.5, 1, false, 4)).toBeCloseTo(0.5005, 6);
-    expect(scrubBy(0.5, 1, true, 8)).toBeCloseTo(0.50005, 6);
+    expect(scrubBy(0.5, 1, false, 4)).toBeCloseTo(0.5000625, 6);
+    expect(scrubBy(0.5, 1, true, 8)).toBeCloseTo(0.50000625, 6);
     // Zoomed out it is exactly the plain step.
     expect(scrubBy(0.5, 1, false, 1)).toBeCloseTo(scrubBy(0.5, 1), 6);
+  });
+
+  it('caps pathological batched deltas from the hardware encoder', () => {
+    expect(scrubBy(0.5, 1000)).toBe(scrubBy(0.5, 24));
+    expect(scrubBy(0.5, -1000, true)).toBe(scrubBy(0.5, -24, true));
   });
 });
 
@@ -110,6 +116,47 @@ describe('the registry', () => {
     expect(MoveWaveformStore.isRegistered()).toBe(true);
     release();
     expect(MoveWaveformStore.isRegistered()).toBe(false);
+  });
+
+  it('names the volume knob while it holds it, and hands the pill back', () => {
+    expect(MoveVolumeDisplay.get()).toBe(null);
+    const release = MoveWaveformStore.register();
+    const pill = MoveVolumeDisplay.get();
+    expect(pill?.label).toBe('time');
+    expect(typeof pill?.getValue).toBe('function');
+    release();
+    expect(MoveVolumeDisplay.get()).toBe(null);
+  });
+
+  it('reads the playhead as a time once the sample length is known', () => {
+    const release = MoveWaveformStore.register();
+    // With no duration a position is still readable — as a percentage.
+    MoveWaveformStore.setView({ position: 0.5 });
+    expect(MoveVolumeDisplay.get()?.getValue?.()).toBe('50%');
+    MoveWaveformStore.setDuration(90);
+    expect(MoveVolumeDisplay.get()?.getValue?.()).toBe('0:45.0');
+    MoveWaveformStore.setView({ position: 1 });
+    expect(MoveVolumeDisplay.get()?.getValue?.()).toBe('1:30.0');
+    release();
+  });
+
+  it('reads the engine playhead during playback, not the last scrub', () => {
+    const release = MoveWaveformStore.register();
+    MoveWaveformStore.setDuration(10);
+    MoveWaveformStore.setView({ position: 0 });
+    MoveWaveformStore.setProgressSource(() => 0.25);
+    expect(MoveVolumeDisplay.get()?.getValue?.()).toBe('0:02.5');
+    release();
+  });
+
+  it('forgets the sample length on release', () => {
+    const first = MoveWaveformStore.register();
+    MoveWaveformStore.setDuration(60);
+    first();
+    const second = MoveWaveformStore.register();
+    MoveWaveformStore.setView({ position: 0.5 });
+    expect(MoveVolumeDisplay.get()?.getValue?.()).toBe('50%');
+    second();
   });
 
   it('resets the view on release, so the next waveform starts clean', () => {

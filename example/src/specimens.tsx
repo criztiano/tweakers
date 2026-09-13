@@ -21,6 +21,7 @@ import {
   MovePadValueBody,
   MovePadActionBody,
   MovePadAppBody,
+  MovePadTabsBody,
   CurveComposer,
   ModRing,
   ModulationStore,
@@ -363,6 +364,14 @@ export const SMALL_SLOTS: Specimen[] = [
     description: MOVE_PAD_LIBRARY.wave.description,
     note: 'One row below the bends, under every stage. The name says which way the sine goes.',
     render: () => <MovePadWaveBody label="Dip" percent={40} />,
+  },
+  {
+    kind: 'tabs', span: 4,
+    description: MOVE_PAD_LIBRARY.tabs.description,
+    note: 'The small slots’ first multi-slot control. This one is the instrument’s own Take switch — four pads, the leading one its name.',
+    render: () => (
+      <MovePadTabsBody name="Take" options={['A', 'B', 'C']} activeIdx={1} />
+    ),
   },
 ];
 

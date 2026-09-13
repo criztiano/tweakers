@@ -6,6 +6,7 @@ export type { TweakTheme } from './theme';
 
 // Move surface mirror (docked bottom panel matching the bridge kit's mapping)
 export { MovePanel } from './components/MovePanel';
+export type { MovePanelProps } from './components/MovePanel';
 // The panel's window events — what the bridge kit sends in and hears back.
 export {
   MOVE_TOUCH_EVENT,
@@ -16,12 +17,15 @@ export {
   MOVE_JOG_EVENT,
   MOVE_JOG_CLICK_EVENT,
   MOVE_MUTE_EVENT,
+  MOVE_SEARCH_EVENT,
   MOVE_STRIP_EVENT,
   MOVE_TRACK_COLORS,
 } from './components/MovePanel';
 export { MoveActionButton } from './components/MoveActionButton';
 export type { MoveActionButtonProps } from './components/MoveActionButton';
-export { buildMovePages, buildModMovePage, movePadRows, moveAppPadRow, visibleColumns, isToggleDial, normalizeToggleDial, denormalizeToggleDial, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isMoveDial, isSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
+export { MoveFunctionChips } from './components/MoveFunctionChips';
+export type { MoveFunctionChipsProps } from './components/MoveFunctionChips';
+export { buildMovePages, buildModMovePage, movePadRows, moveAppPadRow, visibleColumns, isToggleDial, normalizeToggleDial, denormalizeToggleDial, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, padSpan, isMoveDial, isMoveTabs, isNamedTabs, moveTabCell, isSpanContinuation, isPadSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
 export type { MovePage } from './move-layout';
 
 // The endless strip — a page with more slots than the Move has dials
@@ -30,7 +34,7 @@ export { buildMoveStrip, isStripSlot, stripStarts, stripOffsets, clampStripOffse
 // The big-slot library — the dictionary of what a Move dial slot can be
 export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotPlaybackDrawing, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotColorBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
 // The small slots — the pad row under the dials
-export { MOVE_PAD_LIBRARY, MovePadToggleBody, MovePadValueBody, MovePadActionBody, MovePadAppBody, MovePadWaveBody } from './components/move-slots';
+export { MOVE_PAD_LIBRARY, MovePadToggleBody, MovePadValueBody, MovePadActionBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody } from './components/move-slots';
 export type { MovePadKind } from './components/move-slots';
 export { moveNumericDrawing, movePlaybackMode, moveVisualReading } from './move-visual-core';
 export type { MoveVisual, MoveSliderVisual, MoveSelectVisual, MovePlaybackMode, MoveNumericDrawing } from './move-visual-core';
@@ -39,8 +43,8 @@ export type { MoveSlotKind } from './components/move-slots';
 // The filter control core — the kit's first 2-slot control (cutoff + resonance)
 export { resolveFilterAxis, normalizeFilterValue, defaultFilterResponse, filterShapeResponse, filterResponsePath, filterHand01, filterHandValue, FILTER_DB_FLOOR, FILTER_DB_CEIL } from './filter-core';
 export type { FilterAxis, FilterAxisConfig, FilterValue, FilterResponse, FilterShapeType } from './filter-core';
-export { MoveFunctions, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_SPECIAL_BUTTONS } from './move-functions';
-export type { MoveFunctionButton, MoveFunctionPress, MoveFunctionHandler, MoveFunctionOptions, MoveFunctionRunListener } from './move-functions';
+export { MoveFunctions, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_MANIFEST, MOVE_SPECIAL_BUTTONS, MOVE_STEP_FUNCTIONS, MOVE_CHIP_BUTTONS } from './move-functions';
+export type { MoveFunctionButton, MoveFunctionPress, MoveFunctionHandler, MoveFunctionOptions, MoveFunctionChip, MoveFunctionChipStyle, MoveFunctionRunListener } from './move-functions';
 export { MoveWaveform } from './components/MoveWaveform';
 export type { MoveWaveformProps } from './components/MoveWaveform';
 export {
@@ -58,13 +62,23 @@ export {
   MOVE_WAVEFORM_PADS,
 } from './move-waveform';
 export type { MoveWaveformVariant, MoveWaveformView } from './move-waveform';
+// Notifications — the app's messages, floating over the instrument and over
+// whatever display is already up there.
+export { MoveNotifications, moveNotify } from './components/MoveNotifications';
+export type { MoveNotificationsProps, MoveNotifyOptions } from './components/MoveNotifications';
+export { MOVE_NOTIFY_KINDS, MOVE_NOTIFY_GAP, MOVE_FLOAT_SELECTOR, notifyDockBottom } from './move-notify';
+export type { MoveNotifyKind } from './move-notify';
+export { MOVE_PALETTE } from './move-palette';
+export type { MovePaletteName } from './move-palette';
+export { MoveSettingsView } from './move-settings';
 export { MoveVolumeDisplay } from './move-volume';
 export type { MoveVolumeDisplayState } from './move-volume';
-export { ICON_MOVE_CAPTURE, ICON_MOVE_ENTER } from './icons';
+export { ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, MOVE_FUNCTION_ICONS } from './icons';
+export type { MoveFunctionGlyph } from './icons';
 // Raw hardware an app claims for itself — the bottom pad rows, the step
 // buttons, the device screen — kept for the on-screen mirror.
 export { MoveSurfaceStore, moveScreenRowLabel, moveScreenChecked } from './move-surface-store';
-export type { MovePadCell, MoveStepCell, MoveScreenList, MoveScreenRow, MoveSurfaceState } from './move-surface-store';
+export type { MovePadCell, MoveStepCell, MoveScreenList, MoveScreenRow, MoveScreenSearch, MoveSurfaceState } from './move-surface-store';
 
 // List screen (the Move's dark display list, standalone)
 export { ListScreen } from './components/ListScreen';
@@ -330,6 +344,8 @@ export type { MoveColorView, MoveColorPalette } from './move-color';
 // bridge kit drives (scroll on wheel turns, confirm on jog click,
 // beginSave on Shift+Menu; a hold opens generative exploration).
 export { MovePresetStore } from './move-presets';
+export { MoveSearchStore, moveSearchMatch, moveSearchFilter } from './move-search';
+export type { MoveSearchTarget, MoveSearchView } from './move-search';
 export type { MovePresetItem, MovePresetView, MovePresetSave, MovePresetPhase } from './move-presets';
 
 export { PresetExplorationStore } from './preset-exploration';

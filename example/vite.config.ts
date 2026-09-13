@@ -6,9 +6,15 @@ import { fileURLToPath } from 'node:url';
 // `npm run dev` still pins 3100 via its --port flag.
 export default defineConfig({
   plugins: [react()],
-  resolve: { alias: [
+  resolve: { dedupe: ['react', 'react-dom', 'motion'], alias: [
     { find: /^tweakers$/, replacement: fileURLToPath(new URL('../dist/index.js', import.meta.url)) },
     { find: /^tweakers\/(.*)$/, replacement: fileURLToPath(new URL('../dist/', import.meta.url)) + '$1' },
   ] },
-  server: process.env.PORT ? { port: Number(process.env.PORT), host: true } : undefined,
+  server: {
+    // The kit is linked from a sibling checkout; its bundled font
+    // (dist/fonts) sits outside this app, and vite refuses such assets
+    // unless the folder is allowed.
+    fs: { allow: ['..'] },
+    ...(process.env.PORT ? { port: Number(process.env.PORT), host: true } : {}),
+  },
 });

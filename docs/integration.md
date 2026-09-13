@@ -56,6 +56,12 @@ that is not under their thumb. A view whose wheel drives no list sends `null`
 and leaves the screen to the frames below it, rather than borrowing it for a
 list some other control owns.
 
+Every list the wheel walks can be searched, and no app builds that itself:
+holding Capture opens the search on the list in focus (`MoveSearchStore`),
+typing narrows it, the wheel walks what is left, taking a row or Back ends it.
+A host that reads the wheel events for its own list yields while
+`MoveSearchStore.isOpen()`, exactly as it yields to an open navigator.
+
 Hardware has four tracks and eight dial columns. `buildMovePages`, `dialSpan`,
 `visibleColumns` and `movePadRows` define the layout, not app CSS. Validate pages
 for overflow, two-column filter boundaries, enums and small-pad placement.
@@ -112,6 +118,54 @@ it does not prove the build is current. The explicit build gate above does that.
 - Both directions of state sync verified after preset/undo.
 - Binding, function listeners, timers and subscriptions cleaned up.
 - Snapshot provenance, full vendor package and matching lockfile committed.
+
+### Settings view (Set Overview)
+
+Every app has master settings — output level, latency, autosave, a MIDI
+channel: controls that concern the whole instrument rather than any one page.
+Put them in one dedicated panel — or several — and name them in `MovePanel`'s
+`settings` prop (a name or an array of names, one room page each).
+This is workflow organization, not a new control kind: inside, the panel works
+exactly like any page — any control type, the same layout rules, the same
+hardware sync path.
+
+```tsx
+useTweakers('Settings', {
+  output: [0.8, 0, 1],
+  latency: [0.2, 0, 1],
+  autosave: true,
+});
+
+<MovePanel panels={PANELS} settings="Settings" productionEnabled />
+// or several room pages: settings={['Settings', 'System']}
+```
+
+The named panel leaves the page row and waits behind the Move's Set Overview
+button (Shift + Step 1): the panel attaches `set_overview` itself, so do not
+attach it in the app. A press toggles the view — the surface inverts to the
+settings palette (dark neutral grey), and the header carries the room's name
+with a marker that blinks while the view is open — the pulse the hardware's
+Set Overview step icon is meant to carry too, once the surface module learns
+to blink the Shift layer. Back or a second press walks out — the track
+buttons stay inside the room, switching its pages. A host UI can drive the
+same door with `MoveSettingsView.toggle()`.
+
+The hardware follows on the modulator-page rails: the panel announces the
+room on window (`move-tweakers:settings`), the kit keeps those panels off the
+main track row and appends them as their own page group, and an open steers
+the Move onto the room — knobs, pads, lights and value sync work there
+exactly as on any page — while a close steers it back to the view the panel
+shows. The room is another mode, fully detached: while it is open the four
+track buttons switch between the room's own pages (and light for them), the
+modulation step lights go dark, step gestures are inert, and the claimed
+bottom rows return to the app only on exit. This needs the current bridge
+kit and surface module; older ones leave the hardware on the page underneath
+while the screen shows the room.
+
+The settings panel may appear in the app's `panels` lists or not — the kit
+removes it from the track row either way once the panel announces it. Do not
+put per-page or performance controls here; if a control belongs to one
+instrument page, it belongs on that page.
 
 ### Move color slot
 

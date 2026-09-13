@@ -1,4 +1,15 @@
 @import "./preset-exploration.css";
+/* Geist Pixel, the kit's face. OFL, so it ships next to this sheet — no
+   host-provided fonts needed. One variable file; ELSH is its shape axis
+   (0 regular, 1 square, 20 circle, 40 grid, 60 triangle, 80 line): the
+   text runs regular, the big readouts run line. */
+@font-face {
+  font-family: 'Geist Pixel';
+  src: url('./fonts/GeistPixel.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 
 .tweakers-root {
   /* Surfaces */
@@ -44,9 +55,9 @@
   --tweak-track-fill: rgba(228, 228, 228, 0.3);
   --tweak-track-fill-strong: #e4e4e4;
 
-  /* Type — labels are uppercase mono, values are the reading face */
-  --tweak-font-label: 'System85 Mono Pro', 'Geist Mono', ui-monospace, monospace;
-  --tweak-font-value: 'System85 Pro', system-ui, -apple-system, sans-serif;
+  /* Type — one face for labels and values, the kit's own */
+  --tweak-font-label: 'Geist Pixel', 'Geist Mono', ui-monospace, monospace;
+  --tweak-font-value: 'Geist Pixel', system-ui, -apple-system, sans-serif;
   --tweak-font-size: 12px;
   --tweak-value-opacity: 0.7;
 
@@ -80,9 +91,8 @@
 
   /* Fonts */
   font-family: var(--tweak-font-value);
-  /* System85 reports a line box shorter than its glyphs. Without an explicit
-     line-height every clipping container (ellipsized rows, folder titles)
-     shears the caps off. */
+  /* An explicit line-height keeps clipping containers (ellipsized rows,
+     folder titles) from shearing the caps off. */
   line-height: 1.35;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -352,22 +362,51 @@
 }
 
 .tweakers-move,
-.tweakers-move * {
+.tweakers-move *,
+.tweakers-move-surface,
+.tweakers-move-surface * {
   box-sizing: border-box;
+  /* One weight in the face; a faked bold smears the pixels. */
+  font-synthesis: none;
 }
 
-.tweakers-move {
+/* The instrument's tokens. The panel is the usual carrier, but a surface that
+   floats outside it — the notification stack — wears `tweakers-move-surface`
+   to read from the same set rather than keeping a second palette. */
+.tweakers-move,
+.tweakers-move-surface {
   --move-bg: #302e2e;
+  /* The 8-slot cluster's width cap — the instrument's whole maximum. The
+     wheel-screen list lives inside this budget and never widens the panel
+     beyond it. */
+  --move-cluster-max: 1180px;
   --move-slot: rgba(222, 227, 201, 0.1);
   /* A column held open by a page that has nothing for it to do — fainter
      than a slot you can press, so it never reads as a control. */
   --move-slot-empty: rgba(222, 227, 201, 0.03);
   --move-chip: #41403e;
+  /* The Move's colours on screen — the same set the hardware lights, matched
+     by eye against the device's LED palette (see src/move-palette.ts). Colour
+     on this surface always means something: a track's identity, a modulation
+     assignment, a switch that is on. Never decoration. */
+  --move-red: #fd3c57;
+  --move-orange: #fd6b59;
+  --move-yellow: #f2cf43;
+  --move-lime: #a3f243;
+  --move-emerald: #00ed95;
+  --move-blue: #698eff;
+  --move-indigo: #8660c3;
+  --move-pink: #fe92d5;
+  --move-white: #ffffff;
+  --move-gray-light: #cac5cc;
+  --move-gray: #555162;
+  --move-black: #0e0e16;
+  --move-brown: #856643;
   /* The switch that wears a picture: the thing it turns on, and a badge on
      its corner saying whether it is doing it. */
   --move-toggle-icon-size: 44px;
   --move-toggle-badge-size: 24px;
-  --move-toggle-label-size: 12px;
+  --move-toggle-label-size: 15px;
   --move-toggle-label-inset: 10px;
   --move-toggle-icon-rise: 6.5px;
   /* Lighter than the dial glyphs' hairline, heavier than nothing: the
@@ -388,7 +427,10 @@
   --move-wheel-width: 200px;
   --move-glyph-stroke: 1.25;
   --move-radius-small: 8px;
-  --move-font-label: 'Ableton Sans Small', system-ui, -apple-system, sans-serif;
+  --move-font-label: 'Geist Pixel', system-ui, -apple-system, sans-serif;
+  /* The big readouts — a dial's value, the volume pill — run the line shape. */
+  --move-font-value: var(--move-font-label);
+  --move-font-value-shape: 'ELSH' 80;
   --move-color-gap: 8px;
   --move-color-gap-small: 4px;
   --move-color-padding: 12px;
@@ -404,13 +446,70 @@
   --move-color-marker-light: #fff;
   --move-color-marker-dark: #171717;
   --move-color-disabled-opacity: 0.45;
+  --move-duration-press: 150ms;
+  --move-ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --move-header-control-height: 28px;
+}
 
+.tweakers-move {
   display: flex;
   align-items: flex-end;
   justify-content: center;
   padding: 16px 48px 14px;
+  /* The panel is never wider than its own 8-slot cluster (plus this box's
+     padding) — the cap is measured on the slots alone, and a wheel-screen
+     list beside them shares that budget rather than widening the panel. A
+     host that hands the panel a wider stage gets it centred at this width,
+     not stretched across the page. */
+  max-width: calc(var(--move-cluster-max) + 2 * 48px);
+  margin-inline: auto;
   background: var(--move-bg);
   color: var(--move-text);
+}
+
+/* The settings room: the whole surface changes clothes while the view is
+   open — the warm instrument grey inverts to a cold neutral one, so a
+   glance says you are in the app's master settings, not on a page. The
+   controls underneath wear the same geometry; only the palette flips. */
+.tweakers-move[data-settings] {
+  /* the enum/list screens' own dark grey — the settings room wears the same
+     surface those system-feeling controls already use */
+  --move-bg: #1e1e1e;
+  --move-slot: rgba(255, 255, 255, 0.09);
+  --move-slot-empty: rgba(255, 255, 255, 0.03);
+  --move-chip: #2e2e30;
+  --move-toggle-halo-color: var(--move-chip);
+  --move-text: #f0f0ee;
+  --move-text-inverse: #1e1e1e;
+}
+
+/* The room's name plate, where the page name normally sits: the marker
+   blinks while the view is open — the same pulse the hardware's Set
+   Overview step icon carries. */
+.tweakers-move-settings-title {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  min-height: var(--move-header-control-height);
+  padding: 0 var(--move-color-gap-small);
+}
+
+.tweakers-move-settings-title .tweakers-move-track-label {
+  opacity: 1;
+}
+
+.tweakers-move-settings-blink {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--move-text);
+  animation: tweakers-move-latch 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-settings-blink {
+    animation: none;
+  }
 }
 
 .tweakers-move[data-dock="viewport"] {
@@ -427,12 +526,14 @@
      the fixed 8-wide slot size plus the 4px gaps — and centre in the
      panel, so the page name lines up with the first visible slot and a
      slot never changes size; the panel just shows fewer of them. */
-  --move-cluster-w: calc((100% - 28px) / 8 * var(--move-cols, 8) + 4px * (var(--move-cols, 8) - 1));
+  --move-slot-base-w: calc((100% - 7 * var(--move-gap)) / 8);
+  --move-cluster-w: calc(var(--move-slot-base-w) * var(--move-cols, 8) + var(--move-gap) * (var(--move-cols, 8) - 1));
+  --move-surface-w: calc(var(--move-slot-base-w) * var(--move-surface-cols, var(--move-cols, 8)) + var(--move-gap) * (var(--move-surface-cols, var(--move-cols, 8)) - 1));
 
   position: relative;
   flex: 1 0 0;
   min-width: 1px;
-  max-width: 1180px;
+  max-width: var(--move-cluster-max);
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -446,17 +547,35 @@
   /* Exactly the controls row's footprint: the dial cluster plus the wheel
      screen when one stands beside it — the page name lands on the top-left
      corner of the first real object, whatever the panel resizes to. */
-  width: calc(max(var(--move-cluster-w, 100%), 0px) + var(--move-screen-w, 0px));
+  width: calc(max(var(--move-surface-w, 100%), 0px) + var(--move-screen-w, 0px));
+  /* Never past the panel's own box: with a wheel screen standing beside the
+     cluster the slot-base %-math resolves against a row that already holds
+     the screen, so the sum runs one screen too wide and the header's right
+     cluster (the clock, the function chips) hangs off the instrument. The
+     row is a child of that box — its true footprint can never exceed it
+     (the 8px keeps the padded box inside too). */
+  max-width: calc(100% - 8px);
   align-self: center;
   padding: 4px;
 }
 
 .tweakers-move-tracks-group {
+  display: grid;
+  gap: var(--move-color-gap-small);
+  justify-items: start;
+  min-width: 0;
+}
+
+.tweakers-move-pages {
   display: flex;
-  gap: 12px;
-  /* the readout pill is taller than a track tick: centring puts every name in
-     the row on one line with it */
   align-items: center;
+  gap: var(--move-color-gap);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tweakers-move-header-start {
+  min-width: 0;
 }
 
 .tweakers-move-track {
@@ -464,11 +583,20 @@
   gap: 9px;
   align-items: center;
   border-radius: var(--move-radius);
-  padding: 0;
+  min-height: var(--move-header-control-height);
+  padding: 0 var(--move-color-gap-small);
   background: none;
   border: none;
   cursor: pointer;
   color: var(--move-text);
+  min-width: 0;
+  transition: transform var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-track:active { transform: scale(0.97); }
+.tweakers-move-track:focus-visible {
+  outline: var(--move-color-stroke) solid var(--move-text);
+  outline-offset: var(--move-color-stroke);
 }
 
 .tweakers-move-track-marker {
@@ -480,15 +608,26 @@
 
 .tweakers-move-track-label {
   font-family: var(--move-font-label);
-  font-size: 16px;
+  font-size: 15px;
   line-height: normal;
-  word-break: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-align: left;
   opacity: 0.22;
-  transition: opacity 0.12s;
+  max-width: 10ch;
+  transition: opacity var(--move-duration-press) var(--move-ease-out);
 }
 
 .tweakers-move-track[data-active="true"] .tweakers-move-track-label {
+  opacity: 1;
+}
+
+.tweakers-move-track:hover .tweakers-move-track-label {
+  opacity: 0.7;
+}
+
+.tweakers-move-track[data-active="true"]:hover .tweakers-move-track-label {
   opacity: 1;
 }
 
@@ -559,7 +698,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  font-family: var(--move-font-label, 'Ableton Sans Small', system-ui, -apple-system, sans-serif);
+  font-family: var(--move-font-label);
   font-size: 16px;
   line-height: normal;
   color: #1e1e1e;
@@ -632,20 +771,111 @@
   white-space: nowrap;
 }
 
+.tweakers-move-volume-value {
+  font-family: var(--move-font-value);
+  font-variation-settings: var(--move-font-value-shape);
+}
+
 .tweakers-move-volume-label {
   opacity: 0.5;
 }
 
 .tweakers-move-volume-sep {
-  font-weight: 700;
+  font-variation-settings: normal;
   font-size: 14px;
 }
+
+/* ------------------------------------------------------------------------
+   Move function chips (MoveFunctionChips) — the attached-function row.
+   Default dress is the slot idiom — the panel's own quiet surface and
+   voice — so the chips read as part of the instrument. `highlight` is the
+   pale hardware-key look, for the one action a view leans on; a palette
+   colour (set inline from MOVE_PALETTE, never an arbitrary hue) rides the
+   same inverse voice. The component names `.tweakers-move-chips`,
+   `.tweakers-move-chip[data-name][data-variant][data-color][data-pressed]`
+   and `.tweakers-move-chip-icon` — restyle here, not there.
+   ------------------------------------------------------------------------ */
+
+.tweakers-move-chips {
+  display: flex;
+  /* An app that attaches many functions grows a second chip line rather
+     than clipping — every attached function stays visible, like every
+     attached key stays lit. */
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  min-width: 0;
+}
+
+/* In the header cluster the chips hang off the right edge, so wrapped
+   lines keep ranging from it. */
+.tweakers-move-actions .tweakers-move-chips {
+  justify-content: flex-end;
+}
+
+/* The `tracks` placement: the chips ride the same line as the track labels,
+   to their right. Scoped to the chips' presence, so a group without them
+   keeps its stacked flow (the headerStart slot). */
+.tweakers-move-tracks-group:has(> .tweakers-move-chips) {
+  grid-auto-flow: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.tweakers-move-chip {
+  position: relative;
+  height: 28px;
+  padding: 0 10px 0 26px;
+  border: none;
+  border-radius: var(--move-radius-small, 8px);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-family: var(--move-font-label, 'Ableton Sans Small', system-ui, -apple-system, sans-serif);
+  font-size: 16px;
+  line-height: normal;
+  white-space: nowrap;
+  color: var(--move-text);
+  background: var(--move-chip);
+  transition: filter 0.12s, transform 0.12s;
+}
+
+/* The pop-out dress: the pale hardware-key look, and any palette colour
+   (background set inline from MOVE_PALETTE) — both speak in the inverse
+   voice, dark on light. */
+.tweakers-move-chip[data-variant="highlight"] {
+  background: #dee3c9;
+}
+
+.tweakers-move-chip[data-variant="highlight"],
+.tweakers-move-chip[data-color] {
+  color: #1e1e1e;
+}
+
+.tweakers-move-chip:hover {
+  filter: brightness(1.08);
+}
+
+.tweakers-move-chip[data-pressed] {
+  filter: brightness(1.25);
+  transform: scale(0.96);
+  transition-duration: 0.04s;
+}
+
+.tweakers-move-chip-icon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* End of the Move function chips skin block. */
 
 .tweakers-move-grid {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  width: var(--move-cluster-w, 100%);
+  width: var(--move-surface-w, var(--move-cluster-w, 100%));
   align-self: center;
 }
 
@@ -654,7 +884,8 @@
   grid-template-columns: repeat(var(--move-cols, 8), minmax(0, 1fr));
   gap: var(--move-gap);
   height: var(--move-slot-height);
-  width: 100%;
+  width: var(--move-cluster-w, 100%);
+  align-self: center;
 }
 
 /* The endless strip. The rows keep their 8-wide slot size and simply run
@@ -676,7 +907,15 @@
 }
 
 .tweakers-move-strip[data-scroll="true"] {
-  --move-slot-w: calc((100% - 28px) / 8);
+  /* One slot, at the panel's own 8-wide size. Percentages in here resolve
+     against the window, not the panel — the grid above is already only
+     --move-surface-cols slots wide — so the slot is recovered by dividing
+     the window by its own column count. A flat /8 recovered it only for an
+     8-column window: a shorter strip shrank the window first and then took
+     an eighth of it, squeezing every slot to a pill. */
+  --move-slot-w: calc(
+    (100% - (var(--move-surface-cols, 8) - 1) * var(--move-gap)) / var(--move-surface-cols, 8)
+  );
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -688,6 +927,12 @@
 .tweakers-move-strip[data-scroll="true"] .tweakers-move-dials,
 .tweakers-move-strip[data-scroll="true"] .tweakers-move-pads {
   grid-template-columns: repeat(var(--move-strip-len, 8), var(--move-slot-w));
+  /* Full window width, not the cluster's: --move-cluster-w is a fraction of
+     its containing block, and inside the strip that block is the window —
+     already narrowed once. Taking a fraction of it again is the same
+     double-shrink the slot formula above escapes. The rows overflow this
+     width by design; the viewport clips them. */
+  width: 100%;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1025,8 +1270,28 @@
 }
 
 .tweakers-move-dial-value {
-  font-size: 24px;
+  font-family: var(--move-font-value);
+  font-variation-settings: var(--move-font-value-shape);
+  font-size: 40px;
   opacity: 0;
+  /* number over its unit — "250" with "ms" underneath, in the plain shape */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  white-space: nowrap;
+}
+
+/* The number's box hugs its digits (the face carries a deep descent the
+   digits never use), so the unit can sit a clear 10px under them. */
+.tweakers-move-dial-number {
+  line-height: 0.8;
+}
+
+.tweakers-move-dial-unit {
+  font-variation-settings: normal;
+  font-size: 18px;
+  line-height: 1;
+  margin-top: 3px;
 }
 
 .tweakers-move-dial:hover .tweakers-move-dial-label,
@@ -1059,7 +1324,7 @@
   border-radius: 999px;
   background: var(--move-chip);
   font-family: var(--move-font-label);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 16px;
   white-space: nowrap;
   overflow: hidden;
@@ -1078,7 +1343,7 @@
   background: var(--move-bg);
   color: var(--move-text);
   font-family: var(--move-font-label);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 16px;
   white-space: nowrap;
   overflow: hidden;
@@ -1102,7 +1367,7 @@
   right: 9px;
   bottom: var(--move-option-bottom);
   font-family: var(--move-font-label);
-  font-size: 13px;
+  font-size: 15px;
   line-height: 16px;
   text-align: center;
   white-space: nowrap;
@@ -1222,14 +1487,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 15px;
   color: var(--move-text);
   opacity: 0.75;
 }
 
 .tweakers-move-slot-foot-value {
   flex: none;
-  font-size: 13px;
+  font-size: 15px;
   color: var(--move-text);
   font-variant-numeric: tabular-nums;
 }
@@ -1380,6 +1645,8 @@
 }
 
 .tweakers-move-filter-readout .tweakers-move-dial-value {
+  display: block;
+  font-variation-settings: normal;
   font-size: 13px;
   line-height: 16px;
   white-space: nowrap;
@@ -1463,6 +1730,7 @@
 
 .tweakers-move-env-readout .tweakers-move-dial-label,
 .tweakers-move-env-readout .tweakers-move-dial-value {
+  font-variation-settings: normal;
   font-size: 13px;
   line-height: 16px;
   white-space: nowrap;
@@ -1613,19 +1881,27 @@
 }
 
 .tweakers-move-wheel-screen {
-  display: flex;
-  flex-direction: column;
+  position: relative;
   flex: 0 1 var(--move-wheel-width);
   min-width: 0;
-  height: var(--move-slot-height);
+  /* The whole cluster's height — the slot row and the pad rows below it —
+     the same full-height presentation the preset navigator's screen has.
+     The grid beside it is the height authority: the screen stretches to the
+     row the grid sets, and the list inside is pinned to the screen's box
+     (out of the flow, like the navigator's own screen against the grid), so
+     a long list can never grow the panel. Without a grid — an empty page —
+     the screen keeps the single slot height it has always had. */
+  align-self: stretch;
+  min-height: var(--move-slot-height);
   border-radius: var(--move-radius);
   overflow: hidden;
   background: var(--move-bg);
 }
 
 .tweakers-move-wheel-screen .tweakers-list-screen {
-  flex: 1;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
+  max-height: none;
   width: 100%;
   border-radius: 0;
   /* Centred while the rows fit the screen, from the top once they overflow —
@@ -1845,7 +2121,7 @@
   background: var(--move-chip);
   color: var(--move-text);
   font-family: var(--move-font-label);
-  font-size: 11px;
+  font-size: 13px;
   line-height: var(--move-head-h);
   text-align: center;
   white-space: nowrap;
@@ -2006,7 +2282,8 @@
 .tweakers-move-dial[data-preview] .tweakers-move-dial-value {
   left: 0;
   right: 0;
-  font-size: 11px;
+  font-variation-settings: normal;
+  font-size: 13px;
   white-space: nowrap;
 }
 
@@ -2080,6 +2357,18 @@
   transition-delay: 0.12s;
 }
 
+/* A page with a wheel screen already has a display at the cluster's left
+   edge, at the same full height the navigator wants. So the navigator takes
+   that screen over — the Move has one display — landing exactly on its box:
+   no slide, and the slots stay under the hands. */
+.tweakers-move-controls:has(> .tweakers-move-wheel-screen) .tweakers-move-grid[data-presets] {
+  transform: none;
+}
+
+.tweakers-move-controls:has(> .tweakers-move-wheel-screen) .tweakers-move-preset-screen {
+  right: calc(100% + 2 * var(--move-gap));
+}
+
 .tweakers-move-preset-screen .tweakers-list-screen {
   height: 100%;
   max-height: none;
@@ -2099,6 +2388,112 @@
    steps back to say it is not what's sounding right now. */
 .tweakers-move-preset-screen[data-comparing] {
   opacity: 0.45;
+}
+
+/* The search's field, at the top of the list it narrows (Figma 828:656):
+   a pale pill one row tall — the hardware-key look, dark text on the
+   readout colour — with the magnifier pinned at its left edge and the
+   query centred like a row's name. It sits stuck to the top, the same 4px
+   off the edge as off the sides, and the rows the query keeps run down
+   from it. */
+.tweakers-move-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 24px;
+  margin: 4px 4px var(--move-list-gap, 7px);
+  padding: 2px 10px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  background: var(--move-text);
+  color: #1e1e1e;
+  font-family: var(--move-font-label);
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.tweakers-move-search-icon {
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.tweakers-move-search-input {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 18px;
+  border: none;
+  outline: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  caret-color: currentColor;
+}
+
+.tweakers-move-search-input::placeholder {
+  color: inherit;
+  opacity: 1;
+}
+
+/* On the wheel screen the list is pinned to the screen's box; while a
+   search runs the field takes the top and the list is pinned below it —
+   and the rows read from the top, not from the middle: a narrowed list
+   is a result, and results start where the query is. */
+.tweakers-move-wheel-screen[data-search] {
+  background: #1e1e1e;
+}
+
+.tweakers-move-wheel-screen[data-search] .tweakers-move-search {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+}
+
+.tweakers-move-wheel-screen[data-search] .tweakers-list-screen {
+  top: 35px; /* the 4px edge, the field, the row gap */
+  padding-top: 0;
+  justify-content: flex-start;
+}
+
+/* The navigator screens stack the field above the rows. */
+.tweakers-move-preset-screen[data-search] {
+  display: flex;
+  flex-direction: column;
+  background: #1e1e1e;
+  border-radius: 8px;
+}
+
+.tweakers-move-preset-screen[data-search] > .tweakers-list-screen {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  padding-top: 0;
+}
+
+.tweakers-move-palette-screen[data-search] {
+  padding-top: 0;
+}
+
+.tweakers-move-palette-screen[data-search] > .tweakers-move-search {
+  position: sticky;
+  top: 0;
+  margin: 4px 0 12px;
+}
+
+.tweakers-move-palette-empty {
+  padding: 2px 10px;
+  font-family: var(--move-font-label);
+  font-size: var(--move-color-font);
+  color: var(--move-text);
+  opacity: 0.22;
 }
 
 /* The save-a-preset input, floating centred above the panel like the
@@ -2137,7 +2532,7 @@
 
 .tweakers-move-pads {
   display: grid;
-  grid-template-columns: repeat(var(--move-cols, 8), minmax(0, 1fr));
+  grid-template-columns: repeat(var(--move-pad-cols, var(--move-cols, 8)), minmax(0, 1fr));
   gap: 4px;
   width: 100%;
 }
@@ -2154,17 +2549,58 @@
   border-radius: var(--move-radius-small);
   color: var(--move-text);
   font-family: var(--move-font-label);
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 15px;
   line-height: normal;
   white-space: nowrap;
   cursor: pointer;
+  transition: transform var(--move-duration-press) var(--move-ease-out),
+    opacity var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-pad:not([data-empty="true"]):active,
+.tweakers-move-pad[data-held] {
+  transform: scale(0.97);
+}
+
+.tweakers-move-pad:focus-visible {
+  outline: var(--move-color-stroke) solid var(--move-text);
+  outline-offset: var(--move-color-stroke);
 }
 
 .tweakers-move-pad[data-empty="true"] {
   background: var(--move-slot);
   cursor: default;
   opacity: 0.3;
+}
+
+/* The app's reserved rows, on screen: one slot across the whole width saying
+   what those pads do here. The hardware pads are the app's own instrument —
+   the panel names it rather than pretending to be eight controls. */
+.tweakers-move-app-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 32px;
+  /* the grid's own 4px, plus 4 — the app's row is a different instrument
+     from the control rows above it, and reads better with the air */
+  margin-top: 4px;
+  padding: 0 12px;
+  background: var(--move-slot);
+  opacity: 0.3;
+  border-radius: var(--move-radius-small);
+}
+
+.tweakers-move-app-row[data-rows="2"] { height: 68px; }
+
+.tweakers-move-app-row-label {
+  font-family: var(--move-font-label);
+  font-size: 13px;
+  color: var(--move-text);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tweakers-move-pad-title {
@@ -2200,7 +2636,7 @@
 
 .tweakers-move-pad[data-kind="app"] {
   padding: 0 4px;
-  font-weight: 400;
+  min-width: 0;
 }
 
 .tweakers-move-pad[data-kind="app"]:not([data-on="true"]) .tweakers-move-pad-indicator {
@@ -2210,8 +2646,7 @@
 .tweakers-move-pad[data-kind="value"] {
   justify-content: space-between;
   padding: 0 10px;
-  font-size: 13px;
-  font-weight: 400;
+  font-size: 15px;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -2235,8 +2670,7 @@
 .tweakers-move-pad[data-kind="wave"] {
   justify-content: space-between;
   padding: 0 8px 0 14px;
-  font-size: 13px;
-  font-weight: 400;
+  font-size: 15px;
 }
 
 .tweakers-move-pad[data-kind="wave"] .tweakers-move-pad-title {
@@ -2251,10 +2685,6 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
-}
-
-.tweakers-move-pad-number {
-  font-weight: 700;
 }
 
 .tweakers-move-pad[data-held],
@@ -2273,6 +2703,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .tweakers-move-pad,
+  .tweakers-move-track,
+  .tweakers-move-track-label {
+    transition-duration: 0.01ms;
+  }
+
 .tweakers-move-pad[data-latched],
   .tweakers-move-dial[data-latched] {
     animation: none;
@@ -2284,6 +2720,117 @@
   box-shadow: -2px 2px 0 0 var(--move-bg), -3px 3px 0 0 var(--move-text);
 }
 
+/* The tabs strip — the pad grid's multi-slot control. It spans its run and
+   re-cuts that run into the same columns and the same 4px gap the grid uses,
+   so every tab lands exactly on the hardware pad that selects it. */
+.tweakers-move-tabs {
+  display: grid;
+  grid-template-columns: repeat(var(--move-tabs-cols, 2), minmax(0, 1fr));
+  gap: 4px;
+  position: relative;
+}
+
+/* The options are one bar across their pads: the ground belongs to the run,
+   and the gaps between the tabs are the run showing through. */
+.tweakers-move-tabs-run {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 4px;
+  background: var(--move-chip);
+  border-radius: var(--move-radius-small);
+}
+
+.tweakers-move-tabs-head + .tweakers-move-tabs-run {
+  grid-column: 2 / -1;
+}
+
+.tweakers-move-tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  min-width: 0;
+  padding: 0 6px;
+  border-radius: var(--move-radius-small);
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: normal;
+}
+
+/* Only the mode you are in wears a fill. An available mode says so by being
+   on the bar — giving it a chip of its own would make every tab look chosen. */
+.tweakers-move-tab[data-on] {
+  background: var(--move-text);
+  color: var(--move-text-inverse);
+}
+
+/* The name is a head, not a choice: no ground of its own, and set against
+   the run it names. */
+.tweakers-move-tabs-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 32px;
+  padding-right: 8px;
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: normal;
+  opacity: 0.55;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tweakers-move-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tweakers-move-tab-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+/* The real controls, over the drawing: one button per option, on the column
+   its tab is drawn in. Transparent, so the strip keeps the face above. */
+.tweakers-move-tab-zones {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--move-tabs-cols, 2), minmax(0, 1fr));
+  gap: 4px;
+}
+
+/* No press treatment of its own: the tab lights the instant it is chosen,
+   and that IS the answer to the press. */
+.tweakers-move-tab-zone {
+  grid-row: 1;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--move-radius-small);
+  color: transparent;
+  font-size: 0;
+  cursor: pointer;
+}
+
+.tweakers-move-tab-zone:focus-visible {
+  outline: var(--move-color-stroke) solid var(--move-text);
+  outline-offset: var(--move-color-stroke);
+}
+
+.tweakers-move-tab-zone:disabled {
+  cursor: default;
+}
+
 @media (max-width: 720px) {
 .tweakers-move {
     padding: 12px 12px 10px;
@@ -2293,7 +2840,11 @@
     font-size: 16px;
   }
 .tweakers-move-dial-value {
-    font-size: 18px;
+    font-size: 30px;
+  }
+.tweakers-move-dial-unit {
+    font-size: 14px;
+    margin-top: 2px;
   }
 .tweakers-move-dial {
     --move-shape-top: 32px;
@@ -2301,7 +2852,7 @@
     --move-head-h: 16px;
   }
 .tweakers-move-dial-option {
-    font-size: 12px;
+    font-size: 13px;
     line-height: 14px;
   }
 .tweakers-move-dial-screen {
@@ -2310,8 +2861,8 @@
   }
 .tweakers-move-dial-list .tweakers-list-screen-row {
     padding: 1px 0;
-    font-size: 12px;
-    line-height: 12px;
+    font-size: 13px;
+    line-height: 13px;
   }
 }
 
@@ -2494,7 +3045,7 @@
   background: none;
   border-radius: 4px;
   cursor: pointer;
-  font-family: var(--move-font-label, 'Ableton Sans Small', system-ui, -apple-system, sans-serif);
+  font-family: var(--move-font-label);
   font-size: 16px;
   line-height: 20px;
   color: #dee3c9;
@@ -2542,7 +3093,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: right;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 20px;
   opacity: 0.22;
   transition: opacity 0.12s;
@@ -2719,4 +3270,272 @@
 .tweakers-move-dial[data-visual] .tweakers-move-visual,
 .tweakers-move-dial[data-visual] .tweakers-move-dial-icon {
   transform: translateY(8px);
+}
+
+/* ---------------------------------------------------------------------------
+   Notifications
+
+   The app's messages, standing in the same air as the floating displays:
+   centred over the instrument, one gap above whatever is up there. The card
+   wears the panel's own surface and the curve frame's drop, so a message reads
+   as a thing the instrument said rather than a thing the browser said.
+
+   The stack is the Sonner shape Base UI draws: newest in front, the run behind
+   it peeking out by a sliver, and the whole set fanning open on hover or
+   focus. Base UI hands us the measurements (--toast-index, --toast-height,
+   --toast-offset-y, the swipe offsets); the arithmetic below only spends them.
+   --------------------------------------------------------------------------- */
+
+.tweakers-move-notify {
+  /* A message is narrower than a display on purpose — it is a sentence, not a
+     workspace, and the display it floats over must still read past it. */
+  --move-notify-width: 380px;
+  /* The air between two fanned-out cards, and the sliver a stacked one shows. */
+  --move-notify-gap: 10px;
+  --move-notify-peek: 8px;
+
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  width: var(--move-notify-width);
+  /* Over the panel (9990), over an open overlay (10001), over a docked display
+     (10002) — a message nobody can see is a message nobody was given. */
+  z-index: 10003;
+}
+
+.tweakers-move-notify-card {
+  --move-notify-scale: calc(max(0, 1 - (var(--toast-index) * 0.06)));
+  --move-notify-shrink: calc(1 - var(--move-notify-scale));
+  --move-notify-height: var(--toast-frontmost-height, var(--toast-height));
+  --move-notify-open-y: calc(
+    var(--toast-offset-y) * -1 + (var(--toast-index) * var(--move-notify-gap) * -1) +
+      var(--toast-swipe-movement-y)
+  );
+
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: var(--move-notify-height);
+  border-radius: var(--move-radius);
+  background: var(--move-bg);
+  color: var(--move-text);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  transform-origin: bottom center;
+  -webkit-user-select: none;
+  user-select: none;
+  z-index: calc(1000 - var(--toast-index));
+  transform: translateX(var(--toast-swipe-movement-x))
+    translateY(
+      calc(
+        var(--toast-swipe-movement-y) - (var(--toast-index) * var(--move-notify-peek)) -
+          (var(--move-notify-shrink) * var(--move-notify-height))
+      )
+    )
+    scale(var(--move-notify-scale));
+  transition:
+    transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.4s var(--move-ease-out),
+    height 0.15s;
+}
+
+/* Fanned open — every card at full size, stacked upward by its own height. */
+.tweakers-move-notify-card[data-expanded] {
+  height: var(--toast-height);
+  transform: translateX(var(--toast-swipe-movement-x)) translateY(var(--move-notify-open-y));
+}
+
+/* Arriving and leaving: a message rises out of the instrument and sinks back
+   into it, which is where it came from. */
+.tweakers-move-notify-card[data-starting-style],
+.tweakers-move-notify-card[data-ending-style] {
+  opacity: 0;
+  transform: translateY(150%);
+}
+
+.tweakers-move-notify-card[data-limited] {
+  opacity: 0;
+}
+
+.tweakers-move-notify-card[data-ending-style][data-swipe-direction='up'] {
+  transform: translateY(calc(var(--toast-swipe-movement-y) - 150%));
+}
+
+.tweakers-move-notify-card[data-ending-style][data-swipe-direction='down'] {
+  transform: translateY(calc(var(--toast-swipe-movement-y) + 150%));
+}
+
+.tweakers-move-notify-card[data-ending-style][data-swipe-direction='left'] {
+  transform: translateX(calc(var(--toast-swipe-movement-x) - 150%))
+    translateY(var(--move-notify-open-y));
+}
+
+.tweakers-move-notify-card[data-ending-style][data-swipe-direction='right'] {
+  transform: translateX(calc(var(--toast-swipe-movement-x) + 150%))
+    translateY(var(--move-notify-open-y));
+}
+
+/* The bridge that keeps the fan open while the pointer crosses the gap
+   between two cards. */
+.tweakers-move-notify-card::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  height: calc(var(--move-notify-gap) + 1px);
+}
+
+.tweakers-move-notify-card:focus-visible {
+  outline: var(--move-color-stroke) solid var(--move-text);
+  outline-offset: var(--move-color-stroke);
+}
+
+.tweakers-move-notify-body {
+  display: flex;
+  align-items: center;
+  gap: var(--move-color-gap);
+  padding: 12px;
+  overflow: hidden;
+  transition: opacity 0.25s var(--move-ease-out);
+}
+
+/* A card behind the front one shows its edge, not its words — the stack is a
+   count at rest and a list once it is opened. */
+.tweakers-move-notify-body[data-behind] {
+  opacity: 0;
+}
+
+.tweakers-move-notify-body[data-expanded] {
+  opacity: 1;
+}
+
+.tweakers-move-notify-text {
+  display: flex;
+  flex: 1 0 0;
+  min-width: 1px;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* What kind of message this is, in a word. The hue beside it repeats the word
+   and never replaces it. */
+.tweakers-move-notify-kind {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+  font-family: var(--move-font-label);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--move-text);
+  opacity: 0.7;
+}
+
+.tweakers-move-notify-dot {
+  width: var(--move-color-marker);
+  height: var(--move-color-marker);
+  border-radius: 50%;
+  background: var(--move-text);
+}
+
+.tweakers-move-notify-card[data-type='success'] .tweakers-move-notify-dot {
+  background: var(--move-lime);
+}
+
+.tweakers-move-notify-card[data-type='warning'] .tweakers-move-notify-dot {
+  background: var(--move-yellow);
+}
+
+.tweakers-move-notify-card[data-type='error'] .tweakers-move-notify-dot {
+  background: var(--move-red);
+}
+
+.tweakers-move-notify-title {
+  margin: 0;
+  font-family: var(--move-font-label);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 18px;
+  color: var(--move-text);
+}
+
+.tweakers-move-notify-description {
+  margin: 0;
+  font-family: var(--move-font-label);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 16px;
+  color: var(--move-text);
+  opacity: 0.7;
+}
+
+/* The one thing a message can offer to do about itself. */
+.tweakers-move-notify-action {
+  flex: 0 0 auto;
+  height: var(--move-header-control-height);
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--move-radius-small);
+  background: var(--move-chip);
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: normal;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-notify-action:active {
+  transform: scale(0.97);
+}
+
+.tweakers-move-notify-close {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: var(--move-radius-small);
+  background: none;
+  color: var(--move-text);
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-notify-close:hover {
+  opacity: 1;
+}
+
+.tweakers-move-notify-close path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--move-glyph-stroke);
+  stroke-linecap: round;
+}
+
+.tweakers-move-notify-action:focus-visible,
+.tweakers-move-notify-close:focus-visible {
+  outline: var(--move-color-stroke) solid var(--move-text);
+  outline-offset: var(--move-color-stroke);
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-notify-card,
+  .tweakers-move-notify-body,
+  .tweakers-move-notify-action,
+  .tweakers-move-notify-close {
+    transition: none;
+  }
 }
