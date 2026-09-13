@@ -231,8 +231,9 @@ The same editor now drives gradients and small colours (see
 `docs/controls.md`, "Color: the integrated gradient editor and the balance
 pattern"): a 2–4 stop `gradient` opens the editor from its ramp slot and
 claims the track buttons as its stops for as long as it stands open; a
-`color` with a `movePads` column is a swatch chip on the value row whose tap
-opens the editor; and `balance` blends two sibling colours on a plain 0..1
+`color` with a `movePads` column is a swatch chip on the value row — a chip
+like any other: tap latches it onto the dial above, hold peeks, and the
+editor opens from that dial the way a colour dial's does; and `balance` blends two sibling colours on a plain 0..1
 dial. On the wire the gradient dial rides as a colour dial carrying `stops`,
 and the stop gestures are `color-stop` / `stop-position` — see the move
 repo's `PROTOCOL.md`.

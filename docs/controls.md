@@ -48,7 +48,7 @@ control.
 | `action` | A button the page wants on the surface | `action` with a `movePads` column; `MovePadActionBody` | 1 pad |
 | `app` | A cell the app paints — a track, a slice, a step | `MoveSurfaceStore`; `MovePadAppBody` | 1 pad |
 | `tabs` | The mode a page is in, reachable without turning anything | `select` with `moveTabs` (`true`, or `'named'` for the name pad); `MovePadTabsBody` | 2–8 adjacent pads, switch row |
-| `color` | A single colour where colour is not the page's big control | `color` config with a `movePads` column — or nothing at all when a `balance` references it (the kit seats those itself); `MovePadColorBody` | 1 pad, switch or value row; lit in its colour, tap opens the editor |
+| `color` | A single colour where colour is not the page's big control | `color` config with a `movePads` column — or nothing at all when a `balance` references it (the kit seats those itself); `MovePadColorBody` | 1 pad, switch or value row; lit in its colour; a chip like `value` — tap latches, hold peeks |
 
 A `moveTabs` select stops competing for a dial: it is a pad strip and nothing
 else. It lands as one piece or not at all — the builder reports `tabs-oversized`
@@ -70,7 +70,27 @@ with more than four stops keeps the plain ramp slot and its on-screen drag.
 
 A `color` control given a `movePads` column becomes the **small colour
 selector**: a swatch chip on the value row for pages where colour is not the
-big control. A tap — screen pad or hardware pad — opens the same editor.
+big control. It follows the small-slot grammar every value chip follows —
+the same code path, on screen and on the hardware, so the two can never
+drift:
+
+- **Tap** latches the chip into the dial above: that column's knob (and the
+  on-screen slot) now edits the colour, until the chip is tapped again.
+- **Hold** does the same for as long as the pad is down — a peek; release
+  hands the knob back to its dial.
+
+While a colour chip holds the knob, it is edited exactly as a big-slot
+colour is: hue on the knob, luminosity on the volume knob while that knob is
+touched, and the full editor behind the big slot's own gesture — a still tap
+on the knob (hardware) or on the slot (screen); Shift+tap restores its first
+colour. A tap on the pad itself never opens the editor. The latch outlives
+the editor.
+
+A colour chip is a chip on whichever row it sits: the slot's kind decides
+the gesture, never its row. A balance's first colour sits on the switch row
+and still latches and peeks — it does not toggle. A column holding both of a
+balance's colours has one knob and one owner: latching one releases the
+other, and holding one peeks over the one latched.
 
 The **balance pattern** expresses "this effect's colour is a mix of two":
 two small colour selectors plus one big slot blending between them. Declaring

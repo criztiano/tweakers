@@ -740,8 +740,9 @@ export function MovePadActionBody({ label }: { label: string }) {
 
 /**
  * The small colour selector: the value chip's shape carrying a swatch where
- * the number would sit — for pages where colour is not the big control. A
- * tap opens the same colour editor the big slot's colour uses.
+ * the number would sit — for pages where colour is not the big control. It
+ * is a chip in every gesture: tap latches it into the slot above, hold
+ * peeks, and that slot — the big colour slot — edits it and opens its editor.
  */
 export function MovePadColorBody({ label, color }: { label: string; color: string }) {
   return (
@@ -820,7 +821,7 @@ export const MOVE_PAD_LIBRARY = {
   bend: { description: 'hold and drag to bend the envelope ramp above it', component: MovePadToggleBody },
   wave: { description: 'hold and drag for the stage’s own sine, tap to flip it', component: MovePadWaveBody },
   tabs: { description: '2 to 8 pads: the page’s modes side by side, the current one lit — a name pad optional', component: MovePadTabsBody },
-  color: { description: 'a single colour in a small slot — tap to open the colour editor', component: MovePadColorBody },
+  color: { description: 'a single colour in a small slot — tap latches it onto the dial above, hold peeks; that dial edits and opens it', component: MovePadColorBody },
 } as const satisfies Record<MovePadKind, { description: string; component: unknown }>;
 
 /**

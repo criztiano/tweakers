@@ -240,17 +240,107 @@ describe('Move gradient, balance and small colour panel', () => {
     expect(swatch(renderer!.root.findAllByProps({ 'data-kind': 'color' }).filter((n) => n.type === 'button')[0])).toBe('#00ff00');
   });
 
-  it('small colour pads open the shared editor from the pad rows', () => {
+  // Colour chips follow the small-slot grammar every value chip does: TAP
+  // latches the chip onto the dial above, HOLD peeks; the slot then IS the
+  // big colour slot, so its own tap is the door to the editor. A pad tap
+  // never opens the editor.
+  const colorPads = () => renderer!.root.findAllByProps({ 'data-kind': 'color' }).filter((n) => n.type === 'button' && n.props.className === 'tweakers-move-pad');
+  const colorSlot = () => renderer!.root.findAllByProps({ 'data-kind': 'color' }).filter((n) => n.type === 'button' && n.props.className === 'tweakers-move-dial');
+  const pad = (label: string) => colorPads().find((n) => n.props['aria-label'] === label)!;
+  const tapPad = (label: string) => {
+    act(() => pad(label).props.onPointerDown({ pointerId: 1, currentTarget: { setPointerCapture: vi.fn() } }));
+    act(() => pad(label).props.onPointerUp());
+  };
+
+  it('a colour pad tap latches its chip into the slot above — it never opens the editor', () => {
     mountGradient();
-    const pads = renderer!.root.findAllByProps({ 'data-kind': 'color' }).filter((n) => n.type === 'button');
-    expect(pads).toHaveLength(2);
-    act(() => pads[0].props.onClick());
+    const latches: unknown[] = [];
+    window.addEventListener('move-tweakers:latch', (e) => latches.push((e as CustomEvent).detail));
+    expect(colorPads()).toHaveLength(2);
+    expect(colorSlot()).toHaveLength(0);
+    tapPad('Color A');
+    expect(MoveColorStore.getView()).toBeNull();
+    expect(pad('Color A').props['data-latched']).toBe(true);
+    expect(latches).toEqual([{ pageId: gid, path: 'colorA', latched: true }]);
+    // the balance's slot now holds Color A as the big colour slot, pulsing with its chip
+    expect(colorSlot()).toHaveLength(1);
+    expect(colorSlot()[0].props['aria-label']).toMatch(/^Color A/);
+    expect(colorSlot()[0].props['data-latched']).toBe(true);
+    expect(renderer!.root.findAllByProps({ 'data-kind': 'balance' })).toHaveLength(0);
+    // the slot's own tap is the big colour slot's door to the editor
+    act(() => colorSlot()[0].props.onClick());
     expect(MoveColorStore.getView()?.path).toBe('colorA');
-    /* while the editor is open the pad rows are the opacity meter — the
-       chip steps aside with them, and comes back on close */
-    expect(renderer!.root.findAllByProps({ 'data-kind': 'color' }).filter((n) => n.type === 'button')).toHaveLength(0);
     act(() => MoveColorStore.close());
-    expect(renderer!.root.findAllByProps({ 'data-kind': 'color' }).filter((n) => n.type === 'button')).toHaveLength(2);
+    // latching B releases A — one knob, one owner — and tapping B again lets go
+    tapPad('Color B');
+    expect(colorSlot()[0].props['aria-label']).toMatch(/^Color B/);
+    expect(pad('Color A').props['data-latched']).toBeUndefined();
+    tapPad('Color B');
+    expect(colorSlot()).toHaveLength(0);
+    expect(renderer!.root.findAllByProps({ 'data-kind': 'balance' })).toHaveLength(1);
+  });
+
+  it('holding a colour pad peeks: the slot holds the colour until release, and nothing latches', () => {
+    mountGradient();
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    act(() => pad('Color B').props.onPointerDown({ pointerId: 1, currentTarget: { setPointerCapture: vi.fn() } }));
+    expect(pad('Color B').props['data-held']).toBe(true);
+    expect(colorSlot()[0].props['aria-label']).toMatch(/^Color B/);
+    now.mockReturnValue(2000);                     // well past a tap
+    act(() => pad('Color B').props.onPointerUp());
+    expect(pad('Color B').props['data-latched']).toBeUndefined();
+    expect(colorSlot()).toHaveLength(0);
+    expect(MoveColorStore.getView()).toBeNull();
+    now.mockRestore();
+  });
+
+  it('a colour chip and a slider chip answer the same gestures, with the same events', () => {
+    const cid = `${id}-chips`;
+    const config: Record<string, unknown> = {};
+    for (let i = 0; i < 8; i++) config[`d${i}`] = [0.5, 0, 1];
+    config.extra = [0.2, 0, 1];
+    config.ink = { type: 'color', default: '#00ff00' };
+    TweakStore.registerPanel(cid, 'Chips', config as never, undefined, { movePads: { ink: 5 } });
+    act(() => { renderer = create(createElement(MovePanel, { panels: ['Chips'], dock: 'flow', productionEnabled: true })); });
+    const chip = (kind: string) => renderer!.root.findAll((n) => n.type === 'button' && n.props.className === 'tweakers-move-pad' && n.props['data-kind'] === kind)[0];
+    const slotLabels = () => renderer!.root.findAll((n) => n.props.className === 'tweakers-move-dial' && n.props['aria-label'] !== undefined).map((n) => String(n.props['aria-label']));
+    const latches: { path: string }[] = [];
+    window.addEventListener('move-tweakers:latch', (e) => latches.push((e as CustomEvent).detail));
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    for (const [kind, label] of [['value', 'Extra'], ['color', 'Ink']] as const) {
+      const before = slotLabels();
+      now.mockReturnValue(1000);
+      // same handlers, no click shortcut on either
+      expect(chip(kind).props.onClick).toBeUndefined();
+      // hold peeks
+      act(() => chip(kind).props.onPointerDown({ pointerId: 1, currentTarget: { setPointerCapture: vi.fn() } }));
+      expect(chip(kind).props['data-held']).toBe(true);
+      expect(slotLabels().some((l) => l.startsWith(label))).toBe(true);
+      now.mockReturnValue(5000);
+      act(() => chip(kind).props.onPointerUp());
+      expect(slotLabels()).toEqual(before);
+      expect(chip(kind).props['data-latched']).toBeUndefined();
+      // tap latches, tap again releases
+      act(() => chip(kind).props.onPointerDown({ pointerId: 1, currentTarget: { setPointerCapture: vi.fn() } }));
+      act(() => chip(kind).props.onPointerUp());
+      expect(chip(kind).props['data-latched']).toBe(true);
+      expect(slotLabels().some((l) => l.startsWith(label))).toBe(true);
+      act(() => chip(kind).props.onPointerDown({ pointerId: 1, currentTarget: { setPointerCapture: vi.fn() } }));
+      act(() => chip(kind).props.onPointerUp());
+      expect(chip(kind).props['data-latched']).toBeUndefined();
+      expect(slotLabels()).toEqual(before);
+    }
+    expect(latches.map((l) => l.path)).toEqual(['extra', 'extra', 'ink', 'ink']);
+    expect(MoveColorStore.getView()).toBeNull();
+    now.mockRestore();
+    TweakStore.unregisterPanel(cid);
+  });
+
+  it('the hardware latching a switch-row colour substitutes it on screen too', () => {
+    mountGradient();
+    act(() => window.dispatchEvent(new CustomEvent('move-tweakers:override', { detail: { pageId: gid, held: {}, latched: { colorA: true } } })));
+    expect(colorSlot()[0].props['aria-label']).toMatch(/^Color A/);
+    expect(pad('Color A').props['data-latched']).toBe(true);
   });
 
   it('the balance slot blends its two colours and drags like a dial', () => {

@@ -361,7 +361,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // handled the released gesture. This mirrors the physical pad's momentary
   // feedback without inventing a latched state for an app action.
   const [appHeld, setAppHeld] = useState<string | null>(null);
-  // Screen-side value-chip substitution: a held chip peeks, a tapped chip latches.
+  // Screen-side chip substitution: a held chip peeks, a tapped chip latches —
+  // every chip, a value or a colour, on whichever row it sits.
   const [held, setHeld] = useState<{ col: number; meta: ControlMeta } | null>(null);
   const [latched, setLatched] = useState<Record<number, ControlMeta | undefined>>({});
   const holdStart = useRef(0);
@@ -1268,15 +1269,25 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // Touching a control arms it for the assignment gesture (step press).
   const armMod = (path: string) => ModulationStore.noteTouch(page.panel.id, path);
 
+  // The chips that can take a column's knob: its value-row chip, and a
+  // colour on its switch row (a balance's first colour). A switch is not a
+  // chip — a colour is one wherever it sits: the slot's kind decides the
+  // gesture, never its row.
+  const chipsAt = (col: number): ControlMeta[] =>
+    [page.toggles[col]?.type === 'color' ? page.toggles[col] : undefined, page.values[col]]
+      .filter((m): m is ControlMeta => !!m);
+
   // What a dial column actually edits: a held chip wins (screen or pad),
-  // then a latched one, then the column's own dial.
+  // then a latched one, then the column's own dial. A colour chip lands in
+  // the slot as the big colour slot itself, so it is edited — and its editor
+  // opened — exactly the way a colour dial is.
   const dialAt = (col: number): ControlMeta | undefined => {
     if (held && held.col === col) return held.meta;
-    const hw = page.values[col];
-    if (hw && hwHeld[hw.path]) return hw;
+    const chips = chipsAt(col);
+    const hwHeldChip = chips.find((m) => hwHeld[m.path]);
+    if (hwHeldChip) return hwHeldChip;
     if (latched[col]) return latched[col];
-    if (hw && hwLatched[hw.path]) return hw;
-    return page.dials[col];
+    return chips.find((m) => hwLatched[m.path]) ?? page.dials[col];
   };
 
   const pressChip = (e: React.PointerEvent<HTMLElement>, col: number, meta: ControlMeta) => {
@@ -1648,7 +1659,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   : waveSlot && modSettings
                   ? <MoveWavePreview index={modSettings.index} />
                   : null;
-                if (meta.type === 'color') return <MoveColorSlot key={meta.path} panelId={page.panel.id} meta={meta} active={active} open={colorMeta?.path === meta.path} />;
+                if (meta.type === 'color') return <MoveColorSlot key={meta.path} panelId={page.panel.id} meta={meta} active={active} open={colorMeta?.path === meta.path} latched={meta !== page.dials[i] && chipLatched(i, meta)} />;
                 // The filter takes two slots as one picture: the magnitude
                 // response maximised across both, each hand's small label
                 // sitting where its own slot's label would have been.
@@ -2168,8 +2179,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   );
                 }
                 // The slot pulses with its chip while a latched value sits in it.
-                const latchedHere =
-                  latched[i]?.path === meta.path || (page.values[i]?.path === meta.path && !!hwLatched[meta.path]);
+                const latchedHere = meta !== page.dials[i] && chipLatched(i, meta);
                 // A bipolar/origin dial anchors the fill at the origin mark and
                 // grows toward the handle on either side, like the Slider.
                 const origin01 = dialOrigin(meta);
@@ -2441,30 +2451,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       );
                     }
                     if (!meta) return <div key={`empty-${col}`} className="tweakers-move-pad" data-empty="true" />;
-                    // The small colour selector — whichever row it sits on
-                    // (a balance stacks its two on the switch and value rows
-                    // of its own column). The swatch is the store's value,
-                    // nothing wired by the app; a tap opens the same colour
-                    // editor the big slot's colour uses.
-                    if (meta.type === 'color') {
-                      const open = colorMeta?.path === meta.path;
-                      return (
-                        <button
-                          key={meta.path}
-                          className="tweakers-move-pad"
-                          data-kind="color"
-                          data-on={open || undefined}
-                          aria-expanded={open}
-                          aria-haspopup="dialog"
-                          aria-label={`${meta.label}. Open color editor`}
-                          disabled={TweakStore.isDisabled(page.panel.id, meta.path)}
-                          onClick={() => MoveColorStore.toggle(page.panel.id, meta.path)}
-                        >
-                          <MovePadColorBody label={meta.label} color={String(values[meta.path])} />
-                        </button>
-                      );
-                    }
-                    if (padRows[row] === page.toggles) {
+                    if (padRows[row] === page.toggles && meta.type !== 'color') {
                       return (
                         <button
                           key={meta.path}
@@ -2491,21 +2478,32 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                         </button>
                       );
                     }
-                    const value = chipValue(meta);
+                    // A chip — a value, or the small colour selector on
+                    // whichever row it sits (a balance stacks its two on the
+                    // switch and value rows of its own column). One gesture
+                    // path for both: hold peeks, tap latches, and the knob
+                    // above then edits the chip as its own kind — a colour
+                    // lands in the slot as the big colour slot, whose tap is
+                    // the door to the editor. Only the face differs.
+                    const isColor = meta.type === 'color';
+                    const value = isColor ? null : chipValue(meta);
                     return (
                       <button
                         key={meta.path}
                         className="tweakers-move-pad"
-                        data-kind="value"
+                        data-kind={isColor ? 'color' : 'value'}
                         data-held={(held !== null && held.meta.path === meta.path) || hwHeld[meta.path] || undefined}
                         data-latched={chipLatched(col, meta) || undefined}
+                        aria-label={isColor ? meta.label : undefined}
                         onPointerDown={(e) => pressChip(e, col, meta)}
                         onPointerUp={() => releaseChip(col, meta)}
                         onPointerCancel={() => setHeld(null)}
                       >
-                        <MovePadValueBody label={meta.label} value={value.num} unit={value.unit}>
-                          <MoveModRing panelId={page.panel.id} path={meta.path} pad />
-                        </MovePadValueBody>
+                        {isColor
+                          ? <MovePadColorBody label={meta.label} color={String(values[meta.path])} />
+                          : <MovePadValueBody label={meta.label} value={value!.num} unit={value!.unit}>
+                              <MoveModRing panelId={page.panel.id} path={meta.path} pad />
+                            </MovePadValueBody>}
                       </button>
                     );
                   })}

@@ -385,7 +385,7 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         // to the ordinary chip: the value row, leftmost free (or as named).
         else if (balanceRefs.has(c)) place(values, 'value', c, col);
         // The small colour selector: a swatch on the value row, in its named
-        // column; a tap opens the same editor the big slot's colour uses.
+        // column — a chip like any other (tap latches, hold peeks).
         else if (isPadColor(c)) place(values, 'value', c, col);
         // A control holding a dial slot never reaches the pads — the pad grid
         // must not mirror a dial. A movePads column on one is ignored, out

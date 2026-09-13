@@ -8,8 +8,10 @@ import type { TweakTheme } from '../theme';
 import { MoveSlotColorBody } from './move-slots';
 import { ICON_MOVE_COPY } from '../icons';
 
-export function MoveColorSlot({ panelId, meta, active, open }: {
+export function MoveColorSlot({ panelId, meta, active, open, latched = false }: {
   panelId: string; meta: ControlMeta; active: boolean; open: boolean;
+  /** A colour chip latched into this slot: it pulses with its chip, as a latched value does. */
+  latched?: boolean;
 }) {
   const gesture = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
@@ -17,7 +19,7 @@ export function MoveColorSlot({ panelId, meta, active, open }: {
   const color = MoveColorStore.read(panelId, meta.path);
   return <button
     type="button" className="tweakers-move-dial" data-kind="color"
-    data-active={active || open || undefined} data-disabled={disabled || undefined}
+    data-active={active || open || undefined} data-latched={latched || undefined} data-disabled={disabled || undefined}
     aria-label={`${meta.label}, hue ${Math.round(color.h)} degrees. Open color editor`}
     aria-expanded={open} aria-haspopup="dialog" disabled={disabled}
     onClick={() => {
