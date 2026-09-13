@@ -1001,10 +1001,12 @@ class TweakStoreClass {
     // Set initial transition modes based on config types
     this.initTransitionModes(config, '', values);
 
-    // Overlay persisted values onto the config defaults, but only for keys the
-    // current config still declares — a renamed/removed control drops its
-    // stale saved value instead of resurrecting it.
-    this.overlayPersistedValues(target, values);
+    // Overlay persisted values onto the config defaults — reconciled against
+    // the registration, which is the source of truth: only paths the current
+    // config still declares, and only values its controls can hold (the lego
+    // rule). A renamed/removed/reshaped control drops its stale saved value
+    // instead of resurrecting it.
+    this.overlayPersistedValues(id, target, values, this.mapControlsByPath(controls));
 
     this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, module: '_enabled' in config ? true : undefined, kind: options.kind });
     this.snapshots.set(id, { ...values });
@@ -1099,16 +1101,70 @@ class TweakStoreClass {
     this.notifyGlobal();
   }
 
-  // Overlay saved values onto freshly-computed defaults, in place. Only keys
-  // that still exist in `values` (i.e. the current config) are restored.
-  private overlayPersistedValues(target: PersistTarget | null, values: Record<string, TweakValue>): void {
+  // Overlay saved values onto freshly-computed defaults, in place — the
+  // reload half of the lego rule. Registration decides the shape; the shelf
+  // only fills it: a persisted entry is restored when its path still exists
+  // AND its value still fits the control now standing at that path (same
+  // reconciliation a live updatePanel applies). Everything else — stale
+  // paths, values of a lost type, options that no longer exist — is dropped,
+  // said once in a console.info rather than replayed over the panel. Layout
+  // is untouchable either way: pages are built from the parsed controls
+  // alone, and nothing on this shelf ever reaches them.
+  private overlayPersistedValues(
+    panelId: string,
+    target: PersistTarget | null,
+    values: Record<string, TweakValue>,
+    controlsByPath: Map<string, ControlMeta>
+  ): void {
     const persisted = loadPersisted<Record<string, TweakValue>>(target);
     if (!persisted) return;
-    for (const key of Object.keys(values)) {
-      if (Object.prototype.hasOwnProperty.call(persisted, key)) {
-        values[key] = persisted[key];
+    const dropped: string[] = [];
+    for (const key of Object.keys(persisted)) {
+      if (!Object.prototype.hasOwnProperty.call(values, key)) {
+        dropped.push(key);
+        continue;
       }
+      const restored = this.reconcileValue(persisted[key], values[key], key, controlsByPath);
+      if (restored === undefined) dropped.push(key);
+      else values[key] = restored;
     }
+    if (dropped.length) {
+      console.info(
+        `[tweakers] panel "${panelId}": dropped persisted state the current config no longer matches: ${dropped.join(', ')}`
+      );
+    }
+  }
+
+  /**
+   * One persisted/preset entry against the control now standing at its path.
+   * Returns the value to keep — normalized/clamped by the control's own
+   * rules — or `undefined` when the entry no longer fits and must be dropped.
+   * Transition `.__mode` companions reconcile through their transition
+   * control; the active tab reconciles through the tab bar's own select.
+   */
+  private reconcileValue(
+    incoming: TweakValue,
+    defaultValue: TweakValue,
+    path: string,
+    controlsByPath: Map<string, ControlMeta>
+  ): TweakValue | undefined {
+    if (path.endsWith('.__mode')) {
+      const owner = controlsByPath.get(path.slice(0, -'.__mode'.length));
+      return owner?.type === 'transition' &&
+        (incoming === 'easing' || incoming === 'simple' || incoming === 'advanced')
+        ? incoming
+        : undefined;
+    }
+    const control = controlsByPath.get(path);
+    if (!control) return undefined;
+    const normalized = this.normalizePreservedValue(incoming, defaultValue, control);
+    // normalizePreservedValue answers "what should this path hold" — the
+    // default when the value's shape is lost. For the drop report we only
+    // call that a drop when the saved value actually differed.
+    if (normalized === defaultValue && JSON.stringify(incoming) !== JSON.stringify(defaultValue)) {
+      return undefined;
+    }
+    return normalized;
   }
 
   // Save the panel's current flat values (fail-soft, no-op when persistence is
@@ -1458,9 +1514,32 @@ class TweakStoreClass {
   previewValues(panelId: string, values: Record<string, TweakValue>): void {
     const panel = this.panels.get(panelId);
     if (!panel) return;
-    this.replaceValues(panel, values);
+    this.replaceValues(panel, this.reconcileSnapshot(panel, values));
     this.snapshots.set(panelId, { ...panel.values });
     this.notify(panelId);
+  }
+
+  /**
+   * A captured snapshot (a preset, a preview) against the panel's CURRENT
+   * registration — the preset half of the lego rule. A preset is never
+   * invalidated wholesale for one dead path: its living paths apply
+   * (normalized by the control now at each path), its dead ones are silently
+   * ignored, and paths the snapshot never named keep the panel's current
+   * values. A config that later regains a path revives the preset's value
+   * for it, because reconciliation happens at apply time, not capture time.
+   */
+  private reconcileSnapshot(
+    panel: PanelConfig,
+    incoming: Record<string, TweakValue>
+  ): Record<string, TweakValue> {
+    const controlsByPath = this.mapControlsByPath(panel.controls);
+    const next: Record<string, TweakValue> = { ...panel.values };
+    for (const [path, value] of Object.entries(incoming)) {
+      if (!Object.prototype.hasOwnProperty.call(next, path)) continue;
+      const restored = this.reconcileValue(value, next[path], path, controlsByPath);
+      if (restored !== undefined) next[path] = restored;
+    }
+    return next;
   }
 
   savePreset(panelId: string, name: string): string {
@@ -1493,8 +1572,10 @@ class TweakStoreClass {
     const preset = presets.find(p => p.id === presetId);
     if (!preset) return;
 
-    // Apply preset values
-    this.replaceValues(panel, preset.values);
+    // Apply preset values, reconciled against the current registration: a
+    // snapshot from an older config shape drives only the paths that still
+    // match (see reconcileSnapshot).
+    this.replaceValues(panel, this.reconcileSnapshot(panel, preset.values));
     this.snapshots.set(panelId, { ...panel.values });
     this.activePreset.set(panelId, presetId);
     this.savePanelValues(panelId);

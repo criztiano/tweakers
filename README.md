@@ -85,8 +85,25 @@ const params = useTweakers(name, config, options?)
 | `options.hints` | `Record<string, string>` | Help text for controls (see [Hints](#hints)) |
 | `options.affordances` | `Record<string, AffordanceConfig>` | Companion controls (see [Affordances](#affordances)) |
 | `options.labels` | `Record<string, string>` | Display labels overriding the key-derived name (see [Labels](#labels)) |
+| `options.persist` | `boolean \| { key?, storage? }` | Save the panel's values to browser storage and restore them on the next load (see [Persistence](#persistence)) |
 
 Returns a fully typed object matching your config shape with live values. Updating a control in the UI immediately updates the returned values.
+
+---
+
+## Persistence
+
+With `persist: true` (and a stable panel id or an explicit `persist.key`) the panel's flat values are saved to `localStorage` — fail-soft, so a blocked or full storage degrades to session-only without a sound.
+
+**The registration is the source of truth.** On load, saved state is *reconciled* against the config you just registered, path by path:
+
+- A path the config still declares, holding a value the control at that path can still carry, is restored — clamped into the control's current range, checked against a select's current options, repaired by the control's own normalizer.
+- Everything else — a removed path, a value whose type no longer fits, an option that left the list — is dropped, and the drops are said once in a `console.info`. Renaming a control, retyping it, or shrinking its range can never resurrect the old shape.
+- **Layout is never persisted state.** Which control sits where — dial columns, pad rows, `movePads` seats — is built from the registered config alone; nothing on the storage shelf can move it.
+
+Presets follow the same rule at apply time: a snapshot from an older config shape is never invalidated wholesale — its living paths apply (normalized), its dead paths are silently ignored, and paths it never named keep the panel's current values. A path the config later regains revives that preset value on the next apply.
+
+Modulation slots and assignments persist globally (see [Modulation](#modulation)). A saved assignment carries its panel's **name** as the stable identity: hosts that mint positional ids (`gallery-1`, `gallery-2`, …) get their wires back on the panel they were made on, whatever id that name registers under after a reload.
 
 ---
 
