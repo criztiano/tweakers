@@ -6,7 +6,7 @@ import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { ModulationStore } from '../store/ModulationStore';
 import { modColor, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, getAudioModBuffer, setAudioModBuffer, subscribeAudioMod, getAudioModVersion, setAudioModWindowSource, getAudioModWindow, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
 import { MoveWaveform } from './MoveWaveform';
-import { MoveWaveformStore, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_STEPS, MOVE_WAVEFORM_PANEL, visibleWindow, moveWaveformDemoSample } from '../move-waveform';
+import { MoveWaveformStore, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_PANEL, visibleWindow, moveWaveformDemoSample } from '../move-waveform';
 import { ICON_PLAY, ICON_LOOP, ICON_SEARCH } from '../icons';
 import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
@@ -382,6 +382,14 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // Volume-dial readout: a static value renders as set; a getValue is polled
   // per animation frame while mounted, for readouts that move (a playhead).
   const [volume, setVolume] = useState<MoveVolumeDisplayState | null>(() => MoveVolumeDisplay.get());
+  // A mounted waveform holds the knob, so its clock takes the corner: the
+  // playhead's time with the transport's state around it. That is the one
+  // readout a waveform gets, whichever host mounts it.
+  const waveClaimed = useSyncExternalStore(
+    useCallback((cb) => MoveWaveformStore.subscribe(cb), []),
+    () => MoveWaveformStore.isRegistered(),
+    () => false
+  );
   const [liveValue, setLiveValue] = useState<string | null>(null);
   useEffect(() => {
     setVolume(MoveVolumeDisplay.get());
@@ -1249,12 +1257,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 
   // A bipolar (origin-anchored) dial reads out its real signed value; plain
   // dials keep the 0–100 position the Move itself works in.
+  // A dial reads out in its own domain when it has one — a formatter or a
+  // unit ("2.84 s", "48 px") — and as the Move's 0–100 position otherwise.
+  // A bipolar dial keeps its signed number either way.
   const dialReading = (meta: ControlMeta): string => {
-    if (dialOrigin(meta) <= 0) return `${dialPercent(meta)}%`;
     const n = Number(values[meta.path]);
+    const bipolar = dialOrigin(meta) > 0;
+    if (!bipolar && !meta.formatValue && !meta.unit) return `${dialPercent(meta)}%`;
     if (!Number.isFinite(n)) return '';
     if (meta.formatValue) return meta.formatValue(n);
     const num = Math.abs(n) >= 100 ? Math.round(n).toString() : Number(n.toFixed(2)).toString();
+    if (!bipolar) return `${num}${meta.unit ?? ''}`;
     return n > 0 ? `+${num}` : num;
   };
 
@@ -1312,7 +1325,14 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const padAt = (x: number, y: 0 | 1): MovePadCell | undefined =>
     surface.pads.find((p) => p.x === x && p.y === y);
   const shownPadRows = Array.from({ length: PAD_ROWS }, (_, row) => row)
-    .filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0));
+    // A pad row shows when it holds something: an empty row between two that
+    // do says nothing on screen, the same way an empty column is skipped (the
+    // row keeps its index, so what remains still sits on its hardware row). A
+    // modulator's settings page keeps its gaps: its bend and wave pads live in
+    // the empty cells under its stage columns.
+    .filter((row) => appRowAt(row) !== null || (settingsPanel
+      ? padRows.slice(row).some((r) => r.length > 0)
+      : padRows[row].some(Boolean)));
   // The claimed rows draw as one block, anchored on the topmost of them.
   const firstAppScreenRow = shownPadRows.find((row) => appRowAt(row) !== null) ?? -1;
 
@@ -1381,10 +1401,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // business.) Nothing registered and nothing attached = no cluster, header
   // unchanged.
   const volumeReading = liveValue ?? volume?.value;
-  const headerCluster = (volume || functionChips === 'clock') && (
+  const headerCluster = (waveClaimed || volume || functionChips === 'clock') && (
     <div className="tweakers-move-actions">
       {functionChips === 'clock' && <MoveFunctionChips />}
-      {volume && (
+      {waveClaimed ? (
+        <MoveWaveClock />
+      ) : volume && (
         <div className="tweakers-move-volume">
           <span className="tweakers-move-volume-tick" style={{ background: MOVE_TRACK_COLORS[0] }} />
           {volume.label && volumeReading != null && (
@@ -1439,6 +1461,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
             {audioWave != null ? (
               <MoveAudioZoom />
             ) : (
+            <div className="tweakers-move-tracks-lead">
+            {/* A host's card gets the editor's zoom readout too, leading the
+                page names — the far end of the row from its clock. */}
+            {waveClaimed && <MoveAudioZoom />}
             <div className="tweakers-move-tracks-group">
               {/* The settings room's name plate: the marker blinks for as
                   long as the room is open — the same pulse the hardware's
@@ -1512,6 +1538,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               )}
               {functionChips === 'tracks' && <MoveFunctionChips />}
               {headerStart && <div className="tweakers-move-header-start">{headerStart}</div>}
+            </div>
             </div>
             )}
             {/* The step buttons, centred between the track labels and the
@@ -2173,10 +2200,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               .map((row) => {
                 // The app's reserved rows are one instrument, not sixteen
                 // controls: what those pads mean is the app's business and
-                // only the app can say it. So the whole claimed area draws as
-                // a single slot carrying that sentence, once — the rows after
-                // the first fold into it.
-                if (appRowAt(row) !== null) {
+                // only the app can say it. A claimed area the app has not
+                // painted draws as a single slot carrying that sentence,
+                // once — the rows after the first fold into it. Painted cells
+                // draw as the pads they are, tappable, the sentence on their
+                // tooltip.
+                if (appRowAt(row) !== null && !surface.pads.length) {
                   if (row > firstAppScreenRow) return null;
                   return (
                     <div
@@ -2221,6 +2250,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           type="button"
                           className="tweakers-move-pad"
                           data-kind="app"
+                          title={surface.padsLabel ?? undefined}
                           data-on={cell.lit || appHeld === `${appRow}:${col}` || undefined}
                           data-held={appHeld === `${appRow}:${col}` || undefined}
                           onPointerDown={(e) => {
@@ -2366,7 +2396,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       );
                     }
                     if (!meta) return <div key={`empty-${col}`} className="tweakers-move-pad" data-empty="true" />;
-                    if (padRows[row] === page.toggles) {
+                    // What a pad is comes from the control, not the row it
+                    // sits in: a value chip lifted onto the top row is still
+                    // a value chip.
+                    if (page.toggles[col] === meta) {
                       return (
                         <button
                           key={meta.path}
@@ -2381,7 +2414,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     }
                     // Action pads carry no value — a press just runs the
                     // app's action, the same as the row's button on screen.
-                    if (padRows[row] === page.actions) {
+                    if (page.actions[col] === meta) {
                       return (
                         <button
                           key={meta.path}
@@ -2598,8 +2631,9 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
   }, [index]);
 
   // The surface while the editor is up: the pad row is eight subdivisions of
-  // the shown window, and the step circles mirror the loop bar the hardware
-  // lights. Whatever the app had on the surface comes back on close.
+  // the shown window. (The step circles are the card's own business — it
+  // lights the loop bar in its accent, the slot's colour here.) Whatever the
+  // app had on the pads comes back on close.
   useEffect(() => {
     const prev = MoveSurfaceStore.getState();
     MoveSurfaceStore.setPadRows(1,
@@ -2608,24 +2642,12 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
       })),
       'tap to jump the playhead · hold to loop that part'
     );
-    const paintSteps = () => {
-      const lit = new Set(MoveWaveformStore.loopSteps());
-      MoveSurfaceStore.setSteps(
-        Array.from({ length: MOVE_WAVEFORM_STEPS }, (_, step) => ({
-          step, color: modColor(index), lit: lit.has(step),
-        }))
-      );
-    };
-    paintSteps();
-    const offView = MoveWaveformStore.subscribe(paintSteps);
     const offPress = MoveSurfaceStore.onPress(({ x, y }) => {
       if (y === 0) MoveWaveformStore.pressPad(x);
     });
     return () => {
-      offView();
       offPress();
       MoveSurfaceStore.setPadRows(prev.rows, prev.pads, prev.padsLabel);
-      MoveSurfaceStore.setSteps(prev.steps);
     };
   }, [index]);
 
@@ -2651,6 +2673,7 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
       height={MOVE_WAVE_DISPLAY_HEIGHT}
       waveColor="#1e1e1e"
       playheadColor={modColor(index)}
+      accent={modColor(index)}
     />
   );
 }
@@ -2777,6 +2800,48 @@ function MoveAudioZoom() {
       <span className="tweakers-move-wave-zoom-label">
         Zoom {parseFloat(MoveWaveformStore.getView().zoom.toFixed(1))}x
       </span>
+    </div>
+  );
+}
+
+/**
+ * The clock every host's waveform gets, in the panel's volume corner: the
+ * playhead's time, flanked by the host's transport state — play on the left,
+ * loop on the right, lit when running — when it runs one. The time is
+ * written straight to its span every frame at a fixed width, so the pill
+ * never breathes.
+ */
+function MoveWaveClock() {
+  useSyncExternalStore(
+    useCallback((cb) => MoveWaveformStore.subscribe(cb), []),
+    () => MoveWaveformStore.getVersion(),
+    () => 0
+  );
+  const transport = MoveWaveformStore.getTransport();
+  const clockRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    let raf = requestAnimationFrame(function tick() {
+      const text = MoveWaveformStore.clock();
+      if (clockRef.current && clockRef.current.textContent !== text) clockRef.current.textContent = text;
+      raf = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return (
+    <div className="tweakers-move-volume tweakers-move-wave-time" data-transport={transport ? true : undefined}>
+      {transport && (
+        <svg className="tweakers-move-wave-state" data-on={transport.playing || undefined} viewBox="0 0 24 24" aria-hidden="true">
+          <path d={ICON_PLAY} fill="currentColor" />
+        </svg>
+      )}
+      <span ref={clockRef} className="tweakers-move-volume-value">{MoveWaveformStore.clock()}</span>
+      {transport && (
+        <svg className="tweakers-move-wave-state" data-on={transport.loopOn || undefined} viewBox="0 0 24 24" aria-hidden="true">
+          {ICON_LOOP.map((d) => (
+            <path key={d} d={d} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+          ))}
+        </svg>
+      )}
     </div>
   );
 }

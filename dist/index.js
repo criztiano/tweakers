@@ -1001,6 +1001,9 @@ function moveNumericDrawing(meta, value) {
     case "pitch":
       if (visual.unit !== void 0 && visual.unit !== "semitones" && visual.unit !== "cents") return null;
       return { kind: "pitch", position: (v - lo) / (hi - lo), zero: between(0, lo, hi) ? -lo / (hi - lo) : null };
+    case "trim":
+      if (visual.edge !== "start" && visual.edge !== "end") return null;
+      return { kind: "trim", edge: visual.edge, position: clamp01((v - lo) / (hi - lo)) };
     default:
       return null;
   }
@@ -1034,6 +1037,8 @@ function moveVisualReading(meta, value) {
       return value === (visual.mono ?? 0) ? "Mono" : `${Number(((value - (visual.mono ?? 0)) / ((visual.unity ?? 1) - (visual.mono ?? 0))).toFixed(2))}\xD7`;
     case "pitch":
       return `${value > 0 ? "+" : ""}${number} ${visual.unit === "cents" ? "ct" : "st"}`;
+    case "trim":
+      return `${number} s`;
     default:
       return number;
   }
@@ -1287,6 +1292,24 @@ function MoveSlotNumericBody({ label, value, drawing }) {
           /* @__PURE__ */ jsx("ellipse", { cx: 50 - drawing.separation * 28, cy: "30", rx: "12", ry: "17" }),
           /* @__PURE__ */ jsx("ellipse", { cx: 50 + drawing.separation * 28, cy: "30", rx: "12", ry: "17" })
         ] })
+      ] }),
+      drawing.kind === "trim" && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("path", { className: "tweakers-move-visual-guide", d: "M8 30H92" }),
+        /* @__PURE__ */ jsx(
+          "path",
+          {
+            className: "tweakers-move-visual-line",
+            d: drawing.edge === "start" ? `M${8 + drawing.position * 84} 30H92` : `M8 30H${8 + drawing.position * 84}`
+          }
+        ),
+        /* @__PURE__ */ jsx(
+          "path",
+          {
+            className: "tweakers-move-visual-pitch-marker",
+            "data-offset": (drawing.edge === "start" ? drawing.position > 1e-9 : drawing.position < 1 - 1e-9) || void 0,
+            d: `M${8 + drawing.position * 84} 22l-5 -7h10z`
+          }
+        )
       ] }),
       drawing.kind === "pitch" && /* @__PURE__ */ jsxs("g", { children: [
         /* @__PURE__ */ jsx("path", { className: "tweakers-move-visual-guide", d: "M8 30H92M8 25V35M29 27V33M50 25V35M71 27V33M92 25V35" }),
@@ -1807,18 +1830,42 @@ function buildMovePages(panels) {
         );
       }
     }
+    const lift = panel.moveTopRow ?? [];
+    const lifted = [];
+    for (let i = 0; i < MOVE_PADS; i++) {
+      const v = values[i];
+      if (v && lift.includes(v.path) && toggles[i] === void 0) lifted[i] = true;
+      else if (v && lift.includes(v.path)) {
+        reportMoveLayoutIssue(
+          "top-row-taken",
+          `panel '${panel.id}': control '${v.path}': top-row column ${i} holds '${toggles[i].path}' \u2014 the chip keeps the value row`
+        );
+      }
+    }
     return {
       panel,
       dials,
       toggles: toggles.slice(0, MOVE_PADS),
       values: values.slice(0, MOVE_PADS),
-      actions: actions.slice(0, MOVE_PADS)
+      actions: actions.slice(0, MOVE_PADS),
+      ...lifted.length ? { lifted } : {}
     };
   });
 }
 function movePadRows(page, claimedRows) {
-  if (claimedRows >= 2) return [page.toggles, page.values, [], []];
-  return [page.toggles, page.values, page.actions, []];
+  let top = page.toggles;
+  let values = page.values;
+  if (page.lifted?.some(Boolean)) {
+    top = [];
+    values = [];
+    for (let i = 0; i < MOVE_PADS; i++) {
+      if (page.toggles[i]) top[i] = page.toggles[i];
+      if (page.values[i] && page.lifted[i]) top[i] = page.values[i];
+      else if (page.values[i]) values[i] = page.values[i];
+    }
+  }
+  if (claimedRows >= 2) return [top, values, [], []];
+  return [top, values, page.actions, []];
 }
 function moveAppPadRow(row, claimedRows) {
   if (claimedRows >= 2) return row === 2 ? 1 : row === 3 ? 0 : null;
@@ -2430,9 +2477,13 @@ function MoveSlotScopeBody({
 function MoveSlotToggleBody({ label, checked, icon, onIcon, offIcon }) {
   const badge = checked ? onIcon : offIcon;
   if (!icon) {
+    const split = /\d/.test(label[0] ?? "") ? splitReadoutUnit(label) : null;
     return /* @__PURE__ */ jsxs3(Fragment2, { children: [
       /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-toggle-indicator", "data-on": checked || void 0 }),
-      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-toggle-label", children: label })
+      split?.unit ? /* @__PURE__ */ jsxs3("span", { className: "tweakers-move-dial-toggle-label", "data-value": true, children: [
+        /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-number", children: split.num }),
+        /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-unit", children: split.unit })
+      ] }) : /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-toggle-label", children: label })
     ] });
   }
   return /* @__PURE__ */ jsxs3(Fragment2, { children: [
@@ -2542,6 +2593,7 @@ var MOVE_SLOT_LIBRARY = {
   pan: { description: "position between L, C and R references", component: MoveSlotNumericBody },
   "stereo-width": { description: "stereo separation with a unity reference", component: MoveSlotNumericBody },
   pitch: { description: "signed pitch ruler with a zero reference", component: MoveSlotNumericBody },
+  trim: { description: "one edge of a take \u2014 the kept part filled from the far end, the value beneath", component: MoveSlotNumericBody },
   playback: { description: "explicit playback traversal with a named mode", component: MoveSlotEnumBody },
   default: { description: "name centred, value on touch, fill bar", component: MoveSlotDefaultBody },
   value: { description: "value-first: the value is the headline, the name a tag on top", component: MoveSlotDefaultBody },
@@ -4703,6 +4755,8 @@ var BORDER_FILL_ALPHA = 0.2;
 var DRAG_THRESHOLD2 = 3;
 var EDGE_HIT2 = 6;
 var MIN_LOOP = 1e-3;
+var WAVEFORM_GAP = 8;
+var WAVEFORM_GAP_RADIUS = 6;
 function smoothThrough(ctx, pts) {
   for (let i = 0; i < pts.length - 1; i++) {
     const p0 = pts[i - 1] || pts[i];
@@ -4784,22 +4838,53 @@ function createWaveformEngine(canvas, get) {
   };
   const columnWidth = (pixelSize) => Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSize)));
   const windowState = { start: 0, win: 1 };
+  let pieces = [{ a: 0, b: 1, x0: 0, x1: 0 }];
+  let gapPx = 0;
+  const layoutPieces = (start, win, cuts, gap) => {
+    const end = start + win;
+    const inside = (cuts ?? []).filter((c) => c > start && c < end).sort((x, y) => x - y);
+    gapPx = inside.length ? Math.round(gap * dpr) : 0;
+    let waveW = W - inside.length * gapPx;
+    if (waveW < inside.length + 1) {
+      inside.length = 0;
+      gapPx = 0;
+      waveW = W;
+    }
+    const bounds = [start, ...inside, end];
+    pieces = [];
+    for (let i = 0; i + 1 < bounds.length; i++) {
+      const a = bounds[i];
+      const b = bounds[i + 1];
+      pieces.push({
+        a,
+        b,
+        x0: (a - start) / win * waveW + i * gapPx,
+        x1: (b - start) / win * waveW + i * gapPx
+      });
+    }
+  };
+  const xOfPos = (p) => {
+    let piece = pieces[0];
+    for (const it of pieces) if (p >= it.a) piece = it;
+    const span = piece.b - piece.a;
+    return piece.x0 + (span > 0 ? (p - piece.a) / span * (piece.x1 - piece.x0) : 0);
+  };
   let drag = null;
-  const drawColumns = (p, color, pixelSize, striped) => {
+  const drawColumns = (p, cols, x0, color, pixelSize, striped) => {
     const colW = columnWidth(pixelSize);
     ctx.fillStyle = color;
     ctx.globalAlpha = 1;
     const stretch = striped ? WAVEFORM_STRIPE_STRETCH : 1;
-    for (const bar of barPeaks(p, Math.floor(W / stretch), colW)) {
+    for (const bar of barPeaks(p, Math.floor(cols / stretch), colW)) {
       const yTop = Math.round(cy - bar.max * amp);
       const yBot = Math.round(cy - bar.min * amp);
-      ctx.fillRect(bar.x * stretch, yTop, colW, Math.max(1, yBot - yTop));
+      ctx.fillRect(x0 + bar.x * stretch, yTop, colW, Math.max(1, yBot - yTop));
     }
   };
-  const drawSimplified = (env, color, outline2) => {
+  const drawSimplified = (env, x0, x1, color, outline2) => {
     const n = env.length;
     if (n < 2) return;
-    const px = (k) => k / (n - 1) * W;
+    const px = (k) => x0 + k / (n - 1) * (x1 - x0);
     const top = env.map((a, k) => ({ x: px(k), y: cy - a * amp }));
     const bot = [];
     for (let k = n - 1; k >= 0; k--) bot.push({ x: px(k), y: cy + env[k] * amp });
@@ -4823,6 +4908,33 @@ function createWaveformEngine(canvas, get) {
       ctx.fill();
     }
   };
+  const drawGaps = (color, radius) => {
+    if (!gapPx || pieces.length < 2) return;
+    const r = Math.min(radius * dpr, gapPx * 2, H / 2);
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 1;
+    const corner = (x, y, dx, dy) => {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + dx, y);
+      ctx.arc(x + dx, y + dy, r, dy > 0 ? -Math.PI / 2 : Math.PI / 2, dx > 0 ? Math.PI : 0, dx > 0 === dy > 0);
+      ctx.lineTo(x, y + dy);
+      ctx.closePath();
+      ctx.fill();
+    };
+    for (let i = 0; i < pieces.length; i++) {
+      const piece = pieces[i];
+      if (i > 0) {
+        corner(piece.x0, 0, r, r);
+        corner(piece.x0, H, r, -r);
+      }
+      if (i + 1 < pieces.length) {
+        ctx.fillRect(piece.x1, 0, gapPx, H);
+        corner(piece.x1, 0, -r, r);
+        corner(piece.x1, H, -r, -r);
+      }
+    }
+  };
   const drawGrid = (base, subs) => {
     const n = Math.max(1, Math.round(subs));
     ctx.strokeStyle = base;
@@ -4837,9 +4949,10 @@ function createWaveformEngine(canvas, get) {
     ctx.stroke();
     ctx.globalAlpha = 1;
   };
-  const drawRegion = (a, b, start, win, color) => {
-    const x0 = (a - start) / win * W;
-    const x1 = (b - start) / win * W;
+  const drawRegion = (a, b, color) => {
+    const { start, win } = windowState;
+    const x0 = a <= start ? -1 : a >= start + win ? W + 1 : xOfPos(a);
+    const x1 = b <= start ? -1 : b >= start + win ? W + 1 : xOfPos(b);
     const cx0 = Math.max(0, x0);
     const cx1 = Math.min(W, x1);
     if (cx1 <= cx0) return;
@@ -4900,29 +5013,40 @@ function createWaveformEngine(canvas, get) {
     }
     if (start < 0) start = 0;
     else if (start > 1 - win) start = 1 - win;
-    const end = start + win;
     windowState.start = start;
     windowState.win = win;
+    layoutPieces(start, win, rt.cuts, rt.gap ?? WAVEFORM_GAP);
     const count = monos.length;
     if (count) {
       for (let i = 0; i < count; i++) {
         const mono = monos[i];
-        const s0 = Math.max(0, Math.floor(start * mono.length));
-        const s1 = Math.min(mono.length, Math.ceil(end * mono.length));
-        const slice = s1 > s0 ? mono.subarray(s0, s1) : mono;
-        fillPeaks(slice, rt.mode === "striped" ? Math.floor(W / WAVEFORM_STRIPE_STRETCH) : W, pk.min, pk.max);
         const color = count === 3 ? BAND_COLORS[i] : wave;
-        if (rt.mode !== "smooth") drawColumns(pk, color, rt.pixelSize, rt.mode === "striped");
-        else drawSimplified(envelope(pk, W, Math.max(2, rt.smoothPoints || WAVEFORM_SMOOTH_POINTS)), color, rt.border);
+        const striped = rt.mode === "striped";
+        for (const piece of pieces) {
+          const cols = Math.max(1, Math.round(piece.x1) - Math.round(piece.x0));
+          const s0 = Math.max(0, Math.floor(piece.a * mono.length));
+          const s1 = Math.min(mono.length, Math.ceil(piece.b * mono.length));
+          const slice = s1 > s0 ? mono.subarray(s0, s1) : mono;
+          const pmin = pk.min.subarray(0, cols);
+          const pmax = pk.max.subarray(0, cols);
+          fillPeaks(slice, striped ? Math.max(1, Math.floor(cols / WAVEFORM_STRIPE_STRETCH)) : cols, pmin, pmax);
+          const x0 = Math.round(piece.x0);
+          if (rt.mode !== "smooth") drawColumns({ min: pmin, max: pmax }, cols, x0, color, rt.pixelSize, striped);
+          else {
+            const points = Math.max(2, Math.round((rt.smoothPoints || WAVEFORM_SMOOTH_POINTS) * (cols / W)));
+            drawSimplified(envelope({ min: pmin, max: pmax }, cols, points), x0, x0 + cols, color, rt.border);
+          }
+        }
       }
     }
     if (drag && drag.moved) {
-      drawRegion(Math.min(drag.anchor, drag.curProg), Math.max(drag.anchor, drag.curProg), start, win, ph);
+      drawRegion(Math.min(drag.anchor, drag.curProg), Math.max(drag.anchor, drag.curProg), ph);
     } else if (rt.loop) {
-      drawRegion(rt.loop.start, rt.loop.end, start, win, ph);
+      drawRegion(rt.loop.start, rt.loop.end, ph);
     }
+    drawGaps(rt.gapColor || "#1e1e1e", rt.gapRadius ?? WAVEFORM_GAP_RADIUS);
     if (count) {
-      const playX = (prog - start) / win * W;
+      const playX = xOfPos(prog);
       ctx.globalAlpha = 1;
       ctx.strokeStyle = ph;
       ctx.lineWidth = 1.5 * dpr;
@@ -4937,16 +5061,25 @@ function createWaveformEngine(canvas, get) {
   const xToProgress = (clientX) => {
     const rect = canvas.getBoundingClientRect();
     const fx = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const x = fx * W;
     const { start, win } = windowState;
-    return Math.min(1, Math.max(0, start + fx * win));
+    let piece = pieces[pieces.length - 1];
+    for (const it of pieces) {
+      if (x <= it.x1) {
+        piece = it;
+        break;
+      }
+    }
+    const span = piece.x1 - piece.x0;
+    const t = span > 0 ? Math.min(1, Math.max(0, (x - piece.x0) / span)) : 0;
+    return Math.min(1, Math.max(0, Math.min(start + win, piece.a + t * (piece.b - piece.a))));
   };
   const edgeAt = (clientX) => {
     const rt = get();
     const loop = rt.loop;
     if (!loop || !rt.onLoopChange) return null;
     const rect = canvas.getBoundingClientRect();
-    const { start, win } = windowState;
-    const xOf = (t) => (t - start) / win * rect.width;
+    const xOf = (t) => xOfPos(t) / Math.max(1, W) * rect.width;
     const px = clientX - rect.left;
     const sx = xOf(loop.start);
     const ex = xOf(loop.end);
@@ -5050,6 +5183,10 @@ function WaveformVisualization({
   gridSubdivisions = 8,
   onSeek,
   loop = null,
+  cuts,
+  gapColor,
+  gap,
+  gapRadius,
   onLoopChange,
   waveColor,
   playheadColor,
@@ -5084,6 +5221,10 @@ function WaveformVisualization({
     waveInset,
     autoZoomOnLoop,
     loop,
+    cuts,
+    gapColor,
+    gap,
+    gapRadius,
     zoom,
     width,
     height,
@@ -5148,6 +5289,10 @@ var MoveVolumeDisplay = new MoveVolumeDisplayClass();
 
 // src/move-waveform.ts
 import { TweakStore as TweakStore3 } from "tweakers/store";
+var MOVE_WAVE_FRAME = 12;
+var MOVE_WAVE_MAX_WIDTH = 1200;
+var MOVE_WAVE_MAX_HEIGHT = 176;
+var MOVE_WAVE_MAX_DISPLAY = MOVE_WAVE_MAX_HEIGHT - 2 * MOVE_WAVE_FRAME;
 var MOVE_WAVEFORM_PANEL = "move-waveform";
 var MOVE_WAVEFORM_PIXEL_RANGE = [1, 6];
 var MODE_LABELS = { smooth: "Smooth", pixelated: "Pixel", striped: "Striped" };
@@ -5174,15 +5319,20 @@ var SCRUB_PER_DETENT = 25e-5;
 var SCRUB_FINE = 5e-5;
 var SCRUB_ACCEL = 1.2;
 var SCRUB_MAX_BATCH = 24;
+var SCRUB_MIN_MS = 25;
+var SCRUB_FINE_MIN_MS = 5;
+var SCRUB_CHAIN_MS = 250;
 var ZOOM_PER_DETENT = 0.08;
 var clamp014 = (v) => Math.min(1, Math.max(0, v));
 function defaultView() {
   return { position: 0, zoom: 1, loop: null, loopAnchor: null };
 }
-function scrubBy(position, delta, fine = false, zoom = 1) {
+function scrubBy(position, delta, fine = false, zoom = 1, durationSec) {
   const detents = Math.min(SCRUB_MAX_BATCH, Math.abs(delta));
   const magnitude = fine ? detents : Math.pow(detents, SCRUB_ACCEL);
-  const step = (fine ? SCRUB_FINE : SCRUB_PER_DETENT) / Math.max(1, zoom);
+  const share = fine ? SCRUB_FINE : SCRUB_PER_DETENT;
+  const floor = durationSec && durationSec > 0 ? (fine ? SCRUB_FINE_MIN_MS : SCRUB_MIN_MS) / 1e3 / durationSec : 0;
+  const step = Math.max(share, floor) / Math.max(1, zoom);
   const next = clamp014(position + Math.sign(delta) * magnitude * step);
   return Number(next.toFixed(6));
 }
@@ -5236,6 +5386,8 @@ var MoveWaveformStoreClass = class {
     this.editor = false;
     this.progressSource = null;
     this.duration = null;
+    this.transport = null;
+    this.lastScrubAt = 0;
     this.listeners = /* @__PURE__ */ new Set();
     this.version = 0;
   }
@@ -5248,6 +5400,7 @@ var MoveWaveformStoreClass = class {
    */
   register(style) {
     this.claims += 1;
+    if (this.claims === 1) this.lastScrubAt = 0;
     this.ensureSettings(style);
     if (this.claims === 1) MoveVolumeDisplay.set({ label: "time", getValue: () => this.readout() });
     this.notify();
@@ -5263,11 +5416,39 @@ var MoveWaveformStoreClass = class {
       this.editor = false;
       this.progressSource = null;
       this.duration = null;
+      this.transport = null;
       this.buffer = null;
       this.view = defaultView();
       MoveVolumeDisplay.clear();
       this.notify();
     };
+  }
+  /** The host's transport, for the clock to wear; null when it runs none. */
+  setTransport(transport) {
+    if (transport?.playing === this.transport?.playing && transport?.loopOn === this.transport?.loopOn && transport === null === (this.transport === null)) return;
+    this.transport = transport;
+    this.notify();
+  }
+  getTransport() {
+    return this.transport;
+  }
+  /** A turn of the knob in progress: its last detent landed within the chain window. */
+  isScrubbing(now = Date.now()) {
+    return now - this.lastScrubAt < SCRUB_CHAIN_MS;
+  }
+  /** Where the playhead is right now, 0..1: the knob's landing while a turn
+   *  is in progress (the engine is a beat behind it, and drawing the lag is
+   *  what makes a scrub look like it stutters), else the engine's while one
+   *  reports, else the last scrub. */
+  playhead(now = Date.now()) {
+    if (this.isScrubbing(now)) return clamp014(this.view.position);
+    return clamp014(this.progressSource ? this.progressSource() : this.view.position);
+  }
+  /** The clock the panel shows for the knob: m:ss:cc of the playhead. */
+  clock() {
+    const t = this.playhead() * (this.duration ?? 0);
+    const cc = Math.floor(t % 1 * 100);
+    return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}:${String(cc).padStart(2, "0")}`;
   }
   isRegistered() {
     return this.claims > 0;
@@ -5379,7 +5560,7 @@ var MoveWaveformStoreClass = class {
   }
   /** What the volume knob is editing right now, ready to print. */
   readout() {
-    const at = clamp014(this.progressSource ? this.progressSource() : this.view.position);
+    const at = this.playhead();
     if (this.duration === null) return `${Math.round(at * 100)}%`;
     const total = at * this.duration;
     const minutes = Math.floor(total / 60);
@@ -5401,8 +5582,15 @@ var MoveWaveformStoreClass = class {
     this.view = next;
     this.notify();
   }
-  scrub(delta, fine = false) {
-    this.setView({ position: scrubBy(this.view.position, delta, fine, this.view.zoom) });
+  /** A detent moves the playhead from where it is — the engine's position
+   *  while one reports, so a scrub mid-play carries on from the play, never
+   *  from the spot an earlier scrub left. Within a turn the detents chain
+   *  from each other: the engine's seek lands a beat later than the knob
+   *  turns, and a turn read against it would lose every detent but the first. */
+  scrub(delta, fine = false, now = Date.now()) {
+    const from = this.playhead(now);
+    this.lastScrubAt = now;
+    this.setView({ position: scrubBy(from, delta, fine, this.view.zoom, this.duration ?? void 0) });
   }
   zoom(delta) {
     this.setView({ zoom: zoomBy(this.view.zoom, delta) });
@@ -5494,12 +5682,98 @@ function toAudioBuffer(data, sampleRate) {
   };
 }
 
+// src/move-surface-store.ts
+var moveScreenRowLabel = (row) => typeof row === "string" ? row : row.label;
+var moveScreenChecked = (rows) => rows.flatMap((row, i) => typeof row !== "string" && row.checked ? [i] : []);
+var EMPTY = { rows: 0, pads: [], padsLabel: null, steps: null, screen: null, search: null };
+var state = EMPTY;
+var listeners = /* @__PURE__ */ new Set();
+var pressListeners = /* @__PURE__ */ new Set();
+var screenSelectListeners = /* @__PURE__ */ new Set();
+var emit = () => {
+  for (const fn of listeners) fn();
+};
+function patch(key, value) {
+  if (JSON.stringify(state[key]) === JSON.stringify(value)) return;
+  state = { ...state, [key]: value };
+  emit();
+}
+var validPads = (pads) => pads.filter((p) => p.x >= 0 && p.x < 8 && (p.y === 0 || p.y === 1));
+function patchPadRows(rows, pads, label) {
+  const nextPads = validPads(pads);
+  const nextLabel = label === void 0 ? state.padsLabel : label;
+  if (state.rows === rows && state.padsLabel === nextLabel && JSON.stringify(state.pads) === JSON.stringify(nextPads)) return;
+  state = { ...state, rows, pads: nextPads, padsLabel: nextLabel };
+  emit();
+}
+var MoveSurfaceStore = {
+  getState: () => state,
+  subscribe(fn) {
+    listeners.add(fn);
+    return () => listeners.delete(fn);
+  },
+  /** How many bottom pad rows the app took (matches `claims.pads` on the wire). */
+  claimRows(rows) {
+    patch("rows", rows);
+  },
+  setPads(pads) {
+    patch("pads", validPads(pads));
+  },
+  /** Publish the claimed row count and its cells as one renderable state.
+   *  `label` says what the row does here — pass it whenever the meaning
+   *  changes, so the panel never captions the pads with a stale phrase. */
+  setPadRows(rows, pads, label) {
+    patchPadRows(rows, pads, label);
+  },
+  /** What the claimed rows control in this view. */
+  setPadsLabel(label) {
+    patch("padsLabel", label);
+  },
+  setSteps(steps) {
+    patch("steps", steps === null ? null : steps.filter((s) => s.step >= 0 && s.step < 16));
+  },
+  setScreen(screen) {
+    patch("screen", screen);
+  },
+  /** The search narrowing the wheel list — MoveSearchStore's to write. */
+  setSearch(search) {
+    patch("search", search);
+  },
+  /** Selection intent from the panel's wheel screen; the host owns the value,
+   *  exactly as it owns what a hardware wheel turn means. */
+  onScreenSelect(fn) {
+    screenSelectListeners.add(fn);
+    return () => screenSelectListeners.delete(fn);
+  },
+  selectScreen(index) {
+    if (!state.screen || !Number.isInteger(index) || index < 0 || index >= state.screen.items.length) return;
+    for (const fn of screenSelectListeners) fn(index);
+  },
+  /** A tap on an on-screen pad, for the host to treat like a hardware press. */
+  onPress(fn) {
+    pressListeners.add(fn);
+    return () => pressListeners.delete(fn);
+  },
+  press(x, y) {
+    for (const fn of pressListeners) fn({ x, y });
+  },
+  /** Hand the whole surface back — the panel returns to its plain layout. */
+  reset() {
+    if (state === EMPTY) return;
+    state = EMPTY;
+    emit();
+  }
+};
+
 // src/env.ts
 var isDevDefault = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import.meta !== "undefined" && import.meta.env?.MODE ? import.meta.env.MODE !== "production" : true;
 
 // src/components/MoveWaveform.tsx
 import { jsx as jsx6, jsxs as jsxs6 } from "react/jsx-runtime";
 var SLOT_HEIGHT = 140;
+var DISPLAY_HEIGHT = 128;
+var WAVE_INK = "#1e1e1e";
+var DEFAULT_ACCENT = "#3d9bff";
 var SLOT_ZOOM = 4;
 var DOCK_GAP = 14;
 function MoveWaveform({
@@ -5509,14 +5783,17 @@ function MoveWaveform({
   progress,
   onSeek,
   onLoopChange,
-  mode = "pixelated",
+  transport,
+  accent = DEFAULT_ACCENT,
+  cuts,
+  mode = "smooth",
   pixelSize = 2,
   grid = false,
   bands = false,
-  waveColor,
+  waveColor = WAVE_INK,
   playheadColor,
-  baseline = true,
-  smoothPoints,
+  baseline = false,
+  smoothPoints = 200,
   waveInset,
   height,
   children,
@@ -5538,6 +5815,49 @@ function MoveWaveform({
     setMounted(true);
     return MoveWaveformStore.register(seedRef.current);
   }, [productionEnabled]);
+  useEffect4(() => {
+    if (!productionEnabled) return;
+    const onJogClick = (event) => {
+      if (!MoveWaveformStore.isRegistered()) return;
+      event.preventDefault();
+      MoveWaveformStore.setView({ zoom: 1 });
+    };
+    window.addEventListener("move-tweakers:jog-click", onJogClick);
+    return () => window.removeEventListener("move-tweakers:jog-click", onJogClick);
+  }, [productionEnabled]);
+  const transportRef = useRef4(transport);
+  transportRef.current = transport;
+  const hasTransport = !!transport;
+  useEffect4(() => {
+    if (!productionEnabled || !hasTransport) return;
+    const releases = [
+      MoveFunctions.push("play", () => transportRef.current?.onPlay(), { label: "Play", chip: false }),
+      MoveFunctions.push("loop", () => transportRef.current?.onLoop(), { label: "Loop", chip: false })
+    ];
+    return () => releases.forEach((release) => release());
+  }, [productionEnabled, hasTransport]);
+  const playing = transport?.playing ?? false;
+  const loopOn = transport?.loopOn ?? false;
+  useEffect4(() => {
+    if (!productionEnabled) return;
+    MoveWaveformStore.setTransport(hasTransport ? { playing, loopOn } : null);
+  }, [productionEnabled, hasTransport, playing, loopOn]);
+  useEffect4(() => {
+    if (!productionEnabled) return;
+    const prev = MoveSurfaceStore.getState().steps;
+    const paint = () => {
+      const lit = new Set(MoveWaveformStore.loopSteps());
+      MoveSurfaceStore.setSteps(
+        Array.from({ length: MOVE_WAVEFORM_STEPS }, (_, step) => ({ step, color: accent, lit: lit.has(step) }))
+      );
+    };
+    paint();
+    const off = MoveWaveformStore.subscribe(paint);
+    return () => {
+      off();
+      MoveSurfaceStore.setSteps(prev);
+    };
+  }, [productionEnabled, accent]);
   const styleValues = useSyncExternalStore2(
     useCallback((cb) => MoveWaveformStore.subscribeStyle(cb), []),
     () => MoveWaveformStore.getStyleSnapshot(),
@@ -5592,22 +5912,24 @@ function MoveWaveform({
     };
   }, [variant, mounted]);
   if (!productionEnabled) return null;
-  const boxHeight = height ?? (variant === "slot" ? SLOT_HEIGHT : 180);
+  const boxHeight = Math.min(MOVE_WAVE_MAX_DISPLAY, height ?? (variant === "slot" ? SLOT_HEIGHT : DISPLAY_HEIGHT));
   const wave = /* @__PURE__ */ jsx6(
     WaveformVisualization,
     {
       buffer,
-      ...getProgress ? { getProgress } : { progress: progress ?? state2.position },
+      ...getProgress ? { getProgress: () => MoveWaveformStore.isScrubbing() ? MoveWaveformStore.getView().position : getProgress() } : { progress: progress ?? state2.position },
       mode: look.mode,
       pixelSize: look.pixelSize,
       grid: look.grid,
       bands: look.bands,
-      ...waveColor ? { waveColor } : {},
-      ...playheadColor ? { playheadColor } : {},
+      waveColor,
+      playheadColor: playheadColor ?? accent,
       baseline: look.baseline,
       ...smoothPoints != null ? { smoothPoints } : {},
       ...waveInset != null ? { waveInset } : {},
       loop: state2.loop,
+      cuts,
+      gapColor: WAVE_INK,
       zoom: variant === "slot" ? Math.max(SLOT_ZOOM, state2.zoom) : state2.zoom,
       onSeek: (p) => MoveWaveformStore.setView({ position: p }),
       onLoopChange: (l) => MoveWaveformStore.setView({ loop: l, loopAnchor: null }),
@@ -6544,89 +6866,6 @@ function ModRing({
     }
   );
 }
-
-// src/move-surface-store.ts
-var moveScreenRowLabel = (row) => typeof row === "string" ? row : row.label;
-var moveScreenChecked = (rows) => rows.flatMap((row, i) => typeof row !== "string" && row.checked ? [i] : []);
-var EMPTY = { rows: 0, pads: [], padsLabel: null, steps: null, screen: null, search: null };
-var state = EMPTY;
-var listeners = /* @__PURE__ */ new Set();
-var pressListeners = /* @__PURE__ */ new Set();
-var screenSelectListeners = /* @__PURE__ */ new Set();
-var emit = () => {
-  for (const fn of listeners) fn();
-};
-function patch(key, value) {
-  if (JSON.stringify(state[key]) === JSON.stringify(value)) return;
-  state = { ...state, [key]: value };
-  emit();
-}
-var validPads = (pads) => pads.filter((p) => p.x >= 0 && p.x < 8 && (p.y === 0 || p.y === 1));
-function patchPadRows(rows, pads, label) {
-  const nextPads = validPads(pads);
-  const nextLabel = label === void 0 ? state.padsLabel : label;
-  if (state.rows === rows && state.padsLabel === nextLabel && JSON.stringify(state.pads) === JSON.stringify(nextPads)) return;
-  state = { ...state, rows, pads: nextPads, padsLabel: nextLabel };
-  emit();
-}
-var MoveSurfaceStore = {
-  getState: () => state,
-  subscribe(fn) {
-    listeners.add(fn);
-    return () => listeners.delete(fn);
-  },
-  /** How many bottom pad rows the app took (matches `claims.pads` on the wire). */
-  claimRows(rows) {
-    patch("rows", rows);
-  },
-  setPads(pads) {
-    patch("pads", validPads(pads));
-  },
-  /** Publish the claimed row count and its cells as one renderable state.
-   *  `label` says what the row does here — pass it whenever the meaning
-   *  changes, so the panel never captions the pads with a stale phrase. */
-  setPadRows(rows, pads, label) {
-    patchPadRows(rows, pads, label);
-  },
-  /** What the claimed rows control in this view. */
-  setPadsLabel(label) {
-    patch("padsLabel", label);
-  },
-  setSteps(steps) {
-    patch("steps", steps === null ? null : steps.filter((s) => s.step >= 0 && s.step < 16));
-  },
-  setScreen(screen) {
-    patch("screen", screen);
-  },
-  /** The search narrowing the wheel list — MoveSearchStore's to write. */
-  setSearch(search) {
-    patch("search", search);
-  },
-  /** Selection intent from the panel's wheel screen; the host owns the value,
-   *  exactly as it owns what a hardware wheel turn means. */
-  onScreenSelect(fn) {
-    screenSelectListeners.add(fn);
-    return () => screenSelectListeners.delete(fn);
-  },
-  selectScreen(index) {
-    if (!state.screen || !Number.isInteger(index) || index < 0 || index >= state.screen.items.length) return;
-    for (const fn of screenSelectListeners) fn(index);
-  },
-  /** A tap on an on-screen pad, for the host to treat like a hardware press. */
-  onPress(fn) {
-    pressListeners.add(fn);
-    return () => pressListeners.delete(fn);
-  },
-  press(x, y) {
-    for (const fn of pressListeners) fn({ x, y });
-  },
-  /** Hand the whole surface back — the panel returns to its plain layout. */
-  reset() {
-    if (state === EMPTY) return;
-    state = EMPTY;
-    emit();
-  }
-};
 
 // src/shortcut-utils.ts
 import { TweakStore as TweakStore5 } from "tweakers/store";
@@ -7733,6 +7972,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const rangeHandleRef = useRef9("min");
   const filterHandRef = useRef9("cutoff");
   const [volume, setVolume] = useState7(() => MoveVolumeDisplay.get());
+  const waveClaimed = useSyncExternalStore3(
+    useCallback2((cb) => MoveWaveformStore.subscribe(cb), []),
+    () => MoveWaveformStore.isRegistered(),
+    () => false
+  );
   const [liveValue, setLiveValue] = useState7(null);
   useEffect9(() => {
     setVolume(MoveVolumeDisplay.get());
@@ -8359,11 +8603,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     TweakStore9.updateValue(page.panel.id, meta.path, denormalizeEnumDial(meta, v01));
   };
   const dialReading = (meta) => {
-    if (dialOrigin(meta) <= 0) return `${dialPercent(meta)}%`;
     const n = Number(values[meta.path]);
+    const bipolar = dialOrigin(meta) > 0;
+    if (!bipolar && !meta.formatValue && !meta.unit) return `${dialPercent(meta)}%`;
     if (!Number.isFinite(n)) return "";
     if (meta.formatValue) return meta.formatValue(n);
     const num = Math.abs(n) >= 100 ? Math.round(n).toString() : Number(n.toFixed(2)).toString();
+    if (!bipolar) return `${num}${meta.unit ?? ""}`;
     return n > 0 ? `+${num}` : num;
   };
   const rangeReading = (meta) => {
@@ -8407,7 +8653,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const padRows = movePadRows(page, appRows);
   const appRowAt = (row) => moveAppPadRow(row, appRows);
   const padAt = (x, y) => surface.pads.find((p) => p.x === x && p.y === y);
-  const shownPadRows = Array.from({ length: PAD_ROWS }, (_, row) => row).filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0));
+  const shownPadRows = Array.from({ length: PAD_ROWS }, (_, row) => row).filter((row) => appRowAt(row) !== null || (settingsPanel ? padRows.slice(row).some((r) => r.length > 0) : padRows[row].some(Boolean)));
   const firstAppScreenRow = shownPadRows.find((row) => appRowAt(row) !== null) ?? -1;
   const visibleCols = stripMode ? page.dials.map((_, i) => i) : settingsPanel ? Array.from({ length: modPageWidth() }, (_, i) => i) : color ? Array.from({ length: MOVE_PADS }, (_, i) => i) : visibleColumns(page);
   const clusterCols = explorationOpen ? MOVE_DIALS : stripMode ? Math.min(MOVE_DIALS, visibleCols.length) || MOVE_DIALS : visibleCols.length;
@@ -8429,9 +8675,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const stripFrom = stripMode ? stripSlotIndex(page, stripOffset) : 0;
   const stripTo = stripMode ? stripSlotIndex(page, stripOffset + MOVE_DIALS) : 0;
   const volumeReading = liveValue ?? volume?.value;
-  const headerCluster = (volume || functionChips === "clock") && /* @__PURE__ */ jsxs11("div", { className: "tweakers-move-actions", children: [
+  const headerCluster = (waveClaimed || volume || functionChips === "clock") && /* @__PURE__ */ jsxs11("div", { className: "tweakers-move-actions", children: [
     functionChips === "clock" && /* @__PURE__ */ jsx11(MoveFunctionChips, {}),
-    volume && /* @__PURE__ */ jsxs11("div", { className: "tweakers-move-volume", children: [
+    waveClaimed ? /* @__PURE__ */ jsx11(MoveWaveClock, {}) : volume && /* @__PURE__ */ jsxs11("div", { className: "tweakers-move-volume", children: [
       /* @__PURE__ */ jsx11("span", { className: "tweakers-move-volume-tick", style: { background: MOVE_TRACK_COLORS[0] } }),
       volume.label && volumeReading != null && /* @__PURE__ */ jsx11("span", { className: "tweakers-move-volume-label", children: volume.label }),
       /* @__PURE__ */ jsx11("span", { className: "tweakers-move-volume-value", children: boldColons(volumeReading ?? volume.label ?? "") })
@@ -8468,21 +8714,51 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         },
         children: [
           /* @__PURE__ */ jsxs11("div", { className: "tweakers-move-tracks", children: [
-            audioWave != null ? /* @__PURE__ */ jsx11(MoveAudioZoom, {}) : /* @__PURE__ */ jsxs11("div", { className: "tweakers-move-tracks-group", children: [
-              settingsOpen && /* @__PURE__ */ jsxs11("div", { className: "tweakers-move-settings-title", children: [
-                /* @__PURE__ */ jsx11("span", { className: "tweakers-move-settings-blink" }),
-                roomPages.length > 1 ? /* @__PURE__ */ jsx11("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Settings pages", children: roomPages.map((pg, i) => /* @__PURE__ */ jsxs11(
+            audioWave != null ? /* @__PURE__ */ jsx11(MoveAudioZoom, {}) : /* @__PURE__ */ jsxs11("div", { className: "tweakers-move-tracks-lead", children: [
+              waveClaimed && /* @__PURE__ */ jsx11(MoveAudioZoom, {}),
+              /* @__PURE__ */ jsxs11("div", { className: "tweakers-move-tracks-group", children: [
+                settingsOpen && /* @__PURE__ */ jsxs11("div", { className: "tweakers-move-settings-title", children: [
+                  /* @__PURE__ */ jsx11("span", { className: "tweakers-move-settings-blink" }),
+                  roomPages.length > 1 ? /* @__PURE__ */ jsx11("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Settings pages", children: roomPages.map((pg, i) => /* @__PURE__ */ jsxs11(
+                    "button",
+                    {
+                      type: "button",
+                      role: "tab",
+                      className: "tweakers-move-track",
+                      "data-active": pg === page,
+                      "aria-selected": pg === page,
+                      tabIndex: pg === page ? 0 : -1,
+                      onClick: () => {
+                        setRoomTrack(i);
+                        window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
+                      },
+                      children: [
+                        /* @__PURE__ */ jsx11("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
+                        /* @__PURE__ */ jsx11("span", { className: "tweakers-move-track-label", children: pg.panel.name })
+                      ]
+                    },
+                    pg.panel.id
+                  )) }) : /* @__PURE__ */ jsx11("span", { className: "tweakers-move-track-label", children: page.panel.name })
+                ] }),
+                !settingsOpen && pages.length > 1 && /* @__PURE__ */ jsx11("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Move pages", children: pages.map((pg, i) => /* @__PURE__ */ jsxs11(
                   "button",
                   {
+                    id: `${pageTabsId}-tab-${i}`,
                     type: "button",
                     role: "tab",
                     className: "tweakers-move-track",
                     "data-active": pg === page,
                     "aria-selected": pg === page,
+                    "aria-controls": panelIdForTabs,
                     tabIndex: pg === page ? 0 : -1,
-                    onClick: () => {
-                      setRoomTrack(i);
-                      window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
+                    onClick: () => selectPage(i),
+                    onKeyDown: (event) => {
+                      const last = pages.length - 1;
+                      const next = event.key === "ArrowRight" ? (i + 1) % pages.length : event.key === "ArrowLeft" ? (i - 1 + pages.length) % pages.length : event.key === "Home" ? 0 : event.key === "End" ? last : -1;
+                      if (next < 0) return;
+                      event.preventDefault();
+                      selectPage(next);
+                      event.currentTarget.parentElement?.querySelectorAll('[role="tab"]')[next]?.focus();
                     },
                     children: [
                       /* @__PURE__ */ jsx11("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
@@ -8490,37 +8766,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                     ]
                   },
                   pg.panel.id
-                )) }) : /* @__PURE__ */ jsx11("span", { className: "tweakers-move-track-label", children: page.panel.name })
-              ] }),
-              !settingsOpen && pages.length > 1 && /* @__PURE__ */ jsx11("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Move pages", children: pages.map((pg, i) => /* @__PURE__ */ jsxs11(
-                "button",
-                {
-                  id: `${pageTabsId}-tab-${i}`,
-                  type: "button",
-                  role: "tab",
-                  className: "tweakers-move-track",
-                  "data-active": pg === page,
-                  "aria-selected": pg === page,
-                  "aria-controls": panelIdForTabs,
-                  tabIndex: pg === page ? 0 : -1,
-                  onClick: () => selectPage(i),
-                  onKeyDown: (event) => {
-                    const last = pages.length - 1;
-                    const next = event.key === "ArrowRight" ? (i + 1) % pages.length : event.key === "ArrowLeft" ? (i - 1 + pages.length) % pages.length : event.key === "Home" ? 0 : event.key === "End" ? last : -1;
-                    if (next < 0) return;
-                    event.preventDefault();
-                    selectPage(next);
-                    event.currentTarget.parentElement?.querySelectorAll('[role="tab"]')[next]?.focus();
-                  },
-                  children: [
-                    /* @__PURE__ */ jsx11("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
-                    /* @__PURE__ */ jsx11("span", { className: "tweakers-move-track-label", children: pg.panel.name })
-                  ]
-                },
-                pg.panel.id
-              )) }),
-              functionChips === "tracks" && /* @__PURE__ */ jsx11(MoveFunctionChips, {}),
-              headerStart && /* @__PURE__ */ jsx11("div", { className: "tweakers-move-header-start", children: headerStart })
+                )) }),
+                functionChips === "tracks" && /* @__PURE__ */ jsx11(MoveFunctionChips, {}),
+                headerStart && /* @__PURE__ */ jsx11("div", { className: "tweakers-move-header-start", children: headerStart })
+              ] })
             ] }),
             /* @__PURE__ */ jsx11("div", { className: "tweakers-move-mods", children: settingsOpen ? roomWave ? /* @__PURE__ */ jsx11(MoveAudioZoom, {}) : null : color && colorMeta ? /* @__PURE__ */ jsx11(MoveColorSteps, { color, disabled: TweakStore9.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? ModulationStore2.getSlots().map((slot) => /* @__PURE__ */ jsx11(MoveModCircle, { slot }, slot.index)) : null }),
             audioWave != null ? /* @__PURE__ */ jsx11(MoveAudioTransport, { index: audioWave }) : roomWave ? /* @__PURE__ */ jsx11(MoveRoomTransport, {}) : headerCluster
@@ -9159,7 +9408,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                               );
                             }) }),
                             color && colorMeta ? /* @__PURE__ */ jsx11(MoveOpacityPads, { color, disabled: TweakStore9.isDisabled(page.panel.id, colorMeta.path) }) : shownPadRows.map((row) => {
-                              if (appRowAt(row) !== null) {
+                              if (appRowAt(row) !== null && !surface.pads.length) {
                                 if (row > firstAppScreenRow) return null;
                                 return /* @__PURE__ */ jsx11(
                                   "div",
@@ -9197,6 +9446,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           type: "button",
                                           className: "tweakers-move-pad",
                                           "data-kind": "app",
+                                          title: surface.padsLabel ?? void 0,
                                           "data-on": cell.lit || appHeld === `${appRow}:${col}` || void 0,
                                           "data-held": appHeld === `${appRow}:${col}` || void 0,
                                           onPointerDown: (e) => {
@@ -9345,7 +9595,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       );
                                     }
                                     if (!meta) return /* @__PURE__ */ jsx11("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
-                                    if (padRows[row] === page.toggles) {
+                                    if (page.toggles[col] === meta) {
                                       return /* @__PURE__ */ jsx11(
                                         "button",
                                         {
@@ -9358,7 +9608,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         meta.path
                                       );
                                     }
-                                    if (padRows[row] === page.actions) {
+                                    if (page.actions[col] === meta) {
                                       return /* @__PURE__ */ jsx11(
                                         "button",
                                         {
@@ -9534,26 +9784,12 @@ function MoveAudioWave({ index, theme }) {
       })),
       "tap to jump the playhead \xB7 hold to loop that part"
     );
-    const paintSteps = () => {
-      const lit = new Set(MoveWaveformStore.loopSteps());
-      MoveSurfaceStore.setSteps(
-        Array.from({ length: MOVE_WAVEFORM_STEPS }, (_, step) => ({
-          step,
-          color: modColor(index),
-          lit: lit.has(step)
-        }))
-      );
-    };
-    paintSteps();
-    const offView = MoveWaveformStore.subscribe(paintSteps);
     const offPress = MoveSurfaceStore.onPress(({ x, y }) => {
       if (y === 0) MoveWaveformStore.pressPad(x);
     });
     return () => {
-      offView();
       offPress();
       MoveSurfaceStore.setPadRows(prev.rows, prev.pads, prev.padsLabel);
-      MoveSurfaceStore.setSteps(prev.steps);
     };
   }, [index]);
   return /* @__PURE__ */ jsx11(
@@ -9570,7 +9806,8 @@ function MoveAudioWave({ index, theme }) {
       baseline: false,
       height: MOVE_WAVE_DISPLAY_HEIGHT,
       waveColor: "#1e1e1e",
-      playheadColor: modColor(index)
+      playheadColor: modColor(index),
+      accent: modColor(index)
     }
   );
 }
@@ -9674,6 +9911,28 @@ function MoveAudioZoom() {
       parseFloat(MoveWaveformStore.getView().zoom.toFixed(1)),
       "x"
     ] })
+  ] });
+}
+function MoveWaveClock() {
+  useSyncExternalStore3(
+    useCallback2((cb) => MoveWaveformStore.subscribe(cb), []),
+    () => MoveWaveformStore.getVersion(),
+    () => 0
+  );
+  const transport = MoveWaveformStore.getTransport();
+  const clockRef = useRef9(null);
+  useEffect9(() => {
+    let raf = requestAnimationFrame(function tick() {
+      const text = MoveWaveformStore.clock();
+      if (clockRef.current && clockRef.current.textContent !== text) clockRef.current.textContent = text;
+      raf = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return /* @__PURE__ */ jsxs11("div", { className: "tweakers-move-volume tweakers-move-wave-time", "data-transport": transport ? true : void 0, children: [
+    transport && /* @__PURE__ */ jsx11("svg", { className: "tweakers-move-wave-state", "data-on": transport.playing || void 0, viewBox: "0 0 24 24", "aria-hidden": "true", children: /* @__PURE__ */ jsx11("path", { d: ICON_PLAY, fill: "currentColor" }) }),
+    /* @__PURE__ */ jsx11("span", { ref: clockRef, className: "tweakers-move-volume-value", children: MoveWaveformStore.clock() }),
+    transport && /* @__PURE__ */ jsx11("svg", { className: "tweakers-move-wave-state", "data-on": transport.loopOn || void 0, viewBox: "0 0 24 24", "aria-hidden": "true", children: ICON_LOOP.map((d) => /* @__PURE__ */ jsx11("path", { d, fill: "none", stroke: "currentColor", strokeWidth: "2.4", strokeLinecap: "round", strokeLinejoin: "round" }, d)) })
   ] });
 }
 function MoveAudioTransport({ index }) {
@@ -10650,6 +10909,10 @@ export {
   MOVE_WAVEFORM_PANEL,
   MOVE_WAVEFORM_PIXEL_RANGE,
   MOVE_WAVEFORM_STEPS,
+  MOVE_WAVE_FRAME,
+  MOVE_WAVE_MAX_DISPLAY,
+  MOVE_WAVE_MAX_HEIGHT,
+  MOVE_WAVE_MAX_WIDTH,
   ModRing,
   ModulationStore3 as ModulationStore,
   MoveActionButton,

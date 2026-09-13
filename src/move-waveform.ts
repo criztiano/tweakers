@@ -26,6 +26,20 @@ export type MoveWaveformVariant =
   /** Floating above the Move panel, the width of the surface it belongs to. */
   | 'dock';
 
+/** The transport the waveform's host runs, as the clock wears it. */
+export type MoveWaveformTransport = {
+  playing: boolean;
+  loopOn: boolean;
+};
+
+/** The one card every waveform wears: at most this wide and this tall, the
+ *  12px frame included — the mockup's display is 728×128 inside it. */
+export const MOVE_WAVE_FRAME = 12;
+export const MOVE_WAVE_MAX_WIDTH = 1200;
+export const MOVE_WAVE_MAX_HEIGHT = 176;
+/** The display's height budget once the frame has taken its share. */
+export const MOVE_WAVE_MAX_DISPLAY = MOVE_WAVE_MAX_HEIGHT - 2 * MOVE_WAVE_FRAME;
+
 /** The view state the hardware drives, shared by every surface showing it. */
 export type MoveWaveformView = {
   /** Play position, 0..1. */
@@ -99,6 +113,19 @@ export const SCRUB_FINE = 0.00005;
 export const SCRUB_ACCEL = 1.2;
 /** Ignore pathological encoder batches beyond a deliberate fast spin. */
 export const SCRUB_MAX_BATCH = 24;
+/**
+ * A share of the sample is the wrong unit for a short one: on a five-second
+ * take the finest step above is a millisecond, and a whole turn goes
+ * nowhere. So a detent is never less than this much real time, once the
+ * sample's length is known — long samples keep the share, short ones get
+ * a knob that actually travels.
+ */
+export const SCRUB_MIN_MS = 25;
+export const SCRUB_FINE_MIN_MS = 5;
+/** A turn in progress chains from its own last landing for this long — the
+ *  engine's seek lags a detent or two behind, and reading it mid-turn would
+ *  start every detent from where the first one left off. */
+export const SCRUB_CHAIN_MS = 250;
 /** A wheel detent is a proportion of the current zoom, so it feels the same
  *  going in as coming out. */
 export const ZOOM_PER_DETENT = 0.08;
@@ -117,10 +144,12 @@ export function defaultView(): MoveWaveformView {
  * finest step, a spin (a batched delta) superlinearly more. Shift stays
  * plainly linear — the surgical layer never surprises.
  */
-export function scrubBy(position: number, delta: number, fine = false, zoom = 1): number {
+export function scrubBy(position: number, delta: number, fine = false, zoom = 1, durationSec?: number): number {
   const detents = Math.min(SCRUB_MAX_BATCH, Math.abs(delta));
   const magnitude = fine ? detents : Math.pow(detents, SCRUB_ACCEL);
-  const step = (fine ? SCRUB_FINE : SCRUB_PER_DETENT) / Math.max(1, zoom);
+  const share = fine ? SCRUB_FINE : SCRUB_PER_DETENT;
+  const floor = durationSec && durationSec > 0 ? (fine ? SCRUB_FINE_MIN_MS : SCRUB_MIN_MS) / 1000 / durationSec : 0;
+  const step = Math.max(share, floor) / Math.max(1, zoom);
   const next = clamp01(position + Math.sign(delta) * magnitude * step);
   // Snap the ends: a scrub that lands a thousandth short of the start is a
   // scrub to the start, and the number it feeds is a read position.
@@ -225,6 +254,8 @@ class MoveWaveformStoreClass {
   private editor = false;
   private progressSource: (() => number) | null = null;
   private duration: number | null = null;
+  private transport: MoveWaveformTransport | null = null;
+  private lastScrubAt = 0;
   private listeners = new Set<Listener>();
   private version = 0;
 
@@ -237,6 +268,7 @@ class MoveWaveformStoreClass {
    */
   register(style?: Partial<MoveWaveformStyle>): () => void {
     this.claims += 1;
+    if (this.claims === 1) this.lastScrubAt = 0;
     this.ensureSettings(style);
     // The knob is ours now, so it says so: the volume readout follows the
     // playhead for as long as we hold the claim, and is handed back with it.
@@ -254,11 +286,48 @@ class MoveWaveformStoreClass {
       this.editor = false;
       this.progressSource = null;
       this.duration = null;
+      this.transport = null;
       this.buffer = null;
       this.view = defaultView();
       MoveVolumeDisplay.clear();
       this.notify();
     };
+  }
+
+  /** The host's transport, for the clock to wear; null when it runs none. */
+  setTransport(transport: MoveWaveformTransport | null): void {
+    if (
+      transport?.playing === this.transport?.playing &&
+      transport?.loopOn === this.transport?.loopOn &&
+      (transport === null) === (this.transport === null)
+    ) return;
+    this.transport = transport;
+    this.notify();
+  }
+
+  getTransport(): MoveWaveformTransport | null {
+    return this.transport;
+  }
+
+  /** A turn of the knob in progress: its last detent landed within the chain window. */
+  isScrubbing(now = Date.now()): boolean {
+    return now - this.lastScrubAt < SCRUB_CHAIN_MS;
+  }
+
+  /** Where the playhead is right now, 0..1: the knob's landing while a turn
+   *  is in progress (the engine is a beat behind it, and drawing the lag is
+   *  what makes a scrub look like it stutters), else the engine's while one
+   *  reports, else the last scrub. */
+  playhead(now = Date.now()): number {
+    if (this.isScrubbing(now)) return clamp01(this.view.position);
+    return clamp01(this.progressSource ? this.progressSource() : this.view.position);
+  }
+
+  /** The clock the panel shows for the knob: m:ss:cc of the playhead. */
+  clock(): string {
+    const t = this.playhead() * (this.duration ?? 0);
+    const cc = Math.floor((t % 1) * 100);
+    return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}:${String(cc).padStart(2, '0')}`;
   }
 
   isRegistered(): boolean {
@@ -386,7 +455,7 @@ class MoveWaveformStoreClass {
 
   /** What the volume knob is editing right now, ready to print. */
   readout(): string {
-    const at = clamp01(this.progressSource ? this.progressSource() : this.view.position);
+    const at = this.playhead();
     if (this.duration === null) return `${Math.round(at * 100)}%`;
     const total = at * this.duration;
     const minutes = Math.floor(total / 60);
@@ -418,8 +487,15 @@ class MoveWaveformStoreClass {
     this.notify();
   }
 
-  scrub(delta: number, fine = false): void {
-    this.setView({ position: scrubBy(this.view.position, delta, fine, this.view.zoom) });
+  /** A detent moves the playhead from where it is — the engine's position
+   *  while one reports, so a scrub mid-play carries on from the play, never
+   *  from the spot an earlier scrub left. Within a turn the detents chain
+   *  from each other: the engine's seek lands a beat later than the knob
+   *  turns, and a turn read against it would lose every detent but the first. */
+  scrub(delta: number, fine = false, now = Date.now()): void {
+    const from = this.playhead(now);
+    this.lastScrubAt = now;
+    this.setView({ position: scrubBy(from, delta, fine, this.view.zoom, this.duration ?? undefined) });
   }
 
   zoom(delta: number): void {

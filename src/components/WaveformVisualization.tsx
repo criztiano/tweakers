@@ -45,6 +45,12 @@ interface WaveformVisualizationProps {
    */
   onSeek?: (progress: number) => void;
   /** The active loop region to render (controlled), or null for none. */
+  /** Where the sample is cut (0..1): the display splits there into pieces with a gap of frame between. */
+  cuts?: number[];
+  /** The frame colour the gaps show, and the gap's width / corner radius in CSS px. */
+  gapColor?: string;
+  gap?: number;
+  gapRadius?: number;
   loop?: WaveformLoop | null;
   /**
    * Drag-to-loop. When provided, dragging across the waveform reports a loop
@@ -85,6 +91,10 @@ export function WaveformVisualization({
   gridSubdivisions = 8,
   onSeek,
   loop = null,
+  cuts,
+  gapColor,
+  gap,
+  gapRadius,
   onLoopChange,
   waveColor,
   playheadColor,
@@ -121,6 +131,10 @@ export function WaveformVisualization({
     waveInset,
     autoZoomOnLoop,
     loop,
+    cuts,
+    gapColor,
+    gap,
+    gapRadius,
     zoom,
     width,
     height,

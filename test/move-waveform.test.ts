@@ -124,25 +124,17 @@ describe('the registry', () => {
     expect(MoveWaveformStore.isRegistered()).toBe(false);
   });
 
-  it('names the volume knob while it holds it, and hands the pill back', () => {
-    expect(MoveVolumeDisplay.get()).toBe(null);
+  it('carries a clock for the panel, m:ss:cc of the playhead', () => {
     const release = MoveWaveformStore.register();
-    const pill = MoveVolumeDisplay.get();
-    expect(pill?.label).toBe('time');
-    expect(typeof pill?.getValue).toBe('function');
-    release();
-    expect(MoveVolumeDisplay.get()).toBe(null);
-  });
-
-  it('reads the playhead as a time once the sample length is known', () => {
-    const release = MoveWaveformStore.register();
-    // With no duration a position is still readable — as a percentage.
     MoveWaveformStore.setView({ position: 0.5 });
-    expect(MoveVolumeDisplay.get()?.getValue?.()).toBe('50%');
+    // With no duration a position is still readable — as a percentage.
+    expect(MoveWaveformStore.readout()).toBe('50%');
+    expect(MoveWaveformStore.clock()).toBe('0:00:00');
     MoveWaveformStore.setDuration(90);
-    expect(MoveVolumeDisplay.get()?.getValue?.()).toBe('0:45.0');
+    expect(MoveWaveformStore.readout()).toBe('0:45.0');
+    expect(MoveWaveformStore.clock()).toBe('0:45:00');
     MoveWaveformStore.setView({ position: 1 });
-    expect(MoveVolumeDisplay.get()?.getValue?.()).toBe('1:30.0');
+    expect(MoveWaveformStore.clock()).toBe('1:30:00');
     release();
   });
 
@@ -151,8 +143,55 @@ describe('the registry', () => {
     MoveWaveformStore.setDuration(10);
     MoveWaveformStore.setView({ position: 0 });
     MoveWaveformStore.setProgressSource(() => 0.25);
-    expect(MoveVolumeDisplay.get()?.getValue?.()).toBe('0:02.5');
+    expect(MoveWaveformStore.readout()).toBe('0:02.5');
+    expect(MoveWaveformStore.clock()).toBe('0:02:50');
     release();
+  });
+
+  it('scrubs from the engine playhead, so a turn mid-play carries on from the play', () => {
+    const release = MoveWaveformStore.register();
+    MoveWaveformStore.setView({ position: 0 });
+    MoveWaveformStore.setProgressSource(() => 0.5);
+    MoveWaveformStore.scrub(1, false, 1000);
+    expect(MoveWaveformStore.getView().position).toBeCloseTo(scrubBy(0.5, 1), 6);
+    release();
+  });
+
+  it('chains the detents of one turn, so a lagging seek loses none of them', () => {
+    const release = MoveWaveformStore.register();
+    MoveWaveformStore.setView({ position: 0 });
+    MoveWaveformStore.setProgressSource(() => 0.5); // the engine, still where the turn began
+    MoveWaveformStore.scrub(1, false, 1000);
+    MoveWaveformStore.scrub(1, false, 1050);
+    MoveWaveformStore.scrub(1, false, 1100);
+    expect(MoveWaveformStore.getView().position).toBeCloseTo(scrubBy(scrubBy(scrubBy(0.5, 1), 1), 1), 6);
+    // Mid-turn the knob's landing is the playhead, for the drawing and the clock.
+    expect(MoveWaveformStore.isScrubbing(1200)).toBe(true);
+    expect(MoveWaveformStore.playhead(1200)).toBeCloseTo(MoveWaveformStore.getView().position, 6);
+    // A new turn, later, starts from the engine again.
+    expect(MoveWaveformStore.isScrubbing(5000)).toBe(false);
+    MoveWaveformStore.scrub(1, false, 5000);
+    expect(MoveWaveformStore.getView().position).toBeCloseTo(scrubBy(0.5, 1), 6);
+    release();
+  });
+
+  it('never moves less than real time on a short sample', () => {
+    // Long sample: the share rules, as approved.
+    expect(scrubBy(0.5, 1, false, 1, 180)).toBeCloseTo(scrubBy(0.5, 1), 6);
+    // Five seconds: a slow detent is 25 ms of it, Shift 5 ms.
+    expect(scrubBy(0.5, 1, false, 1, 5) - 0.5).toBeCloseTo(0.025 / 5, 6);
+    expect(scrubBy(0.5, 1, true, 1, 5) - 0.5).toBeCloseTo(0.005 / 5, 6);
+    // The floor follows the zoom like the share does.
+    expect(scrubBy(0.5, 1, false, 4, 5) - 0.5).toBeCloseTo(0.025 / 5 / 4, 6);
+  });
+
+  it('wears the host transport and drops it with the claim', () => {
+    const release = MoveWaveformStore.register();
+    expect(MoveWaveformStore.getTransport()).toBe(null);
+    MoveWaveformStore.setTransport({ playing: true, loopOn: false });
+    expect(MoveWaveformStore.getTransport()).toEqual({ playing: true, loopOn: false });
+    release();
+    expect(MoveWaveformStore.getTransport()).toBe(null);
   });
 
   it('forgets the sample length on release', () => {
@@ -161,7 +200,7 @@ describe('the registry', () => {
     first();
     const second = MoveWaveformStore.register();
     MoveWaveformStore.setView({ position: 0.5 });
-    expect(MoveVolumeDisplay.get()?.getValue?.()).toBe('50%');
+    expect(MoveWaveformStore.readout()).toBe('50%');
     second();
   });
 
