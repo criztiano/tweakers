@@ -57,7 +57,7 @@ export const MOVE_WAVEFORM_PANEL = 'move-waveform';
 /** The bar widths the settings page offers: 1× to 6×, every integer. */
 export const MOVE_WAVEFORM_PIXEL_RANGE = [1, 6] as const;
 
-const MODE_LABELS: Record<WaveformMode, string> = { smooth: 'Smooth', pixelated: 'Pixel', striped: 'Striped' };
+const MODE_LABELS: Record<WaveformMode, string> = { smooth: 'Smooth', pixelated: 'Pixel', striped: 'Striped', spaced: 'Spaced' };
 const clampPixelSize = (v: number) =>
   Math.min(MOVE_WAVEFORM_PIXEL_RANGE[1], Math.max(MOVE_WAVEFORM_PIXEL_RANGE[0], Math.round(v)));
 

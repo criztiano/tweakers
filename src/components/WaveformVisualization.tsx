@@ -21,6 +21,8 @@ interface WaveformVisualizationProps {
    * 'pixelated' — crisp, chunky per-column min/max bars.
    * 'striped' — the same bars with a gap the bar's own width after each;
    * every bar reads its peaks over bar and gap, so nothing is masked.
+   * 'spaced' — the pixelated bars untouched, a gap after each: the wave is
+   * twice as long, and the same zoom shows half of it.
    */
   mode?: WaveformMode;
   /**
