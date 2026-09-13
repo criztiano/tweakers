@@ -4110,9 +4110,11 @@ interface MoveScreenSearch {
     index: number;
 }
 type Listener$2 = () => void;
+/** `shift`: Shift was held — on the hardware, or on the keyboard for a click. */
 type PressListener = (pad: {
     x: number;
     y: 0 | 1;
+    shift: boolean;
 }) => void;
 declare const MoveSurfaceStore: {
     getState: () => MoveSurfaceState;
@@ -4136,7 +4138,7 @@ declare const MoveSurfaceStore: {
     selectScreen(index: number): void;
     /** A tap on an on-screen pad, for the host to treat like a hardware press. */
     onPress(fn: PressListener): () => void;
-    press(x: number, y: 0 | 1): void;
+    press(x: number, y: 0 | 1, shift?: boolean): void;
     /** Hand the whole surface back — the panel returns to its plain layout. */
     reset(): void;
 };

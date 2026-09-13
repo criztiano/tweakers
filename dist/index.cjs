@@ -6127,8 +6127,8 @@ var MoveSurfaceStore = {
     pressListeners.add(fn);
     return () => pressListeners.delete(fn);
   },
-  press(x, y) {
-    for (const fn of pressListeners) fn({ x, y });
+  press(x, y, shift = false) {
+    for (const fn of pressListeners) fn({ x, y, shift });
   },
   /** Hand the whole surface back — the panel returns to its plain layout. */
   reset() {
@@ -9832,7 +9832,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           },
                                           onPointerUp: () => setAppHeld(null),
                                           onPointerCancel: () => setAppHeld(null),
-                                          onClick: () => MoveSurfaceStore.press(col, appRow),
+                                          onClick: (e) => MoveSurfaceStore.press(col, appRow, e.shiftKey),
                                           children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MovePadAppBody, { label: cell.label, color: cell.color })
                                         },
                                         `app-${col}`

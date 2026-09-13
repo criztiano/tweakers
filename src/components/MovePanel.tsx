@@ -2261,7 +2261,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           }}
                           onPointerUp={() => setAppHeld(null)}
                           onPointerCancel={() => setAppHeld(null)}
-                          onClick={() => MoveSurfaceStore.press(col, appRow)}
+                          onClick={(e) => MoveSurfaceStore.press(col, appRow, e.shiftKey)}
                         >
                           <MovePadAppBody label={cell.label} color={cell.color} />
                         </button>

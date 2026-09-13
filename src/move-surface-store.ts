@@ -89,7 +89,8 @@ export interface MoveScreenSearch {
 }
 
 type Listener = () => void;
-type PressListener = (pad: { x: number; y: 0 | 1 }) => void;
+/** `shift`: Shift was held — on the hardware, or on the keyboard for a click. */
+type PressListener = (pad: { x: number; y: 0 | 1; shift: boolean }) => void;
 
 const EMPTY: MoveSurfaceState = { rows: 0, pads: [], padsLabel: null, steps: null, screen: null, search: null };
 
@@ -190,8 +191,8 @@ export const MoveSurfaceStore = {
     return () => pressListeners.delete(fn);
   },
 
-  press(x: number, y: 0 | 1) {
-    for (const fn of pressListeners) fn({ x, y });
+  press(x: number, y: 0 | 1, shift = false) {
+    for (const fn of pressListeners) fn({ x, y, shift });
   },
 
   /** Hand the whole surface back — the panel returns to its plain layout. */
