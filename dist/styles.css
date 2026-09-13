@@ -2885,7 +2885,8 @@
 
 /* The clock holds one width whatever it reads — no breathing per tick. */
 .tweakers-move-wave-time {
-  min-width: 96px;
+  width: 128px;
+  box-sizing: border-box;
   justify-content: center;
 }
 
