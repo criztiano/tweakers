@@ -1,7 +1,7 @@
 "use client";
 
 // src/components/MovePanel.tsx
-import { useEffect as useEffect8, useId, useRef as useRef8, useState as useState6, useSyncExternalStore as useSyncExternalStore2, useCallback as useCallback2 } from "react";
+import { useEffect as useEffect8, useLayoutEffect as useLayoutEffect2, useId, useRef as useRef8, useState as useState6, useSyncExternalStore as useSyncExternalStore2, useCallback as useCallback2 } from "react";
 import { createPortal as createPortal3 } from "react-dom";
 import { TweakStore as TweakStore7 } from "tweakers/store";
 import { ModulationStore as ModulationStore2 } from "tweakers/modulation-store";
@@ -6128,7 +6128,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       MoveSettingsView.close();
     };
   }, [roomKey]);
-  useEffect8(() => {
+  useLayoutEffect2(() => {
     if (!settingsOpen) return;
     const wake = MoveFunctions.suspend(["set_overview"]);
     const releaseBack = MoveFunctions.push("back", () => MoveSettingsView.close(), { label: "Close", chip: false });
@@ -6726,7 +6726,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         },
         children: [
           /* @__PURE__ */ jsxs10("div", { className: "tweakers-move-tracks", children: [
-            audioWave != null ? /* @__PURE__ */ jsx10(MoveAudioZoom, {}) : /* @__PURE__ */ jsxs10("div", { className: "tweakers-move-tracks-group", children: [
+            audioWave != null || roomWave ? /* @__PURE__ */ jsx10(MoveAudioZoom, {}) : /* @__PURE__ */ jsxs10("div", { className: "tweakers-move-tracks-group", children: [
               settingsOpen && /* @__PURE__ */ jsxs10("div", { className: "tweakers-move-settings-title", children: [
                 /* @__PURE__ */ jsx10("span", { className: "tweakers-move-settings-blink" }),
                 roomPages.length > 1 ? /* @__PURE__ */ jsx10("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Settings pages", children: roomPages.map((pg, i) => /* @__PURE__ */ jsxs10(
@@ -6781,7 +6781,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
               headerStart && /* @__PURE__ */ jsx10("div", { className: "tweakers-move-header-start", children: headerStart })
             ] }),
             /* @__PURE__ */ jsx10("div", { className: "tweakers-move-mods", children: settingsOpen ? null : color && colorMeta ? /* @__PURE__ */ jsx10(MoveColorSteps, { color, disabled: TweakStore7.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? ModulationStore2.getSlots().map((slot) => /* @__PURE__ */ jsx10(MoveModCircle, { slot }, slot.index)) : null }),
-            audioWave != null ? /* @__PURE__ */ jsx10(MoveAudioTransport, { index: audioWave }) : headerCluster
+            audioWave != null ? /* @__PURE__ */ jsx10(MoveAudioTransport, { index: audioWave }) : roomWave ? /* @__PURE__ */ jsx10(MoveRoomTransport, {}) : headerCluster
           ] }),
           /* @__PURE__ */ jsxs10(
             "div",
@@ -7828,27 +7828,85 @@ function MoveRoomWave({ theme }) {
     () => 0
   );
   const buffer = MoveWaveformStore.getBuffer() ?? getAudioModBuffer() ?? moveWaveformDemoSample();
-  const startedAt = useRef8(typeof performance === "undefined" ? 0 : performance.now());
-  const getProgress = () => {
-    const seconds = buffer.duration || 1;
-    return (performance.now() - startedAt.current) / 1e3 % seconds / seconds;
-  };
+  roomClock.duration = buffer.duration || 1;
   useEffect8(() => {
-    MoveWaveformStore.setProgressSource(getProgress);
-    return () => MoveWaveformStore.setProgressSource(null);
-  });
+    let last = null;
+    let raf = requestAnimationFrame(function tick(now) {
+      raf = requestAnimationFrame(tick);
+      if (!roomClock.playing) {
+        last = null;
+        return;
+      }
+      if (last != null) roomClock.advance((now - last) / 1e3, MoveWaveformStore.getView().loop);
+      last = now;
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  useEffect8(() => {
+    MoveWaveformStore.setProgressSource(() => roomClock.pos);
+    const releases = [
+      MoveFunctions.push("play", () => roomClock.toggle("playing"), { label: "Play", chip: false }),
+      MoveFunctions.push("loop", () => roomClock.toggle("loopOn"), { label: "Loop", chip: false })
+    ];
+    return () => {
+      releases.forEach((release) => release());
+      MoveWaveformStore.setProgressSource(null);
+    };
+  }, []);
   return /* @__PURE__ */ jsx10(
     MoveWaveform,
     {
       variant: "dock",
       theme,
       buffer,
-      getProgress,
+      getProgress: () => roomClock.pos,
+      onSeek: (p) => roomClock.seek(p),
+      onLoopChange: () => {
+      },
       height: MOVE_WAVE_DISPLAY_HEIGHT,
       waveColor: "#1e1e1e"
     }
   );
 }
+var roomClock = {
+  playing: true,
+  loopOn: true,
+  pos: 0,
+  duration: 1,
+  version: 0,
+  listeners: /* @__PURE__ */ new Set(),
+  subscribe(fn) {
+    roomClock.listeners.add(fn);
+    return () => {
+      roomClock.listeners.delete(fn);
+    };
+  },
+  notify() {
+    roomClock.version += 1;
+    for (const fn of roomClock.listeners) fn();
+  },
+  toggle(key) {
+    roomClock[key] = !roomClock[key];
+    if (key === "playing" && roomClock.playing && roomClock.pos >= 1) roomClock.pos = 0;
+    roomClock.notify();
+  },
+  seek(p) {
+    roomClock.pos = Math.min(1, Math.max(0, p));
+  },
+  advance(dt, loop) {
+    let pos = roomClock.pos + dt / roomClock.duration;
+    if (roomClock.loopOn) {
+      const start = loop ? loop.start : 0;
+      const end = loop ? loop.end : 1;
+      const span = Math.max(1e-4, end - start);
+      if (pos >= end) pos = start + (pos - start) % span;
+      else if (pos < start) pos = start;
+    } else if (pos >= 1) {
+      pos = 1;
+    }
+    roomClock.pos = pos;
+  }
+};
 function MoveAudioZoom() {
   useSyncExternalStore2(
     useCallback2((cb) => MoveWaveformStore.subscribe(cb), []),
@@ -7871,16 +7929,46 @@ function MoveAudioTransport({ index }) {
     () => 0
   );
   const params = ModulationStore2.getSlot(index)?.params ?? {};
+  return /* @__PURE__ */ jsx10(
+    MoveWaveTransport,
+    {
+      playing: !!params.playing,
+      loopOn: !!params.loopOn,
+      getSeconds: () => ModulationStore2.getSlotPhase(index) * (getAudioModBuffer()?.duration ?? 0),
+      onLoaded: () => ModulationStore2.updateSlotParams(index, { position: 0 })
+    }
+  );
+}
+function MoveRoomTransport() {
+  useSyncExternalStore2(
+    useCallback2((cb) => roomClock.subscribe(cb), []),
+    () => roomClock.version,
+    () => 0
+  );
+  return /* @__PURE__ */ jsx10(
+    MoveWaveTransport,
+    {
+      playing: roomClock.playing,
+      loopOn: roomClock.loopOn,
+      getSeconds: () => roomClock.pos * roomClock.duration,
+      onLoaded: () => roomClock.seek(0)
+    }
+  );
+}
+function MoveWaveTransport({ playing, loopOn, getSeconds, onLoaded }) {
+  const params = { playing, loopOn };
   const clockRef = useRef8(null);
+  const secondsRef = useRef8(getSeconds);
+  secondsRef.current = getSeconds;
   useEffect8(() => {
     let raf = requestAnimationFrame(function tick() {
-      const t = ModulationStore2.getSlotPhase(index) * (getAudioModBuffer()?.duration ?? 0);
+      const t = secondsRef.current();
       const text = `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}:${String(Math.floor(t % 1 * 100)).padStart(2, "0")}`;
       if (clockRef.current && clockRef.current.textContent !== text) clockRef.current.textContent = text;
       raf = requestAnimationFrame(tick);
     });
     return () => cancelAnimationFrame(raf);
-  }, [index]);
+  }, []);
   const fileRef = useRef8(null);
   const loadFile = async (file) => {
     const bytes = await file.arrayBuffer();
@@ -7889,7 +7977,7 @@ function MoveAudioTransport({ index }) {
     const ctx = new Ctx();
     try {
       setAudioModBuffer(await ctx.decodeAudioData(bytes));
-      ModulationStore2.updateSlotParams(index, { position: 0 });
+      onLoaded?.();
     } catch {
     } finally {
       void ctx.close();
