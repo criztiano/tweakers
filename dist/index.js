@@ -1947,7 +1947,7 @@ var MoveWaveformStoreClass = class {
    */
   register(style) {
     this.registered = true;
-    this.registerSettings({ ...defaultStyle(), ...style });
+    this.ensureSettings(style);
     MoveVolumeDisplay.set({ label: "time", getValue: () => this.readout() });
     this.notify();
     return () => {
@@ -1968,9 +1968,12 @@ var MoveWaveformStoreClass = class {
    * the bar width, the grid, the EQ bands and the centre line. One hidden
    * `kit` panel that `MovePanel` shows in the settings room and the bridge
    * kit syncs like any page, so the look is set from the hardware too.
+   * Idempotent: the panel puts it there at mount, a claiming waveform
+   * seeds it if it gets there first, and saved values win over any seed.
    */
-  registerSettings(seed) {
+  ensureSettings(style) {
     if (TweakStore.getPanel(MOVE_WAVEFORM_PANEL)) return;
+    const seed = { ...defaultStyle(), ...style };
     TweakStore.registerPanel(
       MOVE_WAVEFORM_PANEL,
       "Waveform",
@@ -5991,6 +5994,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   }, [onlyKey]);
   useEffect8(() => {
     setMounted(true);
+    MoveWaveformStore.ensureSettings();
     setPanels(read());
     return TweakStore7.subscribeGlobal(() => setPanels(read()));
   }, [read]);

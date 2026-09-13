@@ -3368,8 +3368,10 @@ declare class MoveWaveformStoreClass {
      * the bar width, the grid, the EQ bands and the centre line. One hidden
      * `kit` panel that `MovePanel` shows in the settings room and the bridge
      * kit syncs like any page, so the look is set from the hardware too.
+     * Idempotent: the panel puts it there at mount, a claiming waveform
+     * seeds it if it gets there first, and saved values win over any seed.
      */
-    private registerSettings;
+    ensureSettings(style?: Partial<MoveWaveformStyle>): void;
     /** The look the settings page holds right now (the defaults until one is registered). */
     getStyle(): MoveWaveformStyle;
     /** The settings page's values, a stable snapshot per change — for `useSyncExternalStore`. */
