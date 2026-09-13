@@ -4651,6 +4651,8 @@ var BORDER_FILL_ALPHA = 0.2;
 var DRAG_THRESHOLD2 = 3;
 var EDGE_HIT2 = 6;
 var MIN_LOOP = 1e-3;
+var WAVEFORM_GAP = 8;
+var WAVEFORM_GAP_RADIUS = 6;
 function smoothThrough(ctx, pts) {
   for (let i = 0; i < pts.length - 1; i++) {
     const p0 = pts[i - 1] || pts[i];
@@ -4732,27 +4734,58 @@ function createWaveformEngine(canvas, get) {
   };
   const columnWidth = (pixelSize) => Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSize)));
   const windowState = { start: 0, win: 1 };
+  let pieces = [{ a: 0, b: 1, x0: 0, x1: 0 }];
+  let gapPx = 0;
+  const layoutPieces = (start, win, cuts, gap) => {
+    const end = start + win;
+    const inside = (cuts ?? []).filter((c) => c > start && c < end).sort((x, y) => x - y);
+    gapPx = inside.length ? Math.round(gap * dpr) : 0;
+    let waveW = W - inside.length * gapPx;
+    if (waveW < inside.length + 1) {
+      inside.length = 0;
+      gapPx = 0;
+      waveW = W;
+    }
+    const bounds = [start, ...inside, end];
+    pieces = [];
+    for (let i = 0; i + 1 < bounds.length; i++) {
+      const a = bounds[i];
+      const b = bounds[i + 1];
+      pieces.push({
+        a,
+        b,
+        x0: (a - start) / win * waveW + i * gapPx,
+        x1: (b - start) / win * waveW + i * gapPx
+      });
+    }
+  };
+  const xOfPos = (p) => {
+    let piece = pieces[0];
+    for (const it of pieces) if (p >= it.a) piece = it;
+    const span = piece.b - piece.a;
+    return piece.x0 + (span > 0 ? (p - piece.a) / span * (piece.x1 - piece.x0) : 0);
+  };
   let drag = null;
-  const drawColumns = (p, color, pixelSize) => {
+  const drawColumns = (p, cols, x0, color, pixelSize) => {
     const colW = columnWidth(pixelSize);
     ctx.fillStyle = color;
     ctx.globalAlpha = 1;
-    for (let x = 0; x < W; x += colW) {
+    for (let x = 0; x < cols; x += colW) {
       let mn = 1;
       let mx = -1;
-      for (let i = x; i < x + colW && i < W; i++) {
+      for (let i = x; i < x + colW && i < cols; i++) {
         if (p.min[i] < mn) mn = p.min[i];
         if (p.max[i] > mx) mx = p.max[i];
       }
       const yTop = Math.round(cy - mx * amp);
       const yBot = Math.round(cy - mn * amp);
-      ctx.fillRect(x, yTop, colW, Math.max(1, yBot - yTop));
+      ctx.fillRect(x0 + x, yTop, colW, Math.max(1, yBot - yTop));
     }
   };
-  const drawSimplified = (env, color, outline2) => {
+  const drawSimplified = (env, x0, x1, color, outline2) => {
     const n = env.length;
     if (n < 2) return;
-    const px = (k) => k / (n - 1) * W;
+    const px = (k) => x0 + k / (n - 1) * (x1 - x0);
     const top = env.map((a, k) => ({ x: px(k), y: cy - a * amp }));
     const bot = [];
     for (let k = n - 1; k >= 0; k--) bot.push({ x: px(k), y: cy + env[k] * amp });
@@ -4776,6 +4809,33 @@ function createWaveformEngine(canvas, get) {
       ctx.fill();
     }
   };
+  const drawGaps = (color, radius) => {
+    if (!gapPx || pieces.length < 2) return;
+    const r = Math.min(radius * dpr, gapPx * 2, H / 2);
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 1;
+    const corner = (x, y, dx, dy) => {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + dx, y);
+      ctx.arc(x + dx, y + dy, r, dy > 0 ? -Math.PI / 2 : Math.PI / 2, dx > 0 ? Math.PI : 0, dx > 0 === dy > 0);
+      ctx.lineTo(x, y + dy);
+      ctx.closePath();
+      ctx.fill();
+    };
+    for (let i = 0; i < pieces.length; i++) {
+      const piece = pieces[i];
+      if (i > 0) {
+        corner(piece.x0, 0, r, r);
+        corner(piece.x0, H, r, -r);
+      }
+      if (i + 1 < pieces.length) {
+        ctx.fillRect(piece.x1, 0, gapPx, H);
+        corner(piece.x1, 0, -r, r);
+        corner(piece.x1, H, -r, -r);
+      }
+    }
+  };
   const drawGrid = (base, subs) => {
     const n = Math.max(1, Math.round(subs));
     ctx.strokeStyle = base;
@@ -4790,9 +4850,10 @@ function createWaveformEngine(canvas, get) {
     ctx.stroke();
     ctx.globalAlpha = 1;
   };
-  const drawRegion = (a, b, start, win, color) => {
-    const x0 = (a - start) / win * W;
-    const x1 = (b - start) / win * W;
+  const drawRegion = (a, b, color) => {
+    const { start, win } = windowState;
+    const x0 = a <= start ? -1 : a >= start + win ? W + 1 : xOfPos(a);
+    const x1 = b <= start ? -1 : b >= start + win ? W + 1 : xOfPos(b);
     const cx0 = Math.max(0, x0);
     const cx1 = Math.min(W, x1);
     if (cx1 <= cx0) return;
@@ -4853,29 +4914,39 @@ function createWaveformEngine(canvas, get) {
     }
     if (start < 0) start = 0;
     else if (start > 1 - win) start = 1 - win;
-    const end = start + win;
     windowState.start = start;
     windowState.win = win;
+    layoutPieces(start, win, rt.cuts, rt.gap ?? WAVEFORM_GAP);
     const count = monos.length;
     if (count) {
       for (let i = 0; i < count; i++) {
         const mono = monos[i];
-        const s0 = Math.max(0, Math.floor(start * mono.length));
-        const s1 = Math.min(mono.length, Math.ceil(end * mono.length));
-        const slice = s1 > s0 ? mono.subarray(s0, s1) : mono;
-        fillPeaks(slice, W, pk.min, pk.max);
         const color = count === 3 ? BAND_COLORS[i] : wave;
-        if (rt.mode === "pixelated") drawColumns(pk, color, rt.pixelSize);
-        else drawSimplified(envelope(pk, W, Math.max(2, rt.smoothPoints || WAVEFORM_SMOOTH_POINTS)), color, rt.border);
+        for (const piece of pieces) {
+          const cols = Math.max(1, Math.round(piece.x1) - Math.round(piece.x0));
+          const s0 = Math.max(0, Math.floor(piece.a * mono.length));
+          const s1 = Math.min(mono.length, Math.ceil(piece.b * mono.length));
+          const slice = s1 > s0 ? mono.subarray(s0, s1) : mono;
+          const pmin = pk.min.subarray(0, cols);
+          const pmax = pk.max.subarray(0, cols);
+          fillPeaks(slice, cols, pmin, pmax);
+          const x0 = Math.round(piece.x0);
+          if (rt.mode === "pixelated") drawColumns({ min: pmin, max: pmax }, cols, x0, color, rt.pixelSize);
+          else {
+            const points = Math.max(2, Math.round((rt.smoothPoints || WAVEFORM_SMOOTH_POINTS) * (cols / W)));
+            drawSimplified(envelope({ min: pmin, max: pmax }, cols, points), x0, x0 + cols, color, rt.border);
+          }
+        }
       }
     }
     if (drag && drag.moved) {
-      drawRegion(Math.min(drag.anchor, drag.curProg), Math.max(drag.anchor, drag.curProg), start, win, ph);
+      drawRegion(Math.min(drag.anchor, drag.curProg), Math.max(drag.anchor, drag.curProg), ph);
     } else if (rt.loop) {
-      drawRegion(rt.loop.start, rt.loop.end, start, win, ph);
+      drawRegion(rt.loop.start, rt.loop.end, ph);
     }
+    drawGaps(rt.gapColor || "#1e1e1e", rt.gapRadius ?? WAVEFORM_GAP_RADIUS);
     if (count) {
-      const playX = (prog - start) / win * W;
+      const playX = xOfPos(prog);
       ctx.globalAlpha = 1;
       ctx.strokeStyle = ph;
       ctx.lineWidth = 1.5 * dpr;
@@ -4890,16 +4961,25 @@ function createWaveformEngine(canvas, get) {
   const xToProgress = (clientX) => {
     const rect = canvas.getBoundingClientRect();
     const fx = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const x = fx * W;
     const { start, win } = windowState;
-    return Math.min(1, Math.max(0, start + fx * win));
+    let piece = pieces[pieces.length - 1];
+    for (const it of pieces) {
+      if (x <= it.x1) {
+        piece = it;
+        break;
+      }
+    }
+    const span = piece.x1 - piece.x0;
+    const t = span > 0 ? Math.min(1, Math.max(0, (x - piece.x0) / span)) : 0;
+    return Math.min(1, Math.max(0, Math.min(start + win, piece.a + t * (piece.b - piece.a))));
   };
   const edgeAt = (clientX) => {
     const rt = get();
     const loop = rt.loop;
     if (!loop || !rt.onLoopChange) return null;
     const rect = canvas.getBoundingClientRect();
-    const { start, win } = windowState;
-    const xOf = (t) => (t - start) / win * rect.width;
+    const xOf = (t) => xOfPos(t) / Math.max(1, W) * rect.width;
     const px = clientX - rect.left;
     const sx = xOf(loop.start);
     const ex = xOf(loop.end);
@@ -5003,6 +5083,10 @@ function WaveformVisualization({
   gridSubdivisions = 8,
   onSeek,
   loop = null,
+  cuts,
+  gapColor,
+  gap,
+  gapRadius,
   onLoopChange,
   waveColor,
   playheadColor,
@@ -5037,6 +5121,10 @@ function WaveformVisualization({
     waveInset,
     autoZoomOnLoop,
     loop,
+    cuts,
+    gapColor,
+    gap,
+    gapRadius,
     zoom,
     width,
     height,
@@ -5411,6 +5499,7 @@ function MoveWaveform({
   onLoopChange,
   transport,
   accent = DEFAULT_ACCENT,
+  cuts,
   mode = "smooth",
   pixelSize = 2,
   grid = false,
@@ -5536,6 +5625,8 @@ function MoveWaveform({
       ...smoothPoints != null ? { smoothPoints } : {},
       ...waveInset != null ? { waveInset } : {},
       loop: state2.loop,
+      cuts,
+      gapColor: WAVE_INK,
       zoom: variant === "slot" ? Math.max(SLOT_ZOOM, state2.zoom) : state2.zoom,
       onSeek: (p) => MoveWaveformStore.setView({ position: p }),
       onLoopChange: (l) => MoveWaveformStore.setView({ loop: l, loopAnchor: null }),

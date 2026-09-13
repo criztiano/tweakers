@@ -3636,6 +3636,12 @@ interface MoveWaveformProps {
     };
     /** The colour of the playhead, the loop band and the lit steps — the host's signature on the card. */
     accent?: string;
+    /**
+     * Where the sample is cut, 0..1. The display splits at each: a gap of
+     * frame between pieces that end in rounded corners, and time stepping
+     * straight across — the playhead, a loop edge, a click all skip the gap.
+     */
+    cuts?: number[];
     mode?: WaveformMode;
     pixelSize?: number;
     grid?: boolean;
@@ -3664,7 +3670,7 @@ interface MoveWaveformProps {
  * one wheel, so there is one waveform. The app keeps its own state; this
  * reports moves through `onSeek` / `onLoopChange` like any control.
  */
-declare function MoveWaveform({ buffer, variant, getProgress, progress, onSeek, onLoopChange, transport, accent, mode, pixelSize, grid, bands, waveColor, playheadColor, baseline, smoothPoints, waveInset, height, children, theme, productionEnabled, className, }: MoveWaveformProps): react_jsx_runtime.JSX.Element | null;
+declare function MoveWaveform({ buffer, variant, getProgress, progress, onSeek, onLoopChange, transport, accent, cuts, mode, pixelSize, grid, bands, waveColor, playheadColor, baseline, smoothPoints, waveInset, height, children, theme, productionEnabled, className, }: MoveWaveformProps): react_jsx_runtime.JSX.Element | null;
 
 /**
  * Where a notification stands, and what it is allowed to say.
@@ -4410,6 +4416,12 @@ interface WaveformVisualizationProps {
      */
     onSeek?: (progress: number) => void;
     /** The active loop region to render (controlled), or null for none. */
+    /** Where the sample is cut (0..1): the display splits there into pieces with a gap of frame between. */
+    cuts?: number[];
+    /** The frame colour the gaps show, and the gap's width / corner radius in CSS px. */
+    gapColor?: string;
+    gap?: number;
+    gapRadius?: number;
     loop?: WaveformLoop | null;
     /**
      * Drag-to-loop. When provided, dragging across the waveform reports a loop
@@ -4437,7 +4449,7 @@ interface WaveformVisualizationProps {
     width?: number;
     height?: number;
 }
-declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, grid, gridSubdivisions, onSeek, loop, onLoopChange, waveColor, playheadColor, baseline, smoothPoints, waveInset, autoZoomOnLoop, zoom: zoomProp, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
+declare function WaveformVisualization({ buffer, progress, getProgress, mode, border, bands, pixelSize, grid, gridSubdivisions, onSeek, loop, cuts, gapColor, gap, gapRadius, onLoopChange, waveColor, playheadColor, baseline, smoothPoints, waveInset, autoZoomOnLoop, zoom: zoomProp, width, height, }: WaveformVisualizationProps): react_jsx_runtime.JSX.Element;
 
 interface CurveComposerProps {
     /** The curve series (controlled). */

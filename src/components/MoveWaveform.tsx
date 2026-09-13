@@ -56,6 +56,12 @@ export interface MoveWaveformProps {
   };
   /** The colour of the playhead, the loop band and the lit steps — the host's signature on the card. */
   accent?: string;
+  /**
+   * Where the sample is cut, 0..1. The display splits at each: a gap of
+   * frame between pieces that end in rounded corners, and time stepping
+   * straight across — the playhead, a loop edge, a click all skip the gap.
+   */
+  cuts?: number[];
   mode?: WaveformMode;
   pixelSize?: number;
   grid?: boolean;
@@ -94,6 +100,7 @@ export function MoveWaveform({
   onLoopChange,
   transport,
   accent = DEFAULT_ACCENT,
+  cuts,
   mode = 'smooth',
   pixelSize = 2,
   grid = false,
@@ -249,6 +256,8 @@ export function MoveWaveform({
       {...(smoothPoints != null ? { smoothPoints } : {})}
       {...(waveInset != null ? { waveInset } : {})}
       loop={state.loop}
+      cuts={cuts}
+      gapColor={WAVE_INK}
       zoom={variant === 'slot' ? Math.max(SLOT_ZOOM, state.zoom) : state.zoom}
       onSeek={(p) => MoveWaveformStore.setView({ position: p })}
       onLoopChange={(l) => MoveWaveformStore.setView({ loop: l, loopAnchor: null })}
