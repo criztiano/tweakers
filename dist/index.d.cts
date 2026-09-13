@@ -3245,9 +3245,11 @@ declare const MoveFunctions: MoveFunctionsClass;
  * How the sample is drawn. `smooth` is the simplified envelope; `pixelated`
  * is one chunky min/max bar per column; `striped` is the pixelated bar with
  * a gap the same width after it — each bar then stands for twice the
- * samples, so the wave keeps every transient and loses only resolution.
+ * samples, so the wave keeps every transient and loses only resolution;
+ * `spaced` keeps the pixelated bar exactly as it is and puts the gap after
+ * it, so the wave is twice as long and the same zoom shows half as much.
  */
-type WaveformMode = 'smooth' | 'pixelated' | 'striped';
+type WaveformMode = 'smooth' | 'pixelated' | 'striped' | 'spaced';
 declare const WAVEFORM_MODES: WaveformMode[];
 /** A loop region over the sample, as normalized 0..1 positions. */
 type WaveformLoop = {
@@ -4271,6 +4273,8 @@ interface WaveformVisualizationProps {
      * 'pixelated' — crisp, chunky per-column min/max bars.
      * 'striped' — the same bars with a gap the bar's own width after each;
      * every bar reads its peaks over bar and gap, so nothing is masked.
+     * 'spaced' — the pixelated bars untouched, a gap after each: the wave is
+     * twice as long, and the same zoom shows half of it.
      */
     mode?: WaveformMode;
     /**
