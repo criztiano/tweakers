@@ -883,7 +883,15 @@
   grid-template-columns: repeat(var(--move-cols, 8), minmax(0, 1fr));
   gap: var(--move-gap);
   height: var(--move-slot-height);
-  width: var(--move-cluster-w, 100%);
+  /* Percentages resolve where they are used, and this row's block is the
+     grid — already only --move-surface-cols slots wide. An eighth of THAT
+     is a second shrink: a five-slot page drew five pills. So the slot is
+     recovered from the grid by its own column count (the strip's rule),
+     and the row is that slot times the dial columns it shows. */
+  --move-dials-slot-w: calc(
+    (100% - (var(--move-surface-cols, var(--move-cols, 8)) - 1) * var(--move-gap)) / var(--move-surface-cols, var(--move-cols, 8))
+  );
+  width: calc(var(--move-dials-slot-w) * var(--move-cols, 8) + var(--move-gap) * (var(--move-cols, 8) - 1));
   align-self: center;
 }
 
