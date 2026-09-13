@@ -876,6 +876,16 @@
   gap: 4px;
   width: var(--move-surface-w, var(--move-cluster-w, 100%));
   align-self: center;
+  /* One slot, measured INSIDE this box. --move-cluster-w is a fraction of
+     its containing block, and for anything in here that block is the grid —
+     already narrowed once to --move-surface-cols slots. Taking an eighth of
+     it again shrank every dial a second time (144px → 70px on a 4-column
+     page) and floated the row off its pad columns. The slot is recovered the
+     way the strip recovers it: divide this box by its own column count. */
+  --move-slot-w: calc(
+    (100% - (var(--move-surface-cols, var(--move-cols, 8)) - 1) * var(--move-gap))
+    / var(--move-surface-cols, var(--move-cols, 8))
+  );
 }
 
 .tweakers-move-dials {
@@ -883,8 +893,12 @@
   grid-template-columns: repeat(var(--move-cols, 8), minmax(0, 1fr));
   gap: var(--move-gap);
   height: var(--move-slot-height);
-  width: var(--move-cluster-w, 100%);
-  align-self: center;
+  width: calc(
+    var(--move-slot-w) * var(--move-cols, 8) + var(--move-gap) * (var(--move-cols, 8) - 1)
+  );
+  /* Column i is knob i on both rows: a dial row narrower than the pad row
+     below it starts where the pads start, so a chip stays under its dial. */
+  align-self: start;
 }
 
 /* The endless strip. The rows keep their 8-wide slot size and simply run
