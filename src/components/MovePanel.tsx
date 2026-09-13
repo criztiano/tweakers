@@ -4,7 +4,7 @@ import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { ModulationStore } from '../store/ModulationStore';
 import { modColor, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, getAudioModBuffer, setAudioModBuffer, subscribeAudioMod, getAudioModVersion, setAudioModWindowSource, getAudioModWindow, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
 import { MoveWaveform } from './MoveWaveform';
-import { MoveWaveformStore, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_STEPS, MOVE_WAVEFORM_PANEL, visibleWindow } from '../move-waveform';
+import { MoveWaveformStore, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_STEPS, MOVE_WAVEFORM_PANEL, visibleWindow, moveWaveformDemoSample } from '../move-waveform';
 import { ICON_PLAY, ICON_LOOP } from '../icons';
 import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
@@ -721,6 +721,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // An audio modulator's page floats its waveform the same way — the dial
   // draws the small sample, the page brings the full editor above the panel.
   const audioWave = modSlot?.type === 'audio' && modSettings ? modSettings.index : null;
+  // The Waveform room page floats the display it dresses: you set the look
+  // on the wave itself, not on five blind switches.
+  const roomWave = settingsOpen && page?.panel.id === MOVE_WAVEFORM_PANEL;
   const clipIndex = composition
     ? Math.min(composition.segments.length - 1, Math.max(0, Math.round(Number(modSlot!.params.selected) || 0)))
     : 0;
@@ -1218,7 +1221,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     <div className="tweakers-root tweakers-move-root" data-theme={theme} data-dock={dock}>
       {/* While a composer floats above it the whole instrument comes forward,
           over the app's own panels — you are working in it. */}
-      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-settings={settingsOpen || undefined} data-overlay={composition || audioWave != null || color || presetSave ? true : undefined}>
+      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-settings={settingsOpen || undefined} data-overlay={composition || audioWave != null || roomWave || color || presetSave ? true : undefined}>
         {colorMeta && <MoveColorDisplay panelId={page.panel.id} meta={colorMeta} anchor={panelRef} theme={theme} />}
         {presetSave && <MovePresetSaveInput suggested={presetSave.suggested} />}
         {composition && modSettings && (
@@ -1231,6 +1234,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
           />
         )}
         {audioWave != null && <MoveAudioWave index={audioWave} theme={theme} />}
+        {roomWave && <MoveRoomWave theme={theme} />}
         <div
           className="tweakers-move-inner"
           style={{
@@ -1417,7 +1421,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 // reads the other way round: the name shrinks to the tag on
                 // top and the value takes the slot. Plain 0..1 amounts keep
                 // the big name, since "40%" on its own says nothing.
-                const valueFirst = !!settingsPanel && !(meta.min === 0 && meta.max === 1);
+                // The kit's own room pages read the same way: the bar width
+                // says "2×" big, with its name as the tag.
+                const valueFirst = (!!settingsPanel || page.panel.kind === 'kit') && !(meta.min === 0 && meta.max === 1);
                 // The modulator's oscilloscope belongs to a place on the page,
                 // not to one control: the LFO's first slot shows the live wave
                 // whether it is holding a rate in Hz or a tempo division.
@@ -2456,6 +2462,42 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
 
 /** The editor card's display: 728×128, with the 12px border outside it. */
 const MOVE_WAVE_DISPLAY_HEIGHT = 128;
+
+/**
+ * The Waveform room page's display: the sample on the surface — the app's
+ * own, the audio modulator's, or a stand-in drum loop when there is none —
+ * floating above the panel in the editor's card, so the look is set on the
+ * thing it dresses. It runs on a clock of its own, so the playhead sweeps
+ * and the wave reads at tempo; the wheel still zooms it.
+ */
+function MoveRoomWave({ theme }: { theme: TweakTheme }) {
+  useSyncExternalStore(
+    useCallback((cb) => subscribeAudioMod(cb), []),
+    () => getAudioModVersion(),
+    () => 0
+  );
+  const buffer = MoveWaveformStore.getBuffer() ?? getAudioModBuffer() ?? moveWaveformDemoSample();
+  const startedAt = useRef(typeof performance === 'undefined' ? 0 : performance.now());
+  const getProgress = () => {
+    const seconds = buffer.duration || 1;
+    return (((performance.now() - startedAt.current) / 1000) % seconds) / seconds;
+  };
+  // The header clock reads this playhead while the page is up.
+  useEffect(() => {
+    MoveWaveformStore.setProgressSource(getProgress);
+    return () => MoveWaveformStore.setProgressSource(null);
+  });
+  return (
+    <MoveWaveform
+      variant="dock"
+      theme={theme}
+      buffer={buffer}
+      getProgress={getProgress}
+      height={MOVE_WAVE_DISPLAY_HEIGHT}
+      waveColor="#1e1e1e"
+    />
+  );
+}
 
 /**
  * The editor's zoom readout, in the panel's track corner while the editor
