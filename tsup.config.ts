@@ -65,12 +65,14 @@ export default defineConfig([
         js: '"use client";',
       };
     },
-    onSuccess: 'cp src/styles/theme.css dist/styles.css',
+    onSuccess: 'cp src/styles/theme.css dist/styles.css && cp src/styles/preset-exploration.css dist/preset-exploration.css',
   },
   // Framework-neutral leaf modules that keep their own subpath exports.
   // Externalize the shared store rather than inlining a second, desynced copy.
   {
     entry: {
+      'preset-flower': 'src/preset-flower.ts',
+      'preset-genetics': 'src/preset-genetics.ts',
       'curve-composer-core': 'src/curve-composer-core.ts',
       'modulation-core': 'src/modulation-core.ts',
       // ModulationStore sits in src/store, so its TweakStore import is the

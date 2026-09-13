@@ -839,6 +839,12 @@ When the panel is open, the toolbar provides:
 - **Presets** — A version dropdown for saving and loading parameter snapshots. Click "+" to save the current state as a new version. Select a version to load it. Changes auto-save to the active version. "Version 1" always represents the original defaults.
 - **Copy** — Exports the current values as JSON to your clipboard.
 
+### Generative preset exploration
+
+Hold the Move preset button to explore a floating 32-pad generation. Audition children, mark parents, rate favorites, breed new generations, or morph up to eight presets. Save multiple discoveries without leaving; Back restores the original sound. Pass `exploration: PresetExplorationStore` to the updated bridge’s `bindMove` options.
+
+See [the exploration guide](docs/preset-exploration.md) for controls, persistence, supported parameters, and the optional host preset adapter.
+
 ### App-backed presets
 
 Apps with their own preset store (files, engine IPC, a server) can back the same toolbar UI with a `PresetProvider` via the `presets` option. tweakers then renders your list in your order, hides its implicit "Version 1" row, and stops snapshotting values itself — you apply values in `onSelect` and own persistence:

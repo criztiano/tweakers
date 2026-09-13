@@ -1,0 +1,170 @@
+.tweakers-exploration {
+  --explore-width: 704px;
+  --explore-gap: var(--move-color-gap);
+  --explore-pad-height: 64px;
+  --explore-padding: var(--move-color-gap);
+  --explore-font: var(--move-color-font);
+  --explore-line: 1px;
+  --explore-focus: var(--move-color-stroke);
+  --explore-rise: 10px;
+  --explore-xy-height: 160px;
+  --explore-scroll-height: 290px;
+  --explore-ring: rgba(255, 255, 255, .08);
+  --explore-shadow: 0 0 0 1px var(--explore-ring), 0 1px 2px rgba(0, 0, 0, .04), 0 8px 24px rgba(0, 0, 0, .45);
+  position: absolute;
+  bottom: calc(100% + var(--explore-rise));
+  left: 50%;
+  z-index: var(--move-color-overlay-z);
+  width: min(var(--explore-width), calc(100vw - var(--explore-padding) * 2));
+  max-height: var(--explore-available-height, calc(100dvh - var(--move-slot-height) - 80px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: var(--explore-padding);
+  border-radius: var(--move-radius);
+  background: var(--move-bg);
+  color: var(--move-text);
+  box-shadow: var(--explore-shadow);
+  font-family: var(--move-font-label);
+  font-size: var(--explore-font);
+  line-height: 1.4;
+  text-align: left;
+  color-scheme: dark;
+}
+.tweakers-exploration * { box-sizing: border-box; }
+.tweakers-exploration button, .tweakers-exploration input, .tweakers-exploration select {
+  font: inherit;
+  color: inherit;
+  accent-color: var(--move-text);
+}
+.tweakers-exploration button, .tweakers-exploration select, .tweakers-exploration input:not([type="range"]):not([type="checkbox"]) {
+  min-width: 0;
+  border: var(--explore-line) solid transparent;
+  border-radius: var(--move-radius-small);
+  background: var(--move-chip);
+  padding: var(--move-gap) var(--explore-gap);
+}
+.tweakers-exploration button { cursor: pointer; min-height: var(--move-color-hit); }
+.tweakers-exploration button:hover:not(:disabled) { background: var(--move-slot); }
+.tweakers-exploration button[aria-pressed="true"] { border-color: var(--move-text); }
+.tweakers-exploration :disabled { opacity: var(--move-color-disabled-opacity); cursor: not-allowed; }
+.tweakers-exploration :focus-visible { outline: var(--explore-focus) solid var(--move-text); outline-offset: var(--move-color-stroke); }
+.tweakers-exploration input[type="range"] { min-width: 0; width: 100%; margin: 0; cursor: pointer; }
+.tweakers-exploration input[type="number"] { width: 100%; }
+.tweakers-exploration input[type="checkbox"] { flex: none; }
+.tweakers-exploration select { max-width: 100%; text-overflow: ellipsis; }
+.tweakers-exploration-header, .tweakers-exploration-toolbar, .tweakers-exploration-actions, .tweakers-exploration-nav,
+.tweakers-exploration-inline, .tweakers-exploration-generation, .tweakers-exploration-footer, .tweakers-exploration-save {
+  display: flex;
+  align-items: center;
+  gap: var(--explore-gap);
+}
+.tweakers-exploration-header { flex: none; justify-content: space-between; padding-bottom: var(--move-gap); border-bottom: var(--explore-line) solid var(--move-slot); }
+.tweakers-exploration-header > div { min-width: 0; }
+.tweakers-exploration-header strong { display: block; font-size: inherit; }
+.tweakers-exploration-caption, .tweakers-exploration-hint { opacity: .75; }
+.tweakers-exploration-toolbar { flex-wrap: wrap; margin: var(--move-gap) 0; }
+.tweakers-exploration-toolbar > :last-child { margin-left: auto; }
+.tweakers-exploration-inline select { max-width: calc(var(--explore-width) / 4); }
+.tweakers-exploration-generation { font-variant-numeric: tabular-nums; }
+.tweakers-exploration-generation button { min-width: var(--move-color-hit); }
+.tweakers-exploration-pads { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: var(--move-gap); }
+.tweakers-exploration .tweakers-exploration-pad {
+  position: relative;
+  height: var(--explore-pad-height);
+  text-align: left;
+  border: 0;
+  background: color-mix(in srgb, var(--move-chip) 35%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+.tweakers-exploration-parent { position: absolute; right: var(--move-gap); top: var(--move-gap); }
+.tweakers-exploration .tweakers-exploration-pad:disabled { background: var(--move-slot-empty); }
+.tweakers-exploration .tweakers-exploration-primary { background: var(--move-text); color: var(--move-text-inverse); }
+.tweakers-exploration .tweakers-exploration-primary:hover:not(:disabled) { background: var(--move-text); opacity: .9; }
+.tweakers-exploration-hint { margin: var(--move-gap) 0 var(--explore-gap); }
+.tweakers-exploration-tree { display: flex; flex-wrap: wrap; gap: var(--move-gap); margin-bottom: var(--explore-gap); max-height: var(--explore-xy-height); overflow: auto; }
+.tweakers-exploration-tree button { text-align: left; flex: 1 1 auto; }
+.tweakers-exploration-tree button span, .tweakers-exploration-corners button span { display: block; opacity: .75; font-size: inherit; }
+.tweakers-exploration-active { border-top: var(--explore-line) solid var(--move-slot); padding-top: var(--explore-gap); }
+.tweakers-exploration-active > span { display: flex; justify-content: space-between; gap: var(--explore-gap); margin-bottom: var(--explore-gap); }
+.tweakers-exploration-active small { max-width: 70%; font-size: inherit; opacity: .75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tweakers-exploration-actions { flex-wrap: wrap; }
+.tweakers-exploration-seeds { margin-top: var(--explore-gap); border-top: var(--explore-line) solid var(--move-slot); }
+.tweakers-exploration-seeds summary { cursor: pointer; padding: var(--explore-gap) 0; }
+.tweakers-exploration-settings { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--explore-gap); margin-bottom: var(--explore-gap); }
+.tweakers-exploration-settings label { display: flex; flex-direction: column; justify-content: space-between; gap: var(--move-gap); }
+.tweakers-exploration-save { margin-top: var(--explore-gap); padding: var(--explore-gap); background: var(--move-slot); border-radius: var(--move-radius-small); }
+.tweakers-exploration-save label { display: flex; gap: var(--explore-gap); align-items: center; flex: 1; min-width: 0; }
+.tweakers-exploration-save input { flex: 1; }
+.tweakers-exploration-footer { margin-top: var(--move-gap); justify-content: space-between; }
+.tweakers-exploration-error { border: var(--explore-line) solid var(--move-text); border-radius: var(--move-radius-small); padding: var(--explore-gap); margin-bottom: 0; }
+.tweakers-exploration-morph { padding: var(--explore-gap) 0; }
+.tweakers-exploration-morph-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--explore-padding); }
+.tweakers-exploration-xy { position: relative; height: var(--explore-xy-height); border: var(--explore-line) solid var(--move-slot); border-radius: var(--move-radius-small); background: var(--move-slot-empty); touch-action: none; cursor: crosshair; overflow: hidden; }
+.tweakers-exploration-xy::before, .tweakers-exploration-xy::after { content: ''; position: absolute; background: var(--move-slot); }
+.tweakers-exploration-xy::before { width: var(--explore-line); top: 0; bottom: 0; left: 50%; }
+.tweakers-exploration-xy::after { height: var(--explore-line); left: 0; right: 0; top: 50%; }
+.tweakers-exploration-xy[data-disabled] { opacity: var(--move-color-disabled-opacity); cursor: not-allowed; }
+.tweakers-exploration-xy-label { position: absolute; top: var(--explore-gap); left: var(--explore-gap); }
+.tweakers-exploration-xy-point { position: absolute; width: var(--move-color-marker); height: var(--move-color-marker); background: var(--move-text); border-radius: 50%; transform: translate(-50%, -50%); }
+.tweakers-exploration-xy-controls { display: flex; gap: var(--explore-gap); margin: var(--move-gap) 0; }
+.tweakers-exploration-xy-controls label { display: flex; align-items: center; gap: var(--move-gap); min-width: 0; }
+.tweakers-exploration-corners { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--move-gap); }
+.tweakers-exploration-corners button { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.tweakers-exploration-blend { display: flex; align-items: center; gap: var(--explore-gap); margin: var(--explore-padding) 0; }
+.tweakers-exploration-blend output { min-width: var(--move-color-hit); }
+.tweakers-exploration-parameters { max-height: var(--explore-scroll-height); overflow-y: auto; padding: var(--move-gap); }
+.tweakers-exploration-parameter-group { min-width: 0; border: var(--explore-line) solid var(--move-slot); border-radius: var(--move-radius-small); padding: var(--explore-gap); margin: var(--explore-gap) 0; }
+.tweakers-exploration-parameter-group legend { padding: 0 var(--move-gap); }
+.tweakers-exploration-group-actions { display: flex; gap: var(--move-gap); }
+.tweakers-exploration-parameter { display: flex; align-items: center; justify-content: space-between; gap: var(--explore-gap); padding: var(--move-gap) 0; }
+.tweakers-exploration-parameter > label { display: flex; align-items: center; gap: var(--move-gap); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tweakers-exploration-range { display: flex; flex: 0 0 45%; gap: var(--explore-gap); }
+.tweakers-exploration-range label { display: flex; align-items: center; gap: var(--move-gap); min-width: 0; }
+@media (max-width: 600px) {
+  .tweakers-exploration-header { flex-wrap: wrap; }
+  .tweakers-exploration-header > div { flex: 1; }
+  .tweakers-exploration-nav { order: 3; width: 100%; }
+  .tweakers-exploration-nav button { flex: 1; }
+  .tweakers-exploration-settings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tweakers-exploration-save, .tweakers-exploration-save label { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-exploration, .tweakers-exploration * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+.tweakers-exploration-body { min-height: 0; overflow-y: auto; overflow-x: hidden; padding: var(--move-gap); }
+.tweakers-exploration-workspace { min-width: 0; margin: 0; padding: 0; border: 0; }
+.tweakers-exploration-generation-actions { flex-wrap: nowrap; }
+.tweakers-exploration-generation-actions > .tweakers-exploration-caption { flex: 1; min-width: 0; }
+.tweakers-exploration-generation-actions button { flex: none; }
+.tweakers-exploration-advanced { border-top: var(--explore-line) solid var(--move-slot); margin-top: var(--move-gap); }
+.tweakers-exploration-advanced > summary { padding: var(--explore-gap) 0; cursor: pointer; }
+.tweakers-exploration-dock-slot { color: var(--move-text); }
+.tweakers-exploration-dock-slot input {
+  position: absolute;
+  bottom: var(--move-color-gap);
+  left: var(--move-color-gap);
+  width: calc(100% - var(--move-color-gap) * 2);
+  margin: 0;
+  accent-color: var(--move-text);
+}
+.tweakers-exploration-dock-slot input:focus-visible { outline: var(--move-color-stroke) solid var(--move-text); outline-offset: var(--move-color-stroke); }
+.tweakers-exploration-dock-slot:focus-within .tweakers-move-dial-label { opacity: 0; }
+.tweakers-exploration-dock-slot:focus-within .tweakers-move-dial-value { opacity: 1; }
+.tweakers-exploration-dock-slot[data-disabled] { opacity: var(--move-color-disabled-opacity); }
+.tweakers-exploration-dock .tweakers-move-dial-bar { display: none; }
+.tweakers-exploration-dock .tweakers-move-dial-label,
+.tweakers-exploration-dock .tweakers-move-dial-value { transition: none; }
+@media (max-width: 600px) {
+  .tweakers-exploration-generation-actions { flex-wrap: wrap; }
+  .tweakers-exploration-generation-actions > .tweakers-exploration-caption { flex-basis: 100%; }
+}
+
+.tweakers-exploration-pad { overflow: hidden; }
+.tweakers-exploration-pad .tweakers-exploration-artwork { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+.tweakers-exploration-parent { z-index: 1; background: #0e0e16; color: #ffffff; border-radius: var(--move-radius-small); padding: 0 2px; }
+.tweakers-exploration-parent:empty { display: none; }
+.tweakers-exploration-corners .tweakers-exploration-artwork { width: 36px; height: 36px; float: right; border-radius: var(--move-radius-small); }
+
+.tweakers-exploration .tweakers-exploration-pad[aria-pressed="true"] { background: var(--move-chip); }

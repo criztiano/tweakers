@@ -1,3 +1,5 @@
+import { PresetExploration, PresetExplorationSlots } from './PresetExploration';
+import { PresetExplorationStore } from '../preset-exploration';
 import { useEffect, useRef, useState, useSyncExternalStore, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
@@ -336,6 +338,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // turn is left alone.
   useEffect(() => {
     const onJog = (e: Event) => {
+      if (PresetExplorationStore.getState()) { e.preventDefault(); PresetExplorationStore.jog(Number((e as CustomEvent).detail?.delta) || 0); return; }
       // An open colour editor keeps the strip still too: the wheel belongs
       // to its overlays (the palette list) while the editor is up.
       if (e.defaultPrevented || presetNavigatorOpen() || MoveColorStore.getView() || !stripRef.current.on) return;
@@ -373,10 +376,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     const el = panelRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
+      if (e.target instanceof Element && e.target.closest('.tweakers-exploration')) return;
+      const exploring = !!PresetExplorationStore.getState();
       const browsing = presetNavigatorOpen();
       const picking = palettePickerOpen();
       const editing = MoveWaveformStore.wantsSteps();
-      if (!browsing && !picking && !editing && !stripRef.current.on) return;
+      if (!exploring && !browsing && !picking && !editing && !stripRef.current.on) return;
       const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
       if (!d) return;
       e.preventDefault();
@@ -387,7 +392,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       // The same wheel, the same rule as the hardware: while the navigator
       // is up it walks the preset list, while the waveform editor floats it
       // zooms (scroll up goes in), otherwise it moves the strip.
-      if (browsing) MovePresetStore.scroll(steps);
+      if (exploring) PresetExplorationStore.jog(steps);
+      else if (browsing) MovePresetStore.scroll(steps);
       else if (picking) MoveColorStore.movePickerCursor(steps);
       else if (editing) MoveWaveformStore.zoom(-steps);
       else scrollSlots(steps);
@@ -495,10 +501,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   }, []);
 
   // The preset navigator, behind the hardware Menu button: a press toggles
-  // the list screen beside the slots, a long press (or Shift+Menu) opens the
-  // floating save input. The store holds the open view — same contract as
+  // the list screen beside the slots; a hold opens exploration, Shift+Menu
+  // opens the floating save input. The store holds the open view — same contract as
   // the colour wheel — and leaving the page takes both down with it.
   useSyncExternalStore(MovePresetStore.subscribe, MovePresetStore.getVersion, () => 0);
+  useSyncExternalStore(PresetExplorationStore.subscribe, PresetExplorationStore.getVersion, () => 0);
+  const explorationOpen = PresetExplorationStore.getState()?.panelId === pageId;
   const presetView = MovePresetStore.getView();
   const presetSaving = MovePresetStore.getSaving();
   const presetScreen = presetView?.panelId === pageId ? presetView : null;
@@ -506,13 +514,15 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   useEffect(() => {
     if (!pageId) return;
     return MoveFunctions.attach('menu', ({ shift, hold }) => {
-      if (shift || hold) MovePresetStore.beginSave(pageId);
+      if (shift) MovePresetStore.beginSave(pageId);
+      else if (hold) { MovePresetStore.cancel(); void PresetExplorationStore.open(pageId); }
       else MovePresetStore.toggle(pageId);
     }, { label: 'presets' });
   }, [pageId]);
   useEffect(() => () => {
     if (MovePresetStore.getView()?.panelId === pageId) MovePresetStore.cancel();
     if (MovePresetStore.getSaving()?.panelId === pageId) MovePresetStore.cancelSave();
+    if (PresetExplorationStore.getState()?.panelId === pageId) { PresetExplorationStore.cancelSave(); void PresetExplorationStore.close(); }
   }, [pageId]);
   // While the navigator is open it borrows the Back button: Back puts the
   // pre-navigator settings back and dismisses. Borrowing (push, not attach)
@@ -538,6 +548,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       MovePresetStore.scroll(Number((e as CustomEvent).detail?.delta) || 0);
     };
     const onJogClick = (e: Event) => {
+      if (PresetExplorationStore.getState()) { e.preventDefault(); PresetExplorationStore.toggleParent(); return; }
       if (!openView()) return;
       e.preventDefault();
       MovePresetStore.confirm();
@@ -950,7 +961,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // shuffles the control rows around the claim, exactly as the hardware does.
   // A modulator's settings page takes the surface over, list included: the
   // page IS what the wheel is walking while it is open.
-  const screen = settingsPanel ? null : surface.screen;
+  const screen = settingsPanel || explorationOpen ? null : surface.screen;
   const appRows = surface.rows;
   const padRows = movePadRows(page, appRows);
   const appRowAt = (row: number) => moveAppPadRow(row, appRows);
@@ -984,7 +995,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
         : visibleColumns(page);
   // The cluster the header and the grid share is never wider than the dials:
   // a strip of forty slots still shows eight.
-  const clusterCols = stripMode
+  const clusterCols = explorationOpen ? MOVE_DIALS : stripMode
     ? Math.min(MOVE_DIALS, visibleCols.length) || MOVE_DIALS
     : visibleCols.length;
   // Where the window sits in the whole set — counted in controls, since that
@@ -1014,10 +1025,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     <div className="tweakers-root tweakers-move-root" data-theme={theme} data-dock={dock}>
       {/* While a composer floats above it the whole instrument comes forward,
           over the app's own panels — you are working in it. */}
-      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-overlay={composition || audioWave != null || color || presetSave ? true : undefined}>
-        {colorMeta && <MoveColorDisplay panelId={page.panel.id} meta={colorMeta} anchor={panelRef} theme={theme} />}
+      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-overlay={explorationOpen || composition || audioWave != null || color || presetSave ? true : undefined}>
+        {!explorationOpen && colorMeta && <MoveColorDisplay panelId={page.panel.id} meta={colorMeta} anchor={panelRef} theme={theme} />}
+        <PresetExploration />
         {presetSave && <MovePresetSaveInput suggested={presetSave.suggested} />}
-        {composition && modSettings && (
+        {!explorationOpen && composition && modSettings && (
           <MoveCurveComposer
             index={modSettings.index}
             segments={composition.segments}
@@ -1026,7 +1038,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
             selected={clipIndex}
           />
         )}
-        {audioWave != null && <MoveAudioWave index={audioWave} theme={theme} />}
+        {!explorationOpen && audioWave != null && <MoveAudioWave index={audioWave} theme={theme} />}
         <div
           className="tweakers-move-inner"
           style={{
@@ -1114,7 +1126,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               />
             </div>
           )}
-          {visibleCols.length > 0 && <div className="tweakers-move-grid" data-presets={presetScreen?.phase === 'open' || paletteScreen || undefined}>
+          {explorationOpen && <PresetExplorationSlots />}
+          {visibleCols.length > 0 && <div style={explorationOpen ? { display: 'none' } : undefined} className="tweakers-move-grid" data-presets={presetScreen?.phase === 'open' || paletteScreen || undefined}>
             {presetScreen && <MovePresetScreen view={presetScreen} />}
             {paletteScreen && <MovePaletteScreen />}
             {/* The window on the strip: the row is as long as the page has

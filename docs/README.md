@@ -5,6 +5,7 @@ The Move hardware bridge lives in the separate `move` repository. Reusable UI
 belongs here; transport and device protocol belong there; engine behavior belongs
 in the consuming app.
 
+- [Preset exploration](preset-exploration.md): breeding, morphing, Move controls, and host adapters.
 - [Control dictionary](controls.md): choose a control and understand Move coverage.
 - [Design language](design-language.md): surfaces, typography, layout and interaction.
 - [Integration standards](integration.md): state, hardware lifecycle, packaging and updates.

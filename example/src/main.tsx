@@ -1,16 +1,19 @@
 import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { TweakStore, ModulationStore, MoveFunctions, MoveColorStore, MovePresetStore, sampleTransfer, movePoint } from 'tweakers';
+import { TweakStore, ModulationStore, MoveFunctions, MoveColorStore, MovePresetStore, PresetExplorationStore, sampleTransfer, movePoint } from 'tweakers';
 import 'tweakers/styles.css';
 import { Library } from './Library';
+import FlowerPlayground from './FlowerPlayground';
 import { registerLibraryPanel } from './panel';
 import { bindKeyboardHardware } from './hardware';
 
-registerLibraryPanel();
+const isFlowerPlayground = window.location.pathname.replace(/\/$/, '') === '/flowers';
+if (isFlowerPlayground) document.title = 'Flower playground · Tweakers';
+else registerLibraryPanel();
 
 // Handles for poking the live stores from the console — a library is a place
 // to try things, and the stores are half of what there is to try.
-(window as unknown as Record<string, unknown>).__kit = { TweakStore, ModulationStore, MoveFunctions, MovePresetStore };
+(window as unknown as Record<string, unknown>).__kit = { TweakStore, ModulationStore, MoveFunctions, MovePresetStore, PresetExplorationStore };
 
 /**
  * The hardware, when it is there. The bridge kit is served by the `move`
@@ -29,6 +32,7 @@ function MoveBridge() {
         if (cancelled) return;
         unbind = m.bindMove(TweakStore, {
           functions: MoveFunctions,
+          exploration: PresetExplorationStore,
           modulation: ModulationStore,
           color: MoveColorStore,
           // The curve maths a knob needs to hold one of a transfer's points:
@@ -48,7 +52,6 @@ function MoveBridge() {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <MoveBridge />
-    <Library />
+    {isFlowerPlayground ? <FlowerPlayground /> : <><MoveBridge /><Library /></>}
   </StrictMode>
 );
