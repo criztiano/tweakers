@@ -89,9 +89,10 @@ __export(index_exports, {
   MOVE_TOUCH_EVENT: () => MOVE_TOUCH_EVENT,
   MOVE_TRACKS: () => MOVE_TRACKS,
   MOVE_TRACK_COLORS: () => MOVE_TRACK_COLORS,
+  MOVE_WAVEFORM_DEMO_SECONDS: () => MOVE_WAVEFORM_DEMO_SECONDS,
   MOVE_WAVEFORM_PADS: () => MOVE_WAVEFORM_PADS,
   MOVE_WAVEFORM_PANEL: () => MOVE_WAVEFORM_PANEL,
-  MOVE_WAVEFORM_PIXEL_SIZES: () => MOVE_WAVEFORM_PIXEL_SIZES,
+  MOVE_WAVEFORM_PIXEL_RANGE: () => MOVE_WAVEFORM_PIXEL_RANGE,
   MOVE_WAVEFORM_STEPS: () => MOVE_WAVEFORM_STEPS,
   ModRing: () => ModRing,
   ModulationStore: () => import_ModulationStore3.ModulationStore,
@@ -243,6 +244,7 @@ __export(index_exports, {
   moveVisualReading: () => moveVisualReading,
   moveWaveformDefaultStyle: () => defaultStyle,
   moveWaveformDefaultView: () => defaultView,
+  moveWaveformDemoSample: () => moveWaveformDemoSample,
   moveWaveformStyleFromValues: () => styleFromValues,
   moveWheelSlot: () => moveWheelSlot,
   nearestHandle: () => nearestHandle,
@@ -2191,16 +2193,16 @@ var MoveVolumeDisplay = new MoveVolumeDisplayClass();
 // src/move-waveform.ts
 var import_TweakStore = require("tweakers/store");
 var MOVE_WAVEFORM_PANEL = "move-waveform";
-var MOVE_WAVEFORM_PIXEL_SIZES = [1, 2, 4, 6];
+var MOVE_WAVEFORM_PIXEL_RANGE = [1, 6];
 var MODE_LABELS = { smooth: "Smooth", pixelated: "Pixel", striped: "Striped" };
-var sizeOption = (size) => `${size}\xD7`;
+var clampPixelSize = (v) => Math.min(MOVE_WAVEFORM_PIXEL_RANGE[1], Math.max(MOVE_WAVEFORM_PIXEL_RANGE[0], Math.round(v)));
 function defaultStyle() {
   return { mode: "pixelated", pixelSize: 2, grid: false, bands: false, baseline: true };
 }
 function styleFromValues(values, base) {
   if (!values) return base;
   const mode = WAVEFORM_MODES.find((m) => m === values.style) ?? base.mode;
-  const size = MOVE_WAVEFORM_PIXEL_SIZES.find((s) => sizeOption(s) === values.resolution) ?? base.pixelSize;
+  const size = typeof values.resolution === "number" && Number.isFinite(values.resolution) ? clampPixelSize(values.resolution) : base.pixelSize;
   const flag = (v, fallback) => typeof v === "boolean" ? v : fallback;
   return {
     mode,
@@ -2272,7 +2274,9 @@ function loopSteps(view, steps = MOVE_WAVEFORM_STEPS) {
 var MoveWaveformStoreClass = class {
   constructor() {
     this.view = defaultView();
-    this.registered = false;
+    /** Live claims — the app's display and the room's preview can both be up. */
+    this.claims = 0;
+    this.buffer = null;
     this.editor = false;
     this.progressSource = null;
     this.duration = null;
@@ -2287,22 +2291,38 @@ var MoveWaveformStoreClass = class {
    * off screen for a moment — and its saved values win over the seed.
    */
   register(style) {
-    this.registered = true;
+    this.claims += 1;
     this.ensureSettings(style);
-    MoveVolumeDisplay.set({ label: "time", getValue: () => this.readout() });
+    if (this.claims === 1) MoveVolumeDisplay.set({ label: "time", getValue: () => this.readout() });
     this.notify();
+    let released = false;
     return () => {
-      this.registered = false;
+      if (released) return;
+      released = true;
+      this.claims -= 1;
+      if (this.claims > 0) {
+        this.notify();
+        return;
+      }
       this.editor = false;
       this.progressSource = null;
       this.duration = null;
+      this.buffer = null;
       this.view = defaultView();
       MoveVolumeDisplay.clear();
       this.notify();
     };
   }
   isRegistered() {
-    return this.registered;
+    return this.claims > 0;
+  }
+  /** The sample on the surface right now — what the room's preview shows. */
+  setBuffer(buffer) {
+    this.buffer = buffer;
+    this.setDuration(buffer?.duration ?? null);
+  }
+  getBuffer() {
+    return this.buffer;
   }
   /**
    * The kit's Waveform settings page: how the sample is drawn — the style,
@@ -2324,14 +2344,21 @@ var MoveWaveformStoreClass = class {
           default: seed.mode,
           options: WAVEFORM_MODES.map((m) => ({ value: m, label: MODE_LABELS[m] }))
         },
+        // The bar width as the headline value — "2×" — the way the old
+        // resolution slider read.
         resolution: {
-          type: "select",
-          default: sizeOption(MOVE_WAVEFORM_PIXEL_SIZES.includes(seed.pixelSize) ? seed.pixelSize : 2),
-          options: MOVE_WAVEFORM_PIXEL_SIZES.map(sizeOption)
+          type: "slider",
+          default: clampPixelSize(seed.pixelSize),
+          min: MOVE_WAVEFORM_PIXEL_RANGE[0],
+          max: MOVE_WAVEFORM_PIXEL_RANGE[1],
+          step: 1,
+          formatValue: (v) => `${Math.round(v)}\xD7`
         },
-        grid: { type: "toggle", default: seed.grid, moveSlot: true },
-        bands: { type: "toggle", default: seed.bands, moveSlot: true, label: "EQ bands" },
-        baseline: { type: "toggle", default: seed.baseline, moveSlot: true, label: "Centre line" }
+        // The three overlays as pictures with a state badge — what each
+        // switch is about, and whether it is on.
+        grid: { type: "toggle", default: seed.grid, moveSlot: true, icon: "grid-2x2" },
+        bands: { type: "toggle", default: seed.bands, moveSlot: true, label: "EQ bands", icon: "audio-lines" },
+        baseline: { type: "toggle", default: seed.baseline, moveSlot: true, label: "Centre line", icon: "activity" }
       },
       void 0,
       { kind: "kit", persist: true }
@@ -2361,11 +2388,11 @@ var MoveWaveformStoreClass = class {
   }
   /** The kit routes every step press here while the editor is up. */
   wantsSteps() {
-    return this.registered && this.editor;
+    return this.claims > 0 && this.editor;
   }
   /** The kit claims and routes the bottom pad row while the editor is up. */
   wantsPads() {
-    return this.registered && this.editor;
+    return this.claims > 0 && this.editor;
   }
   /**
    * Where the playhead actually is, for framing — during playback the shown
@@ -2449,6 +2476,45 @@ var MoveWaveformStoreClass = class {
   }
 };
 var MoveWaveformStore = new MoveWaveformStoreClass();
+var MOVE_WAVEFORM_DEMO_SECONDS = 4;
+var demoSample = null;
+function moveWaveformDemoSample() {
+  if (demoSample) return demoSample;
+  const rate = 44100;
+  const data = new Float32Array(rate * MOVE_WAVEFORM_DEMO_SECONDS);
+  let seed = 7;
+  const noise = () => {
+    seed = seed * 1103515245 + 12345 & 2147483647;
+    return seed / 2147483647 * 2 - 1;
+  };
+  const beat = rate / 2;
+  for (let n = 0; n < 8; n++) {
+    const at = n * beat;
+    for (let i = 0; i < rate * 0.3 && at + i < data.length; i++) {
+      const t = i / rate;
+      const f = 45 + 75 * Math.exp(-t * 30);
+      data[at + i] += Math.sin(2 * Math.PI * f * t) * Math.exp(-t * 9) * 0.9;
+    }
+    if (n % 2 === 1) {
+      for (let i = 0; i < rate * 0.18 && at + i < data.length; i++) {
+        const t = i / rate;
+        data[at + i] += (noise() * 0.6 + Math.sin(2 * Math.PI * 190 * t) * 0.3) * Math.exp(-t * 22);
+      }
+    }
+    const off = at + beat / 2;
+    for (let i = 0; i < rate * 0.05 && off + i < data.length; i++) {
+      data[off + i] += noise() * 0.25 * Math.exp(-(i / rate) * 90);
+    }
+  }
+  demoSample = {
+    numberOfChannels: 1,
+    length: data.length,
+    duration: MOVE_WAVEFORM_DEMO_SECONDS,
+    sampleRate: rate,
+    getChannelData: () => data
+  };
+  return demoSample;
+}
 
 // src/env.ts
 var import_meta = {};
@@ -2502,7 +2568,7 @@ function MoveWaveform({
   );
   const look = styleFromValues(styleValues, { mode, pixelSize, grid, bands, baseline });
   (0, import_react2.useEffect)(() => {
-    MoveWaveformStore.setDuration(buffer?.duration ?? null);
+    MoveWaveformStore.setBuffer(buffer);
   }, [buffer]);
   const view = (0, import_react2.useSyncExternalStore)(
     (0, import_react2.useCallback)((cb) => MoveWaveformStore.subscribe(cb), []),
@@ -6597,6 +6663,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const modSlot = modSettings ? import_ModulationStore2.ModulationStore.getSlot(modSettings.index) : null;
   const composition = modSlot?.type === "curve" ? curveComposition(modSlot.params) : null;
   const audioWave = modSlot?.type === "audio" && modSettings ? modSettings.index : null;
+  const roomWave = settingsOpen && page?.panel.id === MOVE_WAVEFORM_PANEL;
   const clipIndex = composition ? Math.min(composition.segments.length - 1, Math.max(0, Math.round(Number(modSlot.params.selected) || 0))) : 0;
   const previewPath = modLayout?.dials.find((d) => d.preview)?.path ?? null;
   const values = (0, import_react8.useSyncExternalStore)(
@@ -6932,7 +6999,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("span", { className: "tweakers-move-volume-value", children: boldColons(volumeReading ?? volume.label ?? "") })
     ] })
   ] });
-  const content = /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-settings": settingsOpen || void 0, "data-overlay": composition || audioWave != null || color || presetSave ? true : void 0, children: [
+  const content = /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-settings": settingsOpen || void 0, "data-overlay": composition || audioWave != null || roomWave || color || presetSave ? true : void 0, children: [
     colorMeta && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MoveColorDisplay, { panelId: page.panel.id, meta: colorMeta, anchor: panelRef, theme }),
     presetSave && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MovePresetSaveInput, { suggested: presetSave.suggested }),
     composition && modSettings && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
@@ -6946,6 +7013,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       }
     ),
     audioWave != null && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MoveAudioWave, { index: audioWave, theme }),
+    roomWave && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MoveRoomWave, { theme }),
     /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(
       "div",
       {
@@ -7064,7 +7132,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                               if (!meta) return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
                               const disabled = import_TweakStore7.TweakStore.isDisabled(page.panel.id, meta.path);
                               const active = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
-                              const valueFirst = !!settingsPanel && !(meta.min === 0 && meta.max === 1);
+                              const valueFirst = (!!settingsPanel || page.panel.kind === "kit") && !(meta.min === 0 && meta.max === 1);
                               const scopeSlot = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.scope : void 0;
                               const waveSlot = settingsPanel && meta.type !== "xy" ? modLayout?.dials.find((d) => d.path === meta.path)?.preview : void 0;
                               const scope = scopeSlot && modSettings ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MoveScope, { index: modSettings.index }) : waveSlot && modSettings ? /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MoveWavePreview, { index: modSettings.index }) : null;
@@ -8056,6 +8124,34 @@ function MoveAudioWave({ index, theme }) {
   );
 }
 var MOVE_WAVE_DISPLAY_HEIGHT = 128;
+function MoveRoomWave({ theme }) {
+  (0, import_react8.useSyncExternalStore)(
+    (0, import_react8.useCallback)((cb) => subscribeAudioMod(cb), []),
+    () => getAudioModVersion(),
+    () => 0
+  );
+  const buffer = MoveWaveformStore.getBuffer() ?? getAudioModBuffer() ?? moveWaveformDemoSample();
+  const startedAt = (0, import_react8.useRef)(typeof performance === "undefined" ? 0 : performance.now());
+  const getProgress = () => {
+    const seconds = buffer.duration || 1;
+    return (performance.now() - startedAt.current) / 1e3 % seconds / seconds;
+  };
+  (0, import_react8.useEffect)(() => {
+    MoveWaveformStore.setProgressSource(getProgress);
+    return () => MoveWaveformStore.setProgressSource(null);
+  });
+  return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+    MoveWaveform,
+    {
+      variant: "dock",
+      theme,
+      buffer,
+      getProgress,
+      height: MOVE_WAVE_DISPLAY_HEIGHT,
+      waveColor: "#1e1e1e"
+    }
+  );
+}
 function MoveAudioZoom() {
   (0, import_react8.useSyncExternalStore)(
     (0, import_react8.useCallback)((cb) => MoveWaveformStore.subscribe(cb), []),
@@ -8872,9 +8968,10 @@ var import_TweakStore9 = require("tweakers/store");
   MOVE_TOUCH_EVENT,
   MOVE_TRACKS,
   MOVE_TRACK_COLORS,
+  MOVE_WAVEFORM_DEMO_SECONDS,
   MOVE_WAVEFORM_PADS,
   MOVE_WAVEFORM_PANEL,
-  MOVE_WAVEFORM_PIXEL_SIZES,
+  MOVE_WAVEFORM_PIXEL_RANGE,
   MOVE_WAVEFORM_STEPS,
   ModRing,
   ModulationStore,
@@ -9026,6 +9123,7 @@ var import_TweakStore9 = require("tweakers/store");
   moveVisualReading,
   moveWaveformDefaultStyle,
   moveWaveformDefaultView,
+  moveWaveformDemoSample,
   moveWaveformStyleFromValues,
   moveWheelSlot,
   nearestHandle,
