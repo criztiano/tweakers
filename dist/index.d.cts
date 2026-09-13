@@ -3243,13 +3243,12 @@ declare const MoveFunctions: MoveFunctionsClass;
 
 /**
  * How the sample is drawn. `smooth` is the simplified envelope; `pixelated`
- * is one chunky min/max bar per column; `striped` is the pixelated bar with
- * a gap the same width after it — each bar then stands for twice the
- * samples, so the wave keeps every transient and loses only resolution;
- * `spaced` keeps the pixelated bar exactly as it is and puts the gap after
- * it, so the wave is twice as long and the same zoom shows half as much.
+ * is one chunky min/max bar per column; `striped` is the pixelated bar,
+ * untouched, with a gap its own width after it — no sample is lost and no
+ * bar coarsens, the wave is simply twice as long, so the same zoom shows
+ * half as much of it.
  */
-type WaveformMode = 'smooth' | 'pixelated' | 'striped' | 'spaced';
+type WaveformMode = 'smooth' | 'pixelated' | 'striped';
 declare const WAVEFORM_MODES: WaveformMode[];
 /** A loop region over the sample, as normalized 0..1 positions. */
 type WaveformLoop = {
@@ -3391,6 +3390,13 @@ declare class MoveWaveformStoreClass {
      * seeds it if it gets there first, and saved values win over any seed.
      */
     ensureSettings(style?: Partial<MoveWaveformStyle>): void;
+    /**
+     * The zoom the display is really at: striped bars stretch the wave, so
+     * the shown window is that much narrower than the view's zoom says. The
+     * pads and the small screens frame by this, so they show what the card
+     * shows.
+     */
+    shownZoom(): number;
     /** The look the settings page holds right now (the defaults until one is registered). */
     getStyle(): MoveWaveformStyle;
     /** The settings page's values, a stable snapshot per change — for `useSyncExternalStore`. */
@@ -4271,10 +4277,8 @@ interface WaveformVisualizationProps {
      * 'smooth' — a simplified, SVG-like envelope: few points, Catmull-Rom
      * interpolation, solid fill (the gist of the sample's dynamics).
      * 'pixelated' — crisp, chunky per-column min/max bars.
-     * 'striped' — the same bars with a gap the bar's own width after each;
-     * every bar reads its peaks over bar and gap, so nothing is masked.
-     * 'spaced' — the pixelated bars untouched, a gap after each: the wave is
-     * twice as long, and the same zoom shows half of it.
+     * 'striped' — the pixelated bars untouched, a gap the bar's own width
+     * after each: the wave is twice as long, and the same zoom shows half.
      */
     mode?: WaveformMode;
     /**

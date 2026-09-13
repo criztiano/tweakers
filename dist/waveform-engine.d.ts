@@ -1,13 +1,14 @@
 /**
  * How the sample is drawn. `smooth` is the simplified envelope; `pixelated`
- * is one chunky min/max bar per column; `striped` is the pixelated bar with
- * a gap the same width after it — each bar then stands for twice the
- * samples, so the wave keeps every transient and loses only resolution;
- * `spaced` keeps the pixelated bar exactly as it is and puts the gap after
- * it, so the wave is twice as long and the same zoom shows half as much.
+ * is one chunky min/max bar per column; `striped` is the pixelated bar,
+ * untouched, with a gap its own width after it — no sample is lost and no
+ * bar coarsens, the wave is simply twice as long, so the same zoom shows
+ * half as much of it.
  */
-type WaveformMode = 'smooth' | 'pixelated' | 'striped' | 'spaced';
+type WaveformMode = 'smooth' | 'pixelated' | 'striped';
 declare const WAVEFORM_MODES: WaveformMode[];
+/** Striped bars make the wave this many times longer at a given zoom. */
+declare const WAVEFORM_STRIPE_STRETCH = 2;
 /** A loop region over the sample, as normalized 0..1 positions. */
 type WaveformLoop = {
     start: number;
@@ -56,4 +57,4 @@ declare const WAVEFORM_SMOOTH_POINTS = 46;
  */
 declare function createWaveformEngine(canvas: HTMLCanvasElement, get: () => WaveformRuntime): WaveformEngine;
 
-export { WAVEFORM_MAX_ZOOM, WAVEFORM_MODES, WAVEFORM_SMOOTH_POINTS, type WaveformEngine, type WaveformLoop, type WaveformMode, type WaveformRuntime, createWaveformEngine };
+export { WAVEFORM_MAX_ZOOM, WAVEFORM_MODES, WAVEFORM_SMOOTH_POINTS, WAVEFORM_STRIPE_STRETCH, type WaveformEngine, type WaveformLoop, type WaveformMode, type WaveformRuntime, createWaveformEngine };

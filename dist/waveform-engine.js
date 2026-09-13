@@ -56,7 +56,8 @@ function envelope(p, cols, n) {
 }
 
 // src/waveform-engine.ts
-var WAVEFORM_MODES = ["smooth", "pixelated", "striped", "spaced"];
+var WAVEFORM_MODES = ["smooth", "pixelated", "striped"];
+var WAVEFORM_STRIPE_STRETCH = 2;
 var WAVEFORM_MAX_ZOOM = 1024;
 var BANDS = [
   { type: "lowpass", freq: 250 },
@@ -151,16 +152,15 @@ function createWaveformEngine(canvas, get) {
   const columnWidth = (pixelSize) => Math.max(1, Math.round(dpr) * Math.max(1, Math.round(pixelSize)));
   const windowState = { start: 0, win: 1 };
   let drag = null;
-  const drawColumns = (p, color, pixelSize, mode) => {
+  const drawColumns = (p, color, pixelSize, striped) => {
     const colW = columnWidth(pixelSize);
-    const spaced = mode === "spaced";
     ctx.fillStyle = color;
     ctx.globalAlpha = 1;
-    const cols = spaced ? Math.floor(W / 2) : W;
-    for (const bar of barPeaks(p, cols, mode === "striped" ? colW * 2 : colW)) {
+    const stretch = striped ? WAVEFORM_STRIPE_STRETCH : 1;
+    for (const bar of barPeaks(p, Math.floor(W / stretch), colW)) {
       const yTop = Math.round(cy - bar.max * amp);
       const yBot = Math.round(cy - bar.min * amp);
-      ctx.fillRect(spaced ? bar.x * 2 : bar.x, yTop, colW, Math.max(1, yBot - yTop));
+      ctx.fillRect(bar.x * stretch, yTop, colW, Math.max(1, yBot - yTop));
     }
   };
   const drawSimplified = (env, color, outline) => {
@@ -262,7 +262,7 @@ function createWaveformEngine(canvas, get) {
       win = Math.min(1, Math.max(1 / WAVEFORM_MAX_ZOOM, span * 1.2));
       start = (activeLoop.start + activeLoop.end) / 2 - win / 2;
     } else {
-      win = 1 / Math.max(1, rt.zoom) / (rt.mode === "spaced" ? 2 : 1);
+      win = 1 / Math.max(1, rt.zoom) / (rt.mode === "striped" ? WAVEFORM_STRIPE_STRETCH : 1);
       start = prog - win / 2;
     }
     if (start < 0) start = 0;
@@ -277,9 +277,9 @@ function createWaveformEngine(canvas, get) {
         const s0 = Math.max(0, Math.floor(start * mono.length));
         const s1 = Math.min(mono.length, Math.ceil(end * mono.length));
         const slice = s1 > s0 ? mono.subarray(s0, s1) : mono;
-        fillPeaks(slice, rt.mode === "spaced" ? Math.floor(W / 2) : W, pk.min, pk.max);
+        fillPeaks(slice, rt.mode === "striped" ? Math.floor(W / WAVEFORM_STRIPE_STRETCH) : W, pk.min, pk.max);
         const color = count === 3 ? BAND_COLORS[i] : wave;
-        if (rt.mode !== "smooth") drawColumns(pk, color, rt.pixelSize, rt.mode);
+        if (rt.mode !== "smooth") drawColumns(pk, color, rt.pixelSize, rt.mode === "striped");
         else drawSimplified(envelope(pk, W, Math.max(2, rt.smoothPoints || WAVEFORM_SMOOTH_POINTS)), color, rt.border);
       }
     }
@@ -406,6 +406,7 @@ export {
   WAVEFORM_MAX_ZOOM,
   WAVEFORM_MODES,
   WAVEFORM_SMOOTH_POINTS,
+  WAVEFORM_STRIPE_STRETCH,
   createWaveformEngine
 };
 //# sourceMappingURL=waveform-engine.js.map

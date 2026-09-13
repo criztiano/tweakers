@@ -17,10 +17,8 @@ type Bar = {
 };
 /**
  * Group per-pixel peaks into bars `pitch` pixels apart. Each bar reads the
- * min/max of its WHOLE pitch, so a bar drawn narrower than its pitch (the
- * striped style: a bar, then a gap the same width) still stands for every
- * sample under the gap. The gap costs resolution, never data — a transient
- * that lands in the gap still lifts the bar beside it.
+ * min/max of its whole pitch, so no column's sample is left out of the bar
+ * that stands for it.
  */
 declare function barPeaks(p: Peaks, cols: number, pitch: number): Bar[];
 declare function envelope(p: Peaks, cols: number, n: number): number[];
