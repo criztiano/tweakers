@@ -1302,8 +1302,15 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const appRowAt = (row: number) => moveAppPadRow(row, appRows);
   const padAt = (x: number, y: 0 | 1): MovePadCell | undefined =>
     surface.pads.find((p) => p.x === x && p.y === y);
+  // A pad row shows when it holds something: an empty row between two that
+  // do says nothing on screen, the same way an empty column is skipped (the
+  // row keeps its index, so what remains still sits on its hardware row). A
+  // modulator's settings page keeps its gaps: its bend and wave pads live in
+  // the empty cells under its stage columns.
   const shownPadRows = Array.from({ length: PAD_ROWS }, (_, row) => row)
-    .filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0));
+    .filter((row) => appRowAt(row) !== null || (settingsPanel
+      ? padRows.slice(row).some((r) => r.length > 0)
+      : padRows[row].some(Boolean)));
   // The claimed rows draw as one block, anchored on the topmost of them.
   const firstAppScreenRow = shownPadRows.find((row) => appRowAt(row) !== null) ?? -1;
 
