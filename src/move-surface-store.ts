@@ -76,12 +76,22 @@ export interface MoveSurfaceState {
   /** null hands the step circles back to the modulation slots. */
   steps: MoveStepCell[] | null;
   screen: MoveScreenList | null;
+  /** A search running on `screen`: the typed query and the row (index into
+   *  the full list) the wheel rests on. The kit narrows the device's list
+   *  by it, the same way the panel narrows the on-screen one. Written by
+   *  MoveSearchStore, never by the host. */
+  search: MoveScreenSearch | null;
+}
+
+export interface MoveScreenSearch {
+  query: string;
+  index: number;
 }
 
 type Listener = () => void;
 type PressListener = (pad: { x: number; y: 0 | 1 }) => void;
 
-const EMPTY: MoveSurfaceState = { rows: 0, pads: [], padsLabel: null, steps: null, screen: null };
+const EMPTY: MoveSurfaceState = { rows: 0, pads: [], padsLabel: null, steps: null, screen: null, search: null };
 
 let state: MoveSurfaceState = EMPTY;
 const listeners = new Set<Listener>();
@@ -155,6 +165,11 @@ export const MoveSurfaceStore = {
 
   setScreen(screen: MoveScreenList | null) {
     patch('screen', screen);
+  },
+
+  /** The search narrowing the wheel list — MoveSearchStore's to write. */
+  setSearch(search: MoveScreenSearch | null) {
+    patch('search', search);
   },
 
   /** Selection intent from the panel's wheel screen; the host owns the value,

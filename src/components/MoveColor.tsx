@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { MoveColorStore, MOVE_COLOR_PALETTES, MOVE_COLOR_STEPS, MOVE_OPACITY_PADS, type MoveColorPalette } from '../move-color';
 import { TweakStore, type ControlMeta } from '../store/TweakStore';
@@ -222,13 +222,15 @@ export function MoveColorDisplay({ panelId, meta, anchor, theme }: {
  * of each palette's colours. The first row — "All colors", a hue gradient —
  * is the way back to the whole wheel.
  */
-export function MovePaletteScreen() {
+export function MovePaletteScreen({ kept = null, children }: { kept?: number[] | null; children?: ReactNode }) {
   const root = useRef<HTMLDivElement>(null);
   const cursor = MoveColorStore.getPickerCursor();
-  const rows: { name: string; colors: string[] | null }[] = [
-    { name: 'All colors', colors: null },
-    ...MOVE_COLOR_PALETTES.map((p) => ({ name: p.name, colors: p.colors })),
-  ];
+  // A running search (`kept`, the row indices its query keeps) narrows the
+  // rows and hands the wheel to the panel; its line rides in as children.
+  const rows: { name: string; colors: string[] | null; index: number }[] = [
+    { name: 'All colors', colors: null, index: 0 },
+    ...MOVE_COLOR_PALETTES.map((p, i) => ({ name: p.name, colors: p.colors, index: i + 1 })),
+  ].filter((row) => !kept || kept.includes(row.index));
   // The view follows the cursor the way the list screen does: scroll only
   // this screen, and only far enough to bring the row into sight.
   useEffect(() => {
@@ -245,12 +247,15 @@ export function MovePaletteScreen() {
     el.scrollTop = Math.max(0, Math.min(next, el.scrollHeight - el.clientHeight));
   }, [cursor]);
   return <div ref={root} className="tweakers-move-preset-screen tweakers-move-palette-screen" data-open
+    data-search={kept ? true : undefined}
     role="listbox" aria-label="Color palettes"
-    onWheel={(e) => { e.preventDefault(); MoveColorStore.movePickerCursor(e.deltaY > 0 ? 1 : -1); }}>
-    {rows.map((row, index) => <button key={row.name} type="button" role="option"
-      className="tweakers-move-palette-row" aria-selected={index === cursor}
-      data-selected={index === cursor || undefined}
-      onClick={() => MoveColorStore.choosePicker(index)}>
+    onWheel={(e) => { e.preventDefault(); if (!kept) MoveColorStore.movePickerCursor(e.deltaY > 0 ? 1 : -1); }}>
+    {children}
+    {kept && !rows.length && <span className="tweakers-move-palette-empty">No matches</span>}
+    {rows.map((row) => <button key={row.name} type="button" role="option"
+      className="tweakers-move-palette-row" aria-selected={row.index === cursor}
+      data-selected={row.index === cursor || undefined}
+      onClick={() => MoveColorStore.choosePicker(row.index)}>
       <span className="tweakers-move-palette-name">{row.name}</span>
       <span className="tweakers-move-palette-strip" aria-hidden="true">
         {row.colors

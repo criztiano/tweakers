@@ -17,6 +17,7 @@ export {
   MOVE_JOG_EVENT,
   MOVE_JOG_CLICK_EVENT,
   MOVE_MUTE_EVENT,
+  MOVE_SEARCH_EVENT,
   MOVE_STRIP_EVENT,
   MOVE_TRACK_COLORS,
 } from './components/MovePanel';
@@ -77,7 +78,7 @@ export type { MoveFunctionGlyph } from './icons';
 // Raw hardware an app claims for itself — the bottom pad rows, the step
 // buttons, the device screen — kept for the on-screen mirror.
 export { MoveSurfaceStore, moveScreenRowLabel, moveScreenChecked } from './move-surface-store';
-export type { MovePadCell, MoveStepCell, MoveScreenList, MoveScreenRow, MoveSurfaceState } from './move-surface-store';
+export type { MovePadCell, MoveStepCell, MoveScreenList, MoveScreenRow, MoveScreenSearch, MoveSurfaceState } from './move-surface-store';
 
 // List screen (the Move's dark display list, standalone)
 export { ListScreen } from './components/ListScreen';
@@ -343,4 +344,6 @@ export type { MoveColorView, MoveColorPalette } from './move-color';
 // bridge kit drives (scroll on wheel turns, confirm on jog click,
 // beginSave on a long press).
 export { MovePresetStore } from './move-presets';
+export { MoveSearchStore, moveSearchMatch, moveSearchFilter } from './move-search';
+export type { MoveSearchTarget, MoveSearchView } from './move-search';
 export type { MovePresetItem, MovePresetView, MovePresetSave, MovePresetPhase } from './move-presets';

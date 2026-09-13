@@ -153,6 +153,18 @@ class MovePresetStoreClass {
     this.notify();
   }
 
+  /** Rest the cursor on a row by id — a search landing the wheel on the next
+   *  match, previewed live exactly as a wheel turn is. */
+  rest(id: string) {
+    const view = this.view;
+    if (!view || view.phase === 'closing' || view.chosen) return;
+    if (!this.items(view.panelId).some((i) => i.id === id)) return;
+    if (id === view.cursor && !view.comparing) return;
+    this.view = { ...view, cursor: id, comparing: false };
+    this.applyPreview(id);
+    this.notify();
+  }
+
   /** Menu held down: play the pre-navigator sound for as long as it's held. */
   compareStart() {
     const view = this.view;

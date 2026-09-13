@@ -82,6 +82,7 @@ __export(index_exports, {
   MOVE_PAGE_EVENT: () => MOVE_PAGE_EVENT,
   MOVE_PAGE_SELECT_EVENT: () => MOVE_PAGE_SELECT_EVENT,
   MOVE_PALETTE: () => MOVE_PALETTE,
+  MOVE_SEARCH_EVENT: () => MOVE_SEARCH_EVENT,
   MOVE_SLOT_LIBRARY: () => MOVE_SLOT_LIBRARY,
   MOVE_SPECIAL_BUTTONS: () => MOVE_SPECIAL_BUTTONS,
   MOVE_STEP_FUNCTIONS: () => MOVE_STEP_FUNCTIONS,
@@ -106,6 +107,7 @@ __export(index_exports, {
   MovePadWaveBody: () => MovePadWaveBody,
   MovePanel: () => MovePanel,
   MovePresetStore: () => MovePresetStore,
+  MoveSearchStore: () => MoveSearchStore,
   MoveSettingsView: () => MoveSettingsView,
   MoveSlotColorBody: () => MoveSlotColorBody,
   MoveSlotDefaultBody: () => MoveSlotDefaultBody,
@@ -233,6 +235,8 @@ __export(index_exports, {
   movePoint: () => movePoint,
   moveScreenChecked: () => moveScreenChecked,
   moveScreenRowLabel: () => moveScreenRowLabel,
+  moveSearchFilter: () => moveSearchFilter,
+  moveSearchMatch: () => moveSearchMatch,
   moveSlotKind: () => moveSlotKind,
   moveStop: () => moveStop,
   moveTabCell: () => moveTabCell,
@@ -2494,6 +2498,7 @@ var ICON_ELLIPSIS = [
   { cx: "18.5", cy: "12" }
 ];
 var ICON_CHECK = "M5 12.75L10 19L19 5";
+var ICON_SEARCH = "M10.5 4.5C7.18629 4.5 4.5 7.18629 4.5 10.5C4.5 13.8137 7.18629 16.5 10.5 16.5C13.8137 16.5 16.5 13.8137 16.5 10.5C16.5 7.18629 13.8137 4.5 10.5 4.5ZM15 15L20 20";
 var ICON_PLAY = "M9.24394 2.36758C7.41419 1.18362 5 2.49701 5 4.67639V19.3238C5 21.5032 7.41419 22.8166 9.24394 21.6326L20.5624 14.3089C22.2371 13.2253 22.2372 10.775 20.5624 9.69129L9.24394 2.36758Z";
 var ICON_LOOP = [
   "M17 2L21 6L17 10",
@@ -5022,7 +5027,7 @@ var MOVE_TRACK_COLORS = [
 // src/move-surface-store.ts
 var moveScreenRowLabel = (row) => typeof row === "string" ? row : row.label;
 var moveScreenChecked = (rows) => rows.flatMap((row, i) => typeof row !== "string" && row.checked ? [i] : []);
-var EMPTY = { rows: 0, pads: [], padsLabel: null, steps: null, screen: null };
+var EMPTY = { rows: 0, pads: [], padsLabel: null, steps: null, screen: null, search: null };
 var state = EMPTY;
 var listeners = /* @__PURE__ */ new Set();
 var pressListeners = /* @__PURE__ */ new Set();
@@ -5071,6 +5076,10 @@ var MoveSurfaceStore = {
   },
   setScreen(screen) {
     patch("screen", screen);
+  },
+  /** The search narrowing the wheel list — MoveSearchStore's to write. */
+  setSearch(search) {
+    patch("search", search);
   },
   /** Selection intent from the panel's wheel screen; the host owns the value,
    *  exactly as it owns what a hardware wheel turn means. */
@@ -5384,6 +5393,14 @@ var MoveColorStoreClass = class {
     this.pickerCursor = next;
     this.notify();
   }
+  /** Rest the cursor on a row — a search landing the wheel on the next match. */
+  setPickerCursor(cursor) {
+    if (!this.isPickerOpen()) return;
+    const next = Math.max(0, Math.min(MOVE_COLOR_PALETTES.length, cursor));
+    if (next === this.pickerCursor) return;
+    this.pickerCursor = next;
+    this.notify();
+  }
   /** Keep the cursor's row: the palette locks in and the navigator dismisses. */
   confirmPicker() {
     if (!this.isPickerOpen()) return;
@@ -5397,6 +5414,57 @@ var MoveColorStoreClass = class {
   }
 };
 var MoveColorStore = new MoveColorStoreClass();
+
+// src/move-search.ts
+function moveSearchMatch(label, query) {
+  const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!tokens.length) return true;
+  const hay = label.toLowerCase();
+  return tokens.every((t) => hay.includes(t));
+}
+function moveSearchFilter(labels, query) {
+  return labels.flatMap((label, i) => moveSearchMatch(label, query) ? [i] : []);
+}
+var MoveSearchStoreClass = class {
+  constructor() {
+    this.view = null;
+    this.version = 0;
+    this.listeners = /* @__PURE__ */ new Set();
+    this.getView = () => this.view;
+    this.isOpen = () => !!this.view;
+    this.getVersion = () => this.version;
+    this.subscribe = (fn) => {
+      this.listeners.add(fn);
+      return () => {
+        this.listeners.delete(fn);
+      };
+    };
+  }
+  set(next) {
+    this.view = next;
+    MoveSurfaceStore.setSearch(next?.target === "screen" ? { query: next.query, index: next.cursor } : null);
+    this.version++;
+    for (const fn of this.listeners) fn();
+  }
+  /** Open on a list, with an empty query. Already open: nothing changes. */
+  open(target, cursor = 0) {
+    if (this.view) return;
+    this.set({ target, query: "", cursor });
+  }
+  close() {
+    if (this.view) this.set(null);
+  }
+  setQuery(query) {
+    if (!this.view || this.view.query === query) return;
+    this.set({ ...this.view, query });
+  }
+  /** The `screen` target's resting row, an index into the app's full list. */
+  setCursor(cursor) {
+    if (!this.view || this.view.cursor === cursor) return;
+    this.set({ ...this.view, cursor });
+  }
+};
+var MoveSearchStore = new MoveSearchStoreClass();
 
 // src/components/MoveColor.tsx
 var import_react6 = require("react");
@@ -5679,13 +5747,13 @@ function MoveColorDisplay({ panelId, meta, anchor, theme }) {
   );
   return typeof document === "undefined" ? content : (0, import_react_dom2.createPortal)(content, document.body);
 }
-function MovePaletteScreen() {
+function MovePaletteScreen({ kept = null, children }) {
   const root = (0, import_react6.useRef)(null);
   const cursor = MoveColorStore.getPickerCursor();
   const rows = [
-    { name: "All colors", colors: null },
-    ...MOVE_COLOR_PALETTES.map((p) => ({ name: p.name, colors: p.colors }))
-  ];
+    { name: "All colors", colors: null, index: 0 },
+    ...MOVE_COLOR_PALETTES.map((p, i) => ({ name: p.name, colors: p.colors, index: i + 1 }))
+  ].filter((row) => !kept || kept.includes(row.index));
   (0, import_react6.useEffect)(() => {
     const el = root.current;
     const selected = el?.querySelector("[data-selected]");
@@ -5697,34 +5765,39 @@ function MovePaletteScreen() {
     const next = top < el.scrollTop ? top : bottom > el.scrollTop + el.clientHeight ? bottom - el.clientHeight : el.scrollTop;
     el.scrollTop = Math.max(0, Math.min(next, el.scrollHeight - el.clientHeight));
   }, [cursor]);
-  return /* @__PURE__ */ (0, import_jsx_runtime8.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
     "div",
     {
       ref: root,
       className: "tweakers-move-preset-screen tweakers-move-palette-screen",
       "data-open": true,
+      "data-search": kept ? true : void 0,
       role: "listbox",
       "aria-label": "Color palettes",
       onWheel: (e) => {
         e.preventDefault();
-        MoveColorStore.movePickerCursor(e.deltaY > 0 ? 1 : -1);
+        if (!kept) MoveColorStore.movePickerCursor(e.deltaY > 0 ? 1 : -1);
       },
-      children: rows.map((row, index) => /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
-        "button",
-        {
-          type: "button",
-          role: "option",
-          className: "tweakers-move-palette-row",
-          "aria-selected": index === cursor,
-          "data-selected": index === cursor || void 0,
-          onClick: () => MoveColorStore.choosePicker(index),
-          children: [
-            /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "tweakers-move-palette-name", children: row.name }),
-            /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "tweakers-move-palette-strip", "aria-hidden": "true", children: row.colors ? row.colors.map((hex, i) => /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "tweakers-move-palette-color", style: { background: hex } }, i)) : /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "tweakers-move-palette-color", "data-gradient": true }) })
-          ]
-        },
-        row.name
-      ))
+      children: [
+        children,
+        kept && !rows.length && /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "tweakers-move-palette-empty", children: "No matches" }),
+        rows.map((row) => /* @__PURE__ */ (0, import_jsx_runtime8.jsxs)(
+          "button",
+          {
+            type: "button",
+            role: "option",
+            className: "tweakers-move-palette-row",
+            "aria-selected": row.index === cursor,
+            "data-selected": row.index === cursor || void 0,
+            onClick: () => MoveColorStore.choosePicker(row.index),
+            children: [
+              /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "tweakers-move-palette-name", children: row.name }),
+              /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "tweakers-move-palette-strip", "aria-hidden": "true", children: row.colors ? row.colors.map((hex, i) => /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "tweakers-move-palette-color", style: { background: hex } }, i)) : /* @__PURE__ */ (0, import_jsx_runtime8.jsx)("span", { className: "tweakers-move-palette-color", "data-gradient": true }) })
+            ]
+          },
+          row.name
+        ))
+      ]
     }
   );
 }
@@ -6073,6 +6146,17 @@ var MovePresetStoreClass = class {
     this.applyPreview(items[next].id);
     this.notify();
   }
+  /** Rest the cursor on a row by id — a search landing the wheel on the next
+   *  match, previewed live exactly as a wheel turn is. */
+  rest(id) {
+    const view = this.view;
+    if (!view || view.phase === "closing" || view.chosen) return;
+    if (!this.items(view.panelId).some((i) => i.id === id)) return;
+    if (id === view.cursor && !view.comparing) return;
+    this.view = { ...view, cursor: id, comparing: false };
+    this.applyPreview(id);
+    this.notify();
+  }
   /** Menu held down: play the pre-navigator sound for as long as it's held. */
   compareStart() {
     const view = this.view;
@@ -6147,6 +6231,67 @@ var presetNavigatorOpen = () => {
   return !!view && view.phase !== "closing";
 };
 var palettePickerOpen = () => MoveColorStore.isPickerOpen();
+function searchRows(view) {
+  if (view.target === "screen") {
+    const screen = MoveSurfaceStore.getState().screen;
+    if (!screen) return null;
+    return {
+      labels: screen.items.map(moveScreenRowLabel),
+      cursor: view.cursor,
+      rest: (index) => MoveSearchStore.setCursor(index),
+      take: (index) => {
+        MoveSearchStore.close();
+        MoveSurfaceStore.selectScreen(index);
+      }
+    };
+  }
+  if (view.target === "presets") {
+    const preset = MovePresetStore.getView();
+    if (!preset || preset.phase === "closing") return null;
+    const items = MovePresetStore.items(preset.panelId);
+    return {
+      labels: items.map((i) => i.label),
+      cursor: items.findIndex((i) => i.id === preset.cursor),
+      rest: (index) => MovePresetStore.rest(items[index].id),
+      take: (index) => {
+        MoveSearchStore.close();
+        MovePresetStore.choose(items[index].id);
+      }
+    };
+  }
+  if (!palettePickerOpen()) return null;
+  return {
+    labels: ["All colors", ...MOVE_COLOR_PALETTES.map((p) => p.name)],
+    cursor: MoveColorStore.getPickerCursor(),
+    rest: (index) => MoveColorStore.setPickerCursor(index),
+    take: (index) => {
+      MoveSearchStore.close();
+      MoveColorStore.choosePicker(index);
+    }
+  };
+}
+var searchKept = (rows, view) => moveSearchFilter(rows.labels, view.query);
+function searchStep(view, delta) {
+  const rows = searchRows(view);
+  if (!rows || !delta) return;
+  const kept = searchKept(rows, view);
+  if (!kept.length) return;
+  const at = kept.indexOf(rows.cursor);
+  const next = kept[Math.max(0, Math.min(kept.length - 1, (at < 0 ? 0 : at) + delta))];
+  if (next !== rows.cursor) rows.rest(next);
+}
+function searchTake(view) {
+  const rows = searchRows(view);
+  if (rows && searchKept(rows, view).includes(rows.cursor)) rows.take(rows.cursor);
+}
+function searchType(query) {
+  MoveSearchStore.setQuery(query);
+  const view = MoveSearchStore.getView();
+  const rows = view && searchRows(view);
+  if (!view || !rows) return;
+  const kept = searchKept(rows, view);
+  if (kept.length && !kept.includes(rows.cursor)) rows.rest(kept[0]);
+}
 function boldColons(text) {
   if (!text.includes(":")) return text;
   return text.split(":").flatMap(
@@ -6174,6 +6319,7 @@ var MOVE_PAGE_SELECT_EVENT = "move-tweakers:page-select";
 var MOVE_JOG_EVENT = "move-tweakers:jog";
 var MOVE_JOG_CLICK_EVENT = "move-tweakers:jog-click";
 var MOVE_MUTE_EVENT = "move-tweakers:mute";
+var MOVE_SEARCH_EVENT = "move-tweakers:search";
 var MOVE_STRIP_EVENT = "move-tweakers:strip";
 var MOVE_SETTINGS_EVENT = "move-tweakers:settings";
 function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only, dock = "viewport", scroll = false, headerStart, settings, functionChips = "clock" }) {
@@ -6299,7 +6445,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   (0, import_react8.useEffect)(() => setOffset(0), [pageId]);
   (0, import_react8.useEffect)(() => {
     const onJog = (e) => {
-      if (e.defaultPrevented || presetNavigatorOpen() || MoveColorStore.getView() || !stripRef.current.on) return;
+      if (e.defaultPrevented || MoveSearchStore.isOpen() || presetNavigatorOpen() || MoveColorStore.getView() || !stripRef.current.on) return;
       if (MoveWaveformStore.wantsSteps()) return;
       e.preventDefault();
       scrollSlots(Math.round(Number(e.detail?.delta) || 0));
@@ -6322,10 +6468,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     const el = panelRef.current;
     if (!el) return;
     const onWheel = (e) => {
+      const searching = MoveSearchStore.getView();
       const browsing = presetNavigatorOpen();
       const picking = palettePickerOpen();
       const editing = MoveWaveformStore.wantsSteps();
-      if (!browsing && !picking && !editing && !stripRef.current.on) return;
+      if (!searching && !browsing && !picking && !editing && !stripRef.current.on) return;
       const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
       if (!d) return;
       e.preventDefault();
@@ -6333,7 +6480,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       const steps = Math.trunc(wheelRest.current / WHEEL_SLOT_PX);
       if (!steps) return;
       wheelRest.current -= steps * WHEEL_SLOT_PX;
-      if (browsing) MovePresetStore.scroll(steps);
+      if (searching) searchStep(searching, steps);
+      else if (browsing) MovePresetStore.scroll(steps);
       else if (picking) MoveColorStore.movePickerCursor(steps);
       else if (editing) MoveWaveformStore.zoom(-steps);
       else scrollSlots(steps);
@@ -6408,12 +6556,12 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   }, [paletteScreen]);
   (0, import_react8.useEffect)(() => {
     const onJog = (e) => {
-      if (!palettePickerOpen()) return;
+      if (e.defaultPrevented || MoveSearchStore.isOpen() || !palettePickerOpen()) return;
       e.preventDefault();
       MoveColorStore.movePickerCursor(Number(e.detail?.delta) || 0);
     };
     const onJogClick = (e) => {
-      if (!palettePickerOpen()) return;
+      if (e.defaultPrevented || MoveSearchStore.isOpen() || !palettePickerOpen()) return;
       e.preventDefault();
       MoveColorStore.confirmPicker();
     };
@@ -6451,12 +6599,12 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       return view && view.phase !== "closing" ? view : null;
     };
     const onJog = (e) => {
-      if (!openView()) return;
+      if (e.defaultPrevented || MoveSearchStore.isOpen() || !openView()) return;
       e.preventDefault();
       MovePresetStore.scroll(Number(e.detail?.delta) || 0);
     };
     const onJogClick = (e) => {
-      if (!openView()) return;
+      if (e.defaultPrevented || MoveSearchStore.isOpen() || !openView()) return;
       e.preventDefault();
       MovePresetStore.confirm();
     };
@@ -6483,6 +6631,50 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       window.removeEventListener(MOVE_MUTE_EVENT, onMute);
     };
   }, []);
+  (0, import_react8.useSyncExternalStore)(MoveSearchStore.subscribe, MoveSearchStore.getVersion, () => 0);
+  const search = MoveSearchStore.getView();
+  const screenShown = (0, import_react8.useRef)(false);
+  (0, import_react8.useEffect)(() => {
+    const onSearch = (e) => {
+      if (e.defaultPrevented) return;
+      if (MoveSearchStore.isOpen()) {
+        e.preventDefault();
+        MoveSearchStore.close();
+        return;
+      }
+      const target = palettePickerOpen() ? "palette" : presetNavigatorOpen() ? "presets" : screenShown.current ? "screen" : null;
+      if (!target) return;
+      e.preventDefault();
+      MoveSearchStore.open(target, target === "screen" ? MoveSurfaceStore.getState().screen?.index ?? 0 : 0);
+    };
+    window.addEventListener(MOVE_SEARCH_EVENT, onSearch);
+    return () => window.removeEventListener(MOVE_SEARCH_EVENT, onSearch);
+  }, []);
+  (0, import_react8.useEffect)(() => {
+    const onJog = (e) => {
+      const view = MoveSearchStore.getView();
+      if (!view) return;
+      e.preventDefault();
+      searchStep(view, Math.round(Number(e.detail?.delta) || 0));
+    };
+    const onJogClick = (e) => {
+      const view = MoveSearchStore.getView();
+      if (!view) return;
+      e.preventDefault();
+      searchTake(view);
+    };
+    window.addEventListener(MOVE_JOG_EVENT, onJog, { capture: true });
+    window.addEventListener(MOVE_JOG_CLICK_EVENT, onJogClick, { capture: true });
+    return () => {
+      window.removeEventListener(MOVE_JOG_EVENT, onJog, { capture: true });
+      window.removeEventListener(MOVE_JOG_CLICK_EVENT, onJogClick, { capture: true });
+    };
+  }, []);
+  const searchOpen = !!search;
+  (0, import_react8.useEffect)(() => {
+    if (!searchOpen) return;
+    return MoveFunctions.push("back", () => MoveSearchStore.close(), { label: "end search", chip: false });
+  }, [searchOpen]);
   const modSlot = modSettings ? import_ModulationStore2.ModulationStore.getSlot(modSettings.index) : null;
   const composition = modSlot?.type === "curve" ? curveComposition(modSlot.params) : null;
   const audioWave = modSlot?.type === "audio" && modSettings ? modSettings.index : null;
@@ -6566,6 +6758,15 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     setHeld(null);
     setLatched({});
   }, [pageId]);
+  const screen = settingsPanel || settingsOpen ? null : surface.screen;
+  const searchTarget = search?.target ?? null;
+  const screenSearch = searchTarget === "screen" && screen ? search : null;
+  const presetSearch = searchTarget === "presets" && presetOpenPanel ? search : null;
+  const paletteSearch = searchTarget === "palette" && paletteScreen ? search : null;
+  (0, import_react8.useEffect)(() => {
+    screenShown.current = !!screen;
+    if (searchTarget && !screenSearch && !presetSearch && !paletteSearch) MoveSearchStore.close();
+  });
   if (!mounted || typeof window === "undefined" || pages.length === 0 || !page || !values) return null;
   const dialPercent = (meta) => Math.round(normalizeDial(meta, values[meta.path]) * 100);
   const chipValue = (meta) => {
@@ -6786,7 +6987,6 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       detail: { pageId: page.panel.id, path: meta.path, latched: !wasLatched }
     }));
   };
-  const screen = settingsPanel || settingsOpen ? null : surface.screen;
   const appRows = settingsOpen ? 0 : surface.rows;
   const padRows = movePadRows(page, appRows);
   const appRowAt = (row) => moveAppPadRow(row, appRows);
@@ -6915,22 +7115,32 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
               role: pages.length > 1 && pageTabIndex >= 0 ? "tabpanel" : void 0,
               "aria-labelledby": pages.length > 1 && pageTabIndex >= 0 ? `${pageTabsId}-tab-${pageTabIndex}` : void 0,
               children: [
-                screen && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: "tweakers-move-wheel-screen", role: "group", "aria-label": screen.title ?? "Wheel selection", children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
-                  ListScreen,
-                  {
-                    items: screen.items.map((row, index) => ({
-                      value: String(index),
-                      label: moveScreenRowLabel(row),
-                      ...typeof row === "string" ? {} : {
-                        ...row.detail ? { detail: row.detail } : {},
-                        ...row.checked === void 0 ? {} : { checked: row.checked }
+                screen && /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "tweakers-move-wheel-screen", role: "group", "aria-label": screen.title ?? "Wheel selection", "data-search": screenSearch ? true : void 0, children: [
+                  screenSearch && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MoveSearchBar, { view: screenSearch }),
+                  /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+                    ListScreen,
+                    {
+                      items: searchedRows(
+                        screen.items.map((row, index) => ({
+                          value: String(index),
+                          label: moveScreenRowLabel(row),
+                          ...typeof row === "string" ? {} : {
+                            ...row.detail ? { detail: row.detail } : {},
+                            ...row.checked === void 0 ? {} : { checked: row.checked }
+                          }
+                        })),
+                        screenSearch
+                      ),
+                      value: String(screenSearch ? screenSearch.cursor : screen.index),
+                      follow: "center",
+                      onSelect: (value) => {
+                        if (!value) return;
+                        if (screenSearch) MoveSearchStore.close();
+                        MoveSurfaceStore.selectScreen(Number(value));
                       }
-                    })),
-                    value: String(screen.index),
-                    follow: "center",
-                    onSelect: (value) => MoveSurfaceStore.selectScreen(Number(value))
-                  }
-                ) }),
+                    }
+                  )
+                ] }),
                 (visibleCols.length > 0 || shownPadRows.length > 0) && /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(
                   "div",
                   {
@@ -6938,8 +7148,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                     "data-presets": presetScreen?.phase === "open" || paletteScreen || void 0,
                     "data-pad-columns": padGridCols || void 0,
                     children: [
-                      presetScreen && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MovePresetScreen, { view: presetScreen }),
-                      paletteScreen && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MovePaletteScreen, {}),
+                      presetScreen && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MovePresetScreen, { view: presetScreen, search: presetSearch }),
+                      paletteScreen && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MovePaletteScreen, { kept: paletteSearch ? moveSearchFilter(["All colors", ...MOVE_COLOR_PALETTES.map((p) => p.name)], paletteSearch.query) : null, children: paletteSearch && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MoveSearchBar, { view: paletteSearch }) }),
                       /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("div", { className: "tweakers-move-viewport", "data-scroll": stripMode || void 0, children: /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(
                         "div",
                         {
@@ -8042,32 +8252,75 @@ function MoveAudioTransport({ index }) {
     )
   ] });
 }
-function MovePresetScreen({ view }) {
+function MovePresetScreen({ view, search }) {
   const items = MovePresetStore.items(view.panelId);
-  const rows = items.length ? items.map((i) => ({ value: i.id, label: i.label })) : [{ value: "", label: "No presets", muted: true }];
-  return /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+  const rows = items.length ? searchedRows(items.map((i) => ({ value: i.id, label: i.label })), search) : [{ value: "", label: "No presets", muted: true }];
+  return /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)(
     "div",
     {
       className: "tweakers-move-preset-screen",
       "data-open": view.phase === "open" || void 0,
       "data-chosen": view.chosen ? true : void 0,
       "data-comparing": view.comparing || void 0,
+      "data-search": search ? true : void 0,
       onWheel: (e) => {
         e.preventDefault();
-        MovePresetStore.scroll(e.deltaY > 0 ? 1 : -1);
+        if (!search) MovePresetStore.scroll(e.deltaY > 0 ? 1 : -1);
       },
-      children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
-        ListScreen,
-        {
-          items: rows,
-          value: view.chosen ?? view.cursor ?? void 0,
-          onSelect: (id) => {
-            if (id) MovePresetStore.choose(id);
+      children: [
+        search && /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(MoveSearchBar, { view: search }),
+        /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+          ListScreen,
+          {
+            items: rows,
+            value: view.chosen ?? view.cursor ?? void 0,
+            onSelect: (id) => {
+              if (!id) return;
+              if (search) MoveSearchStore.close();
+              MovePresetStore.choose(id);
+            }
           }
-        }
-      )
+        )
+      ]
     }
   );
+}
+function searchedRows(rows, search) {
+  if (!search) return rows;
+  const kept = moveSearchFilter(rows.map((r) => r.label), search.query);
+  return kept.length ? kept.map((i) => rows[i]) : [{ value: "", label: "No matches", muted: true }];
+}
+function MoveSearchBar({ view }) {
+  const inputRef = (0, import_react8.useRef)(null);
+  (0, import_react8.useEffect)(() => {
+    inputRef.current?.focus();
+  }, []);
+  return /* @__PURE__ */ (0, import_jsx_runtime10.jsxs)("div", { className: "tweakers-move-search", role: "search", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("svg", { className: "tweakers-move-search-icon", viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime10.jsx)("path", { d: ICON_SEARCH, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime10.jsx)(
+      "input",
+      {
+        ref: inputRef,
+        className: "tweakers-move-search-input",
+        type: "text",
+        value: view.query,
+        placeholder: "Search",
+        "aria-label": "Search the list",
+        spellCheck: false,
+        autoComplete: "off",
+        onChange: (e) => searchType(e.currentTarget.value),
+        onKeyDown: (e) => {
+          if (e.key === "Enter") searchTake(view);
+          else if (e.key === "Escape") MoveSearchStore.close();
+          else if (e.key === "ArrowDown") searchStep(view, 1);
+          else if (e.key === "ArrowUp") searchStep(view, -1);
+          else return;
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    )
+  ] });
 }
 function MovePresetSaveInput({ suggested }) {
   const inputRef = (0, import_react8.useRef)(null);
@@ -8742,6 +8995,7 @@ var import_TweakStore8 = require("tweakers/store");
   MOVE_PAGE_EVENT,
   MOVE_PAGE_SELECT_EVENT,
   MOVE_PALETTE,
+  MOVE_SEARCH_EVENT,
   MOVE_SLOT_LIBRARY,
   MOVE_SPECIAL_BUTTONS,
   MOVE_STEP_FUNCTIONS,
@@ -8766,6 +9020,7 @@ var import_TweakStore8 = require("tweakers/store");
   MovePadWaveBody,
   MovePanel,
   MovePresetStore,
+  MoveSearchStore,
   MoveSettingsView,
   MoveSlotColorBody,
   MoveSlotDefaultBody,
@@ -8893,6 +9148,8 @@ var import_TweakStore8 = require("tweakers/store");
   movePoint,
   moveScreenChecked,
   moveScreenRowLabel,
+  moveSearchFilter,
+  moveSearchMatch,
   moveSlotKind,
   moveStop,
   moveTabCell,

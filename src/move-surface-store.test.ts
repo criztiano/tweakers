@@ -139,6 +139,6 @@ describe('the surface store', () => {
     MoveSurfaceStore.claimRows(2);
     MoveSurfaceStore.setScreen({ items: ['a', 'b'], index: 1 });
     MoveSurfaceStore.reset();
-    assert.deepEqual(MoveSurfaceStore.getState(), { rows: 0, pads: [], padsLabel: null, steps: null, screen: null });
+    assert.deepEqual(MoveSurfaceStore.getState(), { rows: 0, pads: [], padsLabel: null, steps: null, screen: null, search: null });
   });
 });

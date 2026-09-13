@@ -2389,6 +2389,112 @@
   opacity: 0.45;
 }
 
+/* The search's field, at the top of the list it narrows (Figma 828:656):
+   a pale pill one row tall — the hardware-key look, dark text on the
+   readout colour — with the magnifier pinned at its left edge and the
+   query centred like a row's name. It sits stuck to the top, the same 4px
+   off the edge as off the sides, and the rows the query keeps run down
+   from it. */
+.tweakers-move-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 24px;
+  margin: 4px 4px var(--move-list-gap, 7px);
+  padding: 2px 10px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  background: var(--move-text);
+  color: #1e1e1e;
+  font-family: var(--move-font-label);
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.tweakers-move-search-icon {
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.tweakers-move-search-input {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 18px;
+  border: none;
+  outline: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  caret-color: currentColor;
+}
+
+.tweakers-move-search-input::placeholder {
+  color: inherit;
+  opacity: 1;
+}
+
+/* On the wheel screen the list is pinned to the screen's box; while a
+   search runs the field takes the top and the list is pinned below it —
+   and the rows read from the top, not from the middle: a narrowed list
+   is a result, and results start where the query is. */
+.tweakers-move-wheel-screen[data-search] {
+  background: #1e1e1e;
+}
+
+.tweakers-move-wheel-screen[data-search] .tweakers-move-search {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+}
+
+.tweakers-move-wheel-screen[data-search] .tweakers-list-screen {
+  top: 35px; /* the 4px edge, the field, the row gap */
+  padding-top: 0;
+  justify-content: flex-start;
+}
+
+/* The navigator screens stack the field above the rows. */
+.tweakers-move-preset-screen[data-search] {
+  display: flex;
+  flex-direction: column;
+  background: #1e1e1e;
+  border-radius: 8px;
+}
+
+.tweakers-move-preset-screen[data-search] > .tweakers-list-screen {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  padding-top: 0;
+}
+
+.tweakers-move-palette-screen[data-search] {
+  padding-top: 0;
+}
+
+.tweakers-move-palette-screen[data-search] > .tweakers-move-search {
+  position: sticky;
+  top: 0;
+  margin: 4px 0 12px;
+}
+
+.tweakers-move-palette-empty {
+  padding: 2px 10px;
+  font-family: var(--move-font-label);
+  font-size: var(--move-color-font);
+  color: var(--move-text);
+  opacity: 0.22;
+}
+
 /* The save-a-preset input, floating centred above the panel like the
    curve composer's frame. */
 .tweakers-move-preset-save {
