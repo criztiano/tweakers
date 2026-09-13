@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, useSyncExternalStore, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useId, useRef, useState, useSyncExternalStore, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { ModulationStore } from '../store/ModulationStore';
@@ -411,7 +411,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   }, [roomKey]);
   // The room is another mode: the app's buttons sleep while it is open
   // (dark on the hardware, gone from the header), the door and Back stay.
-  useEffect(() => {
+  // A layout effect, so it lands before the room's own displays push
+  // their buttons (Play and Loop for the wave) — a push made after the
+  // suspension is the room's own and stays live.
+  useLayoutEffect(() => {
     if (!settingsOpen) return;
     const wake = MoveFunctions.suspend(['set_overview']);
     const releaseBack = MoveFunctions.push('back', () => MoveSettingsView.close(), { label: 'Close', chip: false });
@@ -1263,7 +1266,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
             {/* While the audio editor floats, the panel's top row works for
                 it: the zoom readout takes the track corner, Load and the
                 clock take the volume corner — the mockup's arrangement. */}
-            {audioWave != null ? (
+            {audioWave != null || roomWave ? (
               <MoveAudioZoom />
             ) : (
             <div className="tweakers-move-tracks-group">
@@ -1357,7 +1360,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   ))
                 : null}
             </div>
-            {audioWave != null ? <MoveAudioTransport index={audioWave} /> : headerCluster}
+            {audioWave != null ? <MoveAudioTransport index={audioWave} /> : roomWave ? <MoveRoomTransport /> : headerCluster}
           </div>
 
           <div
@@ -2484,27 +2487,94 @@ function MoveRoomWave({ theme }: { theme: TweakTheme }) {
     () => 0
   );
   const buffer = MoveWaveformStore.getBuffer() ?? getAudioModBuffer() ?? moveWaveformDemoSample();
-  const startedAt = useRef(typeof performance === 'undefined' ? 0 : performance.now());
-  const getProgress = () => {
-    const seconds = buffer.duration || 1;
-    return (((performance.now() - startedAt.current) / 1000) % seconds) / seconds;
-  };
-  // The header clock reads this playhead while the page is up.
+  roomClock.duration = buffer.duration || 1;
+
+  // The preview's tape: one integrator, run per frame, so reading the
+  // position from two places can never advance it twice. Loop On wraps
+  // inside the loop brackets (or the whole sample); off, the tape runs to
+  // the end and rests there, the way the audio modulator does.
   useEffect(() => {
-    MoveWaveformStore.setProgressSource(getProgress);
-    return () => MoveWaveformStore.setProgressSource(null);
-  });
+    let last: number | null = null;
+    let raf = requestAnimationFrame(function tick(now) {
+      raf = requestAnimationFrame(tick);
+      if (!roomClock.playing) { last = null; return; }
+      if (last != null) roomClock.advance((now - last) / 1000, MoveWaveformStore.getView().loop);
+      last = now;
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // The header clock reads this playhead while the page is up; the
+  // hardware's Play and Loop run it — pushed after the room's suspension,
+  // so they are the room's own and stay lit.
+  useEffect(() => {
+    MoveWaveformStore.setProgressSource(() => roomClock.pos);
+    const releases = [
+      MoveFunctions.push('play', () => roomClock.toggle('playing'), { label: 'Play', chip: false }),
+      MoveFunctions.push('loop', () => roomClock.toggle('loopOn'), { label: 'Loop', chip: false }),
+    ];
+    return () => {
+      releases.forEach((release) => release());
+      MoveWaveformStore.setProgressSource(null);
+    };
+  }, []);
+
   return (
     <MoveWaveform
       variant="dock"
       theme={theme}
       buffer={buffer}
-      getProgress={getProgress}
+      getProgress={() => roomClock.pos}
+      onSeek={(p) => roomClock.seek(p)}
+      onLoopChange={() => { /* the brackets live in the store's view; the tape reads them per frame */ }}
       height={MOVE_WAVE_DISPLAY_HEIGHT}
       waveColor="#1e1e1e"
     />
   );
 }
+
+/**
+ * The room preview's transport — a tape with Play and Loop, shared by the
+ * floating card and the header pill. Module state: there is one room.
+ */
+const roomClock = {
+  playing: true,
+  loopOn: true,
+  pos: 0,
+  duration: 1,
+  version: 0,
+  listeners: new Set<() => void>(),
+  subscribe(fn: () => void) {
+    roomClock.listeners.add(fn);
+    return () => { roomClock.listeners.delete(fn); };
+  },
+  notify() {
+    roomClock.version += 1;
+    for (const fn of roomClock.listeners) fn();
+  },
+  toggle(key: 'playing' | 'loopOn') {
+    roomClock[key] = !roomClock[key];
+    // Play pressed at the end of an unlooped tape starts it over.
+    if (key === 'playing' && roomClock.playing && roomClock.pos >= 1) roomClock.pos = 0;
+    roomClock.notify();
+  },
+  seek(p: number) {
+    roomClock.pos = Math.min(1, Math.max(0, p));
+  },
+  advance(dt: number, loop: { start: number; end: number } | null) {
+    let pos = roomClock.pos + dt / roomClock.duration;
+    if (roomClock.loopOn) {
+      const start = loop ? loop.start : 0;
+      const end = loop ? loop.end : 1;
+      const span = Math.max(0.0001, end - start);
+      if (pos >= end) pos = start + ((pos - start) % span);
+      else if (pos < start) pos = start;
+    } else if (pos >= 1) {
+      pos = 1;
+    }
+    roomClock.pos = pos;
+  },
+};
 
 /**
  * The editor's zoom readout, in the panel's track corner while the editor
@@ -2528,10 +2598,7 @@ function MoveAudioZoom() {
 
 /**
  * The editor's transport corner, where the volume readout usually sits:
- * the Load pill and the running clock, flanked by the transport's state —
- * play on the left, loop on the right, lit when running. The clock is
- * written straight to its span every frame at a fixed width, so the pill
- * never breathes.
+ * the slot's Play and Loop, and its clock.
  */
 function MoveAudioTransport({ index }: { index: number }) {
   // The state icons follow the slot's params (Play/Loop button presses).
@@ -2541,16 +2608,62 @@ function MoveAudioTransport({ index }: { index: number }) {
     () => 0
   );
   const params = ModulationStore.getSlot(index)?.params ?? {};
+  return (
+    <MoveWaveTransport
+      playing={!!params.playing}
+      loopOn={!!params.loopOn}
+      getSeconds={() => ModulationStore.getSlotPhase(index) * (getAudioModBuffer()?.duration ?? 0)}
+      onLoaded={() => ModulationStore.updateSlotParams(index, { position: 0 })}
+    />
+  );
+}
+
+/**
+ * The room page's transport corner: the same pill, reading the preview's
+ * own clock and the Play / Loop the room wave holds.
+ */
+function MoveRoomTransport() {
+  useSyncExternalStore(
+    useCallback((cb) => roomClock.subscribe(cb), []),
+    () => roomClock.version,
+    () => 0
+  );
+  return (
+    <MoveWaveTransport
+      playing={roomClock.playing}
+      loopOn={roomClock.loopOn}
+      getSeconds={() => roomClock.pos * roomClock.duration}
+      onLoaded={() => roomClock.seek(0)}
+    />
+  );
+}
+
+/**
+ * The transport pill itself: Load, the running clock, and the transport's
+ * state — play on the left, loop on the right, lit when running. The clock
+ * is written straight to its span every frame at a fixed width, so the
+ * pill never breathes. Whose clock it is — a modulator's, the room's — is
+ * the caller's.
+ */
+function MoveWaveTransport({ playing, loopOn, getSeconds, onLoaded }: {
+  playing: boolean;
+  loopOn: boolean;
+  getSeconds: () => number;
+  onLoaded?: () => void;
+}) {
+  const params = { playing, loopOn };
   const clockRef = useRef<HTMLSpanElement>(null);
+  const secondsRef = useRef(getSeconds);
+  secondsRef.current = getSeconds;
   useEffect(() => {
     let raf = requestAnimationFrame(function tick() {
-      const t = ModulationStore.getSlotPhase(index) * (getAudioModBuffer()?.duration ?? 0);
+      const t = secondsRef.current();
       const text = `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}:${String(Math.floor((t % 1) * 100)).padStart(2, '0')}`;
       if (clockRef.current && clockRef.current.textContent !== text) clockRef.current.textContent = text;
       raf = requestAnimationFrame(tick);
     });
     return () => cancelAnimationFrame(raf);
-  }, [index]);
+  }, []);
 
   // Load: pick an audio file, decode it, put it on the shelf. The one place
   // the library touches an AudioContext — a one-shot decode, closed right
@@ -2563,7 +2676,7 @@ function MoveAudioTransport({ index }: { index: number }) {
     const ctx = new Ctx();
     try {
       setAudioModBuffer(await ctx.decodeAudioData(bytes));
-      ModulationStore.updateSlotParams(index, { position: 0 });
+      onLoaded?.();
     } catch {
       /* not an audio file the browser can read — the shelf keeps what it had */
     } finally {
