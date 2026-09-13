@@ -335,6 +335,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 
   useEffect(() => {
     setMounted(true);
+    // The kit's own room page — the waveform's look — is there from the
+    // start, not from the first time a sample happens to show: a room that
+    // gains a page while you stand in it is a room you cannot trust.
+    MoveWaveformStore.ensureSettings();
     setPanels(read());
     return TweakStore.subscribeGlobal(() => setPanels(read()));
   }, [read]);

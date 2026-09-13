@@ -232,7 +232,7 @@ class MoveWaveformStoreClass {
    */
   register(style?: Partial<MoveWaveformStyle>): () => void {
     this.registered = true;
-    this.registerSettings({ ...defaultStyle(), ...style });
+    this.ensureSettings(style);
     // The knob is ours now, so it says so: the volume readout follows the
     // playhead for as long as we hold the claim, and is handed back with it.
     MoveVolumeDisplay.set({ label: 'time', getValue: () => this.readout() });
@@ -257,9 +257,12 @@ class MoveWaveformStoreClass {
    * the bar width, the grid, the EQ bands and the centre line. One hidden
    * `kit` panel that `MovePanel` shows in the settings room and the bridge
    * kit syncs like any page, so the look is set from the hardware too.
+   * Idempotent: the panel puts it there at mount, a claiming waveform
+   * seeds it if it gets there first, and saved values win over any seed.
    */
-  private registerSettings(seed: MoveWaveformStyle): void {
+  ensureSettings(style?: Partial<MoveWaveformStyle>): void {
     if (TweakStore.getPanel(MOVE_WAVEFORM_PANEL)) return;
+    const seed = { ...defaultStyle(), ...style };
     TweakStore.registerPanel(
       MOVE_WAVEFORM_PANEL,
       'Waveform',

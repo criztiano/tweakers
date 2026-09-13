@@ -284,6 +284,14 @@ describe('the look lives in the settings room', () => {
     expect(TweakStore.getPanel(MOVE_WAVEFORM_PANEL)).toBeDefined();
   });
 
+  it('is there from the panel\'s mount, before any sample has shown', () => {
+    MoveWaveformStore.ensureSettings();
+    expect(TweakStore.getPanel(MOVE_WAVEFORM_PANEL)?.kind).toBe('kit');
+    // A later claim keeps the page as it is — no re-seed, no duplicate.
+    MoveWaveformStore.ensureSettings({ mode: 'striped' });
+    expect(MoveWaveformStore.getStyle().mode).toBe('pixelated');
+  });
+
   it('never sits on the app\'s own page row', () => {
     const release = MoveWaveformStore.register();
     expect(TweakStore.getPanels('panel').some((p) => p.id === MOVE_WAVEFORM_PANEL)).toBe(false);
