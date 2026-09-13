@@ -161,3 +161,88 @@ describe('Move color panel', () => {
     expect(MoveSurfaceStore.getState()).toBe(before);
   });
 });
+
+// The gradient's integrated editor, the small colour pad and the balance
+// slot — the colour system's three new faces, on one page.
+describe('Move gradient, balance and small colour panel', () => {
+  const gid = `${id}-gradient`;
+  const rect = { left: 0, top: 0, width: 100, height: 40, right: 100, bottom: 40 };
+  const point = (x: number) => ({ clientX: x, clientY: 0, button: 0, pointerId: 1, shiftKey: false,
+    currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => rect } });
+  function mountGradient() {
+    TweakStore.registerPanel(gid, 'Ramp', {
+      ramp: { type: 'gradient', default: { type: 'linear', angle: 90, stops: [
+        { color: '#ff0000ff', position: 0 },
+        { color: '#0000ffff', position: 1 },
+      ] } },
+      colorA: { type: 'color', default: '#ff0000' },
+      colorB: { type: 'color', default: '#0000ff' },
+      mix: { type: 'balance', a: 'colorA', b: 'colorB', default: 0.5 },
+    }, undefined, { movePads: { colorA: 0, colorB: 1 } });
+    act(() => { renderer = create(createElement(MovePanel, { panels: ['Ramp'], dock: 'flow', productionEnabled: true })); });
+  }
+  afterEach(() => { TweakStore.unregisterPanel(gid); });
+  const ramp = () => renderer!.root.findByProps({ 'data-kind': 'ramp' });
+
+  it('a still tap on the ramp slot opens the editor; a drag slides a stop instead', () => {
+    mountGradient();
+    act(() => ramp().props.onPointerDown(point(90)));
+    act(() => ramp().props.onPointerMove(point(60)));
+    act(() => ramp().props.onPointerUp());
+    expect(MoveColorStore.getView()).toBeNull();
+    const g = TweakStore.getValue(gid, 'ramp') as { stops: { position: number }[] };
+    expect(g.stops[1].position).toBeLessThan(1);
+    act(() => ramp().props.onPointerDown(point(90)));
+    act(() => ramp().props.onPointerUp());
+    expect(MoveColorStore.getView()?.path).toBe('ramp');
+  });
+
+  it('the track row becomes the stop row while the editor is open, and hands back on close', () => {
+    mountGradient();
+    act(() => MoveColorStore.open(gid, 'ramp'));
+    const stopRow = renderer!.root.findByProps({ 'aria-label': 'Ramp stops' });
+    const tabs = stopRow.findAllByType('button');
+    expect(tabs).toHaveLength(2);
+    act(() => tabs[1].props.onClick());
+    expect(MoveColorStore.getStop()).toBe(1);
+    /* the dials now edit stop 2 */
+    act(() => renderer!.root.findByProps({ 'aria-label': 'Hue' }).props.onChange({ target: { value: '120' } }));
+    const g = TweakStore.getValue(gid, 'ramp') as { stops: { color: string }[] };
+    expect(g.stops[1].color).toBe('#00ff00ff');
+    expect(g.stops[0].color).toBe('#ff0000ff');
+    act(() => MoveColorStore.close());
+    expect(renderer!.root.findAllByProps({ 'aria-label': 'Ramp stops' })).toHaveLength(0);
+  });
+
+  it('the editor shows the ramp with draggable, selectable stop handles', () => {
+    mountGradient();
+    act(() => MoveColorStore.open(gid, 'ramp'));
+    const handles = renderer!.root.findByProps({ 'aria-label': 'Gradient stops' }).findAllByType('button');
+    expect(handles).toHaveLength(2);
+    act(() => handles[1].props.onPointerDown({ ...point(100), currentTarget: { setPointerCapture: vi.fn(), closest: () => null, getBoundingClientRect: () => rect } }));
+    expect(MoveColorStore.getStop()).toBe(1);
+  });
+
+  it('small colour pads open the shared editor from the value row', () => {
+    mountGradient();
+    const pads = renderer!.root.findAllByProps({ 'data-kind': 'color' }).filter((n) => n.type === 'button');
+    expect(pads).toHaveLength(2);
+    act(() => pads[0].props.onClick());
+    expect(MoveColorStore.getView()?.path).toBe('colorA');
+    /* while the editor is open the pad rows are the opacity meter — the
+       chip steps aside with them, and comes back on close */
+    expect(renderer!.root.findAllByProps({ 'data-kind': 'color' }).filter((n) => n.type === 'button')).toHaveLength(0);
+    act(() => MoveColorStore.close());
+    expect(renderer!.root.findAllByProps({ 'data-kind': 'color' }).filter((n) => n.type === 'button')).toHaveLength(2);
+  });
+
+  it('the balance slot blends its two colours and drags like a dial', () => {
+    mountGradient();
+    const slot = renderer!.root.findByProps({ 'data-kind': 'balance' });
+    act(() => slot.props.onPointerDown(point(50)));
+    expect(TweakStore.getValue(gid, 'mix')).toBeCloseTo(0.5, 5);
+    act(() => slot.props.onPointerMove(point(100)));
+    expect(TweakStore.getValue(gid, 'mix')).toBe(1);
+    act(() => slot.props.onPointerUp());
+  });
+});

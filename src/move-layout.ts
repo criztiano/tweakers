@@ -114,16 +114,17 @@ export const isToggleDial = (c: ControlMeta) => c.type === 'toggle' && c.moveSlo
 export const isMoveDial = (c: ControlMeta) =>
   isToggleDial(c) ||
   c.type === 'slider' || c.type === 'color' || c.type === 'xy' || c.type === 'range' ||
-  c.type === 'filter' || c.type === 'transfer' || c.type === 'gradient' ||
+  c.type === 'filter' || c.type === 'transfer' || c.type === 'gradient' || c.type === 'balance' ||
   (isEnumDial(c) && !isMoveTabs(c)) ||
   (c.type === 'number' && c.min != null && c.max != null);
 
 const isDial = isMoveDial;
 
-/** Two-handed dials and enums need a slot of their own, never a value chip. */
+/** Two-handed dials and enums need a slot of their own, never a value chip.
+ *  A balance keeps its slot too: the blend it stands between IS the control. */
 const noChip = (c: ControlMeta) =>
   isToggleDial(c) || c.type === 'color' || c.type === 'xy' || c.type === 'range' || c.type === 'filter' ||
-  c.type === 'transfer' || c.type === 'gradient' || isEnumDial(c);
+  c.type === 'transfer' || c.type === 'gradient' || c.type === 'balance' || isEnumDial(c);
 
 /**
  * How many dial columns a control claims. The filter is the kit's first
@@ -248,10 +249,18 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
       // instrument, and a control that fits the dials keeps its dial slot no
       // matter what the panel's map says. Only a bounded param that genuinely
       // doesn't fit the 8 columns falls through to the value row.
+      // Each control's hand-named pad column, read once — the reporter must
+      // hear about an invalid column exactly once per control.
+      const padCols = new Map(controls.map((c) => [c, padColumn(panel, c)] as const));
+      // A colour with a NAMED pad column steps out of the dial race: it is
+      // the small colour selector — a swatch chip on the value row that opens
+      // the same editor — for pages where colour is not the big control. The
+      // named column is the whole declaration, exactly as it is for actions.
+      const isPadColor = (c: ControlMeta) => c.type === 'color' && padCols.get(c) != null;
       const dials: ControlMeta[] = [];
       let nextCol = 0;
       for (const c of controls) {
-        if (!isDial(c)) continue;
+        if (!isDial(c) || isPadColor(c)) continue;
         const span = dialSpan(c);
         if (nextCol + span > MOVE_DIALS) {
           if (nextCol >= MOVE_DIALS) break;
@@ -331,12 +340,15 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         for (let k = 0; k < span; k++) toggles[start + k] = c;
       };
       for (const c of controls) {
-        const col = padColumn(panel, c);
+        const col = padCols.get(c) ?? null;
         if (isMoveTabs(c)) placeTabs(c, col);
         else if (c.type === 'toggle' && !isToggleDial(c)) place(toggles, 'toggle', c, col);
         // Actions reach the pads only when the page asks for them by column —
         // every app has buttons, and none of them expect a hardware pad.
         else if (c.type === 'action') { if (col !== null) place(actions, 'action', c, col); }
+        // The small colour selector: a swatch on the value row, in its named
+        // column; a tap opens the same editor the big slot's colour uses.
+        else if (isPadColor(c)) place(values, 'value', c, col);
         // A control holding a dial slot never reaches the pads — the pad grid
         // must not mirror a dial. A movePads column on one is ignored, out
         // loud, so a page that still maps its dials to pads announces itself.

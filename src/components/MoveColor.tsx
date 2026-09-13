@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
+import { rampCss, type GradientValue } from '../gradient-core';
 import { MoveColorStore, MOVE_COLOR_PALETTES, MOVE_COLOR_STEPS, MOVE_OPACITY_PADS, type MoveColorPalette } from '../move-color';
 import { TweakStore, type ControlMeta } from '../store/TweakStore';
 import { parseHex, rgbToHsl, rgbToOklch, displayHex, type HSLA } from '../color-core';
@@ -135,6 +136,45 @@ function MoveColorPaletteStrip({ palette, selected, disabled }: { palette: MoveC
   </div>;
 }
 
+/**
+ * The gradient under the editor, drawn as its ramp with one handle per stop
+ * — the screen's own pair of hands for the hardware's track buttons: a tap
+ * selects a stop (the dials then edit its colour), a drag slides it along
+ * the ramp, clamped between its neighbours exactly as the dial does.
+ */
+function MoveGradientRamp({ panelId, path, gradient, disabled }: {
+  panelId: string; path: string; gradient: GradientValue; disabled: boolean;
+}) {
+  const drag = useRef<{ index: number } | null>(null);
+  const selected = Math.min(MoveColorStore.getStop(), gradient.stops.length - 1);
+  const positionFrom = (e: React.PointerEvent<HTMLElement>) => {
+    const rect = (e.currentTarget.closest('.tweakers-move-color-ramp') ?? e.currentTarget).getBoundingClientRect();
+    return Math.min(1, Math.max(0, (e.clientX - rect.left) / (rect.width || 1)));
+  };
+  return <div className="tweakers-move-color-ramp" role="group" aria-label="Gradient stops"
+    style={{ background: rampCss(gradient.stops) }}>
+    {gradient.stops.map((stop, index) => <button key={index} type="button"
+      className="tweakers-move-color-stop" disabled={disabled}
+      data-selected={index === selected || undefined}
+      aria-label={`Stop ${index + 1}, ${Math.round(stop.position * 100)}%`}
+      aria-pressed={index === selected}
+      style={{ left: `${stop.position * 100}%`, background: stop.color }}
+      onPointerDown={(e) => {
+        if (disabled || e.button > 0) return;
+        MoveColorStore.selectStop(index);
+        drag.current = { index };
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+      }}
+      onPointerMove={(e) => {
+        if (!drag.current || disabled) return;
+        MoveColorStore.moveStop(panelId, path, drag.current.index, positionFrom(e));
+      }}
+      onPointerUp={() => { drag.current = null; }}
+      onPointerCancel={() => { drag.current = null; }}
+    />)}
+  </div>;
+}
+
 export function MoveColorDisplay({ panelId, meta, anchor, theme }: {
   panelId: string; meta: ControlMeta; anchor: RefObject<HTMLDivElement>; theme: TweakTheme;
 }) {
@@ -144,7 +184,9 @@ export function MoveColorDisplay({ panelId, meta, anchor, theme }: {
   const disabled = TweakStore.isDisabled(panelId, meta.path);
   const close = () => {
     if (display.current?.contains(document.activeElement)) {
-      anchor.current?.querySelector<HTMLButtonElement>('[data-kind="color"][aria-expanded="true"]')?.focus();
+      // Whatever face opened the editor — the colour dial, the gradient's
+      // ramp slot, or the small colour pad — takes focus back on close.
+      anchor.current?.querySelector<HTMLButtonElement>('[data-kind][aria-expanded="true"]')?.focus();
     }
     MoveColorStore.close();
   };
@@ -184,7 +226,12 @@ export function MoveColorDisplay({ panelId, meta, anchor, theme }: {
       observer?.disconnect();
     };
   }, [anchor]);
-  const hex = String(TweakStore.getValue(panelId, meta.path) ?? '#ff0000');
+  // A gradient's editor speaks for its SELECTED stop — the readouts, the
+  // sliders and the pads all edit that one colour, exactly as they edit a
+  // plain colour control. The ramp above them is where stops are chosen
+  // (the track buttons' job) and slid (the hold-a-track gesture's).
+  const gradient = MoveColorStore.gradient(panelId, meta.path);
+  const hex = MoveColorStore.hex(panelId, meta.path);
   const palette = MoveColorStore.getPalette();
   // With a palette locked the dial's hue is a wheel position, not a colour —
   // the readouts speak for the painted hex instead.
@@ -196,6 +243,7 @@ export function MoveColorDisplay({ panelId, meta, anchor, theme }: {
       <MoveColorCopy label="HEX" reading={displayHex(hex)} copy={hex} />
       <MoveColorCopy label="OKLCH" reading={readingOklch(hex)} copy={copyOklch(hex)} />
     </div>
+    {gradient && <MoveGradientRamp panelId={panelId} path={meta.path} gradient={gradient} disabled={disabled} />}
     {palette
       ? <MoveColorPaletteStrip palette={palette} selected={MoveColorStore.paletteIndex(panelId, meta.path)} disabled={disabled} />
       : <>

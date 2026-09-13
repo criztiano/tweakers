@@ -70,6 +70,7 @@ export type MoveSlotKind =
   | 'color'
   | 'transfer'
   | 'ramp'
+  | 'balance'
   | 'dial'
   | 'opacity'
   | 'blur'
@@ -93,6 +94,7 @@ export function moveSlotKind(
   if (meta.type === 'toggle') return meta.icon ? 'toggle-icon' : 'toggle';
   if (meta.type === 'transfer') return 'transfer';
   if (meta.type === 'gradient') return 'ramp';
+  if (meta.type === 'balance') return 'balance';
   if (meta.type === 'slider' && meta.display === 'dial') return 'dial';
   if (meta.type === 'xy') return 'xy';
   if (meta.type === 'range') return 'range';
@@ -378,24 +380,31 @@ export function MoveSlotTransferBody({ label, value, shape, point }: {
  * colours has nothing to say as a number. A tick marks the stop the knob is
  * holding.
  */
-export function MoveSlotRampBody({ label, value, css, stop }: {
+export function MoveSlotRampBody({ label, value, css, stop, stops }: {
   label: string;
   value: ReactNode;
   /** The ramp as a CSS `linear-gradient(...)`. */
   css: string;
   /** The held stop's position 0..1, or null. */
   stop: number | null;
+  /** Every stop's position, drawn while the editor holds the ramp — the
+   *  held one (`stop`) wears the bright tick, the rest sit quiet. */
+  stops?: number[];
 }) {
+  // Inset a hair so a stop at either end still shows its whole tick.
+  const tickLeft = (p: number) => `calc(${p * 100}% + ${(0.5 - p) * 4}px)`;
   return (
     <>
       <MoveSlotDisplay>
         <span className="tweakers-move-slot-ramp" style={{ background: css }} />
+        {(stops ?? []).map((p, i) => (
+          p === stop ? null : <span key={i} className="tweakers-move-slot-tick" data-quiet style={{ left: tickLeft(p) }} />
+        ))}
         {stop !== null && (
-          // Inset a hair so a stop at either end still shows its whole tick —
-          // the only thing saying which stop the knob is holding.
+          // The only thing saying which stop the knob is holding.
           <span
             className="tweakers-move-slot-tick"
-            style={{ left: `calc(${stop * 100}% + ${(0.5 - stop) * 4}px)` }}
+            style={{ left: tickLeft(stop) }}
           />
         )}
       </MoveSlotDisplay>
@@ -675,7 +684,7 @@ function MoveSlotBadge({ on }: { on: boolean }) {
  * every pad in it keeps one option — so the hardware's one-thing-per-pad
  * rule still holds under the shared strip.
  */
-export type MovePadKind = 'toggle' | 'value' | 'action' | 'app' | 'bend' | 'wave' | 'tabs';
+export type MovePadKind = 'toggle' | 'value' | 'action' | 'app' | 'bend' | 'wave' | 'tabs' | 'color';
 
 /** A switch: the indicator top-left, the name beside it, the whole pad
  *  inverting when it is on. */
@@ -727,6 +736,20 @@ export function MovePadWaveBody({ label, percent }: { label: string; percent: nu
 /** A button: no value to carry, so the name has the pad to itself. */
 export function MovePadActionBody({ label }: { label: string }) {
   return <span className="tweakers-move-pad-title">{label}</span>;
+}
+
+/**
+ * The small colour selector: the value chip's shape carrying a swatch where
+ * the number would sit — for pages where colour is not the big control. A
+ * tap opens the same colour editor the big slot's colour uses.
+ */
+export function MovePadColorBody({ label, color }: { label: string; color: string }) {
+  return (
+    <>
+      <span className="tweakers-move-pad-title">{label}</span>
+      <span className="tweakers-move-pad-swatch" aria-hidden="true"><span style={{ background: color }} /></span>
+    </>
+  );
 }
 
 /**
@@ -797,6 +820,7 @@ export const MOVE_PAD_LIBRARY = {
   bend: { description: 'hold and drag to bend the envelope ramp above it', component: MovePadToggleBody },
   wave: { description: 'hold and drag for the stage’s own sine, tap to flip it', component: MovePadWaveBody },
   tabs: { description: '2 to 8 pads: the page’s modes side by side, the current one lit — a name pad optional', component: MovePadTabsBody },
+  color: { description: 'a single colour in a small slot — tap to open the colour editor', component: MovePadColorBody },
 } as const satisfies Record<MovePadKind, { description: string; component: unknown }>;
 
 /**
@@ -826,6 +850,7 @@ export const MOVE_SLOT_LIBRARY = {
   toggle: { description: 'a switch in a big slot — the pad’s language at slot size', component: MoveSlotToggleBody },
   'toggle-icon': { description: 'a switch drawn as its own picture — the glyph takes a ban while it is off', component: MoveSlotToggleBody },
   transfer: { description: 'a response curve, one knob holding one of its points', component: MoveSlotTransferBody },
-  ramp: { description: 'a colour ramp, one knob holding one of its stops', component: MoveSlotRampBody },
+  ramp: { description: 'a colour ramp, one knob holding one of its stops — tap to edit its colours', component: MoveSlotRampBody },
+  balance: { description: 'the mix between two colour params — the blend fills the slot, the tick is the dial', component: MoveSlotRampBody },
   dial: { description: 'a needle, for values whose two ends are the same place', component: MoveSlotDialBody },
 } as const satisfies Record<MoveSlotKind, { description: string; component: unknown }>;

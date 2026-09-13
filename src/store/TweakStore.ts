@@ -16,6 +16,12 @@ export type { XYValue };
 export type { RangeValue };
 export type { TransferValue };
 
+/** Balance mixes ride 0..1; anything malformed rests at the even blend. */
+const clampBalance = (n: unknown): number => {
+  const v = Number(n);
+  return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.5;
+};
+
 /**
  * One axis of an XY pad control. Partial — every field falls back through
  * `resolveAxis` (min 0, max 1, step 0.01). `origin`/`bipolar` mirror the
@@ -144,6 +150,15 @@ export type GradientConfig = {
    * like a colour scale or a shader lookup, where a shape would do nothing.
    */
   form?: 'fill' | 'ramp';
+};
+
+export type BalanceConfig = {
+  type: 'balance';
+  /** Sibling color params (paths in the same panel) the dial blends between. */
+  a: string;
+  b: string;
+  /** Mix position 0..1 — 0 is all `a`, 1 is all `b`. Default 0.5. */
+  default?: number;
 };
 
 export type XYConfig = {
@@ -490,7 +505,7 @@ export type ListField = {
   defaultValue: number | boolean | string;
 };
 
-export type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ToggleConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue | FilterConfig | FilterValue | TransferConfig | TransferValue;
+export type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ToggleConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | BalanceConfig | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue | FilterConfig | FilterValue | TransferConfig | TransferValue;
 
 export type TweakConfig = {
   // CurveConfig and AnalyserConfig are not TweakValues: they never enter the
@@ -524,6 +539,8 @@ export type ResolvedValues<T extends TweakConfig> = {
             ? string
             : T[K] extends GradientConfig
               ? GradientValue
+            : T[K] extends BalanceConfig
+              ? number
             : T[K] extends XYConfig
               ? XYValue
               : T[K] extends TextConfig
@@ -594,7 +611,7 @@ export type AffordanceConfig = {
 
 export type ControlMeta = {
   moveVisual?: MoveVisual;
-  type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser' | 'filter' | 'transfer';
+  type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'balance' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser' | 'filter' | 'transfer';
   path: string;
   label: string;
   /** One line of help, revealed on hover or when focus lands inside the control. */
@@ -610,6 +627,9 @@ export type ControlMeta = {
   rangeDefault?: RangeValue;
   /** Gradient's editor form — `ramp` drops the fill-shape chrome. */
   gradientForm?: 'fill' | 'ramp';
+  /** Balance's two color params (paths in the same panel) — 0 is all `balanceA`, 1 all `balanceB`. */
+  balanceA?: string;
+  balanceB?: string;
   /** Transfer curve's surface height, grid divisions and axis names. */
   curveHeight?: number;
   gridDivisions?: number;
@@ -1419,7 +1439,7 @@ class TweakStoreClass {
             control.preview = value.preview;
             changed = true;
           }
-        } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isToggleConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
+        } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isToggleConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isBalanceConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
           visit(value as TweakConfig, path);
         }
       }
@@ -1715,7 +1735,7 @@ class TweakStoreClass {
         const hasPhysics = value.stiffness !== undefined || value.damping !== undefined || value.mass !== undefined;
         const hasTime = value.visualDuration !== undefined || value.bounce !== undefined;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? 'advanced' : 'simple';
-      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isToggleConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isCurveConfig(value)) {
+      } else if (typeof value === 'object' && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isToggleConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isBalanceConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isCurveConfig(value)) {
         this.initTransitionModes(value as TweakConfig, path, values);
       }
     }
@@ -1808,6 +1828,11 @@ class TweakStoreClass {
         controls.push({ type: 'color', path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {
         controls.push({ type: 'gradient', path, label, gradientForm: value.form });
+      } else if (this.isBalanceConfig(value)) {
+        // A 0..1 mix between two sibling color params: a plain bounded number
+        // whose slot wears the blend it is standing between.
+        controls.push({ type: 'balance', path, label, min: 0, max: 1, step: 0.01, stepInferred: true,
+          balanceA: value.a, balanceB: value.b, shortcut });
       } else if (this.isXYConfig(value)) {
         controls.push({ type: 'xy', path, label, xAxis: value.x, yAxis: value.y, grid: value.grid, density: value.density, snap: value.snap, returnToCenter: value.returnToCenter, showValues: value.showValues });
       } else if (this.isFilterConfig(value)) {
@@ -1971,6 +1996,8 @@ class TweakStoreClass {
         values[path] = value.default ?? '#000000';
       } else if (this.isGradientConfig(value)) {
         values[path] = normalizeGradient(value.default ?? DEFAULT_GRADIENT);
+      } else if (this.isBalanceConfig(value)) {
+        values[path] = clampBalance(value.default);
       } else if (this.isXYConfig(value)) {
         // Clamp/snap the config default into range up front (defaults might be
         // out of range or partial); missing components fall back to each axis origin.
@@ -2079,6 +2106,15 @@ class TweakStoreClass {
       value !== null &&
       'type' in value &&
       (value as GradientConfig).type === 'gradient'
+    );
+  }
+
+  private isBalanceConfig(value: unknown): value is BalanceConfig {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'type' in value &&
+      (value as BalanceConfig).type === 'balance'
     );
   }
 
@@ -2361,6 +2397,11 @@ class TweakStoreClass {
           return defaultValue;
         }
         return normalizeGradient(existingValue);
+      }
+      case 'balance': {
+        // A mix is 0..1 by definition; a lost shape falls back to the default.
+        if (typeof existingValue !== 'number' || !Number.isFinite(existingValue)) return defaultValue;
+        return clampBalance(existingValue);
       }
       case 'xy': {
         // Re-clamp a preserved point against the (possibly edited) axes; a lost

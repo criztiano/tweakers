@@ -13,7 +13,7 @@ import type { TweakTheme } from '../theme';
 import { buildMovePages, buildModMovePage, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadValueBody, MovePadActionBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody } from './move-slots';
+import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadValueBody, MovePadActionBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing, angleFromPointer } from '../angle-core';
@@ -26,7 +26,7 @@ import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValu
 import { nearestHandle, type RangeValue } from '../range-slider-core';
 import { fineDragValue } from '../shortcut-utils';
 import { MoveVolumeDisplay, type MoveVolumeDisplayState } from '../move-volume';
-import { MoveColorStore, MOVE_COLOR_PALETTES } from '../move-color';
+import { MoveColorStore, MOVE_COLOR_PALETTES, MOVE_GRADIENT_STOPS } from '../move-color';
 import { MoveSearchStore, moveSearchFilter, type MoveSearchTarget, type MoveSearchView } from '../move-search';
 import { MoveColorSlot, MoveColorDisplay, MoveOpacityPads, MoveColorSteps, MovePaletteScreen, copyHslOfHex, copyOklch } from './MoveColor';
 import { MoveFunctions } from '../move-functions';
@@ -352,6 +352,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const [curvePoint, setCurvePoint] = useState<Record<string, number>>({});
   // …and which stop of a ramp. Same idea: one knob, a list of things. */
   const [rampStop, setRampStop] = useState<Record<string, number>>({});
+  // The ramp slot's press, until it moves: a still press is the TAP that
+  // opens the colour editor, a travelled one is the stop drag.
+  const rampGesture = useRef<{ path: string; x: number; y: number; moved: boolean } | null>(null);
   const [hwHeld, setHwHeld] = useState<Record<string, boolean>>({});
   const [hwLatched, setHwLatched] = useState<Record<string, boolean>>({});
   // A pointer on an app-owned pad lights immediately, before the host has
@@ -662,10 +665,22 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   }, [announceStrip]);
   useSyncExternalStore(MoveColorStore.subscribe, MoveColorStore.getVersion, () => 0);
   const colorView = MoveColorStore.getView();
-  const colorMeta = colorView?.panelId === pageId
-    ? page?.dials.find((meta) => meta.type === 'color' && meta.path === colorView.path)
+  // A gradient the editor can hold in one hand: 2–4 stops, one per track
+  // button. Wider ramps keep the plain slot and its on-screen stop drag.
+  const gradientEditable = (meta: ControlMeta) =>
+    meta.type === 'gradient' && pageId !== undefined &&
+    (MoveColorStore.gradient(pageId, meta.path)?.stops.length ?? 0) <= MOVE_GRADIENT_STOPS;
+  // The editor's target may hold a dial slot (a colour, an editable
+  // gradient) or sit on the value row (the small colour selector).
+  const colorMeta = colorView?.panelId === pageId && page
+    ? [...page.dials, ...page.values].find((meta) =>
+        meta && meta.path === colorView.path &&
+        (meta.type === 'color' || gradientEditable(meta)))
     : undefined;
   const color = colorMeta && pageId ? MoveColorStore.read(pageId, colorMeta.path) : null;
+  // While the editor holds a gradient, the track row belongs to its stops.
+  const gradientMeta = colorMeta?.type === 'gradient' ? colorMeta : null;
+  const gradientValue = gradientMeta && pageId ? MoveColorStore.gradient(pageId, gradientMeta.path) : null;
   useEffect(() => () => {
     if (MoveColorStore.getView()?.panelId === pageId) MoveColorStore.close();
   }, [pageId]);
@@ -685,7 +700,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     return MoveFunctions.push('copy', ({ shift, hold }) => {
       const view = MoveColorStore.getView();
       if (!view) return;
-      const hex = String(TweakStore.getValue(view.panelId, view.path) ?? '');
+      // The colour under the hand — a gradient's selected stop included.
+      const hex = MoveColorStore.hex(view.panelId, view.path);
       const text = hold ? copyOklch(hex) : shift ? copyHslOfHex(hex) : hex;
       navigator.clipboard?.writeText(text).catch(() => {});
     }, { label: 'copy color', chip: false });
@@ -1107,13 +1123,20 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     if (next !== null) TweakStore.updateValue(page.panel.id, meta.path, next);
   };
 
-  // A ramp slot's pointer picks the nearest stop on press and slides it after.
+  // A ramp slot's pointer picks the nearest stop on press and slides it once
+  // it has really moved — a still press stays a TAP, which is how the slot
+  // opens its colour editor. While the editor is open the selection is the
+  // shared store's, so the slot, the stop row and the hardware's track
+  // buttons all hold the same stop.
   const rampFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, down: boolean) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const w = rect.width - XY_INSET.left - XY_INSET.right;
     const x = Math.min(1, Math.max(0, (e.clientX - rect.left - XY_INSET.left) / (w || 1)));
     const g = normalizeGradient(values[meta.path] as never);
-    let index = Math.min(rampStop[meta.path] ?? 0, g.stops.length - 1);
+    const open = colorMeta?.path === meta.path;
+    let index = open
+      ? Math.min(MoveColorStore.getStop(), g.stops.length - 1)
+      : Math.min(rampStop[meta.path] ?? 0, g.stops.length - 1);
     if (down) {
       let best = 0;
       g.stops.forEach((st, i) => {
@@ -1121,6 +1144,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       });
       index = best;
       setRampStop((prev) => ({ ...prev, [meta.path]: index }));
+      if (open) MoveColorStore.selectStop(index);
+      return;                            /* the press only picks — moving writes */
     }
     // Stops stay in order: dragging one past its neighbour would reorder the
     // ramp under the knob that is holding it.
@@ -1440,7 +1465,31 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   )}
                 </div>
               )}
-              {!settingsOpen && pages.length > 1 && (
+              {/* While the colour editor holds a gradient, the track row is
+                  its stops — the same claim the hardware's track buttons
+                  take, handed back the moment the editor closes. Each tab's
+                  marker wears its stop's colour (colour meaning selection
+                  target, exactly as a track marker means its page). */}
+              {!settingsOpen && gradientMeta && gradientValue && (
+                <div className="tweakers-move-pages" role="tablist" aria-label={`${gradientMeta.label} stops`} data-stops>
+                  {gradientValue.stops.slice(0, MOVE_GRADIENT_STOPS).map((stop, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      role="tab"
+                      className="tweakers-move-track"
+                      data-active={i === Math.min(MoveColorStore.getStop(), gradientValue.stops.length - 1)}
+                      aria-selected={i === Math.min(MoveColorStore.getStop(), gradientValue.stops.length - 1)}
+                      tabIndex={i === MoveColorStore.getStop() ? 0 : -1}
+                      onClick={() => MoveColorStore.selectStop(i)}
+                    >
+                      <span className="tweakers-move-track-marker" style={{ background: stop.color }} />
+                      <span className="tweakers-move-track-label">Stop {i + 1}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {!settingsOpen && !gradientMeta && pages.length > 1 && (
                 <div className="tweakers-move-pages" role="tablist" aria-label="Move pages">
                   {pages.map((pg, i) => (
                     <button
@@ -1635,28 +1684,53 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   );
                 }
                 // A ramp fills its slot with the ramp — a list of colours has
-                // nothing to say as a number.
+                // nothing to say as a number. A drag slides the nearest stop;
+                // a still TAP opens the integrated colour editor (for the 2–4
+                // stop ramps the track buttons can hold), where the dials edit
+                // the selected stop's colour.
                 if (meta.type === 'gradient') {
                   const g = normalizeGradient(values[meta.path] as never);
-                  const index = Math.min(rampStop[meta.path] ?? 0, g.stops.length - 1);
+                  const open = colorMeta?.path === meta.path;
+                  const editable = g.stops.length <= MOVE_GRADIENT_STOPS;
+                  const index = open
+                    ? Math.min(MoveColorStore.getStop(), g.stops.length - 1)
+                    : Math.min(rampStop[meta.path] ?? 0, g.stops.length - 1);
                   return (
                     <div
                       key={meta.path}
                       className="tweakers-move-dial"
                       data-kind="ramp"
-                      data-active={active || undefined}
+                      data-active={active || open || undefined}
+                      role={editable ? 'button' : undefined}
+                      aria-expanded={editable ? open : undefined}
+                      aria-haspopup={editable ? 'dialog' : undefined}
                       onPointerDown={(e) => {
                         try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
                         fineRef.current = null;
+                        rampGesture.current = { path: meta.path, x: e.clientX, y: e.clientY, moved: false };
                         setDragPath(meta.path);
                         armMod(meta.path);
                         rampFromPointer(e, meta, true);
                       }}
                       onPointerMove={(e) => {
-                        if (dragPath === meta.path) rampFromPointer(e, meta, false);
+                        const gesture = rampGesture.current;
+                        if (dragPath !== meta.path || gesture?.path !== meta.path) return;
+                        // A finger never holds perfectly still: a few pixels
+                        // of slip stays a tap.
+                        if (!gesture.moved && Math.hypot(e.clientX - gesture.x, e.clientY - gesture.y) < 3) return;
+                        gesture.moved = true;
+                        rampFromPointer(e, meta, false);
                       }}
-                      onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
-                      onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                      onPointerUp={() => {
+                        const tapped = rampGesture.current?.path === meta.path && !rampGesture.current.moved;
+                        rampGesture.current = null;
+                        setDragPath(null);
+                        fineRef.current = null;
+                        if (tapped && editable && !TweakStore.isDisabled(page.panel.id, meta.path)) {
+                          MoveColorStore.toggle(page.panel.id, meta.path);
+                        }
+                      }}
+                      onPointerCancel={() => { rampGesture.current = null; setDragPath(null); fineRef.current = null; }}
                     >
                       <MoveModRing panelId={page.panel.id} path={meta.path} />
                       <MoveSlotRampBody
@@ -1664,6 +1738,46 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                         value={`${index + 1}/${g.stops.length}`}
                         css={rampCss(g.stops)}
                         stop={g.stops[index]?.position ?? null}
+                        stops={open ? g.stops.map((s) => s.position) : undefined}
+                      />
+                    </div>
+                  );
+                }
+                // The balance slot: the blend between its two colour params
+                // fills the display, and the tick is the dial — a plain 0..1
+                // number underneath, so the hardware turns it like any dial.
+                if (meta.type === 'balance') {
+                  const a = String(values[meta.balanceA ?? ''] ?? '#000000');
+                  const b = String(values[meta.balanceB ?? ''] ?? '#ffffff');
+                  const v = Math.min(1, Math.max(0, Number(values[meta.path] ?? 0.5)));
+                  return (
+                    <div
+                      key={meta.path}
+                      className="tweakers-move-dial"
+                      data-kind="balance"
+                      data-active={active || undefined}
+                      onPointerDown={(e) => {
+                        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                        fineRef.current = null;
+                        setDragPath(meta.path);
+                        armMod(meta.path);
+                        dialFromPointer(e, meta);
+                      }}
+                      onPointerMove={(e) => {
+                        if (dragPath === meta.path) dialFromPointer(e, meta);
+                      }}
+                      onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
+                      onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                    >
+                      <MoveModRing panelId={page.panel.id} path={meta.path} />
+                      <MoveSlotRampBody
+                        label={meta.label}
+                        value={`${Math.round(v * 100)}%`}
+                        css={rampCss([
+                          { color: a, position: 0 },
+                          { color: b, position: 1 },
+                        ])}
+                        stop={v}
                       />
                     </div>
                   );
@@ -2350,6 +2464,27 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           onClick={() => TweakStore.triggerAction(page.panel.id, meta.path)}
                         >
                           <MovePadActionBody label={meta.label} />
+                        </button>
+                      );
+                    }
+                    // The small colour selector: a swatch in the chip's
+                    // shape; a tap opens the same colour editor the big
+                    // slot's colour uses — no hold-to-peek, no latch.
+                    if (meta.type === 'color') {
+                      const open = colorMeta?.path === meta.path;
+                      return (
+                        <button
+                          key={meta.path}
+                          className="tweakers-move-pad"
+                          data-kind="color"
+                          data-on={open || undefined}
+                          aria-expanded={open}
+                          aria-haspopup="dialog"
+                          aria-label={`${meta.label}. Open color editor`}
+                          disabled={TweakStore.isDisabled(page.panel.id, meta.path)}
+                          onClick={() => MoveColorStore.toggle(page.panel.id, meta.path)}
+                        >
+                          <MovePadColorBody label={meta.label} color={String(values[meta.path])} />
                         </button>
                       );
                     }

@@ -122,6 +122,45 @@ describe('move layout', () => {
     ]]);
   });
 
+  it('a colour with a named pad column becomes the small colour selector', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, {
+      gain: [0.5, 0, 1],
+      tintA: { type: 'color', default: '#ff0000' },
+      tintB: { type: 'color', default: '#0000ff' },
+    } as never, undefined, { movePads: { tintB: 1 } });
+    const { result: [page], issues } = capturingIssues(() => buildMovePages([TweakStore.getPanel(id)!]));
+    // tintA stays the big colour slot; tintB steps onto the value row where
+    // its column names — the pad grid's colour chip, no dial spent on it.
+    assert.deepEqual(page.dials.map((d) => d.path), ['gain', 'tintA']);
+    assert.equal(page.values[1].path, 'tintB');
+    assert.equal(page.values[1].type, 'color');
+    assert.deepEqual(issues, []);
+  });
+
+  it('a balance claims a dial slot and never falls back to a chip', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, {
+      colorA: { type: 'color', default: '#ff0000' },
+      colorB: { type: 'color', default: '#0000ff' },
+      mix: { type: 'balance', a: 'colorA', b: 'colorB', default: 0.5 },
+    } as never, undefined, { movePads: { colorA: 0, colorB: 1 } });
+    const { result: [page], issues } = capturingIssues(() => buildMovePages([TweakStore.getPanel(id)!]));
+    assert.deepEqual(page.dials.map((d) => d.path), ['mix']);
+    assert.deepEqual(page.values.map((v) => v?.path), ['colorA', 'colorB']);
+    assert.deepEqual(issues, []);
+
+    // Past the eight columns a balance is dropped out loud, never chipped.
+    const over = nextId();
+    const config: Record<string, unknown> = {};
+    for (let i = 0; i < 8; i++) config[`dial${i}`] = [0.5, 0, 1];
+    config.mix = { type: 'balance', a: 'a', b: 'b' };
+    TweakStore.registerPanel(over, over, config as never);
+    const { result: [pageOver], issues: overIssues } = capturingIssues(() => buildMovePages([TweakStore.getPanel(over)!]));
+    assert.equal(pageOver.values.filter(Boolean).length, 0);
+    assert.deepEqual(overIssues.map(([code]) => code), ['dial-dropped']);
+  });
+
   it('still chips a genuine overflow param, honouring its named column', () => {
     const id = nextId();
     const config: Record<string, unknown> = {};
