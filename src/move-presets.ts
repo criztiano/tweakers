@@ -36,8 +36,8 @@ const ENTER_MS = 20;
  * row it rests on is previewed live — the panel plays the preset while you
  * browse. A click or the jog click confirms and keeps it; Back (or a Menu
  * tap) puts everything back the way it was; holding Menu compares the
- * previewed sound with the one you came in with. A Menu long press — or
- * Shift+Menu — opens the floating save input above the panel.
+ * previewed sound with the one you came in with. Shift+Menu opens the floating save input above the panel; a Menu long
+ * press opens the separate generative exploration mode.
  *
  * Preview writes through `TweakStore.previewValues`, which records nothing:
  * browsing can never rewrite a saved preset. Heavyweight hosts can turn the
@@ -150,6 +150,18 @@ class MovePresetStoreClass {
     if (items[next].id === view.cursor && !view.comparing) return;
     this.view = { ...view, cursor: items[next].id, comparing: false };
     this.applyPreview(items[next].id);
+    this.notify();
+  }
+
+  /** Rest the cursor on a row by id — a search landing the wheel on the next
+   *  match, previewed live exactly as a wheel turn is. */
+  rest(id: string) {
+    const view = this.view;
+    if (!view || view.phase === 'closing' || view.chosen) return;
+    if (!this.items(view.panelId).some((i) => i.id === id)) return;
+    if (id === view.cursor && !view.comparing) return;
+    this.view = { ...view, cursor: id, comparing: false };
+    this.applyPreview(id);
     this.notify();
   }
 

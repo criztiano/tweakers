@@ -1,7 +1,7 @@
 import { GradientValue } from './gradient-core.js';
 import { XYValue } from './xy-pad-core.js';
 import { TransferValue } from './transfer-core.js';
-import { FilterAxisConfig, FilterValue } from './filter-core.js';
+import { FilterValue, FilterAxisConfig } from './filter-core.js';
 import { RangeValue } from './range-slider-core.js';
 
 /** Opt-in meanings for numeric Move faces. Values keep the host's units. */

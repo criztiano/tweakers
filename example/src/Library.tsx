@@ -1,9 +1,11 @@
 import { Fragment, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import {
+  MoveActionDeck,
   MoveNotifications,
   MovePanel,
   MovePresetStore,
+  PresetExplorationStore,
   MoveSurfaceStore,
   MOVE_NOTIFY_KINDS,
   MOVE_PALETTE,
@@ -185,6 +187,14 @@ export function Library() {
       </Section>
 
       <Section
+        id="deck"
+        title="The action deck"
+        lede="A view with nothing to set yet — a start screen — shows neither a list nor a panel: up to four buttons, one per chip key, in the chip voice, wired to the key. The pale one is the action the view leans on, wearing an icon of its own. Click one, or press the key on the Move; both flash it and run one handler. The greyed one has left its key dark."
+      >
+        <DeckPanel />
+      </Section>
+
+      <Section
         id="notify"
         title="Notifications"
         lede="What the app has to say, standing where the floating displays stand: centred over the instrument, one gap above whatever is already up there. The newest card is in front and the run behind it peeks out under it — rest the pointer on the stack to fan the whole set open. Hold a modulation circle to bring a modulator’s curve up first, then fire one: the stack rises over the display rather than burying it, and settles back when the display goes."
@@ -265,6 +275,14 @@ export function Library() {
  * navigator rather than describing it.
  */
 function PresetPanel() {
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const held = useRef(false);
+  const cancelHold = () => { if (holdTimer.current) clearTimeout(holdTimer.current); holdTimer.current = null; };
+  useEffect(() => () => { if (holdTimer.current) clearTimeout(holdTimer.current); }, []);
+  const explore = () => {
+    MovePresetStore.cancel();
+    void PresetExplorationStore.open(PANEL_ID);
+  };
   useSyncExternalStore(MovePresetStore.subscribe, MovePresetStore.getVersion, () => 0);
   // The active preset lives in the panel's own channel, and loading one
   // rewrites every value on it — so this row follows both.
@@ -278,10 +296,18 @@ function PresetPanel() {
   const active = TweakStore.getActivePresetId(PANEL_ID);
   return (
     <div className="kit-presets">
-      <div className="kit-preset-actions">
-        <button type="button" onClick={() => openPresets(PANEL_ID)}>
+      <div className="kit-preset-actions" onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') event.stopPropagation(); }}>
+        <button type="button" aria-describedby="kit-explore-hint"
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            cancelHold(); held.current = false;
+            holdTimer.current = setTimeout(() => { held.current = true; holdTimer.current = null; explore(); }, 450);
+          }}
+          onPointerUp={cancelHold} onPointerCancel={cancelHold} onPointerLeave={cancelHold}
+          onClick={() => { if (held.current) { held.current = false; return; } openPresets(PANEL_ID); }}>
           {open && open.phase !== 'closing' ? 'Close the navigator' : 'Open the navigator'}
         </button>
+        <button type="button" onClick={explore}>Explore presets</button>
         <button type="button" onClick={() => savePreset(PANEL_ID)}>Save what is on the slots</button>
         <span className="kit-preset-state">
           {open && open.phase !== 'closing'
@@ -293,6 +319,7 @@ function PresetPanel() {
               : 'no preset loaded'}
         </span>
       </div>
+      <p id="kit-explore-hint" className="kit-card-note">Hold the navigator button to explore preset variations. Back restores your original sound.</p>
       <ul className="kit-preset-list">
         {items.map((item) => (
           <li key={item.id}>
@@ -373,6 +400,21 @@ function NotifyPanel() {
   );
 }
 
+/** The deck, live: four actions, one switched off, each press announced. */
+function DeckPanel() {
+  const say = (what: string) => moveNotify.add({ type: 'info', title: what, description: 'from the deck, or the key' });
+  return (
+    <MoveActionDeck
+      actions={[
+        { button: 'capture', label: 'Load file', onPress: () => say('Load file') },
+        { button: 'sample', label: 'Record from…', variant: 'highlight', icon: <span className="kit-rec-dot" />, onPress: () => say('Record from…') },
+        { button: 'loop', label: 'Loop last take', onPress: () => say('Loop last take') },
+        { button: 'mute', label: 'Nothing to mute', onPress: () => say('Mute'), disabled: true },
+      ]}
+    />
+  );
+}
+
 function Section({ id, title, lede, children }: {
   id: string; title: string; lede?: string; children: ReactNode;
 }) {
@@ -446,6 +488,8 @@ const DIAL_KIND: Record<string, string | undefined> = {
 const NUMERIC_KINDS = ['opacity', 'blur', 'pan', 'stereo-width', 'pitch'];
 
 const CSS = `
+  .kit-rec-dot { flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%; background: #fd3c57; }
+
 .kit-page {
   --kit-bg: #141414;
   --kit-fg: #e8e6e1;

@@ -839,6 +839,12 @@ When the panel is open, the toolbar provides:
 - **Presets** — A version dropdown for saving and loading parameter snapshots. Click "+" to save the current state as a new version. Select a version to load it. Changes auto-save to the active version. "Version 1" always represents the original defaults.
 - **Copy** — Exports the current values as JSON to your clipboard.
 
+### Generative preset exploration
+
+Hold the Move preset button to explore a floating 32-pad generation. Audition children, mark parents, rate favorites, breed new generations, or morph up to eight presets. Save multiple discoveries without leaving; Back restores the original sound. Pass `exploration: PresetExplorationStore` to the updated bridge’s `bindMove` options.
+
+See [the exploration guide](docs/preset-exploration.md) for controls, persistence, supported parameters, and the optional host preset adapter.
+
 ### App-backed presets
 
 Apps with their own preset store (files, engine IPC, a server) can back the same toolbar UI with a `PresetProvider` via the `presets` option. tweakers then renders your list in your order, hides its implicit "Version 1" row, and stops snapshotting values itself — you apply values in `onSelect` and own persistence:
@@ -1313,6 +1319,24 @@ MoveFunctions.attach('jog_click', () => confirm());
 ```
 
 A disabled button dims to 40% and runs nothing. `MoveFunctions.subscribeRuns((name, press) => ...)` observes every run — that's the channel the button uses to flash on hardware presses.
+
+### Action deck
+
+A view that has nothing to set yet — a start screen, a "what now" page — shows neither a list nor a panel but an **action deck**: up to four buttons in the page's middle, one per key whose meaning is the app's to give (the Sampling key, Capture, Loop, Mute). Each speaks the chip voice — the slot surface by default, `variant: 'highlight'` for the pale key look on the one action the view leans on — wearing its key's glyph unless it brings an `icon` of its own, and the deck attaches the handler to that key itself — a screen click and a hardware press run one function, both flash the button, and the key lights only while its action is live:
+
+```tsx
+import { MoveActionDeck } from 'tweakers';
+
+<MoveActionDeck
+  actions={[
+    { button: 'capture', label: 'Load file', detail: 'or drop one anywhere', onPress: () => openPicker() },
+    { button: 'sample', label: 'Record from…', variant: 'highlight', icon: <RecDot />, onPress: () => pickSource() },
+    { button: 'loop', label: 'Recent', onPress: () => showRecent(), disabled: !recent.length },
+  ]}
+/>
+```
+
+The rules (`normalizeDeck`): the order is the app's, one action per key (the first wins), at most four, and every dropped action is warned in the console. A disabled action dims and leaves its key dark. The deck is the chip — its attachments render no header chip of their own. A view shows one of the deck, the list screen, or a panel, never two side by side.
 
 The `MovePanel` header keeps one right-aligned pill: the dark volume-dial readout — whatever the volume dial currently means in your app:
 

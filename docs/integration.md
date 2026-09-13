@@ -56,6 +56,12 @@ that is not under their thumb. A view whose wheel drives no list sends `null`
 and leaves the screen to the frames below it, rather than borrowing it for a
 list some other control owns.
 
+Every list the wheel walks can be searched, and no app builds that itself:
+holding Capture opens the search on the list in focus (`MoveSearchStore`),
+typing narrows it, the wheel walks what is left, taking a row or Back ends it.
+A host that reads the wheel events for its own list yields while
+`MoveSearchStore.isOpen()`, exactly as it yields to an open navigator.
+
 Hardware has four tracks and eight dial columns. `buildMovePages`, `dialSpan`,
 `visibleColumns` and `movePadRows` define the layout, not app CSS. Validate pages
 for overflow, two-column filter boundaries, enums and small-pad placement.

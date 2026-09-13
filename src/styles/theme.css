@@ -1,3 +1,4 @@
+@import "./preset-exploration.css";
 /* Geist Pixel, the kit's face. OFL, so it ships next to this sheet — no
    host-provided fonts needed. One variable file; ELSH is its shape axis
    (0 regular, 1 square, 20 circle, 40 grid, 60 triangle, 80 line): the
@@ -869,6 +870,87 @@
 }
 
 /* End of the Move function chips skin block. */
+
+/* -- The action deck ------------------------------------------------------
+   A view's whole surface when it has nothing to set yet: up to four
+   buttons, one per chip key, in the chip voice (Figma 935:537) — the quiet
+   slot surface by default, the pale key look for the one the view leans on
+   — each wearing its key's glyph or an icon of its own. Names:
+   `.tweakers-move-deck`, `.tweakers-move-deck-action[data-name]
+   [data-variant][data-pressed]`, `.tweakers-move-deck-icon`, `-label`,
+   `-detail`.
+   ------------------------------------------------------------------------ */
+
+.tweakers-move-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 200px;
+  margin: 0 auto;
+}
+
+.tweakers-move-deck-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--move-radius-small, 8px);
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--move-font-label);
+  font-size: 20px;
+  line-height: normal;
+  color: var(--move-text);
+  background: var(--move-chip);
+  transition: filter 0.12s, transform 0.12s;
+}
+
+/* The pop-out dress: the pale hardware-key look, dark on light. */
+.tweakers-move-deck-action[data-variant="highlight"] {
+  background: #dee3c9;
+  color: #1e1e1e;
+}
+
+.tweakers-move-deck-action:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.tweakers-move-deck-action[data-pressed] {
+  filter: brightness(1.25);
+  transform: scale(0.96);
+  transition-duration: 0.04s;
+}
+
+.tweakers-move-deck-action:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tweakers-move-deck-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+
+.tweakers-move-deck-label {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A quieter word at the row's end, when the action has one. */
+.tweakers-move-deck-detail {
+  margin-left: auto;
+  font-size: 13px;
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
+/* End of the action deck skin block. */
 
 .tweakers-move-grid {
   display: flex;
@@ -2397,6 +2479,112 @@
   opacity: 0.45;
 }
 
+/* The search's field, at the top of the list it narrows (Figma 828:656):
+   a pale pill one row tall — the hardware-key look, dark text on the
+   readout colour — with the magnifier pinned at its left edge and the
+   query centred like a row's name. It sits stuck to the top, the same 4px
+   off the edge as off the sides, and the rows the query keeps run down
+   from it. */
+.tweakers-move-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 24px;
+  margin: 4px 4px var(--move-list-gap, 7px);
+  padding: 2px 10px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  background: var(--move-text);
+  color: #1e1e1e;
+  font-family: var(--move-font-label);
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.tweakers-move-search-icon {
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translateY(-50%);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.tweakers-move-search-input {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 18px;
+  border: none;
+  outline: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  caret-color: currentColor;
+}
+
+.tweakers-move-search-input::placeholder {
+  color: inherit;
+  opacity: 1;
+}
+
+/* On the wheel screen the list is pinned to the screen's box; while a
+   search runs the field takes the top and the list is pinned below it —
+   and the rows read from the top, not from the middle: a narrowed list
+   is a result, and results start where the query is. */
+.tweakers-move-wheel-screen[data-search] {
+  background: #1e1e1e;
+}
+
+.tweakers-move-wheel-screen[data-search] .tweakers-move-search {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+}
+
+.tweakers-move-wheel-screen[data-search] .tweakers-list-screen {
+  top: 35px; /* the 4px edge, the field, the row gap */
+  padding-top: 0;
+  justify-content: flex-start;
+}
+
+/* The navigator screens stack the field above the rows. */
+.tweakers-move-preset-screen[data-search] {
+  display: flex;
+  flex-direction: column;
+  background: #1e1e1e;
+  border-radius: 8px;
+}
+
+.tweakers-move-preset-screen[data-search] > .tweakers-list-screen {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  padding-top: 0;
+}
+
+.tweakers-move-palette-screen[data-search] {
+  padding-top: 0;
+}
+
+.tweakers-move-palette-screen[data-search] > .tweakers-move-search {
+  position: sticky;
+  top: 0;
+  margin: 4px 0 12px;
+}
+
+.tweakers-move-palette-empty {
+  padding: 2px 10px;
+  font-family: var(--move-font-label);
+  font-size: var(--move-color-font);
+  color: var(--move-text);
+  opacity: 0.22;
+}
+
 /* The save-a-preset input, floating centred above the panel like the
    curve composer's frame. */
 .tweakers-move-preset-save {
@@ -3038,6 +3226,34 @@
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* A row's picture — an app's icon — at the left end, pinned like the mark
+   so a centred name stays put; it dims and brightens with the label. */
+.tweakers-list-screen-icon {
+  position: absolute;
+  top: 50%;
+  left: var(--move-list-mark-inset, 6px);
+  width: var(--move-list-icon-size, 16px);
+  height: var(--move-list-icon-size, 16px);
+  transform: translateY(-50%);
+  border-radius: 3px;
+  pointer-events: none;
+  opacity: 0.4;
+  transition: opacity 0.12s;
+}
+
+.tweakers-list-screen-row[data-icon] .tweakers-list-screen-label {
+  padding: 0 calc(var(--move-list-icon-size, 16px) + var(--move-list-mark-inset, 6px) * 2);
+}
+
+.tweakers-list-screen[data-wide] .tweakers-list-screen-row[data-icon] .tweakers-list-screen-label {
+  padding-right: 0;
+}
+
+.tweakers-list-screen-row[data-selected] .tweakers-list-screen-icon,
+.tweakers-list-screen-row[data-checked="true"] .tweakers-list-screen-icon {
+  opacity: 1;
 }
 
 /* A way back sits at the left end, where the eye looks to leave. */
