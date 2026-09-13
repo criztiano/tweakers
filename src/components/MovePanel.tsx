@@ -1266,7 +1266,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
             {/* While the audio editor floats, the panel's top row works for
                 it: the zoom readout takes the track corner, Load and the
                 clock take the volume corner — the mockup's arrangement. */}
-            {audioWave != null || roomWave ? (
+            {audioWave != null ? (
               <MoveAudioZoom />
             ) : (
             <div className="tweakers-move-tracks-group">
@@ -1351,7 +1351,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 settings are no place to reach for a modulator. */}
             <div className="tweakers-move-mods">
               {settingsOpen
-                ? null
+                /* The room keeps its tab row; the wave's zoom readout takes
+                   the centre, where the step circles would be. */
+                ? roomWave ? <MoveAudioZoom /> : null
                 : color && colorMeta
                 ? <MoveColorSteps color={color} disabled={TweakStore.isDisabled(page.panel.id, colorMeta.path)} />
                 : surface.steps === null
