@@ -211,9 +211,19 @@ window.addEventListener('keyup', (e) => {
 
 // The hardware, when the bridge is up: knobs, track buttons, Menu, wheel.
 // No bridge (or no Move) is fine — the keyboard stand-ins above still work.
+//
+// `?bridge=http://localhost:7799` points the demo at another bridge — a
+// private local-engine one on a spare port. That is how this page is checked
+// in a browser nobody is sitting at: there is one Move, and whoever binds it
+// owns it, so an automated run takes its own bridge and leaves the live one
+// to the hand playing it. (The kit refuses the live bridge from an automated
+// browser anyway; this is what it refuses you IN FAVOUR of.)
+const bridge = (new URLSearchParams(location.search).get('bridge') || 'http://localhost:7787')
+  .replace(/\/+$/, '');
 // @ts-ignore — remote module, no types
-import(/* @vite-ignore */ 'http://localhost:7787/kit.js')
+import(/* @vite-ignore */ `${bridge}/kit.js`)
   .then((m) => m.bindMove(TweakStore, {
+    url: bridge,
     functions: MoveFunctions,
     modulation: ModulationStore,
     color: MoveColorStore,
