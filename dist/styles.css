@@ -2392,14 +2392,15 @@
 /* The search's field, at the top of the list it narrows (Figma 828:656):
    a pale pill one row tall — the hardware-key look, dark text on the
    readout colour — with the magnifier pinned at its left edge and the
-   query centred like a row's name. It sits in the list's own top padding,
-   as the first row would, and the rows the query keeps run down from it. */
+   query centred like a row's name. It sits stuck to the top, the same 4px
+   off the edge as off the sides, and the rows the query keeps run down
+   from it. */
 .tweakers-move-search {
   position: relative;
   display: flex;
   align-items: center;
   height: 24px;
-  margin: var(--move-list-pad, 16px) 4px var(--move-list-gap, 7px);
+  margin: 4px 4px var(--move-list-gap, 7px);
   padding: 2px 10px;
   flex-shrink: 0;
   border-radius: 4px;
@@ -2412,7 +2413,7 @@
 
 .tweakers-move-search-icon {
   position: absolute;
-  left: 10px;
+  left: 6px;
   top: 50%;
   width: 16px;
   height: 16px;
@@ -2456,7 +2457,7 @@
 }
 
 .tweakers-move-wheel-screen[data-search] .tweakers-list-screen {
-  top: 47px; /* the list pad, the field, the row gap */
+  top: 35px; /* the 4px edge, the field, the row gap */
   padding-top: 0;
   justify-content: flex-start;
 }
@@ -2483,7 +2484,7 @@
 .tweakers-move-palette-screen[data-search] > .tweakers-move-search {
   position: sticky;
   top: 0;
-  margin: 16px 0 12px;
+  margin: 4px 0 12px;
 }
 
 .tweakers-move-palette-empty {
