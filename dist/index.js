@@ -2962,9 +2962,9 @@ function moveTabCell(row, i) {
   };
 }
 var isToggleDial = (c) => c.type === "toggle" && c.moveSlot === true;
-var isMoveDial = (c) => isToggleDial(c) || c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c) && !isMoveTabs(c) || c.type === "number" && c.min != null && c.max != null;
+var isMoveDial = (c) => isToggleDial(c) || c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || c.type === "balance" || isEnumDial(c) && !isMoveTabs(c) || c.type === "number" && c.min != null && c.max != null;
 var isDial = isMoveDial;
-var noChip = (c) => isToggleDial(c) || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c);
+var noChip = (c) => isToggleDial(c) || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || c.type === "balance" || isEnumDial(c);
 var dialSpan = (c) => c?.type === "filter" ? 2 : 1;
 var isSpanContinuation = (page, i) => i > 0 && page.dials[i] !== void 0 && page.dials[i] === page.dials[i - 1];
 function buildModMovePage(panel, layout) {
@@ -3018,10 +3018,12 @@ function buildMovePages(panels) {
   }
   return plain.slice(0, MOVE_TRACKS).map((panel) => {
     const controls = flat(panel.controls);
+    const padCols = new Map(controls.map((c) => [c, padColumn(panel, c)]));
+    const isPadColor = (c) => c.type === "color" && padCols.get(c) != null;
     const dials = [];
     let nextCol = 0;
     for (const c of controls) {
-      if (!isDial(c)) continue;
+      if (!isDial(c) || isPadColor(c)) continue;
       const span = dialSpan(c);
       if (nextCol + span > MOVE_DIALS) {
         if (nextCol >= MOVE_DIALS) break;
@@ -3090,12 +3092,13 @@ function buildMovePages(panels) {
       for (let k = 0; k < span; k++) toggles[start + k] = c;
     };
     for (const c of controls) {
-      const col = padColumn(panel, c);
+      const col = padCols.get(c) ?? null;
       if (isMoveTabs(c)) placeTabs(c, col);
       else if (c.type === "toggle" && !isToggleDial(c)) place(toggles, "toggle", c, col);
       else if (c.type === "action") {
         if (col !== null) place(actions, "action", c, col);
-      } else if (dials.includes(c)) {
+      } else if (isPadColor(c)) place(values, "value", c, col);
+      else if (dials.includes(c)) {
         if (col !== null) {
           reportMoveLayoutIssue(
             "pad-column-on-dial",
@@ -3717,6 +3720,7 @@ function moveSlotKind(meta, opts = {}) {
   if (meta.type === "toggle") return meta.icon ? "toggle-icon" : "toggle";
   if (meta.type === "transfer") return "transfer";
   if (meta.type === "gradient") return "ramp";
+  if (meta.type === "balance") return "balance";
   if (meta.type === "slider" && meta.display === "dial") return "dial";
   if (meta.type === "xy") return "xy";
   if (meta.type === "range") return "range";
@@ -3879,17 +3883,18 @@ function MoveSlotTransferBody({ label, value, shape, point }) {
     /* @__PURE__ */ jsx6(MoveSlotDisplayFoot, { label, value })
   ] });
 }
-function MoveSlotRampBody({ label, value, css, stop }) {
+function MoveSlotRampBody({ label, value, css, stop, stops }) {
+  const tickLeft = (p) => `calc(${p * 100}% + ${(0.5 - p) * 4}px)`;
   return /* @__PURE__ */ jsxs6(Fragment3, { children: [
     /* @__PURE__ */ jsxs6(MoveSlotDisplay, { children: [
       /* @__PURE__ */ jsx6("span", { className: "tweakers-move-slot-ramp", style: { background: css } }),
-      stop !== null && // Inset a hair so a stop at either end still shows its whole tick —
-      // the only thing saying which stop the knob is holding.
+      (stops ?? []).map((p, i) => p === stop ? null : /* @__PURE__ */ jsx6("span", { className: "tweakers-move-slot-tick", "data-quiet": true, style: { left: tickLeft(p) } }, i)),
+      stop !== null && // The only thing saying which stop the knob is holding.
       /* @__PURE__ */ jsx6(
         "span",
         {
           className: "tweakers-move-slot-tick",
-          style: { left: `calc(${stop * 100}% + ${(0.5 - stop) * 4}px)` }
+          style: { left: tickLeft(stop) }
         }
       )
     ] }),
@@ -4077,6 +4082,12 @@ function MovePadWaveBody({ label, percent }) {
 function MovePadActionBody({ label }) {
   return /* @__PURE__ */ jsx6("span", { className: "tweakers-move-pad-title", children: label });
 }
+function MovePadColorBody({ label, color }) {
+  return /* @__PURE__ */ jsxs6(Fragment3, { children: [
+    /* @__PURE__ */ jsx6("span", { className: "tweakers-move-pad-title", children: label }),
+    /* @__PURE__ */ jsx6("span", { className: "tweakers-move-pad-swatch", "aria-hidden": "true", children: /* @__PURE__ */ jsx6("span", { style: { background: color } }) })
+  ] });
+}
 function MovePadTabsBody({ name, options, activeIdx }) {
   return /* @__PURE__ */ jsxs6(Fragment3, { children: [
     name != null && /* @__PURE__ */ jsx6("span", { className: "tweakers-move-tabs-head", children: name }),
@@ -4113,7 +4124,8 @@ var MOVE_PAD_LIBRARY = {
   app: { description: "a cell the app paints itself \u2014 a track, a slice, a step", component: MovePadAppBody },
   bend: { description: "hold and drag to bend the envelope ramp above it", component: MovePadToggleBody },
   wave: { description: "hold and drag for the stage\u2019s own sine, tap to flip it", component: MovePadWaveBody },
-  tabs: { description: "2 to 8 pads: the page\u2019s modes side by side, the current one lit \u2014 a name pad optional", component: MovePadTabsBody }
+  tabs: { description: "2 to 8 pads: the page\u2019s modes side by side, the current one lit \u2014 a name pad optional", component: MovePadTabsBody },
+  color: { description: "a single colour in a small slot \u2014 tap to open the colour editor", component: MovePadColorBody }
 };
 var MOVE_SLOT_LIBRARY = {
   color: { description: "selected color; hue on the dial, luminosity on volume, tap to edit", component: MoveSlotColorBody },
@@ -4136,7 +4148,8 @@ var MOVE_SLOT_LIBRARY = {
   toggle: { description: "a switch in a big slot \u2014 the pad\u2019s language at slot size", component: MoveSlotToggleBody },
   "toggle-icon": { description: "a switch drawn as its own picture \u2014 the glyph takes a ban while it is off", component: MoveSlotToggleBody },
   transfer: { description: "a response curve, one knob holding one of its points", component: MoveSlotTransferBody },
-  ramp: { description: "a colour ramp, one knob holding one of its stops", component: MoveSlotRampBody },
+  ramp: { description: "a colour ramp, one knob holding one of its stops \u2014 tap to edit its colours", component: MoveSlotRampBody },
+  balance: { description: "the mix between two colour params \u2014 the blend fills the slot, the tick is the dial", component: MoveSlotRampBody },
   dial: { description: "a needle, for values whose two ends are the same place", component: MoveSlotDialBody }
 };
 
@@ -4778,6 +4791,7 @@ function fineDragValue(opts) {
 
 // src/move-color.ts
 import { TweakStore as TweakStore3 } from "tweakers/store";
+var MOVE_GRADIENT_STOPS = 4;
 var MOVE_COLOR_PALETTES = [
   { id: "move", name: "Move 16", colors: [
     "#ff4d07",
@@ -4922,6 +4936,8 @@ var MoveColorStoreClass = class {
     /** The palette navigator behind Menu while the editor is open. */
     this.picker = false;
     this.pickerCursor = 0;
+    /** The gradient stop the editor is on — meaningless for a plain colour. */
+    this.stop = 0;
     this.getView = () => this.view;
     this.getVersion = () => this.version;
     this.subscribe = (fn) => {
@@ -4930,6 +4946,7 @@ var MoveColorStoreClass = class {
         this.listeners.delete(fn);
       };
     };
+    this.getStop = () => this.stop;
     /* ---- the palette lock and its navigator ---- */
     this.getPaletteId = () => this.paletteId;
     this.getPalette = () => this.paletteId ? MOVE_COLOR_PALETTES.find((p) => p.id === this.paletteId) ?? null : null;
@@ -4943,6 +4960,7 @@ var MoveColorStoreClass = class {
   open(panelId, path) {
     if (this.view?.panelId === panelId && this.view.path === path) return;
     this.view = { panelId, path };
+    this.stop = 0;
     this.notify();
   }
   close() {
@@ -4956,9 +4974,77 @@ var MoveColorStoreClass = class {
     if (this.view?.panelId === panelId && this.view.path === path) this.close();
     else this.open(panelId, path);
   }
+  /* ---- the gradient shape under a control, when it has one ---- */
+  /** The control's gradient value, or null when it holds a plain colour. */
+  gradient(panelId, path) {
+    const v = TweakStore3.getValue(panelId, path);
+    return v && typeof v === "object" && Array.isArray(v.stops) && v.stops.length >= 2 ? v : null;
+  }
+  /** How many stops the editor can hold — 0 for a plain colour. */
+  stopCount(panelId, path) {
+    return Math.min(this.gradient(panelId, path)?.stops.length ?? 0, MOVE_GRADIENT_STOPS);
+  }
+  /** Land the editor on a stop — the track buttons' gesture. */
+  selectStop(index) {
+    if (!this.view) return;
+    const count = this.stopCount(this.view.panelId, this.view.path);
+    const next = Math.max(0, Math.min(Math.max(0, count - 1), Math.round(index)));
+    if (next === this.stop) return;
+    this.stop = next;
+    this.notify();
+  }
+  /** A stop's position along the ramp, 0..1 — 0 when out of range. */
+  stopPosition(panelId, path, index) {
+    return Number(this.gradient(panelId, path)?.stops[index]?.position) || 0;
+  }
+  /** Slide a stop, clamped between its neighbours so the held stop never
+   *  changes identity under the hand moving it — the ramp slot's own rule. */
+  moveStop(panelId, path, index, position) {
+    const g = this.gradient(panelId, path);
+    if (!g || TweakStore3.isDisabled(panelId, path) || !Number.isFinite(position)) return;
+    if (index < 0 || index >= g.stops.length) return;
+    const lo = index > 0 ? g.stops[index - 1].position : 0;
+    const hi = index < g.stops.length - 1 ? g.stops[index + 1].position : 1;
+    const next = Math.min(hi, Math.max(lo, position));
+    if (next === g.stops[index].position) return;
+    TweakStore3.updateValue(panelId, path, {
+      ...g,
+      stops: g.stops.map((s, i) => i === index ? { ...s, position: next } : s)
+    });
+    this.notify();
+  }
+  /** Slide the selected stop by wheel/dial detents — the hold-a-track gesture. */
+  turnStop(panelId, path, delta, fine = false) {
+    this.moveStop(
+      panelId,
+      path,
+      this.stop,
+      this.stopPosition(panelId, path, this.stop) + delta * (fine ? 1e-3 : 0.01)
+    );
+  }
+  /** Where a control's colour lives: the hex itself, or the stop's colour. */
+  hexAt(panelId, path, stop) {
+    const g = stop === null ? null : this.gradient(panelId, path);
+    if (g && stop !== null) return String(g.stops[Math.min(stop, g.stops.length - 1)]?.color ?? "#ff0000ff");
+    return String(TweakStore3.getValue(panelId, path) ?? "#ff0000");
+  }
+  /** The selected coordinate target: the stop the editor is on, when the
+   *  control is a gradient; the control itself otherwise. */
+  targetStop(panelId, path) {
+    return this.gradient(panelId, path) ? Math.min(this.stop, this.stopCount(panelId, path) - 1) : null;
+  }
   read(panelId, path) {
-    const hex = String(TweakStore3.getValue(panelId, path) ?? "#ff0000");
-    const cached = this.coordinates.get(JSON.stringify([panelId, path]));
+    return this.readStop(panelId, path, this.targetStop(panelId, path));
+  }
+  /** The colour under the editor as hex — the selected stop's for a gradient. */
+  hex(panelId, path) {
+    return this.hexAt(panelId, path, this.targetStop(panelId, path));
+  }
+  /** A specific stop's coordinates (null = the plain colour) — what the stop
+   *  row and the hardware's track lights paint. */
+  readStop(panelId, path, stop) {
+    const hex = this.hexAt(panelId, path, stop);
+    const cached = this.coordinates.get(JSON.stringify([panelId, path, stop]));
     if (cached?.hex === hex) return { ...cached.color };
     const color = rgbToHsl(parseHex(hex) ?? { r: 255, g: 0, b: 0, a: 1 });
     if (color.s === 0) {
@@ -4968,8 +5054,11 @@ var MoveColorStoreClass = class {
     return color;
   }
   update(panelId, path, patch2) {
+    this.updateStop(panelId, path, this.targetStop(panelId, path), patch2);
+  }
+  updateStop(panelId, path, stop, patch2) {
     if (!TweakStore3.getPanel(panelId) || TweakStore3.isDisabled(panelId, path) || Object.values(patch2).some((n) => !Number.isFinite(n))) return;
-    const color = { ...this.read(panelId, path), ...patch2 };
+    const color = { ...this.readStop(panelId, path, stop), ...patch2 };
     color.h = hue(color.h);
     color.s = clamp6(color.s);
     color.l = clamp6(color.l);
@@ -4977,10 +5066,12 @@ var MoveColorStoreClass = class {
     const palette = this.view?.panelId === panelId && this.view.path === path ? this.getPalette() : null;
     const snapped = palette ? paletteHsl(palette)[paletteAt(palette, color.h)] : null;
     const painted = snapped ? { ...color, h: snapped.h, s: snapped.s, l: snapped.l } : color;
-    const current = String(TweakStore3.getValue(panelId, path) ?? "");
-    const hex = formatHex(hslToRgb(painted), painted.a < 1 || current.length === 9 || current.length === 5);
-    this.coordinates.set(JSON.stringify([panelId, path]), { hex, color });
-    TweakStore3.updateValue(panelId, path, hex);
+    const g = stop === null ? null : this.gradient(panelId, path);
+    const current = this.hexAt(panelId, path, stop);
+    const hex = formatHex(hslToRgb(painted), !!g || painted.a < 1 || current.length === 9 || current.length === 5);
+    this.coordinates.set(JSON.stringify([panelId, path, stop]), { hex, color });
+    if (g && stop !== null) TweakStore3.updateValue(panelId, path, setStopColor(g, stop, hex));
+    else TweakStore3.updateValue(panelId, path, hex);
     this.notify();
   }
   setHue(h) {
@@ -5306,6 +5397,55 @@ function MoveColorPaletteStrip({ palette, selected, disabled }) {
     )) })
   ] });
 }
+function MoveGradientRamp({ panelId, path, gradient, disabled }) {
+  const drag = useRef6(null);
+  const selected = Math.min(MoveColorStore.getStop(), gradient.stops.length - 1);
+  const positionFrom = (e) => {
+    const rect = (e.currentTarget.closest(".tweakers-move-color-ramp") ?? e.currentTarget).getBoundingClientRect();
+    return Math.min(1, Math.max(0, (e.clientX - rect.left) / (rect.width || 1)));
+  };
+  return /* @__PURE__ */ jsx8(
+    "div",
+    {
+      className: "tweakers-move-color-ramp",
+      role: "group",
+      "aria-label": "Gradient stops",
+      style: { background: rampCss(gradient.stops) },
+      children: gradient.stops.map((stop, index) => /* @__PURE__ */ jsx8(
+        "button",
+        {
+          type: "button",
+          className: "tweakers-move-color-stop",
+          disabled,
+          "data-selected": index === selected || void 0,
+          "aria-label": `Stop ${index + 1}, ${Math.round(stop.position * 100)}%`,
+          "aria-pressed": index === selected,
+          style: { left: `${stop.position * 100}%`, background: stop.color },
+          onPointerDown: (e) => {
+            if (disabled || e.button > 0) return;
+            MoveColorStore.selectStop(index);
+            drag.current = { index };
+            try {
+              e.currentTarget.setPointerCapture(e.pointerId);
+            } catch {
+            }
+          },
+          onPointerMove: (e) => {
+            if (!drag.current || disabled) return;
+            MoveColorStore.moveStop(panelId, path, drag.current.index, positionFrom(e));
+          },
+          onPointerUp: () => {
+            drag.current = null;
+          },
+          onPointerCancel: () => {
+            drag.current = null;
+          }
+        },
+        index
+      ))
+    }
+  );
+}
 function MoveColorDisplay({ panelId, meta, anchor, theme }) {
   const display = useRef6(null);
   const [position, setPosition] = useState4({ left: 0, top: 0 });
@@ -5313,7 +5453,7 @@ function MoveColorDisplay({ panelId, meta, anchor, theme }) {
   const disabled = TweakStore4.isDisabled(panelId, meta.path);
   const close = () => {
     if (display.current?.contains(document.activeElement)) {
-      anchor.current?.querySelector('[data-kind="color"][aria-expanded="true"]')?.focus();
+      anchor.current?.querySelector('[data-kind][aria-expanded="true"]')?.focus();
     }
     MoveColorStore.close();
   };
@@ -5353,7 +5493,8 @@ function MoveColorDisplay({ panelId, meta, anchor, theme }) {
       observer?.disconnect();
     };
   }, [anchor]);
-  const hex = String(TweakStore4.getValue(panelId, meta.path) ?? "#ff0000");
+  const gradient = MoveColorStore.gradient(panelId, meta.path);
+  const hex = MoveColorStore.hex(panelId, meta.path);
   const palette = MoveColorStore.getPalette();
   const shown = palette ? rgbToHsl(parseHex(hex) ?? { r: 255, g: 0, b: 0, a: 1 }) : color;
   const content = /* @__PURE__ */ jsxs8(
@@ -5371,6 +5512,7 @@ function MoveColorDisplay({ panelId, meta, anchor, theme }) {
           /* @__PURE__ */ jsx8(MoveColorCopy, { label: "HEX", reading: displayHex(hex), copy: hex }),
           /* @__PURE__ */ jsx8(MoveColorCopy, { label: "OKLCH", reading: readingOklch(hex), copy: copyOklch(hex) })
         ] }),
+        gradient && /* @__PURE__ */ jsx8(MoveGradientRamp, { panelId, path: meta.path, gradient, disabled }),
         palette ? /* @__PURE__ */ jsx8(MoveColorPaletteStrip, { palette, selected: MoveColorStore.paletteIndex(panelId, meta.path), disabled }) : /* @__PURE__ */ jsxs8(Fragment4, { children: [
           /* @__PURE__ */ jsx8("div", { className: "tweakers-move-color-slider", "data-kind": "hue", children: /* @__PURE__ */ jsx8(
             "input",
@@ -5995,6 +6137,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const [handTouch, setHandTouch] = useState6({});
   const [curvePoint, setCurvePoint] = useState6({});
   const [rampStop, setRampStop] = useState6({});
+  const rampGesture = useRef8(null);
   const [hwHeld, setHwHeld] = useState6({});
   const [hwLatched, setHwLatched] = useState6({});
   const [appHeld, setAppHeld] = useState6(null);
@@ -6189,8 +6332,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   }, [announceStrip]);
   useSyncExternalStore2(MoveColorStore.subscribe, MoveColorStore.getVersion, () => 0);
   const colorView = MoveColorStore.getView();
-  const colorMeta = colorView?.panelId === pageId ? page?.dials.find((meta) => meta.type === "color" && meta.path === colorView.path) : void 0;
+  const gradientEditable = (meta) => meta.type === "gradient" && pageId !== void 0 && (MoveColorStore.gradient(pageId, meta.path)?.stops.length ?? 0) <= MOVE_GRADIENT_STOPS;
+  const colorMeta = colorView?.panelId === pageId && page ? [...page.dials, ...page.values].find((meta) => meta && meta.path === colorView.path && (meta.type === "color" || gradientEditable(meta))) : void 0;
   const color = colorMeta && pageId ? MoveColorStore.read(pageId, colorMeta.path) : null;
+  const gradientMeta = colorMeta?.type === "gradient" ? colorMeta : null;
+  const gradientValue = gradientMeta && pageId ? MoveColorStore.gradient(pageId, gradientMeta.path) : null;
   useEffect8(() => () => {
     if (MoveColorStore.getView()?.panelId === pageId) MoveColorStore.close();
   }, [pageId]);
@@ -6204,7 +6350,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     return MoveFunctions.push("copy", ({ shift, hold }) => {
       const view = MoveColorStore.getView();
       if (!view) return;
-      const hex = String(TweakStore6.getValue(view.panelId, view.path) ?? "");
+      const hex = MoveColorStore.hex(view.panelId, view.path);
       const text = hold ? copyOklch(hex) : shift ? copyHslOfHex(hex) : hex;
       navigator.clipboard?.writeText(text).catch(() => {
       });
@@ -6526,7 +6672,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     const w = rect.width - XY_INSET.left - XY_INSET.right;
     const x = Math.min(1, Math.max(0, (e.clientX - rect.left - XY_INSET.left) / (w || 1)));
     const g = normalizeGradient(values[meta.path]);
-    let index = Math.min(rampStop[meta.path] ?? 0, g.stops.length - 1);
+    const open2 = colorMeta?.path === meta.path;
+    let index = open2 ? Math.min(MoveColorStore.getStop(), g.stops.length - 1) : Math.min(rampStop[meta.path] ?? 0, g.stops.length - 1);
     if (down) {
       let best = 0;
       g.stops.forEach((st, i) => {
@@ -6534,6 +6681,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       });
       index = best;
       setRampStop((prev) => ({ ...prev, [meta.path]: index }));
+      if (open2) MoveColorStore.selectStop(index);
+      return;
     }
     const lo = index > 0 ? g.stops[index - 1].position : 0;
     const hi = index < g.stops.length - 1 ? g.stops[index + 1].position : 1;
@@ -6735,7 +6884,27 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                   pg.panel.id
                 )) }) : /* @__PURE__ */ jsx10("span", { className: "tweakers-move-track-label", children: page.panel.name })
               ] }),
-              !settingsOpen && pages.length > 1 && /* @__PURE__ */ jsx10("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Move pages", children: pages.map((pg, i) => /* @__PURE__ */ jsxs10(
+              !settingsOpen && gradientMeta && gradientValue && /* @__PURE__ */ jsx10("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": `${gradientMeta.label} stops`, "data-stops": true, children: gradientValue.stops.slice(0, MOVE_GRADIENT_STOPS).map((stop, i) => /* @__PURE__ */ jsxs10(
+                "button",
+                {
+                  type: "button",
+                  role: "tab",
+                  className: "tweakers-move-track",
+                  "data-active": i === Math.min(MoveColorStore.getStop(), gradientValue.stops.length - 1),
+                  "aria-selected": i === Math.min(MoveColorStore.getStop(), gradientValue.stops.length - 1),
+                  tabIndex: i === MoveColorStore.getStop() ? 0 : -1,
+                  onClick: () => MoveColorStore.selectStop(i),
+                  children: [
+                    /* @__PURE__ */ jsx10("span", { className: "tweakers-move-track-marker", style: { background: stop.color } }),
+                    /* @__PURE__ */ jsxs10("span", { className: "tweakers-move-track-label", children: [
+                      "Stop ",
+                      i + 1
+                    ] })
+                  ]
+                },
+                i
+              )) }),
+              !settingsOpen && !gradientMeta && pages.length > 1 && /* @__PURE__ */ jsx10("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Move pages", children: pages.map((pg, i) => /* @__PURE__ */ jsxs10(
                 "button",
                 {
                   id: `${pageTabsId}-tab-${i}`,
@@ -6874,12 +7043,76 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                               }
                               if (meta.type === "gradient") {
                                 const g = normalizeGradient(values[meta.path]);
-                                const index = Math.min(rampStop[meta.path] ?? 0, g.stops.length - 1);
+                                const open2 = colorMeta?.path === meta.path;
+                                const editable = g.stops.length <= MOVE_GRADIENT_STOPS;
+                                const index = open2 ? Math.min(MoveColorStore.getStop(), g.stops.length - 1) : Math.min(rampStop[meta.path] ?? 0, g.stops.length - 1);
                                 return /* @__PURE__ */ jsxs10(
                                   "div",
                                   {
                                     className: "tweakers-move-dial",
                                     "data-kind": "ramp",
+                                    "data-active": active || open2 || void 0,
+                                    role: editable ? "button" : void 0,
+                                    "aria-expanded": editable ? open2 : void 0,
+                                    "aria-haspopup": editable ? "dialog" : void 0,
+                                    onPointerDown: (e) => {
+                                      try {
+                                        e.currentTarget.setPointerCapture(e.pointerId);
+                                      } catch {
+                                      }
+                                      fineRef.current = null;
+                                      rampGesture.current = { path: meta.path, x: e.clientX, y: e.clientY, moved: false };
+                                      setDragPath(meta.path);
+                                      armMod(meta.path);
+                                      rampFromPointer(e, meta, true);
+                                    },
+                                    onPointerMove: (e) => {
+                                      const gesture = rampGesture.current;
+                                      if (dragPath !== meta.path || gesture?.path !== meta.path) return;
+                                      if (!gesture.moved && Math.hypot(e.clientX - gesture.x, e.clientY - gesture.y) < 3) return;
+                                      gesture.moved = true;
+                                      rampFromPointer(e, meta, false);
+                                    },
+                                    onPointerUp: () => {
+                                      const tapped = rampGesture.current?.path === meta.path && !rampGesture.current.moved;
+                                      rampGesture.current = null;
+                                      setDragPath(null);
+                                      fineRef.current = null;
+                                      if (tapped && editable && !TweakStore6.isDisabled(page.panel.id, meta.path)) {
+                                        MoveColorStore.toggle(page.panel.id, meta.path);
+                                      }
+                                    },
+                                    onPointerCancel: () => {
+                                      rampGesture.current = null;
+                                      setDragPath(null);
+                                      fineRef.current = null;
+                                    },
+                                    children: [
+                                      /* @__PURE__ */ jsx10(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                                      /* @__PURE__ */ jsx10(
+                                        MoveSlotRampBody,
+                                        {
+                                          label: meta.label,
+                                          value: `${index + 1}/${g.stops.length}`,
+                                          css: rampCss(g.stops),
+                                          stop: g.stops[index]?.position ?? null,
+                                          stops: open2 ? g.stops.map((s) => s.position) : void 0
+                                        }
+                                      )
+                                    ]
+                                  },
+                                  meta.path
+                                );
+                              }
+                              if (meta.type === "balance") {
+                                const a = String(values[meta.balanceA ?? ""] ?? "#000000");
+                                const b = String(values[meta.balanceB ?? ""] ?? "#ffffff");
+                                const v = Math.min(1, Math.max(0, Number(values[meta.path] ?? 0.5)));
+                                return /* @__PURE__ */ jsxs10(
+                                  "div",
+                                  {
+                                    className: "tweakers-move-dial",
+                                    "data-kind": "balance",
                                     "data-active": active || void 0,
                                     onPointerDown: (e) => {
                                       try {
@@ -6889,10 +7122,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       fineRef.current = null;
                                       setDragPath(meta.path);
                                       armMod(meta.path);
-                                      rampFromPointer(e, meta, true);
+                                      dialFromPointer(e, meta);
                                     },
                                     onPointerMove: (e) => {
-                                      if (dragPath === meta.path) rampFromPointer(e, meta, false);
+                                      if (dragPath === meta.path) dialFromPointer(e, meta);
                                     },
                                     onPointerUp: () => {
                                       setDragPath(null);
@@ -6908,9 +7141,12 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         MoveSlotRampBody,
                                         {
                                           label: meta.label,
-                                          value: `${index + 1}/${g.stops.length}`,
-                                          css: rampCss(g.stops),
-                                          stop: g.stops[index]?.position ?? null
+                                          value: `${Math.round(v * 100)}%`,
+                                          css: rampCss([
+                                            { color: a, position: 0 },
+                                            { color: b, position: 1 }
+                                          ]),
+                                          stop: v
                                         }
                                       )
                                     ]
@@ -7607,6 +7843,24 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           "data-kind": "action",
                                           onClick: () => TweakStore6.triggerAction(page.panel.id, meta.path),
                                           children: /* @__PURE__ */ jsx10(MovePadActionBody, { label: meta.label })
+                                        },
+                                        meta.path
+                                      );
+                                    }
+                                    if (meta.type === "color") {
+                                      const open2 = colorMeta?.path === meta.path;
+                                      return /* @__PURE__ */ jsx10(
+                                        "button",
+                                        {
+                                          className: "tweakers-move-pad",
+                                          "data-kind": "color",
+                                          "data-on": open2 || void 0,
+                                          "aria-expanded": open2,
+                                          "aria-haspopup": "dialog",
+                                          "aria-label": `${meta.label}. Open color editor`,
+                                          disabled: TweakStore6.isDisabled(page.panel.id, meta.path),
+                                          onClick: () => MoveColorStore.toggle(page.panel.id, meta.path),
+                                          children: /* @__PURE__ */ jsx10(MovePadColorBody, { label: meta.label, color: String(values[meta.path]) })
                                         },
                                         meta.path
                                       );
@@ -8642,6 +8896,7 @@ export {
   MOVE_FUNCTION_BUTTONS,
   MOVE_FUNCTION_ICONS,
   MOVE_FUNCTION_MANIFEST,
+  MOVE_GRADIENT_STOPS,
   MOVE_JOG_CLICK_EVENT,
   MOVE_JOG_EVENT,
   MOVE_LATCH_EVENT,
@@ -8674,6 +8929,7 @@ export {
   MoveNotifications,
   MovePadActionBody,
   MovePadAppBody,
+  MovePadColorBody,
   MovePadTabsBody,
   MovePadToggleBody,
   MovePadValueBody,

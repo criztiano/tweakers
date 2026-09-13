@@ -191,9 +191,9 @@ function moveTabCell(row, i) {
   };
 }
 var isToggleDial = (c) => c.type === "toggle" && c.moveSlot === true;
-var isMoveDial = (c) => isToggleDial(c) || c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c) && !isMoveTabs(c) || c.type === "number" && c.min != null && c.max != null;
+var isMoveDial = (c) => isToggleDial(c) || c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || c.type === "balance" || isEnumDial(c) && !isMoveTabs(c) || c.type === "number" && c.min != null && c.max != null;
 var isDial = isMoveDial;
-var noChip = (c) => isToggleDial(c) || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || isEnumDial(c);
+var noChip = (c) => isToggleDial(c) || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || c.type === "balance" || isEnumDial(c);
 var dialSpan = (c) => c?.type === "filter" ? 2 : 1;
 var isSpanContinuation = (page, i) => i > 0 && page.dials[i] !== void 0 && page.dials[i] === page.dials[i - 1];
 function buildModMovePage(panel, layout) {
@@ -250,10 +250,12 @@ function buildMovePages(panels) {
   }
   return plain.slice(0, MOVE_TRACKS).map((panel) => {
     const controls = flat(panel.controls);
+    const padCols = new Map(controls.map((c) => [c, padColumn(panel, c)]));
+    const isPadColor = (c) => c.type === "color" && padCols.get(c) != null;
     const dials = [];
     let nextCol = 0;
     for (const c of controls) {
-      if (!isDial(c)) continue;
+      if (!isDial(c) || isPadColor(c)) continue;
       const span = dialSpan(c);
       if (nextCol + span > MOVE_DIALS) {
         if (nextCol >= MOVE_DIALS) break;
@@ -322,12 +324,13 @@ function buildMovePages(panels) {
       for (let k = 0; k < span; k++) toggles[start + k] = c;
     };
     for (const c of controls) {
-      const col = padColumn(panel, c);
+      const col = padCols.get(c) ?? null;
       if (isMoveTabs(c)) placeTabs(c, col);
       else if (c.type === "toggle" && !isToggleDial(c)) place(toggles, "toggle", c, col);
       else if (c.type === "action") {
         if (col !== null) place(actions, "action", c, col);
-      } else if (dials.includes(c)) {
+      } else if (isPadColor(c)) place(values, "value", c, col);
+      else if (dials.includes(c)) {
         if (col !== null) {
           reportMoveLayoutIssue(
             "pad-column-on-dial",

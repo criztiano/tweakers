@@ -221,6 +221,10 @@ function savePersisted(target, value) {
 }
 
 // src/store/TweakStore.ts
+var clampBalance = (n) => {
+  const v = Number(n);
+  return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.5;
+};
 var TAB_PATH = "_tab";
 var EMPTY_VALUES = Object.freeze({});
 function formatLabel(key) {
@@ -675,7 +679,7 @@ var TweakStoreClass = class {
             control.preview = value.preview;
             changed = true;
           }
-        } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isToggleConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
+        } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isToggleConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isBalanceConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
           visit(value, path);
         }
       }
@@ -918,7 +922,7 @@ var TweakStoreClass = class {
         const hasPhysics = value.stiffness !== void 0 || value.damping !== void 0 || value.mass !== void 0;
         const hasTime = value.visualDuration !== void 0 || value.bounce !== void 0;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? "advanced" : "simple";
-      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isToggleConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isCurveConfig(value)) {
+      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isToggleConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isBalanceConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isCurveConfig(value)) {
         this.initTransitionModes(value, path, values);
       }
     }
@@ -1002,6 +1006,19 @@ var TweakStoreClass = class {
         controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {
         controls.push({ type: "gradient", path, label, gradientForm: value.form });
+      } else if (this.isBalanceConfig(value)) {
+        controls.push({
+          type: "balance",
+          path,
+          label,
+          min: 0,
+          max: 1,
+          step: 0.01,
+          stepInferred: true,
+          balanceA: value.a,
+          balanceB: value.b,
+          shortcut
+        });
       } else if (this.isXYConfig(value)) {
         controls.push({ type: "xy", path, label, xAxis: value.x, yAxis: value.y, grid: value.grid, density: value.density, snap: value.snap, returnToCenter: value.returnToCenter, showValues: value.showValues });
       } else if (this.isFilterConfig(value)) {
@@ -1148,6 +1165,8 @@ var TweakStoreClass = class {
         values[path] = value.default ?? "#000000";
       } else if (this.isGradientConfig(value)) {
         values[path] = normalizeGradient(value.default ?? DEFAULT_GRADIENT);
+      } else if (this.isBalanceConfig(value)) {
+        values[path] = clampBalance(value.default);
       } else if (this.isXYConfig(value)) {
         const xAxis = resolveAxis(value.x);
         const yAxis = resolveAxis(value.y);
@@ -1203,6 +1222,9 @@ var TweakStoreClass = class {
   }
   isGradientConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "gradient";
+  }
+  isBalanceConfig(value) {
+    return typeof value === "object" && value !== null && "type" in value && value.type === "balance";
   }
   // Explicit { type: 'xy' } only — a bare { x, y } object would collide with the
   // "nested object → folder" fallback, so the shorthand is deliberately unsupported.
@@ -1348,6 +1370,10 @@ var TweakStoreClass = class {
           return defaultValue;
         }
         return normalizeGradient(existingValue);
+      }
+      case "balance": {
+        if (typeof existingValue !== "number" || !Number.isFinite(existingValue)) return defaultValue;
+        return clampBalance(existingValue);
       }
       case "xy": {
         if (typeof existingValue !== "object" || existingValue === null || Array.isArray(existingValue)) {
