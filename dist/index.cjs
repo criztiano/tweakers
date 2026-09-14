@@ -2544,32 +2544,32 @@ function ListScreen({
     event.preventDefault();
     next.focus();
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
-    "div",
-    {
-      ref: rootRef,
-      className: rootClassName,
-      style,
-      "data-wide": wide || void 0,
-      role: "listbox",
-      onKeyDown,
-      "data-back": back ? true : void 0,
-      children: [
-        back && /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
-          "button",
-          {
-            type: "button",
-            className: "tweakers-list-screen-back",
-            "aria-label": `Back to ${back}`,
-            disabled: !onBack,
-            onClick: onBack,
-            children: [
-              /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("path", { d: ICON_CHEVRON_LEFT, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }) }),
-              /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "tweakers-list-screen-back-label", children: back })
-            ]
-          }
-        ),
-        items.map((item) => {
+  return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(import_jsx_runtime2.Fragment, { children: [
+    back && /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
+      "button",
+      {
+        type: "button",
+        className: "tweakers-list-screen-back",
+        "aria-label": `Back to ${back}`,
+        disabled: !onBack,
+        onClick: onBack,
+        children: [
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("path", { d: ICON_CHEVRON_LEFT, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "tweakers-list-screen-back-label", children: back })
+        ]
+      }
+    ),
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+      "div",
+      {
+        ref: rootRef,
+        className: rootClassName,
+        style,
+        "data-wide": wide || void 0,
+        role: "listbox",
+        onKeyDown,
+        "data-back": back ? true : void 0,
+        children: items.map((item) => {
           const rowValue = itemValue(item);
           const selected = rowValue === value;
           const tag = itemTag(item);
@@ -2601,9 +2601,9 @@ function ListScreen({
             rowValue
           );
         })
-      ]
-    }
-  );
+      }
+    )
+  ] });
 }
 
 // src/components/move-slots.tsx
