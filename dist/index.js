@@ -2123,6 +2123,8 @@ function ListScreen({
   onSelect,
   wide,
   follow = "nearest",
+  back,
+  onBack,
   className,
   style
 }) {
@@ -2172,7 +2174,7 @@ function ListScreen({
     event.preventDefault();
     next.focus();
   };
-  return /* @__PURE__ */ jsx2(
+  return /* @__PURE__ */ jsxs2(
     "div",
     {
       ref: rootRef,
@@ -2181,38 +2183,55 @@ function ListScreen({
       "data-wide": wide || void 0,
       role: "listbox",
       onKeyDown,
-      children: items.map((item) => {
-        const rowValue = itemValue(item);
-        const selected = rowValue === value;
-        const tag = itemTag(item);
-        const detail = itemDetail(item);
-        const checked = itemChecked(item);
-        const icon = itemIcon(item);
-        return /* @__PURE__ */ jsxs2(
+      "data-back": back ? true : void 0,
+      children: [
+        back && /* @__PURE__ */ jsxs2(
           "button",
           {
             type: "button",
-            role: "option",
-            "aria-selected": selected,
-            className: "tweakers-list-screen-row",
-            "data-selected": selected || void 0,
-            "data-tagged": tag ? true : void 0,
-            "data-detail": detail,
-            "data-checked": checked,
-            "aria-checked": checked,
-            "data-muted": itemMuted(item) || void 0,
-            "data-icon": icon ? true : void 0,
-            onClick: () => onSelect?.(rowValue),
+            className: "tweakers-list-screen-back",
+            "aria-label": `Back to ${back}`,
+            disabled: !onBack,
+            onClick: onBack,
             children: [
-              icon && /* @__PURE__ */ jsx2("img", { className: "tweakers-list-screen-icon", src: icon, alt: "", "aria-hidden": "true" }),
-              /* @__PURE__ */ jsx2("span", { className: "tweakers-list-screen-label", children: itemLabel(item) }),
-              tag && /* @__PURE__ */ jsx2("span", { className: "tweakers-list-screen-tag", children: tag }),
-              (detail || checked) && /* @__PURE__ */ jsx2(ListScreenMark, { detail, checked })
+              /* @__PURE__ */ jsx2("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ jsx2("path", { d: ICON_CHEVRON_LEFT, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }) }),
+              /* @__PURE__ */ jsx2("span", { className: "tweakers-list-screen-back-label", children: back })
             ]
-          },
-          rowValue
-        );
-      })
+          }
+        ),
+        items.map((item) => {
+          const rowValue = itemValue(item);
+          const selected = rowValue === value;
+          const tag = itemTag(item);
+          const detail = itemDetail(item);
+          const checked = itemChecked(item);
+          const icon = itemIcon(item);
+          return /* @__PURE__ */ jsxs2(
+            "button",
+            {
+              type: "button",
+              role: "option",
+              "aria-selected": selected,
+              className: "tweakers-list-screen-row",
+              "data-selected": selected || void 0,
+              "data-tagged": tag ? true : void 0,
+              "data-detail": detail,
+              "data-checked": checked,
+              "aria-checked": checked,
+              "data-muted": itemMuted(item) || void 0,
+              "data-icon": icon ? true : void 0,
+              onClick: () => onSelect?.(rowValue),
+              children: [
+                icon && /* @__PURE__ */ jsx2("img", { className: "tweakers-list-screen-icon", src: icon, alt: "", "aria-hidden": "true" }),
+                /* @__PURE__ */ jsx2("span", { className: "tweakers-list-screen-label", children: itemLabel(item) }),
+                tag && /* @__PURE__ */ jsx2("span", { className: "tweakers-list-screen-tag", children: tag }),
+                (detail || checked) && /* @__PURE__ */ jsx2(ListScreenMark, { detail, checked })
+              ]
+            },
+            rowValue
+          );
+        })
+      ]
     }
   );
 }
@@ -9045,6 +9064,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                       ),
                       value: String(screenSearch ? screenSearch.cursor : screen.index),
                       follow: "center",
+                      back: screenSearch ? void 0 : screen.back,
+                      onBack: () => MoveFunctions.run("back"),
                       onSelect: (value) => {
                         if (!value) return;
                         if (screenSearch) MoveSearchStore.close();
