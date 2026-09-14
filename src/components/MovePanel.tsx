@@ -1648,6 +1648,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 )}
                 value={String(screenSearch ? screenSearch.cursor : screen.index)}
                 follow="center"
+                back={screenSearch ? undefined : screen.back}
+                onBack={() => MoveFunctions.run('back')}
                 onSelect={(value) => {
                   if (!value) return;
                   if (screenSearch) MoveSearchStore.close();

@@ -3351,6 +3351,53 @@
   opacity: 1;
 }
 
+/* The way out of a nested list: a pill at the screen's top-left corner —
+   the back chevron and the parent's name — standing still while the rows
+   run under it. It takes no row, so every row is a place in this level. */
+.tweakers-list-screen-back {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  flex-shrink: 0;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 8px);
+  height: var(--move-list-row);
+  margin: calc(-1 * var(--move-list-pad) + 6px) 0 0 2px;
+  padding: 0 10px 0 6px;
+  border: none;
+  border-radius: 999px;
+  background: #41403e;
+  color: #dee3c9;
+  font-family: var(--move-font-label);
+  font-size: 14px;
+  line-height: 20px;
+  cursor: pointer;
+  transition: filter 0.12s;
+}
+
+.tweakers-list-screen-back:disabled {
+  cursor: default;
+}
+
+.tweakers-list-screen-back:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+
+.tweakers-list-screen-back svg {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+}
+
+.tweakers-list-screen-back-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* A way back sits at the left end, where the eye looks to leave. */
 .tweakers-list-screen-row[data-detail="back"] .tweakers-list-screen-mark {
   right: auto;

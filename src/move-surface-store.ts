@@ -54,6 +54,9 @@ export interface MoveScreenList {
   title?: string;
   items: MoveScreenRow[];
   index: number;
+  /** The level the list sits inside, by name — worn as a back pill at the
+   *  screen's corner rather than as a row. A click on it is the Back key. */
+  back?: string;
 }
 
 /** A row's label, whichever form the host wrote it in. */
