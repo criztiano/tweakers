@@ -3401,6 +3401,12 @@
   text-overflow: ellipsis;
 }
 
+/* A tagged row that also wears a mark keeps its tag clear of it. */
+.tweakers-list-screen-row[data-tagged][data-detail] .tweakers-list-screen-tag,
+.tweakers-list-screen-row[data-tagged][data-checked="true"] .tweakers-list-screen-tag {
+  padding-right: calc(var(--move-list-mark-size, 14px) + var(--move-list-mark-inset, 6px));
+}
+
 /* A way back sits at the left end, where the eye looks to leave. */
 .tweakers-list-screen-row[data-detail="back"] .tweakers-list-screen-mark {
   right: auto;
