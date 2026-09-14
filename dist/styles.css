@@ -3364,15 +3364,16 @@
   align-items: center;
   gap: 4px;
   max-width: calc(100% - 8px);
-  height: var(--move-list-row);
-  margin: calc(-1 * var(--move-list-pad) + 6px) 0 0 2px;
-  padding: 0 10px 0 6px;
+  height: 28px;
+  /* up into the screen's top pad, and a clear breath above the first row */
+  margin: calc(-1 * var(--move-list-pad) + 4px) 0 10px 0;
+  padding: 0 12px 0 8px;
   border: none;
   border-radius: 999px;
   background: #41403e;
   color: #dee3c9;
   font-family: var(--move-font-label);
-  font-size: 14px;
+  font-size: 16px;
   line-height: 20px;
   cursor: pointer;
   transition: filter 0.12s;
@@ -3388,8 +3389,8 @@
 
 .tweakers-list-screen-back svg {
   flex-shrink: 0;
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
 }
 
 .tweakers-list-screen-back-label {
