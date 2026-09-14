@@ -54,7 +54,9 @@ export interface ListScreenProps {
    * The level this list sits inside, by name. The list is one level of
    * nesting deep, so it wears the way out at its top-left corner — a pill
    * with the back chevron and the parent's name — instead of spending a row
-   * on it. The Back key is the gesture; the pill says where it goes.
+   * on it. The Back key is the gesture; the pill says where it goes. The
+   * pill is drawn beside the list, not in it, so it never scrolls: it pins
+   * to the nearest positioned box, which on the Move panel is the screen.
    */
   back?: string;
   /** Called when the back pill is clicked. Without it the pill is only a sign. */
@@ -201,17 +203,9 @@ export function ListScreen({
   };
 
   return (
-    <div
-      ref={rootRef}
-      className={rootClassName}
-      style={style}
-      data-wide={wide || undefined}
-      role="listbox"
-      onKeyDown={onKeyDown}
-      data-back={back ? true : undefined}
-    >
-      {back && (
-        <button
+    <>
+    {back && (
+      <button
           type="button"
           className="tweakers-list-screen-back"
           aria-label={`Back to ${back}`}
@@ -223,7 +217,16 @@ export function ListScreen({
           </svg>
           <span className="tweakers-list-screen-back-label">{back}</span>
         </button>
-      )}
+    )}
+    <div
+      ref={rootRef}
+      className={rootClassName}
+      style={style}
+      data-wide={wide || undefined}
+      role="listbox"
+      onKeyDown={onKeyDown}
+      data-back={back ? true : undefined}
+    >
       {items.map((item) => {
         const rowValue = itemValue(item);
         const selected = rowValue === value;
@@ -255,5 +258,6 @@ export function ListScreen({
         );
       })}
     </div>
+    </>
   );
 }
