@@ -132,12 +132,11 @@ const noChip = (c: ControlMeta) =>
   c.type === 'transfer' || c.type === 'gradient' || c.type === 'balance' || isEnumDial(c);
 
 /**
- * How many dial columns a control claims. The filter is the kit's first
- * 2-slot control: its picture spans two columns, and on the hardware the
- * left column's knob turns cutoff while the right column's turns resonance.
+ * How many dial columns a control claims. Filters give each knob its own
+ * axis; a two-column select gives both knobs the same list.
  */
 export const dialSpan = (c: ControlMeta | undefined): number =>
-  c?.type === 'filter' ? 2 : 1;
+  c?.type === 'filter' || (c?.type === 'select' && c.moveSpan === 2 && !isMoveTabs(c)) ? 2 : 1;
 
 /** True when column i only continues the span-2 dial sitting at i-1. */
 export const isSpanContinuation = (page: MovePage, i: number): boolean =>

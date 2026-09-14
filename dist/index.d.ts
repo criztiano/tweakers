@@ -1282,6 +1282,9 @@ type ToggleConfig = {
 };
 type SelectConfig = {
     type: 'select';
+    /** Dial columns occupied by this select. Two gives long list labels more room;
+     *  either column's knob selects the same value. Ignored for `moveTabs`. */
+    moveSpan?: 1 | 2;
     /** Optional semantic drawing for the Move surface. */
     moveVisual?: MoveSelectVisual;
     /**
@@ -1765,6 +1768,8 @@ type ControlMeta = {
     moveBlank?: boolean;
     /** Select's per-option shape sampler — swapped in place by syncCurveConfigs. */
     preview?: (value: string) => ((t: number) => number) | null | undefined;
+    /** Select dial width in hardware columns; defaults to one. */
+    moveSpan?: 1 | 2;
     /** Select declared `moveTabs` — it lies across the small slots as a tabs
      *  strip instead of claiming a dial; `'named'` adds its leading name pad. */
     moveTabs?: boolean | 'named';
@@ -2905,9 +2910,8 @@ declare const isToggleDial: (c: ControlMeta) => boolean;
 /** Everything the hardware turns: the controls that claim a dial slot. */
 declare const isMoveDial: (c: ControlMeta) => boolean;
 /**
- * How many dial columns a control claims. The filter is the kit's first
- * 2-slot control: its picture spans two columns, and on the hardware the
- * left column's knob turns cutoff while the right column's turns resonance.
+ * How many dial columns a control claims. Filters give each knob its own
+ * axis; a two-column select gives both knobs the same list.
  */
 declare const dialSpan: (c: ControlMeta | undefined) => number;
 /** True when column i only continues the span-2 dial sitting at i-1. */

@@ -2057,7 +2057,7 @@ var isToggleDial = (c) => c.type === "toggle" && c.moveSlot === true;
 var isMoveDial = (c) => isToggleDial(c) || c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || c.type === "balance" || isEnumDial(c) && !isMoveTabs(c) || c.type === "number" && c.min != null && c.max != null;
 var isDial = isMoveDial;
 var noChip = (c) => isToggleDial(c) || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || c.type === "balance" || isEnumDial(c);
-var dialSpan = (c) => c?.type === "filter" ? 2 : 1;
+var dialSpan = (c) => c?.type === "filter" || c?.type === "select" && c.moveSpan === 2 && !isMoveTabs(c) ? 2 : 1;
 var isSpanContinuation = (page, i) => i > 0 && page.dials[i] !== void 0 && page.dials[i] === page.dials[i - 1];
 function buildModMovePage(panel, layout) {
   const controls = flat(panel.controls);
@@ -9444,7 +9444,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                           children: [
                             /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "tweakers-move-dials", "data-scroll": stripMode || void 0, children: visibleCols.map((i) => {
                               if (isSpanContinuation(page, i)) return null;
-                              const meta = page.dials[i]?.type === "filter" ? page.dials[i] : dialAt(i);
+                              const meta = dialSpan(page.dials[i]) > 1 ? page.dials[i] : dialAt(i);
                               if (!meta) return /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
                               const disabled = import_TweakStore12.TweakStore.isDisabled(page.panel.id, meta.path);
                               const active = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
@@ -9805,6 +9805,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   {
                                     className: "tweakers-move-dial",
                                     "data-kind": "enum",
+                                    style: dialSpan(meta) > 1 ? { gridColumn: `span ${dialSpan(meta)}` } : void 0,
                                     "data-scope": scope ? true : void 0,
                                     "data-visual": playback ? "playback" : void 0,
                                     role: "slider",

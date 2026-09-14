@@ -11,7 +11,7 @@ adjustment, modulation, readouts and hardware column alignment.
 | --- | --- | --- | --- |
 | `default` | Bounded continuous quantity; signed values use `bipolar` / `origin` | Slider tuple, `slider`, bounded `number`; `MoveSlotDefaultBody` | 1 dial |
 | `value` | A value that is the headline, including a substituted value chip | Panel-selected presentation of `MoveSlotDefaultBody` | 1 dial |
-| `enum` | A stepped choice | `select.options`; `MoveSlotEnumBody` | 1 dial |
+| `enum` | A stepped choice | `select.options`, optional `moveSpan: 2` for a wider list; `MoveSlotEnumBody` | 1 dial by default; 2 adjacent dials with `moveSpan: 2`, either knob selects |
 | `icon` | A choice recognized by its picture | Select option `icon`; `MoveSlotEnumBody` | 1 dial |
 | `curve` | A choice whose value is a shape | Select `preview(option)` sampler; `MoveSlotEnumBody` | 1 dial |
 | `toggle` | A switch the page is about | `toggle` config with `moveSlot`; `MoveSlotToggleBody` | 1 dial |
@@ -23,6 +23,11 @@ adjustment, modulation, readouts and hardware column alignment.
 | `color` | One colour the page is about | `color` config; `MoveSlotColorBody` | 1 dial; hue on the knob, luminosity on volume, tap opens the editor |
 | `ramp` | A colour gradient of 2–4 stops, editable in place | `gradient` config; `MoveSlotRampBody` | 1 dial; tap opens the editor — the track buttons become the stops |
 | `balance` | A 0..1 mix between two sibling colour params | `balance` config (`{ type: 'balance', a, b }`); `MoveSlotRampBody` | 1 dial, a plain normalized value on the wire |
+
+A select with `moveSpan: 2` uses the same list face and gestures across two
+adjacent columns. Both knobs select the same value; later controls and their
+pads retain their physical column indices. `moveTabs` takes precedence and
+keeps the select on the pad row.
 
 The panel's standard surface is the fixed eight-column cluster: parameters past
 the eight dials become value chips on the pad row per the layout rules, and a

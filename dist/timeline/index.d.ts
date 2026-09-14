@@ -192,6 +192,9 @@ type ToggleConfig = {
 };
 type SelectConfig = {
     type: 'select';
+    /** Dial columns occupied by this select. Two gives long list labels more room;
+     *  either column's knob selects the same value. Ignored for `moveTabs`. */
+    moveSpan?: 1 | 2;
     /** Optional semantic drawing for the Move surface. */
     moveVisual?: MoveSelectVisual;
     /**

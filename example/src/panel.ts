@@ -42,6 +42,14 @@ export const CONFIG = {
     type: 'select', default: 'dorian',
     options: ['major', 'minor', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'locrian'],
   },
+  result: {
+    type: 'select', default: 'drums', moveSpan: 2,
+    options: [
+      { value: 'drums', label: 'Drums · polished' },
+      { value: 'bass', label: 'Bass · original' },
+      { value: 'other', label: 'Other instruments' },
+    ],
+  },
   shape: {
     type: 'select', default: 'bell',
     options: [
