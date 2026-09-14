@@ -9428,7 +9428,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                           label: moveScreenRowLabel(row),
                           ...typeof row === "string" ? {} : {
                             ...row.detail ? { detail: row.detail } : {},
-                            ...row.checked === void 0 ? {} : { checked: row.checked }
+                            ...row.checked === void 0 ? {} : { checked: row.checked },
+                            ...row.tag ? { tag: row.tag } : {}
                           }
                         })),
                         screenSearch

@@ -4276,6 +4276,10 @@ type MoveScreenRow = string | {
     label: string;
     detail?: ListScreenDetail;
     checked?: boolean;
+    /** A short note pinned to the row's right end, smaller and dimmer than
+     *  the name — a file's format, a status. The hardware screen has no room
+     *  for it and takes the label alone. */
+    tag?: string;
 };
 /** The app's list on the Move's own 128×64 screen. */
 interface MoveScreenList {
