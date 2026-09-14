@@ -1642,6 +1642,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     ...(typeof row === 'string' ? {} : {
                       ...(row.detail ? { detail: row.detail } : {}),
                       ...(row.checked === undefined ? {} : { checked: row.checked }),
+                      ...(row.tag ? { tag: row.tag } : {}),
                     }),
                   })),
                   screenSearch
