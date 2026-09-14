@@ -2,12 +2,12 @@ import { createRoot } from 'react-dom/client';
 import { MovePanel } from '../src/components/MovePanel';
 import { TweakStore } from '../src/store/TweakStore';
 import { ModulationStore } from '../src/store/ModulationStore';
-import { MoveColorStore } from '../src/move-color';
 import { MoveFunctions } from '../src/move-functions';
 import { MovePresetStore } from '../src/move-presets';
 import { MoveSurfaceStore, type MoveScreenRow } from '../src/move-surface-store';
-import { MoveWaveformStore, toAudioBuffer } from '../src/move-waveform';
+import { toAudioBuffer } from '../src/move-waveform';
 import { MoveVolumeDisplay } from '../src/move-volume';
+import { moveKitOptions } from '../src/move-kit';
 import { setAudioModBuffer } from '../src/modulation-core';
 import '../src/styles/theme.css';
 
@@ -26,6 +26,21 @@ TweakStore.registerPanel('space', 'Space', {
   size: [0.35, 0, 1],
   decay: [0.5, 0, 1],
   mix: [0.3, 0, 1],
+});
+
+// The colour system, all three faces on one page: the integrated gradient
+// editor in a big slot (tap it — the track row becomes its stops), two small
+// colour selectors on the pad row, and the balance dial blending them.
+TweakStore.registerPanel('paint', 'Paint', {
+  ramp: { type: 'gradient', default: { type: 'linear', angle: 90, stops: [
+    { color: '#1b2a4aff', position: 0 },
+    { color: '#eb644dff', position: 0.55 },
+    { color: '#f7e6b0ff', position: 1 },
+  ] } },
+  glow: [0.4, 0, 1],
+  inkA: { type: 'color', default: '#632ad5' },
+  inkB: { type: 'color', default: '#fccff7' },
+  blend: { type: 'balance', a: 'inkA', b: 'inkB', default: 0.5 },
 });
 
 // The settings room: master controls behind the Set Overview button
@@ -190,19 +205,18 @@ window.addEventListener('keyup', (e) => {
 
 // The hardware, when the bridge is up: knobs, track buttons, Menu, wheel.
 // No bridge (or no Move) is fine — the keyboard stand-ins above still work.
+//
 // `?bridge=http://localhost:7799` points the demo at another bridge — a
-// local-engine one, so a check never touches the Move someone is playing.
-const bridge = new URLSearchParams(location.search).get('bridge') ?? 'http://localhost:7787';
+// private local-engine one on a spare port. That is how this page is checked
+// in a browser nobody is sitting at: there is one Move, and whoever binds it
+// owns it, so an automated run takes its own bridge and leaves the live one
+// to the hand playing it. (The kit refuses the live bridge from an automated
+// browser anyway; this is what it refuses you IN FAVOUR of.)
+const bridge = (new URLSearchParams(location.search).get('bridge') || 'http://localhost:7787')
+  .replace(/\/+$/, '');
 // @ts-ignore — remote module, no types
 import(/* @vite-ignore */ `${bridge}/kit.js`)
-  .then((m) => m.bindMove(TweakStore, {
-    url: bridge,
-    functions: MoveFunctions,
-    modulation: ModulationStore,
-    color: MoveColorStore,
-    waveform: MoveWaveformStore,
-    volume: MoveVolumeDisplay,
-  }))
+  .then((m) => m.bindMove(TweakStore, moveKitOptions({ url: bridge })))
   .catch(() => {});
 
 // Debug handles for poking the live stores from the console.

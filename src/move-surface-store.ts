@@ -18,6 +18,7 @@
  */
 
 import type { ListScreenDetail } from './components/ListScreen';
+import { TweakStore } from './store/TweakStore';
 
 /** One pad on a claimed row. `y` is 0 for the bottom row, 1 for the one above. */
 export interface MovePadCell {
@@ -113,6 +114,10 @@ function patch<K extends keyof MoveSurfaceState>(key: K, value: MoveSurfaceState
   emit();
 }
 
+/** Anything the app puts here only reaches the Move through the kit's
+ *  `surface` option — so a real claim tells the kit this page needs it. */
+const used = () => TweakStore.noteMoveKitUse('surface');
+
 const validPads = (pads: MovePadCell[]): MovePadCell[] =>
   pads.filter((p) => p.x >= 0 && p.x < 8 && (p.y === 0 || p.y === 1));
 
@@ -141,10 +146,12 @@ export const MoveSurfaceStore = {
 
   /** How many bottom pad rows the app took (matches `claims.pads` on the wire). */
   claimRows(rows: 0 | 1 | 2) {
+    if (rows > 0) used();
     patch('rows', rows);
   },
 
   setPads(pads: MovePadCell[]) {
+    if (pads.length) used();
     patch('pads', validPads(pads));
   },
 
@@ -152,6 +159,7 @@ export const MoveSurfaceStore = {
    *  `label` says what the row does here — pass it whenever the meaning
    *  changes, so the panel never captions the pads with a stale phrase. */
   setPadRows(rows: 0 | 1 | 2, pads: MovePadCell[], label?: string | null) {
+    if (rows > 0) used();
     patchPadRows(rows, pads, label);
   },
 
@@ -161,10 +169,12 @@ export const MoveSurfaceStore = {
   },
 
   setSteps(steps: MoveStepCell[] | null) {
+    if (steps) used();
     patch('steps', steps === null ? null : steps.filter((s) => s.step >= 0 && s.step < 16));
   },
 
   setScreen(screen: MoveScreenList | null) {
+    if (screen) used();
     patch('screen', screen);
   },
 

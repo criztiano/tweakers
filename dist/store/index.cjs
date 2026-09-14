@@ -259,6 +259,10 @@ function savePersisted(target, value) {
 }
 
 // src/store/TweakStore.ts
+var clampBalance = (n) => {
+  const v = Number(n);
+  return Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0.5;
+};
 var TAB_PATH = "_tab";
 var EMPTY_VALUES = Object.freeze({});
 function formatLabel(key) {
@@ -352,6 +356,9 @@ var TweakStoreClass = class {
     // yet registered.
     this.presetTargets = /* @__PURE__ */ new Map();
     this.persistTargets = /* @__PURE__ */ new Map();
+    // The Move-kit registries this page has put to use. Only ever grows: a
+    // page that once claimed the pads is a page whose binding needs them.
+    this.moveKitUses = /* @__PURE__ */ new Set();
   }
   registerPanel(id, name, config, shortcuts, options = {}) {
     const existingPanel = this.panels.get(id);
@@ -371,7 +378,7 @@ var TweakStoreClass = class {
     const values = this.flattenValues(config, "");
     this.initTabValue(controls, values);
     this.initTransitionModes(config, "", values);
-    this.overlayPersistedValues(target, values);
+    this.overlayPersistedValues(id, target, values, this.mapControlsByPath(controls));
     this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, moveTopRow: options.moveTopRow, module: "_enabled" in config ? true : void 0, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
@@ -450,16 +457,53 @@ var TweakStoreClass = class {
     this.presetsHidden.delete(id);
     this.notifyGlobal();
   }
-  // Overlay saved values onto freshly-computed defaults, in place. Only keys
-  // that still exist in `values` (i.e. the current config) are restored.
-  overlayPersistedValues(target, values) {
+  // Overlay saved values onto freshly-computed defaults, in place — the
+  // reload half of the lego rule. Registration decides the shape; the shelf
+  // only fills it: a persisted entry is restored when its path still exists
+  // AND its value still fits the control now standing at that path (same
+  // reconciliation a live updatePanel applies). Everything else — stale
+  // paths, values of a lost type, options that no longer exist — is dropped,
+  // said once in a console.info rather than replayed over the panel. Layout
+  // is untouchable either way: pages are built from the parsed controls
+  // alone, and nothing on this shelf ever reaches them.
+  overlayPersistedValues(panelId, target, values, controlsByPath) {
     const persisted = loadPersisted(target);
     if (!persisted) return;
-    for (const key of Object.keys(values)) {
-      if (Object.prototype.hasOwnProperty.call(persisted, key)) {
-        values[key] = persisted[key];
+    const dropped = [];
+    for (const key of Object.keys(persisted)) {
+      if (!Object.prototype.hasOwnProperty.call(values, key)) {
+        dropped.push(key);
+        continue;
       }
+      const restored = this.reconcileValue(persisted[key], values[key], key, controlsByPath);
+      if (restored === void 0) dropped.push(key);
+      else values[key] = restored;
     }
+    if (dropped.length) {
+      console.info(
+        `[tweakers] panel "${panelId}": dropped persisted state the current config no longer matches: ${dropped.join(", ")}`
+      );
+    }
+  }
+  /**
+   * One persisted/preset entry against the control now standing at its path.
+   * Returns the value to keep — normalized/clamped by the control's own
+   * rules — or `undefined` when the entry no longer fits and must be dropped.
+   * Transition `.__mode` companions reconcile through their transition
+   * control; the active tab reconciles through the tab bar's own select.
+   */
+  reconcileValue(incoming, defaultValue, path, controlsByPath) {
+    if (path.endsWith(".__mode")) {
+      const owner = controlsByPath.get(path.slice(0, -".__mode".length));
+      return owner?.type === "transition" && (incoming === "easing" || incoming === "simple" || incoming === "advanced") ? incoming : void 0;
+    }
+    const control = controlsByPath.get(path);
+    if (!control) return void 0;
+    const normalized = this.normalizePreservedValue(incoming, defaultValue, control);
+    if (normalized === defaultValue && JSON.stringify(incoming) !== JSON.stringify(defaultValue)) {
+      return void 0;
+    }
+    return normalized;
   }
   // Save the panel's current flat values (fail-soft, no-op when persistence is
   // off). Called after every edit so timing/values survive a reload.
@@ -574,6 +618,16 @@ var TweakStoreClass = class {
         this.listeners.delete(panelId);
       }
     };
+  }
+  /** A registry says the page uses it (see MoveKitRegistry). Silent: this is
+   *  bookkeeping for the bridge kit, not a change anything should render. */
+  noteMoveKitUse(registry) {
+    this.moveKitUses.add(registry);
+  }
+  /** The Move-kit registries this page has put to use — what the bridge kit
+   *  checks its binding against. */
+  getMoveKitUses() {
+    return [...this.moveKitUses];
   }
   subscribeGlobal(listener) {
     this.globalListeners.add(listener);
@@ -729,7 +783,7 @@ var TweakStoreClass = class {
             control.preview = value.preview;
             changed = true;
           }
-        } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isToggleConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
+        } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isSpringConfig(value) && !this.isEasingConfig(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isToggleConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isBalanceConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isFileConfig(value)) {
           visit(value, path);
         }
       }
@@ -746,9 +800,28 @@ var TweakStoreClass = class {
   previewValues(panelId, values) {
     const panel = this.panels.get(panelId);
     if (!panel) return;
-    this.replaceValues(panel, values);
+    this.replaceValues(panel, this.reconcileSnapshot(panel, values));
     this.snapshots.set(panelId, { ...panel.values });
     this.notify(panelId);
+  }
+  /**
+   * A captured snapshot (a preset, a preview) against the panel's CURRENT
+   * registration — the preset half of the lego rule. A preset is never
+   * invalidated wholesale for one dead path: its living paths apply
+   * (normalized by the control now at each path), its dead ones are silently
+   * ignored, and paths the snapshot never named keep the panel's current
+   * values. A config that later regains a path revives the preset's value
+   * for it, because reconciliation happens at apply time, not capture time.
+   */
+  reconcileSnapshot(panel, incoming) {
+    const controlsByPath = this.mapControlsByPath(panel.controls);
+    const next = { ...panel.values };
+    for (const [path, value] of Object.entries(incoming)) {
+      if (!Object.prototype.hasOwnProperty.call(next, path)) continue;
+      const restored = this.reconcileValue(value, next[path], path, controlsByPath);
+      if (restored !== void 0) next[path] = restored;
+    }
+    return next;
   }
   presetSchema(c) {
     return JSON.stringify([c?.type, c?.min, c?.max, c?.step, c?.stepInferred, c?.options, c?.xAxis, c?.yAxis, c?.cutoffAxis, c?.resonanceAxis]);
@@ -774,7 +847,9 @@ var TweakStoreClass = class {
     for (const path of Object.keys(restored)) {
       if (Object.prototype.hasOwnProperty.call(original.values, path)) restored[path] = original.schemas.get(path) === this.presetSchema(controls.get(path)) ? original.values[path] : this.normalizePreservedValue(original.values[path], restored[path], controls.get(path));
     }
-    this.previewValues(panelId, structuredClone(restored));
+    this.replaceValues(panel, structuredClone(restored));
+    this.snapshots.set(panelId, { ...panel.values });
+    this.notify(panelId);
   }
   getPresetPersistenceTarget(panelId) {
     return this.presetTargets.get(panelId) ? this.persistTargets.get(panelId) ?? null : null;
@@ -811,7 +886,7 @@ var TweakStoreClass = class {
     const presets = this.presets.get(panelId) ?? [];
     const preset = presets.find((p) => p.id === presetId);
     if (!preset) return;
-    this.replaceValues(panel, preset.values);
+    this.replaceValues(panel, this.reconcileSnapshot(panel, preset.values));
     this.snapshots.set(panelId, { ...panel.values });
     this.activePreset.set(panelId, presetId);
     this.savePanelValues(panelId);
@@ -1013,7 +1088,7 @@ var TweakStoreClass = class {
         const hasPhysics = value.stiffness !== void 0 || value.damping !== void 0 || value.mass !== void 0;
         const hasTime = value.visualDuration !== void 0 || value.bounce !== void 0;
         values[`${path}.__mode`] = hasPhysics && !hasTime ? "advanced" : "simple";
-      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isToggleConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isCurveConfig(value)) {
+      } else if (typeof value === "object" && value !== null && !Array.isArray(value) && !this.isActionConfig(value) && !this.isSelectConfig(value) && !this.isToggleConfig(value) && !this.isSliderConfig(value) && !this.isNumberConfig(value) && !this.isColorConfig(value) && !this.isGradientConfig(value) && !this.isBalanceConfig(value) && !this.isXYConfig(value) && !this.isTextConfig(value) && !this.isRangeConfig(value) && !this.isFilterConfig(value) && !this.isGalleryConfig(value) && !this.isFileConfig(value) && !this.isSwatchConfig(value) && !this.isChipsConfig(value) && !this.isMultiSelectConfig(value) && !this.isListConfig(value) && !this.isCurveConfig(value)) {
         this.initTransitionModes(value, path, values);
       }
     }
@@ -1097,6 +1172,19 @@ var TweakStoreClass = class {
         controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {
         controls.push({ type: "gradient", path, label, gradientForm: value.form });
+      } else if (this.isBalanceConfig(value)) {
+        controls.push({
+          type: "balance",
+          path,
+          label,
+          min: 0,
+          max: 1,
+          step: 0.01,
+          stepInferred: true,
+          balanceA: value.a,
+          balanceB: value.b,
+          shortcut
+        });
       } else if (this.isXYConfig(value)) {
         controls.push({ type: "xy", path, label, xAxis: value.x, yAxis: value.y, grid: value.grid, density: value.density, snap: value.snap, returnToCenter: value.returnToCenter, showValues: value.showValues });
       } else if (this.isFilterConfig(value)) {
@@ -1243,6 +1331,8 @@ var TweakStoreClass = class {
         values[path] = value.default ?? "#000000";
       } else if (this.isGradientConfig(value)) {
         values[path] = normalizeGradient(value.default ?? DEFAULT_GRADIENT);
+      } else if (this.isBalanceConfig(value)) {
+        values[path] = clampBalance(value.default);
       } else if (this.isXYConfig(value)) {
         const xAxis = resolveAxis(value.x);
         const yAxis = resolveAxis(value.y);
@@ -1298,6 +1388,9 @@ var TweakStoreClass = class {
   }
   isGradientConfig(value) {
     return typeof value === "object" && value !== null && "type" in value && value.type === "gradient";
+  }
+  isBalanceConfig(value) {
+    return typeof value === "object" && value !== null && "type" in value && value.type === "balance";
   }
   // Explicit { type: 'xy' } only — a bare { x, y } object would collide with the
   // "nested object → folder" fallback, so the shorthand is deliberately unsupported.
@@ -1443,6 +1536,10 @@ var TweakStoreClass = class {
           return defaultValue;
         }
         return normalizeGradient(existingValue);
+      }
+      case "balance": {
+        if (typeof existingValue !== "number" || !Number.isFinite(existingValue)) return defaultValue;
+        return clampBalance(existingValue);
       }
       case "xy": {
         if (typeof existingValue !== "object" || existingValue === null || Array.isArray(existingValue)) {

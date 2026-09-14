@@ -1,7 +1,14 @@
 import { formatHex, hslToRgb, parseHex, rgbToHsl, type HSLA } from './color-core';
+import { setStopColor, type GradientValue } from './gradient-core';
 import { TweakStore } from './store/TweakStore';
 
 export interface MoveColorView { panelId: string; path: string }
+
+/** How many stops the Move's gradient editor drives — one per track button.
+ *  A gradient with more stops keeps the plain ramp slot (drag its stops on
+ *  screen); the integrated editor is for the 2–4 stop ramps the hardware can
+ *  hold in one hand. */
+export const MOVE_GRADIENT_STOPS = 4;
 
 /** A named palette the colour dial can be locked to: sixteen colours, the
  *  dial stepping between them instead of sweeping the whole wheel. */
@@ -91,7 +98,10 @@ const paletteAt = (palette: MoveColorPalette, h: number): number =>
 const paletteCenter = (palette: MoveColorPalette, index: number): number =>
   (index + 0.5) * 360 / palette.colors.length;
 
-/** Shared editor selection and color coordinates for the panel and Move bridge. */
+/** Shared editor selection and color coordinates for the panel and Move bridge.
+ *  One editor serves two value shapes: a plain hex colour, and a gradient —
+ *  there the editor holds a SELECTED STOP (one of up to four, the track
+ *  buttons' count) and every hue/luminosity/opacity edit lands on that stop. */
 class MoveColorStoreClass {
   private view: MoveColorView | null = null;
   private version = 0;
@@ -103,6 +113,8 @@ class MoveColorStoreClass {
   /** The palette navigator behind Menu while the editor is open. */
   private picker = false;
   private pickerCursor = 0;
+  /** The gradient stop the editor is on — meaningless for a plain colour. */
+  private stop = 0;
   getView = (): MoveColorView | null => this.view;
   getVersion = (): number => this.version;
   subscribe = (fn: () => void): (() => void) => {
@@ -113,6 +125,7 @@ class MoveColorStoreClass {
   open(panelId: string, path: string) {
     if (this.view?.panelId === panelId && this.view.path === path) return;
     this.view = { panelId, path };
+    this.stop = 0;
     this.notify();
   }
   close() { if (this.view || this.picker) { this.view = null; this.picker = false; this.notify(); } }
@@ -120,9 +133,79 @@ class MoveColorStoreClass {
     if (this.view?.panelId === panelId && this.view.path === path) this.close();
     else this.open(panelId, path);
   }
+
+  /* ---- the gradient shape under a control, when it has one ---- */
+
+  /** The control's gradient value, or null when it holds a plain colour. */
+  gradient(panelId: string, path: string): GradientValue | null {
+    const v = TweakStore.getValue(panelId, path);
+    return v && typeof v === 'object' && Array.isArray((v as GradientValue).stops) && (v as GradientValue).stops.length >= 2
+      ? (v as GradientValue)
+      : null;
+  }
+  /** How many stops the editor can hold — 0 for a plain colour. */
+  stopCount(panelId: string, path: string): number {
+    return Math.min(this.gradient(panelId, path)?.stops.length ?? 0, MOVE_GRADIENT_STOPS);
+  }
+  getStop = (): number => this.stop;
+  /** Land the editor on a stop — the track buttons' gesture. */
+  selectStop(index: number) {
+    if (!this.view) return;
+    const count = this.stopCount(this.view.panelId, this.view.path);
+    const next = Math.max(0, Math.min(Math.max(0, count - 1), Math.round(index)));
+    if (next === this.stop) return;
+    this.stop = next;
+    this.notify();
+  }
+  /** A stop's position along the ramp, 0..1 — 0 when out of range. */
+  stopPosition(panelId: string, path: string, index: number): number {
+    return Number(this.gradient(panelId, path)?.stops[index]?.position) || 0;
+  }
+  /** Slide a stop, clamped between its neighbours so the held stop never
+   *  changes identity under the hand moving it — the ramp slot's own rule. */
+  moveStop(panelId: string, path: string, index: number, position: number) {
+    const g = this.gradient(panelId, path);
+    if (!g || TweakStore.isDisabled(panelId, path) || !Number.isFinite(position)) return;
+    if (index < 0 || index >= g.stops.length) return;
+    const lo = index > 0 ? g.stops[index - 1].position : 0;
+    const hi = index < g.stops.length - 1 ? g.stops[index + 1].position : 1;
+    const next = Math.min(hi, Math.max(lo, position));
+    if (next === g.stops[index].position) return;
+    TweakStore.updateValue(panelId, path, {
+      ...g,
+      stops: g.stops.map((s, i) => (i === index ? { ...s, position: next } : s)),
+    });
+    this.notify();
+  }
+  /** Slide the selected stop by wheel/dial detents — the hold-a-track gesture. */
+  turnStop(panelId: string, path: string, delta: number, fine = false) {
+    this.moveStop(panelId, path, this.stop,
+      this.stopPosition(panelId, path, this.stop) + delta * (fine ? 0.001 : 0.01));
+  }
+
+  /** Where a control's colour lives: the hex itself, or the stop's colour. */
+  private hexAt(panelId: string, path: string, stop: number | null): string {
+    const g = stop === null ? null : this.gradient(panelId, path);
+    if (g && stop !== null) return String(g.stops[Math.min(stop, g.stops.length - 1)]?.color ?? '#ff0000ff');
+    return String(TweakStore.getValue(panelId, path) ?? '#ff0000');
+  }
+  /** The selected coordinate target: the stop the editor is on, when the
+   *  control is a gradient; the control itself otherwise. */
+  private targetStop(panelId: string, path: string): number | null {
+    return this.gradient(panelId, path) ? Math.min(this.stop, this.stopCount(panelId, path) - 1) : null;
+  }
   read(panelId: string, path: string): HSLA {
-    const hex = String(TweakStore.getValue(panelId, path) ?? '#ff0000');
-    const cached = this.coordinates.get(JSON.stringify([panelId, path]));
+    return this.readStop(panelId, path, this.targetStop(panelId, path));
+  }
+  /** The colour under the editor as hex — the selected stop's for a gradient. */
+  hex(panelId: string, path: string): string {
+    return this.hexAt(panelId, path, this.targetStop(panelId, path));
+  }
+  /** A specific stop's coordinates (null = the plain colour) — what the stop
+   *  row and the hardware's track lights paint. */
+  readStop(panelId: string, path: string, stop: number | null): HSLA {
+    const hex = this.hexAt(panelId, path, stop);
+    const cached = this.coordinates.get(JSON.stringify([panelId, path, stop]));
     if (cached?.hex === hex) return { ...cached.color };
     const color = rgbToHsl(parseHex(hex) ?? { r: 255, g: 0, b: 0, a: 1 });
     if (color.s === 0) {
@@ -132,20 +215,27 @@ class MoveColorStoreClass {
     return color;
   }
   update(panelId: string, path: string, patch: Partial<HSLA>) {
+    this.updateStop(panelId, path, this.targetStop(panelId, path), patch);
+  }
+  updateStop(panelId: string, path: string, stop: number | null, patch: Partial<HSLA>) {
     if (!TweakStore.getPanel(panelId) || TweakStore.isDisabled(panelId, path) || Object.values(patch).some(n => !Number.isFinite(n))) return;
-    const color = { ...this.read(panelId, path), ...patch };
+    const color = { ...this.readStop(panelId, path, stop), ...patch };
     color.h = hue(color.h); color.s = clamp(color.s); color.l = clamp(color.l); color.a = clamp(color.a);
     // Locked to a palette, the open dial only paints its colours: the hue is
     // a position on the segmented wheel and the written hex is the segment's
     // colour. The cache keeps the position, so the hardware's knob value is
     // never snapped back under it. Alpha stays free — it belongs to the pads.
+    // The lock is per stop: every stop of an open gradient snaps the same way.
     const palette = this.view?.panelId === panelId && this.view.path === path ? this.getPalette() : null;
     const snapped = palette ? paletteHsl(palette)[paletteAt(palette, color.h)] : null;
     const painted = snapped ? { ...color, h: snapped.h, s: snapped.s, l: snapped.l } : color;
-    const current = String(TweakStore.getValue(panelId, path) ?? '');
-    const hex = formatHex(hslToRgb(painted), painted.a < 1 || current.length === 9 || current.length === 5);
-    this.coordinates.set(JSON.stringify([panelId, path]), { hex, color });
-    TweakStore.updateValue(panelId, path, hex);
+    const g = stop === null ? null : this.gradient(panelId, path);
+    // A gradient stop is always #rrggbbaa; a plain colour keeps its shape.
+    const current = this.hexAt(panelId, path, stop);
+    const hex = formatHex(hslToRgb(painted), !!g || painted.a < 1 || current.length === 9 || current.length === 5);
+    this.coordinates.set(JSON.stringify([panelId, path, stop]), { hex, color });
+    if (g && stop !== null) TweakStore.updateValue(panelId, path, setStopColor(g, stop, hex));
+    else TweakStore.updateValue(panelId, path, hex);
     this.notify();
   }
   setHue(h: number) { if (this.view) this.update(this.view.panelId, this.view.path, { h, s: 1 }); }

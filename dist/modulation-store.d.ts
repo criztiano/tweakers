@@ -1,5 +1,5 @@
 import { ModulationSlot, ModulationType, ModulationParams, ModulationAssignment, ModPageLayout } from './modulation-core.js';
-import './TweakStore-BwoLtwGN.js';
+import './TweakStore-C9BYl1QG.js';
 import './gradient-core.js';
 import './color-core.js';
 import './xy-pad-core.js';
@@ -60,6 +60,15 @@ type Listener = () => void;
 declare class ModulationStoreClass {
     private slots;
     private assignments;
+    /**
+     * Persisted assignments waiting for their panel: a saved wire names its
+     * panel (`panelName`) because panel IDS can be positional (`gallery-N`)
+     * and land on a different panel after a reload. A named record stays here
+     * — driving nothing — until a panel registers under that name, then binds
+     * to whatever id the name carries now. Records without a name (older
+     * shelves) bind by id as they always did.
+     */
+    private pending;
     private states;
     private signals;
     private sources;
@@ -78,6 +87,14 @@ declare class ModulationStoreClass {
     private rafId;
     private lastTick;
     constructor();
+    /**
+     * Follow every named wire to where its panel lives NOW. A pending record
+     * whose panel name is registered binds to that id; a live record whose id
+     * has gone (the panel unmounted and re-registered under a fresh positional
+     * id) re-keys to the same name's new id. Names are the stable identity;
+     * ids are just where the name is standing today.
+     */
+    private rebindAssignments;
     /** Create a modulation in a step's slot; an occupied slot is returned as-is. */
     createSlot(index: number, type?: ModulationType): ModulationSlot | null;
     getSlot(index: number): ModulationSlot | null;

@@ -267,6 +267,8 @@ class MoveWaveformStoreClass {
    * off screen for a moment — and its saved values win over the seed.
    */
   register(style?: Partial<MoveWaveformStyle>): () => void {
+    // the knob, wheel and step row drive it only through the kit's `waveform`
+    TweakStore.noteMoveKitUse('waveform');
     this.claims += 1;
     if (this.claims === 1) this.lastScrubAt = 0;
     this.ensureSettings(style);

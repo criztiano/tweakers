@@ -22,6 +22,7 @@ import {
   MovePadActionBody,
   MovePadAppBody,
   MovePadTabsBody,
+  MovePadColorBody,
   CurveComposer,
   ModRing,
   ModulationStore,
@@ -251,6 +252,20 @@ export const BIG_SLOTS: Specimen[] = [
     ),
   },
   {
+    kind: 'balance', path: 'blend',
+    description: MOVE_SLOT_LIBRARY.balance.description,
+    render: () => (
+      <MoveSlotRampBody
+        label="Blend" value="35%"
+        css={rampCss([
+          { color: '#632ad5', position: 0 },
+          { color: '#fccff7', position: 1 },
+        ])}
+        stop={0.35}
+      />
+    ),
+  },
+  {
     kind: 'transfer', path: 'response',
     description: MOVE_SLOT_LIBRARY.transfer.description,
     render: () => (
@@ -364,6 +379,12 @@ export const SMALL_SLOTS: Specimen[] = [
     description: MOVE_PAD_LIBRARY.wave.description,
     note: 'One row below the bends, under every stage. The name says which way the sine goes.',
     render: () => <MovePadWaveBody label="Dip" percent={40} />,
+  },
+  {
+    kind: 'color',
+    description: MOVE_PAD_LIBRARY.color.description,
+    note: 'For pages where colour is not the big control. The tap opens the same editor the colour dial has.',
+    render: () => <MovePadColorBody label="Ink A" color="#632ad5" />,
   },
   {
     kind: 'tabs', span: 4,

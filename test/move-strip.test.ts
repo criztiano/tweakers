@@ -11,7 +11,9 @@ import {
   stripDialSlots,
   stripSlotCount,
   stripSlotIndex,
+  stripWindowPads,
 } from '../src/move-strip';
+import { movePadRows } from '../src/move-layout';
 
 const control = (path: string, extra: Partial<ControlMeta> = {}): ControlMeta => ({
   type: 'slider',
@@ -34,6 +36,24 @@ const sliders = (count: number) =>
   Array.from({ length: count }, (_, i) => control(`s${i}`));
 
 describe('the endless strip', () => {
+  it('stacks a balance column the way the page does — a up top, b under it', () => {
+    const page = buildMoveStrip(panel([
+      ...sliders(9),
+      control('colorA', { type: 'color' }),
+      control('colorB', { type: 'color' }),
+      control('mix', { type: 'balance', balanceA: 'colorA', balanceB: 'colorB' }),
+    ]));
+    expect(page.dials.map((d) => d.path).at(-1)).toBe('mix');
+    expect(page.topValues?.[9]?.path).toBe('colorA');
+    expect(page.values[9]?.path).toBe('colorB');
+    expect(page.toggles).toEqual([]);
+    // past the eighth column the screen's top row still carries it
+    expect(movePadRows(page, 0)[0][9]?.path).toBe('colorA');
+    // and the hardware window's top row says so
+    const pads = stripWindowPads(page, 2);
+    expect([pads.toggles[7]?.path, pads.values[7]?.path]).toEqual(['colorA', 'colorB']);
+  });
+
   it('keeps every control at slot size instead of dropping the overflow to chips', () => {
     const page = buildMoveStrip(panel(sliders(20)));
     expect(page.dials).toHaveLength(20);

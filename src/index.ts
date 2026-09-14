@@ -39,7 +39,7 @@ export { buildMoveStrip, isStripSlot, stripStarts, stripOffsets, clampStripOffse
 // The big-slot library — the dictionary of what a Move dial slot can be
 export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotPlaybackDrawing, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotColorBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
 // The small slots — the pad row under the dials
-export { MOVE_PAD_LIBRARY, MovePadToggleBody, MovePadValueBody, MovePadActionBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody } from './components/move-slots';
+export { MOVE_PAD_LIBRARY, MovePadToggleBody, MovePadValueBody, MovePadActionBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody } from './components/move-slots';
 export type { MovePadKind } from './components/move-slots';
 export { moveNumericDrawing, movePlaybackMode, moveVisualReading } from './move-visual-core';
 export type { MoveVisual, MoveSliderVisual, MoveSelectVisual, MovePlaybackMode, MoveNumericDrawing } from './move-visual-core';
@@ -91,6 +91,12 @@ export { MoveVolumeDisplay } from './move-volume';
 export type { MoveVolumeDisplayState } from './move-volume';
 export { ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, MOVE_FUNCTION_ICONS } from './icons';
 export type { MoveFunctionGlyph } from './icons';
+// The one bind: every registry the bridge kit reads, keyed by its option
+// name — bindMove(TweakStore, moveKitOptions()).
+export { moveKitOptions } from './move-kit';
+export type { MoveKitOptions, MoveKitOverrides } from './move-kit';
+export type { MoveKitRegistry } from './store/TweakStore';
+
 // Raw hardware an app claims for itself — the bottom pad rows, the step
 // buttons, the device screen — kept for the on-screen mirror.
 export { MoveSurfaceStore, moveScreenRowLabel, moveScreenChecked } from './move-surface-store';
@@ -312,6 +318,7 @@ export type {
   ToggleConfig,
   ColorConfig,
   GradientConfig,
+  BalanceConfig,
   XYConfig,
   XYAxis,
   TextConfig,
@@ -356,7 +363,7 @@ export type {
   PanelConfig,
 } from './store/TweakStore';
 
-export { MoveColorStore, MOVE_COLOR_WHEEL, MOVE_COLOR_HUES, MOVE_COLOR_STEPS, MOVE_COLOR_PALETTES, MOVE_OPACITY_PADS, moveWheelSlot } from './move-color';
+export { MoveColorStore, MOVE_COLOR_WHEEL, MOVE_COLOR_HUES, MOVE_COLOR_STEPS, MOVE_COLOR_PALETTES, MOVE_OPACITY_PADS, MOVE_GRADIENT_STOPS, moveWheelSlot } from './move-color';
 export type { MoveColorView, MoveColorPalette } from './move-color';
 
 // The preset navigator behind the hardware Menu button — the store the

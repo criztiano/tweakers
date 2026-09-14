@@ -74,12 +74,12 @@ describe('TweakStore persistence', () => {
   it('restores persisted panel values on re-register (simulated reload)', () => {
     withMockWindow(() => {
       const id = 'persist-panel-roundtrip';
-      TweakStore.registerPanel(id, 'P', { size: 10, on: false }, undefined, { persist: true });
+      TweakStore.registerPanel(id, 'P', { size: [10, 0, 100] as [number, number, number], on: false }, undefined, { persist: true });
       TweakStore.updateValue(id, 'size', 42);
       TweakStore.updateValue(id, 'on', true);
       TweakStore.unregisterPanel(id); // reload: tear down…
 
-      TweakStore.registerPanel(id, 'P', { size: 10, on: false }, undefined, { persist: true }); // …and mount again
+      TweakStore.registerPanel(id, 'P', { size: [10, 0, 100] as [number, number, number], on: false }, undefined, { persist: true }); // …and mount again
       const values = TweakStore.getValues(id);
       assert.equal(values.size, 42);
       assert.equal(values.on, true);
@@ -103,16 +103,63 @@ describe('TweakStore persistence', () => {
   it('drops persisted keys the config no longer declares', () => {
     withMockWindow(() => {
       const id = 'persist-panel-drop';
-      TweakStore.registerPanel(id, 'P', { a: 1, b: 2 }, undefined, { persist: true });
+      TweakStore.registerPanel(id, 'P', { a: [1, 0, 10] as [number, number, number], b: [2, 0, 10] as [number, number, number] }, undefined, { persist: true });
       TweakStore.updateValue(id, 'a', 9);
       TweakStore.updateValue(id, 'b', 8);
       TweakStore.unregisterPanel(id);
 
       // Re-register without `b`: its stale saved value must not resurrect.
-      TweakStore.registerPanel(id, 'P', { a: 1 }, undefined, { persist: true });
+      const info = console.info;
+      console.info = () => {};
+      try {
+        TweakStore.registerPanel(id, 'P', { a: [1, 0, 10] as [number, number, number] }, undefined, { persist: true });
+      } finally {
+        console.info = info;
+      }
       const values = TweakStore.getValues(id);
       assert.equal(values.a, 9);
       assert.equal('b' in values, false);
+      TweakStore.unregisterPanel(id);
+    });
+  });
+
+  // The lego rule: registration is the source of truth, and a persisted value
+  // is restored only when the control now at its path can still hold it.
+  it('reconciles persisted values against the current config shape', () => {
+    withMockWindow(() => {
+      const id = 'persist-panel-reshape';
+      TweakStore.registerPanel(id, 'P', {
+        size: [10, 0, 200] as [number, number, number],
+        mix: '#ff0000',
+        mode: { type: 'select', options: ['a', 'b', 'retired'] },
+      }, undefined, { persist: true });
+      TweakStore.updateValue(id, 'size', 150);
+      TweakStore.updateValue(id, 'mix', '#00ff00');
+      TweakStore.updateValue(id, 'mode', 'retired');
+      TweakStore.unregisterPanel(id);
+
+      // The reworked shape: size's range shrank, mix became a balance (a
+      // number now, not a hex), and `retired` left the mode list.
+      const info = console.info;
+      let said = 0;
+      console.info = () => { said++; };
+      try {
+        TweakStore.registerPanel(id, 'P', {
+          size: [10, 0, 100] as [number, number, number],
+          mix: { type: 'balance', a: 'colorA', b: 'colorB', default: 0.5 },
+          mode: { type: 'select', options: ['a', 'b'] },
+          colorA: '#111111',
+          colorB: '#222222',
+        }, undefined, { persist: true });
+      } finally {
+        console.info = info;
+      }
+
+      const values = TweakStore.getValues(id);
+      assert.equal(values.size, 100);     // clamped into the new range
+      assert.equal(values.mix, 0.5);      // a hex can't be a mix — default
+      assert.equal(values.mode, 'a');     // retired option — default
+      assert.equal(said, 1);              // dropped state is said once
       TweakStore.unregisterPanel(id);
     });
   });

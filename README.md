@@ -85,8 +85,25 @@ const params = useTweakers(name, config, options?)
 | `options.hints` | `Record<string, string>` | Help text for controls (see [Hints](#hints)) |
 | `options.affordances` | `Record<string, AffordanceConfig>` | Companion controls (see [Affordances](#affordances)) |
 | `options.labels` | `Record<string, string>` | Display labels overriding the key-derived name (see [Labels](#labels)) |
+| `options.persist` | `boolean \| { key?, storage? }` | Save the panel's values to browser storage and restore them on the next load (see [Persistence](#persistence)) |
 
 Returns a fully typed object matching your config shape with live values. Updating a control in the UI immediately updates the returned values.
+
+---
+
+## Persistence
+
+With `persist: true` (and a stable panel id or an explicit `persist.key`) the panel's flat values are saved to `localStorage` — fail-soft, so a blocked or full storage degrades to session-only without a sound.
+
+**The registration is the source of truth.** On load, saved state is *reconciled* against the config you just registered, path by path:
+
+- A path the config still declares, holding a value the control at that path can still carry, is restored — clamped into the control's current range, checked against a select's current options, repaired by the control's own normalizer.
+- Everything else — a removed path, a value whose type no longer fits, an option that left the list — is dropped, and the drops are said once in a `console.info`. Renaming a control, retyping it, or shrinking its range can never resurrect the old shape.
+- **Layout is never persisted state.** Which control sits where — dial columns, pad rows, `movePads` seats — is built from the registered config alone; nothing on the storage shelf can move it.
+
+Presets follow the same rule at apply time: a snapshot from an older config shape is never invalidated wholesale — its living paths apply (normalized), its dead paths are silently ignored, and paths it never named keep the panel's current values. A path the config later regains revives that preset value on the next apply.
+
+Modulation slots and assignments persist globally (see [Modulation](#modulation)). A saved assignment carries its panel's **name** as the stable identity: hosts that mint positional ids (`gallery-1`, `gallery-2`, …) get their wires back on the panel they were made on, whatever id that name registers under after a reload.
 
 ---
 
@@ -841,7 +858,7 @@ When the panel is open, the toolbar provides:
 
 ### Generative preset exploration
 
-Hold the Move preset button to explore a floating 32-pad generation. Audition children, mark parents, rate favorites, breed new generations, or morph up to eight presets. Save multiple discoveries without leaving; Back restores the original sound. Pass `exploration: PresetExplorationStore` to the updated bridge’s `bindMove` options.
+Hold the Move preset button to explore a floating 32-pad generation. Audition children, mark parents, rate favorites, breed new generations, or morph up to eight presets. Save multiple discoveries without leaving; Back restores the original sound. `moveKitOptions()` already carries `PresetExplorationStore` as the bridge’s `exploration` option.
 
 See [the exploration guide](docs/preset-exploration.md) for controls, persistence, supported parameters, and the optional host preset adapter.
 
@@ -1039,11 +1056,13 @@ Mark an item `muted` when the row is information rather than a choice — a job 
 tweakers apps can be driven by an Ableton Move over the bridge kit (the `move` repo's app server). The app binds once and both surfaces stay in sync:
 
 ```tsx
-import { TweakStore, MovePanel } from 'tweakers';
+import { TweakStore, MovePanel, moveKitOptions } from 'tweakers';
 
-// Bind the hardware bridge when it's running (no-op otherwise).
+// Bind the hardware bridge when it's running (no-op otherwise). The bundle is
+// every registry the kit reads — never list them by hand; the kit warns when
+// the page needs one the bind lacks.
 import('http://localhost:7787/kit.js')
-  .then(m => m.bindMove(TweakStore))
+  .then(m => m.bindMove(TweakStore, moveKitOptions()))
   .catch(() => {});
 
 // Optional on-screen mirror of the Move surface, docked to the bottom edge.
@@ -1253,12 +1272,13 @@ The pad row under the dials has its own dictionary, `MOVE_PAD_LIBRARY`, on the s
 The panel gives an app its knobs; `MoveWaveform` gives it the sample they are acting on, on the same surface and driven by the same hardware.
 
 ```tsx
-import { MoveWaveform, MoveWaveformStore } from 'tweakers';
+import { MoveWaveform, TweakStore, moveKitOptions } from 'tweakers';
 
 <MoveWaveform buffer={buffer} getProgress={() => playhead} onSeek={setPosition} onLoopChange={setLoop} />
 
+// moveKitOptions() already carries MoveWaveformStore as `waveform`
 import('http://localhost:7787/kit.js')
-  .then(m => m.bindMove(TweakStore, { waveform: MoveWaveformStore }))
+  .then(m => m.bindMove(TweakStore, moveKitOptions()))
   .catch(() => {});
 ```
 
@@ -1290,14 +1310,15 @@ The Move's named function buttons attach to your app's own actions through the f
 - **Special** — `sample`, `loop`, `capture`, `menu`, `back`, `jog_click` (also exported as `MOVE_SPECIAL_BUTTONS`). These carry no fixed meaning; each app decides what they do — `sample` often acts as the confirm key.
 
 ```tsx
-import { TweakStore, MoveFunctions } from 'tweakers';
+import { TweakStore, MoveFunctions, moveKitOptions } from 'tweakers';
 
 MoveFunctions.attach('undo', () => history.undo());
 MoveFunctions.attach('copy', ({ shift }) => (shift ? copyAll() : copySelection()));
 MoveFunctions.attach('sample', () => confirmSelection());
 
+// moveKitOptions() already carries MoveFunctions as `functions`
 import('http://localhost:7787/kit.js')
-  .then(m => m.bindMove(TweakStore, { functions: MoveFunctions }))
+  .then(m => m.bindMove(TweakStore, moveKitOptions()))
   .catch(() => {});
 ```
 

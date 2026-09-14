@@ -967,6 +967,16 @@
   gap: 4px;
   width: var(--move-surface-w, var(--move-cluster-w, 100%));
   align-self: center;
+  /* One slot, measured INSIDE this box. --move-cluster-w is a fraction of
+     its containing block, and for anything in here that block is the grid —
+     already narrowed once to --move-surface-cols slots. Taking an eighth of
+     it again shrank every dial a second time (144px → 70px on a 4-column
+     page) and floated the row off its pad columns. The slot is recovered the
+     way the strip recovers it: divide this box by its own column count. */
+  --move-slot-w: calc(
+    (100% - (var(--move-surface-cols, var(--move-cols, 8)) - 1) * var(--move-gap))
+    / var(--move-surface-cols, var(--move-cols, 8))
+  );
 }
 
 .tweakers-move-dials {
@@ -974,16 +984,12 @@
   grid-template-columns: repeat(var(--move-cols, 8), minmax(0, 1fr));
   gap: var(--move-gap);
   height: var(--move-slot-height);
-  /* Percentages resolve where they are used, and this row's block is the
-     grid — already only --move-surface-cols slots wide. An eighth of THAT
-     is a second shrink: a five-slot page drew five pills. So the slot is
-     recovered from the grid by its own column count (the strip's rule),
-     and the row is that slot times the dial columns it shows. */
-  --move-dials-slot-w: calc(
-    (100% - (var(--move-surface-cols, var(--move-cols, 8)) - 1) * var(--move-gap)) / var(--move-surface-cols, var(--move-cols, 8))
+  width: calc(
+    var(--move-slot-w) * var(--move-cols, 8) + var(--move-gap) * (var(--move-cols, 8) - 1)
   );
-  width: calc(var(--move-dials-slot-w) * var(--move-cols, 8) + var(--move-gap) * (var(--move-cols, 8) - 1));
-  align-self: center;
+  /* Column i is knob i on both rows: a dial row narrower than the pad row
+     below it starts where the pads start, so a chip stays under its dial. */
+  align-self: start;
 }
 
 /* The endless strip. The rows keep their 8-wide slot size and simply run
@@ -1183,6 +1189,35 @@
 /* The two big sliders (Figma "Slider/Hue" and "Slider/Lightness"): a 20px
    pill of gradient with a 26px round thumb riding it — the thumb's fill
    follows the value through --move-slider-thumb, set inline. */
+/* The gradient's ramp inside the editor: the value itself, with one handle
+   per stop — tap a handle to select its stop (the track buttons' job on
+   the hardware), drag it to slide the stop between its neighbours. */
+.tweakers-move-color-ramp {
+  position: relative;
+  height: 30px;
+  border-radius: 6px;
+}
+
+.tweakers-move-color-stop {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 22px;
+  margin: -11px 0 0 -7px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  box-shadow: 0 0 0 var(--move-color-stroke) var(--move-color-marker-dark);
+  cursor: grab;
+  touch-action: none;
+}
+
+.tweakers-move-color-stop[data-selected] {
+  box-shadow: 0 0 0 var(--move-color-stroke) var(--move-color-marker-dark), 0 0 0 calc(var(--move-color-stroke) * 2) var(--move-text);
+}
+
+.tweakers-move-color-stop:disabled { cursor: default; }
+
 .tweakers-move-color-slider { width: 100%; }
 .tweakers-move-color-slider input {
   -webkit-appearance: none;
@@ -1645,6 +1680,12 @@
 
   background: var(--move-text);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+}
+
+/* The other stops, while the editor holds the ramp: present, not the one
+   under the hand. */
+.tweakers-move-slot-tick[data-quiet] {
+  opacity: 0.4;
 }
 
 .tweakers-move-slot-needle {
@@ -2763,6 +2804,38 @@
 
 .tweakers-move-pad[data-kind="value"] .tweakers-move-pad-title {
   text-align: left;
+}
+
+/* The small colour selector: the value chip's shape carrying a swatch where
+   the number would sit. The swatch rides the same transparency checker as
+   the big slot's, so an alpha colour reads the same at both sizes. */
+.tweakers-move-pad[data-kind="color"] {
+  justify-content: space-between;
+  padding: 0 10px;
+}
+
+.tweakers-move-pad[data-kind="color"] .tweakers-move-pad-title {
+  text-align: left;
+}
+
+.tweakers-move-pad[data-kind="color"][data-on],
+.tweakers-move-pad[data-kind="color"]:hover {
+  box-shadow: inset 0 0 0 var(--move-color-stroke) var(--move-text);
+}
+
+.tweakers-move-pad-swatch {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: repeating-conic-gradient(var(--move-color-check-light) 0% 25%, var(--move-color-check-dark) 0% 50%) 0 0 / 12px 12px;
+}
+
+.tweakers-move-pad-swatch > span {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 /* The envelope's two gesture rows — bend above, wave below. Both are held

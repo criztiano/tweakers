@@ -20,6 +20,9 @@ adjustment, modulation, readouts and hardware column alignment.
 | `xy` | Two axes that form one gesture | `xy`; `MoveSlotXYBody` | Column knob X, touched + volume Y |
 | `range` | Low/high bounds of one interval | `range`; `MoveSlotRangeBody` | Column knob low, touched + volume high |
 | `filter` | Cutoff and resonance with a response display | `filter`; `MoveSlotFilterBody` | 2 adjacent dials |
+| `color` | One colour the page is about | `color` config; `MoveSlotColorBody` | 1 dial; hue on the knob, luminosity on volume, tap opens the editor |
+| `ramp` | A colour gradient of 2–4 stops, editable in place | `gradient` config; `MoveSlotRampBody` | 1 dial; tap opens the editor — the track buttons become the stops |
+| `balance` | A 0..1 mix between two sibling colour params | `balance` config (`{ type: 'balance', a, b }`); `MoveSlotRampBody` | 1 dial, a plain normalized value on the wire |
 
 The panel's standard surface is the fixed eight-column cluster: parameters past
 the eight dials become value chips on the pad row per the layout rules, and a
@@ -45,12 +48,86 @@ control.
 | `action` | A button the page wants on the surface | `action` with a `movePads` column; `MovePadActionBody` | 1 pad |
 | `app` | A cell the app paints — a track, a slice, a step | `MoveSurfaceStore`; `MovePadAppBody` | 1 pad |
 | `tabs` | The mode a page is in, reachable without turning anything | `select` with `moveTabs` (`true`, or `'named'` for the name pad); `MovePadTabsBody` | 2–8 adjacent pads, switch row |
+| `color` | A single colour where colour is not the page's big control | `color` config with a `movePads` column — or nothing at all when a `balance` references it (the kit seats those itself); `MovePadColorBody` | 1 pad, top or value row; lit white like any chip (its colour is the screen's swatch); a chip like `value` — tap latches, hold peeks |
 
 A `moveTabs` select stops competing for a dial: it is a pad strip and nothing
 else. It lands as one piece or not at all — the builder reports `tabs-oversized`
 when the strip is wider than the 8-pad row and `tabs-no-room` when no run that
 long is left, rather than shortening a mode picker. `movePads` names the column
 its run **starts** in.
+
+### Color: the integrated gradient editor and the balance pattern
+
+A `gradient` of 2–4 stops carries the full colour editor in its slot: tap the
+ramp (screen) or its knob (hardware) and the four track buttons become the
+stops, lit in each stop's colour — select one and the colour dial + volume
+dial edit that stop's hue and luminosity exactly as they edit a single
+colour; hold a track button and the colour dial slides that stop along the
+ramp instead; pads and steps set the selected stop's opacity. The track
+buttons return to page duty the moment the editor closes (the settings
+room's suppress/restore precedent). Palette locks apply per stop. A gradient
+with more than four stops keeps the plain ramp slot and its on-screen drag.
+
+A `color` control given a `movePads` column becomes the **small colour
+selector**: a swatch chip on the value row for pages where colour is not the
+big control. It follows the small-slot grammar every value chip follows —
+the same code path, on screen and on the hardware, so the two can never
+drift:
+
+- **Tap** latches the chip into the dial above: that column's knob (and the
+  on-screen slot) now edits the colour, until the chip is tapped again.
+- **Hold** does the same for as long as the pad is down — a peek; release
+  hands the knob back to its dial.
+
+While a colour chip holds the knob, it is edited exactly as a big-slot
+colour is: hue on the knob, luminosity on the volume knob while that knob is
+touched, and the full editor behind the big slot's own gesture — a still tap
+on the knob (hardware) or on the slot (screen); Shift+tap restores its first
+colour. A tap on the pad itself never opens the editor. The latch outlives
+the editor.
+
+A colour chip is a chip on whichever row it sits: the slot's kind decides
+the gesture, never its row. A balance's first colour rides the top row —
+the same cell a `moveTopRow` chip takes — and still latches and peeks; it
+does not toggle. A column holding both of a
+balance's colours has one knob and one owner: latching one releases the
+other, and holding one peeks over the one latched.
+
+The **balance pattern** expresses "this effect's colour is a mix of two":
+two small colour selectors plus one big slot blending between them. Declaring
+the three params is the whole job — the lego principle:
+
+```tsx
+useTweakers('Noise', {
+  colorA: { type: 'color', default: '#632ad5' },
+  colorB: { type: 'color', default: '#fccff7' },
+  balance: { type: 'balance', a: 'colorA', b: 'colorB', default: 0.5 },
+});
+```
+
+The kit seats the two referenced colours ITSELF: stacked in the balance's
+own column — `a` the chip up top, `b` the chip under it, the stacked column
+`moveTopRow` builds by hand — so the blend and its two ends read as one column
+group, on screen and on the hardware alike. They seat first: a switch or a
+lifted chip named into that column moves along its row, said out loud.
+No `movePads` for them (a hand-named column on one is ignored with a
+`balance-color-placed` warning, the pads-never-mirror-dials rule's sibling).
+Every colour chip wears its live store value as the swatch on screen. On
+the device its pad lights WHITE, like every occupied small slot — the
+small-slot grammar has no per-type exceptions, so the colour is shown on the
+screen, never on the pad.
+
+`balance` resolves to a plain 0..1 number (0 all `a`, 1 all `b`) — on the
+wire it is an ordinary dial, so modulation, presets and hardware sync need
+nothing new — while its slot draws the two referenced colours' ramp with the
+mix position as the tick.
+
+What stays a hand decision, and why: a STANDALONE colour is a dial by
+default and becomes a chip only when its `movePads` column says so — whether
+colour is the page's big control is page design, not something the config
+can know; a toggle's column (which dial it qualifies) and a hand-placed
+action's seat are the app's vocabulary for the same reason. Everything the
+config can answer, the kit answers.
 
 | Component / API | Purpose |
 | --- | --- |

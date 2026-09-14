@@ -16,6 +16,8 @@
  * When nothing is set, the pill disappears.
  */
 
+import { TweakStore } from './store/TweakStore';
+
 export interface MoveVolumeDisplayState {
   /** A short name for what the dial edits — dimmed ahead of the value. */
   label?: string;
@@ -31,6 +33,8 @@ class MoveVolumeDisplayClass {
 
   /** Show the pill with this readout — replaces any previous one. */
   set(state: MoveVolumeDisplayState): void {
+    // the Move's screen shows it only through the kit's `volume` option
+    TweakStore.noteMoveKitUse('volume');
     this.state = state;
     this.notify();
   }

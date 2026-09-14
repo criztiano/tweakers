@@ -251,6 +251,14 @@ type GradientConfig = {
      */
     form?: 'fill' | 'ramp';
 };
+type BalanceConfig = {
+    type: 'balance';
+    /** Sibling color params (paths in the same panel) the dial blends between. */
+    a: string;
+    b: string;
+    /** Mix position 0..1 — 0 is all `a`, 1 is all `b`. Default 0.5. */
+    default?: number;
+};
 type XYConfig = {
     type: 'xy';
     /** Starting point. Missing/out-of-range components clamp to each axis's origin. */
@@ -571,14 +579,14 @@ type ListField = {
     placeholder?: string;
     defaultValue: number | boolean | string;
 };
-type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ToggleConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue | FilterConfig | FilterValue | TransferConfig | TransferValue;
+type TweakValue = number | boolean | string | string[] | XYValue | SpringConfig | EasingConfig | ActionConfig | SelectConfig | ToggleConfig | SliderConfig | NumberConfig | ColorConfig | GradientConfig | GradientValue | BalanceConfig | XYConfig | TextConfig | GalleryConfig | FileConfig | SwatchConfig | ChipsConfig | MultiSelectConfig | ListConfig | ListItemValue[] | RangeConfig | RangeValue | FilterConfig | FilterValue | TransferConfig | TransferValue;
 type TweakConfig = {
     [key: string]: TweakValue | [number, number, number, number?] | CurveConfig | AnalyserConfig | TweakConfig;
 };
 /** UI-only reserved keys: they shape the panel, never resolve to a value. */
 type ReservedKey = '_collapsed' | '_collapsible' | '_tabs';
 type ResolvedValues<T extends TweakConfig> = {
-    [K in keyof T as T[K] extends CurveConfig ? never : T[K] extends AnalyserConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends ToggleConfig ? boolean : T[K] extends NumberConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends FilterConfig ? FilterValue : T[K] extends TransferConfig ? TransferValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends TweakConfig ? ResolvedValues<T[K]> : T[K];
+    [K in keyof T as T[K] extends CurveConfig ? never : T[K] extends AnalyserConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends ToggleConfig ? boolean : T[K] extends NumberConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends BalanceConfig ? number : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends FilterConfig ? FilterValue : T[K] extends TransferConfig ? TransferValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends TweakConfig ? ResolvedValues<T[K]> : T[K];
 };
 type ShortcutMode = 'fine' | 'normal' | 'coarse';
 type ShortcutInteraction = 'scroll' | 'drag' | 'move' | 'scroll-only';
@@ -620,7 +628,7 @@ type AffordanceConfig = {
 };
 type ControlMeta = {
     moveVisual?: MoveVisual;
-    type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser' | 'filter' | 'transfer';
+    type: 'slider' | 'number' | 'toggle' | 'spring' | 'transition' | 'folder' | 'action' | 'select' | 'color' | 'gradient' | 'balance' | 'xy' | 'text' | 'range' | 'gallery' | 'file' | 'swatch' | 'chips' | 'multiselect' | 'list' | 'curve' | 'analyser' | 'filter' | 'transfer';
     path: string;
     label: string;
     /** One line of help, revealed on hover or when focus lands inside the control. */
@@ -636,6 +644,9 @@ type ControlMeta = {
     rangeDefault?: RangeValue;
     /** Gradient's editor form — `ramp` drops the fill-shape chrome. */
     gradientForm?: 'fill' | 'ramp';
+    /** Balance's two color params (paths in the same panel) — 0 is all `balanceA`, 1 all `balanceB`. */
+    balanceA?: string;
+    balanceB?: string;
     /** Transfer curve's surface height, grid divisions and axis names. */
     curveHeight?: number;
     gridDivisions?: number;
@@ -870,8 +881,9 @@ type TweakStorePanelOptions = {
     /**
      * Value chips, by control path, that sit on the top pad row instead of the
      * value row — for a page whose switches leave that row free, so the chip
-     * sits right under the dial it pairs with. A chip keeps the value row when
-     * a switch already holds its column up top. Same column, same gestures
+     * sits right under the dial it pairs with. The chip rides its `movePads`
+     * column, and keeps the value row when it names none or when a switch (or a
+     * balance's colour) already holds that cell up top. Same column, same gestures
      * (hold to peek, tap to latch), on the screen and on the hardware.
      */
     moveTopRow?: string[];
@@ -881,6 +893,15 @@ type TweakStorePanelOptions = {
      * are filtered out of the panel dock and off the track row. */
     kind?: 'timeline' | 'modulation' | 'kit';
 };
+/**
+ * The registries the Move bridge kit reads, by their `bindMove` option names.
+ * The kit ships alone and cannot import them, so an app hands them over —
+ * `moveKitOptions()` bundles every one. Each registry notes here when the page
+ * puts it to use (`noteMoveKitUse`), so the kit can say out loud when it was
+ * bound without one the page needs, instead of dropping that feature on the
+ * hardware in silence.
+ */
+type MoveKitRegistry = 'functions' | 'modulation' | 'color' | 'surface' | 'waveform' | 'volume' | 'transfer';
 /** camelCase → Title Case, the label rule used everywhere a key becomes UI text. */
 declare function formatLabel(key: string): string;
 /**
@@ -919,10 +940,19 @@ declare class TweakStoreClass {
     private baseValues;
     private presetTargets;
     private persistTargets;
+    private moveKitUses;
     registerPanel(id: string, name: string, config: TweakConfig, shortcuts?: Record<string, ShortcutConfig>, options?: TweakStorePanelOptions): void;
     updatePanel(id: string, name: string, config: TweakConfig, shortcuts?: Record<string, ShortcutConfig>, options?: TweakStorePanelOptions): void;
     unregisterPanel(id: string): void;
     private overlayPersistedValues;
+    /**
+     * One persisted/preset entry against the control now standing at its path.
+     * Returns the value to keep — normalized/clamped by the control's own
+     * rules — or `undefined` when the entry no longer fits and must be dropped.
+     * Transition `.__mode` companions reconcile through their transition
+     * control; the active tab reconciles through the tab bar's own select.
+     */
+    private reconcileValue;
     private persistPresets;
     private savePanelValues;
     updateValue(panelId: string, path: string, value: TweakValue): void;
@@ -944,6 +974,12 @@ declare class TweakStoreClass {
     selectPanels(only?: string | string[]): PanelConfig[];
     getPanel(id: string): PanelConfig | undefined;
     subscribe(panelId: string, listener: Listener): () => void;
+    /** A registry says the page uses it (see MoveKitRegistry). Silent: this is
+     *  bookkeeping for the bridge kit, not a change anything should render. */
+    noteMoveKitUse(registry: MoveKitRegistry): void;
+    /** The Move-kit registries this page has put to use — what the bridge kit
+     *  checks its binding against. */
+    getMoveKitUses(): MoveKitRegistry[];
     subscribeGlobal(listener: Listener): () => void;
     subscribeActions(panelId: string, listener: ActionListener): () => void;
     triggerAction(panelId: string, path: string): void;
@@ -987,6 +1023,16 @@ declare class TweakStoreClass {
      * record doesn't, so browsing can never rewrite a saved preset.
      */
     previewValues(panelId: string, values: Record<string, TweakValue>): void;
+    /**
+     * A captured snapshot (a preset, a preview) against the panel's CURRENT
+     * registration — the preset half of the lego rule. A preset is never
+     * invalidated wholesale for one dead path: its living paths apply
+     * (normalized by the control now at each path), its dead ones are silently
+     * ignored, and paths the snapshot never named keep the panel's current
+     * values. A config that later regains a path revives the preset's value
+     * for it, because reconciliation happens at apply time, not capture time.
+     */
+    private reconcileSnapshot;
     private presetSchema;
     /** Scoped audition: normal edits remain audible but never autosave. */
     beginPresetPreview(panelId: string): void;
@@ -1072,6 +1118,7 @@ declare class TweakStoreClass {
     private isSelectConfig;
     private isColorConfig;
     private isGradientConfig;
+    private isBalanceConfig;
     private isXYConfig;
     private isFilterConfig;
     private isTransferConfig;
@@ -1122,4 +1169,4 @@ declare function defaultListItemParams(schema: Record<string, ListItemField>): R
 declare function normalizeListItems(config: ListConfig): ListItemValue[];
 declare const TweakStore: TweakStoreClass;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type CurveConfig, type EasingConfig, type FileConfig, type FilterConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type MovePlaybackMode, type MoveSelectVisual, type MoveSliderVisual, type MoveVisual, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type PanelConfig, type Preset, type PresetExplorationAdapter, type PresetItem, type PresetProvider, type PresetProviderPreset, type RangeConfig, type RangeValue, type ReservedKey, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SwatchConfig, type SwatchOption, TAB_PATH, type TextConfig, type ToggleConfig, type TransferConfig, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakStorePanelOptions, type TweakValue, type TweakersPersistOptions, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, groupListFields, hintDomId, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveTweakValues };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type BalanceConfig, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type CurveConfig, type EasingConfig, type FileConfig, type FilterConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type MoveKitRegistry, type MovePlaybackMode, type MoveSelectVisual, type MoveSliderVisual, type MoveVisual, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type PanelConfig, type Preset, type PresetExplorationAdapter, type PresetItem, type PresetProvider, type PresetProviderPreset, type RangeConfig, type RangeValue, type ReservedKey, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SwatchConfig, type SwatchOption, TAB_PATH, type TextConfig, type ToggleConfig, type TransferConfig, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakStorePanelOptions, type TweakValue, type TweakersPersistOptions, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, groupListFields, hintDomId, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveTweakValues };
