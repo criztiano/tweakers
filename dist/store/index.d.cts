@@ -906,7 +906,7 @@ type TweakStorePanelOptions = {
  * bound without one the page needs, instead of dropping that feature on the
  * hardware in silence.
  */
-type MoveKitRegistry = 'functions' | 'modulation' | 'color' | 'surface' | 'waveform' | 'volume' | 'transfer';
+type MoveKitRegistry = 'padList' | 'functions' | 'modulation' | 'color' | 'surface' | 'waveform' | 'volume' | 'transfer';
 /** camelCase → Title Case, the label rule used everywhere a key becomes UI text. */
 declare function formatLabel(key: string): string;
 /**

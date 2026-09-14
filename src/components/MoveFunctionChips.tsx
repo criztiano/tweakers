@@ -40,7 +40,7 @@ export function MoveFunctionGlyphIcon({ glyph, className = 'tweakers-move-chip-i
   );
 }
 
-function Chip({ chip }: { chip: MoveFunctionChip }) {
+export function MoveFunctionChipButton({ chip, disabled }: { chip: MoveFunctionChip; disabled?: boolean }) {
   const [pressed, setPressed] = useState(false);
   const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -64,6 +64,7 @@ function Chip({ chip }: { chip: MoveFunctionChip }) {
     <button
       type="button"
       className="tweakers-move-chip"
+      disabled={disabled}
       data-name={chip.name}
       data-variant={chip.variant}
       data-color={chip.color}
@@ -107,7 +108,7 @@ export function MoveFunctionChips({ className }: MoveFunctionChipsProps) {
   return (
     <div className={className ? `tweakers-move-chips ${className}` : 'tweakers-move-chips'}>
       {chips.map((chip) => (
-        <Chip key={chip.name} chip={chip} />
+        <MoveFunctionChipButton key={chip.name} chip={chip} />
       ))}
     </div>
   );

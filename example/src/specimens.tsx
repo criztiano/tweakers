@@ -360,6 +360,9 @@ export const BIG_SLOTS: Specimen[] = [
 /* ── the small slots — the pad row under the dials ──────────────── */
 
 export const SMALL_SLOTS: Specimen[] = [
+  { kind: 'list', description: MOVE_PAD_LIBRARY.list.description,
+    note: 'Tap Parts in the live panel. Its dial walks the checked list; Enter selects and Capture submits.',
+    render: () => <MovePadActionBody label="Parts" /> },
   {
     kind: 'toggle',
     description: MOVE_PAD_LIBRARY.toggle.description,

@@ -181,3 +181,34 @@ Check that adapter's export barrel and renderer before selecting a specialized
 control; React exports do not establish parity. Framework-neutral entry points
 include `tweakers/store`, `tweakers/timeline`, `tweakers/curve-composer-core`,
 `tweakers/modulation-core`, and `tweakers/modulation-store`.
+
+### Checked list action pad
+
+Attach `MovePadListStore` to a normal action in `movePads`. Its small slot
+opens a checked `ListScreen` directly above itself. The column dial walks the
+rows; Enter (Sampling), jog click or a row click toggles; Capture submits.
+Back, Escape, clicking elsewhere, page changes and unmount release the dial.
+The underlying dial value is untouched. The wheel and volume keep their app
+meaning; this overlay never publishes a hardware screen list.
+
+```tsx
+useEffect(() => MovePadListStore.attach(panelId, 'extract', {
+  label: 'Parts', submitLabel: 'Extract',
+  options: [{ value: 'drums', label: 'Drums' }, { value: 'bass', label: 'Bass' }],
+  selected: ['drums'],
+  onSubmit: selected => extract(selected),
+}), [panelId, extract]);
+```
+
+Selections and cursor survive close/reopen for the attachment's lifetime.
+`open(panelId, path)` also opens it from an app's browser action. `getView()`
+is null when closed; `subscribe()` returns a release callback. Async submission
+locks selection and ignores duplicate Capture even if closed and reopened.
+A failure stays beside the list for an explicit retry. The footer reuses the
+kit Capture chip so submission stays reachable when the list covers the header.
+The Library's **Parts** pad demonstrates the same API used by Primecut Extract.
+`moveKitOptions()` includes this registry as `padList`.
+
+`MovePadListBody` is the shared drawing in `MOVE_PAD_LIBRARY.list`; it uses
+`MovePadListView` plus cursor/toggle callbacks. `MoveFunctions.push` keeps
+an overlay above app reattachments and restores the latest app handler.

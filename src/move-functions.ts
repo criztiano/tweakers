@@ -160,6 +160,16 @@ export type MoveFunctionRunListener = (name: MoveFunctionButton, press: MoveFunc
 
 class MoveFunctionsClass {
   private handlers = new Map<MoveFunctionButton, MoveFunctionHandler>();
+  private overlays = new Map<MoveFunctionButton, { handler: MoveFunctionHandler; options?: MoveFunctionOptions }[]>();
+  private handler(name: MoveFunctionButton) {
+    const entries = this.overlays.get(name);
+    return entries?.[entries.length - 1]?.handler ?? this.handlers.get(name);
+  }
+  private option(name: MoveFunctionButton) {
+    const entries = this.overlays.get(name);
+    const overlay = entries?.[entries.length - 1];
+    return overlay ? overlay.options : this.options.get(name);
+  }
   private options = new Map<MoveFunctionButton, MoveFunctionOptions>();
   private listeners = new Set<() => void>();
   private runListeners = new Set<MoveFunctionRunListener>();
@@ -194,7 +204,7 @@ class MoveFunctionsClass {
 
   /** The attached button names — what the kit claims on the hardware. */
   list(): MoveFunctionButton[] {
-    return [...this.handlers.keys()].filter((name) => !this.dormant?.has(name));
+    return [...new Set([...this.handlers.keys(), ...this.overlays.keys()])].filter((name) => !this.dormant?.has(name));
   }
 
   /**
@@ -207,7 +217,7 @@ class MoveFunctionsClass {
    * release wakes everything as it was.
    */
   suspend(keep: MoveFunctionButton[] = []): () => void {
-    const dormant = new Set([...this.handlers.keys()].filter((name) => !keep.includes(name)));
+    const dormant = new Set(this.list().filter((name) => !keep.includes(name)));
     this.dormant = dormant;
     this.notify();
     return () => {
@@ -228,8 +238,8 @@ class MoveFunctionsClass {
    */
   chips(): MoveFunctionChip[] {
     return MOVE_FUNCTION_MANIFEST
-      .filter((b) => (MOVE_CHIP_BUTTONS as readonly string[]).includes(b.name) && this.handlers.has(b.name) && !this.dormant?.has(b.name))
-      .map((b) => ({ name: b.name, options: this.options.get(b.name) }))
+      .filter((b) => (MOVE_CHIP_BUTTONS as readonly string[]).includes(b.name) && this.handler(b.name) && !this.dormant?.has(b.name))
+      .map((b) => ({ name: b.name, options: this.option(b.name) }))
       .filter(({ options }) => options?.chip !== false && !!options?.label)
       .map(({ name, options }) => ({
         name,
@@ -243,30 +253,37 @@ class MoveFunctionsClass {
 
   /**
    * Attach on top of whatever is there; the returned release puts the
-   * previous attachment back. For overlays that borrow a button while they
+   * latest app attachment back, including reattachments while it was open. For overlays that borrow a button while they
    * are open — the preset navigator takes Back, and hands it back on close.
    */
   push(name: MoveFunctionButton, handler: MoveFunctionHandler, options?: MoveFunctionOptions): () => void {
-    const prevHandler = this.handlers.get(name);
-    const prevOptions = this.options.get(name);
-    const detach = this.attach(name, handler, options);
+    const entry = { handler, options };
+    const stack = this.overlays.get(name) ?? [];
+    stack.push(entry);
+    this.overlays.set(name, stack);
+    this.dormant?.delete(name);
+    TweakStore.noteMoveKitUse('functions');
+    this.notify();
     return () => {
-      if (this.handlers.get(name) !== handler) return; // someone else took it since
-      detach();
-      if (prevHandler) this.attach(name, prevHandler, prevOptions);
+      const entries = this.overlays.get(name);
+      if (!entries?.includes(entry)) return;
+      const remaining = entries.filter(item => item !== entry);
+      if (remaining.length) this.overlays.set(name, remaining);
+      else this.overlays.delete(name);
+      this.notify();
     };
   }
 
   /** The screen name an attachment carries, if any. */
   label(name: MoveFunctionButton): string | undefined {
-    return this.options.get(name)?.label;
+    return this.option(name)?.label;
   }
 
   /** Run the action attached to a button, if any. Called by the kit per press. */
   run(name: MoveFunctionButton, press?: Partial<MoveFunctionPress>): void {
     const full: MoveFunctionPress = { name, shift: !!press?.shift, hold: !!press?.hold, ...(typeof press?.step === 'number' ? { step: press.step } : {}) };
     if (this.dormant?.has(name)) return;
-    this.handlers.get(name)?.(full);
+    this.handler(name)?.(full);
     for (const l of this.runListeners) l(name, full);
   }
 

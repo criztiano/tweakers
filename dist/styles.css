@@ -3756,3 +3756,30 @@
     transition: none;
   }
 }
+
+/* A small list pad keeps its canonical grid cell; its display floats above. */
+.tweakers-move-pad-list-anchor { position: relative; min-width: 0; }
+.tweakers-move-pad-list-anchor > .tweakers-move-pad { width: 100%; height: 100%; }
+.tweakers-move-pad-list-overlay {
+  position: absolute;
+  inset-inline-end: 0;
+  bottom: calc(100% + var(--move-gap));
+  width: var(--move-wheel-width);
+  max-height: calc(100dvh - var(--move-slot-height));
+  overflow: auto;
+  z-index: var(--move-color-overlay-z);
+  border-radius: var(--move-radius-small);
+  background: var(--move-black);
+  box-shadow: 0 0 0 1px var(--tweak-border), var(--tweak-shadow-dropdown);
+}
+.tweakers-move-pad-list-overlay .tweakers-list-screen { width: 100%; max-height: none; height: auto; }
+.tweakers-move-pad-list-status {
+  padding: var(--move-color-padding);
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  font-size: var(--move-color-font);
+}
+
+.tweakers-move-pad-list-submit { padding: 0 var(--move-color-padding) var(--move-color-padding); }
+.tweakers-move-pad-list-submit .tweakers-move-chip { width: 100%; justify-content: center; }
+.tweakers-move-pad-list-overlay .tweakers-list-screen-row:not([data-selected]):not([data-checked="true"]) .tweakers-list-screen-label { opacity: var(--tweak-value-opacity); }
