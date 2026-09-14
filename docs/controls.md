@@ -48,7 +48,7 @@ control.
 | `action` | A button the page wants on the surface | `action` with a `movePads` column; `MovePadActionBody` | 1 pad |
 | `app` | A cell the app paints — a track, a slice, a step | `MoveSurfaceStore`; `MovePadAppBody` | 1 pad |
 | `tabs` | The mode a page is in, reachable without turning anything | `select` with `moveTabs` (`true`, or `'named'` for the name pad); `MovePadTabsBody` | 2–8 adjacent pads, switch row |
-| `color` | A single colour where colour is not the page's big control | `color` config with a `movePads` column — or nothing at all when a `balance` references it (the kit seats those itself); `MovePadColorBody` | 1 pad, top or value row; lit in its colour; a chip like `value` — tap latches, hold peeks |
+| `color` | A single colour where colour is not the page's big control | `color` config with a `movePads` column — or nothing at all when a `balance` references it (the kit seats those itself); `MovePadColorBody` | 1 pad, top or value row; lit white like any chip (its colour is the screen's swatch); a chip like `value` — tap latches, hold peeks |
 
 A `moveTabs` select stops competing for a dial: it is a pad strip and nothing
 else. It lands as one piece or not at all — the builder reports `tabs-oversized`
@@ -112,9 +112,10 @@ group, on screen and on the hardware alike. They seat first: a switch or a
 lifted chip named into that column moves along its row, said out loud.
 No `movePads` for them (a hand-named column on one is ignored with a
 `balance-color-placed` warning, the pads-never-mirror-dials rule's sibling).
-Every colour chip wears its live store value: the swatch on screen, and on
-the device the pad lights in the colour itself — true RGB where the module
-advertises `pad_rgb`, the nearest named hue otherwise.
+Every colour chip wears its live store value as the swatch on screen. On
+the device its pad lights WHITE, like every occupied small slot — the
+small-slot grammar has no per-type exceptions, so the colour is shown on the
+screen, never on the pad.
 
 `balance` resolves to a plain 0..1 number (0 all `a`, 1 all `b`) — on the
 wire it is an ordinary dial, so modulation, presets and hardware sync need
