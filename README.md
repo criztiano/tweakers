@@ -1046,6 +1046,8 @@ Mark an item `muted` when the row is information rather than a choice — a job 
 | `onSelect` | `(value: string) => void` | — |
 | `wide` | `boolean` — 400px with left-aligned rows, instead of the 200px centered default | `false` |
 | `follow` | `'nearest' \| 'center'` — how the view follows the selection: scroll it just into view, or hold it in the middle of the screen | `'nearest'` |
+| `back` | `string` — the level this list sits inside; worn as a back pill (chevron + name) at the top-left corner instead of a row. On the Move panel it comes from `MoveScreenList.back`, and a click on it is the Back key | — |
+| `onBack` | `() => void` — runs when the pill is clicked; without it the pill is only a sign | — |
 | `className` | `string` | — |
 | `style` | `React.CSSProperties` | — |
 

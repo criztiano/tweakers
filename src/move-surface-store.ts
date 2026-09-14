@@ -47,13 +47,24 @@ export interface MoveStepCell {
  * switched on, which the panel draws as a mark at the row's end. */
 export type MoveScreenRow =
   | string
-  | { label: string; detail?: ListScreenDetail; checked?: boolean };
+  | {
+      label: string;
+      detail?: ListScreenDetail;
+      checked?: boolean;
+      /** A short note pinned to the row's right end, smaller and dimmer than
+       *  the name — a file's format, a status. The hardware screen has no room
+       *  for it and takes the label alone. */
+      tag?: string;
+    };
 
 /** The app's list on the Move's own 128×64 screen. */
 export interface MoveScreenList {
   title?: string;
   items: MoveScreenRow[];
   index: number;
+  /** The level the list sits inside, by name — worn as a back pill at the
+   *  screen's corner rather than as a row. A click on it is the Back key. */
+  back?: string;
 }
 
 /** A row's label, whichever form the host wrote it in. */

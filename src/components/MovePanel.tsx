@@ -1401,15 +1401,18 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const clusterCols = explorationOpen ? MOVE_DIALS : stripMode
     ? Math.min(MOVE_DIALS, visibleCols.length) || MOVE_DIALS
     : visibleCols.length;
-  // Pads are the Move's own 8-column matrix, not a continuation of however
-  // many parameter dials happen to be above them. App-owned rows therefore
-  // keep all eight physical coordinates; sparse kit rows keep at least four
-  // columns, and extend through their furthest occupied hardware column.
+  // Pads keep their hardware columns: a pad is drawn in the column it sits
+  // in on the Move, never repacked. But the panel is only as wide as what it
+  // shows — the dial columns in use and the furthest pad that holds
+  // something — so a page of four slots is a four-column instrument, its
+  // pad rows included, not four slots beside an empty half. Sparse kit rows
+  // keep at least four columns.
   const kitPadCols = Math.max(0, ...padRows.map((row) => row.length));
+  const appPadCols = Math.max(0, ...surface.pads.filter((cell) => !cell.empty).map((cell) => cell.x + 1));
   const padGridCols = shownPadRows.length === 0
     ? 0
     : appRows > 0
-      ? MOVE_PADS
+      ? Math.min(MOVE_PADS, Math.max(1, clusterCols, appPadCols))
       : Math.min(MOVE_PADS, Math.max(MIN_PAD_COLUMNS, clusterCols, kitPadCols));
   const surfaceCols = Math.max(clusterCols, padGridCols);
   const panelIdForTabs = `${pageTabsId}-panel`;
@@ -1642,12 +1645,15 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     ...(typeof row === 'string' ? {} : {
                       ...(row.detail ? { detail: row.detail } : {}),
                       ...(row.checked === undefined ? {} : { checked: row.checked }),
+                      ...(row.tag ? { tag: row.tag } : {}),
                     }),
                   })),
                   screenSearch
                 )}
                 value={String(screenSearch ? screenSearch.cursor : screen.index)}
                 follow="center"
+                back={screenSearch ? undefined : screen.back}
+                onBack={() => MoveFunctions.run('back')}
                 onSelect={(value) => {
                   if (!value) return;
                   if (screenSearch) MoveSearchStore.close();
@@ -2353,9 +2359,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   data-pad-columns={stripMode ? page.dials.length : padGridCols}
                   style={{ '--move-pad-cols': stripMode ? page.dials.length : padGridCols } as React.CSSProperties}
                 >
-                  {/* An app-claimed row spans the whole hardware row — its
-                      pads are the app's own set of eight, not echoes of the
-                      dial columns above. Kit rows keep the dial columns. */}
+                  {/* An app-claimed row runs from the first hardware column to
+                      the panel's edge — its pads are the app's own, not echoes
+                      of the dial columns above. Kit rows keep the dial columns. */}
                   {(stripMode
                     ? visibleCols
                     : Array.from({ length: padGridCols }, (_, i) => i)

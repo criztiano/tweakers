@@ -28,6 +28,14 @@ describe('the list a wheel is walking', () => {
     expect(moveScreenChecked(rows)).toEqual([2]);
   });
 
+  it('wears the level above as a back pill, not a row', () => {
+    const html = renderToStaticMarkup(createElement(ListScreen, { items: ['Amen', 'Funk'], value: 'Amen', back: 'Audio', onBack: () => {} }));
+    expect(html).toContain('tweakers-list-screen-back');
+    expect(html).toContain('Audio');
+    expect(html.match(/role="option"/g)).toHaveLength(2);
+    expect(renderToStaticMarkup(createElement(ListScreen, { items: ['Amen'] }))).not.toContain('tweakers-list-screen-back');
+  });
+
   it('draws where a row leads, and what is switched on', () => {
     const html = renderToStaticMarkup(createElement(ListScreen, {
       items: rows.map((row, i) => ({

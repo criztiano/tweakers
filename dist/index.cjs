@@ -2493,6 +2493,8 @@ function ListScreen({
   onSelect,
   wide,
   follow = "nearest",
+  back,
+  onBack,
   className,
   style
 }) {
@@ -2542,49 +2544,66 @@ function ListScreen({
     event.preventDefault();
     next.focus();
   };
-  return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
-    "div",
-    {
-      ref: rootRef,
-      className: rootClassName,
-      style,
-      "data-wide": wide || void 0,
-      role: "listbox",
-      onKeyDown,
-      children: items.map((item) => {
-        const rowValue = itemValue(item);
-        const selected = rowValue === value;
-        const tag = itemTag(item);
-        const detail = itemDetail(item);
-        const checked = itemChecked(item);
-        const icon = itemIcon(item);
-        return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
-          "button",
-          {
-            type: "button",
-            role: "option",
-            "aria-selected": selected,
-            className: "tweakers-list-screen-row",
-            "data-selected": selected || void 0,
-            "data-tagged": tag ? true : void 0,
-            "data-detail": detail,
-            "data-checked": checked,
-            "aria-checked": checked,
-            "data-muted": itemMuted(item) || void 0,
-            "data-icon": icon ? true : void 0,
-            onClick: () => onSelect?.(rowValue),
-            children: [
-              icon && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("img", { className: "tweakers-list-screen-icon", src: icon, alt: "", "aria-hidden": "true" }),
-              /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "tweakers-list-screen-label", children: itemLabel(item) }),
-              tag && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "tweakers-list-screen-tag", children: tag }),
-              (detail || checked) && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(ListScreenMark, { detail, checked })
-            ]
-          },
-          rowValue
-        );
-      })
-    }
-  );
+  return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(import_jsx_runtime2.Fragment, { children: [
+    back && /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
+      "button",
+      {
+        type: "button",
+        className: "tweakers-list-screen-back",
+        "aria-label": `Back to ${back}`,
+        disabled: !onBack,
+        onClick: onBack,
+        children: [
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("path", { d: ICON_CHEVRON_LEFT, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }) }),
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "tweakers-list-screen-back-label", children: back })
+        ]
+      }
+    ),
+    /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+      "div",
+      {
+        ref: rootRef,
+        className: rootClassName,
+        style,
+        "data-wide": wide || void 0,
+        role: "listbox",
+        onKeyDown,
+        "data-back": back ? true : void 0,
+        children: items.map((item) => {
+          const rowValue = itemValue(item);
+          const selected = rowValue === value;
+          const tag = itemTag(item);
+          const detail = itemDetail(item);
+          const checked = itemChecked(item);
+          const icon = itemIcon(item);
+          return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
+            "button",
+            {
+              type: "button",
+              role: "option",
+              "aria-selected": selected,
+              className: "tweakers-list-screen-row",
+              "data-selected": selected || void 0,
+              "data-tagged": tag ? true : void 0,
+              "data-detail": detail,
+              "data-checked": checked,
+              "aria-checked": checked,
+              "data-muted": itemMuted(item) || void 0,
+              "data-icon": icon ? true : void 0,
+              onClick: () => onSelect?.(rowValue),
+              children: [
+                icon && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("img", { className: "tweakers-list-screen-icon", src: icon, alt: "", "aria-hidden": "true" }),
+                /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "tweakers-list-screen-label", children: itemLabel(item) }),
+                tag && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { className: "tweakers-list-screen-tag", children: tag }),
+                (detail || checked) && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(ListScreenMark, { detail, checked })
+              ]
+            },
+            rowValue
+          );
+        })
+      }
+    )
+  ] });
 }
 
 // src/components/move-slots.tsx
@@ -9254,7 +9273,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const visibleCols = stripMode ? page.dials.map((_, i) => i) : settingsPanel ? Array.from({ length: modPageWidth() }, (_, i) => i) : color ? Array.from({ length: MOVE_PADS }, (_, i) => i) : visibleColumns(page);
   const clusterCols = explorationOpen ? MOVE_DIALS : stripMode ? Math.min(MOVE_DIALS, visibleCols.length) || MOVE_DIALS : visibleCols.length;
   const kitPadCols = Math.max(0, ...padRows.map((row) => row.length));
-  const padGridCols = shownPadRows.length === 0 ? 0 : appRows > 0 ? MOVE_PADS : Math.min(MOVE_PADS, Math.max(MIN_PAD_COLUMNS, clusterCols, kitPadCols));
+  const appPadCols = Math.max(0, ...surface.pads.filter((cell) => !cell.empty).map((cell) => cell.x + 1));
+  const padGridCols = shownPadRows.length === 0 ? 0 : appRows > 0 ? Math.min(MOVE_PADS, Math.max(1, clusterCols, appPadCols)) : Math.min(MOVE_PADS, Math.max(MIN_PAD_COLUMNS, clusterCols, kitPadCols));
   const surfaceCols = Math.max(clusterCols, padGridCols);
   const panelIdForTabs = `${pageTabsId}-panel`;
   const pageTabIndex = pages.indexOf(page);
@@ -9409,13 +9429,16 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                           label: moveScreenRowLabel(row),
                           ...typeof row === "string" ? {} : {
                             ...row.detail ? { detail: row.detail } : {},
-                            ...row.checked === void 0 ? {} : { checked: row.checked }
+                            ...row.checked === void 0 ? {} : { checked: row.checked },
+                            ...row.tag ? { tag: row.tag } : {}
                           }
                         })),
                         screenSearch
                       ),
                       value: String(screenSearch ? screenSearch.cursor : screen.index),
                       follow: "center",
+                      back: screenSearch ? void 0 : screen.back,
+                      onBack: () => MoveFunctions.run("back"),
                       onSelect: (value) => {
                         if (!value) return;
                         if (screenSearch) MoveSearchStore.close();
