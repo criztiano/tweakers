@@ -2533,7 +2533,8 @@ function MovePadList({ panelId, path, label, view, disabled }) {
   (0, import_react3.useEffect)(() => {
     if (!open2) return;
     const key = (event) => {
-      if (event.target instanceof HTMLElement && (event.target.isContentEditable || /^(INPUT|TEXTAREA)$/.test(event.target.tagName))) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.target instanceof HTMLElement && (event.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName))) return;
       if (["Enter", " "].includes(event.key) && event.target.closest?.('.tweakers-move-chip[data-name="capture"]')) return;
       if (!["Escape", "Enter", " ", "ArrowUp", "ArrowDown", "x", "X"].includes(event.key)) return;
       event.preventDefault();
