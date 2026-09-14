@@ -127,12 +127,13 @@ describe('the surface store', () => {
   });
 
   it('relays an on-screen pad tap to the host', () => {
-    const seen: { x: number; y: number }[] = [];
+    const seen: { x: number; y: number; shift: boolean }[] = [];
     const off = MoveSurfaceStore.onPress((p) => seen.push(p));
     MoveSurfaceStore.press(4, 1);
+    MoveSurfaceStore.press(2, 0, true);
     off();
     MoveSurfaceStore.press(5, 0);
-    assert.deepEqual(seen, [{ x: 4, y: 1 }]);
+    assert.deepEqual(seen, [{ x: 4, y: 1, shift: false }, { x: 2, y: 0, shift: true }]);
   });
 
   it('reset hands the whole surface back', () => {

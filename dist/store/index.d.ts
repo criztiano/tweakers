@@ -1,3 +1,21 @@
+type PresetDNA = Record<string, TweakValue>;
+interface GeneParameter {
+    id: string;
+    path: string;
+    label: string;
+    group?: string;
+    component?: string;
+    kind: 'number' | 'category';
+    min?: number;
+    max?: number;
+    step?: number;
+    options?: (string | boolean)[];
+    enabled: boolean;
+    trouble?: boolean;
+    low?: number;
+    high?: number;
+}
+
 /** Opt-in meanings for numeric Move faces. Values keep the host's units. */
 type MoveSliderVisual = {
     kind: 'opacity';
@@ -16,6 +34,12 @@ type MoveSliderVisual = {
 } | {
     kind: 'pitch';
     unit?: 'semitones' | 'cents';
+}
+/** One edge of a take: the bar is the whole of it, the kept part is filled
+ *  from this edge's far end to the value, the edge itself is the marker. */
+ | {
+    kind: 'trim';
+    edge: 'start' | 'end';
 };
 type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
 type MoveSelectVisual = {
@@ -90,6 +114,11 @@ interface FilterValue {
     cutoff: number;
     resonance: number;
 }
+
+type PersistTarget = {
+    key: string;
+    storage: 'localStorage' | 'sessionStorage';
+};
 
 /** A resolved range value. Invariant (upheld by the helpers): min <= max. */
 type RangeValue = {
@@ -728,12 +757,14 @@ type PanelConfig = {
     labels?: Record<string, string>;
     /** Move pad columns by control path, retained on the same terms as `hints`. */
     movePads?: Record<string, number>;
+    /** Value chips lifted onto the top pad row, retained on the same terms as `hints`. */
+    moveTopRow?: string[];
     /**
      * Config declared `_enabled` at its root — the whole panel is a module, and
      * its title carries the switch. Same idiom as a module folder, one level up.
      */
     module?: boolean;
-    kind?: 'timeline' | 'modulation';
+    kind?: 'timeline' | 'modulation' | 'kit';
 };
 type Listener = () => void;
 type ActionListener = (action: string) => void;
@@ -776,7 +807,17 @@ type PresetProviderPreset = {
  * stock auto-save-to-active-preset behavior is off because the store's own
  * active-preset state is never engaged in provider mode.
  */
+/** Hosts must preview without saving, and restore their own active preset identity. */
+interface PresetExplorationAdapter {
+    parameters: GeneParameter[];
+    capture(): PresetDNA | Promise<PresetDNA>;
+    preview(values: PresetDNA): void | Promise<void>;
+    restore(values: PresetDNA, activeId: string | null): void | Promise<void>;
+    save(name: string, values: PresetDNA): void | Promise<void>;
+    readPreset?(id: string): PresetDNA | Promise<PresetDNA>;
+}
 type PresetProvider = {
+    exploration?: PresetExplorationAdapter;
     presets: PresetProviderPreset[];
     activeId?: string | null;
     onSelect(id: string): void | Promise<void>;
@@ -837,9 +878,20 @@ type TweakStorePanelOptions = {
      * has), actions the row under those.
      */
     movePads?: Record<string, number>;
+    /**
+     * Value chips, by control path, that sit on the top pad row instead of the
+     * value row — for a page whose switches leave that row free, so the chip
+     * sits right under the dial it pairs with. The chip rides its `movePads`
+     * column, and keeps the value row when it names none or when a switch (or a
+     * balance's colour) already holds that cell up top. Same column, same gestures
+     * (hold to peek, tap to latch), on the screen and on the hardware.
+     */
+    moveTopRow?: string[];
     /** Timeline panels render in TweakTimeline; modulation panels are the Move's
-     * modulator settings pages — both are filtered out of the panel dock. */
-    kind?: 'timeline' | 'modulation';
+     * modulator settings pages; kit panels are the Move kit's own settings
+     * pages (the waveform's look), shown only in the settings room — all three
+     * are filtered out of the panel dock and off the track row. */
+    kind?: 'timeline' | 'modulation' | 'kit';
 };
 /**
  * The registries the Move bridge kit reads, by their `bindMove` option names.
@@ -884,7 +936,9 @@ declare class TweakStoreClass {
     private presetProviders;
     /** Panels whose header carries no preset toolbar (see setPresetsHidden). */
     private presetsHidden;
+    private previewTransactions;
     private baseValues;
+    private presetTargets;
     private persistTargets;
     private moveKitUses;
     registerPanel(id: string, name: string, config: TweakConfig, shortcuts?: Record<string, ShortcutConfig>, options?: TweakStorePanelOptions): void;
@@ -899,6 +953,7 @@ declare class TweakStoreClass {
      * control; the active tab reconciles through the tab bar's own select.
      */
     private reconcileValue;
+    private persistPresets;
     private savePanelValues;
     updateValue(panelId: string, path: string, value: TweakValue): void;
     updateValues(panelId: string, updates: Record<string, TweakValue>): void;
@@ -978,6 +1033,13 @@ declare class TweakStoreClass {
      * for it, because reconciliation happens at apply time, not capture time.
      */
     private reconcileSnapshot;
+    private presetSchema;
+    /** Scoped audition: normal edits remain audible but never autosave. */
+    beginPresetPreview(panelId: string): void;
+    endPresetPreview(panelId: string): void;
+    getPresetPersistenceTarget(panelId: string): PersistTarget | null;
+    /** Save a discovery without changing which preset subsequent edits belong to. */
+    savePresetSnapshot(panelId: string, name: string, values: PresetDNA): string;
     savePreset(panelId: string, name: string): string;
     loadPreset(panelId: string, presetId: string): void;
     deletePreset(panelId: string, presetId: string): void;
@@ -1107,4 +1169,4 @@ declare function defaultListItemParams(schema: Record<string, ListItemField>): R
 declare function normalizeListItems(config: ListConfig): ListItemValue[];
 declare const TweakStore: TweakStoreClass;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type BalanceConfig, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type CurveConfig, type EasingConfig, type FileConfig, type FilterConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type MoveKitRegistry, type MovePlaybackMode, type MoveSelectVisual, type MoveSliderVisual, type MoveVisual, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type PanelConfig, type Preset, type PresetItem, type PresetProvider, type PresetProviderPreset, type RangeConfig, type RangeValue, type ReservedKey, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SwatchConfig, type SwatchOption, TAB_PATH, type TextConfig, type ToggleConfig, type TransferConfig, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakStorePanelOptions, type TweakValue, type TweakersPersistOptions, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, groupListFields, hintDomId, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveTweakValues };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type BalanceConfig, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type CurveConfig, type EasingConfig, type FileConfig, type FilterConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type MoveKitRegistry, type MovePlaybackMode, type MoveSelectVisual, type MoveSliderVisual, type MoveVisual, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type PanelConfig, type Preset, type PresetExplorationAdapter, type PresetItem, type PresetProvider, type PresetProviderPreset, type RangeConfig, type RangeValue, type ReservedKey, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SwatchConfig, type SwatchOption, TAB_PATH, type TextConfig, type ToggleConfig, type TransferConfig, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakStorePanelOptions, type TweakValue, type TweakersPersistOptions, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, groupListFields, hintDomId, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveTweakValues };

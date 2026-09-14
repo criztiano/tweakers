@@ -35,8 +35,9 @@ import { ListScreen } from './ListScreen';
  *   knob turns X and the volume knob turns Y while touched.
  * - `range`   — two handles on one bar; column knob = low end, volume
  *   knob = high end while touched.
- * - `opacity`, `blur`, `pan`, `stereo-width`, `pitch` — explicit numeric
- *   meanings, drawn as specimens or positioned against domain references.
+ * - `opacity`, `blur`, `pan`, `stereo-width`, `pitch`, `trim` — explicit
+ *   numeric meanings, drawn as specimens or positioned against domain
+ *   references (`trim`: one edge of a take, the kept part filled).
  * - `playback` — an explicitly mapped playback icon.
  * - `filter`  — the 2-slot control: cutoff and resonance as one picture,
  *   the magnitude response maximised across both columns, each hand's
@@ -77,6 +78,7 @@ export type MoveSlotKind =
   | 'pan'
   | 'stereo-width'
   | 'pitch'
+  | 'trim'
   | 'playback'
   | 'env'
   | 'scope'
@@ -618,10 +620,20 @@ export function MoveSlotToggleBody({ label, checked, icon, onIcon, offIcon }: {
 }) {
   const badge = checked ? onIcon : offIcon;
   if (!icon) {
+    // A switch named by a number with a unit ("72.1 BPM") wears it the way a
+    // dial wears its value: the number big, the unit small beneath it.
+    const split = /\d/.test(label[0] ?? '') ? splitReadoutUnit(label) : null;
     return (
       <>
         <span className="tweakers-move-dial-toggle-indicator" data-on={checked || undefined} />
-        <span className="tweakers-move-dial-toggle-label">{label}</span>
+        {split?.unit ? (
+          <span className="tweakers-move-dial-toggle-label" data-value>
+            <span className="tweakers-move-dial-number">{split.num}</span>
+            <span className="tweakers-move-dial-unit">{split.unit}</span>
+          </span>
+        ) : (
+          <span className="tweakers-move-dial-toggle-label">{label}</span>
+        )}
       </>
     );
   }
@@ -837,6 +849,7 @@ export const MOVE_SLOT_LIBRARY = {
   pan: { description: 'position between L, C and R references', component: MoveSlotNumericBody },
   'stereo-width': { description: 'stereo separation with a unity reference', component: MoveSlotNumericBody },
   pitch: { description: 'signed pitch ruler with a zero reference', component: MoveSlotNumericBody },
+  trim: { description: 'one edge of a take — the kept part filled from the far end, the value beneath', component: MoveSlotNumericBody },
   playback: { description: 'explicit playback traversal with a named mode', component: MoveSlotEnumBody },
   default: { description: 'name centred, value on touch, fill bar', component: MoveSlotDefaultBody },
   value: { description: 'value-first: the value is the headline, the name a tag on top', component: MoveSlotDefaultBody },

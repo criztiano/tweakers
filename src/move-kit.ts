@@ -27,8 +27,8 @@ import { MoveFunctions } from './move-functions';
 import { MoveSurfaceStore } from './move-surface-store';
 import { MoveVolumeDisplay } from './move-volume';
 import { MoveWaveformStore } from './move-waveform';
+import { PresetExplorationStore } from './preset-exploration';
 import { ModulationStore } from './store/ModulationStore';
-import type { MoveKitRegistry } from './store/TweakStore';
 import { movePoint, sampleTransfer } from './transfer-core';
 
 export interface MoveKitOptions {
@@ -40,11 +40,13 @@ export interface MoveKitOptions {
   volume: typeof MoveVolumeDisplay;
   /** The curve maths a knob needs to hold one of a transfer's points. */
   transfer: { sample: typeof sampleTransfer; move: typeof movePoint };
+  /** Preset exploration's 32 pads, behind a held Menu. */
+  exploration: typeof PresetExplorationStore;
 }
 
 /** What may ride along: any other bind option, and `null` to decline a
  *  registry on purpose. */
-export type MoveKitOverrides = { [K in MoveKitRegistry]?: MoveKitOptions[K] | null } & Record<string, unknown>;
+export type MoveKitOverrides = { [K in keyof MoveKitOptions]?: MoveKitOptions[K] | null } & Record<string, unknown>;
 
 /** Every registry the bridge kit reads, keyed by its `bindMove` option. */
 export function moveKitOptions<T extends MoveKitOverrides>(overrides?: T): Omit<MoveKitOptions, keyof T> & T {
@@ -56,6 +58,7 @@ export function moveKitOptions<T extends MoveKitOverrides>(overrides?: T): Omit<
     waveform: MoveWaveformStore,
     volume: MoveVolumeDisplay,
     transfer: { sample: sampleTransfer, move: movePoint },
+    exploration: PresetExplorationStore,
     ...overrides,
   } as Omit<MoveKitOptions, keyof T> & T;
 }

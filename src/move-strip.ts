@@ -74,11 +74,23 @@ export function buildMoveStrip(panel: PanelConfig): MovePage {
     for (let s = 0; s < dialSpan(c); s++) dials.push(c);
   }
 
-  // The pad rows, indexed by the same columns the slots use: switches on the
-  // first, values on the second, the app's buttons under those.
+  // The pad rows, indexed by the same columns the slots use: switches and
+  // the chips riding up top on the first, values on the second, the app's
+  // buttons under those.
   const toggles: ControlMeta[] = [];
+  const topValues: ControlMeta[] = [];
   const values: ControlMeta[] = [];
   const actions: ControlMeta[] = [];
+  const topAt = (i: number) => toggles[i] ?? topValues[i];
+  // Each balance's colours first, under the balance itself — they own their
+  // column: `a` the chip up top, `b` the chip under it. The 8-wide page's
+  // stacked column, on the strip's own unbounded row.
+  for (const [ref, bal] of balanceRefs) {
+    const col = dials.indexOf(bal);
+    if (col < 0) continue;
+    if (ref.path === bal.balanceA) topValues[col] = ref;
+    else values[col] = ref;
+  }
   // A tabs strip claims a RUN of pads in the switch row, not a pad — the same
   // multi-slot rule the 8-wide page keeps, on the strip's own unbounded row.
   // It starts at the column it names, and packs left when it names none;
@@ -86,7 +98,7 @@ export function buildMoveStrip(panel: PanelConfig): MovePage {
   const placeRun = (c: ControlMeta, col: number | null) => {
     const span = padSpan(c);
     const fits = (start: number) =>
-      Array.from({ length: span }, (_, k) => toggles[start + k]).every((p) => p === undefined);
+      Array.from({ length: span }, (_, k) => topAt(start + k)).every((p) => p === undefined);
     let start = col !== null && fits(col) ? col : -1;
     for (let i = 0; start < 0; i++) {
       if (fits(i)) start = i;
@@ -98,21 +110,14 @@ export function buildMoveStrip(panel: PanelConfig): MovePage {
       placeRun(c, column(c));
       continue;
     }
-    if (balanceRefs.has(c)) continue;   /* seated by its balance below */
+    if (balanceRefs.has(c)) continue;   /* seated by its balance above */
     const col = column(c);
     if (col === null) continue;
-    const row = c.type === 'toggle' ? toggles : c.type === 'action' ? actions : values;
+    if (c.type === 'toggle') { if (topAt(col) === undefined) toggles[col] = c; continue; }
+    const row = c.type === 'action' ? actions : values;
     if (row[col] === undefined) row[col] = c;
   }
-  // Each balance's colours, under the balance itself: `a` on the switch row,
-  // `b` on the value row of the balance's own column.
-  for (const [ref, bal] of balanceRefs) {
-    const col = dials.indexOf(bal);
-    if (col < 0) continue;
-    const row = ref.path === bal.balanceA ? toggles : values;
-    if (row[col] === undefined) row[col] = ref;
-  }
-  return { panel, dials, toggles, values, actions };
+  return { panel, dials, toggles, values, actions, ...(topValues.length ? { topValues } : {}) };
 }
 
 /** The columns where a control begins — the places the window may stop. */
@@ -227,7 +232,10 @@ export function stripWindowPads(
 ): { toggles: (ControlMeta | undefined)[]; values: (ControlMeta | undefined)[]; actions: (ControlMeta | undefined)[] } {
   const row = (cells: ControlMeta[]) =>
     Array.from({ length: cols }, (_, i) => cells[offset + i]);
-  return { toggles: row(page.toggles), values: row(page.values), actions: row(page.actions) };
+  // the top row carries the switches and the chips riding up there alike
+  const top = page.toggles.slice();
+  page.topValues?.forEach((m, i) => { if (m && top[i] === undefined) top[i] = m; });
+  return { toggles: row(top), values: row(page.values), actions: row(page.actions) };
 }
 
 /** How many controls the strip holds — the number the position readout counts. */

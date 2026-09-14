@@ -225,11 +225,12 @@ describe('Move gradient, balance and small colour panel', () => {
 
   it('a balance seats its colours in its own column, wearing their store values', () => {
     mountGradient();
-    // Zero movePads declared: the balance placed both — a on the switch row,
-    // b on the value row of its own column (dial 2, after ramp).
+    // Zero movePads declared: the balance placed both as its column's two
+    // chips — a up top, b under it (dial 2, after ramp). No switch involved.
     const [page] = buildMovePages([TweakStore.getPanel(gid)!]);
     const at = page.dials.findIndex((d) => d?.path === 'mix');
-    expect(page.toggles[at]?.path).toBe('colorA');
+    expect(page.topValues?.[at]?.path).toBe('colorA');
+    expect(page.toggles[at]).toBeUndefined();
     expect(page.values[at]?.path).toBe('colorB');
     // The swatches carry the store's colours with no app wiring.
     const pads = renderer!.root.findAllByProps({ 'data-kind': 'color' }).filter((n) => n.type === 'button');

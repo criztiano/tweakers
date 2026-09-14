@@ -16,6 +16,12 @@ type MoveSliderVisual = {
 } | {
     kind: 'pitch';
     unit?: 'semitones' | 'cents';
+}
+/** One edge of a take: the bar is the whole of it, the kept part is filled
+ *  from this edge's far end to the value, the edge itself is the marker. */
+ | {
+    kind: 'trim';
+    edge: 'start' | 'end';
 };
 type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
 type MoveSelectVisual = {
@@ -89,6 +95,24 @@ interface FilterValue {
     cutoff: number;
     resonance: number;
 }
+
+/**
+ * Fail-soft browser persistence shared by TweakStore (panel values) and
+ * TimelineStore (loop regions). Kept separate so the stores stay node-safe and
+ * side-effect-free: nothing here touches `window` at import time, and every
+ * storage access is guarded + try/caught. When storage is unavailable (SSR,
+ * Safari private mode, blocked cookies) persistence silently degrades to
+ * session-only — a broken shelf must never break the tool.
+ *
+ * Mirrors the style of color-palette-store.ts.
+ */
+/** Structural mirror of TweakersPersistOptions — duplicated here to keep this
+ * module free of a TweakStore import (avoids a store ↔ persist cycle). */
+type PersistConfig = boolean | {
+    key?: string;
+    storage?: 'localStorage' | 'sessionStorage';
+    presets?: boolean;
+};
 
 /** A resolved range value. Invariant (upheld by the helpers): min <= max. */
 type RangeValue = {
@@ -536,24 +560,6 @@ type ResolvedValues<T extends TweakConfig> = {
     [K in keyof T as T[K] extends CurveConfig ? never : T[K] extends AnalyserConfig ? never : K extends ReservedKey ? never : K]: T[K] extends [number, number, number, number?] ? number : T[K] extends SliderConfig ? number : T[K] extends ToggleConfig ? boolean : T[K] extends NumberConfig ? number : T[K] extends MultiSelectConfig ? string[] : T[K] extends SpringConfig ? TransitionConfig : T[K] extends EasingConfig ? TransitionConfig : T[K] extends SelectConfig ? string : T[K] extends ColorConfig ? string : T[K] extends GradientConfig ? GradientValue : T[K] extends BalanceConfig ? number : T[K] extends XYConfig ? XYValue : T[K] extends TextConfig ? string : T[K] extends RangeConfig ? RangeValue : T[K] extends FilterConfig ? FilterValue : T[K] extends TransferConfig ? TransferValue : T[K] extends GalleryConfig ? string : T[K] extends FileConfig ? string : T[K] extends SwatchConfig ? string : T[K] extends ChipsConfig ? string : T[K] extends ListConfig ? ListItemValue[] : T[K] extends TweakConfig ? ResolvedValues<T[K]> : T[K];
 };
 type TweakersPersistOptions = boolean | {
-    key?: string;
-    storage?: 'localStorage' | 'sessionStorage';
-    presets?: boolean;
-};
-
-/**
- * Fail-soft browser persistence shared by TweakStore (panel values) and
- * TimelineStore (loop regions). Kept separate so the stores stay node-safe and
- * side-effect-free: nothing here touches `window` at import time, and every
- * storage access is guarded + try/caught. When storage is unavailable (SSR,
- * Safari private mode, blocked cookies) persistence silently degrades to
- * session-only — a broken shelf must never break the tool.
- *
- * Mirrors the style of color-palette-store.ts.
- */
-/** Structural mirror of TweakersPersistOptions — duplicated here to keep this
- * module free of a TweakStore import (avoids a store ↔ persist cycle). */
-type PersistConfig = boolean | {
     key?: string;
     storage?: 'localStorage' | 'sessionStorage';
     presets?: boolean;

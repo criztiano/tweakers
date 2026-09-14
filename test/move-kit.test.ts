@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   moveKitOptions, MoveColorStore, MoveFunctions, MoveSurfaceStore, MoveVolumeDisplay,
-  MoveWaveformStore, ModulationStore, TweakStore, movePoint, sampleTransfer,
+  MoveWaveformStore, ModulationStore, PresetExplorationStore, TweakStore, movePoint, sampleTransfer,
 } from '../src/index';
 
 // The one bind. The bridge kit ships alone, so every registry it reads is
@@ -20,9 +20,10 @@ describe('moveKitOptions', () => {
     expect(o.waveform).toBe(MoveWaveformStore);
     expect(o.volume).toBe(MoveVolumeDisplay);
     expect(o.transfer).toEqual({ sample: sampleTransfer, move: movePoint });
+    expect(o.exploration).toBe(PresetExplorationStore);
     // Nothing else: a new registry lands here AND in this list, together.
     expect(Object.keys(o).sort()).toEqual(
-      ['color', 'functions', 'modulation', 'surface', 'transfer', 'volume', 'waveform'],
+      ['color', 'exploration', 'functions', 'modulation', 'surface', 'transfer', 'volume', 'waveform'],
     );
   });
 

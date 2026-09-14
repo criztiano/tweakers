@@ -6,7 +6,10 @@ export type MoveSliderVisual =
   | { kind: 'blur' }
   | { kind: 'pan'; left?: number; center?: number; right?: number }
   | { kind: 'stereo-width'; mono?: number; unity?: number }
-  | { kind: 'pitch'; unit?: 'semitones' | 'cents' };
+  | { kind: 'pitch'; unit?: 'semitones' | 'cents' }
+  /** One edge of a take: the bar is the whole of it, the kept part is filled
+   *  from this edge's far end to the value, the edge itself is the marker. */
+  | { kind: 'trim'; edge: 'start' | 'end' };
 
 export type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
 export type MoveSelectVisual = {
@@ -22,7 +25,8 @@ export type MoveNumericDrawing =
   | { kind: 'blur'; radius: number }
   | { kind: 'pan'; position: number }
   | { kind: 'stereo-width'; separation: number; unity: number | null }
-  | { kind: 'pitch'; position: number; zero: number | null };
+  | { kind: 'pitch'; position: number; zero: number | null }
+  | { kind: 'trim'; edge: 'start' | 'end'; position: number };
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 const between = (value: number, min: number, max: number) => value >= min && value <= max;
@@ -68,6 +72,9 @@ export function moveNumericDrawing(meta: ControlMeta, value: unknown): MoveNumer
     case 'pitch':
       if (visual.unit !== undefined && visual.unit !== 'semitones' && visual.unit !== 'cents') return null;
       return { kind: 'pitch', position: (v - lo) / (hi - lo), zero: between(0, lo, hi) ? -lo / (hi - lo) : null };
+    case 'trim':
+      if (visual.edge !== 'start' && visual.edge !== 'end') return null;
+      return { kind: 'trim', edge: visual.edge, position: clamp01((v - lo) / (hi - lo)) };
     default:
       return null;
   }
@@ -101,6 +108,7 @@ export function moveVisualReading(meta: ControlMeta, value: number): string {
     case 'stereo-width':
       return value === (visual.mono ?? 0) ? 'Mono' : `${Number(((value - (visual.mono ?? 0)) / ((visual.unity ?? 1) - (visual.mono ?? 0))).toFixed(2))}×`;
     case 'pitch': return `${value > 0 ? '+' : ''}${number} ${visual.unit === 'cents' ? 'ct' : 'st'}`;
+    case 'trim': return `${number} s`;
     default: return number;
   }
 }

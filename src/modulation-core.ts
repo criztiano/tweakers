@@ -1161,6 +1161,28 @@ export const getAudioModVersion = (): number => audioModVersion;
 /** The sample the audio modulator is reading, for the visualizer to draw. */
 export const getAudioModBuffer = (): AudioBuffer | null => audioModBuffer;
 
+/** A stretch of the sample, 0..1: where it starts and how much it spans. */
+export type AudioModWindow = { start: number; span: number };
+
+let audioModWindow: (() => AudioModWindow) | null = null;
+
+/**
+ * The stretch of the sample the small screens draw. Unset, the whole
+ * sample; while the floating editor is zoomed in, the editor's own shown
+ * window — the dial face and the Move's screen then show the part the big
+ * display shows, not a whole-sample thumbnail the hand cannot place.
+ */
+export function setAudioModWindowSource(fn: (() => AudioModWindow) | null): void {
+  audioModWindow = fn;
+}
+
+/** The stretch the small screens are drawing right now. */
+export function getAudioModWindow(): AudioModWindow {
+  const win = audioModWindow?.();
+  if (!win || !(win.span > 0) || win.span >= 1) return { start: 0, span: 1 };
+  return { start: clamp01(win.start), span: Math.min(win.span, 1 - clamp01(win.start)) };
+}
+
 /** Amplitude 0..1 at a play position 0..1; 0 with no sample loaded. */
 export function audioModLevel(position: number): number {
   if (!audioModEnv) return 0;
@@ -1242,14 +1264,18 @@ export const AUDIO_DEF: ModTypeDef = {
   buttons: {
     delete: () => ({ loopStart: 0, loopEnd: 1 }),
   },
-  /** The sample's envelope — the small screens' waveform drawing. */
+  /**
+   * The sample's envelope — the small screens' waveform drawing. Over the
+   * whole sample, or over the editor's shown window while it is zoomed in.
+   */
   preview(_params, count) {
     const n = Math.max(2, count);
     if (!audioModEnv) {
       return { points: Array.from({ length: n }, () => 0), label: 'No sample' };
     }
+    const { start, span } = getAudioModWindow();
     return {
-      points: Array.from({ length: n }, (_, i) => clamp01(audioModLevel(i / (n - 1)))),
+      points: Array.from({ length: n }, (_, i) => clamp01(audioModLevel(start + (i / (n - 1)) * span))),
       label: 'Audio',
     };
   },

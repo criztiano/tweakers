@@ -1,4 +1,4 @@
-import { P as PanelConfig, C as ControlMeta } from './TweakStore-BYuVEbYD.js';
+import { P as PanelConfig, C as ControlMeta } from './TweakStore-C9BYl1QG.js';
 import { ModPageLayout } from './modulation-core.js';
 import { XYValue } from './xy-pad-core.js';
 import { RangeValue } from './range-slider-core.js';
@@ -37,6 +37,11 @@ interface MovePage {
     /** Action pads — the row under the values (y=1 on the device).
      *  Placed by hand only, through the panel's `movePads` map. */
     actions: ControlMeta[];
+    /** Chips riding the top pad row (y=3), sharing it with the switches: a
+     *  balance's first colour, and each `moveTopRow` chip in its named column
+     *  where no switch holds it. A column may carry one here and another in
+     *  `values` under it; both take that column's knob. Absent: none. */
+    topValues?: ControlMeta[];
 }
 /** A select with real choices becomes an enum dial — the kit's exact rule. */
 declare const isEnumDial: (c: ControlMeta) => boolean;
@@ -106,7 +111,7 @@ declare function buildModMovePage(panel: PanelConfig, layout?: ModPageLayout | n
  * Tests (and apps that want the feed) can swap the sink with
  * `setMoveLayoutReporter`; `null` restores the deduped console.warn.
  */
-type MoveLayoutIssueCode = 'panel-dropped' | 'dial-dropped' | 'pad-column-invalid' | 'pad-column-on-dial' | 'balance-color-placed' | 'pad-column-taken' | 'pad-row-full' | 'tabs-oversized' | 'tabs-no-room';
+type MoveLayoutIssueCode = 'panel-dropped' | 'dial-dropped' | 'pad-column-invalid' | 'pad-column-on-dial' | 'balance-color-placed' | 'pad-column-taken' | 'top-row-taken' | 'top-row-no-column' | 'pad-row-full' | 'tabs-oversized' | 'tabs-no-room';
 type MoveLayoutReporter = (code: MoveLayoutIssueCode, message: string) => void;
 declare function setMoveLayoutReporter(fn: MoveLayoutReporter | null): void;
 declare function reportMoveLayoutIssue(code: MoveLayoutIssueCode, message: string): void;

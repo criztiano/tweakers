@@ -4,9 +4,19 @@
 // pointer interaction, reading the current props through a `get()` callback so it
 // never needs to be torn down when a prop changes.
 
-import { mixToMono, fillPeaks, envelope, type Peaks } from './waveform-dsp';
+import { mixToMono, fillPeaks, envelope, barPeaks, type Peaks } from './waveform-dsp';
 
-export type WaveformMode = 'smooth' | 'pixelated';
+/**
+ * How the sample is drawn. `smooth` is the simplified envelope; `pixelated`
+ * is one chunky min/max bar per column; `striped` is the pixelated bar,
+ * untouched, with a gap its own width after it — no sample is lost and no
+ * bar coarsens, the wave is simply twice as long, so the same zoom shows
+ * half as much of it.
+ */
+export type WaveformMode = 'smooth' | 'pixelated' | 'striped';
+export const WAVEFORM_MODES: WaveformMode[] = ['smooth', 'pixelated', 'striped'];
+/** Striped bars make the wave this many times longer at a given zoom. */
+export const WAVEFORM_STRIPE_STRETCH = 2;
 /** A loop region over the sample, as normalized 0..1 positions. */
 export type WaveformLoop = { start: number; end: number };
 
@@ -35,6 +45,18 @@ export interface WaveformRuntime {
   waveInset: number;
   autoZoomOnLoop: boolean;
   loop: WaveformLoop | null;
+  /**
+   * Where the sample is cut, as 0..1 positions. At each one the display
+   * splits: a fixed gap of frame shows through, the pieces either side end
+   * in rounded corners, and time steps straight across — the playhead, a
+   * loop edge, a click all skip the gap, so the pieces read as the
+   * containers the sample now is.
+   */
+  cuts?: number[];
+  /** The frame the gaps show, and the gap's width and corner radius in CSS px. */
+  gapColor?: string;
+  gap?: number;
+  gapRadius?: number;
   /** Manual zoom level (the wrapper owns the +/− buttons). */
   zoom: number;
   width: number;
@@ -72,6 +94,9 @@ const DRAG_THRESHOLD = 3;
 const EDGE_HIT = 6;
 // Minimum loop span (0..1) below which a selection is treated as a click, not a loop.
 const MIN_LOOP = 0.001;
+// A cut's gap and the corners either side of it, in CSS px, when the wrapper names none.
+export const WAVEFORM_GAP = 8;
+export const WAVEFORM_GAP_RADIUS = 6;
 
 type Pt = { x: number; y: number };
 // A drag in progress: 'create' draws a fresh selection from `anchor`; 'resize'
@@ -185,32 +210,69 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
 
   // The window currently shown (updated each frame) — used to map pointer x → progress.
   const windowState = { start: 0, win: 1 };
-  // The in-progress loop drag, if any.
-  let drag: Drag | null = null;
+  // The pieces the window shows, once the cuts inside it have taken their
+  // gaps: each is a stretch of the sample and the device-pixel span it owns.
+  type Piece = { a: number; b: number; x0: number; x1: number };
+  let pieces: Piece[] = [{ a: 0, b: 1, x0: 0, x1: 0 }];
+  let gapPx = 0;
 
-  // Chunky, full-opacity min/max columns.
-  const drawColumns = (p: Peaks, color: string, pixelSize: number) => {
-    const colW = columnWidth(pixelSize);
-    ctx.fillStyle = color;
-    ctx.globalAlpha = 1;
-    for (let x = 0; x < W; x += colW) {
-      let mn = 1;
-      let mx = -1;
-      for (let i = x; i < x + colW && i < W; i++) {
-        if (p.min[i] < mn) mn = p.min[i];
-        if (p.max[i] > mx) mx = p.max[i];
-      }
-      const yTop = Math.round(cy - mx * amp);
-      const yBot = Math.round(cy - mn * amp);
-      ctx.fillRect(x, yTop, colW, Math.max(1, yBot - yTop));
+  const layoutPieces = (start: number, win: number, cuts: number[] | undefined, gap: number) => {
+    const end = start + win;
+    const inside = (cuts ?? []).filter((c) => c > start && c < end).sort((x, y) => x - y);
+    gapPx = inside.length ? Math.round(gap * dpr) : 0;
+    let waveW = W - inside.length * gapPx;
+    if (waveW < inside.length + 1) {
+      // No room for the gaps at this zoom: draw the sample whole.
+      inside.length = 0;
+      gapPx = 0;
+      waveW = W;
+    }
+    const bounds = [start, ...inside, end];
+    pieces = [];
+    for (let i = 0; i + 1 < bounds.length; i++) {
+      const a = bounds[i];
+      const b = bounds[i + 1];
+      pieces.push({
+        a,
+        b,
+        x0: ((a - start) / win) * waveW + i * gapPx,
+        x1: ((b - start) / win) * waveW + i * gapPx,
+      });
     }
   };
 
-  // Simplified, smoothly-interpolated envelope: solid fill, or translucent + outline.
-  const drawSimplified = (env: number[], color: string, outline: boolean) => {
+  // A 0..1 position's device x — in its own piece, so a position exactly on
+  // a cut lands at the start of the piece after it.
+  const xOfPos = (p: number) => {
+    let piece = pieces[0];
+    for (const it of pieces) if (p >= it.a) piece = it;
+    const span = piece.b - piece.a;
+    return piece.x0 + (span > 0 ? ((p - piece.a) / span) * (piece.x1 - piece.x0) : 0);
+  };
+  // The in-progress loop drag, if any.
+  let drag: Drag | null = null;
+
+  // Chunky, full-opacity min/max columns, `cols` of them from device x `x0`.
+  // Striped, the peaks were read over half the piece into half the columns,
+  // so every bar is exactly the pixelated bar; it is drawn at twice its
+  // column, leaving the gap.
+  const drawColumns = (p: Peaks, cols: number, x0: number, color: string, pixelSize: number, striped: boolean) => {
+    const colW = columnWidth(pixelSize);
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 1;
+    const stretch = striped ? WAVEFORM_STRIPE_STRETCH : 1;
+    for (const bar of barPeaks(p, Math.floor(cols / stretch), colW)) {
+      const yTop = Math.round(cy - bar.max * amp);
+      const yBot = Math.round(cy - bar.min * amp);
+      ctx.fillRect(x0 + bar.x * stretch, yTop, colW, Math.max(1, yBot - yTop));
+    }
+  };
+
+  // Simplified, smoothly-interpolated envelope across device x `x0`..`x1`: solid fill, or translucent + outline.
+  const drawSimplified = (env: number[], x0: number, x1: number, color: string, outline: boolean) => {
     const n = env.length;
     if (n < 2) return;
-    const px = (k: number) => (k / (n - 1)) * W;
+    const px = (k: number) => x0 + (k / (n - 1)) * (x1 - x0);
     const top: Pt[] = env.map((a, k) => ({ x: px(k), y: cy - a * amp }));
     const bot: Pt[] = [];
     for (let k = n - 1; k >= 0; k--) bot.push({ x: px(k), y: cy + env[k] * amp });
@@ -237,6 +299,40 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
     }
   };
 
+  // The frame showing through a cut, and the rounded corners of the pieces
+  // either side: a corner is the square outside a quarter circle, drawn in
+  // the frame's colour over the wave.
+  const drawGaps = (color: string, radius: number) => {
+    if (!gapPx || pieces.length < 2) return;
+    const r = Math.min(radius * dpr, gapPx * 2, H / 2);
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 1;
+    const corner = (x: number, y: number, dx: number, dy: number) => {
+      // The square's outer corner is (x, y); the circle's centre sits
+      // `dx`,`dy` (±r) from it, inside the piece.
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + dx, y);
+      ctx.arc(x + dx, y + dy, r, dy > 0 ? -Math.PI / 2 : Math.PI / 2, dx > 0 ? Math.PI : 0, dx > 0 === dy > 0);
+      ctx.lineTo(x, y + dy);
+      ctx.closePath();
+      ctx.fill();
+    };
+    for (let i = 0; i < pieces.length; i++) {
+      const piece = pieces[i];
+      if (i > 0) {
+        // this piece's left end, after a gap
+        corner(piece.x0, 0, r, r);
+        corner(piece.x0, H, r, -r);
+      }
+      if (i + 1 < pieces.length) {
+        ctx.fillRect(piece.x1, 0, gapPx, H);
+        corner(piece.x1, 0, -r, r);
+        corner(piece.x1, H, -r, -r);
+      }
+    }
+  };
+
   // Faint reference grid: `subs` vertical (time) lines.
   const drawGrid = (base: string, subs: number) => {
     const n = Math.max(1, Math.round(subs));
@@ -254,10 +350,11 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
   };
 
   // Translucent loop / selection band between two 0..1 positions, mapped into the
-  // current window (`start`,`win`). Tinted with the playhead color at low opacity.
-  const drawRegion = (a: number, b: number, start: number, win: number, color: string) => {
-    const x0 = ((a - start) / win) * W;
-    const x1 = ((b - start) / win) * W;
+  // current window and its pieces. Tinted with the playhead color at low opacity.
+  const drawRegion = (a: number, b: number, color: string) => {
+    const { start, win } = windowState;
+    const x0 = a <= start ? -1 : a >= start + win ? W + 1 : xOfPos(a);
+    const x1 = b <= start ? -1 : b >= start + win ? W + 1 : xOfPos(b);
     const cx0 = Math.max(0, x0);
     const cx1 = Math.min(W, x1);
     if (cx1 <= cx0) return;
@@ -323,40 +420,57 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
       win = Math.min(1, Math.max(1 / WAVEFORM_MAX_ZOOM, span * 1.2));
       start = (activeLoop.start + activeLoop.end) / 2 - win / 2;
     } else {
-      win = 1 / Math.max(1, rt.zoom);
+      // Striped bars make the wave twice as long: the same zoom shows half.
+      win = 1 / Math.max(1, rt.zoom) / (rt.mode === 'striped' ? WAVEFORM_STRIPE_STRETCH : 1);
       start = prog - win / 2;
     }
     if (start < 0) start = 0;
     else if (start > 1 - win) start = 1 - win;
-    const end = start + win;
     windowState.start = start;
     windowState.win = win;
+    layoutPieces(start, win, rt.cuts, rt.gap ?? WAVEFORM_GAP);
 
     const count = monos.length;
     if (count) {
-      // Bands drawn low → high so the spikier high band reads on top.
+      // Bands drawn low → high so the spikier high band reads on top; each
+      // piece of the window drawn into the pixels it owns.
       for (let i = 0; i < count; i++) {
         const mono = monos[i];
-        const s0 = Math.max(0, Math.floor(start * mono.length));
-        const s1 = Math.min(mono.length, Math.ceil(end * mono.length));
-        const slice = s1 > s0 ? mono.subarray(s0, s1) : mono;
-        fillPeaks(slice, W, pk.min, pk.max);
         const color = count === 3 ? BAND_COLORS[i] : wave;
-        if (rt.mode === 'pixelated') drawColumns(pk, color, rt.pixelSize);
-        else drawSimplified(envelope(pk, W, Math.max(2, rt.smoothPoints || WAVEFORM_SMOOTH_POINTS)), color, rt.border);
+        const striped = rt.mode === 'striped';
+        for (const piece of pieces) {
+          const cols = Math.max(1, Math.round(piece.x1) - Math.round(piece.x0));
+          const s0 = Math.max(0, Math.floor(piece.a * mono.length));
+          const s1 = Math.min(mono.length, Math.ceil(piece.b * mono.length));
+          const slice = s1 > s0 ? mono.subarray(s0, s1) : mono;
+          const pmin = pk.min.subarray(0, cols);
+          const pmax = pk.max.subarray(0, cols);
+          fillPeaks(slice, striped ? Math.max(1, Math.floor(cols / WAVEFORM_STRIPE_STRETCH)) : cols, pmin, pmax);
+          const x0 = Math.round(piece.x0);
+          if (rt.mode !== 'smooth') drawColumns({ min: pmin, max: pmax }, cols, x0, color, rt.pixelSize, striped);
+          else {
+            // the envelope keeps one density of points across every piece
+            const points = Math.max(2, Math.round((rt.smoothPoints || WAVEFORM_SMOOTH_POINTS) * (cols / W)));
+            drawSimplified(envelope({ min: pmin, max: pmax }, cols, points), x0, x0 + cols, color, rt.border);
+          }
+        }
       }
     }
 
     // Loop / live drag selection on top of the waveform, derived from the playhead color.
     if (drag && drag.moved) {
-      drawRegion(Math.min(drag.anchor, drag.curProg), Math.max(drag.anchor, drag.curProg), start, win, ph);
+      drawRegion(Math.min(drag.anchor, drag.curProg), Math.max(drag.anchor, drag.curProg), ph);
     } else if (rt.loop) {
-      drawRegion(rt.loop.start, rt.loop.end, start, win, ph);
+      drawRegion(rt.loop.start, rt.loop.end, ph);
     }
 
+    // The cuts, over the wave and the band: the frame shows through them.
+    drawGaps(rt.gapColor || '#1e1e1e', rt.gapRadius ?? WAVEFORM_GAP_RADIUS);
+
     if (count) {
-      // playhead — mapped into the (possibly zoomed) window so it stays visible
-      const playX = ((prog - start) / win) * W;
+      // playhead — in its piece of the (possibly zoomed) window, so it stays
+      // visible and steps straight across a cut
+      const playX = xOfPos(prog);
       ctx.globalAlpha = 1;
       ctx.strokeStyle = ph;
       ctx.lineWidth = 1.5 * dpr;
@@ -371,12 +485,23 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
 
   // --- pointer interaction ---
 
-  // Map a clientX to a 0..1 sample position using the window currently displayed.
+  // Map a clientX to a 0..1 sample position using the window currently
+  // displayed and its pieces — a press in a gap lands on the piece after it.
   const xToProgress = (clientX: number) => {
     const rect = canvas.getBoundingClientRect();
     const fx = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    const x = fx * W;
     const { start, win } = windowState;
-    return Math.min(1, Math.max(0, start + fx * win));
+    let piece = pieces[pieces.length - 1];
+    for (const it of pieces) {
+      if (x <= it.x1) {
+        piece = it;
+        break;
+      }
+    }
+    const span = piece.x1 - piece.x0;
+    const t = span > 0 ? Math.min(1, Math.max(0, (x - piece.x0) / span)) : 0;
+    return Math.min(1, Math.max(0, Math.min(start + win, piece.a + t * (piece.b - piece.a))));
   };
 
   // Which loop edge (if any) a clientX is grabbing — only when a resizable loop is on screen.
@@ -385,8 +510,7 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
     const loop = rt.loop;
     if (!loop || !rt.onLoopChange) return null;
     const rect = canvas.getBoundingClientRect();
-    const { start, win } = windowState;
-    const xOf = (t: number) => ((t - start) / win) * rect.width;
+    const xOf = (t: number) => (xOfPos(t) / Math.max(1, W)) * rect.width;
     const px = clientX - rect.left;
     const sx = xOf(loop.start);
     const ex = xOf(loop.end);

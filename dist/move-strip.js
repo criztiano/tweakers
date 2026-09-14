@@ -37,11 +37,19 @@ function buildMoveStrip(panel) {
     for (let s = 0; s < dialSpan(c); s++) dials.push(c);
   }
   const toggles = [];
+  const topValues = [];
   const values = [];
   const actions = [];
+  const topAt = (i) => toggles[i] ?? topValues[i];
+  for (const [ref, bal] of balanceRefs) {
+    const col = dials.indexOf(bal);
+    if (col < 0) continue;
+    if (ref.path === bal.balanceA) topValues[col] = ref;
+    else values[col] = ref;
+  }
   const placeRun = (c, col) => {
     const span = padSpan(c);
-    const fits = (start2) => Array.from({ length: span }, (_, k) => toggles[start2 + k]).every((p) => p === void 0);
+    const fits = (start2) => Array.from({ length: span }, (_, k) => topAt(start2 + k)).every((p) => p === void 0);
     let start = col !== null && fits(col) ? col : -1;
     for (let i = 0; start < 0; i++) {
       if (fits(i)) start = i;
@@ -56,16 +64,14 @@ function buildMoveStrip(panel) {
     if (balanceRefs.has(c)) continue;
     const col = column(c);
     if (col === null) continue;
-    const row = c.type === "toggle" ? toggles : c.type === "action" ? actions : values;
+    if (c.type === "toggle") {
+      if (topAt(col) === void 0) toggles[col] = c;
+      continue;
+    }
+    const row = c.type === "action" ? actions : values;
     if (row[col] === void 0) row[col] = c;
   }
-  for (const [ref, bal] of balanceRefs) {
-    const col = dials.indexOf(bal);
-    if (col < 0) continue;
-    const row = ref.path === bal.balanceA ? toggles : values;
-    if (row[col] === void 0) row[col] = ref;
-  }
-  return { panel, dials, toggles, values, actions };
+  return { panel, dials, toggles, values, actions, ...topValues.length ? { topValues } : {} };
 }
 function stripStarts(page) {
   const starts = [];
@@ -115,7 +121,11 @@ function stripDialSlots(page, offset, cols = MOVE_DIALS) {
 }
 function stripWindowPads(page, offset, cols = MOVE_DIALS) {
   const row = (cells) => Array.from({ length: cols }, (_, i) => cells[offset + i]);
-  return { toggles: row(page.toggles), values: row(page.values), actions: row(page.actions) };
+  const top = page.toggles.slice();
+  page.topValues?.forEach((m, i) => {
+    if (m && top[i] === void 0) top[i] = m;
+  });
+  return { toggles: row(top), values: row(page.values), actions: row(page.actions) };
 }
 var stripSlotCount = (page) => stripStarts(page).length;
 var stripSlotIndex = (page, offset) => stripStarts(page).filter((start) => start < offset).length;

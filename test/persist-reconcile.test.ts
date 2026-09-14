@@ -74,6 +74,7 @@ const layoutShape = (id: string) => {
   return {
     dials: paths(page.dials),
     toggles: paths(page.toggles),
+    topValues: paths(page.topValues ?? []),
     values: paths(page.values),
     actions: paths(page.actions),
   };
@@ -94,7 +95,7 @@ describe('persisted state vs the current registration (the lego rule)', () => {
     expect(stale).toEqual(clean);
     // The balance keeps its dial, its colours their auto-seated chips.
     expect(stale.dials).toContain('balance');
-    expect(stale.toggles).toContain('colorA');
+    expect(stale.topValues).toContain('colorA');
     expect(stale.values).toContain('colorB');
     expect(info).toHaveBeenCalledTimes(1);
   });

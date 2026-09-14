@@ -856,6 +856,12 @@ When the panel is open, the toolbar provides:
 - **Presets** — A version dropdown for saving and loading parameter snapshots. Click "+" to save the current state as a new version. Select a version to load it. Changes auto-save to the active version. "Version 1" always represents the original defaults.
 - **Copy** — Exports the current values as JSON to your clipboard.
 
+### Generative preset exploration
+
+Hold the Move preset button to explore a floating 32-pad generation. Audition children, mark parents, rate favorites, breed new generations, or morph up to eight presets. Save multiple discoveries without leaving; Back restores the original sound. `moveKitOptions()` already carries `PresetExplorationStore` as the bridge’s `exploration` option.
+
+See [the exploration guide](docs/preset-exploration.md) for controls, persistence, supported parameters, and the optional host preset adapter.
+
 ### App-backed presets
 
 Apps with their own preset store (files, engine IPC, a server) can back the same toolbar UI with a `PresetProvider` via the `presets` option. tweakers then renders your list in your order, hides its implicit "Version 1" row, and stops snapshotting values itself — you apply values in `onSelect` and own persistence:
@@ -1292,6 +1298,10 @@ Three placements, one look — all of them on the hardware's own display surface
 
 `children` render over the waveform, so an app can lay its own markers on top without fighting the canvas's sizing. Every prop `WaveformVisualization` takes is passed through; `WaveformVisualization` itself now also accepts a controlled `zoom`, which is how the wheel drives it.
 
+**The look is the user's.** How the sample is drawn — the style, the bar width, the grid, the EQ bands, the centre line — lives on the kit's own **Waveform** page in the settings room (behind the Move's Set Overview button, Shift + Step 1), not in the app: the first waveform to claim the surface puts the page there (seeded with its `mode` / `pixelSize` / `grid` / `bands` / `baseline` props), it persists per machine, and every waveform on the surface follows it, on screen and from the hardware. Three styles: `smooth` (the simplified envelope), `pixelated` (one min/max bar per column) and `striped` — the pixelated bar, untouched, with a gap its own width after it. No sample is lost and no bar coarsens: the wave is simply twice as long, so the same zoom shows half of it, and the pads and the small screens frame what the card shows.
+
+While the audio modulator's floating editor is zoomed in, the small screens — the audio dial's face and the Move's own display — show the part the editor shows, framed on the playhead, rather than a whole-sample thumbnail.
+
 ### Function buttons
 
 The Move's named function buttons attach to your app's own actions through the function library. Names match the printed hardware labels, and the manifest (`MOVE_FUNCTION_MANIFEST`) splits them in two groups:
@@ -1330,6 +1340,24 @@ MoveFunctions.attach('jog_click', () => confirm());
 ```
 
 A disabled button dims to 40% and runs nothing. `MoveFunctions.subscribeRuns((name, press) => ...)` observes every run — that's the channel the button uses to flash on hardware presses.
+
+### Action deck
+
+A view that has nothing to set yet — a start screen, a "what now" page — shows neither a list nor a panel but an **action deck**: up to four buttons in the page's middle, one per key whose meaning is the app's to give (the Sampling key, Capture, Loop, Mute). Each speaks the chip voice — the slot surface by default, `variant: 'highlight'` for the pale key look on the one action the view leans on — wearing its key's glyph unless it brings an `icon` of its own, and the deck attaches the handler to that key itself — a screen click and a hardware press run one function, both flash the button, and the key lights only while its action is live:
+
+```tsx
+import { MoveActionDeck } from 'tweakers';
+
+<MoveActionDeck
+  actions={[
+    { button: 'capture', label: 'Load file', detail: 'or drop one anywhere', onPress: () => openPicker() },
+    { button: 'sample', label: 'Record from…', variant: 'highlight', icon: <RecDot />, onPress: () => pickSource() },
+    { button: 'loop', label: 'Recent', onPress: () => showRecent(), disabled: !recent.length },
+  ]}
+/>
+```
+
+The rules (`normalizeDeck`): the order is the app's, one action per key (the first wins), at most four, and every dropped action is warned in the console. A disabled action dims and leaves its key dark. The deck is the chip — its attachments render no header chip of their own. A view shows one of the deck, the list screen, or a panel, never two side by side.
 
 The `MovePanel` header keeps one right-aligned pill: the dark volume-dial readout — whatever the volume dial currently means in your app:
 

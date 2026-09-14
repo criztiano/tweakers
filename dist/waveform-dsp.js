@@ -25,6 +25,20 @@ function fillPeaks(data, cols, min, max) {
     max[x] = mx;
   }
 }
+function barPeaks(p, cols, pitch) {
+  const step = Math.max(1, Math.round(pitch));
+  const out = [];
+  for (let x = 0; x < cols; x += step) {
+    let mn = 1;
+    let mx = -1;
+    for (let i = x; i < x + step && i < cols; i++) {
+      if (p.min[i] < mn) mn = p.min[i];
+      if (p.max[i] > mx) mx = p.max[i];
+    }
+    out.push({ x, min: mn, max: mx });
+  }
+  return out;
+}
 function envelope(p, cols, n) {
   const out = new Array(n);
   const seg = cols / n;
@@ -41,6 +55,7 @@ function envelope(p, cols, n) {
   return out;
 }
 export {
+  barPeaks,
   envelope,
   fillPeaks,
   mixToMono

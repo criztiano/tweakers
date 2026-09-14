@@ -1,3 +1,4 @@
+import type { GeneParameter, PresetDNA } from '../preset-genetics';
 import type { MoveSliderVisual, MoveSelectVisual, MoveVisual } from '../move-visual-core';
 export type { MoveSliderVisual, MoveSelectVisual, MoveVisual, MovePlaybackMode } from '../move-visual-core';
 // Lightweight state store with subscriptions for tweakers
@@ -735,12 +736,14 @@ export type PanelConfig = {
   labels?: Record<string, string>;
   /** Move pad columns by control path, retained on the same terms as `hints`. */
   movePads?: Record<string, number>;
+  /** Value chips lifted onto the top pad row, retained on the same terms as `hints`. */
+  moveTopRow?: string[];
   /**
    * Config declared `_enabled` at its root — the whole panel is a module, and
    * its title carries the switch. Same idiom as a module folder, one level up.
    */
   module?: boolean;
-  kind?: 'timeline' | 'modulation';
+  kind?: 'timeline' | 'modulation' | 'kit';
 };
 
 type Listener = () => void;
@@ -779,7 +782,18 @@ export type PresetProviderPreset = {
  * stock auto-save-to-active-preset behavior is off because the store's own
  * active-preset state is never engaged in provider mode.
  */
+/** Hosts must preview without saving, and restore their own active preset identity. */
+export interface PresetExplorationAdapter {
+  parameters: GeneParameter[];
+  capture(): PresetDNA | Promise<PresetDNA>;
+  preview(values: PresetDNA): void | Promise<void>;
+  restore(values: PresetDNA, activeId: string | null): void | Promise<void>;
+  save(name: string, values: PresetDNA): void | Promise<void>;
+  readPreset?(id: string): PresetDNA | Promise<PresetDNA>;
+}
+
 export type PresetProvider = {
+  exploration?: PresetExplorationAdapter;
   presets: PresetProviderPreset[];
   activeId?: string | null;
   onSelect(id: string): void | Promise<void>;
@@ -850,9 +864,20 @@ export type TweakStorePanelOptions = {
    * has), actions the row under those.
    */
   movePads?: Record<string, number>;
+  /**
+   * Value chips, by control path, that sit on the top pad row instead of the
+   * value row — for a page whose switches leave that row free, so the chip
+   * sits right under the dial it pairs with. The chip rides its `movePads`
+   * column, and keeps the value row when it names none or when a switch (or a
+   * balance's colour) already holds that cell up top. Same column, same gestures
+   * (hold to peek, tap to latch), on the screen and on the hardware.
+   */
+  moveTopRow?: string[];
   /** Timeline panels render in TweakTimeline; modulation panels are the Move's
-   * modulator settings pages — both are filtered out of the panel dock. */
-  kind?: 'timeline' | 'modulation';
+   * modulator settings pages; kit panels are the Move kit's own settings
+   * pages (the waveform's look), shown only in the settings room — all three
+   * are filtered out of the panel dock and off the track row. */
+  kind?: 'timeline' | 'modulation' | 'kit';
 };
 
 /**
@@ -986,9 +1011,11 @@ class TweakStoreClass {
   private presetProviders: Map<string, { provider: PresetProvider; serialized: string }> = new Map();
   /** Panels whose header carries no preset toolbar (see setPresetsHidden). */
   private presetsHidden: Set<string> = new Set();
+  private previewTransactions = new Map<string, { values: PresetDNA; activeId: string | null; schemas: Map<string, string> }>();
   private baseValues: Map<string, Record<string, TweakValue>> = new Map();
   // Resolved storage target per panel (null = persistence off). Absent = not
   // yet registered.
+  private presetTargets = new Map<string, PersistTarget | null>();
   private persistTargets: Map<string, PersistTarget | null> = new Map();
 
   // The Move-kit registries this page has put to use. Only ever grows: a
@@ -1006,6 +1033,13 @@ class TweakStoreClass {
 
     const target = resolvePersistTarget('panel', id, options.persist);
     this.persistTargets.set(id, target);
+    const presetTarget = target && !(typeof options.persist === 'object' && options.persist.presets === false)
+      ? { ...target, key: `${target.key}:presets` } : null;
+    this.presetTargets.set(id, presetTarget);
+    const savedPresets = loadPersisted<unknown>(presetTarget);
+    if (Array.isArray(savedPresets)) this.presets.set(id, savedPresets.filter((p): p is Preset =>
+      !!p && typeof p.id === 'string' && typeof p.name === 'string' && !!p.values && typeof p.values === 'object' && !Array.isArray(p.values)));
+
 
     const controls = this.parseConfig(config, '', shortcuts);
     this.applyControlExtras(controls, options.hints, options.affordances, options.labels);
@@ -1022,7 +1056,7 @@ class TweakStoreClass {
     // instead of resurrecting it.
     this.overlayPersistedValues(id, target, values, this.mapControlsByPath(controls));
 
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, module: '_enabled' in config ? true : undefined, kind: options.kind });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, moveTopRow: options.moveTopRow, module: '_enabled' in config ? true : undefined, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -1039,6 +1073,7 @@ class TweakStoreClass {
     const affordances = options.affordances ?? existing.affordances;
     const labels = options.labels ?? existing.labels;
     const movePads = options.movePads ?? existing.movePads;
+    const moveTopRow = options.moveTopRow ?? existing.moveTopRow;
     const controls = this.parseConfig(config, '', shortcuts);
     this.applyControlExtras(controls, hints, affordances, labels);
     const controlsByPath = this.mapControlsByPath(controls);
@@ -1069,7 +1104,7 @@ class TweakStoreClass {
       }
     }
 
-    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, module: '_enabled' in config ? true : undefined, kind: options.kind ?? existing.kind };
+    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, moveTopRow, module: '_enabled' in config ? true : undefined, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
 
@@ -1110,6 +1145,7 @@ class TweakStoreClass {
     this.snapshots.delete(id);
     this.baseValues.delete(id);
     this.persistTargets.delete(id);
+    this.presetTargets.delete(id);
     this.presetProviders.delete(id);
     this.presetsHidden.delete(id);
     this.notifyGlobal();
@@ -1183,11 +1219,16 @@ class TweakStoreClass {
 
   // Save the panel's current flat values (fail-soft, no-op when persistence is
   // off). Called after every edit so timing/values survive a reload.
+  private persistPresets(panelId: string): void {
+    savePersisted(this.presetTargets.get(panelId) ?? null, this.presets.get(panelId) ?? []);
+  }
+
   private savePanelValues(panelId: string): void {
     const target = this.persistTargets.get(panelId);
-    if (!target) return;
+    if (!target || this.previewTransactions.has(panelId)) return;
     const panel = this.panels.get(panelId);
     if (panel) savePersisted(target, panel.values);
+    this.persistPresets(panelId);
   }
 
   updateValue(panelId: string, path: string, value: TweakValue): void {
@@ -1197,6 +1238,7 @@ class TweakStoreClass {
     panel.values[path] = value;
 
     // Auto-save to active preset or base values
+    if (!this.previewTransactions.has(panelId)) {
     const activeId = this.activePreset.get(panelId);
     if (activeId) {
       const presets = this.presets.get(panelId) ?? [];
@@ -1205,6 +1247,8 @@ class TweakStoreClass {
     } else {
       const base = this.baseValues.get(panelId);
       if (base) base[path] = value;
+    }
+
     }
 
     // Create a new snapshot reference so useSyncExternalStore detects the change
@@ -1229,8 +1273,10 @@ class TweakStoreClass {
 
     for (const [path, value] of Object.entries(updates)) {
       panel.values[path] = value;
-      if (preset) preset.values[path] = value;
-      else if (base) base[path] = value;
+      if (!this.previewTransactions.has(panelId)) {
+        if (preset) preset.values[path] = value;
+        else if (base) base[path] = value;
+      }
     }
 
     this.snapshots.set(panelId, { ...panel.values });
@@ -1568,6 +1614,54 @@ class TweakStoreClass {
     return next;
   }
 
+  private presetSchema(c?: ControlMeta): string {
+    return JSON.stringify([c?.type,c?.min,c?.max,c?.step,c?.stepInferred,c?.options,c?.xAxis,c?.yAxis,c?.cutoffAxis,c?.resonanceAxis]);
+  }
+
+  /** Scoped audition: normal edits remain audible but never autosave. */
+  beginPresetPreview(panelId: string): void {
+    if (this.previewTransactions.has(panelId)) throw new Error('A preset preview is already active.');
+    const panel = this.panels.get(panelId);
+    if (!panel) throw new Error('Panel is unavailable.');
+    this.previewTransactions.set(panelId, { values: structuredClone(panel.values), activeId: this.activePreset.get(panelId) ?? null, schemas: new Map([...this.mapControlsByPath(panel.controls)].map(([path,c]) => [path,this.presetSchema(c)])) });
+    panel.values = structuredClone(panel.values);
+    this.snapshots.set(panelId, { ...panel.values });
+  }
+
+  endPresetPreview(panelId: string): void {
+    const original = this.previewTransactions.get(panelId);
+    if (!original) return;
+    this.previewTransactions.delete(panelId);
+    this.activePreset.set(panelId, original.activeId);
+    const panel = this.panels.get(panelId);
+    if (!panel) return;
+    const controls = this.mapControlsByPath(panel.controls);
+    const restored = { ...panel.values };
+    for (const path of Object.keys(restored)) {
+      if (Object.prototype.hasOwnProperty.call(original.values, path)) restored[path] = original.schemas.get(path) === this.presetSchema(controls.get(path))
+        ? original.values[path] : this.normalizePreservedValue(original.values[path], restored[path], controls.get(path));
+    }
+    // Already reconciled above, path by path against the schema the preview
+    // opened with — so the entry values land exactly, never re-snapped.
+    this.replaceValues(panel, structuredClone(restored));
+    this.snapshots.set(panelId, { ...panel.values });
+    this.notify(panelId);
+  }
+
+  getPresetPersistenceTarget(panelId: string): PersistTarget | null {
+    return this.presetTargets.get(panelId) ? this.persistTargets.get(panelId) ?? null : null;
+  }
+
+  /** Save a discovery without changing which preset subsequent edits belong to. */
+  savePresetSnapshot(panelId: string, name: string, values: PresetDNA): string {
+    if (!this.panels.has(panelId)) throw new Error('Panel is unavailable.');
+    const id = `preset-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    this.presets.set(panelId, [...(this.presets.get(panelId) ?? []), { id, name, values: structuredClone(values) }]);
+    this.persistPresets(panelId);
+    this.notify(panelId);
+    return id;
+  }
+
   savePreset(panelId: string, name: string): string {
     const panel = this.panels.get(panelId);
     if (!panel) throw new Error(`Panel ${panelId} not found`);
@@ -1581,6 +1675,7 @@ class TweakStoreClass {
 
     const existing = this.presets.get(panelId) ?? [];
     this.presets.set(panelId, [...existing, preset]);
+    this.persistPresets(panelId);
     this.activePreset.set(panelId, id);
 
     // Force re-render by creating new snapshot reference
@@ -1611,6 +1706,7 @@ class TweakStoreClass {
   deletePreset(panelId: string, presetId: string): void {
     const presets = this.presets.get(panelId) ?? [];
     this.presets.set(panelId, presets.filter(p => p.id !== presetId));
+    this.persistPresets(panelId);
 
     // Clear active if deleted
     if (this.activePreset.get(panelId) === presetId) {
@@ -1766,6 +1862,7 @@ class TweakStoreClass {
     const preset = (this.presets.get(panelId) ?? []).find((p) => p.id === presetId);
     if (!preset) return;
     preset.name = trimmed;
+    this.persistPresets(panelId);
     const panel = this.panels.get(panelId);
     if (panel) this.snapshots.set(panelId, { ...panel.values });
     this.notify(panelId);

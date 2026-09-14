@@ -241,7 +241,7 @@ var padColumn = (panel, c) => {
   return null;
 };
 function buildMovePages(panels) {
-  const plain = panels.filter((p) => p.kind === void 0);
+  const plain = panels.filter((p) => p.kind === void 0 || p.kind === "kit");
   for (const p of plain.slice(MOVE_TRACKS)) {
     reportMoveLayoutIssue(
       "panel-dropped",
@@ -272,26 +272,23 @@ function buildMovePages(panels) {
       for (let s = 0; s < span; s++) dials[nextCol + s] = c;
       nextCol += span;
     }
-    const balanceSeat = /* @__PURE__ */ new Map();
-    for (const [ref, bal] of balanceRefs) {
-      const col = dials.indexOf(bal);
-      if (col < 0) continue;
-      balanceSeat.set(ref, { col, first: ref.path === bal.balanceA });
-    }
     const toggles = [];
     const values = [];
     const actions = [];
+    const topValues = [];
+    const topAt = (i) => toggles[i] ?? topValues[i];
+    const cellAt = (row, i) => row === toggles ? topAt(i) : row[i];
     const place = (row, rowName, c, col) => {
-      if (col !== null && row[col] === void 0) {
+      if (col !== null && cellAt(row, col) === void 0) {
         row[col] = c;
         return;
       }
       for (let i = 0; i < MOVE_PADS; i++) {
-        if (row[i] === void 0) {
+        if (cellAt(row, i) === void 0) {
           if (col !== null) {
             reportMoveLayoutIssue(
               "pad-column-taken",
-              `panel '${panel.id}': control '${c.path}': ${rowName} column ${col} already occupied by '${row[col].path}' \u2014 moved to column ${i}`
+              `panel '${panel.id}': control '${c.path}': ${rowName} column ${col} already occupied by '${cellAt(row, col).path}' \u2014 moved to column ${i}`
             );
           }
           row[i] = c;
@@ -312,7 +309,7 @@ function buildMovePages(panels) {
         );
         return;
       }
-      const fits = (start2) => start2 >= 0 && start2 + span <= MOVE_PADS && Array.from({ length: span }, (_, k) => toggles[start2 + k]).every((p) => p === void 0);
+      const fits = (start2) => start2 >= 0 && start2 + span <= MOVE_PADS && Array.from({ length: span }, (_, k) => topAt(start2 + k)).every((p) => p === void 0);
       let start = col !== null && fits(col) ? col : -1;
       if (start < 0) {
         for (let i = 0; i + span <= MOVE_PADS; i++) {
@@ -337,21 +334,51 @@ function buildMovePages(panels) {
       }
       for (let k = 0; k < span; k++) toggles[start + k] = c;
     };
+    for (const [ref, bal] of balanceRefs) {
+      const at = dials.indexOf(bal);
+      if (at < 0) continue;
+      const first = ref.path === bal.balanceA;
+      const col = padCols.get(ref) ?? null;
+      if (col !== null) {
+        reportMoveLayoutIssue(
+          "balance-color-placed",
+          `panel '${panel.id}': control '${ref.path}' is placed by its balance \u2014 movePads column ${col} ignored; a balance seats its own colours`
+        );
+      }
+      if (first) topValues[at] = ref;
+      else values[at] = ref;
+    }
+    const seated = (c) => topValues.includes(c) || values.includes(c);
     for (const c of controls) {
       const col = padCols.get(c) ?? null;
       if (isMoveTabs(c)) placeTabs(c, col);
       else if (c.type === "toggle" && !isToggleDial(c)) place(toggles, "toggle", c, col);
-      else if (c.type === "action") {
+    }
+    const lift = panel.moveTopRow ?? [];
+    const chipFits = (c) => isDial(c) && !noChip(c) && !dials.includes(c) && !balanceRefs.has(c) && !isPadColor(c);
+    for (const c of controls) {
+      if (!lift.includes(c.path) || !chipFits(c)) continue;
+      const col = padCols.get(c) ?? null;
+      if (col === null) {
+        reportMoveLayoutIssue(
+          "top-row-no-column",
+          `panel '${panel.id}': control '${c.path}' is named in moveTopRow but has no movePads column \u2014 the chip keeps the value row`
+        );
+      } else if (topAt(col) !== void 0) {
+        reportMoveLayoutIssue(
+          "top-row-taken",
+          `panel '${panel.id}': control '${c.path}': top-row column ${col} holds '${topAt(col).path}' \u2014 the chip keeps the value row`
+        );
+      } else {
+        topValues[col] = c;
+      }
+    }
+    for (const c of controls) {
+      const col = padCols.get(c) ?? null;
+      if (isMoveTabs(c) || c.type === "toggle" && !isToggleDial(c)) continue;
+      if (seated(c)) continue;
+      if (c.type === "action") {
         if (col !== null) place(actions, "action", c, col);
-      } else if (balanceSeat.has(c)) {
-        if (col !== null) {
-          reportMoveLayoutIssue(
-            "balance-color-placed",
-            `panel '${panel.id}': control '${c.path}' is placed by its balance \u2014 movePads column ${col} ignored; a balance seats its own colours`
-          );
-        }
-        const seat = balanceSeat.get(c);
-        place(seat.first ? toggles : values, seat.first ? "toggle" : "value", c, seat.col);
       } else if (balanceRefs.has(c)) place(values, "value", c, col);
       else if (isPadColor(c)) place(values, "value", c, col);
       else if (dials.includes(c)) {
@@ -374,13 +401,23 @@ function buildMovePages(panels) {
       dials,
       toggles: toggles.slice(0, MOVE_PADS),
       values: values.slice(0, MOVE_PADS),
-      actions: actions.slice(0, MOVE_PADS)
+      actions: actions.slice(0, MOVE_PADS),
+      ...topValues.length ? { topValues: topValues.slice(0, MOVE_PADS) } : {}
     };
   });
 }
 function movePadRows(page, claimedRows) {
-  if (claimedRows >= 2) return [page.toggles, page.values, [], []];
-  return [page.toggles, page.values, page.actions, []];
+  let top = page.toggles;
+  const values = page.values;
+  if (page.topValues?.some(Boolean)) {
+    top = [];
+    for (let i = 0; i < Math.max(page.toggles.length, page.topValues.length); i++) {
+      const cell = page.toggles[i] ?? page.topValues[i];
+      if (cell) top[i] = cell;
+    }
+  }
+  if (claimedRows >= 2) return [top, values, [], []];
+  return [top, values, page.actions, []];
 }
 function moveAppPadRow(row, claimedRows) {
   if (claimedRows >= 2) return row === 2 ? 1 : row === 3 ? 0 : null;
@@ -389,7 +426,7 @@ function moveAppPadRow(row, claimedRows) {
 function visibleColumns(page) {
   const cols = [];
   for (let i = 0; i < MOVE_DIALS; i++) {
-    if (page.dials[i] || page.toggles[i] || page.values[i] || page.actions[i]) cols.push(i);
+    if (page.dials[i] || page.toggles[i] || page.topValues?.[i] || page.values[i] || page.actions[i]) cols.push(i);
   }
   return cols;
 }

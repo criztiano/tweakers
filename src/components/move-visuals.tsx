@@ -47,6 +47,22 @@ export function MoveSlotNumericBody({ label, value, drawing }: {
             </g>
           </>
         )}
+        {drawing.kind === 'trim' && (
+          <>
+            <path className="tweakers-move-visual-guide" d="M8 30H92" />
+            <path
+              className="tweakers-move-visual-line"
+              d={drawing.edge === 'start'
+                ? `M${8 + drawing.position * 84} 30H92`
+                : `M8 30H${8 + drawing.position * 84}`}
+            />
+            <path
+              className="tweakers-move-visual-pitch-marker"
+              data-offset={(drawing.edge === 'start' ? drawing.position > 1e-9 : drawing.position < 1 - 1e-9) || undefined}
+              d={`M${8 + drawing.position * 84} 22l-5 -7h10z`}
+            />
+          </>
+        )}
         {drawing.kind === 'pitch' && (
           <g>
             <path className="tweakers-move-visual-guide" d="M8 30H92M8 25V35M29 27V33M50 25V35M71 27V33M92 25V35" />

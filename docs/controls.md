@@ -48,7 +48,7 @@ control.
 | `action` | A button the page wants on the surface | `action` with a `movePads` column; `MovePadActionBody` | 1 pad |
 | `app` | A cell the app paints — a track, a slice, a step | `MoveSurfaceStore`; `MovePadAppBody` | 1 pad |
 | `tabs` | The mode a page is in, reachable without turning anything | `select` with `moveTabs` (`true`, or `'named'` for the name pad); `MovePadTabsBody` | 2–8 adjacent pads, switch row |
-| `color` | A single colour where colour is not the page's big control | `color` config with a `movePads` column — or nothing at all when a `balance` references it (the kit seats those itself); `MovePadColorBody` | 1 pad, switch or value row; lit in its colour; a chip like `value` — tap latches, hold peeks |
+| `color` | A single colour where colour is not the page's big control | `color` config with a `movePads` column — or nothing at all when a `balance` references it (the kit seats those itself); `MovePadColorBody` | 1 pad, top or value row; lit in its colour; a chip like `value` — tap latches, hold peeks |
 
 A `moveTabs` select stops competing for a dial: it is a pad strip and nothing
 else. It lands as one piece or not at all — the builder reports `tabs-oversized`
@@ -87,8 +87,9 @@ colour. A tap on the pad itself never opens the editor. The latch outlives
 the editor.
 
 A colour chip is a chip on whichever row it sits: the slot's kind decides
-the gesture, never its row. A balance's first colour sits on the switch row
-and still latches and peeks — it does not toggle. A column holding both of a
+the gesture, never its row. A balance's first colour rides the top row —
+the same cell a `moveTopRow` chip takes — and still latches and peeks; it
+does not toggle. A column holding both of a
 balance's colours has one knob and one owner: latching one releases the
 other, and holding one peeks over the one latched.
 
@@ -105,8 +106,10 @@ useTweakers('Noise', {
 ```
 
 The kit seats the two referenced colours ITSELF: stacked in the balance's
-own column — `a` on the switch row, `b` on the value row — so the blend and
-its two ends read as one column group, on screen and on the hardware alike.
+own column — `a` the chip up top, `b` the chip under it, the stacked column
+`moveTopRow` builds by hand — so the blend and its two ends read as one column
+group, on screen and on the hardware alike. They seat first: a switch or a
+lifted chip named into that column moves along its row, said out loud.
 No `movePads` for them (a hand-named column on one is ignored with a
 `balance-color-placed` warning, the pads-never-mirror-dials rule's sibling).
 Every colour chip wears its live store value: the swatch on screen, and on
@@ -129,14 +132,15 @@ config can answer, the kit answers.
 | --- | --- |
 | `movePads` option | Place toggles, numeric value chips, explicitly mapped actions and tabs strips under their related dial columns |
 | `MoveActionButton` / `MoveFunctions` | Hardware-named action pills and one shared action registry |
+| `MoveActionDeck` | A view's whole surface when it has nothing to set yet — a start screen, a "what now" page: up to four buttons in the page's middle, one per chip key (`sample`, `capture`, `loop`, `mute`), in the chip voice (`variant: 'highlight'` for the pale key look, an `icon` of its own or the key's glyph) and attached to the key through `MoveFunctions`, so a click and a press run one handler and both flash the button. A disabled action leaves its key dark; the deck is the chip, so its attachments show no header chip. One of three: a view shows the deck, the list screen, or a panel — never two. `normalizeDeck` is the rule (order kept, first action per key wins, a fifth is dropped, every drop warned). |
 | `MoveFunctionChips` | The attached functions as header chips, for free — but only for `MOVE_CHIP_BUTTONS` (`sample`, `capture`, `mute`, `loop`: the keys whose meaning is the app's to give), and only with a `label` saying what the button does in this app. A chip never wears a hardware name; unlabelled or non-chip-button attachments light the key and nothing else (Play is the time indicator's story). Naming: `sample` is the printed Sampling key — the surface's second confirm, often called "the enter button"; `jog_click` is the wheel pressed, never a chip. Clicking a chip runs the hardware key's handler. Default dress is the slot idiom; `chip: { variant: 'highlight' }` is the pale key look, `chip: { color }` takes a `MOVE_PALETTE` name only. `MovePanel` places the row by its `functionChips` option — `clock` (default, left of the volume readout), `tracks` (after the track labels), `none`. `chip: false` hides one. |
-| `MoveWaveform` / `MoveWaveformStore` | Sample display, navigation, loop and scrub state |
+| `MoveWaveform` / `MoveWaveformStore` | Sample display, navigation, loop and scrub state. The look — style (`smooth` / `pixelated` / `striped`), bar width, grid, EQ bands, centre line — is the kit's own **Waveform** page (`MOVE_WAVEFORM_PANEL`, kind `'kit'`), put in the settings room by the first waveform to claim the surface and persisted per machine; the component's look props only seed it. `striped` draws the pixel bars untouched with a gap after each, so the wave is twice as long and nothing is lost. The card itself is the kit's — light display, dark frame, at most 1200×176 — with wheel zoom (a press resets it), a knob scrub from the playhead, the step loop, the clock with the host's play/loop state, and `cuts` that split it into pieces. |
 | `MoveVolumeDisplay` | Contextual volume-knob readout |
 | `MoveNotifications` / `moveNotify` | The app's messages, stacked over the instrument. Mount the component once; call `moveNotify.add({ type, title, description })` from anywhere. `type` is `info`, `success`, `warning` or `error` — the card says the kind in a word and repeats it in the palette's hue, never in hue alone. The stack clears the panel and any display floating over it (curve composer, docked waveform, save input); an app-drawn float opts in with `data-move-float`. |
 | `MOVE_PALETTE` | The Move's colours on screen — the same set the hardware lights, matched by eye against the device's LED palette. `MOVE_TRACK_COLORS` is built from it. Colour on this surface always means something; never decoration. |
 | `MoveSurfaceStore` | Mirror app-owned raw pads, step buttons and screen state |
 | `MoveSearchStore` | Search on whichever list has the wheel — a system gesture, the same in every app, nothing to wire. Holding **Capture** opens it on the list in focus (the palette navigator, else the preset navigator, else the app's wheel list); typing on the computer keyboard narrows the rows as the letters land, the wheel (and ↑ ↓) walks what is left, taking a row (jog click, Enter, a click) or Back ends it, and holding Capture again closes it. The device's screen narrows with the wheel list and shows the query as its title. A host reading the wheel itself checks `MoveSearchStore.isOpen()` before taking a turn (the panel consumes the events first, but a listener registered ahead of it must still yield). `moveSearchMatch` / `moveSearchFilter` are the rule: every word of the query, any case, any order. |
-| `ListScreen` | Controlled list presentation matching the device display |
+| `ListScreen` | Controlled list presentation matching the device display. A row may carry `icon` (an image URL) at its left end — an app's icon, a file kind — pinned like the mark so a centred name stays put; the hardware screen has no room for it and takes the label alone |
 | `ModulationStore` | LFO, sample-and-hold, ADSR and curve modulation; settings layouts and assignments |
 
 ## General controls and artifacts

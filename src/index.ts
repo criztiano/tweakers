@@ -25,6 +25,11 @@ export { MoveActionButton } from './components/MoveActionButton';
 export type { MoveActionButtonProps } from './components/MoveActionButton';
 export { MoveFunctionChips } from './components/MoveFunctionChips';
 export type { MoveFunctionChipsProps } from './components/MoveFunctionChips';
+// The action deck — a view's whole surface as up to four big key-dressed buttons
+export { MoveActionDeck } from './components/MoveActionDeck';
+export type { MoveActionDeckProps, MoveDeckActionDress } from './components/MoveActionDeck';
+export { normalizeDeck, MOVE_DECK_MAX } from './move-deck-core';
+export type { MoveDeckAction, MoveDeckButton } from './move-deck-core';
 export { buildMovePages, buildModMovePage, movePadRows, moveAppPadRow, visibleColumns, isToggleDial, normalizeToggleDial, denormalizeToggleDial, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, padSpan, isMoveDial, isMoveTabs, isNamedTabs, moveTabCell, isSpanContinuation, isPadSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
 export type { MovePage } from './move-layout';
 
@@ -49,6 +54,10 @@ export { MoveWaveform } from './components/MoveWaveform';
 export type { MoveWaveformProps } from './components/MoveWaveform';
 export {
   MoveWaveformStore,
+  MOVE_WAVE_FRAME,
+  MOVE_WAVE_MAX_WIDTH,
+  MOVE_WAVE_MAX_HEIGHT,
+  MOVE_WAVE_MAX_DISPLAY,
   defaultView as moveWaveformDefaultView,
   scrubBy,
   zoomBy,
@@ -60,8 +69,15 @@ export {
   padSection,
   MOVE_WAVEFORM_STEPS,
   MOVE_WAVEFORM_PADS,
+  MOVE_WAVEFORM_PANEL,
+  MOVE_WAVEFORM_PIXEL_RANGE,
+  MOVE_WAVEFORM_DEMO_SECONDS,
+  moveWaveformDemoSample,
+  toAudioBuffer,
+  defaultStyle as moveWaveformDefaultStyle,
+  styleFromValues as moveWaveformStyleFromValues,
 } from './move-waveform';
-export type { MoveWaveformVariant, MoveWaveformView } from './move-waveform';
+export type { MoveWaveformVariant, MoveWaveformView, MoveWaveformStyle, MoveWaveformTransport } from './move-waveform';
 // Notifications — the app's messages, floating over the instrument and over
 // whatever display is already up there.
 export { MoveNotifications, moveNotify } from './components/MoveNotifications';
@@ -113,6 +129,8 @@ export {
   subscribeAudioMod,
   getAudioModVersion,
   audioModLevel,
+  setAudioModWindowSource,
+  getAudioModWindow,
   CURVE_LABELS,
   CURVE_MAX_CLIPS,
   CURVE_MIN_DURATION,
@@ -150,6 +168,7 @@ export type {
   ModControlMeta,
   ModPageLayout,
   ModPageSlot,
+  AudioModWindow,
 } from './modulation-core';
 export { ModRing } from './components/ModRing';
 
@@ -170,7 +189,7 @@ export { snapAngle, normalizeAngle, valueToBearing, bearingToValue, angleFromPoi
 export { WaveformVisualization } from './components/WaveformVisualization';
 export type { WaveformMode, WaveformLoop } from './components/WaveformVisualization';
 // The zoom ceiling belongs with the window maths a host frames against.
-export { WAVEFORM_MAX_ZOOM, WAVEFORM_SMOOTH_POINTS } from './waveform-engine';
+export { WAVEFORM_MAX_ZOOM, WAVEFORM_SMOOTH_POINTS, WAVEFORM_MODES } from './waveform-engine';
 export { CurveComposer } from './components/CurveComposer';
 export type { CurveType, CurveSegment, CurveDriver, CurveComposition, DriverDirection } from './components/CurveComposer';
 export {
@@ -349,8 +368,15 @@ export type { MoveColorView, MoveColorPalette } from './move-color';
 
 // The preset navigator behind the hardware Menu button — the store the
 // bridge kit drives (scroll on wheel turns, confirm on jog click,
-// beginSave on a long press).
+// beginSave on Shift+Menu; a hold opens generative exploration).
 export { MovePresetStore } from './move-presets';
 export { MoveSearchStore, moveSearchMatch, moveSearchFilter } from './move-search';
 export type { MoveSearchTarget, MoveSearchView } from './move-search';
 export type { MovePresetItem, MovePresetView, MovePresetSave, MovePresetPhase } from './move-presets';
+
+export { PresetExplorationStore } from './preset-exploration';
+export type { ExplorationState, ExplorationSlot, ExplorationView } from './preset-exploration';
+export * from './preset-genetics';
+export type { PresetExplorationAdapter } from './store/TweakStore';
+
+export { presetFlowerSeed, presetFlowerSvg } from './preset-flower';

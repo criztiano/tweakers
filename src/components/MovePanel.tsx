@@ -1,10 +1,12 @@
-import { useEffect, useId, useRef, useState, useSyncExternalStore, useCallback } from 'react';
+import { PresetExploration, PresetExplorationSlots } from './PresetExploration';
+import { PresetExplorationStore } from '../preset-exploration';
+import { useEffect, useLayoutEffect, useId, useRef, useState, useSyncExternalStore, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { ModulationStore } from '../store/ModulationStore';
-import { modColor, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, getAudioModBuffer, setAudioModBuffer, subscribeAudioMod, getAudioModVersion, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
+import { modColor, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, getAudioModBuffer, setAudioModBuffer, subscribeAudioMod, getAudioModVersion, setAudioModWindowSource, getAudioModWindow, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
 import { MoveWaveform } from './MoveWaveform';
-import { MoveWaveformStore, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_STEPS } from '../move-waveform';
+import { MoveWaveformStore, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_PANEL, visibleWindow, moveWaveformDemoSample } from '../move-waveform';
 import { ICON_PLAY, ICON_LOOP, ICON_SEARCH } from '../icons';
 import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
@@ -384,6 +386,14 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // Volume-dial readout: a static value renders as set; a getValue is polled
   // per animation frame while mounted, for readouts that move (a playhead).
   const [volume, setVolume] = useState<MoveVolumeDisplayState | null>(() => MoveVolumeDisplay.get());
+  // A mounted waveform holds the knob, so its clock takes the corner: the
+  // playhead's time with the transport's state around it. That is the one
+  // readout a waveform gets, whichever host mounts it.
+  const waveClaimed = useSyncExternalStore(
+    useCallback((cb) => MoveWaveformStore.subscribe(cb), []),
+    () => MoveWaveformStore.isRegistered(),
+    () => false
+  );
   const [liveValue, setLiveValue] = useState<string | null>(null);
   useEffect(() => {
     setVolume(MoveVolumeDisplay.get());
@@ -420,6 +430,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 
   useEffect(() => {
     setMounted(true);
+    // The kit's own room page — the waveform's look — is there from the
+    // start, not from the first time a sample happens to show: a room that
+    // gains a page while you stand in it is a room you cannot trust.
+    MoveWaveformStore.ensureSettings();
     setPanels(read());
     return TweakStore.subscribeGlobal(() => setPanels(read()));
   }, [read]);
@@ -430,11 +444,16 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // prop. The key keeps identity stable when the host hands over fresh
   // arrays, exactly like the panels selection above.
   const settingsKey = settings === undefined ? undefined : JSON.stringify(Array.isArray(settings) ? settings : [settings]);
-  const settingsRooms = settingsKey === undefined
+  const namedRooms = settingsKey === undefined
     ? []
     : (JSON.parse(settingsKey) as string[])
         .map((key) => TweakStore.getPanels('panel').find((p) => p.id === key || p.name === key))
         .filter((p): p is PanelConfig => p !== undefined);
+  // The kit's own pages ride after the app's: the waveform's look, once a
+  // waveform has claimed the surface. An app with no room of its own still
+  // gets the door, because the page behind it is the kit's.
+  const waveRoom = TweakStore.getPanel(MOVE_WAVEFORM_PANEL);
+  const settingsRooms = waveRoom ? [...namedRooms, waveRoom] : namedRooms;
   const roomIds = settingsRooms.map((p) => p.id);
   const settingsOpen = useSyncExternalStore(
     useCallback((cb) => MoveSettingsView.subscribe(cb), []),
@@ -485,9 +504,19 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       MoveSettingsView.close();
     };
   }, [roomKey]);
-  useEffect(() => {
+  // The room is another mode: the app's buttons sleep while it is open
+  // (dark on the hardware, gone from the header), the door and Back stay.
+  // A layout effect, so it lands before the room's own displays push
+  // their buttons (Play and Loop for the wave) — a push made after the
+  // suspension is the room's own and stays live.
+  useLayoutEffect(() => {
     if (!settingsOpen) return;
-    return MoveFunctions.push('back', () => MoveSettingsView.close(), { label: 'Close', chip: false });
+    const wake = MoveFunctions.suspend(['set_overview']);
+    const releaseBack = MoveFunctions.push('back', () => MoveSettingsView.close(), { label: 'Close', chip: false });
+    return () => {
+      releaseBack();
+      wake();
+    };
   }, [settingsOpen]);
 
   // Tell the kit about the room: its panels, whether the door stands open,
@@ -548,6 +577,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // turn is left alone.
   useEffect(() => {
     const onJog = (e: Event) => {
+      if (PresetExplorationStore.getState()) { e.preventDefault(); PresetExplorationStore.jog(Number((e as CustomEvent).detail?.delta) || 0); return; }
       // An open colour editor keeps the strip still too: the wheel belongs
       // to its overlays (the palette list) while the editor is up.
       if (e.defaultPrevented || MoveSearchStore.isOpen() || presetNavigatorOpen() || MoveColorStore.getView() || !stripRef.current.on) return;
@@ -585,11 +615,13 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     const el = panelRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
+      if (e.target instanceof Element && e.target.closest('.tweakers-exploration')) return;
+      const exploring = !!PresetExplorationStore.getState();
       const searching = MoveSearchStore.getView();
       const browsing = presetNavigatorOpen();
       const picking = palettePickerOpen();
       const editing = MoveWaveformStore.wantsSteps();
-      if (!searching && !browsing && !picking && !editing && !stripRef.current.on) return;
+      if (!exploring && !searching && !browsing && !picking && !editing && !stripRef.current.on) return;
       const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
       if (!d) return;
       e.preventDefault();
@@ -601,7 +633,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       // walks what the query kept, while the navigator is up it walks the
       // preset list, while the waveform editor floats it zooms (scroll up
       // goes in), otherwise it moves the strip.
-      if (searching) searchStep(searching, steps);
+      if (exploring) PresetExplorationStore.jog(steps);
+      else if (searching) searchStep(searching, steps);
       else if (browsing) MovePresetStore.scroll(steps);
       else if (picking) MoveColorStore.movePickerCursor(steps);
       else if (editing) MoveWaveformStore.zoom(-steps);
@@ -673,9 +706,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     (MoveColorStore.gradient(pageId, meta.path)?.stops.length ?? 0) <= MOVE_GRADIENT_STOPS;
   // The editor's target may hold a dial slot (a colour, an editable
   // gradient) or sit on the pad rows (the small colour selector — a
-  // balance's colours stack on the switch and value rows of its column).
+  // balance's colours stack as the two chips of its column).
   const colorMeta = colorView?.panelId === pageId && page
-    ? [...page.dials, ...page.toggles, ...page.values].find((meta) =>
+    ? [...page.dials, ...(page.topValues ?? []), ...page.values].find((meta) =>
         meta && meta.path === colorView.path &&
         (meta.type === 'color' || gradientEditable(meta)))
     : undefined;
@@ -735,10 +768,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   }, []);
 
   // The preset navigator, behind the hardware Menu button: a press toggles
-  // the list screen beside the slots, a long press (or Shift+Menu) opens the
-  // floating save input. The store holds the open view — same contract as
+  // the list screen beside the slots; a hold opens exploration, Shift+Menu
+  // opens the floating save input. The store holds the open view — same contract as
   // the colour wheel — and leaving the page takes both down with it.
   useSyncExternalStore(MovePresetStore.subscribe, MovePresetStore.getVersion, () => 0);
+  useSyncExternalStore(PresetExplorationStore.subscribe, PresetExplorationStore.getVersion, () => 0);
+  const explorationOpen = PresetExplorationStore.getState()?.panelId === pageId;
   const presetView = MovePresetStore.getView();
   const presetSaving = MovePresetStore.getSaving();
   const presetScreen = presetView?.panelId === pageId ? presetView : null;
@@ -746,13 +781,15 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   useEffect(() => {
     if (!pageId) return;
     return MoveFunctions.attach('menu', ({ shift, hold }) => {
-      if (shift || hold) MovePresetStore.beginSave(pageId);
+      if (shift) MovePresetStore.beginSave(pageId);
+      else if (hold) { MovePresetStore.cancel(); void PresetExplorationStore.open(pageId); }
       else MovePresetStore.toggle(pageId);
     }, { label: 'presets', chip: false });
   }, [pageId]);
   useEffect(() => () => {
     if (MovePresetStore.getView()?.panelId === pageId) MovePresetStore.cancel();
     if (MovePresetStore.getSaving()?.panelId === pageId) MovePresetStore.cancelSave();
+    if (PresetExplorationStore.getState()?.panelId === pageId) { PresetExplorationStore.cancelSave(); void PresetExplorationStore.close(); }
   }, [pageId]);
   // While the navigator is open it borrows the Back button: Back puts the
   // pre-navigator settings back and dismisses. Borrowing (push, not attach)
@@ -778,6 +815,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       MovePresetStore.scroll(Number((e as CustomEvent).detail?.delta) || 0);
     };
     const onJogClick = (e: Event) => {
+      if (PresetExplorationStore.getState()) { e.preventDefault(); PresetExplorationStore.toggleParent(); return; }
       if (e.defaultPrevented || MoveSearchStore.isOpen() || !openView()) return;
       e.preventDefault();
       MovePresetStore.confirm();
@@ -876,6 +914,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // An audio modulator's page floats its waveform the same way — the dial
   // draws the small sample, the page brings the full editor above the panel.
   const audioWave = modSlot?.type === 'audio' && modSettings ? modSettings.index : null;
+  // The Waveform room page floats the display it dresses: you set the look
+  // on the wave itself, not on five blind switches.
+  const roomWave = settingsOpen && page?.panel.id === MOVE_WAVEFORM_PANEL;
   const clipIndex = composition
     ? Math.min(composition.segments.length - 1, Math.max(0, Math.round(Number(modSlot!.params.selected) || 0)))
     : 0;
@@ -996,7 +1037,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // takes it all the same way — the wheel screen, the claimed rows and the
   // step circles belong to the view underneath, and drawing them beside the
   // room's own eight slots also overflows the panel.
-  const screen = settingsPanel || settingsOpen ? null : surface.screen;
+  const screen = settingsPanel || settingsOpen || explorationOpen ? null : surface.screen;
   // A search outlives nothing: the list it ran on going away takes it too.
   const searchTarget = search?.target ?? null;
   const screenSearch = searchTarget === 'screen' && screen ? search : null;
@@ -1243,12 +1284,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 
   // A bipolar (origin-anchored) dial reads out its real signed value; plain
   // dials keep the 0–100 position the Move itself works in.
+  // A dial reads out in its own domain when it has one — a formatter or a
+  // unit ("2.84 s", "48 px") — and as the Move's 0–100 position otherwise.
+  // A bipolar dial keeps its signed number either way.
   const dialReading = (meta: ControlMeta): string => {
-    if (dialOrigin(meta) <= 0) return `${dialPercent(meta)}%`;
     const n = Number(values[meta.path]);
+    const bipolar = dialOrigin(meta) > 0;
+    if (!bipolar && !meta.formatValue && !meta.unit) return `${dialPercent(meta)}%`;
     if (!Number.isFinite(n)) return '';
     if (meta.formatValue) return meta.formatValue(n);
     const num = Math.abs(n) >= 100 ? Math.round(n).toString() : Number(n.toFixed(2)).toString();
+    if (!bipolar) return `${num}${meta.unit ?? ''}`;
     return n > 0 ? `+${num}` : num;
   };
 
@@ -1269,13 +1315,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // Touching a control arms it for the assignment gesture (step press).
   const armMod = (path: string) => ModulationStore.noteTouch(page.panel.id, path);
 
-  // The chips that can take a column's knob: its value-row chip, and a
-  // colour on its switch row (a balance's first colour). A switch is not a
-  // chip — a colour is one wherever it sits: the slot's kind decides the
-  // gesture, never its row.
+  // The chips that can take a column's knob: the one up top (a balance's
+  // first colour, a moveTopRow chip) and the one under it. A switch is never
+  // a chip; a chip is one whichever row it rides — the gesture is the same.
   const chipsAt = (col: number): ControlMeta[] =>
-    [page.toggles[col]?.type === 'color' ? page.toggles[col] : undefined, page.values[col]]
-      .filter((m): m is ControlMeta => !!m);
+    [page.topValues?.[col], page.values[col]].filter((m): m is ControlMeta => !!m);
 
   // What a dial column actually edits: a held chip wins (screen or pad),
   // then a latched one, then the column's own dial. A colour chip lands in
@@ -1310,13 +1354,20 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 
   // The claimed pad rows, on the same terms as the wheel screen above: the
   // settings room hides them with it.
-  const appRows = settingsOpen ? 0 : surface.rows;
+  const appRows = (settingsOpen || explorationOpen) ? 0 : surface.rows;
   const padRows = movePadRows(page, appRows);
   const appRowAt = (row: number) => moveAppPadRow(row, appRows);
   const padAt = (x: number, y: 0 | 1): MovePadCell | undefined =>
     surface.pads.find((p) => p.x === x && p.y === y);
   const shownPadRows = Array.from({ length: PAD_ROWS }, (_, row) => row)
-    .filter((row) => appRowAt(row) !== null || padRows.slice(row).some((r) => r.length > 0));
+    // A pad row shows when it holds something: an empty row between two that
+    // do says nothing on screen, the same way an empty column is skipped (the
+    // row keeps its index, so what remains still sits on its hardware row). A
+    // modulator's settings page keeps its gaps: its bend and wave pads live in
+    // the empty cells under its stage columns.
+    .filter((row) => appRowAt(row) !== null || (settingsPanel
+      ? padRows.slice(row).some((r) => r.length > 0)
+      : padRows[row].some(Boolean)));
   // The claimed rows draw as one block, anchored on the topmost of them.
   const firstAppScreenRow = shownPadRows.find((row) => appRowAt(row) !== null) ?? -1;
 
@@ -1347,7 +1398,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
         : visibleColumns(page);
   // The cluster the header and the grid share is never wider than the dials:
   // a strip of forty slots still shows eight.
-  const clusterCols = stripMode
+  const clusterCols = explorationOpen ? MOVE_DIALS : stripMode
     ? Math.min(MOVE_DIALS, visibleCols.length) || MOVE_DIALS
     : visibleCols.length;
   // Pads are the Move's own 8-column matrix, not a continuation of however
@@ -1385,10 +1436,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // business.) Nothing registered and nothing attached = no cluster, header
   // unchanged.
   const volumeReading = liveValue ?? volume?.value;
-  const headerCluster = (volume || functionChips === 'clock') && (
+  const headerCluster = (waveClaimed || volume || functionChips === 'clock') && (
     <div className="tweakers-move-actions">
       {functionChips === 'clock' && <MoveFunctionChips />}
-      {volume && (
+      {waveClaimed ? (
+        <MoveWaveClock />
+      ) : volume && (
         <div className="tweakers-move-volume">
           <span className="tweakers-move-volume-tick" style={{ background: MOVE_TRACK_COLORS[0] }} />
           {volume.label && volumeReading != null && (
@@ -1404,10 +1457,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     <div className="tweakers-root tweakers-move-root" data-theme={theme} data-dock={dock}>
       {/* While a composer floats above it the whole instrument comes forward,
           over the app's own panels — you are working in it. */}
-      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-settings={settingsOpen || undefined} data-overlay={composition || audioWave != null || color || presetSave ? true : undefined}>
-        {colorMeta && <MoveColorDisplay panelId={page.panel.id} meta={colorMeta} anchor={panelRef} theme={theme} />}
+      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-settings={settingsOpen || undefined} data-overlay={explorationOpen || composition || audioWave != null || roomWave || color || presetSave ? true : undefined}>
+        {!explorationOpen && colorMeta && <MoveColorDisplay panelId={page.panel.id} meta={colorMeta} anchor={panelRef} theme={theme} />}
+        <PresetExploration />
         {presetSave && <MovePresetSaveInput suggested={presetSave.suggested} />}
-        {composition && modSettings && (
+        {!explorationOpen && composition && modSettings && (
           <MoveCurveComposer
             index={modSettings.index}
             segments={composition.segments}
@@ -1416,7 +1470,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
             selected={clipIndex}
           />
         )}
-        {audioWave != null && <MoveAudioWave index={audioWave} theme={theme} />}
+        {!explorationOpen && audioWave != null && <MoveAudioWave index={audioWave} theme={theme} />}
+        {!explorationOpen && roomWave && <MoveRoomWave theme={theme} />}
         <div
           className="tweakers-move-inner"
           style={{
@@ -1441,6 +1496,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
             {audioWave != null ? (
               <MoveAudioZoom />
             ) : (
+            <div className="tweakers-move-tracks-lead">
+            {/* A host's card gets the editor's zoom readout too, leading the
+                page names — the far end of the row from its clock. */}
+            {waveClaimed && <MoveAudioZoom />}
             <div className="tweakers-move-tracks-group">
               {/* The settings room's name plate: the marker blinks for as
                   long as the room is open — the same pulse the hardware's
@@ -1539,6 +1598,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               {functionChips === 'tracks' && <MoveFunctionChips />}
               {headerStart && <div className="tweakers-move-header-start">{headerStart}</div>}
             </div>
+            </div>
             )}
             {/* The step buttons, centred between the track labels and the
                 volume readout — one circle each. Normally the modulation
@@ -1547,7 +1607,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 settings are no place to reach for a modulator. */}
             <div className="tweakers-move-mods">
               {settingsOpen
-                ? null
+                /* The room keeps its tab row; the wave's zoom readout takes
+                   the centre, where the step circles would be. */
+                ? roomWave ? <MoveAudioZoom /> : null
                 : color && colorMeta
                 ? <MoveColorSteps color={color} disabled={TweakStore.isDisabled(page.panel.id, colorMeta.path)} />
                 : surface.steps === null
@@ -1556,7 +1618,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   ))
                 : null}
             </div>
-            {audioWave != null ? <MoveAudioTransport index={audioWave} /> : headerCluster}
+            {audioWave != null ? <MoveAudioTransport index={audioWave} /> : roomWave ? <MoveRoomTransport /> : headerCluster}
           </div>
 
           <div
@@ -1594,8 +1656,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               />
             </div>
           )}
+          {explorationOpen && <PresetExplorationSlots />}
           {(visibleCols.length > 0 || shownPadRows.length > 0) && <div
-            className="tweakers-move-grid"
+            style={explorationOpen ? { display: 'none' } : undefined} className="tweakers-move-grid"
             data-presets={presetScreen?.phase === 'open' || paletteScreen || undefined}
             data-pad-columns={padGridCols || undefined}
           >
@@ -1639,7 +1702,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 // reads the other way round: the name shrinks to the tag on
                 // top and the value takes the slot. Plain 0..1 amounts keep
                 // the big name, since "40%" on its own says nothing.
-                const valueFirst = !!settingsPanel && !(meta.min === 0 && meta.max === 1);
+                // The kit's own room pages read the same way: the bar width
+                // says "2×" big, with its name as the tag.
+                const valueFirst = (!!settingsPanel || page.panel.kind === 'kit') && !(meta.min === 0 && meta.max === 1);
                 // The modulator's oscilloscope belongs to a place on the page,
                 // not to one control: the LFO's first slot shows the live wave
                 // whether it is holding a rate in Hz or a tempo division.
@@ -2258,10 +2323,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               .map((row) => {
                 // The app's reserved rows are one instrument, not sixteen
                 // controls: what those pads mean is the app's business and
-                // only the app can say it. So the whole claimed area draws as
-                // a single slot carrying that sentence, once — the rows after
-                // the first fold into it.
-                if (appRowAt(row) !== null) {
+                // only the app can say it. A claimed area the app has not
+                // painted draws as a single slot carrying that sentence,
+                // once — the rows after the first fold into it. Painted cells
+                // draw as the pads they are, tappable, the sentence on their
+                // tooltip.
+                if (appRowAt(row) !== null && !surface.pads.length) {
                   if (row > firstAppScreenRow) return null;
                   return (
                     <div
@@ -2306,6 +2373,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           type="button"
                           className="tweakers-move-pad"
                           data-kind="app"
+                          title={surface.padsLabel ?? undefined}
                           data-on={cell.lit || appHeld === `${appRow}:${col}` || undefined}
                           data-held={appHeld === `${appRow}:${col}` || undefined}
                           onPointerDown={(e) => {
@@ -2314,7 +2382,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           }}
                           onPointerUp={() => setAppHeld(null)}
                           onPointerCancel={() => setAppHeld(null)}
-                          onClick={() => MoveSurfaceStore.press(col, appRow)}
+                          onClick={(e) => MoveSurfaceStore.press(col, appRow, e.shiftKey)}
                         >
                           <MovePadAppBody label={cell.label} color={cell.color} />
                         </button>
@@ -2451,7 +2519,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       );
                     }
                     if (!meta) return <div key={`empty-${col}`} className="tweakers-move-pad" data-empty="true" />;
-                    if (padRows[row] === page.toggles && meta.type !== 'color') {
+                    // What a pad is comes from the control, not the row it
+                    // sits in: a value chip lifted onto the top row is still
+                    // a value chip.
+                    if (page.toggles[col] === meta) {
                       return (
                         <button
                           key={meta.path}
@@ -2466,7 +2537,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     }
                     // Action pads carry no value — a press just runs the
                     // app's action, the same as the row's button on screen.
-                    if (padRows[row] === page.actions) {
+                    if (page.actions[col] === meta) {
                       return (
                         <button
                           key={meta.path}
@@ -2479,8 +2550,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       );
                     }
                     // A chip — a value, or the small colour selector on
-                    // whichever row it sits (a balance stacks its two on the
-                    // switch and value rows of its own column). One gesture
+                    // whichever row it sits (a balance stacks its two in its
+                    // own column, one up top and one under it). One gesture
                     // path for both: hold peeks, tap latches, and the knob
                     // above then edits the chip as its own kind — a colour
                     // lands in the slot as the big colour slot, whose tap is
@@ -2666,7 +2737,12 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
     });
     MoveWaveformStore.setProgressSource(() => ModulationStore.getSlotPhase(index));
     MoveWaveformStore.setEditor(true);
+    // The small screens follow the big one: zoomed in, the dial face and
+    // the Move's screen draw the shown window, framed as the editor frames it.
+    setAudioModWindowSource(() =>
+      visibleWindow(ModulationStore.getSlotPhase(index), MoveWaveformStore.shownZoom()));
     return () => {
+      setAudioModWindowSource(null);
       MoveWaveformStore.setEditor(false);
       MoveWaveformStore.setProgressSource(null);
     };
@@ -2689,8 +2765,9 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
   }, [index]);
 
   // The surface while the editor is up: the pad row is eight subdivisions of
-  // the shown window, and the step circles mirror the loop bar the hardware
-  // lights. Whatever the app had on the surface comes back on close.
+  // the shown window. (The step circles are the card's own business — it
+  // lights the loop bar in its accent, the slot's colour here.) Whatever the
+  // app had on the pads comes back on close.
   useEffect(() => {
     const prev = MoveSurfaceStore.getState();
     MoveSurfaceStore.setPadRows(1,
@@ -2699,24 +2776,12 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
       })),
       'tap to jump the playhead · hold to loop that part'
     );
-    const paintSteps = () => {
-      const lit = new Set(MoveWaveformStore.loopSteps());
-      MoveSurfaceStore.setSteps(
-        Array.from({ length: MOVE_WAVEFORM_STEPS }, (_, step) => ({
-          step, color: modColor(index), lit: lit.has(step),
-        }))
-      );
-    };
-    paintSteps();
-    const offView = MoveWaveformStore.subscribe(paintSteps);
     const offPress = MoveSurfaceStore.onPress(({ x, y }) => {
       if (y === 0) MoveWaveformStore.pressPad(x);
     });
     return () => {
-      offView();
       offPress();
       MoveSurfaceStore.setPadRows(prev.rows, prev.pads, prev.padsLabel);
-      MoveSurfaceStore.setSteps(prev.steps);
     };
   }, [index]);
 
@@ -2742,12 +2807,116 @@ function MoveAudioWave({ index, theme }: { index: number; theme: TweakTheme }) {
       height={MOVE_WAVE_DISPLAY_HEIGHT}
       waveColor="#1e1e1e"
       playheadColor={modColor(index)}
+      accent={modColor(index)}
     />
   );
 }
 
 /** The editor card's display: 728×128, with the 12px border outside it. */
 const MOVE_WAVE_DISPLAY_HEIGHT = 128;
+
+/**
+ * The Waveform room page's display: the sample on the surface — the app's
+ * own, the audio modulator's, or a stand-in drum loop when there is none —
+ * floating above the panel in the editor's card, so the look is set on the
+ * thing it dresses. It runs on a clock of its own, so the playhead sweeps
+ * and the wave reads at tempo; the wheel still zooms it.
+ */
+function MoveRoomWave({ theme }: { theme: TweakTheme }) {
+  useSyncExternalStore(
+    useCallback((cb) => subscribeAudioMod(cb), []),
+    () => getAudioModVersion(),
+    () => 0
+  );
+  const buffer = MoveWaveformStore.getBuffer() ?? getAudioModBuffer() ?? moveWaveformDemoSample();
+  roomClock.duration = buffer.duration || 1;
+
+  // The preview's tape: one integrator, run per frame, so reading the
+  // position from two places can never advance it twice. Loop On wraps
+  // inside the loop brackets (or the whole sample); off, the tape runs to
+  // the end and rests there, the way the audio modulator does.
+  useEffect(() => {
+    let last: number | null = null;
+    let raf = requestAnimationFrame(function tick(now) {
+      raf = requestAnimationFrame(tick);
+      if (!roomClock.playing) { last = null; return; }
+      if (last != null) roomClock.advance((now - last) / 1000, MoveWaveformStore.getView().loop);
+      last = now;
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // The header clock reads this playhead while the page is up; the
+  // hardware's Play and Loop run it — pushed after the room's suspension,
+  // so they are the room's own and stay lit.
+  useEffect(() => {
+    MoveWaveformStore.setProgressSource(() => roomClock.pos);
+    const releases = [
+      MoveFunctions.push('play', () => roomClock.toggle('playing'), { label: 'Play', chip: false }),
+      MoveFunctions.push('loop', () => roomClock.toggle('loopOn'), { label: 'Loop', chip: false }),
+    ];
+    return () => {
+      releases.forEach((release) => release());
+      MoveWaveformStore.setProgressSource(null);
+    };
+  }, []);
+
+  return (
+    <MoveWaveform
+      variant="dock"
+      theme={theme}
+      buffer={buffer}
+      getProgress={() => roomClock.pos}
+      onSeek={(p) => roomClock.seek(p)}
+      onLoopChange={() => { /* the brackets live in the store's view; the tape reads them per frame */ }}
+      height={MOVE_WAVE_DISPLAY_HEIGHT}
+      waveColor="#1e1e1e"
+    />
+  );
+}
+
+/**
+ * The room preview's transport — a tape with Play and Loop, shared by the
+ * floating card and the header pill. Module state: there is one room.
+ */
+const roomClock = {
+  playing: true,
+  loopOn: true,
+  pos: 0,
+  duration: 1,
+  version: 0,
+  listeners: new Set<() => void>(),
+  subscribe(fn: () => void) {
+    roomClock.listeners.add(fn);
+    return () => { roomClock.listeners.delete(fn); };
+  },
+  notify() {
+    roomClock.version += 1;
+    for (const fn of roomClock.listeners) fn();
+  },
+  toggle(key: 'playing' | 'loopOn') {
+    roomClock[key] = !roomClock[key];
+    // Play pressed at the end of an unlooped tape starts it over.
+    if (key === 'playing' && roomClock.playing && roomClock.pos >= 1) roomClock.pos = 0;
+    roomClock.notify();
+  },
+  seek(p: number) {
+    roomClock.pos = Math.min(1, Math.max(0, p));
+  },
+  advance(dt: number, loop: { start: number; end: number } | null) {
+    let pos = roomClock.pos + dt / roomClock.duration;
+    if (roomClock.loopOn) {
+      const start = loop ? loop.start : 0;
+      const end = loop ? loop.end : 1;
+      const span = Math.max(0.0001, end - start);
+      if (pos >= end) pos = start + ((pos - start) % span);
+      else if (pos < start) pos = start;
+    } else if (pos >= 1) {
+      pos = 1;
+    }
+    roomClock.pos = pos;
+  },
+};
 
 /**
  * The editor's zoom readout, in the panel's track corner while the editor
@@ -2770,11 +2939,50 @@ function MoveAudioZoom() {
 }
 
 /**
- * The editor's transport corner, where the volume readout usually sits:
- * the Load pill and the running clock, flanked by the transport's state —
- * play on the left, loop on the right, lit when running. The clock is
+ * The clock every host's waveform gets, in the panel's volume corner: the
+ * playhead's time, flanked by the host's transport state — play on the left,
+ * loop on the right, lit when running — when it runs one. The time is
  * written straight to its span every frame at a fixed width, so the pill
  * never breathes.
+ */
+function MoveWaveClock() {
+  useSyncExternalStore(
+    useCallback((cb) => MoveWaveformStore.subscribe(cb), []),
+    () => MoveWaveformStore.getVersion(),
+    () => 0
+  );
+  const transport = MoveWaveformStore.getTransport();
+  const clockRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    let raf = requestAnimationFrame(function tick() {
+      const text = MoveWaveformStore.clock();
+      if (clockRef.current && clockRef.current.textContent !== text) clockRef.current.textContent = text;
+      raf = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return (
+    <div className="tweakers-move-volume tweakers-move-wave-time" data-transport={transport ? true : undefined}>
+      {transport && (
+        <svg className="tweakers-move-wave-state" data-on={transport.playing || undefined} viewBox="0 0 24 24" aria-hidden="true">
+          <path d={ICON_PLAY} fill="currentColor" />
+        </svg>
+      )}
+      <span ref={clockRef} className="tweakers-move-volume-value">{MoveWaveformStore.clock()}</span>
+      {transport && (
+        <svg className="tweakers-move-wave-state" data-on={transport.loopOn || undefined} viewBox="0 0 24 24" aria-hidden="true">
+          {ICON_LOOP.map((d) => (
+            <path key={d} d={d} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+          ))}
+        </svg>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The editor's transport corner, where the volume readout usually sits:
+ * the slot's Play and Loop, and its clock.
  */
 function MoveAudioTransport({ index }: { index: number }) {
   // The state icons follow the slot's params (Play/Loop button presses).
@@ -2784,16 +2992,62 @@ function MoveAudioTransport({ index }: { index: number }) {
     () => 0
   );
   const params = ModulationStore.getSlot(index)?.params ?? {};
+  return (
+    <MoveWaveTransport
+      playing={!!params.playing}
+      loopOn={!!params.loopOn}
+      getSeconds={() => ModulationStore.getSlotPhase(index) * (getAudioModBuffer()?.duration ?? 0)}
+      onLoaded={() => ModulationStore.updateSlotParams(index, { position: 0 })}
+    />
+  );
+}
+
+/**
+ * The room page's transport corner: the same pill, reading the preview's
+ * own clock and the Play / Loop the room wave holds.
+ */
+function MoveRoomTransport() {
+  useSyncExternalStore(
+    useCallback((cb) => roomClock.subscribe(cb), []),
+    () => roomClock.version,
+    () => 0
+  );
+  return (
+    <MoveWaveTransport
+      playing={roomClock.playing}
+      loopOn={roomClock.loopOn}
+      getSeconds={() => roomClock.pos * roomClock.duration}
+      onLoaded={() => roomClock.seek(0)}
+    />
+  );
+}
+
+/**
+ * The transport pill itself: Load, the running clock, and the transport's
+ * state — play on the left, loop on the right, lit when running. The clock
+ * is written straight to its span every frame at a fixed width, so the
+ * pill never breathes. Whose clock it is — a modulator's, the room's — is
+ * the caller's.
+ */
+function MoveWaveTransport({ playing, loopOn, getSeconds, onLoaded }: {
+  playing: boolean;
+  loopOn: boolean;
+  getSeconds: () => number;
+  onLoaded?: () => void;
+}) {
+  const params = { playing, loopOn };
   const clockRef = useRef<HTMLSpanElement>(null);
+  const secondsRef = useRef(getSeconds);
+  secondsRef.current = getSeconds;
   useEffect(() => {
     let raf = requestAnimationFrame(function tick() {
-      const t = ModulationStore.getSlotPhase(index) * (getAudioModBuffer()?.duration ?? 0);
+      const t = secondsRef.current();
       const text = `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}:${String(Math.floor((t % 1) * 100)).padStart(2, '0')}`;
       if (clockRef.current && clockRef.current.textContent !== text) clockRef.current.textContent = text;
       raf = requestAnimationFrame(tick);
     });
     return () => cancelAnimationFrame(raf);
-  }, [index]);
+  }, []);
 
   // Load: pick an audio file, decode it, put it on the shelf. The one place
   // the library touches an AudioContext — a one-shot decode, closed right
@@ -2806,7 +3060,7 @@ function MoveAudioTransport({ index }: { index: number }) {
     const ctx = new Ctx();
     try {
       setAudioModBuffer(await ctx.decodeAudioData(bytes));
-      ModulationStore.updateSlotParams(index, { position: 0 });
+      onLoaded?.();
     } catch {
       /* not an audio file the browser can read — the shelf keeps what it had */
     } finally {
@@ -3017,16 +3271,28 @@ function MoveScope({ index }: { index: number }) {
 
 /**
  * The audio dial's face: the settings preview — the sample's envelope — as
- * a standing wave, with the slot's playhead running through it. The shape
- * draws once per render; only the playhead line ticks, written straight to
- * its attributes with the scope's no-re-render discipline.
+ * a standing wave, with the slot's playhead running through it. Over the
+ * whole sample the shape draws once per render and only the playhead line
+ * ticks. While the floating editor is zoomed in, the face shows the part
+ * the editor shows — a window that rides with the playhead — so the shape
+ * is rewritten on the same tick, with the scope's no-re-render discipline.
  */
 function MoveWavePreview({ index }: { index: number }) {
+  const path = useRef<SVGPathElement>(null);
   const line = useRef<SVGLineElement>(null);
   const preview = ModulationStore.getSettingsPreview(64);
   useEffect(() => {
+    let shown = '';
     let raf = requestAnimationFrame(function tick() {
-      const x = (ModulationStore.getSlotPhase(index) * 100).toFixed(2);
+      const { start, span } = getAudioModWindow();
+      const key = `${start.toFixed(5)}|${span.toFixed(5)}`;
+      if (key !== shown) {
+        shown = key;
+        const p = ModulationStore.getSettingsPreview(64);
+        if (p) path.current?.setAttribute('d', previewPathData(p.points));
+      }
+      const at = (ModulationStore.getSlotPhase(index) - start) / span;
+      const x = (Math.min(1, Math.max(0, at)) * 100).toFixed(2);
       line.current?.setAttribute('x1', x);
       line.current?.setAttribute('x2', x);
       raf = requestAnimationFrame(tick);
@@ -3042,7 +3308,7 @@ function MoveWavePreview({ index }: { index: number }) {
       preserveAspectRatio="none"
       aria-hidden="true"
     >
-      <path d={previewPathData(preview.points)} />
+      <path ref={path} d={previewPathData(preview.points)} />
       <line ref={line} x1="0" y1="0" x2="0" y2="100" />
     </svg>
   );

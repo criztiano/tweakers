@@ -1,3 +1,4 @@
+@import "./preset-exploration.css";
 /* Geist Pixel, the kit's face. OFL, so it ships next to this sheet — no
    host-provided fonts needed. One variable file; ELSH is its shape axis
    (0 regular, 1 square, 20 circle, 40 grid, 60 triangle, 80 line): the
@@ -565,6 +566,15 @@
   min-width: 0;
 }
 
+/* The header's leading cell: the zoom readout (a host's card up) first,
+   then the page names. */
+.tweakers-move-tracks-lead {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
 .tweakers-move-pages {
   display: flex;
   align-items: center;
@@ -869,6 +879,87 @@
 }
 
 /* End of the Move function chips skin block. */
+
+/* -- The action deck ------------------------------------------------------
+   A view's whole surface when it has nothing to set yet: up to four
+   buttons, one per chip key, in the chip voice (Figma 935:537) — the quiet
+   slot surface by default, the pale key look for the one the view leans on
+   — each wearing its key's glyph or an icon of its own. Names:
+   `.tweakers-move-deck`, `.tweakers-move-deck-action[data-name]
+   [data-variant][data-pressed]`, `.tweakers-move-deck-icon`, `-label`,
+   `-detail`.
+   ------------------------------------------------------------------------ */
+
+.tweakers-move-deck {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 200px;
+  margin: 0 auto;
+}
+
+.tweakers-move-deck-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border: none;
+  border-radius: var(--move-radius-small, 8px);
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--move-font-label);
+  font-size: 20px;
+  line-height: normal;
+  color: var(--move-text);
+  background: var(--move-chip);
+  transition: filter 0.12s, transform 0.12s;
+}
+
+/* The pop-out dress: the pale hardware-key look, dark on light. */
+.tweakers-move-deck-action[data-variant="highlight"] {
+  background: #dee3c9;
+  color: #1e1e1e;
+}
+
+.tweakers-move-deck-action:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.tweakers-move-deck-action[data-pressed] {
+  filter: brightness(1.25);
+  transform: scale(0.96);
+  transition-duration: 0.04s;
+}
+
+.tweakers-move-deck-action:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.tweakers-move-deck-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+
+.tweakers-move-deck-label {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A quieter word at the row's end, when the action has one. */
+.tweakers-move-deck-detail {
+  margin-left: auto;
+  font-size: 13px;
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
+/* End of the action deck skin block. */
 
 .tweakers-move-grid {
   display: flex;
@@ -1888,6 +1979,17 @@
   font-family: var(--move-font-label);
   font-size: 16px;
   line-height: 20px;
+}
+
+/* A switch named by a number: the dial value's face — the number in the
+   value shape at the value's size, the unit small beneath. */
+.tweakers-move-dial-toggle-label[data-value] {
+  flex-direction: column;
+  font-family: var(--move-font-value);
+  font-variation-settings: var(--move-font-value-shape);
+  font-size: 40px;
+  line-height: normal;
+  white-space: nowrap;
 }
 
 /* A switch is a button, so the slot's own surface has to be restated. */
@@ -2946,12 +3048,21 @@
   }
 }
 
+/* The card every waveform wears — the audio editor's mockup: a light
+   display with the sample dark on it, a 12px dark frame OUTSIDE the
+   display, the outer radius frame + inner so the display's corners round
+   proportionally inside. One card for every placement, no host restyle:
+   at most 1200 wide and 176 tall, frame included. */
 .tweakers-move-wave {
-  --move-display: #1e1e1e;
+  --move-display: #dfe2cc;
+  box-sizing: content-box;
   width: 100%;
-  border-radius: var(--move-radius, 12px);
+  max-width: calc(1200px - 24px);
+  margin: 0 auto;
+  border: 12px solid #1e1e1e;
+  border-radius: 16px;
   background: var(--move-display);
-  color: var(--move-text, #dee3c9);
+  color: #1e1e1e;
   overflow: hidden;
 }
 
@@ -2967,12 +3078,18 @@
 
 .tweakers-move-wave .tweakers-waveform-viz {
   display: block;
+  /* The grid, the centre line and the default wave are drawn in the
+     canvas's colour — the card's ink, not the sidebar's white: white lines
+     on the light editor card are lines nobody sees. */
+  color: inherit;
   width: 100% !important;
   background: transparent;
   border-radius: 0;
 }
 
+/* Dial-sized: the same display, a thinner frame so the tape still shows. */
 .tweakers-move-wave[data-variant='slot'] {
+  border-width: 4px;
   border-radius: var(--move-radius-small, 8px);
 }
 
@@ -2994,17 +3111,8 @@
   left: 50%;
   transform: translateX(-50%);
   pointer-events: auto;
-  /* The editor's card, to the mockup: the display itself is 728×128 and
-     the wave fills it edge to edge — the 12px dark border sits OUTSIDE
-     that, and the outer radius is border + inner, so the display's
-     corners round proportionally inside the frame. The shadow is the
-     design's drop: 0/40, blur 20, spread -24, black at 25%. */
-  box-sizing: content-box;
   width: 728px;
-  border: 12px solid #1e1e1e;
-  border-radius: 16px;
-  background: #dfe2cc;
-  color: #1e1e1e;
+  /* The design's drop: 0/40, blur 20, spread -24, black at 25%. */
   box-shadow: 0 40px 20px -24px rgba(0, 0, 0, 0.25);
 }
 
@@ -3060,7 +3168,8 @@
 
 /* The clock holds one width whatever it reads — no breathing per tick. */
 .tweakers-move-wave-time {
-  min-width: 96px;
+  width: 128px;
+  box-sizing: border-box;
   justify-content: center;
 }
 
@@ -3212,6 +3321,34 @@
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* A row's picture — an app's icon — at the left end, pinned like the mark
+   so a centred name stays put; it dims and brightens with the label. */
+.tweakers-list-screen-icon {
+  position: absolute;
+  top: 50%;
+  left: var(--move-list-mark-inset, 6px);
+  width: var(--move-list-icon-size, 16px);
+  height: var(--move-list-icon-size, 16px);
+  transform: translateY(-50%);
+  border-radius: 3px;
+  pointer-events: none;
+  opacity: 0.4;
+  transition: opacity 0.12s;
+}
+
+.tweakers-list-screen-row[data-icon] .tweakers-list-screen-label {
+  padding: 0 calc(var(--move-list-icon-size, 16px) + var(--move-list-mark-inset, 6px) * 2);
+}
+
+.tweakers-list-screen[data-wide] .tweakers-list-screen-row[data-icon] .tweakers-list-screen-label {
+  padding-right: 0;
+}
+
+.tweakers-list-screen-row[data-selected] .tweakers-list-screen-icon,
+.tweakers-list-screen-row[data-checked="true"] .tweakers-list-screen-icon {
+  opacity: 1;
 }
 
 /* A way back sits at the left end, where the eye looks to leave. */

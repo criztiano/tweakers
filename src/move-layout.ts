@@ -35,6 +35,11 @@ export interface MovePage {
   /** Action pads — the row under the values (y=1 on the device).
    *  Placed by hand only, through the panel's `movePads` map. */
   actions: ControlMeta[];
+  /** Chips riding the top pad row (y=3), sharing it with the switches: a
+   *  balance's first colour, and each `moveTopRow` chip in its named column
+   *  where no switch holds it. A column may carry one here and another in
+   *  `values` under it; both take that column's knob. Absent: none. */
+  topValues?: ControlMeta[];
 }
 
 const flat = (controls: ControlMeta[], out: ControlMeta[] = []): ControlMeta[] => {
@@ -190,6 +195,8 @@ export type MoveLayoutIssueCode =
   | 'pad-column-on-dial'
   | 'balance-color-placed'
   | 'pad-column-taken'
+  | 'top-row-taken'
+  | 'top-row-no-column'
   | 'pad-row-full'
   | 'tabs-oversized'
   | 'tabs-no-room';
@@ -231,7 +238,9 @@ const padColumn = (panel: PanelConfig, c: ControlMeta): number | null => {
 };
 
 export function buildMovePages(panels: PanelConfig[]): MovePage[] {
-  const plain = panels.filter((p) => p.kind === undefined);
+  // The kit's own settings pages lay out like the app's; the panel decides
+  // where they show (the settings room), never the builder.
+  const plain = panels.filter((p) => p.kind === undefined || p.kind === 'kit');
   for (const p of plain.slice(MOVE_TRACKS)) {
     reportMoveLayoutIssue(
       'panel-dropped',
@@ -254,8 +263,8 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
       // hear about an invalid column exactly once per control.
       const padCols = new Map(controls.map((c) => [c, padColumn(panel, c)] as const));
       // The two colours a balance references never enter the dial race: the
-      // balance places them ITSELF — stacked in its own column, switch row
-      // over value row — so the pattern needs zero layout from the panel.
+      // balance places them ITSELF — stacked in its own column, one chip up
+      // top and one under it — so the pattern needs zero layout from the panel.
       const balanceRefs = new Map<ControlMeta, ControlMeta>();
       for (const c of controls) {
         if (c.type !== 'balance') continue;
@@ -281,34 +290,29 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         for (let s = 0; s < span; s++) dials[nextCol + s] = c;
         nextCol += span;
       }
-      // Where each balance's colours land, now the dials are settled: `a` on
-      // the switch row of the balance's column, `b` on the value row below it
-      // — the blend and its two ends read as one column group. A balance that
-      // never landed a column leaves its colours to the ordinary rules.
-      const balanceSeat = new Map<ControlMeta, { col: number; first: boolean }>();
-      for (const [ref, bal] of balanceRefs) {
-        const col = dials.indexOf(bal);
-        if (col < 0) continue;
-        balanceSeat.set(ref, { col, first: ref.path === bal.balanceA });
-      }
-
       const toggles: ControlMeta[] = [];
       const values: ControlMeta[] = [];
       const actions: ControlMeta[] = [];
+      // The top pad row holds switches and the chips riding up there — a
+      // balance's first colour, a `moveTopRow` chip. Both kinds share one
+      // row, so a cell is free only when neither holds it.
+      const topValues: ControlMeta[] = [];
+      const topAt = (i: number) => toggles[i] ?? topValues[i];
+      const cellAt = (row: ControlMeta[], i: number) => (row === toggles ? topAt(i) : row[i]);
       // A named column is taken as read; everything else — and anything whose
       // column is already spoken for — packs into the leftmost free one, which
       // is the whole rule for a panel that names no columns at all.
       const place = (row: ControlMeta[], rowName: string, c: ControlMeta, col: number | null) => {
-        if (col !== null && row[col] === undefined) {
+        if (col !== null && cellAt(row, col) === undefined) {
           row[col] = c;
           return;
         }
         for (let i = 0; i < MOVE_PADS; i++) {
-          if (row[i] === undefined) {
+          if (cellAt(row, i) === undefined) {
             if (col !== null) {
               reportMoveLayoutIssue(
                 'pad-column-taken',
-                `panel '${panel.id}': control '${c.path}': ${rowName} column ${col} already occupied by '${row[col]!.path}' — moved to column ${i}`
+                `panel '${panel.id}': control '${c.path}': ${rowName} column ${col} already occupied by '${cellAt(row, col)!.path}' — moved to column ${i}`
               );
             }
             row[i] = c;
@@ -339,7 +343,7 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         }
         const fits = (start: number) =>
           start >= 0 && start + span <= MOVE_PADS &&
-          Array.from({ length: span }, (_, k) => toggles[start + k]).every((p) => p === undefined);
+          Array.from({ length: span }, (_, k) => topAt(start + k)).every((p) => p === undefined);
         let start = col !== null && fits(col) ? col : -1;
         if (start < 0) {
           for (let i = 0; i + span <= MOVE_PADS; i++) {
@@ -361,26 +365,71 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         }
         for (let k = 0; k < span; k++) toggles[start + k] = c;
       };
+
+      // The column group, in the order the kit seats it (move's
+      // kit/move-tweakers.js), so screen and hardware land every pad alike:
+      //
+      // 1. Each balance seats its colours first — they own their column. A
+      //    balance IS a stacked column: its dial is the blend, `a` the chip up
+      //    top, `b` the chip under it. The same two cells a `moveTopRow` chip
+      //    and its partner use, and the same gestures (hold peeks, tap latches).
+      for (const [ref, bal] of balanceRefs) {
+        const at = dials.indexOf(bal);
+        if (at < 0) continue;
+        const first = ref.path === bal.balanceA;
+        const col = padCols.get(ref) ?? null;
+        if (col !== null) {
+          reportMoveLayoutIssue(
+            'balance-color-placed',
+            `panel '${panel.id}': control '${ref.path}' is placed by its balance — movePads column ${col} ignored; a balance seats its own colours`
+          );
+        }
+        if (first) topValues[at] = ref;
+        else values[at] = ref;
+      }
+      const seated = (c: ControlMeta) => topValues.includes(c) || values.includes(c);
+
+      // 2. The switches take the top row — around the chips already there.
       for (const c of controls) {
         const col = padCols.get(c) ?? null;
         if (isMoveTabs(c)) placeTabs(c, col);
         else if (c.type === 'toggle' && !isToggleDial(c)) place(toggles, 'toggle', c, col);
+      }
+
+      // 3. A value chip the panel names in `moveTopRow` rides the top row in
+      //    its movePads column, when that cell is free — right under its dial,
+      //    still a value chip. It lands before the value row fills, so the
+      //    column's value cell stays free for a second chip under it. A chip
+      //    whose cell is taken, or that names no column, keeps the value row.
+      const lift = panel.moveTopRow ?? [];
+      const chipFits = (c: ControlMeta) =>
+        isDial(c) && !noChip(c) && !dials.includes(c) && !balanceRefs.has(c) && !isPadColor(c);
+      for (const c of controls) {
+        if (!lift.includes(c.path) || !chipFits(c)) continue;
+        const col = padCols.get(c) ?? null;
+        if (col === null) {
+          reportMoveLayoutIssue(
+            'top-row-no-column',
+            `panel '${panel.id}': control '${c.path}' is named in moveTopRow but has no movePads column — the chip keeps the value row`
+          );
+        } else if (topAt(col) !== undefined) {
+          reportMoveLayoutIssue(
+            'top-row-taken',
+            `panel '${panel.id}': control '${c.path}': top-row column ${col} holds '${topAt(col)!.path}' — the chip keeps the value row`
+          );
+        } else {
+          topValues[col] = c;
+        }
+      }
+
+      // 4. Everything else, in the order the panel declares it.
+      for (const c of controls) {
+        const col = padCols.get(c) ?? null;
+        if (isMoveTabs(c) || (c.type === 'toggle' && !isToggleDial(c))) continue;   /* seated in 2 */
+        if (seated(c)) continue;                                                     /* seated in 1 or 3 */
         // Actions reach the pads only when the page asks for them by column —
         // every app has buttons, and none of them expect a hardware pad.
-        else if (c.type === 'action') { if (col !== null) place(actions, 'action', c, col); }
-        // A balance's colours place themselves — a hand-named column on one
-        // is ignored, out loud, the way a dial-holder's is: the placement is
-        // the balance's, not the map's.
-        else if (balanceSeat.has(c)) {
-          if (col !== null) {
-            reportMoveLayoutIssue(
-              'balance-color-placed',
-              `panel '${panel.id}': control '${c.path}' is placed by its balance — movePads column ${col} ignored; a balance seats its own colours`
-            );
-          }
-          const seat = balanceSeat.get(c)!;
-          place(seat.first ? toggles : values, seat.first ? 'toggle' : 'value', c, seat.col);
-        }
+        if (c.type === 'action') { if (col !== null) place(actions, 'action', c, col); }
         // A balance's colour whose balance never landed a column falls back
         // to the ordinary chip: the value row, leftmost free (or as named).
         else if (balanceRefs.has(c)) place(values, 'value', c, col);
@@ -415,6 +464,7 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         toggles: toggles.slice(0, MOVE_PADS),
         values: values.slice(0, MOVE_PADS),
         actions: actions.slice(0, MOVE_PADS),
+        ...(topValues.length ? { topValues: topValues.slice(0, MOVE_PADS) } : {}),
       };
     });
 }
@@ -433,8 +483,19 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
  * alone and the actions keep theirs (see PROTOCOL.md).
  */
 export function movePadRows(page: MovePage, claimedRows: number): ControlMeta[][] {
-  if (claimedRows >= 2) return [page.toggles, page.values, [], []];
-  return [page.toggles, page.values, page.actions, []];
+  let top = page.toggles;
+  const values = page.values;
+  if (page.topValues?.some(Boolean)) {
+    // the chips asked up top share the switch row, each in its own column
+    // (an endless strip's rows run past eight columns)
+    top = [];
+    for (let i = 0; i < Math.max(page.toggles.length, page.topValues.length); i++) {
+      const cell = page.toggles[i] ?? page.topValues[i];
+      if (cell) top[i] = cell;
+    }
+  }
+  if (claimedRows >= 2) return [top, values, [], []];
+  return [top, values, page.actions, []];
 }
 
 /**
@@ -458,7 +519,7 @@ export function moveAppPadRow(row: number, claimedRows: number): 0 | 1 | null {
 export function visibleColumns(page: MovePage): number[] {
   const cols: number[] = [];
   for (let i = 0; i < MOVE_DIALS; i++) {
-    if (page.dials[i] || page.toggles[i] || page.values[i] || page.actions[i]) cols.push(i);
+    if (page.dials[i] || page.toggles[i] || page.topValues?.[i] || page.values[i] || page.actions[i]) cols.push(i);
   }
   return cols;
 }

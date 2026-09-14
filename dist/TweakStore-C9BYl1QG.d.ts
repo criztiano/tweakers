@@ -1,7 +1,7 @@
 import { GradientValue } from './gradient-core.js';
 import { XYValue } from './xy-pad-core.js';
 import { TransferValue } from './transfer-core.js';
-import { FilterAxisConfig, FilterValue } from './filter-core.js';
+import { FilterValue, FilterAxisConfig } from './filter-core.js';
 import { RangeValue } from './range-slider-core.js';
 
 /** Opt-in meanings for numeric Move faces. Values keep the host's units. */
@@ -22,6 +22,12 @@ type MoveSliderVisual = {
 } | {
     kind: 'pitch';
     unit?: 'semitones' | 'cents';
+}
+/** One edge of a take: the bar is the whole of it, the kept part is filled
+ *  from this edge's far end to the value, the edge itself is the marker. */
+ | {
+    kind: 'trim';
+    edge: 'start' | 'end';
 };
 type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
 type MoveSelectVisual = {
@@ -47,6 +53,10 @@ type MoveNumericDrawing = {
     kind: 'pitch';
     position: number;
     zero: number | null;
+} | {
+    kind: 'trim';
+    edge: 'start' | 'end';
+    position: number;
 };
 /** Invalid or incompatible metadata falls back to the ordinary face. No label inference. */
 declare function moveNumericDrawing(meta: ControlMeta, value: unknown): MoveNumericDrawing | null;
@@ -662,12 +672,14 @@ type PanelConfig = {
     labels?: Record<string, string>;
     /** Move pad columns by control path, retained on the same terms as `hints`. */
     movePads?: Record<string, number>;
+    /** Value chips lifted onto the top pad row, retained on the same terms as `hints`. */
+    moveTopRow?: string[];
     /**
      * Config declared `_enabled` at its root — the whole panel is a module, and
      * its title carries the switch. Same idiom as a module folder, one level up.
      */
     module?: boolean;
-    kind?: 'timeline' | 'modulation';
+    kind?: 'timeline' | 'modulation' | 'kit';
 };
 
 export { type ControlMeta as C, type MoveNumericDrawing as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, type MovePlaybackMode as d, type MoveSelectVisual as e, type MoveSliderVisual as f, type MoveVisual as g, moveNumericDrawing as h, movePlaybackMode as i, moveVisualReading as j, moveKeyboardValue as m };

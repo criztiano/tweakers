@@ -12,9 +12,15 @@ import {
   padSection,
   MOVE_WAVEFORM_STEPS,
   MOVE_WAVEFORM_PADS,
+  MOVE_WAVEFORM_PANEL,
+  MOVE_WAVEFORM_PIXEL_RANGE,
+  moveWaveformDemoSample,
+  defaultStyle,
+  styleFromValues,
 } from '../src/move-waveform';
 import { WAVEFORM_MAX_ZOOM } from '../src/waveform-engine';
 import { MoveVolumeDisplay } from '../src/move-volume';
+import { TweakStore } from '../src/store/TweakStore';
 
 describe('the volume knob scrubs', () => {
   it('moves by the finest step on a slow tick and stops at both ends', () => {
@@ -118,25 +124,17 @@ describe('the registry', () => {
     expect(MoveWaveformStore.isRegistered()).toBe(false);
   });
 
-  it('names the volume knob while it holds it, and hands the pill back', () => {
-    expect(MoveVolumeDisplay.get()).toBe(null);
+  it('carries a clock for the panel, m:ss:cc of the playhead', () => {
     const release = MoveWaveformStore.register();
-    const pill = MoveVolumeDisplay.get();
-    expect(pill?.label).toBe('time');
-    expect(typeof pill?.getValue).toBe('function');
-    release();
-    expect(MoveVolumeDisplay.get()).toBe(null);
-  });
-
-  it('reads the playhead as a time once the sample length is known', () => {
-    const release = MoveWaveformStore.register();
-    // With no duration a position is still readable — as a percentage.
     MoveWaveformStore.setView({ position: 0.5 });
-    expect(MoveVolumeDisplay.get()?.getValue?.()).toBe('50%');
+    // With no duration a position is still readable — as a percentage.
+    expect(MoveWaveformStore.readout()).toBe('50%');
+    expect(MoveWaveformStore.clock()).toBe('0:00:00');
     MoveWaveformStore.setDuration(90);
-    expect(MoveVolumeDisplay.get()?.getValue?.()).toBe('0:45.0');
+    expect(MoveWaveformStore.readout()).toBe('0:45.0');
+    expect(MoveWaveformStore.clock()).toBe('0:45:00');
     MoveWaveformStore.setView({ position: 1 });
-    expect(MoveVolumeDisplay.get()?.getValue?.()).toBe('1:30.0');
+    expect(MoveWaveformStore.clock()).toBe('1:30:00');
     release();
   });
 
@@ -145,8 +143,55 @@ describe('the registry', () => {
     MoveWaveformStore.setDuration(10);
     MoveWaveformStore.setView({ position: 0 });
     MoveWaveformStore.setProgressSource(() => 0.25);
-    expect(MoveVolumeDisplay.get()?.getValue?.()).toBe('0:02.5');
+    expect(MoveWaveformStore.readout()).toBe('0:02.5');
+    expect(MoveWaveformStore.clock()).toBe('0:02:50');
     release();
+  });
+
+  it('scrubs from the engine playhead, so a turn mid-play carries on from the play', () => {
+    const release = MoveWaveformStore.register();
+    MoveWaveformStore.setView({ position: 0 });
+    MoveWaveformStore.setProgressSource(() => 0.5);
+    MoveWaveformStore.scrub(1, false, 1000);
+    expect(MoveWaveformStore.getView().position).toBeCloseTo(scrubBy(0.5, 1), 6);
+    release();
+  });
+
+  it('chains the detents of one turn, so a lagging seek loses none of them', () => {
+    const release = MoveWaveformStore.register();
+    MoveWaveformStore.setView({ position: 0 });
+    MoveWaveformStore.setProgressSource(() => 0.5); // the engine, still where the turn began
+    MoveWaveformStore.scrub(1, false, 1000);
+    MoveWaveformStore.scrub(1, false, 1050);
+    MoveWaveformStore.scrub(1, false, 1100);
+    expect(MoveWaveformStore.getView().position).toBeCloseTo(scrubBy(scrubBy(scrubBy(0.5, 1), 1), 1), 6);
+    // Mid-turn the knob's landing is the playhead, for the drawing and the clock.
+    expect(MoveWaveformStore.isScrubbing(1200)).toBe(true);
+    expect(MoveWaveformStore.playhead(1200)).toBeCloseTo(MoveWaveformStore.getView().position, 6);
+    // A new turn, later, starts from the engine again.
+    expect(MoveWaveformStore.isScrubbing(5000)).toBe(false);
+    MoveWaveformStore.scrub(1, false, 5000);
+    expect(MoveWaveformStore.getView().position).toBeCloseTo(scrubBy(0.5, 1), 6);
+    release();
+  });
+
+  it('never moves less than real time on a short sample', () => {
+    // Long sample: the share rules, as approved.
+    expect(scrubBy(0.5, 1, false, 1, 180)).toBeCloseTo(scrubBy(0.5, 1), 6);
+    // Five seconds: a slow detent is 25 ms of it, Shift 5 ms.
+    expect(scrubBy(0.5, 1, false, 1, 5) - 0.5).toBeCloseTo(0.025 / 5, 6);
+    expect(scrubBy(0.5, 1, true, 1, 5) - 0.5).toBeCloseTo(0.005 / 5, 6);
+    // The floor follows the zoom like the share does.
+    expect(scrubBy(0.5, 1, false, 4, 5) - 0.5).toBeCloseTo(0.025 / 5 / 4, 6);
+  });
+
+  it('wears the host transport and drops it with the claim', () => {
+    const release = MoveWaveformStore.register();
+    expect(MoveWaveformStore.getTransport()).toBe(null);
+    MoveWaveformStore.setTransport({ playing: true, loopOn: false });
+    expect(MoveWaveformStore.getTransport()).toEqual({ playing: true, loopOn: false });
+    release();
+    expect(MoveWaveformStore.getTransport()).toBe(null);
   });
 
   it('forgets the sample length on release', () => {
@@ -155,7 +200,7 @@ describe('the registry', () => {
     first();
     const second = MoveWaveformStore.register();
     MoveWaveformStore.setView({ position: 0.5 });
-    expect(MoveVolumeDisplay.get()?.getValue?.()).toBe('50%');
+    expect(MoveWaveformStore.readout()).toBe('50%');
     second();
   });
 
@@ -261,5 +306,110 @@ describe('the editor claim', () => {
     // The window is centred on the playing position, not the last scrub.
     expect(MoveWaveformStore.getView().position).toBeCloseTo(0.375, 6);
     release();
+  });
+});
+
+describe('the look lives in the settings room', () => {
+  beforeEach(() => TweakStore.unregisterPanel(MOVE_WAVEFORM_PANEL));
+
+  it('puts the Waveform page in the room on the first claim, seeded with the app\'s look', () => {
+    expect(TweakStore.getPanel(MOVE_WAVEFORM_PANEL)).toBeUndefined();
+    const release = MoveWaveformStore.register({ mode: 'striped', pixelSize: 4, grid: true });
+    const page = TweakStore.getPanel(MOVE_WAVEFORM_PANEL);
+    expect(page?.kind).toBe('kit');
+    expect(page?.name).toBe('Waveform');
+    expect(MoveWaveformStore.getStyle()).toEqual({ mode: 'striped', pixelSize: 4, grid: true, bands: false, baseline: true });
+    release();
+    // The page stays: a room does not lose a page because its display is off screen.
+    expect(TweakStore.getPanel(MOVE_WAVEFORM_PANEL)).toBeDefined();
+  });
+
+  it('is there from the panel\'s mount, before any sample has shown', () => {
+    MoveWaveformStore.ensureSettings();
+    expect(TweakStore.getPanel(MOVE_WAVEFORM_PANEL)?.kind).toBe('kit');
+    // A later claim keeps the page as it is — no re-seed, no duplicate.
+    MoveWaveformStore.ensureSettings({ mode: 'striped' });
+    expect(MoveWaveformStore.getStyle().mode).toBe('pixelated');
+  });
+
+  it('never sits on the app\'s own page row', () => {
+    const release = MoveWaveformStore.register();
+    expect(TweakStore.getPanels('panel').some((p) => p.id === MOVE_WAVEFORM_PANEL)).toBe(false);
+    release();
+  });
+
+  it('reads the page\'s values back as the style every waveform draws with', () => {
+    const release = MoveWaveformStore.register();
+    TweakStore.updateValue(MOVE_WAVEFORM_PANEL, 'style', 'smooth');
+    TweakStore.updateValue(MOVE_WAVEFORM_PANEL, 'resolution', 6);
+    TweakStore.updateValue(MOVE_WAVEFORM_PANEL, 'baseline', false);
+    expect(MoveWaveformStore.getStyle()).toEqual({ mode: 'smooth', pixelSize: 6, grid: false, bands: false, baseline: false });
+    release();
+  });
+
+  it('offers bar widths from 1× to 6× as the headline value, and every style', () => {
+    expect(MOVE_WAVEFORM_PIXEL_RANGE).toEqual([1, 6]);
+    expect(styleFromValues({ style: 'striped', resolution: 1 }, defaultStyle()).mode).toBe('striped');
+    expect(styleFromValues({ style: 'striped', resolution: 1 }, defaultStyle()).pixelSize).toBe(1);
+    // Off the range it clamps; anything unset — or nonsense — falls back to
+    // the app's own look.
+    expect(styleFromValues({ resolution: 40 }, defaultStyle()).pixelSize).toBe(6);
+    expect(styleFromValues({ style: 'neon', resolution: '3×' }, defaultStyle())).toEqual(defaultStyle());
+    expect(styleFromValues(undefined, defaultStyle())).toEqual(defaultStyle());
+  });
+
+  it('shows the three overlays as pictures and the bar width as a value', () => {
+    MoveWaveformStore.ensureSettings();
+    const controls = TweakStore.getPanel(MOVE_WAVEFORM_PANEL)!.controls;
+    const by = (path: string) => controls.find((c) => c.path === path)!;
+    expect(by('grid').icon).toBe('grid-2x2');
+    expect(by('bands').icon).toBe('audio-lines');
+    expect(by('baseline').icon).toBe('activity');
+    expect(by('resolution').type).toBe('slider');
+    expect(by('resolution').formatValue?.(2)).toBe('2×');
+  });
+});
+
+describe('striped bars stretch the wave', () => {
+  beforeEach(() => TweakStore.unregisterPanel(MOVE_WAVEFORM_PANEL));
+
+  it('so the pads and the small screens frame half the window the zoom names', () => {
+    const release = MoveWaveformStore.register();
+    MoveWaveformStore.setView({ zoom: 2, position: 0.5 });
+    expect(MoveWaveformStore.shownZoom()).toBe(2);
+    TweakStore.updateValue(MOVE_WAVEFORM_PANEL, 'style', 'striped');
+    expect(MoveWaveformStore.shownZoom()).toBe(4);
+    // Pad 0 lands at the start of the window the card actually shows.
+    MoveWaveformStore.pressPad(0);
+    expect(MoveWaveformStore.getView().position).toBeCloseTo(0.375, 6);
+    release();
+  });
+});
+
+describe('two displays can hold the claim', () => {
+  it('keeps the hardware until the last one lets go', () => {
+    const a = MoveWaveformStore.register();
+    const b = MoveWaveformStore.register();
+    expect(MoveWaveformStore.isRegistered()).toBe(true);
+    a();
+    expect(MoveWaveformStore.isRegistered()).toBe(true);
+    expect(MoveVolumeDisplay.get()?.label).toBe('time');
+    b();
+    expect(MoveWaveformStore.isRegistered()).toBe(false);
+    expect(MoveVolumeDisplay.get()).toBe(null);
+    // A release used twice is one release.
+    a();
+    expect(MoveWaveformStore.isRegistered()).toBe(false);
+  });
+
+  it('remembers the sample on the surface, and forgets it with the last claim', () => {
+    const release = MoveWaveformStore.register();
+    const sample = moveWaveformDemoSample();
+    MoveWaveformStore.setBuffer(sample);
+    expect(MoveWaveformStore.getBuffer()).toBe(sample);
+    expect(sample.duration).toBe(4);
+    expect(sample.getChannelData(0).some((v) => Math.abs(v) > 0.5)).toBe(true);
+    release();
+    expect(MoveWaveformStore.getBuffer()).toBe(null);
   });
 });

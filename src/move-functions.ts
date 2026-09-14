@@ -163,6 +163,8 @@ class MoveFunctionsClass {
   private options = new Map<MoveFunctionButton, MoveFunctionOptions>();
   private listeners = new Set<() => void>();
   private runListeners = new Set<MoveFunctionRunListener>();
+  /** Attachments put to sleep by `suspend` — attached, but not in this view. */
+  private dormant: Set<MoveFunctionButton> | null = null;
 
   /**
    * Attach an action to a function button; returns a detach function.
@@ -178,6 +180,8 @@ class MoveFunctionsClass {
     this.handlers.set(name, handler);
     if (options) this.options.set(name, options);
     else this.options.delete(name);
+    // An attachment made inside a suspended view belongs to that view.
+    this.dormant?.delete(name);
     this.notify();
     return () => {
       if (this.handlers.get(name) === handler) {
@@ -190,7 +194,27 @@ class MoveFunctionsClass {
 
   /** The attached button names — what the kit claims on the hardware. */
   list(): MoveFunctionButton[] {
-    return [...this.handlers.keys()];
+    return [...this.handlers.keys()].filter((name) => !this.dormant?.has(name));
+  }
+
+  /**
+   * Another view takes the surface — the settings room — and the app's
+   * buttons do not belong in it: a key that does nothing there must be
+   * dark there. Everything attached goes dormant except `keep`; whatever is
+   * attached or pushed while the view is up is the view's own and stays
+   * live. The kit reads `list`, so the keys go dark on the hardware and
+   * the chips leave the header, with no second bookkeeping. The returned
+   * release wakes everything as it was.
+   */
+  suspend(keep: MoveFunctionButton[] = []): () => void {
+    const dormant = new Set([...this.handlers.keys()].filter((name) => !keep.includes(name)));
+    this.dormant = dormant;
+    this.notify();
+    return () => {
+      if (this.dormant !== dormant) return;
+      this.dormant = null;
+      this.notify();
+    };
   }
 
   /**
@@ -204,7 +228,7 @@ class MoveFunctionsClass {
    */
   chips(): MoveFunctionChip[] {
     return MOVE_FUNCTION_MANIFEST
-      .filter((b) => (MOVE_CHIP_BUTTONS as readonly string[]).includes(b.name) && this.handlers.has(b.name))
+      .filter((b) => (MOVE_CHIP_BUTTONS as readonly string[]).includes(b.name) && this.handlers.has(b.name) && !this.dormant?.has(b.name))
       .map((b) => ({ name: b.name, options: this.options.get(b.name) }))
       .filter(({ options }) => options?.chip !== false && !!options?.label)
       .map(({ name, options }) => ({
@@ -241,6 +265,7 @@ class MoveFunctionsClass {
   /** Run the action attached to a button, if any. Called by the kit per press. */
   run(name: MoveFunctionButton, press?: Partial<MoveFunctionPress>): void {
     const full: MoveFunctionPress = { name, shift: !!press?.shift, hold: !!press?.hold, ...(typeof press?.step === 'number' ? { step: press.step } : {}) };
+    if (this.dormant?.has(name)) return;
     this.handlers.get(name)?.(full);
     for (const l of this.runListeners) l(name, full);
   }
