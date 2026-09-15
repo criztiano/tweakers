@@ -2586,7 +2586,7 @@ function MovePadList({ panelId, path, label, view, disabled }) {
       MovePadListStore.move(event.deltaY);
     }, children: [
       /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(MovePadListBody, { view, onCursor: (index) => MovePadListStore.setCursor(index), onToggle: () => MovePadListStore.toggleCursor() }),
-      /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "tweakers-move-pad-list-submit", children: MoveFunctions.chips().filter((chip) => chip.name === "capture").map((chip) => /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(MoveFunctionChipButton, { chip: { ...chip, color: "lime" }, disabled: view.pending }, chip.name)) })
+      /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "tweakers-move-pad-list-submit", children: MoveFunctions.chips().filter((chip) => chip.name === "capture").map((chip) => /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(MoveFunctionChipButton, { chip: { ...chip, color: void 0, variant: "highlight" }, disabled: view.pending }, chip.name)) })
     ] })
   ] });
 }

@@ -393,6 +393,7 @@
   --move-orange: #fd6b59;
   --move-yellow: #f2cf43;
   --move-lime: #a3f243;
+  --move-enter-color: #52bd06;
   --move-emerald: #00ed95;
   --move-blue: #698eff;
   --move-indigo: #8660c3;
@@ -716,7 +717,7 @@
 }
 
 .tweakers-move-action[data-kind="enter"] {
-  background: #52bd06;
+  background: var(--move-enter-color);
 }
 
 .tweakers-move-action[data-kind="capture"] {
@@ -3793,6 +3794,7 @@
   max-width: calc(100% - var(--move-gap) * 2);
 }
 .tweakers-move-pad-list-submit .tweakers-move-chip {
+  background: var(--move-enter-color);
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;

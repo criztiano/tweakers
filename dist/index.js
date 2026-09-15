@@ -2214,7 +2214,7 @@ function MovePadList({ panelId, path, label, view, disabled }) {
       MovePadListStore.move(event.deltaY);
     }, children: [
       /* @__PURE__ */ jsx5(MovePadListBody, { view, onCursor: (index) => MovePadListStore.setCursor(index), onToggle: () => MovePadListStore.toggleCursor() }),
-      /* @__PURE__ */ jsx5("div", { className: "tweakers-move-pad-list-submit", children: MoveFunctions.chips().filter((chip) => chip.name === "capture").map((chip) => /* @__PURE__ */ jsx5(MoveFunctionChipButton, { chip: { ...chip, color: "lime" }, disabled: view.pending }, chip.name)) })
+      /* @__PURE__ */ jsx5("div", { className: "tweakers-move-pad-list-submit", children: MoveFunctions.chips().filter((chip) => chip.name === "capture").map((chip) => /* @__PURE__ */ jsx5(MoveFunctionChipButton, { chip: { ...chip, color: void 0, variant: "highlight" }, disabled: view.pending }, chip.name)) })
     ] })
   ] });
 }
