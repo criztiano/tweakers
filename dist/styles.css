@@ -3765,9 +3765,9 @@
 /* Shared expanded dial screen: only its anchor and Capture corner differ. */
 .tweakers-move-pad-list-overlay {
   inset: auto 0 calc(100% + var(--move-gap)) auto;
-  width: var(--move-wheel-width);
+  width: 100%;
   max-height: min(50vh, calc(100dvh - var(--move-slot-height)));
-  padding-top: calc(var(--move-header-control-height) + var(--move-gap) * 2);
+  padding-top: 32px;
   z-index: var(--move-color-overlay-z);
   box-shadow: var(--move-list-shadow);
 }
@@ -3787,17 +3787,36 @@
   font-size: var(--move-color-font);
   overflow-wrap: anywhere;
 }
-.tweakers-move-pad-list-submit {
-  position: absolute;
-  top: var(--move-gap);
-  right: var(--move-gap);
-  max-width: calc(100% - var(--move-gap) * 2);
-}
+/* Mirror the nested list's Back pill, at the opposite corner. */
+.tweakers-move-pad-list-submit { display: contents; }
 .tweakers-move-pad-list-submit .tweakers-move-chip {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 8px);
+  height: 24px;
+  padding: 0 10px 0 4px;
+  border-radius: 999px;
   background: var(--move-enter-color);
-  max-width: 100%;
+  font-size: 14px;
+  line-height: 24px;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: filter 0.12s;
+}
+.tweakers-move-pad-list-submit .tweakers-move-chip:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+.tweakers-move-pad-list-submit .tweakers-move-chip-icon {
+  position: static;
+  transform: none;
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
 }
 .tweakers-move-pad-list-submit .tweakers-move-chip:disabled {
   opacity: var(--move-color-disabled-opacity);
