@@ -82,3 +82,19 @@ describe('a column the page is holding open', () => {
     TweakStore.unregisterPanel('blank-face');
   });
 });
+
+describe('a switch held rather than thrown', () => {
+  it('keeps its pad under its dial and says it is held, off the config', () => {
+    TweakStore.registerPanel('hold-pad', 'Hold pad', {
+      level: { type: 'slider', default: 50, min: 0, max: 100 },
+      solo: { type: 'toggle', default: false, moveHold: true },
+      mute: { type: 'toggle', default: false },
+    } as never, undefined, { movePads: { solo: 0, mute: 1 } });
+    const panel = TweakStore.getPanel('hold-pad')!;
+    const [page] = buildMovePages([panel]);
+    expect(page.toggles[0]?.path).toBe('solo');
+    expect(page.toggles[0]?.moveHold).toBe(true);
+    expect(page.toggles[1]?.moveHold).toBeUndefined();
+    TweakStore.unregisterPanel('hold-pad');
+  });
+});
