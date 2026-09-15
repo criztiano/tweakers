@@ -1,13 +1,18 @@
 import { useRef, useEffect, useState } from 'react';
 import { createWaveformEngine, WAVEFORM_MAX_ZOOM, WAVEFORM_SMOOTH_POINTS } from '../waveform-engine';
 import type { WaveformRuntime } from '../waveform-engine';
+import type { WaveformAsset, WaveformRange } from '../waveform-asset';
 
 export type { WaveformMode, WaveformLoop } from '../waveform-engine';
 import type { WaveformMode, WaveformLoop } from '../waveform-engine';
 
 interface WaveformVisualizationProps {
-  /** Decoded audio sample. Its full waveform is drawn once (fixed). */
+  /** Decoded audio sample. Its peaks are measured once per buffer. */
   buffer?: AudioBuffer | null;
+  /** The sample as prepared peaks (see `waveformAsset`); wins over `buffer`, which the EQ bands still filter. */
+  asset?: WaveformAsset | null;
+  /** The stretches of the sample that play, back to back — a trim without copying audio. */
+  ranges?: WaveformRange[] | null;
   /** Playhead position, 0..1. */
   progress?: number;
   /**
@@ -81,6 +86,8 @@ interface WaveformVisualizationProps {
 
 export function WaveformVisualization({
   buffer = null,
+  asset = null,
+  ranges = null,
   progress = 0,
   getProgress,
   mode = 'smooth',
@@ -115,7 +122,10 @@ export function WaveformVisualization({
   // Latest props, read by the engine each frame so a prop change never restarts it.
   const runtimeRef = useRef<WaveformRuntime>(null as unknown as WaveformRuntime);
   runtimeRef.current = {
-    buffer,
+    buffer: asset ? null : buffer,
+    asset,
+    ranges,
+    bandSource: buffer,
     progress,
     getProgress,
     mode,

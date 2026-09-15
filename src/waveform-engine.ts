@@ -4,7 +4,17 @@
 // pointer interaction, reading the current props through a `get()` callback so it
 // never needs to be torn down when a prop changes.
 
-import { mixToMono, fillPeaks, envelope, barPeaks, type Peaks } from './waveform-dsp';
+import { envelope, barPeaks, type Peaks } from './waveform-dsp';
+import {
+  buildWaveformLevels,
+  fillRangePeaks,
+  playedRanges,
+  rangesDuration,
+  waveformAsset,
+  waveformAssetFromBuffer,
+  type WaveformAsset,
+  type WaveformRange,
+} from './waveform-asset';
 
 /**
  * How the sample is drawn. `smooth` is the simplified envelope; `pixelated`
@@ -23,6 +33,19 @@ export type WaveformLoop = { start: number; end: number };
 /** Everything the engine reads each frame. Wrappers supply a getter for the live values. */
 export interface WaveformRuntime {
   buffer: AudioBuffer | null;
+  /**
+   * The sample as prepared peaks. Takes precedence over `buffer`, which is
+   * turned into one (once per buffer) when it is all a host gives.
+   */
+  asset?: WaveformAsset | null;
+  /**
+   * The stretches of the sample that play, back to back, in its seconds —
+   * a trim without copying audio. Positions, loops and cuts are then shares
+   * of the ranges' total. Left out, the whole sample plays.
+   */
+  ranges?: WaveformRange[] | null;
+  /** For the EQ bands: the decoded sample they are filtered from, when the asset alone was given. */
+  bandSource?: AudioBuffer | null;
   progress: number;
   getProgress?: () => number;
   mode: WaveformMode;
@@ -123,7 +146,8 @@ function smoothThrough(ctx: CanvasRenderingContext2D, pts: Pt[]) {
 }
 
 async function filterBuffer(buffer: AudioBuffer, band: (typeof BANDS)[number]): Promise<AudioBuffer> {
-  const off = new OfflineAudioContext(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+  // One channel: the bands are drawn from the mono mix, so the render keeps half the memory.
+  const off = new OfflineAudioContext(1, buffer.length, buffer.sampleRate);
   const src = off.createBufferSource();
   src.buffer = buffer;
   const filter = off.createBiquadFilter();
@@ -135,6 +159,50 @@ async function filterBuffer(buffer: AudioBuffer, band: (typeof BANDS)[number]): 
   src.start();
   return off.startRendering();
 }
+
+// Assets made from bare buffers, and the EQ bands of each asset — kept for as
+// long as the sample is, so a remount or a second display reuses them.
+const bufferAssets = new WeakMap<AudioBuffer, WaveformAsset>();
+const assetFor = (buffer: AudioBuffer) => {
+  let asset = bufferAssets.get(buffer);
+  if (!asset) bufferAssets.set(buffer, (asset = waveformAssetFromBuffer(buffer)));
+  return asset;
+};
+const bandAssets = new WeakMap<WaveformAsset, Promise<WaveformAsset[]>>();
+// One band render at a time across every waveform: three full-length offline
+// renders at once is what used to spike memory.
+let bandQueue: Promise<unknown> = Promise.resolve();
+const bandsFor = (asset: WaveformAsset, source: AudioBuffer) => {
+  let bands = bandAssets.get(asset);
+  if (!bands) {
+    bands = (async () => {
+      const out: WaveformAsset[] = [];
+      for (const band of BANDS) {
+        const render = bandQueue.then(() => filterBuffer(source, band));
+        bandQueue = render.catch(() => {});
+        const filtered = await render;
+        // Peaks only: the filtered samples are dropped once measured.
+        out.push(waveformAsset(buildWaveformLevels([filtered.getChannelData(0)]), filtered.sampleRate, filtered.length));
+      }
+      return out;
+    })();
+    bands.catch(() => bandAssets.delete(asset));
+    bandAssets.set(asset, bands);
+  }
+  return bands;
+};
+
+// Identity numbers, so a cached drawing can be keyed by the objects it drew.
+const ids = new WeakMap<object, number>();
+let nextId = 1;
+const idOf = (o: object | null | undefined) => {
+  if (!o) return 0;
+  let id = ids.get(o);
+  if (!id) ids.set(o, (id = nextId++));
+  return id;
+};
+const listKey = (list: { start: number; end: number }[] | number[] | null | undefined) =>
+  list ? list.map((v) => (typeof v === 'number' ? v : `${v.start}:${v.end}`)).join(',') : '';
 
 /**
  * Mount the renderer on `canvas`, reading the current props from `get()` every
@@ -170,38 +238,27 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
     pk = { min: new Float32Array(W), max: new Float32Array(W) };
   };
 
-  // Mono sample data per band (or one entry, bands off). Peaks are recomputed per
-  // frame from the visible window so zoom reveals real detail, not stretched pixels.
-  let monos: Float32Array[] = [];
-  let monoToken = 0;
-  let lastBuffer: AudioBuffer | null | undefined; // undefined: not yet synced
+  // The assets drawn (one, or the three EQ bands once they are measured).
+  // The bands resolve off the frame; the plain wave stays until they do.
+  let drawn: WaveformAsset[] = [];
+  let drawnToken = 0;
+  let lastAsset: WaveformAsset | null | undefined; // undefined: not yet synced
   let lastBands = false;
 
-  const syncMonos = (buffer: AudioBuffer | null, bands: boolean) => {
-    if (buffer === lastBuffer && bands === lastBands) return;
-    lastBuffer = buffer;
+  const syncAssets = (asset: WaveformAsset | null, bands: boolean, source: AudioBuffer | null) => {
+    if (asset === lastAsset && bands === lastBands) return;
+    lastAsset = asset;
     lastBands = bands;
-    const token = ++monoToken;
-    if (!buffer) {
-      monos = [];
-      return;
-    }
-    if (!bands) {
-      // No EQ split — derive the single mono synchronously (no blank frame).
-      monos = [mixToMono(buffer)];
-      return;
-    }
-    // Band split renders offline; keep the previous waveform on screen until it
-    // resolves rather than blanking, and never leave a permanent hole on failure.
-    (async () => {
-      try {
-        const bufs = await Promise.all(BANDS.map((b) => filterBuffer(buffer, b)));
-        if (token !== monoToken) return;
-        monos = bufs.map((b) => mixToMono(b));
-      } catch {
-        // Offline render failed (e.g. memory pressure) — keep the prior waveform.
-      }
-    })();
+    const token = ++drawnToken;
+    drawn = asset ? [asset] : [];
+    if (!asset || !bands || !source || typeof OfflineAudioContext === 'undefined') return;
+    bandsFor(asset, source).then(
+      (split) => {
+        if (token === drawnToken) drawn = split;
+      },
+      // Offline render failed (e.g. memory pressure) — keep the plain wave.
+      () => {}
+    );
   };
 
   // One CSS pixel per column (two device pixels on retina), times the pixelSize
@@ -249,6 +306,8 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
     const span = piece.b - piece.a;
     return piece.x0 + (span > 0 ? ((p - piece.a) / span) * (piece.x1 - piece.x0) : 0);
   };
+  // The context the wave helpers draw into: the wave's own layer.
+  let dc: CanvasRenderingContext2D = ctx;
   // The in-progress loop drag, if any.
   let drag: Drag | null = null;
 
@@ -258,13 +317,13 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
   // column, leaving the gap.
   const drawColumns = (p: Peaks, cols: number, x0: number, color: string, pixelSize: number, striped: boolean) => {
     const colW = columnWidth(pixelSize);
-    ctx.fillStyle = color;
-    ctx.globalAlpha = 1;
+    dc.fillStyle = color;
+    dc.globalAlpha = 1;
     const stretch = striped ? WAVEFORM_STRIPE_STRETCH : 1;
     for (const bar of barPeaks(p, Math.floor(cols / stretch), colW)) {
       const yTop = Math.round(cy - bar.max * amp);
       const yBot = Math.round(cy - bar.min * amp);
-      ctx.fillRect(x0 + bar.x * stretch, yTop, colW, Math.max(1, yBot - yTop));
+      dc.fillRect(x0 + bar.x * stretch, yTop, colW, Math.max(1, yBot - yTop));
     }
   };
 
@@ -277,25 +336,25 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
     const bot: Pt[] = [];
     for (let k = n - 1; k >= 0; k--) bot.push({ x: px(k), y: cy + env[k] * amp });
 
-    ctx.beginPath();
-    ctx.moveTo(top[0].x, top[0].y);
-    smoothThrough(ctx, top);
-    ctx.lineTo(bot[0].x, bot[0].y);
-    smoothThrough(ctx, bot);
-    ctx.closePath();
+    dc.beginPath();
+    dc.moveTo(top[0].x, top[0].y);
+    smoothThrough(dc, top);
+    dc.lineTo(bot[0].x, bot[0].y);
+    smoothThrough(dc, bot);
+    dc.closePath();
 
-    ctx.fillStyle = color;
+    dc.fillStyle = color;
     if (outline) {
-      ctx.globalAlpha = BORDER_FILL_ALPHA;
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.6 * dpr;
-      ctx.lineJoin = 'round';
-      ctx.stroke();
+      dc.globalAlpha = BORDER_FILL_ALPHA;
+      dc.fill();
+      dc.globalAlpha = 1;
+      dc.strokeStyle = color;
+      dc.lineWidth = 1.6 * dpr;
+      dc.lineJoin = 'round';
+      dc.stroke();
     } else {
-      ctx.globalAlpha = 1;
-      ctx.fill();
+      dc.globalAlpha = 1;
+      dc.fill();
     }
   };
 
@@ -336,17 +395,17 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
   // Faint reference grid: `subs` vertical (time) lines.
   const drawGrid = (base: string, subs: number) => {
     const n = Math.max(1, Math.round(subs));
-    ctx.strokeStyle = base;
-    ctx.globalAlpha = 0.1;
-    ctx.lineWidth = dpr;
-    ctx.beginPath();
+    dc.strokeStyle = base;
+    dc.globalAlpha = 0.1;
+    dc.lineWidth = dpr;
+    dc.beginPath();
     for (let i = 1; i < n; i++) {
       const x = Math.round((i / n) * W) + 0.5;
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, H);
+      dc.moveTo(x, 0);
+      dc.lineTo(x, H);
     }
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+    dc.stroke();
+    dc.globalAlpha = 1;
   };
 
   // Translucent loop / selection band between two 0..1 positions, mapped into the
@@ -379,32 +438,78 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
     ctx.globalAlpha = 1;
   };
 
+  // The wave layer: grid, centre line and every piece of the window, each
+  // band low → high so the spikier high band reads on top.
+  const drawWave = (g: CanvasRenderingContext2D, rt: WaveformRuntime, base: string, wave: string, ranges: WaveformRange[], played: number) => {
+    dc = g;
+    g.globalAlpha = 1;
+    g.clearRect(0, 0, W, H);
+    g.imageSmoothingEnabled = rt.mode === 'smooth';
+    if (rt.grid) drawGrid(base, rt.gridSubdivisions);
+    if (rt.baseline) {
+      g.strokeStyle = base;
+      g.globalAlpha = 0.15;
+      g.lineWidth = dpr;
+      g.beginPath();
+      g.moveTo(0, Math.round(cy) + 0.5);
+      g.lineTo(W, Math.round(cy) + 0.5);
+      g.stroke();
+      g.globalAlpha = 1;
+    }
+    const count = drawn.length;
+    const striped = rt.mode === 'striped';
+    for (let i = 0; i < count; i++) {
+      const color = count === 3 ? BAND_COLORS[i] : wave;
+      for (const piece of pieces) {
+        const cols = Math.max(1, Math.round(piece.x1) - Math.round(piece.x0));
+        const pmin = pk.min.subarray(0, cols);
+        const pmax = pk.max.subarray(0, cols);
+        const read = striped ? Math.max(1, Math.floor(cols / WAVEFORM_STRIPE_STRETCH)) : cols;
+        fillRangePeaks(drawn[i], ranges, piece.a * played, piece.b * played, read, pmin, pmax);
+        const x0 = Math.round(piece.x0);
+        if (rt.mode !== 'smooth') drawColumns({ min: pmin, max: pmax }, cols, x0, color, rt.pixelSize, striped);
+        else {
+          // the envelope keeps one density of points across every piece
+          const points = Math.max(2, Math.round((rt.smoothPoints || WAVEFORM_SMOOTH_POINTS) * (cols / W)));
+          drawSimplified(envelope({ min: pmin, max: pmax }, cols, points), x0, x0 + cols, color, rt.border);
+        }
+      }
+    }
+    g.globalAlpha = 1;
+    dc = ctx;
+  };
+
+  // The wave is drawn to its own layer and kept until what it shows changes:
+  // the playhead, the loop band and the gaps are laid over it each time
+  // anything moves, and an unchanged frame draws nothing at all.
+  const layer = document.createElement('canvas');
+  const lctx = layer.getContext('2d');
+  let waveKey = '';
+  let frameKey = '';
+  let rangesRef: WaveformRange[] | null | undefined;
+  let rangesSig = '';
+  let cutsRef: number[] | undefined;
+  let cutsSig = '';
+
   let raf = 0;
   const frame = () => {
     raf = requestAnimationFrame(frame);
     const rt = get();
     syncSize(rt.width, rt.height, Math.max(0, rt.waveInset || 0));
-    syncMonos(rt.buffer, rt.bands);
-
-    const base = getComputedStyle(canvas).color || 'rgb(255,255,255)';
-    ctx.globalAlpha = 1;
-    ctx.clearRect(0, 0, W, H);
-    ctx.imageSmoothingEnabled = rt.mode === 'smooth';
-
-    if (rt.grid) drawGrid(base, rt.gridSubdivisions);
-
-    // center baseline
-    if (rt.baseline) {
-      ctx.strokeStyle = base;
-      ctx.globalAlpha = 0.15;
-      ctx.lineWidth = dpr;
-      ctx.beginPath();
-      ctx.moveTo(0, Math.round(cy) + 0.5);
-      ctx.lineTo(W, Math.round(cy) + 0.5);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
+    const asset = rt.asset ?? (rt.buffer ? assetFor(rt.buffer) : null);
+    syncAssets(asset, rt.bands, rt.bandSource ?? rt.buffer);
+    const ranges = asset ? playedRanges(asset, rt.ranges) : [];
+    const played = rangesDuration(ranges);
+    if (rt.ranges !== rangesRef) {
+      rangesRef = rt.ranges;
+      rangesSig = listKey(rt.ranges);
+    }
+    if (rt.cuts !== cutsRef) {
+      cutsRef = rt.cuts;
+      cutsSig = listKey(rt.cuts);
     }
 
+    const base = getComputedStyle(canvas).color || 'rgb(255,255,255)';
     const wave = rt.waveColor || base;
     const ph = rt.playheadColor || base;
 
@@ -428,53 +533,45 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
     else if (start > 1 - win) start = 1 - win;
     windowState.start = start;
     windowState.win = win;
-    layoutPieces(start, win, rt.cuts, rt.gap ?? WAVEFORM_GAP);
 
-    const count = monos.length;
-    if (count) {
-      // Bands drawn low → high so the spikier high band reads on top; each
-      // piece of the window drawn into the pixels it owns.
-      for (let i = 0; i < count; i++) {
-        const mono = monos[i];
-        const color = count === 3 ? BAND_COLORS[i] : wave;
-        const striped = rt.mode === 'striped';
-        for (const piece of pieces) {
-          const cols = Math.max(1, Math.round(piece.x1) - Math.round(piece.x0));
-          const s0 = Math.max(0, Math.floor(piece.a * mono.length));
-          const s1 = Math.min(mono.length, Math.ceil(piece.b * mono.length));
-          const slice = s1 > s0 ? mono.subarray(s0, s1) : mono;
-          const pmin = pk.min.subarray(0, cols);
-          const pmax = pk.max.subarray(0, cols);
-          fillPeaks(slice, striped ? Math.max(1, Math.floor(cols / WAVEFORM_STRIPE_STRETCH)) : cols, pmin, pmax);
-          const x0 = Math.round(piece.x0);
-          if (rt.mode !== 'smooth') drawColumns({ min: pmin, max: pmax }, cols, x0, color, rt.pixelSize, striped);
-          else {
-            // the envelope keeps one density of points across every piece
-            const points = Math.max(2, Math.round((rt.smoothPoints || WAVEFORM_SMOOTH_POINTS) * (cols / W)));
-            drawSimplified(envelope({ min: pmin, max: pmax }, cols, points), x0, x0 + cols, color, rt.border);
-          }
-        }
+    const nextWaveKey = [
+      W, H, dpr, lastInset, drawn.map(idOf).join('.'), rangesSig, cutsSig, rt.gap ?? WAVEFORM_GAP,
+      rt.mode, rt.pixelSize, rt.border, rt.grid, rt.gridSubdivisions, rt.baseline, rt.smoothPoints,
+      base, wave, start, win,
+    ].join('|');
+    const region = drag && drag.moved ? [Math.min(drag.anchor, drag.curProg), Math.max(drag.anchor, drag.curProg)] : rt.loop ? [rt.loop.start, rt.loop.end] : null;
+    if (nextWaveKey !== waveKey) layoutPieces(start, win, rt.cuts, rt.gap ?? WAVEFORM_GAP);
+    const playX = drawn.length ? Math.round(Math.max(0, Math.min(W, xOfPos(prog)))) : -1;
+    const nextFrameKey = [nextWaveKey, region?.join(':'), ph, rt.gapColor, rt.gapRadius, playX].join('|');
+    if (nextFrameKey === frameKey) return;
+    frameKey = nextFrameKey;
+
+    if (nextWaveKey !== waveKey && lctx) {
+      waveKey = nextWaveKey;
+      if (layer.width !== W || layer.height !== H) {
+        layer.width = W;
+        layer.height = H;
       }
+      drawWave(lctx, rt, base, wave, ranges, played);
     }
+
+    ctx.globalAlpha = 1;
+    ctx.clearRect(0, 0, W, H);
+    if (W > 0 && H > 0) ctx.drawImage(layer, 0, 0);
 
     // Loop / live drag selection on top of the waveform, derived from the playhead color.
-    if (drag && drag.moved) {
-      drawRegion(Math.min(drag.anchor, drag.curProg), Math.max(drag.anchor, drag.curProg), ph);
-    } else if (rt.loop) {
-      drawRegion(rt.loop.start, rt.loop.end, ph);
-    }
+    if (region) drawRegion(region[0], region[1], ph);
 
     // The cuts, over the wave and the band: the frame shows through them.
     drawGaps(rt.gapColor || '#1e1e1e', rt.gapRadius ?? WAVEFORM_GAP_RADIUS);
 
-    if (count) {
+    if (playX >= 0) {
       // playhead — in its piece of the (possibly zoomed) window, so it stays
       // visible and steps straight across a cut
-      const playX = xOfPos(prog);
       ctx.globalAlpha = 1;
       ctx.strokeStyle = ph;
       ctx.lineWidth = 1.5 * dpr;
-      const cxp = Math.round(Math.max(0, Math.min(W, playX))) + 0.5;
+      const cxp = playX + 0.5;
       ctx.beginPath();
       ctx.moveTo(cxp, 0);
       ctx.lineTo(cxp, H);
@@ -611,7 +708,7 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
   return {
     destroy() {
       cancelAnimationFrame(raf);
-      monoToken++; // invalidate any in-flight band filtering
+      drawnToken++; // invalidate any in-flight band split
       canvas.removeEventListener('pointerdown', onPointerDown);
       canvas.removeEventListener('pointermove', onPointerMove);
       canvas.removeEventListener('pointerup', onPointerUp);

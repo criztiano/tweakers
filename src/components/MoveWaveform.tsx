@@ -7,6 +7,7 @@ import { MoveFunctions } from '../move-functions';
 import { MoveSurfaceStore } from '../move-surface-store';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from '../theme';
+import { rangesDuration, type WaveformAsset, type WaveformRange } from '../waveform-asset';
 
 /** Slot geometry, so a slot-placed waveform lines up with the dial row. */
 const SLOT_HEIGHT = 140;
@@ -27,8 +28,20 @@ const SLOT_ZOOM = 4;
 const DOCK_GAP = 14;
 
 export interface MoveWaveformProps {
-  /** Decoded sample. */
+  /** Decoded sample. With an `asset` it is only what the EQ bands filter. */
   buffer?: AudioBuffer | null;
+  /**
+   * The sample as prepared peaks — built once, in a worker if the host likes
+   * (`buildWaveformLevels`, then `waveformAsset`). A frame then reads a few
+   * buckets per column, however long the sample.
+   */
+  asset?: WaveformAsset | null;
+  /**
+   * The stretches that play, back to back, in the sample's seconds. A trim is
+   * a shorter list, never a new buffer; `cuts`, positions and the loop are
+   * shares of their total.
+   */
+  ranges?: WaveformRange[] | null;
   /**
    * Where it sits. `page` is a card on the app's own surface, `slot` is
    * dial-sized with the playhead pinned at the centre, `dock` floats above
@@ -99,6 +112,8 @@ export interface MoveWaveformProps {
  */
 export function MoveWaveform({
   buffer = null,
+  asset = null,
+  ranges = null,
   variant = 'page',
   getProgress,
   progress,
@@ -210,9 +225,11 @@ export function MoveWaveform({
 
   // The sample's length, so the volume readout counts seconds rather than
   // percent — it follows the buffer, which an app can swap under us.
+  const playedSeconds = asset ? (ranges ? rangesDuration(ranges) : asset.duration) : null;
   useEffect(() => {
     MoveWaveformStore.setBuffer(buffer);
-  }, [buffer]);
+    if (playedSeconds !== null) MoveWaveformStore.setDuration(playedSeconds);
+  }, [buffer, playedSeconds]);
 
   const view = useSyncExternalStore(
     useCallback((cb) => MoveWaveformStore.subscribe(cb), []),
@@ -275,6 +292,8 @@ export function MoveWaveform({
   const wave = (
     <WaveformVisualization
       buffer={buffer}
+      asset={asset}
+      ranges={ranges}
       // The host's playhead for the drawing — except mid-turn, when the
       // knob's own landing leads and the host's seek trails it.
       {...(getProgress

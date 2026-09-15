@@ -295,3 +295,12 @@ of any `MoveVolumeDisplay` readout. Pass `transport` (`playing`, `loopOn`,
 host's tape too, with both states lit on the clock. `MoveWaveformStore.setEditor`
 widens the claim to the whole step row and the pad row, as the audio
 modulator's editor does.
+
+A long sample should arrive as an `asset` rather than a bare buffer: build its
+peak ladder once with `buildWaveformLevels` (a worker can, and post the arrays
+across), wrap it with `waveformAsset(levels, sampleRate, length, channels)`,
+and every frame reads a few buckets per column however long the sample is.
+Pass `ranges` — the stretches that still play, in the sample's seconds — for a
+trim: the card plays them back to back without a copied buffer, and `cuts`,
+the position and the loop are shares of their total. The drawing is cached
+and redrawn only when what it shows changes; a paused card draws nothing.
