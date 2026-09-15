@@ -74,6 +74,8 @@ export interface MovePanelProps {
    * for that app.
    */
   scroll?: boolean;
+  /** A focused correction view: occupied pad columns only, with numeric values visible at rest. */
+  focused?: boolean;
   /**
    * View-owned status placed in the panel's top-left header slot. This is for
    * a compact, live readout that belongs beside the panel (for example a
@@ -334,7 +336,7 @@ export const MOVE_SETTINGS_EVENT = 'move-tweakers:settings';
  * are the eight the dials are holding, their pads with them, so all of them
  * can be reached without a single one shrinking to a chip.
  */
-export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport', scroll = false, headerStart, settings, functionChips = 'clock' }: MovePanelProps) {
+export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport', scroll = false, focused = false, headerStart, settings, functionChips = 'clock' }: MovePanelProps) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [track, setTrack] = useState(0);
@@ -1420,7 +1422,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     ? 0
     : appRows > 0
       ? Math.min(MOVE_PADS, Math.max(1, clusterCols, appPadCols))
-      : Math.min(MOVE_PADS, Math.max(MIN_PAD_COLUMNS, clusterCols, kitPadCols));
+      : Math.min(MOVE_PADS, Math.max(focused ? 1 : MIN_PAD_COLUMNS, clusterCols, kitPadCols));
   const surfaceCols = Math.max(clusterCols, padGridCols);
   const panelIdForTabs = `${pageTabsId}-panel`;
   const pageTabIndex = pages.indexOf(page);
@@ -1717,7 +1719,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 // the big name, since "40%" on its own says nothing.
                 // The kit's own room pages read the same way: the bar width
                 // says "2×" big, with its name as the tag.
-                const valueFirst = (!!settingsPanel || page.panel.kind === 'kit') && !(meta.min === 0 && meta.max === 1);
+                const valueFirst = (focused || !!settingsPanel || page.panel.kind === 'kit') && !(meta.min === 0 && meta.max === 1);
                 // The modulator's oscilloscope belongs to a place on the page,
                 // not to one control: the LFO's first slot shows the live wave
                 // whether it is holding a rate in Hz or a tempo division.

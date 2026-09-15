@@ -8813,7 +8813,7 @@ var MOVE_MUTE_EVENT = "move-tweakers:mute";
 var MOVE_SEARCH_EVENT = "move-tweakers:search";
 var MOVE_STRIP_EVENT = "move-tweakers:strip";
 var MOVE_SETTINGS_EVENT = "move-tweakers:settings";
-function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only, dock = "viewport", scroll = false, headerStart, settings: settings2, functionChips = "clock" }) {
+function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only, dock = "viewport", scroll = false, focused = false, headerStart, settings: settings2, functionChips = "clock" }) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = (0, import_react11.useState)([]);
   const [track, setTrack] = (0, import_react11.useState)(0);
@@ -9539,7 +9539,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const clusterCols = explorationOpen ? MOVE_DIALS : stripMode ? Math.min(MOVE_DIALS, visibleCols.length) || MOVE_DIALS : visibleCols.length;
   const kitPadCols = Math.max(0, ...padRows.map((row) => row.length));
   const appPadCols = Math.max(0, ...surface.pads.filter((cell) => !cell.empty).map((cell) => cell.x + 1));
-  const padGridCols = shownPadRows.length === 0 ? 0 : appRows > 0 ? Math.min(MOVE_PADS, Math.max(1, clusterCols, appPadCols)) : Math.min(MOVE_PADS, Math.max(MIN_PAD_COLUMNS, clusterCols, kitPadCols));
+  const padGridCols = shownPadRows.length === 0 ? 0 : appRows > 0 ? Math.min(MOVE_PADS, Math.max(1, clusterCols, appPadCols)) : Math.min(MOVE_PADS, Math.max(focused ? 1 : MIN_PAD_COLUMNS, clusterCols, kitPadCols));
   const surfaceCols = Math.max(clusterCols, padGridCols);
   const panelIdForTabs = `${pageTabsId}-panel`;
   const pageTabIndex = pages.indexOf(page);
@@ -9736,7 +9736,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                               if (!meta) return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
                               const disabled = import_TweakStore13.TweakStore.isDisabled(page.panel.id, meta.path);
                               const active = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
-                              const valueFirst = (!!settingsPanel || page.panel.kind === "kit") && !(meta.min === 0 && meta.max === 1);
+                              const valueFirst = (focused || !!settingsPanel || page.panel.kind === "kit") && !(meta.min === 0 && meta.max === 1);
                               const scopeSlot = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.scope : void 0;
                               const waveSlot = settingsPanel && meta.type !== "xy" ? modLayout?.dials.find((d) => d.path === meta.path)?.preview : void 0;
                               const scope = scopeSlot && modSettings ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveScope, { index: modSettings.index }) : waveSlot && modSettings ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveWavePreview, { index: modSettings.index }) : null;

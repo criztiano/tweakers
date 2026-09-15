@@ -79,6 +79,8 @@ interface MovePanelProps {
      * for that app.
      */
     scroll?: boolean;
+    /** A focused correction view: occupied pad columns only, with numeric values visible at rest. */
+    focused?: boolean;
     /**
      * View-owned status placed in the panel's top-left header slot. This is for
      * a compact, live readout that belongs beside the panel (for example a
@@ -185,7 +187,7 @@ declare const MOVE_STRIP_EVENT = "move-tweakers:strip";
  * are the eight the dials are holding, their pads with them, so all of them
  * can be reached without a single one shrinking to a chip.
  */
-declare function MovePanel({ theme, productionEnabled, panels: only, dock, scroll, headerStart, settings, functionChips }: MovePanelProps): react_jsx_runtime.JSX.Element | null;
+declare function MovePanel({ theme, productionEnabled, panels: only, dock, scroll, focused, headerStart, settings, functionChips }: MovePanelProps): react_jsx_runtime.JSX.Element | null;
 
 interface MoveActionButtonProps {
     /**
