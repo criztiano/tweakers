@@ -3355,6 +3355,62 @@
   opacity: 1;
 }
 
+/* The way out of a nested list: a pill pinned 4px into the screen's
+   top-left corner — the back chevron and the parent's name. It sits beside
+   the scrolling list, so it never moves, and takes no row. */
+.tweakers-list-screen-back {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 8px);
+  height: 24px;
+  padding: 0 10px 0 4px;
+  border: none;
+  border-radius: 999px;
+  background: #41403e;
+  color: #dee3c9;
+  font-family: var(--move-font-label);
+  font-size: 14px;
+  line-height: 24px;
+  cursor: pointer;
+  transition: filter 0.12s;
+}
+
+/* the rows start under the pill, never behind it */
+.tweakers-list-screen[data-back] {
+  padding-top: 32px;
+}
+
+.tweakers-list-screen-back:disabled {
+  cursor: default;
+}
+
+.tweakers-list-screen-back:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+
+.tweakers-list-screen-back svg {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+}
+
+.tweakers-list-screen-back-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A tagged row that also wears a mark keeps its tag clear of it. */
+.tweakers-list-screen-row[data-tagged][data-detail] .tweakers-list-screen-tag,
+.tweakers-list-screen-row[data-tagged][data-checked="true"] .tweakers-list-screen-tag {
+  padding-right: calc(var(--move-list-mark-size, 14px) + var(--move-list-mark-inset, 6px));
+}
+
 /* A way back sits at the left end, where the eye looks to leave. */
 .tweakers-list-screen-row[data-detail="back"] .tweakers-list-screen-mark {
   right: auto;

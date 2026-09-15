@@ -54,6 +54,17 @@ export interface ListScreenProps {
    * the two ends of it can push the selection off centre.
    */
   follow?: 'nearest' | 'center';
+  /**
+   * The level this list sits inside, by name. The list is one level of
+   * nesting deep, so it wears the way out at its top-left corner — a pill
+   * with the back chevron and the parent's name — instead of spending a row
+   * on it. The Back key is the gesture; the pill says where it goes. The
+   * pill is drawn beside the list, not in it, so it never scrolls: it pins
+   * to the nearest positioned box, which on the Move panel is the screen.
+   */
+  back?: string;
+  /** Called when the back pill is clicked. Without it the pill is only a sign. */
+  onBack?: () => void;
   className?: string;
   style?: CSSProperties;
 }
@@ -128,6 +139,8 @@ export function ListScreen({
   onSelect,
   wide,
   follow = 'nearest',
+  back,
+  onBack,
   className,
   style,
 }: ListScreenProps): ReactElement {
@@ -198,6 +211,21 @@ export function ListScreen({
   };
 
   return (
+    <>
+    {back && (
+      <button
+          type="button"
+          className="tweakers-list-screen-back"
+          aria-label={`Back to ${back}`}
+          disabled={!onBack}
+          onClick={onBack}
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d={ICON_CHEVRON_LEFT} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span className="tweakers-list-screen-back-label">{back}</span>
+        </button>
+    )}
     <div
       ref={rootRef}
       className={rootClassName}
@@ -207,6 +235,7 @@ export function ListScreen({
       aria-label={label}
       aria-multiselectable={multiselect || undefined}
       onKeyDown={onKeyDown}
+      data-back={back ? true : undefined}
     >
       {items.map((item) => {
         const rowValue = itemValue(item);
@@ -241,5 +270,6 @@ export function ListScreen({
         );
       })}
     </div>
+    </>
   );
 }

@@ -4276,6 +4276,17 @@ interface ListScreenProps {
      * the two ends of it can push the selection off centre.
      */
     follow?: 'nearest' | 'center';
+    /**
+     * The level this list sits inside, by name. The list is one level of
+     * nesting deep, so it wears the way out at its top-left corner — a pill
+     * with the back chevron and the parent's name — instead of spending a row
+     * on it. The Back key is the gesture; the pill says where it goes. The
+     * pill is drawn beside the list, not in it, so it never scrolls: it pins
+     * to the nearest positioned box, which on the Move panel is the screen.
+     */
+    back?: string;
+    /** Called when the back pill is clicked. Without it the pill is only a sign. */
+    onBack?: () => void;
     className?: string;
     style?: CSSProperties;
 }
@@ -4290,7 +4301,7 @@ interface ListScreenProps {
  * presentational: the host owns the selection state and any wheel or
  * arrow-key stepping.
  */
-declare function ListScreen({ items, label, disabled, multiselect, onFocusItem, value, onSelect, wide, follow, className, style, }: ListScreenProps): ReactElement;
+declare function ListScreen({ items, label, disabled, multiselect, onFocusItem, value, onSelect, wide, follow, back, onBack, className, style, }: ListScreenProps): ReactElement;
 
 /**
  * What an app puts on the Move that its parameters cannot describe.
@@ -4338,12 +4349,19 @@ type MoveScreenRow = string | {
     label: string;
     detail?: ListScreenDetail;
     checked?: boolean;
+    /** A short note pinned to the row's right end, smaller and dimmer than
+     *  the name — a file's format, a status. The hardware screen has no room
+     *  for it and takes the label alone. */
+    tag?: string;
 };
 /** The app's list on the Move's own 128×64 screen. */
 interface MoveScreenList {
     title?: string;
     items: MoveScreenRow[];
     index: number;
+    /** The level the list sits inside, by name — worn as a back pill at the
+     *  screen's corner rather than as a row. A click on it is the Back key. */
+    back?: string;
 }
 /** A row's label, whichever form the host wrote it in. */
 declare const moveScreenRowLabel: (row: MoveScreenRow) => string;
