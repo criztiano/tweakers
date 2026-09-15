@@ -12172,6 +12172,7 @@ export {
   setSegmentSteepness,
   setStopColor,
   shiftSpan,
+  slotGroups,
   snapAngle,
   snapToStep,
   splitSegment,

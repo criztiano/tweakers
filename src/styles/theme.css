@@ -1128,7 +1128,9 @@
 .tweakers-move-slot-group-divider {
   position: absolute;
   top: 50%;
-  left: calc(var(--move-group-divider-at) * (var(--move-slot-w) + var(--move-gap)) - var(--move-gap) / 2 - 1px);
+  /* measured in the container itself: --move-slot-w is a share of whatever
+     box reads it, so the slot width is taken from the group's own width */
+  left: calc(var(--move-group-divider-at) * ((100% - (var(--move-group-span) - 1) * var(--move-gap)) / var(--move-group-span) + var(--move-gap)) - var(--move-gap) / 2 - 1px);
   width: 2px;
   height: 48px;
   border-radius: 1px;
