@@ -64,6 +64,32 @@ export function barPeaks(p: Peaks, cols: number, pitch: number): Bar[] {
   return out;
 }
 
+/**
+ * A simplified symmetric envelope pinned to the sample rather than the view:
+ * point `k` sits at sample `k * seg` and reads the peak amplitude over the
+ * `seg` samples centred on it. The points covering samples `from`..`to` come
+ * back with their sample positions, so a window sliding across the sample
+ * shows the same shape moving, never a reshaped one.
+ */
+export function sampleEnvelope(data: Float32Array, from: number, to: number, seg: number): { pos: number; amp: number }[] {
+  const out: { pos: number; amp: number }[] = [];
+  if (!data.length || !(seg > 0)) return out;
+  const k0 = Math.max(0, Math.floor(from / seg));
+  const k1 = Math.min(Math.ceil(data.length / seg), Math.ceil(to / seg));
+  for (let k = k0; k <= k1; k++) {
+    const pos = Math.min(data.length, k * seg);
+    const start = Math.max(0, Math.floor((k - 0.5) * seg));
+    const end = Math.max(start + 1, Math.min(data.length, Math.floor((k + 0.5) * seg)));
+    let a = 0;
+    for (let i = start; i < end && i < data.length; i++) {
+      const m = Math.abs(data[i]);
+      if (m > a) a = m;
+    }
+    out.push({ pos, amp: a });
+  }
+  return out;
+}
+
 // Simplified symmetric envelope: peak amplitude over each of `n` evenly-spaced segments.
 export function envelope(p: Peaks, cols: number, n: number): number[] {
   const out = new Array<number>(n);
