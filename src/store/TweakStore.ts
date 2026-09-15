@@ -751,6 +751,8 @@ export type PanelConfig = {
   movePads?: Record<string, number>;
   /** Value chips lifted onto the top pad row, retained on the same terms as `hints`. */
   moveTopRow?: string[];
+  /** Value chips sunk onto the action pad row, retained on the same terms as `hints`. */
+  moveActionRow?: string[];
   /**
    * Config declared `_enabled` at its root — the whole panel is a module, and
    * its title carries the switch. Same idiom as a module folder, one level up.
@@ -886,6 +888,13 @@ export type TweakStorePanelOptions = {
    * (hold to peek, tap to latch), on the screen and on the hardware.
    */
   moveTopRow?: string[];
+  /**
+   * Value chips, by control path, that sit on the action pad row in their
+   * `movePads` column — a column's third small slot, so one column can carry a
+   * switch and two chips (a take's Solo, high cut and low cut). A chip whose
+   * action cell is taken, or that names no column, keeps the value row.
+   */
+  moveActionRow?: string[];
   /** Timeline panels render in TweakTimeline; modulation panels are the Move's
    * modulator settings pages; kit panels are the Move kit's own settings
    * pages (the waveform's look), shown only in the settings room — all three
@@ -1069,7 +1078,7 @@ class TweakStoreClass {
     // instead of resurrecting it.
     this.overlayPersistedValues(id, target, values, this.mapControlsByPath(controls));
 
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, moveTopRow: options.moveTopRow, module: '_enabled' in config ? true : undefined, kind: options.kind });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, moveTopRow: options.moveTopRow, moveActionRow: options.moveActionRow, module: '_enabled' in config ? true : undefined, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -1087,6 +1096,7 @@ class TweakStoreClass {
     const labels = options.labels ?? existing.labels;
     const movePads = options.movePads ?? existing.movePads;
     const moveTopRow = options.moveTopRow ?? existing.moveTopRow;
+    const moveActionRow = options.moveActionRow ?? existing.moveActionRow;
     const controls = this.parseConfig(config, '', shortcuts);
     this.applyControlExtras(controls, hints, affordances, labels);
     const controlsByPath = this.mapControlsByPath(controls);
@@ -1117,7 +1127,7 @@ class TweakStoreClass {
       }
     }
 
-    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, moveTopRow, module: '_enabled' in config ? true : undefined, kind: options.kind ?? existing.kind };
+    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, moveTopRow, moveActionRow, module: '_enabled' in config ? true : undefined, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
 

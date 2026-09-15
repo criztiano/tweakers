@@ -735,7 +735,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // gradient) or sit on the pad rows (the small colour selector — a
   // balance's colours stack as the two chips of its column).
   const colorMeta = colorView?.panelId === pageId && page
-    ? [...page.dials, ...(page.topValues ?? []), ...page.values].find((meta) =>
+    ? [...page.dials, ...(page.topValues ?? []), ...page.values, ...(page.actionValues ?? [])].find((meta) =>
         meta && meta.path === colorView.path &&
         (meta.type === 'color' || gradientEditable(meta)))
     : undefined;
@@ -1346,7 +1346,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // first colour, a moveTopRow chip) and the one under it. A switch is never
   // a chip; a chip is one whichever row it rides — the gesture is the same.
   const chipsAt = (col: number): ControlMeta[] =>
-    [page.topValues?.[col], page.values[col]].filter((m): m is ControlMeta => !!m);
+    [page.topValues?.[col], page.values[col], page.actionValues?.[col]].filter((m): m is ControlMeta => !!m);
 
   // What a dial column actually edits: a held chip wins (screen or pad),
   // then a latched one, then the column's own dial. A colour chip lands in

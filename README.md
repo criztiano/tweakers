@@ -1110,6 +1110,8 @@ is anonymous: the smaller tab carries blank columns to make up the count, and
 no control reserves a blank of its own inside another tab. The rule holds
 within one group only — a different view lays out its slots from scratch.
 
+A column has three small rows. `moveTopRow` lifts a value chip onto the switch row, and `moveActionRow` sinks one onto the action row, both in the chip's `movePads` column. That lets one column carry a switch and two chips — a take's Solo, its high cut and its low cut.
+
 A switch that should only be on while a finger holds it — a solo, a preview — says `moveHold: true`. Its pad turns the value on at the press and off at the release, on the screen and on the hardware, so nothing stays latched by accident.
 
 `icon` is a glyph from the bundled lucide subset or the URL of an asset the app owns (drawn as a mask, so it takes the slot's colour and states). The slot then reads as that picture with a badge on its corner — a check while the switch is on, a ban while it is off — and its name underneath: what the switch is about, and whether it is doing it. `onIcon` / `offIcon` put the app's own pair of badges there instead. A switch with no picture keeps the plain face: the indicator bar, the name centred, the whole slot inverting when it is on. Naming a column for a bounded number makes it a chip wherever it was declared, so it stops competing for a dial slot — a page can spend all 8 dials on the controls it wants big, whatever else it carries. Controls with no column keep packing left around the named ones, and a column already spoken for falls back to packing rather than dropping the control.
