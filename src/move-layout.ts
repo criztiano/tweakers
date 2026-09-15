@@ -198,6 +198,7 @@ export type MoveLayoutIssueCode =
   | 'balance-color-placed'
   | 'pad-column-taken'
   | 'top-row-taken'
+  | 'slot-group-apart'
   | 'action-row-no-column'
   | 'action-row-taken'
   | 'top-row-no-column'
@@ -559,6 +560,32 @@ export function moveAppPadRow(row: number, claimedRows: number): 0 | 1 | null {
  * never renumber them, so the latch/substitution logic and the physical
  * knobs keep agreeing on what column i means.
  */
+/**
+ * The runs of big slots a page draws as one container, from the panel's
+ * `moveSlotGroups`: `start` is the position among the columns shown (hidden
+ * columns take no room on screen) and `span` how many slots it covers. A group
+ * needs two slots side by side; one whose slots are not adjacent on screen is
+ * reported and left out, rather than drawn around a stranger.
+ */
+export function slotGroups(page: MovePage, cols: number[] = visibleColumns(page)): { start: number; span: number }[] {
+  const out: { start: number; span: number }[] = [];
+  for (const paths of page.panel.moveSlotGroups ?? []) {
+    const at = cols.flatMap((col, position) => {
+      const dial = page.dials[col];
+      return dial && paths.includes(dial.path) ? [position] : [];
+    });
+    if (at.length < 2) continue;
+    const start = at[0];
+    const span = at[at.length - 1] - start + 1;
+    if (span !== at.length) {
+      reportMoveLayoutIssue('slot-group-apart', `panel '${page.panel.id}': slot group [${paths.join(', ')}] is not side by side on the page — not drawn`);
+      continue;
+    }
+    out.push({ start, span });
+  }
+  return out;
+}
+
 export function visibleColumns(page: MovePage): number[] {
   const cols: number[] = [];
   for (let i = 0; i < MOVE_DIALS; i++) {

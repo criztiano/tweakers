@@ -1110,6 +1110,8 @@ is anonymous: the smaller tab carries blank columns to make up the count, and
 no control reserves a blank of its own inside another tab. The rule holds
 within one group only — a different view lays out its slots from scratch.
 
+Big slots that read as one thing can share a container: `moveSlotGroups: [['threshold', 'lookAhead', 'release']]` draws one surface across those adjacent dials, with a 2 × 48px divider between each. Nothing moves — the columns keep their hardware places, and a group whose slots are not side by side is not drawn.
+
 A column has three small rows. `moveTopRow` lifts a value chip onto the switch row, and `moveActionRow` sinks one onto the action row, both in the chip's `movePads` column. That lets one column carry a switch and two chips — a take's Solo, its high cut and its low cut.
 
 A switch that should only be on while a finger holds it — a solo, a preview — says `moveHold: true`. Its pad turns the value on at the press and off at the release, on the screen and on the hardware, so nothing stays latched by accident.

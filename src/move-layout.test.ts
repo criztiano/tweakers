@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { TweakStore } from './store/TweakStore';
-import { buildMovePages, movePadRows, visibleColumns, enumOptionIcon, enumShapePath, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, setMoveLayoutReporter, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage, type MoveLayoutIssueCode } from './move-layout';
+import { buildMovePages, movePadRows, slotGroups, visibleColumns, enumOptionIcon, enumShapePath, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, setMoveLayoutReporter, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage, type MoveLayoutIssueCode } from './move-layout';
 
 /** Run `fn` with the issue feed captured, restoring the console sink after. */
 function capturingIssues<T>(fn: () => T): { result: T; issues: [MoveLayoutIssueCode, string][] } {
@@ -21,6 +21,30 @@ function capturingIssues<T>(fn: () => T): { result: T; issues: [MoveLayoutIssueC
 
 let seq = 0;
 const nextId = () => `move-layout-${++seq}`;
+
+describe('grouped slots', () => {
+  it('draws a group over its side-by-side slots, counted among the columns shown', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, {
+      version: { type: 'select', default: 'a', options: ['a', 'b'] },
+      level: [0.5, 0, 1], amount: [0.5, 0, 1], cloud: [0.5, 0, 1],
+    }, undefined, { moveSlotGroups: [['level', 'amount', 'cloud']] });
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    assert.deepEqual(slotGroups(page), [{ start: 1, span: 3 }]);
+    TweakStore.unregisterPanel(id);
+  });
+
+  it('leaves out a group whose slots are not side by side', () => {
+    const id = nextId();
+    const { result, issues } = capturingIssues(() => {
+      TweakStore.registerPanel(id, id, { a: [0.5, 0, 1], b: [0.5, 0, 1], c: [0.5, 0, 1] }, undefined, { moveSlotGroups: [['a', 'c'], ['b']] });
+      return slotGroups(buildMovePages([TweakStore.getPanel(id)!])[0]);
+    });
+    assert.deepEqual(result, []);
+    assert.ok(issues.some(([code]) => code === 'slot-group-apart'));
+    TweakStore.unregisterPanel(id);
+  });
+});
 
 describe('value chips on the action row', () => {
   it('gives a column a switch and two chips: one on the value row, one on the action row', () => {
