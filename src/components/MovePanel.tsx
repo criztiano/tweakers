@@ -214,6 +214,24 @@ function searchType(query: string) {
  * 14px — a `0:00:00` time reads as digit groups, not a colon soup. Strings
  * without colons pass through untouched.
  */
+/** A `moveHold` switch pad's gestures: on while the pointer or a key holds it,
+ *  off on release — including a pointer that slides away or is cancelled. */
+function holdPad(panelId: string, path: string) {
+  const set = (on: boolean) => { if (TweakStore.getValue(panelId, path) !== on) TweakStore.updateValue(panelId, path, on) }
+  return {
+    onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
+      try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* not capturable */ }
+      set(true)
+    },
+    onPointerUp: () => set(false),
+    onPointerCancel: () => set(false),
+    onLostPointerCapture: () => set(false),
+    onKeyDown: (e: React.KeyboardEvent) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!e.repeat) set(true) } },
+    onKeyUp: (e: React.KeyboardEvent) => { if (e.key === ' ' || e.key === 'Enter') set(false) },
+    onBlur: () => set(false),
+  }
+}
+
 function boldColons(text: string) {
   if (!text.includes(':')) return text;
   return text.split(':').flatMap((part, i) =>
@@ -2563,7 +2581,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           className="tweakers-move-pad"
                           data-kind="toggle"
                           data-on={!!values[meta.path]}
-                          onClick={() => TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path])}
+                          {...(meta.moveHold ? holdPad(page.panel.id, meta.path) : {
+                            onClick: () => TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path]),
+                          })}
                         >
                           <MovePadToggleBody label={meta.label} />
                         </button>

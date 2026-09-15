@@ -195,6 +195,12 @@ type ToggleConfig = {
      * the controls moving under the finger doing the scrolling.
      */
     moveBlank?: boolean;
+    /**
+     * A switch pad that is on only while it is held — a solo, a preview, a
+     * momentary kill. Press turns it on, release turns it off, on the screen
+     * and on the hardware alike; there is no latched state to forget.
+     */
+    moveHold?: boolean;
 };
 type SelectConfig = {
     type: 'select';
@@ -682,6 +688,8 @@ type ControlMeta = {
     moveSlot?: boolean;
     /** Toggle declared `moveBlank` — its column is held open and drawn empty. */
     moveBlank?: boolean;
+    /** Toggle declared `moveHold` — its pad is on only while held. */
+    moveHold?: boolean;
     /** Select's per-option shape sampler — swapped in place by syncCurveConfigs. */
     preview?: (value: string) => ((t: number) => number) | null | undefined;
     /** Select dial width in hardware columns; defaults to one. */

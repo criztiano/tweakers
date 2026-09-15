@@ -189,6 +189,12 @@ type ToggleConfig = {
      * the controls moving under the finger doing the scrolling.
      */
     moveBlank?: boolean;
+    /**
+     * A switch pad that is on only while it is held — a solo, a preview, a
+     * momentary kill. Press turns it on, release turns it off, on the screen
+     * and on the hardware alike; there is no latched state to forget.
+     */
+    moveHold?: boolean;
 };
 type SelectConfig = {
     type: 'select';

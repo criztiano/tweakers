@@ -49,6 +49,7 @@ control.
 | Kind | Choose for | Configuration / body | Hardware space |
 | --- | --- | --- | --- |
 | `toggle` | A switch under its dial | `toggle` with a `movePads` column; `MovePadToggleBody` | 1 pad |
+| `hold` | A switch that is on only while held — a solo, a preview | `toggle` with `moveHold` and a `movePads` column; `MovePadToggleBody` | 1 pad |
 | `value` | A bounded number the dial above can borrow | Bounded `slider` / `number`; `MovePadValueBody` | 1 pad |
 | `action` | A button the page wants on the surface | `action` with a `movePads` column; `MovePadActionBody` | 1 pad |
 | `app` | A cell the app paints — a track, a slice, a step | `MoveSurfaceStore`; `MovePadAppBody` | 1 pad |

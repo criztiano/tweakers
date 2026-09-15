@@ -8667,6 +8667,33 @@ function searchType(query) {
   const kept = searchKept(rows, view);
   if (kept.length && !kept.includes(rows.cursor)) rows.rest(kept[0]);
 }
+function holdPad(panelId, path) {
+  const set2 = (on) => {
+    if (TweakStore13.getValue(panelId, path) !== on) TweakStore13.updateValue(panelId, path, on);
+  };
+  return {
+    onPointerDown: (e) => {
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+      }
+      set2(true);
+    },
+    onPointerUp: () => set2(false),
+    onPointerCancel: () => set2(false),
+    onLostPointerCapture: () => set2(false),
+    onKeyDown: (e) => {
+      if (e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        if (!e.repeat) set2(true);
+      }
+    },
+    onKeyUp: (e) => {
+      if (e.key === " " || e.key === "Enter") set2(false);
+    },
+    onBlur: () => set2(false)
+  };
+}
 function boldColons(text) {
   if (!text.includes(":")) return text;
   return text.split(":").flatMap(
@@ -10504,7 +10531,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           className: "tweakers-move-pad",
                                           "data-kind": "toggle",
                                           "data-on": !!values[meta.path],
-                                          onClick: () => TweakStore13.updateValue(page.panel.id, meta.path, !values[meta.path]),
+                                          ...meta.moveHold ? holdPad(page.panel.id, meta.path) : {
+                                            onClick: () => TweakStore13.updateValue(page.panel.id, meta.path, !values[meta.path])
+                                          },
                                           children: /* @__PURE__ */ jsx12(MovePadToggleBody, { label: meta.label })
                                         },
                                         meta.path

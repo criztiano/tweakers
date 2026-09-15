@@ -1158,6 +1158,7 @@ var TweakStoreClass = class {
           offIcon: value.offIcon,
           moveSlot: value.moveSlot,
           moveBlank: value.moveBlank,
+          moveHold: value.moveHold,
           shortcut
         });
       } else if (typeof value === "boolean") {
