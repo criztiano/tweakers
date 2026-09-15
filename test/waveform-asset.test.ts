@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildWaveformLevels,
   fillRangePeaks,
+  rangeEnvelope,
   rangesDuration,
   waveformAsset,
   WAVEFORM_BASE_BUCKET,
@@ -113,5 +114,34 @@ describe('fillRangePeaks', () => {
     fillRangePeaks(counted, [{ start: 0, end: 60 }], 0, 60, 1200, min, max);
     expect(reads).toBe(0);
     expect(WAVEFORM_BASE_BUCKET).toBe(64);
+  });
+});
+
+describe('rangeEnvelope', () => {
+  it('keeps the smooth shape the same while the window slides', () => {
+    const sr = 1000;
+    const mono = signal(60_000);
+    const asset = waveformAsset(buildWaveformLevels([mono]), sr, mono.length, [mono]);
+    const ranges = [{ start: 0, end: 60 }];
+    const seg = 15 / 200;
+    const at = (t0: number) => new Map(rangeEnvelope(asset, ranges, t0, t0 + 15, seg).map((p) => [p.t, p.amp]));
+    const before = at(20);
+    const after = at(20.0373);
+    let shared = 0;
+    for (const [t, amp] of after) {
+      if (!before.has(t)) continue;
+      expect(amp).toBe(before.get(t));
+      shared++;
+    }
+    expect(shared).toBeGreaterThan(150);
+  });
+
+  it('reaches both ends of the played time', () => {
+    const mono = new Float32Array(1000).fill(0.5);
+    const asset = waveformAsset(buildWaveformLevels([mono]), 1000, mono.length, [mono]);
+    const env = rangeEnvelope(asset, [{ start: 0, end: 1 }], 0, 1, 0.064);
+    expect(env[0].t).toBe(0);
+    expect(env.at(-1)!.t).toBe(1);
+    expect(env.every((p) => p.amp === 0.5)).toBe(true);
   });
 });

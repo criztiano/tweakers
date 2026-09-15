@@ -210,3 +210,33 @@ export function fillRangePeaks(
     max[x] = out[1];
   }
 }
+
+/**
+ * A simplified symmetric envelope pinned to played time rather than the view:
+ * point `k` sits at `k * seg` seconds and reads the peak amplitude over the
+ * `seg` seconds centred on it. The points covering [t0, t1] come back with
+ * their times, so a window sliding along shows the same shape moving, never
+ * a reshaped one.
+ */
+export function rangeEnvelope(
+  asset: WaveformAsset,
+  ranges: WaveformRange[],
+  t0: number,
+  t1: number,
+  seg: number
+): { t: number; amp: number }[] {
+  const played = rangesDuration(ranges);
+  if (!(seg > 0) || played <= 0) return [];
+  const k0 = Math.max(0, Math.floor(t0 / seg));
+  const k1 = Math.min(Math.ceil(played / seg), Math.ceil(t1 / seg));
+  const n = k1 - k0 + 1;
+  if (n < 1) return [];
+  const min = new Float32Array(n);
+  const max = new Float32Array(n);
+  fillRangePeaks(asset, ranges, (k0 - 0.5) * seg, (k1 + 0.5) * seg, n, min, max);
+  const out: { t: number; amp: number }[] = [];
+  for (let i = 0; i < n; i++) {
+    out.push({ t: Math.min(played, (k0 + i) * seg), amp: Math.max(Math.abs(min[i]), Math.abs(max[i])) });
+  }
+  return out;
+}
