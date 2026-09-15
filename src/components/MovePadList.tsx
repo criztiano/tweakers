@@ -45,10 +45,10 @@ export function MovePadList({ panelId, path, label, view, disabled }: {
       onClick={() => MovePadListStore.toggle(panelId, path)}>
       <MovePadActionBody label={label} />
     </button>
-    {open && <div className="tweakers-move-pad-list-overlay" onWheel={event => { event.stopPropagation(); MovePadListStore.move(event.deltaY); }}>
+    {open && <div className="tweakers-move-dial-screen tweakers-move-pad-list-overlay" onWheel={event => { event.stopPropagation(); MovePadListStore.move(event.deltaY); }}>
       <MovePadListBody view={view} onCursor={index => MovePadListStore.setCursor(index)} onToggle={() => MovePadListStore.toggleCursor()} />
       <div className="tweakers-move-pad-list-submit">
-        {MoveFunctions.chips().filter(chip => chip.name === 'capture').map(chip => <MoveFunctionChipButton key={chip.name} chip={chip} disabled={view.pending} />)}
+        {MoveFunctions.chips().filter(chip => chip.name === 'capture').map(chip => <MoveFunctionChipButton key={chip.name} chip={{ ...chip, color: 'lime' }} disabled={view.pending} />)}
       </div>
     </div>}
   </div>;

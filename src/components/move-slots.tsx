@@ -829,13 +829,13 @@ export function MovePadAppBody({ label, color }: { label?: string; color?: strin
 export function MovePadListBody({ view, onCursor, onToggle }: {
   view: MovePadListView; onCursor: (index: number) => void; onToggle: () => void;
 }) {
-  return <div aria-busy={view.pending || undefined}>
-    <ListScreen label={view.label} disabled={view.pending} multiselect items={view.options.map(option => ({ ...option, checked: view.selected.includes(option.value) }))}
+  return <div className="tweakers-move-pad-list-body" aria-busy={view.pending || undefined}>
+    <ListScreen className="tweakers-move-dial-list" follow="center" label={view.label} disabled={view.pending} multiselect items={view.options.map(option => ({ ...option, checked: view.selected.includes(option.value) }))}
       value={view.options[view.cursor]?.value} onFocusItem={value => onCursor(view.options.findIndex(option => option.value === value))}
       onSelect={value => { onCursor(view.options.findIndex(option => option.value === value)); onToggle(); }} />
-    <div className="tweakers-move-pad-list-status" role="status" aria-live="polite">
-      {view.error ?? (view.pending ? 'Starting…' : !view.options.length ? 'No options available.' : 'Enter selects · Capture runs')}
-    </div>
+    {(view.error || view.pending || !view.options.length) && <div className="tweakers-move-pad-list-status" role="status" aria-live="polite">
+      {view.error ?? (view.pending ? 'Starting…' : 'No options available.')}
+    </div>}
   </div>;
 }
 

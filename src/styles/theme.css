@@ -449,6 +449,7 @@
   --move-duration-press: 150ms;
   --move-ease-out: cubic-bezier(0.2, 0, 0, 1);
   --move-header-control-height: 28px;
+  --move-list-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
 .tweakers-move {
@@ -2262,7 +2263,7 @@
   top: auto;
   height: min(var(--move-screen-full), 50vh);
   z-index: 6;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--move-list-shadow);
 }
 
 .tweakers-move-dial-head {
@@ -3760,26 +3761,55 @@
 /* A small list pad keeps its canonical grid cell; its display floats above. */
 .tweakers-move-pad-list-anchor { position: relative; min-width: 0; }
 .tweakers-move-pad-list-anchor > .tweakers-move-pad { width: 100%; height: 100%; }
+/* Shared expanded dial screen: only its anchor and Capture corner differ. */
 .tweakers-move-pad-list-overlay {
-  position: absolute;
-  inset-inline-end: 0;
-  bottom: calc(100% + var(--move-gap));
+  inset: auto 0 calc(100% + var(--move-gap)) auto;
   width: var(--move-wheel-width);
-  max-height: calc(100dvh - var(--move-slot-height));
-  overflow: auto;
+  max-height: min(50vh, calc(100dvh - var(--move-slot-height)));
+  padding-top: calc(var(--move-header-control-height) + var(--move-gap) * 2);
   z-index: var(--move-color-overlay-z);
-  border-radius: var(--move-radius-small);
-  background: var(--move-black);
-  box-shadow: 0 0 0 1px var(--tweak-border), var(--tweak-shadow-dropdown);
+  box-shadow: var(--move-list-shadow);
 }
-.tweakers-move-pad-list-overlay .tweakers-list-screen { width: 100%; max-height: none; height: auto; }
+.tweakers-move-pad-list-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.tweakers-move-pad-list-body > .tweakers-move-dial-list {
+  pointer-events: auto;
+  overscroll-behavior: contain;
+}
 .tweakers-move-pad-list-status {
   padding: var(--move-color-padding);
   color: var(--move-text);
   font-family: var(--move-font-label);
   font-size: var(--move-color-font);
+  overflow-wrap: anywhere;
 }
-
-.tweakers-move-pad-list-submit { padding: 0 var(--move-color-padding) var(--move-color-padding); }
-.tweakers-move-pad-list-submit .tweakers-move-chip { width: 100%; justify-content: center; }
-.tweakers-move-pad-list-overlay .tweakers-list-screen-row:not([data-selected]):not([data-checked="true"]) .tweakers-list-screen-label { opacity: var(--tweak-value-opacity); }
+.tweakers-move-pad-list-submit {
+  position: absolute;
+  top: var(--move-gap);
+  right: var(--move-gap);
+  max-width: calc(100% - var(--move-gap) * 2);
+}
+.tweakers-move-pad-list-submit .tweakers-move-chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tweakers-move-pad-list-submit .tweakers-move-chip:disabled {
+  opacity: var(--move-color-disabled-opacity);
+  cursor: default;
+}
+.tweakers-move-pad-list-overlay .tweakers-list-screen-row:focus-visible,
+.tweakers-move-pad-list-submit .tweakers-move-chip:focus-visible {
+  outline: var(--move-color-stroke) solid var(--move-text);
+  outline-offset: calc(-1 * var(--move-color-stroke));
+}
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-pad-list-overlay .tweakers-list-screen-row,
+  .tweakers-move-pad-list-overlay .tweakers-list-screen-label,
+  .tweakers-move-pad-list-submit .tweakers-move-chip {
+    transition: none;
+  }
+}

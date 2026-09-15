@@ -204,8 +204,9 @@ Selections and cursor survive close/reopen for the attachment's lifetime.
 `open(panelId, path)` also opens it from an app's browser action. `getView()`
 is null when closed; `subscribe()` returns a release callback. Async submission
 locks selection and ignores duplicate Capture even if closed and reopened.
-A failure stays beside the list for an explicit retry. The footer reuses the
-kit Capture chip so submission stays reachable when the list covers the header.
+A failure stays beside the list for an explicit retry. The expanded display
+shares the dial list styling, with the kit Capture chip in its upper-right
+corner so submission stays reachable above the rows.
 The Library's **Parts** pad demonstrates the same API used by Primecut Extract.
 `moveKitOptions()` includes this registry as `padList`.
 
