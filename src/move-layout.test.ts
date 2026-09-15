@@ -82,6 +82,52 @@ describe('value chips on the action row', () => {
   });
 });
 
+describe('actions on the value row', () => {
+  const dials = Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`d${i}`, [0.5, 0, 1] as [number, number, number]]));
+
+  it('stacks two buttons in one column: one on the value row over one on the action row', () => {
+    const id = nextId();
+    const { result: page, issues } = capturingIssues(() => {
+      TweakStore.registerPanel(id, id, { ...dials, fade: [0, 0, 1], extract: { type: 'action', label: 'Extract' }, export: { type: 'action', label: 'Export' } }, undefined, {
+        movePads: { fade: 0, extract: 7, export: 7 },
+        moveValueRow: ['extract'],
+      });
+      return buildMovePages([TweakStore.getPanel(id)!])[0];
+    });
+    const [, values, actions] = movePadRows(page, 0);
+    assert.deepEqual([values[0]?.path, values[7]?.path, actions[7]?.path], ['fade', 'extract', 'export']);
+    assert.ok(visibleColumns(page).includes(7));
+    assert.deepEqual(issues, []);
+    TweakStore.unregisterPanel(id);
+  });
+
+  it('holds its value cell against a chip named to the same column, and keeps the action row with no column', () => {
+    const id = nextId();
+    const { result: page, issues } = capturingIssues(() => {
+      TweakStore.registerPanel(id, id, { ...dials, fade: [0, 0, 1], extract: { type: 'action', label: 'Extract' }, loose: { type: 'action', label: 'Loose' } }, undefined, {
+        movePads: { fade: 3, extract: 3, loose: 6 },
+        moveValueRow: ['extract', 'loose'],
+      });
+      return buildMovePages([TweakStore.getPanel(id)!])[0];
+    });
+    const [, values] = movePadRows(page, 0);
+    assert.equal(values[3]?.path, 'extract');
+    assert.notEqual(page.values.findIndex((c) => c?.path === 'fade'), 3, 'the chip packs along');
+    assert.equal(values[6]?.path, 'loose');
+    assert.ok(issues.some(([code]) => code === 'pad-column-taken'));
+    TweakStore.unregisterPanel(id);
+
+    const bare = nextId();
+    const { result: unnamed, issues: said } = capturingIssues(() => {
+      TweakStore.registerPanel(bare, bare, { ...dials, extract: { type: 'action', label: 'Extract' } }, undefined, { moveValueRow: ['extract'] });
+      return buildMovePages([TweakStore.getPanel(bare)!])[0];
+    });
+    assert.equal(unnamed.valueActions, undefined);
+    assert.ok(said.some(([code]) => code === 'value-row-no-column'));
+    TweakStore.unregisterPanel(bare);
+  });
+});
+
 describe('value chips on the top row', () => {
   it('lifts a named chip into a free switch column, keeping it a value chip', () => {
     const id = nextId();
