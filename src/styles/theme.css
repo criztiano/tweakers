@@ -393,6 +393,9 @@
   --move-orange: #fd6b59;
   --move-yellow: #f2cf43;
   --move-lime: #a3f243;
+  --move-enter-color: #52bd06;
+  --move-confirm-pulse-duration: 1600ms;
+  --move-confirm-pulse-shade: 0.16;
   --move-emerald: #00ed95;
   --move-blue: #698eff;
   --move-indigo: #8660c3;
@@ -449,6 +452,7 @@
   --move-duration-press: 150ms;
   --move-ease-out: cubic-bezier(0.2, 0, 0, 1);
   --move-header-control-height: 28px;
+  --move-list-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
 .tweakers-move {
@@ -715,7 +719,7 @@
 }
 
 .tweakers-move-action[data-kind="enter"] {
-  background: #52bd06;
+  background: var(--move-enter-color);
 }
 
 .tweakers-move-action[data-kind="capture"] {
@@ -2262,7 +2266,7 @@
   top: auto;
   height: min(var(--move-screen-full), 50vh);
   z-index: 6;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--move-list-shadow);
 }
 
 .tweakers-move-dial-head {
@@ -3811,4 +3815,64 @@
   .tweakers-move-notify-close {
     transition: none;
   }
+}
+
+/* A small list pad keeps its canonical grid cell; its display floats above. */
+.tweakers-move-pad-list-anchor { position: relative; min-width: 0; }
+.tweakers-move-pad-list-anchor > .tweakers-move-pad { width: 100%; height: 100%; }
+/* The expanded dial screen anchored to its submitting pad. */
+.tweakers-move-pad-list-overlay {
+  inset: auto 0 calc(100% + var(--move-gap)) auto;
+  width: 100%;
+  max-height: min(50vh, calc(100dvh - var(--move-slot-height)));
+  z-index: var(--move-color-overlay-z);
+  box-shadow: var(--move-list-shadow);
+}
+.tweakers-move-pad-list-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.tweakers-move-pad-list-body > .tweakers-move-dial-list {
+  pointer-events: auto;
+  overscroll-behavior: contain;
+}
+.tweakers-move-pad-list-status {
+  padding: var(--move-color-padding);
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  font-size: var(--move-color-font);
+  overflow-wrap: anywhere;
+}
+/* The open pad becomes the action: pulse its surface, keeping the label steady. */
+.tweakers-move-pad[data-confirm] {
+  background: var(--move-enter-color);
+  color: var(--move-text-inverse);
+  isolation: isolate;
+}
+.tweakers-move-pad[data-confirm]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--move-text-inverse);
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+  animation: tweakers-move-confirm-pulse var(--move-confirm-pulse-duration) ease-in-out infinite;
+}
+.tweakers-move-pad[data-confirm][data-pending]::before { animation: none; }
+@keyframes tweakers-move-confirm-pulse {
+  0%, 100% { opacity: 0; }
+  50% { opacity: var(--move-confirm-pulse-shade); }
+}
+.tweakers-move-pad-list-anchor > .tweakers-move-pad:focus-visible,
+.tweakers-move-pad-list-overlay .tweakers-list-screen-row:focus-visible {
+  outline: var(--move-color-stroke) solid var(--move-text);
+  outline-offset: calc(-1 * var(--move-color-stroke));
+}
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-pad[data-confirm]::before { animation: none; }
+  .tweakers-move-pad-list-overlay .tweakers-list-screen-row,
+  .tweakers-move-pad-list-overlay .tweakers-list-screen-label { transition: none; }
 }

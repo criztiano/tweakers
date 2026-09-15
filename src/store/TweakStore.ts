@@ -101,6 +101,9 @@ export type ToggleConfig = {
 
 export type SelectConfig = {
   type: 'select';
+  /** Dial columns occupied by this select. Two gives long list labels more room;
+   *  either column's knob selects the same value. Ignored for `moveTabs`. */
+  moveSpan?: 1 | 2;
   /** Optional semantic drawing for the Move surface. */
   moveVisual?: MoveSelectVisual;
   /**
@@ -658,6 +661,8 @@ export type ControlMeta = {
   moveBlank?: boolean;
   /** Select's per-option shape sampler — swapped in place by syncCurveConfigs. */
   preview?: (value: string) => ((t: number) => number) | null | undefined;
+  /** Select dial width in hardware columns; defaults to one. */
+  moveSpan?: 1 | 2;
   /** Select declared `moveTabs` — it lies across the small slots as a tabs
    *  strip instead of claiming a dial; `'named'` adds its leading name pad. */
   moveTabs?: boolean | 'named';
@@ -888,7 +893,7 @@ export type TweakStorePanelOptions = {
  * bound without one the page needs, instead of dropping that feature on the
  * hardware in silence.
  */
-export type MoveKitRegistry = 'functions' | 'modulation' | 'color' | 'surface' | 'waveform' | 'volume' | 'transfer';
+export type MoveKitRegistry = 'padList' | 'functions' | 'modulation' | 'color' | 'surface' | 'waveform' | 'volume' | 'transfer';
 
 /** camelCase → Title Case, the label rule used everywhere a key becomes UI text. */
 export function formatLabel(key: string): string {
@@ -2027,7 +2032,7 @@ class TweakStoreClass {
       } else if (this.isActionConfig(value)) {
         controls.push({ type: 'action', path, label: (value as ActionConfig).label || label, caption: (value as ActionConfig).caption });
       } else if (this.isSelectConfig(value)) {
-        controls.push({ type: 'select', path, label, options: value.options, display: value.display, preview: value.preview, moveVisual: value.moveVisual, moveTabs: value.moveTabs });
+        controls.push({ type: 'select', path, label, options: value.options, display: value.display, preview: value.preview, moveVisual: value.moveVisual, moveTabs: value.moveTabs, moveSpan: value.moveSpan });
       } else if (this.isColorConfig(value)) {
         controls.push({ type: 'color', path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {

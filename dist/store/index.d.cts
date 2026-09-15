@@ -198,6 +198,9 @@ type ToggleConfig = {
 };
 type SelectConfig = {
     type: 'select';
+    /** Dial columns occupied by this select. Two gives long list labels more room;
+     *  either column's knob selects the same value. Ignored for `moveTabs`. */
+    moveSpan?: 1 | 2;
     /** Optional semantic drawing for the Move surface. */
     moveVisual?: MoveSelectVisual;
     /**
@@ -681,6 +684,8 @@ type ControlMeta = {
     moveBlank?: boolean;
     /** Select's per-option shape sampler — swapped in place by syncCurveConfigs. */
     preview?: (value: string) => ((t: number) => number) | null | undefined;
+    /** Select dial width in hardware columns; defaults to one. */
+    moveSpan?: 1 | 2;
     /** Select declared `moveTabs` — it lies across the small slots as a tabs
      *  strip instead of claiming a dial; `'named'` adds its leading name pad. */
     moveTabs?: boolean | 'named';
@@ -901,7 +906,7 @@ type TweakStorePanelOptions = {
  * bound without one the page needs, instead of dropping that feature on the
  * hardware in silence.
  */
-type MoveKitRegistry = 'functions' | 'modulation' | 'color' | 'surface' | 'waveform' | 'volume' | 'transfer';
+type MoveKitRegistry = 'padList' | 'functions' | 'modulation' | 'color' | 'surface' | 'waveform' | 'volume' | 'transfer';
 /** camelCase → Title Case, the label rule used everywhere a key becomes UI text. */
 declare function formatLabel(key: string): string;
 /**

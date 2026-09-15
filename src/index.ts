@@ -380,3 +380,7 @@ export * from './preset-genetics';
 export type { PresetExplorationAdapter } from './store/TweakStore';
 
 export { presetFlowerSeed, presetFlowerSvg } from './preset-flower';
+
+export { MovePadListStore } from './move-pad-list';
+export type { MovePadListConfig, MovePadListOption, MovePadListView } from './move-pad-list';
+export { MovePadListBody } from './components/move-slots';

@@ -1,4 +1,4 @@
-import { TweakStore, ModulationStore, MoveFunctions, type TweakConfig } from 'tweakers';
+import { MovePadListStore, moveNotify, TweakStore, ModulationStore, MoveFunctions, type TweakConfig } from 'tweakers';
 
 /**
  * The library's instrument: one page carrying every face a Move slot can
@@ -42,6 +42,14 @@ export const CONFIG = {
     type: 'select', default: 'dorian',
     options: ['major', 'minor', 'dorian', 'phrygian', 'lydian', 'mixolydian', 'locrian'],
   },
+  result: {
+    type: 'select', default: 'drums', moveSpan: 2,
+    options: [
+      { value: 'drums', label: 'Drums · polished' },
+      { value: 'bass', label: 'Bass · original' },
+      { value: 'other', label: 'Other instruments' },
+    ],
+  },
   shape: {
     type: 'select', default: 'bell',
     options: [
@@ -66,6 +74,7 @@ export const CONFIG = {
   sync: true,                                                  /* a switch */
   drive: { type: 'slider', default: 42, min: 0, max: 100, step: 1, unit: '%' },
   glide: { type: 'slider', default: 120, min: 0, max: 500, step: 1, unit: ' ms' },
+  parts: { type: 'action', label: 'Parts' },
   reset: { type: 'action', label: 'Reset' },                   /* a button */
 
   /* ── the small slots' own multi-slot control: a mode picker lying across
@@ -162,6 +171,7 @@ export const MOVE_PADS: Record<string, number> = {
   drive: 0,
   glide: 1,
   reset: 5,
+  parts: 6,
   take: 2,          /* a strip: the column its run starts in, four pads wide */
 };
 
@@ -215,6 +225,11 @@ export function registerLibraryPanel() {
     if (path === 'reset') resetTheStrip();
   });
 
+  MovePadListStore.attach(PANEL_ID, 'parts', {
+    label: 'Parts', submitLabel: 'Extract', options: ['Drums', 'Bass', 'Voice', 'Instru'].map(label => ({ value: label.toLowerCase(), label })),
+    selected: ['drums'],
+    onSubmit: selected => { moveNotify.add({ title: `Selected ${selected.join(', ')}` }); },
+  });
   seedPresets();
 
   // The Move's Copy button puts the whole page on the clipboard.

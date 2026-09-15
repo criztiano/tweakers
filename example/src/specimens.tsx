@@ -195,6 +195,18 @@ export const BIG_SLOTS: Specimen[] = [
     ),
   },
   {
+    kind: 'enum-wide', span: 2, path: 'result',
+    description: 'The same list across two dial columns, with room for longer names. Either knob selects a result.',
+    note: 'select with moveSpan: 2',
+    render: () => (
+      <MoveSlotEnumBody
+        label="Result" optionLabel="Drums · polished" activeIdx={0}
+        options={['Drums · polished', 'Bass · original', 'Other instruments']}
+        shape={null} glyph={null}
+      />
+    ),
+  },
+  {
     kind: 'curve', path: 'shape',
     description: MOVE_SLOT_LIBRARY.curve.description,
     render: () => (
@@ -348,6 +360,9 @@ export const BIG_SLOTS: Specimen[] = [
 /* ── the small slots — the pad row under the dials ──────────────── */
 
 export const SMALL_SLOTS: Specimen[] = [
+  { kind: 'list', description: MOVE_PAD_LIBRARY.list.description,
+    note: 'Tap Parts in the live panel. Its dial walks the checked list; Sample selects, tap the green pad again to submit, and Back closes.',
+    render: () => <MovePadActionBody label="Parts" /> },
   {
     kind: 'toggle',
     description: MOVE_PAD_LIBRARY.toggle.description,

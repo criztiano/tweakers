@@ -1,3 +1,5 @@
+import { MovePadListStore } from '../move-pad-list';
+import { MovePadList } from './MovePadList';
 import { PresetExploration, PresetExplorationSlots } from './PresetExploration';
 import { PresetExplorationStore } from '../preset-exploration';
 import { useEffect, useLayoutEffect, useId, useRef, useState, useSyncExternalStore, useCallback } from 'react';
@@ -12,7 +14,7 @@ import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from '../theme';
-import { buildMovePages, buildModMovePage, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
+import { buildMovePages, buildModMovePage, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
 import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadValueBody, MovePadActionBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody } from './move-slots';
@@ -490,6 +492,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     ? buildModMovePage(settingsPanel, modLayout)
     : roomPage ?? pages[Math.min(track, Math.max(0, pages.length - 1))];
   const pageId = page?.panel.id;
+  useSyncExternalStore(MovePadListStore.subscribe, MovePadListStore.getVersion, () => 0);
+  const padListView = MovePadListStore.getView();
+  useEffect(() => {
+    if (padListView && padListView.panelId !== pageId) MovePadListStore.close();
+  }, [pageId, padListView]);
 
   // The Set Overview button (Shift + Step 1) is the settings room's door,
   // attached for as long as a room is named — attaching is also what lights
@@ -1460,7 +1467,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     <div className="tweakers-root tweakers-move-root" data-theme={theme} data-dock={dock}>
       {/* While a composer floats above it the whole instrument comes forward,
           over the app's own panels — you are working in it. */}
-      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-settings={settingsOpen || undefined} data-overlay={explorationOpen || composition || audioWave != null || roomWave || color || presetSave ? true : undefined}>
+      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-settings={settingsOpen || undefined} data-overlay={padListView || explorationOpen || composition || audioWave != null || roomWave || color || presetSave ? true : undefined}>
         {!explorationOpen && colorMeta && <MoveColorDisplay panelId={page.panel.id} meta={colorMeta} anchor={panelRef} theme={theme} />}
         <PresetExploration />
         {presetSave && <MovePresetSaveInput suggested={presetSave.suggested} />}
@@ -1695,7 +1702,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 // keeps its slot against chip substitution: a chip landing in
                 // half a picture would break the span.
                 if (isSpanContinuation(page, i)) return null;
-                const meta = page.dials[i]?.type === 'filter' ? page.dials[i] : dialAt(i);
+                const meta = dialSpan(page.dials[i]) > 1 ? page.dials[i] : dialAt(i);
                 if (!meta) return <div key={`empty-${i}`} className="tweakers-move-dial" data-empty="true" />;
                 const disabled = TweakStore.isDisabled(page.panel.id, meta.path);
                 const active =
@@ -1730,6 +1737,24 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   : waveSlot && modSettings
                   ? <MoveWavePreview index={modSettings.index} />
                   : null;
+                if (padListView?.panelId === page.panel.id && page.actions[i]?.path === padListView.path) {
+                  const stepList = (event: React.PointerEvent<HTMLElement>) => {
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    const fraction = (event.clientX - rect.left - DIAL_TRACK_INSET) / Math.max(1, rect.width - DIAL_TRACK_INSET * 2);
+                    MovePadListStore.setCursor(Math.round(fraction * Math.max(0, padListView.options.length - 1)));
+                  };
+                  return <div key={meta.path} className="tweakers-move-dial" data-active="true" data-latched="true" data-pad-list-dial="true"
+                    role="slider" tabIndex={0} aria-label={`${padListView.label} list dial`} aria-valuemin={0}
+                    aria-valuemax={Math.max(0, padListView.options.length - 1)} aria-valuenow={padListView.cursor}
+                    aria-valuetext={padListView.options[padListView.cursor]?.label ?? 'No items'} aria-disabled={padListView.pending || undefined}
+                    onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); MovePadListStore.move(event.key === 'ArrowLeft' ? -1 : 1); } }}
+                    onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); stepList(event); }}
+                    onPointerMove={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) stepList(event); }}
+                    onPointerUp={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }}
+                    onWheel={event => { event.stopPropagation(); MovePadListStore.move(event.deltaY); }}>
+                    <MoveSlotDefaultBody label={padListView.label} value={padListView.options[padListView.cursor]?.label ?? 'No items'} pct={100 * padListView.cursor / Math.max(1, padListView.options.length - 1)} originPct={null} />
+                  </div>;
+                }
                 if (meta.type === 'color') return <MoveColorSlot key={meta.path} panelId={page.panel.id} meta={meta} active={active} open={colorMeta?.path === meta.path} latched={meta !== page.dials[i] && chipLatched(i, meta)} />;
                 // The filter takes two slots as one picture: the magnitude
                 // response maximised across both, each hand's small label
@@ -2036,6 +2061,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       key={meta.path}
                       className="tweakers-move-dial"
                       data-kind="enum"
+                      style={dialSpan(meta) > 1 ? { gridColumn: `span ${dialSpan(meta)}` } : undefined}
                       data-scope={scope ? true : undefined}
                       data-visual={playback ? 'playback' : undefined}
                       role="slider"
@@ -2544,6 +2570,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     // Action pads carry no value — a press just runs the
                     // app's action, the same as the row's button on screen.
                     if (page.actions[col] === meta) {
+                      if (MovePadListStore.has(page.panel.id, meta.path)) return <MovePadList key={meta.path} panelId={page.panel.id} path={meta.path} label={meta.label} view={padListView} disabled={TweakStore.isDisabled(page.panel.id, meta.path)} />;
                       return (
                         <button
                           key={meta.path}

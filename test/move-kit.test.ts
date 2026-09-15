@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  moveKitOptions, MoveColorStore, MoveFunctions, MoveSurfaceStore, MoveVolumeDisplay,
+  MovePadListStore, moveKitOptions, MoveColorStore, MoveFunctions, MoveSurfaceStore, MoveVolumeDisplay,
   MoveWaveformStore, ModulationStore, PresetExplorationStore, TweakStore, movePoint, sampleTransfer,
 } from '../src/index';
 
@@ -13,6 +13,7 @@ import {
 describe('moveKitOptions', () => {
   it('carries every registry the kit reads, under its bindMove option name', () => {
     const o = moveKitOptions();
+    expect(o.padList).toBe(MovePadListStore);
     expect(o.functions).toBe(MoveFunctions);
     expect(o.modulation).toBe(ModulationStore);
     expect(o.color).toBe(MoveColorStore);
@@ -23,7 +24,7 @@ describe('moveKitOptions', () => {
     expect(o.exploration).toBe(PresetExplorationStore);
     // Nothing else: a new registry lands here AND in this list, together.
     expect(Object.keys(o).sort()).toEqual(
-      ['color', 'exploration', 'functions', 'modulation', 'surface', 'transfer', 'volume', 'waveform'],
+      ['color', 'exploration', 'functions', 'modulation', 'padList', 'surface', 'transfer', 'volume', 'waveform'],
     );
   });
 

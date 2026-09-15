@@ -22,6 +22,7 @@
  * page uses it, so carrying one the app never touches costs nothing.
  */
 
+import { MovePadListStore } from './move-pad-list';
 import { MoveColorStore } from './move-color';
 import { MoveFunctions } from './move-functions';
 import { MoveSurfaceStore } from './move-surface-store';
@@ -32,6 +33,7 @@ import { ModulationStore } from './store/ModulationStore';
 import { movePoint, sampleTransfer } from './transfer-core';
 
 export interface MoveKitOptions {
+  padList: typeof MovePadListStore;
   functions: typeof MoveFunctions;
   modulation: typeof ModulationStore;
   color: typeof MoveColorStore;
@@ -51,6 +53,7 @@ export type MoveKitOverrides = { [K in keyof MoveKitOptions]?: MoveKitOptions[K]
 /** Every registry the bridge kit reads, keyed by its `bindMove` option. */
 export function moveKitOptions<T extends MoveKitOverrides>(overrides?: T): Omit<MoveKitOptions, keyof T> & T {
   return {
+    padList: MovePadListStore,
     functions: MoveFunctions,
     modulation: ModulationStore,
     color: MoveColorStore,

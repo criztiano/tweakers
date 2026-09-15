@@ -123,7 +123,7 @@ export function Library() {
       <Section
         id="big"
         title="Big slots"
-        lede="One column of the dial row — two for the filter, four for the envelope. Every body is a pure drawing of computed props, so a face is written once and reused everywhere; the gestures stay with the panel."
+        lede="One column of the dial row — two for a wide list or filter, four for the envelope. Every body is a pure drawing of computed props, so a face is written once and reused everywhere; the gestures stay with the panel."
       >
         <ul className="kit-cards">
           {BIG_SLOTS.map((item) => (
@@ -227,7 +227,7 @@ export function Library() {
           <dt>The wheel</dt>
           <dd>
             One detent, one control. The window always starts on a whole control, so
-            a two-column filter is never cut in half at the edge.
+            a two-column list or filter is never cut in half at the edge.
           </dd>
           <dt>The arrows</dt>
           <dd>
@@ -479,7 +479,7 @@ function Card({ item, onShow, tall }: { item: Specimen; onShow: (path: string) =
 
 /** The `data-kind` each face needs on its slot for the stylesheet to place it. */
 const DIAL_KIND: Record<string, string | undefined> = {
-  color: 'color', filter: 'filter', xy: 'xy', range: 'range', enum: 'enum',
+  color: 'color', filter: 'filter', xy: 'xy', range: 'range', enum: 'enum', 'enum-wide': 'enum',
   icon: 'enum', curve: 'enum', playback: 'enum', toggle: 'toggle', 'toggle-icon': 'toggle-icon',
   transfer: 'transfer',
   ramp: 'ramp', dial: 'dial', scope: 'scope', env: 'env',

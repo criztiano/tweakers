@@ -1,3 +1,4 @@
+import type { MovePadListView } from '../move-pad-list';
 import type { CSSProperties, ReactNode } from 'react';
 import { moveNumericDrawing, movePlaybackMode, type MovePlaybackMode } from '../move-visual-core';
 import { MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
@@ -696,7 +697,7 @@ function MoveSlotBadge({ on }: { on: boolean }) {
  * every pad in it keeps one option — so the hardware's one-thing-per-pad
  * rule still holds under the shared strip.
  */
-export type MovePadKind = 'toggle' | 'value' | 'action' | 'app' | 'bend' | 'wave' | 'tabs' | 'color';
+export type MovePadKind = 'toggle' | 'value' | 'action' | 'app' | 'bend' | 'wave' | 'tabs' | 'color' | 'list';
 
 /** A switch: the indicator top-left, the name beside it, the whole pad
  *  inverting when it is on. */
@@ -824,10 +825,25 @@ export function MovePadAppBody({ label, color }: { label?: string; color?: strin
   );
 }
 
+/** The checked list uses the same dark rows and marks as every other kit list. */
+export function MovePadListBody({ view, onCursor, onToggle }: {
+  view: MovePadListView; onCursor: (index: number) => void; onToggle: () => void;
+}) {
+  return <div className="tweakers-move-pad-list-body" aria-busy={view.pending || undefined}>
+    <ListScreen className="tweakers-move-dial-list" follow="center" label={view.label} disabled={view.pending} multiselect items={view.options.map(option => ({ ...option, checked: view.selected.includes(option.value) }))}
+      value={view.options[view.cursor]?.value} onFocusItem={value => onCursor(view.options.findIndex(option => option.value === value))}
+      onSelect={value => { onCursor(view.options.findIndex(option => option.value === value)); onToggle(); }} />
+    {(view.error || view.pending || !view.options.length) && <div className="tweakers-move-pad-list-status" role="status" aria-live="polite">
+      {view.error ?? (view.pending ? 'Starting…' : 'No options available.')}
+    </div>}
+  </div>;
+}
+
 /** The small slot dictionary — every pad face the kit knows. */
 export const MOVE_PAD_LIBRARY = {
   toggle: { description: 'a switch; the pad inverts when it is on', component: MovePadToggleBody },
   value: { description: 'a value the dial above can borrow — hold to peek, tap to latch', component: MovePadValueBody },
+  list: { description: 'a checked list above a small pad; its dial walks, Sample selects, a second pad press runs', component: MovePadListBody },
   action: { description: 'a button: a press runs the app’s action', component: MovePadActionBody },
   app: { description: 'a cell the app paints itself — a track, a slice, a step', component: MovePadAppBody },
   bend: { description: 'hold and drag to bend the envelope ramp above it', component: MovePadToggleBody },

@@ -11,7 +11,7 @@ adjustment, modulation, readouts and hardware column alignment.
 | --- | --- | --- | --- |
 | `default` | Bounded continuous quantity; signed values use `bipolar` / `origin` | Slider tuple, `slider`, bounded `number`; `MoveSlotDefaultBody` | 1 dial |
 | `value` | A value that is the headline, including a substituted value chip | Panel-selected presentation of `MoveSlotDefaultBody` | 1 dial |
-| `enum` | A stepped choice | `select.options`; `MoveSlotEnumBody` | 1 dial |
+| `enum` | A stepped choice | `select.options`, optional `moveSpan: 2` for a wider list; `MoveSlotEnumBody` | 1 dial by default; 2 adjacent dials with `moveSpan: 2`, either knob selects |
 | `icon` | A choice recognized by its picture | Select option `icon`; `MoveSlotEnumBody` | 1 dial |
 | `curve` | A choice whose value is a shape | Select `preview(option)` sampler; `MoveSlotEnumBody` | 1 dial |
 | `toggle` | A switch the page is about | `toggle` config with `moveSlot`; `MoveSlotToggleBody` | 1 dial |
@@ -23,6 +23,11 @@ adjustment, modulation, readouts and hardware column alignment.
 | `color` | One colour the page is about | `color` config; `MoveSlotColorBody` | 1 dial; hue on the knob, luminosity on volume, tap opens the editor |
 | `ramp` | A colour gradient of 2–4 stops, editable in place | `gradient` config; `MoveSlotRampBody` | 1 dial; tap opens the editor — the track buttons become the stops |
 | `balance` | A 0..1 mix between two sibling colour params | `balance` config (`{ type: 'balance', a, b }`); `MoveSlotRampBody` | 1 dial, a plain normalized value on the wire |
+
+A select with `moveSpan: 2` uses the same list face and gestures across two
+adjacent columns. Both knobs select the same value; later controls and their
+pads retain their physical column indices. `moveTabs` takes precedence and
+keeps the select on the pad row.
 
 The panel's standard surface is the fixed eight-column cluster: parameters past
 the eight dials become value chips on the pad row per the layout rules, and a
@@ -176,3 +181,36 @@ Check that adapter's export barrel and renderer before selecting a specialized
 control; React exports do not establish parity. Framework-neutral entry points
 include `tweakers/store`, `tweakers/timeline`, `tweakers/curve-composer-core`,
 `tweakers/modulation-core`, and `tweakers/modulation-store`.
+
+### Checked list action pad
+
+Attach `MovePadListStore` to a normal action in `movePads`. Its small slot
+opens a checked `ListScreen` directly above itself. The column dial walks the
+rows; Enter (Sampling), jog click or a row click toggles; a second press of the green pulsing pad submits (Capture also works).
+Back, Escape, clicking elsewhere, page changes and unmount release the dial.
+The underlying dial value is untouched. The wheel and volume keep their app
+meaning; this overlay never publishes a hardware screen list.
+
+```tsx
+useEffect(() => MovePadListStore.attach(panelId, 'extract', {
+  label: 'Parts', submitLabel: 'Extract',
+  options: [{ value: 'drums', label: 'Drums' }, { value: 'bass', label: 'Bass' }],
+  selected: ['drums'],
+  onSubmit: selected => extract(selected),
+}), [panelId, extract]);
+```
+
+Selections and cursor survive close/reopen for the attachment's lifetime.
+`open(panelId, path)` also opens it from an app's browser action. `getView()`
+is null when closed; `subscribe()` returns a release callback. Async submission
+locks selection and ignores duplicate Capture even if closed and reopened.
+A failure stays beside the list for an explicit retry. The expanded display
+shares the dial list styling, with no extra submission button: the owning pad becomes the green action.
+Reduced-motion mode keeps it steadily green. `activate(panelId, path)` opens
+a closed list or submits its current selection; `toggle` retains open/close behavior.
+The Library's **Parts** pad demonstrates the same API used by Primecut Extract.
+`moveKitOptions()` includes this registry as `padList`.
+
+`MovePadListBody` is the shared drawing in `MOVE_PAD_LIBRARY.list`; it uses
+`MovePadListView` plus cursor/toggle callbacks. `MoveFunctions.push` keeps
+an overlay above app reattachments and restores the latest app handler.

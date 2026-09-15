@@ -1,4 +1,4 @@
-import { P as PanelConfig, C as ControlMeta } from './TweakStore-C9BYl1QG.js';
+import { P as PanelConfig, C as ControlMeta } from './TweakStore-CjJJljPQ.js';
 import { ModPageLayout } from './modulation-core.js';
 import { XYValue } from './xy-pad-core.js';
 import { RangeValue } from './range-slider-core.js';
@@ -83,9 +83,8 @@ declare const isToggleDial: (c: ControlMeta) => boolean;
 /** Everything the hardware turns: the controls that claim a dial slot. */
 declare const isMoveDial: (c: ControlMeta) => boolean;
 /**
- * How many dial columns a control claims. The filter is the kit's first
- * 2-slot control: its picture spans two columns, and on the hardware the
- * left column's knob turns cutoff while the right column's turns resonance.
+ * How many dial columns a control claims. Filters give each knob its own
+ * axis; a two-column select gives both knobs the same list.
  */
 declare const dialSpan: (c: ControlMeta | undefined) => number;
 /** True when column i only continues the span-2 dial sitting at i-1. */

@@ -35,6 +35,10 @@ export type ListScreenItem =
     };
 
 export interface ListScreenProps {
+  label?: string;
+  disabled?: boolean;
+  multiselect?: boolean;
+  onFocusItem?: (value: string) => void;
   /** Rows in display order. */
   items: ListScreenItem[];
   /** The selected item's value. */
@@ -127,6 +131,10 @@ function ListScreenMark({ detail, checked }: { detail?: ListScreenDetail; checke
  */
 export function ListScreen({
   items,
+  label,
+  disabled,
+  multiselect,
+  onFocusItem,
   value,
   onSelect,
   wide,
@@ -224,6 +232,8 @@ export function ListScreen({
       style={style}
       data-wide={wide || undefined}
       role="listbox"
+      aria-label={label}
+      aria-multiselectable={multiselect || undefined}
       onKeyDown={onKeyDown}
       data-back={back ? true : undefined}
     >
@@ -238,8 +248,9 @@ export function ListScreen({
           <button
             key={rowValue}
             type="button"
+            disabled={disabled}
             role="option"
-            aria-selected={selected}
+            aria-selected={multiselect ? checked : selected}
             className="tweakers-list-screen-row"
             data-selected={selected || undefined}
             data-tagged={tag ? true : undefined}
@@ -248,6 +259,7 @@ export function ListScreen({
             aria-checked={checked}
             data-muted={itemMuted(item) || undefined}
             data-icon={icon ? true : undefined}
+            onFocus={() => onFocusItem?.(rowValue)}
             onClick={() => onSelect?.(rowValue)}
           >
             {icon && <img className="tweakers-list-screen-icon" src={icon} alt="" aria-hidden="true" />}
