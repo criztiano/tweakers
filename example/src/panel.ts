@@ -226,7 +226,7 @@ export function registerLibraryPanel() {
   });
 
   MovePadListStore.attach(PANEL_ID, 'parts', {
-    label: 'Parts', options: ['Drums', 'Bass', 'Voice', 'Instru'].map(label => ({ value: label.toLowerCase(), label })),
+    label: 'Parts', submitLabel: 'Extract', options: ['Drums', 'Bass', 'Voice', 'Instru'].map(label => ({ value: label.toLowerCase(), label })),
     selected: ['drums'],
     onSubmit: selected => { moveNotify.add({ title: `Selected ${selected.join(', ')}` }); },
   });

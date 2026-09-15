@@ -64,3 +64,31 @@ it('shares in-flight submission across replacement attachments and releases it o
   store.open('page', 'extract'); await store.submit();
   expect(nextSubmit).toHaveBeenCalledOnce();
 });
+it('uses the same pad to open and submit, keeping Back as dismissal and Capture out of the chips', async () => {
+  const submit = vi.fn();
+  const store = setup(submit);
+  store.close();
+  store.activate('page', 'extract');
+  expect(store.getView()?.submitLabel).toBe('Extract');
+  expect(MoveFunctions.chips().some(chip => chip.name === 'capture')).toBe(false);
+  MoveFunctions.run('sample');
+  MoveFunctions.run('back');
+  expect(store.getView()).toBeNull();
+  expect(submit).not.toHaveBeenCalled();
+  store.activate('page', 'extract');
+  await store.activate('page', 'extract');
+  expect(submit).toHaveBeenCalledExactlyOnceWith(['drums']);
+  expect(store.getView()).toBeNull();
+});
+it('does not submit twice through repeated pad presses while pending', async () => {
+  let finish!: () => void;
+  const submit = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+  const store = setup(submit);
+  store.toggleCursor();
+  const pending = store.activate('page', 'extract');
+  await store.activate('page', 'extract');
+  expect(submit).toHaveBeenCalledOnce();
+  expect(store.getView()?.pending).toBe(true);
+  finish(); await pending;
+  expect(store.getView()).toBeNull();
+});

@@ -3089,6 +3089,7 @@ interface MovePadListView {
     panelId: string;
     path: string;
     label: string;
+    submitLabel?: string;
     options: MovePadListOption[];
     selected: string[];
     cursor: number;
@@ -3111,6 +3112,8 @@ declare class MovePadListStoreClass {
     selected(panelId: string, path: string): string[];
     attach(panelId: string, path: string, config: MovePadListConfig): () => void;
     open(panelId: string, path: string): void;
+    /** The same pad opens its list, then becomes its submission action. */
+    activate(panelId: string, path: string): Promise<void> | undefined;
     toggle(panelId: string, path: string): void;
     close(): void;
     setCursor(index: number): void;
@@ -3488,7 +3491,7 @@ declare const MOVE_PAD_LIBRARY: {
         readonly component: typeof MovePadValueBody;
     };
     readonly list: {
-        readonly description: "a checked list above a small pad; its dial walks, Enter selects, Capture runs";
+        readonly description: "a checked list above a small pad; its dial walks, Sample selects, a second pad press runs";
         readonly component: typeof MovePadListBody;
     };
     readonly action: {

@@ -186,7 +186,7 @@ include `tweakers/store`, `tweakers/timeline`, `tweakers/curve-composer-core`,
 
 Attach `MovePadListStore` to a normal action in `movePads`. Its small slot
 opens a checked `ListScreen` directly above itself. The column dial walks the
-rows; Enter (Sampling), jog click or a row click toggles; Capture submits.
+rows; Enter (Sampling), jog click or a row click toggles; a second press of the green pulsing pad submits (Capture also works).
 Back, Escape, clicking elsewhere, page changes and unmount release the dial.
 The underlying dial value is untouched. The wheel and volume keep their app
 meaning; this overlay never publishes a hardware screen list.
@@ -205,8 +205,9 @@ Selections and cursor survive close/reopen for the attachment's lifetime.
 is null when closed; `subscribe()` returns a release callback. Async submission
 locks selection and ignores duplicate Capture even if closed and reopened.
 A failure stays beside the list for an explicit retry. The expanded display
-shares the dial list styling, with the kit Capture chip in its upper-right
-corner so submission stays reachable above the rows.
+shares the dial list styling, with no extra submission button: the owning pad becomes the green action.
+Reduced-motion mode keeps it steadily green. `activate(panelId, path)` opens
+a closed list or submits its current selection; `toggle` retains open/close behavior.
 The Library's **Parts** pad demonstrates the same API used by Primecut Extract.
 `moveKitOptions()` includes this registry as `padList`.
 

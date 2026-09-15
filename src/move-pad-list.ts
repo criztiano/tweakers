@@ -13,6 +13,7 @@ export interface MovePadListView {
   panelId: string;
   path: string;
   label: string;
+  submitLabel?: string;
   options: MovePadListOption[];
   selected: string[];
   cursor: number;
@@ -56,16 +57,21 @@ export class MovePadListStoreClass {
     if (!attachment || TweakStore.isDisabled(panelId, path)) return;
     this.close();
     const { config } = attachment;
-    this.view = { panelId, path, label: config.label ?? path, options: config.options, selected: [...attachment.selected], cursor: Math.min(attachment.cursor, Math.max(0, config.options.length - 1)), pending: attachment.submission.pending, error: null };
+    this.view = { panelId, path, label: config.label ?? path, submitLabel: config.submitLabel, options: config.options, selected: [...attachment.selected], cursor: Math.min(attachment.cursor, Math.max(0, config.options.length - 1)), pending: attachment.submission.pending, error: null };
     this.releases = [
       MoveFunctions.push('back', () => this.close(), { label: 'close list' }),
       MoveFunctions.push('sample', () => this.toggleCursor(), { label: 'select' }),
       MoveFunctions.push('up', () => this.move(-1)),
       MoveFunctions.push('down', () => this.move(1)),
       MoveFunctions.push('jog_click', () => this.toggleCursor(), { label: 'select', chip: false }),
-      MoveFunctions.push('capture', () => { void this.submit(); }, { label: config.submitLabel ?? config.label ?? 'run selected' }),
+      MoveFunctions.push('capture', () => { void this.submit(); }, { label: config.submitLabel ?? config.label ?? 'run selected', chip: false }),
     ];
     this.notify();
+  }
+  /** The same pad opens its list, then becomes its submission action. */
+  activate(panelId: string, path: string) {
+    if (this.view?.panelId === panelId && this.view.path === path) return this.submit();
+    this.open(panelId, path);
   }
   toggle(panelId: string, path: string) {
     if (this.view?.panelId === panelId && this.view.path === path) this.close();
@@ -102,7 +108,7 @@ export class MovePadListStoreClass {
   async submit() {
     const view = this.view;
     if (!view || view.pending) return;
-    if (!view.selected.length) { this.view = { ...view, error: 'Select at least one item, then press Capture.' }; this.notify(); return; }
+    if (!view.selected.length) { this.view = { ...view, error: 'Select at least one item, then tap the pad again.' }; this.notify(); return; }
     const attachment = this.attachments.get(this.key(view.panelId, view.path));
     if (!attachment || attachment.submission.pending) return;
     attachment.submission.pending = true;
@@ -115,7 +121,7 @@ export class MovePadListStoreClass {
     } catch (error) {
       attachment.submission.pending = false;
       if (this.attachments.get(this.key(view.panelId, view.path))?.submission !== attachment.submission || this.view?.panelId !== view.panelId || this.view.path !== view.path) return;
-      this.view = { ...this.view, pending: false, error: error instanceof Error ? error.message : 'Could not start. Press Capture to retry.' };
+      this.view = { ...this.view, pending: false, error: error instanceof Error ? error.message : 'Could not start. Tap the pad again to retry.' };
       this.notify();
     }
   }

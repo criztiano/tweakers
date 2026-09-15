@@ -1,7 +1,5 @@
 import { useEffect, useRef } from 'react';
 import { MovePadListStore, type MovePadListView } from '../move-pad-list';
-import { MoveFunctions } from '../move-functions';
-import { MoveFunctionChipButton } from './MoveFunctionChips';
 import { MovePadActionBody, MovePadListBody } from './move-slots';
 
 /** The action pad anchors its list; the shared list body supplies every row. */
@@ -19,7 +17,7 @@ export function MovePadList({ panelId, path, label, view, disabled }: {
     const key = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (event.target instanceof HTMLElement && (event.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName))) return;
-      if (['Enter', ' '].includes(event.key) && (event.target as Element).closest?.('.tweakers-move-chip[data-name="capture"]')) return;
+      if (['Enter', ' '].includes(event.key) && event.target === root.current?.querySelector('button')) return;
       if (!['Escape', 'Enter', ' ', 'ArrowUp', 'ArrowDown', 'x', 'X'].includes(event.key)) return;
       event.preventDefault(); event.stopImmediatePropagation();
       if (event.repeat && ['Enter', ' '].includes(event.key)) return;
@@ -40,16 +38,13 @@ export function MovePadList({ panelId, path, label, view, disabled }: {
     };
   }, [open]);
   return <div className="tweakers-move-pad-list-anchor" ref={root}>
-    <button type="button" className="tweakers-move-pad" data-kind="list" data-latched={open || undefined}
-      aria-expanded={open} aria-haspopup="listbox" disabled={disabled}
-      onClick={() => MovePadListStore.toggle(panelId, path)}>
-      <MovePadActionBody label={label} />
+    <button type="button" className="tweakers-move-pad" data-kind="list" data-confirm={open || undefined} data-pending={open && view.pending || undefined}
+      aria-expanded={open} aria-haspopup="listbox" aria-busy={open && view.pending || undefined} disabled={disabled || (open && view.pending)}
+      onClick={() => { void MovePadListStore.activate(panelId, path); }}>
+      <MovePadActionBody label={open ? view.submitLabel ?? label : label} />
     </button>
     {open && <div className="tweakers-move-dial-screen tweakers-move-pad-list-overlay" onWheel={event => { event.stopPropagation(); MovePadListStore.move(event.deltaY); }}>
       <MovePadListBody view={view} onCursor={index => MovePadListStore.setCursor(index)} onToggle={() => MovePadListStore.toggleCursor()} />
-      <div className="tweakers-move-pad-list-submit">
-        {MoveFunctions.chips().filter(chip => chip.name === 'capture').map(chip => <MoveFunctionChipButton key={chip.name} chip={{ ...chip, color: undefined, variant: 'highlight' }} disabled={view.pending} />)}
-      </div>
     </div>}
   </div>;
 }

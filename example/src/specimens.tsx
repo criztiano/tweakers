@@ -361,7 +361,7 @@ export const BIG_SLOTS: Specimen[] = [
 
 export const SMALL_SLOTS: Specimen[] = [
   { kind: 'list', description: MOVE_PAD_LIBRARY.list.description,
-    note: 'Tap Parts in the live panel. Its dial walks the checked list; Enter selects and Capture submits.',
+    note: 'Tap Parts in the live panel. Its dial walks the checked list; Sample selects, tap the green pad again to submit, and Back closes.',
     render: () => <MovePadActionBody label="Parts" /> },
   {
     kind: 'toggle',

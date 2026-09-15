@@ -264,7 +264,7 @@ var MovePadListStoreClass = class {
     if (!attachment || TweakStore2.isDisabled(panelId, path)) return;
     this.close();
     const { config } = attachment;
-    this.view = { panelId, path, label: config.label ?? path, options: config.options, selected: [...attachment.selected], cursor: Math.min(attachment.cursor, Math.max(0, config.options.length - 1)), pending: attachment.submission.pending, error: null };
+    this.view = { panelId, path, label: config.label ?? path, submitLabel: config.submitLabel, options: config.options, selected: [...attachment.selected], cursor: Math.min(attachment.cursor, Math.max(0, config.options.length - 1)), pending: attachment.submission.pending, error: null };
     this.releases = [
       MoveFunctions.push("back", () => this.close(), { label: "close list" }),
       MoveFunctions.push("sample", () => this.toggleCursor(), { label: "select" }),
@@ -273,9 +273,14 @@ var MovePadListStoreClass = class {
       MoveFunctions.push("jog_click", () => this.toggleCursor(), { label: "select", chip: false }),
       MoveFunctions.push("capture", () => {
         void this.submit();
-      }, { label: config.submitLabel ?? config.label ?? "run selected" })
+      }, { label: config.submitLabel ?? config.label ?? "run selected", chip: false })
     ];
     this.notify();
+  }
+  /** The same pad opens its list, then becomes its submission action. */
+  activate(panelId, path) {
+    if (this.view?.panelId === panelId && this.view.path === path) return this.submit();
+    this.open(panelId, path);
   }
   toggle(panelId, path) {
     if (this.view?.panelId === panelId && this.view.path === path) this.close();
@@ -320,7 +325,7 @@ var MovePadListStoreClass = class {
     const view = this.view;
     if (!view || view.pending) return;
     if (!view.selected.length) {
-      this.view = { ...view, error: "Select at least one item, then press Capture." };
+      this.view = { ...view, error: "Select at least one item, then tap the pad again." };
       this.notify();
       return;
     }
@@ -337,7 +342,7 @@ var MovePadListStoreClass = class {
     } catch (error) {
       attachment.submission.pending = false;
       if (this.attachments.get(this.key(view.panelId, view.path))?.submission !== attachment.submission || this.view?.panelId !== view.panelId || this.view.path !== view.path) return;
-      this.view = { ...this.view, pending: false, error: error instanceof Error ? error.message : "Could not start. Press Capture to retry." };
+      this.view = { ...this.view, pending: false, error: error instanceof Error ? error.message : "Could not start. Tap the pad again to retry." };
       this.notify();
     }
   }
@@ -345,10 +350,115 @@ var MovePadListStoreClass = class {
 var MovePadListStore = new MovePadListStoreClass();
 
 // src/components/MovePadList.tsx
-import { useEffect as useEffect3, useRef as useRef3 } from "react";
+import { useEffect as useEffect2, useRef as useRef2 } from "react";
 
-// src/components/MoveFunctionChips.tsx
-import { useEffect, useRef, useState } from "react";
+// src/move-visual-core.ts
+var clamp01 = (value) => Math.max(0, Math.min(1, value));
+var between = (value, min, max) => value >= min && value <= max;
+function moveNumericDrawing(meta, value) {
+  const visual = meta.moveVisual;
+  const { min, max } = meta;
+  if (meta.type !== "slider" || !visual || typeof value !== "number" || !Number.isFinite(value) || !Number.isFinite(min) || !Number.isFinite(max) || max <= min) return null;
+  const lo = min;
+  const hi = max;
+  const v = Math.max(lo, Math.min(hi, value));
+  switch (visual.kind) {
+    case "opacity": {
+      const opaque = visual.opaqueValue ?? 1;
+      if (!Number.isFinite(opaque) || opaque <= 0 || lo < 0 || hi > opaque) return null;
+      return { kind: "opacity", alpha: v / opaque };
+    }
+    case "blur":
+      return lo >= 0 ? { kind: "blur", radius: v } : null;
+    case "pan": {
+      const left = visual.left ?? -1;
+      const center = visual.center ?? 0;
+      const right = visual.right ?? 1;
+      if (![left, center, right].every(Number.isFinite) || left >= center || center >= right || lo < left || hi > right) return null;
+      const position = v <= center ? (v - left) / (center - left) / 2 : 0.5 + (v - center) / (right - center) / 2;
+      return { kind: "pan", position: clamp01(position) };
+    }
+    case "stereo-width": {
+      const mono = visual.mono ?? 0;
+      const unity = visual.unity ?? 1;
+      if (![mono, unity].every(Number.isFinite) || unity <= mono || lo < mono || hi <= mono) return null;
+      return {
+        kind: "stereo-width",
+        separation: (v - mono) / (hi - mono),
+        unity: between(unity, lo, hi) ? (unity - mono) / (hi - mono) : null
+      };
+    }
+    case "pitch":
+      if (visual.unit !== void 0 && visual.unit !== "semitones" && visual.unit !== "cents") return null;
+      return { kind: "pitch", position: (v - lo) / (hi - lo), zero: between(0, lo, hi) ? -lo / (hi - lo) : null };
+    case "trim":
+      if (visual.edge !== "start" && visual.edge !== "end") return null;
+      return { kind: "trim", edge: visual.edge, position: clamp01((v - lo) / (hi - lo)) };
+    default:
+      return null;
+  }
+}
+function movePlaybackMode(meta, value) {
+  if (meta.type !== "select" || meta.moveVisual?.kind !== "playback" || typeof value !== "string") return null;
+  if (!meta.options?.some((option) => (typeof option === "string" ? option : option.value) === value)) return null;
+  const modes = meta.moveVisual.modes;
+  if (modes !== void 0 && (typeof modes !== "object" || modes === null || Array.isArray(modes))) return null;
+  const mode = modes ? Object.prototype.hasOwnProperty.call(modes, value) ? modes[value] : void 0 : value;
+  return mode === "forward" || mode === "reverse" || mode === "ping-pong" || mode === "scissors" ? mode : null;
+}
+function moveVisualReading(meta, value) {
+  if (meta.formatValue) return meta.formatValue(value);
+  const number = Number(value.toFixed(2)).toString();
+  if (meta.unit) return `${number}${meta.unit}`;
+  if (!moveNumericDrawing(meta, value)) return number;
+  const visual = meta.moveVisual;
+  switch (visual.kind) {
+    case "opacity":
+      return `${Number((value / (visual.opaqueValue ?? 1) * 100).toFixed(1))}%`;
+    case "blur":
+      return `${number} px`;
+    case "pan": {
+      const center = visual.center ?? 0;
+      if (value === center) return "C";
+      const extent = value < center ? center - (visual.left ?? -1) : (visual.right ?? 1) - center;
+      return `${value < center ? "L" : "R"} ${Number((Math.abs(value - center) / extent * 100).toFixed(1))}%`;
+    }
+    case "stereo-width":
+      return value === (visual.mono ?? 0) ? "Mono" : `${Number(((value - (visual.mono ?? 0)) / ((visual.unity ?? 1) - (visual.mono ?? 0))).toFixed(2))}\xD7`;
+    case "pitch":
+      return `${value > 0 ? "+" : ""}${number} ${visual.unit === "cents" ? "ct" : "st"}`;
+    case "trim":
+      return `${number} s`;
+    default:
+      return number;
+  }
+}
+function moveKeyboardValue(meta, value, key, fine = false) {
+  const direction = key === "ArrowRight" || key === "ArrowUp" || key === "PageUp" ? 1 : key === "ArrowLeft" || key === "ArrowDown" || key === "PageDown" ? -1 : 0;
+  if (!direction && key !== "Home" && key !== "End") return null;
+  if (meta.type === "select") {
+    const options = meta.options ?? [];
+    if (!options.length) return null;
+    const optionValue = (option) => typeof option === "string" ? option : option.value;
+    const index = Math.max(0, options.findIndex((option) => optionValue(option) === value));
+    const next2 = key === "Home" ? 0 : key === "End" ? options.length - 1 : Math.max(0, Math.min(options.length - 1, index + direction));
+    return optionValue(options[next2]);
+  }
+  const { min, max } = meta;
+  if (typeof value !== "number" || !Number.isFinite(value) || !Number.isFinite(min) || !Number.isFinite(max) || max <= min) return null;
+  if (key === "Home") return min;
+  if (key === "End") return max;
+  const range = max - min;
+  if (meta.step === 0) {
+    const delta = range / (fine ? 1e3 : key.startsWith("Page") ? 10 : 100);
+    return Math.max(min, Math.min(max, Number((value + direction * delta).toPrecision(12))));
+  }
+  const step = meta.step && Number.isFinite(meta.step) && meta.step > 0 ? meta.step : range / 100;
+  const coarseSteps = Math.max(1, Math.round(range / 100 / step));
+  const multiplier = fine ? 1 : key.startsWith("Page") ? coarseSteps * 10 : coarseSteps;
+  const next = Math.round((value + direction * step * multiplier) / step) * step;
+  return Math.max(min, Math.min(max, Number(next.toPrecision(12))));
+}
 
 // src/icons.ts
 var ICON_CHEVRON_RIGHT = "M9.5 6L15.5 12L9.5 18";
@@ -525,196 +635,18 @@ var LUCIDE_ICONS = {
 var ICON_BADGE_OFF = "M17.203 19.3594L4.6875 6.7969C3.6094 8.25 3 10.0781 3 12C3 16.9688 7.031 21 12 21C13.969 21 15.75 20.3906 17.203 19.3594ZM19.359 17.2031C20.391 15.75 21 13.9219 21 12C21 7.0312 16.969 3 12 3C10.078 3 8.25 3.6094 6.797 4.6875L19.359 17.2031ZM0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24C5.391 24 0 18.6094 0 12Z";
 var ICON_BADGE_ON = "M12 24C5.391 24 0 18.6094 0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24ZM17.531 6.8438C17.016 6.4688 16.313 6.5625 15.984 7.0781L10.359 14.7656L7.922 12.3281C7.5 11.9062 6.75 11.9062 6.328 12.3281C5.906 12.7969 5.906 13.5 6.328 13.9219L9.703 17.2969C9.937 17.5312 10.266 17.6719 10.594 17.625C10.922 17.625 11.203 17.4375 11.391 17.1562L17.766 8.3906C18.141 7.9219 18.047 7.2188 17.531 6.8438Z";
 
-// src/components/MoveFunctionChips.tsx
-import { jsx, jsxs } from "react/jsx-runtime";
-var PRESS_FLASH_MS = 160;
-function MoveFunctionGlyphIcon({ glyph, className = "tweakers-move-chip-icon" }) {
-  return /* @__PURE__ */ jsxs("svg", { className, width: glyph.size, height: glyph.size, viewBox: glyph.viewBox, fill: "none", children: [
-    glyph.paths?.map((d) => /* @__PURE__ */ jsx("path", { d, stroke: "currentColor", strokeWidth: "1.5", strokeLinecap: "round", strokeLinejoin: "round" }, d)),
-    glyph.fills?.map((d) => /* @__PURE__ */ jsx("path", { d, fill: "currentColor" }, d)),
-    glyph.circles?.map((c) => /* @__PURE__ */ jsx("circle", { ...c, fill: "currentColor" }, `${c.cx},${c.cy}`)),
-    glyph.text && // A letter mark (mute's "M"): Helvetica, centred on the same grid
-    // the drawn marks share, weighted to read like their 1.5px stroke.
-    /* @__PURE__ */ jsx(
-      "text",
-      {
-        x: "7",
-        y: "7.5",
-        textAnchor: "middle",
-        dominantBaseline: "central",
-        fontFamily: MOVE_GLYPH_TEXT_FONT,
-        fontSize: "12",
-        fontWeight: "bold",
-        fill: "currentColor",
-        children: glyph.text
-      }
-    )
-  ] });
-}
-function MoveFunctionChipButton({ chip, disabled }) {
-  const [pressed, setPressed] = useState(false);
-  const flashTimer = useRef(void 0);
-  useEffect(() => {
-    const unsubscribe = MoveFunctions.subscribeRuns((ran) => {
-      if (ran !== chip.name) return;
-      setPressed(true);
-      clearTimeout(flashTimer.current);
-      flashTimer.current = setTimeout(() => setPressed(false), PRESS_FLASH_MS);
-    });
-    return () => {
-      unsubscribe();
-      clearTimeout(flashTimer.current);
-    };
-  }, [chip.name]);
-  return /* @__PURE__ */ jsxs(
-    "button",
-    {
-      type: "button",
-      className: "tweakers-move-chip",
-      disabled,
-      "data-name": chip.name,
-      "data-variant": chip.variant,
-      "data-color": chip.color,
-      "data-pressed": pressed || void 0,
-      style: chip.color ? { background: MOVE_PALETTE[chip.color] } : void 0,
-      onClick: () => MoveFunctions.run(chip.name, { shift: false }),
-      children: [
-        /* @__PURE__ */ jsx(MoveFunctionGlyphIcon, { glyph: MOVE_FUNCTION_ICONS[chip.name] }),
-        chip.label
-      ]
-    }
-  );
-}
-function MoveFunctionChips({ className }) {
-  const [chips, setChips] = useState(() => MoveFunctions.chips());
-  useEffect(() => {
-    setChips(MoveFunctions.chips());
-    return MoveFunctions.subscribe(() => setChips(MoveFunctions.chips()));
-  }, []);
-  if (!chips.length) return null;
-  return /* @__PURE__ */ jsx("div", { className: className ? `tweakers-move-chips ${className}` : "tweakers-move-chips", children: chips.map((chip) => /* @__PURE__ */ jsx(MoveFunctionChipButton, { chip }, chip.name)) });
-}
-
-// src/move-visual-core.ts
-var clamp01 = (value) => Math.max(0, Math.min(1, value));
-var between = (value, min, max) => value >= min && value <= max;
-function moveNumericDrawing(meta, value) {
-  const visual = meta.moveVisual;
-  const { min, max } = meta;
-  if (meta.type !== "slider" || !visual || typeof value !== "number" || !Number.isFinite(value) || !Number.isFinite(min) || !Number.isFinite(max) || max <= min) return null;
-  const lo = min;
-  const hi = max;
-  const v = Math.max(lo, Math.min(hi, value));
-  switch (visual.kind) {
-    case "opacity": {
-      const opaque = visual.opaqueValue ?? 1;
-      if (!Number.isFinite(opaque) || opaque <= 0 || lo < 0 || hi > opaque) return null;
-      return { kind: "opacity", alpha: v / opaque };
-    }
-    case "blur":
-      return lo >= 0 ? { kind: "blur", radius: v } : null;
-    case "pan": {
-      const left = visual.left ?? -1;
-      const center = visual.center ?? 0;
-      const right = visual.right ?? 1;
-      if (![left, center, right].every(Number.isFinite) || left >= center || center >= right || lo < left || hi > right) return null;
-      const position = v <= center ? (v - left) / (center - left) / 2 : 0.5 + (v - center) / (right - center) / 2;
-      return { kind: "pan", position: clamp01(position) };
-    }
-    case "stereo-width": {
-      const mono = visual.mono ?? 0;
-      const unity = visual.unity ?? 1;
-      if (![mono, unity].every(Number.isFinite) || unity <= mono || lo < mono || hi <= mono) return null;
-      return {
-        kind: "stereo-width",
-        separation: (v - mono) / (hi - mono),
-        unity: between(unity, lo, hi) ? (unity - mono) / (hi - mono) : null
-      };
-    }
-    case "pitch":
-      if (visual.unit !== void 0 && visual.unit !== "semitones" && visual.unit !== "cents") return null;
-      return { kind: "pitch", position: (v - lo) / (hi - lo), zero: between(0, lo, hi) ? -lo / (hi - lo) : null };
-    case "trim":
-      if (visual.edge !== "start" && visual.edge !== "end") return null;
-      return { kind: "trim", edge: visual.edge, position: clamp01((v - lo) / (hi - lo)) };
-    default:
-      return null;
-  }
-}
-function movePlaybackMode(meta, value) {
-  if (meta.type !== "select" || meta.moveVisual?.kind !== "playback" || typeof value !== "string") return null;
-  if (!meta.options?.some((option) => (typeof option === "string" ? option : option.value) === value)) return null;
-  const modes = meta.moveVisual.modes;
-  if (modes !== void 0 && (typeof modes !== "object" || modes === null || Array.isArray(modes))) return null;
-  const mode = modes ? Object.prototype.hasOwnProperty.call(modes, value) ? modes[value] : void 0 : value;
-  return mode === "forward" || mode === "reverse" || mode === "ping-pong" || mode === "scissors" ? mode : null;
-}
-function moveVisualReading(meta, value) {
-  if (meta.formatValue) return meta.formatValue(value);
-  const number = Number(value.toFixed(2)).toString();
-  if (meta.unit) return `${number}${meta.unit}`;
-  if (!moveNumericDrawing(meta, value)) return number;
-  const visual = meta.moveVisual;
-  switch (visual.kind) {
-    case "opacity":
-      return `${Number((value / (visual.opaqueValue ?? 1) * 100).toFixed(1))}%`;
-    case "blur":
-      return `${number} px`;
-    case "pan": {
-      const center = visual.center ?? 0;
-      if (value === center) return "C";
-      const extent = value < center ? center - (visual.left ?? -1) : (visual.right ?? 1) - center;
-      return `${value < center ? "L" : "R"} ${Number((Math.abs(value - center) / extent * 100).toFixed(1))}%`;
-    }
-    case "stereo-width":
-      return value === (visual.mono ?? 0) ? "Mono" : `${Number(((value - (visual.mono ?? 0)) / ((visual.unity ?? 1) - (visual.mono ?? 0))).toFixed(2))}\xD7`;
-    case "pitch":
-      return `${value > 0 ? "+" : ""}${number} ${visual.unit === "cents" ? "ct" : "st"}`;
-    case "trim":
-      return `${number} s`;
-    default:
-      return number;
-  }
-}
-function moveKeyboardValue(meta, value, key, fine = false) {
-  const direction = key === "ArrowRight" || key === "ArrowUp" || key === "PageUp" ? 1 : key === "ArrowLeft" || key === "ArrowDown" || key === "PageDown" ? -1 : 0;
-  if (!direction && key !== "Home" && key !== "End") return null;
-  if (meta.type === "select") {
-    const options = meta.options ?? [];
-    if (!options.length) return null;
-    const optionValue = (option) => typeof option === "string" ? option : option.value;
-    const index = Math.max(0, options.findIndex((option) => optionValue(option) === value));
-    const next2 = key === "Home" ? 0 : key === "End" ? options.length - 1 : Math.max(0, Math.min(options.length - 1, index + direction));
-    return optionValue(options[next2]);
-  }
-  const { min, max } = meta;
-  if (typeof value !== "number" || !Number.isFinite(value) || !Number.isFinite(min) || !Number.isFinite(max) || max <= min) return null;
-  if (key === "Home") return min;
-  if (key === "End") return max;
-  const range = max - min;
-  if (meta.step === 0) {
-    const delta = range / (fine ? 1e3 : key.startsWith("Page") ? 10 : 100);
-    return Math.max(min, Math.min(max, Number((value + direction * delta).toPrecision(12))));
-  }
-  const step = meta.step && Number.isFinite(meta.step) && meta.step > 0 ? meta.step : range / 100;
-  const coarseSteps = Math.max(1, Math.round(range / 100 / step));
-  const multiplier = fine ? 1 : key.startsWith("Page") ? coarseSteps * 10 : coarseSteps;
-  const next = Math.round((value + direction * step * multiplier) / step) * step;
-  return Math.max(min, Math.min(max, Number(next.toPrecision(12))));
-}
-
 // src/components/move-visuals.tsx
-import { Fragment, jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
+import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 function MoveSlotNumericBody({ label, value, drawing }) {
-  return /* @__PURE__ */ jsxs2(Fragment, { children: [
-    /* @__PURE__ */ jsx2("span", { className: "tweakers-move-dial-tag", children: label }),
-    /* @__PURE__ */ jsxs2("svg", { className: "tweakers-move-visual", viewBox: "0 0 100 60", "aria-hidden": "true", children: [
-      drawing.kind === "opacity" && /* @__PURE__ */ jsxs2(Fragment, { children: [
-        /* @__PURE__ */ jsx2("circle", { className: "tweakers-move-visual-guide", cx: "40", cy: "30", r: "18" }),
-        /* @__PURE__ */ jsx2("circle", { className: "tweakers-move-visual-guide", cx: "60", cy: "30", r: "18" }),
-        /* @__PURE__ */ jsx2("circle", { className: "tweakers-move-visual-solid", cx: "60", cy: "30", r: "18", opacity: drawing.alpha })
+  return /* @__PURE__ */ jsxs(Fragment, { children: [
+    /* @__PURE__ */ jsx("span", { className: "tweakers-move-dial-tag", children: label }),
+    /* @__PURE__ */ jsxs("svg", { className: "tweakers-move-visual", viewBox: "0 0 100 60", "aria-hidden": "true", children: [
+      drawing.kind === "opacity" && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("circle", { className: "tweakers-move-visual-guide", cx: "40", cy: "30", r: "18" }),
+        /* @__PURE__ */ jsx("circle", { className: "tweakers-move-visual-guide", cx: "60", cy: "30", r: "18" }),
+        /* @__PURE__ */ jsx("circle", { className: "tweakers-move-visual-solid", cx: "60", cy: "30", r: "18", opacity: drawing.alpha })
       ] }),
-      drawing.kind === "blur" && /* @__PURE__ */ jsx2(
+      drawing.kind === "blur" && /* @__PURE__ */ jsx(
         "circle",
         {
           className: "tweakers-move-visual-solid",
@@ -724,10 +656,10 @@ function MoveSlotNumericBody({ label, value, drawing }) {
           style: { filter: `blur(${drawing.radius}px)` }
         }
       ),
-      drawing.kind === "pan" && /* @__PURE__ */ jsxs2(Fragment, { children: [
-        /* @__PURE__ */ jsx2("path", { className: "tweakers-move-visual-guide", d: "M16 30H84M50 12V48" }),
-        /* @__PURE__ */ jsx2("path", { className: "tweakers-move-visual-line", d: `M50 30H${16 + drawing.position * 68}` }),
-        /* @__PURE__ */ jsx2(
+      drawing.kind === "pan" && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("path", { className: "tweakers-move-visual-guide", d: "M16 30H84M50 12V48" }),
+        /* @__PURE__ */ jsx("path", { className: "tweakers-move-visual-line", d: `M50 30H${16 + drawing.position * 68}` }),
+        /* @__PURE__ */ jsx(
           "circle",
           {
             className: "tweakers-move-visual-point",
@@ -737,30 +669,30 @@ function MoveSlotNumericBody({ label, value, drawing }) {
             r: "5"
           }
         ),
-        /* @__PURE__ */ jsx2("text", { x: "5", y: "30", dominantBaseline: "central", children: "L" }),
-        /* @__PURE__ */ jsx2("text", { x: "95", y: "30", dominantBaseline: "central", children: "R" })
+        /* @__PURE__ */ jsx("text", { x: "5", y: "30", dominantBaseline: "central", children: "L" }),
+        /* @__PURE__ */ jsx("text", { x: "95", y: "30", dominantBaseline: "central", children: "R" })
       ] }),
-      drawing.kind === "stereo-width" && /* @__PURE__ */ jsxs2(Fragment, { children: [
-        /* @__PURE__ */ jsx2("path", { className: "tweakers-move-visual-guide", d: "M50 13V47" }),
-        drawing.unity !== null && /* @__PURE__ */ jsxs2("g", { className: "tweakers-move-visual-reference", children: [
-          /* @__PURE__ */ jsx2("ellipse", { cx: 50 - drawing.unity * 28, cy: "30", rx: "12", ry: "17" }),
-          /* @__PURE__ */ jsx2("ellipse", { cx: 50 + drawing.unity * 28, cy: "30", rx: "12", ry: "17" })
+      drawing.kind === "stereo-width" && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("path", { className: "tweakers-move-visual-guide", d: "M50 13V47" }),
+        drawing.unity !== null && /* @__PURE__ */ jsxs("g", { className: "tweakers-move-visual-reference", children: [
+          /* @__PURE__ */ jsx("ellipse", { cx: 50 - drawing.unity * 28, cy: "30", rx: "12", ry: "17" }),
+          /* @__PURE__ */ jsx("ellipse", { cx: 50 + drawing.unity * 28, cy: "30", rx: "12", ry: "17" })
         ] }),
-        /* @__PURE__ */ jsxs2("g", { className: "tweakers-move-visual-lobes", children: [
-          /* @__PURE__ */ jsx2("ellipse", { cx: 50 - drawing.separation * 28, cy: "30", rx: "12", ry: "17" }),
-          /* @__PURE__ */ jsx2("ellipse", { cx: 50 + drawing.separation * 28, cy: "30", rx: "12", ry: "17" })
+        /* @__PURE__ */ jsxs("g", { className: "tweakers-move-visual-lobes", children: [
+          /* @__PURE__ */ jsx("ellipse", { cx: 50 - drawing.separation * 28, cy: "30", rx: "12", ry: "17" }),
+          /* @__PURE__ */ jsx("ellipse", { cx: 50 + drawing.separation * 28, cy: "30", rx: "12", ry: "17" })
         ] })
       ] }),
-      drawing.kind === "trim" && /* @__PURE__ */ jsxs2(Fragment, { children: [
-        /* @__PURE__ */ jsx2("path", { className: "tweakers-move-visual-guide", d: "M8 30H92" }),
-        /* @__PURE__ */ jsx2(
+      drawing.kind === "trim" && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("path", { className: "tweakers-move-visual-guide", d: "M8 30H92" }),
+        /* @__PURE__ */ jsx(
           "path",
           {
             className: "tweakers-move-visual-line",
             d: drawing.edge === "start" ? `M${8 + drawing.position * 84} 30H92` : `M8 30H${8 + drawing.position * 84}`
           }
         ),
-        /* @__PURE__ */ jsx2(
+        /* @__PURE__ */ jsx(
           "path",
           {
             className: "tweakers-move-visual-pitch-marker",
@@ -769,11 +701,11 @@ function MoveSlotNumericBody({ label, value, drawing }) {
           }
         )
       ] }),
-      drawing.kind === "pitch" && /* @__PURE__ */ jsxs2("g", { children: [
-        /* @__PURE__ */ jsx2("path", { className: "tweakers-move-visual-guide", d: "M8 30H92M8 25V35M29 27V33M50 25V35M71 27V33M92 25V35" }),
-        drawing.zero !== null && /* @__PURE__ */ jsx2("path", { className: "tweakers-move-visual-reference", d: `M${8 + drawing.zero * 84} 12V48` }),
-        /* @__PURE__ */ jsx2("path", { className: "tweakers-move-visual-line", d: `M${8 + (drawing.zero ?? 0) * 84} 30H${8 + drawing.position * 84}` }),
-        /* @__PURE__ */ jsx2(
+      drawing.kind === "pitch" && /* @__PURE__ */ jsxs("g", { children: [
+        /* @__PURE__ */ jsx("path", { className: "tweakers-move-visual-guide", d: "M8 30H92M8 25V35M29 27V33M50 25V35M71 27V33M92 25V35" }),
+        drawing.zero !== null && /* @__PURE__ */ jsx("path", { className: "tweakers-move-visual-reference", d: `M${8 + drawing.zero * 84} 12V48` }),
+        /* @__PURE__ */ jsx("path", { className: "tweakers-move-visual-line", d: `M${8 + (drawing.zero ?? 0) * 84} 30H${8 + drawing.position * 84}` }),
+        /* @__PURE__ */ jsx(
           "path",
           {
             className: "tweakers-move-visual-pitch-marker",
@@ -783,12 +715,12 @@ function MoveSlotNumericBody({ label, value, drawing }) {
         )
       ] })
     ] }),
-    /* @__PURE__ */ jsx2("span", { className: "tweakers-move-dial-option tweakers-move-visual-value", children: value })
+    /* @__PURE__ */ jsx("span", { className: "tweakers-move-dial-option tweakers-move-visual-value", children: value })
   ] });
 }
 function MoveSlotPlaybackDrawing({ mode }) {
   const icon = mode === "scissors" ? "scissors" : mode === "ping-pong" ? "arrow-left-right" : "arrow-right";
-  return /* @__PURE__ */ jsx2(
+  return /* @__PURE__ */ jsx(
     "svg",
     {
       className: "tweakers-move-dial-icon",
@@ -799,7 +731,7 @@ function MoveSlotPlaybackDrawing({ mode }) {
       strokeLinecap: "round",
       strokeLinejoin: "round",
       "aria-hidden": "true",
-      children: /* @__PURE__ */ jsx2("g", { transform: mode === "reverse" ? "translate(24 0) scale(-1 1)" : void 0, children: LUCIDE_ICONS[icon].map((d) => /* @__PURE__ */ jsx2("path", { d }, d)) })
+      children: /* @__PURE__ */ jsx("g", { transform: mode === "reverse" ? "translate(24 0) scale(-1 1)" : void 0, children: LUCIDE_ICONS[icon].map((d) => /* @__PURE__ */ jsx("path", { d }, d)) })
     }
   );
 }
@@ -1546,8 +1478,8 @@ function arcPath(from, to, radius, cx = 0, cy = 0) {
 }
 
 // src/components/ListScreen.tsx
-import { useEffect as useEffect2, useRef as useRef2 } from "react";
-import { jsx as jsx3, jsxs as jsxs3 } from "react/jsx-runtime";
+import { useEffect, useRef } from "react";
+import { jsx as jsx2, jsxs as jsxs2 } from "react/jsx-runtime";
 function itemValue(item) {
   return typeof item === "string" ? item : item.value;
 }
@@ -1571,7 +1503,7 @@ function itemIcon(item) {
 }
 function ListScreenMark({ detail, checked }) {
   const stroke = { stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" };
-  return /* @__PURE__ */ jsx3("span", { className: "tweakers-list-screen-mark", "aria-hidden": "true", children: /* @__PURE__ */ jsx3("svg", { viewBox: "0 0 24 24", fill: "none", children: detail === "page" || detail === "back" ? /* @__PURE__ */ jsx3("path", { d: detail === "back" ? ICON_CHEVRON_LEFT : ICON_CHEVRON_RIGHT, strokeWidth: "2", ...stroke }) : detail === "dialog" ? ICON_ELLIPSIS.map((c) => /* @__PURE__ */ jsx3("circle", { cx: c.cx, cy: c.cy, r: "1.75", fill: "currentColor" }, c.cx)) : checked ? /* @__PURE__ */ jsx3("path", { d: ICON_CHECK, strokeWidth: "2.5", ...stroke }) : null }) });
+  return /* @__PURE__ */ jsx2("span", { className: "tweakers-list-screen-mark", "aria-hidden": "true", children: /* @__PURE__ */ jsx2("svg", { viewBox: "0 0 24 24", fill: "none", children: detail === "page" || detail === "back" ? /* @__PURE__ */ jsx2("path", { d: detail === "back" ? ICON_CHEVRON_LEFT : ICON_CHEVRON_RIGHT, strokeWidth: "2", ...stroke }) : detail === "dialog" ? ICON_ELLIPSIS.map((c) => /* @__PURE__ */ jsx2("circle", { cx: c.cx, cy: c.cy, r: "1.75", fill: "currentColor" }, c.cx)) : checked ? /* @__PURE__ */ jsx2("path", { d: ICON_CHECK, strokeWidth: "2.5", ...stroke }) : null }) });
 }
 function ListScreen({
   items,
@@ -1586,8 +1518,8 @@ function ListScreen({
   className,
   style
 }) {
-  const rootRef = useRef2(null);
-  useEffect2(() => {
+  const rootRef = useRef(null);
+  useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
     const syncEdges = () => {
@@ -1632,7 +1564,7 @@ function ListScreen({
     event.preventDefault();
     next.focus();
   };
-  return /* @__PURE__ */ jsx3(
+  return /* @__PURE__ */ jsx2(
     "div",
     {
       ref: rootRef,
@@ -1650,7 +1582,7 @@ function ListScreen({
         const detail = itemDetail(item);
         const checked = itemChecked(item);
         const icon = itemIcon(item);
-        return /* @__PURE__ */ jsxs3(
+        return /* @__PURE__ */ jsxs2(
           "button",
           {
             type: "button",
@@ -1668,10 +1600,10 @@ function ListScreen({
             onFocus: () => onFocusItem?.(rowValue),
             onClick: () => onSelect?.(rowValue),
             children: [
-              icon && /* @__PURE__ */ jsx3("img", { className: "tweakers-list-screen-icon", src: icon, alt: "", "aria-hidden": "true" }),
-              /* @__PURE__ */ jsx3("span", { className: "tweakers-list-screen-label", children: itemLabel(item) }),
-              tag && /* @__PURE__ */ jsx3("span", { className: "tweakers-list-screen-tag", children: tag }),
-              (detail || checked) && /* @__PURE__ */ jsx3(ListScreenMark, { detail, checked })
+              icon && /* @__PURE__ */ jsx2("img", { className: "tweakers-list-screen-icon", src: icon, alt: "", "aria-hidden": "true" }),
+              /* @__PURE__ */ jsx2("span", { className: "tweakers-list-screen-label", children: itemLabel(item) }),
+              tag && /* @__PURE__ */ jsx2("span", { className: "tweakers-list-screen-tag", children: tag }),
+              (detail || checked) && /* @__PURE__ */ jsx2(ListScreenMark, { detail, checked })
             ]
           },
           rowValue
@@ -1682,7 +1614,7 @@ function ListScreen({
 }
 
 // src/components/move-slots.tsx
-import { Fragment as Fragment2, jsx as jsx4, jsxs as jsxs4 } from "react/jsx-runtime";
+import { Fragment as Fragment2, jsx as jsx3, jsxs as jsxs3 } from "react/jsx-runtime";
 function moveSlotKind(meta, opts = {}) {
   if (meta.type === "color") return "color";
   if (meta.type === "filter") return "filter";
@@ -1707,7 +1639,7 @@ function moveSlotKind(meta, opts = {}) {
 function MoveSlotGlyph({ name, className }) {
   const paths = LUCIDE_ICONS[name];
   if (!paths) return null;
-  return /* @__PURE__ */ jsx4(
+  return /* @__PURE__ */ jsx3(
     "svg",
     {
       className,
@@ -1718,7 +1650,7 @@ function MoveSlotGlyph({ name, className }) {
       strokeLinecap: "round",
       strokeLinejoin: "round",
       "aria-hidden": "true",
-      children: paths.map((d) => /* @__PURE__ */ jsx4("path", { d }, d))
+      children: paths.map((d) => /* @__PURE__ */ jsx3("path", { d }, d))
     }
   );
 }
@@ -1729,16 +1661,16 @@ function splitReadoutUnit(value) {
 }
 function MoveSlotReadout({ label, value }) {
   const split = typeof value === "string" ? splitReadoutUnit(value) : null;
-  return /* @__PURE__ */ jsxs4("div", { className: "tweakers-move-dial-readout", children: [
-    /* @__PURE__ */ jsx4("span", { className: "tweakers-move-dial-label", "data-long": label.length > 9 || void 0, children: label }),
-    /* @__PURE__ */ jsx4("span", { className: "tweakers-move-dial-value", children: split?.unit ? /* @__PURE__ */ jsxs4(Fragment2, { children: [
-      /* @__PURE__ */ jsx4("span", { className: "tweakers-move-dial-number", children: split.num }),
-      /* @__PURE__ */ jsx4("span", { className: "tweakers-move-dial-unit", children: split.unit })
+  return /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-dial-readout", children: [
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-label", "data-long": label.length > 9 || void 0, children: label }),
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-value", children: split?.unit ? /* @__PURE__ */ jsxs3(Fragment2, { children: [
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-number", children: split.num }),
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-unit", children: split.unit })
     ] }) : value })
   ] });
 }
 function MoveSlotShape({ d, className = "tweakers-move-dial-shape" }) {
-  return /* @__PURE__ */ jsx4("svg", { className, viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": "true", children: /* @__PURE__ */ jsx4("path", { d }) });
+  return /* @__PURE__ */ jsx3("svg", { className, viewBox: "0 0 100 100", preserveAspectRatio: "none", "aria-hidden": "true", children: /* @__PURE__ */ jsx3("path", { d }) });
 }
 function MoveSlotDefaultBody({
   label,
@@ -1747,10 +1679,10 @@ function MoveSlotDefaultBody({
   originPct,
   atOrigin
 }) {
-  return /* @__PURE__ */ jsxs4(Fragment2, { children: [
-    /* @__PURE__ */ jsx4(MoveSlotReadout, { label, value }),
-    /* @__PURE__ */ jsxs4("div", { className: "tweakers-move-dial-bar", children: [
-      /* @__PURE__ */ jsx4(
+  return /* @__PURE__ */ jsxs3(Fragment2, { children: [
+    /* @__PURE__ */ jsx3(MoveSlotReadout, { label, value }),
+    /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-dial-bar", children: [
+      /* @__PURE__ */ jsx3(
         "div",
         {
           className: "tweakers-move-dial-fill",
@@ -1758,7 +1690,7 @@ function MoveSlotDefaultBody({
           style: originPct != null ? { marginLeft: `${Math.min(pct, originPct)}%`, width: `${Math.abs(pct - originPct)}%` } : { width: `${pct}%` }
         }
       ),
-      atOrigin && /* @__PURE__ */ jsx4("span", { className: "tweakers-move-dial-zero", style: { left: `${originPct}%` } })
+      atOrigin && /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-zero", style: { left: `${originPct}%` } })
     ] })
   ] });
 }
@@ -1775,13 +1707,13 @@ function MoveSlotEnumBody({
 }) {
   const selected = options[activeIdx];
   if (playback || shape || glyph || scoped) {
-    return /* @__PURE__ */ jsxs4(Fragment2, { children: [
-      /* @__PURE__ */ jsx4("span", { className: "tweakers-move-dial-tag", children: label }),
-      playback && /* @__PURE__ */ jsx4(MoveSlotPlaybackDrawing, { mode: playback }),
-      !playback && shape && /* @__PURE__ */ jsx4(MoveSlotShape, { d: shape }),
-      !playback && glyph && /* @__PURE__ */ jsx4(MoveSlotGlyph, { name: glyph, className: "tweakers-move-dial-icon" }),
-      /* @__PURE__ */ jsx4("span", { className: "tweakers-move-dial-option", children: optionLabel }),
-      /* @__PURE__ */ jsx4("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ jsx4("div", { className: "tweakers-move-dial-enum", children: options.map((opt, j) => /* @__PURE__ */ jsx4(
+    return /* @__PURE__ */ jsxs3(Fragment2, { children: [
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-tag", children: label }),
+      playback && /* @__PURE__ */ jsx3(MoveSlotPlaybackDrawing, { mode: playback }),
+      !playback && shape && /* @__PURE__ */ jsx3(MoveSlotShape, { d: shape }),
+      !playback && glyph && /* @__PURE__ */ jsx3(MoveSlotGlyph, { name: glyph, className: "tweakers-move-dial-icon" }),
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-option", children: optionLabel }),
+      /* @__PURE__ */ jsx3("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ jsx3("div", { className: "tweakers-move-dial-enum", children: options.map((opt, j) => /* @__PURE__ */ jsx3(
         "span",
         {
           className: "tweakers-move-dial-enum-cell",
@@ -1791,15 +1723,15 @@ function MoveSlotEnumBody({
       )) }) })
     ] });
   }
-  return /* @__PURE__ */ jsxs4(
+  return /* @__PURE__ */ jsxs3(
     "div",
     {
       className: "tweakers-move-dial-screen",
       "data-grow": options.length > MOVE_LIST_ROWS || void 0,
       style: { "--move-list-count": options.length },
       children: [
-        /* @__PURE__ */ jsx4("span", { className: "tweakers-move-dial-head", children: label }),
-        /* @__PURE__ */ jsx4(
+        /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-head", children: label }),
+        /* @__PURE__ */ jsx3(
           ListScreen,
           {
             className: "tweakers-move-dial-list",
@@ -1816,33 +1748,33 @@ function MoveSlotEnumBody({
   );
 }
 function MoveSlotXYBody({ label, value, position, gridN, shape = null }) {
-  return /* @__PURE__ */ jsxs4(Fragment2, { children: [
-    /* @__PURE__ */ jsx4("div", { className: "tweakers-move-xy", children: shape !== null ? /* @__PURE__ */ jsx4(MoveSlotShape, { d: shape, className: "tweakers-move-xy-curve" }) : /* @__PURE__ */ jsxs4(Fragment2, { children: [
-      gridN > 0 && /* @__PURE__ */ jsx4("span", { className: "tweakers-move-xy-grid", style: {
+  return /* @__PURE__ */ jsxs3(Fragment2, { children: [
+    /* @__PURE__ */ jsx3("div", { className: "tweakers-move-xy", children: shape !== null ? /* @__PURE__ */ jsx3(MoveSlotShape, { d: shape, className: "tweakers-move-xy-curve" }) : /* @__PURE__ */ jsxs3(Fragment2, { children: [
+      gridN > 0 && /* @__PURE__ */ jsx3("span", { className: "tweakers-move-xy-grid", style: {
         "--tweak-xy-grid-step-x": `${100 / gridN}%`,
         "--tweak-xy-grid-step-y": `${100 / gridN}%`
       } }),
-      /* @__PURE__ */ jsx4("span", { className: "tweakers-move-xy-line", "data-axis": "x", style: { top: `${position.y * 100}%` } }),
-      /* @__PURE__ */ jsx4("span", { className: "tweakers-move-xy-line", "data-axis": "y", style: { left: `${position.x * 100}%` } }),
-      /* @__PURE__ */ jsx4("span", { className: "tweakers-move-xy-dot", style: { left: `${position.x * 100}%`, top: `${position.y * 100}%` } })
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-xy-line", "data-axis": "x", style: { top: `${position.y * 100}%` } }),
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-xy-line", "data-axis": "y", style: { left: `${position.x * 100}%` } }),
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-xy-dot", style: { left: `${position.x * 100}%`, top: `${position.y * 100}%` } })
     ] }) }),
-    /* @__PURE__ */ jsx4(MoveSlotReadout, { label, value })
+    /* @__PURE__ */ jsx3(MoveSlotReadout, { label, value })
   ] });
 }
 function MoveSlotDisplay({ children }) {
-  return /* @__PURE__ */ jsx4("div", { className: "tweakers-move-slot-display", children });
+  return /* @__PURE__ */ jsx3("div", { className: "tweakers-move-slot-display", children });
 }
 function MoveSlotDisplayFoot({ label, value }) {
-  return /* @__PURE__ */ jsxs4("div", { className: "tweakers-move-slot-foot", children: [
-    /* @__PURE__ */ jsx4("span", { className: "tweakers-move-slot-foot-label", children: label }),
-    /* @__PURE__ */ jsx4("span", { className: "tweakers-move-slot-foot-value", children: value })
+  return /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-slot-foot", children: [
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-slot-foot-label", children: label }),
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-slot-foot-value", children: value })
   ] });
 }
 function MoveSlotTransferBody({ label, value, shape, point }) {
-  return /* @__PURE__ */ jsxs4(Fragment2, { children: [
-    /* @__PURE__ */ jsxs4(MoveSlotDisplay, { children: [
-      /* @__PURE__ */ jsx4(MoveSlotShape, { d: shape, className: "tweakers-move-slot-shape" }),
-      point && /* @__PURE__ */ jsx4(
+  return /* @__PURE__ */ jsxs3(Fragment2, { children: [
+    /* @__PURE__ */ jsxs3(MoveSlotDisplay, { children: [
+      /* @__PURE__ */ jsx3(MoveSlotShape, { d: shape, className: "tweakers-move-slot-shape" }),
+      point && /* @__PURE__ */ jsx3(
         "span",
         {
           className: "tweakers-move-slot-dot",
@@ -1850,17 +1782,17 @@ function MoveSlotTransferBody({ label, value, shape, point }) {
         }
       )
     ] }),
-    /* @__PURE__ */ jsx4(MoveSlotDisplayFoot, { label, value })
+    /* @__PURE__ */ jsx3(MoveSlotDisplayFoot, { label, value })
   ] });
 }
 function MoveSlotRampBody({ label, value, css, stop, stops }) {
   const tickLeft = (p) => `calc(${p * 100}% + ${(0.5 - p) * 4}px)`;
-  return /* @__PURE__ */ jsxs4(Fragment2, { children: [
-    /* @__PURE__ */ jsxs4(MoveSlotDisplay, { children: [
-      /* @__PURE__ */ jsx4("span", { className: "tweakers-move-slot-ramp", style: { background: css } }),
-      (stops ?? []).map((p, i) => p === stop ? null : /* @__PURE__ */ jsx4("span", { className: "tweakers-move-slot-tick", "data-quiet": true, style: { left: tickLeft(p) } }, i)),
+  return /* @__PURE__ */ jsxs3(Fragment2, { children: [
+    /* @__PURE__ */ jsxs3(MoveSlotDisplay, { children: [
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-slot-ramp", style: { background: css } }),
+      (stops ?? []).map((p, i) => p === stop ? null : /* @__PURE__ */ jsx3("span", { className: "tweakers-move-slot-tick", "data-quiet": true, style: { left: tickLeft(p) } }, i)),
       stop !== null && // The only thing saying which stop the knob is holding.
-      /* @__PURE__ */ jsx4(
+      /* @__PURE__ */ jsx3(
         "span",
         {
           className: "tweakers-move-slot-tick",
@@ -1868,16 +1800,16 @@ function MoveSlotRampBody({ label, value, css, stop, stops }) {
         }
       )
     ] }),
-    /* @__PURE__ */ jsx4(MoveSlotDisplayFoot, { label, value })
+    /* @__PURE__ */ jsx3(MoveSlotDisplayFoot, { label, value })
   ] });
 }
 function MoveSlotDialBody({ label, value, bearing, origin }) {
   const rad = (bearing - 90) * Math.PI / 180;
-  return /* @__PURE__ */ jsxs4(Fragment2, { children: [
-    /* @__PURE__ */ jsx4(MoveSlotDisplay, { children: /* @__PURE__ */ jsxs4("svg", { className: "tweakers-move-slot-needle", viewBox: "-12 -12 24 24", "aria-hidden": "true", children: [
-      /* @__PURE__ */ jsx4("circle", { className: "tweakers-move-needle-face", cx: "0", cy: "0", r: "8.5" }),
-      /* @__PURE__ */ jsx4("path", { className: "tweakers-move-needle-sweep", d: arcPath(origin, bearing, 8.5) }),
-      /* @__PURE__ */ jsx4(
+  return /* @__PURE__ */ jsxs3(Fragment2, { children: [
+    /* @__PURE__ */ jsx3(MoveSlotDisplay, { children: /* @__PURE__ */ jsxs3("svg", { className: "tweakers-move-slot-needle", viewBox: "-12 -12 24 24", "aria-hidden": "true", children: [
+      /* @__PURE__ */ jsx3("circle", { className: "tweakers-move-needle-face", cx: "0", cy: "0", r: "8.5" }),
+      /* @__PURE__ */ jsx3("path", { className: "tweakers-move-needle-sweep", d: arcPath(origin, bearing, 8.5) }),
+      /* @__PURE__ */ jsx3(
         "line",
         {
           className: "tweakers-move-needle-hand",
@@ -1888,7 +1820,7 @@ function MoveSlotDialBody({ label, value, bearing, origin }) {
         }
       )
     ] }) }),
-    /* @__PURE__ */ jsx4(MoveSlotDisplayFoot, { label, value })
+    /* @__PURE__ */ jsx3(MoveSlotDisplayFoot, { label, value })
   ] });
 }
 function MoveSlotRangeBody({
@@ -1897,18 +1829,18 @@ function MoveSlotRangeBody({
   lo,
   hi
 }) {
-  return /* @__PURE__ */ jsxs4(Fragment2, { children: [
-    /* @__PURE__ */ jsx4(MoveSlotReadout, { label, value }),
-    /* @__PURE__ */ jsx4("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ jsxs4("div", { className: "tweakers-move-dial-range", children: [
-      /* @__PURE__ */ jsx4(
+  return /* @__PURE__ */ jsxs3(Fragment2, { children: [
+    /* @__PURE__ */ jsx3(MoveSlotReadout, { label, value }),
+    /* @__PURE__ */ jsx3("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-dial-range", children: [
+      /* @__PURE__ */ jsx3(
         "div",
         {
           className: "tweakers-move-dial-span",
           style: { left: `${lo * 100}%`, width: `${(hi - lo) * 100}%` }
         }
       ),
-      /* @__PURE__ */ jsx4("span", { className: "tweakers-move-dial-handle", style: { left: `${lo * 100}%` } }),
-      /* @__PURE__ */ jsx4("span", { className: "tweakers-move-dial-handle", style: { left: `${hi * 100}%` } })
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-handle", style: { left: `${lo * 100}%` } }),
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-handle", style: { left: `${hi * 100}%` } })
     ] }) })
   ] });
 }
@@ -1920,23 +1852,23 @@ function MoveSlotFilterBody({
   const ca = resolveFilterAxis(meta.cutoffAxis, "cutoff");
   const ra = resolveFilterAxis(meta.resonanceAxis, "resonance");
   const fmt = (v, f) => f ? f(v) : Math.abs(v) >= 100 ? Math.round(v).toString() : Number(v.toFixed(2)).toString();
-  return /* @__PURE__ */ jsxs4(Fragment2, { children: [
-    /* @__PURE__ */ jsx4("div", { className: "tweakers-move-filter-display", children: shape && /* @__PURE__ */ jsx4(MoveSlotShape, { d: shape, className: "tweakers-move-filter-shape" }) }),
-    /* @__PURE__ */ jsxs4("div", { className: "tweakers-move-filter-readout", "data-side": "cutoff", children: [
-      /* @__PURE__ */ jsx4("span", { className: "tweakers-move-dial-label", children: ca.label }),
-      /* @__PURE__ */ jsx4("span", { className: "tweakers-move-dial-value", children: fmt(value.cutoff, ca.formatValue) })
+  return /* @__PURE__ */ jsxs3(Fragment2, { children: [
+    /* @__PURE__ */ jsx3("div", { className: "tweakers-move-filter-display", children: shape && /* @__PURE__ */ jsx3(MoveSlotShape, { d: shape, className: "tweakers-move-filter-shape" }) }),
+    /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-filter-readout", "data-side": "cutoff", children: [
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-label", children: ca.label }),
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-value", children: fmt(value.cutoff, ca.formatValue) })
     ] }),
-    /* @__PURE__ */ jsxs4("div", { className: "tweakers-move-filter-readout", "data-side": "resonance", children: [
-      /* @__PURE__ */ jsx4("span", { className: "tweakers-move-dial-label", children: ra.label }),
-      /* @__PURE__ */ jsx4("span", { className: "tweakers-move-dial-value", children: fmt(value.resonance, ra.formatValue) })
+    /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-filter-readout", "data-side": "resonance", children: [
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-label", children: ra.label }),
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-value", children: fmt(value.resonance, ra.formatValue) })
     ] })
   ] });
 }
 function MoveSlotColorBody({ label, color, hue: hue2 }) {
-  return /* @__PURE__ */ jsxs4(Fragment2, { children: [
-    /* @__PURE__ */ jsx4("span", { className: "tweakers-move-dial-head", children: label }),
-    /* @__PURE__ */ jsx4("span", { className: "tweakers-move-color-swatch", "aria-hidden": "true", children: /* @__PURE__ */ jsx4("span", { style: { background: color } }) }),
-    /* @__PURE__ */ jsxs4("span", { className: "tweakers-move-color-reading", children: [
+  return /* @__PURE__ */ jsxs3(Fragment2, { children: [
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-head", children: label }),
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-color-swatch", "aria-hidden": "true", children: /* @__PURE__ */ jsx3("span", { style: { background: color } }) }),
+    /* @__PURE__ */ jsxs3("span", { className: "tweakers-move-color-reading", children: [
       Math.round(hue2),
       "\xB0"
     ] })
@@ -1948,10 +1880,10 @@ function MoveSlotEnvBody({
   joints = []
 }) {
   const d = points.map((v, i) => `${i === 0 ? "M" : "L"} ${i / (points.length - 1) * 100} ${100 - v * 100}`).join(" ");
-  return /* @__PURE__ */ jsxs4(Fragment2, { children: [
-    /* @__PURE__ */ jsxs4("div", { className: "tweakers-move-env-display", children: [
-      /* @__PURE__ */ jsx4(MoveSlotShape, { d, className: "tweakers-move-env-shape" }),
-      joints.map((j) => /* @__PURE__ */ jsx4(
+  return /* @__PURE__ */ jsxs3(Fragment2, { children: [
+    /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-env-display", children: [
+      /* @__PURE__ */ jsx3(MoveSlotShape, { d, className: "tweakers-move-env-shape" }),
+      joints.map((j) => /* @__PURE__ */ jsx3(
         "span",
         {
           className: "tweakers-move-env-handle",
@@ -1964,9 +1896,9 @@ function MoveSlotEnvBody({
         j.stage
       ))
     ] }),
-    stages.map((s) => /* @__PURE__ */ jsxs4("div", { className: "tweakers-move-env-readout", "data-stage": s.stage, children: [
-      /* @__PURE__ */ jsx4("span", { className: "tweakers-move-dial-label", children: s.label }),
-      /* @__PURE__ */ jsx4("span", { className: "tweakers-move-dial-value", children: s.value })
+    stages.map((s) => /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-env-readout", "data-stage": s.stage, children: [
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-label", children: s.label }),
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-value", children: s.value })
     ] }, s.stage))
   ] });
 }
@@ -1976,36 +1908,36 @@ function MoveSlotScopeBody({
   pct,
   children
 }) {
-  return /* @__PURE__ */ jsxs4(Fragment2, { children: [
-    /* @__PURE__ */ jsx4("div", { className: "tweakers-move-scope-display", children }),
-    /* @__PURE__ */ jsx4(MoveSlotReadout, { label, value }),
-    /* @__PURE__ */ jsx4("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ jsx4("div", { className: "tweakers-move-dial-fill", style: { width: `${pct}%` } }) })
+  return /* @__PURE__ */ jsxs3(Fragment2, { children: [
+    /* @__PURE__ */ jsx3("div", { className: "tweakers-move-scope-display", children }),
+    /* @__PURE__ */ jsx3(MoveSlotReadout, { label, value }),
+    /* @__PURE__ */ jsx3("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ jsx3("div", { className: "tweakers-move-dial-fill", style: { width: `${pct}%` } }) })
   ] });
 }
 function MoveSlotToggleBody({ label, checked, icon, onIcon, offIcon }) {
   const badge = checked ? onIcon : offIcon;
   if (!icon) {
     const split = /\d/.test(label[0] ?? "") ? splitReadoutUnit(label) : null;
-    return /* @__PURE__ */ jsxs4(Fragment2, { children: [
-      /* @__PURE__ */ jsx4("span", { className: "tweakers-move-dial-toggle-indicator", "data-on": checked || void 0 }),
-      split?.unit ? /* @__PURE__ */ jsxs4("span", { className: "tweakers-move-dial-toggle-label", "data-value": true, children: [
-        /* @__PURE__ */ jsx4("span", { className: "tweakers-move-dial-number", children: split.num }),
-        /* @__PURE__ */ jsx4("span", { className: "tweakers-move-dial-unit", children: split.unit })
-      ] }) : /* @__PURE__ */ jsx4("span", { className: "tweakers-move-dial-toggle-label", children: label })
+    return /* @__PURE__ */ jsxs3(Fragment2, { children: [
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-toggle-indicator", "data-on": checked || void 0 }),
+      split?.unit ? /* @__PURE__ */ jsxs3("span", { className: "tweakers-move-dial-toggle-label", "data-value": true, children: [
+        /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-number", children: split.num }),
+        /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-unit", children: split.unit })
+      ] }) : /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-toggle-label", children: label })
     ] });
   }
-  return /* @__PURE__ */ jsxs4(Fragment2, { children: [
-    /* @__PURE__ */ jsxs4("span", { className: "tweakers-move-toggle-picture", "aria-hidden": "true", children: [
-      /* @__PURE__ */ jsx4(MoveSlotIcon, { icon, className: "tweakers-move-toggle-icon" }),
-      /* @__PURE__ */ jsx4("span", { className: "tweakers-move-toggle-badge", children: badge ? /* @__PURE__ */ jsx4(MoveSlotIcon, { icon: badge, className: "tweakers-move-toggle-state-icon" }) : /* @__PURE__ */ jsx4(MoveSlotBadge, { on: checked }) })
+  return /* @__PURE__ */ jsxs3(Fragment2, { children: [
+    /* @__PURE__ */ jsxs3("span", { className: "tweakers-move-toggle-picture", "aria-hidden": "true", children: [
+      /* @__PURE__ */ jsx3(MoveSlotIcon, { icon, className: "tweakers-move-toggle-icon" }),
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-toggle-badge", children: badge ? /* @__PURE__ */ jsx3(MoveSlotIcon, { icon: badge, className: "tweakers-move-toggle-state-icon" }) : /* @__PURE__ */ jsx3(MoveSlotBadge, { on: checked }) })
     ] }),
-    /* @__PURE__ */ jsx4("span", { className: "tweakers-move-toggle-label", children: label })
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-toggle-label", children: label })
   ] });
 }
 function MoveSlotIcon({ icon, className }) {
-  if (LUCIDE_ICONS[icon]) return /* @__PURE__ */ jsx4(MoveSlotGlyph, { name: icon, className });
+  if (LUCIDE_ICONS[icon]) return /* @__PURE__ */ jsx3(MoveSlotGlyph, { name: icon, className });
   const mask = `url(${JSON.stringify(icon)})`;
-  return /* @__PURE__ */ jsx4(
+  return /* @__PURE__ */ jsx3(
     "span",
     {
       className,
@@ -2016,63 +1948,63 @@ function MoveSlotIcon({ icon, className }) {
   );
 }
 function MoveSlotBadge({ on }) {
-  return /* @__PURE__ */ jsx4(
+  return /* @__PURE__ */ jsx3(
     "svg",
     {
       className: "tweakers-move-toggle-state-icon",
       viewBox: "0 0 24 24",
       fill: "currentColor",
       "aria-hidden": "true",
-      children: /* @__PURE__ */ jsx4("path", { d: on ? ICON_BADGE_ON : ICON_BADGE_OFF })
+      children: /* @__PURE__ */ jsx3("path", { d: on ? ICON_BADGE_ON : ICON_BADGE_OFF })
     }
   );
 }
 function MovePadToggleBody({ label }) {
-  return /* @__PURE__ */ jsxs4(Fragment2, { children: [
-    /* @__PURE__ */ jsx4("span", { className: "tweakers-move-pad-indicator" }),
-    /* @__PURE__ */ jsx4("span", { className: "tweakers-move-pad-title", children: label })
+  return /* @__PURE__ */ jsxs3(Fragment2, { children: [
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-pad-indicator" }),
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-pad-title", children: label })
   ] });
 }
 function MovePadValueBody({ label, value, unit, children }) {
-  return /* @__PURE__ */ jsxs4(Fragment2, { children: [
+  return /* @__PURE__ */ jsxs3(Fragment2, { children: [
     children,
-    /* @__PURE__ */ jsx4("span", { className: "tweakers-move-pad-title", children: label }),
-    /* @__PURE__ */ jsxs4("span", { className: "tweakers-move-pad-reading", children: [
-      /* @__PURE__ */ jsx4("span", { className: "tweakers-move-pad-number", children: value }),
-      unit && /* @__PURE__ */ jsx4("span", { children: unit })
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-pad-title", children: label }),
+    /* @__PURE__ */ jsxs3("span", { className: "tweakers-move-pad-reading", children: [
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-pad-number", children: value }),
+      unit && /* @__PURE__ */ jsx3("span", { children: unit })
     ] })
   ] });
 }
 function MovePadWaveBody({ label, percent }) {
-  return /* @__PURE__ */ jsxs4(Fragment2, { children: [
-    /* @__PURE__ */ jsx4("span", { className: "tweakers-move-pad-indicator" }),
-    /* @__PURE__ */ jsx4("span", { className: "tweakers-move-pad-title", children: label }),
-    /* @__PURE__ */ jsxs4("span", { className: "tweakers-move-pad-reading", children: [
-      /* @__PURE__ */ jsx4("span", { className: "tweakers-move-pad-number", children: percent }),
-      /* @__PURE__ */ jsx4("span", { children: "%" })
+  return /* @__PURE__ */ jsxs3(Fragment2, { children: [
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-pad-indicator" }),
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-pad-title", children: label }),
+    /* @__PURE__ */ jsxs3("span", { className: "tweakers-move-pad-reading", children: [
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-pad-number", children: percent }),
+      /* @__PURE__ */ jsx3("span", { children: "%" })
     ] })
   ] });
 }
 function MovePadActionBody({ label }) {
-  return /* @__PURE__ */ jsx4("span", { className: "tweakers-move-pad-title", children: label });
+  return /* @__PURE__ */ jsx3("span", { className: "tweakers-move-pad-title", children: label });
 }
 function MovePadColorBody({ label, color }) {
-  return /* @__PURE__ */ jsxs4(Fragment2, { children: [
-    /* @__PURE__ */ jsx4("span", { className: "tweakers-move-pad-title", children: label }),
-    /* @__PURE__ */ jsx4("span", { className: "tweakers-move-pad-swatch", "aria-hidden": "true", children: /* @__PURE__ */ jsx4("span", { style: { background: color } }) })
+  return /* @__PURE__ */ jsxs3(Fragment2, { children: [
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-pad-title", children: label }),
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-pad-swatch", "aria-hidden": "true", children: /* @__PURE__ */ jsx3("span", { style: { background: color } }) })
   ] });
 }
 function MovePadTabsBody({ name, options, activeIdx }) {
-  return /* @__PURE__ */ jsxs4(Fragment2, { children: [
-    name != null && /* @__PURE__ */ jsx4("span", { className: "tweakers-move-tabs-head", children: name }),
-    /* @__PURE__ */ jsx4("div", { className: "tweakers-move-tabs-run", children: options.map((opt, i) => {
+  return /* @__PURE__ */ jsxs3(Fragment2, { children: [
+    name != null && /* @__PURE__ */ jsx3("span", { className: "tweakers-move-tabs-head", children: name }),
+    /* @__PURE__ */ jsx3("div", { className: "tweakers-move-tabs-run", children: options.map((opt, i) => {
       const glyph = enumOptionIcon(opt);
-      return /* @__PURE__ */ jsx4(
+      return /* @__PURE__ */ jsx3(
         "span",
         {
           className: "tweakers-move-tab",
           "data-on": i === activeIdx || void 0,
-          children: glyph ? /* @__PURE__ */ jsx4(MoveSlotGlyph, { name: glyph, className: "tweakers-move-tab-icon" }) : /* @__PURE__ */ jsx4("span", { className: "tweakers-move-tab-title", children: enumOptionLabel(opt) })
+          children: glyph ? /* @__PURE__ */ jsx3(MoveSlotGlyph, { name: glyph, className: "tweakers-move-tab-icon" }) : /* @__PURE__ */ jsx3("span", { className: "tweakers-move-tab-title", children: enumOptionLabel(opt) })
         },
         enumOptionValue(opt)
       );
@@ -2080,20 +2012,20 @@ function MovePadTabsBody({ name, options, activeIdx }) {
   ] });
 }
 function MovePadAppBody({ label, color }) {
-  return /* @__PURE__ */ jsxs4(Fragment2, { children: [
-    /* @__PURE__ */ jsx4(
+  return /* @__PURE__ */ jsxs3(Fragment2, { children: [
+    /* @__PURE__ */ jsx3(
       "span",
       {
         className: "tweakers-move-pad-indicator",
         style: color ? { background: color } : void 0
       }
     ),
-    label && /* @__PURE__ */ jsx4("span", { className: "tweakers-move-pad-title", children: label })
+    label && /* @__PURE__ */ jsx3("span", { className: "tweakers-move-pad-title", children: label })
   ] });
 }
 function MovePadListBody({ view, onCursor, onToggle }) {
-  return /* @__PURE__ */ jsxs4("div", { className: "tweakers-move-pad-list-body", "aria-busy": view.pending || void 0, children: [
-    /* @__PURE__ */ jsx4(
+  return /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-pad-list-body", "aria-busy": view.pending || void 0, children: [
+    /* @__PURE__ */ jsx3(
       ListScreen,
       {
         className: "tweakers-move-dial-list",
@@ -2110,13 +2042,13 @@ function MovePadListBody({ view, onCursor, onToggle }) {
         }
       }
     ),
-    (view.error || view.pending || !view.options.length) && /* @__PURE__ */ jsx4("div", { className: "tweakers-move-pad-list-status", role: "status", "aria-live": "polite", children: view.error ?? (view.pending ? "Starting\u2026" : "No options available.") })
+    (view.error || view.pending || !view.options.length) && /* @__PURE__ */ jsx3("div", { className: "tweakers-move-pad-list-status", role: "status", "aria-live": "polite", children: view.error ?? (view.pending ? "Starting\u2026" : "No options available.") })
   ] });
 }
 var MOVE_PAD_LIBRARY = {
   toggle: { description: "a switch; the pad inverts when it is on", component: MovePadToggleBody },
   value: { description: "a value the dial above can borrow \u2014 hold to peek, tap to latch", component: MovePadValueBody },
-  list: { description: "a checked list above a small pad; its dial walks, Enter selects, Capture runs", component: MovePadListBody },
+  list: { description: "a checked list above a small pad; its dial walks, Sample selects, a second pad press runs", component: MovePadListBody },
   action: { description: "a button: a press runs the app\u2019s action", component: MovePadActionBody },
   app: { description: "a cell the app paints itself \u2014 a track, a slice, a step", component: MovePadAppBody },
   bend: { description: "hold and drag to bend the envelope ramp above it", component: MovePadToggleBody },
@@ -2152,20 +2084,20 @@ var MOVE_SLOT_LIBRARY = {
 };
 
 // src/components/MovePadList.tsx
-import { jsx as jsx5, jsxs as jsxs5 } from "react/jsx-runtime";
+import { jsx as jsx4, jsxs as jsxs4 } from "react/jsx-runtime";
 function MovePadList({ panelId, path, label, view, disabled }) {
-  const root = useRef3(null);
+  const root = useRef2(null);
   const open2 = view?.panelId === panelId && view.path === path;
-  useEffect3(() => () => {
+  useEffect2(() => () => {
     const current = MovePadListStore.getView();
     if (current?.panelId === panelId && current.path === path) MovePadListStore.close();
   }, [panelId, path]);
-  useEffect3(() => {
+  useEffect2(() => {
     if (!open2) return;
     const key = (event) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (event.target instanceof HTMLElement && (event.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName))) return;
-      if (["Enter", " "].includes(event.key) && event.target.closest?.('.tweakers-move-chip[data-name="capture"]')) return;
+      if (["Enter", " "].includes(event.key) && event.target === root.current?.querySelector("button")) return;
       if (!["Escape", "Enter", " ", "ArrowUp", "ArrowDown", "x", "X"].includes(event.key)) return;
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -2194,33 +2126,34 @@ function MovePadList({ panelId, path, label, view, disabled }) {
       window.removeEventListener("move-tweakers:jog-click", jogClick, true);
     };
   }, [open2]);
-  return /* @__PURE__ */ jsxs5("div", { className: "tweakers-move-pad-list-anchor", ref: root, children: [
-    /* @__PURE__ */ jsx5(
+  return /* @__PURE__ */ jsxs4("div", { className: "tweakers-move-pad-list-anchor", ref: root, children: [
+    /* @__PURE__ */ jsx4(
       "button",
       {
         type: "button",
         className: "tweakers-move-pad",
         "data-kind": "list",
-        "data-latched": open2 || void 0,
+        "data-confirm": open2 || void 0,
+        "data-pending": open2 && view.pending || void 0,
         "aria-expanded": open2,
         "aria-haspopup": "listbox",
-        disabled,
-        onClick: () => MovePadListStore.toggle(panelId, path),
-        children: /* @__PURE__ */ jsx5(MovePadActionBody, { label })
+        "aria-busy": open2 && view.pending || void 0,
+        disabled: disabled || open2 && view.pending,
+        onClick: () => {
+          void MovePadListStore.activate(panelId, path);
+        },
+        children: /* @__PURE__ */ jsx4(MovePadActionBody, { label: open2 ? view.submitLabel ?? label : label })
       }
     ),
-    open2 && /* @__PURE__ */ jsxs5("div", { className: "tweakers-move-dial-screen tweakers-move-pad-list-overlay", onWheel: (event) => {
+    open2 && /* @__PURE__ */ jsx4("div", { className: "tweakers-move-dial-screen tweakers-move-pad-list-overlay", onWheel: (event) => {
       event.stopPropagation();
       MovePadListStore.move(event.deltaY);
-    }, children: [
-      /* @__PURE__ */ jsx5(MovePadListBody, { view, onCursor: (index) => MovePadListStore.setCursor(index), onToggle: () => MovePadListStore.toggleCursor() }),
-      /* @__PURE__ */ jsx5("div", { className: "tweakers-move-pad-list-submit", children: MoveFunctions.chips().filter((chip) => chip.name === "capture").map((chip) => /* @__PURE__ */ jsx5(MoveFunctionChipButton, { chip: { ...chip, color: void 0, variant: "highlight" }, disabled: view.pending }, chip.name)) })
-    ] })
+    }, children: /* @__PURE__ */ jsx4(MovePadListBody, { view, onCursor: (index) => MovePadListStore.setCursor(index), onToggle: () => MovePadListStore.toggleCursor() }) })
   ] });
 }
 
 // src/components/PresetExploration.tsx
-import { useEffect as useEffect4, useMemo, useLayoutEffect, useRef as useRef4, useState as useState2, useSyncExternalStore } from "react";
+import { useEffect as useEffect3, useMemo, useLayoutEffect, useRef as useRef3, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 // src/preset-exploration.ts
@@ -3235,21 +3168,21 @@ function presetFlowerSvg(values) {
 
 // src/components/PresetExploration.tsx
 import { TweakStore as TweakStore4 } from "tweakers/store";
-import { Fragment as Fragment3, jsx as jsx6, jsxs as jsxs6 } from "react/jsx-runtime";
+import { Fragment as Fragment3, jsx as jsx5, jsxs as jsxs5 } from "react/jsx-runtime";
 var SHELL_MOTION = { duration: 0.15, ease: [0.2, 0, 0, 1] };
 var clamp5 = (value) => Math.max(0, Math.min(1, value));
-var useBrowserLayoutEffect = typeof window === "undefined" ? useEffect4 : useLayoutEffect;
+var useBrowserLayoutEffect = typeof window === "undefined" ? useEffect3 : useLayoutEffect;
 function PresetArtwork({ values }) {
   const seed = presetFlowerSeed(values);
   const src = useMemo(() => `data:image/svg+xml,${encodeURIComponent(flowerSvg(seed, DEFAULT_FLOWER_SETTINGS, { background: false }))}`, [seed]);
-  return /* @__PURE__ */ jsx6("img", { className: "tweakers-exploration-artwork", src, alt: "", "aria-hidden": "true", draggable: false });
+  return /* @__PURE__ */ jsx5("img", { className: "tweakers-exploration-artwork", src, alt: "", "aria-hidden": "true", draggable: false });
 }
 function PresetExploration() {
   useSyncExternalStore(PresetExplorationStore.subscribe, PresetExplorationStore.getVersion, () => 0);
   const state2 = PresetExplorationStore.getState();
   const reducedMotion = useReducedMotion();
-  const shell = useRef4(null);
-  const [availableHeight, setAvailableHeight] = useState2(null);
+  const shell = useRef3(null);
+  const [availableHeight, setAvailableHeight] = useState(null);
   useBrowserLayoutEffect(() => {
     const anchor = shell.current?.closest(".tweakers-move");
     if (!state2 || !anchor) return;
@@ -3263,7 +3196,7 @@ function PresetExploration() {
       window.removeEventListener("resize", measure);
     };
   }, [state2?.panelId]);
-  return /* @__PURE__ */ jsx6(AnimatePresence, { children: state2 && /* @__PURE__ */ jsx6(
+  return /* @__PURE__ */ jsx5(AnimatePresence, { children: state2 && /* @__PURE__ */ jsx5(
     motion.section,
     {
       className: "tweakers-exploration",
@@ -3280,7 +3213,7 @@ function PresetExploration() {
           PresetExplorationStore.close();
         }
       },
-      children: /* @__PURE__ */ jsx6(ExplorationContent, { state: state2, anchorRef: shell })
+      children: /* @__PURE__ */ jsx5(ExplorationContent, { state: state2, anchorRef: shell })
     },
     state2.panelId
   ) });
@@ -3291,18 +3224,18 @@ function PresetExplorationSlots() {
   if (!state2) return null;
   const slots = PresetExplorationStore.slots();
   const unsupported = !!TweakStore4.getPresetProvider(state2.panelId) && !TweakStore4.getPresetProvider(state2.panelId)?.exploration;
-  return /* @__PURE__ */ jsx6("div", { className: "tweakers-move-grid tweakers-exploration-dock", role: "group", "aria-label": "Eight Move encoder properties", children: /* @__PURE__ */ jsx6("div", { className: "tweakers-move-dials", children: Array.from({ length: 8 }, (_, index) => {
+  return /* @__PURE__ */ jsx5("div", { className: "tweakers-move-grid tweakers-exploration-dock", role: "group", "aria-label": "Eight Move encoder properties", children: /* @__PURE__ */ jsx5("div", { className: "tweakers-move-dials", children: Array.from({ length: 8 }, (_, index) => {
     const slot = slots[index];
-    if (!slot) return /* @__PURE__ */ jsx6("div", { className: "tweakers-move-dial", "data-empty": true, "aria-hidden": "true" }, index);
-    return /* @__PURE__ */ jsxs6(
+    if (!slot) return /* @__PURE__ */ jsx5("div", { className: "tweakers-move-dial", "data-empty": true, "aria-hidden": "true" }, index);
+    return /* @__PURE__ */ jsxs5(
       "label",
       {
         className: "tweakers-move-dial tweakers-exploration-dock-slot",
         title: `${slot.label}: ${slot.display}`,
         "data-disabled": state2.busy || unsupported || slot.min === slot.max || void 0,
         children: [
-          /* @__PURE__ */ jsx6(MoveSlotDefaultBody, { label: slot.label, value: slot.display, pct: slot.max > slot.min ? (slot.value - slot.min) / (slot.max - slot.min) * 100 : 0, originPct: null }),
-          /* @__PURE__ */ jsx6(
+          /* @__PURE__ */ jsx5(MoveSlotDefaultBody, { label: slot.label, value: slot.display, pct: slot.max > slot.min ? (slot.value - slot.min) / (slot.max - slot.min) * 100 : 0, originPct: null }),
+          /* @__PURE__ */ jsx5(
             "input",
             {
               type: "range",
@@ -3323,12 +3256,12 @@ function PresetExplorationSlots() {
   }) }) });
 }
 function ExplorationContent({ state: state2, anchorRef }) {
-  const [name, setName] = useState2("");
-  const [seedId, setSeedId] = useState2("");
-  useEffect4(() => {
+  const [name, setName] = useState("");
+  const [seedId, setSeedId] = useState("");
+  useEffect3(() => {
     if (state2.saving) setName("");
   }, [state2.saving]);
-  const [parameterGroup, setParameterGroup] = useState2("*");
+  const [parameterGroup, setParameterGroup] = useState("*");
   const provider = TweakStore4.getPresetProvider(state2.panelId);
   const unsupported = !!provider && !provider.exploration;
   const blocked = state2.busy || unsupported;
@@ -3348,13 +3281,13 @@ function ExplorationContent({ state: state2, anchorRef }) {
     }
     return "Unknown child";
   };
-  return /* @__PURE__ */ jsxs6(Fragment3, { children: [
-    /* @__PURE__ */ jsxs6("header", { ref: anchorRef, className: "tweakers-exploration-header", children: [
-      /* @__PURE__ */ jsxs6("div", { children: [
-        /* @__PURE__ */ jsx6("strong", { children: "Preset exploration" }),
-        /* @__PURE__ */ jsx6("span", { className: "tweakers-exploration-caption", children: state2.persistent ? "Family tree" : "Session tree" })
+  return /* @__PURE__ */ jsxs5(Fragment3, { children: [
+    /* @__PURE__ */ jsxs5("header", { ref: anchorRef, className: "tweakers-exploration-header", children: [
+      /* @__PURE__ */ jsxs5("div", { children: [
+        /* @__PURE__ */ jsx5("strong", { children: "Preset exploration" }),
+        /* @__PURE__ */ jsx5("span", { className: "tweakers-exploration-caption", children: state2.persistent ? "Family tree" : "Session tree" })
       ] }),
-      /* @__PURE__ */ jsx6("nav", { className: "tweakers-exploration-nav", "aria-label": "Exploration views", children: ["evolution", "morph", "parameters"].map((view) => /* @__PURE__ */ jsx6(
+      /* @__PURE__ */ jsx5("nav", { className: "tweakers-exploration-nav", "aria-label": "Exploration views", children: ["evolution", "morph", "parameters"].map((view) => /* @__PURE__ */ jsx5(
         "button",
         {
           type: "button",
@@ -3365,29 +3298,29 @@ function ExplorationContent({ state: state2, anchorRef }) {
         },
         view
       )) }),
-      /* @__PURE__ */ jsx6("button", { type: "button", onClick: () => PresetExplorationStore.close(), title: state2.saving ? "Cancel naming and return to exploration" : "Exit and restore the original sound", children: "Back \u21A9" })
+      /* @__PURE__ */ jsx5("button", { type: "button", onClick: () => PresetExplorationStore.close(), title: state2.saving ? "Cancel naming and return to exploration" : "Exit and restore the original sound", children: "Back \u21A9" })
     ] }),
-    /* @__PURE__ */ jsxs6("div", { className: "tweakers-exploration-body", children: [
-      /* @__PURE__ */ jsxs6("fieldset", { className: "tweakers-exploration-workspace", disabled: blocked, children: [
-        state2.view === "evolution" && /* @__PURE__ */ jsxs6(Fragment3, { children: [
-          /* @__PURE__ */ jsxs6("div", { className: "tweakers-exploration-toolbar", children: [
-            /* @__PURE__ */ jsxs6("label", { className: "tweakers-exploration-inline", children: [
+    /* @__PURE__ */ jsxs5("div", { className: "tweakers-exploration-body", children: [
+      /* @__PURE__ */ jsxs5("fieldset", { className: "tweakers-exploration-workspace", disabled: blocked, children: [
+        state2.view === "evolution" && /* @__PURE__ */ jsxs5(Fragment3, { children: [
+          /* @__PURE__ */ jsxs5("div", { className: "tweakers-exploration-toolbar", children: [
+            /* @__PURE__ */ jsxs5("label", { className: "tweakers-exploration-inline", children: [
               "Tree ",
-              /* @__PURE__ */ jsx6("select", { "aria-label": "Family tree", value: state2.treeId, onChange: (event) => PresetExplorationStore.selectTree(event.target.value), children: state2.trees.map((item) => /* @__PURE__ */ jsx6("option", { value: item.id, children: item.name }, item.id)) })
+              /* @__PURE__ */ jsx5("select", { "aria-label": "Family tree", value: state2.treeId, onChange: (event) => PresetExplorationStore.selectTree(event.target.value), children: state2.trees.map((item) => /* @__PURE__ */ jsx5("option", { value: item.id, children: item.name }, item.id)) })
             ] }),
-            /* @__PURE__ */ jsxs6("div", { className: "tweakers-exploration-generation", children: [
-              /* @__PURE__ */ jsx6("button", { type: "button", "aria-label": "Previous generation", disabled: state2.generation === 0, onClick: () => PresetExplorationStore.setGeneration(state2.generation - 1), children: "\u2190" }),
-              /* @__PURE__ */ jsxs6("span", { children: [
+            /* @__PURE__ */ jsxs5("div", { className: "tweakers-exploration-generation", children: [
+              /* @__PURE__ */ jsx5("button", { type: "button", "aria-label": "Previous generation", disabled: state2.generation === 0, onClick: () => PresetExplorationStore.setGeneration(state2.generation - 1), children: "\u2190" }),
+              /* @__PURE__ */ jsxs5("span", { children: [
                 "Generation ",
                 state2.generation + 1,
                 " / ",
                 tree2?.generations.length ?? 0
               ] }),
-              /* @__PURE__ */ jsx6("button", { type: "button", "aria-label": "Next generation", disabled: state2.generation >= (tree2?.generations.length ?? 0) - 1, onClick: () => PresetExplorationStore.setGeneration(state2.generation + 1), children: "\u2192" })
+              /* @__PURE__ */ jsx5("button", { type: "button", "aria-label": "Next generation", disabled: state2.generation >= (tree2?.generations.length ?? 0) - 1, onClick: () => PresetExplorationStore.setGeneration(state2.generation + 1), children: "\u2192" })
             ] }),
-            /* @__PURE__ */ jsx6("button", { type: "button", "aria-pressed": state2.treeView, onClick: () => PresetExplorationStore.toggleTree(), children: "Family tree" })
+            /* @__PURE__ */ jsx5("button", { type: "button", "aria-pressed": state2.treeView, onClick: () => PresetExplorationStore.toggleTree(), children: "Family tree" })
           ] }),
-          state2.treeView && /* @__PURE__ */ jsx6("div", { className: "tweakers-exploration-tree", "aria-label": "Generation history", children: tree2?.generations.map((gen, index) => /* @__PURE__ */ jsxs6(
+          state2.treeView && /* @__PURE__ */ jsx5("div", { className: "tweakers-exploration-tree", "aria-label": "Generation history", children: tree2?.generations.map((gen, index) => /* @__PURE__ */ jsxs5(
             "button",
             {
               type: "button",
@@ -3396,7 +3329,7 @@ function ExplorationContent({ state: state2, anchorRef }) {
               children: [
                 "G",
                 index + 1,
-                /* @__PURE__ */ jsxs6("span", { children: [
+                /* @__PURE__ */ jsxs5("span", { children: [
                   gen.children.length,
                   " children \xB7 ",
                   gen.children.filter((child2) => child2.marked).length,
@@ -3406,9 +3339,9 @@ function ExplorationContent({ state: state2, anchorRef }) {
             },
             gen.id
           )) }),
-          /* @__PURE__ */ jsx6("div", { className: "tweakers-exploration-pads", role: "group", "aria-label": "Generation presets, four rows of eight pads", children: Array.from({ length: 32 }, (_, index) => {
+          /* @__PURE__ */ jsx5("div", { className: "tweakers-exploration-pads", role: "group", "aria-label": "Generation presets, four rows of eight pads", children: Array.from({ length: 32 }, (_, index) => {
             const child2 = generation?.children[index];
-            return /* @__PURE__ */ jsxs6(
+            return /* @__PURE__ */ jsxs5(
               "button",
               {
                 type: "button",
@@ -3426,17 +3359,17 @@ function ExplorationContent({ state: state2, anchorRef }) {
                   if (next instanceof HTMLButtonElement && !next.disabled) next.focus();
                 },
                 children: [
-                  child2 && /* @__PURE__ */ jsx6(PresetArtwork, { values: child2.values }),
-                  child2?.marked && /* @__PURE__ */ jsx6("span", { className: "tweakers-exploration-parent", "aria-hidden": "true", children: "\u25C6" })
+                  child2 && /* @__PURE__ */ jsx5(PresetArtwork, { values: child2.values }),
+                  child2?.marked && /* @__PURE__ */ jsx5("span", { className: "tweakers-exploration-parent", "aria-hidden": "true", children: "\u25C6" })
                 ]
               },
               child2?.id ?? index
             );
           }) }),
-          /* @__PURE__ */ jsxs6("div", { className: "tweakers-exploration-toolbar tweakers-exploration-generation-actions", children: [
-            /* @__PURE__ */ jsx6("span", { className: "tweakers-exploration-caption", id: "exploration-generation-hint", children: enabledCount === 0 ? "Enable parameters first." : parents.length < 2 ? "Mark two parents to breed." : `${parents.length} parents \xB7 \u2605 biases breeding` }),
-            /* @__PURE__ */ jsx6("button", { type: "button", disabled: blocked || enabledCount === 0, title: "Start a new tree with 32 random seeds; keep previous trees", onClick: () => void PresetExplorationStore.randomizeSeeds(), children: "Randomize seeds" }),
-            /* @__PURE__ */ jsx6(
+          /* @__PURE__ */ jsxs5("div", { className: "tweakers-exploration-toolbar tweakers-exploration-generation-actions", children: [
+            /* @__PURE__ */ jsx5("span", { className: "tweakers-exploration-caption", id: "exploration-generation-hint", children: enabledCount === 0 ? "Enable parameters first." : parents.length < 2 ? "Mark two parents to breed." : `${parents.length} parents \xB7 \u2605 biases breeding` }),
+            /* @__PURE__ */ jsx5("button", { type: "button", disabled: blocked || enabledCount === 0, title: "Start a new tree with 32 random seeds; keep previous trees", onClick: () => void PresetExplorationStore.randomizeSeeds(), children: "Randomize seeds" }),
+            /* @__PURE__ */ jsx5(
               "button",
               {
                 type: "button",
@@ -3449,10 +3382,10 @@ function ExplorationContent({ state: state2, anchorRef }) {
             )
           ] })
         ] }),
-        state2.view === "morph" && /* @__PURE__ */ jsxs6("div", { className: "tweakers-exploration-morph", children: [
-          /* @__PURE__ */ jsx6("p", { className: "tweakers-exploration-hint", children: "Choose a corner, then assign a child. Drag either surface to blend its four presets." }),
-          /* @__PURE__ */ jsx6("div", { className: "tweakers-exploration-morph-pair", children: ["A", "B"].map((label, quadrant) => /* @__PURE__ */ jsxs6("div", { children: [
-            /* @__PURE__ */ jsx6(
+        state2.view === "morph" && /* @__PURE__ */ jsxs5("div", { className: "tweakers-exploration-morph", children: [
+          /* @__PURE__ */ jsx5("p", { className: "tweakers-exploration-hint", children: "Choose a corner, then assign a child. Drag either surface to blend its four presets." }),
+          /* @__PURE__ */ jsx5("div", { className: "tweakers-exploration-morph-pair", children: ["A", "B"].map((label, quadrant) => /* @__PURE__ */ jsxs5("div", { children: [
+            /* @__PURE__ */ jsx5(
               XYSurface,
               {
                 label,
@@ -3462,10 +3395,10 @@ function ExplorationContent({ state: state2, anchorRef }) {
                 onChange: (x, y) => PresetExplorationStore.setMorph(quadrant === 0 ? { ax: x, ay: y } : { bx: x, by: y })
               }
             ),
-            /* @__PURE__ */ jsx6("div", { className: "tweakers-exploration-corners", role: "group", "aria-label": `Quadrant ${label} presets`, children: state2.morph.corners.slice(quadrant * 4, quadrant * 4 + 4).map((id, corner) => {
+            /* @__PURE__ */ jsx5("div", { className: "tweakers-exploration-corners", role: "group", "aria-label": `Quadrant ${label} presets`, children: state2.morph.corners.slice(quadrant * 4, quadrant * 4 + 4).map((id, corner) => {
               const index = quadrant * 4 + corner;
               const assigned = allChildren.find((child2) => child2.id === id);
-              return /* @__PURE__ */ jsxs6(
+              return /* @__PURE__ */ jsxs5(
                 "button",
                 {
                   type: "button",
@@ -3473,19 +3406,19 @@ function ExplorationContent({ state: state2, anchorRef }) {
                   onClick: () => PresetExplorationStore.setMorph({ corner: index }),
                   title: id ? childLabel(id) : "Unassigned corner",
                   children: [
-                    assigned && /* @__PURE__ */ jsx6(PresetArtwork, { values: assigned.values }),
+                    assigned && /* @__PURE__ */ jsx5(PresetArtwork, { values: assigned.values }),
                     label,
                     corner + 1,
-                    /* @__PURE__ */ jsx6("span", { children: id ? childLabel(id) : "Empty" })
+                    /* @__PURE__ */ jsx5("span", { children: id ? childLabel(id) : "Empty" })
                   ]
                 },
                 index
               );
             }) })
           ] }, label)) }),
-          /* @__PURE__ */ jsxs6("label", { className: "tweakers-exploration-blend", children: [
+          /* @__PURE__ */ jsxs5("label", { className: "tweakers-exploration-blend", children: [
             "A ",
-            /* @__PURE__ */ jsx6(
+            /* @__PURE__ */ jsx5(
               "input",
               {
                 type: "range",
@@ -3499,51 +3432,51 @@ function ExplorationContent({ state: state2, anchorRef }) {
               }
             ),
             " B",
-            /* @__PURE__ */ jsxs6("output", { children: [
+            /* @__PURE__ */ jsxs5("output", { children: [
               Math.round(state2.morph.blend * 100),
               "%"
             ] })
           ] }),
-          /* @__PURE__ */ jsx6("button", { type: "button", onClick: () => PresetExplorationStore.beginAssign(), children: state2.assigning ? "Choose a child in Evolve" : "Assign child to selected corner" })
+          /* @__PURE__ */ jsx5("button", { type: "button", onClick: () => PresetExplorationStore.beginAssign(), children: state2.assigning ? "Choose a child in Evolve" : "Assign child to selected corner" })
         ] }),
-        state2.view === "parameters" && /* @__PURE__ */ jsxs6("div", { className: "tweakers-exploration-parameters", children: [
-          /* @__PURE__ */ jsxs6("div", { className: "tweakers-exploration-toolbar", children: [
-            /* @__PURE__ */ jsxs6("label", { className: "tweakers-exploration-inline", children: [
+        state2.view === "parameters" && /* @__PURE__ */ jsxs5("div", { className: "tweakers-exploration-parameters", children: [
+          /* @__PURE__ */ jsxs5("div", { className: "tweakers-exploration-toolbar", children: [
+            /* @__PURE__ */ jsxs5("label", { className: "tweakers-exploration-inline", children: [
               "Group ",
-              /* @__PURE__ */ jsxs6("select", { value: parameterGroup, onChange: (event) => setParameterGroup(event.target.value), children: [
-                /* @__PURE__ */ jsx6("option", { value: "*", children: "All groups" }),
-                [...new Set(state2.parameters.map((parameter) => parameter.group ?? ""))].map((group) => /* @__PURE__ */ jsx6("option", { value: group, children: group || "Parameters" }, group))
+              /* @__PURE__ */ jsxs5("select", { value: parameterGroup, onChange: (event) => setParameterGroup(event.target.value), children: [
+                /* @__PURE__ */ jsx5("option", { value: "*", children: "All groups" }),
+                [...new Set(state2.parameters.map((parameter) => parameter.group ?? ""))].map((group) => /* @__PURE__ */ jsx5("option", { value: group, children: group || "Parameters" }, group))
               ] })
             ] }),
-            /* @__PURE__ */ jsxs6("label", { className: "tweakers-exploration-inline", children: [
-              /* @__PURE__ */ jsx6("input", { type: "checkbox", checked: state2.omitTrouble, onChange: (event) => PresetExplorationStore.setOmitTrouble(event.target.checked) }),
+            /* @__PURE__ */ jsxs5("label", { className: "tweakers-exploration-inline", children: [
+              /* @__PURE__ */ jsx5("input", { type: "checkbox", checked: state2.omitTrouble, onChange: (event) => PresetExplorationStore.setOmitTrouble(event.target.checked) }),
               "Omit enable / bypass"
             ] }),
-            /* @__PURE__ */ jsxs6("span", { children: [
+            /* @__PURE__ */ jsxs5("span", { children: [
               enabledCount,
               " / ",
               state2.parameters.length,
               " parameters included"
             ] }),
-            /* @__PURE__ */ jsx6("button", { type: "button", onClick: () => PresetExplorationStore.setAllParameters(true), children: "Select all" }),
-            /* @__PURE__ */ jsx6("button", { type: "button", onClick: () => PresetExplorationStore.setAllParameters(false), children: "Deselect all" })
+            /* @__PURE__ */ jsx5("button", { type: "button", onClick: () => PresetExplorationStore.setAllParameters(true), children: "Select all" }),
+            /* @__PURE__ */ jsx5("button", { type: "button", onClick: () => PresetExplorationStore.setAllParameters(false), children: "Deselect all" })
           ] }),
-          /* @__PURE__ */ jsx6("p", { className: "tweakers-exploration-hint", children: "Included parameters evolve and morph within their chosen range. Other values stay unchanged." }),
-          [...new Set(state2.parameters.map((parameter) => parameter.group ?? ""))].filter((group) => parameterGroup === "*" || parameterGroup === group).map((group) => /* @__PURE__ */ jsxs6("fieldset", { className: "tweakers-exploration-parameter-group", children: [
-            /* @__PURE__ */ jsx6("legend", { children: group || "Parameters" }),
-            /* @__PURE__ */ jsxs6("div", { className: "tweakers-exploration-group-actions", children: [
-              /* @__PURE__ */ jsx6("button", { type: "button", onClick: () => PresetExplorationStore.setAllParameters(true, group), children: "Select group" }),
-              /* @__PURE__ */ jsx6("button", { type: "button", onClick: () => PresetExplorationStore.setAllParameters(false, group), children: "Deselect group" })
+          /* @__PURE__ */ jsx5("p", { className: "tweakers-exploration-hint", children: "Included parameters evolve and morph within their chosen range. Other values stay unchanged." }),
+          [...new Set(state2.parameters.map((parameter) => parameter.group ?? ""))].filter((group) => parameterGroup === "*" || parameterGroup === group).map((group) => /* @__PURE__ */ jsxs5("fieldset", { className: "tweakers-exploration-parameter-group", children: [
+            /* @__PURE__ */ jsx5("legend", { children: group || "Parameters" }),
+            /* @__PURE__ */ jsxs5("div", { className: "tweakers-exploration-group-actions", children: [
+              /* @__PURE__ */ jsx5("button", { type: "button", onClick: () => PresetExplorationStore.setAllParameters(true, group), children: "Select group" }),
+              /* @__PURE__ */ jsx5("button", { type: "button", onClick: () => PresetExplorationStore.setAllParameters(false, group), children: "Deselect group" })
             ] }),
-            state2.parameters.filter((parameter) => (parameter.group ?? "") === group).map((parameter) => /* @__PURE__ */ jsxs6("div", { className: "tweakers-exploration-parameter", children: [
-              /* @__PURE__ */ jsxs6("label", { title: parameter.path, children: [
-                /* @__PURE__ */ jsx6("input", { type: "checkbox", checked: parameter.enabled, onChange: (event) => PresetExplorationStore.setParameter(parameter.id, { enabled: event.target.checked }) }),
+            state2.parameters.filter((parameter) => (parameter.group ?? "") === group).map((parameter) => /* @__PURE__ */ jsxs5("div", { className: "tweakers-exploration-parameter", children: [
+              /* @__PURE__ */ jsxs5("label", { title: parameter.path, children: [
+                /* @__PURE__ */ jsx5("input", { type: "checkbox", checked: parameter.enabled, onChange: (event) => PresetExplorationStore.setParameter(parameter.id, { enabled: event.target.checked }) }),
                 parameter.label
               ] }),
-              parameter.kind === "number" ? /* @__PURE__ */ jsxs6("div", { className: "tweakers-exploration-range", children: [
-                /* @__PURE__ */ jsxs6("label", { children: [
+              parameter.kind === "number" ? /* @__PURE__ */ jsxs5("div", { className: "tweakers-exploration-range", children: [
+                /* @__PURE__ */ jsxs5("label", { children: [
                   "Min ",
-                  /* @__PURE__ */ jsx6(
+                  /* @__PURE__ */ jsx5(
                     "input",
                     {
                       type: "number",
@@ -3559,9 +3492,9 @@ function ExplorationContent({ state: state2, anchorRef }) {
                     }
                   )
                 ] }),
-                /* @__PURE__ */ jsxs6("label", { children: [
+                /* @__PURE__ */ jsxs5("label", { children: [
                   "Max ",
-                  /* @__PURE__ */ jsx6(
+                  /* @__PURE__ */ jsx5(
                     "input",
                     {
                       type: "number",
@@ -3577,110 +3510,110 @@ function ExplorationContent({ state: state2, anchorRef }) {
                     }
                   )
                 ] })
-              ] }) : /* @__PURE__ */ jsxs6("span", { className: "tweakers-exploration-caption", title: parameter.options?.join(", "), children: [
+              ] }) : /* @__PURE__ */ jsxs5("span", { className: "tweakers-exploration-caption", title: parameter.options?.join(", "), children: [
                 parameter.options?.length ?? 0,
                 " choices"
               ] })
             ] }, parameter.id))
           ] }, group))
         ] }),
-        state2.view !== "parameters" && /* @__PURE__ */ jsxs6("details", { className: "tweakers-exploration-advanced", children: [
-          /* @__PURE__ */ jsxs6("summary", { children: [
+        state2.view !== "parameters" && /* @__PURE__ */ jsxs5("details", { className: "tweakers-exploration-advanced", children: [
+          /* @__PURE__ */ jsxs5("summary", { children: [
             active ? childLabel(active.id) : "Child actions",
             " \xB7 mark, rate, save & seed settings"
           ] }),
-          /* @__PURE__ */ jsxs6("div", { className: "tweakers-exploration-active", children: [
-            /* @__PURE__ */ jsxs6("span", { children: [
+          /* @__PURE__ */ jsxs5("div", { className: "tweakers-exploration-active", children: [
+            /* @__PURE__ */ jsxs5("span", { children: [
               active ? childLabel(active.id) : "Select a child",
-              active?.parents.length ? /* @__PURE__ */ jsxs6("small", { children: [
+              active?.parents.length ? /* @__PURE__ */ jsxs5("small", { children: [
                 "From ",
                 active.parents.map(childLabel).join(" + ")
               ] }) : null
             ] }),
-            /* @__PURE__ */ jsxs6("div", { className: "tweakers-exploration-actions", children: [
-              /* @__PURE__ */ jsx6("button", { type: "button", disabled: !active, "aria-pressed": active?.marked ?? false, onClick: () => PresetExplorationStore.toggleParent(), children: active?.marked ? "\u25C6 Parent marked" : "Mark Parent" }),
-              /* @__PURE__ */ jsxs6("label", { className: "tweakers-exploration-inline", children: [
+            /* @__PURE__ */ jsxs5("div", { className: "tweakers-exploration-actions", children: [
+              /* @__PURE__ */ jsx5("button", { type: "button", disabled: !active, "aria-pressed": active?.marked ?? false, onClick: () => PresetExplorationStore.toggleParent(), children: active?.marked ? "\u25C6 Parent marked" : "Mark Parent" }),
+              /* @__PURE__ */ jsxs5("label", { className: "tweakers-exploration-inline", children: [
                 "Rating ",
-                /* @__PURE__ */ jsx6("select", { "aria-label": "Active child rating", disabled: !active, value: active?.rating ?? 3, onChange: (event) => PresetExplorationStore.rate(Number(event.target.value)), children: [1, 2, 3, 4, 5].map((rating) => /* @__PURE__ */ jsx6("option", { value: rating, children: rating }, rating)) })
+                /* @__PURE__ */ jsx5("select", { "aria-label": "Active child rating", disabled: !active, value: active?.rating ?? 3, onChange: (event) => PresetExplorationStore.rate(Number(event.target.value)), children: [1, 2, 3, 4, 5].map((rating) => /* @__PURE__ */ jsx5("option", { value: rating, children: rating }, rating)) })
               ] }),
-              /* @__PURE__ */ jsx6("button", { type: "button", disabled: !active || state2.busy, onClick: () => PresetExplorationStore.remix(), children: "Remix" }),
-              /* @__PURE__ */ jsx6("button", { type: "button", disabled: !active || state2.busy, onClick: () => PresetExplorationStore.overwrite(), children: "Overwrite DNA" }),
-              /* @__PURE__ */ jsx6("button", { type: "button", disabled: blocked || !active && !(state2.view === "morph" && state2.morph.corners.some(Boolean)), onClick: () => PresetExplorationStore.beginSave(), children: "Save Preset" })
+              /* @__PURE__ */ jsx5("button", { type: "button", disabled: !active || state2.busy, onClick: () => PresetExplorationStore.remix(), children: "Remix" }),
+              /* @__PURE__ */ jsx5("button", { type: "button", disabled: !active || state2.busy, onClick: () => PresetExplorationStore.overwrite(), children: "Overwrite DNA" }),
+              /* @__PURE__ */ jsx5("button", { type: "button", disabled: blocked || !active && !(state2.view === "morph" && state2.morph.corners.some(Boolean)), onClick: () => PresetExplorationStore.beginSave(), children: "Save Preset" })
             ] })
           ] }),
-          /* @__PURE__ */ jsxs6("details", { className: "tweakers-exploration-seeds", children: [
-            /* @__PURE__ */ jsx6("summary", { children: "Seeds & breeding" }),
-            /* @__PURE__ */ jsxs6("div", { className: "tweakers-exploration-settings", children: [
-              /* @__PURE__ */ jsxs6("label", { children: [
+          /* @__PURE__ */ jsxs5("details", { className: "tweakers-exploration-seeds", children: [
+            /* @__PURE__ */ jsx5("summary", { children: "Seeds & breeding" }),
+            /* @__PURE__ */ jsxs5("div", { className: "tweakers-exploration-settings", children: [
+              /* @__PURE__ */ jsxs5("label", { children: [
                 "Seed source",
-                /* @__PURE__ */ jsxs6("select", { value: state2.settings.seedMode, onChange: (event) => PresetExplorationStore.setSettings({ seedMode: event.target.value }), children: [
-                  /* @__PURE__ */ jsx6("option", { value: "current", children: "Current sound" }),
-                  /* @__PURE__ */ jsx6("option", { value: "random", children: "Randomized" })
+                /* @__PURE__ */ jsxs5("select", { value: state2.settings.seedMode, onChange: (event) => PresetExplorationStore.setSettings({ seedMode: event.target.value }), children: [
+                  /* @__PURE__ */ jsx5("option", { value: "current", children: "Current sound" }),
+                  /* @__PURE__ */ jsx5("option", { value: "random", children: "Randomized" })
                 ] })
               ] }),
-              /* @__PURE__ */ jsxs6("label", { children: [
+              /* @__PURE__ */ jsxs5("label", { children: [
                 "Seed count",
-                /* @__PURE__ */ jsx6("input", { type: "number", min: 1, max: 32, value: state2.settings.seedCount, onChange: (event) => PresetExplorationStore.setSettings({ seedCount: Number(event.target.value) }) })
+                /* @__PURE__ */ jsx5("input", { type: "number", min: 1, max: 32, value: state2.settings.seedCount, onChange: (event) => PresetExplorationStore.setSettings({ seedCount: Number(event.target.value) }) })
               ] }),
-              /* @__PURE__ */ jsxs6("label", { children: [
+              /* @__PURE__ */ jsxs5("label", { children: [
                 "Spread",
-                /* @__PURE__ */ jsx6("input", { type: "range", min: 0, max: 1, step: 0.01, value: state2.settings.spread, onChange: (event) => PresetExplorationStore.setSettings({ spread: Number(event.target.value) }) })
+                /* @__PURE__ */ jsx5("input", { type: "range", min: 0, max: 1, step: 0.01, value: state2.settings.spread, onChange: (event) => PresetExplorationStore.setSettings({ spread: Number(event.target.value) }) })
               ] }),
-              /* @__PURE__ */ jsxs6("label", { children: [
+              /* @__PURE__ */ jsxs5("label", { children: [
                 "Mutation mode",
-                /* @__PURE__ */ jsxs6("select", { value: state2.settings.mutationMode, onChange: (event) => PresetExplorationStore.setSettings({ mutationMode: event.target.value }), children: [
-                  /* @__PURE__ */ jsx6("option", { value: "random", children: "Random replacement" }),
-                  /* @__PURE__ */ jsx6("option", { value: "copy-error", children: "Copy error" })
+                /* @__PURE__ */ jsxs5("select", { value: state2.settings.mutationMode, onChange: (event) => PresetExplorationStore.setSettings({ mutationMode: event.target.value }), children: [
+                  /* @__PURE__ */ jsx5("option", { value: "random", children: "Random replacement" }),
+                  /* @__PURE__ */ jsx5("option", { value: "copy-error", children: "Copy error" })
                 ] })
               ] }),
-              /* @__PURE__ */ jsxs6("label", { children: [
+              /* @__PURE__ */ jsxs5("label", { children: [
                 "Breeding window (0 = all)",
-                /* @__PURE__ */ jsx6("input", { type: "number", min: 0, max: tree2?.generations.length ?? 1, value: state2.settings.breedWindow, onChange: (event) => PresetExplorationStore.setSettings({ breedWindow: Number(event.target.value) }) })
+                /* @__PURE__ */ jsx5("input", { type: "number", min: 0, max: tree2?.generations.length ?? 1, value: state2.settings.breedWindow, onChange: (event) => PresetExplorationStore.setSettings({ breedWindow: Number(event.target.value) }) })
               ] })
             ] }),
-            /* @__PURE__ */ jsxs6("div", { className: "tweakers-exploration-actions", children: [
-              /* @__PURE__ */ jsx6("button", { type: "button", disabled: state2.busy || enabledCount === 0 || (tree2?.generations[0].children.length ?? 0) >= 32, onClick: () => PresetExplorationStore.addSeeds(), children: "Add Seeds" }),
-              /* @__PURE__ */ jsx6("button", { type: "button", disabled: !allChildren.some((child2) => child2.marked) || state2.busy, onClick: () => PresetExplorationStore.newTree(), children: "New Tree from Parents" }),
-              /* @__PURE__ */ jsxs6("label", { className: "tweakers-exploration-inline", children: [
+            /* @__PURE__ */ jsxs5("div", { className: "tweakers-exploration-actions", children: [
+              /* @__PURE__ */ jsx5("button", { type: "button", disabled: state2.busy || enabledCount === 0 || (tree2?.generations[0].children.length ?? 0) >= 32, onClick: () => PresetExplorationStore.addSeeds(), children: "Add Seeds" }),
+              /* @__PURE__ */ jsx5("button", { type: "button", disabled: !allChildren.some((child2) => child2.marked) || state2.busy, onClick: () => PresetExplorationStore.newTree(), children: "New Tree from Parents" }),
+              /* @__PURE__ */ jsxs5("label", { className: "tweakers-exploration-inline", children: [
                 "Preset seed ",
-                /* @__PURE__ */ jsxs6("select", { value: seedId, onChange: (event) => setSeedId(event.target.value), children: [
-                  /* @__PURE__ */ jsx6("option", { value: "", children: "Choose preset\u2026" }),
-                  presets.map((preset) => /* @__PURE__ */ jsx6("option", { value: preset.id, children: preset.label }, preset.id))
+                /* @__PURE__ */ jsxs5("select", { value: seedId, onChange: (event) => setSeedId(event.target.value), children: [
+                  /* @__PURE__ */ jsx5("option", { value: "", children: "Choose preset\u2026" }),
+                  presets.map((preset) => /* @__PURE__ */ jsx5("option", { value: preset.id, children: preset.label }, preset.id))
                 ] })
               ] }),
-              /* @__PURE__ */ jsx6("button", { type: "button", disabled: !seedId || state2.busy, onClick: () => PresetExplorationStore.addPresetSeed(seedId), children: "Add Preset Seed" })
+              /* @__PURE__ */ jsx5("button", { type: "button", disabled: !seedId || state2.busy, onClick: () => PresetExplorationStore.addPresetSeed(seedId), children: "Add Preset Seed" })
             ] })
           ] })
         ] })
       ] }),
-      state2.saving && /* @__PURE__ */ jsxs6("form", { className: "tweakers-exploration-save", onSubmit: (event) => {
+      state2.saving && /* @__PURE__ */ jsxs5("form", { className: "tweakers-exploration-save", onSubmit: (event) => {
         event.preventDefault();
         if (name.trim()) void PresetExplorationStore.save(name.trim());
       }, children: [
-        /* @__PURE__ */ jsxs6("label", { children: [
+        /* @__PURE__ */ jsxs5("label", { children: [
           "Preset name",
-          /* @__PURE__ */ jsx6("input", { type: "text", value: name, maxLength: 120, placeholder: "Name this sound", onChange: (event) => setName(event.target.value) })
+          /* @__PURE__ */ jsx5("input", { type: "text", value: name, maxLength: 120, placeholder: "Name this sound", onChange: (event) => setName(event.target.value) })
         ] }),
-        /* @__PURE__ */ jsx6("button", { type: "submit", disabled: !name.trim() || state2.busy, children: "Save" }),
-        /* @__PURE__ */ jsx6("button", { type: "button", disabled: state2.busy, onClick: () => PresetExplorationStore.cancelSave(), children: "Cancel" })
+        /* @__PURE__ */ jsx5("button", { type: "submit", disabled: !name.trim() || state2.busy, children: "Save" }),
+        /* @__PURE__ */ jsx5("button", { type: "button", disabled: state2.busy, onClick: () => PresetExplorationStore.cancelSave(), children: "Cancel" })
       ] }),
-      /* @__PURE__ */ jsxs6("footer", { className: "tweakers-exploration-footer", children: [
-        /* @__PURE__ */ jsx6("span", { role: "status", children: state2.message ?? (state2.assigning ? "Select a child to assign it to the morph corner." : "Back restores your original sound.") }),
-        /* @__PURE__ */ jsx6("button", { type: "button", disabled: blocked, onClick: () => PresetExplorationStore.undo(), children: "Undo" }),
-        state2.busy && /* @__PURE__ */ jsx6("span", { role: "status", children: "Working\u2026" })
+      /* @__PURE__ */ jsxs5("footer", { className: "tweakers-exploration-footer", children: [
+        /* @__PURE__ */ jsx5("span", { role: "status", children: state2.message ?? (state2.assigning ? "Select a child to assign it to the morph corner." : "Back restores your original sound.") }),
+        /* @__PURE__ */ jsx5("button", { type: "button", disabled: blocked, onClick: () => PresetExplorationStore.undo(), children: "Undo" }),
+        state2.busy && /* @__PURE__ */ jsx5("span", { role: "status", children: "Working\u2026" })
       ] }),
-      state2.error && /* @__PURE__ */ jsx6("p", { role: "alert", className: "tweakers-exploration-error", children: state2.error })
+      state2.error && /* @__PURE__ */ jsx5("p", { role: "alert", className: "tweakers-exploration-error", children: state2.error })
     ] })
   ] });
 }
 function XYSurface({ label, x, y, disabled, onChange }) {
-  const pointer = useRef4(null);
+  const pointer = useRef3(null);
   const update = (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
     onChange(clamp5((event.clientX - rect.left) / Math.max(1, rect.width)), clamp5((event.clientY - rect.top) / Math.max(1, rect.height)));
   };
-  return /* @__PURE__ */ jsxs6("div", { role: "group", "aria-label": `Morph quadrant ${label}`, children: [
-    /* @__PURE__ */ jsxs6(
+  return /* @__PURE__ */ jsxs5("div", { role: "group", "aria-label": `Morph quadrant ${label}`, children: [
+    /* @__PURE__ */ jsxs5(
       "div",
       {
         className: "tweakers-exploration-xy",
@@ -3707,19 +3640,19 @@ function XYSurface({ label, x, y, disabled, onChange }) {
           pointer.current = null;
         },
         children: [
-          /* @__PURE__ */ jsx6("span", { className: "tweakers-exploration-xy-label", children: label }),
-          /* @__PURE__ */ jsx6("span", { className: "tweakers-exploration-xy-point", style: { left: `${x * 100}%`, top: `${y * 100}%` } })
+          /* @__PURE__ */ jsx5("span", { className: "tweakers-exploration-xy-label", children: label }),
+          /* @__PURE__ */ jsx5("span", { className: "tweakers-exploration-xy-point", style: { left: `${x * 100}%`, top: `${y * 100}%` } })
         ]
       }
     ),
-    /* @__PURE__ */ jsxs6("div", { className: "tweakers-exploration-xy-controls", children: [
-      /* @__PURE__ */ jsxs6("label", { children: [
+    /* @__PURE__ */ jsxs5("div", { className: "tweakers-exploration-xy-controls", children: [
+      /* @__PURE__ */ jsxs5("label", { children: [
         "X ",
-        /* @__PURE__ */ jsx6("input", { type: "range", "aria-label": `Quadrant ${label} X`, min: 0, max: 1, step: 0.01, disabled, value: x, onChange: (event) => onChange(Number(event.target.value), y) })
+        /* @__PURE__ */ jsx5("input", { type: "range", "aria-label": `Quadrant ${label} X`, min: 0, max: 1, step: 0.01, disabled, value: x, onChange: (event) => onChange(Number(event.target.value), y) })
       ] }),
-      /* @__PURE__ */ jsxs6("label", { children: [
+      /* @__PURE__ */ jsxs5("label", { children: [
         "Y ",
-        /* @__PURE__ */ jsx6("input", { type: "range", "aria-label": `Quadrant ${label} Y`, min: 0, max: 1, step: 0.01, disabled, value: y, onChange: (event) => onChange(x, Number(event.target.value)) })
+        /* @__PURE__ */ jsx5("input", { type: "range", "aria-label": `Quadrant ${label} Y`, min: 0, max: 1, step: 0.01, disabled, value: y, onChange: (event) => onChange(x, Number(event.target.value)) })
       ] })
     ] })
   ] });
@@ -5110,11 +5043,11 @@ var AUDIO_DEF = {
 registerModType(AUDIO_DEF);
 
 // src/components/MoveWaveform.tsx
-import { useCallback, useEffect as useEffect6, useRef as useRef6, useState as useState4, useSyncExternalStore as useSyncExternalStore2 } from "react";
+import { useCallback, useEffect as useEffect5, useRef as useRef5, useState as useState3, useSyncExternalStore as useSyncExternalStore2 } from "react";
 import { createPortal } from "react-dom";
 
 // src/components/WaveformVisualization.tsx
-import { useRef as useRef5, useEffect as useEffect5, useState as useState3 } from "react";
+import { useRef as useRef4, useEffect as useEffect4, useState as useState2 } from "react";
 
 // src/waveform-engine.ts
 var WAVEFORM_MODES = ["smooth", "pixelated", "striped"];
@@ -5546,7 +5479,7 @@ function createWaveformEngine(canvas, get) {
 }
 
 // src/components/WaveformVisualization.tsx
-import { jsx as jsx7, jsxs as jsxs7 } from "react/jsx-runtime";
+import { jsx as jsx6, jsxs as jsxs6 } from "react/jsx-runtime";
 function WaveformVisualization({
   buffer = null,
   progress = 0,
@@ -5574,12 +5507,12 @@ function WaveformVisualization({
   width = 256,
   height = 140
 }) {
-  const canvasRef = useRef5(null);
-  const [ownZoom, setOwnZoom] = useState3(1);
+  const canvasRef = useRef4(null);
+  const [ownZoom, setOwnZoom] = useState2(1);
   const controlled = zoomProp !== void 0;
   const zoom = controlled ? Math.max(1, zoomProp) : ownZoom;
   const setZoom = setOwnZoom;
-  const runtimeRef = useRef5(null);
+  const runtimeRef = useRef4(null);
   runtimeRef.current = {
     buffer,
     progress,
@@ -5607,25 +5540,25 @@ function WaveformVisualization({
     onSeek,
     onLoopChange
   };
-  useEffect5(() => {
+  useEffect4(() => {
     if (!canvasRef.current) return;
     const engine = createWaveformEngine(canvasRef.current, () => runtimeRef.current);
     return () => engine.destroy();
   }, []);
   const atMaxZoom = zoom >= WAVEFORM_MAX_ZOOM;
   const framingLoop = autoZoomOnLoop && !!loop || controlled;
-  return /* @__PURE__ */ jsxs7("div", { className: "tweakers-waveform-viz-wrap", style: { width }, children: [
-    /* @__PURE__ */ jsx7("canvas", { ref: canvasRef, className: "tweakers-waveform-viz", style: { width, height } }),
-    !framingLoop && /* @__PURE__ */ jsxs7("div", { className: "tweakers-waveform-zoom", children: [
-      zoom > 1 && /* @__PURE__ */ jsx7("button", { type: "button", "aria-label": "Zoom out", onClick: () => setZoom((z) => Math.max(1, z / 2)), children: /* @__PURE__ */ jsx7("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ jsx7("path", { d: "M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) }) }),
-      /* @__PURE__ */ jsx7(
+  return /* @__PURE__ */ jsxs6("div", { className: "tweakers-waveform-viz-wrap", style: { width }, children: [
+    /* @__PURE__ */ jsx6("canvas", { ref: canvasRef, className: "tweakers-waveform-viz", style: { width, height } }),
+    !framingLoop && /* @__PURE__ */ jsxs6("div", { className: "tweakers-waveform-zoom", children: [
+      zoom > 1 && /* @__PURE__ */ jsx6("button", { type: "button", "aria-label": "Zoom out", onClick: () => setZoom((z) => Math.max(1, z / 2)), children: /* @__PURE__ */ jsx6("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ jsx6("path", { d: "M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) }) }),
+      /* @__PURE__ */ jsx6(
         "button",
         {
           type: "button",
           "aria-label": "Zoom in",
           disabled: atMaxZoom,
           onClick: () => setZoom((z) => Math.min(WAVEFORM_MAX_ZOOM, z * 2)),
-          children: /* @__PURE__ */ jsx7("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ jsx7("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) })
+          children: /* @__PURE__ */ jsx6("svg", { viewBox: "0 0 16 16", fill: "none", children: /* @__PURE__ */ jsx6("path", { d: "M8 3.5v9M3.5 8h9", stroke: "currentColor", strokeWidth: "1.6", strokeLinecap: "round" }) })
         }
       )
     ] })
@@ -6155,7 +6088,7 @@ var MoveSurfaceStore = {
 var isDevDefault = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import.meta !== "undefined" && import.meta.env?.MODE ? import.meta.env.MODE !== "production" : true;
 
 // src/components/MoveWaveform.tsx
-import { jsx as jsx8, jsxs as jsxs8 } from "react/jsx-runtime";
+import { jsx as jsx7, jsxs as jsxs7 } from "react/jsx-runtime";
 var SLOT_HEIGHT = 140;
 var DISPLAY_HEIGHT = 128;
 var WAVE_INK = "#1e1e1e";
@@ -6187,21 +6120,21 @@ function MoveWaveform({
   productionEnabled = isDevDefault,
   className
 }) {
-  const hostRef = useRef6(null);
-  const [width, setWidth] = useState4(0);
-  const [dockBottom, setDockBottom] = useState4(0);
-  const [mounted, setMounted] = useState4(false);
-  const seekRef = useRef6(onSeek);
+  const hostRef = useRef5(null);
+  const [width, setWidth] = useState3(0);
+  const [dockBottom, setDockBottom] = useState3(0);
+  const [mounted, setMounted] = useState3(false);
+  const seekRef = useRef5(onSeek);
   seekRef.current = onSeek;
-  const loopRef = useRef6(onLoopChange);
+  const loopRef = useRef5(onLoopChange);
   loopRef.current = onLoopChange;
-  const seedRef = useRef6({ mode, pixelSize, grid, bands, baseline });
-  useEffect6(() => {
+  const seedRef = useRef5({ mode, pixelSize, grid, bands, baseline });
+  useEffect5(() => {
     if (!productionEnabled) return;
     setMounted(true);
     return MoveWaveformStore.register(seedRef.current);
   }, [productionEnabled]);
-  useEffect6(() => {
+  useEffect5(() => {
     if (!productionEnabled) return;
     const onJogClick = (event) => {
       if (!MoveWaveformStore.isRegistered()) return;
@@ -6211,10 +6144,10 @@ function MoveWaveform({
     window.addEventListener("move-tweakers:jog-click", onJogClick);
     return () => window.removeEventListener("move-tweakers:jog-click", onJogClick);
   }, [productionEnabled]);
-  const transportRef = useRef6(transport);
+  const transportRef = useRef5(transport);
   transportRef.current = transport;
   const hasTransport = !!transport;
-  useEffect6(() => {
+  useEffect5(() => {
     if (!productionEnabled || !hasTransport) return;
     const releases = [
       MoveFunctions.push("play", () => transportRef.current?.onPlay(), { label: "Play", chip: false }),
@@ -6224,11 +6157,11 @@ function MoveWaveform({
   }, [productionEnabled, hasTransport]);
   const playing = transport?.playing ?? false;
   const loopOn = transport?.loopOn ?? false;
-  useEffect6(() => {
+  useEffect5(() => {
     if (!productionEnabled) return;
     MoveWaveformStore.setTransport(hasTransport ? { playing, loopOn } : null);
   }, [productionEnabled, hasTransport, playing, loopOn]);
-  useEffect6(() => {
+  useEffect5(() => {
     if (!productionEnabled) return;
     const prev = MoveSurfaceStore.getState().steps;
     const paint = () => {
@@ -6250,7 +6183,7 @@ function MoveWaveform({
     () => MoveWaveformStore.getStyleSnapshot()
   );
   const look = styleFromValues(styleValues, { mode, pixelSize, grid, bands, baseline });
-  useEffect6(() => {
+  useEffect5(() => {
     MoveWaveformStore.setBuffer(buffer);
   }, [buffer]);
   const view = useSyncExternalStore2(
@@ -6259,8 +6192,8 @@ function MoveWaveform({
     () => 0
   );
   const state2 = MoveWaveformStore.getView();
-  const lastSent = useRef6({ position: state2.position, loop: state2.loop });
-  useEffect6(() => {
+  const lastSent = useRef5({ position: state2.position, loop: state2.loop });
+  useEffect5(() => {
     if (state2.position !== lastSent.current.position) {
       lastSent.current.position = state2.position;
       seekRef.current?.(state2.position);
@@ -6270,7 +6203,7 @@ function MoveWaveform({
       loopRef.current?.(state2.loop);
     }
   }, [view, state2.position, state2.loop]);
-  useEffect6(() => {
+  useEffect5(() => {
     const host = hostRef.current;
     if (!host) return;
     const ro = new ResizeObserver((entries) => {
@@ -6280,7 +6213,7 @@ function MoveWaveform({
     ro.observe(host);
     return () => ro.disconnect();
   }, [mounted, variant]);
-  useEffect6(() => {
+  useEffect5(() => {
     if (variant !== "dock" || typeof window === "undefined") return;
     const measure = () => {
       const panel2 = document.querySelector(".tweakers-move-root .tweakers-move");
@@ -6299,7 +6232,7 @@ function MoveWaveform({
   }, [variant, mounted]);
   if (!productionEnabled) return null;
   const boxHeight = Math.min(MOVE_WAVE_MAX_DISPLAY, height ?? (variant === "slot" ? SLOT_HEIGHT : DISPLAY_HEIGHT));
-  const wave = /* @__PURE__ */ jsx8(
+  const wave = /* @__PURE__ */ jsx7(
     WaveformVisualization,
     {
       buffer,
@@ -6323,14 +6256,14 @@ function MoveWaveform({
       height: boxHeight
     }
   );
-  const body = /* @__PURE__ */ jsx8(
+  const body = /* @__PURE__ */ jsx7(
     "div",
     {
       ref: hostRef,
       className: `tweakers-move-wave${className ? ` ${className}` : ""}`,
       "data-variant": variant,
       style: variant === "dock" ? { bottom: `${dockBottom}px` } : void 0,
-      children: /* @__PURE__ */ jsxs8("div", { className: "tweakers-move-wave-canvas", style: { height: `${boxHeight}px` }, children: [
+      children: /* @__PURE__ */ jsxs7("div", { className: "tweakers-move-wave-canvas", style: { height: `${boxHeight}px` }, children: [
         width > 0 && wave,
         children
       ] })
@@ -6339,14 +6272,14 @@ function MoveWaveform({
   if (variant !== "dock") return body;
   if (!mounted || typeof document === "undefined") return null;
   return createPortal(
-    /* @__PURE__ */ jsx8("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-wave-dock": "true", children: body }),
+    /* @__PURE__ */ jsx7("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-wave-dock": "true", children: body }),
     document.body
   );
 }
 
 // src/components/CurveComposer.tsx
-import { useRef as useRef7, useEffect as useEffect7, useMemo as useMemo2, useState as useState5 } from "react";
-import { Fragment as Fragment4, jsx as jsx9, jsxs as jsxs9 } from "react/jsx-runtime";
+import { useRef as useRef6, useEffect as useEffect6, useMemo as useMemo2, useState as useState4 } from "react";
+import { Fragment as Fragment4, jsx as jsx8, jsxs as jsxs8 } from "react/jsx-runtime";
 function CurveComposer({
   segments,
   driver = null,
@@ -6375,20 +6308,20 @@ function CurveComposer({
     [segments, driver, direction, gap]
   );
   const samplers = useMemo2(() => buildSamplers(composition), [composition]);
-  const liveRef = useRef7({ composition, samplers, getPhase, phase, mode, triggerSteps });
+  const liveRef = useRef6({ composition, samplers, getPhase, phase, mode, triggerSteps });
   liveRef.current = { composition, samplers, getPhase, phase, mode, triggerSteps };
-  const onTriggerRef = useRef7(onTrigger);
+  const onTriggerRef = useRef6(onTrigger);
   onTriggerRef.current = onTrigger;
-  const svgRef = useRef7(null);
-  const seriesPlayheadRef = useRef7(null);
-  const seriesDotRef = useRef7(null);
-  const driverPlayheadRef = useRef7(null);
-  const prevTrigValue = useRef7(Number.NaN);
-  const [drag, setDrag] = useState5(null);
-  const [hover, setHover] = useState5(null);
-  const dragRef = useRef7(null);
+  const svgRef = useRef6(null);
+  const seriesPlayheadRef = useRef6(null);
+  const seriesDotRef = useRef6(null);
+  const driverPlayheadRef = useRef6(null);
+  const prevTrigValue = useRef6(Number.NaN);
+  const [drag, setDrag] = useState4(null);
+  const [hover, setHover] = useState4(null);
+  const dragRef = useRef6(null);
   dragRef.current = drag;
-  useEffect7(() => {
+  useEffect6(() => {
     let raf = 0;
     prevTrigValue.current = Number.NaN;
     const tick = () => {
@@ -6540,17 +6473,17 @@ function CurveComposer({
     for (let i = 1; i < n; i++) {
       const gx = i / n * W;
       lines.push(
-        /* @__PURE__ */ jsx9("line", { x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h, className: "tweakers-cc-grid" }, `g-${rect.y}-${i}`)
+        /* @__PURE__ */ jsx8("line", { x1: gx, y1: rect.y, x2: gx, y2: rect.y + rect.h, className: "tweakers-cc-grid" }, `g-${rect.y}-${i}`)
       );
     }
     return lines;
   };
-  const renderLaneBg = (rect, key) => /* @__PURE__ */ jsx9("rect", { className: "tweakers-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 }, key);
+  const renderLaneBg = (rect, key) => /* @__PURE__ */ jsx8("rect", { className: "tweakers-cc-lane", x: rect.x, y: rect.y, width: rect.w, height: rect.h, rx: 8 }, key);
   const diagonal = (rect, span, key) => {
     const d = diagonalLine(rect, span, W);
-    return /* @__PURE__ */ jsx9("line", { className: "tweakers-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 }, key);
+    return /* @__PURE__ */ jsx8("line", { className: "tweakers-cc-diagonal", x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2 }, key);
   };
-  return /* @__PURE__ */ jsx9("div", { className: "tweakers-cc-wrap", style: { width: W }, children: /* @__PURE__ */ jsxs9(
+  return /* @__PURE__ */ jsx8("div", { className: "tweakers-cc-wrap", style: { width: W }, children: /* @__PURE__ */ jsxs8(
     "svg",
     {
       ref: svgRef,
@@ -6570,7 +6503,7 @@ function CurveComposer({
         renderLaneGrid(mainRect),
         selectedIndex != null && selectedIndex >= 0 && selectedIndex < segments.length && (() => {
           const span = segmentSpan(segments, selectedIndex, gap);
-          return /* @__PURE__ */ jsx9(
+          return /* @__PURE__ */ jsx8(
             "rect",
             {
               className: "tweakers-cc-seg-selected",
@@ -6584,7 +6517,7 @@ function CurveComposer({
         })(),
         hover?.kind === "segment" && !drag && (() => {
           const span = segmentSpan(segments, hover.index, gap);
-          return /* @__PURE__ */ jsx9(
+          return /* @__PURE__ */ jsx8(
             "rect",
             {
               className: "tweakers-cc-seg-hover",
@@ -6598,13 +6531,13 @@ function CurveComposer({
         })(),
         segments.map((seg, i) => {
           const span = segmentSpan(segments, i, gap);
-          return /* @__PURE__ */ jsxs9("g", { children: [
+          return /* @__PURE__ */ jsxs8("g", { children: [
             diagonal(mainRect, span, `diag-${i}`),
-            /* @__PURE__ */ jsx9("path", { className: "tweakers-cc-curve", d: curvePath(seg, mainRect, span, W) }),
-            /* @__PURE__ */ jsx9("text", { className: "tweakers-cc-label", x: (span[0] + span[1]) * 0.5 * W, y: mainRect.y + 13, children: seg.type })
+            /* @__PURE__ */ jsx8("path", { className: "tweakers-cc-curve", d: curvePath(seg, mainRect, span, W) }),
+            /* @__PURE__ */ jsx8("text", { className: "tweakers-cc-label", x: (span[0] + span[1]) * 0.5 * W, y: mainRect.y + 13, children: seg.type })
           ] }, `seg-${i}`);
         }),
-        gap > 0 && timelineSlots(segments, gap).filter((slot) => slot.kind === "gap" && slot.b > slot.a).map((slot) => /* @__PURE__ */ jsx9(
+        gap > 0 && timelineSlots(segments, gap).filter((slot) => slot.kind === "gap" && slot.b > slot.a).map((slot) => /* @__PURE__ */ jsx8(
           "path",
           {
             className: "tweakers-cc-connector",
@@ -6612,7 +6545,7 @@ function CurveComposer({
           },
           `conn-${slot.index}`
         )),
-        interior.map((bx, i) => /* @__PURE__ */ jsx9(
+        interior.map((bx, i) => /* @__PURE__ */ jsx8(
           "line",
           {
             className: "tweakers-cc-boundary",
@@ -6626,19 +6559,19 @@ function CurveComposer({
           },
           `b-${i}`
         )),
-        /* @__PURE__ */ jsx9("line", { ref: seriesPlayheadRef, className: "tweakers-cc-playhead", x1: 0, y1: mainRect.y, x2: 0, y2: mainRect.y + mainRect.h, style: { stroke: playheadColor } }),
-        /* @__PURE__ */ jsx9("circle", { ref: seriesDotRef, className: "tweakers-cc-dot", cx: 0, cy: mapY(mainRect, 0), r: 3, style: { fill: playheadColor } }),
-        driverRect && /* @__PURE__ */ jsxs9(Fragment4, { children: [
+        /* @__PURE__ */ jsx8("line", { ref: seriesPlayheadRef, className: "tweakers-cc-playhead", x1: 0, y1: mainRect.y, x2: 0, y2: mainRect.y + mainRect.h, style: { stroke: playheadColor } }),
+        /* @__PURE__ */ jsx8("circle", { ref: seriesDotRef, className: "tweakers-cc-dot", cx: 0, cy: mapY(mainRect, 0), r: 3, style: { fill: playheadColor } }),
+        driverRect && /* @__PURE__ */ jsxs8(Fragment4, { children: [
           renderLaneBg(driverRect, "driver-bg"),
           renderLaneGrid(driverRect),
-          hover?.kind === "driver" && !drag && /* @__PURE__ */ jsx9("rect", { className: "tweakers-cc-seg-hover", x: 0, y: driverRect.y, width: W, height: driverRect.h, rx: 8 }),
+          hover?.kind === "driver" && !drag && /* @__PURE__ */ jsx8("rect", { className: "tweakers-cc-seg-hover", x: 0, y: driverRect.y, width: W, height: driverRect.h, rx: 8 }),
           diagonal(driverRect, [0, 1], "driver-diag"),
-          /* @__PURE__ */ jsx9("path", { className: "tweakers-cc-curve tweakers-cc-curve-driver", d: curvePath(driver, driverRect, [0, 1], W) }),
-          /* @__PURE__ */ jsxs9("text", { className: "tweakers-cc-label", x: W * 0.5, y: driverRect.y + 13, children: [
+          /* @__PURE__ */ jsx8("path", { className: "tweakers-cc-curve tweakers-cc-curve-driver", d: curvePath(driver, driverRect, [0, 1], W) }),
+          /* @__PURE__ */ jsxs8("text", { className: "tweakers-cc-label", x: W * 0.5, y: driverRect.y + 13, children: [
             "driver \xB7 ",
             driver.type
           ] }),
-          /* @__PURE__ */ jsx9("line", { ref: driverPlayheadRef, className: "tweakers-cc-playhead", x1: 0, y1: driverRect.y, x2: 0, y2: driverRect.y + driverRect.h, style: { stroke: playheadColor } })
+          /* @__PURE__ */ jsx8("line", { ref: driverPlayheadRef, className: "tweakers-cc-playhead", x1: 0, y1: driverRect.y, x2: 0, y2: driverRect.y + driverRect.h, style: { stroke: playheadColor } })
         ] })
       ]
     }
@@ -7217,19 +7150,19 @@ function isIdentityTransfer(points) {
 }
 
 // src/components/ModRing.tsx
-import { useEffect as useEffect8, useRef as useRef8 } from "react";
+import { useEffect as useEffect7, useRef as useRef7 } from "react";
 import { TweakStore as TweakStore8 } from "tweakers/store";
 import { ModulationStore } from "tweakers/modulation-store";
-import { jsx as jsx10, jsxs as jsxs10 } from "react/jsx-runtime";
+import { jsx as jsx9, jsxs as jsxs9 } from "react/jsx-runtime";
 function ModRing({
   panelId,
   path,
   assignment,
   className
 }) {
-  const arcRef = useRef8(null);
+  const arcRef = useRef7(null);
   const color = modColor(assignment.slot);
-  useEffect8(() => {
+  useEffect7(() => {
     const el = arcRef.current;
     if (!el) return;
     const draw = (from, to) => {
@@ -7253,15 +7186,15 @@ function ModRing({
       draw(b, b + ModulationStore.getOffset(panelId, path) / span);
     });
   }, [panelId, path, assignment.slot, assignment.amount]);
-  return /* @__PURE__ */ jsxs10(
+  return /* @__PURE__ */ jsxs9(
     "svg",
     {
       className: ["tweakers-mod-ring", className].filter(Boolean).join(" "),
       viewBox: "0 0 16 16",
       "aria-hidden": "true",
       children: [
-        /* @__PURE__ */ jsx10("circle", { className: "tweakers-mod-ring-track", cx: "8", cy: "8", r: MOD_RING_RADIUS }),
-        /* @__PURE__ */ jsx10(
+        /* @__PURE__ */ jsx9("circle", { className: "tweakers-mod-ring-track", cx: "8", cy: "8", r: MOD_RING_RADIUS }),
+        /* @__PURE__ */ jsx9(
           "circle",
           {
             ref: arcRef,
@@ -7716,16 +7649,16 @@ var MoveSearchStoreClass = class {
 var MoveSearchStore = new MoveSearchStoreClass();
 
 // src/components/MoveColor.tsx
-import { useEffect as useEffect9, useLayoutEffect as useLayoutEffect2, useRef as useRef9, useState as useState6 } from "react";
+import { useEffect as useEffect8, useLayoutEffect as useLayoutEffect2, useRef as useRef8, useState as useState5 } from "react";
 import { createPortal as createPortal2 } from "react-dom";
 import { TweakStore as TweakStore11 } from "tweakers/store";
-import { Fragment as Fragment5, jsx as jsx11, jsxs as jsxs11 } from "react/jsx-runtime";
+import { Fragment as Fragment5, jsx as jsx10, jsxs as jsxs10 } from "react/jsx-runtime";
 function MoveColorSlot({ panelId, meta, active, open: open2, latched = false }) {
-  const gesture = useRef9(null);
-  const suppressClick = useRef9(false);
+  const gesture = useRef8(null);
+  const suppressClick = useRef8(false);
   const disabled = TweakStore11.isDisabled(panelId, meta.path);
   const color = MoveColorStore.read(panelId, meta.path);
-  return /* @__PURE__ */ jsx11(
+  return /* @__PURE__ */ jsx10(
     "button",
     {
       type: "button",
@@ -7786,13 +7719,13 @@ function MoveColorSlot({ panelId, meta, active, open: open2, latched = false }) 
       onLostPointerCapture: () => {
         gesture.current = null;
       },
-      children: /* @__PURE__ */ jsx11(MoveSlotColorBody, { label: meta.label, color: String(TweakStore11.getValue(panelId, meta.path)), hue: color.h })
+      children: /* @__PURE__ */ jsx10(MoveSlotColorBody, { label: meta.label, color: String(TweakStore11.getValue(panelId, meta.path)), hue: color.h })
     }
   );
 }
 function MoveOpacityPads({ color, disabled = false }) {
   const level = Math.round(color.a * (MOVE_OPACITY_PADS - 1));
-  return /* @__PURE__ */ jsx11("div", { className: "tweakers-move-pads", role: "group", "aria-label": "Opacity pads", "data-opacity": true, children: Array.from({ length: MOVE_OPACITY_PADS }, (_, pad) => /* @__PURE__ */ jsx11(
+  return /* @__PURE__ */ jsx10("div", { className: "tweakers-move-pads", role: "group", "aria-label": "Opacity pads", "data-opacity": true, children: Array.from({ length: MOVE_OPACITY_PADS }, (_, pad) => /* @__PURE__ */ jsx10(
     "button",
     {
       type: "button",
@@ -7809,7 +7742,7 @@ function MoveOpacityPads({ color, disabled = false }) {
 }
 function MoveColorSteps({ color, disabled = false }) {
   const selected = Math.round(color.a * (MOVE_COLOR_STEPS - 1));
-  return /* @__PURE__ */ jsx11("div", { className: "tweakers-move-color-steps", role: "group", "aria-label": "Color opacity sequencer", children: Array.from({ length: MOVE_COLOR_STEPS }, (_, step) => /* @__PURE__ */ jsx11(
+  return /* @__PURE__ */ jsx10("div", { className: "tweakers-move-color-steps", role: "group", "aria-label": "Color opacity sequencer", children: Array.from({ length: MOVE_COLOR_STEPS }, (_, step) => /* @__PURE__ */ jsx10(
     "button",
     {
       type: "button",
@@ -7818,7 +7751,7 @@ function MoveColorSteps({ color, disabled = false }) {
       "aria-pressed": step === selected,
       disabled,
       onClick: () => MoveColorStore.setOpacity(step / (MOVE_COLOR_STEPS - 1)),
-      children: /* @__PURE__ */ jsx11("span", { style: { opacity: 0.15 + step / (MOVE_COLOR_STEPS - 1) * 0.85 } })
+      children: /* @__PURE__ */ jsx10("span", { style: { opacity: 0.15 + step / (MOVE_COLOR_STEPS - 1) * 0.85 } })
     },
     step
   )) });
@@ -7839,9 +7772,9 @@ var copyOklch = (hex) => {
   return `oklch(${Math.round(ok.l * 100)}% ${ok.c.toFixed(3)} ${Math.round(ok.h)}${ok.a < 1 ? ` / ${Math.round(ok.a * 100)}%` : ""})`;
 };
 function MoveColorCopy({ label, reading, copy }) {
-  const [copied, setCopied] = useState6(false);
-  const timer = useRef9(null);
-  return /* @__PURE__ */ jsxs11(
+  const [copied, setCopied] = useState5(false);
+  const timer = useRef8(null);
+  return /* @__PURE__ */ jsxs10(
     "button",
     {
       type: "button",
@@ -7854,12 +7787,12 @@ function MoveColorCopy({ label, reading, copy }) {
         timer.current = setTimeout(() => setCopied(false), 1e3);
       },
       children: [
-        /* @__PURE__ */ jsxs11("span", { className: "tweakers-move-color-copy-label", children: [
+        /* @__PURE__ */ jsxs10("span", { className: "tweakers-move-color-copy-label", children: [
           label,
           ":"
         ] }),
-        /* @__PURE__ */ jsx11("span", { className: "tweakers-move-color-copy-value", children: reading }),
-        /* @__PURE__ */ jsx11(
+        /* @__PURE__ */ jsx10("span", { className: "tweakers-move-color-copy-value", children: reading }),
+        /* @__PURE__ */ jsx10(
           "svg",
           {
             viewBox: ICON_MOVE_COPY.viewBox,
@@ -7869,7 +7802,7 @@ function MoveColorCopy({ label, reading, copy }) {
             strokeWidth: "1.25",
             strokeLinecap: "round",
             strokeLinejoin: "round",
-            children: copied ? /* @__PURE__ */ jsx11("path", { d: "M2.5 7.5L6 11L11.5 3.5", strokeWidth: "1.75" }) : ICON_MOVE_COPY.paths.map((d) => /* @__PURE__ */ jsx11("path", { d }, d))
+            children: copied ? /* @__PURE__ */ jsx10("path", { d: "M2.5 7.5L6 11L11.5 3.5", strokeWidth: "1.75" }) : ICON_MOVE_COPY.paths.map((d) => /* @__PURE__ */ jsx10("path", { d }, d))
           }
         )
       ]
@@ -7877,9 +7810,9 @@ function MoveColorCopy({ label, reading, copy }) {
   );
 }
 function MoveColorPaletteStrip({ palette, selected, disabled }) {
-  return /* @__PURE__ */ jsxs11("div", { className: "tweakers-move-color-palette", children: [
-    /* @__PURE__ */ jsx11("span", { className: "tweakers-move-palette-name", children: palette.name }),
-    /* @__PURE__ */ jsx11("div", { className: "tweakers-move-palette-strip", role: "group", "aria-label": `${palette.name} colors`, children: palette.colors.map((hex, index) => /* @__PURE__ */ jsx11(
+  return /* @__PURE__ */ jsxs10("div", { className: "tweakers-move-color-palette", children: [
+    /* @__PURE__ */ jsx10("span", { className: "tweakers-move-palette-name", children: palette.name }),
+    /* @__PURE__ */ jsx10("div", { className: "tweakers-move-palette-strip", role: "group", "aria-label": `${palette.name} colors`, children: palette.colors.map((hex, index) => /* @__PURE__ */ jsx10(
       "button",
       {
         type: "button",
@@ -7896,20 +7829,20 @@ function MoveColorPaletteStrip({ palette, selected, disabled }) {
   ] });
 }
 function MoveGradientRamp({ panelId, path, gradient, disabled }) {
-  const drag = useRef9(null);
+  const drag = useRef8(null);
   const selected = Math.min(MoveColorStore.getStop(), gradient.stops.length - 1);
   const positionFrom = (e) => {
     const rect = (e.currentTarget.closest(".tweakers-move-color-ramp") ?? e.currentTarget).getBoundingClientRect();
     return Math.min(1, Math.max(0, (e.clientX - rect.left) / (rect.width || 1)));
   };
-  return /* @__PURE__ */ jsx11(
+  return /* @__PURE__ */ jsx10(
     "div",
     {
       className: "tweakers-move-color-ramp",
       role: "group",
       "aria-label": "Gradient stops",
       style: { background: rampCss(gradient.stops) },
-      children: gradient.stops.map((stop, index) => /* @__PURE__ */ jsx11(
+      children: gradient.stops.map((stop, index) => /* @__PURE__ */ jsx10(
         "button",
         {
           type: "button",
@@ -7945,8 +7878,8 @@ function MoveGradientRamp({ panelId, path, gradient, disabled }) {
   );
 }
 function MoveColorDisplay({ panelId, meta, anchor, theme }) {
-  const display = useRef9(null);
-  const [position, setPosition] = useState6({ left: 0, top: 0 });
+  const display = useRef8(null);
+  const [position, setPosition] = useState5({ left: 0, top: 0 });
   const color = MoveColorStore.read(panelId, meta.path);
   const disabled = TweakStore11.isDisabled(panelId, meta.path);
   const close = () => {
@@ -7995,7 +7928,7 @@ function MoveColorDisplay({ panelId, meta, anchor, theme }) {
   const hex = MoveColorStore.hex(panelId, meta.path);
   const palette = MoveColorStore.getPalette();
   const shown = palette ? rgbToHsl(parseHex(hex) ?? { r: 255, g: 0, b: 0, a: 1 }) : color;
-  const content = /* @__PURE__ */ jsxs11(
+  const content = /* @__PURE__ */ jsxs10(
     "div",
     {
       ref: display,
@@ -8005,14 +7938,14 @@ function MoveColorDisplay({ panelId, meta, anchor, theme }) {
       "aria-label": `${meta.label} color editor`,
       style: position,
       children: [
-        /* @__PURE__ */ jsxs11("div", { className: "tweakers-move-color-copies", children: [
-          /* @__PURE__ */ jsx11(MoveColorCopy, { label: "HSL", reading: readingHsl(shown), copy: copyHsl(shown) }),
-          /* @__PURE__ */ jsx11(MoveColorCopy, { label: "HEX", reading: displayHex(hex), copy: hex }),
-          /* @__PURE__ */ jsx11(MoveColorCopy, { label: "OKLCH", reading: readingOklch(hex), copy: copyOklch(hex) })
+        /* @__PURE__ */ jsxs10("div", { className: "tweakers-move-color-copies", children: [
+          /* @__PURE__ */ jsx10(MoveColorCopy, { label: "HSL", reading: readingHsl(shown), copy: copyHsl(shown) }),
+          /* @__PURE__ */ jsx10(MoveColorCopy, { label: "HEX", reading: displayHex(hex), copy: hex }),
+          /* @__PURE__ */ jsx10(MoveColorCopy, { label: "OKLCH", reading: readingOklch(hex), copy: copyOklch(hex) })
         ] }),
-        gradient && /* @__PURE__ */ jsx11(MoveGradientRamp, { panelId, path: meta.path, gradient, disabled }),
-        palette ? /* @__PURE__ */ jsx11(MoveColorPaletteStrip, { palette, selected: MoveColorStore.paletteIndex(panelId, meta.path), disabled }) : /* @__PURE__ */ jsxs11(Fragment5, { children: [
-          /* @__PURE__ */ jsx11("div", { className: "tweakers-move-color-slider", "data-kind": "hue", children: /* @__PURE__ */ jsx11(
+        gradient && /* @__PURE__ */ jsx10(MoveGradientRamp, { panelId, path: meta.path, gradient, disabled }),
+        palette ? /* @__PURE__ */ jsx10(MoveColorPaletteStrip, { palette, selected: MoveColorStore.paletteIndex(panelId, meta.path), disabled }) : /* @__PURE__ */ jsxs10(Fragment5, { children: [
+          /* @__PURE__ */ jsx10("div", { className: "tweakers-move-color-slider", "data-kind": "hue", children: /* @__PURE__ */ jsx10(
             "input",
             {
               type: "range",
@@ -8027,7 +7960,7 @@ function MoveColorDisplay({ panelId, meta, anchor, theme }) {
               onChange: (e) => MoveColorStore.setHue(Number(e.target.value))
             }
           ) }),
-          /* @__PURE__ */ jsx11("div", { className: "tweakers-move-color-slider", "data-kind": "lightness", children: /* @__PURE__ */ jsx11(
+          /* @__PURE__ */ jsx10("div", { className: "tweakers-move-color-slider", "data-kind": "lightness", children: /* @__PURE__ */ jsx10(
             "input",
             {
               type: "range",
@@ -8049,13 +7982,13 @@ function MoveColorDisplay({ panelId, meta, anchor, theme }) {
   return typeof document === "undefined" ? content : createPortal2(content, document.body);
 }
 function MovePaletteScreen({ kept = null, children }) {
-  const root = useRef9(null);
+  const root = useRef8(null);
   const cursor = MoveColorStore.getPickerCursor();
   const rows = [
     { name: "All colors", colors: null, index: 0 },
     ...MOVE_COLOR_PALETTES.map((p, i) => ({ name: p.name, colors: p.colors, index: i + 1 }))
   ].filter((row) => !kept || kept.includes(row.index));
-  useEffect9(() => {
+  useEffect8(() => {
     const el = root.current;
     const selected = el?.querySelector("[data-selected]");
     if (!el || !selected) return;
@@ -8066,7 +7999,7 @@ function MovePaletteScreen({ kept = null, children }) {
     const next = top < el.scrollTop ? top : bottom > el.scrollTop + el.clientHeight ? bottom - el.clientHeight : el.scrollTop;
     el.scrollTop = Math.max(0, Math.min(next, el.scrollHeight - el.clientHeight));
   }, [cursor]);
-  return /* @__PURE__ */ jsxs11(
+  return /* @__PURE__ */ jsxs10(
     "div",
     {
       ref: root,
@@ -8081,8 +8014,8 @@ function MovePaletteScreen({ kept = null, children }) {
       },
       children: [
         children,
-        kept && !rows.length && /* @__PURE__ */ jsx11("span", { className: "tweakers-move-palette-empty", children: "No matches" }),
-        rows.map((row) => /* @__PURE__ */ jsxs11(
+        kept && !rows.length && /* @__PURE__ */ jsx10("span", { className: "tweakers-move-palette-empty", children: "No matches" }),
+        rows.map((row) => /* @__PURE__ */ jsxs10(
           "button",
           {
             type: "button",
@@ -8092,8 +8025,8 @@ function MovePaletteScreen({ kept = null, children }) {
             "data-selected": row.index === cursor || void 0,
             onClick: () => MoveColorStore.choosePicker(row.index),
             children: [
-              /* @__PURE__ */ jsx11("span", { className: "tweakers-move-palette-name", children: row.name }),
-              /* @__PURE__ */ jsx11("span", { className: "tweakers-move-palette-strip", "aria-hidden": "true", children: row.colors ? row.colors.map((hex, i) => /* @__PURE__ */ jsx11("span", { className: "tweakers-move-palette-color", style: { background: hex } }, i)) : /* @__PURE__ */ jsx11("span", { className: "tweakers-move-palette-color", "data-gradient": true }) })
+              /* @__PURE__ */ jsx10("span", { className: "tweakers-move-palette-name", children: row.name }),
+              /* @__PURE__ */ jsx10("span", { className: "tweakers-move-palette-strip", "aria-hidden": "true", children: row.colors ? row.colors.map((hex, i) => /* @__PURE__ */ jsx10("span", { className: "tweakers-move-palette-color", style: { background: hex } }, i)) : /* @__PURE__ */ jsx10("span", { className: "tweakers-move-palette-color", "data-gradient": true }) })
             ]
           },
           row.name
@@ -8101,6 +8034,77 @@ function MovePaletteScreen({ kept = null, children }) {
       ]
     }
   );
+}
+
+// src/components/MoveFunctionChips.tsx
+import { useEffect as useEffect9, useRef as useRef9, useState as useState6 } from "react";
+import { jsx as jsx11, jsxs as jsxs11 } from "react/jsx-runtime";
+var PRESS_FLASH_MS = 160;
+function MoveFunctionGlyphIcon({ glyph, className = "tweakers-move-chip-icon" }) {
+  return /* @__PURE__ */ jsxs11("svg", { className, width: glyph.size, height: glyph.size, viewBox: glyph.viewBox, fill: "none", children: [
+    glyph.paths?.map((d) => /* @__PURE__ */ jsx11("path", { d, stroke: "currentColor", strokeWidth: "1.5", strokeLinecap: "round", strokeLinejoin: "round" }, d)),
+    glyph.fills?.map((d) => /* @__PURE__ */ jsx11("path", { d, fill: "currentColor" }, d)),
+    glyph.circles?.map((c) => /* @__PURE__ */ jsx11("circle", { ...c, fill: "currentColor" }, `${c.cx},${c.cy}`)),
+    glyph.text && // A letter mark (mute's "M"): Helvetica, centred on the same grid
+    // the drawn marks share, weighted to read like their 1.5px stroke.
+    /* @__PURE__ */ jsx11(
+      "text",
+      {
+        x: "7",
+        y: "7.5",
+        textAnchor: "middle",
+        dominantBaseline: "central",
+        fontFamily: MOVE_GLYPH_TEXT_FONT,
+        fontSize: "12",
+        fontWeight: "bold",
+        fill: "currentColor",
+        children: glyph.text
+      }
+    )
+  ] });
+}
+function MoveFunctionChipButton({ chip, disabled }) {
+  const [pressed, setPressed] = useState6(false);
+  const flashTimer = useRef9(void 0);
+  useEffect9(() => {
+    const unsubscribe = MoveFunctions.subscribeRuns((ran) => {
+      if (ran !== chip.name) return;
+      setPressed(true);
+      clearTimeout(flashTimer.current);
+      flashTimer.current = setTimeout(() => setPressed(false), PRESS_FLASH_MS);
+    });
+    return () => {
+      unsubscribe();
+      clearTimeout(flashTimer.current);
+    };
+  }, [chip.name]);
+  return /* @__PURE__ */ jsxs11(
+    "button",
+    {
+      type: "button",
+      className: "tweakers-move-chip",
+      disabled,
+      "data-name": chip.name,
+      "data-variant": chip.variant,
+      "data-color": chip.color,
+      "data-pressed": pressed || void 0,
+      style: chip.color ? { background: MOVE_PALETTE[chip.color] } : void 0,
+      onClick: () => MoveFunctions.run(chip.name, { shift: false }),
+      children: [
+        /* @__PURE__ */ jsx11(MoveFunctionGlyphIcon, { glyph: MOVE_FUNCTION_ICONS[chip.name] }),
+        chip.label
+      ]
+    }
+  );
+}
+function MoveFunctionChips({ className }) {
+  const [chips, setChips] = useState6(() => MoveFunctions.chips());
+  useEffect9(() => {
+    setChips(MoveFunctions.chips());
+    return MoveFunctions.subscribe(() => setChips(MoveFunctions.chips()));
+  }, []);
+  if (!chips.length) return null;
+  return /* @__PURE__ */ jsx11("div", { className: className ? `tweakers-move-chips ${className}` : "tweakers-move-chips", children: chips.map((chip) => /* @__PURE__ */ jsx11(MoveFunctionChipButton, { chip }, chip.name)) });
 }
 
 // src/move-settings.ts
