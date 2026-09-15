@@ -1646,19 +1646,6 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 ? ModulationStore.getSlots().map((slot) => (
                     <MoveModCircle key={slot.index} slot={slot} />
                   ))
-                : MoveSurfaceStore.ownsSteps()
-                /* the app's own steps: a circle per step it names, the lit one filled */
-                ? stepRuns(surface.steps).map((run) => (
-                    <span key={run[0].step} className="tweakers-move-step-group">
-                      {run.map((cell) => (
-                        <button key={cell.step} type="button" className="tweakers-move-mod" data-lit={cell.lit || undefined}
-                          title={`Step ${cell.step + 1}`} aria-pressed={!!cell.lit}
-                          onClick={(event) => MoveSurfaceStore.pressStep(cell.step, event.shiftKey)}>
-                          <span className="tweakers-move-mod-dot" style={{ background: cell.lit ? cell.color ?? 'var(--move-text)' : 'transparent', boxShadow: cell.lit ? undefined : 'inset 0 0 0 1.5px var(--move-text)' }} />
-                        </button>
-                      ))}
-                    </span>
-                  ))
                 : null}
             </div>
             {audioWave != null ? <MoveAudioTransport index={audioWave} /> : roomWave ? <MoveRoomTransport /> : headerCluster}
@@ -2663,6 +2650,26 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               })}
             </div>
             </div>
+
+            {/* An app that holds the step row: its circles under the pad grid,
+                where a long row has the panel's width to wrap in — a circle
+                per step it names, the lit one filled, a group's steps in one
+                pill. */}
+            {!settingsOpen && surface.steps && MoveSurfaceStore.ownsSteps() && (
+              <div className="tweakers-move-app-steps">
+                {stepRuns(surface.steps).map((run) => (
+                <span key={run[0].step} className="tweakers-move-step-group">
+                  {run.map((cell) => (
+                    <button key={cell.step} type="button" className="tweakers-move-mod" data-lit={cell.lit || undefined}
+                      title={`Step ${cell.step + 1}`} aria-pressed={!!cell.lit}
+                      onClick={(event) => MoveSurfaceStore.pressStep(cell.step, event.shiftKey)}>
+                      <span className="tweakers-move-mod-dot" style={{ background: cell.lit ? cell.color ?? 'var(--move-text)' : 'transparent', boxShadow: cell.lit ? undefined : 'inset 0 0 0 1.5px var(--move-text)' }} />
+                    </button>
+                  ))}
+                </span>
+              ))}
+              </div>
+            )}
 
             {/* Where the window sits in the whole set — the wheel's own answer
                 to "where am I", and the thing you can drag when there is no
