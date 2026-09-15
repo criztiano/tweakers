@@ -325,6 +325,7 @@ export type {
   ActionConfig,
   SelectConfig,
   ToggleConfig,
+  MoveSlotGroup,
   ColorConfig,
   GradientConfig,
   BalanceConfig,

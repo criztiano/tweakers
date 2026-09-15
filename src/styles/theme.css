@@ -386,6 +386,7 @@
   --move-slot-empty: rgba(222, 227, 201, 0.03);
   --move-chip: #41403e;
   --move-group-divider: #353333;
+  --move-group-head: #2f2d2c;
   /* The Move's colours on screen — the same set the hardware lights, matched
      by eye against the device's LED palette (see src/move-palette.ts). Colour
      on this surface always means something: a track's identity, a modulation
@@ -484,6 +485,7 @@
   --move-slot-empty: rgba(255, 255, 255, 0.03);
   --move-chip: #2e2e30;
   --move-group-divider: #353333;
+  --move-group-head: #1f1f21;
   --move-toggle-halo-color: var(--move-chip);
   --move-text: #f0f0ee;
   --move-text-inverse: #1e1e1e;
@@ -1123,6 +1125,29 @@
   background: var(--move-chip);
   border-radius: var(--move-radius);
   pointer-events: none;
+}
+
+/* A labelled group's name, in a small header along its top: the dial list's
+   head, inset 2px from the top and the sides, its top corners following the
+   container's. It sits over the slots — the pointer passes through to them. */
+.tweakers-move-slot-group-head {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  right: 2px;
+  z-index: 1;
+  height: var(--move-head-h, 18px);
+  padding: 0 8px;
+  border-radius: calc(var(--move-radius) - 2px) calc(var(--move-radius) - 2px) 0 0;
+  background: var(--move-group-head);
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  font-size: 13px;
+  line-height: var(--move-head-h, 18px);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .tweakers-move-slot-group-divider {

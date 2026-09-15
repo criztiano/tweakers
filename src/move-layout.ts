@@ -567,9 +567,11 @@ export function moveAppPadRow(row: number, claimedRows: number): 0 | 1 | null {
  * needs two slots side by side; one whose slots are not adjacent on screen is
  * reported and left out, rather than drawn around a stranger.
  */
-export function slotGroups(page: MovePage, cols: number[] = visibleColumns(page)): { start: number; span: number }[] {
-  const out: { start: number; span: number }[] = [];
-  for (const paths of page.panel.moveSlotGroups ?? []) {
+export function slotGroups(page: MovePage, cols: number[] = visibleColumns(page)): { start: number; span: number; label?: string }[] {
+  const out: { start: number; span: number; label?: string }[] = [];
+  for (const group of page.panel.moveSlotGroups ?? []) {
+    const paths = Array.isArray(group) ? group : group.slots;
+    const label = Array.isArray(group) ? undefined : group.label;
     const at = cols.flatMap((col, position) => {
       const dial = page.dials[col];
       return dial && paths.includes(dial.path) ? [position] : [];
@@ -581,7 +583,7 @@ export function slotGroups(page: MovePage, cols: number[] = visibleColumns(page)
       reportMoveLayoutIssue('slot-group-apart', `panel '${page.panel.id}': slot group [${paths.join(', ')}] is not side by side on the page — not drawn`);
       continue;
     }
-    out.push({ start, span });
+    out.push({ start, span, ...(label ? { label } : {}) });
   }
   return out;
 }
