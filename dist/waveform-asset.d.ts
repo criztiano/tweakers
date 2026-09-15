@@ -48,5 +48,16 @@ declare function playedRanges(asset: WaveformAsset, ranges?: WaveformRange[] | n
  * as silence. The cost follows the columns, never the samples on screen.
  */
 declare function fillRangePeaks(asset: WaveformAsset, ranges: WaveformRange[], t0: number, t1: number, cols: number, min: Float32Array, max: Float32Array): void;
+/**
+ * A simplified symmetric envelope pinned to played time rather than the view:
+ * point `k` sits at `k * seg` seconds and reads the peak amplitude over the
+ * `seg` seconds centred on it. The points covering [t0, t1] come back with
+ * their times, so a window sliding along shows the same shape moving, never
+ * a reshaped one.
+ */
+declare function rangeEnvelope(asset: WaveformAsset, ranges: WaveformRange[], t0: number, t1: number, seg: number): {
+    t: number;
+    amp: number;
+}[];
 
-export { WAVEFORM_BASE_BUCKET, type WaveformAsset, type WaveformLevel, type WaveformRange, buildWaveformLevels, fillRangePeaks, mixRange, playedRanges, rangesDuration, waveformAsset, waveformAssetFromBuffer };
+export { WAVEFORM_BASE_BUCKET, type WaveformAsset, type WaveformLevel, type WaveformRange, buildWaveformLevels, fillRangePeaks, mixRange, playedRanges, rangeEnvelope, rangesDuration, waveformAsset, waveformAssetFromBuffer };

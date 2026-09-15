@@ -13,21 +13,6 @@ function barPeaks(p, cols, pitch) {
   }
   return out;
 }
-function envelope(p, cols, n) {
-  const out = new Array(n);
-  const seg = cols / n;
-  for (let k = 0; k < n; k++) {
-    const start = Math.floor(k * seg);
-    const end = Math.max(start + 1, Math.min(cols, Math.floor((k + 1) * seg)));
-    let a = 0;
-    for (let x = start; x < end; x++) {
-      const m = Math.max(Math.abs(p.min[x]), Math.abs(p.max[x]));
-      if (m > a) a = m;
-    }
-    out[k] = a;
-  }
-  return out;
-}
 
 // src/waveform-asset.ts
 var WAVEFORM_BASE_BUCKET = 64;
@@ -164,6 +149,22 @@ function fillRangePeaks(asset, ranges, t0, t1, cols, min, max) {
     min[x] = out[0];
     max[x] = out[1];
   }
+}
+function rangeEnvelope(asset, ranges, t0, t1, seg) {
+  const played = rangesDuration(ranges);
+  if (!(seg > 0) || played <= 0) return [];
+  const k0 = Math.max(0, Math.floor(t0 / seg));
+  const k1 = Math.min(Math.ceil(played / seg), Math.ceil(t1 / seg));
+  const n = k1 - k0 + 1;
+  if (n < 1) return [];
+  const min = new Float32Array(n);
+  const max = new Float32Array(n);
+  fillRangePeaks(asset, ranges, (k0 - 0.5) * seg, (k1 + 0.5) * seg, n, min, max);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    out.push({ t: Math.min(played, (k0 + i) * seg), amp: Math.max(Math.abs(min[i]), Math.abs(max[i])) });
+  }
+  return out;
 }
 
 // src/waveform-engine.ts
@@ -341,10 +342,13 @@ function createWaveformEngine(canvas, get) {
   const drawSimplified = (env, x0, x1, color, outline) => {
     const n = env.length;
     if (n < 2) return;
-    const px = (k) => x0 + k / (n - 1) * (x1 - x0);
-    const top = env.map((a, k) => ({ x: px(k), y: cy - a * amp }));
+    const top = env.map((p) => ({ x: p.x, y: cy - p.amp * amp }));
     const bot = [];
-    for (let k = n - 1; k >= 0; k--) bot.push({ x: px(k), y: cy + env[k] * amp });
+    for (let k = n - 1; k >= 0; k--) bot.push({ x: env[k].x, y: cy + env[k].amp * amp });
+    dc.save();
+    dc.beginPath();
+    dc.rect(x0, 0, x1 - x0, H);
+    dc.clip();
     dc.beginPath();
     dc.moveTo(top[0].x, top[0].y);
     smoothThrough(dc, top);
@@ -364,6 +368,7 @@ function createWaveformEngine(canvas, get) {
       dc.globalAlpha = 1;
       dc.fill();
     }
+    dc.restore();
   };
   const drawGaps = (color, radius) => {
     if (!gapPx || pieces.length < 2) return;
@@ -455,16 +460,23 @@ function createWaveformEngine(canvas, get) {
       const color = count === 3 ? BAND_COLORS[i] : wave;
       for (const piece of pieces) {
         const cols = Math.max(1, Math.round(piece.x1) - Math.round(piece.x0));
+        const x0 = Math.round(piece.x0);
+        if (rt.mode === "smooth") {
+          const seg = windowState.win * played / (rt.smoothPoints || WAVEFORM_SMOOTH_POINTS);
+          const t0 = piece.a * played;
+          const span = Math.max(1e-9, piece.b * played - t0);
+          const env = rangeEnvelope(drawn[i], ranges, t0, piece.b * played, seg).map((p) => ({
+            x: x0 + (p.t - t0) / span * cols,
+            amp: p.amp
+          }));
+          drawSimplified(env, x0, x0 + cols, color, rt.border);
+          continue;
+        }
         const pmin = pk.min.subarray(0, cols);
         const pmax = pk.max.subarray(0, cols);
         const read = striped ? Math.max(1, Math.floor(cols / WAVEFORM_STRIPE_STRETCH)) : cols;
         fillRangePeaks(drawn[i], ranges, piece.a * played, piece.b * played, read, pmin, pmax);
-        const x0 = Math.round(piece.x0);
-        if (rt.mode !== "smooth") drawColumns({ min: pmin, max: pmax }, cols, x0, color, rt.pixelSize, striped);
-        else {
-          const points = Math.max(2, Math.round((rt.smoothPoints || WAVEFORM_SMOOTH_POINTS) * (cols / W)));
-          drawSimplified(envelope({ min: pmin, max: pmax }, cols, points), x0, x0 + cols, color, rt.border);
-        }
+        drawColumns({ min: pmin, max: pmax }, cols, x0, color, rt.pixelSize, striped);
       }
     }
     g.globalAlpha = 1;

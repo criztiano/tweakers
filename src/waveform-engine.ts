@@ -4,10 +4,11 @@
 // pointer interaction, reading the current props through a `get()` callback so it
 // never needs to be torn down when a prop changes.
 
-import { envelope, barPeaks, type Peaks } from './waveform-dsp';
+import { barPeaks, type Peaks } from './waveform-dsp';
 import {
   buildWaveformLevels,
   fillRangePeaks,
+  rangeEnvelope,
   playedRanges,
   rangesDuration,
   waveformAsset,
@@ -327,15 +328,19 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
     }
   };
 
-  // Simplified, smoothly-interpolated envelope across device x `x0`..`x1`: solid fill, or translucent + outline.
-  const drawSimplified = (env: number[], x0: number, x1: number, color: string, outline: boolean) => {
+  // Simplified, smoothly-interpolated envelope through points at device x, kept
+  // inside `x0`..`x1`: solid fill, or translucent + outline.
+  const drawSimplified = (env: { x: number; amp: number }[], x0: number, x1: number, color: string, outline: boolean) => {
     const n = env.length;
     if (n < 2) return;
-    const px = (k: number) => x0 + (k / (n - 1)) * (x1 - x0);
-    const top: Pt[] = env.map((a, k) => ({ x: px(k), y: cy - a * amp }));
+    const top: Pt[] = env.map((p) => ({ x: p.x, y: cy - p.amp * amp }));
     const bot: Pt[] = [];
-    for (let k = n - 1; k >= 0; k--) bot.push({ x: px(k), y: cy + env[k] * amp });
+    for (let k = n - 1; k >= 0; k--) bot.push({ x: env[k].x, y: cy + env[k].amp * amp });
 
+    dc.save();
+    dc.beginPath();
+    dc.rect(x0, 0, x1 - x0, H);
+    dc.clip();
     dc.beginPath();
     dc.moveTo(top[0].x, top[0].y);
     smoothThrough(dc, top);
@@ -356,6 +361,7 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
       dc.globalAlpha = 1;
       dc.fill();
     }
+    dc.restore();
   };
 
   // The frame showing through a cut, and the rounded corners of the pieces
@@ -462,17 +468,26 @@ export function createWaveformEngine(canvas: HTMLCanvasElement, get: () => Wavef
       const color = count === 3 ? BAND_COLORS[i] : wave;
       for (const piece of pieces) {
         const cols = Math.max(1, Math.round(piece.x1) - Math.round(piece.x0));
+        const x0 = Math.round(piece.x0);
+        if (rt.mode === 'smooth') {
+          // The points are pinned to played time, one density across every
+          // piece: a window following the playhead slides the shape along
+          // instead of re-measuring it each frame.
+          const seg = (windowState.win * played) / (rt.smoothPoints || WAVEFORM_SMOOTH_POINTS);
+          const t0 = piece.a * played;
+          const span = Math.max(1e-9, piece.b * played - t0);
+          const env = rangeEnvelope(drawn[i], ranges, t0, piece.b * played, seg).map((p) => ({
+            x: x0 + ((p.t - t0) / span) * cols,
+            amp: p.amp,
+          }));
+          drawSimplified(env, x0, x0 + cols, color, rt.border);
+          continue;
+        }
         const pmin = pk.min.subarray(0, cols);
         const pmax = pk.max.subarray(0, cols);
         const read = striped ? Math.max(1, Math.floor(cols / WAVEFORM_STRIPE_STRETCH)) : cols;
         fillRangePeaks(drawn[i], ranges, piece.a * played, piece.b * played, read, pmin, pmax);
-        const x0 = Math.round(piece.x0);
-        if (rt.mode !== 'smooth') drawColumns({ min: pmin, max: pmax }, cols, x0, color, rt.pixelSize, striped);
-        else {
-          // the envelope keeps one density of points across every piece
-          const points = Math.max(2, Math.round((rt.smoothPoints || WAVEFORM_SMOOTH_POINTS) * (cols / W)));
-          drawSimplified(envelope({ min: pmin, max: pmax }, cols, points), x0, x0 + cols, color, rt.border);
-        }
+        drawColumns({ min: pmin, max: pmax }, cols, x0, color, rt.pixelSize, striped);
       }
     }
     g.globalAlpha = 1;
