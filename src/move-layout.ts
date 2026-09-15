@@ -40,6 +40,9 @@ export interface MovePage {
    *  where no switch holds it. A column may carry one here and another in
    *  `values` under it; both take that column's knob. Absent: none. */
   topValues?: ControlMeta[];
+  /** Chips riding the action row (y=1), each `moveActionRow` chip in its named
+   *  column where no action holds it — a column's third small slot. Absent: none. */
+  actionValues?: ControlMeta[];
 }
 
 const flat = (controls: ControlMeta[], out: ControlMeta[] = []): ControlMeta[] => {
@@ -195,6 +198,8 @@ export type MoveLayoutIssueCode =
   | 'balance-color-placed'
   | 'pad-column-taken'
   | 'top-row-taken'
+  | 'action-row-no-column'
+  | 'action-row-taken'
   | 'top-row-no-column'
   | 'pad-row-full'
   | 'tabs-oversized'
@@ -421,14 +426,43 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         }
       }
 
+      // 3b. A value chip the panel names in `moveActionRow` rides the action
+      //     row in its movePads column, under the value row — the column's
+      //     third small slot. Same fallbacks as the top row: no column, or a
+      //     taken cell, and the chip keeps the value row.
+      const sink = panel.moveActionRow ?? [];
+      const actionValues: ControlMeta[] = [];
+      for (const c of controls) {
+        if (!sink.includes(c.path) || !chipFits(c) || topValues.includes(c)) continue;
+        const col = padCols.get(c) ?? null;
+        if (col === null) {
+          reportMoveLayoutIssue(
+            'action-row-no-column',
+            `panel '${panel.id}': control '${c.path}' is named in moveActionRow but has no movePads column — the chip keeps the value row`
+          );
+        } else if (actionValues[col] !== undefined) {
+          reportMoveLayoutIssue(
+            'action-row-taken',
+            `panel '${panel.id}': control '${c.path}': action-row column ${col} holds '${actionValues[col].path}' — the chip keeps the value row`
+          );
+        } else {
+          actionValues[col] = c;
+        }
+      }
+
       // 4. Everything else, in the order the panel declares it.
       for (const c of controls) {
         const col = padCols.get(c) ?? null;
         if (isMoveTabs(c) || (c.type === 'toggle' && !isToggleDial(c))) continue;   /* seated in 2 */
-        if (seated(c)) continue;                                                     /* seated in 1 or 3 */
+        if (seated(c) || actionValues.includes(c)) continue;                          /* seated in 1 or 3 */
         // Actions reach the pads only when the page asks for them by column —
         // every app has buttons, and none of them expect a hardware pad.
-        if (c.type === 'action') { if (col !== null) place(actions, 'action', c, col); }
+        if (c.type === 'action') {
+          if (col !== null && actionValues[col] !== undefined) {
+            reportMoveLayoutIssue('action-row-taken', `panel '${panel.id}': action '${c.path}': column ${col} holds the chip '${actionValues[col].path}' — the action moves along`);
+            place(actions, 'action', c, null);
+          } else if (col !== null) place(actions, 'action', c, col);
+        }
         // A balance's colour whose balance never landed a column falls back
         // to the ordinary chip: the value row, leftmost free (or as named).
         else if (balanceRefs.has(c)) place(values, 'value', c, col);
@@ -464,6 +498,7 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         values: values.slice(0, MOVE_PADS),
         actions: actions.slice(0, MOVE_PADS),
         ...(topValues.length ? { topValues: topValues.slice(0, MOVE_PADS) } : {}),
+        ...(actionValues.length ? { actionValues: actionValues.slice(0, MOVE_PADS) } : {}),
       };
     });
 }
@@ -493,8 +528,17 @@ export function movePadRows(page: MovePage, claimedRows: number): ControlMeta[][
       if (cell) top[i] = cell;
     }
   }
+  let actions = page.actions;
+  if (page.actionValues?.some(Boolean)) {
+    // the chips sunk to the action row share it with the buttons, each in its own column
+    actions = [];
+    for (let i = 0; i < Math.max(page.actions.length, page.actionValues.length); i++) {
+      const cell = page.actions[i] ?? page.actionValues[i];
+      if (cell) actions[i] = cell;
+    }
+  }
   if (claimedRows >= 2) return [top, values, [], []];
-  return [top, values, page.actions, []];
+  return [top, values, actions, []];
 }
 
 /**
@@ -518,7 +562,7 @@ export function moveAppPadRow(row: number, claimedRows: number): 0 | 1 | null {
 export function visibleColumns(page: MovePage): number[] {
   const cols: number[] = [];
   for (let i = 0; i < MOVE_DIALS; i++) {
-    if (page.dials[i] || page.toggles[i] || page.topValues?.[i] || page.values[i] || page.actions[i]) cols.push(i);
+    if (page.dials[i] || page.toggles[i] || page.topValues?.[i] || page.values[i] || page.actions[i] || page.actionValues?.[i]) cols.push(i);
   }
   return cols;
 }

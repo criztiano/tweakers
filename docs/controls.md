@@ -137,6 +137,7 @@ config can answer, the kit answers.
 
 | Component / API | Purpose |
 | --- | --- |
+| `moveActionRow` option | Seat value chips on the action row in their `movePads` column, so one column carries a switch and two chips |
 | `movePads` option | Place toggles, numeric value chips, explicitly mapped actions and tabs strips under their related dial columns |
 | `MoveActionButton` / `MoveFunctions` | Hardware-named action pills and one shared action registry |
 | `MoveActionDeck` | A view's whole surface when it has nothing to set yet — a start screen, a "what now" page: up to four buttons in the page's middle, one per chip key (`sample`, `capture`, `loop`, `mute`), in the chip voice (`variant: 'highlight'` for the pale key look, an `icon` of its own or the key's glyph) and attached to the key through `MoveFunctions`, so a click and a press run one handler and both flash the button. A disabled action leaves its key dark; the deck is the chip, so its attachments show no header chip. One of three: a view shows the deck, the list screen, or a panel — never two. `normalizeDeck` is the rule (order kept, first action per key wins, a fifth is dropped, every drop warned). |

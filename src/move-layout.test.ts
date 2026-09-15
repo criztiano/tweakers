@@ -22,6 +22,37 @@ function capturingIssues<T>(fn: () => T): { result: T; issues: [MoveLayoutIssueC
 let seq = 0;
 const nextId = () => `move-layout-${++seq}`;
 
+describe('value chips on the action row', () => {
+  it('gives a column a switch and two chips: one on the value row, one on the action row', () => {
+    const id = nextId();
+    const dials = Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`d${i}`, [0.5, 0, 1] as [number, number, number]]));
+    const { result: page, issues } = capturingIssues(() => {
+      TweakStore.registerPanel(id, id, { ...dials, solo: { type: 'toggle', default: false, moveHold: true }, high: [1, 0, 1], low: [0, 0, 1], keep: { type: 'action', label: 'Keep' } }, undefined, {
+        movePads: { solo: 2, high: 2, low: 2, keep: 7 },
+        moveActionRow: ['low'],
+      });
+      return buildMovePages([TweakStore.getPanel(id)!])[0];
+    });
+    const [top, values, actions] = movePadRows(page, 0);
+    assert.deepEqual([top[2]?.path, values[2]?.path, actions[2]?.path, actions[7]?.path], ['solo', 'high', 'low', 'keep']);
+    assert.deepEqual(issues, []);
+    TweakStore.unregisterPanel(id);
+  });
+
+  it('keeps the chip on the value row when it names no column', () => {
+    const id = nextId();
+    const dials = Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`d${i}`, [0.5, 0, 1] as [number, number, number]]));
+    const { result: page, issues } = capturingIssues(() => {
+      TweakStore.registerPanel(id, id, { ...dials, low: [0, 0, 1] }, undefined, { moveActionRow: ['low'] });
+      return buildMovePages([TweakStore.getPanel(id)!])[0];
+    });
+    assert.equal(page.values[0]?.path, 'low');
+    assert.equal(page.actionValues, undefined);
+    assert.ok(issues.some(([code]) => code === 'action-row-no-column'));
+    TweakStore.unregisterPanel(id);
+  });
+});
+
 describe('value chips on the top row', () => {
   it('lifts a named chip into a free switch column, keeping it a value chip', () => {
     const id = nextId();
