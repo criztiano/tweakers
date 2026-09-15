@@ -10079,7 +10079,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 headerStart && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "tweakers-move-header-start", children: headerStart })
               ] })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "tweakers-move-mods", children: settingsOpen ? roomWave ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveAudioZoom, {}) : null : color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveColorSteps, { color, disabled: import_TweakStore13.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? import_ModulationStore2.ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveModCircle, { slot }, slot.index)) : MoveSurfaceStore.ownsSteps() ? surface.steps.map((cell) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "tweakers-move-mods", children: settingsOpen ? roomWave ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveAudioZoom, {}) : null : color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveColorSteps, { color, disabled: import_TweakStore13.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? import_ModulationStore2.ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveModCircle, { slot }, slot.index)) : MoveSurfaceStore.ownsSteps() ? stepRuns(surface.steps).map((run) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "tweakers-move-step-group", children: run.map((cell) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
               "button",
               {
                 type: "button",
@@ -10091,7 +10091,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "tweakers-move-mod-dot", style: { background: cell.lit ? cell.color ?? "var(--move-text)" : "transparent", boxShadow: cell.lit ? void 0 : "inset 0 0 0 1.5px var(--move-text)" } })
               },
               cell.step
-            )) : null }),
+            )) }, run[0].step)) : null }),
             audioWave != null ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveAudioTransport, { index: audioWave }) : roomWave ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveRoomTransport, {}) : headerCluster
           ] }),
           /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(
@@ -11661,6 +11661,15 @@ function MoveWavePreview({ index }) {
       ]
     }
   );
+}
+function stepRuns(cells) {
+  const runs = [];
+  for (const cell of cells) {
+    const last = runs[runs.length - 1];
+    if (last && cell.group !== void 0 && last[0].group === cell.group && last[last.length - 1].step === cell.step - 1) last.push(cell);
+    else runs.push([cell]);
+  }
+  return runs;
 }
 function MoveModCircle({ slot }) {
   const dotRef = (0, import_react11.useRef)(null);

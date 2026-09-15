@@ -4469,6 +4469,9 @@ interface MoveStepCell {
     step: number;
     color?: string;
     lit?: boolean;
+    /** Steps side by side that share a group read as one piece on the screen —
+     *  one pill around their circles (pages of one thing). */
+    group?: number;
 }
 /** One row of the app's list. A plain string is a row that settles a value
  * where it stands; the object form adds where the row leads and whether it is
