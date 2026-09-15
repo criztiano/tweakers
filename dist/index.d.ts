@@ -3958,16 +3958,21 @@ declare class MoveWaveformStoreClass {
      *  turns, and a turn read against it would lose every detent but the first. */
     scrub(delta: number, fine?: boolean, now?: number): void;
     zoom(delta: number): void;
+    /** A step press marks the loop — unless an app holds the step row
+     *  (MoveSurfaceStore.onStep), in which case the press is the app's. Routing
+     *  it here too means a kit that predates app-owned steps, which sends every
+     *  step to the waveform, still reaches the app. */
     pressStep(index: number): void;
     /** A held step lets the loop go — the remove gesture, from any step. */
-    holdStep(_index: number): void;
+    holdStep(index: number): void;
     /**
      * The bottom pad row, over the shown window: a tap jumps the playhead to
      * that subdivision (preview it), a hold selects it as the loop.
      */
     pressPad(index: number, hold?: boolean): void;
     clearLoop(): void;
-    /** The steps the loop covers — what the hardware lights. */
+    /** The steps the loop covers — what the hardware lights. While an app
+     *  holds the row, its lit steps instead. */
     loopSteps(): number[];
     subscribe(fn: Listener$4): () => void;
     private notify;
