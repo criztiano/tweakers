@@ -756,6 +756,8 @@ export type PanelConfig = {
   moveTopRow?: string[];
   /** Value chips sunk onto the action pad row, retained on the same terms as `hints`. */
   moveActionRow?: string[];
+  /** Actions raised onto the value pad row, retained on the same terms as `hints`. */
+  moveValueRow?: string[];
   /** Big slots drawn as one container, retained on the same terms as `hints`. */
   moveSlotGroups?: MoveSlotGroup[];
   /**
@@ -900,6 +902,13 @@ export type TweakStorePanelOptions = {
    * action cell is taken, or that names no column, keeps the value row.
    */
   moveActionRow?: string[];
+  /**
+   * Actions, by control path, that sit on the value pad row in their
+   * `movePads` column — so one column can stack two buttons (Extract over
+   * Export). An action whose value cell is taken, or that names no column,
+   * keeps the action row.
+   */
+  moveValueRow?: string[];
   /**
    * Big slots that read as one thing — a gate's threshold, look-ahead and
    * release — drawn as one container, by control path. Each group is the
@@ -1093,7 +1102,7 @@ class TweakStoreClass {
     // instead of resurrecting it.
     this.overlayPersistedValues(id, target, values, this.mapControlsByPath(controls));
 
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, moveTopRow: options.moveTopRow, moveActionRow: options.moveActionRow, moveSlotGroups: options.moveSlotGroups, module: '_enabled' in config ? true : undefined, kind: options.kind });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, moveTopRow: options.moveTopRow, moveActionRow: options.moveActionRow, moveValueRow: options.moveValueRow, moveSlotGroups: options.moveSlotGroups, module: '_enabled' in config ? true : undefined, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -1112,6 +1121,7 @@ class TweakStoreClass {
     const movePads = options.movePads ?? existing.movePads;
     const moveTopRow = options.moveTopRow ?? existing.moveTopRow;
     const moveActionRow = options.moveActionRow ?? existing.moveActionRow;
+    const moveValueRow = options.moveValueRow ?? existing.moveValueRow;
     const moveSlotGroups = options.moveSlotGroups ?? existing.moveSlotGroups;
     const controls = this.parseConfig(config, '', shortcuts);
     this.applyControlExtras(controls, hints, affordances, labels);
@@ -1143,7 +1153,7 @@ class TweakStoreClass {
       }
     }
 
-    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, moveTopRow, moveActionRow, moveSlotGroups, module: '_enabled' in config ? true : undefined, kind: options.kind ?? existing.kind };
+    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, moveTopRow, moveActionRow, moveValueRow, moveSlotGroups, module: '_enabled' in config ? true : undefined, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
 

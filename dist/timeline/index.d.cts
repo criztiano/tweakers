@@ -159,10 +159,6 @@ type ActionConfig = {
      */
     caption?: string;
 };
-/**
- * Explicit switch form, for what a bare `false` cannot say: a name a key
- * cannot spell, a slot of its own on the Move, and a picture to wear there.
- */
 type ToggleConfig = {
     type: 'toggle';
     default: boolean;

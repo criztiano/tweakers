@@ -1769,7 +1769,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   : waveSlot && modSettings
                   ? <MoveWavePreview index={modSettings.index} />
                   : null;
-                if (padListView?.panelId === page.panel.id && page.actions[i]?.path === padListView.path) {
+                if (padListView?.panelId === page.panel.id && (page.actions[i] ?? page.valueActions?.[i])?.path === padListView.path) {
                   const stepList = (event: React.PointerEvent<HTMLElement>) => {
                     const rect = event.currentTarget.getBoundingClientRect();
                     const fraction = (event.clientX - rect.left - DIAL_TRACK_INSET) / Math.max(1, rect.width - DIAL_TRACK_INSET * 2);

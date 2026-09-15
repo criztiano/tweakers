@@ -1112,7 +1112,7 @@ within one group only — a different view lays out its slots from scratch.
 
 Big slots that read as one thing can share a container: `moveSlotGroups: [['threshold', 'lookAhead', 'release']]` draws one surface across those adjacent dials, with a 2 × 48px divider between each. Give a group as `{ label: 'Gate', slots: [...] }` and it wears that name in a small header along its top. Nothing moves — the columns keep their hardware places, and a group whose slots are not side by side is not drawn.
 
-A column has three small rows. `moveTopRow` lifts a value chip onto the switch row, and `moveActionRow` sinks one onto the action row, both in the chip's `movePads` column. That lets one column carry a switch and two chips — a take's Solo, its high cut and its low cut.
+A column has three small rows. `moveTopRow` lifts a value chip onto the switch row, and `moveActionRow` sinks one onto the action row, both in the chip's `movePads` column. That lets one column carry a switch and two chips — a take's Solo, its high cut and its low cut. `moveValueRow` raises an action onto the value row in its `movePads` column, so one column can stack two buttons — Extract over Export.
 
 A switch that should only be on while a finger holds it — a solo, a preview — says `moveHold: true`. Its pad turns the value on at the press and off at the release, on the screen and on the hardware, so nothing stays latched by accident.
 
