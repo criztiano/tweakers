@@ -1,4 +1,4 @@
-import { P as PanelConfig, C as ControlMeta } from './TweakStore-B_gIdvJc.js';
+import { P as PanelConfig, C as ControlMeta } from './TweakStore-D6j07vL3.js';
 import { ModPageLayout } from './modulation-core.js';
 import { XYValue } from './xy-pad-core.js';
 import { RangeValue } from './range-slider-core.js';
@@ -45,6 +45,10 @@ interface MovePage {
     /** Chips riding the action row (y=1), each `moveActionRow` chip in its named
      *  column where no action holds it — a column's third small slot. Absent: none. */
     actionValues?: ControlMeta[];
+    /** Buttons riding the value row (y=2), each `moveValueRow` action in its
+     *  named column where no chip holds it — so a column can stack two buttons,
+     *  one over the other. Absent: none. */
+    valueActions?: ControlMeta[];
 }
 /** A select with real choices becomes an enum dial — the kit's exact rule. */
 declare const isEnumDial: (c: ControlMeta) => boolean;
@@ -113,7 +117,7 @@ declare function buildModMovePage(panel: PanelConfig, layout?: ModPageLayout | n
  * Tests (and apps that want the feed) can swap the sink with
  * `setMoveLayoutReporter`; `null` restores the deduped console.warn.
  */
-type MoveLayoutIssueCode = 'panel-dropped' | 'dial-dropped' | 'pad-column-invalid' | 'pad-column-on-dial' | 'balance-color-placed' | 'pad-column-taken' | 'top-row-taken' | 'slot-group-apart' | 'action-row-no-column' | 'action-row-taken' | 'top-row-no-column' | 'pad-row-full' | 'tabs-oversized' | 'tabs-no-room';
+type MoveLayoutIssueCode = 'panel-dropped' | 'dial-dropped' | 'pad-column-invalid' | 'pad-column-on-dial' | 'balance-color-placed' | 'pad-column-taken' | 'top-row-taken' | 'slot-group-apart' | 'action-row-no-column' | 'action-row-taken' | 'value-row-no-column' | 'value-row-taken' | 'top-row-no-column' | 'pad-row-full' | 'tabs-oversized' | 'tabs-no-room';
 type MoveLayoutReporter = (code: MoveLayoutIssueCode, message: string) => void;
 declare function setMoveLayoutReporter(fn: MoveLayoutReporter | null): void;
 declare function reportMoveLayoutIssue(code: MoveLayoutIssueCode, message: string): void;
@@ -156,6 +160,7 @@ declare function moveAppPadRow(row: number, claimedRows: number): 0 | 1 | null;
 declare function slotGroups(page: MovePage, cols?: number[]): {
     start: number;
     span: number;
+    label?: string;
 }[];
 declare function visibleColumns(page: MovePage): number[];
 /** A boolean dial's position: exact endpoints, and halfway reads as on — the

@@ -1533,8 +1533,9 @@ function buildMovePages(panels) {
     const values = [];
     const actions = [];
     const topValues = [];
+    const valueActions = [];
     const topAt = (i) => toggles[i] ?? topValues[i];
-    const cellAt = (row, i) => row === toggles ? topAt(i) : row[i];
+    const cellAt = (row, i) => row === toggles ? topAt(i) : row === values ? values[i] ?? valueActions[i] : row[i];
     const place = (row, rowName, c, col) => {
       if (col !== null && cellAt(row, col) === void 0) {
         row[col] = c;
@@ -1649,10 +1650,28 @@ function buildMovePages(panels) {
         actionValues[col] = c;
       }
     }
+    const raise = panel.moveValueRow ?? [];
+    for (const c of controls) {
+      if (!raise.includes(c.path) || c.type !== "action" || topValues.includes(c)) continue;
+      const col = padCols.get(c) ?? null;
+      if (col === null) {
+        reportMoveLayoutIssue(
+          "value-row-no-column",
+          `panel '${panel.id}': action '${c.path}' is named in moveValueRow but has no movePads column \u2014 it keeps the action row`
+        );
+      } else if (cellAt(values, col) !== void 0) {
+        reportMoveLayoutIssue(
+          "value-row-taken",
+          `panel '${panel.id}': action '${c.path}': value-row column ${col} holds '${cellAt(values, col).path}' \u2014 it keeps the action row`
+        );
+      } else {
+        valueActions[col] = c;
+      }
+    }
     for (const c of controls) {
       const col = padCols.get(c) ?? null;
       if (isMoveTabs(c) || c.type === "toggle" && !isToggleDial(c)) continue;
-      if (seated(c) || actionValues.includes(c)) continue;
+      if (seated(c) || actionValues.includes(c) || valueActions.includes(c)) continue;
       if (c.type === "action") {
         if (col !== null && actionValues[col] !== void 0) {
           reportMoveLayoutIssue("action-row-taken", `panel '${panel.id}': action '${c.path}': column ${col} holds the chip '${actionValues[col].path}' \u2014 the action moves along`);
@@ -1682,13 +1701,21 @@ function buildMovePages(panels) {
       values: values.slice(0, MOVE_PADS),
       actions: actions.slice(0, MOVE_PADS),
       ...topValues.length ? { topValues: topValues.slice(0, MOVE_PADS) } : {},
-      ...actionValues.length ? { actionValues: actionValues.slice(0, MOVE_PADS) } : {}
+      ...actionValues.length ? { actionValues: actionValues.slice(0, MOVE_PADS) } : {},
+      ...valueActions.length ? { valueActions: valueActions.slice(0, MOVE_PADS) } : {}
     };
   });
 }
 function movePadRows(page, claimedRows) {
   let top = page.toggles;
-  const values = page.values;
+  let values = page.values;
+  if (page.valueActions?.some(Boolean)) {
+    values = [];
+    for (let i = 0; i < Math.max(page.values.length, page.valueActions.length); i++) {
+      const cell = page.values[i] ?? page.valueActions[i];
+      if (cell) values[i] = cell;
+    }
+  }
   if (page.topValues?.some(Boolean)) {
     top = [];
     for (let i = 0; i < Math.max(page.toggles.length, page.topValues.length); i++) {
@@ -1713,7 +1740,9 @@ function moveAppPadRow(row, claimedRows) {
 }
 function slotGroups(page, cols = visibleColumns(page)) {
   const out = [];
-  for (const paths of page.panel.moveSlotGroups ?? []) {
+  for (const group of page.panel.moveSlotGroups ?? []) {
+    const paths = Array.isArray(group) ? group : group.slots;
+    const label = Array.isArray(group) ? void 0 : group.label;
     const at = cols.flatMap((col, position) => {
       const dial = page.dials[col];
       return dial && paths.includes(dial.path) ? [position] : [];
@@ -1725,14 +1754,14 @@ function slotGroups(page, cols = visibleColumns(page)) {
       reportMoveLayoutIssue("slot-group-apart", `panel '${page.panel.id}': slot group [${paths.join(", ")}] is not side by side on the page \u2014 not drawn`);
       continue;
     }
-    out.push({ start, span });
+    out.push({ start, span, ...label ? { label } : {} });
   }
   return out;
 }
 function visibleColumns(page) {
   const cols = [];
   for (let i = 0; i < MOVE_DIALS; i++) {
-    if (page.dials[i] || page.toggles[i] || page.topValues?.[i] || page.values[i] || page.actions[i] || page.actionValues?.[i]) cols.push(i);
+    if (page.dials[i] || page.toggles[i] || page.topValues?.[i] || page.values[i] || page.actions[i] || page.actionValues?.[i] || page.valueActions?.[i]) cols.push(i);
   }
   return cols;
 }
@@ -10071,13 +10100,17 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                           style: stripMode ? { "--move-strip-len": page.dials.length, "--move-offset": stripOffset } : void 0,
                           children: [
                             /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "tweakers-move-dials", "data-scroll": stripMode || void 0, children: [
-                              !stripMode && !settingsPanel && !color && slotGroups(page, visibleCols).map(({ start, span }) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+                              !stripMode && !settingsPanel && !color && slotGroups(page, visibleCols).map(({ start, span, label }) => /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(
                                 "div",
                                 {
                                   className: "tweakers-move-slot-group",
                                   "aria-hidden": "true",
+                                  "data-labelled": label ? "true" : void 0,
                                   style: { "--move-group-start": start, "--move-group-span": span },
-                                  children: Array.from({ length: span - 1 }, (_, k) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("i", { className: "tweakers-move-slot-group-divider", style: { "--move-group-divider-at": k + 1 } }, k))
+                                  children: [
+                                    label && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "tweakers-move-slot-group-head", children: label }),
+                                    Array.from({ length: span - 1 }, (_, k) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("i", { className: "tweakers-move-slot-group-divider", style: { "--move-group-divider-at": k + 1 } }, k))
+                                  ]
                                 },
                                 `group-${start}`
                               )),
@@ -10091,7 +10124,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                 const scopeSlot = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.scope : void 0;
                                 const waveSlot = settingsPanel && meta.type !== "xy" ? modLayout?.dials.find((d) => d.path === meta.path)?.preview : void 0;
                                 const scope = scopeSlot && modSettings ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveScope, { index: modSettings.index }) : waveSlot && modSettings ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveWavePreview, { index: modSettings.index }) : null;
-                                if (padListView?.panelId === page.panel.id && page.actions[i]?.path === padListView.path) {
+                                if (padListView?.panelId === page.panel.id && (page.actions[i] ?? page.valueActions?.[i])?.path === padListView.path) {
                                   const stepList = (event) => {
                                     const rect = event.currentTarget.getBoundingClientRect();
                                     const fraction = (event.clientX - rect.left - DIAL_TRACK_INSET) / Math.max(1, rect.width - DIAL_TRACK_INSET * 2);

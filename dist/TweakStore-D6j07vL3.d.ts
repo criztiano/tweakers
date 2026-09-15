@@ -109,6 +109,11 @@ type ActionConfig = {
  * Explicit switch form, for what a bare `false` cannot say: a name a key
  * cannot spell, a slot of its own on the Move, and a picture to wear there.
  */
+/** Big slots that read as one thing: their control paths, and the name the group wears. */
+type MoveSlotGroup = string[] | {
+    label?: string;
+    slots: string[];
+};
 type ToggleConfig = {
     type: 'toggle';
     default: boolean;
@@ -689,8 +694,10 @@ type PanelConfig = {
     moveTopRow?: string[];
     /** Value chips sunk onto the action pad row, retained on the same terms as `hints`. */
     moveActionRow?: string[];
+    /** Actions raised onto the value pad row, retained on the same terms as `hints`. */
+    moveValueRow?: string[];
     /** Big slots drawn as one container, retained on the same terms as `hints`. */
-    moveSlotGroups?: string[][];
+    moveSlotGroups?: MoveSlotGroup[];
     /**
      * Config declared `_enabled` at its root — the whole panel is a module, and
      * its title carries the switch. Same idiom as a module folder, one level up.

@@ -169,6 +169,11 @@ type ActionConfig = {
  * Explicit switch form, for what a bare `false` cannot say: a name a key
  * cannot spell, a slot of its own on the Move, and a picture to wear there.
  */
+/** Big slots that read as one thing: their control paths, and the name the group wears. */
+type MoveSlotGroup = string[] | {
+    label?: string;
+    slots: string[];
+};
 type ToggleConfig = {
     type: 'toggle';
     default: boolean;
@@ -774,8 +779,10 @@ type PanelConfig = {
     moveTopRow?: string[];
     /** Value chips sunk onto the action pad row, retained on the same terms as `hints`. */
     moveActionRow?: string[];
+    /** Actions raised onto the value pad row, retained on the same terms as `hints`. */
+    moveValueRow?: string[];
     /** Big slots drawn as one container, retained on the same terms as `hints`. */
-    moveSlotGroups?: string[][];
+    moveSlotGroups?: MoveSlotGroup[];
     /**
      * Config declared `_enabled` at its root — the whole panel is a module, and
      * its title carries the switch. Same idiom as a module folder, one level up.
@@ -912,14 +919,22 @@ type TweakStorePanelOptions = {
      */
     moveActionRow?: string[];
     /**
+     * Actions, by control path, that sit on the value pad row in their
+     * `movePads` column — so one column can stack two buttons (Extract over
+     * Export). An action whose value cell is taken, or that names no column,
+     * keeps the action row.
+     */
+    moveValueRow?: string[];
+    /**
      * Big slots that read as one thing — a gate's threshold, look-ahead and
      * release — drawn as one container, by control path. Each group is the
      * dials of adjacent columns: the container is styled, its slots are
      * transparent, and a short divider stands between them. The columns keep
      * their hardware places; a group whose slots are not side by side on the
-     * page is not drawn.
+     * page is not drawn. A group given as `{ label, slots }` wears its label in
+     * a small header along the container's top.
      */
-    moveSlotGroups?: string[][];
+    moveSlotGroups?: MoveSlotGroup[];
     /** Timeline panels render in TweakTimeline; modulation panels are the Move's
      * modulator settings pages; kit panels are the Move kit's own settings
      * pages (the waveform's look), shown only in the settings room — all three
@@ -1202,4 +1217,4 @@ declare function defaultListItemParams(schema: Record<string, ListItemField>): R
 declare function normalizeListItems(config: ListConfig): ListItemValue[];
 declare const TweakStore: TweakStoreClass;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type BalanceConfig, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type CurveConfig, type EasingConfig, type FileConfig, type FilterConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type MoveKitRegistry, type MovePlaybackMode, type MoveSelectVisual, type MoveSliderVisual, type MoveVisual, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type PanelConfig, type Preset, type PresetExplorationAdapter, type PresetItem, type PresetProvider, type PresetProviderPreset, type RangeConfig, type RangeValue, type ReservedKey, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SwatchConfig, type SwatchOption, TAB_PATH, type TextConfig, type ToggleConfig, type TransferConfig, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakStorePanelOptions, type TweakValue, type TweakersPersistOptions, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, groupListFields, hintDomId, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveTweakValues };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type BalanceConfig, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type CurveConfig, type EasingConfig, type FileConfig, type FilterConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type MoveKitRegistry, type MovePlaybackMode, type MoveSelectVisual, type MoveSliderVisual, type MoveSlotGroup, type MoveVisual, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type PanelConfig, type Preset, type PresetExplorationAdapter, type PresetItem, type PresetProvider, type PresetProviderPreset, type RangeConfig, type RangeValue, type ReservedKey, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SwatchConfig, type SwatchOption, TAB_PATH, type TextConfig, type ToggleConfig, type TransferConfig, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakStorePanelOptions, type TweakValue, type TweakersPersistOptions, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, groupListFields, hintDomId, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveTweakValues };
