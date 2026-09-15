@@ -137,7 +137,7 @@ config can answer, the kit answers.
 
 | Component / API | Purpose |
 | --- | --- |
-| `moveSlotGroups` option | Draw big slots that read as one thing (a gate's threshold, look-ahead, release) as one container, with a short divider between them; the columns keep their places |
+| `moveSlotGroups` option | Draw big slots that read as one thing (a gate's threshold, look-ahead, release) as one container, with a short divider between them and, given `{ label, slots }`, a small header with the group's name; the columns keep their places |
 | `moveActionRow` option | Seat value chips on the action row in their `movePads` column, so one column carries a switch and two chips |
 | `movePads` option | Place toggles, numeric value chips, explicitly mapped actions and tabs strips under their related dial columns |
 | `MoveActionButton` / `MoveFunctions` | Hardware-named action pills and one shared action registry |

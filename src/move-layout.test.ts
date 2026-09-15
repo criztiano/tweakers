@@ -31,6 +31,11 @@ describe('grouped slots', () => {
     }, undefined, { moveSlotGroups: [['level', 'amount', 'cloud']] });
     const [page] = buildMovePages([TweakStore.getPanel(id)!]);
     assert.deepEqual(slotGroups(page), [{ start: 1, span: 3 }]);
+    TweakStore.registerPanel(id, id, {
+      version: { type: 'select', default: 'a', options: ['a', 'b'] },
+      level: [0.5, 0, 1], amount: [0.5, 0, 1], cloud: [0.5, 0, 1],
+    }, undefined, { moveSlotGroups: [{ label: 'Scatter', slots: ['level', 'amount', 'cloud'] }] });
+    assert.deepEqual(slotGroups(buildMovePages([TweakStore.getPanel(id)!])[0]), [{ start: 1, span: 3, label: 'Scatter' }], 'a named group wears its label');
     TweakStore.unregisterPanel(id);
   });
 

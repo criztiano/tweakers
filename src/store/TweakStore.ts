@@ -71,6 +71,9 @@ export type ActionConfig = {
  * Explicit switch form, for what a bare `false` cannot say: a name a key
  * cannot spell, a slot of its own on the Move, and a picture to wear there.
  */
+/** Big slots that read as one thing: their control paths, and the name the group wears. */
+export type MoveSlotGroup = string[] | { label?: string; slots: string[] };
+
 export type ToggleConfig = {
   type: 'toggle';
   default: boolean;
@@ -754,7 +757,7 @@ export type PanelConfig = {
   /** Value chips sunk onto the action pad row, retained on the same terms as `hints`. */
   moveActionRow?: string[];
   /** Big slots drawn as one container, retained on the same terms as `hints`. */
-  moveSlotGroups?: string[][];
+  moveSlotGroups?: MoveSlotGroup[];
   /**
    * Config declared `_enabled` at its root — the whole panel is a module, and
    * its title carries the switch. Same idiom as a module folder, one level up.
@@ -903,9 +906,10 @@ export type TweakStorePanelOptions = {
    * dials of adjacent columns: the container is styled, its slots are
    * transparent, and a short divider stands between them. The columns keep
    * their hardware places; a group whose slots are not side by side on the
-   * page is not drawn.
+   * page is not drawn. A group given as `{ label, slots }` wears its label in
+   * a small header along the container's top.
    */
-  moveSlotGroups?: string[][];
+  moveSlotGroups?: MoveSlotGroup[];
   /** Timeline panels render in TweakTimeline; modulation panels are the Move's
    * modulator settings pages; kit panels are the Move kit's own settings
    * pages (the waveform's look), shown only in the settings room — all three
