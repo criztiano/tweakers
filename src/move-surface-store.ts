@@ -110,6 +110,7 @@ let state: MoveSurfaceState = EMPTY;
 const listeners = new Set<Listener>();
 const pressListeners = new Set<PressListener>();
 const screenSelectListeners = new Set<(index: number) => void>();
+const stepListeners = new Set<(step: { index: number; shift: boolean }) => void>();
 
 const emit = () => {
   for (const fn of listeners) fn();
@@ -214,6 +215,31 @@ export const MoveSurfaceStore = {
 
   press(x: number, y: 0 | 1, shift = false) {
     for (const fn of pressListeners) fn({ x, y, shift });
+  },
+
+  /** The sixteen step buttons, taken by the app for as long as a listener is
+   *  attached: a press arrives here instead of reaching the modulation slots
+   *  or the waveform's loop, and `setSteps` is what they show — the lit cell
+   *  bright, the others it names dim. Detaching the last listener hands the
+   *  row back. */
+  onStep(fn: (step: { index: number; shift: boolean }) => void): () => void {
+    used();
+    stepListeners.add(fn);
+    if (stepListeners.size === 1) emit();
+    return () => {
+      if (!stepListeners.delete(fn)) return;
+      if (!stepListeners.size) emit();
+    };
+  },
+
+  /** Whether the app holds the step row right now. */
+  ownsSteps: (): boolean => stepListeners.size > 0,
+
+  /** A step press — from the hardware or an on-screen circle — for the app
+   *  that holds the row. */
+  pressStep(index: number, shift = false) {
+    if (!Number.isInteger(index) || index < 0 || index > 15) return;
+    for (const fn of stepListeners) fn({ index, shift });
   },
 
   /** Hand the whole surface back — the panel returns to its plain layout. */

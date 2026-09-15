@@ -143,3 +143,24 @@ describe('the surface store', () => {
     assert.deepEqual(MoveSurfaceStore.getState(), { rows: 0, pads: [], padsLabel: null, steps: null, screen: null, search: null });
   });
 });
+
+describe('app-owned steps', () => {
+  it('holds the row while a listener is attached, routes presses to it, and hands the row back', () => {
+    const heard: { index: number; shift: boolean }[] = [];
+    let changes = 0;
+    const unsub = MoveSurfaceStore.subscribe(() => changes++);
+    assert.equal(MoveSurfaceStore.ownsSteps(), false);
+    const release = MoveSurfaceStore.onStep((step) => heard.push(step));
+    assert.equal(MoveSurfaceStore.ownsSteps(), true);
+    MoveSurfaceStore.pressStep(3);
+    MoveSurfaceStore.pressStep(15, true);
+    MoveSurfaceStore.pressStep(16);
+    assert.deepEqual(heard, [{ index: 3, shift: false }, { index: 15, shift: true }]);
+    release();
+    assert.equal(MoveSurfaceStore.ownsSteps(), false);
+    MoveSurfaceStore.pressStep(4);
+    assert.equal(heard.length, 2);
+    assert.equal(changes, 2, 'taking and handing back the row each tell the kit');
+    unsub();
+  });
+});
