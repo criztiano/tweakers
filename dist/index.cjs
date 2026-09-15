@@ -10079,19 +10079,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 headerStart && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "tweakers-move-header-start", children: headerStart })
               ] })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "tweakers-move-mods", children: settingsOpen ? roomWave ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveAudioZoom, {}) : null : color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveColorSteps, { color, disabled: import_TweakStore13.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? import_ModulationStore2.ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveModCircle, { slot }, slot.index)) : MoveSurfaceStore.ownsSteps() ? stepRuns(surface.steps).map((run) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "tweakers-move-step-group", children: run.map((cell) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
-              "button",
-              {
-                type: "button",
-                className: "tweakers-move-mod",
-                "data-lit": cell.lit || void 0,
-                title: `Step ${cell.step + 1}`,
-                "aria-pressed": !!cell.lit,
-                onClick: (event) => MoveSurfaceStore.pressStep(cell.step, event.shiftKey),
-                children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "tweakers-move-mod-dot", style: { background: cell.lit ? cell.color ?? "var(--move-text)" : "transparent", boxShadow: cell.lit ? void 0 : "inset 0 0 0 1.5px var(--move-text)" } })
-              },
-              cell.step
-            )) }, run[0].step)) : null }),
+            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "tweakers-move-mods", children: settingsOpen ? roomWave ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveAudioZoom, {}) : null : color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveColorSteps, { color, disabled: import_TweakStore13.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? import_ModulationStore2.ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveModCircle, { slot }, slot.index)) : null }),
             audioWave != null ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveAudioTransport, { index: audioWave }) : roomWave ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveRoomTransport, {}) : headerCluster
           ] }),
           /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(
@@ -11101,6 +11089,19 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                           ]
                         }
                       ) }),
+                      !settingsOpen && surface.steps && MoveSurfaceStore.ownsSteps() && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "tweakers-move-app-steps", children: stepRuns(surface.steps).map((run) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "tweakers-move-step-group", children: run.map((cell) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+                        "button",
+                        {
+                          type: "button",
+                          className: "tweakers-move-mod",
+                          "data-lit": cell.lit || void 0,
+                          title: `Step ${cell.step + 1}`,
+                          "aria-pressed": !!cell.lit,
+                          onClick: (event) => MoveSurfaceStore.pressStep(cell.step, event.shiftKey),
+                          children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "tweakers-move-mod-dot", style: { background: cell.lit ? cell.color ?? "var(--move-text)" : "transparent", boxShadow: cell.lit ? void 0 : "inset 0 0 0 1.5px var(--move-text)" } })
+                        },
+                        cell.step
+                      )) }, run[0].step)) }),
                       stripMode && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
                         "div",
                         {

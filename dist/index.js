@@ -9699,19 +9699,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 headerStart && /* @__PURE__ */ jsx12("div", { className: "tweakers-move-header-start", children: headerStart })
               ] })
             ] }),
-            /* @__PURE__ */ jsx12("div", { className: "tweakers-move-mods", children: settingsOpen ? roomWave ? /* @__PURE__ */ jsx12(MoveAudioZoom, {}) : null : color && colorMeta ? /* @__PURE__ */ jsx12(MoveColorSteps, { color, disabled: TweakStore13.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? ModulationStore2.getSlots().map((slot) => /* @__PURE__ */ jsx12(MoveModCircle, { slot }, slot.index)) : MoveSurfaceStore.ownsSteps() ? stepRuns(surface.steps).map((run) => /* @__PURE__ */ jsx12("span", { className: "tweakers-move-step-group", children: run.map((cell) => /* @__PURE__ */ jsx12(
-              "button",
-              {
-                type: "button",
-                className: "tweakers-move-mod",
-                "data-lit": cell.lit || void 0,
-                title: `Step ${cell.step + 1}`,
-                "aria-pressed": !!cell.lit,
-                onClick: (event) => MoveSurfaceStore.pressStep(cell.step, event.shiftKey),
-                children: /* @__PURE__ */ jsx12("span", { className: "tweakers-move-mod-dot", style: { background: cell.lit ? cell.color ?? "var(--move-text)" : "transparent", boxShadow: cell.lit ? void 0 : "inset 0 0 0 1.5px var(--move-text)" } })
-              },
-              cell.step
-            )) }, run[0].step)) : null }),
+            /* @__PURE__ */ jsx12("div", { className: "tweakers-move-mods", children: settingsOpen ? roomWave ? /* @__PURE__ */ jsx12(MoveAudioZoom, {}) : null : color && colorMeta ? /* @__PURE__ */ jsx12(MoveColorSteps, { color, disabled: TweakStore13.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? ModulationStore2.getSlots().map((slot) => /* @__PURE__ */ jsx12(MoveModCircle, { slot }, slot.index)) : null }),
             audioWave != null ? /* @__PURE__ */ jsx12(MoveAudioTransport, { index: audioWave }) : roomWave ? /* @__PURE__ */ jsx12(MoveRoomTransport, {}) : headerCluster
           ] }),
           /* @__PURE__ */ jsxs12(
@@ -10721,6 +10709,19 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                           ]
                         }
                       ) }),
+                      !settingsOpen && surface.steps && MoveSurfaceStore.ownsSteps() && /* @__PURE__ */ jsx12("div", { className: "tweakers-move-app-steps", children: stepRuns(surface.steps).map((run) => /* @__PURE__ */ jsx12("span", { className: "tweakers-move-step-group", children: run.map((cell) => /* @__PURE__ */ jsx12(
+                        "button",
+                        {
+                          type: "button",
+                          className: "tweakers-move-mod",
+                          "data-lit": cell.lit || void 0,
+                          title: `Step ${cell.step + 1}`,
+                          "aria-pressed": !!cell.lit,
+                          onClick: (event) => MoveSurfaceStore.pressStep(cell.step, event.shiftKey),
+                          children: /* @__PURE__ */ jsx12("span", { className: "tweakers-move-mod-dot", style: { background: cell.lit ? cell.color ?? "var(--move-text)" : "transparent", boxShadow: cell.lit ? void 0 : "inset 0 0 0 1.5px var(--move-text)" } })
+                        },
+                        cell.step
+                      )) }, run[0].step)) }),
                       stripMode && /* @__PURE__ */ jsx12(
                         "div",
                         {

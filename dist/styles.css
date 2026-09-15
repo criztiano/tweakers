@@ -667,6 +667,15 @@
   cursor: pointer;
 }
 
+/* An app's step row, under the pad grid: wraps rather than overflow. */
+.tweakers-move-app-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  padding-top: var(--move-gap);
+}
+
 /* An app's steps that belong together: one pill around their circles. */
 .tweakers-move-step-group {
   display: flex;
