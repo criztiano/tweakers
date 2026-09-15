@@ -404,7 +404,7 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
       const chipFits = (c: ControlMeta) =>
         isDial(c) && !noChip(c) && !dials.includes(c) && !balanceRefs.has(c) && !isPadColor(c);
       for (const c of controls) {
-        if (!lift.includes(c.path) || !chipFits(c)) continue;
+        if (!lift.includes(c.path) || (c.type !== 'action' && !chipFits(c))) continue;
         const col = padCols.get(c) ?? null;
         if (col === null) {
           reportMoveLayoutIssue(

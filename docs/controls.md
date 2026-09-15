@@ -214,3 +214,10 @@ The Library's **Parts** pad demonstrates the same API used by Primecut Extract.
 `MovePadListBody` is the shared drawing in `MOVE_PAD_LIBRARY.list`; it uses
 `MovePadListView` plus cursor/toggle callbacks. `MoveFunctions.push` keeps
 an overlay above app reattachments and restores the latest app handler.
+
+### Stacked actions
+
+An action named in both `movePads` and `moveTopRow` occupies that column’s
+top pad row. Another action can use its ordinary bottom action row in the same
+column. Both remain momentary actions; neither borrows the dial or toggles a
+value. Primecut’s Fix tempo uses this for Double and Half beneath the BPM dial.

@@ -2569,7 +2569,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     }
                     // Action pads carry no value — a press just runs the
                     // app's action, the same as the row's button on screen.
-                    if (page.actions[col] === meta) {
+                    if (meta.type === 'action') {
                       if (MovePadListStore.has(page.panel.id, meta.path)) return <MovePadList key={meta.path} panelId={page.panel.id} path={meta.path} label={meta.label} view={padListView} disabled={TweakStore.isDisabled(page.panel.id, meta.path)} />;
                       return (
                         <button

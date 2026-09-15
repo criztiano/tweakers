@@ -1607,7 +1607,7 @@ function buildMovePages(panels) {
     const lift = panel.moveTopRow ?? [];
     const chipFits = (c) => isDial(c) && !noChip(c) && !dials.includes(c) && !balanceRefs.has(c) && !isPadColor(c);
     for (const c of controls) {
-      if (!lift.includes(c.path) || !chipFits(c)) continue;
+      if (!lift.includes(c.path) || c.type !== "action" && !chipFits(c)) continue;
       const col = padCols.get(c) ?? null;
       if (col === null) {
         reportMoveLayoutIssue(
@@ -10626,7 +10626,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         meta.path
                                       );
                                     }
-                                    if (page.actions[col] === meta) {
+                                    if (meta.type === "action") {
                                       if (MovePadListStore.has(page.panel.id, meta.path)) return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MovePadList, { panelId: page.panel.id, path: meta.path, label: meta.label, view: padListView, disabled: import_TweakStore13.TweakStore.isDisabled(page.panel.id, meta.path) }, meta.path);
                                       return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
                                         "button",
