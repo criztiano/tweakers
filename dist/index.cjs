@@ -6730,6 +6730,7 @@ var state = EMPTY;
 var listeners = /* @__PURE__ */ new Set();
 var pressListeners = /* @__PURE__ */ new Set();
 var screenSelectListeners = /* @__PURE__ */ new Set();
+var stepListeners = /* @__PURE__ */ new Set();
 var emit = () => {
   for (const fn of listeners) fn();
 };
@@ -6802,6 +6803,28 @@ var MoveSurfaceStore = {
   },
   press(x, y, shift = false) {
     for (const fn of pressListeners) fn({ x, y, shift });
+  },
+  /** The sixteen step buttons, taken by the app for as long as a listener is
+   *  attached: a press arrives here instead of reaching the modulation slots
+   *  or the waveform's loop, and `setSteps` is what they show — the lit cell
+   *  bright, the others it names dim. Detaching the last listener hands the
+   *  row back. */
+  onStep(fn) {
+    used();
+    stepListeners.add(fn);
+    if (stepListeners.size === 1) emit();
+    return () => {
+      if (!stepListeners.delete(fn)) return;
+      if (!stepListeners.size) emit();
+    };
+  },
+  /** Whether the app holds the step row right now. */
+  ownsSteps: () => stepListeners.size > 0,
+  /** A step press — from the hardware or an on-screen circle — for the app
+   *  that holds the row. */
+  pressStep(index, shift = false) {
+    if (!Number.isInteger(index) || index < 0 || index > 15) return;
+    for (const fn of stepListeners) fn({ index, shift });
   },
   /** Hand the whole surface back — the panel returns to its plain layout. */
   reset() {
@@ -6895,6 +6918,7 @@ function MoveWaveform({
     if (!productionEnabled) return;
     const prev = MoveSurfaceStore.getState().steps;
     const paint = () => {
+      if (MoveSurfaceStore.ownsSteps()) return;
       const lit = new Set(MoveWaveformStore.loopSteps());
       MoveSurfaceStore.setSteps(
         Array.from({ length: MOVE_WAVEFORM_STEPS }, (_, step) => ({ step, color: accent, lit: lit.has(step) }))
@@ -6904,7 +6928,7 @@ function MoveWaveform({
     const off = MoveWaveformStore.subscribe(paint);
     return () => {
       off();
-      MoveSurfaceStore.setSteps(prev);
+      if (!MoveSurfaceStore.ownsSteps()) MoveSurfaceStore.setSteps(prev);
     };
   }, [productionEnabled, accent]);
   const styleValues = (0, import_react6.useSyncExternalStore)(
@@ -10041,7 +10065,19 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 headerStart && /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "tweakers-move-header-start", children: headerStart })
               ] })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "tweakers-move-mods", children: settingsOpen ? roomWave ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveAudioZoom, {}) : null : color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveColorSteps, { color, disabled: import_TweakStore13.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? import_ModulationStore2.ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveModCircle, { slot }, slot.index)) : null }),
+            /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "tweakers-move-mods", children: settingsOpen ? roomWave ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveAudioZoom, {}) : null : color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveColorSteps, { color, disabled: import_TweakStore13.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? import_ModulationStore2.ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveModCircle, { slot }, slot.index)) : MoveSurfaceStore.ownsSteps() ? surface.steps.map((cell) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+              "button",
+              {
+                type: "button",
+                className: "tweakers-move-mod",
+                "data-lit": cell.lit || void 0,
+                title: `Step ${cell.step + 1}`,
+                "aria-pressed": !!cell.lit,
+                onClick: (event) => MoveSurfaceStore.pressStep(cell.step, event.shiftKey),
+                children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("span", { className: "tweakers-move-mod-dot", style: { background: cell.lit ? cell.color ?? "var(--move-text)" : "transparent", boxShadow: cell.lit ? void 0 : "inset 0 0 0 1.5px var(--move-text)" } })
+              },
+              cell.step
+            )) : null }),
             audioWave != null ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveAudioTransport, { index: audioWave }) : roomWave ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveRoomTransport, {}) : headerCluster
           ] }),
           /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(

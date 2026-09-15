@@ -4543,6 +4543,20 @@ declare const MoveSurfaceStore: {
     /** A tap on an on-screen pad, for the host to treat like a hardware press. */
     onPress(fn: PressListener): () => void;
     press(x: number, y: 0 | 1, shift?: boolean): void;
+    /** The sixteen step buttons, taken by the app for as long as a listener is
+     *  attached: a press arrives here instead of reaching the modulation slots
+     *  or the waveform's loop, and `setSteps` is what they show — the lit cell
+     *  bright, the others it names dim. Detaching the last listener hands the
+     *  row back. */
+    onStep(fn: (step: {
+        index: number;
+        shift: boolean;
+    }) => void): () => void;
+    /** Whether the app holds the step row right now. */
+    ownsSteps: () => boolean;
+    /** A step press — from the hardware or an on-screen circle — for the app
+     *  that holds the row. */
+    pressStep(index: number, shift?: boolean): void;
     /** Hand the whole surface back — the panel returns to its plain layout. */
     reset(): void;
 };
