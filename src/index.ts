@@ -190,6 +190,15 @@ export { WaveformVisualization } from './components/WaveformVisualization';
 export type { WaveformMode, WaveformLoop } from './components/WaveformVisualization';
 // The zoom ceiling belongs with the window maths a host frames against.
 export { WAVEFORM_MAX_ZOOM, WAVEFORM_SMOOTH_POINTS, WAVEFORM_MODES } from './waveform-engine';
+export {
+  buildWaveformLevels,
+  waveformAsset,
+  waveformAssetFromBuffer,
+  fillRangePeaks,
+  rangesDuration,
+  WAVEFORM_BASE_BUCKET,
+} from './waveform-asset';
+export type { WaveformAsset, WaveformLevel, WaveformRange } from './waveform-asset';
 export { CurveComposer } from './components/CurveComposer';
 export type { CurveType, CurveSegment, CurveDriver, CurveComposition, DriverDirection } from './components/CurveComposer';
 export {

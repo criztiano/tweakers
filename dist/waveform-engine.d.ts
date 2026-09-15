@@ -1,3 +1,5 @@
+import { WaveformAsset, WaveformRange } from './waveform-asset.js';
+
 /**
  * How the sample is drawn. `smooth` is the simplified envelope; `pixelated`
  * is one chunky min/max bar per column; `striped` is the pixelated bar,
@@ -17,6 +19,19 @@ type WaveformLoop = {
 /** Everything the engine reads each frame. Wrappers supply a getter for the live values. */
 interface WaveformRuntime {
     buffer: AudioBuffer | null;
+    /**
+     * The sample as prepared peaks. Takes precedence over `buffer`, which is
+     * turned into one (once per buffer) when it is all a host gives.
+     */
+    asset?: WaveformAsset | null;
+    /**
+     * The stretches of the sample that play, back to back, in its seconds —
+     * a trim without copying audio. Positions, loops and cuts are then shares
+     * of the ranges' total. Left out, the whole sample plays.
+     */
+    ranges?: WaveformRange[] | null;
+    /** For the EQ bands: the decoded sample they are filtered from, when the asset alone was given. */
+    bandSource?: AudioBuffer | null;
     progress: number;
     getProgress?: () => number;
     mode: WaveformMode;

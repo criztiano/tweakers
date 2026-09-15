@@ -102,6 +102,7 @@ export default defineConfig([
       'timeline-core': 'src/timeline-core.ts',
       'transfer-core': 'src/transfer-core.ts',
       'transition-math': 'src/transition-math.ts',
+      'waveform-asset': 'src/waveform-asset.ts',
       'waveform-dsp': 'src/waveform-dsp.ts',
       'waveform-engine': 'src/waveform-engine.ts',
       'xy-pad-core': 'src/xy-pad-core.ts',
