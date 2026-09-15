@@ -1,5 +1,6 @@
 import { WAVEFORM_MAX_ZOOM, WAVEFORM_MODES, WAVEFORM_STRIPE_STRETCH } from './waveform-engine';
 import type { WaveformLoop, WaveformMode } from './waveform-engine';
+import { MoveSurfaceStore } from './move-surface-store';
 import { MoveVolumeDisplay } from './move-volume';
 import { TweakStore, type TweakValue } from './store/TweakStore';
 
@@ -504,12 +505,18 @@ class MoveWaveformStoreClass {
     this.setView({ zoom: zoomBy(this.view.zoom, delta) });
   }
 
+  /** A step press marks the loop — unless an app holds the step row
+   *  (MoveSurfaceStore.onStep), in which case the press is the app's. Routing
+   *  it here too means a kit that predates app-owned steps, which sends every
+   *  step to the waveform, still reaches the app. */
   pressStep(index: number): void {
+    if (MoveSurfaceStore.ownsSteps()) { MoveSurfaceStore.pressStep(index); return; }
     this.setView(loopFromStep(this.view, index));
   }
 
   /** A held step lets the loop go — the remove gesture, from any step. */
-  holdStep(_index: number): void {
+  holdStep(index: number): void {
+    if (MoveSurfaceStore.ownsSteps()) { MoveSurfaceStore.pressStep(index); return; }
     this.clearLoop();
   }
 
@@ -528,8 +535,10 @@ class MoveWaveformStoreClass {
     this.setView({ loop: null, loopAnchor: null });
   }
 
-  /** The steps the loop covers — what the hardware lights. */
+  /** The steps the loop covers — what the hardware lights. While an app
+   *  holds the row, its lit steps instead. */
   loopSteps(): number[] {
+    if (MoveSurfaceStore.ownsSteps()) return (MoveSurfaceStore.getState().steps ?? []).flatMap((cell) => (cell.lit ? [cell.step] : []));
     return loopSteps(this.view);
   }
 

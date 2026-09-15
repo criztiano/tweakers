@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { TweakStore } from './store/TweakStore';
 import { buildMovePages, movePadRows, moveAppPadRow } from './move-layout';
 import { MoveSurfaceStore } from './move-surface-store';
+import { MoveWaveformStore } from './move-waveform';
 
 // The pad grid shuffles when an app claims the bottom rows for itself, and
 // the panel has to shuffle with it or the two surfaces stop matching. These
@@ -162,5 +163,19 @@ describe('app-owned steps', () => {
     assert.equal(heard.length, 2);
     assert.equal(changes, 2, 'taking and handing back the row each tell the kit');
     unsub();
+  });
+
+  it('takes the step a kit sends to the waveform, and lights what the app lights instead of the loop', () => {
+    const heard: number[] = [];
+    const release = MoveSurfaceStore.onStep(({ index }) => heard.push(index));
+    MoveSurfaceStore.setSteps([{ step: 0 }, { step: 1, lit: true }, { step: 2 }]);
+    const loop = MoveWaveformStore.getView().loop;
+    MoveWaveformStore.pressStep(2);
+    MoveWaveformStore.holdStep(0);
+    assert.deepEqual(heard, [2, 0]);
+    assert.deepEqual(MoveWaveformStore.getView().loop, loop, 'the loop is left alone');
+    assert.deepEqual(MoveWaveformStore.loopSteps(), [1]);
+    release();
+    MoveSurfaceStore.setSteps(null);
   });
 });
