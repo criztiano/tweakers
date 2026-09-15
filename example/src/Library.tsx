@@ -114,6 +114,9 @@ export function Library() {
           bottom edge, over the page, with the reading matter running under
           it. `viewport` docking portals it out of this tree — the page only
           has to keep its own bottom clear. */}
+      <p>A focused correction panel uses <code>focused</code>: only occupied pad columns,
+        with the numeric value visible above its Double and Half action pads.
+        Use <code>moveTopRow</code> to place Double above Half in the same dial column.</p>
       <MovePanel panels={PANEL_NAME} theme="dark" scroll productionEnabled />
 
       {/* The app's messages, in the same air as the floating displays. One

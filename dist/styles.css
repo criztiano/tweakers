@@ -3847,7 +3847,7 @@
 /* The open pad becomes the action: pulse its surface, keeping the label steady. */
 .tweakers-move-pad[data-confirm] {
   background: var(--move-enter-color);
-  color: var(--move-text-inverse);
+  color: var(--move-white);
   isolation: isolate;
 }
 .tweakers-move-pad[data-confirm]::before {

@@ -214,3 +214,17 @@ The Library's **Parts** pad demonstrates the same API used by Primecut Extract.
 `MovePadListBody` is the shared drawing in `MOVE_PAD_LIBRARY.list`; it uses
 `MovePadListView` plus cursor/toggle callbacks. `MoveFunctions.push` keeps
 an overlay above app reattachments and restores the latest app handler.
+
+### Stacked actions
+
+An action named in both `movePads` and `moveTopRow` occupies that column’s
+top pad row. Another action can use its ordinary bottom action row in the same
+column. Both remain momentary actions; neither borrows the dial or toggles a
+value. Primecut’s Fix tempo uses this for Double and Half beneath the BPM dial.
+
+### Focused correction panels
+
+`<MovePanel focused panels="Fix tempo" />` keeps the standard slot sizes and hardware indices,
+but fits pad rows to occupied columns and shows numeric dial values at rest.
+Use it for a focused adjustment with related actions (for example Tempo, Double and Half);
+the default panel retains its existing minimum pad width.

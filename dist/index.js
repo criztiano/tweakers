@@ -1235,7 +1235,7 @@ function buildMovePages(panels) {
     const lift = panel.moveTopRow ?? [];
     const chipFits = (c) => isDial(c) && !noChip(c) && !dials.includes(c) && !balanceRefs.has(c) && !isPadColor(c);
     for (const c of controls) {
-      if (!lift.includes(c.path) || !chipFits(c)) continue;
+      if (!lift.includes(c.path) || c.type !== "action" && !chipFits(c)) continue;
       const col = padCols.get(c) ?? null;
       if (col === null) {
         reportMoveLayoutIssue(
@@ -8440,7 +8440,7 @@ var MOVE_MUTE_EVENT = "move-tweakers:mute";
 var MOVE_SEARCH_EVENT = "move-tweakers:search";
 var MOVE_STRIP_EVENT = "move-tweakers:strip";
 var MOVE_SETTINGS_EVENT = "move-tweakers:settings";
-function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only, dock = "viewport", scroll = false, headerStart, settings: settings2, functionChips = "clock" }) {
+function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only, dock = "viewport", scroll = false, focused = false, headerStart, settings: settings2, functionChips = "clock" }) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState7([]);
   const [track, setTrack] = useState7(0);
@@ -9166,7 +9166,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const clusterCols = explorationOpen ? MOVE_DIALS : stripMode ? Math.min(MOVE_DIALS, visibleCols.length) || MOVE_DIALS : visibleCols.length;
   const kitPadCols = Math.max(0, ...padRows.map((row) => row.length));
   const appPadCols = Math.max(0, ...surface.pads.filter((cell) => !cell.empty).map((cell) => cell.x + 1));
-  const padGridCols = shownPadRows.length === 0 ? 0 : appRows > 0 ? Math.min(MOVE_PADS, Math.max(1, clusterCols, appPadCols)) : Math.min(MOVE_PADS, Math.max(MIN_PAD_COLUMNS, clusterCols, kitPadCols));
+  const padGridCols = shownPadRows.length === 0 ? 0 : appRows > 0 ? Math.min(MOVE_PADS, Math.max(1, clusterCols, appPadCols)) : Math.min(MOVE_PADS, Math.max(focused ? 1 : MIN_PAD_COLUMNS, clusterCols, kitPadCols));
   const surfaceCols = Math.max(clusterCols, padGridCols);
   const panelIdForTabs = `${pageTabsId}-panel`;
   const pageTabIndex = pages.indexOf(page);
@@ -9363,7 +9363,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                               if (!meta) return /* @__PURE__ */ jsx12("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
                               const disabled = TweakStore13.isDisabled(page.panel.id, meta.path);
                               const active = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
-                              const valueFirst = (!!settingsPanel || page.panel.kind === "kit") && !(meta.min === 0 && meta.max === 1);
+                              const valueFirst = (focused || !!settingsPanel || page.panel.kind === "kit") && !(meta.min === 0 && meta.max === 1);
                               const scopeSlot = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.scope : void 0;
                               const waveSlot = settingsPanel && meta.type !== "xy" ? modLayout?.dials.find((d) => d.path === meta.path)?.preview : void 0;
                               const scope = scopeSlot && modSettings ? /* @__PURE__ */ jsx12(MoveScope, { index: modSettings.index }) : waveSlot && modSettings ? /* @__PURE__ */ jsx12(MoveWavePreview, { index: modSettings.index }) : null;
@@ -10253,7 +10253,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         meta.path
                                       );
                                     }
-                                    if (page.actions[col] === meta) {
+                                    if (meta.type === "action") {
                                       if (MovePadListStore.has(page.panel.id, meta.path)) return /* @__PURE__ */ jsx12(MovePadList, { panelId: page.panel.id, path: meta.path, label: meta.label, view: padListView, disabled: TweakStore13.isDisabled(page.panel.id, meta.path) }, meta.path);
                                       return /* @__PURE__ */ jsx12(
                                         "button",
