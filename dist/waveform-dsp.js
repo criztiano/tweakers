@@ -39,6 +39,24 @@ function barPeaks(p, cols, pitch) {
   }
   return out;
 }
+function sampleEnvelope(data, from, to, seg) {
+  const out = [];
+  if (!data.length || !(seg > 0)) return out;
+  const k0 = Math.max(0, Math.floor(from / seg));
+  const k1 = Math.min(Math.ceil(data.length / seg), Math.ceil(to / seg));
+  for (let k = k0; k <= k1; k++) {
+    const pos = Math.min(data.length, k * seg);
+    const start = Math.max(0, Math.floor((k - 0.5) * seg));
+    const end = Math.max(start + 1, Math.min(data.length, Math.floor((k + 0.5) * seg)));
+    let a = 0;
+    for (let i = start; i < end && i < data.length; i++) {
+      const m = Math.abs(data[i]);
+      if (m > a) a = m;
+    }
+    out.push({ pos, amp: a });
+  }
+  return out;
+}
 function envelope(p, cols, n) {
   const out = new Array(n);
   const seg = cols / n;
@@ -58,6 +76,7 @@ export {
   barPeaks,
   envelope,
   fillPeaks,
-  mixToMono
+  mixToMono,
+  sampleEnvelope
 };
 //# sourceMappingURL=waveform-dsp.js.map

@@ -21,6 +21,17 @@ type Bar = {
  * that stands for it.
  */
 declare function barPeaks(p: Peaks, cols: number, pitch: number): Bar[];
+/**
+ * A simplified symmetric envelope pinned to the sample rather than the view:
+ * point `k` sits at sample `k * seg` and reads the peak amplitude over the
+ * `seg` samples centred on it. The points covering samples `from`..`to` come
+ * back with their sample positions, so a window sliding across the sample
+ * shows the same shape moving, never a reshaped one.
+ */
+declare function sampleEnvelope(data: Float32Array, from: number, to: number, seg: number): {
+    pos: number;
+    amp: number;
+}[];
 declare function envelope(p: Peaks, cols: number, n: number): number[];
 
-export { type Bar, type Peaks, barPeaks, envelope, fillPeaks, mixToMono };
+export { type Bar, type Peaks, barPeaks, envelope, fillPeaks, mixToMono, sampleEnvelope };
