@@ -385,6 +385,7 @@
      than a slot you can press, so it never reads as a control. */
   --move-slot-empty: rgba(222, 227, 201, 0.03);
   --move-chip: #41403e;
+  --move-group-divider: #353333;
   /* The Move's colours on screen — the same set the hardware lights, matched
      by eye against the device's LED palette (see src/move-palette.ts). Colour
      on this surface always means something: a track's identity, a modulation
@@ -482,6 +483,7 @@
   --move-slot: rgba(255, 255, 255, 0.09);
   --move-slot-empty: rgba(255, 255, 255, 0.03);
   --move-chip: #2e2e30;
+  --move-group-divider: #353333;
   --move-toggle-halo-color: var(--move-chip);
   --move-text: #f0f0ee;
   --move-text-inverse: #1e1e1e;
@@ -984,6 +986,7 @@
 }
 
 .tweakers-move-dials {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(var(--move-cols, 8), minmax(0, 1fr));
   gap: var(--move-gap);
@@ -1105,6 +1108,32 @@
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+}
+
+/* Grouped slots (`moveSlotGroups`): the container carries the slot surface
+   across its columns and the gaps between them, so the slots on it read as
+   one; each gap gets a 2 × 48px rounded divider. It sits under the slots,
+   whose own surface is the same colour. */
+.tweakers-move-slot-group {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--move-group-start) * (var(--move-slot-w) + var(--move-gap)));
+  width: calc(var(--move-group-span) * var(--move-slot-w) + (var(--move-group-span) - 1) * var(--move-gap));
+  background: var(--move-chip);
+  border-radius: var(--move-radius);
+  pointer-events: none;
+}
+
+.tweakers-move-slot-group-divider {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--move-group-divider-at) * (var(--move-slot-w) + var(--move-gap)) - var(--move-gap) / 2 - 1px);
+  width: 2px;
+  height: 48px;
+  border-radius: 1px;
+  background: var(--move-group-divider);
+  transform: translateY(-50%);
 }
 
 .tweakers-move-dial[data-empty="true"] {

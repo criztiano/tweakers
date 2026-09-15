@@ -373,12 +373,34 @@ function buildMovePages(panels) {
         topValues[col] = c;
       }
     }
+    const sink = panel.moveActionRow ?? [];
+    const actionValues = [];
+    for (const c of controls) {
+      if (!sink.includes(c.path) || !chipFits(c) || topValues.includes(c)) continue;
+      const col = padCols.get(c) ?? null;
+      if (col === null) {
+        reportMoveLayoutIssue(
+          "action-row-no-column",
+          `panel '${panel.id}': control '${c.path}' is named in moveActionRow but has no movePads column \u2014 the chip keeps the value row`
+        );
+      } else if (actionValues[col] !== void 0) {
+        reportMoveLayoutIssue(
+          "action-row-taken",
+          `panel '${panel.id}': control '${c.path}': action-row column ${col} holds '${actionValues[col].path}' \u2014 the chip keeps the value row`
+        );
+      } else {
+        actionValues[col] = c;
+      }
+    }
     for (const c of controls) {
       const col = padCols.get(c) ?? null;
       if (isMoveTabs(c) || c.type === "toggle" && !isToggleDial(c)) continue;
-      if (seated(c)) continue;
+      if (seated(c) || actionValues.includes(c)) continue;
       if (c.type === "action") {
-        if (col !== null) place(actions, "action", c, col);
+        if (col !== null && actionValues[col] !== void 0) {
+          reportMoveLayoutIssue("action-row-taken", `panel '${panel.id}': action '${c.path}': column ${col} holds the chip '${actionValues[col].path}' \u2014 the action moves along`);
+          place(actions, "action", c, null);
+        } else if (col !== null) place(actions, "action", c, col);
       } else if (balanceRefs.has(c)) place(values, "value", c, col);
       else if (isPadColor(c)) place(values, "value", c, col);
       else if (dials.includes(c)) {
@@ -402,7 +424,8 @@ function buildMovePages(panels) {
       toggles: toggles.slice(0, MOVE_PADS),
       values: values.slice(0, MOVE_PADS),
       actions: actions.slice(0, MOVE_PADS),
-      ...topValues.length ? { topValues: topValues.slice(0, MOVE_PADS) } : {}
+      ...topValues.length ? { topValues: topValues.slice(0, MOVE_PADS) } : {},
+      ...actionValues.length ? { actionValues: actionValues.slice(0, MOVE_PADS) } : {}
     };
   });
 }
@@ -416,17 +439,43 @@ function movePadRows(page, claimedRows) {
       if (cell) top[i] = cell;
     }
   }
+  let actions = page.actions;
+  if (page.actionValues?.some(Boolean)) {
+    actions = [];
+    for (let i = 0; i < Math.max(page.actions.length, page.actionValues.length); i++) {
+      const cell = page.actions[i] ?? page.actionValues[i];
+      if (cell) actions[i] = cell;
+    }
+  }
   if (claimedRows >= 2) return [top, values, [], []];
-  return [top, values, page.actions, []];
+  return [top, values, actions, []];
 }
 function moveAppPadRow(row, claimedRows) {
   if (claimedRows >= 2) return row === 2 ? 1 : row === 3 ? 0 : null;
   return claimedRows === 1 && row === 3 ? 0 : null;
 }
+function slotGroups(page, cols = visibleColumns(page)) {
+  const out = [];
+  for (const paths of page.panel.moveSlotGroups ?? []) {
+    const at = cols.flatMap((col, position) => {
+      const dial = page.dials[col];
+      return dial && paths.includes(dial.path) ? [position] : [];
+    });
+    if (at.length < 2) continue;
+    const start = at[0];
+    const span = at[at.length - 1] - start + 1;
+    if (span !== at.length) {
+      reportMoveLayoutIssue("slot-group-apart", `panel '${page.panel.id}': slot group [${paths.join(", ")}] is not side by side on the page \u2014 not drawn`);
+      continue;
+    }
+    out.push({ start, span });
+  }
+  return out;
+}
 function visibleColumns(page) {
   const cols = [];
   for (let i = 0; i < MOVE_DIALS; i++) {
-    if (page.dials[i] || page.toggles[i] || page.topValues?.[i] || page.values[i] || page.actions[i]) cols.push(i);
+    if (page.dials[i] || page.toggles[i] || page.topValues?.[i] || page.values[i] || page.actions[i] || page.actionValues?.[i]) cols.push(i);
   }
   return cols;
 }
@@ -594,6 +643,7 @@ export {
   padSpan,
   reportMoveLayoutIssue,
   setMoveLayoutReporter,
+  slotGroups,
   visibleColumns
 };
 //# sourceMappingURL=move-layout.js.map

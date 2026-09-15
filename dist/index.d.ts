@@ -1861,6 +1861,10 @@ type PanelConfig = {
     movePads?: Record<string, number>;
     /** Value chips lifted onto the top pad row, retained on the same terms as `hints`. */
     moveTopRow?: string[];
+    /** Value chips sunk onto the action pad row, retained on the same terms as `hints`. */
+    moveActionRow?: string[];
+    /** Big slots drawn as one container, retained on the same terms as `hints`. */
+    moveSlotGroups?: string[][];
     /**
      * Config declared `_enabled` at its root — the whole panel is a module, and
      * its title carries the switch. Same idiom as a module folder, one level up.
@@ -1989,6 +1993,22 @@ type TweakStorePanelOptions = {
      * (hold to peek, tap to latch), on the screen and on the hardware.
      */
     moveTopRow?: string[];
+    /**
+     * Value chips, by control path, that sit on the action pad row in their
+     * `movePads` column — a column's third small slot, so one column can carry a
+     * switch and two chips (a take's Solo, high cut and low cut). A chip whose
+     * action cell is taken, or that names no column, keeps the value row.
+     */
+    moveActionRow?: string[];
+    /**
+     * Big slots that read as one thing — a gate's threshold, look-ahead and
+     * release — drawn as one container, by control path. Each group is the
+     * dials of adjacent columns: the container is styled, its slots are
+     * transparent, and a short divider stands between them. The columns keep
+     * their hardware places; a group whose slots are not side by side on the
+     * page is not drawn.
+     */
+    moveSlotGroups?: string[][];
     /** Timeline panels render in TweakTimeline; modulation panels are the Move's
      * modulator settings pages; kit panels are the Move kit's own settings
      * pages (the waveform's look), shown only in the settings room — all three
@@ -2884,6 +2904,9 @@ interface MovePage {
      *  where no switch holds it. A column may carry one here and another in
      *  `values` under it; both take that column's knob. Absent: none. */
     topValues?: ControlMeta[];
+    /** Chips riding the action row (y=1), each `moveActionRow` chip in its named
+     *  column where no action holds it — a column's third small slot. Absent: none. */
+    actionValues?: ControlMeta[];
 }
 /**
  * The tabs strip: a select laid across the small slots instead of taking a
@@ -2963,13 +2986,6 @@ declare function movePadRows(page: MovePage, claimedRows: number): ControlMeta[]
  * pads, exactly where the hardware puts it.
  */
 declare function moveAppPadRow(row: number, claimedRows: number): 0 | 1 | null;
-/**
- * The columns the on-screen panel actually shows: a column is occupied when
- * it has a dial, a toggle chip, or a value chip at that index. The indices
- * stay the hardware knob numbers — callers hide the unoccupied columns,
- * never renumber them, so the latch/substitution logic and the physical
- * knobs keep agreeing on what column i means.
- */
 declare function visibleColumns(page: MovePage): number[];
 /** A boolean dial's position: exact endpoints, and halfway reads as on — the
  *  same rule the on-screen slot follows, so the knob and the slot agree. */

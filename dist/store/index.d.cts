@@ -772,6 +772,10 @@ type PanelConfig = {
     movePads?: Record<string, number>;
     /** Value chips lifted onto the top pad row, retained on the same terms as `hints`. */
     moveTopRow?: string[];
+    /** Value chips sunk onto the action pad row, retained on the same terms as `hints`. */
+    moveActionRow?: string[];
+    /** Big slots drawn as one container, retained on the same terms as `hints`. */
+    moveSlotGroups?: string[][];
     /**
      * Config declared `_enabled` at its root — the whole panel is a module, and
      * its title carries the switch. Same idiom as a module folder, one level up.
@@ -900,6 +904,22 @@ type TweakStorePanelOptions = {
      * (hold to peek, tap to latch), on the screen and on the hardware.
      */
     moveTopRow?: string[];
+    /**
+     * Value chips, by control path, that sit on the action pad row in their
+     * `movePads` column — a column's third small slot, so one column can carry a
+     * switch and two chips (a take's Solo, high cut and low cut). A chip whose
+     * action cell is taken, or that names no column, keeps the value row.
+     */
+    moveActionRow?: string[];
+    /**
+     * Big slots that read as one thing — a gate's threshold, look-ahead and
+     * release — drawn as one container, by control path. Each group is the
+     * dials of adjacent columns: the container is styled, its slots are
+     * transparent, and a short divider stands between them. The columns keep
+     * their hardware places; a group whose slots are not side by side on the
+     * page is not drawn.
+     */
+    moveSlotGroups?: string[][];
     /** Timeline panels render in TweakTimeline; modulation panels are the Move's
      * modulator settings pages; kit panels are the Move kit's own settings
      * pages (the waveform's look), shown only in the settings room — all three

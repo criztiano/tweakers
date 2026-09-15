@@ -687,6 +687,10 @@ type PanelConfig = {
     movePads?: Record<string, number>;
     /** Value chips lifted onto the top pad row, retained on the same terms as `hints`. */
     moveTopRow?: string[];
+    /** Value chips sunk onto the action pad row, retained on the same terms as `hints`. */
+    moveActionRow?: string[];
+    /** Big slots drawn as one container, retained on the same terms as `hints`. */
+    moveSlotGroups?: string[][];
     /**
      * Config declared `_enabled` at its root — the whole panel is a module, and
      * its title carries the switch. Same idiom as a module folder, one level up.
