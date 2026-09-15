@@ -667,6 +667,18 @@
   cursor: pointer;
 }
 
+/* An app's steps that belong together: one pill around their circles. */
+.tweakers-move-step-group {
+  display: flex;
+  gap: 4px;
+  border-radius: 999px;
+  background: var(--move-slot);
+}
+
+.tweakers-move-step-group > .tweakers-move-mod {
+  background: transparent;
+}
+
 .tweakers-move-mod-dot {
   width: 12px;
   height: 12px;
