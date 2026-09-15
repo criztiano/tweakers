@@ -1,4 +1,4 @@
-import { P as PanelConfig, C as ControlMeta } from './TweakStore-DSVXjark.js';
+import { P as PanelConfig, C as ControlMeta } from './TweakStore-B_gIdvJc.js';
 import { ModPageLayout } from './modulation-core.js';
 import { XYValue } from './xy-pad-core.js';
 import { RangeValue } from './range-slider-core.js';
@@ -42,6 +42,9 @@ interface MovePage {
      *  where no switch holds it. A column may carry one here and another in
      *  `values` under it; both take that column's knob. Absent: none. */
     topValues?: ControlMeta[];
+    /** Chips riding the action row (y=1), each `moveActionRow` chip in its named
+     *  column where no action holds it — a column's third small slot. Absent: none. */
+    actionValues?: ControlMeta[];
 }
 /** A select with real choices becomes an enum dial — the kit's exact rule. */
 declare const isEnumDial: (c: ControlMeta) => boolean;
@@ -110,7 +113,7 @@ declare function buildModMovePage(panel: PanelConfig, layout?: ModPageLayout | n
  * Tests (and apps that want the feed) can swap the sink with
  * `setMoveLayoutReporter`; `null` restores the deduped console.warn.
  */
-type MoveLayoutIssueCode = 'panel-dropped' | 'dial-dropped' | 'pad-column-invalid' | 'pad-column-on-dial' | 'balance-color-placed' | 'pad-column-taken' | 'top-row-taken' | 'top-row-no-column' | 'pad-row-full' | 'tabs-oversized' | 'tabs-no-room';
+type MoveLayoutIssueCode = 'panel-dropped' | 'dial-dropped' | 'pad-column-invalid' | 'pad-column-on-dial' | 'balance-color-placed' | 'pad-column-taken' | 'top-row-taken' | 'slot-group-apart' | 'action-row-no-column' | 'action-row-taken' | 'top-row-no-column' | 'pad-row-full' | 'tabs-oversized' | 'tabs-no-room';
 type MoveLayoutReporter = (code: MoveLayoutIssueCode, message: string) => void;
 declare function setMoveLayoutReporter(fn: MoveLayoutReporter | null): void;
 declare function reportMoveLayoutIssue(code: MoveLayoutIssueCode, message: string): void;
@@ -143,6 +146,17 @@ declare function moveAppPadRow(row: number, claimedRows: number): 0 | 1 | null;
  * never renumber them, so the latch/substitution logic and the physical
  * knobs keep agreeing on what column i means.
  */
+/**
+ * The runs of big slots a page draws as one container, from the panel's
+ * `moveSlotGroups`: `start` is the position among the columns shown (hidden
+ * columns take no room on screen) and `span` how many slots it covers. A group
+ * needs two slots side by side; one whose slots are not adjacent on screen is
+ * reported and left out, rather than drawn around a stranger.
+ */
+declare function slotGroups(page: MovePage, cols?: number[]): {
+    start: number;
+    span: number;
+}[];
 declare function visibleColumns(page: MovePage): number[];
 /** A boolean dial's position: exact endpoints, and halfway reads as on — the
  *  same rule the on-screen slot follows, so the knob and the slot agree. */
@@ -217,4 +231,4 @@ declare function dialOrigin(meta: ControlMeta): number;
 /** Axis positions 0..1 back to the control's real {x, y}, kit-identical. */
 declare function denormalizeXYDial(meta: ControlMeta, x01: number, y01: number): XYValue;
 
-export { ENUM_SHAPE_SAMPLES, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MoveLayoutIssueCode, type MovePage, type MoveTabCell, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, denormalizeXYDial, dialOrigin, dialSpan, enumIndex, enumOptionIcon, enumOptionLabel, enumOptionValue, enumShapePath, filterShapePath, isEnumDial, isMoveDial, isMoveTabs, isNamedTabs, isPadSpanContinuation, isSpanContinuation, isToggleDial, moveAppPadRow, movePadRows, moveTabCell, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeToggleDial, normalizeXYDial, padSpan, reportMoveLayoutIssue, setMoveLayoutReporter, visibleColumns };
+export { ENUM_SHAPE_SAMPLES, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MoveLayoutIssueCode, type MovePage, type MoveTabCell, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, denormalizeXYDial, dialOrigin, dialSpan, enumIndex, enumOptionIcon, enumOptionLabel, enumOptionValue, enumShapePath, filterShapePath, isEnumDial, isMoveDial, isMoveTabs, isNamedTabs, isPadSpanContinuation, isSpanContinuation, isToggleDial, moveAppPadRow, movePadRows, moveTabCell, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeToggleDial, normalizeXYDial, padSpan, reportMoveLayoutIssue, setMoveLayoutReporter, slotGroups, visibleColumns };

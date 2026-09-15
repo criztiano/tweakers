@@ -14,7 +14,7 @@ import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from '../theme';
-import { buildMovePages, buildModMovePage, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
+import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
 import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadValueBody, MovePadActionBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody } from './move-slots';
@@ -1716,6 +1716,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 : undefined}
             >
             <div className="tweakers-move-dials" data-scroll={stripMode || undefined}>
+              {/* Grouped slots: one container behind the slots that read as one
+                  thing, a short divider between each — drawn under the slots,
+                  so the columns and their gestures stay exactly where they are. */}
+              {!stripMode && !settingsPanel && !color && slotGroups(page, visibleCols).map(({ start, span }) => (
+                <div key={`group-${start}`} className="tweakers-move-slot-group" aria-hidden="true"
+                  style={{ '--move-group-start': start, '--move-group-span': span } as React.CSSProperties}>
+                  {Array.from({ length: span - 1 }, (_, k) => (
+                    <i key={k} className="tweakers-move-slot-group-divider" style={{ '--move-group-divider-at': k + 1 } as React.CSSProperties} />
+                  ))}
+                </div>
+              ))}
               {visibleCols.map((i) => {
                 // A 2-slot dial's second column renders nothing of its own —
                 // the base column's slot spans across it. And a 2-slot dial

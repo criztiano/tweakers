@@ -30,7 +30,7 @@ export { MoveActionDeck } from './components/MoveActionDeck';
 export type { MoveActionDeckProps, MoveDeckActionDress } from './components/MoveActionDeck';
 export { normalizeDeck, MOVE_DECK_MAX } from './move-deck-core';
 export type { MoveDeckAction, MoveDeckButton } from './move-deck-core';
-export { buildMovePages, buildModMovePage, movePadRows, moveAppPadRow, visibleColumns, isToggleDial, normalizeToggleDial, denormalizeToggleDial, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, padSpan, isMoveDial, isMoveTabs, isNamedTabs, moveTabCell, isSpanContinuation, isPadSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
+export { buildMovePages, buildModMovePage, slotGroups, movePadRows, moveAppPadRow, visibleColumns, isToggleDial, normalizeToggleDial, denormalizeToggleDial, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, padSpan, isMoveDial, isMoveTabs, isNamedTabs, moveTabCell, isSpanContinuation, isPadSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
 export type { MovePage } from './move-layout';
 
 // The endless strip — a page with more slots than the Move has dials
