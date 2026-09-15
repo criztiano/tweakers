@@ -2092,10 +2092,12 @@ function MovePadAppBody({ label, color }) {
   ] });
 }
 function MovePadListBody({ view, onCursor, onToggle }) {
-  return /* @__PURE__ */ jsxs4("div", { "aria-busy": view.pending || void 0, children: [
+  return /* @__PURE__ */ jsxs4("div", { className: "tweakers-move-pad-list-body", "aria-busy": view.pending || void 0, children: [
     /* @__PURE__ */ jsx4(
       ListScreen,
       {
+        className: "tweakers-move-dial-list",
+        follow: "center",
         label: view.label,
         disabled: view.pending,
         multiselect: true,
@@ -2108,7 +2110,7 @@ function MovePadListBody({ view, onCursor, onToggle }) {
         }
       }
     ),
-    /* @__PURE__ */ jsx4("div", { className: "tweakers-move-pad-list-status", role: "status", "aria-live": "polite", children: view.error ?? (view.pending ? "Starting\u2026" : !view.options.length ? "No options available." : "Enter selects \xB7 Capture runs") })
+    (view.error || view.pending || !view.options.length) && /* @__PURE__ */ jsx4("div", { className: "tweakers-move-pad-list-status", role: "status", "aria-live": "polite", children: view.error ?? (view.pending ? "Starting\u2026" : "No options available.") })
   ] });
 }
 var MOVE_PAD_LIBRARY = {
@@ -2207,12 +2209,12 @@ function MovePadList({ panelId, path, label, view, disabled }) {
         children: /* @__PURE__ */ jsx5(MovePadActionBody, { label })
       }
     ),
-    open2 && /* @__PURE__ */ jsxs5("div", { className: "tweakers-move-pad-list-overlay", onWheel: (event) => {
+    open2 && /* @__PURE__ */ jsxs5("div", { className: "tweakers-move-dial-screen tweakers-move-pad-list-overlay", onWheel: (event) => {
       event.stopPropagation();
       MovePadListStore.move(event.deltaY);
     }, children: [
       /* @__PURE__ */ jsx5(MovePadListBody, { view, onCursor: (index) => MovePadListStore.setCursor(index), onToggle: () => MovePadListStore.toggleCursor() }),
-      /* @__PURE__ */ jsx5("div", { className: "tweakers-move-pad-list-submit", children: MoveFunctions.chips().filter((chip) => chip.name === "capture").map((chip) => /* @__PURE__ */ jsx5(MoveFunctionChipButton, { chip, disabled: view.pending }, chip.name)) })
+      /* @__PURE__ */ jsx5("div", { className: "tweakers-move-pad-list-submit", children: MoveFunctions.chips().filter((chip) => chip.name === "capture").map((chip) => /* @__PURE__ */ jsx5(MoveFunctionChipButton, { chip: { ...chip, color: "lime" }, disabled: view.pending }, chip.name)) })
     ] })
   ] });
 }

@@ -2464,10 +2464,12 @@ function MovePadAppBody({ label, color }) {
   ] });
 }
 function MovePadListBody({ view, onCursor, onToggle }) {
-  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { "aria-busy": view.pending || void 0, children: [
+  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "tweakers-move-pad-list-body", "aria-busy": view.pending || void 0, children: [
     /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
       ListScreen,
       {
+        className: "tweakers-move-dial-list",
+        follow: "center",
         label: view.label,
         disabled: view.pending,
         multiselect: true,
@@ -2480,7 +2482,7 @@ function MovePadListBody({ view, onCursor, onToggle }) {
         }
       }
     ),
-    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "tweakers-move-pad-list-status", role: "status", "aria-live": "polite", children: view.error ?? (view.pending ? "Starting\u2026" : !view.options.length ? "No options available." : "Enter selects \xB7 Capture runs") })
+    (view.error || view.pending || !view.options.length) && /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "tweakers-move-pad-list-status", role: "status", "aria-live": "polite", children: view.error ?? (view.pending ? "Starting\u2026" : "No options available.") })
   ] });
 }
 var MOVE_PAD_LIBRARY = {
@@ -2579,12 +2581,12 @@ function MovePadList({ panelId, path, label, view, disabled }) {
         children: /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(MovePadActionBody, { label })
       }
     ),
-    open2 && /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "tweakers-move-pad-list-overlay", onWheel: (event) => {
+    open2 && /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "tweakers-move-dial-screen tweakers-move-pad-list-overlay", onWheel: (event) => {
       event.stopPropagation();
       MovePadListStore.move(event.deltaY);
     }, children: [
       /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(MovePadListBody, { view, onCursor: (index) => MovePadListStore.setCursor(index), onToggle: () => MovePadListStore.toggleCursor() }),
-      /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "tweakers-move-pad-list-submit", children: MoveFunctions.chips().filter((chip) => chip.name === "capture").map((chip) => /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(MoveFunctionChipButton, { chip, disabled: view.pending }, chip.name)) })
+      /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "tweakers-move-pad-list-submit", children: MoveFunctions.chips().filter((chip) => chip.name === "capture").map((chip) => /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(MoveFunctionChipButton, { chip: { ...chip, color: "lime" }, disabled: view.pending }, chip.name)) })
     ] })
   ] });
 }
