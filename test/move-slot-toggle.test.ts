@@ -1,7 +1,8 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { MOVE_SLOT_LIBRARY, MoveSlotToggleBody, moveSlotKind } from '../src/components/move-slots';
+import { MOVE_PAD_LIBRARY, MOVE_SLOT_LIBRARY, MovePadIconBody, MoveSlotToggleBody, moveSlotKind } from '../src/components/move-slots';
+import { LUCIDE_ICONS } from '../src/icons';
 import { ICON_BADGE_OFF, ICON_BADGE_ON } from '../src/icons';
 import { TweakStore, type ControlMeta } from '../src/store/TweakStore';
 import { buildMovePages, isToggleDial } from '../src/move-layout';
@@ -96,5 +97,23 @@ describe('a switch held rather than thrown', () => {
     expect(page.toggles[0]?.moveHold).toBe(true);
     expect(page.toggles[1]?.moveHold).toBeUndefined();
     TweakStore.unregisterPanel('hold-pad');
+  });
+});
+
+describe('a pad switch drawn as its picture alone', () => {
+  it('is a small slot of the library', () => {
+    expect(MOVE_PAD_LIBRARY.icon.component).toBe(MovePadIconBody);
+  });
+
+  it('draws the glyph and no name', () => {
+    const html = renderToStaticMarkup(createElement(MovePadIconBody, { icon: 'headphones' }));
+    expect(html).toContain('tweakers-move-pad-icon');
+    expect(html).toContain(LUCIDE_ICONS.headphones[0]);
+    expect(html).not.toContain('tweakers-move-pad-title');
+  });
+
+  it('masks a host asset in the pad’s colour', () => {
+    const html = renderToStaticMarkup(createElement(MovePadIconBody, { icon: '/solo.svg' }));
+    expect(html).toContain('url(&quot;/solo.svg&quot;)');
   });
 });

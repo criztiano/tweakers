@@ -248,6 +248,7 @@ export const LUCIDE_ICONS: Record<string, string[]> = {
   /* switches — what a boolean is about, drawn */
   repeat: ['m17 2 4 4-4 4', 'M3 11v-1a4 4 0 0 1 4-4h14', 'm7 22-4-4 4-4', 'M21 13v1a4 4 0 0 1-4 4H3'],
   timer: ['M10 2h4', 'M12 14l3-3', 'M12 6a8 8 0 1 0 0 16 8 8 0 0 0 0-16z'],
+  headphones: ['M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3'],
   /* restoration — the polish page's five switches */
   'broom-sparkles': [
     'M11 2v2', 'M12 3h-2', 'M13.5 10.5 22 2',
