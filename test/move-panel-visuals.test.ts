@@ -87,7 +87,7 @@ describe('MovePanel semantic interactions', () => {
     // the drag reads the whole line, not the touched column
     const zone = { ...pointer(130), currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, width: 120 }), parentElement: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 260, height: 140 }) } } };
     act(() => dial('End').props.onPointerDown(zone));
-    expect(TweakStore.getValues(id).end).toBe(5);
+    expect(TweakStore.getValues(id).end).toBe(5); // the middle of a 260px line inset 14px each side
     act(() => dial('End').props.onPointerUp());
     expect(flag('end').props['data-offset']).toBe(true);
   });

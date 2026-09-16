@@ -1972,8 +1972,9 @@
   flex: 1;
 }
 
-/* The 2-slot take (`trim-span`): one line across both columns, inset by the
-   dial's own track inset so a drag lands the flag under the finger. The
+/* The 2-slot take (`trim-span`): one line across both columns, inset 4px
+   past the dial's own track inset (`TRIM_SPAN_PAD`) so the drawing gets air
+   while a drag still lands the flag under the finger. The
    start keeps the left side — its name up top, its value below — and the
    end the right. */
 .tweakers-move-trim-span-tag,
@@ -2012,8 +2013,8 @@
 .tweakers-move-trim-span-track {
   position: absolute;
   top: calc(50% + 8px);
-  left: 10px;
-  right: 10px;
+  left: 14px;
+  right: 14px;
   height: 0;
   pointer-events: none;
 }

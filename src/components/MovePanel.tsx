@@ -107,6 +107,8 @@ const MIN_PAD_COLUMNS = 4;
 
 /** The slider track's inset from the dial slot's edges (Figma 802:767). */
 const DIAL_TRACK_INSET = 10;
+/** The trim span's line sits this much further in than a dial's track. */
+const TRIM_SPAN_PAD = 4;
 /** The xy field's inset within its slot — must match .tweakers-move-xy. */
 const XY_INSET = { left: 8, top: 8, right: 9, bottom: 8 };
 
@@ -1118,14 +1120,15 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 
   // Whole-slot hotspot, position-on-the-track sets the value — the same feel
   // as the library Slider's card.
-  // `box` is the track being read, when it is wider than the touched element.
-  const dialFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, box: Element = e.currentTarget) => {
+  // `box` is the track being read, when it is wider than the touched element,
+  // and `inset` how far in from its sides the line runs.
+  const dialFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, box: Element = e.currentTarget, inset = DIAL_TRACK_INSET) => {
     const rect = box.getBoundingClientRect();
-    const span = rect.width - DIAL_TRACK_INSET * 2;
+    const span = rect.width - inset * 2;
     const fine = fineAnchor(e, () => normalizeDial(meta, values[meta.path]));
     const v01 = fine
       ? fineDragValue({ startValue: fine.v as number, startPos: fine.x, pos: e.clientX, extentPx: span || 1, min: 0, max: 1, factor: fine.shift ? 0.1 : 1 })
-      : Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
+      : Math.min(1, Math.max(0, (e.clientX - rect.left - inset) / (span || 1)));
     TweakStore.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
   };
 
@@ -2373,11 +2376,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                                 fineRef.current = null;
                                 setDragPath(e.meta.path);
                                 armMod(e.meta.path);
-                                dialFromPointer(p, e.meta, p.currentTarget.parentElement ?? p.currentTarget);
+                                dialFromPointer(p, e.meta, p.currentTarget.parentElement ?? p.currentTarget, DIAL_TRACK_INSET + TRIM_SPAN_PAD);
                               }}
                               onPointerMove={(p) => {
                                 if (!TweakStore.isDisabled(page.panel.id, e.meta.path) && dragPath === e.meta.path) {
-                                  dialFromPointer(p, e.meta, p.currentTarget.parentElement ?? p.currentTarget);
+                                  dialFromPointer(p, e.meta, p.currentTarget.parentElement ?? p.currentTarget, DIAL_TRACK_INSET + TRIM_SPAN_PAD);
                                 }
                               }}
                               onPointerUp={() => { setDragPath(null); fineRef.current = null; }}

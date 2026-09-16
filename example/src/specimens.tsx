@@ -329,7 +329,7 @@ export const BIG_SLOTS: Specimen[] = [
     render: () => numeric('pitch', 'Pitch', 7, '+7 st', { min: -24, max: 24, bipolar: true, unit: ' st' }),
   },
   {
-    kind: 'trim-span', span: 2, path: 'start',
+    kind: 'trim-span', span: 2,
     description: MOVE_SLOT_LIBRARY['trim-span'].description,
     render: () => (
       <MoveSlotTrimSpanBody
