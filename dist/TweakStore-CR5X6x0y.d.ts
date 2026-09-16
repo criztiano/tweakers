@@ -65,6 +65,24 @@ declare function movePlaybackMode(meta: ControlMeta, value: unknown): MovePlayba
 declare function moveVisualReading(meta: ControlMeta, value: number): string;
 /** Returns a new value only for editing keys. Shift uses the configured smallest step. */
 declare function moveKeyboardValue(meta: ControlMeta, value: unknown, key: string, fine?: boolean): number | string | null;
+/**
+ * The band's small screen, in its own drawing units: a 79 × 39 plot ruled
+ * into eight columns and four rows of 9-unit cells by 1-unit lines.
+ */
+declare const MOVE_BAND_W = 79;
+declare const MOVE_BAND_H = 39;
+/**
+ * The two cut regions of a band, as paths in the screen's units. Each cut's
+ * foot sits on the floor at its place (`low`, `high`, each 0..1 left to
+ * right); its slope leans in to the top and rounds over into the pass
+ * band. The low cut fills the left of its slope, the high cut the right of
+ * its own. Past each other the two shoulders meet in the middle instead of
+ * crossing.
+ */
+declare function moveBandCuts(low: number, high: number): {
+    low: string;
+    high: string;
+};
 
 /**
  * One axis of an XY pad control. Partial — every field falls back through
@@ -113,6 +131,11 @@ type ActionConfig = {
 type MoveSlotGroup = string[] | {
     label?: string;
     slots: string[];
+};
+/** Two value chips stacked in one pad column that cut the ends of one band. */
+type MoveBand = {
+    high: string;
+    low: string;
 };
 type ToggleConfig = {
     type: 'toggle';
@@ -698,6 +721,8 @@ type PanelConfig = {
     moveValueRow?: string[];
     /** Big slots drawn as one container, retained on the same terms as `hints`. */
     moveSlotGroups?: MoveSlotGroup[];
+    /** Stacked cut chips drawn as one band, retained on the same terms as `hints`. */
+    moveBands?: MoveBand[];
     /**
      * Config declared `_enabled` at its root — the whole panel is a module, and
      * its title carries the switch. Same idiom as a module folder, one level up.
@@ -706,4 +731,4 @@ type PanelConfig = {
     kind?: 'timeline' | 'modulation' | 'kit';
 };
 
-export { type ControlMeta as C, type MoveNumericDrawing as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, type MovePlaybackMode as d, type MoveSelectVisual as e, type MoveSliderVisual as f, type MoveVisual as g, moveNumericDrawing as h, movePlaybackMode as i, moveVisualReading as j, moveKeyboardValue as m };
+export { type ControlMeta as C, MOVE_BAND_H as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_W as d, type MoveNumericDrawing as e, type MovePlaybackMode as f, type MoveSelectVisual as g, type MoveSliderVisual as h, type MoveVisual as i, moveKeyboardValue as j, moveNumericDrawing as k, movePlaybackMode as l, moveBandCuts as m, moveVisualReading as n };

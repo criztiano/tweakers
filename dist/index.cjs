@@ -59,6 +59,8 @@ __export(index_exports, {
   MOD_SETTINGS_PANEL: () => MOD_SETTINGS_PANEL,
   MOD_SLOTS: () => MOD_SLOTS,
   MOD_TOUCH_GRACE_MS: () => import_ModulationStore4.MOD_TOUCH_GRACE_MS,
+  MOVE_BAND_H: () => MOVE_BAND_H,
+  MOVE_BAND_W: () => MOVE_BAND_W,
   MOVE_CHIP_BUTTONS: () => MOVE_CHIP_BUTTONS,
   MOVE_COLOR_HUES: () => MOVE_COLOR_HUES,
   MOVE_COLOR_PALETTES: () => MOVE_COLOR_PALETTES,
@@ -111,6 +113,7 @@ __export(index_exports, {
   MoveNotifications: () => MoveNotifications,
   MovePadActionBody: () => MovePadActionBody,
   MovePadAppBody: () => MovePadAppBody,
+  MovePadBandBody: () => MovePadBandBody,
   MovePadColorBody: () => MovePadColorBody,
   MovePadListBody: () => MovePadListBody,
   MovePadListStore: () => MovePadListStore,
@@ -253,6 +256,8 @@ __export(index_exports, {
   modRingArc: () => modRingArc,
   morphDNA: () => morphDNA,
   moveAppPadRow: () => moveAppPadRow,
+  moveBandCell: () => moveBandCell,
+  moveBandCuts: () => moveBandCuts,
   moveKitOptions: () => moveKitOptions,
   moveNotify: () => moveNotify,
   moveNumericDrawing: () => moveNumericDrawing,
@@ -837,6 +842,26 @@ function moveKeyboardValue(meta, value, key, fine = false) {
   const multiplier = fine ? 1 : key.startsWith("Page") ? coarseSteps * 10 : coarseSteps;
   const next = Math.round((value + direction * step * multiplier) / step) * step;
   return Math.max(min, Math.min(max, Number(next.toPrecision(12))));
+}
+var MOVE_BAND_W = 79;
+var MOVE_BAND_H = 39;
+var BAND_SLANT = 4;
+var BAND_SHOULDER = 8;
+function moveBandCuts(low, high) {
+  const W = MOVE_BAND_W;
+  const H = MOVE_BAND_H;
+  const xl = clamp01(low) * W;
+  const xh = Math.max(xl, clamp01(high) * W);
+  let topL = xl + BAND_SLANT;
+  let topR = xh - BAND_SLANT;
+  if (topL > topR) topL = topR = (topL + topR) / 2;
+  const k = Math.min(BAND_SHOULDER, (topR - topL) / 2);
+  const dx = BAND_SLANT * k / H;
+  const n = (v) => Number(v.toFixed(2));
+  return {
+    low: `M 0 0 L ${n(topL + k)} 0 Q ${n(topL)} 0 ${n(topL - dx)} ${n(k)} L ${n(xl)} ${H} L 0 ${H} Z`,
+    high: `M ${W} 0 L ${n(topR - k)} 0 Q ${n(topR)} 0 ${n(topR + dx)} ${n(k)} L ${n(xh)} ${H} L ${W} ${H} Z`
+  };
 }
 
 // src/icons.ts
@@ -1694,7 +1719,7 @@ function buildMovePages(panels) {
         );
       }
     }
-    return {
+    const page = {
       panel,
       dials,
       toggles: toggles.slice(0, MOVE_PADS),
@@ -1704,6 +1729,19 @@ function buildMovePages(panels) {
       ...actionValues.length ? { actionValues: actionValues.slice(0, MOVE_PADS) } : {},
       ...valueActions.length ? { valueActions: valueActions.slice(0, MOVE_PADS) } : {}
     };
+    const rows = movePadRows(page, 0);
+    for (const band of panel.moveBands ?? []) {
+      const on = [band.high, band.low].filter((path) => rows.some((r) => r.some((m) => m?.path === path)));
+      if (on.length < 2) continue;
+      const stacked = rows.some((r, row) => r.some((m, col) => m?.path === band.high && moveBandCell(page, rows, row, col)));
+      if (!stacked) {
+        reportMoveLayoutIssue(
+          "band-apart",
+          `panel '${panel.id}': band '${band.high}' / '${band.low}' is not two chips stacked in one column \u2014 drawn as its two chips`
+        );
+      }
+    }
+    return page;
   });
 }
 function movePadRows(page, claimedRows) {
@@ -1733,6 +1771,25 @@ function movePadRows(page, claimedRows) {
   }
   if (claimedRows >= 2) return [top, values, [], []];
   return [top, values, actions, []];
+}
+function moveBandCell(page, rows, row, col) {
+  const meta = rows[row]?.[col];
+  if (!meta || !page.panel.moveBands?.length) return null;
+  const chip = (m) => !!m && isDial(m) && !noChip(m) && !page.dials.includes(m);
+  for (const band of page.panel.moveBands) {
+    if (meta.path !== band.high && meta.path !== band.low) continue;
+    const partner = meta.path === band.high ? band.low : band.high;
+    const below = rows[row + 1]?.[col];
+    const above = rows[row - 1]?.[col];
+    const tail = above?.path === partner;
+    const other = tail ? above : below?.path === partner ? below : void 0;
+    if (!chip(meta) || !chip(other)) return null;
+    const high = meta.path === band.high ? meta : other;
+    const low = meta.path === band.low ? meta : other;
+    const top = tail ? other : meta;
+    return { high, low, upper: top === high ? "high" : "low", tail };
+  }
+  return null;
 }
 function moveAppPadRow(row, claimedRows) {
   if (claimedRows >= 2) return row === 2 ? 1 : row === 3 ? 0 : null;
@@ -2487,6 +2544,44 @@ function MovePadTabsBody({ name, options, activeIdx }) {
     }) })
   ] });
 }
+var BAND_CAPTIONS = { high: "Hi", low: "Lo" };
+function MovePadBandBody({ low, high, upper = "high" }) {
+  const cuts = moveBandCuts(low.at, high.at);
+  const hands = { low, high };
+  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "tweakers-move-band-screen", children: [
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "tweakers-move-band-plot", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
+        "svg",
+        {
+          className: "tweakers-move-band-drawing",
+          viewBox: `0 0 ${MOVE_BAND_W} ${MOVE_BAND_H}`,
+          preserveAspectRatio: "none",
+          "aria-hidden": "true",
+          children: [
+            /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("g", { className: "tweakers-move-band-grid", shapeRendering: "crispEdges", children: [
+              Array.from({ length: 7 }, (_, i) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("rect", { x: 9 + i * 10, y: "0", width: "1", height: MOVE_BAND_H }, `x${i}`)),
+              Array.from({ length: 3 }, (_, i) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("rect", { x: "0", y: 9 + i * 10, width: MOVE_BAND_W, height: "1" }, `y${i}`))
+            ] }),
+            /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("path", { className: "tweakers-move-band-cut", "data-cut": low.cut || void 0, d: cuts.low }),
+            /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("path", { className: "tweakers-move-band-cut", "data-cut": high.cut || void 0, d: cuts.high })
+          ]
+        }
+      ) }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-band-handle", style: { left: `${low.at * 100}%` } }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-band-handle", style: { left: `${high.at * 100}%` } })
+    ] }),
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "tweakers-move-band-captions", children: [upper, upper === "high" ? "low" : "high"].map((hand) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+      "span",
+      {
+        className: "tweakers-move-band-caption",
+        "data-held": hands[hand].held || void 0,
+        "data-latched": hands[hand].latched || void 0,
+        children: BAND_CAPTIONS[hand]
+      },
+      hand
+    )) })
+  ] });
+}
 function MovePadAppBody({ label, color }) {
   return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
     /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
@@ -2530,7 +2625,8 @@ var MOVE_PAD_LIBRARY = {
   bend: { description: "hold and drag to bend the envelope ramp above it", component: MovePadToggleBody },
   wave: { description: "hold and drag for the stage\u2019s own sine, tap to flip it", component: MovePadWaveBody },
   tabs: { description: "2 to 8 pads: the page\u2019s modes side by side, the current one lit \u2014 a name pad optional", component: MovePadTabsBody },
-  color: { description: "a single colour in a small slot \u2014 tap latches it onto the dial above, hold peeks; that dial edits and opens it", component: MovePadColorBody }
+  color: { description: "a single colour in a small slot \u2014 tap latches it onto the dial above, hold peeks; that dial edits and opens it", component: MovePadColorBody },
+  band: { description: "2 pads in one column: a high cut over a low cut, drawn as one band on a small screen \u2014 each half its own chip", component: MovePadBandBody }
 };
 var MOVE_SLOT_LIBRARY = {
   color: { description: "selected color; hue on the dial, luminosity on volume, tap to edit", component: MoveSlotColorBody },
@@ -11036,6 +11132,43 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       );
                                     }
                                     if (!meta) return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
+                                    const band = moveBandCell(page, padRows, row, col);
+                                    if (band?.tail) return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "tweakers-move-band", "data-tail": true, "aria-hidden": "true" }, `band-${col}`);
+                                    if (band) {
+                                      const lower = band.upper === "high" ? band.low : band.high;
+                                      const chipHeld = (m) => held !== null && held.meta.path === m.path || !!hwHeld[m.path];
+                                      const hand = (m, open2) => ({
+                                        at: normalizeDial(m, values[m.path]),
+                                        cut: Number(values[m.path]) !== open2,
+                                        held: chipHeld(m),
+                                        latched: chipLatched(col, m)
+                                      });
+                                      return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "tweakers-move-band", "data-kind": "band", children: /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "tweakers-move-band-face", children: [
+                                        /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+                                          MovePadBandBody,
+                                          {
+                                            low: hand(band.low, band.low.min ?? 0),
+                                            high: hand(band.high, band.high.max ?? 1),
+                                            upper: band.upper
+                                          }
+                                        ),
+                                        [meta, lower].map((m) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+                                          "button",
+                                          {
+                                            type: "button",
+                                            className: "tweakers-move-band-zone",
+                                            "aria-label": m.label,
+                                            "data-held": chipHeld(m) || void 0,
+                                            "data-latched": chipLatched(col, m) || void 0,
+                                            onPointerDown: (e) => pressChip(e, col, m),
+                                            onPointerUp: () => releaseChip(col, m),
+                                            onPointerCancel: () => setHeld(null),
+                                            children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveModRing, { panelId: page.panel.id, path: m.path, pad: true })
+                                          },
+                                          m.path
+                                        ))
+                                      ] }) }, `band-${col}`);
+                                    }
                                     if (page.toggles[col] === meta) {
                                       return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
                                         "button",
@@ -12358,6 +12491,8 @@ var import_TweakStore15 = require("tweakers/store");
   MOD_SETTINGS_PANEL,
   MOD_SLOTS,
   MOD_TOUCH_GRACE_MS,
+  MOVE_BAND_H,
+  MOVE_BAND_W,
   MOVE_CHIP_BUTTONS,
   MOVE_COLOR_HUES,
   MOVE_COLOR_PALETTES,
@@ -12410,6 +12545,7 @@ var import_TweakStore15 = require("tweakers/store");
   MoveNotifications,
   MovePadActionBody,
   MovePadAppBody,
+  MovePadBandBody,
   MovePadColorBody,
   MovePadListBody,
   MovePadListStore,
@@ -12552,6 +12688,8 @@ var import_TweakStore15 = require("tweakers/store");
   modRingArc,
   morphDNA,
   moveAppPadRow,
+  moveBandCell,
+  moveBandCuts,
   moveKitOptions,
   moveNotify,
   moveNumericDrawing,

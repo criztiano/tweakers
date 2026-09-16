@@ -437,7 +437,7 @@ function buildMovePages(panels) {
         );
       }
     }
-    return {
+    const page = {
       panel,
       dials,
       toggles: toggles.slice(0, MOVE_PADS),
@@ -447,6 +447,19 @@ function buildMovePages(panels) {
       ...actionValues.length ? { actionValues: actionValues.slice(0, MOVE_PADS) } : {},
       ...valueActions.length ? { valueActions: valueActions.slice(0, MOVE_PADS) } : {}
     };
+    const rows = movePadRows(page, 0);
+    for (const band of panel.moveBands ?? []) {
+      const on = [band.high, band.low].filter((path) => rows.some((r) => r.some((m) => m?.path === path)));
+      if (on.length < 2) continue;
+      const stacked = rows.some((r, row) => r.some((m, col) => m?.path === band.high && moveBandCell(page, rows, row, col)));
+      if (!stacked) {
+        reportMoveLayoutIssue(
+          "band-apart",
+          `panel '${panel.id}': band '${band.high}' / '${band.low}' is not two chips stacked in one column \u2014 drawn as its two chips`
+        );
+      }
+    }
+    return page;
   });
 }
 function movePadRows(page, claimedRows) {
@@ -476,6 +489,25 @@ function movePadRows(page, claimedRows) {
   }
   if (claimedRows >= 2) return [top, values, [], []];
   return [top, values, actions, []];
+}
+function moveBandCell(page, rows, row, col) {
+  const meta = rows[row]?.[col];
+  if (!meta || !page.panel.moveBands?.length) return null;
+  const chip = (m) => !!m && isDial(m) && !noChip(m) && !page.dials.includes(m);
+  for (const band of page.panel.moveBands) {
+    if (meta.path !== band.high && meta.path !== band.low) continue;
+    const partner = meta.path === band.high ? band.low : band.high;
+    const below = rows[row + 1]?.[col];
+    const above = rows[row - 1]?.[col];
+    const tail = above?.path === partner;
+    const other = tail ? above : below?.path === partner ? below : void 0;
+    if (!chip(meta) || !chip(other)) return null;
+    const high = meta.path === band.high ? meta : other;
+    const low = meta.path === band.low ? meta : other;
+    const top = tail ? other : meta;
+    return { high, low, upper: top === high ? "high" : "low", tail };
+  }
+  return null;
 }
 function moveAppPadRow(row, claimedRows) {
   if (claimedRows >= 2) return row === 2 ? 1 : row === 3 ? 0 : null;
@@ -661,6 +693,7 @@ export {
   isSpanContinuation,
   isToggleDial,
   moveAppPadRow,
+  moveBandCell,
   movePadRows,
   moveTabCell,
   normalizeDial,
