@@ -1,4 +1,4 @@
-export { M as MOVE_BAND_H, d as MOVE_BAND_W, e as MoveGateRole, f as MoveNumericDrawing, g as MovePlaybackMode, h as MoveSelectVisual, i as MoveSliderVisual, j as MoveVisual, m as moveBandCuts, k as moveGateSpan, l as moveKeyboardValue, n as moveNumericDrawing, o as movePlaybackMode, p as moveTrimSpan, q as moveVisualReading } from './TweakStore-fTcanRqx.js';
+export { M as MOVE_BAND_H, d as MOVE_BAND_W, e as MoveGateRole, f as MoveMultibandRole, g as MoveNumericDrawing, h as MovePlaybackMode, i as MoveSelectVisual, j as MoveSliderVisual, k as MoveVisual, m as moveBandCuts, l as moveGateSpan, n as moveKeyboardValue, o as moveMultibandRole, p as moveMultibandSpan, q as moveNumericDrawing, r as movePlaybackMode, s as moveTrimSpan, t as moveVisualReading } from './TweakStore-WQph4Rlc.js';
 import './gradient-core.js';
 import './color-core.js';
 import './xy-pad-core.js';

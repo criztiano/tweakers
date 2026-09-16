@@ -47,6 +47,22 @@ type MoveSliderVisual = {
  | {
     kind: 'gate';
     role: MoveGateRole;
+}
+/** One control of a multiband cleaner: an amount (its bar wears `icon`),
+ *  a speed, and bands, each `band` its place from the top of the spectrum
+ *  down. An amount, a speed and at least one band dial side by side draw
+ *  as one face; band chips in those columns join its curve. */
+ | {
+    kind: 'multiband';
+    role: 'amount';
+    icon?: string;
+} | {
+    kind: 'multiband';
+    role: 'speed';
+} | {
+    kind: 'multiband';
+    role: 'band';
+    band: number;
 };
 type MoveGateRole = 'threshold' | 'lookahead' | 'release';
 type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';

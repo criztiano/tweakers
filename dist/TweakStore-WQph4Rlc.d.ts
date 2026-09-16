@@ -35,6 +35,22 @@ type MoveSliderVisual = {
  | {
     kind: 'gate';
     role: MoveGateRole;
+}
+/** One control of a multiband cleaner: an amount (its bar wears `icon`),
+ *  a speed, and bands, each `band` its place from the top of the spectrum
+ *  down. An amount, a speed and at least one band dial side by side draw
+ *  as one face; band chips in those columns join its curve. */
+ | {
+    kind: 'multiband';
+    role: 'amount';
+    icon?: string;
+} | {
+    kind: 'multiband';
+    role: 'speed';
+} | {
+    kind: 'multiband';
+    role: 'band';
+    band: number;
 };
 type MoveGateRole = 'threshold' | 'lookahead' | 'release';
 type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
@@ -80,6 +96,23 @@ declare function moveGateSpan(dials: [ControlMeta, unknown][]): {
     threshold: number;
     lookahead: number;
     release: number;
+} | null;
+type MoveMultibandRole = 'amount' | 'speed' | 'band';
+/** A slider's multiband role, or null when it is not one. */
+declare function moveMultibandRole(meta: ControlMeta | undefined): MoveMultibandRole | null;
+/**
+ * Where a multiband face's controls sit, each 0..1 — or null unless the
+ * dials are an amount, a speed and one or more bands, in that order. `bands`
+ * are every band control the face draws (dials and chips), returned in
+ * spectrum order.
+ */
+declare function moveMultibandSpan(dials: [ControlMeta, unknown][], bands: [ControlMeta, unknown][]): {
+    amount: number;
+    speed: number;
+    bands: {
+        meta: ControlMeta;
+        position: number;
+    }[];
 } | null;
 declare function movePlaybackMode(meta: ControlMeta, value: unknown): MovePlaybackMode | null;
 /** Semantic formatting is a fallback; a host formatter or unit always wins. */
@@ -760,4 +793,4 @@ type PanelConfig = {
     kind?: 'timeline' | 'modulation' | 'kit';
 };
 
-export { type ControlMeta as C, MOVE_BAND_H as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_W as d, type MoveGateRole as e, type MoveNumericDrawing as f, type MovePlaybackMode as g, type MoveSelectVisual as h, type MoveSliderVisual as i, type MoveVisual as j, moveGateSpan as k, moveKeyboardValue as l, moveBandCuts as m, moveNumericDrawing as n, movePlaybackMode as o, moveTrimSpan as p, moveVisualReading as q };
+export { type ControlMeta as C, MOVE_BAND_H as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_W as d, type MoveGateRole as e, type MoveMultibandRole as f, type MoveNumericDrawing as g, type MovePlaybackMode as h, type MoveSelectVisual as i, type MoveSliderVisual as j, type MoveVisual as k, moveGateSpan as l, moveBandCuts as m, moveKeyboardValue as n, moveMultibandRole as o, moveMultibandSpan as p, moveNumericDrawing as q, movePlaybackMode as r, moveTrimSpan as s, moveVisualReading as t };
