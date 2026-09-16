@@ -763,9 +763,21 @@ export function MoveSlotMetronomeBody({ label, checked, swing }: {
     };
   }, [swings]);
 
+  // The tempo is the headline, top right, in the value shape with its unit
+  // small under it; the metronome keeps the bottom-left corner. A name that
+  // is not a number ("No beat") stands in the number's place in the label face.
+  const split = /\d/.test(label[0] ?? '') ? splitReadoutUnit(label) : null;
   return (
     <>
-      <span className="tweakers-move-toggle-picture" aria-hidden="true">
+      {split?.unit ? (
+        <span className="tweakers-move-metronome-readout" data-value>
+          <span className="tweakers-move-dial-number">{split.num}</span>
+          <span className="tweakers-move-dial-unit">{split.unit}</span>
+        </span>
+      ) : (
+        <span className="tweakers-move-metronome-readout">{label}</span>
+      )}
+      <span className="tweakers-move-metronome-picture" aria-hidden="true">
         <svg
           className="tweakers-move-metronome"
           data-on={checked || undefined}
@@ -802,7 +814,6 @@ export function MoveSlotMetronomeBody({ label, checked, swing }: {
           </g>
         </svg>
       </span>
-      <span className="tweakers-move-toggle-label">{label}</span>
     </>
   );
 }

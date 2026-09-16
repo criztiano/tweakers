@@ -60,8 +60,14 @@ describe('the switch drawn as a metronome', () => {
     expect(html).toContain('tweakers-move-metronome');
     expect(html).not.toContain('data-on');
     expect(html).toContain('transform="rotate(0)"');
-    expect(html).toContain('120.0 BPM');
     expect(html).not.toContain('tweakers-move-toggle-badge');
+  });
+
+  it('heads the slot with the tempo as a number over its unit', () => {
+    const html = renderToStaticMarkup(createElement(MoveSlotMetronomeBody, { label: '120.0 BPM', checked: false, swing }));
+    expect(html).toMatch(/class="tweakers-move-metronome-readout" data-value="true"><span class="tweakers-move-dial-number">120\.0<\/span><span class="tweakers-move-dial-unit">BPM<\/span>/);
+    const plain = renderToStaticMarkup(createElement(MoveSlotMetronomeBody, { label: 'No beat', checked: false, swing }));
+    expect(plain).toContain('<span class="tweakers-move-metronome-readout">No beat</span>');
   });
 
   it('is lit while it is on, and cuts its arm out of the body', () => {
