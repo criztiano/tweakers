@@ -2076,123 +2076,134 @@
   cursor: not-allowed;
 }
 
-/* The 3-slot gate (`gate`). The threshold's bar stands over the first
-   column's centre and the release's over the third's; the grid fills the
-   room between them, and each name sits under its own column. Each bar is
-   lit from its marker down: how much the dial is doing. */
-.tweakers-move-dial[data-kind="gate"] {
-  --move-gate-col: calc((100% - 2 * var(--move-gap)) / 3);
-  --move-gate-well: var(--move-bg);
-  --move-gate-cell: color-mix(in srgb, var(--move-text) 5%, var(--move-bg));
-  --move-gate-bar-w: 4px;
-  --move-gate-marker: 4px;
-  --move-gate-inset: 12px;
+/* Multi-slot instruments (`gate`, `multiband`): one face across a dial per
+   column. A face lays its parts out by column — `--move-face-span` columns,
+   each `--move-face-col-w` wide — so each part stands over its own knob. */
+.tweakers-move-dial[data-kind="gate"],
+.tweakers-move-dial[data-kind="multiband"] {
+  --move-face-well: var(--move-bg);
+  --move-face-cell: color-mix(in srgb, var(--move-text) 5%, var(--move-bg));
+  --move-face-bar-w: 4px;
+  --move-face-marker: 4px;
   cursor: default;
 }
 
-.tweakers-move-gate-bar {
+.tweakers-move-face {
+  --move-face-col-w: calc((100% - (var(--move-face-span) - 1) * var(--move-gap)) / var(--move-face-span));
   position: absolute;
-  top: 30px;
-  bottom: 28px;
-  width: var(--move-gate-bar-w);
-  background: var(--move-gate-well);
+  inset: 0;
   pointer-events: none;
 }
 
-.tweakers-move-gate-bar[data-role="threshold"] {
-  left: calc(var(--move-gate-col) / 2 - var(--move-gate-bar-w) / 2);
-  --move-gate-colour: var(--move-gate-threshold);
-  --move-gate-lit: color-mix(in srgb, var(--move-gate-threshold) 50%, var(--move-gate-well));
+/* A bar is lit from its marker down: how much the dial is doing. */
+.tweakers-move-face-bar {
+  position: absolute;
+  top: 30px;
+  bottom: 28px;
+  width: var(--move-face-bar-w);
+  background: var(--move-face-well);
+  pointer-events: none;
 }
 
-.tweakers-move-gate-bar[data-role="release"] {
-  right: calc(var(--move-gate-col) / 2 - var(--move-gate-bar-w) / 2);
-  --move-gate-colour: var(--move-gate-release);
-  --move-gate-lit: color-mix(in srgb, var(--move-gate-release) 40%, var(--move-gate-well));
-}
-
-.tweakers-move-gate-bar-lit,
-.tweakers-move-gate-bar-marker {
+.tweakers-move-face-bar-lit,
+.tweakers-move-face-bar-marker {
   position: absolute;
   left: 0;
   right: 0;
 }
 
-.tweakers-move-gate-bar-lit {
-  top: calc((1 - var(--move-gate-at)) * (100% - var(--move-gate-marker)) + var(--move-gate-marker));
+.tweakers-move-face-bar-lit {
+  top: calc((1 - var(--move-face-at)) * (100% - var(--move-face-marker)) + var(--move-face-marker));
   bottom: 0;
-  background: var(--move-gate-lit);
+  background: color-mix(in srgb, var(--move-face-colour) var(--move-face-lit, 50%), var(--move-face-well));
 }
 
-.tweakers-move-gate-bar-marker {
-  top: calc((1 - var(--move-gate-at)) * (100% - var(--move-gate-marker)));
-  height: var(--move-gate-marker);
-  background: var(--move-gate-colour);
+.tweakers-move-face-bar-marker {
+  top: calc((1 - var(--move-face-at)) * (100% - var(--move-face-marker)));
+  height: var(--move-face-marker);
+  background: var(--move-face-colour);
 }
 
-.tweakers-move-gate-grid {
+.tweakers-move-face-grid {
   position: absolute;
   top: 29px;
   bottom: 27px;
-  left: calc(var(--move-gate-col) / 2 + var(--move-gate-bar-w) / 2 + var(--move-gate-inset));
-  right: calc(var(--move-gate-col) / 2 + var(--move-gate-bar-w) / 2 + var(--move-gate-inset));
   display: grid;
   gap: 2px;
   padding: 2px;
   border-radius: var(--move-radius-small);
-  background: var(--move-gate-well);
+  background: var(--move-face-well);
   pointer-events: none;
 }
 
-.tweakers-move-gate-grid > i {
+.tweakers-move-face-grid > i {
   border-radius: 2px;
-  background: var(--move-gate-cell);
+  background: var(--move-face-cell);
 }
 
-.tweakers-move-gate-grid > i[data-corner="tl"] { border-top-left-radius: calc(var(--move-radius-small) - 2px); }
-.tweakers-move-gate-grid > i[data-corner="tr"] { border-top-right-radius: calc(var(--move-radius-small) - 2px); }
-.tweakers-move-gate-grid > i[data-corner="bl"] { border-bottom-left-radius: calc(var(--move-radius-small) - 2px); }
-.tweakers-move-gate-grid > i[data-corner="br"] { border-bottom-right-radius: calc(var(--move-radius-small) - 2px); }
+.tweakers-move-face-grid > i[data-corner="tl"] { border-top-left-radius: calc(var(--move-radius-small) - 2px); }
+.tweakers-move-face-grid > i[data-corner="tr"] { border-top-right-radius: calc(var(--move-radius-small) - 2px); }
+.tweakers-move-face-grid > i[data-corner="bl"] { border-bottom-left-radius: calc(var(--move-radius-small) - 2px); }
+.tweakers-move-face-grid > i[data-corner="br"] { border-bottom-right-radius: calc(var(--move-radius-small) - 2px); }
 
-.tweakers-move-gate-display {
+.tweakers-move-face-display {
   position: absolute;
   inset: 2px;
   overflow: hidden;
   border-radius: calc(var(--move-radius-small) - 2px);
 }
 
-.tweakers-move-gate-canvas {
+.tweakers-move-gate-canvas,
+.tweakers-move-multiband-canvas {
   display: block;
   width: 100%;
   height: 100%;
 }
 
-.tweakers-move-gate-name {
+.tweakers-move-face-name,
+.tweakers-move-gate-look-name {
   color: var(--move-text);
   font-family: var(--move-font-label);
-  font-size: var(--move-visual-font-size);
+  font-size: var(--move-face-name-size, var(--move-visual-font-size));
   line-height: 16px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
   pointer-events: none;
 }
 
-.tweakers-move-gate-name[data-role="threshold"],
-.tweakers-move-gate-name[data-role="release"],
-.tweakers-move-gate-look {
+.tweakers-move-face-name {
   position: absolute;
   bottom: 6px;
+  left: calc(var(--move-face-col-w) * (var(--move-face-col) + 0.5) + var(--move-gap) * var(--move-face-col));
   transform: translateX(-50%);
 }
 
-.tweakers-move-gate-name[data-role="threshold"] { left: calc(var(--move-gate-col) / 2); }
-.tweakers-move-gate-name[data-role="release"] { left: calc(100% - var(--move-gate-col) / 2); }
+/* The gate: the threshold's bar over the first column's centre, the
+   release's over the third's, the grid in the room between them. */
+.tweakers-move-dial[data-kind="gate"] .tweakers-move-face-bar[data-role="threshold"] {
+  left: calc(var(--move-face-col-w) / 2 - var(--move-face-bar-w) / 2);
+  --move-face-colour: var(--move-gate-threshold);
+}
+
+.tweakers-move-dial[data-kind="gate"] .tweakers-move-face-bar[data-role="release"] {
+  right: calc(var(--move-face-col-w) / 2 - var(--move-face-bar-w) / 2);
+  --move-face-colour: var(--move-gate-release);
+  --move-face-lit: 40%;
+}
+
+.tweakers-move-dial[data-kind="gate"] .tweakers-move-face-grid {
+  left: calc(var(--move-face-col-w) / 2 + var(--move-face-bar-w) / 2 + 12px);
+  right: calc(var(--move-face-col-w) / 2 + var(--move-face-bar-w) / 2 + 12px);
+}
 
 .tweakers-move-gate-look {
+  position: absolute;
+  bottom: 6px;
   left: 50%;
   display: flex;
   align-items: center;
   gap: 9px;
+  transform: translateX(-50%);
   pointer-events: none;
 }
 
@@ -2217,18 +2228,18 @@
 
 .tweakers-move-gate-look-line::before {
   right: 1px;
-  background: var(--move-gate-well);
+  background: var(--move-face-well);
 }
 
 .tweakers-move-gate-look-lit {
-  width: calc(var(--move-gate-at) * var(--move-gate-reach));
-  background: color-mix(in srgb, var(--move-gate-lookahead) 50%, var(--move-gate-well));
+  width: calc(var(--move-face-at) * var(--move-gate-reach));
+  background: color-mix(in srgb, var(--move-gate-lookahead) 50%, var(--move-face-well));
 }
 
 .tweakers-move-gate-look-dot {
   position: absolute;
   top: 3px;
-  left: calc(var(--move-gate-at) * var(--move-gate-reach) - 3px);
+  left: calc(var(--move-face-at) * var(--move-gate-reach) - 3px);
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -2246,34 +2257,114 @@
 
 .tweakers-move-gate-look-arrow path {
   fill: none;
-  stroke: var(--move-gate-well);
+  stroke: var(--move-face-well);
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
-.tweakers-move-gate-zones {
+/* The multiband cleaner: the amount's bar hugs the first column's left edge
+   beside its icon, the speed's gauge stands over the second column, and the
+   band columns share one grid. */
+.tweakers-move-dial[data-kind="multiband"] {
+  --move-face-name-size: 15px;
+}
+
+.tweakers-move-dial[data-kind="multiband"] .tweakers-move-face-bar[data-role="amount"] {
+  left: 19px;
+  --move-face-colour: var(--move-multiband-amount);
+}
+
+.tweakers-move-multiband-icon {
+  position: absolute;
+  top: 54px;
+  left: calc(var(--move-face-col-w) / 2 - 21px);
+  width: 42px;
+  height: 42px;
+  color: var(--move-text);
+  pointer-events: none;
+}
+
+.tweakers-move-multiband-icon path,
+.tweakers-move-multiband-icon line,
+.tweakers-move-multiband-icon circle {
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
+
+.tweakers-move-multiband-icon[data-asset] {
+  background: currentColor;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+}
+
+.tweakers-move-multiband-gauge {
+  position: absolute;
+  top: 43px;
+  left: calc(var(--move-face-col-w) * 1.5 + var(--move-gap) - 49px);
+  width: 98px;
+  height: 64px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.tweakers-move-multiband-gauge-dome,
+.tweakers-move-multiband-gauge-base,
+.tweakers-move-multiband-gauge-needle {
+  fill: none;
+  stroke: var(--move-text);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.tweakers-move-multiband-gauge-tick {
+  stroke: var(--move-text);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  opacity: 0.3;
+}
+
+.tweakers-move-multiband-gauge-tick[data-lit] {
+  opacity: 1;
+}
+
+.tweakers-move-multiband-gauge-pivot {
+  fill: var(--move-text);
+}
+
+.tweakers-move-dial[data-kind="multiband"] .tweakers-move-face-grid {
+  left: calc(var(--move-face-col-w) * 2 + var(--move-gap) * 2 + 8px);
+  right: 8px;
+}
+
+.tweakers-move-face-zones {
   position: absolute;
   inset: 0;
   display: flex;
+  gap: var(--move-gap);
 }
 
-.tweakers-move-gate-zone {
+.tweakers-move-face-zone {
   position: relative;
   flex: 1;
   cursor: ns-resize;
   touch-action: none;
 }
 
-.tweakers-move-gate-zone[data-role="lookahead"] { cursor: ew-resize; }
+.tweakers-move-face-zone[data-role="lookahead"] { cursor: ew-resize; }
+.tweakers-move-face-zone[data-role="speed"] { cursor: grab; }
 
-.tweakers-move-gate-zone:focus-visible {
+.tweakers-move-face-zone:focus-visible {
   outline: var(--move-visual-focus-width) solid var(--move-text);
   outline-offset: calc(-1 * var(--move-visual-focus-width));
   border-radius: var(--move-radius);
 }
 
-.tweakers-move-gate-zone[data-disabled] {
+.tweakers-move-face-zone[data-disabled] {
   cursor: not-allowed;
 }
 
@@ -4031,6 +4122,7 @@
   --move-gate-threshold: #f27560;
   --move-gate-lookahead: #8e68e6;
   --move-gate-release: #6a91f8;
+  --move-multiband-amount: #5ce79c;
   --move-visual-font-size: 10px;
   --move-visual-focus-width: 2px;
   --move-visual-focus-offset: 2px;

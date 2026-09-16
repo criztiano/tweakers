@@ -37,17 +37,23 @@ export type { MovePage, MoveBandCell } from './move-layout';
 export { buildMoveStrip, isStripSlot, stripStarts, stripOffsets, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripSlotCount, stripSlotIndex } from './move-strip';
 
 // The big-slot library — the dictionary of what a Move dial slot can be
-export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MOVE_GATE_GRID, MoveSlotPlaybackDrawing, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotColorBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
+export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MOVE_GATE_GRID, MoveSlotMultibandBody, MOVE_MULTIBAND_GRID, MOVE_GAUGE, moveGaugeBearing, MoveSlotPlaybackDrawing, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotColorBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
 // The small slots — the pad row under the dials
 export { MOVE_PAD_LIBRARY, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody } from './components/move-slots';
 export type { MovePadKind, MovePadBandHand } from './components/move-slots';
-export { moveNumericDrawing, moveTrimSpan, moveGateSpan, movePlaybackMode, moveVisualReading, moveBandCuts, MOVE_BAND_W, MOVE_BAND_H } from './move-visual-core';
-export type { MoveGateRole, MoveVisual, MoveSliderVisual, MoveSelectVisual, MovePlaybackMode, MoveNumericDrawing } from './move-visual-core';
-export type { MoveSlotKind, MoveTrimSpanEdge, MoveGateDial } from './components/move-slots';
+export { moveNumericDrawing, moveTrimSpan, moveGateSpan, moveMultibandSpan, moveMultibandRole, movePlaybackMode, moveVisualReading, moveBandCuts, MOVE_BAND_W, MOVE_BAND_H } from './move-visual-core';
+export type { MoveGateRole, MoveMultibandRole, MoveVisual, MoveSliderVisual, MoveSelectVisual, MovePlaybackMode, MoveNumericDrawing } from './move-visual-core';
+export type { MoveSlotKind, MoveTrimSpanEdge, MoveFaceDial } from './components/move-slots';
 // The gate face's live picture — the app attaches what the gate is doing around the playhead
 export { MoveGateMeter, drawMoveGate, moveGateDemoReading } from './move-gate';
 export type { MoveGateReading, MoveGateReader, MoveGateColours } from './move-gate';
 export { MoveGateDisplay } from './components/MoveGateDisplay';
+// The multiband face's live picture — the app attaches what each band is doing at the playhead
+export { MoveMultibandMeter, drawMoveMultiband, moveMultibandDemoReading } from './move-multiband';
+export type { MoveMultibandReading, MoveMultibandColours } from './move-multiband';
+export { MoveMultibandDisplay } from './components/MoveMultibandDisplay';
+export { createMoveMeter } from './move-meter';
+export type { MoveMeter } from './move-meter';
 
 // The filter control core — the kit's first 2-slot control (cutoff + resonance)
 export { resolveFilterAxis, normalizeFilterValue, defaultFilterResponse, filterShapeResponse, filterResponsePath, filterHand01, filterHandValue, FILTER_DB_FLOOR, FILTER_DB_CEIL } from './filter-core';

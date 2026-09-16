@@ -15,6 +15,10 @@ import {
   MoveSlotTrimSpanBody,
   MoveSlotGateBody,
   MoveGateDisplay,
+  MoveSlotMultibandBody,
+  MoveMultibandDisplay,
+  MoveMultibandMeter,
+  moveMultibandDemoReading,
   MoveGateMeter,
   moveGateDemoReading,
   MoveSlotNumericBody,
@@ -349,6 +353,12 @@ export const BIG_SLOTS: Specimen[] = [
     render: () => <LiveGate />,
   },
   {
+    kind: 'multiband', span: 5,
+    description: MOVE_SLOT_LIBRARY.multiband.description,
+    note: 'The bands move to a made-up signal; an app attaches its own with MoveMultibandMeter. Band chips in the band columns join the curve.',
+    render: () => <LiveMultiband />,
+  },
+  {
     kind: 'playback', path: 'playback',
     description: MOVE_SLOT_LIBRARY.playback.description,
     render: () => {
@@ -395,6 +405,22 @@ function LiveGate() {
     >
       <MoveGateDisplay panelId="library-gate" threshold={0.8} />
     </MoveSlotGateBody>
+  );
+}
+
+/** The multiband specimen: six bands, three on knobs, the curve over a moving signal. */
+function LiveMultiband() {
+  useEffect(() => MoveMultibandMeter.attach('library-multiband', () => moveMultibandDemoReading(performance.now())), []);
+  const curve = [1, 0.8, 0.5, 0.4, 0.2, 0];
+  return (
+    <MoveSlotMultibandBody
+      icon="broom-sparkles"
+      amount={{ label: 'Clean', value: '60%', position: 0.6 }}
+      speed={{ label: 'Speed', value: '15%', position: 0.15 }}
+      bands={[{ label: 'Hi', value: '100%', position: 1 }, { label: 'Mid', value: '50%', position: 0.5 }, { label: 'Sub', value: '0%', position: 0 }]}
+    >
+      <MoveMultibandDisplay panelId="library-multiband" bands={curve.map((position) => ({ position: position * 0.6 }))} />
+    </MoveSlotMultibandBody>
   );
 }
 

@@ -13,7 +13,14 @@ export type MoveSliderVisual =
   /** One of a gate's three dials. Threshold, look-ahead and release side by
    *  side, in that order, draw as one 3-slot gate; any other arrangement
    *  keeps the ordinary face. */
-  | { kind: 'gate'; role: MoveGateRole };
+  | { kind: 'gate'; role: MoveGateRole }
+  /** One control of a multiband cleaner: an amount (its bar wears `icon`),
+   *  a speed, and bands, each `band` its place from the top of the spectrum
+   *  down. An amount, a speed and at least one band dial side by side draw
+   *  as one face; band chips in those columns join its curve. */
+  | { kind: 'multiband'; role: 'amount'; icon?: string }
+  | { kind: 'multiband'; role: 'speed' }
+  | { kind: 'multiband'; role: 'band'; band: number };
 
 export type MoveGateRole = 'threshold' | 'lookahead' | 'release';
 
@@ -111,6 +118,48 @@ export function moveGateSpan(
   });
   if (at.some((p) => p === null)) return null;
   return { threshold: at[0]!, lookahead: at[1]!, release: at[2]! };
+}
+
+/** A slider's place across its own range, 0..1 — or null when it has none. */
+function sliderPosition(meta: ControlMeta, value: unknown): number | null {
+  const { min, max } = meta;
+  if (meta.type !== 'slider' || typeof value !== 'number' || !Number.isFinite(value)
+    || !Number.isFinite(min) || !Number.isFinite(max) || max! <= min!) return null;
+  return clamp01((value - min!) / (max! - min!));
+}
+
+export type MoveMultibandRole = 'amount' | 'speed' | 'band';
+
+/** A slider's multiband role, or null when it is not one. */
+export function moveMultibandRole(meta: ControlMeta | undefined): MoveMultibandRole | null {
+  const visual = meta?.moveVisual;
+  return meta?.type === 'slider' && visual?.kind === 'multiband' ? visual.role : null;
+}
+
+/**
+ * Where a multiband face's controls sit, each 0..1 — or null unless the
+ * dials are an amount, a speed and one or more bands, in that order. `bands`
+ * are every band control the face draws (dials and chips), returned in
+ * spectrum order.
+ */
+export function moveMultibandSpan(
+  dials: [ControlMeta, unknown][],
+  bands: [ControlMeta, unknown][],
+): { amount: number; speed: number; bands: { meta: ControlMeta; position: number }[] } | null {
+  const roles = dials.map(([meta]) => moveMultibandRole(meta));
+  if (dials.length < 3 || roles[0] !== 'amount' || roles[1] !== 'speed' || roles.slice(2).some((r) => r !== 'band')) return null;
+  const amount = sliderPosition(...dials[0]);
+  const speed = sliderPosition(...dials[1]);
+  if (amount === null || speed === null) return null;
+  const drawn: { meta: ControlMeta; position: number; band: number }[] = [];
+  for (const [meta, value] of bands) {
+    const visual = meta.moveVisual;
+    const position = sliderPosition(meta, value);
+    if (visual?.kind !== 'multiband' || visual.role !== 'band' || position === null || !Number.isFinite(visual.band)) return null;
+    drawn.push({ meta, position, band: visual.band });
+  }
+  drawn.sort((a, b) => a.band - b.band);
+  return { amount, speed, bands: drawn.map(({ meta, position }) => ({ meta, position })) };
 }
 
 export function movePlaybackMode(meta: ControlMeta, value: unknown): MovePlaybackMode | null {

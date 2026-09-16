@@ -2,6 +2,7 @@ import { createElement } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MovePanel, MOVE_OVERRIDE_EVENT } from '../src/components/MovePanel';
+import { MoveMultibandDisplay } from '../src/components/MoveMultibandDisplay';
 import { TweakStore, type TweakConfig } from '../src/store/TweakStore';
 
 let renderer: ReactTestRenderer | undefined;
@@ -99,10 +100,10 @@ describe('MovePanel semantic interactions', () => {
       release: { type: 'slider', min: 10, max: 510, default: 260, step: 5, moveVisual: { kind: 'gate', role: 'release' } },
     });
     const face = renderer!.root.findByProps({ 'data-kind': 'gate' });
-    const bar = (role: string) => face.findByProps({ className: 'tweakers-move-gate-bar', 'data-role': role });
+    const bar = (role: string) => face.findByProps({ className: 'tweakers-move-face-bar', 'data-role': role });
     expect(renderer!.root.findAllByProps({ className: 'tweakers-move-dial' })).toHaveLength(1);
-    expect(bar('threshold').props.style['--move-gate-at']).toBe(0.75);
-    expect(bar('release').props.style['--move-gate-at']).toBe(0.5);
+    expect(bar('threshold').props.style['--move-face-at']).toBe(0.75);
+    expect(bar('release').props.style['--move-face-at']).toBe(0.5);
     act(() => dial('Release').props.onKeyDown(keyEvent('End')));
     expect(TweakStore.getValues(id)).toMatchObject({ gate: -20, look: 10, release: 510 });
     // a bar's drag reads its own drawn track, top to bottom
@@ -111,6 +112,35 @@ describe('MovePanel semantic interactions', () => {
     act(() => dial('Gate').props.onPointerDown(press));
     expect(TweakStore.getValues(id).gate).toBe(-40);
     act(() => dial('Gate').props.onPointerUp());
+  });
+
+  it('draws an amount, a speed and band dials as one multiband face, band chips joining the curve', () => {
+    const blank = { type: 'toggle', default: false, moveSlot: true, moveBlank: true } as const;
+    const band = (k: number, v: number) => ({ type: 'slider', min: 0, max: 100, default: v, step: 1, moveVisual: { kind: 'multiband', role: 'band', band: k } }) as const;
+    TweakStore.registerPanel(id, 'Visual', {
+      clean: { type: 'slider', min: 0, max: 100, default: 50, step: 1, moveVisual: { kind: 'multiband', role: 'amount', icon: 'broom-sparkles' } },
+      speed: { type: 'slider', min: 1, max: 101, default: 51, step: 1, moveVisual: { kind: 'multiband', role: 'speed' } },
+      hi: band(0, 100), mid: band(2, 50), sub: band(5, 0),
+      _5: blank, _6: blank, _7: blank,
+      hiMid: band(1, 80), loMid: band(3, 40), bass: band(4, 20),
+    }, undefined, { movePads: { hiMid: 2, loMid: 3, bass: 4 }, moveTopRow: ['hiMid', 'loMid', 'bass'] });
+    act(() => { renderer = create(createElement(MovePanel, { panels: 'Visual', dock: 'flow', productionEnabled: true })); });
+    const face = renderer!.root.findByProps({ 'data-kind': 'multiband' });
+    expect(face.props.style.gridColumn).toBe('span 5');
+    // the face and the three held-open columns after it
+    expect(renderer!.root.findAllByProps({ className: 'tweakers-move-dial' })).toHaveLength(4);
+    const curve = face.findByType(MoveMultibandDisplay).props.bands.map((b: { position: number }) => b.position);
+    expect(curve).toEqual([0.5, 0.4, 0.25, 0.2, 0.1, 0]);
+    act(() => dial('Mid').props.onKeyDown(keyEvent('End')));
+    expect(TweakStore.getValues(id).mid).toBe(100);
+    // the speed turns round its gauge: straight up is the middle
+    const gauge = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 98, height: 64 }) };
+    const press = { clientX: 49, clientY: 0, pointerId: 1, shiftKey: false, currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }), closest: () => ({ querySelector: () => gauge }) } };
+    act(() => dial('Speed').props.onPointerDown(press));
+    expect(TweakStore.getValues(id).speed).toBe(51);
+    act(() => dial('Speed').props.onPointerDown({ ...press, clientX: 98, clientY: 42 }));
+    expect(TweakStore.getValues(id).speed).toBeCloseTo(1 + 100 * (0.5 + 90 / 220), 0);
+    act(() => dial('Speed').props.onPointerUp());
   });
 
   it('keeps the ordinary faces when the gate dials are out of order', () => {

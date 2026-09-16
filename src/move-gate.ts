@@ -1,8 +1,4 @@
-/**
- * The gate face's live picture. The kit cannot hear the app's audio, so the
- * app attaches a reader per panel; the face calls it once a frame while it is
- * on screen and draws what comes back around the playhead.
- */
+import { createMoveMeter } from './move-meter';
 
 /** What the gate is doing around the playhead, oldest step first. */
 export type MoveGateReading = {
@@ -19,28 +15,16 @@ export type MoveGateReading = {
 
 export type MoveGateReader = () => MoveGateReading | null;
 
-const readers = new Map<string, MoveGateReader>();
-
-export const MoveGateMeter = {
-  /** Feed a panel's gate face. Returns the detach. */
-  attach(panelId: string, read: MoveGateReader): () => void {
-    readers.set(panelId, read);
-    return () => {
-      if (readers.get(panelId) === read) readers.delete(panelId);
-    };
-  },
-  read(panelId: string): MoveGateReading | null {
-    return readers.get(panelId)?.() ?? null;
-  },
-};
+export const MoveGateMeter = createMoveMeter<MoveGateReading>();
 
 export type MoveGateColours = { text: string; threshold: string; lookahead: string; release: string };
 
 /**
  * Paints a reading over the grid: the level as a filled trace that dims where
  * the gate shuts, the gate's opening in the release colour, the look-ahead
- * reaching past the playhead, and the threshold as a dashed line across, under the level's line. `pad` keeps the
- * trace off the frame, so the threshold line meets the bar's marker.
+ * reaching past the playhead, and the threshold as a dashed line across,
+ * under the level's line. `pad` keeps the trace off the frame, so the
+ * threshold line meets the bar's marker.
  */
 export function drawMoveGate(
   g: CanvasRenderingContext2D,
