@@ -50,8 +50,10 @@ control, and `band`, which runs two pads down one column.
 | --- | --- | --- | --- |
 | `toggle` | A switch under its dial | `toggle` with a `movePads` column; `MovePadToggleBody` | 1 pad |
 | `hold` | A switch that is on only while held — a solo, a preview | `toggle` with `moveHold` and a `movePads` column; `MovePadToggleBody` | 1 pad |
+| `icon` | A switch a picture says better than a name — a solo's headphones | `toggle` with `icon` (a `LUCIDE_ICONS` name or an asset URL) and a `movePads` column, `moveHold` optional; `MovePadIconBody` | 1 pad; the name stays as its accessible label |
 | `value` | A bounded number the dial above can borrow | Bounded `slider` / `number`; `MovePadValueBody` | 1 pad |
 | `action` | A button the page wants on the surface | `action` with a `movePads` column; `MovePadActionBody` | 1 pad |
+| `icon-label` | A button a picture helps find — Export's download, Clear's cross | `action` with `icon` (a `LUCIDE_ICONS` name or an asset URL) and a `movePads` column; `MovePadIconLabelBody` | 1 pad; the name gives way before the picture |
 | `app` | A cell the app paints — a track, a slice, a step | `MoveSurfaceStore`; `MovePadAppBody` | 1 pad |
 | `tabs` | The mode a page is in, reachable without turning anything | `select` with `moveTabs` (`true`, or `'named'` for the name pad); `MovePadTabsBody` | 2–8 adjacent pads, switch row |
 | `band` | A high cut and a low cut that shape one band — a filter's two ends | Two bounded chips stacked in one `movePads` column (e.g. one sunk with `moveActionRow`), named in `moveBands: [{ high, low }]`; `MovePadBandBody` | 2 pads, one column; each half is its own chip — tap latches, hold peeks. A cut off its open end (high below max, low above min) fills yellow |

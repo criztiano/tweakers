@@ -1,4 +1,4 @@
-import { C as ControlMeta, P as PanelConfig } from './TweakStore-CR5X6x0y.js';
+import { C as ControlMeta, P as PanelConfig } from './TweakStore-D79Ear7m.js';
 import { ModPageLayout } from './modulation-core.js';
 import { XYValue } from './xy-pad-core.js';
 import { RangeValue } from './range-slider-core.js';

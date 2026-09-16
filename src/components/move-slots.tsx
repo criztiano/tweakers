@@ -700,7 +700,7 @@ function MoveSlotBadge({ on }: { on: boolean }) {
  * `band` claims two pads the other way — one column, two rows — and keeps
  * the same promise: each pad under the shared screen is still its own chip.
  */
-export type MovePadKind = 'toggle' | 'value' | 'action' | 'app' | 'bend' | 'wave' | 'tabs' | 'color' | 'list' | 'band';
+export type MovePadKind = 'toggle' | 'icon' | 'value' | 'action' | 'icon-label' | 'app' | 'bend' | 'wave' | 'tabs' | 'color' | 'list' | 'band';
 
 /** A switch: the indicator top-left, the name beside it, the whole pad
  *  inverting when it is on. */
@@ -711,6 +711,13 @@ export function MovePadToggleBody({ label }: { label: string }) {
       <span className="tweakers-move-pad-title">{label}</span>
     </>
   );
+}
+
+/** A switch drawn as its picture alone: a pad is too narrow for a name and
+ *  a badge, and the whole pad inverting already says it is on. The name
+ *  stays on the pad for the screen reader, not the eye. */
+export function MovePadIconBody({ icon }: { icon: string }) {
+  return <MoveSlotIcon icon={icon} className="tweakers-move-pad-icon" />;
 }
 
 /** A value chip: the name, and the real value in bold with its unit
@@ -752,6 +759,18 @@ export function MovePadWaveBody({ label, percent }: { label: string; percent: nu
 /** A button: no value to carry, so the name has the pad to itself. */
 export function MovePadActionBody({ label }: { label: string }) {
   return <span className="tweakers-move-pad-title">{label}</span>;
+}
+
+/** A button that shows what it does twice: its picture, then its name — the
+ *  glyph is found at a glance, the word confirms it. The name gives way
+ *  before the picture does when the pad runs narrow. */
+export function MovePadIconLabelBody({ icon, label }: { icon: string; label: string }) {
+  return (
+    <span className="tweakers-move-pad-icon-label">
+      <MoveSlotIcon icon={icon} className="tweakers-move-pad-icon" />
+      <span className="tweakers-move-pad-title">{label}</span>
+    </span>
+  );
 }
 
 /**
@@ -917,9 +936,11 @@ export function MovePadListBody({ view, onCursor, onToggle }: {
 /** The small slot dictionary — every pad face the kit knows. */
 export const MOVE_PAD_LIBRARY = {
   toggle: { description: 'a switch; the pad inverts when it is on', component: MovePadToggleBody },
+  icon: { description: 'a switch drawn as its picture alone — no name, the pad inverts when it is on', component: MovePadIconBody },
   value: { description: 'a value the dial above can borrow — hold to peek, tap to latch', component: MovePadValueBody },
   list: { description: 'a checked list above a small pad; its dial walks, Sample selects, a second pad press runs', component: MovePadListBody },
   action: { description: 'a button: a press runs the app’s action', component: MovePadActionBody },
+  'icon-label': { description: 'a button wearing its picture beside its name — a press runs the app’s action', component: MovePadIconLabelBody },
   app: { description: 'a cell the app paints itself — a track, a slice, a step', component: MovePadAppBody },
   bend: { description: 'hold and drag to bend the envelope ramp above it', component: MovePadToggleBody },
   wave: { description: 'hold and drag for the stage’s own sine, tap to flip it', component: MovePadWaveBody },

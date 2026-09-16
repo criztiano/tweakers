@@ -158,6 +158,12 @@ type ActionConfig = {
      * fills the row and carries the meaning alone.
      */
     caption?: string;
+    /**
+     * A glyph from `LUCIDE_ICONS`, or the URL of an asset the app owns. On a
+     * Move pad the button then wears it beside its name (the `icon-label`
+     * small slot).
+     */
+    icon?: string;
 };
 type ToggleConfig = {
     type: 'toggle';
@@ -169,6 +175,8 @@ type ToggleConfig = {
      * asset the app owns (drawn as a mask, so it takes the slot's colour). The
      * slot then reads as that picture with a state badge on its corner rather
      * than as a name — what the switch is about, and whether it is doing it.
+     * On a pad the picture stands alone (the `icon` small slot): no name, no
+     * badge, the pad inverting when it is on.
      */
     icon?: string;
     /** The app's own state badges, in place of the kit's check and ban. */

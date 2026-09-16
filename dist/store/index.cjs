@@ -1170,7 +1170,7 @@ var TweakStoreClass = class {
       } else if (this.isSpringConfig(value) || this.isEasingConfig(value)) {
         controls.push({ type: "transition", path, label });
       } else if (this.isActionConfig(value)) {
-        controls.push({ type: "action", path, label: value.label || label, caption: value.caption });
+        controls.push({ type: "action", path, label: value.label || label, caption: value.caption, icon: value.icon });
       } else if (this.isSelectConfig(value)) {
         controls.push({ type: "select", path, label, options: value.options, display: value.display, preview: value.preview, moveVisual: value.moveVisual, moveTabs: value.moveTabs, moveSpan: value.moveSpan });
       } else if (this.isColorConfig(value)) {

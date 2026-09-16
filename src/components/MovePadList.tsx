@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { MovePadListStore, type MovePadListView } from '../move-pad-list';
-import { MovePadActionBody, MovePadListBody } from './move-slots';
+import { MovePadActionBody, MovePadIconLabelBody, MovePadListBody } from './move-slots';
 
 /** The action pad anchors its list; the shared list body supplies every row. */
-export function MovePadList({ panelId, path, label, view, disabled }: {
-  panelId: string; path: string; label: string; view: MovePadListView | null; disabled: boolean;
+export function MovePadList({ panelId, path, label, icon, view, disabled }: {
+  panelId: string; path: string; label: string; icon?: string; view: MovePadListView | null; disabled: boolean;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const open = view?.panelId === panelId && view.path === path;
@@ -41,7 +41,9 @@ export function MovePadList({ panelId, path, label, view, disabled }: {
     <button type="button" className="tweakers-move-pad" data-kind="list" data-confirm={open || undefined} data-pending={open && view.pending || undefined}
       aria-expanded={open} aria-haspopup="listbox" aria-busy={open && view.pending || undefined} disabled={disabled || (open && view.pending)}
       onClick={() => { void MovePadListStore.activate(panelId, path); }}>
-      <MovePadActionBody label={open ? view.submitLabel ?? label : label} />
+      {icon
+        ? <MovePadIconLabelBody icon={icon} label={open ? view.submitLabel ?? label : label} />
+        : <MovePadActionBody label={open ? view.submitLabel ?? label : label} />}
     </button>
     {open && <div className="tweakers-move-dial-screen tweakers-move-pad-list-overlay" onWheel={event => { event.stopPropagation(); MovePadListStore.move(event.deltaY); }}>
       <MovePadListBody view={view} onCursor={index => MovePadListStore.setCursor(index)} onToggle={() => MovePadListStore.toggleCursor()} />

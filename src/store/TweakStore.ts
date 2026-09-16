@@ -65,6 +65,12 @@ export type ActionConfig = {
    * fills the row and carries the meaning alone.
    */
   caption?: string;
+  /**
+   * A glyph from `LUCIDE_ICONS`, or the URL of an asset the app owns. On a
+   * Move pad the button then wears it beside its name (the `icon-label`
+   * small slot).
+   */
+  icon?: string;
 };
 
 /**
@@ -86,6 +92,8 @@ export type ToggleConfig = {
    * asset the app owns (drawn as a mask, so it takes the slot's colour). The
    * slot then reads as that picture with a state badge on its corner rather
    * than as a name — what the switch is about, and whether it is doing it.
+   * On a pad the picture stands alone (the `icon` small slot): no name, no
+   * badge, the pad inverting when it is on.
    */
   icon?: string;
   /** The app's own state badges, in place of the kit's check and ban. */
@@ -662,7 +670,7 @@ export type ControlMeta = {
   /** The synthetic segmented select driving `_tab` — it renders as the panel's tab bar, never as a row. */
   tabBar?: boolean;
   options?: (string | { value: string; label: string; icon?: string })[];
-  /** Toggle's own picture and state badges, from the explicit ToggleConfig form. */
+  /** Toggle's own picture and state badges, from the explicit ToggleConfig form; an action's pad glyph. */
   icon?: string;
   onIcon?: string;
   offIcon?: string;
@@ -2089,7 +2097,7 @@ class TweakStoreClass {
       } else if (this.isSpringConfig(value) || this.isEasingConfig(value)) {
         controls.push({ type: 'transition', path, label });
       } else if (this.isActionConfig(value)) {
-        controls.push({ type: 'action', path, label: (value as ActionConfig).label || label, caption: (value as ActionConfig).caption });
+        controls.push({ type: 'action', path, label: (value as ActionConfig).label || label, caption: (value as ActionConfig).caption, icon: (value as ActionConfig).icon });
       } else if (this.isSelectConfig(value)) {
         controls.push({ type: 'select', path, label, options: value.options, display: value.display, preview: value.preview, moveVisual: value.moveVisual, moveTabs: value.moveTabs, moveSpan: value.moveSpan });
       } else if (this.isColorConfig(value)) {

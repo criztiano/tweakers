@@ -39,7 +39,7 @@ export { buildMoveStrip, isStripSlot, stripStarts, stripOffsets, clampStripOffse
 // The big-slot library — the dictionary of what a Move dial slot can be
 export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotPlaybackDrawing, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotColorBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
 // The small slots — the pad row under the dials
-export { MOVE_PAD_LIBRARY, MovePadToggleBody, MovePadValueBody, MovePadActionBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody } from './components/move-slots';
+export { MOVE_PAD_LIBRARY, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody } from './components/move-slots';
 export type { MovePadKind, MovePadBandHand } from './components/move-slots';
 export { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveBandCuts, MOVE_BAND_W, MOVE_BAND_H } from './move-visual-core';
 export type { MoveVisual, MoveSliderVisual, MoveSelectVisual, MovePlaybackMode, MoveNumericDrawing } from './move-visual-core';
