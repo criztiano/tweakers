@@ -2750,7 +2750,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                               aria-valuenow={Number(values[m.path])}
                               aria-valuetext={moveVisualReading(m, Number(values[m.path]))}
                               aria-orientation="horizontal"
-                              data-held={chipHeld(m) || dragPath === m.path || undefined}
+                              data-held={chipHeld(m) || undefined}
                               data-latched={chipLatched(at, m) || undefined}
                               onKeyDown={(k) => dialFromKeyboard(k, m)}
                             >

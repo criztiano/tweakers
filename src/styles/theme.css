@@ -3360,8 +3360,8 @@
 
 /* Each half of the pill is its own chip on the hardware, over its own pad;
    on screen the cursor drags the handles instead (the pill takes the
-   pointer). A held, dragged or latched half lifts a light veil over its side
-   of the face — the chip's inversion, kept soft so the drawing still reads
+   pointer, and a drag lights nothing). A half held or latched on the Move
+   lifts a light veil over its side of the face — the chip's inversion, kept soft so the drawing still reads
    through it. */
 .tweakers-move-edges-zone {
   position: absolute;
