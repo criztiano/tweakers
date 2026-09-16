@@ -16,6 +16,7 @@ import {
   MoveSlotGateBody,
   MoveGateDisplay,
   MoveSlotMultibandBody,
+  MoveSlotChannelBody,
   MoveMultibandDisplay,
   MoveMultibandMeter,
   moveMultibandDemoReading,
@@ -351,6 +352,19 @@ export const BIG_SLOTS: Specimen[] = [
     description: MOVE_SLOT_LIBRARY.gate.description,
     note: 'The grid runs a made-up drum loop; an app attaches its own with MoveGateMeter.',
     render: () => <LiveGate />,
+  },
+  {
+    kind: 'channel', span: 4,
+    description: MOVE_SLOT_LIBRARY.channel.description,
+    note: 'Each channel is its own dial; channel dials side by side draw as one mixer.',
+    render: () => (
+      <MoveSlotChannelBody channels={[
+        { label: 'Restored', value: '0%', position: 0, icon: 'broom-sparkles' },
+        { label: 'Denoise', value: '21%', position: 0.21, icon: 'audio-lines-x', tone: 'orange' },
+        { label: 'Stereo', value: '50%', position: 0.5, icon: 'boom-box', tone: 'yellow' },
+        { label: 'Remaster', value: '29%', position: 0.29, icon: 'disc-3', tone: 'pink' },
+      ]} />
+    ),
   },
   {
     kind: 'multiband', span: 5,

@@ -146,6 +146,39 @@ describe('MovePanel semantic interactions', () => {
     act(() => dial('Speed').props.onPointerUp());
   });
 
+  it('takes the band under the cursor on the band grid, pads included', () => {
+    const blank = { type: 'toggle', default: false, moveSlot: true, moveBlank: true } as const;
+    const band = (k: number, v: number) => ({ type: 'slider', min: 0, max: 100, default: v, step: 1, moveVisual: { kind: 'multiband', role: 'band', band: k } }) as const;
+    TweakStore.registerPanel(id, 'Visual', {
+      clean: { type: 'slider', min: 0, max: 100, default: 50, step: 1, moveVisual: { kind: 'multiband', role: 'amount' } },
+      speed: { type: 'slider', min: 0, max: 100, default: 50, step: 1, moveVisual: { kind: 'multiband', role: 'speed' } },
+      hi: band(0, 100), mid: band(2, 100), sub: band(5, 100),
+      _5: blank, _6: blank, _7: blank,
+      hiMid: band(1, 100), loMid: band(3, 100), bass: band(4, 100),
+    }, undefined, { movePads: { hiMid: 2, loMid: 3, bass: 4 }, moveTopRow: ['hiMid', 'loMid', 'bass'] });
+    act(() => { renderer = create(createElement(MovePanel, { panels: 'Visual', dock: 'flow', productionEnabled: true })); });
+    const grid = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 300, height: 100 }) };
+    // x 75 of 300 is the second of six bands: Hi mid, on a pad
+    const press = { clientX: 75, clientY: 75, pointerId: 1, shiftKey: false, currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }), closest: () => ({ querySelector: () => grid }) } };
+    act(() => dial('Hi').props.onPointerDown(press));
+    expect(TweakStore.getValues(id)).toMatchObject({ hi: 100, hiMid: 25 });
+    act(() => dial('Hi').props.onPointerUp());
+  });
+
+  it('draws channel dials side by side as one mixer, each fader in its own column', () => {
+    const channel = (v: number, tone?: 'orange') => ({ type: 'slider', min: 0, max: 100, default: v, step: 1, moveVisual: { kind: 'channel', icon: 'disc-3', tone } }) as const;
+    mount({ a: channel(0), b: channel(40, 'orange') });
+    const face = renderer!.root.findByProps({ 'data-kind': 'channel' });
+    expect(face.props.style.gridColumn).toBe('span 2');
+    const fills = face.findAllByProps({ className: 'tweakers-move-channel-fill' });
+    expect(fills.map((f) => [f.props.style['--move-face-at'], f.props['data-empty']])).toEqual([[0, true], [0.4, undefined]]);
+    const well = { getBoundingClientRect: () => ({ left: 0, top: 40, width: 100, height: 100 }) };
+    const press = { clientX: 0, clientY: 65, pointerId: 1, shiftKey: false, currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }), closest: () => ({ querySelector: (q: string) => (q === '[data-track="channel-1"]' ? well : null) }) } };
+    act(() => dial('B').props.onPointerDown(press));
+    expect(TweakStore.getValues(id).b).toBe(75);
+    act(() => dial('B').props.onPointerUp());
+  });
+
   it('keeps the ordinary faces when the gate dials are out of order', () => {
     mount({
       look: { type: 'slider', min: 0, max: 40, default: 10, step: 1, moveVisual: { kind: 'gate', role: 'lookahead' } },

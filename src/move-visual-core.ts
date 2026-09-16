@@ -20,7 +20,13 @@ export type MoveSliderVisual =
    *  as one face; band chips in those columns join its curve. */
   | { kind: 'multiband'; role: 'amount'; icon?: string }
   | { kind: 'multiband'; role: 'speed' }
-  | { kind: 'multiband'; role: 'band'; band: number };
+  | { kind: 'multiband'; role: 'band'; band: number }
+  /** A mixer channel's level: a fader under its icon and name, in its tone.
+   *  Channel dials side by side draw as one mixer. */
+  | { kind: 'channel'; icon?: string; tone?: MoveTone };
+
+/** A Move hue by name, as the theme's `--move-<tone>` token carries it. */
+export type MoveTone = 'red' | 'orange' | 'yellow' | 'lime' | 'emerald' | 'blue' | 'indigo' | 'pink';
 
 export type MoveGateRole = 'threshold' | 'lookahead' | 'release';
 
@@ -126,6 +132,11 @@ function sliderPosition(meta: ControlMeta, value: unknown): number | null {
   if (meta.type !== 'slider' || typeof value !== 'number' || !Number.isFinite(value)
     || !Number.isFinite(min) || !Number.isFinite(max) || max! <= min!) return null;
   return clamp01((value - min!) / (max! - min!));
+}
+
+/** A mixer channel's fader position (0..1), or null unless it is a channel slider. */
+export function moveChannelPosition(meta: ControlMeta | undefined, value: unknown): number | null {
+  return meta?.moveVisual?.kind === 'channel' ? sliderPosition(meta, value) : null;
 }
 
 export type MoveMultibandRole = 'amount' | 'speed' | 'band';

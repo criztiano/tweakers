@@ -17,12 +17,12 @@ import type { TweakTheme } from '../theme';
 import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotMultibandBody, MOVE_GAUGE, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody } from './move-slots';
+import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotMultibandBody, MoveSlotChannelBody, MOVE_GAUGE, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing, angleFromPointer } from '../angle-core';
 import { normalizeTransfer, movePoint, nearestPoint, sampleTransfer, type TransferValue } from '../transfer-core';
-import { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveKeyboardValue, moveTrimSpan, moveGateSpan, moveMultibandSpan, moveMultibandRole } from '../move-visual-core';
+import { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveKeyboardValue, moveTrimSpan, moveGateSpan, moveMultibandSpan, moveMultibandRole, moveChannelPosition } from '../move-visual-core';
 import { MoveGateDisplay } from './MoveGateDisplay';
 import { MoveMultibandDisplay } from './MoveMultibandDisplay';
 import { ModRing } from './ModRing';
@@ -405,6 +405,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // value snapshot where shift went down; releasing shift rebases at 1× so the
   // value never jumps back to the cursor's absolute position.
   const fineRef = useRef<{ shift: boolean; x: number; y: number; v: unknown } | null>(null);
+  // The control a face's drag holds — on a band grid, the band nearest the press.
+  const faceDrag = useRef<ControlMeta | null>(null);
   // Which range handle a gesture grabbed — locked at pointer-down.
   const rangeHandleRef = useRef<'min' | 'max'>('min');
   // Which filter hand a gesture grabbed (left half = cutoff, right half =
@@ -1383,8 +1385,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 
   // Multi-slot instruments: one face across a dial per column, each column
   // keeping its knob and drag zone. `role` names the part a dial is drawn as.
-  type FaceDial = { role: string; col: number; meta: ControlMeta; position: number };
-  type Face = { kind: 'gate' | 'multiband'; col: number; span: number; dials: FaceDial[]; curve?: { meta: ControlMeta; position: number }[]; icon?: string };
+  type FaceDial = { role: string; col: number; meta: ControlMeta; position: number; track?: string };
+  type Face = { kind: 'gate' | 'multiband' | 'channel'; col: number; span: number; dials: FaceDial[]; curve?: { meta: ControlMeta; position: number }[]; icon?: string };
 
   // A gate's three dials side by side — threshold, look-ahead, release — draw
   // as one 3-slot control, all the page's own dials or all latched chips.
@@ -1425,7 +1427,21 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     };
   };
 
-  const faceAt = (col: number): Face | null => (stripMode ? null : gateAt(col) ?? multibandAt(col));
+  // Mixer channels side by side: one face per run of the page's own channel
+  // dials — a chip standing in a column ends the run there.
+  const channelCol = (col: number) =>
+    visibleCols.includes(col) && dialAt(col) === page.dials[col] && moveChannelPosition(page.dials[col], values[page.dials[col]?.path]) !== null;
+  const channelAt = (col: number): Face | null => {
+    if (!channelCol(col) || channelCol(col - 1)) return null;
+    const dials: FaceDial[] = [];
+    for (let k = col; channelCol(k); k++) {
+      const meta = page.dials[k];
+      dials.push({ role: 'channel', col: k, meta, position: moveChannelPosition(meta, values[meta.path])!, track: `channel-${k - col}` });
+    }
+    return { kind: 'channel', col, span: dials.length, dials };
+  };
+
+  const faceAt = (col: number): Face | null => (stripMode ? null : gateAt(col) ?? multibandAt(col) ?? channelAt(col));
   /** A column another face already draws across. */
   const underFace = (col: number) => {
     for (let j = col - 1; j >= 0 && j >= col - MOVE_DIALS; j--) {
@@ -1442,7 +1458,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const faceFromPointer = (e: React.PointerEvent<HTMLElement>, d: FaceDial) => {
     const { meta, role } = d;
     const face = e.currentTarget.closest?.('.tweakers-move-dial');
-    const track = role === 'band' ? 'grid' : role;
+    const track = d.track ?? (role === 'band' ? 'grid' : role);
     const rect = (face?.querySelector(`[data-track="${track}"]`) ?? e.currentTarget).getBoundingClientRect();
     let v01: number;
     if (role === 'speed') {
@@ -1452,7 +1468,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       v01 = Math.min(1, Math.max(0, (bearing + MOVE_GAUGE.sweep) / (MOVE_GAUGE.sweep * 2)));
     } else {
       const vertical = role !== 'lookahead';
-      const marker = role === 'band' ? 0 : FACE_MARKER;
+      const marker = role === 'band' || role === 'channel' ? 0 : FACE_MARKER;
       const extent = (vertical ? rect.height - marker : rect.width) || 1;
       const fine = fineAnchor(e, () => normalizeDial(meta, values[meta.path]));
       v01 = fine
@@ -2425,7 +2441,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     position: d.position,
                     active: d.active,
                   });
-                  const body = face.kind === 'gate' ? (
+                  const body = face.kind === 'channel' ? (
+                    <MoveSlotChannelBody channels={dials.map((d) => {
+                      const visual = d.meta.moveVisual;
+                      return { ...shown(d), ...(visual?.kind === 'channel' ? { icon: visual.icon, tone: visual.tone } : {}) };
+                    })} />
+                  ) : face.kind === 'gate' ? (
                     <MoveSlotGateBody threshold={shown(dials[0])} lookahead={shown(dials[1])} release={shown(dials[2])}>
                       <MoveGateDisplay panelId={page.panel.id} threshold={dials[0].position} />
                     </MoveSlotGateBody>
@@ -2433,7 +2454,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     <MoveSlotMultibandBody amount={shown(dials[0])} speed={shown(dials[1])} bands={dials.slice(2).map(shown)} icon={face.icon}>
                       <MoveMultibandDisplay
                         panelId={page.panel.id}
-                        bands={face.curve!.map((b) => ({ position: b.position, active: dials.some((d) => d.active && d.meta === b.meta) }))}
+                        bands={face.curve!.map((b) => ({ position: b.position, active: dragPath === b.meta.path || dials.some((d) => d.active && d.meta === b.meta) }))}
                       />
                     </MoveSlotMultibandBody>
                   );
@@ -2467,18 +2488,29 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                               data-disabled={off || undefined}
                               onKeyDown={(k) => dialFromKeyboard(k, d.meta)}
                               onPointerDown={(p) => {
-                                if (TweakStore.isDisabled(page.panel.id, d.meta.path)) return;
+                                // on the band grid the press takes the band under it, knob or pad
+                                let meta = d.meta;
+                                if (d.role === 'band' && face.curve) {
+                                  const grid = p.currentTarget.closest?.('.tweakers-move-dial')?.querySelector('[data-track="grid"]')?.getBoundingClientRect();
+                                  if (grid?.width) {
+                                    const k = Math.floor(((p.clientX - grid.left) / grid.width) * face.curve.length);
+                                    meta = face.curve[Math.max(0, Math.min(face.curve.length - 1, k))].meta;
+                                  }
+                                }
+                                if (TweakStore.isDisabled(page.panel.id, meta.path)) return;
                                 try { p.currentTarget.setPointerCapture(p.pointerId); } catch { /* synthetic pointer */ }
                                 fineRef.current = null;
-                                setDragPath(d.meta.path);
-                                armMod(d.meta.path);
-                                faceFromPointer(p, d);
+                                faceDrag.current = meta;
+                                setDragPath(meta.path);
+                                armMod(meta.path);
+                                faceFromPointer(p, { ...d, meta });
                               }}
                               onPointerMove={(p) => {
-                                if (!TweakStore.isDisabled(page.panel.id, d.meta.path) && dragPath === d.meta.path) faceFromPointer(p, d);
+                                const meta = faceDrag.current;
+                                if (meta && dragPath === meta.path && !TweakStore.isDisabled(page.panel.id, meta.path)) faceFromPointer(p, { ...d, meta });
                               }}
-                              onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
-                              onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                              onPointerUp={() => { setDragPath(null); fineRef.current = null; faceDrag.current = null; }}
+                              onPointerCancel={() => { setDragPath(null); fineRef.current = null; faceDrag.current = null; }}
                             >
                               <MoveModRing panelId={page.panel.id} path={d.meta.path} />
                             </div>
