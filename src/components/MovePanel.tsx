@@ -17,7 +17,7 @@ import type { TweakTheme } from '../theme';
 import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody } from './move-slots';
+import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing, angleFromPointer } from '../angle-core';
@@ -2188,15 +2188,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 // envelope's Loop, an app's bypass): the pad's language at
                 // slot size, or its own picture where it named one. A real
                 // button, so the keyboard and a screen reader get the switch
-                // the pointer gets.
+                // the pointer gets. A switch that draws what it switches (the
+                // metronome) is the same button wearing that drawing.
                 if (meta.type === 'toggle') {
                   const checked = values[meta.path] === true;
+                  const kind = moveSlotKind(meta);
                   return (
                     <button
                       key={meta.path}
                       type="button"
                       className="tweakers-move-dial"
-                      data-kind={meta.icon ? 'toggle-icon' : 'toggle'}
+                      data-kind={kind}
                       data-on={checked || undefined}
                       data-active={active || undefined}
                       role="switch"
@@ -2210,13 +2212,21 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       }}
                     >
                       <MoveModRing panelId={page.panel.id} path={meta.path} />
-                      <MoveSlotToggleBody
-                        label={meta.label}
-                        checked={checked}
-                        icon={meta.icon}
-                        onIcon={meta.onIcon}
-                        offIcon={meta.offIcon}
-                      />
+                      {kind === 'metronome' ? (
+                        <MoveSlotMetronomeBody
+                          label={meta.label}
+                          checked={checked}
+                          swing={meta.moveVisual?.kind === 'metronome' ? meta.moveVisual.swing : undefined}
+                        />
+                      ) : (
+                        <MoveSlotToggleBody
+                          label={meta.label}
+                          checked={checked}
+                          icon={meta.icon}
+                          onIcon={meta.onIcon}
+                          offIcon={meta.offIcon}
+                        />
+                      )}
                     </button>
                   );
                 }

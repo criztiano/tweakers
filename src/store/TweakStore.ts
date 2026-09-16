@@ -1,6 +1,6 @@
 import type { GeneParameter, PresetDNA } from '../preset-genetics';
-import type { MoveSliderVisual, MoveSelectVisual, MoveVisual } from '../move-visual-core';
-export type { MoveSliderVisual, MoveSelectVisual, MoveVisual, MovePlaybackMode } from '../move-visual-core';
+import type { MoveSliderVisual, MoveSelectVisual, MoveToggleVisual, MoveVisual } from '../move-visual-core';
+export type { MoveSliderVisual, MoveSelectVisual, MoveToggleVisual, MoveVisual, MovePlaybackMode } from '../move-visual-core';
 // Lightweight state store with subscriptions for tweakers
 
 import { HEX_COLOR_REGEX } from '../color-core';
@@ -119,6 +119,12 @@ export type ToggleConfig = {
    * and on the hardware alike; there is no latched state to forget.
    */
   moveHold?: boolean;
+  /**
+   * Draw the switch as what it switches, in its own slot: `metronome` is a
+   * click track whose arm swings to the host's `swing()` while it is on. The
+   * slot's name becomes the caption under the picture ("120.0 BPM").
+   */
+  moveVisual?: MoveToggleVisual;
 };
 
 export type SelectConfig = {
@@ -2105,6 +2111,7 @@ class TweakStoreClass {
           moveSlot: value.moveSlot,
           moveBlank: value.moveBlank,
           moveHold: value.moveHold,
+          moveVisual: value.moveVisual,
           shortcut,
         });
       } else if (typeof value === 'boolean') {

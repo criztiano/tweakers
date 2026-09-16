@@ -1,7 +1,8 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
-import { MOVE_PAD_LIBRARY, MOVE_SLOT_LIBRARY, MovePadIconBody, MovePadIconLabelBody, MoveSlotToggleBody, moveSlotKind } from '../src/components/move-slots';
+import { act, create } from 'react-test-renderer';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MOVE_PAD_LIBRARY, MOVE_SLOT_LIBRARY, MovePadIconBody, MovePadIconLabelBody, MoveSlotMetronomeBody, MoveSlotToggleBody, moveSlotKind } from '../src/components/move-slots';
 import { LUCIDE_ICONS } from '../src/icons';
 import { ICON_BADGE_OFF, ICON_BADGE_ON } from '../src/icons';
 import { TweakStore, type ControlMeta } from '../src/store/TweakStore';
@@ -41,6 +42,102 @@ describe('the switch that draws itself', () => {
     const html = renderToStaticMarkup(createElement(MoveSlotToggleBody, { label: 'Hold', checked: true }));
     expect(html).toContain('tweakers-move-dial-toggle-indicator');
     expect(html).not.toContain('tweakers-move-toggle-picture');
+  });
+});
+
+describe('the switch drawn as a metronome', () => {
+  const swing = () => 0.5;
+
+  it('is a face of the library, and wins over the switch’s other faces', () => {
+    expect(MOVE_SLOT_LIBRARY.metronome.component).toBe(MoveSlotMetronomeBody);
+    expect(moveSlotKind(meta({ moveVisual: { kind: 'metronome', swing } }))).toBe('metronome');
+    // A picture named beside it does not turn it back into a glyph.
+    expect(moveSlotKind(meta({ icon: 'repeat', moveVisual: { kind: 'metronome' } }))).toBe('metronome');
+  });
+
+  it('stands dim and upright while it is off', () => {
+    const html = renderToStaticMarkup(createElement(MoveSlotMetronomeBody, { label: '120.0 BPM', checked: false, swing }));
+    expect(html).toContain('tweakers-move-metronome');
+    expect(html).not.toContain('data-on');
+    expect(html).toContain('transform="rotate(0)"');
+    expect(html).toContain('120.0 BPM');
+    expect(html).not.toContain('tweakers-move-toggle-badge');
+  });
+
+  it('is lit while it is on, and cuts its arm out of the body', () => {
+    const html = renderToStaticMarkup(createElement(MoveSlotMetronomeBody, { label: '120.0 BPM', checked: true, swing }));
+    expect(html).toMatch(/class="tweakers-move-metronome" data-on="true"/);
+    expect(html).toContain('tweakers-move-metronome-cut');
+    // The swing is the host's to run in the browser; on the server the arm
+    // starts upright.
+    expect(html).toContain('transform="rotate(0)"');
+  });
+
+  describe('in the browser', () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    /** Mounts the face with the arm's element stood in, and a frame clock the
+     *  test turns by hand. */
+    function mount(props: { checked: boolean; swing?: () => number | null }, reduce = false) {
+      const frames: (() => void)[] = [];
+      vi.stubGlobal('window', {
+        matchMedia: () => ({ matches: reduce }),
+        requestAnimationFrame: (cb: () => void) => frames.push(cb),
+        cancelAnimationFrame: () => { frames.length = 0; },
+      });
+      const leans: string[] = [];
+      const node = { setAttribute: (_: string, v: string) => leans.push(v) };
+      let renderer!: ReturnType<typeof create>;
+      act(() => {
+        renderer = create(createElement(MoveSlotMetronomeBody, { label: '120.0 BPM', ...props }), {
+          createNodeMock: (el) => (el.type === 'g' ? node : null),
+        });
+      });
+      const step = () => { const next = frames.splice(0); next.forEach((f) => f()); };
+      return { renderer, leans, frames, step };
+    }
+
+    it('swings the arm to the host’s position every frame, without a render', () => {
+      let at: number | null = 1;
+      const { renderer, leans, step } = mount({ checked: true, swing: () => at });
+      expect(leans.at(-1)).toBe('rotate(45.00)');
+      at = -0.5;
+      step();
+      expect(leans.at(-1)).toBe('rotate(-22.50)');
+      at = null;
+      step();
+      expect(leans.at(-1)).toBe('rotate(0.00)');
+      at = 3;
+      step();
+      expect(leans.at(-1)).toBe('rotate(45.00)');
+      act(() => renderer.unmount());
+    });
+
+    it('stops and stands upright when it is switched off', () => {
+      const { renderer, leans, frames } = mount({ checked: true, swing: () => 1 });
+      act(() => renderer.update(createElement(MoveSlotMetronomeBody, { label: '120.0 BPM', checked: false, swing: () => 1 })));
+      expect(frames).toHaveLength(0);
+      expect(leans.at(-1)).toBe('rotate(0.00)');
+      act(() => renderer.unmount());
+    });
+
+    it('stands still, lit, for a reader who asked for less motion', () => {
+      const { renderer, leans, frames } = mount({ checked: true, swing: () => 1 }, true);
+      expect(frames).toHaveLength(0);
+      expect(leans).toEqual(['rotate(0.00)']);
+      act(() => renderer.unmount());
+    });
+  });
+
+  it('carries the host’s swing off the config into its slot', () => {
+    TweakStore.registerPanel('metronome-face', 'Metronome face', {
+      click: { type: 'toggle', default: false, label: '120.0 BPM', moveSlot: true, moveVisual: { kind: 'metronome', swing } },
+    } as never);
+    const click = TweakStore.getPanel('metronome-face')!.controls.find((c) => c.path === 'click')!;
+    expect(click.moveVisual).toEqual({ kind: 'metronome', swing });
+    expect(moveSlotKind(click)).toBe('metronome');
+    expect(isToggleDial(click)).toBe(true);
+    TweakStore.unregisterPanel('metronome-face');
   });
 });
 

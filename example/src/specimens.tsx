@@ -15,6 +15,7 @@ import {
   MoveSlotTrimSpanBody,
   MoveSlotNumericBody,
   MoveSlotToggleBody,
+  MoveSlotMetronomeBody,
   MoveSlotScopeBody,
   MoveSlotEnvBody,
   MovePadToggleBody,
@@ -44,7 +45,7 @@ import {
   type MoveSlotKind,
   type MovePadKind,
 } from 'tweakers';
-import { PANEL_ID, MOD_LFO, MOD_ENV, MOD_CURVE } from './panel';
+import { PANEL_ID, MOD_LFO, MOD_ENV, MOD_CURVE, LIBRARY_BPM, librarySwing } from './panel';
 
 /**
  * Every face, drawn. The live panel above the dictionary shows the ones that
@@ -233,6 +234,12 @@ export const BIG_SLOTS: Specimen[] = [
     description: MOVE_SLOT_LIBRARY['toggle-icon'].description,
     note: 'The switch on the strip is on; this one is drawn off — the badge is the whole difference. An app that ships its own pair of badges (a brush, a check, a ban) passes them as `icon`, `onIcon` and `offIcon`.',
     render: () => <MoveSlotToggleBody label="Loop" checked={false} icon="repeat" />,
+  },
+  {
+    kind: 'metronome', path: 'tempo',
+    description: MOVE_SLOT_LIBRARY.metronome.description,
+    note: 'A toggle with `moveVisual: { kind: \'metronome\', swing }`. The app keeps time: `swing()` answers where the arm is now, -1 to +1, or `null` to stand it upright. Off, the picture dims and the arm rests.',
+    render: () => <MoveSlotMetronomeBody label={`${LIBRARY_BPM.toFixed(1)} BPM`} checked swing={librarySwing} />,
   },
   {
     kind: 'range', path: 'band',

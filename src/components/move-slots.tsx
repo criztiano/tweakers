@@ -1,4 +1,5 @@
 import type { MovePadListView } from '../move-pad-list';
+import { useEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { moveBandCuts, moveNumericDrawing, movePlaybackMode, MOVE_BAND_H, MOVE_BAND_W, type MovePlaybackMode } from '../move-visual-core';
 import { MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
@@ -56,6 +57,9 @@ import { ListScreen } from './ListScreen';
  * - `toggle-icon` — the same switch drawn as its own picture: the glyph of
  *   the thing it turns on, with a ban struck across it while it is off. What
  *   the switch does and whether it is doing it become one look.
+ * - `metronome` — a switch drawn as a metronome: lit with its arm swinging
+ *   to the host's beat while it is on, dim and upright while it is off. The
+ *   motion is the state, so it wears no badge.
  *
  * Multi-slot controls (`filter` spans 2 columns, `env` spans 4) follow one
  * pattern: the container takes `grid-column: span N`, the display and its
@@ -88,7 +92,8 @@ export type MoveSlotKind =
   | 'env'
   | 'scope'
   | 'toggle'
-  | 'toggle-icon';
+  | 'toggle-icon'
+  | 'metronome';
 
 /** Which face a control wears in its slot, from its meta and moment. */
 export function moveSlotKind(
@@ -98,6 +103,7 @@ export function moveSlotKind(
   if (meta.type === 'color') return 'color';
   if (meta.type === 'filter') return 'filter';
   if (opts.stage) return 'env';
+  if (meta.type === 'toggle' && meta.moveVisual?.kind === 'metronome') return 'metronome';
   if (meta.type === 'toggle') return meta.icon ? 'toggle-icon' : 'toggle';
   if (meta.type === 'transfer') return 'transfer';
   if (meta.type === 'gradient') return 'ramp';
@@ -690,6 +696,117 @@ export function MoveSlotToggleBody({ label, checked, icon, onIcon, offIcon }: {
   );
 }
 
+/**
+ * The metronome's drawing, in its own units with the arm's pivot at the
+ * origin: a hollow trapezoid body (the centre line of its 2-unit stroke) and
+ * an arm 30 long with its weight 21 up. The box leaves room for the arm swung
+ * to either extreme, where its tip leaves the body.
+ */
+const METRONOME_VIEWBOX = '-23 -31 46 36';
+const METRONOME_BODY = 'M -3.07 -30 H 3.07 L 12.11 4 H -12.11 Z';
+const METRONOME_ARM = 30;
+const METRONOME_WEIGHT_AT = 21;
+const METRONOME_WEIGHT_R = 4.5;
+const METRONOME_STROKE = 2;
+/** The ring the arm cuts out of the body where it crosses it. */
+const METRONOME_CUT = 2;
+/** How far the arm leans at a full swing, in degrees. */
+const METRONOME_SWING_DEG = 45;
+
+/**
+ * A switch drawn as a metronome — the click track's own face. On, the
+ * picture is lit and its arm swings to the host's beat; off, it dims and the
+ * arm stands upright. The motion says the switch is on, so there is no badge.
+ *
+ * The host owns time: `swing` is read every frame for where the arm is now,
+ * -1 (full left) to +1 (full right), or `null` to stand it upright. The arm
+ * is turned straight on its element, never through a render, so a beat costs
+ * the page no React work. A reader who asked for less motion gets the lit
+ * metronome standing still.
+ */
+export function MoveSlotMetronomeBody({ label, checked, swing }: {
+  label: string;
+  checked: boolean;
+  /** Where the arm is now, -1..+1, or `null` for upright. */
+  swing?: () => number | null;
+}) {
+  const arm = useRef<SVGGElement>(null);
+  // The latest reader, so a host that hands in a fresh function every render
+  // does not restart the loop.
+  const read = useRef(swing);
+  read.current = swing;
+  const swings = checked && !!swing;
+
+  useEffect(() => {
+    const g = arm.current;
+    if (!g) return;
+    const lean = (deg: number) => g.setAttribute('transform', `rotate(${deg.toFixed(2)})`);
+    const still = typeof window === 'undefined'
+      || typeof window.requestAnimationFrame !== 'function'
+      || !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (!swings || still) {
+      lean(0);
+      return;
+    }
+    let frame = 0;
+    const tick = () => {
+      const at = read.current?.();
+      lean(typeof at === 'number' && Number.isFinite(at)
+        ? Math.max(-1, Math.min(1, at)) * METRONOME_SWING_DEG
+        : 0);
+      frame = window.requestAnimationFrame(tick);
+    };
+    tick();
+    return () => {
+      window.cancelAnimationFrame(frame);
+      lean(0);
+    };
+  }, [swings]);
+
+  return (
+    <>
+      <span className="tweakers-move-toggle-picture" aria-hidden="true">
+        <svg
+          className="tweakers-move-metronome"
+          data-on={checked || undefined}
+          viewBox={METRONOME_VIEWBOX}
+          fill="none"
+        >
+          <path
+            className="tweakers-move-metronome-body"
+            d={METRONOME_BODY}
+            strokeWidth={METRONOME_STROKE}
+            strokeLinejoin="round"
+          />
+          <g ref={arm} transform="rotate(0)">
+            {/* The same arm, fatter, in the slot's own colour underneath:
+                where it crosses the body, it cuts the outline. */}
+            <g className="tweakers-move-metronome-cut">
+              <line
+                x1={0} y1={0} x2={0} y2={-METRONOME_ARM}
+                strokeWidth={METRONOME_STROKE + 2 * METRONOME_CUT}
+                strokeLinecap="round"
+              />
+              <circle cx={0} cy={-METRONOME_WEIGHT_AT} r={METRONOME_WEIGHT_R + METRONOME_CUT} />
+            </g>
+            <line
+              className="tweakers-move-metronome-arm"
+              x1={0} y1={0} x2={0} y2={-METRONOME_ARM}
+              strokeWidth={METRONOME_STROKE}
+              strokeLinecap="round"
+            />
+            <circle
+              className="tweakers-move-metronome-weight"
+              cx={0} cy={-METRONOME_WEIGHT_AT} r={METRONOME_WEIGHT_R}
+            />
+          </g>
+        </svg>
+      </span>
+      <span className="tweakers-move-toggle-label">{label}</span>
+    </>
+  );
+}
+
 /** A bundled glyph or a host-owned asset; both take the slot's own colour. */
 function MoveSlotIcon({ icon, className }: { icon: string; className: string }) {
   if (LUCIDE_ICONS[icon]) return <MoveSlotGlyph name={icon} className={className} />;
@@ -1084,6 +1201,7 @@ export const MOVE_SLOT_LIBRARY = {
   scope: { description: 'a dial with the live signal filling it behind the readout', component: MoveSlotScopeBody },
   toggle: { description: 'a switch in a big slot — the pad’s language at slot size', component: MoveSlotToggleBody },
   'toggle-icon': { description: 'a switch drawn as its own picture — the glyph takes a ban while it is off', component: MoveSlotToggleBody },
+  metronome: { description: 'a switch drawn as a metronome — the arm swings to the beat while it is on', component: MoveSlotMetronomeBody },
   transfer: { description: 'a response curve, one knob holding one of its points', component: MoveSlotTransferBody },
   ramp: { description: 'a colour ramp, one knob holding one of its stops — tap to edit its colours', component: MoveSlotRampBody },
   balance: { description: 'the mix between two colour params — the blend fills the slot, the tick is the dial', component: MoveSlotRampBody },

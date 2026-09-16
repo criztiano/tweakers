@@ -494,6 +494,7 @@ function Card({ item, onShow, tall }: { item: Specimen; onShow: (path: string) =
 const DIAL_KIND: Record<string, string | undefined> = {
   color: 'color', filter: 'filter', xy: 'xy', range: 'range', enum: 'enum', 'enum-wide': 'enum',
   icon: 'enum', curve: 'enum', playback: 'enum', toggle: 'toggle', 'toggle-icon': 'toggle-icon',
+  metronome: 'metronome',
   transfer: 'transfer',
   ramp: 'ramp', dial: 'dial', scope: 'scope', env: 'env', 'trim-span': 'trim-span',
 };
