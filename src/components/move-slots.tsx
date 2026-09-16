@@ -645,7 +645,8 @@ export type MoveChannelDial = MoveFaceDial & { icon?: string; tone?: MoveTone };
 /**
  * A mixer's face, one slot per channel: each channel's icon and name along
  * the top in its tone, and under them a fader well filled from the bottom
- * to its level. A channel at zero keeps a hairline, so it still reads.
+ * to its level — lime for a channel with no tone. A channel at zero keeps a
+ * hairline in the text colour, so it still reads.
  */
 export function MoveSlotChannelBody({ channels }: { channels: MoveChannelDial[] }) {
   return (

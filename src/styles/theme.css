@@ -2429,13 +2429,15 @@
   bottom: 0;
   height: calc(var(--move-face-at) * 100%);
   border-radius: 2px;
-  background: var(--move-channel-colour);
+  /* a channel with no tone of its own fills lime */
+  background: var(--move-channel-tone, var(--move-lime));
 }
 
-/* at zero, a hairline on the floor */
+/* at zero, every channel keeps a hairline on the floor in the text colour */
 .tweakers-move-channel-fill[data-empty] {
   height: 1px;
   border-radius: 0;
+  background: var(--move-text);
 }
 
 .tweakers-move-face-zones {
