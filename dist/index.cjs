@@ -9322,6 +9322,7 @@ var PAD_ROWS = 4;
 var MIN_PAD_COLUMNS = 4;
 var DIAL_TRACK_INSET = 10;
 var TRIM_SPAN_PAD = 4;
+var EDGES_TRACK_INSET = 12;
 var XY_INSET = { left: 8, top: 8, right: 9, bottom: 8 };
 var XY_GRID_DEFAULT = 5;
 var TAP_MS = 300;
@@ -10147,6 +10148,15 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     if (hwHeldChip) return hwHeldChip;
     if (latched[col]) return latched[col];
     return chips.find((m) => hwLatched[m.path]) ?? page.dials[col];
+  };
+  const edgesFromPointer = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const span = rect.width - EDGES_TRACK_INSET * 2;
+    return Math.min(1, Math.max(0, (e.clientX - rect.left - EDGES_TRACK_INSET) / (span || 1)));
+  };
+  const dragEdge = (kind, isStart, meta, x) => {
+    const v01 = kind === "loop" ? x : Math.min(1, (isStart ? x : 1 - x) * 2);
+    import_TweakStore13.TweakStore.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
   };
   const trimSpanAt = (col) => {
     const start = dialAt(col);
@@ -11358,24 +11368,56 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       });
                                       const start = hand(edges.start, edges.start.min ?? 0);
                                       const end = hand(edges.end, edges.kind === "loop" ? edges.end.max ?? 1 : edges.end.min ?? 0);
-                                      return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "tweakers-move-edges", "data-kind": edges.kind, style: { gridColumn: "span 2" }, children: [
-                                        edges.kind === "fade" ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MovePadFadeBody, { fadeIn: start, fadeOut: end }) : /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MovePadLoopBody, { start, end }),
-                                        [[edges.start, col], [edges.end, col + 1]].map(([m, at]) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
-                                          "button",
-                                          {
-                                            type: "button",
-                                            className: "tweakers-move-edges-zone",
-                                            "aria-label": m.label,
-                                            "data-held": chipHeld(m) || void 0,
-                                            "data-latched": chipLatched(at, m) || void 0,
-                                            onPointerDown: (e) => pressChip(e, at, m),
-                                            onPointerUp: () => releaseChip(at, m),
-                                            onPointerCancel: () => setHeld(null),
-                                            children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveModRing, { panelId: page.panel.id, path: m.path, pad: true })
+                                      return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)(
+                                        "div",
+                                        {
+                                          className: "tweakers-move-edges",
+                                          "data-kind": edges.kind,
+                                          style: { gridColumn: "span 2" },
+                                          onPointerDown: (e) => {
+                                            const x = edgesFromPointer(e);
+                                            const takeStart = edges.kind === "fade" ? x < 0.5 : Math.abs(x - start.at) < Math.abs(x - end.at) || start.at >= end.at && x <= start.at;
+                                            const m = takeStart ? edges.start : edges.end;
+                                            if (import_TweakStore13.TweakStore.isDisabled(page.panel.id, m.path)) return;
+                                            try {
+                                              e.currentTarget.setPointerCapture(e.pointerId);
+                                            } catch {
+                                            }
+                                            setDragPath(m.path);
+                                            armMod(m.path);
+                                            dragEdge(edges.kind, takeStart, m, x);
                                           },
-                                          m.path
-                                        ))
-                                      ] }, `edges-${col}`);
+                                          onPointerMove: (e) => {
+                                            const m = dragPath === edges.start.path ? edges.start : dragPath === edges.end.path ? edges.end : null;
+                                            if (m && !import_TweakStore13.TweakStore.isDisabled(page.panel.id, m.path)) dragEdge(edges.kind, m === edges.start, m, edgesFromPointer(e));
+                                          },
+                                          onPointerUp: () => setDragPath(null),
+                                          onPointerCancel: () => setDragPath(null),
+                                          children: [
+                                            edges.kind === "fade" ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MovePadFadeBody, { fadeIn: start, fadeOut: end }) : /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MovePadLoopBody, { start, end }),
+                                            [[edges.start, col], [edges.end, col + 1]].map(([m, at]) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+                                              "div",
+                                              {
+                                                className: "tweakers-move-edges-zone",
+                                                role: "slider",
+                                                tabIndex: import_TweakStore13.TweakStore.isDisabled(page.panel.id, m.path) ? -1 : 0,
+                                                "aria-label": m.label,
+                                                "aria-valuemin": m.min ?? 0,
+                                                "aria-valuemax": m.max ?? 1,
+                                                "aria-valuenow": Number(values[m.path]),
+                                                "aria-valuetext": moveVisualReading(m, Number(values[m.path])),
+                                                "aria-orientation": "horizontal",
+                                                "data-held": chipHeld(m) || dragPath === m.path || void 0,
+                                                "data-latched": chipLatched(at, m) || void 0,
+                                                onKeyDown: (k) => dialFromKeyboard(k, m),
+                                                children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveModRing, { panelId: page.panel.id, path: m.path, pad: true })
+                                              },
+                                              m.path
+                                            ))
+                                          ]
+                                        },
+                                        `edges-${col}`
+                                      );
                                     }
                                     const band = moveBandCell(page, padRows, row, col);
                                     if (band?.tail) return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "tweakers-move-band", "data-tail": true, "aria-hidden": "true" }, `band-${col}`);
