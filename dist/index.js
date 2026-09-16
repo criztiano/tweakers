@@ -2161,7 +2161,7 @@ function MoveSlotGateBody({
     /* @__PURE__ */ jsx3(MoveFaceName, { col: 2, dial: release })
   ] });
 }
-var MOVE_GAUGE = { r: 41, base: 21, half: 49, top: 42, height: 64, sweep: 110, ticks: 11 };
+var MOVE_GAUGE = { r: 36, base: 18, half: 43, top: 37, height: 56, sweep: 110, ticks: 11 };
 var moveGaugeBearing = (position) => (place(position) * 2 - 1) * MOVE_GAUGE.sweep;
 function MoveGauge({ position }) {
   const { r, base, half, top, height, sweep, ticks } = MOVE_GAUGE;
@@ -2172,7 +2172,7 @@ function MoveGauge({ position }) {
   };
   const needle = point(moveGaugeBearing(position), r * 0.62);
   return /* @__PURE__ */ jsxs3("svg", { className: "tweakers-move-multiband-gauge", "data-track": "speed", viewBox: `${-half} ${-top} ${half * 2} ${height}`, "aria-hidden": "true", children: [
-    /* @__PURE__ */ jsx3("path", { className: "tweakers-move-multiband-gauge-dome", d: `M${-foot} ${base}A${r} ${r} 0 1 1 ${foot} ${base}` }),
+    /* @__PURE__ */ jsx3("path", { className: "tweakers-move-multiband-gauge-dome", d: `M${-foot} ${base}A${r} ${r} 0 1 1 ${foot} ${base}Z` }),
     /* @__PURE__ */ jsx3("line", { className: "tweakers-move-multiband-gauge-base", x1: -half + 1, y1: base, x2: half - 1, y2: base }),
     Array.from({ length: ticks }, (_, k) => {
       const at = k / (ticks - 1);
@@ -8026,22 +8026,19 @@ function drawMoveMultiband(g, w, h, dpr, reading, bands, colours, pad = 0) {
     g.globalAlpha = 1;
   }
   const pts = bands.map((b, k) => [x(k), y(b.position)]);
+  const slopes = pts.map((_, k) => {
+    if (k === 0 || k === n - 1) return 0;
+    const before = (pts[k][1] - pts[k - 1][1]) / slice;
+    const after = (pts[k + 1][1] - pts[k][1]) / slice;
+    return before * after <= 0 ? 0 : 2 * before * after / (before + after);
+  });
   const curve = () => {
     g.moveTo(0, pts[0][1]);
     g.lineTo(pts[0][0], pts[0][1]);
     for (let k = 0; k < n - 1; k++) {
-      const p0 = pts[Math.max(0, k - 1)];
-      const p1 = pts[k];
-      const p2 = pts[k + 1];
-      const p3 = pts[Math.min(n - 1, k + 2)];
-      g.bezierCurveTo(
-        p1[0] + (p2[0] - p0[0]) / 6,
-        p1[1] + (p2[1] - p0[1]) / 6,
-        p2[0] - (p3[0] - p1[0]) / 6,
-        p2[1] - (p3[1] - p1[1]) / 6,
-        p2[0],
-        p2[1]
-      );
+      const [x1, y1] = pts[k];
+      const [x2, y2] = pts[k + 1];
+      g.bezierCurveTo(x1 + slice / 3, y1 + slopes[k] * slice / 3, x2 - slice / 3, y2 - slopes[k + 1] * slice / 3, x2, y2);
     }
     g.lineTo(w, pts[n - 1][1]);
   };
@@ -11038,7 +11035,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     MoveMultibandDisplay,
                                     {
                                       panelId: page.panel.id,
-                                      bands: face.curve.map((b) => ({ position: b.position * dials[0].position, active: dials.some((d) => d.active && d.meta === b.meta) }))
+                                      bands: face.curve.map((b) => ({ position: b.position, active: dials.some((d) => d.active && d.meta === b.meta) }))
                                     }
                                   ) });
                                   return /* @__PURE__ */ jsxs12(

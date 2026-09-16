@@ -2267,7 +2267,7 @@
    beside its icon, the speed's gauge stands over the second column, and the
    band columns share one grid. */
 .tweakers-move-dial[data-kind="multiband"] {
-  --move-face-name-size: 15px;
+  --move-face-name-size: 14px;
 }
 
 .tweakers-move-dial[data-kind="multiband"] .tweakers-move-face-bar[data-role="amount"] {
@@ -2302,12 +2302,13 @@
   -webkit-mask-position: center;
 }
 
+/* sized to MOVE_GAUGE: its baseline sits 106px down, level with the grid's foot */
 .tweakers-move-multiband-gauge {
   position: absolute;
-  top: 43px;
-  left: calc(var(--move-face-col-w) * 1.5 + var(--move-gap) - 49px);
-  width: 98px;
-  height: 64px;
+  top: 51px;
+  left: calc(var(--move-face-col-w) * 1.5 + var(--move-gap) - 43px);
+  width: 86px;
+  height: 56px;
   overflow: visible;
   pointer-events: none;
 }
@@ -2319,6 +2320,18 @@
   stroke: var(--move-text);
   stroke-width: 2;
   stroke-linecap: round;
+}
+
+.tweakers-move-multiband-gauge-dome {
+  fill: var(--move-face-cell);
+}
+
+.tweakers-move-multiband-gauge-base {
+  stroke: var(--move-multiband-base);
+}
+
+.tweakers-move-multiband-gauge-needle {
+  stroke: var(--move-multiband-needle);
 }
 
 .tweakers-move-multiband-gauge-tick {
@@ -2333,7 +2346,7 @@
 }
 
 .tweakers-move-multiband-gauge-pivot {
-  fill: var(--move-text);
+  fill: var(--move-multiband-needle);
 }
 
 .tweakers-move-dial[data-kind="multiband"] .tweakers-move-face-grid {
@@ -4123,6 +4136,8 @@
   --move-gate-lookahead: #8e68e6;
   --move-gate-release: #6a91f8;
   --move-multiband-amount: #5ce79c;
+  --move-multiband-needle: #f39a38;
+  --move-multiband-base: #7a5230;
   --move-visual-font-size: 10px;
   --move-visual-focus-width: 2px;
   --move-visual-focus-offset: 2px;

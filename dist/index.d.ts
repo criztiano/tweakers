@@ -3576,11 +3576,11 @@ declare function MoveSlotGateBody({ threshold, lookahead, release, children, }: 
  *  dome of radius `r` on a baseline `base` below its centre, graded across
  *  `sweep` degrees either side of straight up. */
 declare const MOVE_GAUGE: {
-    readonly r: 41;
-    readonly base: 21;
-    readonly half: 49;
-    readonly top: 42;
-    readonly height: 64;
+    readonly r: 36;
+    readonly base: 18;
+    readonly half: 43;
+    readonly top: 37;
+    readonly height: 56;
     readonly sweep: 110;
     readonly ticks: 11;
 };
@@ -4045,7 +4045,7 @@ declare function moveMultibandDemoReading(t?: number): MoveMultibandReading;
  */
 declare function MoveMultibandDisplay({ panelId, bands, reading }: {
     panelId?: string;
-    /** Each band's setting (0..1, already scaled by the amount), top of the spectrum first. */
+    /** Each band's setting (0..1), top of the spectrum first. */
     bands: {
         position: number;
         active?: boolean;
