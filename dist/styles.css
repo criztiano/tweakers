@@ -433,6 +433,10 @@
   --move-metronome-body-opacity: 0.85;
   /* The tempo's unit steps back behind its number. */
   --move-metronome-unit-opacity: 0.5;
+  /* The picture sits a little into the corner's left edge and clear of its
+     floor: its swing room already pads the left side. */
+  --move-metronome-inset-left: 6px;
+  --move-metronome-inset-bottom: 14px;
   --move-text: #dee3c9;
   --move-text-inverse: #31322f;
   --move-radius: 12px;
@@ -2344,8 +2348,8 @@
 
 .tweakers-move-metronome-picture {
   position: absolute;
-  left: var(--move-toggle-label-inset);
-  bottom: var(--move-toggle-label-inset);
+  left: var(--move-metronome-inset-left);
+  bottom: var(--move-metronome-inset-bottom);
   pointer-events: none;
 }
 
