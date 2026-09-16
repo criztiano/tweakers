@@ -17,7 +17,7 @@ import type { TweakTheme } from '../theme';
 import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody } from './move-slots';
+import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing, angleFromPointer } from '../angle-core';
@@ -2608,7 +2608,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     // Action pads carry no value — a press just runs the
                     // app's action, the same as the row's button on screen.
                     if (meta.type === 'action') {
-                      if (MovePadListStore.has(page.panel.id, meta.path)) return <MovePadList key={meta.path} panelId={page.panel.id} path={meta.path} label={meta.label} view={padListView} disabled={TweakStore.isDisabled(page.panel.id, meta.path)} />;
+                      if (MovePadListStore.has(page.panel.id, meta.path)) return <MovePadList key={meta.path} panelId={page.panel.id} path={meta.path} label={meta.label} icon={meta.icon} view={padListView} disabled={TweakStore.isDisabled(page.panel.id, meta.path)} />;
                       return (
                         <button
                           key={meta.path}
@@ -2616,7 +2616,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           data-kind="action"
                           onClick={() => TweakStore.triggerAction(page.panel.id, meta.path)}
                         >
-                          <MovePadActionBody label={meta.label} />
+                          {meta.icon
+                            ? <MovePadIconLabelBody icon={meta.icon} label={meta.label} />
+                            : <MovePadActionBody label={meta.label} />}
                         </button>
                       );
                     }

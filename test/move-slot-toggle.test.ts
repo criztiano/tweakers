@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { MOVE_PAD_LIBRARY, MOVE_SLOT_LIBRARY, MovePadIconBody, MoveSlotToggleBody, moveSlotKind } from '../src/components/move-slots';
+import { MOVE_PAD_LIBRARY, MOVE_SLOT_LIBRARY, MovePadIconBody, MovePadIconLabelBody, MoveSlotToggleBody, moveSlotKind } from '../src/components/move-slots';
 import { LUCIDE_ICONS } from '../src/icons';
 import { ICON_BADGE_OFF, ICON_BADGE_ON } from '../src/icons';
 import { TweakStore, type ControlMeta } from '../src/store/TweakStore';
@@ -115,5 +115,28 @@ describe('a pad switch drawn as its picture alone', () => {
   it('masks a host asset in the pad’s colour', () => {
     const html = renderToStaticMarkup(createElement(MovePadIconBody, { icon: '/solo.svg' }));
     expect(html).toContain('url(&quot;/solo.svg&quot;)');
+  });
+});
+
+describe('a pad button wearing its picture beside its name', () => {
+  it('is a small slot of the library', () => {
+    expect(MOVE_PAD_LIBRARY['icon-label'].component).toBe(MovePadIconLabelBody);
+  });
+
+  it('draws the glyph, then the name', () => {
+    const html = renderToStaticMarkup(createElement(MovePadIconLabelBody, { icon: 'download', label: 'Export' }));
+    expect(html).toContain(LUCIDE_ICONS.download[0]);
+    expect(html.indexOf('tweakers-move-pad-icon')).toBeLessThan(html.indexOf('Export'));
+  });
+
+  it('carries an action’s icon from its config', () => {
+    TweakStore.registerPanel('icon-action', 'Icon action', {
+      save: { type: 'action', label: 'Export', icon: 'download' },
+      clear: { type: 'action', label: 'Clear' },
+    } as never);
+    const controls = TweakStore.getPanel('icon-action')!.controls;
+    expect(controls.find((c) => c.path === 'save')?.icon).toBe('download');
+    expect(controls.find((c) => c.path === 'clear')?.icon).toBeUndefined();
+    TweakStore.unregisterPanel('icon-action');
   });
 });
