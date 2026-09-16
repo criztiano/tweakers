@@ -5913,8 +5913,121 @@ function WaveformVisualization({
   ] });
 }
 
-// src/move-volume.ts
+// src/move-surface-store.ts
 import { TweakStore as TweakStore5 } from "tweakers/store";
+var moveScreenRowLabel = (row) => typeof row === "string" ? row : row.label;
+var moveScreenChecked = (rows) => rows.flatMap((row, i) => typeof row !== "string" && row.checked ? [i] : []);
+var EMPTY = { rows: 0, pads: [], padsLabel: null, steps: null, screen: null, search: null };
+var state = EMPTY;
+var listeners = /* @__PURE__ */ new Set();
+var pressListeners = /* @__PURE__ */ new Set();
+var screenSelectListeners = /* @__PURE__ */ new Set();
+var stepListeners = /* @__PURE__ */ new Set();
+var emit = () => {
+  for (const fn of listeners) fn();
+};
+function patch(key, value) {
+  if (JSON.stringify(state[key]) === JSON.stringify(value)) return;
+  state = { ...state, [key]: value };
+  emit();
+}
+var used = () => TweakStore5.noteMoveKitUse("surface");
+var validPads = (pads) => pads.filter((p) => p.x >= 0 && p.x < 8 && (p.y === 0 || p.y === 1));
+function patchPadRows(rows, pads, label) {
+  const nextPads = validPads(pads);
+  const nextLabel = label === void 0 ? state.padsLabel : label;
+  if (state.rows === rows && state.padsLabel === nextLabel && JSON.stringify(state.pads) === JSON.stringify(nextPads)) return;
+  state = { ...state, rows, pads: nextPads, padsLabel: nextLabel };
+  emit();
+}
+var MoveSurfaceStore = {
+  getState: () => state,
+  subscribe(fn) {
+    listeners.add(fn);
+    return () => listeners.delete(fn);
+  },
+  /** How many bottom pad rows the app took (matches `claims.pads` on the wire). */
+  claimRows(rows) {
+    if (rows > 0) used();
+    patch("rows", rows);
+  },
+  setPads(pads) {
+    if (pads.length) used();
+    patch("pads", validPads(pads));
+  },
+  /** Publish the claimed row count and its cells as one renderable state.
+   *  `label` says what the row does here — pass it whenever the meaning
+   *  changes, so the panel never captions the pads with a stale phrase. */
+  setPadRows(rows, pads, label) {
+    if (rows > 0) used();
+    patchPadRows(rows, pads, label);
+  },
+  /** What the claimed rows control in this view. */
+  setPadsLabel(label) {
+    patch("padsLabel", label);
+  },
+  setSteps(steps) {
+    if (steps) used();
+    patch("steps", steps === null ? null : steps.filter((s) => s.step >= 0 && s.step < 16));
+  },
+  setScreen(screen) {
+    if (screen) used();
+    patch("screen", screen);
+  },
+  /** The search narrowing the wheel list — MoveSearchStore's to write. */
+  setSearch(search) {
+    patch("search", search);
+  },
+  /** Selection intent from the panel's wheel screen; the host owns the value,
+   *  exactly as it owns what a hardware wheel turn means. */
+  onScreenSelect(fn) {
+    screenSelectListeners.add(fn);
+    return () => screenSelectListeners.delete(fn);
+  },
+  selectScreen(index) {
+    if (!state.screen || !Number.isInteger(index) || index < 0 || index >= state.screen.items.length) return;
+    for (const fn of screenSelectListeners) fn(index);
+  },
+  /** A tap on an on-screen pad, for the host to treat like a hardware press. */
+  onPress(fn) {
+    pressListeners.add(fn);
+    return () => pressListeners.delete(fn);
+  },
+  press(x, y, shift = false) {
+    for (const fn of pressListeners) fn({ x, y, shift });
+  },
+  /** The sixteen step buttons, taken by the app for as long as a listener is
+   *  attached: a press arrives here instead of reaching the modulation slots
+   *  or the waveform's loop, and `setSteps` is what they show — the lit cell
+   *  bright, the others it names dim. Detaching the last listener hands the
+   *  row back. */
+  onStep(fn) {
+    used();
+    stepListeners.add(fn);
+    if (stepListeners.size === 1) emit();
+    return () => {
+      if (!stepListeners.delete(fn)) return;
+      if (!stepListeners.size) emit();
+    };
+  },
+  /** Whether the app holds the step row right now. */
+  ownsSteps: () => stepListeners.size > 0,
+  /** A step press — from the hardware or an on-screen circle — for the app
+   *  that holds the row. */
+  pressStep(index, shift = false) {
+    if (!Number.isInteger(index) || index < 0 || index > 15) return;
+    for (const fn of stepListeners) fn({ index, shift });
+  },
+  /** Hand the whole surface back — the panel returns to its plain layout. */
+  reset() {
+    if (state === EMPTY) return;
+    state = EMPTY;
+    emit();
+  }
+};
+
+// src/move-volume.ts
+import { TweakStore as TweakStore6 } from "tweakers/store";
 var MoveVolumeDisplayClass = class {
   constructor() {
     this.state = null;
@@ -5922,7 +6035,7 @@ var MoveVolumeDisplayClass = class {
   }
   /** Show the pill with this readout — replaces any previous one. */
   set(state2) {
-    TweakStore5.noteMoveKitUse("volume");
+    TweakStore6.noteMoveKitUse("volume");
     this.state = state2;
     this.notify();
   }
@@ -5947,7 +6060,7 @@ var MoveVolumeDisplayClass = class {
 var MoveVolumeDisplay = new MoveVolumeDisplayClass();
 
 // src/move-waveform.ts
-import { TweakStore as TweakStore6 } from "tweakers/store";
+import { TweakStore as TweakStore7 } from "tweakers/store";
 var MOVE_WAVE_FRAME = 12;
 var MOVE_WAVE_MAX_WIDTH = 1200;
 var MOVE_WAVE_MAX_HEIGHT = 176;
@@ -6058,7 +6171,7 @@ var MoveWaveformStoreClass = class {
    * off screen for a moment — and its saved values win over the seed.
    */
   register(style) {
-    TweakStore6.noteMoveKitUse("waveform");
+    TweakStore7.noteMoveKitUse("waveform");
     this.claims += 1;
     if (this.claims === 1) this.lastScrubAt = 0;
     this.ensureSettings(style);
@@ -6130,9 +6243,9 @@ var MoveWaveformStoreClass = class {
    * seeds it if it gets there first, and saved values win over any seed.
    */
   ensureSettings(style) {
-    if (TweakStore6.getPanel(MOVE_WAVEFORM_PANEL)) return;
+    if (TweakStore7.getPanel(MOVE_WAVEFORM_PANEL)) return;
     const seed = { ...defaultStyle(), ...style };
-    TweakStore6.registerPanel(
+    TweakStore7.registerPanel(
       MOVE_WAVEFORM_PANEL,
       "Waveform",
       {
@@ -6160,8 +6273,8 @@ var MoveWaveformStoreClass = class {
       void 0,
       { kind: "kit", persist: true }
     );
-    const saved = TweakStore6.getValues(MOVE_WAVEFORM_PANEL);
-    if (typeof saved.resolution !== "number") TweakStore6.updateValue(MOVE_WAVEFORM_PANEL, "resolution", clampPixelSize(seed.pixelSize));
+    const saved = TweakStore7.getValues(MOVE_WAVEFORM_PANEL);
+    if (typeof saved.resolution !== "number") TweakStore7.updateValue(MOVE_WAVEFORM_PANEL, "resolution", clampPixelSize(seed.pixelSize));
   }
   /**
    * The zoom the display is really at: striped bars stretch the wave, so
@@ -6174,14 +6287,14 @@ var MoveWaveformStoreClass = class {
   }
   /** The look the settings page holds right now (the defaults until one is registered). */
   getStyle() {
-    return styleFromValues(TweakStore6.getPanel(MOVE_WAVEFORM_PANEL) && TweakStore6.getValues(MOVE_WAVEFORM_PANEL), defaultStyle());
+    return styleFromValues(TweakStore7.getPanel(MOVE_WAVEFORM_PANEL) && TweakStore7.getValues(MOVE_WAVEFORM_PANEL), defaultStyle());
   }
   /** The settings page's values, a stable snapshot per change — for `useSyncExternalStore`. */
   getStyleSnapshot() {
-    return TweakStore6.getValues(MOVE_WAVEFORM_PANEL);
+    return TweakStore7.getValues(MOVE_WAVEFORM_PANEL);
   }
   subscribeStyle(fn) {
-    return TweakStore6.subscribe(MOVE_WAVEFORM_PANEL, fn);
+    return TweakStore7.subscribe(MOVE_WAVEFORM_PANEL, fn);
   }
   /**
    * Editor mode — the floating waveform is up and owns the whole surface:
@@ -6255,11 +6368,23 @@ var MoveWaveformStoreClass = class {
   zoom(delta) {
     this.setView({ zoom: zoomBy(this.view.zoom, delta) });
   }
+  /** A step press marks the loop — unless an app holds the step row
+   *  (MoveSurfaceStore.onStep), in which case the press is the app's. Routing
+   *  it here too means a kit that predates app-owned steps, which sends every
+   *  step to the waveform, still reaches the app. */
   pressStep(index) {
+    if (MoveSurfaceStore.ownsSteps()) {
+      MoveSurfaceStore.pressStep(index);
+      return;
+    }
     this.setView(loopFromStep(this.view, index));
   }
   /** A held step lets the loop go — the remove gesture, from any step. */
-  holdStep(_index) {
+  holdStep(index) {
+    if (MoveSurfaceStore.ownsSteps()) {
+      MoveSurfaceStore.pressStep(index);
+      return;
+    }
     this.clearLoop();
   }
   /**
@@ -6275,8 +6400,10 @@ var MoveWaveformStoreClass = class {
   clearLoop() {
     this.setView({ loop: null, loopAnchor: null });
   }
-  /** The steps the loop covers — what the hardware lights. */
+  /** The steps the loop covers — what the hardware lights. While an app
+   *  holds the row, its lit steps instead. */
   loopSteps() {
+    if (MoveSurfaceStore.ownsSteps()) return (MoveSurfaceStore.getState().steps ?? []).flatMap((cell) => cell.lit ? [cell.step] : []);
     return loopSteps(this.view);
   }
   subscribe(fn) {
@@ -6341,96 +6468,6 @@ function toAudioBuffer(data, sampleRate) {
     getChannelData: () => data
   };
 }
-
-// src/move-surface-store.ts
-import { TweakStore as TweakStore7 } from "tweakers/store";
-var moveScreenRowLabel = (row) => typeof row === "string" ? row : row.label;
-var moveScreenChecked = (rows) => rows.flatMap((row, i) => typeof row !== "string" && row.checked ? [i] : []);
-var EMPTY = { rows: 0, pads: [], padsLabel: null, steps: null, screen: null, search: null };
-var state = EMPTY;
-var listeners = /* @__PURE__ */ new Set();
-var pressListeners = /* @__PURE__ */ new Set();
-var screenSelectListeners = /* @__PURE__ */ new Set();
-var emit = () => {
-  for (const fn of listeners) fn();
-};
-function patch(key, value) {
-  if (JSON.stringify(state[key]) === JSON.stringify(value)) return;
-  state = { ...state, [key]: value };
-  emit();
-}
-var used = () => TweakStore7.noteMoveKitUse("surface");
-var validPads = (pads) => pads.filter((p) => p.x >= 0 && p.x < 8 && (p.y === 0 || p.y === 1));
-function patchPadRows(rows, pads, label) {
-  const nextPads = validPads(pads);
-  const nextLabel = label === void 0 ? state.padsLabel : label;
-  if (state.rows === rows && state.padsLabel === nextLabel && JSON.stringify(state.pads) === JSON.stringify(nextPads)) return;
-  state = { ...state, rows, pads: nextPads, padsLabel: nextLabel };
-  emit();
-}
-var MoveSurfaceStore = {
-  getState: () => state,
-  subscribe(fn) {
-    listeners.add(fn);
-    return () => listeners.delete(fn);
-  },
-  /** How many bottom pad rows the app took (matches `claims.pads` on the wire). */
-  claimRows(rows) {
-    if (rows > 0) used();
-    patch("rows", rows);
-  },
-  setPads(pads) {
-    if (pads.length) used();
-    patch("pads", validPads(pads));
-  },
-  /** Publish the claimed row count and its cells as one renderable state.
-   *  `label` says what the row does here — pass it whenever the meaning
-   *  changes, so the panel never captions the pads with a stale phrase. */
-  setPadRows(rows, pads, label) {
-    if (rows > 0) used();
-    patchPadRows(rows, pads, label);
-  },
-  /** What the claimed rows control in this view. */
-  setPadsLabel(label) {
-    patch("padsLabel", label);
-  },
-  setSteps(steps) {
-    if (steps) used();
-    patch("steps", steps === null ? null : steps.filter((s) => s.step >= 0 && s.step < 16));
-  },
-  setScreen(screen) {
-    if (screen) used();
-    patch("screen", screen);
-  },
-  /** The search narrowing the wheel list — MoveSearchStore's to write. */
-  setSearch(search) {
-    patch("search", search);
-  },
-  /** Selection intent from the panel's wheel screen; the host owns the value,
-   *  exactly as it owns what a hardware wheel turn means. */
-  onScreenSelect(fn) {
-    screenSelectListeners.add(fn);
-    return () => screenSelectListeners.delete(fn);
-  },
-  selectScreen(index) {
-    if (!state.screen || !Number.isInteger(index) || index < 0 || index >= state.screen.items.length) return;
-    for (const fn of screenSelectListeners) fn(index);
-  },
-  /** A tap on an on-screen pad, for the host to treat like a hardware press. */
-  onPress(fn) {
-    pressListeners.add(fn);
-    return () => pressListeners.delete(fn);
-  },
-  press(x, y, shift = false) {
-    for (const fn of pressListeners) fn({ x, y, shift });
-  },
-  /** Hand the whole surface back — the panel returns to its plain layout. */
-  reset() {
-    if (state === EMPTY) return;
-    state = EMPTY;
-    emit();
-  }
-};
 
 // src/env.ts
 var isDevDefault = typeof process !== "undefined" && process?.env?.NODE_ENV ? process.env.NODE_ENV !== "production" : typeof import.meta !== "undefined" && import.meta.env?.MODE ? import.meta.env.MODE !== "production" : true;
@@ -6515,6 +6552,7 @@ function MoveWaveform({
     if (!productionEnabled) return;
     const prev = MoveSurfaceStore.getState().steps;
     const paint = () => {
+      if (MoveSurfaceStore.ownsSteps()) return;
       const lit = new Set(MoveWaveformStore.loopSteps());
       MoveSurfaceStore.setSteps(
         Array.from({ length: MOVE_WAVEFORM_STEPS }, (_, step) => ({ step, color: accent, lit: lit.has(step) }))
@@ -6524,7 +6562,7 @@ function MoveWaveform({
     const off = MoveWaveformStore.subscribe(paint);
     return () => {
       off();
-      MoveSurfaceStore.setSteps(prev);
+      if (!MoveSurfaceStore.ownsSteps()) MoveSurfaceStore.setSteps(prev);
     };
   }, [productionEnabled, accent]);
   const styleValues = useSyncExternalStore2(
@@ -10671,6 +10709,19 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                           ]
                         }
                       ) }),
+                      !settingsOpen && surface.steps && MoveSurfaceStore.ownsSteps() && /* @__PURE__ */ jsx12("div", { className: "tweakers-move-app-steps", children: stepRuns(surface.steps).map((run) => /* @__PURE__ */ jsx12("span", { className: "tweakers-move-step-group", children: run.map((cell) => /* @__PURE__ */ jsx12(
+                        "button",
+                        {
+                          type: "button",
+                          className: "tweakers-move-mod",
+                          "data-lit": cell.lit || void 0,
+                          title: `Step ${cell.step + 1}`,
+                          "aria-pressed": !!cell.lit,
+                          onClick: (event) => MoveSurfaceStore.pressStep(cell.step, event.shiftKey),
+                          children: /* @__PURE__ */ jsx12("span", { className: "tweakers-move-mod-dot", style: { background: cell.lit ? cell.color ?? "var(--move-text)" : "transparent", boxShadow: cell.lit ? void 0 : "inset 0 0 0 1.5px var(--move-text)" } })
+                        },
+                        cell.step
+                      )) }, run[0].step)) }),
                       stripMode && /* @__PURE__ */ jsx12(
                         "div",
                         {
@@ -11231,6 +11282,15 @@ function MoveWavePreview({ index }) {
       ]
     }
   );
+}
+function stepRuns(cells) {
+  const runs = [];
+  for (const cell of cells) {
+    const last = runs[runs.length - 1];
+    if (last && cell.group !== void 0 && last[0].group === cell.group && last[last.length - 1].step === cell.step - 1) last.push(cell);
+    else runs.push([cell]);
+  }
+  return runs;
 }
 function MoveModCircle({ slot }) {
   const dotRef = useRef10(null);

@@ -200,7 +200,9 @@ export function MoveWaveform({
   useEffect(() => {
     if (!productionEnabled) return;
     const prev = MoveSurfaceStore.getState().steps;
+    // an app that holds the step row paints it itself; the loop keeps out
     const paint = () => {
+      if (MoveSurfaceStore.ownsSteps()) return;
       const lit = new Set(MoveWaveformStore.loopSteps());
       MoveSurfaceStore.setSteps(
         Array.from({ length: MOVE_WAVEFORM_STEPS }, (_, step) => ({ step, color: accent, lit: lit.has(step) }))
@@ -210,7 +212,7 @@ export function MoveWaveform({
     const off = MoveWaveformStore.subscribe(paint);
     return () => {
       off();
-      MoveSurfaceStore.setSteps(prev);
+      if (!MoveSurfaceStore.ownsSteps()) MoveSurfaceStore.setSteps(prev);
     };
   }, [productionEnabled, accent]);
 
