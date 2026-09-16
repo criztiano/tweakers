@@ -14,10 +14,10 @@ import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from '../theme';
-import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
+import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody } from './move-slots';
+import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing, angleFromPointer } from '../angle-core';
@@ -2583,6 +2583,48 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       );
                     }
                     if (!meta) return <div key={`empty-${col}`} className="tweakers-move-pad" data-empty="true" />;
+                    // A band — a high cut over a low cut in one column — draws
+                    // once, out of its upper pad, two pads tall; the pad under
+                    // it holds the column and yields the room. Each half is
+                    // still its own chip: hold peeks, tap latches.
+                    const band = moveBandCell(page, padRows, row, col);
+                    if (band?.tail) return <div key={`band-${col}`} className="tweakers-move-band" data-tail aria-hidden="true" />;
+                    if (band) {
+                      const lower = band.upper === 'high' ? band.low : band.high;
+                      const chipHeld = (m: ControlMeta) => (held !== null && held.meta.path === m.path) || !!hwHeld[m.path];
+                      const hand = (m: ControlMeta, open: number) => ({
+                        at: normalizeDial(m, values[m.path]),
+                        cut: Number(values[m.path]) !== open,
+                        held: chipHeld(m),
+                        latched: chipLatched(col, m),
+                      });
+                      return (
+                        <div key={`band-${col}`} className="tweakers-move-band" data-kind="band">
+                          <div className="tweakers-move-band-face">
+                            <MovePadBandBody
+                              low={hand(band.low, band.low.min ?? 0)}
+                              high={hand(band.high, band.high.max ?? 1)}
+                              upper={band.upper}
+                            />
+                            {[meta, lower].map((m) => (
+                              <button
+                                key={m.path}
+                                type="button"
+                                className="tweakers-move-band-zone"
+                                aria-label={m.label}
+                                data-held={chipHeld(m) || undefined}
+                                data-latched={chipLatched(col, m) || undefined}
+                                onPointerDown={(e) => pressChip(e, col, m)}
+                                onPointerUp={() => releaseChip(col, m)}
+                                onPointerCancel={() => setHeld(null)}
+                              >
+                                <MoveModRing panelId={page.panel.id} path={m.path} pad />
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    }
                     // What a pad is comes from the control, not the row it
                     // sits in: a value chip lifted onto the top row is still
                     // a value chip.

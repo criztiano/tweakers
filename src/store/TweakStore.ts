@@ -79,6 +79,8 @@ export type ActionConfig = {
  */
 /** Big slots that read as one thing: their control paths, and the name the group wears. */
 export type MoveSlotGroup = string[] | { label?: string; slots: string[] };
+/** Two value chips stacked in one pad column that cut the ends of one band. */
+export type MoveBand = { high: string; low: string };
 
 export type ToggleConfig = {
   type: 'toggle';
@@ -768,6 +770,8 @@ export type PanelConfig = {
   moveValueRow?: string[];
   /** Big slots drawn as one container, retained on the same terms as `hints`. */
   moveSlotGroups?: MoveSlotGroup[];
+  /** Stacked cut chips drawn as one band, retained on the same terms as `hints`. */
+  moveBands?: MoveBand[];
   /**
    * Config declared `_enabled` at its root — the whole panel is a module, and
    * its title carries the switch. Same idiom as a module folder, one level up.
@@ -927,6 +931,15 @@ export type TweakStorePanelOptions = {
    * a small header along the container's top.
    */
   moveSlotGroups?: MoveSlotGroup[];
+  /**
+   * Two value chips, by control path, that cut the ends of one band — a high
+   * cut and a low cut stacked in one `movePads` column, one row over the
+   * other. The screen draws the pair as one small slot two pads tall: the
+   * band on a small screen, each cut's handle on its edge. Each half keeps
+   * its own chip's gestures, and the hardware keeps its two pads. A pair that
+   * is not stacked in one column draws as its two chips.
+   */
+  moveBands?: MoveBand[];
   /** Timeline panels render in TweakTimeline; modulation panels are the Move's
    * modulator settings pages; kit panels are the Move kit's own settings
    * pages (the waveform's look), shown only in the settings room — all three
@@ -1110,7 +1123,7 @@ class TweakStoreClass {
     // instead of resurrecting it.
     this.overlayPersistedValues(id, target, values, this.mapControlsByPath(controls));
 
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, moveTopRow: options.moveTopRow, moveActionRow: options.moveActionRow, moveValueRow: options.moveValueRow, moveSlotGroups: options.moveSlotGroups, module: '_enabled' in config ? true : undefined, kind: options.kind });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, moveTopRow: options.moveTopRow, moveActionRow: options.moveActionRow, moveValueRow: options.moveValueRow, moveSlotGroups: options.moveSlotGroups, moveBands: options.moveBands, module: '_enabled' in config ? true : undefined, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -1131,6 +1144,7 @@ class TweakStoreClass {
     const moveActionRow = options.moveActionRow ?? existing.moveActionRow;
     const moveValueRow = options.moveValueRow ?? existing.moveValueRow;
     const moveSlotGroups = options.moveSlotGroups ?? existing.moveSlotGroups;
+    const moveBands = options.moveBands ?? existing.moveBands;
     const controls = this.parseConfig(config, '', shortcuts);
     this.applyControlExtras(controls, hints, affordances, labels);
     const controlsByPath = this.mapControlsByPath(controls);
@@ -1161,7 +1175,7 @@ class TweakStoreClass {
       }
     }
 
-    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, moveTopRow, moveActionRow, moveValueRow, moveSlotGroups, module: '_enabled' in config ? true : undefined, kind: options.kind ?? existing.kind };
+    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, moveTopRow, moveActionRow, moveValueRow, moveSlotGroups, moveBands, module: '_enabled' in config ? true : undefined, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
 

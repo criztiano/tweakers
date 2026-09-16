@@ -25,6 +25,7 @@ import {
   MovePadAppBody,
   MovePadTabsBody,
   MovePadColorBody,
+  MovePadBandBody,
   CurveComposer,
   ModRing,
   ModulationStore,
@@ -414,6 +415,12 @@ export const SMALL_SLOTS: Specimen[] = [
     description: MOVE_PAD_LIBRARY.color.description,
     note: 'For pages where colour is not the big control. The tap opens the same editor the colour dial has.',
     render: () => <MovePadColorBody label="Ink A" color="#632ad5" />,
+  },
+  {
+    kind: 'band',
+    description: MOVE_PAD_LIBRARY.band.description,
+    note: 'Two chips in one column, one over the other, named in the panel’s moveBands. The low cut is open, a sliver at its edge; the high cut has come in and turned yellow. Primecut’s Polish page wears one per take.',
+    render: () => <MovePadBandBody low={{ at: 0, cut: false }} high={{ at: 0.7, cut: true }} />,
   },
   {
     kind: 'tabs', span: 4,

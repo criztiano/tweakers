@@ -1,6 +1,6 @@
 import type { MovePadListView } from '../move-pad-list';
 import type { CSSProperties, ReactNode } from 'react';
-import { moveNumericDrawing, movePlaybackMode, type MovePlaybackMode } from '../move-visual-core';
+import { moveBandCuts, moveNumericDrawing, movePlaybackMode, MOVE_BAND_H, MOVE_BAND_W, type MovePlaybackMode } from '../move-visual-core';
 import { MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
 export { MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
 import type { ControlMeta } from '../store/TweakStore';
@@ -696,8 +696,11 @@ function MoveSlotBadge({ on }: { on: boolean }) {
  * `grid-column: span N`, the drawing stretches across the whole run, and
  * every pad in it keeps one option — so the hardware's one-thing-per-pad
  * rule still holds under the shared strip.
+ *
+ * `band` claims two pads the other way — one column, two rows — and keeps
+ * the same promise: each pad under the shared screen is still its own chip.
  */
-export type MovePadKind = 'toggle' | 'icon' | 'value' | 'action' | 'icon-label' | 'app' | 'bend' | 'wave' | 'tabs' | 'color' | 'list';
+export type MovePadKind = 'toggle' | 'icon' | 'value' | 'action' | 'icon-label' | 'app' | 'bend' | 'wave' | 'tabs' | 'color' | 'list' | 'band';
 
 /** A switch: the indicator top-left, the name beside it, the whole pad
  *  inverting when it is on. */
@@ -830,6 +833,78 @@ export function MovePadTabsBody({ name, options, activeIdx }: {
   );
 }
 
+/** One cut of a band: where it sits, and whether it is cutting anything. */
+export type MovePadBandHand = {
+  /** The cut's place on the band, 0..1 left to right. */
+  at: number;
+  /** Moved in off its open end — the band is losing something here. */
+  cut: boolean;
+  held?: boolean;
+  latched?: boolean;
+};
+
+const BAND_CAPTIONS = { high: 'Hi', low: 'Lo' } as const;
+
+/**
+ * The band — a high cut and a low cut stacked in one column, drawn as what
+ * they do together: a small ruled screen with the pass band standing on it,
+ * each cut region filled beside its slope and a handle on its foot. A cut
+ * left open fills in the text colour, a sliver at its edge; one moved in
+ * turns yellow, so a band that is losing something says so at a glance.
+ *
+ * The captions stand beside the screen in the order the two chips sit on
+ * the grid, each over its own pad. A held or latched chip lights its
+ * caption, the way a chip inverts.
+ */
+export function MovePadBandBody({ low, high, upper = 'high' }: {
+  low: MovePadBandHand;
+  high: MovePadBandHand;
+  /** The hand whose chip sits on the higher row. */
+  upper?: 'high' | 'low';
+}) {
+  const cuts = moveBandCuts(low.at, high.at);
+  const hands = { low, high };
+  return (
+    <>
+      <div className="tweakers-move-band-screen">
+        <div className="tweakers-move-band-plot">
+          <svg
+            className="tweakers-move-band-drawing"
+            viewBox={`0 0 ${MOVE_BAND_W} ${MOVE_BAND_H}`}
+            preserveAspectRatio="none"
+            aria-hidden="true"
+          >
+            <g className="tweakers-move-band-grid" shapeRendering="crispEdges">
+              {Array.from({ length: 7 }, (_, i) => (
+                <rect key={`x${i}`} x={9 + i * 10} y="0" width="1" height={MOVE_BAND_H} />
+              ))}
+              {Array.from({ length: 3 }, (_, i) => (
+                <rect key={`y${i}`} x="0" y={9 + i * 10} width={MOVE_BAND_W} height="1" />
+              ))}
+            </g>
+            <path className="tweakers-move-band-cut" data-cut={low.cut || undefined} d={cuts.low} />
+            <path className="tweakers-move-band-cut" data-cut={high.cut || undefined} d={cuts.high} />
+          </svg>
+        </div>
+        <span className="tweakers-move-band-handle" style={{ left: `${low.at * 100}%` }} />
+        <span className="tweakers-move-band-handle" style={{ left: `${high.at * 100}%` }} />
+      </div>
+      <div className="tweakers-move-band-captions">
+        {([upper, upper === 'high' ? 'low' : 'high'] as const).map((hand) => (
+          <span
+            key={hand}
+            className="tweakers-move-band-caption"
+            data-held={hands[hand].held || undefined}
+            data-latched={hands[hand].latched || undefined}
+          >
+            {BAND_CAPTIONS[hand]}
+          </span>
+        ))}
+      </div>
+    </>
+  );
+}
+
 /** A cell the app owns — a track, a slice, a step. The colour is the app's
  *  own, so it rides inline the way a modulation dot does. */
 export function MovePadAppBody({ label, color }: { label?: string; color?: string }) {
@@ -871,6 +946,7 @@ export const MOVE_PAD_LIBRARY = {
   wave: { description: 'hold and drag for the stage’s own sine, tap to flip it', component: MovePadWaveBody },
   tabs: { description: '2 to 8 pads: the page’s modes side by side, the current one lit — a name pad optional', component: MovePadTabsBody },
   color: { description: 'a single colour in a small slot — tap latches it onto the dial above, hold peeks; that dial edits and opens it', component: MovePadColorBody },
+  band: { description: '2 pads in one column: a high cut over a low cut, drawn as one band on a small screen — each half its own chip', component: MovePadBandBody },
 } as const satisfies Record<MovePadKind, { description: string; component: unknown }>;
 
 /**

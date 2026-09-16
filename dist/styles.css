@@ -385,6 +385,10 @@
      than a slot you can press, so it never reads as a control. */
   --move-slot-empty: rgba(222, 227, 201, 0.03);
   --move-chip: #41403e;
+  /* The band's small screen: its rim, and the rules across it — shades of
+     the chip it is cut into, so they follow the chip in either theme. */
+  --move-band-rim: rgba(0, 0, 0, 0.26);
+  --move-band-rule: rgba(0, 0, 0, 0.17);
   --move-group-divider: #353333;
   --move-group-head: #2f2d2c;
   /* The Move's colours on screen — the same set the hardware lights, matched
@@ -3024,6 +3028,136 @@
 .tweakers-move-pad[data-kind="page"],
 .tweakers-move-pad[data-kind="action"] {
   box-shadow: -2px 2px 0 0 var(--move-bg), -3px 3px 0 0 var(--move-text);
+}
+
+/* The band — a high cut over a low cut, one column two pads tall. The cell
+   keeps a pad's height so its row does not grow; the face hangs from it over
+   the pad under it (32 + 4 + 32), and that pad's cell stays empty below. The
+   face is the mockup's 108 × 52 chip at pad size: the screen is inset 7px
+   and three quarters wide, the captions share what is left. */
+.tweakers-move-band {
+  position: relative;
+  height: 32px;
+}
+
+.tweakers-move-band-face {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 68px;
+  background: var(--move-chip);
+  border-radius: var(--move-radius-small);
+  color: var(--move-white);
+  font-family: var(--move-font-label);
+}
+
+.tweakers-move-band-screen {
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: 7px;
+  width: 75%;
+  border: 1px solid var(--move-band-rim);
+  border-radius: 6px;
+}
+
+.tweakers-move-band-plot {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 5px;
+}
+
+.tweakers-move-band-drawing {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.tweakers-move-band-grid { fill: var(--move-band-rule); }
+
+.tweakers-move-band-cut { fill: var(--move-text); }
+.tweakers-move-band-cut[data-cut] { fill: var(--move-yellow); }
+
+/* A handle on each cut's foot, ringed in the chip so it stands off the fill
+   and the rim alike; an open cut's handle sits on the screen's edge. */
+.tweakers-move-band-handle {
+  position: absolute;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--move-text);
+  box-shadow: 0 0 0 1.5px var(--move-chip);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.tweakers-move-band-captions {
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: calc(7px + 75%);
+  right: 0;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  place-items: center;
+  pointer-events: none;
+}
+
+.tweakers-move-band-caption {
+  padding: 1px 3px;
+  border-radius: 4px;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.tweakers-move-band-caption[data-held],
+.tweakers-move-band-caption[data-latched] {
+  background: var(--move-text);
+  color: var(--move-text-inverse);
+}
+
+.tweakers-move-band-caption[data-latched] {
+  animation: tweakers-move-latch 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-band-caption[data-latched] { animation: none; }
+}
+
+/* Each half of the face is its own chip, over its own hardware pad. */
+.tweakers-move-band-zone {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 50%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: var(--move-radius-small);
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tweakers-move-band-zone:first-of-type { top: 0; }
+.tweakers-move-band-zone:last-of-type { bottom: 0; }
+
+.tweakers-move-band-zone:focus-visible {
+  outline: var(--move-color-stroke) solid var(--move-text);
+  outline-offset: calc(-1 * var(--move-color-stroke));
+}
+
+.tweakers-move-band-zone .tweakers-move-pad-mod {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 10px;
+  height: 10px;
 }
 
 /* The tabs strip — the pad grid's multi-slot control. It spans its run and

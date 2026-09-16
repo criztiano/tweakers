@@ -105,7 +105,30 @@ function moveKeyboardValue(meta, value, key, fine = false) {
   const next = Math.round((value + direction * step * multiplier) / step) * step;
   return Math.max(min, Math.min(max, Number(next.toPrecision(12))));
 }
+var MOVE_BAND_W = 79;
+var MOVE_BAND_H = 39;
+var BAND_SLANT = 4;
+var BAND_SHOULDER = 8;
+function moveBandCuts(low, high) {
+  const W = MOVE_BAND_W;
+  const H = MOVE_BAND_H;
+  const xl = clamp01(low) * W;
+  const xh = Math.max(xl, clamp01(high) * W);
+  let topL = xl + BAND_SLANT;
+  let topR = xh - BAND_SLANT;
+  if (topL > topR) topL = topR = (topL + topR) / 2;
+  const k = Math.min(BAND_SHOULDER, (topR - topL) / 2);
+  const dx = BAND_SLANT * k / H;
+  const n = (v) => Number(v.toFixed(2));
+  return {
+    low: `M 0 0 L ${n(topL + k)} 0 Q ${n(topL)} 0 ${n(topL - dx)} ${n(k)} L ${n(xl)} ${H} L 0 ${H} Z`,
+    high: `M ${W} 0 L ${n(topR - k)} 0 Q ${n(topR)} 0 ${n(topR + dx)} ${n(k)} L ${n(xh)} ${H} L ${W} ${H} Z`
+  };
+}
 export {
+  MOVE_BAND_H,
+  MOVE_BAND_W,
+  moveBandCuts,
   moveKeyboardValue,
   moveNumericDrawing,
   movePlaybackMode,

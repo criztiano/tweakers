@@ -142,3 +142,39 @@ export function moveKeyboardValue(meta: ControlMeta, value: unknown, key: string
   const next = Math.round((value + direction * step * multiplier) / step) * step;
   return Math.max(min!, Math.min(max!, Number(next.toPrecision(12))));
 }
+
+/**
+ * The band's small screen, in its own drawing units: a 79 × 39 plot ruled
+ * into eight columns and four rows of 9-unit cells by 1-unit lines.
+ */
+export const MOVE_BAND_W = 79;
+export const MOVE_BAND_H = 39;
+/** How far each cut's slope leans in, foot to top. */
+const BAND_SLANT = 4;
+/** How far the rounded shoulder runs along the top and down the slope. */
+const BAND_SHOULDER = 8;
+
+/**
+ * The two cut regions of a band, as paths in the screen's units. Each cut's
+ * foot sits on the floor at its place (`low`, `high`, each 0..1 left to
+ * right); its slope leans in to the top and rounds over into the pass
+ * band. The low cut fills the left of its slope, the high cut the right of
+ * its own. Past each other the two shoulders meet in the middle instead of
+ * crossing.
+ */
+export function moveBandCuts(low: number, high: number): { low: string; high: string } {
+  const W = MOVE_BAND_W;
+  const H = MOVE_BAND_H;
+  const xl = clamp01(low) * W;
+  const xh = Math.max(xl, clamp01(high) * W);
+  let topL = xl + BAND_SLANT;
+  let topR = xh - BAND_SLANT;
+  if (topL > topR) topL = topR = (topL + topR) / 2;
+  const k = Math.min(BAND_SHOULDER, (topR - topL) / 2);
+  const dx = (BAND_SLANT * k) / H;
+  const n = (v: number) => Number(v.toFixed(2));
+  return {
+    low: `M 0 0 L ${n(topL + k)} 0 Q ${n(topL)} 0 ${n(topL - dx)} ${n(k)} L ${n(xl)} ${H} L 0 ${H} Z`,
+    high: `M ${W} 0 L ${n(topR - k)} 0 Q ${n(topR)} 0 ${n(topR + dx)} ${n(k)} L ${n(xh)} ${H} L ${W} ${H} Z`,
+  };
+}

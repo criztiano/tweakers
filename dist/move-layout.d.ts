@@ -1,4 +1,4 @@
-import { P as PanelConfig, C as ControlMeta } from './TweakStore-wC6uXjoy.js';
+import { C as ControlMeta, P as PanelConfig } from './TweakStore-D79Ear7m.js';
 import { ModPageLayout } from './modulation-core.js';
 import { XYValue } from './xy-pad-core.js';
 import { RangeValue } from './range-slider-core.js';
@@ -117,7 +117,7 @@ declare function buildModMovePage(panel: PanelConfig, layout?: ModPageLayout | n
  * Tests (and apps that want the feed) can swap the sink with
  * `setMoveLayoutReporter`; `null` restores the deduped console.warn.
  */
-type MoveLayoutIssueCode = 'panel-dropped' | 'dial-dropped' | 'pad-column-invalid' | 'pad-column-on-dial' | 'balance-color-placed' | 'pad-column-taken' | 'top-row-taken' | 'slot-group-apart' | 'action-row-no-column' | 'action-row-taken' | 'value-row-no-column' | 'value-row-taken' | 'top-row-no-column' | 'pad-row-full' | 'tabs-oversized' | 'tabs-no-room';
+type MoveLayoutIssueCode = 'panel-dropped' | 'dial-dropped' | 'pad-column-invalid' | 'pad-column-on-dial' | 'balance-color-placed' | 'pad-column-taken' | 'top-row-taken' | 'slot-group-apart' | 'action-row-no-column' | 'action-row-taken' | 'value-row-no-column' | 'value-row-taken' | 'top-row-no-column' | 'pad-row-full' | 'tabs-oversized' | 'tabs-no-room' | 'band-apart';
 type MoveLayoutReporter = (code: MoveLayoutIssueCode, message: string) => void;
 declare function setMoveLayoutReporter(fn: MoveLayoutReporter | null): void;
 declare function reportMoveLayoutIssue(code: MoveLayoutIssueCode, message: string): void;
@@ -136,6 +136,25 @@ declare function buildMovePages(panels: PanelConfig[]): MovePage[];
  * alone and the actions keep theirs (see PROTOCOL.md).
  */
 declare function movePadRows(page: MovePage, claimedRows: number): ControlMeta[][];
+/**
+ * One pad cell of a band — the small slot two pads tall that draws a high
+ * cut and a low cut as one band on a small screen (the panel's `moveBands`).
+ * `upper` names the hand whose chip sits on the higher row; `tail` is true
+ * on the lower cell, which yields to the band drawn out of the one above it,
+ * the way a tabs strip's run yields to its first pad.
+ */
+type MoveBandCell = {
+    high: ControlMeta;
+    low: ControlMeta;
+    upper: 'high' | 'low';
+    tail: boolean;
+};
+/**
+ * What the pad at `row`, `col` of the rows `movePadRows` gave is, as part of
+ * a band — or null. A band needs both its chips, one right under the other
+ * in the same column; anything else stays the two chips it is.
+ */
+declare function moveBandCell(page: MovePage, rows: (ControlMeta | undefined)[][], row: number, col: number): MoveBandCell | null;
 /**
  * Which claimed hardware row a screen row shows, or null when it is a control
  * row. Two claimed rows fill screen rows 2 and 3 (y=1 then y=0); one claimed
@@ -236,4 +255,4 @@ declare function dialOrigin(meta: ControlMeta): number;
 /** Axis positions 0..1 back to the control's real {x, y}, kit-identical. */
 declare function denormalizeXYDial(meta: ControlMeta, x01: number, y01: number): XYValue;
 
-export { ENUM_SHAPE_SAMPLES, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MoveLayoutIssueCode, type MovePage, type MoveTabCell, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, denormalizeXYDial, dialOrigin, dialSpan, enumIndex, enumOptionIcon, enumOptionLabel, enumOptionValue, enumShapePath, filterShapePath, isEnumDial, isMoveDial, isMoveTabs, isNamedTabs, isPadSpanContinuation, isSpanContinuation, isToggleDial, moveAppPadRow, movePadRows, moveTabCell, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeToggleDial, normalizeXYDial, padSpan, reportMoveLayoutIssue, setMoveLayoutReporter, slotGroups, visibleColumns };
+export { ENUM_SHAPE_SAMPLES, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MoveBandCell, type MoveLayoutIssueCode, type MovePage, type MoveTabCell, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, denormalizeXYDial, dialOrigin, dialSpan, enumIndex, enumOptionIcon, enumOptionLabel, enumOptionValue, enumShapePath, filterShapePath, isEnumDial, isMoveDial, isMoveTabs, isNamedTabs, isPadSpanContinuation, isSpanContinuation, isToggleDial, moveAppPadRow, moveBandCell, movePadRows, moveTabCell, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeToggleDial, normalizeXYDial, padSpan, reportMoveLayoutIssue, setMoveLayoutReporter, slotGroups, visibleColumns };
