@@ -164,6 +164,12 @@ type ActionConfig = {
      * fills the row and carries the meaning alone.
      */
     caption?: string;
+    /**
+     * A glyph from `LUCIDE_ICONS`, or the URL of an asset the app owns. On a
+     * Move pad the button then wears it beside its name (the `icon-label`
+     * small slot).
+     */
+    icon?: string;
 };
 /**
  * Explicit switch form, for what a bare `false` cannot say: a name a key
@@ -687,7 +693,7 @@ type ControlMeta = {
         label: string;
         icon?: string;
     })[];
-    /** Toggle's own picture and state badges, from the explicit ToggleConfig form. */
+    /** Toggle's own picture and state badges, from the explicit ToggleConfig form; an action's pad glyph. */
     icon?: string;
     onIcon?: string;
     offIcon?: string;

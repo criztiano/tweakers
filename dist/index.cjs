@@ -113,6 +113,7 @@ __export(index_exports, {
   MovePadAppBody: () => MovePadAppBody,
   MovePadColorBody: () => MovePadColorBody,
   MovePadIconBody: () => MovePadIconBody,
+  MovePadIconLabelBody: () => MovePadIconLabelBody,
   MovePadListBody: () => MovePadListBody,
   MovePadListStore: () => MovePadListStore,
   MovePadTabsBody: () => MovePadTabsBody,
@@ -969,6 +970,24 @@ var LUCIDE_ICONS = {
   /* switches — what a boolean is about, drawn */
   repeat: ["m17 2 4 4-4 4", "M3 11v-1a4 4 0 0 1 4-4h14", "m7 22-4-4 4-4", "M21 13v1a4 4 0 0 1-4 4H3"],
   timer: ["M10 2h4", "M12 14l3-3", "M12 6a8 8 0 1 0 0 16 8 8 0 0 0 0-16z"],
+  /* actions — what a button does, drawn beside its name */
+  x: ["M18 6 6 18", "m6 6 12 12"],
+  "brush-cleaning": [
+    "m16 22-1-4",
+    "M19 13.99a1 1 0 0 0 1-1V12a2 2 0 0 0-2-2h-3a1 1 0 0 1-1-1V4a2 2 0 0 0-4 0v5a1 1 0 0 1-1 1H6a2 2 0 0 0-2 2v.99a1 1 0 0 0 1 1",
+    "M5 14h14l1.973 6.767A1 1 0 0 1 20 22H4a1 1 0 0 1-.973-1.233z",
+    "m8 22 1-4"
+  ],
+  sparkles: [
+    "M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z",
+    "M20 3v4",
+    "M22 5h-4",
+    "M4 17v2",
+    "M5 18H3"
+  ],
+  heart: ["M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"],
+  download: ["M12 15V3", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "m7 10 5 5 5-5"],
+  wrench: ["M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"],
   headphones: ["M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"],
   /* restoration — the polish page's five switches */
   "broom-sparkles": [
@@ -2469,6 +2488,12 @@ function MovePadWaveBody({ label, percent }) {
 function MovePadActionBody({ label }) {
   return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-pad-title", children: label });
 }
+function MovePadIconLabelBody({ icon, label }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("span", { className: "tweakers-move-pad-icon-label", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotIcon, { icon, className: "tweakers-move-pad-icon" }),
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-pad-title", children: label })
+  ] });
+}
 function MovePadColorBody({ label, color }) {
   return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
     /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-pad-title", children: label }),
@@ -2532,6 +2557,7 @@ var MOVE_PAD_LIBRARY = {
   value: { description: "a value the dial above can borrow \u2014 hold to peek, tap to latch", component: MovePadValueBody },
   list: { description: "a checked list above a small pad; its dial walks, Sample selects, a second pad press runs", component: MovePadListBody },
   action: { description: "a button: a press runs the app\u2019s action", component: MovePadActionBody },
+  "icon-label": { description: "a button wearing its picture beside its name \u2014 a press runs the app\u2019s action", component: MovePadIconLabelBody },
   app: { description: "a cell the app paints itself \u2014 a track, a slice, a step", component: MovePadAppBody },
   bend: { description: "hold and drag to bend the envelope ramp above it", component: MovePadToggleBody },
   wave: { description: "hold and drag for the stage\u2019s own sine, tap to flip it", component: MovePadWaveBody },
@@ -2567,7 +2593,7 @@ var MOVE_SLOT_LIBRARY = {
 
 // src/components/MovePadList.tsx
 var import_jsx_runtime4 = require("react/jsx-runtime");
-function MovePadList({ panelId, path, label, view, disabled }) {
+function MovePadList({ panelId, path, label, icon, view, disabled }) {
   const root = (0, import_react2.useRef)(null);
   const open2 = view?.panelId === panelId && view.path === path;
   (0, import_react2.useEffect)(() => () => {
@@ -2624,7 +2650,7 @@ function MovePadList({ panelId, path, label, view, disabled }) {
         onClick: () => {
           void MovePadListStore.activate(panelId, path);
         },
-        children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(MovePadActionBody, { label: open2 ? view.submitLabel ?? label : label })
+        children: icon ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(MovePadIconLabelBody, { icon, label: open2 ? view.submitLabel ?? label : label }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(MovePadActionBody, { label: open2 ? view.submitLabel ?? label : label })
       }
     ),
     open2 && /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "tweakers-move-dial-screen tweakers-move-pad-list-overlay", onWheel: (event) => {
@@ -11060,14 +11086,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       );
                                     }
                                     if (meta.type === "action") {
-                                      if (MovePadListStore.has(page.panel.id, meta.path)) return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MovePadList, { panelId: page.panel.id, path: meta.path, label: meta.label, view: padListView, disabled: import_TweakStore13.TweakStore.isDisabled(page.panel.id, meta.path) }, meta.path);
+                                      if (MovePadListStore.has(page.panel.id, meta.path)) return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MovePadList, { panelId: page.panel.id, path: meta.path, label: meta.label, icon: meta.icon, view: padListView, disabled: import_TweakStore13.TweakStore.isDisabled(page.panel.id, meta.path) }, meta.path);
                                       return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
                                         "button",
                                         {
                                           className: "tweakers-move-pad",
                                           "data-kind": "action",
                                           onClick: () => import_TweakStore13.TweakStore.triggerAction(page.panel.id, meta.path),
-                                          children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MovePadActionBody, { label: meta.label })
+                                          children: meta.icon ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MovePadIconLabelBody, { icon: meta.icon, label: meta.label }) : /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MovePadActionBody, { label: meta.label })
                                         },
                                         meta.path
                                       );
@@ -12420,6 +12446,7 @@ var import_TweakStore15 = require("tweakers/store");
   MovePadAppBody,
   MovePadColorBody,
   MovePadIconBody,
+  MovePadIconLabelBody,
   MovePadListBody,
   MovePadListStore,
   MovePadTabsBody,

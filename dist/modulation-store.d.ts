@@ -1,5 +1,5 @@
 import { ModulationSlot, ModulationType, ModulationParams, ModulationAssignment, ModPageLayout } from './modulation-core.js';
-import './TweakStore-CLCRufn6.js';
+import './TweakStore-wC6uXjoy.js';
 import './gradient-core.js';
 import './color-core.js';
 import './xy-pad-core.js';

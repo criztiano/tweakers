@@ -53,6 +53,7 @@ control.
 | `icon` | A switch a picture says better than a name — a solo's headphones | `toggle` with `icon` (a `LUCIDE_ICONS` name or an asset URL) and a `movePads` column, `moveHold` optional; `MovePadIconBody` | 1 pad; the name stays as its accessible label |
 | `value` | A bounded number the dial above can borrow | Bounded `slider` / `number`; `MovePadValueBody` | 1 pad |
 | `action` | A button the page wants on the surface | `action` with a `movePads` column; `MovePadActionBody` | 1 pad |
+| `icon-label` | A button a picture helps find — Export's download, Clear's cross | `action` with `icon` (a `LUCIDE_ICONS` name or an asset URL) and a `movePads` column; `MovePadIconLabelBody` | 1 pad; the name gives way before the picture |
 | `app` | A cell the app paints — a track, a slice, a step | `MoveSurfaceStore`; `MovePadAppBody` | 1 pad |
 | `tabs` | The mode a page is in, reachable without turning anything | `select` with `moveTabs` (`true`, or `'named'` for the name pad); `MovePadTabsBody` | 2–8 adjacent pads, switch row |
 | `color` | A single colour where colour is not the page's big control | `color` config with a `movePads` column — or nothing at all when a `balance` references it (the kit seats those itself); `MovePadColorBody` | 1 pad, top or value row; lit white like any chip (its colour is the screen's swatch); a chip like `value` — tap latches, hold peeks |

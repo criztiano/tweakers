@@ -21,6 +21,7 @@ import {
   MovePadWaveBody,
   MovePadValueBody,
   MovePadActionBody,
+  MovePadIconLabelBody,
   MovePadAppBody,
   MovePadTabsBody,
   MovePadColorBody,
@@ -384,6 +385,12 @@ export const SMALL_SLOTS: Specimen[] = [
     kind: 'action',
     description: MOVE_PAD_LIBRARY.action.description,
     render: () => <MovePadActionBody label="Clear" />,
+  },
+  {
+    kind: 'icon-label',
+    description: MOVE_PAD_LIBRARY['icon-label'].description,
+    note: 'An action that names an icon. The picture is found first; the word says it for sure.',
+    render: () => <MovePadIconLabelBody icon="download" label="Export" />,
   },
   {
     kind: 'app',
