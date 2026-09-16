@@ -24,6 +24,7 @@ import {
   moveGateDemoReading,
   MoveSlotNumericBody,
   MoveSlotToggleBody,
+  MoveSlotMetronomeBody,
   MoveSlotScopeBody,
   MoveSlotEnvBody,
   MovePadToggleBody,
@@ -36,6 +37,8 @@ import {
   MovePadTabsBody,
   MovePadColorBody,
   MovePadBandBody,
+  MovePadFadeBody,
+  MovePadLoopBody,
   CurveComposer,
   ModRing,
   ModulationStore,
@@ -51,7 +54,7 @@ import {
   type MoveSlotKind,
   type MovePadKind,
 } from 'tweakers';
-import { PANEL_ID, MOD_LFO, MOD_ENV, MOD_CURVE } from './panel';
+import { PANEL_ID, MOD_LFO, MOD_ENV, MOD_CURVE, LIBRARY_BPM, librarySwing } from './panel';
 
 /**
  * Every face, drawn. The live panel above the dictionary shows the ones that
@@ -240,6 +243,12 @@ export const BIG_SLOTS: Specimen[] = [
     description: MOVE_SLOT_LIBRARY['toggle-icon'].description,
     note: 'The switch on the strip is on; this one is drawn off — the badge is the whole difference. An app that ships its own pair of badges (a brush, a check, a ban) passes them as `icon`, `onIcon` and `offIcon`.',
     render: () => <MoveSlotToggleBody label="Loop" checked={false} icon="repeat" />,
+  },
+  {
+    kind: 'metronome', path: 'tempo',
+    description: MOVE_SLOT_LIBRARY.metronome.description,
+    note: 'A toggle with `moveVisual: { kind: \'metronome\', swing }`. The app keeps time: `swing()` answers where the arm is now, -1 to +1, or `null` to stand it upright. Off, the picture dims and the arm rests.',
+    render: () => <MoveSlotMetronomeBody label={`${LIBRARY_BPM.toFixed(1)} BPM`} checked swing={librarySwing} />,
   },
   {
     kind: 'range', path: 'band',
@@ -499,6 +508,18 @@ export const SMALL_SLOTS: Specimen[] = [
     description: MOVE_PAD_LIBRARY.band.description,
     note: 'Two chips in one column, one over the other, named in the panel’s moveBands. The low cut is open, a sliver at its edge; the high cut has come in and turned yellow. Primecut’s Polish page wears one per take.',
     render: () => <MovePadBandBody low={{ at: 0, cut: false }} high={{ at: 0.7, cut: true }} />,
+  },
+  {
+    kind: 'fade', span: 2,
+    description: MOVE_PAD_LIBRARY.fade.description,
+    note: 'Two chips side by side, the fade in first, named in the panel’s moveEdges. The fade in has come in and turned blue; the fade out is still a needle. Primecut’s editor wears one under Start and End.',
+    render: () => <MovePadFadeBody fadeIn={{ at: 0.3, moved: true }} fadeOut={{ at: 0, moved: false }} />,
+  },
+  {
+    kind: 'loop', span: 2,
+    description: MOVE_PAD_LIBRARY.loop.description,
+    note: 'Two chips side by side, the start first, named in the panel’s moveEdges. The start has moved in and turned red, the part before it shaded; the end still sits on its end of the line.',
+    render: () => <MovePadLoopBody start={{ at: 0.2, moved: true }} end={{ at: 1, moved: false }} />,
   },
   {
     kind: 'tabs', span: 4,

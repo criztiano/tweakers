@@ -37,7 +37,18 @@ export type MoveSelectVisual = {
   modes?: Record<string, MovePlaybackMode>;
 };
 
-export type MoveVisual = MoveSliderVisual | MoveSelectVisual;
+/**
+ * A switch that draws what it switches. `metronome`: a metronome whose arm
+ * swings while it is on. The host owns time — `swing` is polled every frame
+ * for where the arm is now, -1 (full left) to +1 (full right), or `null` to
+ * stand it upright (the transport stopped, say). The kit only draws.
+ */
+export type MoveToggleVisual = {
+  kind: 'metronome';
+  swing?: () => number | null;
+};
+
+export type MoveVisual = MoveSliderVisual | MoveSelectVisual | MoveToggleVisual;
 
 export type MoveNumericDrawing =
   | { kind: 'opacity'; alpha: number }

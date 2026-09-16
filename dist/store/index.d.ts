@@ -80,7 +80,17 @@ type MoveSelectVisual = {
     /** Map host option values to drawings. Omit when values are mode names. */
     modes?: Record<string, MovePlaybackMode>;
 };
-type MoveVisual = MoveSliderVisual | MoveSelectVisual;
+/**
+ * A switch that draws what it switches. `metronome`: a metronome whose arm
+ * swings while it is on. The host owns time — `swing` is polled every frame
+ * for where the arm is now, -1 (full left) to +1 (full right), or `null` to
+ * stand it upright (the transport stopped, say). The kit only draws.
+ */
+type MoveToggleVisual = {
+    kind: 'metronome';
+    swing?: () => number | null;
+};
+type MoveVisual = MoveSliderVisual | MoveSelectVisual | MoveToggleVisual;
 
 /**
  * gradient-core — DOM-free gradient math shared by every framework port of the
@@ -218,6 +228,13 @@ type MoveBand = {
     high: string;
     low: string;
 };
+/** Two value chips side by side in one pad row that set the two edges of one
+ *  line: a fade in and a fade out, or a loop's start and end. */
+type MoveEdges = {
+    kind: 'fade' | 'loop';
+    start: string;
+    end: string;
+};
 type ToggleConfig = {
     type: 'toggle';
     default: boolean;
@@ -252,6 +269,12 @@ type ToggleConfig = {
      * and on the hardware alike; there is no latched state to forget.
      */
     moveHold?: boolean;
+    /**
+     * Draw the switch as what it switches, in its own slot: `metronome` is a
+     * click track whose arm swings to the host's `swing()` while it is on. The
+     * slot's name becomes the caption under the picture ("120.0 BPM").
+     */
+    moveVisual?: MoveToggleVisual;
 };
 type SelectConfig = {
     type: 'select';
@@ -831,6 +854,8 @@ type PanelConfig = {
     moveSlotGroups?: MoveSlotGroup[];
     /** Stacked cut chips drawn as one band, retained on the same terms as `hints`. */
     moveBands?: MoveBand[];
+    /** Side-by-side edge chips drawn as one line, retained on the same terms as `hints`. */
+    moveEdges?: MoveEdges[];
     /**
      * Config declared `_enabled` at its root — the whole panel is a module, and
      * its title carries the switch. Same idiom as a module folder, one level up.
@@ -992,6 +1017,15 @@ type TweakStorePanelOptions = {
      * is not stacked in one column draws as its two chips.
      */
     moveBands?: MoveBand[];
+    /**
+     * Two value chips, by control path, that set the two edges of one line —
+     * a start and an end side by side in one pad row, the start in the column
+     * before the end. `kind` says what the line is: a `fade` draws each fade as
+     * a ramp from its own end, a `loop` draws the loop's two markers. Each half
+     * keeps its own chip's gestures, and the hardware keeps its two pads. A
+     * pair that is not side by side draws as its two chips.
+     */
+    moveEdges?: MoveEdges[];
     /** Timeline panels render in TweakTimeline; modulation panels are the Move's
      * modulator settings pages; kit panels are the Move kit's own settings
      * pages (the waveform's look), shown only in the settings room — all three
@@ -1274,4 +1308,4 @@ declare function defaultListItemParams(schema: Record<string, ListItemField>): R
 declare function normalizeListItems(config: ListConfig): ListItemValue[];
 declare const TweakStore: TweakStoreClass;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type BalanceConfig, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type CurveConfig, type EasingConfig, type FileConfig, type FilterConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type MoveBand, type MoveKitRegistry, type MovePlaybackMode, type MoveSelectVisual, type MoveSliderVisual, type MoveSlotGroup, type MoveVisual, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type PanelConfig, type Preset, type PresetExplorationAdapter, type PresetItem, type PresetProvider, type PresetProviderPreset, type RangeConfig, type RangeValue, type ReservedKey, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SwatchConfig, type SwatchOption, TAB_PATH, type TextConfig, type ToggleConfig, type TransferConfig, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakStorePanelOptions, type TweakValue, type TweakersPersistOptions, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, groupListFields, hintDomId, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveTweakValues };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type BalanceConfig, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type CurveConfig, type EasingConfig, type FileConfig, type FilterConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type MoveBand, type MoveEdges, type MoveKitRegistry, type MovePlaybackMode, type MoveSelectVisual, type MoveSliderVisual, type MoveSlotGroup, type MoveToggleVisual, type MoveVisual, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type PanelConfig, type Preset, type PresetExplorationAdapter, type PresetItem, type PresetProvider, type PresetProviderPreset, type RangeConfig, type RangeValue, type ReservedKey, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SwatchConfig, type SwatchOption, TAB_PATH, type TextConfig, type ToggleConfig, type TransferConfig, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakStorePanelOptions, type TweakValue, type TweakersPersistOptions, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, groupListFields, hintDomId, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveTweakValues };

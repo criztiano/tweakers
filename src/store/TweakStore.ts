@@ -1,6 +1,6 @@
 import type { GeneParameter, PresetDNA } from '../preset-genetics';
-import type { MoveSliderVisual, MoveSelectVisual, MoveVisual } from '../move-visual-core';
-export type { MoveSliderVisual, MoveSelectVisual, MoveVisual, MovePlaybackMode } from '../move-visual-core';
+import type { MoveSliderVisual, MoveSelectVisual, MoveToggleVisual, MoveVisual } from '../move-visual-core';
+export type { MoveSliderVisual, MoveSelectVisual, MoveToggleVisual, MoveVisual, MovePlaybackMode } from '../move-visual-core';
 // Lightweight state store with subscriptions for tweakers
 
 import { HEX_COLOR_REGEX } from '../color-core';
@@ -81,6 +81,9 @@ export type ActionConfig = {
 export type MoveSlotGroup = string[] | { label?: string; slots: string[] };
 /** Two value chips stacked in one pad column that cut the ends of one band. */
 export type MoveBand = { high: string; low: string };
+/** Two value chips side by side in one pad row that set the two edges of one
+ *  line: a fade in and a fade out, or a loop's start and end. */
+export type MoveEdges = { kind: 'fade' | 'loop'; start: string; end: string };
 
 export type ToggleConfig = {
   type: 'toggle';
@@ -116,6 +119,12 @@ export type ToggleConfig = {
    * and on the hardware alike; there is no latched state to forget.
    */
   moveHold?: boolean;
+  /**
+   * Draw the switch as what it switches, in its own slot: `metronome` is a
+   * click track whose arm swings to the host's `swing()` while it is on. The
+   * slot's name becomes the caption under the picture ("120.0 BPM").
+   */
+  moveVisual?: MoveToggleVisual;
 };
 
 export type SelectConfig = {
@@ -772,6 +781,8 @@ export type PanelConfig = {
   moveSlotGroups?: MoveSlotGroup[];
   /** Stacked cut chips drawn as one band, retained on the same terms as `hints`. */
   moveBands?: MoveBand[];
+  /** Side-by-side edge chips drawn as one line, retained on the same terms as `hints`. */
+  moveEdges?: MoveEdges[];
   /**
    * Config declared `_enabled` at its root — the whole panel is a module, and
    * its title carries the switch. Same idiom as a module folder, one level up.
@@ -940,6 +951,15 @@ export type TweakStorePanelOptions = {
    * is not stacked in one column draws as its two chips.
    */
   moveBands?: MoveBand[];
+  /**
+   * Two value chips, by control path, that set the two edges of one line —
+   * a start and an end side by side in one pad row, the start in the column
+   * before the end. `kind` says what the line is: a `fade` draws each fade as
+   * a ramp from its own end, a `loop` draws the loop's two markers. Each half
+   * keeps its own chip's gestures, and the hardware keeps its two pads. A
+   * pair that is not side by side draws as its two chips.
+   */
+  moveEdges?: MoveEdges[];
   /** Timeline panels render in TweakTimeline; modulation panels are the Move's
    * modulator settings pages; kit panels are the Move kit's own settings
    * pages (the waveform's look), shown only in the settings room — all three
@@ -1123,7 +1143,7 @@ class TweakStoreClass {
     // instead of resurrecting it.
     this.overlayPersistedValues(id, target, values, this.mapControlsByPath(controls));
 
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, moveTopRow: options.moveTopRow, moveActionRow: options.moveActionRow, moveValueRow: options.moveValueRow, moveSlotGroups: options.moveSlotGroups, moveBands: options.moveBands, module: '_enabled' in config ? true : undefined, kind: options.kind });
+    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, moveTopRow: options.moveTopRow, moveActionRow: options.moveActionRow, moveValueRow: options.moveValueRow, moveSlotGroups: options.moveSlotGroups, moveBands: options.moveBands, moveEdges: options.moveEdges, module: '_enabled' in config ? true : undefined, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -1145,6 +1165,7 @@ class TweakStoreClass {
     const moveValueRow = options.moveValueRow ?? existing.moveValueRow;
     const moveSlotGroups = options.moveSlotGroups ?? existing.moveSlotGroups;
     const moveBands = options.moveBands ?? existing.moveBands;
+    const moveEdges = options.moveEdges ?? existing.moveEdges;
     const controls = this.parseConfig(config, '', shortcuts);
     this.applyControlExtras(controls, hints, affordances, labels);
     const controlsByPath = this.mapControlsByPath(controls);
@@ -1175,7 +1196,7 @@ class TweakStoreClass {
       }
     }
 
-    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, moveTopRow, moveActionRow, moveValueRow, moveSlotGroups, moveBands, module: '_enabled' in config ? true : undefined, kind: options.kind ?? existing.kind };
+    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, moveTopRow, moveActionRow, moveValueRow, moveSlotGroups, moveBands, moveEdges, module: '_enabled' in config ? true : undefined, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
 
@@ -2090,6 +2111,7 @@ class TweakStoreClass {
           moveSlot: value.moveSlot,
           moveBlank: value.moveBlank,
           moveHold: value.moveHold,
+          moveVisual: value.moveVisual,
           shortcut,
         });
       } else if (typeof value === 'boolean') {

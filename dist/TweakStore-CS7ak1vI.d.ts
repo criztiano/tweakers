@@ -68,7 +68,17 @@ type MoveSelectVisual = {
     /** Map host option values to drawings. Omit when values are mode names. */
     modes?: Record<string, MovePlaybackMode>;
 };
-type MoveVisual = MoveSliderVisual | MoveSelectVisual;
+/**
+ * A switch that draws what it switches. `metronome`: a metronome whose arm
+ * swings while it is on. The host owns time — `swing` is polled every frame
+ * for where the arm is now, -1 (full left) to +1 (full right), or `null` to
+ * stand it upright (the transport stopped, say). The kit only draws.
+ */
+type MoveToggleVisual = {
+    kind: 'metronome';
+    swing?: () => number | null;
+};
+type MoveVisual = MoveSliderVisual | MoveSelectVisual | MoveToggleVisual;
 type MoveNumericDrawing = {
     kind: 'opacity';
     alpha: number;
@@ -208,6 +218,13 @@ type MoveBand = {
     high: string;
     low: string;
 };
+/** Two value chips side by side in one pad row that set the two edges of one
+ *  line: a fade in and a fade out, or a loop's start and end. */
+type MoveEdges = {
+    kind: 'fade' | 'loop';
+    start: string;
+    end: string;
+};
 type ToggleConfig = {
     type: 'toggle';
     default: boolean;
@@ -242,6 +259,12 @@ type ToggleConfig = {
      * and on the hardware alike; there is no latched state to forget.
      */
     moveHold?: boolean;
+    /**
+     * Draw the switch as what it switches, in its own slot: `metronome` is a
+     * click track whose arm swings to the host's `swing()` while it is on. The
+     * slot's name becomes the caption under the picture ("120.0 BPM").
+     */
+    moveVisual?: MoveToggleVisual;
 };
 type SelectConfig = {
     type: 'select';
@@ -796,6 +819,8 @@ type PanelConfig = {
     moveSlotGroups?: MoveSlotGroup[];
     /** Stacked cut chips drawn as one band, retained on the same terms as `hints`. */
     moveBands?: MoveBand[];
+    /** Side-by-side edge chips drawn as one line, retained on the same terms as `hints`. */
+    moveEdges?: MoveEdges[];
     /**
      * Config declared `_enabled` at its root — the whole panel is a module, and
      * its title carries the switch. Same idiom as a module folder, one level up.
@@ -804,4 +829,4 @@ type PanelConfig = {
     kind?: 'timeline' | 'modulation' | 'kit';
 };
 
-export { type ControlMeta as C, MOVE_BAND_H as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_W as d, type MoveGateRole as e, type MoveMultibandRole as f, type MoveNumericDrawing as g, type MovePlaybackMode as h, type MoveSelectVisual as i, type MoveSliderVisual as j, type MoveTone as k, type MoveVisual as l, moveBandCuts as m, moveChannelPosition as n, moveGateSpan as o, moveKeyboardValue as p, moveMultibandRole as q, moveMultibandSpan as r, moveNumericDrawing as s, movePlaybackMode as t, moveTrimSpan as u, moveVisualReading as v };
+export { type ControlMeta as C, type MoveEdges as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_H as d, MOVE_BAND_W as e, type MoveGateRole as f, type MoveMultibandRole as g, type MoveNumericDrawing as h, type MovePlaybackMode as i, type MoveSelectVisual as j, type MoveSliderVisual as k, type MoveToggleVisual as l, type MoveTone as m, type MoveVisual as n, moveBandCuts as o, moveChannelPosition as p, moveGateSpan as q, moveKeyboardValue as r, moveMultibandRole as s, moveMultibandSpan as t, moveNumericDrawing as u, movePlaybackMode as v, moveTrimSpan as w, moveVisualReading as x };

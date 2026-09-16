@@ -428,6 +428,15 @@
   /* The slot's own surface, flattened — the punch-out reads as a gap in the
      picture, not as a hole down to the panel. */
   --move-toggle-halo-color: var(--move-chip);
+  /* The metronome's body sits a step behind its arm, so the thing that moves
+     is the brightest thing in the slot. */
+  --move-metronome-body-opacity: 0.85;
+  /* The tempo's unit steps back behind its number. */
+  --move-metronome-unit-opacity: 0.5;
+  /* The picture sits a little into the corner's left edge and clear of its
+     floor: its swing room already pads the left side. */
+  --move-metronome-inset-left: 6px;
+  --move-metronome-inset-bottom: 14px;
   --move-text: #dee3c9;
   --move-text-inverse: #31322f;
   --move-radius: 12px;
@@ -2574,7 +2583,8 @@
 
 /* A switch is a button, so the slot's own surface has to be restated. */
 .tweakers-move-dial[data-kind="toggle"],
-.tweakers-move-dial[data-kind="toggle-icon"] {
+.tweakers-move-dial[data-kind="toggle-icon"],
+.tweakers-move-dial[data-kind="metronome"] {
   border: 0;
   padding: 0;
   color: var(--move-text);
@@ -2583,13 +2593,15 @@
 }
 
 .tweakers-move-dial[data-kind="toggle"]:focus-visible,
-.tweakers-move-dial[data-kind="toggle-icon"]:focus-visible {
+.tweakers-move-dial[data-kind="toggle-icon"]:focus-visible,
+.tweakers-move-dial[data-kind="metronome"]:focus-visible {
   outline: var(--move-visual-focus-width) solid var(--move-text);
   outline-offset: var(--move-visual-focus-offset);
 }
 
 .tweakers-move-dial[data-kind="toggle"]:disabled,
-.tweakers-move-dial[data-kind="toggle-icon"]:disabled {
+.tweakers-move-dial[data-kind="toggle-icon"]:disabled,
+.tweakers-move-dial[data-kind="metronome"]:disabled {
   opacity: var(--move-visual-disabled-opacity);
   cursor: not-allowed;
 }
@@ -2696,6 +2708,74 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+/* The metronome slot reads like a dial: the tempo top right, big, in the
+   value's line shape, the unit small and quiet under it; the picture sits
+   in the bottom-left corner. */
+.tweakers-move-metronome-readout {
+  position: absolute;
+  top: var(--move-toggle-label-inset);
+  right: var(--move-toggle-label-inset);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-family: var(--move-font-label);
+  font-size: var(--move-toggle-label-size);
+  line-height: normal;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.tweakers-move-metronome-readout[data-value] {
+  font-family: var(--move-font-value);
+  font-variation-settings: var(--move-font-value-shape);
+  font-size: 40px;
+}
+
+.tweakers-move-metronome-readout .tweakers-move-dial-unit {
+  opacity: var(--move-metronome-unit-opacity);
+}
+
+.tweakers-move-metronome-picture {
+  position: absolute;
+  left: var(--move-metronome-inset-left);
+  bottom: var(--move-metronome-inset-bottom);
+  pointer-events: none;
+}
+
+/* The metronome: as tall as a switch's picture, dim while it is off, lit
+   while its arm is swinging. The arm and its weight are the slot's text; the
+   ring cut round them is the slot's own surface, so where the arm crosses
+   the body the outline breaks rather than the two lines merging. */
+.tweakers-move-metronome {
+  display: block;
+  height: var(--move-toggle-icon-size);
+  width: auto;
+  overflow: visible;
+  opacity: var(--move-toggle-off-opacity);
+}
+
+.tweakers-move-metronome[data-on] {
+  opacity: 1;
+}
+
+.tweakers-move-metronome-body {
+  stroke: currentColor;
+  opacity: var(--move-metronome-body-opacity);
+}
+
+.tweakers-move-metronome-cut {
+  stroke: var(--move-toggle-halo-color);
+  fill: var(--move-toggle-halo-color);
+}
+
+.tweakers-move-metronome-arm {
+  stroke: currentColor;
+}
+
+.tweakers-move-metronome-weight {
+  fill: currentColor;
 }
 
 /* A host's own picture rides as a mask, so an app's asset takes the slot's
@@ -3673,6 +3753,144 @@
   right: 4px;
   width: 10px;
   height: 10px;
+}
+
+/* A fade or a loop — a start chip and the end chip beside it, one row, two
+   pads wide. The face is a chip-coloured pill with a dark line inset in it
+   (8px top and bottom, 12px at the sides); nothing is written on it, the
+   drawing is the reading. Each half of the pill is its own chip. */
+.tweakers-move-edges {
+  position: relative;
+  height: 32px;
+  background: var(--move-chip);
+  border-radius: var(--move-radius-small);
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tweakers-move-edges-track {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 12px;
+  right: 12px;
+  background: var(--move-bg);
+  pointer-events: none;
+}
+
+/* A fade runs on its own half of the line, from its end inward. The ramp is
+   what it takes away: the corner at its end of the line, cut from the floor
+   there to the handle on top. At zero the ramp keeps 3px, a needle. */
+.tweakers-move-fade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  --move-edge-x: max(3px, var(--move-edge-at));
+  --move-edge-ink: var(--move-text);
+}
+
+.tweakers-move-fade[data-moved] { --move-edge-ink: var(--move-blue); }
+.tweakers-move-fade[data-edge="in"] { left: 0; }
+.tweakers-move-fade[data-edge="out"] { right: 0; }
+
+.tweakers-move-fade-ramp {
+  position: absolute;
+  inset: 0;
+  background: var(--move-edge-ink);
+  transition: background-color 0.12s;
+}
+
+.tweakers-move-fade[data-edge="in"] .tweakers-move-fade-ramp {
+  clip-path: polygon(0 0, var(--move-edge-x) 0, 0 100%);
+}
+
+.tweakers-move-fade[data-edge="out"] .tweakers-move-fade-ramp {
+  clip-path: polygon(100% 0, calc(100% - var(--move-edge-x)) 0, 100% 100%);
+}
+
+.tweakers-move-fade-handle {
+  position: absolute;
+  top: 0;
+  width: 6px;
+  height: 6px;
+  box-sizing: border-box;
+  border: 1.25px solid var(--move-edge-ink);
+  border-radius: 50%;
+  background: var(--move-chip);
+  transform: translate(-50%, -50%);
+  transition: border-color 0.12s;
+}
+
+.tweakers-move-fade[data-edge="in"] .tweakers-move-fade-handle { left: var(--move-edge-x); }
+.tweakers-move-fade[data-edge="out"] .tweakers-move-fade-handle { left: calc(100% - var(--move-edge-x)); }
+
+/* A loop marker stands on its edge the full height of the line and points
+   into the loop; what lies outside the loop is shaded lighter. */
+.tweakers-move-loop-outside {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--move-text) 5%, transparent);
+}
+
+.tweakers-move-loop-marker {
+  position: absolute;
+  top: 0;
+  width: 8px;
+  height: 100%;
+  overflow: visible;
+  fill: var(--move-orange);
+  transition: fill 0.12s;
+}
+
+.tweakers-move-loop-marker[data-edge="end"] { margin-left: -8px; }
+.tweakers-move-loop-marker[data-moved] { fill: var(--move-red); }
+
+/* Each half of the pill is its own chip on the hardware, over its own pad;
+   on screen the cursor drags the handles instead (the pill takes the
+   pointer, and a drag lights nothing). A half held or latched on the Move
+   lifts a light veil over its side of the face — the chip's inversion, kept soft so the drawing still reads
+   through it. */
+.tweakers-move-edges-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  border-radius: var(--move-radius-small);
+  pointer-events: none;
+  transition: background-color var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-edges-zone:first-of-type { left: 0; }
+.tweakers-move-edges-zone:last-of-type { right: 0; }
+
+.tweakers-move-edges-zone[data-held],
+.tweakers-move-edges-zone[data-latched] {
+  background: color-mix(in srgb, var(--move-text) 16%, transparent);
+}
+
+.tweakers-move-edges-zone[data-latched] {
+  animation: tweakers-move-latch 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-edges-zone[data-latched] { animation: none; }
+}
+
+.tweakers-move-edges-zone:focus-visible {
+  outline: var(--move-color-stroke) solid var(--move-text);
+  outline-offset: calc(-1 * var(--move-color-stroke));
+}
+
+.tweakers-move-edges-zone .tweakers-move-pad-mod {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
 }
 
 /* The tabs strip — the pad grid's multi-slot control. It spans its run and

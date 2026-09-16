@@ -23,6 +23,14 @@ const SHAPES: Record<string, (t: number) => number> = {
   bounce: (t) => Math.abs(Math.sin(t * Math.PI * 2)) * (1 - t),
 };
 
+/**
+ * The library's own beat, for the metronome to swing to: a full sweep a beat,
+ * at an extreme on every click. A real app reads its transport here, and
+ * answers `null` while it is stopped.
+ */
+export const LIBRARY_BPM = 120;
+export const librarySwing = () => Math.cos((performance.now() / 60000) * LIBRARY_BPM * Math.PI);
+
 export const CONFIG = {
   /* ── the everyday dial: a name, a number, a bar ───────────────── */
   amount: { type: 'slider', default: 0.5, min: 0, max: 1, step: 0.01 },
@@ -67,6 +75,12 @@ export const CONFIG = {
   /* the same switch, drawn: the picture of the thing it turns on, badged
      with a check while it is on and a ban while it is off */
   loop: { type: 'toggle', default: true, icon: 'repeat' },
+  /* the same switch, drawn as what it switches: a metronome whose arm swings
+     to the beat while it is on. The app keeps time; the slot only draws. */
+  tempo: {
+    type: 'toggle', default: true, label: `${LIBRARY_BPM.toFixed(1)} BPM`,
+    moveVisual: { kind: 'metronome', swing: librarySwing },
+  },
 
   /* ── the small slots: the pad row under the dials. Each one names the
         column it sits in (see MOVE_PADS below), so it travels with the

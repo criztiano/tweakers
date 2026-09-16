@@ -1,4 +1,5 @@
 import type { MovePadListView } from '../move-pad-list';
+import { useEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { moveBandCuts, moveNumericDrawing, movePlaybackMode, MOVE_BAND_H, MOVE_BAND_W, type MovePlaybackMode, type MoveTone } from '../move-visual-core';
 import { MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
@@ -65,6 +66,9 @@ import { ListScreen } from './ListScreen';
  * - `toggle-icon` — the same switch drawn as its own picture: the glyph of
  *   the thing it turns on, with a ban struck across it while it is off. What
  *   the switch does and whether it is doing it become one look.
+ * - `metronome` — a switch drawn as a metronome: lit with its arm swinging
+ *   to the host's beat while it is on, dim and upright while it is off. The
+ *   motion is the state, so it wears no badge.
  *
  * Multi-slot controls (`filter` spans 2 columns, `env` spans 4) follow one
  * pattern: the container takes `grid-column: span N`, the display and its
@@ -100,7 +104,8 @@ export type MoveSlotKind =
   | 'env'
   | 'scope'
   | 'toggle'
-  | 'toggle-icon';
+  | 'toggle-icon'
+  | 'metronome';
 
 /** Which face a control wears in its slot, from its meta and moment. */
 export function moveSlotKind(
@@ -110,6 +115,7 @@ export function moveSlotKind(
   if (meta.type === 'color') return 'color';
   if (meta.type === 'filter') return 'filter';
   if (opts.stage) return 'env';
+  if (meta.type === 'toggle' && meta.moveVisual?.kind === 'metronome') return 'metronome';
   if (meta.type === 'toggle') return meta.icon ? 'toggle-icon' : 'toggle';
   if (meta.type === 'transfer') return 'transfer';
   if (meta.type === 'gradient') return 'ramp';
@@ -875,6 +881,128 @@ export function MoveSlotToggleBody({ label, checked, icon, onIcon, offIcon }: {
   );
 }
 
+/**
+ * The metronome's drawing, in its own units with the arm's pivot at the
+ * origin: a hollow trapezoid body (the centre line of its 2-unit stroke) and
+ * an arm 30 long with its weight 21 up. The box leaves room for the arm swung
+ * to either extreme, where its tip leaves the body.
+ */
+const METRONOME_VIEWBOX = '-23 -31 46 36';
+const METRONOME_BODY = 'M -3.07 -30 H 3.07 L 12.11 4 H -12.11 Z';
+const METRONOME_ARM = 30;
+const METRONOME_WEIGHT_AT = 21;
+const METRONOME_WEIGHT_R = 4.5;
+const METRONOME_STROKE = 2;
+/** The ring the arm cuts out of the body where it crosses it. */
+const METRONOME_CUT = 2;
+/** How far the arm leans at a full swing, in degrees. */
+const METRONOME_SWING_DEG = 45;
+
+/**
+ * A switch drawn as a metronome — the click track's own face. On, the
+ * picture is lit and its arm swings to the host's beat; off, it dims and the
+ * arm stands upright. The motion says the switch is on, so there is no badge.
+ *
+ * The host owns time: `swing` is read every frame for where the arm is now,
+ * -1 (full left) to +1 (full right), or `null` to stand it upright. The arm
+ * is turned straight on its element, never through a render, so a beat costs
+ * the page no React work. A reader who asked for less motion gets the lit
+ * metronome standing still.
+ */
+export function MoveSlotMetronomeBody({ label, checked, swing }: {
+  label: string;
+  checked: boolean;
+  /** Where the arm is now, -1..+1, or `null` for upright. */
+  swing?: () => number | null;
+}) {
+  const arm = useRef<SVGGElement>(null);
+  // The latest reader, so a host that hands in a fresh function every render
+  // does not restart the loop.
+  const read = useRef(swing);
+  read.current = swing;
+  const swings = checked && !!swing;
+
+  useEffect(() => {
+    const g = arm.current;
+    if (!g) return;
+    const lean = (deg: number) => g.setAttribute('transform', `rotate(${deg.toFixed(2)})`);
+    const still = typeof window === 'undefined'
+      || typeof window.requestAnimationFrame !== 'function'
+      || !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (!swings || still) {
+      lean(0);
+      return;
+    }
+    let frame = 0;
+    const tick = () => {
+      const at = read.current?.();
+      lean(typeof at === 'number' && Number.isFinite(at)
+        ? Math.max(-1, Math.min(1, at)) * METRONOME_SWING_DEG
+        : 0);
+      frame = window.requestAnimationFrame(tick);
+    };
+    tick();
+    return () => {
+      window.cancelAnimationFrame(frame);
+      lean(0);
+    };
+  }, [swings]);
+
+  // The tempo is the headline, top right, in the value shape with its unit
+  // small under it; the metronome keeps the bottom-left corner. A name that
+  // is not a number ("No beat") stands in the number's place in the label face.
+  const split = /\d/.test(label[0] ?? '') ? splitReadoutUnit(label) : null;
+  return (
+    <>
+      {split?.unit ? (
+        <span className="tweakers-move-metronome-readout" data-value>
+          <span className="tweakers-move-dial-number">{split.num}</span>
+          <span className="tweakers-move-dial-unit">{split.unit}</span>
+        </span>
+      ) : (
+        <span className="tweakers-move-metronome-readout">{label}</span>
+      )}
+      <span className="tweakers-move-metronome-picture" aria-hidden="true">
+        <svg
+          className="tweakers-move-metronome"
+          data-on={checked || undefined}
+          viewBox={METRONOME_VIEWBOX}
+          fill="none"
+        >
+          <path
+            className="tweakers-move-metronome-body"
+            d={METRONOME_BODY}
+            strokeWidth={METRONOME_STROKE}
+            strokeLinejoin="round"
+          />
+          <g ref={arm} transform="rotate(0)">
+            {/* The same arm, fatter, in the slot's own colour underneath:
+                where it crosses the body, it cuts the outline. */}
+            <g className="tweakers-move-metronome-cut">
+              <line
+                x1={0} y1={0} x2={0} y2={-METRONOME_ARM}
+                strokeWidth={METRONOME_STROKE + 2 * METRONOME_CUT}
+                strokeLinecap="round"
+              />
+              <circle cx={0} cy={-METRONOME_WEIGHT_AT} r={METRONOME_WEIGHT_R + METRONOME_CUT} />
+            </g>
+            <line
+              className="tweakers-move-metronome-arm"
+              x1={0} y1={0} x2={0} y2={-METRONOME_ARM}
+              strokeWidth={METRONOME_STROKE}
+              strokeLinecap="round"
+            />
+            <circle
+              className="tweakers-move-metronome-weight"
+              cx={0} cy={-METRONOME_WEIGHT_AT} r={METRONOME_WEIGHT_R}
+            />
+          </g>
+        </svg>
+      </span>
+    </>
+  );
+}
+
 /** A bundled glyph or a host-owned asset; both take the slot's own colour. */
 function MoveSlotIcon({ icon, className }: { icon: string; className: string }) {
   if (LUCIDE_ICONS[icon]) return <MoveSlotGlyph name={icon} className={className} />;
@@ -921,8 +1049,9 @@ function MoveSlotBadge({ on }: { on: boolean }) {
  *
  * `band` claims two pads the other way — one column, two rows — and keeps
  * the same promise: each pad under the shared screen is still its own chip.
+ * `fade` and `loop` claim two pads side by side in one row on the same terms.
  */
-export type MovePadKind = 'toggle' | 'icon' | 'value' | 'action' | 'icon-label' | 'app' | 'bend' | 'wave' | 'tabs' | 'color' | 'list' | 'band';
+export type MovePadKind = 'toggle' | 'icon' | 'value' | 'action' | 'icon-label' | 'app' | 'bend' | 'wave' | 'tabs' | 'color' | 'list' | 'band' | 'fade' | 'loop';
 
 /** A switch: the indicator top-left, the name beside it, the whole pad
  *  inverting when it is on. */
@@ -1122,6 +1251,73 @@ export function MovePadBandBody({ low, high, upper = 'high' }: {
   );
 }
 
+/** One edge of a fade or loop line: where it sits, and whether it has left
+ *  its open end. */
+export type MovePadEdgeHand = {
+  /** The edge's place on its own chip's range, 0..1. */
+  at: number;
+  /** Moved off its open end — the line is doing something here. */
+  moved: boolean;
+};
+
+const edgeAt = (at: number) => Math.max(0, Math.min(1, at)) * 100;
+
+/**
+ * The fade line — a fade in and a fade out side by side in one row, drawn on
+ * one dark line with no names or numbers. Each fade is the part of the sound
+ * it takes away: a ramp standing on its own end of the line, its handle on
+ * top where the sound is whole again. Each has half the line to run on. A
+ * fade left at zero is a thin needle at its end; one moved in turns blue.
+ */
+export function MovePadFadeBody({ fadeIn, fadeOut }: { fadeIn: MovePadEdgeHand; fadeOut: MovePadEdgeHand }) {
+  return (
+    <div className="tweakers-move-edges-track" aria-hidden="true">
+      {([['in', fadeIn], ['out', fadeOut]] as const).map(([edge, hand]) => (
+        <span
+          key={edge}
+          className="tweakers-move-fade"
+          data-edge={edge}
+          data-moved={hand.moved || undefined}
+          style={{ '--move-edge-at': `${edgeAt(hand.at)}%` } as CSSProperties}
+        >
+          <span className="tweakers-move-fade-ramp" />
+          <span className="tweakers-move-fade-handle" />
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The loop line — a loop's start and end side by side in one row, drawn on
+ * one dark line with no names or numbers: a marker at each edge pointing
+ * into the loop, and the part left outside it shaded lighter. A marker at
+ * its own end of the line is orange; one moved in turns red.
+ */
+export function MovePadLoopBody({ start, end }: { start: MovePadEdgeHand; end: MovePadEdgeHand }) {
+  const a = edgeAt(start.at);
+  const b = edgeAt(end.at);
+  return (
+    <div className="tweakers-move-edges-track" aria-hidden="true">
+      <span className="tweakers-move-loop-outside" style={{ left: 0, width: `${a}%` }} />
+      <span className="tweakers-move-loop-outside" style={{ right: 0, width: `${100 - b}%` }} />
+      {([['start', start, a], ['end', end, b]] as const).map(([edge, hand, at]) => (
+        <svg
+          key={edge}
+          className="tweakers-move-loop-marker"
+          data-edge={edge}
+          data-moved={hand.moved || undefined}
+          style={{ left: `${at}%` }}
+          viewBox="0 0 8 16"
+          preserveAspectRatio="none"
+        >
+          <path d={edge === 'start' ? 'M0 0L8 8L0 16Z' : 'M8 0L0 8L8 16Z'} />
+        </svg>
+      ))}
+    </div>
+  );
+}
+
 /** A cell the app owns — a track, a slice, a step. The colour is the app's
  *  own, so it rides inline the way a modulation dot does. */
 export function MovePadAppBody({ label, color }: { label?: string; color?: string }) {
@@ -1164,6 +1360,8 @@ export const MOVE_PAD_LIBRARY = {
   tabs: { description: '2 to 8 pads: the page’s modes side by side, the current one lit — a name pad optional', component: MovePadTabsBody },
   color: { description: 'a single colour in a small slot — tap latches it onto the dial above, hold peeks; that dial edits and opens it', component: MovePadColorBody },
   band: { description: '2 pads in one column: a high cut over a low cut, drawn as one band on a small screen — each half its own chip', component: MovePadBandBody },
+  fade: { description: '2 pads in one row: a fade in and a fade out, each a ramp from its own end of one line — each half its own chip', component: MovePadFadeBody },
+  loop: { description: '2 pads in one row: a loop’s start and end, a marker for each on one line — each half its own chip', component: MovePadLoopBody },
 } as const satisfies Record<MovePadKind, { description: string; component: unknown }>;
 
 /**
@@ -1197,6 +1395,7 @@ export const MOVE_SLOT_LIBRARY = {
   scope: { description: 'a dial with the live signal filling it behind the readout', component: MoveSlotScopeBody },
   toggle: { description: 'a switch in a big slot — the pad’s language at slot size', component: MoveSlotToggleBody },
   'toggle-icon': { description: 'a switch drawn as its own picture — the glyph takes a ban while it is off', component: MoveSlotToggleBody },
+  metronome: { description: 'a switch drawn as a metronome — the arm swings to the beat while it is on', component: MoveSlotMetronomeBody },
   transfer: { description: 'a response curve, one knob holding one of its points', component: MoveSlotTransferBody },
   ramp: { description: 'a colour ramp, one knob holding one of its stops — tap to edit its colours', component: MoveSlotRampBody },
   balance: { description: 'the mix between two colour params — the blend fills the slot, the tick is the dial', component: MoveSlotRampBody },

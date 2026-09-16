@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { TweakStore } from './store/TweakStore';
-import { buildMovePages, movePadRows, moveBandCell, slotGroups, visibleColumns, enumOptionIcon, enumShapePath, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, setMoveLayoutReporter, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage, type MoveLayoutIssueCode } from './move-layout';
+import { buildMovePages, movePadRows, moveBandCell, moveEdgesCell, slotGroups, visibleColumns, enumOptionIcon, enumShapePath, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, setMoveLayoutReporter, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage, type MoveLayoutIssueCode } from './move-layout';
 
 /** Run `fn` with the issue feed captured, restoring the console sink after. */
 function capturingIssues<T>(fn: () => T): { result: T; issues: [MoveLayoutIssueCode, string][] } {
@@ -117,6 +117,46 @@ describe('bands', () => {
     assert.equal(moveBandCell(page, rows, 1, 1), null);
     assert.equal(moveBandCell(page, rows, 1, 2), null);
     assert.ok(issues.some(([code]) => code === 'band-apart'));
+    TweakStore.unregisterPanel(id);
+  });
+});
+
+describe('edges', () => {
+  const dials = Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`d${i}`, [0.5, 0, 1] as [number, number, number]]));
+
+  it('draws a start chip beside its end chip as one line, out of the start pad', () => {
+    const id = nextId();
+    const { result: page, issues } = capturingIssues(() => {
+      TweakStore.registerPanel(id, id, { ...dials, loopIn: [0, 0, 10], loopOut: [10, 0, 10], fadeIn: [0, 0, 5], fadeOut: [0, 0, 5] }, undefined, {
+        movePads: { loopIn: 0, loopOut: 1, fadeIn: 0, fadeOut: 1 },
+        moveTopRow: ['loopIn', 'loopOut'],
+        moveEdges: [{ kind: 'loop', start: 'loopIn', end: 'loopOut' }, { kind: 'fade', start: 'fadeIn', end: 'fadeOut' }],
+      });
+      return buildMovePages([TweakStore.getPanel(id)!])[0];
+    });
+    const rows = movePadRows(page, 0);
+    const loop = moveEdgesCell(page, rows, 0, 0);
+    assert.deepEqual([loop?.kind, loop?.start.path, loop?.end.path, loop?.tail], ['loop', 'loopIn', 'loopOut', false]);
+    assert.equal(moveEdgesCell(page, rows, 0, 1)?.tail, true);
+    assert.equal(moveEdgesCell(page, rows, 1, 0)?.kind, 'fade');
+    assert.equal(moveEdgesCell(page, rows, 0, 2), null);
+    assert.deepEqual(issues, []);
+    TweakStore.unregisterPanel(id);
+  });
+
+  it('leaves a pair that is not side by side, start first, as its two chips, and says so', () => {
+    const id = nextId();
+    const { result: page, issues } = capturingIssues(() => {
+      TweakStore.registerPanel(id, id, { ...dials, fadeIn: [0, 0, 5], fadeOut: [0, 0, 5] }, undefined, {
+        movePads: { fadeIn: 1, fadeOut: 0 },
+        moveEdges: [{ kind: 'fade', start: 'fadeIn', end: 'fadeOut' }],
+      });
+      return buildMovePages([TweakStore.getPanel(id)!])[0];
+    });
+    const rows = movePadRows(page, 0);
+    assert.equal(moveEdgesCell(page, rows, 1, 0), null);
+    assert.equal(moveEdgesCell(page, rows, 1, 1), null);
+    assert.ok(issues.some(([code]) => code === 'edges-apart'));
     TweakStore.unregisterPanel(id);
   });
 });

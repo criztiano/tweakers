@@ -1,4 +1,4 @@
-import type { PanelConfig, ControlMeta } from './store/TweakStore';
+import type { PanelConfig, ControlMeta, MoveEdges } from './store/TweakStore';
 import type { ModPageLayout } from './modulation-core';
 import { resolveAxis, type XYValue } from './xy-pad-core';
 import { plotCurve } from './curve-preview-core';
@@ -211,7 +211,8 @@ export type MoveLayoutIssueCode =
   | 'pad-row-full'
   | 'tabs-oversized'
   | 'tabs-no-room'
-  | 'band-apart';
+  | 'band-apart'
+  | 'edges-apart';
 
 type MoveLayoutReporter = (code: MoveLayoutIssueCode, message: string) => void;
 
@@ -547,6 +548,19 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
           );
         }
       }
+      // 6. The same courtesy for a pair of edges that did not land side by
+      //    side in one row.
+      for (const edges of panel.moveEdges ?? []) {
+        const on = [edges.start, edges.end].filter((path) => rows.some((r) => r.some((m) => m?.path === path)));
+        if (on.length < 2) continue;
+        const paired = rows.some((r, row) => r.some((m, col) => m?.path === edges.start && moveEdgesCell(page, rows, row, col)));
+        if (!paired) {
+          reportMoveLayoutIssue(
+            'edges-apart',
+            `panel '${panel.id}': ${edges.kind} '${edges.start}' / '${edges.end}' is not two chips side by side in one row, start first — drawn as its two chips`
+          );
+        }
+      }
       return page;
     });
 }
@@ -627,6 +641,35 @@ export function moveBandCell(page: MovePage, rows: (ControlMeta | undefined)[][]
     const low = meta.path === band.low ? meta : other;
     const top = tail ? other : meta;
     return { high, low, upper: top === high ? 'high' : 'low', tail };
+  }
+  return null;
+}
+
+/**
+ * One pad cell of a pair of edges — the small slot two pads wide that draws
+ * a start chip and the end chip beside it as one line (the panel's
+ * `moveEdges`): a fade in and a fade out, or a loop's two markers. `tail` is
+ * true on the right cell, which yields to the face drawn out of the one
+ * before it, the way a tabs strip's run yields to its first pad.
+ */
+export type MoveEdgesCell = { kind: MoveEdges['kind']; start: ControlMeta; end: ControlMeta; tail: boolean };
+
+/**
+ * What the pad at `row`, `col` of the rows `movePadRows` gave is, as part of
+ * a pair of edges — or null. The pair needs both its chips in one row, the
+ * start in the column right before the end; anything else stays the two
+ * chips it is.
+ */
+export function moveEdgesCell(page: MovePage, rows: (ControlMeta | undefined)[][], row: number, col: number): MoveEdgesCell | null {
+  const meta = rows[row]?.[col];
+  if (!meta || !page.panel.moveEdges?.length) return null;
+  const chip = (m: ControlMeta | undefined): m is ControlMeta => !!m && isDial(m) && !noChip(m) && !page.dials.includes(m);
+  for (const edges of page.panel.moveEdges) {
+    if (meta.path !== edges.start && meta.path !== edges.end) continue;
+    const tail = meta.path === edges.end;
+    const other = rows[row]?.[tail ? col - 1 : col + 1];
+    if (other?.path !== (tail ? edges.start : edges.end) || !chip(meta) || !chip(other)) return null;
+    return { kind: edges.kind, start: tail ? other : meta, end: tail ? meta : other, tail };
   }
   return null;
 }

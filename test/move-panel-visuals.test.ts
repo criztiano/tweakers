@@ -188,6 +188,42 @@ describe('MovePanel semantic interactions', () => {
     expect(renderer!.root.findAllByProps({ 'data-kind': 'gate' })).toHaveLength(0);
   });
 
+  it('draws a fade pair and a loop pair as two-pad lines, the cursor dragging their handles', () => {
+    const edge = (value: number, max = 10) => ({ type: 'slider', min: 0, max, default: value, step: 0.01 }) as const;
+    TweakStore.registerPanel(id, 'Visual', {
+      ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`d${i}`, edge(5)])),
+      loopStart: edge(2), loopEnd: edge(10), fadeIn: edge(0, 5), fadeOut: edge(2.5, 5),
+    }, undefined, {
+      movePads: { loopStart: 0, loopEnd: 1, fadeIn: 0, fadeOut: 1 },
+      moveTopRow: ['loopStart', 'loopEnd'],
+      moveEdges: [{ kind: 'loop', start: 'loopStart', end: 'loopEnd' }, { kind: 'fade', start: 'fadeIn', end: 'fadeOut' }],
+    });
+    act(() => { renderer = create(createElement(MovePanel, { panels: 'Visual', dock: 'flow', productionEnabled: true })); });
+    const face = (kind: string) => renderer!.root.findByProps({ className: 'tweakers-move-edges', 'data-kind': kind });
+    const marker = (edge: string) => face('loop').findByProps({ className: 'tweakers-move-loop-marker', 'data-edge': edge });
+    const fade = (edge: string) => face('fade').findByProps({ className: 'tweakers-move-fade', 'data-edge': edge });
+    expect(renderer!.root.findAllByProps({ className: 'tweakers-move-pad', 'data-kind': 'value' })).toHaveLength(0);
+    expect(marker('start').props.style.left).toBe('20%');
+    expect(marker('start').props['data-moved']).toBe(true);
+    expect(marker('end').props['data-moved']).toBeUndefined();
+    expect(fade('in').props['data-moved']).toBeUndefined();
+    expect(fade('out').props['data-moved']).toBe(true);
+    expect(fade('out').props.style['--move-edge-at']).toBe('50%');
+    // the cursor drags the marker nearest it: a 268px pill, its line inset 12px
+    const drag = (clientX: number) => ({ clientX, pointerId: 1, currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, width: 268 }) } });
+    act(() => face('loop').props.onPointerDown(drag(12 + 244 * 0.25)));
+    act(() => face('loop').props.onPointerMove(drag(12 + 244 * 0.5)));
+    act(() => face('loop').props.onPointerUp());
+    expect(TweakStore.getValues(id)).toMatchObject({ loopStart: 5, loopEnd: 10 });
+    act(() => face('loop').props.onPointerDown(drag(12 + 244 * 0.9)));
+    expect(TweakStore.getValues(id).loopEnd).toBe(9);
+    act(() => face('loop').props.onPointerUp());
+    // a fade runs its own half, from its own end inward
+    act(() => face('fade').props.onPointerDown(drag(12 + 244 * 0.8)));
+    act(() => face('fade').props.onPointerUp());
+    expect(TweakStore.getValues(id)).toMatchObject({ fadeIn: 0, fadeOut: 2 });
+  });
+
   it('keeps pointer dragging and shift fine dragging on the existing mapping', () => {
     mount({ opacity });
     act(() => dial('Opacity').props.onPointerDown(pointer(60)));
