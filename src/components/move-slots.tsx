@@ -563,8 +563,7 @@ export const MOVE_GATE_GRID = { columns: 14, rows: 4 } as const;
 
 /**
  * The 3-slot gate's face. The threshold stands as a bar over the first
- * column, lit from the top down to its marker, and the release over the
- * third, lit from its marker down; the grid between them holds the live picture (the children); the
+ * column and the release over the third, each lit from its marker down; the grid between them holds the live picture (the children); the
  * look-ahead is a short line under the middle, pointing ahead in time. Each
  * name sits under its own column.
  */
