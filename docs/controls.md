@@ -16,6 +16,7 @@ adjustment, modulation, readouts and hardware column alignment.
 | `curve` | A choice whose value is a shape | Select `preview(option)` sampler; `MoveSlotEnumBody` | 1 dial |
 | `toggle` | A switch the page is about | `toggle` config with `moveSlot`; `MoveSlotToggleBody` | 1 dial |
 | `toggle-icon` | The same switch as a picture, badged with a check or a ban | `toggle` config with `moveSlot` + `icon` (glyph name or asset URL; optional `onIcon` / `offIcon`); `MoveSlotToggleBody` | 1 dial |
+| `metronome` | A click track's switch, drawn as a metronome that swings to the beat while it is on | `toggle` config with `moveSlot` + `moveVisual: { kind: 'metronome', swing }` — `swing()` returns the arm's place now, -1..+1, or `null` for upright; the app keeps time. The label is the caption ("120.0 BPM"); `MoveSlotMetronomeBody` | 1 dial; tap toggles, as any switch |
 | `blank` | A column held open for a mode this page is not in | Any control with `moveBlank` | 1 dial |
 | `xy` | Two axes that form one gesture | `xy`; `MoveSlotXYBody` | Column knob X, touched + volume Y |
 | `range` | Low/high bounds of one interval | `range`; `MoveSlotRangeBody` | Column knob low, touched + volume high |

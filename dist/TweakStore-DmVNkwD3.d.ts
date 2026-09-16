@@ -35,7 +35,17 @@ type MoveSelectVisual = {
     /** Map host option values to drawings. Omit when values are mode names. */
     modes?: Record<string, MovePlaybackMode>;
 };
-type MoveVisual = MoveSliderVisual | MoveSelectVisual;
+/**
+ * A switch that draws what it switches. `metronome`: a metronome whose arm
+ * swings while it is on. The host owns time — `swing` is polled every frame
+ * for where the arm is now, -1 (full left) to +1 (full right), or `null` to
+ * stand it upright (the transport stopped, say). The kit only draws.
+ */
+type MoveToggleVisual = {
+    kind: 'metronome';
+    swing?: () => number | null;
+};
+type MoveVisual = MoveSliderVisual | MoveSelectVisual | MoveToggleVisual;
 type MoveNumericDrawing = {
     kind: 'opacity';
     alpha: number;
@@ -190,6 +200,12 @@ type ToggleConfig = {
      * and on the hardware alike; there is no latched state to forget.
      */
     moveHold?: boolean;
+    /**
+     * Draw the switch as what it switches, in its own slot: `metronome` is a
+     * click track whose arm swings to the host's `swing()` while it is on. The
+     * slot's name becomes the caption under the picture ("120.0 BPM").
+     */
+    moveVisual?: MoveToggleVisual;
 };
 type SelectConfig = {
     type: 'select';
@@ -754,4 +770,4 @@ type PanelConfig = {
     kind?: 'timeline' | 'modulation' | 'kit';
 };
 
-export { type ControlMeta as C, type MoveEdges as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_H as d, MOVE_BAND_W as e, type MoveNumericDrawing as f, type MovePlaybackMode as g, type MoveSelectVisual as h, type MoveSliderVisual as i, type MoveVisual as j, moveKeyboardValue as k, moveNumericDrawing as l, moveBandCuts as m, movePlaybackMode as n, moveTrimSpan as o, moveVisualReading as p };
+export { type ControlMeta as C, type MoveEdges as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_H as d, MOVE_BAND_W as e, type MoveNumericDrawing as f, type MovePlaybackMode as g, type MoveSelectVisual as h, type MoveSliderVisual as i, type MoveToggleVisual as j, type MoveVisual as k, moveKeyboardValue as l, moveBandCuts as m, moveNumericDrawing as n, movePlaybackMode as o, moveTrimSpan as p, moveVisualReading as q };

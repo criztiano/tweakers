@@ -1261,7 +1261,7 @@ Bipolar sliders (`bipolar: true` or an `origin`) keep their character on the dia
 
 ### The big-slot library, and multi-slot controls
 
-Every face a dial slot can wear lives in one dictionary, `MOVE_SLOT_LIBRARY` (`src/components/move-slots.tsx`): `default`, `value`, `icon`, `curve`, `enum`, `xy`, `range`, `filter`, `env`, `scope`, `toggle`, `toggle-icon`, `color`, `transfer`, `ramp`, `dial`, and the specimens (`opacity`, `blur`, `pan`, `stereo-width`, `pitch`, `playback`). The library app (`cd example && npm run dev`) shows every one of them live in a single scrolling panel, with the dictionary's own descriptions beside it. Each entry is a pure body — a drawing of computed props with no gestures of its own — so a new face is added by writing a body and dispatching to it from the MovePanel, and the gestures (pointer capture, fine drag, modulation arming) stay in one place.
+Every face a dial slot can wear lives in one dictionary, `MOVE_SLOT_LIBRARY` (`src/components/move-slots.tsx`): `default`, `value`, `icon`, `curve`, `enum`, `xy`, `range`, `filter`, `env`, `scope`, `toggle`, `toggle-icon`, `metronome`, `color`, `transfer`, `ramp`, `dial`, and the specimens (`opacity`, `blur`, `pan`, `stereo-width`, `pitch`, `playback`). The library app (`cd example && npm run dev`) shows every one of them live in a single scrolling panel, with the dictionary's own descriptions beside it. Each entry is a pure body — a drawing of computed props with no gestures of its own — so a new face is added by writing a body and dispatching to it from the MovePanel, and the gestures (pointer capture, fine drag, modulation arming) stay in one place.
 
 Some controls are bigger than one column. A **multi-slot control** follows one pattern, whatever its width:
 
