@@ -13,6 +13,15 @@ import {
   MoveSlotTransferBody,
   MoveSlotFilterBody,
   MoveSlotTrimSpanBody,
+  MoveSlotGateBody,
+  MoveGateDisplay,
+  MoveSlotMultibandBody,
+  MoveSlotChannelBody,
+  MoveMultibandDisplay,
+  MoveMultibandMeter,
+  moveMultibandDemoReading,
+  MoveGateMeter,
+  moveGateDemoReading,
   MoveSlotNumericBody,
   MoveSlotToggleBody,
   MoveSlotMetronomeBody,
@@ -348,6 +357,31 @@ export const BIG_SLOTS: Specimen[] = [
     ),
   },
   {
+    kind: 'gate', span: 3,
+    description: MOVE_SLOT_LIBRARY.gate.description,
+    note: 'The grid runs a made-up drum loop; an app attaches its own with MoveGateMeter.',
+    render: () => <LiveGate />,
+  },
+  {
+    kind: 'channel', span: 4,
+    description: MOVE_SLOT_LIBRARY.channel.description,
+    note: 'Each channel is its own dial; channel dials side by side draw as one mixer.',
+    render: () => (
+      <MoveSlotChannelBody channels={[
+        { label: 'Restored', value: '0%', position: 0, icon: 'broom-sparkles' },
+        { label: 'Denoise', value: '21%', position: 0.21, icon: 'audio-lines-x', tone: 'orange' },
+        { label: 'Stereo', value: '50%', position: 0.5, icon: 'boom-box', tone: 'yellow' },
+        { label: 'Remaster', value: '29%', position: 0.29, icon: 'disc-3', tone: 'pink' },
+      ]} />
+    ),
+  },
+  {
+    kind: 'multiband', span: 5,
+    description: MOVE_SLOT_LIBRARY.multiband.description,
+    note: 'The bands move to a made-up signal; an app attaches its own with MoveMultibandMeter. Band chips in the band columns join the curve.',
+    render: () => <LiveMultiband />,
+  },
+  {
     kind: 'playback', path: 'playback',
     description: MOVE_SLOT_LIBRARY.playback.description,
     render: () => {
@@ -379,6 +413,39 @@ export const BIG_SLOTS: Specimen[] = [
     render: () => <LiveEnvelope />,
   },
 ];
+
+/** The gate specimen with a loop running under the playhead. */
+function LiveGate() {
+  useEffect(() => {
+    const started = performance.now();
+    return MoveGateMeter.attach('library-gate', () => moveGateDemoReading(96, ((performance.now() - started) / 40) | 0));
+  }, []);
+  return (
+    <MoveSlotGateBody
+      threshold={{ label: 'Threshold', value: '-10 dB', position: 0.8 }}
+      lookahead={{ label: 'Look-ahead', value: '12 ms', position: 0.3 }}
+      release={{ label: 'Release', value: '95 ms', position: 0.5 }}
+    >
+      <MoveGateDisplay panelId="library-gate" threshold={0.8} />
+    </MoveSlotGateBody>
+  );
+}
+
+/** The multiband specimen: six bands, three on knobs, the curve over a moving signal. */
+function LiveMultiband() {
+  useEffect(() => MoveMultibandMeter.attach('library-multiband', () => moveMultibandDemoReading(performance.now())), []);
+  const curve = [1, 0.8, 0.5, 0.4, 0.2, 0];
+  return (
+    <MoveSlotMultibandBody
+      icon="broom-sparkles"
+      amount={{ label: 'Clean', value: '60%', position: 0.6 }}
+      speed={{ label: 'Speed', value: '15%', position: 0.15 }}
+      bands={[{ label: 'Hi', value: '100%', position: 1 }, { label: 'Mid', value: '50%', position: 0.5 }, { label: 'Sub', value: '0%', position: 0 }]}
+    >
+      <MoveMultibandDisplay panelId="library-multiband" bands={curve.map((position) => ({ position }))} />
+    </MoveSlotMultibandBody>
+  );
+}
 
 /* ── the small slots — the pad row under the dials ──────────────── */
 

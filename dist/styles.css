@@ -385,10 +385,10 @@
      than a slot you can press, so it never reads as a control. */
   --move-slot-empty: rgba(222, 227, 201, 0.03);
   --move-chip: #41403e;
-  /* The band's small screen: its rim, and the rules across it — shades of
-     the chip it is cut into, so they follow the chip in either theme. */
-  --move-band-rim: rgba(0, 0, 0, 0.26);
-  --move-band-rule: rgba(0, 0, 0, 0.17);
+  /* A drawn screen's grid (the gate, the cleaner, the band pad): the well
+     it sits in, and the cells across it. */
+  --move-face-well: var(--move-bg);
+  --move-face-cell: color-mix(in srgb, var(--move-text) 5%, var(--move-bg));
   --move-group-divider: #353333;
   --move-group-head: #2f2d2c;
   /* The Move's colours on screen — the same set the hardware lights, matched
@@ -501,6 +501,8 @@
   --move-group-head: #1f1f21;
   --move-toggle-halo-color: var(--move-chip);
   --move-text: #f0f0ee;
+  --move-face-well: var(--move-bg);
+  --move-face-cell: color-mix(in srgb, var(--move-text) 5%, var(--move-bg));
   --move-text-inverse: #1e1e1e;
 }
 
@@ -2085,6 +2087,395 @@
   cursor: not-allowed;
 }
 
+/* Multi-slot instruments (`gate`, `multiband`): one face across a dial per
+   column. A face lays its parts out by column — `--move-face-span` columns,
+   each `--move-face-col-w` wide — so each part stands over its own knob. */
+.tweakers-move-dial[data-kind="gate"],
+.tweakers-move-dial[data-kind="multiband"],
+.tweakers-move-dial[data-kind="channel"] {
+  --move-face-bar-w: 4px;
+  --move-face-marker: 4px;
+  cursor: default;
+}
+
+.tweakers-move-face {
+  --move-face-col-w: calc((100% - (var(--move-face-span) - 1) * var(--move-gap)) / var(--move-face-span));
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* A bar is lit from its marker down: how much the dial is doing. */
+.tweakers-move-face-bar {
+  position: absolute;
+  top: 30px;
+  bottom: 28px;
+  width: var(--move-face-bar-w);
+  background: var(--move-face-well);
+  pointer-events: none;
+}
+
+.tweakers-move-face-bar-lit,
+.tweakers-move-face-bar-marker {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+
+.tweakers-move-face-bar-lit {
+  top: calc((1 - var(--move-face-at)) * (100% - var(--move-face-marker)) + var(--move-face-marker));
+  bottom: 0;
+  background: color-mix(in srgb, var(--move-face-colour) var(--move-face-lit, 50%), var(--move-face-well));
+}
+
+.tweakers-move-face-bar-marker {
+  top: calc((1 - var(--move-face-at)) * (100% - var(--move-face-marker)));
+  height: var(--move-face-marker);
+  background: var(--move-face-colour);
+}
+
+.tweakers-move-face-grid {
+  position: absolute;
+  top: 29px;
+  bottom: 27px;
+  display: grid;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--move-radius-small);
+  background: var(--move-face-well);
+  pointer-events: none;
+}
+
+.tweakers-move-face-grid > i {
+  border-radius: 2px;
+  background: var(--move-face-cell);
+}
+
+.tweakers-move-face-grid > i[data-corner="tl"] { border-top-left-radius: calc(var(--move-radius-small) - 2px); }
+.tweakers-move-face-grid > i[data-corner="tr"] { border-top-right-radius: calc(var(--move-radius-small) - 2px); }
+.tweakers-move-face-grid > i[data-corner="bl"] { border-bottom-left-radius: calc(var(--move-radius-small) - 2px); }
+.tweakers-move-face-grid > i[data-corner="br"] { border-bottom-right-radius: calc(var(--move-radius-small) - 2px); }
+
+.tweakers-move-face-display {
+  position: absolute;
+  inset: 2px;
+  overflow: hidden;
+  border-radius: calc(var(--move-radius-small) - 2px);
+}
+
+.tweakers-move-gate-canvas,
+.tweakers-move-multiband-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.tweakers-move-face-name,
+.tweakers-move-gate-look-name {
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  font-size: var(--move-face-name-size, var(--move-visual-font-size));
+  line-height: 16px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.tweakers-move-face-name {
+  position: absolute;
+  bottom: 6px;
+  left: calc(var(--move-face-col-w) * (var(--move-face-col) + 0.5) + var(--move-gap) * var(--move-face-col));
+  transform: translateX(-50%);
+}
+
+/* The gate: the threshold's bar over the first column's centre, the
+   release's over the third's, the grid in the room between them. */
+.tweakers-move-dial[data-kind="gate"] .tweakers-move-face-bar[data-role="threshold"] {
+  left: calc(var(--move-face-col-w) / 2 - var(--move-face-bar-w) / 2);
+  --move-face-colour: var(--move-gate-threshold);
+}
+
+.tweakers-move-dial[data-kind="gate"] .tweakers-move-face-bar[data-role="release"] {
+  right: calc(var(--move-face-col-w) / 2 - var(--move-face-bar-w) / 2);
+  --move-face-colour: var(--move-gate-release);
+  --move-face-lit: 40%;
+}
+
+.tweakers-move-dial[data-kind="gate"] .tweakers-move-face-grid {
+  left: calc(var(--move-face-col-w) / 2 + var(--move-face-bar-w) / 2 + 12px);
+  right: calc(var(--move-face-col-w) / 2 + var(--move-face-bar-w) / 2 + 12px);
+}
+
+.tweakers-move-gate-look {
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* The look-ahead: a short line lit up to its dot, running on into an arrow —
+   the time the gate reads ahead of the playhead. */
+.tweakers-move-gate-look-line {
+  position: relative;
+  width: 70px;
+  height: 12px;
+  --move-gate-reach: calc(100% - 9px);
+}
+
+.tweakers-move-gate-look-line::before,
+.tweakers-move-gate-look-lit {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: 0;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.tweakers-move-gate-look-line::before {
+  right: 1px;
+  background: var(--move-face-well);
+}
+
+.tweakers-move-gate-look-lit {
+  width: calc(var(--move-face-at) * var(--move-gate-reach));
+  background: color-mix(in srgb, var(--move-gate-lookahead) 50%, var(--move-face-well));
+}
+
+.tweakers-move-gate-look-dot {
+  position: absolute;
+  top: 3px;
+  left: calc(var(--move-face-at) * var(--move-gate-reach) - 3px);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--move-gate-lookahead);
+}
+
+.tweakers-move-gate-look-arrow {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 12px;
+  overflow: visible;
+}
+
+.tweakers-move-gate-look-arrow path {
+  fill: none;
+  stroke: var(--move-face-well);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The multiband cleaner: the amount's bar hugs the first column's left edge
+   beside its icon, the speed's gauge stands over the second column, and the
+   band columns share one grid. */
+.tweakers-move-dial[data-kind="multiband"] {
+  --move-face-name-size: 14px;
+}
+
+.tweakers-move-dial[data-kind="multiband"] .tweakers-move-face-bar[data-role="amount"] {
+  left: 19px;
+  --move-face-colour: var(--move-multiband-amount);
+}
+
+.tweakers-move-multiband-icon {
+  position: absolute;
+  top: 54px;
+  left: calc(var(--move-face-col-w) / 2 - 21px);
+  width: 42px;
+  height: 42px;
+  color: var(--move-text);
+  pointer-events: none;
+}
+
+.tweakers-move-multiband-icon path,
+.tweakers-move-multiband-icon line,
+.tweakers-move-multiband-icon circle {
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
+
+.tweakers-move-multiband-icon[data-asset] {
+  background: currentColor;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+}
+
+/* sized to MOVE_GAUGE: its baseline sits 106px down, level with the grid's foot */
+.tweakers-move-multiband-gauge {
+  position: absolute;
+  top: 51px;
+  left: calc(var(--move-face-col-w) * 1.5 + var(--move-gap) - 43px);
+  width: 86px;
+  height: 56px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.tweakers-move-multiband-gauge-dome,
+.tweakers-move-multiband-gauge-base,
+.tweakers-move-multiband-gauge-needle {
+  fill: none;
+  stroke: var(--move-text);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.tweakers-move-multiband-gauge-dome {
+  fill: var(--move-face-cell);
+}
+
+.tweakers-move-multiband-gauge-base {
+  stroke: var(--move-multiband-base);
+}
+
+.tweakers-move-multiband-gauge-needle {
+  stroke: var(--move-multiband-needle);
+}
+
+.tweakers-move-multiband-gauge-tick {
+  stroke: var(--move-text);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  opacity: 0.3;
+}
+
+.tweakers-move-multiband-gauge-tick[data-lit] {
+  opacity: 1;
+}
+
+.tweakers-move-multiband-gauge-pivot {
+  fill: var(--move-multiband-needle);
+}
+
+.tweakers-move-dial[data-kind="multiband"] .tweakers-move-face-grid {
+  left: calc(var(--move-face-col-w) * 2 + var(--move-gap) * 2 + 8px);
+  right: 8px;
+}
+
+/* The mixer (`channel`): per column, the icon and name centred along the
+   top in the channel's tone, and a fader well under them. */
+.tweakers-move-dial[data-kind="channel"] {
+  cursor: default;
+}
+
+.tweakers-move-channel {
+  --move-channel-colour: var(--move-channel-tone, var(--move-text));
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--move-face-col-w) * var(--move-face-col) + var(--move-gap) * var(--move-face-col));
+  width: var(--move-face-col-w);
+}
+
+.tweakers-move-channel-head {
+  position: absolute;
+  top: 11px;
+  left: 4px;
+  right: 4px;
+  height: 21px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  color: var(--move-channel-colour);
+}
+
+.tweakers-move-channel-icon {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.tweakers-move-channel-icon[data-asset] {
+  background: currentColor;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+}
+
+.tweakers-move-channel-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--move-font-label);
+  font-size: 12px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tweakers-move-channel-well {
+  position: absolute;
+  top: 41px;
+  bottom: 12px;
+  left: 10px;
+  right: 10px;
+  border: 3px solid var(--move-face-well);
+  border-radius: 6px;
+  background: var(--move-face-cell);
+  overflow: hidden;
+}
+
+.tweakers-move-channel-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(var(--move-face-at) * 100%);
+  border-radius: 2px;
+  /* a channel with no tone of its own fills lime */
+  background: var(--move-channel-tone, var(--move-lime));
+}
+
+/* at zero, every channel keeps a hairline on the floor in the text colour */
+.tweakers-move-channel-fill[data-empty] {
+  height: 1px;
+  border-radius: 0;
+  background: var(--move-text);
+}
+
+.tweakers-move-face-zones {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  gap: var(--move-gap);
+}
+
+.tweakers-move-face-zone {
+  position: relative;
+  flex: 1;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.tweakers-move-face-zone[data-role="lookahead"] { cursor: ew-resize; }
+.tweakers-move-face-zone[data-role="speed"] { cursor: grab; }
+
+.tweakers-move-face-zone:focus-visible {
+  outline: var(--move-visual-focus-width) solid var(--move-text);
+  outline-offset: calc(-1 * var(--move-visual-focus-width));
+  border-radius: var(--move-radius);
+}
+
+.tweakers-move-face-zone[data-disabled] {
+  cursor: not-allowed;
+}
+
 .tweakers-move-scope-display {
   position: absolute;
   top: 6px;
@@ -3237,21 +3628,42 @@
   font-family: var(--move-font-label);
 }
 
+/* The band's small screen wears the faces' grid: a well, cells across it,
+   and the cuts drawn over the cells. */
 .tweakers-move-band-screen {
   position: absolute;
   top: 7px;
   bottom: 7px;
   left: 7px;
   width: 75%;
-  border: 1px solid var(--move-band-rim);
   border-radius: 6px;
+  background: var(--move-face-well);
 }
+
+.tweakers-move-band-cells {
+  position: absolute;
+  inset: 2px;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.tweakers-move-band-cells > i {
+  border-radius: 1px;
+  background: var(--move-face-cell);
+}
+
+.tweakers-move-band-cells > i:first-child { border-top-left-radius: 4px; }
+.tweakers-move-band-cells > i:nth-child(8) { border-top-right-radius: 4px; }
+.tweakers-move-band-cells > i:nth-child(25) { border-bottom-left-radius: 4px; }
+.tweakers-move-band-cells > i:last-child { border-bottom-right-radius: 4px; }
 
 .tweakers-move-band-plot {
   position: absolute;
-  inset: 0;
+  inset: 2px;
   overflow: hidden;
-  border-radius: 5px;
+  border-radius: 4px;
 }
 
 .tweakers-move-band-drawing {
@@ -3260,7 +3672,6 @@
   height: 100%;
 }
 
-.tweakers-move-band-grid { fill: var(--move-band-rule); }
 
 .tweakers-move-band-cut { fill: var(--move-text); }
 .tweakers-move-band-cut[data-cut] { fill: var(--move-yellow); }
@@ -4045,6 +4456,12 @@
   --move-visual-guide-opacity: 0.6;
   --move-visual-reference-opacity: 0.7;
   --move-visual-pitch-active: #f39a38;
+  --move-gate-threshold: #f27560;
+  --move-gate-lookahead: #8e68e6;
+  --move-gate-release: #6a91f8;
+  --move-multiband-amount: #5ce79c;
+  --move-multiband-needle: #f39a38;
+  --move-multiband-base: #7a5230;
   --move-visual-font-size: 10px;
   --move-visual-focus-width: 2px;
   --move-visual-focus-offset: 2px;

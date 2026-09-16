@@ -28,7 +28,40 @@ type MoveSliderVisual = {
  | {
     kind: 'trim';
     edge: 'start' | 'end';
+}
+/** One of a gate's three dials. Threshold, look-ahead and release side by
+ *  side, in that order, draw as one 3-slot gate; any other arrangement
+ *  keeps the ordinary face. */
+ | {
+    kind: 'gate';
+    role: MoveGateRole;
+}
+/** One control of a multiband cleaner: an amount (its bar wears `icon`),
+ *  a speed, and bands, each `band` its place from the top of the spectrum
+ *  down. An amount, a speed and at least one band dial side by side draw
+ *  as one face; band chips in those columns join its curve. */
+ | {
+    kind: 'multiband';
+    role: 'amount';
+    icon?: string;
+} | {
+    kind: 'multiband';
+    role: 'speed';
+} | {
+    kind: 'multiband';
+    role: 'band';
+    band: number;
+}
+/** A mixer channel's level: a fader under its icon and name, in its tone.
+ *  Channel dials side by side draw as one mixer. */
+ | {
+    kind: 'channel';
+    icon?: string;
+    tone?: MoveTone;
 };
+/** A Move hue by name, as the theme's `--move-<tone>` token carries it. */
+type MoveTone = 'red' | 'orange' | 'yellow' | 'lime' | 'emerald' | 'blue' | 'indigo' | 'pink';
+type MoveGateRole = 'threshold' | 'lookahead' | 'release';
 type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
 type MoveSelectVisual = {
     kind: 'playback';
@@ -75,6 +108,32 @@ declare function moveNumericDrawing(meta: ControlMeta, value: unknown): MoveNume
 declare function moveTrimSpan(start: ControlMeta, startValue: unknown, end: ControlMeta, endValue: unknown): {
     start: number;
     end: number;
+} | null;
+/** Where a gate's three dials sit, each 0..1 across its own range — or null
+ *  unless the three are a threshold, a look-ahead and a release, in order. */
+declare function moveGateSpan(dials: [ControlMeta, unknown][]): {
+    threshold: number;
+    lookahead: number;
+    release: number;
+} | null;
+/** A mixer channel's fader position (0..1), or null unless it is a channel slider. */
+declare function moveChannelPosition(meta: ControlMeta | undefined, value: unknown): number | null;
+type MoveMultibandRole = 'amount' | 'speed' | 'band';
+/** A slider's multiband role, or null when it is not one. */
+declare function moveMultibandRole(meta: ControlMeta | undefined): MoveMultibandRole | null;
+/**
+ * Where a multiband face's controls sit, each 0..1 — or null unless the
+ * dials are an amount, a speed and one or more bands, in that order. `bands`
+ * are every band control the face draws (dials and chips), returned in
+ * spectrum order.
+ */
+declare function moveMultibandSpan(dials: [ControlMeta, unknown][], bands: [ControlMeta, unknown][]): {
+    amount: number;
+    speed: number;
+    bands: {
+        meta: ControlMeta;
+        position: number;
+    }[];
 } | null;
 declare function movePlaybackMode(meta: ControlMeta, value: unknown): MovePlaybackMode | null;
 /** Semantic formatting is a fallback; a host formatter or unit always wins. */
@@ -770,4 +829,4 @@ type PanelConfig = {
     kind?: 'timeline' | 'modulation' | 'kit';
 };
 
-export { type ControlMeta as C, type MoveEdges as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_H as d, MOVE_BAND_W as e, type MoveNumericDrawing as f, type MovePlaybackMode as g, type MoveSelectVisual as h, type MoveSliderVisual as i, type MoveToggleVisual as j, type MoveVisual as k, moveKeyboardValue as l, moveBandCuts as m, moveNumericDrawing as n, movePlaybackMode as o, moveTrimSpan as p, moveVisualReading as q };
+export { type ControlMeta as C, type MoveEdges as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_H as d, MOVE_BAND_W as e, type MoveGateRole as f, type MoveMultibandRole as g, type MoveNumericDrawing as h, type MovePlaybackMode as i, type MoveSelectVisual as j, type MoveSliderVisual as k, type MoveToggleVisual as l, type MoveTone as m, type MoveVisual as n, moveBandCuts as o, moveChannelPosition as p, moveGateSpan as q, moveKeyboardValue as r, moveMultibandRole as s, moveMultibandSpan as t, moveNumericDrawing as u, movePlaybackMode as v, moveTrimSpan as w, moveVisualReading as x };

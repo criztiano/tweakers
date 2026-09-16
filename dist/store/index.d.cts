@@ -40,7 +40,40 @@ type MoveSliderVisual = {
  | {
     kind: 'trim';
     edge: 'start' | 'end';
+}
+/** One of a gate's three dials. Threshold, look-ahead and release side by
+ *  side, in that order, draw as one 3-slot gate; any other arrangement
+ *  keeps the ordinary face. */
+ | {
+    kind: 'gate';
+    role: MoveGateRole;
+}
+/** One control of a multiband cleaner: an amount (its bar wears `icon`),
+ *  a speed, and bands, each `band` its place from the top of the spectrum
+ *  down. An amount, a speed and at least one band dial side by side draw
+ *  as one face; band chips in those columns join its curve. */
+ | {
+    kind: 'multiband';
+    role: 'amount';
+    icon?: string;
+} | {
+    kind: 'multiband';
+    role: 'speed';
+} | {
+    kind: 'multiband';
+    role: 'band';
+    band: number;
+}
+/** A mixer channel's level: a fader under its icon and name, in its tone.
+ *  Channel dials side by side draw as one mixer. */
+ | {
+    kind: 'channel';
+    icon?: string;
+    tone?: MoveTone;
 };
+/** A Move hue by name, as the theme's `--move-<tone>` token carries it. */
+type MoveTone = 'red' | 'orange' | 'yellow' | 'lime' | 'emerald' | 'blue' | 'indigo' | 'pink';
+type MoveGateRole = 'threshold' | 'lookahead' | 'release';
 type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
 type MoveSelectVisual = {
     kind: 'playback';

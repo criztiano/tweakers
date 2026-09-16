@@ -1,7 +1,7 @@
 import type { MovePadListView } from '../move-pad-list';
 import { useEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { moveBandCuts, moveNumericDrawing, movePlaybackMode, MOVE_BAND_H, MOVE_BAND_W, type MovePlaybackMode } from '../move-visual-core';
+import { moveBandCuts, moveNumericDrawing, movePlaybackMode, MOVE_BAND_H, MOVE_BAND_W, type MovePlaybackMode, type MoveTone } from '../move-visual-core';
 import { MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
 export { MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
 import type { ControlMeta } from '../store/TweakStore';
@@ -47,6 +47,15 @@ import { ListScreen } from './ListScreen';
  * - `trim-span` — the 2-slot take: a trim start dial beside a trim end dial
  *   drawn as one line, the kept part between a flag for each edge, the
  *   names along the top and the values along the bottom at their own sides.
+ * - `gate`    — the 3-slot gate: threshold, look-ahead and release side by
+ *   side as one instrument. The threshold and release stand as bars at
+ *   the outer columns, the look-ahead is a short line under the middle,
+ *   and the grid between the bars shows the gate live around the playhead.
+ * - `multiband` — a multiband cleaner, one slot per dial: the amount as a
+ *   bar with its icon, the speed as a graded gauge, and the band columns as
+ *   one grid with the bands' curve live over what each band is doing.
+ * - `channel` — a mixer, one slot per channel: icon and name on top in the
+ *   channel's tone, a fader well under them filled to its level.
  * - `env`     — the 4-slot control: the whole ADSR drawn as one shape on a
  *   single display spanning the four stage columns, one caption and drag
  *   zone per stage, square handles pinned on the joints.
@@ -88,6 +97,9 @@ export type MoveSlotKind =
   | 'pitch'
   | 'trim'
   | 'trim-span'
+  | 'gate'
+  | 'multiband'
+  | 'channel'
   | 'playback'
   | 'env'
   | 'scope'
@@ -552,6 +564,179 @@ export function MoveSlotTrimSpanBody({ start, end }: { start: MoveTrimSpanEdge; 
       <span className="tweakers-move-trim-span-value" data-side="start">{start.value}</span>
       <span className="tweakers-move-trim-span-value" data-side="end">{end.value}</span>
     </>
+  );
+}
+
+/** One dial on a multi-slot instrument's face: its name, its reading, its
+ *  place (0..1) and whether a hand is on it — then the reading shows. */
+export type MoveFaceDial = { label: string; value: ReactNode; position: number; active?: boolean };
+
+/** Grid cells behind the gate's live picture. */
+export const MOVE_GATE_GRID = { columns: 14, rows: 4 } as const;
+/** Grid cells per band column behind the multiband face's curve. */
+export const MOVE_MULTIBAND_GRID = { columnsPerSlot: 7, rows: 4 } as const;
+
+const place = (position: number) => Math.max(0, Math.min(1, position));
+
+/** A face's bar: lit from its marker down — how much the dial is doing. */
+function MoveFaceBar({ role, dial }: { role: string; dial: MoveFaceDial }) {
+  return (
+    <span className="tweakers-move-face-bar" data-role={role} data-track={role} data-active={dial.active || undefined}
+      style={{ '--move-face-at': place(dial.position) } as CSSProperties} aria-hidden="true">
+      <i className="tweakers-move-face-bar-lit" />
+      <i className="tweakers-move-face-bar-marker" />
+    </span>
+  );
+}
+
+/** A face's cell grid, with its live picture laid over it. */
+function MoveFaceGrid({ columns, rows, children }: { columns: number; rows: number; children?: ReactNode }) {
+  const corners: Record<number, string> = { 0: 'tl', [columns - 1]: 'tr', [columns * (rows - 1)]: 'bl', [columns * rows - 1]: 'br' };
+  return (
+    <div className="tweakers-move-face-grid" data-track="grid" aria-hidden="true"
+      style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}>
+      {Array.from({ length: columns * rows }, (_, i) => <i key={i} data-corner={corners[i]} />)}
+      {children && <div className="tweakers-move-face-display">{children}</div>}
+    </div>
+  );
+}
+
+/** A dial's name under column `col` of the face, its reading while touched. */
+function MoveFaceName({ col, dial }: { col: number; dial: MoveFaceDial }) {
+  return (
+    <span className="tweakers-move-face-name" data-active={dial.active || undefined} style={{ '--move-face-col': col } as CSSProperties}>
+      {dial.active ? dial.value : dial.label}
+    </span>
+  );
+}
+
+/**
+ * The 3-slot gate's face. The threshold stands as a bar over the first
+ * column and the release over the third, each lit from its marker down; the
+ * grid between them holds the live picture (the children); the look-ahead is
+ * a short line under the middle, pointing ahead in time. Each name sits
+ * under its own column.
+ */
+export function MoveSlotGateBody({
+  threshold, lookahead, release, children,
+}: {
+  threshold: MoveFaceDial;
+  lookahead: MoveFaceDial;
+  release: MoveFaceDial;
+  /** The live picture, laid over the grid. */
+  children?: ReactNode;
+}) {
+  return (
+    <div className="tweakers-move-face" style={{ '--move-face-span': 3 } as CSSProperties}>
+      <MoveFaceBar role="threshold" dial={threshold} />
+      <MoveFaceGrid columns={MOVE_GATE_GRID.columns} rows={MOVE_GATE_GRID.rows}>{children}</MoveFaceGrid>
+      <MoveFaceBar role="release" dial={release} />
+      <MoveFaceName col={0} dial={threshold} />
+      <span className="tweakers-move-gate-look" data-active={lookahead.active || undefined}>
+        <span className="tweakers-move-gate-look-name">{lookahead.active ? lookahead.value : lookahead.label}</span>
+        <span className="tweakers-move-gate-look-line" data-track="lookahead" style={{ '--move-face-at': place(lookahead.position) } as CSSProperties} aria-hidden="true">
+          <i className="tweakers-move-gate-look-lit" />
+          <i className="tweakers-move-gate-look-dot" />
+          <svg className="tweakers-move-gate-look-arrow" viewBox="0 0 8 12"><path d="M1 1l6 5-6 5" /></svg>
+        </span>
+      </span>
+      <MoveFaceName col={2} dial={release} />
+    </div>
+  );
+}
+
+/** One channel of a mixer face: its dial, and the icon and tone it wears. */
+export type MoveChannelDial = MoveFaceDial & { icon?: string; tone?: MoveTone };
+
+/**
+ * A mixer's face, one slot per channel: each channel's icon and name along
+ * the top in its tone, and under them a fader well filled from the bottom
+ * to its level — lime for a channel with no tone. A channel at zero keeps a
+ * hairline in the text colour, so it still reads.
+ */
+export function MoveSlotChannelBody({ channels }: { channels: MoveChannelDial[] }) {
+  return (
+    <div className="tweakers-move-face" style={{ '--move-face-span': channels.length } as CSSProperties}>
+      {channels.map((channel, k) => (
+        <div key={k} className="tweakers-move-channel" data-active={channel.active || undefined}
+          style={{ '--move-face-col': k, '--move-channel-tone': channel.tone ? `var(--move-${channel.tone})` : undefined } as CSSProperties}>
+          <span className="tweakers-move-channel-head">
+            {channel.icon && <MoveSlotIcon icon={channel.icon} className="tweakers-move-channel-icon" />}
+            <span className="tweakers-move-channel-name">{channel.active ? channel.value : channel.label}</span>
+          </span>
+          <span className="tweakers-move-channel-well" data-track={`channel-${k}`} aria-hidden="true">
+            <i className="tweakers-move-channel-fill" data-empty={channel.position <= 0 || undefined}
+              style={{ '--move-face-at': place(channel.position) } as CSSProperties} />
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** The speed gauge's drawing, in its own viewBox units (1 unit = 1px): a
+ *  dome of radius `r` on a baseline `base` below its centre, graded across
+ *  `sweep` degrees either side of straight up. */
+export const MOVE_GAUGE = { r: 36, base: 18, half: 43, top: 37, height: 56, sweep: 110, ticks: 11 } as const;
+
+/** Where a value (0..1) points on the gauge: a compass bearing, 0 = up. */
+export const moveGaugeBearing = (position: number) => (place(position) * 2 - 1) * MOVE_GAUGE.sweep;
+
+function MoveGauge({ position }: { position: number }) {
+  const { r, base, half, top, height, sweep, ticks } = MOVE_GAUGE;
+  const foot = Math.sqrt(r * r - base * base);
+  const point = (bearing: number, radius: number) => {
+    const rad = (bearing * Math.PI) / 180;
+    return [radius * Math.sin(rad), -radius * Math.cos(rad)] as const;
+  };
+  const needle = point(moveGaugeBearing(position), r * 0.62);
+  return (
+    <svg className="tweakers-move-multiband-gauge" data-track="speed" viewBox={`${-half} ${-top} ${half * 2} ${height}`} aria-hidden="true">
+      <path className="tweakers-move-multiband-gauge-dome" d={`M${-foot} ${base}A${r} ${r} 0 1 1 ${foot} ${base}Z`} />
+      <line className="tweakers-move-multiband-gauge-base" x1={-half + 1} y1={base} x2={half - 1} y2={base} />
+      {Array.from({ length: ticks }, (_, k) => {
+        const at = k / (ticks - 1);
+        const major = k % 5 === 0;
+        const [x1, y1] = point(-sweep + at * sweep * 2, r - 4);
+        const [x2, y2] = point(-sweep + at * sweep * 2, r - (major ? 10 : 7));
+        return <line key={k} className="tweakers-move-multiband-gauge-tick" data-major={major || undefined}
+          data-lit={at <= place(position) + 1e-9 || undefined} x1={x1} y1={y1} x2={x2} y2={y2} />;
+      })}
+      <line className="tweakers-move-multiband-gauge-needle" x1="0" y1="0" x2={needle[0]} y2={needle[1]} />
+      <circle className="tweakers-move-multiband-gauge-pivot" cx="0" cy="0" r="2.5" />
+    </svg>
+  );
+}
+
+/**
+ * The multiband cleaner's face, one slot per dial: the amount as a bar with
+ * its icon over the first column, the speed as a graded gauge over the
+ * second, and the band columns as one grid holding the live curve (the
+ * children). Each column's name sits under it — a band column names
+ * whichever band its knob is on.
+ */
+export function MoveSlotMultibandBody({
+  amount, speed, bands, icon, children,
+}: {
+  amount: MoveFaceDial;
+  speed: MoveFaceDial;
+  /** One entry per band column: the band its knob is on. */
+  bands: MoveFaceDial[];
+  /** The amount's glyph: a bundled icon name or an asset URL. */
+  icon?: string;
+  /** The live picture, laid over the grid. */
+  children?: ReactNode;
+}) {
+  return (
+    <div className="tweakers-move-face" style={{ '--move-face-span': 2 + bands.length } as CSSProperties}>
+      <MoveFaceBar role="amount" dial={amount} />
+      {icon && <MoveSlotIcon icon={icon} className="tweakers-move-multiband-icon" />}
+      <MoveGauge position={speed.position} />
+      <MoveFaceGrid columns={MOVE_MULTIBAND_GRID.columnsPerSlot * bands.length} rows={MOVE_MULTIBAND_GRID.rows}>{children}</MoveFaceGrid>
+      <MoveFaceName col={0} dial={amount} />
+      <MoveFaceName col={1} dial={speed} />
+      {bands.map((band, k) => <MoveFaceName key={k} col={2 + k} dial={band} />)}
+    </div>
   );
 }
 
@@ -1033,6 +1218,9 @@ export function MovePadBandBody({ low, high, upper = 'high' }: {
   return (
     <>
       <div className="tweakers-move-band-screen">
+        <div className="tweakers-move-band-cells" aria-hidden="true">
+          {Array.from({ length: 32 }, (_, i) => <i key={i} />)}
+        </div>
         <div className="tweakers-move-band-plot">
           <svg
             className="tweakers-move-band-drawing"
@@ -1040,14 +1228,6 @@ export function MovePadBandBody({ low, high, upper = 'high' }: {
             preserveAspectRatio="none"
             aria-hidden="true"
           >
-            <g className="tweakers-move-band-grid" shapeRendering="crispEdges">
-              {Array.from({ length: 7 }, (_, i) => (
-                <rect key={`x${i}`} x={9 + i * 10} y="0" width="1" height={MOVE_BAND_H} />
-              ))}
-              {Array.from({ length: 3 }, (_, i) => (
-                <rect key={`y${i}`} x="0" y={9 + i * 10} width={MOVE_BAND_W} height="1" />
-              ))}
-            </g>
             <path className="tweakers-move-band-cut" data-cut={low.cut || undefined} d={cuts.low} />
             <path className="tweakers-move-band-cut" data-cut={high.cut || undefined} d={cuts.high} />
           </svg>
@@ -1199,6 +1379,9 @@ export const MOVE_SLOT_LIBRARY = {
   pitch: { description: 'signed pitch ruler with a zero reference', component: MoveSlotNumericBody },
   trim: { description: 'one edge of a take — the kept part filled from the far end, the value beneath', component: MoveSlotNumericBody },
   'trim-span': { description: '2 slots: a take’s start and end on one line, a flag per edge', component: MoveSlotTrimSpanBody },
+  gate: { description: '3 slots: threshold and release as bars, look-ahead as a line, the gate live on a grid between', component: MoveSlotGateBody },
+  channel: { description: 'a slot per channel: icon and name in its tone over a fader filled to its level', component: MoveSlotChannelBody },
+  multiband: { description: 'a slot per dial: amount as a bar, speed as a gauge, the bands as a live curve on a grid', component: MoveSlotMultibandBody },
   playback: { description: 'explicit playback traversal with a named mode', component: MoveSlotEnumBody },
   default: { description: 'name centred, value on touch, fill bar', component: MoveSlotDefaultBody },
   value: { description: 'value-first: the value is the headline, the name a tag on top', component: MoveSlotDefaultBody },

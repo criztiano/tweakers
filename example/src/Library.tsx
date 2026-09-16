@@ -496,7 +496,7 @@ const DIAL_KIND: Record<string, string | undefined> = {
   icon: 'enum', curve: 'enum', playback: 'enum', toggle: 'toggle', 'toggle-icon': 'toggle-icon',
   metronome: 'metronome',
   transfer: 'transfer',
-  ramp: 'ramp', dial: 'dial', scope: 'scope', env: 'env', 'trim-span': 'trim-span',
+  ramp: 'ramp', dial: 'dial', scope: 'scope', env: 'env', 'trim-span': 'trim-span', gate: 'gate', multiband: 'multiband', channel: 'channel',
 };
 
 const NUMERIC_KINDS = ['opacity', 'blur', 'pan', 'stereo-width', 'pitch'];
