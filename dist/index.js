@@ -350,6 +350,9 @@ var MovePadListStoreClass = class {
 var MovePadListStore = new MovePadListStoreClass();
 
 // src/components/MovePadList.tsx
+import { useEffect as useEffect3, useRef as useRef3 } from "react";
+
+// src/components/move-slots.tsx
 import { useEffect as useEffect2, useRef as useRef2 } from "react";
 
 // src/move-visual-core.ts
@@ -1817,6 +1820,7 @@ function moveSlotKind(meta, opts = {}) {
   if (meta.type === "color") return "color";
   if (meta.type === "filter") return "filter";
   if (opts.stage) return "env";
+  if (meta.type === "toggle" && meta.moveVisual?.kind === "metronome") return "metronome";
   if (meta.type === "toggle") return meta.icon ? "toggle-icon" : "toggle";
   if (meta.type === "transfer") return "transfer";
   if (meta.type === "gradient") return "ramp";
@@ -2157,6 +2161,101 @@ function MoveSlotToggleBody({ label, checked, icon, onIcon, offIcon }) {
     /* @__PURE__ */ jsx3("span", { className: "tweakers-move-toggle-label", children: label })
   ] });
 }
+var METRONOME_VIEWBOX = "-23 -31 46 36";
+var METRONOME_BODY = "M -3.07 -30 H 3.07 L 12.11 4 H -12.11 Z";
+var METRONOME_ARM = 30;
+var METRONOME_WEIGHT_AT = 21;
+var METRONOME_WEIGHT_R = 4.5;
+var METRONOME_STROKE = 2;
+var METRONOME_CUT = 2;
+var METRONOME_SWING_DEG = 45;
+function MoveSlotMetronomeBody({ label, checked, swing }) {
+  const arm = useRef2(null);
+  const read2 = useRef2(swing);
+  read2.current = swing;
+  const swings = checked && !!swing;
+  useEffect2(() => {
+    const g = arm.current;
+    if (!g) return;
+    const lean = (deg) => g.setAttribute("transform", `rotate(${deg.toFixed(2)})`);
+    const still = typeof window === "undefined" || typeof window.requestAnimationFrame !== "function" || !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (!swings || still) {
+      lean(0);
+      return;
+    }
+    let frame = 0;
+    const tick = () => {
+      const at = read2.current?.();
+      lean(typeof at === "number" && Number.isFinite(at) ? Math.max(-1, Math.min(1, at)) * METRONOME_SWING_DEG : 0);
+      frame = window.requestAnimationFrame(tick);
+    };
+    tick();
+    return () => {
+      window.cancelAnimationFrame(frame);
+      lean(0);
+    };
+  }, [swings]);
+  return /* @__PURE__ */ jsxs3(Fragment3, { children: [
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-toggle-picture", "aria-hidden": "true", children: /* @__PURE__ */ jsxs3(
+      "svg",
+      {
+        className: "tweakers-move-metronome",
+        "data-on": checked || void 0,
+        viewBox: METRONOME_VIEWBOX,
+        fill: "none",
+        children: [
+          /* @__PURE__ */ jsx3(
+            "path",
+            {
+              className: "tweakers-move-metronome-body",
+              d: METRONOME_BODY,
+              strokeWidth: METRONOME_STROKE,
+              strokeLinejoin: "round"
+            }
+          ),
+          /* @__PURE__ */ jsxs3("g", { ref: arm, transform: "rotate(0)", children: [
+            /* @__PURE__ */ jsxs3("g", { className: "tweakers-move-metronome-cut", children: [
+              /* @__PURE__ */ jsx3(
+                "line",
+                {
+                  x1: 0,
+                  y1: 0,
+                  x2: 0,
+                  y2: -METRONOME_ARM,
+                  strokeWidth: METRONOME_STROKE + 2 * METRONOME_CUT,
+                  strokeLinecap: "round"
+                }
+              ),
+              /* @__PURE__ */ jsx3("circle", { cx: 0, cy: -METRONOME_WEIGHT_AT, r: METRONOME_WEIGHT_R + METRONOME_CUT })
+            ] }),
+            /* @__PURE__ */ jsx3(
+              "line",
+              {
+                className: "tweakers-move-metronome-arm",
+                x1: 0,
+                y1: 0,
+                x2: 0,
+                y2: -METRONOME_ARM,
+                strokeWidth: METRONOME_STROKE,
+                strokeLinecap: "round"
+              }
+            ),
+            /* @__PURE__ */ jsx3(
+              "circle",
+              {
+                className: "tweakers-move-metronome-weight",
+                cx: 0,
+                cy: -METRONOME_WEIGHT_AT,
+                r: METRONOME_WEIGHT_R
+              }
+            )
+          ] })
+        ]
+      }
+    ) }),
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-toggle-label", children: label })
+  ] });
+}
 function MoveSlotIcon({ icon, className }) {
   if (LUCIDE_ICONS[icon]) return /* @__PURE__ */ jsx3(MoveSlotGlyph, { name: icon, className });
   const mask = `url(${JSON.stringify(icon)})`;
@@ -2391,6 +2490,7 @@ var MOVE_SLOT_LIBRARY = {
   scope: { description: "a dial with the live signal filling it behind the readout", component: MoveSlotScopeBody },
   toggle: { description: "a switch in a big slot \u2014 the pad\u2019s language at slot size", component: MoveSlotToggleBody },
   "toggle-icon": { description: "a switch drawn as its own picture \u2014 the glyph takes a ban while it is off", component: MoveSlotToggleBody },
+  metronome: { description: "a switch drawn as a metronome \u2014 the arm swings to the beat while it is on", component: MoveSlotMetronomeBody },
   transfer: { description: "a response curve, one knob holding one of its points", component: MoveSlotTransferBody },
   ramp: { description: "a colour ramp, one knob holding one of its stops \u2014 tap to edit its colours", component: MoveSlotRampBody },
   balance: { description: "the mix between two colour params \u2014 the blend fills the slot, the tick is the dial", component: MoveSlotRampBody },
@@ -2400,13 +2500,13 @@ var MOVE_SLOT_LIBRARY = {
 // src/components/MovePadList.tsx
 import { jsx as jsx4, jsxs as jsxs4 } from "react/jsx-runtime";
 function MovePadList({ panelId, path, label, icon, view, disabled }) {
-  const root = useRef2(null);
+  const root = useRef3(null);
   const open2 = view?.panelId === panelId && view.path === path;
-  useEffect2(() => () => {
+  useEffect3(() => () => {
     const current = MovePadListStore.getView();
     if (current?.panelId === panelId && current.path === path) MovePadListStore.close();
   }, [panelId, path]);
-  useEffect2(() => {
+  useEffect3(() => {
     if (!open2) return;
     const key = (event) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
@@ -2467,7 +2567,7 @@ function MovePadList({ panelId, path, label, icon, view, disabled }) {
 }
 
 // src/components/PresetExploration.tsx
-import { useEffect as useEffect3, useMemo, useLayoutEffect, useRef as useRef3, useState, useSyncExternalStore } from "react";
+import { useEffect as useEffect4, useMemo, useLayoutEffect, useRef as useRef4, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 // src/preset-exploration.ts
@@ -3485,7 +3585,7 @@ import { TweakStore as TweakStore4 } from "tweakers/store";
 import { Fragment as Fragment4, jsx as jsx5, jsxs as jsxs5 } from "react/jsx-runtime";
 var SHELL_MOTION = { duration: 0.15, ease: [0.2, 0, 0, 1] };
 var clamp5 = (value) => Math.max(0, Math.min(1, value));
-var useBrowserLayoutEffect = typeof window === "undefined" ? useEffect3 : useLayoutEffect;
+var useBrowserLayoutEffect = typeof window === "undefined" ? useEffect4 : useLayoutEffect;
 function PresetArtwork({ values }) {
   const seed = presetFlowerSeed(values);
   const src = useMemo(() => `data:image/svg+xml,${encodeURIComponent(flowerSvg(seed, DEFAULT_FLOWER_SETTINGS, { background: false }))}`, [seed]);
@@ -3495,7 +3595,7 @@ function PresetExploration() {
   useSyncExternalStore(PresetExplorationStore.subscribe, PresetExplorationStore.getVersion, () => 0);
   const state2 = PresetExplorationStore.getState();
   const reducedMotion = useReducedMotion();
-  const shell = useRef3(null);
+  const shell = useRef4(null);
   const [availableHeight, setAvailableHeight] = useState(null);
   useBrowserLayoutEffect(() => {
     const anchor = shell.current?.closest(".tweakers-move");
@@ -3572,7 +3672,7 @@ function PresetExplorationSlots() {
 function ExplorationContent({ state: state2, anchorRef }) {
   const [name, setName] = useState("");
   const [seedId, setSeedId] = useState("");
-  useEffect3(() => {
+  useEffect4(() => {
     if (state2.saving) setName("");
   }, [state2.saving]);
   const [parameterGroup, setParameterGroup] = useState("*");
@@ -3921,7 +4021,7 @@ function ExplorationContent({ state: state2, anchorRef }) {
   ] });
 }
 function XYSurface({ label, x, y, disabled, onChange }) {
-  const pointer = useRef3(null);
+  const pointer = useRef4(null);
   const update = (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
     onChange(clamp5((event.clientX - rect.left) / Math.max(1, rect.width)), clamp5((event.clientY - rect.top) / Math.max(1, rect.height)));
@@ -3973,7 +4073,7 @@ function XYSurface({ label, x, y, disabled, onChange }) {
 }
 
 // src/components/MovePanel.tsx
-import { useEffect as useEffect10, useLayoutEffect as useLayoutEffect3, useId, useRef as useRef10, useState as useState7, useSyncExternalStore as useSyncExternalStore3, useCallback as useCallback2 } from "react";
+import { useEffect as useEffect11, useLayoutEffect as useLayoutEffect3, useId, useRef as useRef11, useState as useState7, useSyncExternalStore as useSyncExternalStore3, useCallback as useCallback2 } from "react";
 import { createPortal as createPortal3 } from "react-dom";
 import { TweakStore as TweakStore13 } from "tweakers/store";
 import { ModulationStore as ModulationStore2 } from "tweakers/modulation-store";
@@ -5357,11 +5457,11 @@ var AUDIO_DEF = {
 registerModType(AUDIO_DEF);
 
 // src/components/MoveWaveform.tsx
-import { useCallback, useEffect as useEffect5, useRef as useRef5, useState as useState3, useSyncExternalStore as useSyncExternalStore2 } from "react";
+import { useCallback, useEffect as useEffect6, useRef as useRef6, useState as useState3, useSyncExternalStore as useSyncExternalStore2 } from "react";
 import { createPortal } from "react-dom";
 
 // src/components/WaveformVisualization.tsx
-import { useRef as useRef4, useEffect as useEffect4, useState as useState2 } from "react";
+import { useRef as useRef5, useEffect as useEffect5, useState as useState2 } from "react";
 
 // src/waveform-asset.ts
 var WAVEFORM_BASE_BUCKET = 64;
@@ -6069,12 +6169,12 @@ function WaveformVisualization({
   width = 256,
   height = 140
 }) {
-  const canvasRef = useRef4(null);
+  const canvasRef = useRef5(null);
   const [ownZoom, setOwnZoom] = useState2(1);
   const controlled = zoomProp !== void 0;
   const zoom = controlled ? Math.max(1, zoomProp) : ownZoom;
   const setZoom = setOwnZoom;
-  const runtimeRef = useRef4(null);
+  const runtimeRef = useRef5(null);
   runtimeRef.current = {
     buffer: asset ? null : buffer,
     asset,
@@ -6105,7 +6205,7 @@ function WaveformVisualization({
     onSeek,
     onLoopChange
   };
-  useEffect4(() => {
+  useEffect5(() => {
     if (!canvasRef.current) return;
     const engine = createWaveformEngine(canvasRef.current, () => runtimeRef.current);
     return () => engine.destroy();
@@ -6724,21 +6824,21 @@ function MoveWaveform({
   productionEnabled = isDevDefault,
   className
 }) {
-  const hostRef = useRef5(null);
+  const hostRef = useRef6(null);
   const [width, setWidth] = useState3(0);
   const [dockBottom, setDockBottom] = useState3(0);
   const [mounted, setMounted] = useState3(false);
-  const seekRef = useRef5(onSeek);
+  const seekRef = useRef6(onSeek);
   seekRef.current = onSeek;
-  const loopRef = useRef5(onLoopChange);
+  const loopRef = useRef6(onLoopChange);
   loopRef.current = onLoopChange;
-  const seedRef = useRef5({ mode, pixelSize, grid, bands, baseline });
-  useEffect5(() => {
+  const seedRef = useRef6({ mode, pixelSize, grid, bands, baseline });
+  useEffect6(() => {
     if (!productionEnabled) return;
     setMounted(true);
     return MoveWaveformStore.register(seedRef.current);
   }, [productionEnabled]);
-  useEffect5(() => {
+  useEffect6(() => {
     if (!productionEnabled) return;
     const onJogClick = (event) => {
       if (!MoveWaveformStore.isRegistered()) return;
@@ -6748,10 +6848,10 @@ function MoveWaveform({
     window.addEventListener("move-tweakers:jog-click", onJogClick);
     return () => window.removeEventListener("move-tweakers:jog-click", onJogClick);
   }, [productionEnabled]);
-  const transportRef = useRef5(transport);
+  const transportRef = useRef6(transport);
   transportRef.current = transport;
   const hasTransport = !!transport;
-  useEffect5(() => {
+  useEffect6(() => {
     if (!productionEnabled || !hasTransport) return;
     const releases = [
       MoveFunctions.push("play", () => transportRef.current?.onPlay(), { label: "Play", chip: false }),
@@ -6761,11 +6861,11 @@ function MoveWaveform({
   }, [productionEnabled, hasTransport]);
   const playing = transport?.playing ?? false;
   const loopOn = transport?.loopOn ?? false;
-  useEffect5(() => {
+  useEffect6(() => {
     if (!productionEnabled) return;
     MoveWaveformStore.setTransport(hasTransport ? { playing, loopOn } : null);
   }, [productionEnabled, hasTransport, playing, loopOn]);
-  useEffect5(() => {
+  useEffect6(() => {
     if (!productionEnabled) return;
     const prev = MoveSurfaceStore.getState().steps;
     const paint = () => {
@@ -6789,7 +6889,7 @@ function MoveWaveform({
   );
   const look = styleFromValues(styleValues, { mode, pixelSize, grid, bands, baseline });
   const playedSeconds = asset ? ranges ? rangesDuration(ranges) : asset.duration : null;
-  useEffect5(() => {
+  useEffect6(() => {
     MoveWaveformStore.setBuffer(buffer);
     if (playedSeconds !== null) MoveWaveformStore.setDuration(playedSeconds);
   }, [buffer, playedSeconds]);
@@ -6799,8 +6899,8 @@ function MoveWaveform({
     () => 0
   );
   const state2 = MoveWaveformStore.getView();
-  const lastSent = useRef5({ position: state2.position, loop: state2.loop });
-  useEffect5(() => {
+  const lastSent = useRef6({ position: state2.position, loop: state2.loop });
+  useEffect6(() => {
     if (state2.position !== lastSent.current.position) {
       lastSent.current.position = state2.position;
       seekRef.current?.(state2.position);
@@ -6810,7 +6910,7 @@ function MoveWaveform({
       loopRef.current?.(state2.loop);
     }
   }, [view, state2.position, state2.loop]);
-  useEffect5(() => {
+  useEffect6(() => {
     const host = hostRef.current;
     if (!host) return;
     const ro = new ResizeObserver((entries) => {
@@ -6820,7 +6920,7 @@ function MoveWaveform({
     ro.observe(host);
     return () => ro.disconnect();
   }, [mounted, variant]);
-  useEffect5(() => {
+  useEffect6(() => {
     if (variant !== "dock" || typeof window === "undefined") return;
     const measure = () => {
       const panel2 = document.querySelector(".tweakers-move-root .tweakers-move");
@@ -6887,7 +6987,7 @@ function MoveWaveform({
 }
 
 // src/components/CurveComposer.tsx
-import { useRef as useRef6, useEffect as useEffect6, useMemo as useMemo2, useState as useState4 } from "react";
+import { useRef as useRef7, useEffect as useEffect7, useMemo as useMemo2, useState as useState4 } from "react";
 import { Fragment as Fragment5, jsx as jsx8, jsxs as jsxs8 } from "react/jsx-runtime";
 function CurveComposer({
   segments,
@@ -6917,20 +7017,20 @@ function CurveComposer({
     [segments, driver, direction, gap]
   );
   const samplers = useMemo2(() => buildSamplers(composition), [composition]);
-  const liveRef = useRef6({ composition, samplers, getPhase, phase, mode, triggerSteps });
+  const liveRef = useRef7({ composition, samplers, getPhase, phase, mode, triggerSteps });
   liveRef.current = { composition, samplers, getPhase, phase, mode, triggerSteps };
-  const onTriggerRef = useRef6(onTrigger);
+  const onTriggerRef = useRef7(onTrigger);
   onTriggerRef.current = onTrigger;
-  const svgRef = useRef6(null);
-  const seriesPlayheadRef = useRef6(null);
-  const seriesDotRef = useRef6(null);
-  const driverPlayheadRef = useRef6(null);
-  const prevTrigValue = useRef6(Number.NaN);
+  const svgRef = useRef7(null);
+  const seriesPlayheadRef = useRef7(null);
+  const seriesDotRef = useRef7(null);
+  const driverPlayheadRef = useRef7(null);
+  const prevTrigValue = useRef7(Number.NaN);
   const [drag, setDrag] = useState4(null);
   const [hover, setHover] = useState4(null);
-  const dragRef = useRef6(null);
+  const dragRef = useRef7(null);
   dragRef.current = drag;
-  useEffect6(() => {
+  useEffect7(() => {
     let raf = 0;
     prevTrigValue.current = Number.NaN;
     const tick = () => {
@@ -7759,7 +7859,7 @@ function isIdentityTransfer(points) {
 }
 
 // src/components/ModRing.tsx
-import { useEffect as useEffect7, useRef as useRef7 } from "react";
+import { useEffect as useEffect8, useRef as useRef8 } from "react";
 import { TweakStore as TweakStore8 } from "tweakers/store";
 import { ModulationStore } from "tweakers/modulation-store";
 import { jsx as jsx9, jsxs as jsxs9 } from "react/jsx-runtime";
@@ -7769,9 +7869,9 @@ function ModRing({
   assignment,
   className
 }) {
-  const arcRef = useRef7(null);
+  const arcRef = useRef8(null);
   const color = modColor(assignment.slot);
-  useEffect7(() => {
+  useEffect8(() => {
     const el = arcRef.current;
     if (!el) return;
     const draw = (from, to) => {
@@ -8258,13 +8358,13 @@ var MoveSearchStoreClass = class {
 var MoveSearchStore = new MoveSearchStoreClass();
 
 // src/components/MoveColor.tsx
-import { useEffect as useEffect8, useLayoutEffect as useLayoutEffect2, useRef as useRef8, useState as useState5 } from "react";
+import { useEffect as useEffect9, useLayoutEffect as useLayoutEffect2, useRef as useRef9, useState as useState5 } from "react";
 import { createPortal as createPortal2 } from "react-dom";
 import { TweakStore as TweakStore11 } from "tweakers/store";
 import { Fragment as Fragment6, jsx as jsx10, jsxs as jsxs10 } from "react/jsx-runtime";
 function MoveColorSlot({ panelId, meta, active, open: open2, latched = false }) {
-  const gesture = useRef8(null);
-  const suppressClick = useRef8(false);
+  const gesture = useRef9(null);
+  const suppressClick = useRef9(false);
   const disabled = TweakStore11.isDisabled(panelId, meta.path);
   const color = MoveColorStore.read(panelId, meta.path);
   return /* @__PURE__ */ jsx10(
@@ -8382,7 +8482,7 @@ var copyOklch = (hex) => {
 };
 function MoveColorCopy({ label, reading, copy }) {
   const [copied, setCopied] = useState5(false);
-  const timer = useRef8(null);
+  const timer = useRef9(null);
   return /* @__PURE__ */ jsxs10(
     "button",
     {
@@ -8438,7 +8538,7 @@ function MoveColorPaletteStrip({ palette, selected, disabled }) {
   ] });
 }
 function MoveGradientRamp({ panelId, path, gradient, disabled }) {
-  const drag = useRef8(null);
+  const drag = useRef9(null);
   const selected = Math.min(MoveColorStore.getStop(), gradient.stops.length - 1);
   const positionFrom = (e) => {
     const rect = (e.currentTarget.closest(".tweakers-move-color-ramp") ?? e.currentTarget).getBoundingClientRect();
@@ -8487,7 +8587,7 @@ function MoveGradientRamp({ panelId, path, gradient, disabled }) {
   );
 }
 function MoveColorDisplay({ panelId, meta, anchor, theme }) {
-  const display = useRef8(null);
+  const display = useRef9(null);
   const [position, setPosition] = useState5({ left: 0, top: 0 });
   const color = MoveColorStore.read(panelId, meta.path);
   const disabled = TweakStore11.isDisabled(panelId, meta.path);
@@ -8591,13 +8691,13 @@ function MoveColorDisplay({ panelId, meta, anchor, theme }) {
   return typeof document === "undefined" ? content : createPortal2(content, document.body);
 }
 function MovePaletteScreen({ kept = null, children }) {
-  const root = useRef8(null);
+  const root = useRef9(null);
   const cursor = MoveColorStore.getPickerCursor();
   const rows = [
     { name: "All colors", colors: null, index: 0 },
     ...MOVE_COLOR_PALETTES.map((p, i) => ({ name: p.name, colors: p.colors, index: i + 1 }))
   ].filter((row) => !kept || kept.includes(row.index));
-  useEffect8(() => {
+  useEffect9(() => {
     const el = root.current;
     const selected = el?.querySelector("[data-selected]");
     if (!el || !selected) return;
@@ -8646,7 +8746,7 @@ function MovePaletteScreen({ kept = null, children }) {
 }
 
 // src/components/MoveFunctionChips.tsx
-import { useEffect as useEffect9, useRef as useRef9, useState as useState6 } from "react";
+import { useEffect as useEffect10, useRef as useRef10, useState as useState6 } from "react";
 import { jsx as jsx11, jsxs as jsxs11 } from "react/jsx-runtime";
 var PRESS_FLASH_MS = 160;
 function MoveFunctionGlyphIcon({ glyph, className = "tweakers-move-chip-icon" }) {
@@ -8674,8 +8774,8 @@ function MoveFunctionGlyphIcon({ glyph, className = "tweakers-move-chip-icon" })
 }
 function MoveFunctionChipButton({ chip, disabled }) {
   const [pressed, setPressed] = useState6(false);
-  const flashTimer = useRef9(void 0);
-  useEffect9(() => {
+  const flashTimer = useRef10(void 0);
+  useEffect10(() => {
     const unsubscribe = MoveFunctions.subscribeRuns((ran) => {
       if (ran !== chip.name) return;
       setPressed(true);
@@ -8708,7 +8808,7 @@ function MoveFunctionChipButton({ chip, disabled }) {
 }
 function MoveFunctionChips({ className }) {
   const [chips, setChips] = useState6(() => MoveFunctions.chips());
-  useEffect9(() => {
+  useEffect10(() => {
     setChips(MoveFunctions.chips());
     return MoveFunctions.subscribe(() => setChips(MoveFunctions.chips()));
   }, []);
@@ -9065,26 +9165,26 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const [track, setTrack] = useState7(0);
   const [dragPath, setDragPath] = useState7(null);
   const [bendHeld, setBendHeld] = useState7(null);
-  const bendRef = useRef10(null);
+  const bendRef = useRef11(null);
   const [waveHeld, setWaveHeld] = useState7(null);
-  const waveRef = useRef10(null);
+  const waveRef = useRef11(null);
   const [handTouch, setHandTouch] = useState7({});
   const [curvePoint, setCurvePoint] = useState7({});
   const [rampStop, setRampStop] = useState7({});
-  const rampGesture = useRef10(null);
+  const rampGesture = useRef11(null);
   const [hwHeld, setHwHeld] = useState7({});
   const [hwLatched, setHwLatched] = useState7({});
   const [appHeld, setAppHeld] = useState7(null);
   const [held, setHeld] = useState7(null);
   const [latched, setLatched] = useState7({});
-  const holdStart = useRef10(0);
+  const holdStart = useRef11(0);
   const [mounted, setMounted] = useState7(false);
   const pageTabsId = useId();
-  const panelRef = useRef10(null);
+  const panelRef = useRef11(null);
   const [dotDrag, setDotDrag] = useState7(null);
-  const fineRef = useRef10(null);
-  const rangeHandleRef = useRef10("min");
-  const filterHandRef = useRef10("cutoff");
+  const fineRef = useRef11(null);
+  const rangeHandleRef = useRef11("min");
+  const filterHandRef = useRef11("cutoff");
   const [volume, setVolume] = useState7(() => MoveVolumeDisplay.get());
   const waveClaimed = useSyncExternalStore3(
     useCallback2((cb) => MoveWaveformStore.subscribe(cb), []),
@@ -9092,11 +9192,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     () => false
   );
   const [liveValue, setLiveValue] = useState7(null);
-  useEffect10(() => {
+  useEffect11(() => {
     setVolume(MoveVolumeDisplay.get());
     return MoveVolumeDisplay.subscribe(() => setVolume(MoveVolumeDisplay.get()));
   }, []);
-  useEffect10(() => {
+  useEffect11(() => {
     const poll = volume?.getValue;
     if (!poll) {
       setLiveValue(null);
@@ -9115,7 +9215,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     const registered = TweakStore13.getPanels("panel");
     return requested.map((key) => registered.find((panel) => panel.id === key || panel.name === key)).filter((panel) => panel !== void 0);
   }, [onlyKey]);
-  useEffect10(() => {
+  useEffect11(() => {
     setMounted(true);
     MoveWaveformStore.ensureSettings();
     setPanels(read2());
@@ -9144,11 +9244,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const pageId = page?.panel.id;
   useSyncExternalStore3(MovePadListStore.subscribe, MovePadListStore.getVersion, () => 0);
   const padListView = MovePadListStore.getView();
-  useEffect10(() => {
+  useEffect11(() => {
     if (padListView && padListView.panelId !== pageId) MovePadListStore.close();
   }, [pageId, padListView]);
   const roomKey = roomIds.join("\0");
-  useEffect10(() => {
+  useEffect11(() => {
     if (!roomKey) return;
     const detach = MoveFunctions.attach("set_overview", () => MoveSettingsView.toggle(), { label: "Settings" });
     return () => {
@@ -9167,7 +9267,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   }, [settingsOpen]);
   const regularPageId = underModSettings?.panelId ?? pages[Math.min(track, Math.max(0, pages.length - 1))]?.panel.id;
   const roomPageId = roomPage?.panel.id;
-  useEffect10(() => {
+  useEffect11(() => {
     if (!roomKey || typeof window === "undefined") return;
     const ids2 = roomKey.split("\0");
     const announce = () => window.dispatchEvent(new CustomEvent(MOVE_SETTINGS_EVENT, {
@@ -9180,7 +9280,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const stripMode = scroll && !settingsPanel && !!page;
   const [offset, setOffset] = useState7(0);
   const stripOffset = stripMode ? clampStripOffset(page, offset) : 0;
-  const stripRef = useRef10({
+  const stripRef = useRef11({
     page: void 0,
     offset: 0,
     on: false
@@ -9198,8 +9298,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     const next = pageStripOffset(pg, cur, dir);
     if (next !== cur) setOffset(next);
   }, []);
-  useEffect10(() => setOffset(0), [pageId]);
-  useEffect10(() => {
+  useEffect11(() => setOffset(0), [pageId]);
+  useEffect11(() => {
     const onJog = (e) => {
       if (PresetExplorationStore.getState()) {
         e.preventDefault();
@@ -9214,7 +9314,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     window.addEventListener(MOVE_JOG_EVENT, onJog);
     return () => window.removeEventListener(MOVE_JOG_EVENT, onJog);
   }, [scrollSlots]);
-  useEffect10(() => {
+  useEffect11(() => {
     if (!stripMode) return;
     const free = ["left", "right"].filter((name) => !MoveFunctions.list().includes(name));
     const off = free.map(
@@ -9224,8 +9324,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       for (const detach of off) detach();
     };
   }, [stripMode, scrollPage]);
-  const wheelRest = useRef10(0);
-  useEffect10(() => {
+  const wheelRest = useRef11(0);
+  useEffect11(() => {
     const el = panelRef.current;
     if (!el) return;
     const onWheel = (e) => {
@@ -9276,10 +9376,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       }
     }));
   }, []);
-  useEffect10(() => {
+  useEffect11(() => {
     announceStrip();
   }, [announceStrip, stripMode, pageId, stripOffset]);
-  useEffect10(() => {
+  useEffect11(() => {
     let last = 0;
     const onPage = () => {
       const now = Date.now();
@@ -9297,15 +9397,15 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const color = colorMeta && pageId ? MoveColorStore.read(pageId, colorMeta.path) : null;
   const gradientMeta = colorMeta?.type === "gradient" ? colorMeta : null;
   const gradientValue = gradientMeta && pageId ? MoveColorStore.gradient(pageId, gradientMeta.path) : null;
-  useEffect10(() => () => {
+  useEffect11(() => () => {
     if (MoveColorStore.getView()?.panelId === pageId) MoveColorStore.close();
   }, [pageId]);
   const colorOpenPanel = colorMeta && colorView ? colorView.panelId : null;
-  useEffect10(() => {
+  useEffect11(() => {
     if (!colorOpenPanel) return;
     return MoveFunctions.push("menu", () => MoveColorStore.togglePicker(), { label: "palettes", chip: false });
   }, [colorOpenPanel]);
-  useEffect10(() => {
+  useEffect11(() => {
     if (!colorOpenPanel) return;
     return MoveFunctions.push("copy", ({ shift, hold }) => {
       const view = MoveColorStore.getView();
@@ -9317,11 +9417,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     }, { label: "copy color", chip: false });
   }, [colorOpenPanel]);
   const paletteScreen = colorMeta ? MoveColorStore.isPickerOpen() : false;
-  useEffect10(() => {
+  useEffect11(() => {
     if (!paletteScreen) return;
     return MoveFunctions.push("back", () => MoveColorStore.closePicker(), { label: "back", chip: false });
   }, [paletteScreen]);
-  useEffect10(() => {
+  useEffect11(() => {
     const onJog = (e) => {
       if (e.defaultPrevented || MoveSearchStore.isOpen() || !palettePickerOpen()) return;
       e.preventDefault();
@@ -9346,7 +9446,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const presetSaving = MovePresetStore.getSaving();
   const presetScreen = presetView?.panelId === pageId ? presetView : null;
   const presetSave = presetSaving?.panelId === pageId ? presetSaving : null;
-  useEffect10(() => {
+  useEffect11(() => {
     if (!pageId) return;
     return MoveFunctions.attach("menu", ({ shift, hold }) => {
       if (shift) MovePresetStore.beginSave(pageId);
@@ -9356,7 +9456,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       } else MovePresetStore.toggle(pageId);
     }, { label: "presets", chip: false });
   }, [pageId]);
-  useEffect10(() => () => {
+  useEffect11(() => () => {
     if (MovePresetStore.getView()?.panelId === pageId) MovePresetStore.cancel();
     if (MovePresetStore.getSaving()?.panelId === pageId) MovePresetStore.cancelSave();
     if (PresetExplorationStore.getState()?.panelId === pageId) {
@@ -9365,11 +9465,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     }
   }, [pageId]);
   const presetOpenPanel = presetScreen && presetScreen.phase !== "closing" ? presetScreen.panelId : null;
-  useEffect10(() => {
+  useEffect11(() => {
     if (!presetOpenPanel) return;
     return MoveFunctions.push("back", () => MovePresetStore.cancel(), { label: "revert", chip: false });
   }, [presetOpenPanel]);
-  useEffect10(() => {
+  useEffect11(() => {
     const openView = () => {
       const view = MovePresetStore.getView();
       return view && view.phase !== "closing" ? view : null;
@@ -9414,8 +9514,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   }, []);
   useSyncExternalStore3(MoveSearchStore.subscribe, MoveSearchStore.getVersion, () => 0);
   const search = MoveSearchStore.getView();
-  const screenShown = useRef10(false);
-  useEffect10(() => {
+  const screenShown = useRef11(false);
+  useEffect11(() => {
     const onSearch = (e) => {
       if (e.defaultPrevented) return;
       if (MoveSearchStore.isOpen()) {
@@ -9431,7 +9531,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     window.addEventListener(MOVE_SEARCH_EVENT, onSearch);
     return () => window.removeEventListener(MOVE_SEARCH_EVENT, onSearch);
   }, []);
-  useEffect10(() => {
+  useEffect11(() => {
     const onJog = (e) => {
       const view = MoveSearchStore.getView();
       if (!view) return;
@@ -9452,7 +9552,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     };
   }, []);
   const searchOpen = !!search;
-  useEffect10(() => {
+  useEffect11(() => {
     if (!searchOpen) return;
     return MoveFunctions.push("back", () => MoveSearchStore.close(), { label: "end search", chip: false });
   }, [searchOpen]);
@@ -9469,7 +9569,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     () => void 0
   );
   const [, bumpControlState] = useState7(0);
-  useEffect10(
+  useEffect11(
     () => pageId ? TweakStore13.subscribeControlState(pageId, () => bumpControlState((n) => n + 1)) : void 0,
     [pageId]
   );
@@ -9483,7 +9583,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     () => MoveSurfaceStore.getState(),
     () => MoveSurfaceStore.getState()
   );
-  useEffect10(() => {
+  useEffect11(() => {
     const forPage = (detail, map) => detail && detail.pageId === pageId ? map ?? {} : {};
     const onTouch = (e) => {
       const d = e.detail;
@@ -9501,13 +9601,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       window.removeEventListener(MOVE_OVERRIDE_EVENT, onOverride);
     };
   }, [pageId]);
-  const pagesRef = useRef10(pages);
+  const pagesRef = useRef11(pages);
   pagesRef.current = pages;
-  const roomIdsRef = useRef10(roomIds);
+  const roomIdsRef = useRef11(roomIds);
   roomIdsRef.current = roomIds;
-  const sawSettings = useRef10(false);
-  const sawRoom = useRef10(false);
-  useEffect10(() => {
+  const sawSettings = useRef11(false);
+  const sawRoom = useRef11(false);
+  useEffect11(() => {
     const onPage = (e) => {
       const id = e.detail?.pageId;
       if (id === MOD_SETTINGS_PANEL) {
@@ -9536,7 +9636,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     window.addEventListener(MOVE_PAGE_EVENT, onPage);
     return () => window.removeEventListener(MOVE_PAGE_EVENT, onPage);
   }, []);
-  useEffect10(() => {
+  useEffect11(() => {
     setHeld(null);
     setLatched({});
   }, [pageId]);
@@ -9545,7 +9645,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const screenSearch = searchTarget === "screen" && screen ? search : null;
   const presetSearch = searchTarget === "presets" && presetOpenPanel ? search : null;
   const paletteSearch = searchTarget === "palette" && paletteScreen ? search : null;
-  useEffect10(() => {
+  useEffect11(() => {
     screenShown.current = !!screen;
     if (searchTarget && !screenSearch && !presetSearch && !paletteSearch) MoveSearchStore.close();
   });
@@ -10481,12 +10581,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                 }
                                 if (meta.type === "toggle") {
                                   const checked = values[meta.path] === true;
+                                  const kind = moveSlotKind(meta);
                                   return /* @__PURE__ */ jsxs12(
                                     "button",
                                     {
                                       type: "button",
                                       className: "tweakers-move-dial",
-                                      "data-kind": meta.icon ? "toggle-icon" : "toggle",
+                                      "data-kind": kind,
                                       "data-on": checked || void 0,
                                       "data-active": active || void 0,
                                       role: "switch",
@@ -10500,7 +10601,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       },
                                       children: [
                                         /* @__PURE__ */ jsx12(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                                        /* @__PURE__ */ jsx12(
+                                        kind === "metronome" ? /* @__PURE__ */ jsx12(
+                                          MoveSlotMetronomeBody,
+                                          {
+                                            label: meta.label,
+                                            checked,
+                                            swing: meta.moveVisual?.kind === "metronome" ? meta.moveVisual.swing : void 0
+                                          }
+                                        ) : /* @__PURE__ */ jsx12(
                                           MoveSlotToggleBody,
                                           {
                                             label: meta.label,
@@ -11231,7 +11339,7 @@ function MoveAudioWave({ index, theme }) {
     () => getAudioModVersion(),
     () => 0
   );
-  useEffect10(() => {
+  useEffect11(() => {
     const params = ModulationStore2.getSlot(index)?.params ?? {};
     const start = clampWave01(params.loopStart);
     const end = clampWave01(params.loopEnd ?? 1);
@@ -11249,7 +11357,7 @@ function MoveAudioWave({ index, theme }) {
       MoveWaveformStore.setProgressSource(null);
     };
   }, [index]);
-  useEffect10(() => {
+  useEffect11(() => {
     const toggle = (path) => () => {
       const slot = ModulationStore2.getSlot(index);
       if (slot) ModulationStore2.updateSlotParams(index, { [path]: !slot.params[path] });
@@ -11261,7 +11369,7 @@ function MoveAudioWave({ index, theme }) {
     ];
     return () => releases.forEach((release) => release());
   }, [index]);
-  useEffect10(() => {
+  useEffect11(() => {
     const prev = MoveSurfaceStore.getState();
     MoveSurfaceStore.setPadRows(
       1,
@@ -11309,7 +11417,7 @@ function MoveRoomWave({ theme }) {
   );
   const buffer = MoveWaveformStore.getBuffer() ?? getAudioModBuffer() ?? moveWaveformDemoSample();
   roomClock.duration = buffer.duration || 1;
-  useEffect10(() => {
+  useEffect11(() => {
     let last = null;
     let raf = requestAnimationFrame(function tick(now) {
       raf = requestAnimationFrame(tick);
@@ -11322,7 +11430,7 @@ function MoveRoomWave({ theme }) {
     });
     return () => cancelAnimationFrame(raf);
   }, []);
-  useEffect10(() => {
+  useEffect11(() => {
     MoveWaveformStore.setProgressSource(() => roomClock.pos);
     const releases = [
       MoveFunctions.push("play", () => roomClock.toggle("playing"), { label: "Play", chip: false }),
@@ -11409,8 +11517,8 @@ function MoveWaveClock() {
     () => 0
   );
   const transport = MoveWaveformStore.getTransport();
-  const clockRef = useRef10(null);
-  useEffect10(() => {
+  const clockRef = useRef11(null);
+  useEffect11(() => {
     let raf = requestAnimationFrame(function tick() {
       const text = MoveWaveformStore.clock();
       if (clockRef.current && clockRef.current.textContent !== text) clockRef.current.textContent = text;
@@ -11459,10 +11567,10 @@ function MoveRoomTransport() {
 }
 function MoveWaveTransport({ playing, loopOn, getSeconds, onLoaded }) {
   const params = { playing, loopOn };
-  const clockRef = useRef10(null);
-  const secondsRef = useRef10(getSeconds);
+  const clockRef = useRef11(null);
+  const secondsRef = useRef11(getSeconds);
   secondsRef.current = getSeconds;
-  useEffect10(() => {
+  useEffect11(() => {
     let raf = requestAnimationFrame(function tick() {
       const t = secondsRef.current();
       const text = `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}:${String(Math.floor(t % 1 * 100)).padStart(2, "0")}`;
@@ -11471,7 +11579,7 @@ function MoveWaveTransport({ playing, loopOn, getSeconds, onLoaded }) {
     });
     return () => cancelAnimationFrame(raf);
   }, []);
-  const fileRef = useRef10(null);
+  const fileRef = useRef11(null);
   const loadFile = async (file) => {
     const bytes = await file.arrayBuffer();
     const Ctx = window.AudioContext ?? window.webkitAudioContext;
@@ -11577,8 +11685,8 @@ function searchedRows(rows, search) {
   return kept.length ? kept.map((i) => rows[i]) : [{ value: "", label: "No matches", muted: true }];
 }
 function MoveSearchBar({ view }) {
-  const inputRef = useRef10(null);
-  useEffect10(() => {
+  const inputRef = useRef11(null);
+  useEffect11(() => {
     inputRef.current?.focus();
   }, []);
   return /* @__PURE__ */ jsxs12("div", { className: "tweakers-move-search", role: "search", children: [
@@ -11609,8 +11717,8 @@ function MoveSearchBar({ view }) {
   ] });
 }
 function MovePresetSaveInput({ suggested }) {
-  const inputRef = useRef10(null);
-  useEffect10(() => {
+  const inputRef = useRef11(null);
+  useEffect11(() => {
     inputRef.current?.select();
   }, []);
   return /* @__PURE__ */ jsx12("div", { className: "tweakers-move-preset-save", children: /* @__PURE__ */ jsx12(
@@ -11631,8 +11739,8 @@ function MovePresetSaveInput({ suggested }) {
 }
 var SCOPE_SAMPLES = 120;
 function MoveScope({ index }) {
-  const ref = useRef10(null);
-  useEffect10(() => {
+  const ref = useRef11(null);
+  useEffect11(() => {
     const now = (ModulationStore2.getSignal(index) + 1) / 2;
     const pts = Array(SCOPE_SAMPLES).fill(now);
     let raf = requestAnimationFrame(function tick() {
@@ -11656,10 +11764,10 @@ function MoveScope({ index }) {
   );
 }
 function MoveWavePreview({ index }) {
-  const path = useRef10(null);
-  const line = useRef10(null);
+  const path = useRef11(null);
+  const line = useRef11(null);
   const preview = ModulationStore2.getSettingsPreview(64);
-  useEffect10(() => {
+  useEffect11(() => {
     let shown = "";
     let raf = requestAnimationFrame(function tick() {
       const { start, span } = getAudioModWindow();
@@ -11703,9 +11811,9 @@ function stepRuns(cells) {
   return runs;
 }
 function MoveModCircle({ slot }) {
-  const dotRef = useRef10(null);
-  const pressAt = useRef10(0);
-  useEffect10(() => {
+  const dotRef = useRef11(null);
+  const pressAt = useRef11(0);
+  useEffect11(() => {
     if (typeof window === "undefined") return;
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     return ModulationStore2.subscribeFrames(() => {
@@ -11749,7 +11857,7 @@ function MoveModCircle({ slot }) {
 }
 
 // src/components/MoveActionButton.tsx
-import { useEffect as useEffect11, useRef as useRef11, useState as useState8 } from "react";
+import { useEffect as useEffect12, useRef as useRef12, useState as useState8 } from "react";
 import { jsx as jsx13, jsxs as jsxs13 } from "react/jsx-runtime";
 var PRESS_FLASH_MS2 = 160;
 var KIND_FUNCTION = {
@@ -11762,13 +11870,13 @@ var KIND_FUNCTION = {
 function MoveActionButton({ kind, children, onPress, disabled, className }) {
   const name = kind === "shift" ? null : KIND_FUNCTION[kind];
   const [pressed, setPressed] = useState8(false);
-  const flashTimer = useRef11(void 0);
+  const flashTimer = useRef12(void 0);
   const flash = () => {
     setPressed(true);
     clearTimeout(flashTimer.current);
     flashTimer.current = setTimeout(() => setPressed(false), PRESS_FLASH_MS2);
   };
-  useEffect11(() => {
+  useEffect12(() => {
     if (!name) return () => clearTimeout(flashTimer.current);
     const unsubscribe = MoveFunctions.subscribeRuns((ran) => {
       if (ran === name) flash();
@@ -11819,7 +11927,7 @@ function MoveActionButton({ kind, children, onPress, disabled, className }) {
 }
 
 // src/components/MoveActionDeck.tsx
-import { useEffect as useEffect12, useMemo as useMemo3, useRef as useRef12, useState as useState9 } from "react";
+import { useEffect as useEffect13, useMemo as useMemo3, useRef as useRef13, useState as useState9 } from "react";
 
 // src/move-deck-core.ts
 var MOVE_DECK_MAX = MOVE_CHIP_BUTTONS.length;
@@ -11851,8 +11959,8 @@ import { jsx as jsx14, jsxs as jsxs14 } from "react/jsx-runtime";
 var PRESS_FLASH_MS3 = 160;
 function DeckButton({ action }) {
   const [pressed, setPressed] = useState9(false);
-  const flashTimer = useRef12(void 0);
-  useEffect12(() => {
+  const flashTimer = useRef13(void 0);
+  useEffect13(() => {
     const unsubscribe = MoveFunctions.subscribeRuns((ran) => {
       if (ran !== action.button) return;
       setPressed(true);
@@ -11890,13 +11998,13 @@ function MoveActionDeck({ actions, className }) {
     () => normalizeDeck(actions),
     [actions]
   );
-  useEffect12(() => {
+  useEffect13(() => {
     for (const warning of warnings) console.warn(`[tweakers] action deck: ${warning}`);
   }, [warnings]);
-  const shownRef = useRef12(shown);
+  const shownRef = useRef13(shown);
   shownRef.current = shown;
   const signature = shown.map((a) => `${a.button}:${a.disabled ? "-" : "+"}${a.label}`).join("|");
-  useEffect12(() => {
+  useEffect13(() => {
     const detaches = shownRef.current.filter((a) => !a.disabled).map(
       (a) => MoveFunctions.attach(
         a.button,
@@ -11913,7 +12021,7 @@ function MoveActionDeck({ actions, className }) {
 }
 
 // src/components/MoveNotifications.tsx
-import { useEffect as useEffect13, useState as useState10 } from "react";
+import { useEffect as useEffect14, useState as useState10 } from "react";
 import { createPortal as createPortal4 } from "react-dom";
 import { Toast } from "@base-ui/react/toast";
 
@@ -11943,7 +12051,7 @@ var moveNotify = manager;
 var MEASURE_MS = 100;
 function useDockBottom(active) {
   const [bottom, setBottom] = useState10(MOVE_NOTIFY_GAP);
-  useEffect13(() => {
+  useEffect14(() => {
     if (!active || typeof window === "undefined") return;
     let frame = 0;
     let last = 0;
@@ -11998,7 +12106,7 @@ function MoveNotifications({
   className
 }) {
   const [mounted, setMounted] = useState10(false);
-  useEffect13(() => setMounted(true), []);
+  useEffect14(() => setMounted(true), []);
   if (!mounted || typeof document === "undefined") return null;
   return createPortal4(
     /* @__PURE__ */ jsx15("div", { className: "tweakers-root tweakers-move-surface tweakers-move-notify-root", children: /* @__PURE__ */ jsx15(Toast.Provider, { toastManager: manager, limit, timeout, children: /* @__PURE__ */ jsx15(NotifyStack, { ...className ? { className } : {} }) }) }),
@@ -12464,6 +12572,7 @@ export {
   MoveSlotEnvBody,
   MoveSlotFilterBody,
   MoveSlotGlyph,
+  MoveSlotMetronomeBody,
   MoveSlotNumericBody,
   MoveSlotPlaybackDrawing,
   MoveSlotRampBody,
