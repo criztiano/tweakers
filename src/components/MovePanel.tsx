@@ -14,10 +14,10 @@ import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from '../theme';
-import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
+import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody } from './move-slots';
+import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing, angleFromPointer } from '../angle-core';
@@ -109,6 +109,9 @@ const MIN_PAD_COLUMNS = 4;
 const DIAL_TRACK_INSET = 10;
 /** The trim span's line sits this much further in than a dial's track. */
 const TRIM_SPAN_PAD = 4;
+/** A fade or loop line's inset from its pill's sides — must match
+ *  .tweakers-move-edges-track. */
+const EDGES_TRACK_INSET = 12;
 /** The xy field's inset within its slot — must match .tweakers-move-xy. */
 const XY_INSET = { left: 8, top: 8, right: 9, bottom: 8 };
 
@@ -1363,6 +1366,20 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     if (hwHeldChip) return hwHeldChip;
     if (latched[col]) return latched[col];
     return chips.find((m) => hwLatched[m.path]) ?? page.dials[col];
+  };
+
+  // A fade or loop line takes the cursor like Start and End: press on a
+  // handle and drag it. `edgesFromPointer` reads the cursor's place on the
+  // line, 0..1; a loop marker runs the whole line, a fade its own half, from
+  // its own end inward.
+  const edgesFromPointer = (e: React.PointerEvent<HTMLElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const span = rect.width - EDGES_TRACK_INSET * 2;
+    return Math.min(1, Math.max(0, (e.clientX - rect.left - EDGES_TRACK_INSET) / (span || 1)));
+  };
+  const dragEdge = (kind: 'fade' | 'loop', isStart: boolean, meta: ControlMeta, x: number) => {
+    const v01 = kind === 'loop' ? x : Math.min(1, (isStart ? x : 1 - x) * 2);
+    TweakStore.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
   };
 
   // A take's two edges side by side — a trim start in this column, a trim
@@ -2670,6 +2687,79 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       );
                     }
                     if (!meta) return <div key={`empty-${col}`} className="tweakers-move-pad" data-empty="true" />;
+                    // A fade or a loop — a start chip and the end chip beside
+                    // it — draws once, out of its start pad, two pads wide;
+                    // the end pad yields its cell to the span. Each half is
+                    // still its own chip over its own pad: hold peeks, tap
+                    // latches. A strip's window may cut a pair, so a strip
+                    // keeps the two chips.
+                    const edges = stripMode ? null : moveEdgesCell(page, padRows, row, col);
+                    if (edges?.tail) return null;
+                    if (edges) {
+                      const chipHeld = (m: ControlMeta) => (held !== null && held.meta.path === m.path) || !!hwHeld[m.path];
+                      // An edge has moved once it sits half a step or more off
+                      // its open end: a fade and a loop start open at their
+                      // minimum, a loop end at its maximum.
+                      const hand = (m: ControlMeta, open: number) => ({
+                        at: normalizeDial(m, values[m.path]),
+                        moved: Math.abs(Number(values[m.path]) - open) >= Math.max((m.step ?? 0) / 2, 1e-9),
+                      });
+                      const start = hand(edges.start, edges.start.min ?? 0);
+                      const end = hand(edges.end, edges.kind === 'loop' ? edges.end.max ?? 1 : edges.end.min ?? 0);
+                      return (
+                        <div
+                          key={`edges-${col}`}
+                          className="tweakers-move-edges"
+                          data-kind={edges.kind}
+                          style={{ gridColumn: 'span 2' }}
+                          onPointerDown={(e) => {
+                            const x = edgesFromPointer(e);
+                            // The hand nearest the cursor is the one taken: a
+                            // fade by its half of the line, a loop by whichever
+                            // marker is closer (the start, when they sit together
+                            // and the cursor is left of them).
+                            const takeStart = edges.kind === 'fade'
+                              ? x < 0.5
+                              : Math.abs(x - start.at) < Math.abs(x - end.at) || (start.at >= end.at && x <= start.at);
+                            const m = takeStart ? edges.start : edges.end;
+                            if (TweakStore.isDisabled(page.panel.id, m.path)) return;
+                            try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                            setDragPath(m.path);
+                            armMod(m.path);
+                            dragEdge(edges.kind, takeStart, m, x);
+                          }}
+                          onPointerMove={(e) => {
+                            const m = dragPath === edges.start.path ? edges.start : dragPath === edges.end.path ? edges.end : null;
+                            if (m && !TweakStore.isDisabled(page.panel.id, m.path)) dragEdge(edges.kind, m === edges.start, m, edgesFromPointer(e));
+                          }}
+                          onPointerUp={() => setDragPath(null)}
+                          onPointerCancel={() => setDragPath(null)}
+                        >
+                          {edges.kind === 'fade'
+                            ? <MovePadFadeBody fadeIn={start} fadeOut={end} />
+                            : <MovePadLoopBody start={start} end={end} />}
+                          {([[edges.start, col], [edges.end, col + 1]] as const).map(([m, at]) => (
+                            <div
+                              key={m.path}
+                              className="tweakers-move-edges-zone"
+                              role="slider"
+                              tabIndex={TweakStore.isDisabled(page.panel.id, m.path) ? -1 : 0}
+                              aria-label={m.label}
+                              aria-valuemin={m.min ?? 0}
+                              aria-valuemax={m.max ?? 1}
+                              aria-valuenow={Number(values[m.path])}
+                              aria-valuetext={moveVisualReading(m, Number(values[m.path]))}
+                              aria-orientation="horizontal"
+                              data-held={chipHeld(m) || undefined}
+                              data-latched={chipLatched(at, m) || undefined}
+                              onKeyDown={(k) => dialFromKeyboard(k, m)}
+                            >
+                              <MoveModRing panelId={page.panel.id} path={m.path} pad />
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    }
                     // A band — a high cut over a low cut in one column — draws
                     // once, out of its upper pad, two pads tall; the pad under
                     // it holds the column and yields the room. Each half is

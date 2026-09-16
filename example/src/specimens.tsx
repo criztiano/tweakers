@@ -27,6 +27,8 @@ import {
   MovePadTabsBody,
   MovePadColorBody,
   MovePadBandBody,
+  MovePadFadeBody,
+  MovePadLoopBody,
   CurveComposer,
   ModRing,
   ModulationStore,
@@ -432,6 +434,18 @@ export const SMALL_SLOTS: Specimen[] = [
     description: MOVE_PAD_LIBRARY.band.description,
     note: 'Two chips in one column, one over the other, named in the panel’s moveBands. The low cut is open, a sliver at its edge; the high cut has come in and turned yellow. Primecut’s Polish page wears one per take.',
     render: () => <MovePadBandBody low={{ at: 0, cut: false }} high={{ at: 0.7, cut: true }} />,
+  },
+  {
+    kind: 'fade', span: 2,
+    description: MOVE_PAD_LIBRARY.fade.description,
+    note: 'Two chips side by side, the fade in first, named in the panel’s moveEdges. The fade in has come in and turned blue; the fade out is still a needle. Primecut’s editor wears one under Start and End.',
+    render: () => <MovePadFadeBody fadeIn={{ at: 0.3, moved: true }} fadeOut={{ at: 0, moved: false }} />,
+  },
+  {
+    kind: 'loop', span: 2,
+    description: MOVE_PAD_LIBRARY.loop.description,
+    note: 'Two chips side by side, the start first, named in the panel’s moveEdges. The start has moved in and turned red, the part before it shaded; the end still sits on its end of the line.',
+    render: () => <MovePadLoopBody start={{ at: 0.2, moved: true }} end={{ at: 1, moved: false }} />,
   },
   {
     kind: 'tabs', span: 4,

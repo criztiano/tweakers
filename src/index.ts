@@ -30,8 +30,8 @@ export { MoveActionDeck } from './components/MoveActionDeck';
 export type { MoveActionDeckProps, MoveDeckActionDress } from './components/MoveActionDeck';
 export { normalizeDeck, MOVE_DECK_MAX } from './move-deck-core';
 export type { MoveDeckAction, MoveDeckButton } from './move-deck-core';
-export { buildMovePages, buildModMovePage, slotGroups, movePadRows, moveAppPadRow, visibleColumns, isToggleDial, normalizeToggleDial, denormalizeToggleDial, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, padSpan, isMoveDial, isMoveTabs, isNamedTabs, moveTabCell, moveBandCell, isSpanContinuation, isPadSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
-export type { MovePage, MoveBandCell } from './move-layout';
+export { buildMovePages, buildModMovePage, slotGroups, movePadRows, moveAppPadRow, visibleColumns, isToggleDial, normalizeToggleDial, denormalizeToggleDial, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, padSpan, isMoveDial, isMoveTabs, isNamedTabs, moveTabCell, moveBandCell, moveEdgesCell, isSpanContinuation, isPadSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
+export type { MovePage, MoveBandCell, MoveEdgesCell } from './move-layout';
 
 // The endless strip — a page with more slots than the Move has dials
 export { buildMoveStrip, isStripSlot, stripStarts, stripOffsets, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripSlotCount, stripSlotIndex } from './move-strip';
@@ -39,8 +39,8 @@ export { buildMoveStrip, isStripSlot, stripStarts, stripOffsets, clampStripOffse
 // The big-slot library — the dictionary of what a Move dial slot can be
 export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotPlaybackDrawing, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotColorBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
 // The small slots — the pad row under the dials
-export { MOVE_PAD_LIBRARY, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody } from './components/move-slots';
-export type { MovePadKind, MovePadBandHand } from './components/move-slots';
+export { MOVE_PAD_LIBRARY, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody } from './components/move-slots';
+export type { MovePadKind, MovePadBandHand, MovePadEdgeHand } from './components/move-slots';
 export { moveNumericDrawing, moveTrimSpan, movePlaybackMode, moveVisualReading, moveBandCuts, MOVE_BAND_W, MOVE_BAND_H } from './move-visual-core';
 export type { MoveVisual, MoveSliderVisual, MoveSelectVisual, MovePlaybackMode, MoveNumericDrawing } from './move-visual-core';
 export type { MoveSlotKind, MoveTrimSpanEdge } from './components/move-slots';
@@ -327,6 +327,7 @@ export type {
   ToggleConfig,
   MoveSlotGroup,
   MoveBand,
+  MoveEdges,
   ColorConfig,
   GradientConfig,
   BalanceConfig,
