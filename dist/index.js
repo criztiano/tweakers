@@ -8865,6 +8865,7 @@ import { jsx as jsx12, jsxs as jsxs12 } from "react/jsx-runtime";
 var PAD_ROWS = 4;
 var MIN_PAD_COLUMNS = 4;
 var DIAL_TRACK_INSET = 10;
+var TRIM_SPAN_PAD = 4;
 var XY_INSET = { left: 8, top: 8, right: 9, bottom: 8 };
 var XY_GRID_DEFAULT = 5;
 var TAP_MS = 300;
@@ -9511,11 +9512,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     armMod(meta.path);
     TweakStore13.updateValue(page.panel.id, meta.path, next);
   };
-  const dialFromPointer = (e, meta, box = e.currentTarget) => {
+  const dialFromPointer = (e, meta, box = e.currentTarget, inset = DIAL_TRACK_INSET) => {
     const rect = box.getBoundingClientRect();
-    const span = rect.width - DIAL_TRACK_INSET * 2;
+    const span = rect.width - inset * 2;
     const fine = fineAnchor(e, () => normalizeDial(meta, values[meta.path]));
-    const v01 = fine ? fineDragValue({ startValue: fine.v, startPos: fine.x, pos: e.clientX, extentPx: span || 1, min: 0, max: 1, factor: fine.shift ? 0.1 : 1 }) : Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
+    const v01 = fine ? fineDragValue({ startValue: fine.v, startPos: fine.x, pos: e.clientX, extentPx: span || 1, min: 0, max: 1, factor: fine.shift ? 0.1 : 1 }) : Math.min(1, Math.max(0, (e.clientX - rect.left - inset) / (span || 1)));
     TweakStore13.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
   };
   const xyFromPointer = (e, meta) => {
@@ -10610,11 +10611,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                                 fineRef.current = null;
                                                 setDragPath(e.meta.path);
                                                 armMod(e.meta.path);
-                                                dialFromPointer(p, e.meta, p.currentTarget.parentElement ?? p.currentTarget);
+                                                dialFromPointer(p, e.meta, p.currentTarget.parentElement ?? p.currentTarget, DIAL_TRACK_INSET + TRIM_SPAN_PAD);
                                               },
                                               onPointerMove: (p) => {
                                                 if (!TweakStore13.isDisabled(page.panel.id, e.meta.path) && dragPath === e.meta.path) {
-                                                  dialFromPointer(p, e.meta, p.currentTarget.parentElement ?? p.currentTarget);
+                                                  dialFromPointer(p, e.meta, p.currentTarget.parentElement ?? p.currentTarget, DIAL_TRACK_INSET + TRIM_SPAN_PAD);
                                                 }
                                               },
                                               onPointerUp: () => {
