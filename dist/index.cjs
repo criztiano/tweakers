@@ -115,10 +115,12 @@ __export(index_exports, {
   MovePadAppBody: () => MovePadAppBody,
   MovePadBandBody: () => MovePadBandBody,
   MovePadColorBody: () => MovePadColorBody,
+  MovePadFadeBody: () => MovePadFadeBody,
   MovePadIconBody: () => MovePadIconBody,
   MovePadIconLabelBody: () => MovePadIconLabelBody,
   MovePadListBody: () => MovePadListBody,
   MovePadListStore: () => MovePadListStore,
+  MovePadLoopBody: () => MovePadLoopBody,
   MovePadTabsBody: () => MovePadTabsBody,
   MovePadToggleBody: () => MovePadToggleBody,
   MovePadValueBody: () => MovePadValueBody,
@@ -261,6 +263,7 @@ __export(index_exports, {
   moveAppPadRow: () => moveAppPadRow,
   moveBandCell: () => moveBandCell,
   moveBandCuts: () => moveBandCuts,
+  moveEdgesCell: () => moveEdgesCell,
   moveKitOptions: () => moveKitOptions,
   moveNotify: () => moveNotify,
   moveNumericDrawing: () => moveNumericDrawing,
@@ -1770,6 +1773,17 @@ function buildMovePages(panels) {
         );
       }
     }
+    for (const edges of panel.moveEdges ?? []) {
+      const on = [edges.start, edges.end].filter((path) => rows.some((r) => r.some((m) => m?.path === path)));
+      if (on.length < 2) continue;
+      const paired = rows.some((r, row) => r.some((m, col) => m?.path === edges.start && moveEdgesCell(page, rows, row, col)));
+      if (!paired) {
+        reportMoveLayoutIssue(
+          "edges-apart",
+          `panel '${panel.id}': ${edges.kind} '${edges.start}' / '${edges.end}' is not two chips side by side in one row, start first \u2014 drawn as its two chips`
+        );
+      }
+    }
     return page;
   });
 }
@@ -1817,6 +1831,19 @@ function moveBandCell(page, rows, row, col) {
     const low = meta.path === band.low ? meta : other;
     const top = tail ? other : meta;
     return { high, low, upper: top === high ? "high" : "low", tail };
+  }
+  return null;
+}
+function moveEdgesCell(page, rows, row, col) {
+  const meta = rows[row]?.[col];
+  if (!meta || !page.panel.moveEdges?.length) return null;
+  const chip = (m) => !!m && isDial(m) && !noChip(m) && !page.dials.includes(m);
+  for (const edges of page.panel.moveEdges) {
+    if (meta.path !== edges.start && meta.path !== edges.end) continue;
+    const tail = meta.path === edges.end;
+    const other = rows[row]?.[tail ? col - 1 : col + 1];
+    if (other?.path !== (tail ? edges.start : edges.end) || !chip(meta) || !chip(other)) return null;
+    return { kind: edges.kind, start: tail ? other : meta, end: tail ? meta : other, tail };
   }
   return null;
 }
@@ -2645,6 +2672,44 @@ function MovePadBandBody({ low, high, upper = "high" }) {
     )) })
   ] });
 }
+var edgeAt = (at) => Math.max(0, Math.min(1, at)) * 100;
+function MovePadFadeBody({ fadeIn, fadeOut }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "tweakers-move-edges-track", "aria-hidden": "true", children: [["in", fadeIn], ["out", fadeOut]].map(([edge, hand]) => /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
+    "span",
+    {
+      className: "tweakers-move-fade",
+      "data-edge": edge,
+      "data-moved": hand.moved || void 0,
+      style: { "--move-edge-at": `${edgeAt(hand.at)}%` },
+      children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-fade-ramp" }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-fade-handle" })
+      ]
+    },
+    edge
+  )) });
+}
+function MovePadLoopBody({ start, end }) {
+  const a = edgeAt(start.at);
+  const b = edgeAt(end.at);
+  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "tweakers-move-edges-track", "aria-hidden": "true", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-loop-outside", style: { left: 0, width: `${a}%` } }),
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-loop-outside", style: { right: 0, width: `${100 - b}%` } }),
+    [["start", start, a], ["end", end, b]].map(([edge, hand, at]) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+      "svg",
+      {
+        className: "tweakers-move-loop-marker",
+        "data-edge": edge,
+        "data-moved": hand.moved || void 0,
+        style: { left: `${at}%` },
+        viewBox: "0 0 8 16",
+        preserveAspectRatio: "none",
+        children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("path", { d: edge === "start" ? "M0 0L8 8L0 16Z" : "M8 0L0 8L8 16Z" })
+      },
+      edge
+    ))
+  ] });
+}
 function MovePadAppBody({ label, color }) {
   return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
     /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
@@ -2691,7 +2756,9 @@ var MOVE_PAD_LIBRARY = {
   wave: { description: "hold and drag for the stage\u2019s own sine, tap to flip it", component: MovePadWaveBody },
   tabs: { description: "2 to 8 pads: the page\u2019s modes side by side, the current one lit \u2014 a name pad optional", component: MovePadTabsBody },
   color: { description: "a single colour in a small slot \u2014 tap latches it onto the dial above, hold peeks; that dial edits and opens it", component: MovePadColorBody },
-  band: { description: "2 pads in one column: a high cut over a low cut, drawn as one band on a small screen \u2014 each half its own chip", component: MovePadBandBody }
+  band: { description: "2 pads in one column: a high cut over a low cut, drawn as one band on a small screen \u2014 each half its own chip", component: MovePadBandBody },
+  fade: { description: "2 pads in one row: a fade in and a fade out, each a ramp from its own end of one line \u2014 each half its own chip", component: MovePadFadeBody },
+  loop: { description: "2 pads in one row: a loop\u2019s start and end, a marker for each on one line \u2014 each half its own chip", component: MovePadLoopBody }
 };
 var MOVE_SLOT_LIBRARY = {
   color: { description: "selected color; hue on the dial, luminosity on volume, tap to edit", component: MoveSlotColorBody },
@@ -6267,7 +6334,7 @@ function createWaveformEngine(canvas, get) {
     const t = span > 0 ? Math.min(1, Math.max(0, (x - piece.x0) / span)) : 0;
     return Math.min(1, Math.max(0, Math.min(start + win, piece.a + t * (piece.b - piece.a))));
   };
-  const edgeAt = (clientX) => {
+  const edgeAt2 = (clientX) => {
     const rt = get();
     const loop = rt.loop;
     if (!loop || !rt.onLoopChange) return null;
@@ -6293,7 +6360,7 @@ function createWaveformEngine(canvas, get) {
     } catch {
     }
     const p = xToProgress(e.clientX);
-    const edge = edgeAt(e.clientX);
+    const edge = edgeAt2(e.clientX);
     if (edge && rt.loop) {
       const anchor = edge === "start" ? rt.loop.end : rt.loop.start;
       drag = { mode: "resize", anchor, curProg: p, startX: e.clientX, moved: false };
@@ -6310,7 +6377,7 @@ function createWaveformEngine(canvas, get) {
     }
     const rt = get();
     if (!rt.onSeek && !rt.onLoopChange) return;
-    setCursor(edgeAt(e.clientX) ? "ew-resize" : "crosshair");
+    setCursor(edgeAt2(e.clientX) ? "ew-resize" : "crosshair");
   };
   const onPointerUp = (e) => {
     const d = drag;
@@ -11281,6 +11348,35 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       );
                                     }
                                     if (!meta) return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
+                                    const edges = stripMode ? null : moveEdgesCell(page, padRows, row, col);
+                                    if (edges?.tail) return null;
+                                    if (edges) {
+                                      const chipHeld = (m) => held !== null && held.meta.path === m.path || !!hwHeld[m.path];
+                                      const hand = (m, open2) => ({
+                                        at: normalizeDial(m, values[m.path]),
+                                        moved: Math.abs(Number(values[m.path]) - open2) >= Math.max((m.step ?? 0) / 2, 1e-9)
+                                      });
+                                      const start = hand(edges.start, edges.start.min ?? 0);
+                                      const end = hand(edges.end, edges.kind === "loop" ? edges.end.max ?? 1 : edges.end.min ?? 0);
+                                      return /* @__PURE__ */ (0, import_jsx_runtime12.jsxs)("div", { className: "tweakers-move-edges", "data-kind": edges.kind, style: { gridColumn: "span 2" }, children: [
+                                        edges.kind === "fade" ? /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MovePadFadeBody, { fadeIn: start, fadeOut: end }) : /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MovePadLoopBody, { start, end }),
+                                        [[edges.start, col], [edges.end, col + 1]].map(([m, at]) => /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(
+                                          "button",
+                                          {
+                                            type: "button",
+                                            className: "tweakers-move-edges-zone",
+                                            "aria-label": m.label,
+                                            "data-held": chipHeld(m) || void 0,
+                                            "data-latched": chipLatched(at, m) || void 0,
+                                            onPointerDown: (e) => pressChip(e, at, m),
+                                            onPointerUp: () => releaseChip(at, m),
+                                            onPointerCancel: () => setHeld(null),
+                                            children: /* @__PURE__ */ (0, import_jsx_runtime12.jsx)(MoveModRing, { panelId: page.panel.id, path: m.path, pad: true })
+                                          },
+                                          m.path
+                                        ))
+                                      ] }, `edges-${col}`);
+                                    }
                                     const band = moveBandCell(page, padRows, row, col);
                                     if (band?.tail) return /* @__PURE__ */ (0, import_jsx_runtime12.jsx)("div", { className: "tweakers-move-band", "data-tail": true, "aria-hidden": "true" }, `band-${col}`);
                                     if (band) {
@@ -12698,10 +12794,12 @@ var import_TweakStore15 = require("tweakers/store");
   MovePadAppBody,
   MovePadBandBody,
   MovePadColorBody,
+  MovePadFadeBody,
   MovePadIconBody,
   MovePadIconLabelBody,
   MovePadListBody,
   MovePadListStore,
+  MovePadLoopBody,
   MovePadTabsBody,
   MovePadToggleBody,
   MovePadValueBody,
@@ -12844,6 +12942,7 @@ var import_TweakStore15 = require("tweakers/store");
   moveAppPadRow,
   moveBandCell,
   moveBandCuts,
+  moveEdgesCell,
   moveKitOptions,
   moveNotify,
   moveNumericDrawing,

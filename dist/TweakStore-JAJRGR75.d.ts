@@ -149,6 +149,13 @@ type MoveBand = {
     high: string;
     low: string;
 };
+/** Two value chips side by side in one pad row that set the two edges of one
+ *  line: a fade in and a fade out, or a loop's start and end. */
+type MoveEdges = {
+    kind: 'fade' | 'loop';
+    start: string;
+    end: string;
+};
 type ToggleConfig = {
     type: 'toggle';
     default: boolean;
@@ -737,6 +744,8 @@ type PanelConfig = {
     moveSlotGroups?: MoveSlotGroup[];
     /** Stacked cut chips drawn as one band, retained on the same terms as `hints`. */
     moveBands?: MoveBand[];
+    /** Side-by-side edge chips drawn as one line, retained on the same terms as `hints`. */
+    moveEdges?: MoveEdges[];
     /**
      * Config declared `_enabled` at its root — the whole panel is a module, and
      * its title carries the switch. Same idiom as a module folder, one level up.
@@ -745,4 +754,4 @@ type PanelConfig = {
     kind?: 'timeline' | 'modulation' | 'kit';
 };
 
-export { type ControlMeta as C, MOVE_BAND_H as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_W as d, type MoveNumericDrawing as e, type MovePlaybackMode as f, type MoveSelectVisual as g, type MoveSliderVisual as h, type MoveVisual as i, moveKeyboardValue as j, moveNumericDrawing as k, movePlaybackMode as l, moveBandCuts as m, moveTrimSpan as n, moveVisualReading as o };
+export { type ControlMeta as C, type MoveEdges as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_H as d, MOVE_BAND_W as e, type MoveNumericDrawing as f, type MovePlaybackMode as g, type MoveSelectVisual as h, type MoveSliderVisual as i, type MoveVisual as j, moveKeyboardValue as k, moveNumericDrawing as l, moveBandCuts as m, movePlaybackMode as n, moveTrimSpan as o, moveVisualReading as p };

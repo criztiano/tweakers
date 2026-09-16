@@ -459,6 +459,17 @@ function buildMovePages(panels) {
         );
       }
     }
+    for (const edges of panel.moveEdges ?? []) {
+      const on = [edges.start, edges.end].filter((path) => rows.some((r) => r.some((m) => m?.path === path)));
+      if (on.length < 2) continue;
+      const paired = rows.some((r, row) => r.some((m, col) => m?.path === edges.start && moveEdgesCell(page, rows, row, col)));
+      if (!paired) {
+        reportMoveLayoutIssue(
+          "edges-apart",
+          `panel '${panel.id}': ${edges.kind} '${edges.start}' / '${edges.end}' is not two chips side by side in one row, start first \u2014 drawn as its two chips`
+        );
+      }
+    }
     return page;
   });
 }
@@ -506,6 +517,19 @@ function moveBandCell(page, rows, row, col) {
     const low = meta.path === band.low ? meta : other;
     const top = tail ? other : meta;
     return { high, low, upper: top === high ? "high" : "low", tail };
+  }
+  return null;
+}
+function moveEdgesCell(page, rows, row, col) {
+  const meta = rows[row]?.[col];
+  if (!meta || !page.panel.moveEdges?.length) return null;
+  const chip = (m) => !!m && isDial(m) && !noChip(m) && !page.dials.includes(m);
+  for (const edges of page.panel.moveEdges) {
+    if (meta.path !== edges.start && meta.path !== edges.end) continue;
+    const tail = meta.path === edges.end;
+    const other = rows[row]?.[tail ? col - 1 : col + 1];
+    if (other?.path !== (tail ? edges.start : edges.end) || !chip(meta) || !chip(other)) return null;
+    return { kind: edges.kind, start: tail ? other : meta, end: tail ? meta : other, tail };
   }
   return null;
 }
@@ -694,6 +718,7 @@ export {
   isToggleDial,
   moveAppPadRow,
   moveBandCell,
+  moveEdgesCell,
   movePadRows,
   moveTabCell,
   normalizeDial,
