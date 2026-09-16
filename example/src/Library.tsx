@@ -490,7 +490,7 @@ const DIAL_KIND: Record<string, string | undefined> = {
   color: 'color', filter: 'filter', xy: 'xy', range: 'range', enum: 'enum', 'enum-wide': 'enum',
   icon: 'enum', curve: 'enum', playback: 'enum', toggle: 'toggle', 'toggle-icon': 'toggle-icon',
   transfer: 'transfer',
-  ramp: 'ramp', dial: 'dial', scope: 'scope', env: 'env',
+  ramp: 'ramp', dial: 'dial', scope: 'scope', env: 'env', 'trim-span': 'trim-span',
 };
 
 const NUMERIC_KINDS = ['opacity', 'blur', 'pan', 'stereo-width', 'pitch'];

@@ -20,6 +20,7 @@ adjustment, modulation, readouts and hardware column alignment.
 | `xy` | Two axes that form one gesture | `xy`; `MoveSlotXYBody` | Column knob X, touched + volume Y |
 | `range` | Low/high bounds of one interval | `range`; `MoveSlotRangeBody` | Column knob low, touched + volume high |
 | `filter` | Cutoff and resonance with a response display | `filter`; `MoveSlotFilterBody` | 2 adjacent dials |
+| `trim-span` | A take's start and end — one line, a flag per edge | A slider with `moveVisual: { kind: 'trim', edge: 'start' }` in the column before one with `edge: 'end'`; `MoveSlotTrimSpanBody` | 2 adjacent dials, each knob one edge; a drag reads the whole line. Both the page's own dials, or both latched chips — one chip alone keeps its single face |
 | `color` | One colour the page is about | `color` config; `MoveSlotColorBody` | 1 dial; hue on the knob, luminosity on volume, tap opens the editor |
 | `ramp` | A colour gradient of 2–4 stops, editable in place | `gradient` config; `MoveSlotRampBody` | 1 dial; tap opens the editor — the track buttons become the stops |
 | `balance` | A 0..1 mix between two sibling colour params | `balance` config (`{ type: 'balance', a, b }`); `MoveSlotRampBody` | 1 dial, a plain normalized value on the wire |
