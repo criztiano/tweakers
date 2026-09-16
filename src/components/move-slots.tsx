@@ -639,7 +639,7 @@ export function MoveSlotGateBody({
 /** The speed gauge's drawing, in its own viewBox units (1 unit = 1px): a
  *  dome of radius `r` on a baseline `base` below its centre, graded across
  *  `sweep` degrees either side of straight up. */
-export const MOVE_GAUGE = { r: 41, base: 21, half: 49, top: 42, height: 64, sweep: 110, ticks: 11 } as const;
+export const MOVE_GAUGE = { r: 36, base: 18, half: 43, top: 37, height: 56, sweep: 110, ticks: 11 } as const;
 
 /** Where a value (0..1) points on the gauge: a compass bearing, 0 = up. */
 export const moveGaugeBearing = (position: number) => (place(position) * 2 - 1) * MOVE_GAUGE.sweep;
@@ -654,7 +654,7 @@ function MoveGauge({ position }: { position: number }) {
   const needle = point(moveGaugeBearing(position), r * 0.62);
   return (
     <svg className="tweakers-move-multiband-gauge" data-track="speed" viewBox={`${-half} ${-top} ${half * 2} ${height}`} aria-hidden="true">
-      <path className="tweakers-move-multiband-gauge-dome" d={`M${-foot} ${base}A${r} ${r} 0 1 1 ${foot} ${base}`} />
+      <path className="tweakers-move-multiband-gauge-dome" d={`M${-foot} ${base}A${r} ${r} 0 1 1 ${foot} ${base}Z`} />
       <line className="tweakers-move-multiband-gauge-base" x1={-half + 1} y1={base} x2={half - 1} y2={base} />
       {Array.from({ length: ticks }, (_, k) => {
         const at = k / (ticks - 1);

@@ -8,7 +8,7 @@ import { MoveLiveCanvas } from './MoveLiveCanvas';
  */
 export function MoveMultibandDisplay({ panelId, bands, reading }: {
   panelId?: string;
-  /** Each band's setting (0..1, already scaled by the amount), top of the spectrum first. */
+  /** Each band's setting (0..1), top of the spectrum first. */
   bands: { position: number; active?: boolean }[];
   reading?: MoveMultibandReading;
 }) {

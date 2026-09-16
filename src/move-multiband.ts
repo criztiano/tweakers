@@ -47,21 +47,22 @@ export function drawMoveMultiband(
     g.globalAlpha = 1;
   }
 
-  // A smooth curve through the band points (Catmull-Rom), held flat out to the edges.
+  // A smooth curve through the band points that never swings past them
+  // (monotone cubic), held flat out to the edges.
   const pts = bands.map((b, k) => [x(k), y(b.position)] as const);
+  const slopes = pts.map((_, k) => {
+    if (k === 0 || k === n - 1) return 0;
+    const before = (pts[k][1] - pts[k - 1][1]) / slice;
+    const after = (pts[k + 1][1] - pts[k][1]) / slice;
+    return before * after <= 0 ? 0 : (2 * before * after) / (before + after);
+  });
   const curve = () => {
     g.moveTo(0, pts[0][1]);
     g.lineTo(pts[0][0], pts[0][1]);
     for (let k = 0; k < n - 1; k++) {
-      const p0 = pts[Math.max(0, k - 1)];
-      const p1 = pts[k];
-      const p2 = pts[k + 1];
-      const p3 = pts[Math.min(n - 1, k + 2)];
-      g.bezierCurveTo(
-        p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6,
-        p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6,
-        p2[0], p2[1],
-      );
+      const [x1, y1] = pts[k];
+      const [x2, y2] = pts[k + 1];
+      g.bezierCurveTo(x1 + slice / 3, y1 + (slopes[k] * slice) / 3, x2 - slice / 3, y2 - (slopes[k + 1] * slice) / 3, x2, y2);
     }
     g.lineTo(w, pts[n - 1][1]);
   };

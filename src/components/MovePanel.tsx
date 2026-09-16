@@ -2433,7 +2433,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     <MoveSlotMultibandBody amount={shown(dials[0])} speed={shown(dials[1])} bands={dials.slice(2).map(shown)} icon={face.icon}>
                       <MoveMultibandDisplay
                         panelId={page.panel.id}
-                        bands={face.curve!.map((b) => ({ position: b.position * dials[0].position, active: dials.some((d) => d.active && d.meta === b.meta) }))}
+                        bands={face.curve!.map((b) => ({ position: b.position, active: dials.some((d) => d.active && d.meta === b.meta) }))}
                       />
                     </MoveSlotMultibandBody>
                   );

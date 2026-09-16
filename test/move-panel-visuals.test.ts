@@ -130,9 +130,12 @@ describe('MovePanel semantic interactions', () => {
     // the face and the three held-open columns after it
     expect(renderer!.root.findAllByProps({ className: 'tweakers-move-dial' })).toHaveLength(4);
     const curve = face.findByType(MoveMultibandDisplay).props.bands.map((b: { position: number }) => b.position);
-    expect(curve).toEqual([0.5, 0.4, 0.25, 0.2, 0.1, 0]);
+    // each point sits at its own band's value, so a drag's point stays under the finger
+    expect(curve).toEqual([1, 0.8, 0.5, 0.4, 0.2, 0]);
     act(() => dial('Mid').props.onKeyDown(keyEvent('End')));
     expect(TweakStore.getValues(id).mid).toBe(100);
+    const moved = renderer!.root.findByProps({ 'data-kind': 'multiband' }).findByType(MoveMultibandDisplay).props.bands.map((b: { position: number }) => b.position);
+    expect(moved[2]).toBe(1);
     // the speed turns round its gauge: straight up is the middle
     const gauge = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 98, height: 64 }) };
     const press = { clientX: 49, clientY: 0, pointerId: 1, shiftKey: false, currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }), closest: () => ({ querySelector: () => gauge }) } };

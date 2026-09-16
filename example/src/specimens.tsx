@@ -419,7 +419,7 @@ function LiveMultiband() {
       speed={{ label: 'Speed', value: '15%', position: 0.15 }}
       bands={[{ label: 'Hi', value: '100%', position: 1 }, { label: 'Mid', value: '50%', position: 0.5 }, { label: 'Sub', value: '0%', position: 0 }]}
     >
-      <MoveMultibandDisplay panelId="library-multiband" bands={curve.map((position) => ({ position: position * 0.6 }))} />
+      <MoveMultibandDisplay panelId="library-multiband" bands={curve.map((position) => ({ position }))} />
     </MoveSlotMultibandBody>
   );
 }
