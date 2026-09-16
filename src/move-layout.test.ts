@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { TweakStore } from './store/TweakStore';
-import { buildMovePages, movePadRows, slotGroups, visibleColumns, enumOptionIcon, enumShapePath, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, setMoveLayoutReporter, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage, type MoveLayoutIssueCode } from './move-layout';
+import { buildMovePages, movePadRows, moveBandCell, slotGroups, visibleColumns, enumOptionIcon, enumShapePath, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, setMoveLayoutReporter, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage, type MoveLayoutIssueCode } from './move-layout';
 
 /** Run `fn` with the issue feed captured, restoring the console sink after. */
 function capturingIssues<T>(fn: () => T): { result: T; issues: [MoveLayoutIssueCode, string][] } {
@@ -78,6 +78,45 @@ describe('value chips on the action row', () => {
     assert.equal(page.values[0]?.path, 'low');
     assert.equal(page.actionValues, undefined);
     assert.ok(issues.some(([code]) => code === 'action-row-no-column'));
+    TweakStore.unregisterPanel(id);
+  });
+});
+
+describe('bands', () => {
+  const dials = Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`d${i}`, [0.5, 0, 1] as [number, number, number]]));
+
+  it('draws a high cut over a low cut in one column as one band, out of its upper pad', () => {
+    const id = nextId();
+    const { result: page, issues } = capturingIssues(() => {
+      TweakStore.registerPanel(id, id, { ...dials, solo: { type: 'toggle', default: false }, high: [100, 0, 100], low: [0, 0, 100] }, undefined, {
+        movePads: { solo: 2, high: 2, low: 2 },
+        moveActionRow: ['low'],
+        moveBands: [{ high: 'high', low: 'low' }],
+      });
+      return buildMovePages([TweakStore.getPanel(id)!])[0];
+    });
+    const rows = movePadRows(page, 0);
+    const head = moveBandCell(page, rows, 1, 2);
+    assert.deepEqual([head?.high.path, head?.low.path, head?.upper, head?.tail], ['high', 'low', 'high', false]);
+    assert.equal(moveBandCell(page, rows, 2, 2)?.tail, true);
+    assert.equal(moveBandCell(page, rows, 0, 2), null);
+    assert.deepEqual(issues, []);
+    TweakStore.unregisterPanel(id);
+  });
+
+  it('leaves a pair that is not stacked as its two chips, and says so', () => {
+    const id = nextId();
+    const { result: page, issues } = capturingIssues(() => {
+      TweakStore.registerPanel(id, id, { ...dials, high: [100, 0, 100], low: [0, 0, 100] }, undefined, {
+        movePads: { high: 1, low: 2 },
+        moveBands: [{ high: 'high', low: 'low' }],
+      });
+      return buildMovePages([TweakStore.getPanel(id)!])[0];
+    });
+    const rows = movePadRows(page, 0);
+    assert.equal(moveBandCell(page, rows, 1, 1), null);
+    assert.equal(moveBandCell(page, rows, 1, 2), null);
+    assert.ok(issues.some(([code]) => code === 'band-apart'));
     TweakStore.unregisterPanel(id);
   });
 });

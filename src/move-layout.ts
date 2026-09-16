@@ -210,7 +210,8 @@ export type MoveLayoutIssueCode =
   | 'top-row-no-column'
   | 'pad-row-full'
   | 'tabs-oversized'
-  | 'tabs-no-room';
+  | 'tabs-no-room'
+  | 'band-apart';
 
 type MoveLayoutReporter = (code: MoveLayoutIssueCode, message: string) => void;
 
@@ -522,7 +523,7 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
           );
         }
       }
-      return {
+      const page: MovePage = {
         panel,
         dials,
         toggles: toggles.slice(0, MOVE_PADS),
@@ -532,6 +533,21 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         ...(actionValues.length ? { actionValues: actionValues.slice(0, MOVE_PADS) } : {}),
         ...(valueActions.length ? { valueActions: valueActions.slice(0, MOVE_PADS) } : {}),
       };
+      // 5. A band whose two chips did not land one over the other in a column
+      //    draws as those two chips — said out loud, like any quiet decision.
+      const rows = movePadRows(page, 0);
+      for (const band of panel.moveBands ?? []) {
+        const on = [band.high, band.low].filter((path) => rows.some((r) => r.some((m) => m?.path === path)));
+        if (on.length < 2) continue;
+        const stacked = rows.some((r, row) => r.some((m, col) => m?.path === band.high && moveBandCell(page, rows, row, col)));
+        if (!stacked) {
+          reportMoveLayoutIssue(
+            'band-apart',
+            `panel '${panel.id}': band '${band.high}' / '${band.low}' is not two chips stacked in one column — drawn as its two chips`
+          );
+        }
+      }
+      return page;
     });
 }
 
@@ -579,6 +595,40 @@ export function movePadRows(page: MovePage, claimedRows: number): ControlMeta[][
   }
   if (claimedRows >= 2) return [top, values, [], []];
   return [top, values, actions, []];
+}
+
+/**
+ * One pad cell of a band — the small slot two pads tall that draws a high
+ * cut and a low cut as one band on a small screen (the panel's `moveBands`).
+ * `upper` names the hand whose chip sits on the higher row; `tail` is true
+ * on the lower cell, which yields to the band drawn out of the one above it,
+ * the way a tabs strip's run yields to its first pad.
+ */
+export type MoveBandCell = { high: ControlMeta; low: ControlMeta; upper: 'high' | 'low'; tail: boolean };
+
+/**
+ * What the pad at `row`, `col` of the rows `movePadRows` gave is, as part of
+ * a band — or null. A band needs both its chips, one right under the other
+ * in the same column; anything else stays the two chips it is.
+ */
+export function moveBandCell(page: MovePage, rows: (ControlMeta | undefined)[][], row: number, col: number): MoveBandCell | null {
+  const meta = rows[row]?.[col];
+  if (!meta || !page.panel.moveBands?.length) return null;
+  const chip = (m: ControlMeta | undefined): m is ControlMeta => !!m && isDial(m) && !noChip(m) && !page.dials.includes(m);
+  for (const band of page.panel.moveBands) {
+    if (meta.path !== band.high && meta.path !== band.low) continue;
+    const partner = meta.path === band.high ? band.low : band.high;
+    const below = rows[row + 1]?.[col];
+    const above = rows[row - 1]?.[col];
+    const tail = above?.path === partner;
+    const other = tail ? above : below?.path === partner ? below : undefined;
+    if (!chip(meta) || !chip(other)) return null;
+    const high = meta.path === band.high ? meta : other;
+    const low = meta.path === band.low ? meta : other;
+    const top = tail ? other : meta;
+    return { high, low, upper: top === high ? 'high' : 'low', tail };
+  }
+  return null;
 }
 
 /**

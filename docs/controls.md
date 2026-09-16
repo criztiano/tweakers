@@ -44,7 +44,7 @@ and the formatted readout. It retains every gesture and store subscription.
 
 `MOVE_PAD_LIBRARY` is the small-slot dictionary, checked against `MovePadKind`.
 A small slot is one pad — except `tabs`, the pad grid's first multi-slot
-control.
+control, and `band`, which runs two pads down one column.
 
 | Kind | Choose for | Configuration / body | Hardware space |
 | --- | --- | --- | --- |
@@ -54,6 +54,7 @@ control.
 | `action` | A button the page wants on the surface | `action` with a `movePads` column; `MovePadActionBody` | 1 pad |
 | `app` | A cell the app paints — a track, a slice, a step | `MoveSurfaceStore`; `MovePadAppBody` | 1 pad |
 | `tabs` | The mode a page is in, reachable without turning anything | `select` with `moveTabs` (`true`, or `'named'` for the name pad); `MovePadTabsBody` | 2–8 adjacent pads, switch row |
+| `band` | A high cut and a low cut that shape one band — a filter's two ends | Two bounded chips stacked in one `movePads` column (e.g. one sunk with `moveActionRow`), named in `moveBands: [{ high, low }]`; `MovePadBandBody` | 2 pads, one column; each half is its own chip — tap latches, hold peeks. A cut off its open end (high below max, low above min) fills yellow |
 | `color` | A single colour where colour is not the page's big control | `color` config with a `movePads` column — or nothing at all when a `balance` references it (the kit seats those itself); `MovePadColorBody` | 1 pad, top or value row; lit white like any chip (its colour is the screen's swatch); a chip like `value` — tap latches, hold peeks |
 
 A `moveTabs` select stops competing for a dial: it is a pad strip and nothing
@@ -139,6 +140,7 @@ config can answer, the kit answers.
 | --- | --- |
 | `moveSlotGroups` option | Draw big slots that read as one thing (a gate's threshold, look-ahead, release) as one container, with a short divider between them and, given `{ label, slots }`, a small header with the group's name; the columns keep their places |
 | `moveValueRow` option | Seat actions on the value row in their `movePads` column, so one column stacks two buttons |
+| `moveBands` option | Draw a high cut chip and a low cut chip stacked in one column as one band on a small screen; a pair not stacked reports `band-apart` and stays two chips |
 | `moveActionRow` option | Seat value chips on the action row in their `movePads` column, so one column carries a switch and two chips |
 | `movePads` option | Place toggles, numeric value chips, explicitly mapped actions and tabs strips under their related dial columns |
 | `MoveActionButton` / `MoveFunctions` | Hardware-named action pills and one shared action registry |

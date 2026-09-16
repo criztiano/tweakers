@@ -453,6 +453,11 @@ function Card({ item, onShow, tall }: { item: Specimen; onShow: (path: string) =
             >
               {item.render()}
             </div>
+          ) : item.kind === 'band' ? (
+            // Two pads tall in one column: the face hangs from its cell.
+            <div className="tweakers-move-band" data-kind="band" style={{ width: 'var(--kit-slot-w)', height: 68 }}>
+              <div className="tweakers-move-band-face">{item.render()}</div>
+            </div>
           ) : item.span && item.span > 1 ? (
             // A small slot that claims a run of pads draws as its own strip,
             // re-cut into the pad columns it spans — the same container the
