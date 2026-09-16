@@ -92,6 +92,36 @@ describe('MovePanel semantic interactions', () => {
     expect(flag('end').props['data-offset']).toBe(true);
   });
 
+  it('draws threshold, look-ahead and release side by side as one gate, each column editing its own dial', () => {
+    mount({
+      gate: { type: 'slider', min: -80, max: 0, default: -20, step: 1, moveVisual: { kind: 'gate', role: 'threshold' } },
+      look: { type: 'slider', min: 0, max: 40, default: 10, step: 1, moveVisual: { kind: 'gate', role: 'lookahead' } },
+      release: { type: 'slider', min: 10, max: 510, default: 260, step: 5, moveVisual: { kind: 'gate', role: 'release' } },
+    });
+    const face = renderer!.root.findByProps({ 'data-kind': 'gate' });
+    const bar = (role: string) => face.findByProps({ className: 'tweakers-move-gate-bar', 'data-role': role });
+    expect(renderer!.root.findAllByProps({ className: 'tweakers-move-dial' })).toHaveLength(1);
+    expect(bar('threshold').props.style['--move-gate-at']).toBe(0.75);
+    expect(bar('release').props.style['--move-gate-at']).toBe(0.5);
+    act(() => dial('Release').props.onKeyDown(keyEvent('End')));
+    expect(TweakStore.getValues(id)).toMatchObject({ gate: -20, look: 10, release: 510 });
+    // a bar's drag reads its own drawn track, top to bottom
+    const track = { getBoundingClientRect: () => ({ left: 0, top: 30, width: 4, height: 84 }) };
+    const press = { clientX: 0, clientY: 32 + 40, pointerId: 1, shiftKey: false, currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }), closest: () => ({ querySelector: () => track }) } };
+    act(() => dial('Gate').props.onPointerDown(press));
+    expect(TweakStore.getValues(id).gate).toBe(-40);
+    act(() => dial('Gate').props.onPointerUp());
+  });
+
+  it('keeps the ordinary faces when the gate dials are out of order', () => {
+    mount({
+      look: { type: 'slider', min: 0, max: 40, default: 10, step: 1, moveVisual: { kind: 'gate', role: 'lookahead' } },
+      gate: { type: 'slider', min: -80, max: 0, default: -20, step: 1, moveVisual: { kind: 'gate', role: 'threshold' } },
+      release: { type: 'slider', min: 10, max: 510, default: 260, step: 5, moveVisual: { kind: 'gate', role: 'release' } },
+    });
+    expect(renderer!.root.findAllByProps({ 'data-kind': 'gate' })).toHaveLength(0);
+  });
+
   it('keeps pointer dragging and shift fine dragging on the existing mapping', () => {
     mount({ opacity });
     act(() => dial('Opacity').props.onPointerDown(pointer(60)));

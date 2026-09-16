@@ -17,12 +17,13 @@ import type { TweakTheme } from '../theme';
 import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody } from './move-slots';
+import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing, angleFromPointer } from '../angle-core';
 import { normalizeTransfer, movePoint, nearestPoint, sampleTransfer, type TransferValue } from '../transfer-core';
-import { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveKeyboardValue, moveTrimSpan } from '../move-visual-core';
+import { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveKeyboardValue, moveTrimSpan, moveGateSpan, type MoveGateRole } from '../move-visual-core';
+import { MoveGateDisplay } from './MoveGateDisplay';
 import { ModRing } from './ModRing';
 import { MOVE_TRACK_COLORS } from '../move-palette';
 import { MoveSurfaceStore, moveScreenRowLabel, type MovePadCell, type MoveStepCell } from '../move-surface-store';
@@ -109,6 +110,8 @@ const MIN_PAD_COLUMNS = 4;
 const DIAL_TRACK_INSET = 10;
 /** The trim span's line sits this much further in than a dial's track. */
 const TRIM_SPAN_PAD = 4;
+/** The gate bar's marker height — must match .tweakers-move-gate-bar-marker. */
+const GATE_MARKER = 4;
 /** The xy field's inset within its slot — must match .tweakers-move-xy. */
 const XY_INSET = { left: 8, top: 8, right: 9, bottom: 8 };
 
@@ -1377,6 +1380,33 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     return at && { start, end, at };
   };
 
+  // A gate's three dials side by side — threshold, look-ahead, release — draw
+  // as one 3-slot control, all the page's own dials or all latched chips.
+  const gateAt = (col: number): { dials: { role: MoveGateRole; col: number; meta: ControlMeta; position: number }[] } | null => {
+    const metas = [dialAt(col), dialAt(col + 1), dialAt(col + 2)];
+    if (metas.some((m) => !m) || !visibleCols.includes(col + 1) || !visibleCols.includes(col + 2)) return null;
+    const own = metas.map((m, k) => m === page.dials[col + k]);
+    if (own.some((o) => o !== own[0])) return null;
+    const at = moveGateSpan(metas.map((m) => [m!, values[m!.path]]));
+    if (!at) return null;
+    return { dials: (['threshold', 'lookahead', 'release'] as const).map((role, k) => ({ role, col: col + k, meta: metas[k]!, position: at[role] })) };
+  };
+
+  // A gate dial's drag reads its own drawn track: the bars run top (most) to
+  // bottom (least), the look-ahead's line left to right.
+  const gateFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, role: MoveGateRole) => {
+    const face = e.currentTarget.closest?.('[data-kind="gate"]');
+    const rect = (face?.querySelector(`[data-gate-track="${role}"]`) ?? e.currentTarget).getBoundingClientRect();
+    const vertical = role !== 'lookahead';
+    const extent = (vertical ? rect.height - GATE_MARKER : rect.width) || 1;
+    const pos = vertical ? -e.clientY : e.clientX;
+    const fine = fineAnchor(e, () => normalizeDial(meta, values[meta.path]));
+    const v01 = fine
+      ? fineDragValue({ startValue: fine.v as number, startPos: vertical ? -fine.y : fine.x, pos, extentPx: extent, min: 0, max: 1, factor: fine.shift ? 0.1 : 1 })
+      : Math.min(1, Math.max(0, vertical ? 1 - (e.clientY - rect.top - GATE_MARKER / 2) / extent : (e.clientX - rect.left) / extent));
+    TweakStore.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
+  };
+
   const pressChip = (e: React.PointerEvent<HTMLElement>, col: number, meta: ControlMeta) => {
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
     holdStart.current = Date.now();
@@ -1751,6 +1781,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 // half a picture would break the span.
                 if (isSpanContinuation(page, i)) return null;
                 if (!stripMode && visibleCols.includes(i - 1) && trimSpanAt(i - 1)) return null;
+                if (!stripMode && ((visibleCols.includes(i - 1) && gateAt(i - 1)) || (visibleCols.includes(i - 2) && gateAt(i - 2)))) return null;
                 const meta = dialSpan(page.dials[i]) > 1 ? page.dials[i] : dialAt(i);
                 if (!meta) return <div key={`empty-${i}`} className="tweakers-move-dial" data-empty="true" />;
                 const disabled = TweakStore.isDisabled(page.panel.id, meta.path);
@@ -2320,6 +2351,75 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                             <MoveModRing panelId={page.panel.id} path={m.path} />
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  );
+                }
+                // A gate: threshold, look-ahead and release as one 3-slot
+                // instrument, the gate live between the bars. Each column
+                // keeps its own drag zone and knob; a drag reads that dial's
+                // drawn track.
+                const gate = !stripMode ? gateAt(i) : null;
+                if (gate) {
+                  const [threshold, lookahead, release] = gate.dials.map((d) => ({
+                    ...d,
+                    active: dragPath === d.meta.path || !!handTouch[d.meta.path] || !!hwHeld[d.meta.path] || (held !== null && held.col === d.col),
+                  }));
+                  const face = (d: typeof threshold) => ({
+                    label: d.meta.label,
+                    value: moveVisualReading(d.meta, Number(values[d.meta.path])),
+                    position: d.position,
+                    active: d.active,
+                  });
+                  return (
+                    <div
+                      key={threshold.meta.path}
+                      className="tweakers-move-dial"
+                      data-kind="gate"
+                      data-active={[threshold, lookahead, release].some((d) => d.active) || undefined}
+                      data-latched={gate.dials.every((d) => d.meta !== page.dials[d.col] && chipLatched(d.col, d.meta)) || undefined}
+                      style={{ gridColumn: 'span 3' }}
+                    >
+                      <MoveSlotGateBody threshold={face(threshold)} lookahead={face(lookahead)} release={face(release)}>
+                        <MoveGateDisplay panelId={page.panel.id} threshold={threshold.position} />
+                      </MoveSlotGateBody>
+                      <div className="tweakers-move-gate-zones">
+                        {gate.dials.map((d) => {
+                          const off = TweakStore.isDisabled(page.panel.id, d.meta.path);
+                          return (
+                            <div
+                              key={d.meta.path}
+                              className="tweakers-move-gate-zone"
+                              data-role={d.role}
+                              role="slider"
+                              tabIndex={off ? -1 : 0}
+                              aria-label={d.meta.label}
+                              aria-valuemin={d.meta.min ?? 0}
+                              aria-valuemax={d.meta.max ?? 1}
+                              aria-valuenow={Number(values[d.meta.path])}
+                              aria-valuetext={moveVisualReading(d.meta, Number(values[d.meta.path]))}
+                              aria-orientation={d.role === 'lookahead' ? 'horizontal' : 'vertical'}
+                              aria-disabled={off || undefined}
+                              data-disabled={off || undefined}
+                              onKeyDown={(k) => dialFromKeyboard(k, d.meta)}
+                              onPointerDown={(p) => {
+                                if (TweakStore.isDisabled(page.panel.id, d.meta.path)) return;
+                                try { p.currentTarget.setPointerCapture(p.pointerId); } catch { /* synthetic pointer */ }
+                                fineRef.current = null;
+                                setDragPath(d.meta.path);
+                                armMod(d.meta.path);
+                                gateFromPointer(p, d.meta, d.role);
+                              }}
+                              onPointerMove={(p) => {
+                                if (!TweakStore.isDisabled(page.panel.id, d.meta.path) && dragPath === d.meta.path) gateFromPointer(p, d.meta, d.role);
+                              }}
+                              onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
+                              onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                            >
+                              <MoveModRing panelId={page.panel.id} path={d.meta.path} />
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );

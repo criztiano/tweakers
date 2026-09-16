@@ -9,7 +9,13 @@ export type MoveSliderVisual =
   | { kind: 'pitch'; unit?: 'semitones' | 'cents' }
   /** One edge of a take: the bar is the whole of it, the kept part is filled
    *  from this edge's far end to the value, the edge itself is the marker. */
-  | { kind: 'trim'; edge: 'start' | 'end' };
+  | { kind: 'trim'; edge: 'start' | 'end' }
+  /** One of a gate's three dials. Threshold, look-ahead and release side by
+   *  side, in that order, draw as one 3-slot gate; any other arrangement
+   *  keeps the ordinary face. */
+  | { kind: 'gate'; role: MoveGateRole };
+
+export type MoveGateRole = 'threshold' | 'lookahead' | 'release';
 
 export type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
 export type MoveSelectVisual = {
@@ -87,6 +93,24 @@ export function moveTrimSpan(start: ControlMeta, startValue: unknown, end: Contr
   const b = moveNumericDrawing(end, endValue);
   if (a?.kind !== 'trim' || a.edge !== 'start' || b?.kind !== 'trim' || b.edge !== 'end') return null;
   return { start: a.position, end: b.position };
+}
+
+/** Where a gate's three dials sit, each 0..1 across its own range — or null
+ *  unless the three are a threshold, a look-ahead and a release, in order. */
+export function moveGateSpan(
+  dials: [ControlMeta, unknown][],
+): { threshold: number; lookahead: number; release: number } | null {
+  const roles: MoveGateRole[] = ['threshold', 'lookahead', 'release'];
+  if (dials.length !== 3) return null;
+  const at = dials.map(([meta, value], i) => {
+    const { min, max } = meta;
+    const visual = meta.moveVisual;
+    if (meta.type !== 'slider' || visual?.kind !== 'gate' || visual.role !== roles[i] || typeof value !== 'number'
+      || !Number.isFinite(value) || !Number.isFinite(min) || !Number.isFinite(max) || max! <= min!) return null;
+    return clamp01((value - min!) / (max! - min!));
+  });
+  if (at.some((p) => p === null)) return null;
+  return { threshold: at[0]!, lookahead: at[1]!, release: at[2]! };
 }
 
 export function movePlaybackMode(meta: ControlMeta, value: unknown): MovePlaybackMode | null {

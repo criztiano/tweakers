@@ -13,6 +13,10 @@ import {
   MoveSlotTransferBody,
   MoveSlotFilterBody,
   MoveSlotTrimSpanBody,
+  MoveSlotGateBody,
+  MoveGateDisplay,
+  MoveGateMeter,
+  moveGateDemoReading,
   MoveSlotNumericBody,
   MoveSlotToggleBody,
   MoveSlotScopeBody,
@@ -339,6 +343,12 @@ export const BIG_SLOTS: Specimen[] = [
     ),
   },
   {
+    kind: 'gate', span: 3,
+    description: MOVE_SLOT_LIBRARY.gate.description,
+    note: 'The grid runs a made-up drum loop; an app attaches its own with MoveGateMeter.',
+    render: () => <LiveGate />,
+  },
+  {
     kind: 'playback', path: 'playback',
     description: MOVE_SLOT_LIBRARY.playback.description,
     render: () => {
@@ -370,6 +380,23 @@ export const BIG_SLOTS: Specimen[] = [
     render: () => <LiveEnvelope />,
   },
 ];
+
+/** The gate specimen with a loop running under the playhead. */
+function LiveGate() {
+  useEffect(() => {
+    const started = performance.now();
+    return MoveGateMeter.attach('library-gate', () => moveGateDemoReading(96, ((performance.now() - started) / 40) | 0));
+  }, []);
+  return (
+    <MoveSlotGateBody
+      threshold={{ label: 'Threshold', value: '-10 dB', position: 0.8 }}
+      lookahead={{ label: 'Look-ahead', value: '12 ms', position: 0.3 }}
+      release={{ label: 'Release', value: '95 ms', position: 0.5 }}
+    >
+      <MoveGateDisplay panelId="library-gate" threshold={0.8} />
+    </MoveSlotGateBody>
+  );
+}
 
 /* ── the small slots — the pad row under the dials ──────────────── */
 

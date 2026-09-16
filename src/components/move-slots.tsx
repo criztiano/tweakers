@@ -46,6 +46,10 @@ import { ListScreen } from './ListScreen';
  * - `trim-span` — the 2-slot take: a trim start dial beside a trim end dial
  *   drawn as one line, the kept part between a flag for each edge, the
  *   names along the top and the values along the bottom at their own sides.
+ * - `gate`    — the 3-slot gate: threshold, look-ahead and release side by
+ *   side as one instrument. The threshold and release stand as bars at
+ *   the outer columns, the look-ahead is a short line under the middle,
+ *   and the grid between the bars shows the gate live around the playhead.
  * - `env`     — the 4-slot control: the whole ADSR drawn as one shape on a
  *   single display spanning the four stage columns, one caption and drag
  *   zone per stage, square handles pinned on the joints.
@@ -84,6 +88,7 @@ export type MoveSlotKind =
   | 'pitch'
   | 'trim'
   | 'trim-span'
+  | 'gate'
   | 'playback'
   | 'env'
   | 'scope'
@@ -549,6 +554,63 @@ export function MoveSlotTrimSpanBody({ start, end }: { start: MoveTrimSpanEdge; 
   );
 }
 
+/** One of the gate's three dials on its face: its name, its reading, its
+ *  place (0..1) and whether a hand is on it — then the reading shows. */
+export type MoveGateDial = { label: string; value: ReactNode; position: number; active?: boolean };
+
+/** Grid cells behind the gate's live picture. */
+export const MOVE_GATE_GRID = { columns: 14, rows: 4 } as const;
+
+/**
+ * The 3-slot gate's face. The threshold stands as a bar over the first
+ * column and the release over the third, each lit from the top down to its
+ * marker; the grid between them holds the live picture (the children); the
+ * look-ahead is a short line under the middle, pointing ahead in time. Each
+ * name sits under its own column.
+ */
+export function MoveSlotGateBody({
+  threshold, lookahead, release, children,
+}: {
+  threshold: MoveGateDial;
+  lookahead: MoveGateDial;
+  release: MoveGateDial;
+  /** The live picture, laid over the grid. */
+  children?: ReactNode;
+}) {
+  const at = (position: number) => Math.max(0, Math.min(1, position));
+  const bar = (role: 'threshold' | 'release', dial: MoveGateDial) => (
+    <span className="tweakers-move-gate-bar" data-role={role} data-gate-track={role} data-active={dial.active || undefined}
+      style={{ '--move-gate-at': at(dial.position) } as CSSProperties} aria-hidden="true">
+      <i className="tweakers-move-gate-bar-lit" />
+      <i className="tweakers-move-gate-bar-marker" />
+    </span>
+  );
+  const name = (dial: MoveGateDial) => (dial.active ? dial.value : dial.label);
+  const { columns, rows } = MOVE_GATE_GRID;
+  const corners: Record<number, string> = { 0: 'tl', [columns - 1]: 'tr', [columns * (rows - 1)]: 'bl', [columns * rows - 1]: 'br' };
+  return (
+    <>
+      {bar('threshold', threshold)}
+      <div className="tweakers-move-gate-grid" aria-hidden="true"
+        style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))` }}>
+        {Array.from({ length: columns * rows }, (_, i) => <i key={i} data-corner={corners[i]} />)}
+        {children && <div className="tweakers-move-gate-display">{children}</div>}
+      </div>
+      {bar('release', release)}
+      <span className="tweakers-move-gate-name" data-role="threshold" data-active={threshold.active || undefined}>{name(threshold)}</span>
+      <span className="tweakers-move-gate-look" data-active={lookahead.active || undefined}>
+        <span className="tweakers-move-gate-name" data-role="lookahead">{name(lookahead)}</span>
+        <span className="tweakers-move-gate-look-line" data-gate-track="lookahead" style={{ '--move-gate-at': at(lookahead.position) } as CSSProperties} aria-hidden="true">
+          <i className="tweakers-move-gate-look-lit" />
+          <i className="tweakers-move-gate-look-dot" />
+          <svg className="tweakers-move-gate-look-arrow" viewBox="0 0 8 12"><path d="M1 1l6 5-6 5" /></svg>
+        </span>
+      </span>
+      <span className="tweakers-move-gate-name" data-role="release" data-active={release.active || undefined}>{name(release)}</span>
+    </>
+  );
+}
+
 /** Selected color over a transparency checker, with its current hue. */
 export function MoveSlotColorBody({ label, color, hue }: { label: string; color: string; hue: number }) {
   return <>
@@ -1001,6 +1063,7 @@ export const MOVE_SLOT_LIBRARY = {
   pitch: { description: 'signed pitch ruler with a zero reference', component: MoveSlotNumericBody },
   trim: { description: 'one edge of a take — the kept part filled from the far end, the value beneath', component: MoveSlotNumericBody },
   'trim-span': { description: '2 slots: a take’s start and end on one line, a flag per edge', component: MoveSlotTrimSpanBody },
+  gate: { description: '3 slots: threshold and release as bars, look-ahead as a line, the gate live on a grid between', component: MoveSlotGateBody },
   playback: { description: 'explicit playback traversal with a named mode', component: MoveSlotEnumBody },
   default: { description: 'name centred, value on touch, fill bar', component: MoveSlotDefaultBody },
   value: { description: 'value-first: the value is the headline, the name a tag on top', component: MoveSlotDefaultBody },
