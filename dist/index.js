@@ -398,6 +398,12 @@ function moveNumericDrawing(meta, value) {
       return null;
   }
 }
+function moveTrimSpan(start, startValue, end, endValue) {
+  const a = moveNumericDrawing(start, startValue);
+  const b = moveNumericDrawing(end, endValue);
+  if (a?.kind !== "trim" || a.edge !== "start" || b?.kind !== "trim" || b.edge !== "end") return null;
+  return { start: a.position, end: b.position };
+}
 function movePlaybackMode(meta, value) {
   if (meta.type !== "select" || meta.moveVisual?.kind !== "playback" || typeof value !== "string") return null;
   if (!meta.options?.some((option) => (typeof option === "string" ? option : option.value) === value)) return null;
@@ -2032,6 +2038,31 @@ function MoveSlotFilterBody({
     ] })
   ] });
 }
+function MoveSlotTrimSpanBody({ start, end }) {
+  const at = (position) => `${Math.max(0, Math.min(1, position)) * 100}%`;
+  return /* @__PURE__ */ jsxs3(Fragment3, { children: [
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-trim-span-tag", "data-side": "start", children: start.label }),
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-trim-span-tag", "data-side": "end", children: end.label }),
+    /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-trim-span-track", "aria-hidden": "true", children: [
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-trim-span-guide" }),
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-trim-span-kept", style: { left: at(start.position), right: `calc(100% - ${at(Math.max(start.position, end.position))})` } }),
+      [["start", start], ["end", end]].map(([edge, e]) => /* @__PURE__ */ jsx3(
+        "svg",
+        {
+          className: "tweakers-move-trim-span-flag",
+          "data-edge": edge,
+          "data-offset": e.moved || void 0,
+          style: { left: at(e.position) },
+          viewBox: "0 0 12 22",
+          children: /* @__PURE__ */ jsx3("path", { d: edge === "start" ? "M0 0h2v22H0zM2 0l10 6L2 12z" : "M10 0h2v22h-2zM10 0L0 6l10 6z" })
+        },
+        edge
+      ))
+    ] }),
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-trim-span-value", "data-side": "start", children: start.value }),
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-trim-span-value", "data-side": "end", children: end.value })
+  ] });
+}
 function MoveSlotColorBody({ label, color, hue: hue2 }) {
   return /* @__PURE__ */ jsxs3(Fragment3, { children: [
     /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-head", children: label }),
@@ -2282,6 +2313,7 @@ var MOVE_SLOT_LIBRARY = {
   "stereo-width": { description: "stereo separation with a unity reference", component: MoveSlotNumericBody },
   pitch: { description: "signed pitch ruler with a zero reference", component: MoveSlotNumericBody },
   trim: { description: "one edge of a take \u2014 the kept part filled from the far end, the value beneath", component: MoveSlotNumericBody },
+  "trim-span": { description: "2 slots: a take\u2019s start and end on one line, a flag per edge", component: MoveSlotTrimSpanBody },
   playback: { description: "explicit playback traversal with a named mode", component: MoveSlotEnumBody },
   default: { description: "name centred, value on touch, fill bar", component: MoveSlotDefaultBody },
   value: { description: "value-first: the value is the headline, the name a tag on top", component: MoveSlotDefaultBody },
@@ -9479,8 +9511,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     armMod(meta.path);
     TweakStore13.updateValue(page.panel.id, meta.path, next);
   };
-  const dialFromPointer = (e, meta) => {
-    const rect = e.currentTarget.getBoundingClientRect();
+  const dialFromPointer = (e, meta, box = e.currentTarget) => {
+    const rect = box.getBoundingClientRect();
     const span = rect.width - DIAL_TRACK_INSET * 2;
     const fine = fineAnchor(e, () => normalizeDial(meta, values[meta.path]));
     const v01 = fine ? fineDragValue({ startValue: fine.v, startPos: fine.x, pos: e.clientX, extentPx: span || 1, min: 0, max: 1, factor: fine.shift ? 0.1 : 1 }) : Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
@@ -9658,6 +9690,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     if (hwHeldChip) return hwHeldChip;
     if (latched[col]) return latched[col];
     return chips.find((m) => hwLatched[m.path]) ?? page.dials[col];
+  };
+  const trimSpanAt = (col) => {
+    const start = dialAt(col);
+    const end = dialAt(col + 1);
+    if (!start || !end || start === page.dials[col] !== (end === page.dials[col + 1])) return null;
+    const at = moveTrimSpan(start, values[start.path], end, values[end.path]);
+    return at && { start, end, at };
   };
   const pressChip = (e, col, meta) => {
     try {
@@ -9895,6 +9934,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                               )),
                               visibleCols.map((i) => {
                                 if (isSpanContinuation(page, i)) return null;
+                                if (!stripMode && visibleCols.includes(i - 1) && trimSpanAt(i - 1)) return null;
                                 const meta = dialSpan(page.dials[i]) > 1 ? page.dials[i] : dialAt(i);
                                 if (!meta) return /* @__PURE__ */ jsx12("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
                                 const disabled = TweakStore13.isDisabled(page.panel.id, meta.path);
@@ -10519,6 +10559,80 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       ]
                                     },
                                     meta.path
+                                  );
+                                }
+                                const trimSpan = !stripMode && visibleCols.includes(i + 1) ? trimSpanAt(i) : null;
+                                if (trimSpan) {
+                                  const edges = [
+                                    { edge: "start", col: i, meta: trimSpan.start, position: trimSpan.at.start },
+                                    { edge: "end", col: i + 1, meta: trimSpan.end, position: trimSpan.at.end }
+                                  ];
+                                  const edgeActive = (e) => dragPath === e.meta.path || !!handTouch[e.meta.path] || !!hwHeld[e.meta.path] || held !== null && held.col === e.col;
+                                  const side = (e) => ({
+                                    label: e.meta.label,
+                                    value: moveVisualReading(e.meta, Number(values[e.meta.path])),
+                                    position: e.position,
+                                    moved: e.edge === "start" ? e.position > 1e-9 : e.position < 1 - 1e-9
+                                  });
+                                  return /* @__PURE__ */ jsxs12(
+                                    "div",
+                                    {
+                                      className: "tweakers-move-dial",
+                                      "data-kind": "trim-span",
+                                      "data-active": edges.some(edgeActive) || void 0,
+                                      "data-latched": edges.every((e) => e.meta !== page.dials[e.col] && chipLatched(e.col, e.meta)) || void 0,
+                                      style: { gridColumn: "span 2" },
+                                      children: [
+                                        /* @__PURE__ */ jsx12(MoveSlotTrimSpanBody, { start: side(edges[0]), end: side(edges[1]) }),
+                                        /* @__PURE__ */ jsx12("div", { className: "tweakers-move-trim-span-zones", children: edges.map((e) => {
+                                          const off = TweakStore13.isDisabled(page.panel.id, e.meta.path);
+                                          return /* @__PURE__ */ jsx12(
+                                            "div",
+                                            {
+                                              className: "tweakers-move-trim-span-zone",
+                                              role: "slider",
+                                              tabIndex: off ? -1 : 0,
+                                              "aria-label": e.meta.label,
+                                              "aria-valuemin": e.meta.min ?? 0,
+                                              "aria-valuemax": e.meta.max ?? 1,
+                                              "aria-valuenow": Number(values[e.meta.path]),
+                                              "aria-valuetext": moveVisualReading(e.meta, Number(values[e.meta.path])),
+                                              "aria-orientation": "horizontal",
+                                              "aria-disabled": off || void 0,
+                                              "data-disabled": off || void 0,
+                                              onKeyDown: (k) => dialFromKeyboard(k, e.meta),
+                                              onPointerDown: (p) => {
+                                                if (TweakStore13.isDisabled(page.panel.id, e.meta.path)) return;
+                                                try {
+                                                  p.currentTarget.setPointerCapture(p.pointerId);
+                                                } catch {
+                                                }
+                                                fineRef.current = null;
+                                                setDragPath(e.meta.path);
+                                                armMod(e.meta.path);
+                                                dialFromPointer(p, e.meta, p.currentTarget.parentElement ?? p.currentTarget);
+                                              },
+                                              onPointerMove: (p) => {
+                                                if (!TweakStore13.isDisabled(page.panel.id, e.meta.path) && dragPath === e.meta.path) {
+                                                  dialFromPointer(p, e.meta, p.currentTarget.parentElement ?? p.currentTarget);
+                                                }
+                                              },
+                                              onPointerUp: () => {
+                                                setDragPath(null);
+                                                fineRef.current = null;
+                                              },
+                                              onPointerCancel: () => {
+                                                setDragPath(null);
+                                                fineRef.current = null;
+                                              },
+                                              children: /* @__PURE__ */ jsx12(MoveModRing, { panelId: page.panel.id, path: e.meta.path })
+                                            },
+                                            e.meta.path
+                                          );
+                                        }) })
+                                      ]
+                                    },
+                                    trimSpan.start.path
                                   );
                                 }
                                 const latchedHere = meta !== page.dials[i] && chipLatched(i, meta);
@@ -12221,6 +12335,7 @@ export {
   MoveSlotShape,
   MoveSlotToggleBody,
   MoveSlotTransferBody,
+  MoveSlotTrimSpanBody,
   MoveSlotXYBody,
   MoveSurfaceStore,
   MoveVolumeDisplay,
@@ -12351,6 +12466,7 @@ export {
   moveSlotKind,
   moveStop,
   moveTabCell,
+  moveTrimSpan,
   moveVisualReading,
   defaultStyle as moveWaveformDefaultStyle,
   defaultView as moveWaveformDefaultView,

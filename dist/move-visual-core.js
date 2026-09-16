@@ -44,6 +44,12 @@ function moveNumericDrawing(meta, value) {
       return null;
   }
 }
+function moveTrimSpan(start, startValue, end, endValue) {
+  const a = moveNumericDrawing(start, startValue);
+  const b = moveNumericDrawing(end, endValue);
+  if (a?.kind !== "trim" || a.edge !== "start" || b?.kind !== "trim" || b.edge !== "end") return null;
+  return { start: a.position, end: b.position };
+}
 function movePlaybackMode(meta, value) {
   if (meta.type !== "select" || meta.moveVisual?.kind !== "playback" || typeof value !== "string") return null;
   if (!meta.options?.some((option) => (typeof option === "string" ? option : option.value) === value)) return null;
@@ -132,6 +138,7 @@ export {
   moveKeyboardValue,
   moveNumericDrawing,
   movePlaybackMode,
+  moveTrimSpan,
   moveVisualReading
 };
 //# sourceMappingURL=move-visual-core.js.map

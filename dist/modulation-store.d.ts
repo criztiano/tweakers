@@ -1,5 +1,5 @@
 import { ModulationSlot, ModulationType, ModulationParams, ModulationAssignment, ModPageLayout } from './modulation-core.js';
-import './TweakStore-D79Ear7m.js';
+import './TweakStore-rxUZ-zpG.js';
 import './gradient-core.js';
 import './color-core.js';
 import './xy-pad-core.js';

@@ -60,6 +60,12 @@ type MoveNumericDrawing = {
 };
 /** Invalid or incompatible metadata falls back to the ordinary face. No label inference. */
 declare function moveNumericDrawing(meta: ControlMeta, value: unknown): MoveNumericDrawing | null;
+/** Where a take's two edges sit on one shared line, each 0..1 across its own
+ *  dial — or null unless `start` is a trim start and `end` a trim end. */
+declare function moveTrimSpan(start: ControlMeta, startValue: unknown, end: ControlMeta, endValue: unknown): {
+    start: number;
+    end: number;
+} | null;
 declare function movePlaybackMode(meta: ControlMeta, value: unknown): MovePlaybackMode | null;
 /** Semantic formatting is a fallback; a host formatter or unit always wins. */
 declare function moveVisualReading(meta: ControlMeta, value: number): string;
@@ -739,4 +745,4 @@ type PanelConfig = {
     kind?: 'timeline' | 'modulation' | 'kit';
 };
 
-export { type ControlMeta as C, MOVE_BAND_H as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_W as d, type MoveNumericDrawing as e, type MovePlaybackMode as f, type MoveSelectVisual as g, type MoveSliderVisual as h, type MoveVisual as i, moveKeyboardValue as j, moveNumericDrawing as k, movePlaybackMode as l, moveBandCuts as m, moveVisualReading as n };
+export { type ControlMeta as C, MOVE_BAND_H as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_W as d, type MoveNumericDrawing as e, type MovePlaybackMode as f, type MoveSelectVisual as g, type MoveSliderVisual as h, type MoveVisual as i, moveKeyboardValue as j, moveNumericDrawing as k, movePlaybackMode as l, moveBandCuts as m, moveTrimSpan as n, moveVisualReading as o };

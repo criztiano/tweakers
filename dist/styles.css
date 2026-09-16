@@ -1972,6 +1972,109 @@
   flex: 1;
 }
 
+/* The 2-slot take (`trim-span`): one line across both columns, inset by the
+   dial's own track inset so a drag lands the flag under the finger. The
+   start keeps the left side — its name up top, its value below — and the
+   end the right. */
+.tweakers-move-trim-span-tag,
+.tweakers-move-trim-span-value {
+  position: absolute;
+  z-index: 1;
+  max-width: calc(50% - 16px);
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  font-size: 13px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.tweakers-move-trim-span-tag {
+  top: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--move-bg);
+}
+
+.tweakers-move-trim-span-value {
+  bottom: var(--move-indicator-bottom);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tweakers-move-trim-span-tag[data-side="start"] { left: 6px; }
+.tweakers-move-trim-span-tag[data-side="end"] { right: 6px; }
+.tweakers-move-trim-span-value[data-side="start"] { left: 10px; }
+.tweakers-move-trim-span-value[data-side="end"] { right: 10px; }
+
+.tweakers-move-trim-span-track {
+  position: absolute;
+  top: calc(50% + 8px);
+  left: 10px;
+  right: 10px;
+  height: 0;
+  pointer-events: none;
+}
+
+.tweakers-move-trim-span-guide,
+.tweakers-move-trim-span-kept {
+  position: absolute;
+  top: -1px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--move-text);
+}
+
+.tweakers-move-trim-span-guide {
+  left: 0;
+  right: 0;
+  opacity: var(--move-visual-guide-opacity);
+}
+
+/* A flag's post stands on the line at its edge; the pennant points into the
+   kept part. It wears the offset colour once the edge has left its end. */
+.tweakers-move-trim-span-flag {
+  position: absolute;
+  bottom: -1px;
+  width: 12px;
+  height: 22px;
+  overflow: visible;
+  fill: var(--move-text);
+  transition: fill 0.12s;
+}
+
+.tweakers-move-trim-span-flag[data-edge="start"] { margin-left: -1px; }
+.tweakers-move-trim-span-flag[data-edge="end"] { margin-left: -11px; }
+
+.tweakers-move-trim-span-flag[data-offset] {
+  fill: var(--move-visual-pitch-active);
+}
+
+.tweakers-move-trim-span-zones {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.tweakers-move-trim-span-zone {
+  position: relative;
+  flex: 1;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.tweakers-move-trim-span-zone:focus-visible {
+  outline: var(--move-visual-focus-width) solid var(--move-text);
+  outline-offset: calc(-1 * var(--move-visual-focus-width));
+  border-radius: var(--move-radius);
+}
+
+.tweakers-move-trim-span-zone[data-disabled] {
+  cursor: not-allowed;
+}
+
 .tweakers-move-scope-display {
   position: absolute;
   top: 6px;
