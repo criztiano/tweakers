@@ -63,7 +63,16 @@ type MoveSliderVisual = {
     kind: 'multiband';
     role: 'band';
     band: number;
+}
+/** A mixer channel's level: a fader under its icon and name, in its tone.
+ *  Channel dials side by side draw as one mixer. */
+ | {
+    kind: 'channel';
+    icon?: string;
+    tone?: MoveTone;
 };
+/** A Move hue by name, as the theme's `--move-<tone>` token carries it. */
+type MoveTone = 'red' | 'orange' | 'yellow' | 'lime' | 'emerald' | 'blue' | 'indigo' | 'pink';
 type MoveGateRole = 'threshold' | 'lookahead' | 'release';
 type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
 type MoveSelectVisual = {

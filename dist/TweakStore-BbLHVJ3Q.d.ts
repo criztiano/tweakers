@@ -51,7 +51,16 @@ type MoveSliderVisual = {
     kind: 'multiband';
     role: 'band';
     band: number;
+}
+/** A mixer channel's level: a fader under its icon and name, in its tone.
+ *  Channel dials side by side draw as one mixer. */
+ | {
+    kind: 'channel';
+    icon?: string;
+    tone?: MoveTone;
 };
+/** A Move hue by name, as the theme's `--move-<tone>` token carries it. */
+type MoveTone = 'red' | 'orange' | 'yellow' | 'lime' | 'emerald' | 'blue' | 'indigo' | 'pink';
 type MoveGateRole = 'threshold' | 'lookahead' | 'release';
 type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
 type MoveSelectVisual = {
@@ -97,6 +106,8 @@ declare function moveGateSpan(dials: [ControlMeta, unknown][]): {
     lookahead: number;
     release: number;
 } | null;
+/** A mixer channel's fader position (0..1), or null unless it is a channel slider. */
+declare function moveChannelPosition(meta: ControlMeta | undefined, value: unknown): number | null;
 type MoveMultibandRole = 'amount' | 'speed' | 'band';
 /** A slider's multiband role, or null when it is not one. */
 declare function moveMultibandRole(meta: ControlMeta | undefined): MoveMultibandRole | null;
@@ -793,4 +804,4 @@ type PanelConfig = {
     kind?: 'timeline' | 'modulation' | 'kit';
 };
 
-export { type ControlMeta as C, MOVE_BAND_H as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_W as d, type MoveGateRole as e, type MoveMultibandRole as f, type MoveNumericDrawing as g, type MovePlaybackMode as h, type MoveSelectVisual as i, type MoveSliderVisual as j, type MoveVisual as k, moveGateSpan as l, moveBandCuts as m, moveKeyboardValue as n, moveMultibandRole as o, moveMultibandSpan as p, moveNumericDrawing as q, movePlaybackMode as r, moveTrimSpan as s, moveVisualReading as t };
+export { type ControlMeta as C, MOVE_BAND_H as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_W as d, type MoveGateRole as e, type MoveMultibandRole as f, type MoveNumericDrawing as g, type MovePlaybackMode as h, type MoveSelectVisual as i, type MoveSliderVisual as j, type MoveTone as k, type MoveVisual as l, moveBandCuts as m, moveChannelPosition as n, moveGateSpan as o, moveKeyboardValue as p, moveMultibandRole as q, moveMultibandSpan as r, moveNumericDrawing as s, movePlaybackMode as t, moveTrimSpan as u, moveVisualReading as v };

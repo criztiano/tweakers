@@ -421,6 +421,9 @@ function sliderPosition(meta, value) {
   if (meta.type !== "slider" || typeof value !== "number" || !Number.isFinite(value) || !Number.isFinite(min) || !Number.isFinite(max) || max <= min) return null;
   return clamp01((value - min) / (max - min));
 }
+function moveChannelPosition(meta, value) {
+  return meta?.moveVisual?.kind === "channel" ? sliderPosition(meta, value) : null;
+}
 function moveMultibandRole(meta) {
   const visual = meta?.moveVisual;
   return meta?.type === "slider" && visual?.kind === "multiband" ? visual.role : null;
@@ -703,6 +706,22 @@ var LUCIDE_ICONS = {
     "M8 12h8",
     "M16 8a2 2 0 1 0 0 4 2 2 0 1 0 0-4",
     "m6 20 .7-2.9A1.4 1.4 0 0 1 8.1 16h7.8a1.4 1.4 0 0 1 1.4 1l.7 3"
+  ],
+  "audio-lines-x": [
+    "M2 10v3",
+    "M6 6v11",
+    "M10 3v18",
+    "M14 8v7",
+    "M18 5v6",
+    "M22 10v3",
+    "m16 17 5 5",
+    "m21 17-5 5"
+  ],
+  "disc-3": [
+    "M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20z",
+    "M6 12c0-1.7.7-3.2 1.8-4.2",
+    "M12 10a2 2 0 1 0 0 4 2 2 0 1 0 0-4z",
+    "M18 12c0 1.7-.7 3.2-1.8 4.2"
   ],
   "boom-box": [
     "M4 9V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4",
@@ -2161,6 +2180,31 @@ function MoveSlotGateBody({
     /* @__PURE__ */ jsx3(MoveFaceName, { col: 2, dial: release })
   ] });
 }
+function MoveSlotChannelBody({ channels }) {
+  return /* @__PURE__ */ jsx3("div", { className: "tweakers-move-face", style: { "--move-face-span": channels.length }, children: channels.map((channel, k) => /* @__PURE__ */ jsxs3(
+    "div",
+    {
+      className: "tweakers-move-channel",
+      "data-active": channel.active || void 0,
+      style: { "--move-face-col": k, "--move-channel-tone": channel.tone ? `var(--move-${channel.tone})` : void 0 },
+      children: [
+        /* @__PURE__ */ jsxs3("span", { className: "tweakers-move-channel-head", children: [
+          channel.icon && /* @__PURE__ */ jsx3(MoveSlotIcon, { icon: channel.icon, className: "tweakers-move-channel-icon" }),
+          /* @__PURE__ */ jsx3("span", { className: "tweakers-move-channel-name", children: channel.active ? channel.value : channel.label })
+        ] }),
+        /* @__PURE__ */ jsx3("span", { className: "tweakers-move-channel-well", "data-track": `channel-${k}`, "aria-hidden": "true", children: /* @__PURE__ */ jsx3(
+          "i",
+          {
+            className: "tweakers-move-channel-fill",
+            "data-empty": channel.position <= 0 || void 0,
+            style: { "--move-face-at": place(channel.position) }
+          }
+        ) })
+      ]
+    },
+    k
+  )) });
+}
 var MOVE_GAUGE = { r: 36, base: 18, half: 43, top: 37, height: 56, sweep: 110, ticks: 11 };
 var moveGaugeBearing = (position) => (place(position) * 2 - 1) * MOVE_GAUGE.sweep;
 function MoveGauge({ position }) {
@@ -2376,6 +2420,7 @@ function MovePadBandBody({ low, high, upper = "high" }) {
   const hands = { low, high };
   return /* @__PURE__ */ jsxs3(Fragment3, { children: [
     /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-band-screen", children: [
+      /* @__PURE__ */ jsx3("div", { className: "tweakers-move-band-cells", "aria-hidden": "true", children: Array.from({ length: 32 }, (_, i) => /* @__PURE__ */ jsx3("i", {}, i)) }),
       /* @__PURE__ */ jsx3("div", { className: "tweakers-move-band-plot", children: /* @__PURE__ */ jsxs3(
         "svg",
         {
@@ -2384,10 +2429,6 @@ function MovePadBandBody({ low, high, upper = "high" }) {
           preserveAspectRatio: "none",
           "aria-hidden": "true",
           children: [
-            /* @__PURE__ */ jsxs3("g", { className: "tweakers-move-band-grid", shapeRendering: "crispEdges", children: [
-              Array.from({ length: 7 }, (_, i) => /* @__PURE__ */ jsx3("rect", { x: 9 + i * 10, y: "0", width: "1", height: MOVE_BAND_H }, `x${i}`)),
-              Array.from({ length: 3 }, (_, i) => /* @__PURE__ */ jsx3("rect", { x: "0", y: 9 + i * 10, width: MOVE_BAND_W, height: "1" }, `y${i}`))
-            ] }),
             /* @__PURE__ */ jsx3("path", { className: "tweakers-move-band-cut", "data-cut": low.cut || void 0, d: cuts.low }),
             /* @__PURE__ */ jsx3("path", { className: "tweakers-move-band-cut", "data-cut": high.cut || void 0, d: cuts.high })
           ]
@@ -2466,6 +2507,7 @@ var MOVE_SLOT_LIBRARY = {
   trim: { description: "one edge of a take \u2014 the kept part filled from the far end, the value beneath", component: MoveSlotNumericBody },
   "trim-span": { description: "2 slots: a take\u2019s start and end on one line, a flag per edge", component: MoveSlotTrimSpanBody },
   gate: { description: "3 slots: threshold and release as bars, look-ahead as a line, the gate live on a grid between", component: MoveSlotGateBody },
+  channel: { description: "a slot per channel: icon and name in its tone over a fader filled to its level", component: MoveSlotChannelBody },
   multiband: { description: "a slot per dial: amount as a bar, speed as a gauge, the bands as a live curve on a grid", component: MoveSlotMultibandBody },
   playback: { description: "explicit playback traversal with a named mode", component: MoveSlotEnumBody },
   default: { description: "name centred, value on touch, fill bar", component: MoveSlotDefaultBody },
@@ -9411,6 +9453,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const panelRef = useRef11(null);
   const [dotDrag, setDotDrag] = useState7(null);
   const fineRef = useRef11(null);
+  const faceDrag = useRef11(null);
   const rangeHandleRef = useRef11("min");
   const filterHandRef = useRef11("cutoff");
   const [volume, setVolume] = useState7(() => MoveVolumeDisplay.get());
@@ -10126,7 +10169,17 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       }))
     };
   };
-  const faceAt = (col) => stripMode ? null : gateAt(col) ?? multibandAt(col);
+  const channelCol = (col) => visibleCols.includes(col) && dialAt(col) === page.dials[col] && moveChannelPosition(page.dials[col], values[page.dials[col]?.path]) !== null;
+  const channelAt = (col) => {
+    if (!channelCol(col) || channelCol(col - 1)) return null;
+    const dials = [];
+    for (let k = col; channelCol(k); k++) {
+      const meta = page.dials[k];
+      dials.push({ role: "channel", col: k, meta, position: moveChannelPosition(meta, values[meta.path]), track: `channel-${k - col}` });
+    }
+    return { kind: "channel", col, span: dials.length, dials };
+  };
+  const faceAt = (col) => stripMode ? null : gateAt(col) ?? multibandAt(col) ?? channelAt(col);
   const underFace = (col) => {
     for (let j = col - 1; j >= 0 && j >= col - MOVE_DIALS; j--) {
       if (!visibleCols.includes(j)) continue;
@@ -10138,7 +10191,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const faceFromPointer = (e, d) => {
     const { meta, role } = d;
     const face = e.currentTarget.closest?.(".tweakers-move-dial");
-    const track2 = role === "band" ? "grid" : role;
+    const track2 = d.track ?? (role === "band" ? "grid" : role);
     const rect = (face?.querySelector(`[data-track="${track2}"]`) ?? e.currentTarget).getBoundingClientRect();
     let v01;
     if (role === "speed") {
@@ -10148,7 +10201,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       v01 = Math.min(1, Math.max(0, (bearing + MOVE_GAUGE.sweep) / (MOVE_GAUGE.sweep * 2)));
     } else {
       const vertical = role !== "lookahead";
-      const marker = role === "band" ? 0 : FACE_MARKER;
+      const marker = role === "band" || role === "channel" ? 0 : FACE_MARKER;
       const extent = (vertical ? rect.height - marker : rect.width) || 1;
       const fine = fineAnchor(e, () => normalizeDial(meta, values[meta.path]));
       v01 = fine ? fineDragValue({ startValue: fine.v, startPos: vertical ? -fine.y : fine.x, pos: vertical ? -e.clientY : e.clientX, extentPx: extent, min: 0, max: 1, factor: fine.shift ? 0.1 : 1 }) : Math.min(1, Math.max(0, vertical ? 1 - (e.clientY - rect.top - marker / 2) / extent : (e.clientX - rect.left) / extent));
@@ -11031,11 +11084,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     position: d.position,
                                     active: d.active
                                   });
-                                  const body = face.kind === "gate" ? /* @__PURE__ */ jsx15(MoveSlotGateBody, { threshold: shown(dials[0]), lookahead: shown(dials[1]), release: shown(dials[2]), children: /* @__PURE__ */ jsx15(MoveGateDisplay, { panelId: page.panel.id, threshold: dials[0].position }) }) : /* @__PURE__ */ jsx15(MoveSlotMultibandBody, { amount: shown(dials[0]), speed: shown(dials[1]), bands: dials.slice(2).map(shown), icon: face.icon, children: /* @__PURE__ */ jsx15(
+                                  const body = face.kind === "channel" ? /* @__PURE__ */ jsx15(MoveSlotChannelBody, { channels: dials.map((d) => {
+                                    const visual = d.meta.moveVisual;
+                                    return { ...shown(d), ...visual?.kind === "channel" ? { icon: visual.icon, tone: visual.tone } : {} };
+                                  }) }) : face.kind === "gate" ? /* @__PURE__ */ jsx15(MoveSlotGateBody, { threshold: shown(dials[0]), lookahead: shown(dials[1]), release: shown(dials[2]), children: /* @__PURE__ */ jsx15(MoveGateDisplay, { panelId: page.panel.id, threshold: dials[0].position }) }) : /* @__PURE__ */ jsx15(MoveSlotMultibandBody, { amount: shown(dials[0]), speed: shown(dials[1]), bands: dials.slice(2).map(shown), icon: face.icon, children: /* @__PURE__ */ jsx15(
                                     MoveMultibandDisplay,
                                     {
                                       panelId: page.panel.id,
-                                      bands: face.curve.map((b) => ({ position: b.position, active: dials.some((d) => d.active && d.meta === b.meta) }))
+                                      bands: face.curve.map((b) => ({ position: b.position, active: dragPath === b.meta.path || dials.some((d) => d.active && d.meta === b.meta) }))
                                     }
                                   ) });
                                   return /* @__PURE__ */ jsxs12(
@@ -11067,26 +11123,38 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                               "data-disabled": off || void 0,
                                               onKeyDown: (k) => dialFromKeyboard(k, d.meta),
                                               onPointerDown: (p) => {
-                                                if (TweakStore13.isDisabled(page.panel.id, d.meta.path)) return;
+                                                let meta2 = d.meta;
+                                                if (d.role === "band" && face.curve) {
+                                                  const grid = p.currentTarget.closest?.(".tweakers-move-dial")?.querySelector('[data-track="grid"]')?.getBoundingClientRect();
+                                                  if (grid?.width) {
+                                                    const k = Math.floor((p.clientX - grid.left) / grid.width * face.curve.length);
+                                                    meta2 = face.curve[Math.max(0, Math.min(face.curve.length - 1, k))].meta;
+                                                  }
+                                                }
+                                                if (TweakStore13.isDisabled(page.panel.id, meta2.path)) return;
                                                 try {
                                                   p.currentTarget.setPointerCapture(p.pointerId);
                                                 } catch {
                                                 }
                                                 fineRef.current = null;
-                                                setDragPath(d.meta.path);
-                                                armMod(d.meta.path);
-                                                faceFromPointer(p, d);
+                                                faceDrag.current = meta2;
+                                                setDragPath(meta2.path);
+                                                armMod(meta2.path);
+                                                faceFromPointer(p, { ...d, meta: meta2 });
                                               },
                                               onPointerMove: (p) => {
-                                                if (!TweakStore13.isDisabled(page.panel.id, d.meta.path) && dragPath === d.meta.path) faceFromPointer(p, d);
+                                                const meta2 = faceDrag.current;
+                                                if (meta2 && dragPath === meta2.path && !TweakStore13.isDisabled(page.panel.id, meta2.path)) faceFromPointer(p, { ...d, meta: meta2 });
                                               },
                                               onPointerUp: () => {
                                                 setDragPath(null);
                                                 fineRef.current = null;
+                                                faceDrag.current = null;
                                               },
                                               onPointerCancel: () => {
                                                 setDragPath(null);
                                                 fineRef.current = null;
+                                                faceDrag.current = null;
                                               },
                                               children: /* @__PURE__ */ jsx15(MoveModRing, { panelId: page.panel.id, path: d.meta.path })
                                             },
@@ -12863,6 +12931,7 @@ export {
   MovePresetStore,
   MoveSearchStore,
   MoveSettingsView,
+  MoveSlotChannelBody,
   MoveSlotColorBody,
   MoveSlotDefaultBody,
   MoveSlotDialBody,
@@ -13002,6 +13071,7 @@ export {
   moveAppPadRow,
   moveBandCell,
   moveBandCuts,
+  moveChannelPosition,
   moveGateDemoReading,
   moveGateSpan,
   moveGaugeBearing,

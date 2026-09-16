@@ -67,6 +67,9 @@ function sliderPosition(meta, value) {
   if (meta.type !== "slider" || typeof value !== "number" || !Number.isFinite(value) || !Number.isFinite(min) || !Number.isFinite(max) || max <= min) return null;
   return clamp01((value - min) / (max - min));
 }
+function moveChannelPosition(meta, value) {
+  return meta?.moveVisual?.kind === "channel" ? sliderPosition(meta, value) : null;
+}
 function moveMultibandRole(meta) {
   const visual = meta?.moveVisual;
   return meta?.type === "slider" && visual?.kind === "multiband" ? visual.role : null;
@@ -172,6 +175,7 @@ export {
   MOVE_BAND_H,
   MOVE_BAND_W,
   moveBandCuts,
+  moveChannelPosition,
   moveGateSpan,
   moveKeyboardValue,
   moveMultibandRole,
