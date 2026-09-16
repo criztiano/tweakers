@@ -43,6 +43,9 @@ import { ListScreen } from './ListScreen';
  * - `filter`  — the 2-slot control: cutoff and resonance as one picture,
  *   the magnitude response maximised across both columns, each hand's
  *   small label sitting where its own slot's label would have been.
+ * - `trim-span` — the 2-slot take: a trim start dial beside a trim end dial
+ *   drawn as one line, the kept part between a flag for each edge, the
+ *   names along the top and the values along the bottom at their own sides.
  * - `env`     — the 4-slot control: the whole ADSR drawn as one shape on a
  *   single display spanning the four stage columns, one caption and drag
  *   zone per stage, square handles pinned on the joints.
@@ -80,6 +83,7 @@ export type MoveSlotKind =
   | 'stereo-width'
   | 'pitch'
   | 'trim'
+  | 'trim-span'
   | 'playback'
   | 'env'
   | 'scope'
@@ -508,6 +512,39 @@ export function MoveSlotFilterBody({
         <span className="tweakers-move-dial-label">{ra.label}</span>
         <span className="tweakers-move-dial-value">{fmt(value.resonance, ra.formatValue)}</span>
       </div>
+    </>
+  );
+}
+
+/** One edge of a take on the shared line: its place (0..1), its name and its
+ *  reading. `moved` is an edge off its own end of the take. */
+export type MoveTrimSpanEdge = { label: string; value: ReactNode; position: number; moved?: boolean };
+
+/**
+ * The 2-slot take's face: one line across both columns, the kept part
+ * filled between the two edges. Each edge is a flag — a post down to the
+ * line and a pennant pointing into the kept part — so the start and the end
+ * read apart at a glance. The start's name and value hold the left side,
+ * the end's the right.
+ */
+export function MoveSlotTrimSpanBody({ start, end }: { start: MoveTrimSpanEdge; end: MoveTrimSpanEdge }) {
+  const at = (position: number) => `${Math.max(0, Math.min(1, position)) * 100}%`;
+  return (
+    <>
+      <span className="tweakers-move-trim-span-tag" data-side="start">{start.label}</span>
+      <span className="tweakers-move-trim-span-tag" data-side="end">{end.label}</span>
+      <div className="tweakers-move-trim-span-track" aria-hidden="true">
+        <span className="tweakers-move-trim-span-guide" />
+        <span className="tweakers-move-trim-span-kept" style={{ left: at(start.position), right: `calc(100% - ${at(Math.max(start.position, end.position))})` }} />
+        {([['start', start], ['end', end]] as const).map(([edge, e]) => (
+          <svg key={edge} className="tweakers-move-trim-span-flag" data-edge={edge} data-offset={e.moved || undefined}
+            style={{ left: at(e.position) }} viewBox="0 0 12 22">
+            <path d={edge === 'start' ? 'M0 0h2v22H0zM2 0l10 6L2 12z' : 'M10 0h2v22h-2zM10 0L0 6l10 6z'} />
+          </svg>
+        ))}
+      </div>
+      <span className="tweakers-move-trim-span-value" data-side="start">{start.value}</span>
+      <span className="tweakers-move-trim-span-value" data-side="end">{end.value}</span>
     </>
   );
 }
@@ -963,6 +1000,7 @@ export const MOVE_SLOT_LIBRARY = {
   'stereo-width': { description: 'stereo separation with a unity reference', component: MoveSlotNumericBody },
   pitch: { description: 'signed pitch ruler with a zero reference', component: MoveSlotNumericBody },
   trim: { description: 'one edge of a take — the kept part filled from the far end, the value beneath', component: MoveSlotNumericBody },
+  'trim-span': { description: '2 slots: a take’s start and end on one line, a flag per edge', component: MoveSlotTrimSpanBody },
   playback: { description: 'explicit playback traversal with a named mode', component: MoveSlotEnumBody },
   default: { description: 'name centred, value on touch, fill bar', component: MoveSlotDefaultBody },
   value: { description: 'value-first: the value is the headline, the name a tag on top', component: MoveSlotDefaultBody },

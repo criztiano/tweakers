@@ -12,6 +12,7 @@ import {
   MoveSlotRampBody,
   MoveSlotTransferBody,
   MoveSlotFilterBody,
+  MoveSlotTrimSpanBody,
   MoveSlotNumericBody,
   MoveSlotToggleBody,
   MoveSlotScopeBody,
@@ -326,6 +327,16 @@ export const BIG_SLOTS: Specimen[] = [
     kind: 'pitch', path: 'pitch',
     description: MOVE_SLOT_LIBRARY.pitch.description,
     render: () => numeric('pitch', 'Pitch', 7, '+7 st', { min: -24, max: 24, bipolar: true, unit: ' st' }),
+  },
+  {
+    kind: 'trim-span', span: 2,
+    description: MOVE_SLOT_LIBRARY['trim-span'].description,
+    render: () => (
+      <MoveSlotTrimSpanBody
+        start={{ label: 'Start', value: '171.44 s', position: 0.24, moved: true }}
+        end={{ label: 'End', value: '178.3 s', position: 0.88, moved: true }}
+      />
+    ),
   },
   {
     kind: 'playback', path: 'playback',

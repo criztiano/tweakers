@@ -80,6 +80,15 @@ export function moveNumericDrawing(meta: ControlMeta, value: unknown): MoveNumer
   }
 }
 
+/** Where a take's two edges sit on one shared line, each 0..1 across its own
+ *  dial — or null unless `start` is a trim start and `end` a trim end. */
+export function moveTrimSpan(start: ControlMeta, startValue: unknown, end: ControlMeta, endValue: unknown): { start: number; end: number } | null {
+  const a = moveNumericDrawing(start, startValue);
+  const b = moveNumericDrawing(end, endValue);
+  if (a?.kind !== 'trim' || a.edge !== 'start' || b?.kind !== 'trim' || b.edge !== 'end') return null;
+  return { start: a.position, end: b.position };
+}
+
 export function movePlaybackMode(meta: ControlMeta, value: unknown): MovePlaybackMode | null {
   if (meta.type !== 'select' || meta.moveVisual?.kind !== 'playback' || typeof value !== 'string') return null;
   if (!meta.options?.some((option) => (typeof option === 'string' ? option : option.value) === value)) return null;

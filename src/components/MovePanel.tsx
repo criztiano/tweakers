@@ -17,12 +17,12 @@ import type { TweakTheme } from '../theme';
 import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody } from './move-slots';
+import { MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing, angleFromPointer } from '../angle-core';
 import { normalizeTransfer, movePoint, nearestPoint, sampleTransfer, type TransferValue } from '../transfer-core';
-import { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveKeyboardValue } from '../move-visual-core';
+import { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveKeyboardValue, moveTrimSpan } from '../move-visual-core';
 import { ModRing } from './ModRing';
 import { MOVE_TRACK_COLORS } from '../move-palette';
 import { MoveSurfaceStore, moveScreenRowLabel, type MovePadCell, type MoveStepCell } from '../move-surface-store';
@@ -107,6 +107,8 @@ const MIN_PAD_COLUMNS = 4;
 
 /** The slider track's inset from the dial slot's edges (Figma 802:767). */
 const DIAL_TRACK_INSET = 10;
+/** The trim span's line sits this much further in than a dial's track. */
+const TRIM_SPAN_PAD = 4;
 /** The xy field's inset within its slot — must match .tweakers-move-xy. */
 const XY_INSET = { left: 8, top: 8, right: 9, bottom: 8 };
 
@@ -1118,13 +1120,15 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 
   // Whole-slot hotspot, position-on-the-track sets the value — the same feel
   // as the library Slider's card.
-  const dialFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const span = rect.width - DIAL_TRACK_INSET * 2;
+  // `box` is the track being read, when it is wider than the touched element,
+  // and `inset` how far in from its sides the line runs.
+  const dialFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, box: Element = e.currentTarget, inset = DIAL_TRACK_INSET) => {
+    const rect = box.getBoundingClientRect();
+    const span = rect.width - inset * 2;
     const fine = fineAnchor(e, () => normalizeDial(meta, values[meta.path]));
     const v01 = fine
       ? fineDragValue({ startValue: fine.v as number, startPos: fine.x, pos: e.clientX, extentPx: span || 1, min: 0, max: 1, factor: fine.shift ? 0.1 : 1 })
-      : Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
+      : Math.min(1, Math.max(0, (e.clientX - rect.left - inset) / (span || 1)));
     TweakStore.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
   };
 
@@ -1359,6 +1363,18 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     if (hwHeldChip) return hwHeldChip;
     if (latched[col]) return latched[col];
     return chips.find((m) => hwLatched[m.path]) ?? page.dials[col];
+  };
+
+  // A take's two edges side by side — a trim start in this column, a trim
+  // end in the next — draw as one 2-slot control. Both are the page's own
+  // dials, or both are chips in their place, so a single latched chip never
+  // shares a line with an edge it does not belong to.
+  const trimSpanAt = (col: number): { start: ControlMeta; end: ControlMeta; at: { start: number; end: number } } | null => {
+    const start = dialAt(col);
+    const end = dialAt(col + 1);
+    if (!start || !end || (start === page.dials[col]) !== (end === page.dials[col + 1])) return null;
+    const at = moveTrimSpan(start, values[start.path], end, values[end.path]);
+    return at && { start, end, at };
   };
 
   const pressChip = (e: React.PointerEvent<HTMLElement>, col: number, meta: ControlMeta) => {
@@ -1734,6 +1750,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 // keeps its slot against chip substitution: a chip landing in
                 // half a picture would break the span.
                 if (isSpanContinuation(page, i)) return null;
+                if (!stripMode && visibleCols.includes(i - 1) && trimSpanAt(i - 1)) return null;
                 const meta = dialSpan(page.dials[i]) > 1 ? page.dials[i] : dialAt(i);
                 if (!meta) return <div key={`empty-${i}`} className="tweakers-move-dial" data-empty="true" />;
                 const disabled = TweakStore.isDisabled(page.panel.id, meta.path);
@@ -2303,6 +2320,76 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                             <MoveModRing panelId={page.panel.id} path={m.path} />
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  );
+                }
+                // A take's start and end: one line across both columns, a
+                // flag per edge. Each column keeps its own drag zone and
+                // knob, but a drag reads the whole line, so the flag follows
+                // the finger.
+                const trimSpan = !stripMode && visibleCols.includes(i + 1) ? trimSpanAt(i) : null;
+                if (trimSpan) {
+                  const edges = [
+                    { edge: 'start' as const, col: i, meta: trimSpan.start, position: trimSpan.at.start },
+                    { edge: 'end' as const, col: i + 1, meta: trimSpan.end, position: trimSpan.at.end },
+                  ];
+                  const edgeActive = (e: typeof edges[number]) =>
+                    dragPath === e.meta.path || !!handTouch[e.meta.path] || !!hwHeld[e.meta.path] || (held !== null && held.col === e.col);
+                  const side = (e: typeof edges[number]) => ({
+                    label: e.meta.label,
+                    value: moveVisualReading(e.meta, Number(values[e.meta.path])),
+                    position: e.position,
+                    moved: e.edge === 'start' ? e.position > 1e-9 : e.position < 1 - 1e-9,
+                  });
+                  return (
+                    <div
+                      key={trimSpan.start.path}
+                      className="tweakers-move-dial"
+                      data-kind="trim-span"
+                      data-active={edges.some(edgeActive) || undefined}
+                      data-latched={edges.every((e) => e.meta !== page.dials[e.col] && chipLatched(e.col, e.meta)) || undefined}
+                      style={{ gridColumn: 'span 2' }}
+                    >
+                      <MoveSlotTrimSpanBody start={side(edges[0])} end={side(edges[1])} />
+                      <div className="tweakers-move-trim-span-zones">
+                        {edges.map((e) => {
+                          const off = TweakStore.isDisabled(page.panel.id, e.meta.path);
+                          return (
+                            <div
+                              key={e.meta.path}
+                              className="tweakers-move-trim-span-zone"
+                              role="slider"
+                              tabIndex={off ? -1 : 0}
+                              aria-label={e.meta.label}
+                              aria-valuemin={e.meta.min ?? 0}
+                              aria-valuemax={e.meta.max ?? 1}
+                              aria-valuenow={Number(values[e.meta.path])}
+                              aria-valuetext={moveVisualReading(e.meta, Number(values[e.meta.path]))}
+                              aria-orientation="horizontal"
+                              aria-disabled={off || undefined}
+                              data-disabled={off || undefined}
+                              onKeyDown={(k) => dialFromKeyboard(k, e.meta)}
+                              onPointerDown={(p) => {
+                                if (TweakStore.isDisabled(page.panel.id, e.meta.path)) return;
+                                try { p.currentTarget.setPointerCapture(p.pointerId); } catch { /* synthetic pointer */ }
+                                fineRef.current = null;
+                                setDragPath(e.meta.path);
+                                armMod(e.meta.path);
+                                dialFromPointer(p, e.meta, p.currentTarget.parentElement ?? p.currentTarget, DIAL_TRACK_INSET + TRIM_SPAN_PAD);
+                              }}
+                              onPointerMove={(p) => {
+                                if (!TweakStore.isDisabled(page.panel.id, e.meta.path) && dragPath === e.meta.path) {
+                                  dialFromPointer(p, e.meta, p.currentTarget.parentElement ?? p.currentTarget, DIAL_TRACK_INSET + TRIM_SPAN_PAD);
+                                }
+                              }}
+                              onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
+                              onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                            >
+                              <MoveModRing panelId={page.panel.id} path={e.meta.path} />
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );

@@ -70,6 +70,28 @@ describe('MovePanel semantic interactions', () => {
     expect(triangle().props['data-offset']).toBe(true);
   });
 
+  it('draws a trim start beside a trim end as one line, each column editing its own edge', () => {
+    mount({
+      start: { type: 'slider', min: 0, max: 10, default: 2, step: 0.01, moveVisual: { kind: 'trim', edge: 'start' } },
+      end: { type: 'slider', min: 0, max: 10, default: 10, step: 0.01, moveVisual: { kind: 'trim', edge: 'end' } },
+    });
+    const span = renderer!.root.findByProps({ 'data-kind': 'trim-span' });
+    const flag = (edge: string) => span.findByProps({ className: 'tweakers-move-trim-span-flag', 'data-edge': edge });
+    expect(renderer!.root.findAllByProps({ className: 'tweakers-move-dial' })).toHaveLength(1);
+    expect(flag('start').props.style.left).toBe('20%');
+    expect(flag('start').props['data-offset']).toBe(true);
+    expect(flag('end').props.style.left).toBe('100%');
+    expect(flag('end').props['data-offset']).toBeUndefined();
+    act(() => dial('End').props.onKeyDown(keyEvent('Home')));
+    expect(TweakStore.getValues(id)).toMatchObject({ start: 2, end: 0 });
+    // the drag reads the whole line, not the touched column
+    const zone = { ...pointer(130), currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, width: 120 }), parentElement: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 260, height: 140 }) } } };
+    act(() => dial('End').props.onPointerDown(zone));
+    expect(TweakStore.getValues(id).end).toBe(5); // the middle of a 260px line inset 14px each side
+    act(() => dial('End').props.onPointerUp());
+    expect(flag('end').props['data-offset']).toBe(true);
+  });
+
   it('keeps pointer dragging and shift fine dragging on the existing mapping', () => {
     mount({ opacity });
     act(() => dial('Opacity').props.onPointerDown(pointer(60)));
