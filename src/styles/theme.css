@@ -2078,8 +2078,8 @@
 
 /* The 3-slot gate (`gate`). The threshold's bar stands over the first
    column's centre and the release's over the third's; the grid fills the
-   room between them, and each name sits under its own column. A bar is lit
-   from the top down to its marker — the part of the range above the value. */
+   room between them, and each name sits under its own column. The threshold
+   is lit from the top down to its marker, the release from its marker down. */
 .tweakers-move-dial[data-kind="gate"] {
   --move-gate-col: calc((100% - 2 * var(--move-gap)) / 3);
   --move-gate-well: var(--move-bg);
@@ -2122,6 +2122,13 @@
   top: 0;
   height: calc((1 - var(--move-gate-at)) * (100% - var(--move-gate-marker)));
   background: var(--move-gate-lit);
+}
+
+/* The release is lit the other way: from its marker down to the bottom. */
+.tweakers-move-gate-bar[data-role="release"] .tweakers-move-gate-bar-lit {
+  top: calc((1 - var(--move-gate-at)) * (100% - var(--move-gate-marker)) + var(--move-gate-marker));
+  height: auto;
+  bottom: 0;
 }
 
 .tweakers-move-gate-bar-marker {

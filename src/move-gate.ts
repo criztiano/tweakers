@@ -39,7 +39,7 @@ export type MoveGateColours = { text: string; threshold: string; lookahead: stri
 /**
  * Paints a reading over the grid: the level as a filled trace that dims where
  * the gate shuts, the gate's opening in the release colour, the look-ahead
- * reaching past the playhead, and the threshold line across. `pad` keeps the
+ * reaching past the playhead, and the threshold line across, under the level's line. `pad` keeps the
  * trace off the frame, so the threshold line meets the bar's marker.
  */
 export function drawMoveGate(
@@ -57,6 +57,11 @@ export function drawMoveGate(
   const tall = h - pad * 2;
   const y = (v: number) => top + (1 - Math.max(0, Math.min(1, v))) * tall;
   const mid = w / 2;
+  const thresholdLine = () => {
+    g.globalAlpha = 1;
+    g.fillStyle = colours.threshold;
+    g.fillRect(0, Math.round(y(threshold) - dpr), w, 2 * dpr);
+  };
 
   const levels = reading?.levels;
   const n = levels?.length ?? 0;
@@ -85,7 +90,8 @@ export function drawMoveGate(
       const at = y(sample(levels, px));
       g.fillRect(px, at, 1, top + tall - at);
     }
-    g.globalAlpha = 0.8;
+    // the threshold under the level's line, so the trace reads over it
+    thresholdLine();
     g.strokeStyle = colours.text;
     g.lineWidth = dpr;
     g.lineJoin = 'round';
@@ -102,10 +108,9 @@ export function drawMoveGate(
       g.stroke();
     }
     g.globalAlpha = 1;
+  } else {
+    thresholdLine();
   }
-
-  g.fillStyle = colours.threshold;
-  g.fillRect(0, Math.round(y(threshold) - dpr), w, 2 * dpr);
 
   g.globalAlpha = 0.7;
   g.fillStyle = colours.text;
