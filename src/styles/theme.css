@@ -3273,6 +3273,10 @@
   height: 32px;
   background: var(--move-chip);
   border-radius: var(--move-radius-small);
+  cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .tweakers-move-edges-track {
@@ -3324,6 +3328,7 @@
   box-sizing: border-box;
   border: 1.25px solid var(--move-edge-ink);
   border-radius: 50%;
+  background: var(--move-chip);
   transform: translate(-50%, -50%);
   transition: border-color 0.12s;
 }
@@ -3353,22 +3358,18 @@
 .tweakers-move-loop-marker[data-edge="end"] { margin-left: -8px; }
 .tweakers-move-loop-marker[data-moved] { fill: var(--move-red); }
 
-/* Each half of the pill is its own chip, over its own hardware pad. A held
-   or latched half lifts a light veil over its side of the face — the chip's
-   inversion, kept soft so the drawing still reads through it. */
+/* Each half of the pill is its own chip on the hardware, over its own pad;
+   on screen the cursor drags the handles instead (the pill takes the
+   pointer). A held, dragged or latched half lifts a light veil over its side
+   of the face — the chip's inversion, kept soft so the drawing still reads
+   through it. */
 .tweakers-move-edges-zone {
   position: absolute;
   top: 0;
   bottom: 0;
   width: 50%;
-  padding: 0;
-  border: none;
-  background: transparent;
   border-radius: var(--move-radius-small);
-  cursor: pointer;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
+  pointer-events: none;
   transition: background-color var(--move-duration-press) var(--move-ease-out);
 }
 

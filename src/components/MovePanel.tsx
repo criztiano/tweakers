@@ -109,6 +109,9 @@ const MIN_PAD_COLUMNS = 4;
 const DIAL_TRACK_INSET = 10;
 /** The trim span's line sits this much further in than a dial's track. */
 const TRIM_SPAN_PAD = 4;
+/** A fade or loop line's inset from its pill's sides — must match
+ *  .tweakers-move-edges-track. */
+const EDGES_TRACK_INSET = 12;
 /** The xy field's inset within its slot — must match .tweakers-move-xy. */
 const XY_INSET = { left: 8, top: 8, right: 9, bottom: 8 };
 
@@ -1363,6 +1366,20 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     if (hwHeldChip) return hwHeldChip;
     if (latched[col]) return latched[col];
     return chips.find((m) => hwLatched[m.path]) ?? page.dials[col];
+  };
+
+  // A fade or loop line takes the cursor like Start and End: press on a
+  // handle and drag it. `edgesFromPointer` reads the cursor's place on the
+  // line, 0..1; a loop marker runs the whole line, a fade its own half, from
+  // its own end inward.
+  const edgesFromPointer = (e: React.PointerEvent<HTMLElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const span = rect.width - EDGES_TRACK_INSET * 2;
+    return Math.min(1, Math.max(0, (e.clientX - rect.left - EDGES_TRACK_INSET) / (span || 1)));
+  };
+  const dragEdge = (kind: 'fade' | 'loop', isStart: boolean, meta: ControlMeta, x: number) => {
+    const v01 = kind === 'loop' ? x : Math.min(1, (isStart ? x : 1 - x) * 2);
+    TweakStore.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
   };
 
   // A take's two edges side by side — a trim start in this column, a trim
@@ -2690,24 +2707,55 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       const start = hand(edges.start, edges.start.min ?? 0);
                       const end = hand(edges.end, edges.kind === 'loop' ? edges.end.max ?? 1 : edges.end.min ?? 0);
                       return (
-                        <div key={`edges-${col}`} className="tweakers-move-edges" data-kind={edges.kind} style={{ gridColumn: 'span 2' }}>
+                        <div
+                          key={`edges-${col}`}
+                          className="tweakers-move-edges"
+                          data-kind={edges.kind}
+                          style={{ gridColumn: 'span 2' }}
+                          onPointerDown={(e) => {
+                            const x = edgesFromPointer(e);
+                            // The hand nearest the cursor is the one taken: a
+                            // fade by its half of the line, a loop by whichever
+                            // marker is closer (the start, when they sit together
+                            // and the cursor is left of them).
+                            const takeStart = edges.kind === 'fade'
+                              ? x < 0.5
+                              : Math.abs(x - start.at) < Math.abs(x - end.at) || (start.at >= end.at && x <= start.at);
+                            const m = takeStart ? edges.start : edges.end;
+                            if (TweakStore.isDisabled(page.panel.id, m.path)) return;
+                            try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+                            setDragPath(m.path);
+                            armMod(m.path);
+                            dragEdge(edges.kind, takeStart, m, x);
+                          }}
+                          onPointerMove={(e) => {
+                            const m = dragPath === edges.start.path ? edges.start : dragPath === edges.end.path ? edges.end : null;
+                            if (m && !TweakStore.isDisabled(page.panel.id, m.path)) dragEdge(edges.kind, m === edges.start, m, edgesFromPointer(e));
+                          }}
+                          onPointerUp={() => setDragPath(null)}
+                          onPointerCancel={() => setDragPath(null)}
+                        >
                           {edges.kind === 'fade'
                             ? <MovePadFadeBody fadeIn={start} fadeOut={end} />
                             : <MovePadLoopBody start={start} end={end} />}
                           {([[edges.start, col], [edges.end, col + 1]] as const).map(([m, at]) => (
-                            <button
+                            <div
                               key={m.path}
-                              type="button"
                               className="tweakers-move-edges-zone"
+                              role="slider"
+                              tabIndex={TweakStore.isDisabled(page.panel.id, m.path) ? -1 : 0}
                               aria-label={m.label}
-                              data-held={chipHeld(m) || undefined}
+                              aria-valuemin={m.min ?? 0}
+                              aria-valuemax={m.max ?? 1}
+                              aria-valuenow={Number(values[m.path])}
+                              aria-valuetext={moveVisualReading(m, Number(values[m.path]))}
+                              aria-orientation="horizontal"
+                              data-held={chipHeld(m) || dragPath === m.path || undefined}
                               data-latched={chipLatched(at, m) || undefined}
-                              onPointerDown={(e) => pressChip(e, at, m)}
-                              onPointerUp={() => releaseChip(at, m)}
-                              onPointerCancel={() => setHeld(null)}
+                              onKeyDown={(k) => dialFromKeyboard(k, m)}
                             >
                               <MoveModRing panelId={page.panel.id} path={m.path} pad />
-                            </button>
+                            </div>
                           ))}
                         </div>
                       );
