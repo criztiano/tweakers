@@ -28,7 +28,15 @@ type MoveSliderVisual = {
  | {
     kind: 'trim';
     edge: 'start' | 'end';
+}
+/** One of a gate's three dials. Threshold, look-ahead and release side by
+ *  side, in that order, draw as one 3-slot gate; any other arrangement
+ *  keeps the ordinary face. */
+ | {
+    kind: 'gate';
+    role: MoveGateRole;
 };
+type MoveGateRole = 'threshold' | 'lookahead' | 'release';
 type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
 type MoveSelectVisual = {
     kind: 'playback';
@@ -65,6 +73,13 @@ declare function moveNumericDrawing(meta: ControlMeta, value: unknown): MoveNume
 declare function moveTrimSpan(start: ControlMeta, startValue: unknown, end: ControlMeta, endValue: unknown): {
     start: number;
     end: number;
+} | null;
+/** Where a gate's three dials sit, each 0..1 across its own range — or null
+ *  unless the three are a threshold, a look-ahead and a release, in order. */
+declare function moveGateSpan(dials: [ControlMeta, unknown][]): {
+    threshold: number;
+    lookahead: number;
+    release: number;
 } | null;
 declare function movePlaybackMode(meta: ControlMeta, value: unknown): MovePlaybackMode | null;
 /** Semantic formatting is a fallback; a host formatter or unit always wins. */
@@ -745,4 +760,4 @@ type PanelConfig = {
     kind?: 'timeline' | 'modulation' | 'kit';
 };
 
-export { type ControlMeta as C, MOVE_BAND_H as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_W as d, type MoveNumericDrawing as e, type MovePlaybackMode as f, type MoveSelectVisual as g, type MoveSliderVisual as h, type MoveVisual as i, moveKeyboardValue as j, moveNumericDrawing as k, movePlaybackMode as l, moveBandCuts as m, moveTrimSpan as n, moveVisualReading as o };
+export { type ControlMeta as C, MOVE_BAND_H as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_W as d, type MoveGateRole as e, type MoveNumericDrawing as f, type MovePlaybackMode as g, type MoveSelectVisual as h, type MoveSliderVisual as i, type MoveVisual as j, moveGateSpan as k, moveKeyboardValue as l, moveBandCuts as m, moveNumericDrawing as n, movePlaybackMode as o, moveTrimSpan as p, moveVisualReading as q };

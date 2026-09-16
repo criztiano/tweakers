@@ -50,6 +50,18 @@ function moveTrimSpan(start, startValue, end, endValue) {
   if (a?.kind !== "trim" || a.edge !== "start" || b?.kind !== "trim" || b.edge !== "end") return null;
   return { start: a.position, end: b.position };
 }
+function moveGateSpan(dials) {
+  const roles = ["threshold", "lookahead", "release"];
+  if (dials.length !== 3) return null;
+  const at = dials.map(([meta, value], i) => {
+    const { min, max } = meta;
+    const visual = meta.moveVisual;
+    if (meta.type !== "slider" || visual?.kind !== "gate" || visual.role !== roles[i] || typeof value !== "number" || !Number.isFinite(value) || !Number.isFinite(min) || !Number.isFinite(max) || max <= min) return null;
+    return clamp01((value - min) / (max - min));
+  });
+  if (at.some((p) => p === null)) return null;
+  return { threshold: at[0], lookahead: at[1], release: at[2] };
+}
 function movePlaybackMode(meta, value) {
   if (meta.type !== "select" || meta.moveVisual?.kind !== "playback" || typeof value !== "string") return null;
   if (!meta.options?.some((option) => (typeof option === "string" ? option : option.value) === value)) return null;
@@ -135,6 +147,7 @@ export {
   MOVE_BAND_H,
   MOVE_BAND_W,
   moveBandCuts,
+  moveGateSpan,
   moveKeyboardValue,
   moveNumericDrawing,
   movePlaybackMode,

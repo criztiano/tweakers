@@ -40,7 +40,15 @@ type MoveSliderVisual = {
  | {
     kind: 'trim';
     edge: 'start' | 'end';
+}
+/** One of a gate's three dials. Threshold, look-ahead and release side by
+ *  side, in that order, draw as one 3-slot gate; any other arrangement
+ *  keeps the ordinary face. */
+ | {
+    kind: 'gate';
+    role: MoveGateRole;
 };
+type MoveGateRole = 'threshold' | 'lookahead' | 'release';
 type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
 type MoveSelectVisual = {
     kind: 'playback';
