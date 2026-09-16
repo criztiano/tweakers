@@ -11015,7 +11015,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                                 "aria-valuenow": Number(values[m.path]),
                                                 "aria-valuetext": moveVisualReading(m, Number(values[m.path])),
                                                 "aria-orientation": "horizontal",
-                                                "data-held": chipHeld(m) || dragPath === m.path || void 0,
+                                                "data-held": chipHeld(m) || void 0,
                                                 "data-latched": chipLatched(at, m) || void 0,
                                                 onKeyDown: (k) => dialFromKeyboard(k, m),
                                                 children: /* @__PURE__ */ jsx12(MoveModRing, { panelId: page.panel.id, path: m.path, pad: true })
