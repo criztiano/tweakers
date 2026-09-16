@@ -8180,10 +8180,10 @@ function drawMoveGate(g, w, h, dpr, reading, threshold, colours, pad = 0) {
   const y = (v) => top + (1 - Math.max(0, Math.min(1, v))) * tall;
   const mid = w / 2;
   const thresholdLine = () => {
-    const at = Math.round(y(threshold));
+    const at = Math.round(y(threshold)) + 0.5;
     g.globalAlpha = 1;
     g.strokeStyle = colours.threshold;
-    g.lineWidth = 2 * dpr;
+    g.lineWidth = dpr;
     g.setLineDash([4 * dpr, 3 * dpr]);
     g.beginPath();
     g.moveTo(0, at);
