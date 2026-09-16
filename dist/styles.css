@@ -431,6 +431,8 @@
   /* The metronome's body sits a step behind its arm, so the thing that moves
      is the brightest thing in the slot. */
   --move-metronome-body-opacity: 0.85;
+  /* The tempo's unit steps back behind its number. */
+  --move-metronome-unit-opacity: 0.5;
   --move-text: #dee3c9;
   --move-text-inverse: #31322f;
   --move-radius: 12px;
@@ -2311,6 +2313,40 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+/* The metronome slot reads like a dial: the tempo top right, big, in the
+   value's line shape, the unit small and quiet under it; the picture sits
+   in the bottom-left corner. */
+.tweakers-move-metronome-readout {
+  position: absolute;
+  top: var(--move-toggle-label-inset);
+  right: var(--move-toggle-label-inset);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-family: var(--move-font-label);
+  font-size: var(--move-toggle-label-size);
+  line-height: normal;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.tweakers-move-metronome-readout[data-value] {
+  font-family: var(--move-font-value);
+  font-variation-settings: var(--move-font-value-shape);
+  font-size: 40px;
+}
+
+.tweakers-move-metronome-readout .tweakers-move-dial-unit {
+  opacity: var(--move-metronome-unit-opacity);
+}
+
+.tweakers-move-metronome-picture {
+  position: absolute;
+  left: var(--move-toggle-label-inset);
+  bottom: var(--move-toggle-label-inset);
+  pointer-events: none;
 }
 
 /* The metronome: as tall as a switch's picture, dim while it is off, lit

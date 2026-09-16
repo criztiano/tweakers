@@ -2195,8 +2195,13 @@ function MoveSlotMetronomeBody({ label, checked, swing }) {
       lean(0);
     };
   }, [swings]);
+  const split = /\d/.test(label[0] ?? "") ? splitReadoutUnit(label) : null;
   return /* @__PURE__ */ jsxs3(Fragment3, { children: [
-    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-toggle-picture", "aria-hidden": "true", children: /* @__PURE__ */ jsxs3(
+    split?.unit ? /* @__PURE__ */ jsxs3("span", { className: "tweakers-move-metronome-readout", "data-value": true, children: [
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-number", children: split.num }),
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-unit", children: split.unit })
+    ] }) : /* @__PURE__ */ jsx3("span", { className: "tweakers-move-metronome-readout", children: label }),
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-metronome-picture", "aria-hidden": "true", children: /* @__PURE__ */ jsxs3(
       "svg",
       {
         className: "tweakers-move-metronome",
@@ -2252,8 +2257,7 @@ function MoveSlotMetronomeBody({ label, checked, swing }) {
           ] })
         ]
       }
-    ) }),
-    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-toggle-label", children: label })
+    ) })
   ] });
 }
 function MoveSlotIcon({ icon, className }) {
