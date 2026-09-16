@@ -3519,8 +3519,8 @@ declare const MOVE_GATE_GRID: {
 };
 /**
  * The 3-slot gate's face. The threshold stands as a bar over the first
- * column and the release over the third, each lit from the top down to its
- * marker; the grid between them holds the live picture (the children); the
+ * column, lit from the top down to its marker, and the release over the
+ * third, lit from its marker down; the grid between them holds the live picture (the children); the
  * look-ahead is a short line under the middle, pointing ahead in time. Each
  * name sits under its own column.
  */
@@ -3917,7 +3917,7 @@ type MoveGateColours = {
 /**
  * Paints a reading over the grid: the level as a filled trace that dims where
  * the gate shuts, the gate's opening in the release colour, the look-ahead
- * reaching past the playhead, and the threshold line across. `pad` keeps the
+ * reaching past the playhead, and the threshold line across, under the level's line. `pad` keeps the
  * trace off the frame, so the threshold line meets the bar's marker.
  */
 declare function drawMoveGate(g: CanvasRenderingContext2D, w: number, h: number, dpr: number, reading: MoveGateReading | null, threshold: number, colours: MoveGateColours, pad?: number): void;

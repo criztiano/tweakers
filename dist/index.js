@@ -7783,6 +7783,11 @@ function drawMoveGate(g, w, h, dpr, reading, threshold, colours, pad = 0) {
   const tall = h - pad * 2;
   const y = (v) => top + (1 - Math.max(0, Math.min(1, v))) * tall;
   const mid = w / 2;
+  const thresholdLine = () => {
+    g.globalAlpha = 1;
+    g.fillStyle = colours.threshold;
+    g.fillRect(0, Math.round(y(threshold) - dpr), w, 2 * dpr);
+  };
   const levels = reading?.levels;
   const n = levels?.length ?? 0;
   if (reading && levels && n > 1) {
@@ -7806,7 +7811,7 @@ function drawMoveGate(g, w, h, dpr, reading, threshold, colours, pad = 0) {
       const at = y(sample(levels, px));
       g.fillRect(px, at, 1, top + tall - at);
     }
-    g.globalAlpha = 0.8;
+    thresholdLine();
     g.strokeStyle = colours.text;
     g.lineWidth = dpr;
     g.lineJoin = "round";
@@ -7822,9 +7827,9 @@ function drawMoveGate(g, w, h, dpr, reading, threshold, colours, pad = 0) {
       g.stroke();
     }
     g.globalAlpha = 1;
+  } else {
+    thresholdLine();
   }
-  g.fillStyle = colours.threshold;
-  g.fillRect(0, Math.round(y(threshold) - dpr), w, 2 * dpr);
   g.globalAlpha = 0.7;
   g.fillStyle = colours.text;
   g.fillRect(Math.round(mid - dpr / 2), 0, dpr, h);
