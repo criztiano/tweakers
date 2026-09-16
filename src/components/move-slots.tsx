@@ -736,8 +736,9 @@ function MoveSlotBadge({ on }: { on: boolean }) {
  *
  * `band` claims two pads the other way — one column, two rows — and keeps
  * the same promise: each pad under the shared screen is still its own chip.
+ * `fade` and `loop` claim two pads side by side in one row on the same terms.
  */
-export type MovePadKind = 'toggle' | 'icon' | 'value' | 'action' | 'icon-label' | 'app' | 'bend' | 'wave' | 'tabs' | 'color' | 'list' | 'band';
+export type MovePadKind = 'toggle' | 'icon' | 'value' | 'action' | 'icon-label' | 'app' | 'bend' | 'wave' | 'tabs' | 'color' | 'list' | 'band' | 'fade' | 'loop';
 
 /** A switch: the indicator top-left, the name beside it, the whole pad
  *  inverting when it is on. */
@@ -942,6 +943,73 @@ export function MovePadBandBody({ low, high, upper = 'high' }: {
   );
 }
 
+/** One edge of a fade or loop line: where it sits, and whether it has left
+ *  its open end. */
+export type MovePadEdgeHand = {
+  /** The edge's place on its own chip's range, 0..1. */
+  at: number;
+  /** Moved off its open end — the line is doing something here. */
+  moved: boolean;
+};
+
+const edgeAt = (at: number) => Math.max(0, Math.min(1, at)) * 100;
+
+/**
+ * The fade line — a fade in and a fade out side by side in one row, drawn on
+ * one dark line with no names or numbers. Each fade is the part of the sound
+ * it takes away: a ramp standing on its own end of the line, its handle on
+ * top where the sound is whole again. Each has half the line to run on. A
+ * fade left at zero is a thin needle at its end; one moved in turns blue.
+ */
+export function MovePadFadeBody({ fadeIn, fadeOut }: { fadeIn: MovePadEdgeHand; fadeOut: MovePadEdgeHand }) {
+  return (
+    <div className="tweakers-move-edges-track" aria-hidden="true">
+      {([['in', fadeIn], ['out', fadeOut]] as const).map(([edge, hand]) => (
+        <span
+          key={edge}
+          className="tweakers-move-fade"
+          data-edge={edge}
+          data-moved={hand.moved || undefined}
+          style={{ '--move-edge-at': `${edgeAt(hand.at)}%` } as CSSProperties}
+        >
+          <span className="tweakers-move-fade-ramp" />
+          <span className="tweakers-move-fade-handle" />
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The loop line — a loop's start and end side by side in one row, drawn on
+ * one dark line with no names or numbers: a marker at each edge pointing
+ * into the loop, and the part left outside it shaded lighter. A marker at
+ * its own end of the line is orange; one moved in turns red.
+ */
+export function MovePadLoopBody({ start, end }: { start: MovePadEdgeHand; end: MovePadEdgeHand }) {
+  const a = edgeAt(start.at);
+  const b = edgeAt(end.at);
+  return (
+    <div className="tweakers-move-edges-track" aria-hidden="true">
+      <span className="tweakers-move-loop-outside" style={{ left: 0, width: `${a}%` }} />
+      <span className="tweakers-move-loop-outside" style={{ right: 0, width: `${100 - b}%` }} />
+      {([['start', start, a], ['end', end, b]] as const).map(([edge, hand, at]) => (
+        <svg
+          key={edge}
+          className="tweakers-move-loop-marker"
+          data-edge={edge}
+          data-moved={hand.moved || undefined}
+          style={{ left: `${at}%` }}
+          viewBox="0 0 8 16"
+          preserveAspectRatio="none"
+        >
+          <path d={edge === 'start' ? 'M0 0L8 8L0 16Z' : 'M8 0L0 8L8 16Z'} />
+        </svg>
+      ))}
+    </div>
+  );
+}
+
 /** A cell the app owns — a track, a slice, a step. The colour is the app's
  *  own, so it rides inline the way a modulation dot does. */
 export function MovePadAppBody({ label, color }: { label?: string; color?: string }) {
@@ -984,6 +1052,8 @@ export const MOVE_PAD_LIBRARY = {
   tabs: { description: '2 to 8 pads: the page’s modes side by side, the current one lit — a name pad optional', component: MovePadTabsBody },
   color: { description: 'a single colour in a small slot — tap latches it onto the dial above, hold peeks; that dial edits and opens it', component: MovePadColorBody },
   band: { description: '2 pads in one column: a high cut over a low cut, drawn as one band on a small screen — each half its own chip', component: MovePadBandBody },
+  fade: { description: '2 pads in one row: a fade in and a fade out, each a ramp from its own end of one line — each half its own chip', component: MovePadFadeBody },
+  loop: { description: '2 pads in one row: a loop’s start and end, a marker for each on one line — each half its own chip', component: MovePadLoopBody },
 } as const satisfies Record<MovePadKind, { description: string; component: unknown }>;
 
 /**

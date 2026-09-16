@@ -3264,6 +3264,143 @@
   height: 10px;
 }
 
+/* A fade or a loop — a start chip and the end chip beside it, one row, two
+   pads wide. The face is a chip-coloured pill with a dark line inset in it
+   (8px top and bottom, 12px at the sides); nothing is written on it, the
+   drawing is the reading. Each half of the pill is its own chip. */
+.tweakers-move-edges {
+  position: relative;
+  height: 32px;
+  background: var(--move-chip);
+  border-radius: var(--move-radius-small);
+}
+
+.tweakers-move-edges-track {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 12px;
+  right: 12px;
+  background: var(--move-bg);
+  pointer-events: none;
+}
+
+/* A fade runs on its own half of the line, from its end inward. The ramp is
+   what it takes away: the corner at its end of the line, cut from the floor
+   there to the handle on top. At zero the ramp keeps 3px, a needle. */
+.tweakers-move-fade {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  --move-edge-x: max(3px, var(--move-edge-at));
+  --move-edge-ink: var(--move-text);
+}
+
+.tweakers-move-fade[data-moved] { --move-edge-ink: var(--move-blue); }
+.tweakers-move-fade[data-edge="in"] { left: 0; }
+.tweakers-move-fade[data-edge="out"] { right: 0; }
+
+.tweakers-move-fade-ramp {
+  position: absolute;
+  inset: 0;
+  background: var(--move-edge-ink);
+  transition: background-color 0.12s;
+}
+
+.tweakers-move-fade[data-edge="in"] .tweakers-move-fade-ramp {
+  clip-path: polygon(0 0, var(--move-edge-x) 0, 0 100%);
+}
+
+.tweakers-move-fade[data-edge="out"] .tweakers-move-fade-ramp {
+  clip-path: polygon(100% 0, calc(100% - var(--move-edge-x)) 0, 100% 100%);
+}
+
+.tweakers-move-fade-handle {
+  position: absolute;
+  top: 0;
+  width: 6px;
+  height: 6px;
+  box-sizing: border-box;
+  border: 1.25px solid var(--move-edge-ink);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: border-color 0.12s;
+}
+
+.tweakers-move-fade[data-edge="in"] .tweakers-move-fade-handle { left: var(--move-edge-x); }
+.tweakers-move-fade[data-edge="out"] .tweakers-move-fade-handle { left: calc(100% - var(--move-edge-x)); }
+
+/* A loop marker stands on its edge the full height of the line and points
+   into the loop; what lies outside the loop is shaded lighter. */
+.tweakers-move-loop-outside {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--move-text) 5%, transparent);
+}
+
+.tweakers-move-loop-marker {
+  position: absolute;
+  top: 0;
+  width: 8px;
+  height: 100%;
+  overflow: visible;
+  fill: var(--move-orange);
+  transition: fill 0.12s;
+}
+
+.tweakers-move-loop-marker[data-edge="end"] { margin-left: -8px; }
+.tweakers-move-loop-marker[data-moved] { fill: var(--move-red); }
+
+/* Each half of the pill is its own chip, over its own hardware pad. A held
+   or latched half lifts a light veil over its side of the face — the chip's
+   inversion, kept soft so the drawing still reads through it. */
+.tweakers-move-edges-zone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: var(--move-radius-small);
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background-color var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-edges-zone:first-of-type { left: 0; }
+.tweakers-move-edges-zone:last-of-type { right: 0; }
+
+.tweakers-move-edges-zone[data-held],
+.tweakers-move-edges-zone[data-latched] {
+  background: color-mix(in srgb, var(--move-text) 16%, transparent);
+}
+
+.tweakers-move-edges-zone[data-latched] {
+  animation: tweakers-move-latch 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-edges-zone[data-latched] { animation: none; }
+}
+
+.tweakers-move-edges-zone:focus-visible {
+  outline: var(--move-color-stroke) solid var(--move-text);
+  outline-offset: calc(-1 * var(--move-color-stroke));
+}
+
+.tweakers-move-edges-zone .tweakers-move-pad-mod {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+}
+
 /* The tabs strip — the pad grid's multi-slot control. It spans its run and
    re-cuts that run into the same columns and the same 4px gap the grid uses,
    so every tab lands exactly on the hardware pad that selects it. */

@@ -458,6 +458,11 @@ function Card({ item, onShow, tall }: { item: Specimen; onShow: (path: string) =
             <div className="tweakers-move-band" data-kind="band" style={{ width: 'var(--kit-slot-w)', height: 68 }}>
               <div className="tweakers-move-band-face">{item.render()}</div>
             </div>
+          ) : item.kind === 'fade' || item.kind === 'loop' ? (
+            // Two pads along one row: the pill spans them, as in the panel.
+            <div className="tweakers-move-edges" data-kind={item.kind} style={{ width: 'calc(2 * var(--kit-slot-w) + 4px)' }}>
+              {item.render()}
+            </div>
           ) : item.span && item.span > 1 ? (
             // A small slot that claims a run of pads draws as its own strip,
             // re-cut into the pad columns it spans — the same container the
