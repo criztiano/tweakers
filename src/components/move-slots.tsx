@@ -697,7 +697,7 @@ function MoveSlotBadge({ on }: { on: boolean }) {
  * every pad in it keeps one option — so the hardware's one-thing-per-pad
  * rule still holds under the shared strip.
  */
-export type MovePadKind = 'toggle' | 'value' | 'action' | 'app' | 'bend' | 'wave' | 'tabs' | 'color' | 'list';
+export type MovePadKind = 'toggle' | 'icon' | 'value' | 'action' | 'app' | 'bend' | 'wave' | 'tabs' | 'color' | 'list';
 
 /** A switch: the indicator top-left, the name beside it, the whole pad
  *  inverting when it is on. */
@@ -708,6 +708,13 @@ export function MovePadToggleBody({ label }: { label: string }) {
       <span className="tweakers-move-pad-title">{label}</span>
     </>
   );
+}
+
+/** A switch drawn as its picture alone: a pad is too narrow for a name and
+ *  a badge, and the whole pad inverting already says it is on. The name
+ *  stays on the pad for the screen reader, not the eye. */
+export function MovePadIconBody({ icon }: { icon: string }) {
+  return <MoveSlotIcon icon={icon} className="tweakers-move-pad-icon" />;
 }
 
 /** A value chip: the name, and the real value in bold with its unit
@@ -842,6 +849,7 @@ export function MovePadListBody({ view, onCursor, onToggle }: {
 /** The small slot dictionary — every pad face the kit knows. */
 export const MOVE_PAD_LIBRARY = {
   toggle: { description: 'a switch; the pad inverts when it is on', component: MovePadToggleBody },
+  icon: { description: 'a switch drawn as its picture alone — no name, the pad inverts when it is on', component: MovePadIconBody },
   value: { description: 'a value the dial above can borrow — hold to peek, tap to latch', component: MovePadValueBody },
   list: { description: 'a checked list above a small pad; its dial walks, Sample selects, a second pad press runs', component: MovePadListBody },
   action: { description: 'a button: a press runs the app’s action', component: MovePadActionBody },

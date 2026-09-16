@@ -17,6 +17,7 @@ import {
   MoveSlotScopeBody,
   MoveSlotEnvBody,
   MovePadToggleBody,
+  MovePadIconBody,
   MovePadWaveBody,
   MovePadValueBody,
   MovePadActionBody,
@@ -369,6 +370,12 @@ export const SMALL_SLOTS: Specimen[] = [
     render: () => <MovePadToggleBody label="Sync" />,
   },
   {
+    kind: 'icon',
+    description: MOVE_PAD_LIBRARY.icon.description,
+    note: 'A take’s Solo, held: the headphones say it where the word would not fit.',
+    render: () => <MovePadIconBody icon="headphones" />,
+  },
+  {
     kind: 'value',
     description: MOVE_PAD_LIBRARY.value.description,
     render: () => <MovePadValueBody label="Drive" value="42" unit="%" />,
@@ -414,6 +421,7 @@ export const SMALL_SLOTS: Specimen[] = [
 /** Small slots read as states as much as faces: on, held, latched. */
 export const SMALL_SLOT_STATES: { label: string; kind: MovePadKind; props: Record<string, unknown>; render: () => ReactNode }[] = [
   { label: 'on', kind: 'toggle', props: { 'data-kind': 'toggle', 'data-on': true }, render: () => <MovePadToggleBody label="Sync" /> },
+  { label: 'on', kind: 'icon', props: { 'data-kind': 'icon', 'data-on': true }, render: () => <MovePadIconBody icon="headphones" /> },
   { label: 'held', kind: 'value', props: { 'data-kind': 'value', 'data-held': true }, render: () => <MovePadValueBody label="Drive" value="42" unit="%" /> },
   { label: 'latched', kind: 'value', props: { 'data-kind': 'value', 'data-latched': true }, render: () => <MovePadValueBody label="Drive" value="42" unit="%" /> },
   { label: 'empty', kind: 'app', props: { 'data-empty': true }, render: () => null },

@@ -2846,6 +2846,29 @@
   padding: 0 4px;
 }
 
+/* The picture-only switch: the glyph at the tab strip's size, centred, and
+   the pad's own inversion as the state. */
+.tweakers-move-pad[data-kind="icon"] {
+  padding: 0 4px;
+}
+
+.tweakers-move-pad-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.tweakers-move-pad-icon[data-asset] {
+  display: block;
+  background: currentColor;
+  mask-size: contain;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+}
+
 .tweakers-move-pad-indicator {
   position: absolute;
   left: 4px;
