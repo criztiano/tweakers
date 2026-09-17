@@ -85,6 +85,13 @@ export interface MovePanelProps {
    */
   headerStart?: React.ReactNode;
   /**
+   * View-owned status placed immediately right of the header's right-hand
+   * pill (the waveform clock, else the volume readout), outside it. This is
+   * for a compact, live readout that belongs beside that pill (for example
+   * an input level while recording), not for another row of page controls.
+   */
+  headerEnd?: React.ReactNode;
+  /**
    * Where the attached-function chips sit (see `MoveFunctionChips`): every
    * function the app attaches renders as a chip that runs the same handler
    * as the hardware key. `clock` (the default) puts the row immediately
@@ -363,7 +370,7 @@ export const MOVE_SETTINGS_EVENT = 'move-tweakers:settings';
  * are the eight the dials are holding, their pads with them, so all of them
  * can be reached without a single one shrinking to a chip.
  */
-export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport', scroll = false, focused = false, headerStart, settings, functionChips = 'clock' }: MovePanelProps) {
+export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport', scroll = false, focused = false, headerStart, headerEnd, settings, functionChips = 'clock' }: MovePanelProps) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [track, setTrack] = useState(0);
@@ -1596,11 +1603,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 
   // The header cluster: the attached-function chips (in their default seat,
   // immediately left of the readout), then the volume-dial readout,
-  // right-aligned. (View-placed action pills remain MoveActionButton's
-  // business.) Nothing registered and nothing attached = no cluster, header
-  // unchanged.
+  // right-aligned, then the view's own readout beside it. (View-placed
+  // action pills remain MoveActionButton's business.) Nothing registered
+  // and nothing attached = no cluster, header unchanged.
   const volumeReading = liveValue ?? volume?.value;
-  const headerCluster = (waveClaimed || volume || functionChips === 'clock') && (
+  const headerCluster = (waveClaimed || volume || functionChips === 'clock' || headerEnd) && (
     <div className="tweakers-move-actions">
       {functionChips === 'clock' && <MoveFunctionChips />}
       {waveClaimed ? (
@@ -1614,6 +1621,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
           <span className="tweakers-move-volume-value">{boldColons(volumeReading ?? volume.label ?? '')}</span>
         </div>
       )}
+      {headerEnd && <div className="tweakers-move-header-end">{headerEnd}</div>}
     </div>
   );
 
