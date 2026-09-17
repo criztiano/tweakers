@@ -114,6 +114,10 @@ export const CONFIG = {
     returnToCenter: true,
   },
 
+  /* ── a number that says what it is: the value the headline, the name a
+        tag — asked for with `display: 'value'` ───────────────────── */
+  decay: { type: 'slider', default: 250, min: 0, max: 2000, step: 1, unit: ' ms', display: 'value' },
+
   /* ── values a bar cannot say: a bearing, a colour, a shape ────── */
   heading: { type: 'slider', default: 270, min: 0, max: 360, step: 1, display: 'dial' },
   tint: { type: 'color', default: '#eb644dff', alpha: true },

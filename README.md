@@ -370,7 +370,7 @@ coneAngle:  { type: 'slider', default: 24, min: 0, max: 90, display: 'dial', wra
 
 | Prop | Type | Description |
 |------|------|-------------|
-| `display` | `'track' \| 'dial'` | `dial` draws a needle in place of the track. Default `track`. |
+| `display` | `'track' \| 'dial' \| 'value'` | `dial` draws a needle in place of the track. `value` keeps the track, and on the Move panel shows the value first — the number the headline, the name a tag. Default `track`. |
 | `wrap` | `boolean` | Past the end, come back around instead of stopping. Defaults to true when the range covers a full turn (360, or −180..180). |
 
 The needle follows the pointer directly — a compass gesture, not a fader one —

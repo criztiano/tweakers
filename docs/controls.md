@@ -10,7 +10,7 @@ adjustment, modulation, readouts and hardware column alignment.
 | Kind | Choose for | Configuration / body | Hardware space |
 | --- | --- | --- | --- |
 | `default` | Bounded continuous quantity; signed values use `bipolar` / `origin` | Slider tuple, `slider`, bounded `number`; `MoveSlotDefaultBody` | 1 dial |
-| `value` | A value that is the headline, including a substituted value chip | Panel-selected presentation of `MoveSlotDefaultBody` | 1 dial |
+| `value` | A value that is the headline, including a substituted value chip | A slider asks for it with `display: 'value'`, whatever its range (`{ type: 'slider', …, unit: ' ms', display: 'value' }`); the panel also selects it for a focused panel, the settings room and a substituted chip. The value large at rest, the name a tag; `MoveSlotDefaultBody`. Elsewhere — the sidebar, a pad chip — the slider is unchanged | 1 dial |
 | `enum` | A stepped choice | `select.options`, optional `moveSpan: 2` for a wider list; `MoveSlotEnumBody` | 1 dial by default; 2 adjacent dials with `moveSpan: 2`, either knob selects |
 | `icon` | A choice recognized by its picture | Select option `icon`; `MoveSlotEnumBody` | 1 dial |
 | `curve` | A choice whose value is a shape | Select `preview(option)` sampler; `MoveSlotEnumBody` | 1 dial |

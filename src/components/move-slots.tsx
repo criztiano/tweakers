@@ -25,8 +25,9 @@ import { ListScreen } from './ListScreen';
  *   fill bar at the bottom (an origin tick when the dial is bipolar).
  * - `value`   — the same slot the other way round: the value is the
  *   headline, the name shrinks to a tag on top. For dials whose value
- *   already says what it is (two seconds, three clips), and for a value
- *   chip substituted into the slot.
+ *   already says what it is (two seconds, three clips) — a slider asks for
+ *   it with `display: 'value'` — and for a value chip substituted into the
+ *   slot.
  * - `icon`    — an option picker whose current option shows as a glyph:
  *   at arm's length you read a picture, not a word.
  * - `curve`   — an option picker whose current option draws its shape (the
@@ -131,7 +132,9 @@ export function moveSlotKind(
     if (opts.glyph) return 'icon';
     return 'enum';
   }
-  return opts.valueFirst ? 'value' : 'default';
+  // The panel's moment (a focused view, the settings room) or the app's own
+  // ask (`display: 'value'`) turns the value first.
+  return opts.valueFirst || (meta.type === 'slider' && meta.display === 'value') ? 'value' : 'default';
 }
 
 /** One glyph from the bundled lucide subset; an unknown name draws nothing. */

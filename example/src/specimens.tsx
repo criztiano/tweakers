@@ -179,9 +179,9 @@ export const BIG_SLOTS: Specimen[] = [
     render: () => <MoveSlotDefaultBody label="Amount" value="65%" pct={65} originPct={null} />,
   },
   {
-    kind: 'value',
+    kind: 'value', path: 'decay',
     description: MOVE_SLOT_LIBRARY.value.description,
-    note: 'The face a chip wears when a dial borrows it, and every named value on a modulator’s page.',
+    note: 'A slider asks for it with `display: \'value\'` — whatever its range. It is also the face a chip wears when a dial borrows it, and every named value on a modulator’s page.',
     render: () => (
       <>
         <span className="tweakers-move-dial-sub">Decay</span>

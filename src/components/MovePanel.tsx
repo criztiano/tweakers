@@ -1892,8 +1892,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 // top and the value takes the slot. Plain 0..1 amounts keep
                 // the big name, since "40%" on its own says nothing.
                 // The kit's own room pages read the same way: the bar width
-                // says "2×" big, with its name as the tag.
-                const valueFirst = (focused || !!settingsPanel || page.panel.kind === 'kit') && !(meta.min === 0 && meta.max === 1);
+                // says "2×" big, with its name as the tag. An app asks for it
+                // per slider with `display: 'value'`, whatever the range — it
+                // knows its number says what it is.
+                const valueFirst = (meta.type === 'slider' && meta.display === 'value')
+                  || ((focused || !!settingsPanel || page.panel.kind === 'kit') && !(meta.min === 0 && meta.max === 1));
                 // The modulator's oscilloscope belongs to a place on the page,
                 // not to one control: the LFO's first slot shows the live wave
                 // whether it is holding a rate in Hz or a tempo division.
