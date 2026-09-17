@@ -245,4 +245,27 @@ describe('move functions', () => {
     detachLoop();
     detachDoor();
   });
+
+  it('stacks suspends: a wait over the settings room lets go without waking the room\'s keys', () => {
+    const detachLoop = MoveFunctions.attach('loop', () => {});
+    const detachMute = MoveFunctions.attach('mute', () => {});
+    const closeRoom = MoveFunctions.suspend(['mute']);
+    assert.deepEqual(MoveFunctions.list(), ['mute']);
+    const endWait = MoveFunctions.suspend();
+    assert.deepEqual(MoveFunctions.list(), []);
+    // the view the wait hands over to attaches its own key — live at once
+    const detachSample = MoveFunctions.attach('sample', () => {});
+    assert.deepEqual(MoveFunctions.list(), ['sample']);
+    endWait();
+    assert.deepEqual(MoveFunctions.list(), ['mute', 'sample'], 'the room still keeps Loop dark');
+    // released out of order, each suspend still lets go of only its own
+    const endAgain = MoveFunctions.suspend();
+    closeRoom();
+    assert.deepEqual(MoveFunctions.list(), []);
+    endAgain();
+    assert.deepEqual(MoveFunctions.list(), ['loop', 'mute', 'sample']);
+    detachLoop();
+    detachMute();
+    detachSample();
+  });
 });

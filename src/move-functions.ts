@@ -173,8 +173,19 @@ class MoveFunctionsClass {
   private options = new Map<MoveFunctionButton, MoveFunctionOptions>();
   private listeners = new Set<() => void>();
   private runListeners = new Set<MoveFunctionRunListener>();
-  /** Attachments put to sleep by `suspend` — attached, but not in this view. */
-  private dormant: Set<MoveFunctionButton> | null = null;
+  /** One set per standing `suspend`: the attachments it put to sleep —
+   *  attached, but not in the view that took the surface. Views stack (a
+   *  wait over the settings room), so a button sleeps while any of them
+   *  holds it, and each lets go on its own. */
+  private holds: Set<MoveFunctionButton>[] = [];
+  private isDormant(name: MoveFunctionButton): boolean {
+    return this.holds.some((hold) => hold.has(name));
+  }
+  /** An attachment made while views are suspended belongs to the view in
+   *  front — live under every hold. */
+  private wake(name: MoveFunctionButton) {
+    for (const hold of this.holds) hold.delete(name);
+  }
 
   /**
    * Attach an action to a function button; returns a detach function.
@@ -191,7 +202,7 @@ class MoveFunctionsClass {
     if (options) this.options.set(name, options);
     else this.options.delete(name);
     // An attachment made inside a suspended view belongs to that view.
-    this.dormant?.delete(name);
+    this.wake(name);
     this.notify();
     return () => {
       if (this.handlers.get(name) === handler) {
@@ -204,7 +215,7 @@ class MoveFunctionsClass {
 
   /** The attached button names — what the kit claims on the hardware. */
   list(): MoveFunctionButton[] {
-    return [...new Set([...this.handlers.keys(), ...this.overlays.keys()])].filter((name) => !this.dormant?.has(name));
+    return [...new Set([...this.handlers.keys(), ...this.overlays.keys()])].filter((name) => !this.isDormant(name));
   }
 
   /**
@@ -214,15 +225,21 @@ class MoveFunctionsClass {
    * attached or pushed while the view is up is the view's own and stays
    * live. The kit reads `list`, so the keys go dark on the hardware and
    * the chips leave the header, with no second bookkeeping. The returned
-   * release wakes everything as it was.
+   * release wakes what this suspend put to sleep. Suspends stack — a wait
+   * can stand over the settings room — and release in any order: a button
+   * sleeps while any standing suspend still holds it.
    */
   suspend(keep: MoveFunctionButton[] = []): () => void {
-    const dormant = new Set(this.list().filter((name) => !keep.includes(name)));
-    this.dormant = dormant;
+    // Everything attached, asleep already or not: a key the view behind put
+    // to sleep stays asleep until the view in front lets go of it too.
+    const attached = [...new Set([...this.handlers.keys(), ...this.overlays.keys()])];
+    const hold = new Set(attached.filter((name) => !keep.includes(name)));
+    this.holds.push(hold);
     this.notify();
     return () => {
-      if (this.dormant !== dormant) return;
-      this.dormant = null;
+      const at = this.holds.indexOf(hold);
+      if (at < 0) return;
+      this.holds.splice(at, 1);
       this.notify();
     };
   }
@@ -238,7 +255,7 @@ class MoveFunctionsClass {
    */
   chips(): MoveFunctionChip[] {
     return MOVE_FUNCTION_MANIFEST
-      .filter((b) => (MOVE_CHIP_BUTTONS as readonly string[]).includes(b.name) && this.handler(b.name) && !this.dormant?.has(b.name))
+      .filter((b) => (MOVE_CHIP_BUTTONS as readonly string[]).includes(b.name) && this.handler(b.name) && !this.isDormant(b.name))
       .map((b) => ({ name: b.name, options: this.option(b.name) }))
       .filter(({ options }) => options?.chip !== false && !!options?.label)
       .map(({ name, options }) => ({
@@ -261,7 +278,7 @@ class MoveFunctionsClass {
     const stack = this.overlays.get(name) ?? [];
     stack.push(entry);
     this.overlays.set(name, stack);
-    this.dormant?.delete(name);
+    this.wake(name);
     TweakStore.noteMoveKitUse('functions');
     this.notify();
     return () => {
@@ -282,7 +299,7 @@ class MoveFunctionsClass {
   /** Run the action attached to a button, if any. Called by the kit per press. */
   run(name: MoveFunctionButton, press?: Partial<MoveFunctionPress>): void {
     const full: MoveFunctionPress = { name, shift: !!press?.shift, hold: !!press?.hold, ...(typeof press?.step === 'number' ? { step: press.step } : {}) };
-    if (this.dormant?.has(name)) return;
+    if (this.isDormant(name)) return;
     this.handler(name)?.(full);
     for (const l of this.runListeners) l(name, full);
   }
