@@ -1151,8 +1151,8 @@
 /* The pictures sit over the whole window; every layer of them lets the
    pointer through, so the page around the stage stays in reach. (The views
    inside the frame take no pointer until the change lands — the browser
-   holds a captured element out of hit testing for the few hundred ms it
-   runs. The Move's keys are not held.) */
+   holds a captured element out of hit testing for as long as it runs. The
+   Move's keys are not held.) */
 :root[data-tweakers-move-view]::view-transition,
 :root[data-tweakers-move-view]::view-transition-group(*),
 :root[data-tweakers-move-view]::view-transition-image-pair(*),
@@ -1165,16 +1165,25 @@
   animation: none;
 }
 
+/* The two pictures share one curve, so their opacities always add up to
+   one: laid over each other additively they cross without a dip in light,
+   where plain blending would darken the middle of the change. MoveViews
+   plays the zoom-through on them. */
+:root[data-tweakers-move-view]::view-transition-image-pair(tweakers-move-view) {
+  isolation: isolate;
+}
+
 :root[data-tweakers-move-view]::view-transition-old(tweakers-move-view),
 :root[data-tweakers-move-view]::view-transition-new(tweakers-move-view) {
   animation: none;
-  mix-blend-mode: normal;
+  mix-blend-mode: plus-lighter;
 }
 
-/* A viewport-docked panel is a sheet of its own: arriving, it rises into
-   place; leaving, it sinks away; on both sides of the change it holds
-   still while the view moves above it. (Only while one sheet is on the
-   page — two would share the name and void the change.) */
+/* A viewport-docked panel is a sheet of its own: when it comes or goes with
+   the view it makes the same entrance (MoveViews plays it); on both sides
+   of the change it holds still while the view moves above it. (Only while
+   one sheet is on the page — two would share the name and void the
+   change.) */
 :root[data-tweakers-move-view][data-tweakers-move-view-sheet] .tweakers-move[data-dock="viewport"] {
   view-transition-name: tweakers-move-view-panel;
 }
@@ -1187,40 +1196,6 @@
 :root[data-tweakers-move-view]::view-transition-new(tweakers-move-view-panel) {
   animation: none;
   mix-blend-mode: normal;
-}
-
-:root[data-tweakers-move-view]::view-transition-old(tweakers-move-view-panel):only-child {
-  animation: tweakers-move-view-sheet-out 140ms cubic-bezier(0.4, 0, 1, 1) both;
-}
-
-:root[data-tweakers-move-view]::view-transition-new(tweakers-move-view-panel):only-child {
-  animation: tweakers-move-view-sheet-in 300ms cubic-bezier(0.2, 0, 0, 1) 40ms both;
-}
-
-@keyframes tweakers-move-view-sheet-in {
-  from { opacity: 0; transform: translateY(24px); }
-}
-
-@keyframes tweakers-move-view-sheet-out {
-  to { opacity: 0; transform: translateY(24px); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  :root[data-tweakers-move-view]::view-transition-old(tweakers-move-view-panel):only-child {
-    animation: tweakers-move-view-fade-out 90ms linear both;
-  }
-
-  :root[data-tweakers-move-view]::view-transition-new(tweakers-move-view-panel):only-child {
-    animation: tweakers-move-view-fade-in 140ms linear both;
-  }
-}
-
-@keyframes tweakers-move-view-fade-in {
-  from { opacity: 0; }
-}
-
-@keyframes tweakers-move-view-fade-out {
-  to { opacity: 0; }
 }
 
 /* End of the view stage skin block. */

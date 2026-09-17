@@ -1814,8 +1814,8 @@ function ListScreen({
       event.currentTarget.querySelectorAll(".tweakers-list-screen-row")
     );
     if (!rows.length) return;
-    const active2 = document.activeElement;
-    const at = active2 ? rows.indexOf(active2) : -1;
+    const active = document.activeElement;
+    const at = active ? rows.indexOf(active) : -1;
     const fallback = rows.findIndex((row) => row.hasAttribute("data-selected"));
     const from = at !== -1 ? at : fallback;
     const next = rows[(from === -1 ? event.key === "ArrowDown" ? -1 : rows.length : from) + (event.key === "ArrowDown" ? 1 : -1)];
@@ -3415,8 +3415,8 @@ var ExplorationStore = class {
     this.state.generation = Math.min(this.state.generation, this.currentTree().generations.length - 1);
     const available = new Set(this.allChildren().map((c) => c.id));
     this.state.morph.corners = this.state.morph.corners.map((id) => id && available.has(id) ? id : null);
-    const active2 = this.active();
-    if (active2) this.select(active2.id);
+    const active = this.active();
+    if (active) this.select(active.id);
     else {
       this.state.activeId = null;
       this.preview(cloneDNA(this.original));
@@ -3900,7 +3900,7 @@ function ExplorationContent({ state: state3, anchorRef }) {
   const tree2 = state3.trees.find((item) => item.id === state3.treeId);
   const generation = tree2?.generations[state3.generation];
   const allChildren = tree2?.generations.flatMap((gen) => gen.children) ?? [];
-  const active2 = allChildren.find((child2) => child2.id === state3.activeId);
+  const active = allChildren.find((child2) => child2.id === state3.activeId);
   const presets = PresetExplorationStore.getPresetItems();
   const enabledCount = state3.parameters.filter((parameter) => parameter.enabled).length;
   const parents = (state3.settings.breedWindow ? tree2?.generations.slice(-state3.settings.breedWindow) : tree2?.generations)?.flatMap((gen) => gen.children).filter((child2) => child2.marked) ?? [];
@@ -4151,26 +4151,26 @@ function ExplorationContent({ state: state3, anchorRef }) {
         ] }),
         state3.view !== "parameters" && /* @__PURE__ */ jsxs5("details", { className: "tweakers-exploration-advanced", children: [
           /* @__PURE__ */ jsxs5("summary", { children: [
-            active2 ? childLabel(active2.id) : "Child actions",
+            active ? childLabel(active.id) : "Child actions",
             " \xB7 mark, rate, save & seed settings"
           ] }),
           /* @__PURE__ */ jsxs5("div", { className: "tweakers-exploration-active", children: [
             /* @__PURE__ */ jsxs5("span", { children: [
-              active2 ? childLabel(active2.id) : "Select a child",
-              active2?.parents.length ? /* @__PURE__ */ jsxs5("small", { children: [
+              active ? childLabel(active.id) : "Select a child",
+              active?.parents.length ? /* @__PURE__ */ jsxs5("small", { children: [
                 "From ",
-                active2.parents.map(childLabel).join(" + ")
+                active.parents.map(childLabel).join(" + ")
               ] }) : null
             ] }),
             /* @__PURE__ */ jsxs5("div", { className: "tweakers-exploration-actions", children: [
-              /* @__PURE__ */ jsx5("button", { type: "button", disabled: !active2, "aria-pressed": active2?.marked ?? false, onClick: () => PresetExplorationStore.toggleParent(), children: active2?.marked ? "\u25C6 Parent marked" : "Mark Parent" }),
+              /* @__PURE__ */ jsx5("button", { type: "button", disabled: !active, "aria-pressed": active?.marked ?? false, onClick: () => PresetExplorationStore.toggleParent(), children: active?.marked ? "\u25C6 Parent marked" : "Mark Parent" }),
               /* @__PURE__ */ jsxs5("label", { className: "tweakers-exploration-inline", children: [
                 "Rating ",
-                /* @__PURE__ */ jsx5("select", { "aria-label": "Active child rating", disabled: !active2, value: active2?.rating ?? 3, onChange: (event) => PresetExplorationStore.rate(Number(event.target.value)), children: [1, 2, 3, 4, 5].map((rating) => /* @__PURE__ */ jsx5("option", { value: rating, children: rating }, rating)) })
+                /* @__PURE__ */ jsx5("select", { "aria-label": "Active child rating", disabled: !active, value: active?.rating ?? 3, onChange: (event) => PresetExplorationStore.rate(Number(event.target.value)), children: [1, 2, 3, 4, 5].map((rating) => /* @__PURE__ */ jsx5("option", { value: rating, children: rating }, rating)) })
               ] }),
-              /* @__PURE__ */ jsx5("button", { type: "button", disabled: !active2 || state3.busy, onClick: () => PresetExplorationStore.remix(), children: "Remix" }),
-              /* @__PURE__ */ jsx5("button", { type: "button", disabled: !active2 || state3.busy, onClick: () => PresetExplorationStore.overwrite(), children: "Overwrite DNA" }),
-              /* @__PURE__ */ jsx5("button", { type: "button", disabled: blocked || !active2 && !(state3.view === "morph" && state3.morph.corners.some(Boolean)), onClick: () => PresetExplorationStore.beginSave(), children: "Save Preset" })
+              /* @__PURE__ */ jsx5("button", { type: "button", disabled: !active || state3.busy, onClick: () => PresetExplorationStore.remix(), children: "Remix" }),
+              /* @__PURE__ */ jsx5("button", { type: "button", disabled: !active || state3.busy, onClick: () => PresetExplorationStore.overwrite(), children: "Overwrite DNA" }),
+              /* @__PURE__ */ jsx5("button", { type: "button", disabled: blocked || !active && !(state3.view === "morph" && state3.morph.corners.some(Boolean)), onClick: () => PresetExplorationStore.beginSave(), children: "Save Preset" })
             ] })
           ] }),
           /* @__PURE__ */ jsxs5("details", { className: "tweakers-exploration-seeds", children: [
@@ -7082,12 +7082,12 @@ function MoveWaveform({
     ];
     return () => releases.forEach((release) => release());
   }, [productionEnabled, hasTransport]);
-  const playing = transport?.playing ?? false;
+  const playing2 = transport?.playing ?? false;
   const loopOn = transport?.loopOn ?? false;
   useEffect6(() => {
     if (!productionEnabled) return;
-    MoveWaveformStore.setTransport(hasTransport ? { playing, loopOn } : null);
-  }, [productionEnabled, hasTransport, playing, loopOn]);
+    MoveWaveformStore.setTransport(hasTransport ? { playing: playing2, loopOn } : null);
+  }, [productionEnabled, hasTransport, playing2, loopOn]);
   useEffect6(() => {
     if (!productionEnabled) return;
     const prev = MoveSurfaceStore.getState().steps;
@@ -8824,7 +8824,7 @@ import { useEffect as useEffect10, useLayoutEffect as useLayoutEffect2, useRef a
 import { createPortal as createPortal2 } from "react-dom";
 import { TweakStore as TweakStore11 } from "tweakers/store";
 import { Fragment as Fragment6, jsx as jsx13, jsxs as jsxs10 } from "react/jsx-runtime";
-function MoveColorSlot({ panelId, meta, active: active2, open: open2, latched = false }) {
+function MoveColorSlot({ panelId, meta, active, open: open2, latched = false }) {
   const gesture = useRef10(null);
   const suppressClick = useRef10(false);
   const disabled = TweakStore11.isDisabled(panelId, meta.path);
@@ -8835,7 +8835,7 @@ function MoveColorSlot({ panelId, meta, active: active2, open: open2, latched = 
       type: "button",
       className: "tweakers-move-dial",
       "data-kind": "color",
-      "data-active": active2 || open2 || void 0,
+      "data-active": active || open2 || void 0,
       "data-latched": latched || void 0,
       "data-disabled": disabled || void 0,
       "aria-label": `${meta.label}, hue ${Math.round(color.h)} degrees. Open color editor`,
@@ -9360,9 +9360,9 @@ var MovePresetStoreClass = class {
   }
   open(panelId) {
     this.clearTimers();
-    const active2 = TweakStore12.getActivePresetId(panelId);
+    const active = TweakStore12.getActivePresetId(panelId);
     const items = this.items(panelId);
-    const cursor = (active2 && items.some((i) => i.id === active2) ? active2 : items[0]?.id) ?? null;
+    const cursor = (active && items.some((i) => i.id === active) ? active : items[0]?.id) ?? null;
     this.original = TweakStore12.getPresetProvider(panelId) ? null : { ...TweakStore12.getValues(panelId) };
     this.view = { panelId, phase: "enter", cursor, chosen: null, comparing: false };
     this.notify();
@@ -10651,7 +10651,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                 const meta = dialSpan(page.dials[i]) > 1 ? page.dials[i] : dialAt(i);
                                 if (!meta) return /* @__PURE__ */ jsx15("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
                                 const disabled = TweakStore13.isDisabled(page.panel.id, meta.path);
-                                const active2 = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
+                                const active = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
                                 const valueFirst = (focused || !!settingsPanel || page.panel.kind === "kit") && !(meta.min === 0 && meta.max === 1);
                                 const scopeSlot = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.scope : void 0;
                                 const waveSlot = settingsPanel && meta.type !== "xy" ? modLayout?.dials.find((d) => d.path === meta.path)?.preview : void 0;
@@ -10702,7 +10702,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     meta.path
                                   );
                                 }
-                                if (meta.type === "color") return /* @__PURE__ */ jsx15(MoveColorSlot, { panelId: page.panel.id, meta, active: active2, open: colorMeta?.path === meta.path, latched: meta !== page.dials[i] && chipLatched(i, meta) }, meta.path);
+                                if (meta.type === "color") return /* @__PURE__ */ jsx15(MoveColorSlot, { panelId: page.panel.id, meta, active, open: colorMeta?.path === meta.path, latched: meta !== page.dials[i] && chipLatched(i, meta) }, meta.path);
                                 if (meta.type === "filter") {
                                   const fv = normalizeFilterValue(
                                     values[meta.path],
@@ -10715,7 +10715,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     {
                                       className: "tweakers-move-dial",
                                       "data-kind": "filter",
-                                      "data-active": active2 || void 0,
+                                      "data-active": active || void 0,
                                       "data-disabled": meta.filterEnabled === false || void 0,
                                       onPointerDown: (e) => {
                                         try {
@@ -10756,7 +10756,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     {
                                       className: "tweakers-move-dial",
                                       "data-kind": "ramp",
-                                      "data-active": active2 || open2 || void 0,
+                                      "data-active": active || open2 || void 0,
                                       role: editable ? "button" : void 0,
                                       "aria-expanded": editable ? open2 : void 0,
                                       "aria-haspopup": editable ? "dialog" : void 0,
@@ -10818,7 +10818,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     {
                                       className: "tweakers-move-dial",
                                       "data-kind": "balance",
-                                      "data-active": active2 || void 0,
+                                      "data-active": active || void 0,
                                       onPointerDown: (e) => {
                                         try {
                                           e.currentTarget.setPointerCapture(e.pointerId);
@@ -10867,7 +10867,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     {
                                       className: "tweakers-move-dial",
                                       "data-kind": "dial",
-                                      "data-active": active2 || void 0,
+                                      "data-active": active || void 0,
                                       onPointerDown: (e) => {
                                         try {
                                           e.currentTarget.setPointerCapture(e.pointerId);
@@ -10915,7 +10915,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     {
                                       className: "tweakers-move-dial",
                                       "data-kind": "transfer",
-                                      "data-active": active2 || void 0,
+                                      "data-active": active || void 0,
                                       onPointerDown: (e) => {
                                         try {
                                           e.currentTarget.setPointerCapture(e.pointerId);
@@ -10971,7 +10971,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       "data-kind": "xy",
                                       "data-preview": preview ? true : void 0,
                                       "data-sub": valueFirst || void 0,
-                                      "data-active": active2 || void 0,
+                                      "data-active": active || void 0,
                                       onPointerDown: (e) => {
                                         try {
                                           e.currentTarget.setPointerCapture(e.pointerId);
@@ -11012,7 +11012,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     {
                                       className: "tweakers-move-dial",
                                       "data-kind": "range",
-                                      "data-active": active2 || void 0,
+                                      "data-active": active || void 0,
                                       onPointerDown: (e) => {
                                         try {
                                           e.currentTarget.setPointerCapture(e.pointerId);
@@ -11070,7 +11070,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       "data-disabled": disabled || void 0,
                                       onKeyDown: (e) => dialFromKeyboard(e, meta),
                                       "data-shape": shape ? true : void 0,
-                                      "data-active": active2 || void 0,
+                                      "data-active": active || void 0,
                                       onPointerDown: (e) => {
                                         if (TweakStore13.isDisabled(page.panel.id, meta.path)) return;
                                         try {
@@ -11127,7 +11127,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       className: "tweakers-move-dial",
                                       "data-kind": kind,
                                       "data-on": checked || void 0,
-                                      "data-active": active2 || void 0,
+                                      "data-active": active || void 0,
                                       role: "switch",
                                       "aria-label": meta.label,
                                       "aria-checked": checked,
@@ -11167,7 +11167,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     {
                                       className: "tweakers-move-dial",
                                       "data-kind": "scope",
-                                      "data-active": active2 || void 0,
+                                      "data-active": active || void 0,
                                       onPointerDown: (e) => {
                                         try {
                                           e.currentTarget.setPointerCapture(e.pointerId);
@@ -11462,7 +11462,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   "div",
                                   {
                                     className: "tweakers-move-dial",
-                                    "data-active": active2 || void 0,
+                                    "data-active": active || void 0,
                                     "data-latched": latchedHere || void 0,
                                     "data-sub": !drawing && (subbed || valueFirst) || void 0,
                                     "data-visual": drawing?.kind,
@@ -11581,7 +11581,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       const span = padSpan(meta);
                                       const named = isNamedTabs(meta);
                                       const options = meta.options ?? [];
-                                      const active2 = enumIndex(meta, values[meta.path]);
+                                      const active = enumIndex(meta, values[meta.path]);
                                       return /* @__PURE__ */ jsxs12(
                                         "div",
                                         {
@@ -11594,7 +11594,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                               {
                                                 name: named ? meta.label : null,
                                                 options,
-                                                activeIdx: active2
+                                                activeIdx: active
                                               }
                                             ),
                                             /* @__PURE__ */ jsx15("div", { className: "tweakers-move-tab-zones", role: "tablist", "aria-label": meta.label, children: options.map((opt, i) => /* @__PURE__ */ jsx15(
@@ -11604,7 +11604,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                                 role: "tab",
                                                 className: "tweakers-move-tab-zone",
                                                 style: { gridColumnStart: (named ? 2 : 1) + i },
-                                                "aria-selected": i === active2,
+                                                "aria-selected": i === active,
                                                 disabled: TweakStore13.isDisabled(page.panel.id, meta.path),
                                                 onClick: () => TweakStore13.updateValue(
                                                   page.panel.id,
@@ -12197,8 +12197,8 @@ function MoveRoomTransport() {
     }
   );
 }
-function MoveWaveTransport({ playing, loopOn, getSeconds, onLoaded }) {
-  const params = { playing, loopOn };
+function MoveWaveTransport({ playing: playing2, loopOn, getSeconds, onLoaded }) {
+  const params = { playing: playing2, loopOn };
   const clockRef = useRef12(null);
   const secondsRef = useRef12(getSeconds);
   secondsRef.current = getSeconds;
@@ -12658,125 +12658,80 @@ import { useEffect as useEffect15, useLayoutEffect as useLayoutEffect4, useRef a
 // src/move-views.ts
 import { flushSync } from "react-dom";
 
-// src/transition-math.ts
-import { isEasingConfigValue, isSpringConfigValue } from "tweakers/store";
-function round22(value) {
-  return Math.round(value * 100) / 100;
-}
-function clamp9(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-function isPhysicsSpring(transition) {
-  return transition.type === "spring" && (transition.stiffness !== void 0 || transition.damping !== void 0 || transition.mass !== void 0);
-}
-function springParams(spring) {
-  if (isPhysicsSpring(spring)) {
-    return { stiffness: spring.stiffness ?? 200, damping: spring.damping ?? 25, mass: spring.mass ?? 1 };
-  }
-  const visualDuration = Math.max(0.05, spring.visualDuration ?? 0.3);
-  const bounce = spring.bounce ?? 0.3;
-  const root = 2 * Math.PI / (visualDuration * 1.2);
-  const stiffness = root * root;
-  const damping = 2 * Math.min(1, Math.max(0.05, 1 - bounce)) * Math.sqrt(stiffness);
-  return { stiffness, damping, mass: 1 };
-}
-function springProgress(t, { stiffness, damping, mass }) {
-  if (t <= 0) return 0;
-  const w0 = Math.sqrt(stiffness / mass);
-  const zeta = damping / (2 * Math.sqrt(stiffness * mass));
-  if (zeta < 0.9999) {
-    const wd2 = w0 * Math.sqrt(1 - zeta * zeta);
-    return 1 - Math.exp(-zeta * w0 * t) * (Math.cos(wd2 * t) + zeta * w0 / wd2 * Math.sin(wd2 * t));
-  }
-  if (zeta < 1.0001) {
-    return 1 - Math.exp(-w0 * t) * (1 + w0 * t);
-  }
-  const wd = w0 * Math.sqrt(zeta * zeta - 1);
-  const r1 = -zeta * w0 + wd;
-  const r2 = -zeta * w0 - wd;
-  return 1 + (r2 * Math.exp(r1 * t) - r1 * Math.exp(r2 * t)) / (r1 - r2);
-}
-function springSettleDuration(params) {
-  const w0 = Math.sqrt(params.stiffness / params.mass);
-  const zeta = params.damping / (2 * Math.sqrt(params.stiffness * params.mass));
-  const decay = zeta >= 1 ? zeta * w0 - w0 * Math.sqrt(Math.max(0, zeta * zeta - 1)) : zeta * w0;
-  const duration = Math.log(200) / Math.max(decay, 1e-6);
-  return round22(clamp9(duration, 0.05, 10));
-}
-
 // src/move-view-core.ts
 var MOVE_VIEW_MOTIONS = ["forward", "back", "open", "close", "swap"];
+var MOVE_VIEW_PRESENTATION = {
+  /** ms, both layers, start to settle */
+  duration: 1e3,
+  /** where the arriving view grows up from */
+  enterScale: 0.95,
+  /** where the leaving view grows out to */
+  exitScale: 1.05,
+  /** the arriving view's light below which a swap goes unseen */
+  quietLight: 0.1
+};
+var MOVE_VIEW_REDUCED = { duration: 180 };
 var MOVE_VIEW_WAIT = {
   /** Work that lands inside this never shows a wait — under a fifth of a
    *  second still reads as the press answering. */
   delay: 200,
-  /** A wait that came up stays at least this long from its first frame, so
+  /** A wait that came into sight stays this long after it has arrived, so
    *  it is read rather than glimpsed. */
   hold: 500,
   /** One step of the wait's eight-light sweep; eight of them are one pass. */
   sweepStep: 70
 };
-var MOVE_VIEW_SPRING = { type: "spring", visualDuration: 0.3, bounce: 0 };
-var MOVE_VIEW_EASE_IN = "cubic-bezier(0.4, 0, 1, 1)";
-var MOVE_VIEW_EASE_OUT = "cubic-bezier(0.2, 0, 0, 1)";
-function springEasing(spring = MOVE_VIEW_SPRING, samples = 24) {
-  const params = springParams(spring);
-  const seconds = springSettleDuration(params);
-  const points = [];
-  for (let i = 0; i <= samples; i++) {
-    const t = i / samples * seconds;
-    const value = i === samples ? 1 : springProgress(t, params);
-    points.push(String(Math.round(value * 1e4) / 1e4));
-  }
-  return { easing: `linear(${points.join(", ")})`, duration: Math.round(seconds * 1e3) };
+function expoInOut(x) {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  return x < 0.5 ? 2 ** (20 * x - 10) / 2 : (2 - 2 ** (-20 * x + 10)) / 2;
 }
-var fade = (from, to, duration, delay, easing) => ({
-  from,
-  to,
-  duration,
-  delay,
-  easing
-});
-var FADE_OUT = 110;
-var FADE_IN = 200;
-var FADE_IN_DELAY = 40;
-var TRAVEL = {
-  forward: { leaving: ["translateX(0px)", "translateX(-12px)"], arriving: ["translateX(20px)", "translateX(0px)"] },
-  back: { leaving: ["translateX(0px)", "translateX(12px)"], arriving: ["translateX(-20px)", "translateX(0px)"] },
-  // into a workspace: it comes up to meet you, and what you left passes by
-  open: { leaving: ["scale(1)", "scale(1.015)"], arriving: ["scale(0.975)", "scale(1)"] },
-  close: { leaving: ["scale(1)", "scale(0.975)"], arriving: ["scale(1.015)", "scale(1)"] },
-  swap: {},
-  // a view steps back a hair while its wait comes up; the wait holds still
-  wait: { leaving: ["scale(1)", "scale(0.985)"] },
-  resume: { arriving: ["scale(0.985)", "scale(1)"] }
-};
-function moveViewChoreography(change, reduced = false, spring = springEasing()) {
+function linearEasing(curve, samples = 96) {
+  const points = [];
+  for (let i = 0; i <= samples; i++) points.push(String(Math.round(curve(i / samples) * 1e4) / 1e4));
+  return `linear(${points.join(", ")})`;
+}
+var MOVE_VIEW_EXPO_BEZIER = "cubic-bezier(0.87, 0, 0.13, 1)";
+function reaches(curve, light) {
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 30; i++) {
+    const mid = (lo + hi) / 2;
+    if (curve(mid) < light) lo = mid;
+    else hi = mid;
+  }
+  return hi;
+}
+var EXPO_EASING = linearEasing(expoInOut);
+var EXPO_QUIET = Math.round(reaches(expoInOut, MOVE_VIEW_PRESENTATION.quietLight) * MOVE_VIEW_PRESENTATION.duration);
+function moveViewChoreography(_change, reduced = false) {
   if (reduced) {
+    const { duration: duration2 } = MOVE_VIEW_REDUCED;
+    const tween2 = (from, to) => ({ from, to, duration: duration2, delay: 0, easing: "linear" });
     return {
-      leaving: { fade: fade(1, 0, 90, 0, "linear") },
-      arriving: { fade: fade(0, 1, 140, 0, "linear") }
+      leaving: { fade: tween2(1, 0) },
+      arriving: { fade: tween2(0, 1) },
+      duration: duration2,
+      quiet: Math.round(duration2 * MOVE_VIEW_PRESENTATION.quietLight)
     };
   }
-  const travel = TRAVEL[change] ?? {};
-  const move = (ends) => ends ? { from: ends[0], to: ends[1], duration: spring.duration, delay: 0, easing: spring.easing } : void 0;
-  const arriveDelay = change === "wait" ? 80 : FADE_IN_DELAY;
-  const arriveFade = change === "wait" ? 220 : change === "swap" ? 160 : FADE_IN;
-  const leaving = { fade: fade(1, 0, change === "wait" ? 140 : FADE_OUT, 0, MOVE_VIEW_EASE_IN) };
-  const arriving = { fade: fade(0, 1, arriveFade, arriveDelay, MOVE_VIEW_EASE_OUT) };
-  const leavingMove = move(travel.leaving);
-  const arrivingMove = move(travel.arriving);
-  if (leavingMove) leaving.move = leavingMove;
-  if (arrivingMove) arriving.move = arrivingMove;
-  return { leaving, arriving };
+  const { duration, enterScale, exitScale } = MOVE_VIEW_PRESENTATION;
+  const tween = (from, to) => ({ from, to, duration, delay: 0, easing: EXPO_EASING });
+  return {
+    leaving: { fade: tween(1, 0), move: tween("scale(1)", `scale(${exitScale})`) },
+    arriving: { fade: tween(0, 1), move: tween(`scale(${enterScale})`, "scale(1)") },
+    duration,
+    quiet: EXPO_QUIET
+  };
 }
-function moveViewHoldRemaining(shownAt, now, hold = MOVE_VIEW_WAIT.hold) {
-  if (shownAt === null) return 0;
-  return Math.max(0, shownAt + hold - now);
+function moveViewHoldRemaining(shownAt, now, choreography, hold = MOVE_VIEW_WAIT.hold) {
+  if (shownAt === null || now - shownAt < choreography.quiet) return 0;
+  return Math.max(0, shownAt + choreography.duration + hold - now);
 }
 
 // src/move-views.ts
 var MOVE_VIEW_STAGE_NAME = "tweakers-move-view";
+var MOVE_VIEW_PANEL_NAME = "tweakers-move-view-panel";
 var MOVE_VIEW_CHANGE_ATTR = "data-tweakers-move-view";
 var JOG_EVENTS = ["move-tweakers:jog", "move-tweakers:jog-click"];
 var IDLE = { busy: false, wait: null };
@@ -12792,29 +12747,85 @@ function setState(next) {
   state2 = next;
   emit2();
 }
-var active = null;
 var reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 function play(root, layer, pseudoElement) {
-  const { fade: fade2, move } = layer;
-  root.animate([{ opacity: fade2.from }, { opacity: fade2.to }], {
-    duration: fade2.duration,
-    delay: fade2.delay,
-    easing: fade2.easing,
-    fill: "both",
-    pseudoElement
-  });
-  if (!move) return;
-  const frames = [{ transform: move.from }, { transform: move.to }];
-  const timing = { duration: move.duration, delay: move.delay, fill: "both", pseudoElement };
-  try {
-    root.animate(frames, { ...timing, easing: move.easing });
-  } catch {
-    root.animate(frames, { ...timing, easing: "cubic-bezier(0.2, 0, 0, 1)" });
+  const { fade, move } = layer;
+  const together = move && move.duration === fade.duration && move.delay === fade.delay && move.easing === fade.easing;
+  const run = (frames, tween) => {
+    const timing = { duration: tween.duration, delay: tween.delay, fill: "both", pseudoElement };
+    try {
+      root.animate(frames, { ...timing, easing: tween.easing });
+    } catch {
+      root.animate(frames, { ...timing, easing: MOVE_VIEW_EXPO_BEZIER });
+    }
+  };
+  if (together) {
+    run([{ opacity: fade.from, transform: move.from }, { opacity: fade.to, transform: move.to }], fade);
+    return;
   }
+  run([{ opacity: fade.from }, { opacity: fade.to }], fade);
+  if (move) run([{ transform: move.from }, { transform: move.to }], move);
+}
+var playing = null;
+var VIEWPORT_SHEET = '.tweakers-move[data-dock="viewport"]';
+var SHEET_ATTR = "data-tweakers-move-view-sheet";
+function runUpdates(updates) {
+  flushSync(() => {
+    for (const update of updates) {
+      try {
+        update();
+      } catch (error) {
+        console.error("[tweakers] a view change failed", error);
+      }
+    }
+  });
+}
+var animatable = (doc) => !!doc?.startViewTransition && stages > 0 && doc.visibilityState !== "hidden";
+function startChange(doc, change, updates) {
+  const root = doc.documentElement;
+  const plan = moveViewChoreography(change, reducedMotion());
+  const sheetBefore = doc.querySelectorAll(VIEWPORT_SHEET).length === 1;
+  let sheetAfter = sheetBefore;
+  root.setAttribute(MOVE_VIEW_CHANGE_ATTR, change);
+  root.toggleAttribute(SHEET_ATTR, sheetBefore);
+  const entry = { queue: [...updates], movingAt: null, quiet: plan.quiet, next: null, updated: Promise.resolve() };
+  const transition = doc.startViewTransition(() => {
+    const queue = entry.queue ?? [];
+    entry.queue = null;
+    runUpdates(queue);
+    sheetAfter = doc.querySelectorAll(VIEWPORT_SHEET).length === 1;
+    if (sheetAfter) root.setAttribute(SHEET_ATTR, "");
+  });
+  entry.updated = transition.updateCallbackDone.catch(() => {
+  });
+  playing = entry;
+  transition.ready.then(() => {
+    entry.movingAt = performance.now();
+    play(root, plan.leaving, `::view-transition-old(${MOVE_VIEW_STAGE_NAME})`);
+    play(root, plan.arriving, `::view-transition-new(${MOVE_VIEW_STAGE_NAME})`);
+    if (sheetBefore && !sheetAfter) play(root, plan.leaving, `::view-transition-old(${MOVE_VIEW_PANEL_NAME})`);
+    if (!sheetBefore && sheetAfter) play(root, plan.arriving, `::view-transition-new(${MOVE_VIEW_PANEL_NAME})`);
+  }).catch(() => {
+  });
+  transition.finished.catch(() => {
+  }).finally(() => {
+    if (playing !== entry) return;
+    playing = null;
+    root.removeAttribute(MOVE_VIEW_CHANGE_ATTR);
+    root.removeAttribute(SHEET_ATTR);
+    const next = entry.next;
+    if (!next) return;
+    if (animatable(doc)) void startChange(doc, next.change, next.updates).then(next.resolve);
+    else {
+      runUpdates(next.updates);
+      next.resolve();
+    }
+  });
+  return entry.updated;
 }
 var viewTransitionRunner = (change, update) => {
   const doc = typeof document === "undefined" ? null : document;
-  if (!doc?.startViewTransition || !stages || doc.visibilityState === "hidden") {
+  if (!animatable(doc)) {
     try {
       update();
     } catch (error) {
@@ -12822,31 +12833,28 @@ var viewTransitionRunner = (change, update) => {
     }
     return Promise.resolve();
   }
-  const root = doc.documentElement;
-  const sheets = doc.querySelectorAll('.tweakers-move[data-dock="viewport"]').length;
-  active?.skipTransition();
-  root.setAttribute(MOVE_VIEW_CHANGE_ATTR, change);
-  root.toggleAttribute("data-tweakers-move-view-sheet", sheets === 1);
-  const transition = doc.startViewTransition(() => {
-    flushSync(update);
-  });
-  active = transition;
-  const plan = moveViewChoreography(change, reducedMotion());
-  transition.ready.then(() => {
-    play(root, plan.leaving, `::view-transition-old(${MOVE_VIEW_STAGE_NAME})`);
-    play(root, plan.arriving, `::view-transition-new(${MOVE_VIEW_STAGE_NAME})`);
-  }).catch(() => {
-  });
-  transition.finished.catch(() => {
-  }).finally(() => {
-    if (active !== transition) return;
-    active = null;
-    root.removeAttribute(MOVE_VIEW_CHANGE_ATTR);
-    root.removeAttribute("data-tweakers-move-view-sheet");
-  });
-  return transition.updateCallbackDone.catch((error) => {
-    console.error("[tweakers] a view change failed", error);
-  });
+  const now = playing;
+  if (now?.queue) {
+    now.queue.push(update);
+    return now.updated;
+  }
+  if (now && (now.movingAt === null || performance.now() - now.movingAt < now.quiet)) {
+    runUpdates([update]);
+    return Promise.resolve();
+  }
+  if (now) {
+    if (!now.next) {
+      let resolve;
+      const landed = new Promise((r) => {
+        resolve = r;
+      });
+      now.next = { change, updates: [], resolve, landed };
+    }
+    now.next.change = change;
+    now.next.updates.push(update);
+    return now.next.landed;
+  }
+  return startChange(doc, change, [update]);
 };
 var runner = viewTransitionRunner;
 var timers = {
@@ -12932,6 +12940,7 @@ var MoveViews = {
       running = task;
       const show = () => {
         if (running !== task) return;
+        if (task.shownAt === null) task.shownAt = timers.now();
         setState({ busy: true, wait: task.wait });
         MoveSurfaceStore.setWait({ title: task.wait.title, ...task.wait.detail ? { detail: task.wait.detail } : {} });
       };
@@ -12940,7 +12949,6 @@ var MoveViews = {
         setState({ busy: true, wait: null });
         task.timer = timers.setTimeout(() => {
           if (running !== task) return;
-          task.shownAt = timers.now();
           void runner("wait", show);
         }, MOVE_VIEW_WAIT.delay);
       }
@@ -12951,7 +12959,7 @@ var MoveViews = {
       };
       const finish = (landed) => {
         if (running !== task) return;
-        const hold = moveViewHoldRemaining(task.shownAt, timers.now());
+        const hold = moveViewHoldRemaining(task.shownAt, timers.now(), moveViewChoreography("wait", reducedMotion()));
         const end = () => {
           if (running !== task) return;
           running = null;
@@ -13082,10 +13090,10 @@ import { jsx as jsx19, jsxs as jsxs16 } from "react/jsx-runtime";
 var manager = Toast.createToastManager();
 var moveNotify = manager;
 var MEASURE_MS = 100;
-function useDockBottom(active2) {
+function useDockBottom(active) {
   const [bottom, setBottom] = useState10(MOVE_NOTIFY_GAP);
   useEffect16(() => {
-    if (!active2 || typeof window === "undefined") return;
+    if (!active || typeof window === "undefined") return;
     let frame = 0;
     let last = 0;
     const measure = () => {
@@ -13107,7 +13115,7 @@ function useDockBottom(active2) {
     measure();
     frame = window.requestAnimationFrame(tick);
     return () => window.cancelAnimationFrame(frame);
-  }, [active2]);
+  }, [active]);
   return bottom;
 }
 function NotifyStack({ className }) {
@@ -13456,9 +13464,9 @@ var TimelineStoreClass = class {
         wraps: existing.wraps
       });
     } else {
-      const playing = duration > 0 && autoplay;
-      this.transports.set(meta.id, { time: 0, playing, duration, wraps: 0 });
-      if (playing) this.ensureLoop();
+      const playing2 = duration > 0 && autoplay;
+      this.transports.set(meta.id, { time: 0, playing: playing2, duration, wraps: 0 });
+      if (playing2) this.ensureLoop();
     }
     this.listCache = null;
     this.notify(meta.id);
@@ -13567,6 +13575,7 @@ export {
   MOVE_TRACKS,
   MOVE_TRACK_COLORS,
   MOVE_VIEW_MOTIONS,
+  MOVE_VIEW_PRESENTATION,
   MOVE_VIEW_WAIT,
   MOVE_WAVEFORM_DEMO_SECONDS,
   MOVE_WAVEFORM_PADS,
