@@ -520,12 +520,12 @@ var MoveFunctionsClass = class {
     return overlay ? overlay.options : this.options.get(name);
   }
   isDormant(name) {
-    return this.holds.some((hold) => hold.has(name));
+    return this.holds.some((hold) => hold.sealed ? !hold.keep.includes(name) : hold.asleep.has(name));
   }
   /** An attachment made while views are suspended belongs to the view in
-   *  front — live under every hold. */
+   *  front — live under every hold that is not sealed. */
   wake(name) {
-    for (const hold of this.holds) hold.delete(name);
+    for (const hold of this.holds) hold.asleep.delete(name);
   }
   /**
    * Attach an action to a function button; returns a detach function.
@@ -565,10 +565,14 @@ var MoveFunctionsClass = class {
    * release wakes what this suspend put to sleep. Suspends stack — a wait
    * can stand over the settings room — and release in any order: a button
    * sleeps while any standing suspend still holds it.
+   *
+   * `sealed` is a wait's suspend: nothing wakes under it but `keep`. The
+   * view behind a wait stays mounted and goes on attaching as its state
+   * moves, and none of that may light a key while the app works.
    */
-  suspend(keep = []) {
+  suspend(keep = [], options = {}) {
     const attached = [.../* @__PURE__ */ new Set([...this.handlers.keys(), ...this.overlays.keys()])];
-    const hold = new Set(attached.filter((name) => !keep.includes(name)));
+    const hold = { asleep: new Set(attached.filter((name) => !keep.includes(name))), sealed: !!options.sealed, keep: [...keep] };
     this.holds.push(hold);
     this.notify();
     return () => {
@@ -13268,17 +13272,25 @@ var timers = {
   clearTimeout: (id) => clearTimeout(id),
   now: () => Date.now()
 };
-function holdHardware(cancelable) {
-  const wake = MoveFunctions.suspend();
+function holdInput(cancelable) {
+  const wake = MoveFunctions.suspend(cancelable ? ["back"] : [], { sealed: true });
   const releaseBack = cancelable ? MoveFunctions.push("back", () => MoveViews.cancel(), { chip: false }) : null;
   const swallow = (event) => {
     event.preventDefault();
     event.stopImmediatePropagation();
   };
+  const onKey = (event) => {
+    event.stopImmediatePropagation();
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    MoveViews.cancel();
+  };
   const win = typeof window === "undefined" ? null : window;
   for (const type of JOG_EVENTS) win?.addEventListener(type, swallow, { capture: true });
+  win?.addEventListener("keydown", onKey, { capture: true });
   return () => {
     for (const type of JOG_EVENTS) win?.removeEventListener(type, swallow, { capture: true });
+    win?.removeEventListener("keydown", onKey, { capture: true });
     releaseBack?.();
     wake();
   };
@@ -13331,12 +13343,13 @@ var MoveViews = {
         // a wait already up for the work this one replaces stays up
         shownAt: was && state2.wait ? was.shownAt : null,
         timer: void 0,
-        release: holdHardware(!!options.cancelable),
+        release: holdInput(!!options.cancelable),
         drop: () => resolve(void 0)
       };
       was?.release();
       running = task;
       const show = () => {
+        if (running !== task) return;
         setState({ busy: true, wait: task.wait });
         MoveSurfaceStore.setWait({ title: task.wait.title, ...task.wait.detail ? { detail: task.wait.detail } : {} });
       };

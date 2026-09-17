@@ -436,7 +436,7 @@ declare class MoveFunctionsClass {
     private holds;
     private isDormant;
     /** An attachment made while views are suspended belongs to the view in
-     *  front — live under every hold. */
+     *  front — live under every hold that is not sealed. */
     private wake;
     /**
      * Attach an action to a function button; returns a detach function.
@@ -455,8 +455,14 @@ declare class MoveFunctionsClass {
      * release wakes what this suspend put to sleep. Suspends stack — a wait
      * can stand over the settings room — and release in any order: a button
      * sleeps while any standing suspend still holds it.
+     *
+     * `sealed` is a wait's suspend: nothing wakes under it but `keep`. The
+     * view behind a wait stays mounted and goes on attaching as its state
+     * moves, and none of that may light a key while the app works.
      */
-    suspend(keep?: MoveFunctionButton[]): () => void;
+    suspend(keep?: MoveFunctionButton[], options?: {
+        sealed?: boolean;
+    }): () => void;
     /**
      * The attachments the panel's chip row shows, in manifest order. A chip
      * renders only for a MOVE_CHIP_BUTTONS key, only while a handler is
@@ -737,8 +743,9 @@ declare function moveViewChoreography(change: MoveViewChange, reduced?: boolean,
  *
  * A wait is honest in the hand before it is visible on the screen. The
  * moment work starts the view goes inert and every key goes dark — nothing
- * there can be pressed into doing something twice — and the Move's wheel
- * walks nothing. Work that lands fast never shows a wait; work that does
+ * there can be pressed into doing something twice, not even a key the view
+ * attaches again while it waits — the Move's wheel walks nothing, and the
+ * computer's keys reach nothing but Escape. Work that lands fast never shows a wait; work that does
  * not brings it up, on the screen and on the Move's own display, and holds
  * it long enough to be read. `cancelable` lights Back to abandon the wait.
  * The newest intent wins: a second `load` or a `go` supersedes a running
