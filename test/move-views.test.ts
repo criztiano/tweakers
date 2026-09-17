@@ -220,3 +220,16 @@ describe('the wheel during a wait', () => {
     vi.unstubAllGlobals();
   });
 });
+
+describe('the browser runner', () => {
+  it('lands a change at once where there is no view transition, and reports a failing one', async () => {
+    const { viewTransitionRunner } = await import('../src/move-views');
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let landed = false;
+    await viewTransitionRunner('forward', () => { landed = true; });
+    expect(landed).toBe(true);
+    await expect(viewTransitionRunner('open', () => { throw new Error('bad arrive'); })).resolves.toBeUndefined();
+    expect(errors).toHaveBeenCalled();
+    errors.mockRestore();
+  });
+});

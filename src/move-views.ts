@@ -179,7 +179,13 @@ type ViewTransitionDocument = Document & {
 export const viewTransitionRunner: MoveViewRunner = (change, update) => {
   const doc = typeof document === 'undefined' ? null : (document as ViewTransitionDocument);
   if (!doc?.startViewTransition || !stages || doc.visibilityState === 'hidden') {
-    update();
+    // lands the same way the animated change does: a failing update is
+    // reported, and never leaves a wait standing
+    try {
+      update();
+    } catch (error) {
+      console.error('[tweakers] a view change failed', error);
+    }
     return Promise.resolve();
   }
   const root = doc.documentElement;
