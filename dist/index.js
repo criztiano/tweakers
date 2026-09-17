@@ -12811,7 +12811,11 @@ function play(root, layer, pseudoElement) {
 var viewTransitionRunner = (change, update) => {
   const doc = typeof document === "undefined" ? null : document;
   if (!doc?.startViewTransition || !stages || doc.visibilityState === "hidden") {
-    update();
+    try {
+      update();
+    } catch (error) {
+      console.error("[tweakers] a view change failed", error);
+    }
     return Promise.resolve();
   }
   const root = doc.documentElement;
