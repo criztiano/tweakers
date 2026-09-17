@@ -36,6 +36,15 @@ const TARGET: Record<MovePanelChangeScope, string> = {
   inside: '.tweakers-move-inner',
 };
 
+/** The displays that float over the panel — the notification stack's own
+ *  list, less the panel itself. They come and go with a room or a page, and
+ *  move with it: one leaving fades out as a copy, one arriving zooms in. */
+const FLOATS = '.tweakers-move-wave[data-variant="dock"], .tweakers-move-curve, .tweakers-move-preset-save, [data-move-float]';
+
+/** How long after a change a float may still turn up and join it — a float
+ *  that mounts on its own effect lands a render or two late. */
+const FLOAT_LATE_MS = 200;
+
 /** Marks the frozen copies, so a later change can find and retire them. */
 const GHOST_ATTR = 'data-move-panel-ghost';
 /** On the panel while a change plays: its ground eases to the new palette. */
@@ -57,6 +66,56 @@ export interface MovePanelPicture {
   transform: string;
   /** Scrolled boxes inside the copy, and where to scroll each once laid. */
   scrolls: { el: Element; top: number; left: number }[];
+  /** The floats standing when the picture was taken, each with a copy of
+   *  the box it hangs in, to fade out should it leave with the change. */
+  floats: FloatPicture[];
+}
+
+interface FloatPicture {
+  el: Element;
+  /** Where its box hung — the body, or the panel. */
+  parent: Element;
+  /** A frozen copy of that box, and the float inside the copy. */
+  copy: HTMLElement;
+  float: HTMLElement;
+  transform: string;
+}
+
+/** A transform on top of the one an element already wears (a float centred
+ *  with translateX(-50%) keeps its place while it zooms). */
+const compose = (base: string, scale: string) => (base === 'none' ? scale : `${base} ${scale}`);
+
+/** Frozen copies draw nothing on their canvases; paint in what each shows. */
+function copyCanvases(source: Element, copy: Element) {
+  const canvases = source.querySelectorAll('canvas');
+  copy.querySelectorAll('canvas').forEach((target, i) => {
+    const from = canvases[i];
+    if (!from?.width || !from.height) return;
+    try {
+      target.getContext('2d')?.drawImage(from, 0, 0);
+    } catch {
+      // a tainted or lost context draws nothing — the copy fades regardless
+    }
+  });
+}
+
+const liveFloats = () => Array.from(document.querySelectorAll(FLOATS)).filter((el) => !el.closest(`[${GHOST_ATTR}]`));
+
+function pictureFloats(panel: HTMLElement): FloatPicture[] {
+  return liveFloats().flatMap((el) => {
+    // the box it hangs in: a direct child of the body (a portal) or of the panel
+    let box: Element = el;
+    while (box.parentElement && box.parentElement !== document.body && box.parentElement !== panel) box = box.parentElement;
+    const parent = box.parentElement;
+    if (!parent) return [];
+    const path: number[] = [];
+    for (let node: Element = el; node !== box; node = node.parentElement!) path.unshift(Array.prototype.indexOf.call(node.parentElement!.children, node));
+    const copy = box.cloneNode(true) as HTMLElement;
+    copyCanvases(box, copy);
+    let float: Element = copy;
+    for (const index of path) float = float.children[index];
+    return [{ el, parent, copy, float: float as HTMLElement, transform: getComputedStyle(el).transform }];
+  });
 }
 
 const reducedMotion = () =>
@@ -80,17 +139,7 @@ export function takePanelPicture(panel: HTMLElement | null, scope: MovePanelChan
   ghost.setAttribute(GHOST_ATTR, '');
   ghost.setAttribute('aria-hidden', 'true');
   ghost.inert = true;
-  // canvases copy blank; draw what each one shows
-  const canvases = target.querySelectorAll('canvas');
-  ghost.querySelectorAll('canvas').forEach((copy, i) => {
-    const source = canvases[i];
-    if (!source?.width || !source.height) return;
-    try {
-      copy.getContext('2d')?.drawImage(source, 0, 0);
-    } catch {
-      // a tainted or lost context draws nothing — the copy fades regardless
-    }
-  });
+  copyCanvases(target, ghost);
   // the palette the leaving controls wore, should the change flip it
   if (scope === 'inside') {
     const vars = getComputedStyle(panel);
@@ -120,6 +169,7 @@ export function takePanelPicture(panel: HTMLElement | null, scope: MovePanelChan
     opacity: Number(look.opacity) || 0,
     transform: look.transform === 'none' ? 'scale(1)' : look.transform,
     scrolls,
+    floats: pictureFloats(panel),
   };
 }
 
@@ -171,6 +221,7 @@ export function playPanelChange(picture: MovePanelPicture): void {
   }
 
   const { leaving, arriving } = plan;
+  playFloats(picture, plan);
   const out = animate(
     ghost,
     leaving.move
@@ -194,6 +245,45 @@ export function playPanelChange(picture: MovePanelPicture): void {
 
   clearTimeout(settleTimers.get(panel));
   settleTimers.set(panel, setTimeout(() => panel.removeAttribute(MOVE_PANEL_MOTION_ATTR), plan.duration));
+}
+
+/** Floats that left with the change fade out as copies; floats that came
+ *  with it — now, or a render or two late — zoom in on the panel's beat. */
+function playFloats(picture: MovePanelPicture, plan: ReturnType<typeof movePanelChoreography>) {
+  const { leaving, arriving } = plan;
+  for (const gone of picture.floats) {
+    if (gone.el.isConnected || !gone.parent.isConnected) continue;
+    gone.copy.setAttribute(GHOST_ATTR, '');
+    gone.copy.setAttribute('aria-hidden', 'true');
+    gone.copy.inert = true;
+    gone.copy.style.pointerEvents = 'none';
+    gone.parent.appendChild(gone.copy);
+    const frames = leaving.move
+      ? [{ opacity: 1, transform: compose(gone.transform, 'scale(1)') }, { opacity: 0, transform: compose(gone.transform, leaving.move.to) }]
+      : [{ opacity: 1 }, { opacity: 0 }];
+    const out = animate(gone.float, frames, leaving.fade.duration, leaving.fade.easing, MOVE_VIEW_EXPO_BEZIER, 'forwards');
+    out.finished.then(() => gone.copy.remove(), () => gone.copy.remove());
+  }
+
+  const known = new Set(picture.floats.map((f) => f.el));
+  const started = performance.now();
+  const arrive = () => {
+    const elapsed = performance.now() - started;
+    for (const el of liveFloats()) {
+      if (known.has(el) || !(el instanceof HTMLElement)) continue;
+      known.add(el);
+      const base = getComputedStyle(el).transform;
+      const zoom = arriving.move
+        ? animate(el, [{ transform: compose(base, arriving.move.from) }, { transform: base }], arriving.move.duration, arriving.move.easing, MOVE_VIEW_EXPO_BEZIER, 'none')
+        : null;
+      const fade = animate(el, [{ opacity: 0 }, { opacity: 1 }], arriving.fade.duration, arriving.move ? MOVE_PANEL_ARRIVE_EASING : 'linear', MOVE_VIEW_EXPO_BEZIER, 'none');
+      // a late float joins the change where it stands, not from its start
+      if (zoom) zoom.currentTime = elapsed;
+      fade.currentTime = elapsed;
+    }
+    if (elapsed < FLOAT_LATE_MS) requestAnimationFrame(arrive);
+  };
+  arrive();
 }
 
 /** Throw away a picture that will not be played (the change never came). */
