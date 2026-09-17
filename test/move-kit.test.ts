@@ -22,9 +22,11 @@ describe('moveKitOptions', () => {
     expect(o.volume).toBe(MoveVolumeDisplay);
     expect(o.transfer).toEqual({ sample: sampleTransfer, move: movePoint });
     expect(o.exploration).toBe(PresetExplorationStore);
+    // The live hardware claims ride along (the knob, while a timeline holds it).
+    expect(o.claims).toEqual(expect.any(Object));
     // Nothing else: a new registry lands here AND in this list, together.
     expect(Object.keys(o).sort()).toEqual(
-      ['color', 'exploration', 'functions', 'modulation', 'padList', 'surface', 'transfer', 'volume', 'waveform'],
+      ['claims', 'color', 'exploration', 'functions', 'modulation', 'padList', 'surface', 'transfer', 'volume', 'waveform'],
     );
   });
 
