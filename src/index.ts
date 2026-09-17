@@ -30,6 +30,14 @@ export { MoveActionDeck } from './components/MoveActionDeck';
 export type { MoveActionDeckProps, MoveDeckActionDress } from './components/MoveActionDeck';
 export { normalizeDeck, MOVE_DECK_MAX } from './move-deck-core';
 export type { MoveDeckAction, MoveDeckButton } from './move-deck-core';
+// Views and the changes between them — a stage, directed transitions, and
+// waits that keep the hand honest while work runs
+export { MoveViewStage } from './components/MoveViewStage';
+export type { MoveViewStageProps } from './components/MoveViewStage';
+export { MoveViews } from './move-views';
+export type { MoveViewsState, MoveViewWait, MoveViewTask, MoveViewLoadOptions } from './move-views';
+export { MOVE_VIEW_MOTIONS, MOVE_VIEW_WAIT, moveViewChoreography } from './move-view-core';
+export type { MoveViewMotion, MoveViewChange, MoveViewChoreography, MoveViewLayer, MoveViewTween } from './move-view-core';
 export { buildMovePages, buildModMovePage, slotGroups, movePadRows, moveAppPadRow, visibleColumns, isToggleDial, normalizeToggleDial, denormalizeToggleDial, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, padSpan, isMoveDial, isMoveTabs, isNamedTabs, moveTabCell, moveBandCell, moveEdgesCell, isSpanContinuation, isPadSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
 export type { MovePage, MoveBandCell, MoveEdgesCell } from './move-layout';
 
@@ -110,7 +118,7 @@ export type { MoveKitRegistry } from './store/TweakStore';
 // Raw hardware an app claims for itself — the bottom pad rows, the step
 // buttons, the device screen — kept for the on-screen mirror.
 export { MoveSurfaceStore, moveScreenRowLabel, moveScreenChecked } from './move-surface-store';
-export type { MovePadCell, MoveStepCell, MoveScreenList, MoveScreenRow, MoveScreenSearch, MoveSurfaceState } from './move-surface-store';
+export type { MovePadCell, MoveStepCell, MoveScreenList, MoveScreenRow, MoveScreenSearch, MoveScreenWait, MoveSurfaceState } from './move-surface-store';
 
 // List screen (the Move's dark display list, standalone)
 export { ListScreen } from './components/ListScreen';
