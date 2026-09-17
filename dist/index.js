@@ -9575,9 +9575,39 @@ var TARGET = {
   controls: ".tweakers-move-controls",
   inside: ".tweakers-move-inner"
 };
+var FLOATS = '.tweakers-move-wave[data-variant="dock"], .tweakers-move-curve, .tweakers-move-preset-save, [data-move-float]';
+var FLOAT_LATE_MS = 200;
 var GHOST_ATTR = "data-move-panel-ghost";
 var MOVE_PANEL_MOTION_ATTR = "data-move-panel-motion";
 var ANIMATION_ID = "tweakers-move-panel-motion";
+var compose = (base, scale) => base === "none" ? scale : `${base} ${scale}`;
+function copyCanvases(source, copy) {
+  const canvases = source.querySelectorAll("canvas");
+  copy.querySelectorAll("canvas").forEach((target, i) => {
+    const from = canvases[i];
+    if (!from?.width || !from.height) return;
+    try {
+      target.getContext("2d")?.drawImage(from, 0, 0);
+    } catch {
+    }
+  });
+}
+var liveFloats = () => Array.from(document.querySelectorAll(FLOATS)).filter((el) => !el.closest(`[${GHOST_ATTR}]`));
+function pictureFloats(panel) {
+  return liveFloats().flatMap((el) => {
+    let box = el;
+    while (box.parentElement && box.parentElement !== document.body && box.parentElement !== panel) box = box.parentElement;
+    const parent = box.parentElement;
+    if (!parent) return [];
+    const path = [];
+    for (let node = el; node !== box; node = node.parentElement) path.unshift(Array.prototype.indexOf.call(node.parentElement.children, node));
+    const copy = box.cloneNode(true);
+    copyCanvases(box, copy);
+    let float = copy;
+    for (const index of path) float = float.children[index];
+    return [{ el, parent, copy, float, transform: getComputedStyle(el).transform }];
+  });
+}
 var reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 function takePanelPicture(panel, scope) {
   if (!panel || typeof panel.animate !== "function") return null;
@@ -9592,15 +9622,7 @@ function takePanelPicture(panel, scope) {
   ghost.setAttribute(GHOST_ATTR, "");
   ghost.setAttribute("aria-hidden", "true");
   ghost.inert = true;
-  const canvases = target.querySelectorAll("canvas");
-  ghost.querySelectorAll("canvas").forEach((copy, i) => {
-    const source = canvases[i];
-    if (!source?.width || !source.height) return;
-    try {
-      copy.getContext("2d")?.drawImage(source, 0, 0);
-    } catch {
-    }
-  });
+  copyCanvases(target, ghost);
   if (scope === "inside") {
     const vars = getComputedStyle(panel);
     for (let i = 0; i < vars.length; i++) {
@@ -9625,7 +9647,8 @@ function takePanelPicture(panel, scope) {
     height: rect.height,
     opacity: Number(look.opacity) || 0,
     transform: look.transform === "none" ? "scale(1)" : look.transform,
-    scrolls
+    scrolls,
+    floats: pictureFloats(panel)
   };
 }
 function animate(el, frames, duration, easing, fallback, fill) {
@@ -9665,6 +9688,7 @@ function playPanelChange(picture) {
     el.scrollLeft = left;
   }
   const { leaving, arriving } = plan;
+  playFloats(picture, plan);
   const out = animate(
     ghost,
     leaving.move ? [{ opacity: picture.opacity, transform: picture.transform }, { opacity: 0, transform: leaving.move.to }] : [{ opacity: picture.opacity }, { opacity: 0 }],
@@ -9683,6 +9707,36 @@ function playPanelChange(picture) {
   }
   clearTimeout(settleTimers.get(panel));
   settleTimers.set(panel, setTimeout(() => panel.removeAttribute(MOVE_PANEL_MOTION_ATTR), plan.duration));
+}
+function playFloats(picture, plan) {
+  const { leaving, arriving } = plan;
+  for (const gone of picture.floats) {
+    if (gone.el.isConnected || !gone.parent.isConnected) continue;
+    gone.copy.setAttribute(GHOST_ATTR, "");
+    gone.copy.setAttribute("aria-hidden", "true");
+    gone.copy.inert = true;
+    gone.copy.style.pointerEvents = "none";
+    gone.parent.appendChild(gone.copy);
+    const frames = leaving.move ? [{ opacity: 1, transform: compose(gone.transform, "scale(1)") }, { opacity: 0, transform: compose(gone.transform, leaving.move.to) }] : [{ opacity: 1 }, { opacity: 0 }];
+    const out = animate(gone.float, frames, leaving.fade.duration, leaving.fade.easing, MOVE_VIEW_EXPO_BEZIER, "forwards");
+    out.finished.then(() => gone.copy.remove(), () => gone.copy.remove());
+  }
+  const known = new Set(picture.floats.map((f) => f.el));
+  const started = performance.now();
+  const arrive = () => {
+    const elapsed = performance.now() - started;
+    for (const el of liveFloats()) {
+      if (known.has(el) || !(el instanceof HTMLElement)) continue;
+      known.add(el);
+      const base = getComputedStyle(el).transform;
+      const zoom = arriving.move ? animate(el, [{ transform: compose(base, arriving.move.from) }, { transform: base }], arriving.move.duration, arriving.move.easing, MOVE_VIEW_EXPO_BEZIER, "none") : null;
+      const fade = animate(el, [{ opacity: 0 }, { opacity: 1 }], arriving.fade.duration, arriving.move ? MOVE_PANEL_ARRIVE_EASING : "linear", MOVE_VIEW_EXPO_BEZIER, "none");
+      if (zoom) zoom.currentTime = elapsed;
+      fade.currentTime = elapsed;
+    }
+    if (elapsed < FLOAT_LATE_MS) requestAnimationFrame(arrive);
+  };
+  arrive();
 }
 
 // src/components/MovePanelMotion.tsx
