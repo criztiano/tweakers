@@ -100,7 +100,7 @@ const FILTER_META = meta({
 const FILTER_VALUE = { cutoff: 2400, resonance: 0.4 };
 
 /** A numeric specimen: the drawing the kit derives from `moveVisual`. */
-const numeric = (kind: 'opacity' | 'blur' | 'pan' | 'stereo-width' | 'pitch',
+const numeric = (kind: 'opacity' | 'blur' | 'pan' | 'stereo-width' | 'pitch' | 'gauge',
                  label: string, value: number, reading: string, extra: Partial<ControlMeta> = {}) => {
   const m = meta({ path: kind, label, moveVisual: { kind } as ControlMeta['moveVisual'], ...extra });
   const drawing = moveNumericDrawing(m, value);
@@ -345,6 +345,12 @@ export const BIG_SLOTS: Specimen[] = [
     kind: 'pitch', path: 'pitch',
     description: MOVE_SLOT_LIBRARY.pitch.description,
     render: () => numeric('pitch', 'Pitch', 7, '+7 st', { min: -24, max: 24, bipolar: true, unit: ' st' }),
+  },
+  {
+    kind: 'gauge', path: 'speed',
+    description: MOVE_SLOT_LIBRARY.gauge.description,
+    note: 'A slider with `moveVisual: { kind: \'gauge\' }` — the multiband cleaner’s speed gauge in a slot of its own. An ordinary dial on the wire; it reads as a multiple unless the slider brings a unit or a formatter.',
+    render: () => numeric('gauge', 'Speed', 1.5, '1.5×', { min: 0.25, max: 4 }),
   },
   {
     kind: 'trim-span', span: 2,

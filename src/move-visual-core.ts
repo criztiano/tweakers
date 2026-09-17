@@ -7,6 +7,10 @@ export type MoveSliderVisual =
   | { kind: 'pan'; left?: number; center?: number; right?: number }
   | { kind: 'stereo-width'; mono?: number; unity?: number }
   | { kind: 'pitch'; unit?: 'semitones' | 'cents' }
+  /** A speed: a needle on a graded dome, the slowest end on the left and the
+   *  fastest on the right. It reads as a multiple ("1.5×") unless the host
+   *  gives a unit or a formatter. */
+  | { kind: 'gauge' }
   /** One edge of a take: the bar is the whole of it, the kept part is filled
    *  from this edge's far end to the value, the edge itself is the marker. */
   | { kind: 'trim'; edge: 'start' | 'end' }
@@ -56,6 +60,7 @@ export type MoveNumericDrawing =
   | { kind: 'pan'; position: number }
   | { kind: 'stereo-width'; separation: number; unity: number | null }
   | { kind: 'pitch'; position: number; zero: number | null }
+  | { kind: 'gauge'; position: number }
   | { kind: 'trim'; edge: 'start' | 'end'; position: number };
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
@@ -102,6 +107,9 @@ export function moveNumericDrawing(meta: ControlMeta, value: unknown): MoveNumer
     case 'pitch':
       if (visual.unit !== undefined && visual.unit !== 'semitones' && visual.unit !== 'cents') return null;
       return { kind: 'pitch', position: (v - lo) / (hi - lo), zero: between(0, lo, hi) ? -lo / (hi - lo) : null };
+    case 'gauge':
+      // The needle sweeps the range the dial turns, so the two always agree.
+      return { kind: 'gauge', position: clamp01((v - lo) / (hi - lo)) };
     case 'trim':
       if (visual.edge !== 'start' && visual.edge !== 'end') return null;
       return { kind: 'trim', edge: visual.edge, position: clamp01((v - lo) / (hi - lo)) };
@@ -212,6 +220,7 @@ export function moveVisualReading(meta: ControlMeta, value: number): string {
     case 'stereo-width':
       return value === (visual.mono ?? 0) ? 'Mono' : `${Number(((value - (visual.mono ?? 0)) / ((visual.unity ?? 1) - (visual.mono ?? 0))).toFixed(2))}×`;
     case 'pitch': return `${value > 0 ? '+' : ''}${number} ${visual.unit === 'cents' ? 'ct' : 'st'}`;
+    case 'gauge': return `${number}×`;
     case 'trim': return `${number} s`;
     default: return number;
   }

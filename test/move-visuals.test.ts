@@ -66,6 +66,21 @@ describe('value geometry and references', () => {
     expect(moveNumericDrawing({ ...width, max: 0.5 }, 0.25)).toEqual({ kind: 'stereo-width', separation: 0.5, unity: null });
   });
 
+  it('turns a speed gauge across the range the dial turns, and reads it as a multiple', () => {
+    const speed = numeric({ kind: 'gauge' }, 0.25, 4);
+    expect(moveNumericDrawing(speed, 0.25)).toEqual({ kind: 'gauge', position: 0 });
+    expect(moveNumericDrawing(speed, 1)).toEqual({ kind: 'gauge', position: 0.2 });
+    expect(moveNumericDrawing(speed, 4)).toEqual({ kind: 'gauge', position: 1 });
+    expect(moveNumericDrawing(speed, 9)).toEqual({ kind: 'gauge', position: 1 });
+    expect(moveVisualReading(speed, 1.5)).toBe('1.5×');
+    expect(moveVisualReading({ ...speed, unit: ' BPM' }, 120)).toBe('120 BPM');
+    expect(moveVisualReading({ ...speed, formatValue: (v) => `${v * 100}%` }, 1.5)).toBe('150%');
+    // no drawing without a range to turn across, nor off a slider
+    expect(moveNumericDrawing(numeric({ kind: 'gauge' }, 2, 2), 2)).toBeNull();
+    expect(moveNumericDrawing({ ...speed, type: 'number' }, 1)).toBeNull();
+    expect(moveNumericDrawing(speed, NaN)).toBeNull();
+  });
+
   it('places pitch zero correctly on asymmetric ranges and omits an unavailable zero', () => {
     expect(moveNumericDrawing(numeric({ kind: 'pitch' }, -12, 24), 0)).toEqual({ kind: 'pitch', position: 1 / 3, zero: 1 / 3 });
     expect(moveNumericDrawing(numeric({ kind: 'pitch' }, 12, 24), 18)).toEqual({ kind: 'pitch', position: 0.5, zero: null });

@@ -2331,6 +2331,8 @@
   pointer-events: none;
 }
 
+/* The gauge's parts dress the standalone `gauge` slot too, so they stay
+   unscoped: only the placement above belongs to the multiband face. */
 .tweakers-move-multiband-gauge-dome,
 .tweakers-move-multiband-gauge-base,
 .tweakers-move-multiband-gauge-needle {

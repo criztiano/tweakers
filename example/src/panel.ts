@@ -166,6 +166,10 @@ export const CONFIG = {
     type: 'slider', default: 0, min: -24, max: 24, step: 1, bipolar: true, unit: ' st',
     moveVisual: { kind: 'pitch' },
   },
+  speed: {
+    type: 'slider', default: 1, min: 0.25, max: 4, step: 0.01,
+    moveVisual: { kind: 'gauge' },
+  },
   playback: {
     type: 'select', default: 'forward',
     options: [

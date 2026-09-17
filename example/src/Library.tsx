@@ -499,7 +499,7 @@ const DIAL_KIND: Record<string, string | undefined> = {
   ramp: 'ramp', dial: 'dial', scope: 'scope', env: 'env', 'trim-span': 'trim-span', gate: 'gate', multiband: 'multiband', channel: 'channel',
 };
 
-const NUMERIC_KINDS = ['opacity', 'blur', 'pan', 'stereo-width', 'pitch'];
+const NUMERIC_KINDS = ['opacity', 'blur', 'pan', 'stereo-width', 'pitch', 'gauge'];
 
 const CSS = `
   .kit-rec-dot { flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%; background: #fd3c57; }

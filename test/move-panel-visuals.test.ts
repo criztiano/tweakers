@@ -71,6 +71,22 @@ describe('MovePanel semantic interactions', () => {
     expect(triangle().props['data-offset']).toBe(true);
   });
 
+  it('draws a speed as a gauge in its own slot, an ordinary dial underneath', () => {
+    mount({ speed: { type: 'slider', min: 0.25, max: 4, default: 1, step: 0.01, moveVisual: { kind: 'gauge' } } });
+    const needle = () => dial('Speed').findByProps({ className: 'tweakers-move-multiband-gauge-needle' });
+    expect(dial('Speed').props['data-visual']).toBe('gauge');
+    expect(dial('Speed').props['aria-valuetext']).toBe('1×');
+    expect(dial('Speed').findByProps({ className: 'tweakers-move-dial-option tweakers-move-visual-value' }).props.children).toBe('1×');
+    expect(needle().props.x2).toBeLessThan(0);
+    act(() => dial('Speed').props.onKeyDown(keyEvent('End')));
+    expect(TweakStore.getValues(id).speed).toBe(4);
+    expect(needle().props.x2).toBeGreaterThan(0);
+    // the drag is the dial's own: left to right across the slot
+    act(() => dial('Speed').props.onPointerDown(pointer(60)));
+    expect(TweakStore.getValues(id).speed).toBeCloseTo(2.125, 2);
+    act(() => dial('Speed').props.onPointerUp());
+  });
+
   it('draws a trim start beside a trim end as one line, each column editing its own edge', () => {
     mount({
       start: { type: 'slider', min: 0, max: 10, default: 2, step: 0.01, moveVisual: { kind: 'trim', edge: 'start' } },

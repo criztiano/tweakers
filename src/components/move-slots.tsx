@@ -2,8 +2,8 @@ import type { MovePadListView } from '../move-pad-list';
 import { useEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { moveBandCuts, moveNumericDrawing, movePlaybackMode, MOVE_BAND_H, MOVE_BAND_W, type MovePlaybackMode, type MoveTone } from '../move-visual-core';
-import { MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
-export { MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
+import { MoveGauge, MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
+export { MoveSlotNumericBody, MoveSlotPlaybackDrawing, MOVE_GAUGE, moveGaugeBearing } from './move-visuals';
 import type { ControlMeta } from '../store/TweakStore';
 import { ICON_BADGE_OFF, ICON_BADGE_ON, LUCIDE_ICONS } from '../icons';
 import { enumOptionIcon, enumOptionLabel, enumOptionValue } from '../move-layout';
@@ -38,9 +38,10 @@ import { ListScreen } from './ListScreen';
  *   knob turns X and the volume knob turns Y while touched.
  * - `range`   — two handles on one bar; column knob = low end, volume
  *   knob = high end while touched.
- * - `opacity`, `blur`, `pan`, `stereo-width`, `pitch`, `trim` — explicit
- *   numeric meanings, drawn as specimens or positioned against domain
- *   references (`trim`: one edge of a take, the kept part filled).
+ * - `opacity`, `blur`, `pan`, `stereo-width`, `pitch`, `trim`, `gauge` —
+ *   explicit numeric meanings, drawn as specimens or positioned against
+ *   domain references (`trim`: one edge of a take, the kept part filled;
+ *   `gauge`: a speed, the multiband cleaner's gauge in a slot of its own).
  * - `playback` — an explicitly mapped playback icon.
  * - `filter`  — the 2-slot control: cutoff and resonance as one picture,
  *   the magnitude response maximised across both columns, each hand's
@@ -96,6 +97,7 @@ export type MoveSlotKind =
   | 'pan'
   | 'stereo-width'
   | 'pitch'
+  | 'gauge'
   | 'trim'
   | 'trim-span'
   | 'gate'
@@ -677,40 +679,6 @@ export function MoveSlotChannelBody({ channels }: { channels: MoveChannelDial[] 
   );
 }
 
-/** The speed gauge's drawing, in its own viewBox units (1 unit = 1px): a
- *  dome of radius `r` on a baseline `base` below its centre, graded across
- *  `sweep` degrees either side of straight up. */
-export const MOVE_GAUGE = { r: 36, base: 18, half: 43, top: 37, height: 56, sweep: 110, ticks: 11 } as const;
-
-/** Where a value (0..1) points on the gauge: a compass bearing, 0 = up. */
-export const moveGaugeBearing = (position: number) => (place(position) * 2 - 1) * MOVE_GAUGE.sweep;
-
-function MoveGauge({ position }: { position: number }) {
-  const { r, base, half, top, height, sweep, ticks } = MOVE_GAUGE;
-  const foot = Math.sqrt(r * r - base * base);
-  const point = (bearing: number, radius: number) => {
-    const rad = (bearing * Math.PI) / 180;
-    return [radius * Math.sin(rad), -radius * Math.cos(rad)] as const;
-  };
-  const needle = point(moveGaugeBearing(position), r * 0.62);
-  return (
-    <svg className="tweakers-move-multiband-gauge" data-track="speed" viewBox={`${-half} ${-top} ${half * 2} ${height}`} aria-hidden="true">
-      <path className="tweakers-move-multiband-gauge-dome" d={`M${-foot} ${base}A${r} ${r} 0 1 1 ${foot} ${base}Z`} />
-      <line className="tweakers-move-multiband-gauge-base" x1={-half + 1} y1={base} x2={half - 1} y2={base} />
-      {Array.from({ length: ticks }, (_, k) => {
-        const at = k / (ticks - 1);
-        const major = k % 5 === 0;
-        const [x1, y1] = point(-sweep + at * sweep * 2, r - 4);
-        const [x2, y2] = point(-sweep + at * sweep * 2, r - (major ? 10 : 7));
-        return <line key={k} className="tweakers-move-multiband-gauge-tick" data-major={major || undefined}
-          data-lit={at <= place(position) + 1e-9 || undefined} x1={x1} y1={y1} x2={x2} y2={y2} />;
-      })}
-      <line className="tweakers-move-multiband-gauge-needle" x1="0" y1="0" x2={needle[0]} y2={needle[1]} />
-      <circle className="tweakers-move-multiband-gauge-pivot" cx="0" cy="0" r="2.5" />
-    </svg>
-  );
-}
-
 /**
  * The multiband cleaner's face, one slot per dial: the amount as a bar with
  * its icon over the first column, the speed as a graded gauge over the
@@ -734,7 +702,7 @@ export function MoveSlotMultibandBody({
     <div className="tweakers-move-face" style={{ '--move-face-span': 2 + bands.length } as CSSProperties}>
       <MoveFaceBar role="amount" dial={amount} />
       {icon && <MoveSlotIcon icon={icon} className="tweakers-move-multiband-icon" />}
-      <MoveGauge position={speed.position} />
+      <MoveGauge position={speed.position} className="tweakers-move-multiband-gauge" track="speed" />
       <MoveFaceGrid columns={MOVE_MULTIBAND_GRID.columnsPerSlot * bands.length} rows={MOVE_MULTIBAND_GRID.rows}>{children}</MoveFaceGrid>
       <MoveFaceName col={0} dial={amount} />
       <MoveFaceName col={1} dial={speed} />
@@ -1380,6 +1348,7 @@ export const MOVE_SLOT_LIBRARY = {
   pan: { description: 'position between L, C and R references', component: MoveSlotNumericBody },
   'stereo-width': { description: 'stereo separation with a unity reference', component: MoveSlotNumericBody },
   pitch: { description: 'signed pitch ruler with a zero reference', component: MoveSlotNumericBody },
+  gauge: { description: 'a speed: a needle on a graded dome, slowest to the left, fastest to the right', component: MoveSlotNumericBody },
   trim: { description: 'one edge of a take — the kept part filled from the far end, the value beneath', component: MoveSlotNumericBody },
   'trim-span': { description: '2 slots: a take’s start and end on one line, a flag per edge', component: MoveSlotTrimSpanBody },
   gate: { description: '3 slots: threshold and release as bars, look-ahead as a line, the gate live on a grid between', component: MoveSlotGateBody },

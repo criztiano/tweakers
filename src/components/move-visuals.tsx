@@ -1,12 +1,64 @@
 import { LUCIDE_ICONS } from '../icons';
 import type { MoveNumericDrawing, MovePlaybackMode } from '../move-visual-core';
 
+/** The speed gauge's drawing, in its own viewBox units (1 unit = 1px): a
+ *  dome of radius `r` on a baseline `base` below its centre, graded across
+ *  `sweep` degrees either side of straight up. */
+export const MOVE_GAUGE = { r: 36, base: 18, half: 43, top: 37, height: 56, sweep: 110, ticks: 11 } as const;
+
+const place = (position: number) => Math.max(0, Math.min(1, position));
+
+/** Where a value (0..1) points on the gauge: a compass bearing, 0 = up. */
+export const moveGaugeBearing = (position: number) => (place(position) * 2 - 1) * MOVE_GAUGE.sweep;
+
+/**
+ * The speed gauge: a needle on a graded dome, the ticks lit up to it. One
+ * drawing for the multiband cleaner's speed and the standalone gauge slot;
+ * `className` places it, and `track` names it for a gesture that reads it.
+ */
+export function MoveGauge({ position, className, track }: { position: number; className: string; track?: string }) {
+  const { r, base, half, top, height, sweep, ticks } = MOVE_GAUGE;
+  const foot = Math.sqrt(r * r - base * base);
+  const point = (bearing: number, radius: number) => {
+    const rad = (bearing * Math.PI) / 180;
+    return [radius * Math.sin(rad), -radius * Math.cos(rad)] as const;
+  };
+  const needle = point(moveGaugeBearing(position), r * 0.62);
+  return (
+    <svg className={className} data-track={track} viewBox={`${-half} ${-top} ${half * 2} ${height}`} aria-hidden="true">
+      <path className="tweakers-move-multiband-gauge-dome" d={`M${-foot} ${base}A${r} ${r} 0 1 1 ${foot} ${base}Z`} />
+      <line className="tweakers-move-multiband-gauge-base" x1={-half + 1} y1={base} x2={half - 1} y2={base} />
+      {Array.from({ length: ticks }, (_, k) => {
+        const at = k / (ticks - 1);
+        const major = k % 5 === 0;
+        const [x1, y1] = point(-sweep + at * sweep * 2, r - 4);
+        const [x2, y2] = point(-sweep + at * sweep * 2, r - (major ? 10 : 7));
+        return <line key={k} className="tweakers-move-multiband-gauge-tick" data-major={major || undefined}
+          data-lit={at <= place(position) + 1e-9 || undefined} x1={x1} y1={y1} x2={x2} y2={y2} />;
+      })}
+      <line className="tweakers-move-multiband-gauge-needle" x1="0" y1="0" x2={needle[0]} y2={needle[1]} />
+      <circle className="tweakers-move-multiband-gauge-pivot" cx="0" cy="0" r="2.5" />
+    </svg>
+  );
+}
+
 /** A static value specimen; labels and precise readouts never inherit its effects. */
 export function MoveSlotNumericBody({ label, value, drawing }: {
   label: string;
   value: string;
   drawing: MoveNumericDrawing;
 }) {
+  // The gauge brings its own drawing space; the name and the reading sit
+  // where every specimen keeps them.
+  if (drawing.kind === 'gauge') {
+    return (
+      <>
+        <span className="tweakers-move-dial-tag">{label}</span>
+        <MoveGauge position={drawing.position} className="tweakers-move-visual" />
+        <span className="tweakers-move-dial-option tweakers-move-visual-value">{value}</span>
+      </>
+    );
+  }
   return (
     <>
       <span className="tweakers-move-dial-tag">{label}</span>
