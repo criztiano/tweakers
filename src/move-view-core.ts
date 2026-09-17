@@ -54,6 +54,15 @@ export const MOVE_VIEW_PRESENTATION = {
 export const MOVE_VIEW_REDUCED = { duration: 180 } as const;
 
 /**
+ * The control panel's own changes — a page switch, the settings room or a
+ * modulator's page coming and going, the panel arriving with its view —
+ * make the same zoom-through, short: they happen many times a minute, and
+ * the panel has to be ready by the time the hand moves on (Cri's call).
+ * Reduced motion keeps a brief crossfade.
+ */
+export const MOVE_PANEL_PRESENTATION = { duration: 350, reduced: 120 } as const;
+
+/**
  * The timing of a wait. Feel constants: retune one only with a stated feel
  * goal.
  */
@@ -130,7 +139,28 @@ function reaches(curve: (x: number) => number, light: number): number {
 }
 
 const EXPO_EASING = linearEasing(expoInOut);
-const EXPO_QUIET = Math.round(reaches(expoInOut, MOVE_VIEW_PRESENTATION.quietLight) * MOVE_VIEW_PRESENTATION.duration);
+const EXPO_QUIET_SHARE = reaches(expoInOut, MOVE_VIEW_PRESENTATION.quietLight);
+
+/** The zoom-through at a given length; `reduced` a plain crossfade of `fade` ms. */
+function zoomThrough(duration: number, reduced: number | null): MoveViewChoreography {
+  if (reduced !== null) {
+    const tween = (from: number, to: number): MoveViewTween<number> => ({ from, to, duration: reduced, delay: 0, easing: 'linear' });
+    return {
+      leaving: { fade: tween(1, 0) },
+      arriving: { fade: tween(0, 1) },
+      duration: reduced,
+      quiet: Math.round(reduced * MOVE_VIEW_PRESENTATION.quietLight),
+    };
+  }
+  const { enterScale, exitScale } = MOVE_VIEW_PRESENTATION;
+  const tween = <T,>(from: T, to: T): MoveViewTween<T> => ({ from, to, duration, delay: 0, easing: EXPO_EASING });
+  return {
+    leaving: { fade: tween(1, 0), move: tween('scale(1)', `scale(${exitScale})`) },
+    arriving: { fade: tween(0, 1), move: tween(`scale(${enterScale})`, 'scale(1)') },
+    duration,
+    quiet: Math.round(EXPO_QUIET_SHARE * duration),
+  };
+}
 
 /**
  * The two layers of a change. Every change is the same zoom-through;
@@ -138,25 +168,26 @@ const EXPO_QUIET = Math.round(reaches(expoInOut, MOVE_VIEW_PRESENTATION.quietLig
  * crossfade and drops the zoom.
  */
 export function moveViewChoreography(_change: MoveViewChange, reduced = false): MoveViewChoreography {
-  if (reduced) {
-    const { duration } = MOVE_VIEW_REDUCED;
-    const tween = (from: number, to: number): MoveViewTween<number> => ({ from, to, duration, delay: 0, easing: 'linear' });
-    return {
-      leaving: { fade: tween(1, 0) },
-      arriving: { fade: tween(0, 1) },
-      duration,
-      quiet: Math.round(duration * MOVE_VIEW_PRESENTATION.quietLight),
-    };
-  }
-  const { duration, enterScale, exitScale } = MOVE_VIEW_PRESENTATION;
-  const tween = <T,>(from: T, to: T): MoveViewTween<T> => ({ from, to, duration, delay: 0, easing: EXPO_EASING });
-  return {
-    leaving: { fade: tween(1, 0), move: tween('scale(1)', `scale(${exitScale})`) },
-    arriving: { fade: tween(0, 1), move: tween(`scale(${enterScale})`, 'scale(1)') },
-    duration,
-    quiet: EXPO_QUIET,
-  };
+  return zoomThrough(MOVE_VIEW_PRESENTATION.duration, reduced ? MOVE_VIEW_REDUCED.duration : null);
 }
+
+/** The control panel's zoom-through: the same, over `MOVE_PANEL_PRESENTATION`. */
+export function movePanelChoreography(reduced = false): MoveViewChoreography {
+  return zoomThrough(MOVE_PANEL_PRESENTATION.duration, reduced ? MOVE_PANEL_PRESENTATION.reduced : null);
+}
+
+/**
+ * Two live layers cannot be laid over each other additively the way the
+ * browser's pictures can, so a panel change crosses over plainly — and a
+ * plain crossfade on one shared curve lets a quarter of the light fall
+ * through at its middle. The arriving controls fade in on a curve bent
+ * ahead of the leaving ones instead, `1 − (1 − e)²`, which keeps the dip
+ * under 15% while both still land together.
+ */
+export const MOVE_PANEL_ARRIVE_EASING = linearEasing((x) => {
+  const e = expoInOut(x);
+  return 1 - (1 - e) * (1 - e);
+});
 
 /** How long the whole change runs, both layers done — ms. */
 export function moveViewChangeDuration(choreography: MoveViewChoreography): number {

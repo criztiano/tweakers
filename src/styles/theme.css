@@ -1014,7 +1014,9 @@
    `.tweakers-move-view-stage[data-busy][data-waiting]`,
    `.tweakers-move-view-frame` (the picture a change moves),
    `.tweakers-move-view-content`, `.tweakers-move-view-wait`, `-title`,
-   `-lights`, `-light`, `-detail`, `-cancel`.
+   `-lights`, `-light`, `-detail`, `-cancel`; on the panel,
+   `.tweakers-move[data-move-panel-motion]` and the frozen
+   `[data-move-panel-ghost]` copy a panel change fades out.
    ------------------------------------------------------------------------ */
 
 .tweakers-move-view-stage {
@@ -1179,23 +1181,55 @@
   mix-blend-mode: plus-lighter;
 }
 
-/* A viewport-docked panel is a sheet of its own: when it comes or goes with
-   the view it makes the same entrance (MoveViews plays it); on both sides
-   of the change it holds still while the view moves above it. (Only while
-   one sheet is on the page — two would share the name and void the
-   change.) */
-:root[data-tweakers-move-view][data-tweakers-move-view-sheet] .tweakers-move[data-dock="viewport"] {
+/* The control panel is a layer of its own — docked to the viewport or
+   standing in the view — named while exactly one stands (two would share
+   the name and void the change). MoveViews plays its short zoom-through:
+   `enter`, `exit`, or `pair` when one panel gives way to another, the two
+   crossing additively like the view; its box eases from one size to the
+   other on the same beat. `hold` — the same panel on both sides — keeps
+   it still while the view moves around it. */
+:root[data-tweakers-move-view][data-tweakers-move-view-panel] .tweakers-move[data-dock] {
   view-transition-name: tweakers-move-view-panel;
 }
 
 :root[data-tweakers-move-view]::view-transition-group(tweakers-move-view-panel) {
-  animation: none;
+  animation-duration: 350ms;
+  animation-timing-function: cubic-bezier(0.87, 0, 0.13, 1);
 }
 
 :root[data-tweakers-move-view]::view-transition-old(tweakers-move-view-panel),
 :root[data-tweakers-move-view]::view-transition-new(tweakers-move-view-panel) {
   animation: none;
   mix-blend-mode: normal;
+}
+
+:root[data-tweakers-move-view-panel="pair"]::view-transition-image-pair(tweakers-move-view-panel) {
+  isolation: isolate;
+}
+
+:root[data-tweakers-move-view-panel="pair"]::view-transition-old(tweakers-move-view-panel),
+:root[data-tweakers-move-view-panel="pair"]::view-transition-new(tweakers-move-view-panel) {
+  mix-blend-mode: plus-lighter;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-tweakers-move-view]::view-transition-group(tweakers-move-view-panel) {
+    animation: none;
+  }
+}
+
+/* A change inside the panel (MovePanelMotion): while it plays, the panel's
+   ground eases to the new palette on the controls' beat — the settings
+   room turns cold as it zooms in. */
+.tweakers-move[data-move-panel-motion] {
+  transition: background-color 350ms cubic-bezier(0.87, 0, 0.13, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move[data-move-panel-motion] {
+    transition-duration: 120ms;
+    transition-timing-function: linear;
+  }
 }
 
 /* End of the view stage skin block. */

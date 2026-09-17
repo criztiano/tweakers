@@ -1,6 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  MOVE_PANEL_ARRIVE_EASING,
+  MOVE_PANEL_PRESENTATION,
   MOVE_VIEW_MOTIONS,
   MOVE_VIEW_PRESENTATION,
   MOVE_VIEW_REDUCED,
@@ -10,6 +12,7 @@ import {
   moveViewChangeDuration,
   moveViewChoreography,
   moveViewHoldRemaining,
+  movePanelChoreography,
   type MoveViewChange,
 } from './move-view-core';
 
@@ -61,6 +64,41 @@ describe('the zoom-through', () => {
     assert.ok(expoInOut(quiet / 1000) <= MOVE_VIEW_PRESENTATION.quietLight + 0.001);
     assert.ok(expoInOut((quiet + 20) / 1000) > MOVE_VIEW_PRESENTATION.quietLight);
     assert.equal(quiet, 384);
+  });
+});
+
+describe('the panel\u2019s zoom-through', () => {
+  it('is the same zoom, short: 350 ms, one curve', () => {
+    const plan = movePanelChoreography();
+    const view = moveViewChoreography('open');
+    assert.equal(MOVE_PANEL_PRESENTATION.duration, 350);
+    assert.equal(plan.duration, 350);
+    assert.deepEqual([plan.leaving.move?.to, plan.arriving.move?.from], [view.leaving.move?.to, view.arriving.move?.from]);
+    assert.equal(plan.leaving.fade.easing, view.leaving.fade.easing);
+    assert.ok(plan.quiet < 150 && plan.quiet > 120, `quiet ${plan.quiet}`);
+  });
+
+  it('keeps a brief crossfade and zooms nowhere under reduced motion', () => {
+    const plan = movePanelChoreography(true);
+    assert.equal(plan.arriving.move, undefined);
+    assert.equal(plan.duration, MOVE_PANEL_PRESENTATION.reduced);
+  });
+
+  it('brings the live controls in ahead of the copy leaving, so the middle keeps its light', () => {
+    const points = linearPoints(MOVE_PANEL_ARRIVE_EASING);
+    assert.equal(points[0], 0);
+    assert.equal(points.at(-1), 1);
+    for (let i = 1; i < points.length; i++) assert.ok(points[i] >= points[i - 1]);
+    // at the middle of the curve the old copy sits at half; the new controls at three quarters
+    const middle = points[(points.length - 1) / 2];
+    assert.ok(Math.abs(middle - 0.75) < 0.01, `middle ${middle}`);
+    // light through both layers never dips below 85% (a plain crossfade on one curve dips to 75%)
+    for (let i = 0; i < points.length; i++) {
+      const e = expoInOut(i / (points.length - 1));
+      const copy = 1 - e;
+      const light = copy + points[i] * (1 - copy);
+      assert.ok(light >= 0.85, `light ${light} at ${i}`);
+    }
   });
 });
 

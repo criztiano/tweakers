@@ -47,6 +47,7 @@ import { MoveSurfaceStore } from './move-surface-store';
 import {
   MOVE_VIEW_EXPO_BEZIER,
   MOVE_VIEW_WAIT,
+  movePanelChoreography,
   moveViewChoreography,
   moveViewHoldRemaining,
   type MoveViewChange,
@@ -99,7 +100,8 @@ export type MoveViewRunner = (change: MoveViewChange, update: () => void) => Pro
 
 /** The view-transition name the stage wears while a change runs. */
 export const MOVE_VIEW_STAGE_NAME = 'tweakers-move-view';
-/** The name a viewport-docked MovePanel wears, so the sheet moves on its own. */
+/** The name the control panel wears while a view changes, so it moves as a
+ *  layer of its own — docked to the viewport or standing in the view. */
 export const MOVE_VIEW_PANEL_NAME = 'tweakers-move-view-panel';
 /** On `<html>` while a change runs: the change's name. The stylesheet scopes
  *  every view-transition rule to it, so the rest of the page is untouched. */
@@ -194,8 +196,17 @@ interface Playing {
 
 let playing: Playing | null = null;
 
-const VIEWPORT_SHEET = '.tweakers-move[data-dock="viewport"]';
-const SHEET_ATTR = 'data-tweakers-move-view-sheet';
+const PANEL = '.tweakers-move[data-dock]';
+/** On `<html>` while a change runs, when the control panel moves on its own:
+ *  `enter`, `exit`, `pair` (one panel gives way to another) or `hold`. */
+const PANEL_ATTR = 'data-tweakers-move-view-panel';
+
+/** The panel on the page, by where it is — or null unless exactly one
+ *  stands: a second would share the picture's name and void the change. */
+function panelKey(doc: Document): string | null {
+  const panels = doc.querySelectorAll(PANEL);
+  return panels.length === 1 ? panels[0].getAttribute('data-move-motion-key') ?? '' : null;
+}
 
 function runUpdates(updates: (() => void)[]) {
   flushSync(() => {
@@ -217,20 +228,30 @@ const animatable = (doc: ViewTransitionDocument | null): doc is AnimatableDocume
 
 function startChange(doc: AnimatableDocument, change: MoveViewChange, updates: (() => void)[]): Promise<void> {
   const root = doc.documentElement;
-  const plan = moveViewChoreography(change, reducedMotion());
-  // The viewport sheet is a picture of its own, named only while exactly
-  // one stands: a second would share the name and void the whole change.
-  const sheetBefore = doc.querySelectorAll(VIEWPORT_SHEET).length === 1;
-  let sheetAfter = sheetBefore;
+  const reduced = reducedMotion();
+  const plan = moveViewChoreography(change, reduced);
+  const panelPlan = movePanelChoreography(reduced);
+  // The control panel is a picture of its own: it makes its entrance on the
+  // panel's short zoom-through while the view around it takes its second.
+  const before = panelKey(doc);
+  let panelMotion: 'enter' | 'exit' | 'pair' | 'hold' | null = null;
   root.setAttribute(MOVE_VIEW_CHANGE_ATTR, change);
-  root.toggleAttribute(SHEET_ATTR, sheetBefore);
+  root.toggleAttribute(PANEL_ATTR, before !== null);
   const entry: Playing = { queue: [...updates], movingAt: null, quiet: plan.quiet, next: null, updated: Promise.resolve() };
   const transition = doc.startViewTransition(() => {
     const queue = entry.queue ?? [];
     entry.queue = null;
     runUpdates(queue);
-    sheetAfter = doc.querySelectorAll(VIEWPORT_SHEET).length === 1;
-    if (sheetAfter) root.setAttribute(SHEET_ATTR, '');
+    const after = panelKey(doc);
+    panelMotion =
+      before !== null && after !== null ? (before === after ? 'hold' : 'pair')
+      : before !== null ? 'exit'
+      : after !== null ? 'enter'
+      : null;
+    if (panelMotion) root.setAttribute(PANEL_ATTR, panelMotion);
+    else root.removeAttribute(PANEL_ATTR);
+    // a change landing unseen must stay unseen on the quicker panel too
+    if (panelMotion && panelMotion !== 'hold') entry.quiet = Math.min(plan.quiet, panelPlan.quiet);
   });
   entry.updated = transition.updateCallbackDone.catch(() => {});
   playing = entry;
@@ -239,10 +260,10 @@ function startChange(doc: AnimatableDocument, change: MoveViewChange, updates: (
       entry.movingAt = performance.now();
       play(root, plan.leaving, `::view-transition-old(${MOVE_VIEW_STAGE_NAME})`);
       play(root, plan.arriving, `::view-transition-new(${MOVE_VIEW_STAGE_NAME})`);
-      // a sheet that comes or goes with the view makes the same entrance;
-      // one on both sides holds still
-      if (sheetBefore && !sheetAfter) play(root, plan.leaving, `::view-transition-old(${MOVE_VIEW_PANEL_NAME})`);
-      if (!sheetBefore && sheetAfter) play(root, plan.arriving, `::view-transition-new(${MOVE_VIEW_PANEL_NAME})`);
+      // the panel: out, in, one into another — or, the same panel on both
+      // sides, holding still while the view moves around it
+      if (panelMotion === 'exit' || panelMotion === 'pair') play(root, panelPlan.leaving, `::view-transition-old(${MOVE_VIEW_PANEL_NAME})`);
+      if (panelMotion === 'enter' || panelMotion === 'pair') play(root, panelPlan.arriving, `::view-transition-new(${MOVE_VIEW_PANEL_NAME})`);
     })
     .catch(() => {});
   transition.finished
@@ -251,7 +272,7 @@ function startChange(doc: AnimatableDocument, change: MoveViewChange, updates: (
       if (playing !== entry) return;
       playing = null;
       root.removeAttribute(MOVE_VIEW_CHANGE_ATTR);
-      root.removeAttribute(SHEET_ATTR);
+      root.removeAttribute(PANEL_ATTR);
       const next = entry.next;
       if (!next) return;
       // the stage may be gone, or the tab hidden, by the time this one lands
