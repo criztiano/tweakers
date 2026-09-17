@@ -3812,7 +3812,7 @@ function PresetArtwork({ values }) {
 function PresetExploration() {
   useSyncExternalStore(PresetExplorationStore.subscribe, PresetExplorationStore.getVersion, () => 0);
   const state3 = PresetExplorationStore.getState();
-  const reducedMotion2 = useReducedMotion();
+  const reducedMotion3 = useReducedMotion();
   const shell = useRef4(null);
   const [availableHeight, setAvailableHeight] = useState(null);
   useBrowserLayoutEffect(() => {
@@ -3834,10 +3834,10 @@ function PresetExploration() {
       className: "tweakers-exploration",
       style: availableHeight == null ? void 0 : { "--explore-available-height": `${availableHeight}px` },
       "aria-label": "Preset exploration",
-      initial: { opacity: 0, y: reducedMotion2 ? 0 : 12, x: "-50%" },
+      initial: { opacity: 0, y: reducedMotion3 ? 0 : 12, x: "-50%" },
       animate: { opacity: 1, y: 0, x: "-50%" },
-      exit: { opacity: 0, y: reducedMotion2 ? 0 : 6, x: "-50%" },
-      transition: reducedMotion2 ? { duration: 0 } : SHELL_MOTION,
+      exit: { opacity: 0, y: reducedMotion3 ? 0 : 6, x: "-50%" },
+      transition: reducedMotion3 ? { duration: 0 } : SHELL_MOTION,
       onKeyDown: (event) => {
         event.stopPropagation();
         if (event.key === "Escape") {
@@ -9486,6 +9486,221 @@ var MovePresetStoreClass = class {
 };
 var MovePresetStore = new MovePresetStoreClass();
 
+// src/components/MovePanelMotion.tsx
+import { Component } from "react";
+
+// src/move-view-core.ts
+var MOVE_VIEW_MOTIONS = ["forward", "back", "open", "close", "swap"];
+var MOVE_VIEW_PRESENTATION = {
+  /** ms, both layers, start to settle */
+  duration: 1e3,
+  /** where the arriving view grows up from */
+  enterScale: 0.95,
+  /** where the leaving view grows out to */
+  exitScale: 1.05,
+  /** the arriving view's light below which a swap goes unseen */
+  quietLight: 0.1
+};
+var MOVE_VIEW_REDUCED = { duration: 180 };
+var MOVE_PANEL_PRESENTATION = { duration: 350, reduced: 120 };
+var MOVE_VIEW_WAIT = {
+  /** Work that lands inside this never shows a wait — under a fifth of a
+   *  second still reads as the press answering. */
+  delay: 200,
+  /** A wait that came into sight stays this long after it has arrived, so
+   *  it is read rather than glimpsed. */
+  hold: 500,
+  /** One step of the wait's eight-light sweep; eight of them are one pass. */
+  sweepStep: 70
+};
+function expoInOut(x) {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  return x < 0.5 ? 2 ** (20 * x - 10) / 2 : (2 - 2 ** (-20 * x + 10)) / 2;
+}
+function linearEasing(curve, samples = 96) {
+  const points = [];
+  for (let i = 0; i <= samples; i++) points.push(String(Math.round(curve(i / samples) * 1e4) / 1e4));
+  return `linear(${points.join(", ")})`;
+}
+var MOVE_VIEW_EXPO_BEZIER = "cubic-bezier(0.87, 0, 0.13, 1)";
+function reaches(curve, light) {
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 30; i++) {
+    const mid = (lo + hi) / 2;
+    if (curve(mid) < light) lo = mid;
+    else hi = mid;
+  }
+  return hi;
+}
+var EXPO_EASING = linearEasing(expoInOut);
+var EXPO_QUIET_SHARE = reaches(expoInOut, MOVE_VIEW_PRESENTATION.quietLight);
+function zoomThrough(duration, reduced) {
+  if (reduced !== null) {
+    const tween2 = (from, to) => ({ from, to, duration: reduced, delay: 0, easing: "linear" });
+    return {
+      leaving: { fade: tween2(1, 0) },
+      arriving: { fade: tween2(0, 1) },
+      duration: reduced,
+      quiet: Math.round(reduced * MOVE_VIEW_PRESENTATION.quietLight)
+    };
+  }
+  const { enterScale, exitScale } = MOVE_VIEW_PRESENTATION;
+  const tween = (from, to) => ({ from, to, duration, delay: 0, easing: EXPO_EASING });
+  return {
+    leaving: { fade: tween(1, 0), move: tween("scale(1)", `scale(${exitScale})`) },
+    arriving: { fade: tween(0, 1), move: tween(`scale(${enterScale})`, "scale(1)") },
+    duration,
+    quiet: Math.round(EXPO_QUIET_SHARE * duration)
+  };
+}
+function moveViewChoreography(_change, reduced = false) {
+  return zoomThrough(MOVE_VIEW_PRESENTATION.duration, reduced ? MOVE_VIEW_REDUCED.duration : null);
+}
+function movePanelChoreography(reduced = false) {
+  return zoomThrough(MOVE_PANEL_PRESENTATION.duration, reduced ? MOVE_PANEL_PRESENTATION.reduced : null);
+}
+var MOVE_PANEL_ARRIVE_EASING = linearEasing((x) => {
+  const e = expoInOut(x);
+  return 1 - (1 - e) * (1 - e);
+});
+function moveViewHoldRemaining(shownAt, now, choreography, hold = MOVE_VIEW_WAIT.hold) {
+  if (shownAt === null || now - shownAt < choreography.quiet) return 0;
+  return Math.max(0, shownAt + choreography.duration + hold - now);
+}
+
+// src/move-panel-motion.ts
+var TARGET = {
+  controls: ".tweakers-move-controls",
+  inside: ".tweakers-move-inner"
+};
+var GHOST_ATTR = "data-move-panel-ghost";
+var MOVE_PANEL_MOTION_ATTR = "data-move-panel-motion";
+var ANIMATION_ID = "tweakers-move-panel-motion";
+var reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+function takePanelPicture(panel, scope) {
+  if (!panel || typeof panel.animate !== "function") return null;
+  const target = panel.querySelector(TARGET[scope]);
+  const box = target?.offsetParent;
+  if (!target || !box) return null;
+  const rect = target.getBoundingClientRect();
+  if (!rect.width || !rect.height) return null;
+  const boxRect = box.getBoundingClientRect();
+  const look = getComputedStyle(target);
+  const ghost = target.cloneNode(true);
+  ghost.setAttribute(GHOST_ATTR, "");
+  ghost.setAttribute("aria-hidden", "true");
+  ghost.inert = true;
+  const canvases = target.querySelectorAll("canvas");
+  ghost.querySelectorAll("canvas").forEach((copy, i) => {
+    const source = canvases[i];
+    if (!source?.width || !source.height) return;
+    try {
+      copy.getContext("2d")?.drawImage(source, 0, 0);
+    } catch {
+    }
+  });
+  if (scope === "inside") {
+    const vars = getComputedStyle(panel);
+    for (let i = 0; i < vars.length; i++) {
+      const name = vars[i];
+      if (name.startsWith("--move-")) ghost.style.setProperty(name, vars.getPropertyValue(name));
+    }
+  }
+  const scrolls = [];
+  const copies = ghost.querySelectorAll("*");
+  target.querySelectorAll("*").forEach((el, index) => {
+    if (el.scrollTop || el.scrollLeft) scrolls.push({ el: copies[index], top: el.scrollTop, left: el.scrollLeft });
+  });
+  ghost.querySelectorAll(`[${GHOST_ATTR}]`).forEach((stale) => stale.remove());
+  panel.setAttribute(MOVE_PANEL_MOTION_ATTR, "");
+  return {
+    scope,
+    panel,
+    ghost,
+    left: rect.left - boxRect.left - box.clientLeft + box.scrollLeft,
+    top: rect.top - boxRect.top - box.clientTop + box.scrollTop,
+    width: rect.width,
+    height: rect.height,
+    opacity: Number(look.opacity) || 0,
+    transform: look.transform === "none" ? "scale(1)" : look.transform,
+    scrolls
+  };
+}
+function animate(el, frames, duration, easing, fallback, fill) {
+  const timing = { duration, fill, id: ANIMATION_ID };
+  try {
+    return el.animate(frames, { ...timing, easing });
+  } catch {
+    return el.animate(frames, { ...timing, easing: fallback });
+  }
+}
+var settleTimers = /* @__PURE__ */ new WeakMap();
+function playPanelChange(picture) {
+  const { panel, ghost, scope } = picture;
+  const live = panel.querySelector(`${TARGET[scope]}:not([${GHOST_ATTR}])`);
+  const parent = live?.parentElement;
+  if (!live || !parent || !panel.isConnected) {
+    panel.removeAttribute(MOVE_PANEL_MOTION_ATTR);
+    return;
+  }
+  const plan = movePanelChoreography(reducedMotion());
+  const older = Array.from(parent.querySelectorAll(`:scope > [${GHOST_ATTR}]`));
+  for (const stale of older.slice(0, -1)) stale.remove();
+  Object.assign(ghost.style, {
+    position: "absolute",
+    left: `${picture.left}px`,
+    top: `${picture.top}px`,
+    width: `${picture.width}px`,
+    height: `${picture.height}px`,
+    margin: "0",
+    pointerEvents: "none",
+    transformOrigin: "50% 50%",
+    zIndex: "1"
+  });
+  parent.appendChild(ghost);
+  for (const { el, top, left } of picture.scrolls) {
+    el.scrollTop = top;
+    el.scrollLeft = left;
+  }
+  const { leaving, arriving } = plan;
+  const out = animate(
+    ghost,
+    leaving.move ? [{ opacity: picture.opacity, transform: picture.transform }, { opacity: 0, transform: leaving.move.to }] : [{ opacity: picture.opacity }, { opacity: 0 }],
+    leaving.fade.duration,
+    leaving.fade.easing,
+    MOVE_VIEW_EXPO_BEZIER,
+    "forwards"
+  );
+  out.finished.then(() => ghost.remove(), () => ghost.remove());
+  for (const running2 of live.getAnimations()) if (running2.id === ANIMATION_ID) running2.cancel();
+  if (arriving.move) {
+    animate(live, [{ transform: arriving.move.from }, { transform: arriving.move.to }], arriving.move.duration, arriving.move.easing, MOVE_VIEW_EXPO_BEZIER, "none");
+    animate(live, [{ opacity: 0 }, { opacity: 1 }], arriving.fade.duration, MOVE_PANEL_ARRIVE_EASING, MOVE_VIEW_EXPO_BEZIER, "none");
+  } else {
+    animate(live, [{ opacity: 0 }, { opacity: 1 }], arriving.fade.duration, "linear", "linear", "none");
+  }
+  clearTimeout(settleTimers.get(panel));
+  settleTimers.set(panel, setTimeout(() => panel.removeAttribute(MOVE_PANEL_MOTION_ATTR), plan.duration));
+}
+
+// src/components/MovePanelMotion.tsx
+var MovePanelMotion = class extends Component {
+  getSnapshotBeforeUpdate(previous) {
+    const { surface, page, panel } = this.props;
+    if (previous.surface === surface && previous.page === page) return null;
+    const scope = previous.surface === surface ? "controls" : "inside";
+    return takePanelPicture(panel.current, scope);
+  }
+  componentDidUpdate(_previous, _state, picture) {
+    if (picture) playPanelChange(picture);
+  }
+  render() {
+    return this.props.children;
+  }
+};
+
 // src/components/MovePanel.tsx
 import { jsx as jsx15, jsxs as jsxs12 } from "react/jsx-runtime";
 var PAD_ROWS = 4;
@@ -9706,6 +9921,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const roomPage = roomPages[Math.min(roomTrack, Math.max(0, roomPages.length - 1))];
   const page = settingsPanel ? buildModMovePage(settingsPanel, modLayout) : roomPage ?? pages[Math.min(track, Math.max(0, pages.length - 1))];
   const pageId = page?.panel.id;
+  const motionSurface = settingsPanel ? "mod" : settingsOpen ? "room" : "app";
+  const motionPage = settingsPanel ? settingsPanel.id : settingsOpen ? String(roomTrack) : String(track);
   useSyncExternalStore3(MovePadListStore.subscribe, MovePadListStore.getVersion, () => 0);
   const padListView = MovePadListStore.getView();
   useEffect12(() => {
@@ -10463,7 +10680,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       /* @__PURE__ */ jsx15("span", { className: "tweakers-move-volume-value", children: boldColons(volumeReading ?? volume.label ?? "") })
     ] })
   ] });
-  const content = /* @__PURE__ */ jsx15("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: /* @__PURE__ */ jsxs12("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-settings": settingsOpen || void 0, "data-overlay": padListView || explorationOpen || composition || audioWave != null || roomWave || color || presetSave ? true : void 0, children: [
+  const content = /* @__PURE__ */ jsx15("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: /* @__PURE__ */ jsxs12("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-settings": settingsOpen || void 0, "data-move-motion-key": `${motionSurface}:${motionPage}|${pages.map((pg) => pg.panel.id).join(" ")}`, "data-overlay": padListView || explorationOpen || composition || audioWave != null || roomWave || color || presetSave ? true : void 0, children: [
     !explorationOpen && colorMeta && /* @__PURE__ */ jsx15(MoveColorDisplay, { panelId: page.panel.id, meta: colorMeta, anchor: panelRef, theme }),
     /* @__PURE__ */ jsx15(PresetExploration, {}),
     presetSave && /* @__PURE__ */ jsx15(MovePresetSaveInput, { suggested: presetSave.suggested }),
@@ -11934,7 +12151,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       }
     )
   ] }) });
-  return dock === "flow" ? content : createPortal3(content, document.body);
+  const moving = /* @__PURE__ */ jsx15(MovePanelMotion, { surface: motionSurface, page: motionPage, panel: panelRef, children: content });
+  return dock === "flow" ? moving : createPortal3(moving, document.body);
 }
 function previewPathData(points) {
   if (points.length < 2) return "";
@@ -12657,79 +12875,6 @@ import { useEffect as useEffect15, useLayoutEffect as useLayoutEffect4, useRef a
 
 // src/move-views.ts
 import { flushSync } from "react-dom";
-
-// src/move-view-core.ts
-var MOVE_VIEW_MOTIONS = ["forward", "back", "open", "close", "swap"];
-var MOVE_VIEW_PRESENTATION = {
-  /** ms, both layers, start to settle */
-  duration: 1e3,
-  /** where the arriving view grows up from */
-  enterScale: 0.95,
-  /** where the leaving view grows out to */
-  exitScale: 1.05,
-  /** the arriving view's light below which a swap goes unseen */
-  quietLight: 0.1
-};
-var MOVE_VIEW_REDUCED = { duration: 180 };
-var MOVE_VIEW_WAIT = {
-  /** Work that lands inside this never shows a wait — under a fifth of a
-   *  second still reads as the press answering. */
-  delay: 200,
-  /** A wait that came into sight stays this long after it has arrived, so
-   *  it is read rather than glimpsed. */
-  hold: 500,
-  /** One step of the wait's eight-light sweep; eight of them are one pass. */
-  sweepStep: 70
-};
-function expoInOut(x) {
-  if (x <= 0) return 0;
-  if (x >= 1) return 1;
-  return x < 0.5 ? 2 ** (20 * x - 10) / 2 : (2 - 2 ** (-20 * x + 10)) / 2;
-}
-function linearEasing(curve, samples = 96) {
-  const points = [];
-  for (let i = 0; i <= samples; i++) points.push(String(Math.round(curve(i / samples) * 1e4) / 1e4));
-  return `linear(${points.join(", ")})`;
-}
-var MOVE_VIEW_EXPO_BEZIER = "cubic-bezier(0.87, 0, 0.13, 1)";
-function reaches(curve, light) {
-  let lo = 0;
-  let hi = 1;
-  for (let i = 0; i < 30; i++) {
-    const mid = (lo + hi) / 2;
-    if (curve(mid) < light) lo = mid;
-    else hi = mid;
-  }
-  return hi;
-}
-var EXPO_EASING = linearEasing(expoInOut);
-var EXPO_QUIET = Math.round(reaches(expoInOut, MOVE_VIEW_PRESENTATION.quietLight) * MOVE_VIEW_PRESENTATION.duration);
-function moveViewChoreography(_change, reduced = false) {
-  if (reduced) {
-    const { duration: duration2 } = MOVE_VIEW_REDUCED;
-    const tween2 = (from, to) => ({ from, to, duration: duration2, delay: 0, easing: "linear" });
-    return {
-      leaving: { fade: tween2(1, 0) },
-      arriving: { fade: tween2(0, 1) },
-      duration: duration2,
-      quiet: Math.round(duration2 * MOVE_VIEW_PRESENTATION.quietLight)
-    };
-  }
-  const { duration, enterScale, exitScale } = MOVE_VIEW_PRESENTATION;
-  const tween = (from, to) => ({ from, to, duration, delay: 0, easing: EXPO_EASING });
-  return {
-    leaving: { fade: tween(1, 0), move: tween("scale(1)", `scale(${exitScale})`) },
-    arriving: { fade: tween(0, 1), move: tween(`scale(${enterScale})`, "scale(1)") },
-    duration,
-    quiet: EXPO_QUIET
-  };
-}
-function moveViewHoldRemaining(shownAt, now, choreography, hold = MOVE_VIEW_WAIT.hold) {
-  if (shownAt === null || now - shownAt < choreography.quiet) return 0;
-  return Math.max(0, shownAt + choreography.duration + hold - now);
-}
-
-// src/move-views.ts
 var MOVE_VIEW_STAGE_NAME = "tweakers-move-view";
 var MOVE_VIEW_PANEL_NAME = "tweakers-move-view-panel";
 var MOVE_VIEW_CHANGE_ATTR = "data-tweakers-move-view";
@@ -12747,7 +12892,7 @@ function setState(next) {
   state2 = next;
   emit2();
 }
-var reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+var reducedMotion2 = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 function play(root, layer, pseudoElement) {
   const { fade, move } = layer;
   const together = move && move.duration === fade.duration && move.delay === fade.delay && move.easing === fade.easing;
@@ -12767,8 +12912,12 @@ function play(root, layer, pseudoElement) {
   if (move) run([{ transform: move.from }, { transform: move.to }], move);
 }
 var playing = null;
-var VIEWPORT_SHEET = '.tweakers-move[data-dock="viewport"]';
-var SHEET_ATTR = "data-tweakers-move-view-sheet";
+var PANEL = ".tweakers-move[data-dock]";
+var PANEL_ATTR = "data-tweakers-move-view-panel";
+function panelKey(doc) {
+  const panels = doc.querySelectorAll(PANEL);
+  return panels.length === 1 ? panels[0].getAttribute("data-move-motion-key") ?? "" : null;
+}
 function runUpdates(updates) {
   flushSync(() => {
     for (const update of updates) {
@@ -12783,18 +12932,23 @@ function runUpdates(updates) {
 var animatable = (doc) => !!doc?.startViewTransition && stages > 0 && doc.visibilityState !== "hidden";
 function startChange(doc, change, updates) {
   const root = doc.documentElement;
-  const plan = moveViewChoreography(change, reducedMotion());
-  const sheetBefore = doc.querySelectorAll(VIEWPORT_SHEET).length === 1;
-  let sheetAfter = sheetBefore;
+  const reduced = reducedMotion2();
+  const plan = moveViewChoreography(change, reduced);
+  const panelPlan = movePanelChoreography(reduced);
+  const before = panelKey(doc);
+  let panelMotion = null;
   root.setAttribute(MOVE_VIEW_CHANGE_ATTR, change);
-  root.toggleAttribute(SHEET_ATTR, sheetBefore);
+  root.toggleAttribute(PANEL_ATTR, before !== null);
   const entry = { queue: [...updates], movingAt: null, quiet: plan.quiet, next: null, updated: Promise.resolve() };
   const transition = doc.startViewTransition(() => {
     const queue = entry.queue ?? [];
     entry.queue = null;
     runUpdates(queue);
-    sheetAfter = doc.querySelectorAll(VIEWPORT_SHEET).length === 1;
-    if (sheetAfter) root.setAttribute(SHEET_ATTR, "");
+    const after = panelKey(doc);
+    panelMotion = before !== null && after !== null ? before === after ? "hold" : "pair" : before !== null ? "exit" : after !== null ? "enter" : null;
+    if (panelMotion) root.setAttribute(PANEL_ATTR, panelMotion);
+    else root.removeAttribute(PANEL_ATTR);
+    if (panelMotion && panelMotion !== "hold") entry.quiet = Math.min(plan.quiet, panelPlan.quiet);
   });
   entry.updated = transition.updateCallbackDone.catch(() => {
   });
@@ -12803,8 +12957,8 @@ function startChange(doc, change, updates) {
     entry.movingAt = performance.now();
     play(root, plan.leaving, `::view-transition-old(${MOVE_VIEW_STAGE_NAME})`);
     play(root, plan.arriving, `::view-transition-new(${MOVE_VIEW_STAGE_NAME})`);
-    if (sheetBefore && !sheetAfter) play(root, plan.leaving, `::view-transition-old(${MOVE_VIEW_PANEL_NAME})`);
-    if (!sheetBefore && sheetAfter) play(root, plan.arriving, `::view-transition-new(${MOVE_VIEW_PANEL_NAME})`);
+    if (panelMotion === "exit" || panelMotion === "pair") play(root, panelPlan.leaving, `::view-transition-old(${MOVE_VIEW_PANEL_NAME})`);
+    if (panelMotion === "enter" || panelMotion === "pair") play(root, panelPlan.arriving, `::view-transition-new(${MOVE_VIEW_PANEL_NAME})`);
   }).catch(() => {
   });
   transition.finished.catch(() => {
@@ -12812,7 +12966,7 @@ function startChange(doc, change, updates) {
     if (playing !== entry) return;
     playing = null;
     root.removeAttribute(MOVE_VIEW_CHANGE_ATTR);
-    root.removeAttribute(SHEET_ATTR);
+    root.removeAttribute(PANEL_ATTR);
     const next = entry.next;
     if (!next) return;
     if (animatable(doc)) void startChange(doc, next.change, next.updates).then(next.resolve);
@@ -12959,7 +13113,7 @@ var MoveViews = {
       };
       const finish = (landed) => {
         if (running !== task) return;
-        const hold = moveViewHoldRemaining(task.shownAt, timers.now(), moveViewChoreography("wait", reducedMotion()));
+        const hold = moveViewHoldRemaining(task.shownAt, timers.now(), moveViewChoreography("wait", reducedMotion2()));
         const end = () => {
           if (running !== task) return;
           running = null;

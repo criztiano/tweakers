@@ -4230,7 +4230,7 @@ function PresetArtwork({ values }) {
 function PresetExploration() {
   (0, import_react4.useSyncExternalStore)(PresetExplorationStore.subscribe, PresetExplorationStore.getVersion, () => 0);
   const state3 = PresetExplorationStore.getState();
-  const reducedMotion2 = (0, import_react5.useReducedMotion)();
+  const reducedMotion3 = (0, import_react5.useReducedMotion)();
   const shell = (0, import_react4.useRef)(null);
   const [availableHeight, setAvailableHeight] = (0, import_react4.useState)(null);
   useBrowserLayoutEffect(() => {
@@ -4252,10 +4252,10 @@ function PresetExploration() {
       className: "tweakers-exploration",
       style: availableHeight == null ? void 0 : { "--explore-available-height": `${availableHeight}px` },
       "aria-label": "Preset exploration",
-      initial: { opacity: 0, y: reducedMotion2 ? 0 : 12, x: "-50%" },
+      initial: { opacity: 0, y: reducedMotion3 ? 0 : 12, x: "-50%" },
       animate: { opacity: 1, y: 0, x: "-50%" },
-      exit: { opacity: 0, y: reducedMotion2 ? 0 : 6, x: "-50%" },
-      transition: reducedMotion2 ? { duration: 0 } : SHELL_MOTION,
+      exit: { opacity: 0, y: reducedMotion3 ? 0 : 6, x: "-50%" },
+      transition: reducedMotion3 ? { duration: 0 } : SHELL_MOTION,
       onKeyDown: (event) => {
         event.stopPropagation();
         if (event.key === "Escape") {
@@ -4709,7 +4709,7 @@ function XYSurface({ label, x, y, disabled, onChange }) {
 }
 
 // src/components/MovePanel.tsx
-var import_react13 = require("react");
+var import_react14 = require("react");
 var import_react_dom3 = require("react-dom");
 var import_TweakStore13 = require("tweakers/store");
 var import_ModulationStore2 = require("tweakers/modulation-store");
@@ -9905,6 +9905,221 @@ var MovePresetStoreClass = class {
 };
 var MovePresetStore = new MovePresetStoreClass();
 
+// src/components/MovePanelMotion.tsx
+var import_react13 = require("react");
+
+// src/move-view-core.ts
+var MOVE_VIEW_MOTIONS = ["forward", "back", "open", "close", "swap"];
+var MOVE_VIEW_PRESENTATION = {
+  /** ms, both layers, start to settle */
+  duration: 1e3,
+  /** where the arriving view grows up from */
+  enterScale: 0.95,
+  /** where the leaving view grows out to */
+  exitScale: 1.05,
+  /** the arriving view's light below which a swap goes unseen */
+  quietLight: 0.1
+};
+var MOVE_VIEW_REDUCED = { duration: 180 };
+var MOVE_PANEL_PRESENTATION = { duration: 350, reduced: 120 };
+var MOVE_VIEW_WAIT = {
+  /** Work that lands inside this never shows a wait — under a fifth of a
+   *  second still reads as the press answering. */
+  delay: 200,
+  /** A wait that came into sight stays this long after it has arrived, so
+   *  it is read rather than glimpsed. */
+  hold: 500,
+  /** One step of the wait's eight-light sweep; eight of them are one pass. */
+  sweepStep: 70
+};
+function expoInOut(x) {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  return x < 0.5 ? 2 ** (20 * x - 10) / 2 : (2 - 2 ** (-20 * x + 10)) / 2;
+}
+function linearEasing(curve, samples = 96) {
+  const points = [];
+  for (let i = 0; i <= samples; i++) points.push(String(Math.round(curve(i / samples) * 1e4) / 1e4));
+  return `linear(${points.join(", ")})`;
+}
+var MOVE_VIEW_EXPO_BEZIER = "cubic-bezier(0.87, 0, 0.13, 1)";
+function reaches(curve, light) {
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 30; i++) {
+    const mid = (lo + hi) / 2;
+    if (curve(mid) < light) lo = mid;
+    else hi = mid;
+  }
+  return hi;
+}
+var EXPO_EASING = linearEasing(expoInOut);
+var EXPO_QUIET_SHARE = reaches(expoInOut, MOVE_VIEW_PRESENTATION.quietLight);
+function zoomThrough(duration, reduced) {
+  if (reduced !== null) {
+    const tween2 = (from, to) => ({ from, to, duration: reduced, delay: 0, easing: "linear" });
+    return {
+      leaving: { fade: tween2(1, 0) },
+      arriving: { fade: tween2(0, 1) },
+      duration: reduced,
+      quiet: Math.round(reduced * MOVE_VIEW_PRESENTATION.quietLight)
+    };
+  }
+  const { enterScale, exitScale } = MOVE_VIEW_PRESENTATION;
+  const tween = (from, to) => ({ from, to, duration, delay: 0, easing: EXPO_EASING });
+  return {
+    leaving: { fade: tween(1, 0), move: tween("scale(1)", `scale(${exitScale})`) },
+    arriving: { fade: tween(0, 1), move: tween(`scale(${enterScale})`, "scale(1)") },
+    duration,
+    quiet: Math.round(EXPO_QUIET_SHARE * duration)
+  };
+}
+function moveViewChoreography(_change, reduced = false) {
+  return zoomThrough(MOVE_VIEW_PRESENTATION.duration, reduced ? MOVE_VIEW_REDUCED.duration : null);
+}
+function movePanelChoreography(reduced = false) {
+  return zoomThrough(MOVE_PANEL_PRESENTATION.duration, reduced ? MOVE_PANEL_PRESENTATION.reduced : null);
+}
+var MOVE_PANEL_ARRIVE_EASING = linearEasing((x) => {
+  const e = expoInOut(x);
+  return 1 - (1 - e) * (1 - e);
+});
+function moveViewHoldRemaining(shownAt, now, choreography, hold = MOVE_VIEW_WAIT.hold) {
+  if (shownAt === null || now - shownAt < choreography.quiet) return 0;
+  return Math.max(0, shownAt + choreography.duration + hold - now);
+}
+
+// src/move-panel-motion.ts
+var TARGET = {
+  controls: ".tweakers-move-controls",
+  inside: ".tweakers-move-inner"
+};
+var GHOST_ATTR = "data-move-panel-ghost";
+var MOVE_PANEL_MOTION_ATTR = "data-move-panel-motion";
+var ANIMATION_ID = "tweakers-move-panel-motion";
+var reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+function takePanelPicture(panel, scope) {
+  if (!panel || typeof panel.animate !== "function") return null;
+  const target = panel.querySelector(TARGET[scope]);
+  const box = target?.offsetParent;
+  if (!target || !box) return null;
+  const rect = target.getBoundingClientRect();
+  if (!rect.width || !rect.height) return null;
+  const boxRect = box.getBoundingClientRect();
+  const look = getComputedStyle(target);
+  const ghost = target.cloneNode(true);
+  ghost.setAttribute(GHOST_ATTR, "");
+  ghost.setAttribute("aria-hidden", "true");
+  ghost.inert = true;
+  const canvases = target.querySelectorAll("canvas");
+  ghost.querySelectorAll("canvas").forEach((copy, i) => {
+    const source = canvases[i];
+    if (!source?.width || !source.height) return;
+    try {
+      copy.getContext("2d")?.drawImage(source, 0, 0);
+    } catch {
+    }
+  });
+  if (scope === "inside") {
+    const vars = getComputedStyle(panel);
+    for (let i = 0; i < vars.length; i++) {
+      const name = vars[i];
+      if (name.startsWith("--move-")) ghost.style.setProperty(name, vars.getPropertyValue(name));
+    }
+  }
+  const scrolls = [];
+  const copies = ghost.querySelectorAll("*");
+  target.querySelectorAll("*").forEach((el, index) => {
+    if (el.scrollTop || el.scrollLeft) scrolls.push({ el: copies[index], top: el.scrollTop, left: el.scrollLeft });
+  });
+  ghost.querySelectorAll(`[${GHOST_ATTR}]`).forEach((stale) => stale.remove());
+  panel.setAttribute(MOVE_PANEL_MOTION_ATTR, "");
+  return {
+    scope,
+    panel,
+    ghost,
+    left: rect.left - boxRect.left - box.clientLeft + box.scrollLeft,
+    top: rect.top - boxRect.top - box.clientTop + box.scrollTop,
+    width: rect.width,
+    height: rect.height,
+    opacity: Number(look.opacity) || 0,
+    transform: look.transform === "none" ? "scale(1)" : look.transform,
+    scrolls
+  };
+}
+function animate(el, frames, duration, easing, fallback, fill) {
+  const timing = { duration, fill, id: ANIMATION_ID };
+  try {
+    return el.animate(frames, { ...timing, easing });
+  } catch {
+    return el.animate(frames, { ...timing, easing: fallback });
+  }
+}
+var settleTimers = /* @__PURE__ */ new WeakMap();
+function playPanelChange(picture) {
+  const { panel, ghost, scope } = picture;
+  const live = panel.querySelector(`${TARGET[scope]}:not([${GHOST_ATTR}])`);
+  const parent = live?.parentElement;
+  if (!live || !parent || !panel.isConnected) {
+    panel.removeAttribute(MOVE_PANEL_MOTION_ATTR);
+    return;
+  }
+  const plan = movePanelChoreography(reducedMotion());
+  const older = Array.from(parent.querySelectorAll(`:scope > [${GHOST_ATTR}]`));
+  for (const stale of older.slice(0, -1)) stale.remove();
+  Object.assign(ghost.style, {
+    position: "absolute",
+    left: `${picture.left}px`,
+    top: `${picture.top}px`,
+    width: `${picture.width}px`,
+    height: `${picture.height}px`,
+    margin: "0",
+    pointerEvents: "none",
+    transformOrigin: "50% 50%",
+    zIndex: "1"
+  });
+  parent.appendChild(ghost);
+  for (const { el, top, left } of picture.scrolls) {
+    el.scrollTop = top;
+    el.scrollLeft = left;
+  }
+  const { leaving, arriving } = plan;
+  const out = animate(
+    ghost,
+    leaving.move ? [{ opacity: picture.opacity, transform: picture.transform }, { opacity: 0, transform: leaving.move.to }] : [{ opacity: picture.opacity }, { opacity: 0 }],
+    leaving.fade.duration,
+    leaving.fade.easing,
+    MOVE_VIEW_EXPO_BEZIER,
+    "forwards"
+  );
+  out.finished.then(() => ghost.remove(), () => ghost.remove());
+  for (const running2 of live.getAnimations()) if (running2.id === ANIMATION_ID) running2.cancel();
+  if (arriving.move) {
+    animate(live, [{ transform: arriving.move.from }, { transform: arriving.move.to }], arriving.move.duration, arriving.move.easing, MOVE_VIEW_EXPO_BEZIER, "none");
+    animate(live, [{ opacity: 0 }, { opacity: 1 }], arriving.fade.duration, MOVE_PANEL_ARRIVE_EASING, MOVE_VIEW_EXPO_BEZIER, "none");
+  } else {
+    animate(live, [{ opacity: 0 }, { opacity: 1 }], arriving.fade.duration, "linear", "linear", "none");
+  }
+  clearTimeout(settleTimers.get(panel));
+  settleTimers.set(panel, setTimeout(() => panel.removeAttribute(MOVE_PANEL_MOTION_ATTR), plan.duration));
+}
+
+// src/components/MovePanelMotion.tsx
+var MovePanelMotion = class extends import_react13.Component {
+  getSnapshotBeforeUpdate(previous) {
+    const { surface, page, panel } = this.props;
+    if (previous.surface === surface && previous.page === page) return null;
+    const scope = previous.surface === surface ? "controls" : "inside";
+    return takePanelPicture(panel.current, scope);
+  }
+  componentDidUpdate(_previous, _state, picture) {
+    if (picture) playPanelChange(picture);
+  }
+  render() {
+    return this.props.children;
+  }
+};
+
 // src/components/MovePanel.tsx
 var import_jsx_runtime15 = require("react/jsx-runtime");
 var PAD_ROWS = 4;
@@ -10043,43 +10258,43 @@ var MOVE_STRIP_EVENT = "move-tweakers:strip";
 var MOVE_SETTINGS_EVENT = "move-tweakers:settings";
 function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only, dock = "viewport", scroll = false, focused = false, headerStart, settings: settings2, functionChips = "clock" }) {
   if (!productionEnabled) return null;
-  const [panels, setPanels] = (0, import_react13.useState)([]);
-  const [track, setTrack] = (0, import_react13.useState)(0);
-  const [dragPath, setDragPath] = (0, import_react13.useState)(null);
-  const [bendHeld, setBendHeld] = (0, import_react13.useState)(null);
-  const bendRef = (0, import_react13.useRef)(null);
-  const [waveHeld, setWaveHeld] = (0, import_react13.useState)(null);
-  const waveRef = (0, import_react13.useRef)(null);
-  const [handTouch, setHandTouch] = (0, import_react13.useState)({});
-  const [curvePoint, setCurvePoint] = (0, import_react13.useState)({});
-  const [rampStop, setRampStop] = (0, import_react13.useState)({});
-  const rampGesture = (0, import_react13.useRef)(null);
-  const [hwHeld, setHwHeld] = (0, import_react13.useState)({});
-  const [hwLatched, setHwLatched] = (0, import_react13.useState)({});
-  const [appHeld, setAppHeld] = (0, import_react13.useState)(null);
-  const [held, setHeld] = (0, import_react13.useState)(null);
-  const [latched, setLatched] = (0, import_react13.useState)({});
-  const holdStart = (0, import_react13.useRef)(0);
-  const [mounted, setMounted] = (0, import_react13.useState)(false);
-  const pageTabsId = (0, import_react13.useId)();
-  const panelRef = (0, import_react13.useRef)(null);
-  const [dotDrag, setDotDrag] = (0, import_react13.useState)(null);
-  const fineRef = (0, import_react13.useRef)(null);
-  const faceDrag = (0, import_react13.useRef)(null);
-  const rangeHandleRef = (0, import_react13.useRef)("min");
-  const filterHandRef = (0, import_react13.useRef)("cutoff");
-  const [volume, setVolume] = (0, import_react13.useState)(() => MoveVolumeDisplay.get());
-  const waveClaimed = (0, import_react13.useSyncExternalStore)(
-    (0, import_react13.useCallback)((cb) => MoveWaveformStore.subscribe(cb), []),
+  const [panels, setPanels] = (0, import_react14.useState)([]);
+  const [track, setTrack] = (0, import_react14.useState)(0);
+  const [dragPath, setDragPath] = (0, import_react14.useState)(null);
+  const [bendHeld, setBendHeld] = (0, import_react14.useState)(null);
+  const bendRef = (0, import_react14.useRef)(null);
+  const [waveHeld, setWaveHeld] = (0, import_react14.useState)(null);
+  const waveRef = (0, import_react14.useRef)(null);
+  const [handTouch, setHandTouch] = (0, import_react14.useState)({});
+  const [curvePoint, setCurvePoint] = (0, import_react14.useState)({});
+  const [rampStop, setRampStop] = (0, import_react14.useState)({});
+  const rampGesture = (0, import_react14.useRef)(null);
+  const [hwHeld, setHwHeld] = (0, import_react14.useState)({});
+  const [hwLatched, setHwLatched] = (0, import_react14.useState)({});
+  const [appHeld, setAppHeld] = (0, import_react14.useState)(null);
+  const [held, setHeld] = (0, import_react14.useState)(null);
+  const [latched, setLatched] = (0, import_react14.useState)({});
+  const holdStart = (0, import_react14.useRef)(0);
+  const [mounted, setMounted] = (0, import_react14.useState)(false);
+  const pageTabsId = (0, import_react14.useId)();
+  const panelRef = (0, import_react14.useRef)(null);
+  const [dotDrag, setDotDrag] = (0, import_react14.useState)(null);
+  const fineRef = (0, import_react14.useRef)(null);
+  const faceDrag = (0, import_react14.useRef)(null);
+  const rangeHandleRef = (0, import_react14.useRef)("min");
+  const filterHandRef = (0, import_react14.useRef)("cutoff");
+  const [volume, setVolume] = (0, import_react14.useState)(() => MoveVolumeDisplay.get());
+  const waveClaimed = (0, import_react14.useSyncExternalStore)(
+    (0, import_react14.useCallback)((cb) => MoveWaveformStore.subscribe(cb), []),
     () => MoveWaveformStore.isRegistered(),
     () => false
   );
-  const [liveValue, setLiveValue] = (0, import_react13.useState)(null);
-  (0, import_react13.useEffect)(() => {
+  const [liveValue, setLiveValue] = (0, import_react14.useState)(null);
+  (0, import_react14.useEffect)(() => {
     setVolume(MoveVolumeDisplay.get());
     return MoveVolumeDisplay.subscribe(() => setVolume(MoveVolumeDisplay.get()));
   }, []);
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     const poll = volume?.getValue;
     if (!poll) {
       setLiveValue(null);
@@ -10092,13 +10307,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     return () => cancelAnimationFrame(raf);
   }, [volume]);
   const onlyKey = only === void 0 ? void 0 : JSON.stringify(Array.isArray(only) ? only : [only]);
-  const read2 = (0, import_react13.useCallback)(() => {
+  const read2 = (0, import_react14.useCallback)(() => {
     if (onlyKey === void 0) return import_TweakStore13.TweakStore.selectPanels();
     const requested = JSON.parse(onlyKey);
     const registered = import_TweakStore13.TweakStore.getPanels("panel");
     return requested.map((key) => registered.find((panel) => panel.id === key || panel.name === key)).filter((panel) => panel !== void 0);
   }, [onlyKey]);
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     setMounted(true);
     MoveWaveformStore.ensureSettings();
     setPanels(read2());
@@ -10109,8 +10324,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const waveRoom = import_TweakStore13.TweakStore.getPanel(MOVE_WAVEFORM_PANEL);
   const settingsRooms = waveRoom ? [...namedRooms, waveRoom] : namedRooms;
   const roomIds = settingsRooms.map((p) => p.id);
-  const settingsOpen = (0, import_react13.useSyncExternalStore)(
-    (0, import_react13.useCallback)((cb) => MoveSettingsView.subscribe(cb), []),
+  const settingsOpen = (0, import_react14.useSyncExternalStore)(
+    (0, import_react14.useCallback)((cb) => MoveSettingsView.subscribe(cb), []),
     () => MoveSettingsView.isOpen(),
     () => false
   ) && settingsRooms.length > 0;
@@ -10120,18 +10335,20 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const modSettings = settingsOpen ? null : underModSettings;
   const settingsPanel = modSettings ? import_TweakStore13.TweakStore.getPanel(modSettings.panelId) : void 0;
   const modLayout = settingsPanel ? import_ModulationStore2.ModulationStore.getSettingsLayout() : null;
-  const [roomTrack, setRoomTrack] = (0, import_react13.useState)(0);
+  const [roomTrack, setRoomTrack] = (0, import_react14.useState)(0);
   const roomPages = settingsOpen ? scroll ? settingsRooms.slice(0, MOVE_TRACKS).map(buildMoveStrip) : buildMovePages(settingsRooms) : [];
   const roomPage = roomPages[Math.min(roomTrack, Math.max(0, roomPages.length - 1))];
   const page = settingsPanel ? buildModMovePage(settingsPanel, modLayout) : roomPage ?? pages[Math.min(track, Math.max(0, pages.length - 1))];
   const pageId = page?.panel.id;
-  (0, import_react13.useSyncExternalStore)(MovePadListStore.subscribe, MovePadListStore.getVersion, () => 0);
+  const motionSurface = settingsPanel ? "mod" : settingsOpen ? "room" : "app";
+  const motionPage = settingsPanel ? settingsPanel.id : settingsOpen ? String(roomTrack) : String(track);
+  (0, import_react14.useSyncExternalStore)(MovePadListStore.subscribe, MovePadListStore.getVersion, () => 0);
   const padListView = MovePadListStore.getView();
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     if (padListView && padListView.panelId !== pageId) MovePadListStore.close();
   }, [pageId, padListView]);
   const roomKey = roomIds.join("\0");
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     if (!roomKey) return;
     const detach = MoveFunctions.attach("set_overview", () => MoveSettingsView.toggle(), { label: "Settings" });
     return () => {
@@ -10139,7 +10356,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       MoveSettingsView.close();
     };
   }, [roomKey]);
-  (0, import_react13.useLayoutEffect)(() => {
+  (0, import_react14.useLayoutEffect)(() => {
     if (!settingsOpen) return;
     const wake = MoveFunctions.suspend(["set_overview"]);
     const releaseBack = MoveFunctions.push("back", () => MoveSettingsView.close(), { label: "Close", chip: false });
@@ -10150,7 +10367,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   }, [settingsOpen]);
   const regularPageId = underModSettings?.panelId ?? pages[Math.min(track, Math.max(0, pages.length - 1))]?.panel.id;
   const roomPageId = roomPage?.panel.id;
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     if (!roomKey || typeof window === "undefined") return;
     const ids2 = roomKey.split("\0");
     const announce = () => window.dispatchEvent(new CustomEvent(MOVE_SETTINGS_EVENT, {
@@ -10161,28 +10378,28 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     return () => clearInterval(timer);
   }, [roomKey, settingsOpen, regularPageId, roomPageId]);
   const stripMode = scroll && !settingsPanel && !!page;
-  const [offset, setOffset] = (0, import_react13.useState)(0);
+  const [offset, setOffset] = (0, import_react14.useState)(0);
   const stripOffset = stripMode ? clampStripOffset(page, offset) : 0;
-  const stripRef = (0, import_react13.useRef)({
+  const stripRef = (0, import_react14.useRef)({
     page: void 0,
     offset: 0,
     on: false
   });
   stripRef.current = { page, offset: stripOffset, on: stripMode };
-  const scrollSlots = (0, import_react13.useCallback)((delta) => {
+  const scrollSlots = (0, import_react14.useCallback)((delta) => {
     const { page: pg, offset: cur, on } = stripRef.current;
     if (!on || !pg || !delta) return;
     const next = stepStripOffset(pg, cur, delta);
     if (next !== cur) setOffset(next);
   }, []);
-  const scrollPage = (0, import_react13.useCallback)((dir) => {
+  const scrollPage = (0, import_react14.useCallback)((dir) => {
     const { page: pg, offset: cur, on } = stripRef.current;
     if (!on || !pg || !dir) return;
     const next = pageStripOffset(pg, cur, dir);
     if (next !== cur) setOffset(next);
   }, []);
-  (0, import_react13.useEffect)(() => setOffset(0), [pageId]);
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => setOffset(0), [pageId]);
+  (0, import_react14.useEffect)(() => {
     const onJog = (e) => {
       if (PresetExplorationStore.getState()) {
         e.preventDefault();
@@ -10197,7 +10414,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     window.addEventListener(MOVE_JOG_EVENT, onJog);
     return () => window.removeEventListener(MOVE_JOG_EVENT, onJog);
   }, [scrollSlots]);
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     if (!stripMode) return;
     const free = ["left", "right"].filter((name) => !MoveFunctions.list().includes(name));
     const off = free.map(
@@ -10207,8 +10424,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       for (const detach of off) detach();
     };
   }, [stripMode, scrollPage]);
-  const wheelRest = (0, import_react13.useRef)(0);
-  (0, import_react13.useEffect)(() => {
+  const wheelRest = (0, import_react14.useRef)(0);
+  (0, import_react14.useEffect)(() => {
     const el = panelRef.current;
     if (!el) return;
     const onWheel = (e) => {
@@ -10236,7 +10453,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   }, [scrollSlots, mounted, stripMode]);
-  const announceStrip = (0, import_react13.useCallback)(() => {
+  const announceStrip = (0, import_react14.useCallback)(() => {
     const { page: pg, offset: at, on } = stripRef.current;
     if (!on || !pg) return;
     const pads = stripWindowPads(pg, at);
@@ -10259,10 +10476,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       }
     }));
   }, []);
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     announceStrip();
   }, [announceStrip, stripMode, pageId, stripOffset]);
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     let last = 0;
     const onPage = () => {
       const now = Date.now();
@@ -10273,22 +10490,22 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     window.addEventListener(MOVE_PAGE_EVENT, onPage);
     return () => window.removeEventListener(MOVE_PAGE_EVENT, onPage);
   }, [announceStrip]);
-  (0, import_react13.useSyncExternalStore)(MoveColorStore.subscribe, MoveColorStore.getVersion, () => 0);
+  (0, import_react14.useSyncExternalStore)(MoveColorStore.subscribe, MoveColorStore.getVersion, () => 0);
   const colorView = MoveColorStore.getView();
   const gradientEditable = (meta) => meta.type === "gradient" && pageId !== void 0 && (MoveColorStore.gradient(pageId, meta.path)?.stops.length ?? 0) <= MOVE_GRADIENT_STOPS;
   const colorMeta = colorView?.panelId === pageId && page ? [...page.dials, ...page.topValues ?? [], ...page.values, ...page.actionValues ?? []].find((meta) => meta && meta.path === colorView.path && (meta.type === "color" || gradientEditable(meta))) : void 0;
   const color = colorMeta && pageId ? MoveColorStore.read(pageId, colorMeta.path) : null;
   const gradientMeta = colorMeta?.type === "gradient" ? colorMeta : null;
   const gradientValue = gradientMeta && pageId ? MoveColorStore.gradient(pageId, gradientMeta.path) : null;
-  (0, import_react13.useEffect)(() => () => {
+  (0, import_react14.useEffect)(() => () => {
     if (MoveColorStore.getView()?.panelId === pageId) MoveColorStore.close();
   }, [pageId]);
   const colorOpenPanel = colorMeta && colorView ? colorView.panelId : null;
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     if (!colorOpenPanel) return;
     return MoveFunctions.push("menu", () => MoveColorStore.togglePicker(), { label: "palettes", chip: false });
   }, [colorOpenPanel]);
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     if (!colorOpenPanel) return;
     return MoveFunctions.push("copy", ({ shift, hold }) => {
       const view = MoveColorStore.getView();
@@ -10300,11 +10517,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     }, { label: "copy color", chip: false });
   }, [colorOpenPanel]);
   const paletteScreen = colorMeta ? MoveColorStore.isPickerOpen() : false;
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     if (!paletteScreen) return;
     return MoveFunctions.push("back", () => MoveColorStore.closePicker(), { label: "back", chip: false });
   }, [paletteScreen]);
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     const onJog = (e) => {
       if (e.defaultPrevented || MoveSearchStore.isOpen() || !palettePickerOpen()) return;
       e.preventDefault();
@@ -10322,14 +10539,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       window.removeEventListener(MOVE_JOG_CLICK_EVENT, onJogClick);
     };
   }, []);
-  (0, import_react13.useSyncExternalStore)(MovePresetStore.subscribe, MovePresetStore.getVersion, () => 0);
-  (0, import_react13.useSyncExternalStore)(PresetExplorationStore.subscribe, PresetExplorationStore.getVersion, () => 0);
+  (0, import_react14.useSyncExternalStore)(MovePresetStore.subscribe, MovePresetStore.getVersion, () => 0);
+  (0, import_react14.useSyncExternalStore)(PresetExplorationStore.subscribe, PresetExplorationStore.getVersion, () => 0);
   const explorationOpen = PresetExplorationStore.getState()?.panelId === pageId;
   const presetView = MovePresetStore.getView();
   const presetSaving = MovePresetStore.getSaving();
   const presetScreen = presetView?.panelId === pageId ? presetView : null;
   const presetSave = presetSaving?.panelId === pageId ? presetSaving : null;
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     if (!pageId) return;
     return MoveFunctions.attach("menu", ({ shift, hold }) => {
       if (shift) MovePresetStore.beginSave(pageId);
@@ -10339,7 +10556,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       } else MovePresetStore.toggle(pageId);
     }, { label: "presets", chip: false });
   }, [pageId]);
-  (0, import_react13.useEffect)(() => () => {
+  (0, import_react14.useEffect)(() => () => {
     if (MovePresetStore.getView()?.panelId === pageId) MovePresetStore.cancel();
     if (MovePresetStore.getSaving()?.panelId === pageId) MovePresetStore.cancelSave();
     if (PresetExplorationStore.getState()?.panelId === pageId) {
@@ -10348,11 +10565,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     }
   }, [pageId]);
   const presetOpenPanel = presetScreen && presetScreen.phase !== "closing" ? presetScreen.panelId : null;
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     if (!presetOpenPanel) return;
     return MoveFunctions.push("back", () => MovePresetStore.cancel(), { label: "revert", chip: false });
   }, [presetOpenPanel]);
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     const openView = () => {
       const view = MovePresetStore.getView();
       return view && view.phase !== "closing" ? view : null;
@@ -10395,10 +10612,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       window.removeEventListener(MOVE_MUTE_EVENT, onMute);
     };
   }, []);
-  (0, import_react13.useSyncExternalStore)(MoveSearchStore.subscribe, MoveSearchStore.getVersion, () => 0);
+  (0, import_react14.useSyncExternalStore)(MoveSearchStore.subscribe, MoveSearchStore.getVersion, () => 0);
   const search = MoveSearchStore.getView();
-  const screenShown = (0, import_react13.useRef)(false);
-  (0, import_react13.useEffect)(() => {
+  const screenShown = (0, import_react14.useRef)(false);
+  (0, import_react14.useEffect)(() => {
     const onSearch = (e) => {
       if (e.defaultPrevented) return;
       if (MoveSearchStore.isOpen()) {
@@ -10414,7 +10631,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     window.addEventListener(MOVE_SEARCH_EVENT, onSearch);
     return () => window.removeEventListener(MOVE_SEARCH_EVENT, onSearch);
   }, []);
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     const onJog = (e) => {
       const view = MoveSearchStore.getView();
       if (!view) return;
@@ -10435,7 +10652,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     };
   }, []);
   const searchOpen = !!search;
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     if (!searchOpen) return;
     return MoveFunctions.push("back", () => MoveSearchStore.close(), { label: "end search", chip: false });
   }, [searchOpen]);
@@ -10445,28 +10662,28 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const roomWave = settingsOpen && page?.panel.id === MOVE_WAVEFORM_PANEL;
   const clipIndex = composition ? Math.min(composition.segments.length - 1, Math.max(0, Math.round(Number(modSlot.params.selected) || 0))) : 0;
   const previewPath = modLayout?.dials.find((d) => d.preview)?.path ?? null;
-  const values = (0, import_react13.useSyncExternalStore)(
-    (0, import_react13.useCallback)((cb) => pageId ? import_TweakStore13.TweakStore.subscribe(pageId, cb) : () => {
+  const values = (0, import_react14.useSyncExternalStore)(
+    (0, import_react14.useCallback)((cb) => pageId ? import_TweakStore13.TweakStore.subscribe(pageId, cb) : () => {
     }, [pageId]),
     () => pageId ? import_TweakStore13.TweakStore.getValues(pageId) : void 0,
     () => void 0
   );
-  const [, bumpControlState] = (0, import_react13.useState)(0);
-  (0, import_react13.useEffect)(
+  const [, bumpControlState] = (0, import_react14.useState)(0);
+  (0, import_react14.useEffect)(
     () => pageId ? import_TweakStore13.TweakStore.subscribeControlState(pageId, () => bumpControlState((n) => n + 1)) : void 0,
     [pageId]
   );
-  (0, import_react13.useSyncExternalStore)(
-    (0, import_react13.useCallback)((cb) => import_ModulationStore2.ModulationStore.subscribe(cb), []),
+  (0, import_react14.useSyncExternalStore)(
+    (0, import_react14.useCallback)((cb) => import_ModulationStore2.ModulationStore.subscribe(cb), []),
     () => import_ModulationStore2.ModulationStore.getVersion(),
     () => 0
   );
-  const surface = (0, import_react13.useSyncExternalStore)(
-    (0, import_react13.useCallback)((cb) => MoveSurfaceStore.subscribe(cb), []),
+  const surface = (0, import_react14.useSyncExternalStore)(
+    (0, import_react14.useCallback)((cb) => MoveSurfaceStore.subscribe(cb), []),
     () => MoveSurfaceStore.getState(),
     () => MoveSurfaceStore.getState()
   );
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     const forPage = (detail, map) => detail && detail.pageId === pageId ? map ?? {} : {};
     const onTouch = (e) => {
       const d = e.detail;
@@ -10484,13 +10701,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       window.removeEventListener(MOVE_OVERRIDE_EVENT, onOverride);
     };
   }, [pageId]);
-  const pagesRef = (0, import_react13.useRef)(pages);
+  const pagesRef = (0, import_react14.useRef)(pages);
   pagesRef.current = pages;
-  const roomIdsRef = (0, import_react13.useRef)(roomIds);
+  const roomIdsRef = (0, import_react14.useRef)(roomIds);
   roomIdsRef.current = roomIds;
-  const sawSettings = (0, import_react13.useRef)(false);
-  const sawRoom = (0, import_react13.useRef)(false);
-  (0, import_react13.useEffect)(() => {
+  const sawSettings = (0, import_react14.useRef)(false);
+  const sawRoom = (0, import_react14.useRef)(false);
+  (0, import_react14.useEffect)(() => {
     const onPage = (e) => {
       const id = e.detail?.pageId;
       if (id === MOD_SETTINGS_PANEL) {
@@ -10519,7 +10736,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     window.addEventListener(MOVE_PAGE_EVENT, onPage);
     return () => window.removeEventListener(MOVE_PAGE_EVENT, onPage);
   }, []);
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     setHeld(null);
     setLatched({});
   }, [pageId]);
@@ -10528,7 +10745,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const screenSearch = searchTarget === "screen" && screen ? search : null;
   const presetSearch = searchTarget === "presets" && presetOpenPanel ? search : null;
   const paletteSearch = searchTarget === "palette" && paletteScreen ? search : null;
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     screenShown.current = !!screen;
     if (searchTarget && !screenSearch && !presetSearch && !paletteSearch) MoveSearchStore.close();
   });
@@ -10882,7 +11099,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("span", { className: "tweakers-move-volume-value", children: boldColons(volumeReading ?? volume.label ?? "") })
     ] })
   ] });
-  const content = /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-settings": settingsOpen || void 0, "data-overlay": padListView || explorationOpen || composition || audioWave != null || roomWave || color || presetSave ? true : void 0, children: [
+  const content = /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-settings": settingsOpen || void 0, "data-move-motion-key": `${motionSurface}:${motionPage}|${pages.map((pg) => pg.panel.id).join(" ")}`, "data-overlay": padListView || explorationOpen || composition || audioWave != null || roomWave || color || presetSave ? true : void 0, children: [
     !explorationOpen && colorMeta && /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(MoveColorDisplay, { panelId: page.panel.id, meta: colorMeta, anchor: panelRef, theme }),
     /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(PresetExploration, {}),
     presetSave && /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(MovePresetSaveInput, { suggested: presetSave.suggested }),
@@ -12353,7 +12570,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       }
     )
   ] }) });
-  return dock === "flow" ? content : (0, import_react_dom3.createPortal)(content, document.body);
+  const moving = /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(MovePanelMotion, { surface: motionSurface, page: motionPage, panel: panelRef, children: content });
+  return dock === "flow" ? moving : (0, import_react_dom3.createPortal)(moving, document.body);
 }
 function previewPathData(points) {
   if (points.length < 2) return "";
@@ -12385,12 +12603,12 @@ function MoveCurveComposer({
 }
 var clampWave01 = (v) => Math.min(1, Math.max(0, Number(v) || 0));
 function MoveAudioWave({ index, theme }) {
-  (0, import_react13.useSyncExternalStore)(
-    (0, import_react13.useCallback)((cb) => subscribeAudioMod(cb), []),
+  (0, import_react14.useSyncExternalStore)(
+    (0, import_react14.useCallback)((cb) => subscribeAudioMod(cb), []),
     () => getAudioModVersion(),
     () => 0
   );
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     const params = import_ModulationStore2.ModulationStore.getSlot(index)?.params ?? {};
     const start = clampWave01(params.loopStart);
     const end = clampWave01(params.loopEnd ?? 1);
@@ -12408,7 +12626,7 @@ function MoveAudioWave({ index, theme }) {
       MoveWaveformStore.setProgressSource(null);
     };
   }, [index]);
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     const toggle = (path) => () => {
       const slot = import_ModulationStore2.ModulationStore.getSlot(index);
       if (slot) import_ModulationStore2.ModulationStore.updateSlotParams(index, { [path]: !slot.params[path] });
@@ -12420,7 +12638,7 @@ function MoveAudioWave({ index, theme }) {
     ];
     return () => releases.forEach((release) => release());
   }, [index]);
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     const prev = MoveSurfaceStore.getState();
     MoveSurfaceStore.setPadRows(
       1,
@@ -12461,14 +12679,14 @@ function MoveAudioWave({ index, theme }) {
 }
 var MOVE_WAVE_DISPLAY_HEIGHT = 128;
 function MoveRoomWave({ theme }) {
-  (0, import_react13.useSyncExternalStore)(
-    (0, import_react13.useCallback)((cb) => subscribeAudioMod(cb), []),
+  (0, import_react14.useSyncExternalStore)(
+    (0, import_react14.useCallback)((cb) => subscribeAudioMod(cb), []),
     () => getAudioModVersion(),
     () => 0
   );
   const buffer = MoveWaveformStore.getBuffer() ?? getAudioModBuffer() ?? moveWaveformDemoSample();
   roomClock.duration = buffer.duration || 1;
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     let last = null;
     let raf = requestAnimationFrame(function tick(now) {
       raf = requestAnimationFrame(tick);
@@ -12481,7 +12699,7 @@ function MoveRoomWave({ theme }) {
     });
     return () => cancelAnimationFrame(raf);
   }, []);
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     MoveWaveformStore.setProgressSource(() => roomClock.pos);
     const releases = [
       MoveFunctions.push("play", () => roomClock.toggle("playing"), { label: "Play", chip: false }),
@@ -12547,8 +12765,8 @@ var roomClock = {
   }
 };
 function MoveAudioZoom() {
-  (0, import_react13.useSyncExternalStore)(
-    (0, import_react13.useCallback)((cb) => MoveWaveformStore.subscribe(cb), []),
+  (0, import_react14.useSyncExternalStore)(
+    (0, import_react14.useCallback)((cb) => MoveWaveformStore.subscribe(cb), []),
     () => MoveWaveformStore.getVersion(),
     () => 0
   );
@@ -12562,14 +12780,14 @@ function MoveAudioZoom() {
   ] });
 }
 function MoveWaveClock() {
-  (0, import_react13.useSyncExternalStore)(
-    (0, import_react13.useCallback)((cb) => MoveWaveformStore.subscribe(cb), []),
+  (0, import_react14.useSyncExternalStore)(
+    (0, import_react14.useCallback)((cb) => MoveWaveformStore.subscribe(cb), []),
     () => MoveWaveformStore.getVersion(),
     () => 0
   );
   const transport = MoveWaveformStore.getTransport();
-  const clockRef = (0, import_react13.useRef)(null);
-  (0, import_react13.useEffect)(() => {
+  const clockRef = (0, import_react14.useRef)(null);
+  (0, import_react14.useEffect)(() => {
     let raf = requestAnimationFrame(function tick() {
       const text = MoveWaveformStore.clock();
       if (clockRef.current && clockRef.current.textContent !== text) clockRef.current.textContent = text;
@@ -12584,8 +12802,8 @@ function MoveWaveClock() {
   ] });
 }
 function MoveAudioTransport({ index }) {
-  (0, import_react13.useSyncExternalStore)(
-    (0, import_react13.useCallback)((cb) => import_ModulationStore2.ModulationStore.subscribe(cb), []),
+  (0, import_react14.useSyncExternalStore)(
+    (0, import_react14.useCallback)((cb) => import_ModulationStore2.ModulationStore.subscribe(cb), []),
     () => import_ModulationStore2.ModulationStore.getVersion(),
     () => 0
   );
@@ -12601,8 +12819,8 @@ function MoveAudioTransport({ index }) {
   );
 }
 function MoveRoomTransport() {
-  (0, import_react13.useSyncExternalStore)(
-    (0, import_react13.useCallback)((cb) => roomClock.subscribe(cb), []),
+  (0, import_react14.useSyncExternalStore)(
+    (0, import_react14.useCallback)((cb) => roomClock.subscribe(cb), []),
     () => roomClock.version,
     () => 0
   );
@@ -12618,10 +12836,10 @@ function MoveRoomTransport() {
 }
 function MoveWaveTransport({ playing: playing2, loopOn, getSeconds, onLoaded }) {
   const params = { playing: playing2, loopOn };
-  const clockRef = (0, import_react13.useRef)(null);
-  const secondsRef = (0, import_react13.useRef)(getSeconds);
+  const clockRef = (0, import_react14.useRef)(null);
+  const secondsRef = (0, import_react14.useRef)(getSeconds);
   secondsRef.current = getSeconds;
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     let raf = requestAnimationFrame(function tick() {
       const t = secondsRef.current();
       const text = `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}:${String(Math.floor(t % 1 * 100)).padStart(2, "0")}`;
@@ -12630,7 +12848,7 @@ function MoveWaveTransport({ playing: playing2, loopOn, getSeconds, onLoaded }) 
     });
     return () => cancelAnimationFrame(raf);
   }, []);
-  const fileRef = (0, import_react13.useRef)(null);
+  const fileRef = (0, import_react14.useRef)(null);
   const loadFile = async (file) => {
     const bytes = await file.arrayBuffer();
     const Ctx = window.AudioContext ?? window.webkitAudioContext;
@@ -12736,8 +12954,8 @@ function searchedRows(rows, search) {
   return kept.length ? kept.map((i) => rows[i]) : [{ value: "", label: "No matches", muted: true }];
 }
 function MoveSearchBar({ view }) {
-  const inputRef = (0, import_react13.useRef)(null);
-  (0, import_react13.useEffect)(() => {
+  const inputRef = (0, import_react14.useRef)(null);
+  (0, import_react14.useEffect)(() => {
     inputRef.current?.focus();
   }, []);
   return /* @__PURE__ */ (0, import_jsx_runtime15.jsxs)("div", { className: "tweakers-move-search", role: "search", children: [
@@ -12768,8 +12986,8 @@ function MoveSearchBar({ view }) {
   ] });
 }
 function MovePresetSaveInput({ suggested }) {
-  const inputRef = (0, import_react13.useRef)(null);
-  (0, import_react13.useEffect)(() => {
+  const inputRef = (0, import_react14.useRef)(null);
+  (0, import_react14.useEffect)(() => {
     inputRef.current?.select();
   }, []);
   return /* @__PURE__ */ (0, import_jsx_runtime15.jsx)("div", { className: "tweakers-move-preset-save", children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(
@@ -12790,8 +13008,8 @@ function MovePresetSaveInput({ suggested }) {
 }
 var SCOPE_SAMPLES = 120;
 function MoveScope({ index }) {
-  const ref = (0, import_react13.useRef)(null);
-  (0, import_react13.useEffect)(() => {
+  const ref = (0, import_react14.useRef)(null);
+  (0, import_react14.useEffect)(() => {
     const now = (import_ModulationStore2.ModulationStore.getSignal(index) + 1) / 2;
     const pts = Array(SCOPE_SAMPLES).fill(now);
     let raf = requestAnimationFrame(function tick() {
@@ -12815,10 +13033,10 @@ function MoveScope({ index }) {
   );
 }
 function MoveWavePreview({ index }) {
-  const path = (0, import_react13.useRef)(null);
-  const line = (0, import_react13.useRef)(null);
+  const path = (0, import_react14.useRef)(null);
+  const line = (0, import_react14.useRef)(null);
   const preview = import_ModulationStore2.ModulationStore.getSettingsPreview(64);
-  (0, import_react13.useEffect)(() => {
+  (0, import_react14.useEffect)(() => {
     let shown = "";
     let raf = requestAnimationFrame(function tick() {
       const { start, span } = getAudioModWindow();
@@ -12862,9 +13080,9 @@ function stepRuns(cells) {
   return runs;
 }
 function MoveModCircle({ slot }) {
-  const dotRef = (0, import_react13.useRef)(null);
-  const pressAt = (0, import_react13.useRef)(0);
-  (0, import_react13.useEffect)(() => {
+  const dotRef = (0, import_react14.useRef)(null);
+  const pressAt = (0, import_react14.useRef)(0);
+  (0, import_react14.useEffect)(() => {
     if (typeof window === "undefined") return;
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     return import_ModulationStore2.ModulationStore.subscribeFrames(() => {
@@ -12908,7 +13126,7 @@ function MoveModCircle({ slot }) {
 }
 
 // src/components/MoveActionButton.tsx
-var import_react14 = require("react");
+var import_react15 = require("react");
 var import_jsx_runtime16 = require("react/jsx-runtime");
 var PRESS_FLASH_MS2 = 160;
 var KIND_FUNCTION = {
@@ -12920,14 +13138,14 @@ var KIND_FUNCTION = {
 };
 function MoveActionButton({ kind, children, onPress, disabled, className }) {
   const name = kind === "shift" ? null : KIND_FUNCTION[kind];
-  const [pressed, setPressed] = (0, import_react14.useState)(false);
-  const flashTimer = (0, import_react14.useRef)(void 0);
+  const [pressed, setPressed] = (0, import_react15.useState)(false);
+  const flashTimer = (0, import_react15.useRef)(void 0);
   const flash = () => {
     setPressed(true);
     clearTimeout(flashTimer.current);
     flashTimer.current = setTimeout(() => setPressed(false), PRESS_FLASH_MS2);
   };
-  (0, import_react14.useEffect)(() => {
+  (0, import_react15.useEffect)(() => {
     if (!name) return () => clearTimeout(flashTimer.current);
     const unsubscribe = MoveFunctions.subscribeRuns((ran) => {
       if (ran === name) flash();
@@ -12978,7 +13196,7 @@ function MoveActionButton({ kind, children, onPress, disabled, className }) {
 }
 
 // src/components/MoveActionDeck.tsx
-var import_react15 = require("react");
+var import_react16 = require("react");
 
 // src/move-deck-core.ts
 var MOVE_DECK_MAX = MOVE_CHIP_BUTTONS.length;
@@ -13009,9 +13227,9 @@ function normalizeDeck(actions) {
 var import_jsx_runtime17 = require("react/jsx-runtime");
 var PRESS_FLASH_MS3 = 160;
 function DeckButton({ action }) {
-  const [pressed, setPressed] = (0, import_react15.useState)(false);
-  const flashTimer = (0, import_react15.useRef)(void 0);
-  (0, import_react15.useEffect)(() => {
+  const [pressed, setPressed] = (0, import_react16.useState)(false);
+  const flashTimer = (0, import_react16.useRef)(void 0);
+  (0, import_react16.useEffect)(() => {
     const unsubscribe = MoveFunctions.subscribeRuns((ran) => {
       if (ran !== action.button) return;
       setPressed(true);
@@ -13045,17 +13263,17 @@ function DeckButton({ action }) {
   );
 }
 function MoveActionDeck({ actions, className }) {
-  const { actions: shown, warnings } = (0, import_react15.useMemo)(
+  const { actions: shown, warnings } = (0, import_react16.useMemo)(
     () => normalizeDeck(actions),
     [actions]
   );
-  (0, import_react15.useEffect)(() => {
+  (0, import_react16.useEffect)(() => {
     for (const warning of warnings) console.warn(`[tweakers] action deck: ${warning}`);
   }, [warnings]);
-  const shownRef = (0, import_react15.useRef)(shown);
+  const shownRef = (0, import_react16.useRef)(shown);
   shownRef.current = shown;
   const signature = shown.map((a) => `${a.button}:${a.disabled ? "-" : "+"}${a.label}`).join("|");
-  (0, import_react15.useEffect)(() => {
+  (0, import_react16.useEffect)(() => {
     const detaches = shownRef.current.filter((a) => !a.disabled).map(
       (a) => MoveFunctions.attach(
         a.button,
@@ -13072,83 +13290,10 @@ function MoveActionDeck({ actions, className }) {
 }
 
 // src/components/MoveViewStage.tsx
-var import_react16 = require("react");
+var import_react17 = require("react");
 
 // src/move-views.ts
 var import_react_dom4 = require("react-dom");
-
-// src/move-view-core.ts
-var MOVE_VIEW_MOTIONS = ["forward", "back", "open", "close", "swap"];
-var MOVE_VIEW_PRESENTATION = {
-  /** ms, both layers, start to settle */
-  duration: 1e3,
-  /** where the arriving view grows up from */
-  enterScale: 0.95,
-  /** where the leaving view grows out to */
-  exitScale: 1.05,
-  /** the arriving view's light below which a swap goes unseen */
-  quietLight: 0.1
-};
-var MOVE_VIEW_REDUCED = { duration: 180 };
-var MOVE_VIEW_WAIT = {
-  /** Work that lands inside this never shows a wait — under a fifth of a
-   *  second still reads as the press answering. */
-  delay: 200,
-  /** A wait that came into sight stays this long after it has arrived, so
-   *  it is read rather than glimpsed. */
-  hold: 500,
-  /** One step of the wait's eight-light sweep; eight of them are one pass. */
-  sweepStep: 70
-};
-function expoInOut(x) {
-  if (x <= 0) return 0;
-  if (x >= 1) return 1;
-  return x < 0.5 ? 2 ** (20 * x - 10) / 2 : (2 - 2 ** (-20 * x + 10)) / 2;
-}
-function linearEasing(curve, samples = 96) {
-  const points = [];
-  for (let i = 0; i <= samples; i++) points.push(String(Math.round(curve(i / samples) * 1e4) / 1e4));
-  return `linear(${points.join(", ")})`;
-}
-var MOVE_VIEW_EXPO_BEZIER = "cubic-bezier(0.87, 0, 0.13, 1)";
-function reaches(curve, light) {
-  let lo = 0;
-  let hi = 1;
-  for (let i = 0; i < 30; i++) {
-    const mid = (lo + hi) / 2;
-    if (curve(mid) < light) lo = mid;
-    else hi = mid;
-  }
-  return hi;
-}
-var EXPO_EASING = linearEasing(expoInOut);
-var EXPO_QUIET = Math.round(reaches(expoInOut, MOVE_VIEW_PRESENTATION.quietLight) * MOVE_VIEW_PRESENTATION.duration);
-function moveViewChoreography(_change, reduced = false) {
-  if (reduced) {
-    const { duration: duration2 } = MOVE_VIEW_REDUCED;
-    const tween2 = (from, to) => ({ from, to, duration: duration2, delay: 0, easing: "linear" });
-    return {
-      leaving: { fade: tween2(1, 0) },
-      arriving: { fade: tween2(0, 1) },
-      duration: duration2,
-      quiet: Math.round(duration2 * MOVE_VIEW_PRESENTATION.quietLight)
-    };
-  }
-  const { duration, enterScale, exitScale } = MOVE_VIEW_PRESENTATION;
-  const tween = (from, to) => ({ from, to, duration, delay: 0, easing: EXPO_EASING });
-  return {
-    leaving: { fade: tween(1, 0), move: tween("scale(1)", `scale(${exitScale})`) },
-    arriving: { fade: tween(0, 1), move: tween(`scale(${enterScale})`, "scale(1)") },
-    duration,
-    quiet: EXPO_QUIET
-  };
-}
-function moveViewHoldRemaining(shownAt, now, choreography, hold = MOVE_VIEW_WAIT.hold) {
-  if (shownAt === null || now - shownAt < choreography.quiet) return 0;
-  return Math.max(0, shownAt + choreography.duration + hold - now);
-}
-
-// src/move-views.ts
 var MOVE_VIEW_STAGE_NAME = "tweakers-move-view";
 var MOVE_VIEW_PANEL_NAME = "tweakers-move-view-panel";
 var MOVE_VIEW_CHANGE_ATTR = "data-tweakers-move-view";
@@ -13166,7 +13311,7 @@ function setState(next) {
   state2 = next;
   emit2();
 }
-var reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+var reducedMotion2 = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 function play(root, layer, pseudoElement) {
   const { fade, move } = layer;
   const together = move && move.duration === fade.duration && move.delay === fade.delay && move.easing === fade.easing;
@@ -13186,8 +13331,12 @@ function play(root, layer, pseudoElement) {
   if (move) run([{ transform: move.from }, { transform: move.to }], move);
 }
 var playing = null;
-var VIEWPORT_SHEET = '.tweakers-move[data-dock="viewport"]';
-var SHEET_ATTR = "data-tweakers-move-view-sheet";
+var PANEL = ".tweakers-move[data-dock]";
+var PANEL_ATTR = "data-tweakers-move-view-panel";
+function panelKey(doc) {
+  const panels = doc.querySelectorAll(PANEL);
+  return panels.length === 1 ? panels[0].getAttribute("data-move-motion-key") ?? "" : null;
+}
 function runUpdates(updates) {
   (0, import_react_dom4.flushSync)(() => {
     for (const update of updates) {
@@ -13202,18 +13351,23 @@ function runUpdates(updates) {
 var animatable = (doc) => !!doc?.startViewTransition && stages > 0 && doc.visibilityState !== "hidden";
 function startChange(doc, change, updates) {
   const root = doc.documentElement;
-  const plan = moveViewChoreography(change, reducedMotion());
-  const sheetBefore = doc.querySelectorAll(VIEWPORT_SHEET).length === 1;
-  let sheetAfter = sheetBefore;
+  const reduced = reducedMotion2();
+  const plan = moveViewChoreography(change, reduced);
+  const panelPlan = movePanelChoreography(reduced);
+  const before = panelKey(doc);
+  let panelMotion = null;
   root.setAttribute(MOVE_VIEW_CHANGE_ATTR, change);
-  root.toggleAttribute(SHEET_ATTR, sheetBefore);
+  root.toggleAttribute(PANEL_ATTR, before !== null);
   const entry = { queue: [...updates], movingAt: null, quiet: plan.quiet, next: null, updated: Promise.resolve() };
   const transition = doc.startViewTransition(() => {
     const queue = entry.queue ?? [];
     entry.queue = null;
     runUpdates(queue);
-    sheetAfter = doc.querySelectorAll(VIEWPORT_SHEET).length === 1;
-    if (sheetAfter) root.setAttribute(SHEET_ATTR, "");
+    const after = panelKey(doc);
+    panelMotion = before !== null && after !== null ? before === after ? "hold" : "pair" : before !== null ? "exit" : after !== null ? "enter" : null;
+    if (panelMotion) root.setAttribute(PANEL_ATTR, panelMotion);
+    else root.removeAttribute(PANEL_ATTR);
+    if (panelMotion && panelMotion !== "hold") entry.quiet = Math.min(plan.quiet, panelPlan.quiet);
   });
   entry.updated = transition.updateCallbackDone.catch(() => {
   });
@@ -13222,8 +13376,8 @@ function startChange(doc, change, updates) {
     entry.movingAt = performance.now();
     play(root, plan.leaving, `::view-transition-old(${MOVE_VIEW_STAGE_NAME})`);
     play(root, plan.arriving, `::view-transition-new(${MOVE_VIEW_STAGE_NAME})`);
-    if (sheetBefore && !sheetAfter) play(root, plan.leaving, `::view-transition-old(${MOVE_VIEW_PANEL_NAME})`);
-    if (!sheetBefore && sheetAfter) play(root, plan.arriving, `::view-transition-new(${MOVE_VIEW_PANEL_NAME})`);
+    if (panelMotion === "exit" || panelMotion === "pair") play(root, panelPlan.leaving, `::view-transition-old(${MOVE_VIEW_PANEL_NAME})`);
+    if (panelMotion === "enter" || panelMotion === "pair") play(root, panelPlan.arriving, `::view-transition-new(${MOVE_VIEW_PANEL_NAME})`);
   }).catch(() => {
   });
   transition.finished.catch(() => {
@@ -13231,7 +13385,7 @@ function startChange(doc, change, updates) {
     if (playing !== entry) return;
     playing = null;
     root.removeAttribute(MOVE_VIEW_CHANGE_ATTR);
-    root.removeAttribute(SHEET_ATTR);
+    root.removeAttribute(PANEL_ATTR);
     const next = entry.next;
     if (!next) return;
     if (animatable(doc)) void startChange(doc, next.change, next.updates).then(next.resolve);
@@ -13378,7 +13532,7 @@ var MoveViews = {
       };
       const finish = (landed) => {
         if (running !== task) return;
-        const hold = moveViewHoldRemaining(task.shownAt, timers.now(), moveViewChoreography("wait", reducedMotion()));
+        const hold = moveViewHoldRemaining(task.shownAt, timers.now(), moveViewChoreography("wait", reducedMotion2()));
         const end = () => {
           if (running !== task) return;
           running = null;
@@ -13459,10 +13613,10 @@ function MoveViewWaitScreen({ wait }) {
   );
 }
 function MoveViewStage({ children, className, style }) {
-  const { busy, wait } = (0, import_react16.useSyncExternalStore)(MoveViews.subscribe, MoveViews.getState, MoveViews.getState);
-  const content = (0, import_react16.useRef)(null);
-  (0, import_react16.useEffect)(() => MoveViews.mountStage(), []);
-  (0, import_react16.useLayoutEffect)(() => {
+  const { busy, wait } = (0, import_react17.useSyncExternalStore)(MoveViews.subscribe, MoveViews.getState, MoveViews.getState);
+  const content = (0, import_react17.useRef)(null);
+  (0, import_react17.useEffect)(() => MoveViews.mountStage(), []);
+  (0, import_react17.useLayoutEffect)(() => {
     if (content.current) content.current.inert = busy;
   }, [busy]);
   return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
@@ -13481,7 +13635,7 @@ function MoveViewStage({ children, className, style }) {
 }
 
 // src/components/MoveNotifications.tsx
-var import_react17 = require("react");
+var import_react18 = require("react");
 var import_react_dom5 = require("react-dom");
 var import_toast = require("@base-ui/react/toast");
 
@@ -13510,8 +13664,8 @@ var manager = import_toast.Toast.createToastManager();
 var moveNotify = manager;
 var MEASURE_MS = 100;
 function useDockBottom(active) {
-  const [bottom, setBottom] = (0, import_react17.useState)(MOVE_NOTIFY_GAP);
-  (0, import_react17.useEffect)(() => {
+  const [bottom, setBottom] = (0, import_react18.useState)(MOVE_NOTIFY_GAP);
+  (0, import_react18.useEffect)(() => {
     if (!active || typeof window === "undefined") return;
     let frame = 0;
     let last = 0;
@@ -13565,8 +13719,8 @@ function MoveNotifications({
   timeout = 5e3,
   className
 }) {
-  const [mounted, setMounted] = (0, import_react17.useState)(false);
-  (0, import_react17.useEffect)(() => setMounted(true), []);
+  const [mounted, setMounted] = (0, import_react18.useState)(false);
+  (0, import_react18.useEffect)(() => setMounted(true), []);
   if (!mounted || typeof document === "undefined") return null;
   return (0, import_react_dom5.createPortal)(
     /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { className: "tweakers-root tweakers-move-surface tweakers-move-notify-root", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(import_toast.Toast.Provider, { toastManager: manager, limit, timeout, children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(NotifyStack, { ...className ? { className } : {} }) }) }),
