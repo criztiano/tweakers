@@ -4,6 +4,7 @@ import {
   ListScreen,
   MoveActionDeck,
   MoveFunctions,
+  MoveConnectionDot,
   MoveNotifications,
   MovePanel,
   MovePresetStore,
@@ -126,6 +127,7 @@ export function Library() {
       {/* The app's messages, in the same air as the floating displays. One
           mount, anywhere; every `moveNotify.add` in the app lands here. */}
       <MoveNotifications />
+      <MoveConnectionDot />
 
       <Section
         id="big"

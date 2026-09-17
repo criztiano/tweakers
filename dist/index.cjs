@@ -66,6 +66,8 @@ __export(index_exports, {
   MOVE_COLOR_PALETTES: () => MOVE_COLOR_PALETTES,
   MOVE_COLOR_STEPS: () => MOVE_COLOR_STEPS,
   MOVE_COLOR_WHEEL: () => MOVE_COLOR_WHEEL,
+  MOVE_CONNECTION_ASK_EVENT: () => MOVE_CONNECTION_ASK_EVENT,
+  MOVE_CONNECTION_EVENT: () => MOVE_CONNECTION_EVENT,
   MOVE_DECK_MAX: () => MOVE_DECK_MAX,
   MOVE_DIALS: () => MOVE_DIALS,
   MOVE_FLOAT_SELECTOR: () => MOVE_FLOAT_SELECTOR,
@@ -114,6 +116,8 @@ __export(index_exports, {
   MoveActionButton: () => MoveActionButton,
   MoveActionDeck: () => MoveActionDeck,
   MoveColorStore: () => MoveColorStore,
+  MoveConnection: () => MoveConnection,
+  MoveConnectionDot: () => MoveConnectionDot,
   MoveFunctionChips: () => MoveFunctionChips,
   MoveFunctions: () => MoveFunctions,
   MoveGateDisplay: () => MoveGateDisplay,
@@ -4010,11 +4014,11 @@ var DEFAULT_FLOWER_SETTINGS = {
 };
 var bounded = (n, min, max, fallback) => Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 function randomFor(seed) {
-  let state3 = 2166136261;
-  for (let i = 0; i < seed.length; i++) state3 = Math.imul(state3 ^ seed.charCodeAt(i), 16777619);
+  let state4 = 2166136261;
+  for (let i = 0; i < seed.length; i++) state4 = Math.imul(state4 ^ seed.charCodeAt(i), 16777619);
   return () => {
-    state3 += 1831565813;
-    let n = Math.imul(state3 ^ state3 >>> 15, 1 | state3);
+    state4 += 1831565813;
+    let n = Math.imul(state4 ^ state4 >>> 15, 1 | state4);
     n ^= n + Math.imul(n ^ n >>> 7, 61 | n);
     return ((n ^ n >>> 14) >>> 0) / 4294967296;
   };
@@ -4229,13 +4233,13 @@ function PresetArtwork({ values }) {
 }
 function PresetExploration() {
   (0, import_react4.useSyncExternalStore)(PresetExplorationStore.subscribe, PresetExplorationStore.getVersion, () => 0);
-  const state3 = PresetExplorationStore.getState();
+  const state4 = PresetExplorationStore.getState();
   const reducedMotion3 = (0, import_react5.useReducedMotion)();
   const shell = (0, import_react4.useRef)(null);
   const [availableHeight, setAvailableHeight] = (0, import_react4.useState)(null);
   useBrowserLayoutEffect(() => {
     const anchor = shell.current?.closest(".tweakers-move");
-    if (!state3 || !anchor) return;
+    if (!state4 || !anchor) return;
     const measure = () => setAvailableHeight(Math.max(160, anchor.getBoundingClientRect().top - 20));
     measure();
     const observer = new ResizeObserver(measure);
@@ -4245,8 +4249,8 @@ function PresetExploration() {
       observer.disconnect();
       window.removeEventListener("resize", measure);
     };
-  }, [state3?.panelId]);
-  return /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(import_react5.AnimatePresence, { children: state3 && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
+  }, [state4?.panelId]);
+  return /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(import_react5.AnimatePresence, { children: state4 && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
     import_react5.motion.section,
     {
       className: "tweakers-exploration",
@@ -4263,17 +4267,17 @@ function PresetExploration() {
           PresetExplorationStore.close();
         }
       },
-      children: /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(ExplorationContent, { state: state3, anchorRef: shell })
+      children: /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(ExplorationContent, { state: state4, anchorRef: shell })
     },
-    state3.panelId
+    state4.panelId
   ) });
 }
 function PresetExplorationSlots() {
   (0, import_react4.useSyncExternalStore)(PresetExplorationStore.subscribe, PresetExplorationStore.getVersion, () => 0);
-  const state3 = PresetExplorationStore.getState();
-  if (!state3) return null;
+  const state4 = PresetExplorationStore.getState();
+  if (!state4) return null;
   const slots = PresetExplorationStore.slots();
-  const unsupported = !!import_TweakStore4.TweakStore.getPresetProvider(state3.panelId) && !import_TweakStore4.TweakStore.getPresetProvider(state3.panelId)?.exploration;
+  const unsupported = !!import_TweakStore4.TweakStore.getPresetProvider(state4.panelId) && !import_TweakStore4.TweakStore.getPresetProvider(state4.panelId)?.exploration;
   return /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "tweakers-move-grid tweakers-exploration-dock", role: "group", "aria-label": "Eight Move encoder properties", children: /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "tweakers-move-dials", children: Array.from({ length: 8 }, (_, index) => {
     const slot = slots[index];
     if (!slot) return /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "tweakers-move-dial", "data-empty": true, "aria-hidden": "true" }, index);
@@ -4282,7 +4286,7 @@ function PresetExplorationSlots() {
       {
         className: "tweakers-move-dial tweakers-exploration-dock-slot",
         title: `${slot.label}: ${slot.display}`,
-        "data-disabled": state3.busy || unsupported || slot.min === slot.max || void 0,
+        "data-disabled": state4.busy || unsupported || slot.min === slot.max || void 0,
         children: [
           /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(MoveSlotDefaultBody, { label: slot.label, value: slot.display, pct: slot.max > slot.min ? (slot.value - slot.min) / (slot.max - slot.min) * 100 : 0, originPct: null }),
           /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
@@ -4295,7 +4299,7 @@ function PresetExplorationSlots() {
               max: slot.max,
               step: slot.step,
               value: slot.value,
-              disabled: state3.busy || unsupported || slot.min === slot.max,
+              disabled: state4.busy || unsupported || slot.min === slot.max,
               onChange: (event) => PresetExplorationStore.turnSlot(index, Number(event.target.value))
             }
           )
@@ -4305,28 +4309,28 @@ function PresetExplorationSlots() {
     );
   }) }) });
 }
-function ExplorationContent({ state: state3, anchorRef }) {
+function ExplorationContent({ state: state4, anchorRef }) {
   const [name, setName] = (0, import_react4.useState)("");
   const [seedId, setSeedId] = (0, import_react4.useState)("");
   (0, import_react4.useEffect)(() => {
-    if (state3.saving) setName("");
-  }, [state3.saving]);
+    if (state4.saving) setName("");
+  }, [state4.saving]);
   const [parameterGroup, setParameterGroup] = (0, import_react4.useState)("*");
-  const provider = import_TweakStore4.TweakStore.getPresetProvider(state3.panelId);
+  const provider = import_TweakStore4.TweakStore.getPresetProvider(state4.panelId);
   const unsupported = !!provider && !provider.exploration;
-  const blocked = state3.busy || unsupported;
-  const tree2 = state3.trees.find((item) => item.id === state3.treeId);
-  const generation = tree2?.generations[state3.generation];
+  const blocked = state4.busy || unsupported;
+  const tree2 = state4.trees.find((item) => item.id === state4.treeId);
+  const generation = tree2?.generations[state4.generation];
   const allChildren = tree2?.generations.flatMap((gen) => gen.children) ?? [];
-  const active = allChildren.find((child2) => child2.id === state3.activeId);
+  const active = allChildren.find((child2) => child2.id === state4.activeId);
   const presets = PresetExplorationStore.getPresetItems();
-  const enabledCount = state3.parameters.filter((parameter) => parameter.enabled).length;
-  const parents = (state3.settings.breedWindow ? tree2?.generations.slice(-state3.settings.breedWindow) : tree2?.generations)?.flatMap((gen) => gen.children).filter((child2) => child2.marked) ?? [];
+  const enabledCount = state4.parameters.filter((parameter) => parameter.enabled).length;
+  const parents = (state4.settings.breedWindow ? tree2?.generations.slice(-state4.settings.breedWindow) : tree2?.generations)?.flatMap((gen) => gen.children).filter((child2) => child2.marked) ?? [];
   const childLabel = (id) => {
-    for (const candidate of state3.trees) {
+    for (const candidate of state4.trees) {
       for (let gen = 0; gen < candidate.generations.length; gen++) {
         const index = candidate.generations[gen].children.findIndex((child2) => child2.id === id);
-        if (index >= 0) return `${candidate.id === state3.treeId ? "" : `${candidate.name} \xB7 `}G${gen + 1} / ${String(index + 1).padStart(2, "0")}`;
+        if (index >= 0) return `${candidate.id === state4.treeId ? "" : `${candidate.name} \xB7 `}G${gen + 1} / ${String(index + 1).padStart(2, "0")}`;
       }
     }
     return "Unknown child";
@@ -4335,46 +4339,46 @@ function ExplorationContent({ state: state3, anchorRef }) {
     /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("header", { ref: anchorRef, className: "tweakers-exploration-header", children: [
       /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { children: [
         /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("strong", { children: "Preset exploration" }),
-        /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "tweakers-exploration-caption", children: state3.persistent ? "Family tree" : "Session tree" })
+        /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { className: "tweakers-exploration-caption", children: state4.persistent ? "Family tree" : "Session tree" })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("nav", { className: "tweakers-exploration-nav", "aria-label": "Exploration views", children: ["evolution", "morph", "parameters"].map((view) => /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
         "button",
         {
           type: "button",
           disabled: blocked,
-          "aria-pressed": state3.view === view,
+          "aria-pressed": state4.view === view,
           onClick: () => PresetExplorationStore.setView(view),
           children: view === "evolution" ? "Evolve" : view === "morph" ? "Morph" : "Parameters"
         },
         view
       )) }),
-      /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", onClick: () => PresetExplorationStore.close(), title: state3.saving ? "Cancel naming and return to exploration" : "Exit and restore the original sound", children: "Back \u21A9" })
+      /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", onClick: () => PresetExplorationStore.close(), title: state4.saving ? "Cancel naming and return to exploration" : "Exit and restore the original sound", children: "Back \u21A9" })
     ] }),
     /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "tweakers-exploration-body", children: [
       /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("fieldset", { className: "tweakers-exploration-workspace", disabled: blocked, children: [
-        state3.view === "evolution" && /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(import_jsx_runtime5.Fragment, { children: [
+        state4.view === "evolution" && /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(import_jsx_runtime5.Fragment, { children: [
           /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "tweakers-exploration-toolbar", children: [
             /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("label", { className: "tweakers-exploration-inline", children: [
               "Tree ",
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("select", { "aria-label": "Family tree", value: state3.treeId, onChange: (event) => PresetExplorationStore.selectTree(event.target.value), children: state3.trees.map((item) => /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("option", { value: item.id, children: item.name }, item.id)) })
+              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("select", { "aria-label": "Family tree", value: state4.treeId, onChange: (event) => PresetExplorationStore.selectTree(event.target.value), children: state4.trees.map((item) => /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("option", { value: item.id, children: item.name }, item.id)) })
             ] }),
             /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "tweakers-exploration-generation", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", "aria-label": "Previous generation", disabled: state3.generation === 0, onClick: () => PresetExplorationStore.setGeneration(state3.generation - 1), children: "\u2190" }),
+              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", "aria-label": "Previous generation", disabled: state4.generation === 0, onClick: () => PresetExplorationStore.setGeneration(state4.generation - 1), children: "\u2190" }),
               /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("span", { children: [
                 "Generation ",
-                state3.generation + 1,
+                state4.generation + 1,
                 " / ",
                 tree2?.generations.length ?? 0
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", "aria-label": "Next generation", disabled: state3.generation >= (tree2?.generations.length ?? 0) - 1, onClick: () => PresetExplorationStore.setGeneration(state3.generation + 1), children: "\u2192" })
+              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", "aria-label": "Next generation", disabled: state4.generation >= (tree2?.generations.length ?? 0) - 1, onClick: () => PresetExplorationStore.setGeneration(state4.generation + 1), children: "\u2192" })
             ] }),
-            /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", "aria-pressed": state3.treeView, onClick: () => PresetExplorationStore.toggleTree(), children: "Family tree" })
+            /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", "aria-pressed": state4.treeView, onClick: () => PresetExplorationStore.toggleTree(), children: "Family tree" })
           ] }),
-          state3.treeView && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "tweakers-exploration-tree", "aria-label": "Generation history", children: tree2?.generations.map((gen, index) => /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(
+          state4.treeView && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "tweakers-exploration-tree", "aria-label": "Generation history", children: tree2?.generations.map((gen, index) => /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(
             "button",
             {
               type: "button",
-              "aria-pressed": index === state3.generation,
+              "aria-pressed": index === state4.generation,
               onClick: () => PresetExplorationStore.setGeneration(index),
               children: [
                 "G",
@@ -4396,8 +4400,8 @@ function ExplorationContent({ state: state3, anchorRef }) {
               {
                 type: "button",
                 className: "tweakers-exploration-pad",
-                disabled: !child2 || state3.busy,
-                "aria-pressed": !!child2 && state3.activeId === child2.id,
+                disabled: !child2 || state4.busy,
+                "aria-pressed": !!child2 && state4.activeId === child2.id,
                 "data-parent": child2?.marked || void 0,
                 "aria-label": child2 ? `Preset ${index + 1}, rating ${child2.rating}${child2.marked ? ", marked parent" : ""}` : `Empty pad ${index + 1}`,
                 onClick: () => child2 && PresetExplorationStore.select(child2.id),
@@ -4424,7 +4428,7 @@ function ExplorationContent({ state: state3, anchorRef }) {
               {
                 type: "button",
                 className: "tweakers-exploration-primary",
-                disabled: state3.busy || parents.length < 2 || enabledCount === 0,
+                disabled: state4.busy || parents.length < 2 || enabledCount === 0,
                 "aria-describedby": "exploration-generation-hint",
                 onClick: () => PresetExplorationStore.generate(),
                 children: "Generate 32 children"
@@ -4432,27 +4436,27 @@ function ExplorationContent({ state: state3, anchorRef }) {
             )
           ] })
         ] }),
-        state3.view === "morph" && /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "tweakers-exploration-morph", children: [
+        state4.view === "morph" && /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "tweakers-exploration-morph", children: [
           /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("p", { className: "tweakers-exploration-hint", children: "Choose a corner, then assign a child. Drag either surface to blend its four presets." }),
           /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "tweakers-exploration-morph-pair", children: ["A", "B"].map((label, quadrant) => /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { children: [
             /* @__PURE__ */ (0, import_jsx_runtime5.jsx)(
               XYSurface,
               {
                 label,
-                x: quadrant === 0 ? state3.morph.ax : state3.morph.bx,
-                y: quadrant === 0 ? state3.morph.ay : state3.morph.by,
-                disabled: !state3.morph.corners.slice(quadrant * 4, quadrant * 4 + 4).some(Boolean),
+                x: quadrant === 0 ? state4.morph.ax : state4.morph.bx,
+                y: quadrant === 0 ? state4.morph.ay : state4.morph.by,
+                disabled: !state4.morph.corners.slice(quadrant * 4, quadrant * 4 + 4).some(Boolean),
                 onChange: (x, y) => PresetExplorationStore.setMorph(quadrant === 0 ? { ax: x, ay: y } : { bx: x, by: y })
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "tweakers-exploration-corners", role: "group", "aria-label": `Quadrant ${label} presets`, children: state3.morph.corners.slice(quadrant * 4, quadrant * 4 + 4).map((id, corner) => {
+            /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "tweakers-exploration-corners", role: "group", "aria-label": `Quadrant ${label} presets`, children: state4.morph.corners.slice(quadrant * 4, quadrant * 4 + 4).map((id, corner) => {
               const index = quadrant * 4 + corner;
               const assigned = allChildren.find((child2) => child2.id === id);
               return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(
                 "button",
                 {
                   type: "button",
-                  "aria-pressed": state3.morph.corner === index,
+                  "aria-pressed": state4.morph.corner === index,
                   onClick: () => PresetExplorationStore.setMorph({ corner: index }),
                   title: id ? childLabel(id) : "Unassigned corner",
                   children: [
@@ -4476,49 +4480,49 @@ function ExplorationContent({ state: state3, anchorRef }) {
                 min: 0,
                 max: 1,
                 step: 0.01,
-                value: state3.morph.blend,
-                disabled: !state3.morph.corners.some(Boolean),
+                value: state4.morph.blend,
+                disabled: !state4.morph.corners.some(Boolean),
                 onChange: (event) => PresetExplorationStore.setMorph({ blend: Number(event.target.value) })
               }
             ),
             " B",
             /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("output", { children: [
-              Math.round(state3.morph.blend * 100),
+              Math.round(state4.morph.blend * 100),
               "%"
             ] })
           ] }),
-          /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", onClick: () => PresetExplorationStore.beginAssign(), children: state3.assigning ? "Choose a child in Evolve" : "Assign child to selected corner" })
+          /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", onClick: () => PresetExplorationStore.beginAssign(), children: state4.assigning ? "Choose a child in Evolve" : "Assign child to selected corner" })
         ] }),
-        state3.view === "parameters" && /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "tweakers-exploration-parameters", children: [
+        state4.view === "parameters" && /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "tweakers-exploration-parameters", children: [
           /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "tweakers-exploration-toolbar", children: [
             /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("label", { className: "tweakers-exploration-inline", children: [
               "Group ",
               /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("select", { value: parameterGroup, onChange: (event) => setParameterGroup(event.target.value), children: [
                 /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("option", { value: "*", children: "All groups" }),
-                [...new Set(state3.parameters.map((parameter) => parameter.group ?? ""))].map((group) => /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("option", { value: group, children: group || "Parameters" }, group))
+                [...new Set(state4.parameters.map((parameter) => parameter.group ?? ""))].map((group) => /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("option", { value: group, children: group || "Parameters" }, group))
               ] })
             ] }),
             /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("label", { className: "tweakers-exploration-inline", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("input", { type: "checkbox", checked: state3.omitTrouble, onChange: (event) => PresetExplorationStore.setOmitTrouble(event.target.checked) }),
+              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("input", { type: "checkbox", checked: state4.omitTrouble, onChange: (event) => PresetExplorationStore.setOmitTrouble(event.target.checked) }),
               "Omit enable / bypass"
             ] }),
             /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("span", { children: [
               enabledCount,
               " / ",
-              state3.parameters.length,
+              state4.parameters.length,
               " parameters included"
             ] }),
             /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", onClick: () => PresetExplorationStore.setAllParameters(true), children: "Select all" }),
             /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", onClick: () => PresetExplorationStore.setAllParameters(false), children: "Deselect all" })
           ] }),
           /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("p", { className: "tweakers-exploration-hint", children: "Included parameters evolve and morph within their chosen range. Other values stay unchanged." }),
-          [...new Set(state3.parameters.map((parameter) => parameter.group ?? ""))].filter((group) => parameterGroup === "*" || parameterGroup === group).map((group) => /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("fieldset", { className: "tweakers-exploration-parameter-group", children: [
+          [...new Set(state4.parameters.map((parameter) => parameter.group ?? ""))].filter((group) => parameterGroup === "*" || parameterGroup === group).map((group) => /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("fieldset", { className: "tweakers-exploration-parameter-group", children: [
             /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("legend", { children: group || "Parameters" }),
             /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "tweakers-exploration-group-actions", children: [
               /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", onClick: () => PresetExplorationStore.setAllParameters(true, group), children: "Select group" }),
               /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", onClick: () => PresetExplorationStore.setAllParameters(false, group), children: "Deselect group" })
             ] }),
-            state3.parameters.filter((parameter) => (parameter.group ?? "") === group).map((parameter) => /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "tweakers-exploration-parameter", children: [
+            state4.parameters.filter((parameter) => (parameter.group ?? "") === group).map((parameter) => /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "tweakers-exploration-parameter", children: [
               /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("label", { title: parameter.path, children: [
                 /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("input", { type: "checkbox", checked: parameter.enabled, onChange: (event) => PresetExplorationStore.setParameter(parameter.id, { enabled: event.target.checked }) }),
                 parameter.label
@@ -4567,7 +4571,7 @@ function ExplorationContent({ state: state3, anchorRef }) {
             ] }, parameter.id))
           ] }, group))
         ] }),
-        state3.view !== "parameters" && /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("details", { className: "tweakers-exploration-advanced", children: [
+        state4.view !== "parameters" && /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("details", { className: "tweakers-exploration-advanced", children: [
           /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("summary", { children: [
             active ? childLabel(active.id) : "Child actions",
             " \xB7 mark, rate, save & seed settings"
@@ -4586,9 +4590,9 @@ function ExplorationContent({ state: state3, anchorRef }) {
                 "Rating ",
                 /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("select", { "aria-label": "Active child rating", disabled: !active, value: active?.rating ?? 3, onChange: (event) => PresetExplorationStore.rate(Number(event.target.value)), children: [1, 2, 3, 4, 5].map((rating) => /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("option", { value: rating, children: rating }, rating)) })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", disabled: !active || state3.busy, onClick: () => PresetExplorationStore.remix(), children: "Remix" }),
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", disabled: !active || state3.busy, onClick: () => PresetExplorationStore.overwrite(), children: "Overwrite DNA" }),
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", disabled: blocked || !active && !(state3.view === "morph" && state3.morph.corners.some(Boolean)), onClick: () => PresetExplorationStore.beginSave(), children: "Save Preset" })
+              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", disabled: !active || state4.busy, onClick: () => PresetExplorationStore.remix(), children: "Remix" }),
+              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", disabled: !active || state4.busy, onClick: () => PresetExplorationStore.overwrite(), children: "Overwrite DNA" }),
+              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", disabled: blocked || !active && !(state4.view === "morph" && state4.morph.corners.some(Boolean)), onClick: () => PresetExplorationStore.beginSave(), children: "Save Preset" })
             ] })
           ] }),
           /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("details", { className: "tweakers-exploration-seeds", children: [
@@ -4596,34 +4600,34 @@ function ExplorationContent({ state: state3, anchorRef }) {
             /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "tweakers-exploration-settings", children: [
               /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("label", { children: [
                 "Seed source",
-                /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("select", { value: state3.settings.seedMode, onChange: (event) => PresetExplorationStore.setSettings({ seedMode: event.target.value }), children: [
+                /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("select", { value: state4.settings.seedMode, onChange: (event) => PresetExplorationStore.setSettings({ seedMode: event.target.value }), children: [
                   /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("option", { value: "current", children: "Current sound" }),
                   /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("option", { value: "random", children: "Randomized" })
                 ] })
               ] }),
               /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("label", { children: [
                 "Seed count",
-                /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("input", { type: "number", min: 1, max: 32, value: state3.settings.seedCount, onChange: (event) => PresetExplorationStore.setSettings({ seedCount: Number(event.target.value) }) })
+                /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("input", { type: "number", min: 1, max: 32, value: state4.settings.seedCount, onChange: (event) => PresetExplorationStore.setSettings({ seedCount: Number(event.target.value) }) })
               ] }),
               /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("label", { children: [
                 "Spread",
-                /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("input", { type: "range", min: 0, max: 1, step: 0.01, value: state3.settings.spread, onChange: (event) => PresetExplorationStore.setSettings({ spread: Number(event.target.value) }) })
+                /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("input", { type: "range", min: 0, max: 1, step: 0.01, value: state4.settings.spread, onChange: (event) => PresetExplorationStore.setSettings({ spread: Number(event.target.value) }) })
               ] }),
               /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("label", { children: [
                 "Mutation mode",
-                /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("select", { value: state3.settings.mutationMode, onChange: (event) => PresetExplorationStore.setSettings({ mutationMode: event.target.value }), children: [
+                /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("select", { value: state4.settings.mutationMode, onChange: (event) => PresetExplorationStore.setSettings({ mutationMode: event.target.value }), children: [
                   /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("option", { value: "random", children: "Random replacement" }),
                   /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("option", { value: "copy-error", children: "Copy error" })
                 ] })
               ] }),
               /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("label", { children: [
                 "Breeding window (0 = all)",
-                /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("input", { type: "number", min: 0, max: tree2?.generations.length ?? 1, value: state3.settings.breedWindow, onChange: (event) => PresetExplorationStore.setSettings({ breedWindow: Number(event.target.value) }) })
+                /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("input", { type: "number", min: 0, max: tree2?.generations.length ?? 1, value: state4.settings.breedWindow, onChange: (event) => PresetExplorationStore.setSettings({ breedWindow: Number(event.target.value) }) })
               ] })
             ] }),
             /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { className: "tweakers-exploration-actions", children: [
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", disabled: state3.busy || enabledCount === 0 || (tree2?.generations[0].children.length ?? 0) >= 32, onClick: () => PresetExplorationStore.addSeeds(), children: "Add Seeds" }),
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", disabled: !allChildren.some((child2) => child2.marked) || state3.busy, onClick: () => PresetExplorationStore.newTree(), children: "New Tree from Parents" }),
+              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", disabled: state4.busy || enabledCount === 0 || (tree2?.generations[0].children.length ?? 0) >= 32, onClick: () => PresetExplorationStore.addSeeds(), children: "Add Seeds" }),
+              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", disabled: !allChildren.some((child2) => child2.marked) || state4.busy, onClick: () => PresetExplorationStore.newTree(), children: "New Tree from Parents" }),
               /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("label", { className: "tweakers-exploration-inline", children: [
                 "Preset seed ",
                 /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("select", { value: seedId, onChange: (event) => setSeedId(event.target.value), children: [
@@ -4631,12 +4635,12 @@ function ExplorationContent({ state: state3, anchorRef }) {
                   presets.map((preset) => /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("option", { value: preset.id, children: preset.label }, preset.id))
                 ] })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", disabled: !seedId || state3.busy, onClick: () => PresetExplorationStore.addPresetSeed(seedId), children: "Add Preset Seed" })
+              /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", disabled: !seedId || state4.busy, onClick: () => PresetExplorationStore.addPresetSeed(seedId), children: "Add Preset Seed" })
             ] })
           ] })
         ] })
       ] }),
-      state3.saving && /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("form", { className: "tweakers-exploration-save", onSubmit: (event) => {
+      state4.saving && /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("form", { className: "tweakers-exploration-save", onSubmit: (event) => {
         event.preventDefault();
         if (name.trim()) void PresetExplorationStore.save(name.trim());
       }, children: [
@@ -4644,15 +4648,15 @@ function ExplorationContent({ state: state3, anchorRef }) {
           "Preset name",
           /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("input", { type: "text", value: name, maxLength: 120, placeholder: "Name this sound", onChange: (event) => setName(event.target.value) })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "submit", disabled: !name.trim() || state3.busy, children: "Save" }),
-        /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", disabled: state3.busy, onClick: () => PresetExplorationStore.cancelSave(), children: "Cancel" })
+        /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "submit", disabled: !name.trim() || state4.busy, children: "Save" }),
+        /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", disabled: state4.busy, onClick: () => PresetExplorationStore.cancelSave(), children: "Cancel" })
       ] }),
       /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("footer", { className: "tweakers-exploration-footer", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { role: "status", children: state3.message ?? (state3.assigning ? "Select a child to assign it to the morph corner." : "Back restores your original sound.") }),
+        /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { role: "status", children: state4.message ?? (state4.assigning ? "Select a child to assign it to the morph corner." : "Back restores your original sound.") }),
         /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("button", { type: "button", disabled: blocked, onClick: () => PresetExplorationStore.undo(), children: "Undo" }),
-        state3.busy && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { role: "status", children: "Working\u2026" })
+        state4.busy && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("span", { role: "status", children: "Working\u2026" })
       ] }),
-      state3.error && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("p", { role: "alert", className: "tweakers-exploration-error", children: state3.error })
+      state4.error && /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("p", { role: "alert", className: "tweakers-exploration-error", children: state4.error })
     ] })
   ] });
 }
@@ -5481,8 +5485,8 @@ var LFO_DEF = {
     { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 }
   ],
   createState: () => ({ phase: 0, drift: 0, driftTarget: 0, out: null }),
-  tick(state3, params, dt, bpm) {
-    const s = state3;
+  tick(state4, params, dt, bpm) {
+    const s = state4;
     const hz = params.sync ? lfoSyncedHz(params.division, bpm) : Math.max(0, Number(params.rate) || 0);
     const before = s.phase;
     s.phase = (s.phase + dt * hz) % 1;
@@ -5540,8 +5544,8 @@ var SH_DEF = {
     { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 }
   ],
   createState: () => ({ wait: 0, held: 0, out: null }),
-  tick(state3, params, dt) {
-    const s = state3;
+  tick(state4, params, dt) {
+    const s = state4;
     s.wait -= dt;
     if (s.out === null || s.wait <= 0) {
       s.held = Math.random() * 2 - 1;
@@ -5683,8 +5687,8 @@ var ADSR_DEF = {
     { type: "toggle", path: "loop", label: "Loop", moveSlot: true, icon: "repeat" }
   ],
   createState: () => ({ stage: "idle", t: 0, from: 0, env: 0, gate: false }),
-  gate(state3, on) {
-    const s = state3;
+  gate(state4, on) {
+    const s = state4;
     s.gate = on;
     if (on) {
       s.stage = "attack";
@@ -5696,8 +5700,8 @@ var ADSR_DEF = {
       s.from = s.env;
     }
   },
-  tick(state3, params, dt, bpm) {
-    const s = state3;
+  tick(state4, params, dt, bpm) {
+    const s = state4;
     const loop = !!params.loop;
     const sustain = clamp013(params.sustain);
     if (s.stage === "idle") {
@@ -5868,8 +5872,8 @@ var CURVE_DEF = {
     { type: "slider", path: "segments", label: "Segments", min: 1, max: CURVE_MAX_CLIPS, step: 1 }
   ],
   createState: () => ({ phase: 0, signature: "", samplers: null, prev: null, pulse: 0 }),
-  tick(state3, params, dt, bpm) {
-    const s = state3;
+  tick(state4, params, dt, bpm) {
+    const s = state4;
     const comp = curveComposition(params);
     const signature = JSON.stringify(comp.segments) + `|${comp.gap}`;
     if (signature !== s.signature || !s.samplers) {
@@ -5945,7 +5949,7 @@ var CURVE_DEF = {
       return { clips: writeClips(list), selected: Math.min(sel, list.length - 1) };
     }
   },
-  phase: (state3) => state3.phase,
+  phase: (state4) => state4.phase,
   preview(params, count) {
     const list = readClips(params);
     const sel = selectedClip(params, list.length);
@@ -6034,8 +6038,8 @@ var AUDIO_DEF = {
     { type: "slider", path: "smooth", label: "Smooth", min: 0, max: 1, step: 0.01 }
   ],
   createState: () => ({ pos: 0, out: null, seek: null }),
-  tick(state3, params, dt) {
-    const s = state3;
+  tick(state4, params, dt) {
+    const s = state4;
     const seek = clamp013(params.position);
     if (s.seek !== seek) {
       s.seek = seek;
@@ -6081,12 +6085,12 @@ var AUDIO_DEF = {
       label: "Audio"
     };
   },
-  phase(state3) {
-    return state3.pos;
+  phase(state4) {
+    return state4.pos;
   },
   /** Note on rewinds to the last seek — the sample retriggers like a pad. */
-  gate(state3, on) {
-    const s = state3;
+  gate(state4, on) {
+    const s = state4;
     if (on) s.pos = s.seek ?? 0;
   }
 };
@@ -6992,9 +6996,9 @@ var MoveVolumeDisplayClass = class {
     this.listeners = /* @__PURE__ */ new Set();
   }
   /** Show the pill with this readout — replaces any previous one. */
-  set(state3) {
+  set(state4) {
     import_TweakStore6.TweakStore.noteMoveKitUse("volume");
-    this.state = state3;
+    this.state = state4;
     this.notify();
   }
   /** Hide the pill. */
@@ -7540,18 +7544,18 @@ function MoveWaveform({
     () => MoveWaveformStore.getVersion(),
     () => 0
   );
-  const state3 = MoveWaveformStore.getView();
-  const lastSent = (0, import_react7.useRef)({ position: state3.position, loop: state3.loop });
+  const state4 = MoveWaveformStore.getView();
+  const lastSent = (0, import_react7.useRef)({ position: state4.position, loop: state4.loop });
   (0, import_react7.useEffect)(() => {
-    if (state3.position !== lastSent.current.position) {
-      lastSent.current.position = state3.position;
-      seekRef.current?.(state3.position);
+    if (state4.position !== lastSent.current.position) {
+      lastSent.current.position = state4.position;
+      seekRef.current?.(state4.position);
     }
-    if (state3.loop !== lastSent.current.loop) {
-      lastSent.current.loop = state3.loop;
-      loopRef.current?.(state3.loop);
+    if (state4.loop !== lastSent.current.loop) {
+      lastSent.current.loop = state4.loop;
+      loopRef.current?.(state4.loop);
     }
-  }, [view, state3.position, state3.loop]);
+  }, [view, state4.position, state4.loop]);
   (0, import_react7.useEffect)(() => {
     const host = hostRef.current;
     if (!host) return;
@@ -7587,7 +7591,7 @@ function MoveWaveform({
       buffer,
       asset,
       ranges,
-      ...getProgress ? { getProgress: () => MoveWaveformStore.isScrubbing() ? MoveWaveformStore.getView().position : getProgress() } : { progress: progress ?? state3.position },
+      ...getProgress ? { getProgress: () => MoveWaveformStore.isScrubbing() ? MoveWaveformStore.getView().position : getProgress() } : { progress: progress ?? state4.position },
       mode: look.mode,
       pixelSize: look.pixelSize,
       grid: look.grid,
@@ -7597,10 +7601,10 @@ function MoveWaveform({
       baseline: look.baseline,
       ...smoothPoints != null ? { smoothPoints } : {},
       ...waveInset != null ? { waveInset } : {},
-      loop: state3.loop,
+      loop: state4.loop,
       cuts,
       gapColor: WAVE_INK,
-      zoom: variant === "slot" ? Math.max(SLOT_ZOOM, state3.zoom) : state3.zoom,
+      zoom: variant === "slot" ? Math.max(SLOT_ZOOM, state4.zoom) : state4.zoom,
       onSeek: (p) => MoveWaveformStore.setView({ position: p }),
       onLoopChange: (l) => MoveWaveformStore.setView({ loop: l, loopAnchor: null }),
       width: Math.max(1, width),
@@ -13852,6 +13856,72 @@ function MoveNotifications({
   );
 }
 
+// src/components/MoveConnectionDot.tsx
+var import_react19 = require("react");
+var import_react_dom6 = require("react-dom");
+
+// src/move-connection.ts
+var MOVE_CONNECTION_EVENT = "move-tweakers:connection";
+var MOVE_CONNECTION_ASK_EVENT = "move-tweakers:connection-ask";
+var AWAY = { bridge: false, device: false, active: false };
+var state3 = AWAY;
+var listeners4 = /* @__PURE__ */ new Set();
+var hearing = false;
+function hear(event) {
+  const detail = event.detail;
+  const next = { bridge: !!detail?.bridge, device: !!detail?.device, active: !!detail?.active };
+  if (next.bridge === state3.bridge && next.device === state3.device && next.active === state3.active) return;
+  state3 = next;
+  for (const fn of listeners4) fn();
+}
+var MoveConnection = {
+  getState: () => state3,
+  /** The Move is connected and following this page — all three at once. */
+  isLive: () => state3.bridge && state3.device && state3.active,
+  subscribe(fn) {
+    listeners4.add(fn);
+    if (!hearing && typeof window !== "undefined") {
+      hearing = true;
+      window.addEventListener(MOVE_CONNECTION_EVENT, hear);
+      window.dispatchEvent(new CustomEvent(MOVE_CONNECTION_ASK_EVENT));
+    }
+    return () => {
+      listeners4.delete(fn);
+    };
+  },
+  /** @internal Tests start from a page that has heard nothing. */
+  resetForTest() {
+    if (hearing && typeof window !== "undefined") window.removeEventListener(MOVE_CONNECTION_EVENT, hear);
+    hearing = false;
+    state3 = AWAY;
+    listeners4.clear();
+  }
+};
+
+// src/components/MoveConnectionDot.tsx
+var import_jsx_runtime20 = require("react/jsx-runtime");
+function MoveConnectionDot({ className }) {
+  const live = (0, import_react19.useSyncExternalStore)(MoveConnection.subscribe, MoveConnection.isLive, () => false);
+  const [mounted, setMounted] = (0, import_react19.useState)(false);
+  (0, import_react19.useEffect)(() => setMounted(true), []);
+  if (!mounted || typeof document === "undefined") return null;
+  const label = live ? "Move connected" : "Move not connected";
+  return (0, import_react_dom6.createPortal)(
+    /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+      "div",
+      {
+        className: `tweakers-root tweakers-move-surface tweakers-move-link${className ? ` ${className}` : ""}`,
+        "data-live": live || void 0,
+        role: "status",
+        "aria-label": label,
+        title: label,
+        children: /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "tweakers-move-link-dot", "aria-hidden": "true" })
+      }
+    ),
+    document.body
+  );
+}
+
 // src/move-kit.ts
 var import_ModulationStore3 = require("tweakers/modulation-store");
 function moveKitOptions(overrides) {
@@ -14128,9 +14198,9 @@ var TimelineStoreClass = class {
     }
     this.listeners.get(id).add(listener);
     return () => {
-      const listeners4 = this.listeners.get(id);
-      listeners4?.delete(listener);
-      if (listeners4?.size === 0 && !this.timelines.has(id)) {
+      const listeners5 = this.listeners.get(id);
+      listeners5?.delete(listener);
+      if (listeners5?.size === 0 && !this.timelines.has(id)) {
         this.listeners.delete(id);
       }
     };
@@ -14241,6 +14311,8 @@ var import_TweakStore15 = require("tweakers/store");
   MOVE_COLOR_PALETTES,
   MOVE_COLOR_STEPS,
   MOVE_COLOR_WHEEL,
+  MOVE_CONNECTION_ASK_EVENT,
+  MOVE_CONNECTION_EVENT,
   MOVE_DECK_MAX,
   MOVE_DIALS,
   MOVE_FLOAT_SELECTOR,
@@ -14289,6 +14361,8 @@ var import_TweakStore15 = require("tweakers/store");
   MoveActionButton,
   MoveActionDeck,
   MoveColorStore,
+  MoveConnection,
+  MoveConnectionDot,
   MoveFunctionChips,
   MoveFunctions,
   MoveGateDisplay,

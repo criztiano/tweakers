@@ -1234,6 +1234,44 @@
 
 /* End of the view stage skin block. */
 
+/* -- The connection dot ----------------------------------------------------
+   Whether the Move is with this app (MoveConnectionDot): six pixels pinned
+   20px off the window's bottom-left corner, emerald while the Move follows
+   this app, red while it does not. The box around the dot is a little
+   larger than the dot, so the pointer can find it for its tooltip. Names:
+   `.tweakers-move-link[data-live]`, `.tweakers-move-link-dot`.
+   ------------------------------------------------------------------------ */
+
+.tweakers-move-link {
+  position: fixed;
+  left: 13px;
+  bottom: 13px;
+  z-index: 10003;
+  padding: 7px;
+  line-height: 0;
+}
+
+.tweakers-move-link-dot {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--move-red);
+  transition: background-color 0.2s ease;
+}
+
+.tweakers-move-link[data-live] .tweakers-move-link-dot {
+  background: var(--move-emerald);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-link-dot {
+    transition: none;
+  }
+}
+
+/* End of the connection dot skin block. */
+
 .tweakers-move-grid {
   display: flex;
   flex-direction: column;
