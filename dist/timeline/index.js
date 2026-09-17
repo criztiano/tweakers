@@ -86,6 +86,10 @@ var TimelineStoreClass = class {
     // object reference is stable until set/clear so useSyncExternalStore readers
     // don't churn.
     this.loopRegions = /* @__PURE__ */ new Map();
+    // Timelines that play once and stop at the end. Absent = looping, the
+    // preview tool's default. Kept across re-registration: a player that
+    // switched looping off keeps it off through a remount.
+    this.playsOnce = /* @__PURE__ */ new Set();
     this.persistTargets = /* @__PURE__ */ new Map();
     this.listCache = null;
     this.rafId = null;
@@ -105,6 +109,17 @@ var TimelineStoreClass = class {
         }
         let time = transport.time + dt;
         let wraps = transport.wraps;
+        if (!this.isLooping(id)) {
+          if (time >= duration) {
+            this.transports.set(id, { time: duration, playing: false, duration, wraps });
+            this.notify(id);
+            continue;
+          }
+          this.transports.set(id, { time, playing: true, duration, wraps });
+          anyPlaying = true;
+          this.notify(id);
+          continue;
+        }
         const region = this.effectiveRegion(id, duration);
         if (time >= region.end) {
           const folded = foldLoopTime(time, duration, region.start, region.end);
@@ -202,10 +217,21 @@ var TimelineStoreClass = class {
     if (region) return region;
     return { start: 0, end: Math.max(0, duration) };
   }
+  /** Looping on: the playhead wraps within the loop region (or the whole
+   * timeline). Off: it plays to the end once and stops there. */
+  setLooping(id, looping) {
+    if (looping === this.isLooping(id)) return;
+    if (looping) this.playsOnce.delete(id);
+    else this.playsOnce.add(id);
+    this.notify(id);
+  }
+  isLooping(id) {
+    return !this.playsOnce.has(id);
+  }
   play(id) {
     const transport = this.transports.get(id);
     if (!transport || transport.duration <= 0 || transport.playing) return;
-    const region = this.effectiveRegion(id, transport.duration);
+    const region = this.isLooping(id) ? this.effectiveRegion(id, transport.duration) : { start: 0, end: transport.duration };
     const restart = transport.time >= region.end;
     this.transports.set(id, {
       ...transport,
@@ -225,7 +251,7 @@ var TimelineStoreClass = class {
   replay(id) {
     const transport = this.transports.get(id);
     if (!transport || transport.duration <= 0) return;
-    const region = this.effectiveRegion(id, transport.duration);
+    const region = this.isLooping(id) ? this.effectiveRegion(id, transport.duration) : { start: 0, end: transport.duration };
     this.transports.set(id, { ...transport, time: region.start, wraps: 0, playing: true });
     this.notify(id);
     this.ensureLoop();
