@@ -100,6 +100,11 @@ export type { MoveWaveformVariant, MoveWaveformView, MoveWaveformStyle, MoveWave
 // whatever display is already up there.
 export { MoveNotifications, moveNotify } from './components/MoveNotifications';
 export type { MoveNotificationsProps, MoveNotifyOptions } from './components/MoveNotifications';
+// Whether the Move is with this app — the kit says it, a dot shows it
+export { MoveConnectionDot } from './components/MoveConnectionDot';
+export type { MoveConnectionDotProps } from './components/MoveConnectionDot';
+export { MoveConnection, MOVE_CONNECTION_EVENT, MOVE_CONNECTION_ASK_EVENT } from './move-connection';
+export type { MoveConnectionState } from './move-connection';
 export { MOVE_NOTIFY_KINDS, MOVE_NOTIFY_GAP, MOVE_FLOAT_SELECTOR, notifyDockBottom } from './move-notify';
 export type { MoveNotifyKind } from './move-notify';
 export { MOVE_PALETTE } from './move-palette';
