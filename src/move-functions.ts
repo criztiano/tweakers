@@ -177,14 +177,14 @@ class MoveFunctionsClass {
    *  attached, but not in the view that took the surface. Views stack (a
    *  wait over the settings room), so a button sleeps while any of them
    *  holds it, and each lets go on its own. */
-  private holds: Set<MoveFunctionButton>[] = [];
+  private holds: { asleep: Set<MoveFunctionButton>; sealed: boolean; keep: MoveFunctionButton[] }[] = [];
   private isDormant(name: MoveFunctionButton): boolean {
-    return this.holds.some((hold) => hold.has(name));
+    return this.holds.some((hold) => (hold.sealed ? !hold.keep.includes(name) : hold.asleep.has(name)));
   }
   /** An attachment made while views are suspended belongs to the view in
-   *  front — live under every hold. */
+   *  front — live under every hold that is not sealed. */
   private wake(name: MoveFunctionButton) {
-    for (const hold of this.holds) hold.delete(name);
+    for (const hold of this.holds) hold.asleep.delete(name);
   }
 
   /**
@@ -228,12 +228,16 @@ class MoveFunctionsClass {
    * release wakes what this suspend put to sleep. Suspends stack — a wait
    * can stand over the settings room — and release in any order: a button
    * sleeps while any standing suspend still holds it.
+   *
+   * `sealed` is a wait's suspend: nothing wakes under it but `keep`. The
+   * view behind a wait stays mounted and goes on attaching as its state
+   * moves, and none of that may light a key while the app works.
    */
-  suspend(keep: MoveFunctionButton[] = []): () => void {
+  suspend(keep: MoveFunctionButton[] = [], options: { sealed?: boolean } = {}): () => void {
     // Everything attached, asleep already or not: a key the view behind put
     // to sleep stays asleep until the view in front lets go of it too.
     const attached = [...new Set([...this.handlers.keys(), ...this.overlays.keys()])];
-    const hold = new Set(attached.filter((name) => !keep.includes(name)));
+    const hold = { asleep: new Set(attached.filter((name) => !keep.includes(name))), sealed: !!options.sealed, keep: [...keep] };
     this.holds.push(hold);
     this.notify();
     return () => {

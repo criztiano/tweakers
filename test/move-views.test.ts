@@ -179,6 +179,52 @@ describe('MoveViews.load', () => {
   });
 });
 
+describe('the hand during a wait', () => {
+  it('keeps a key dark that the view behind attaches again while it waits', async () => {
+    const work = deferred<void>();
+    let ran = '';
+    const done = MoveViews.load(() => work.promise, { title: 'Opening' });
+    detaches.push(MoveFunctions.attach('capture', () => { ran = 'capture'; }));
+    detaches.push(MoveFunctions.attach('delete', () => { ran = 'delete'; }));
+    expect(MoveFunctions.list()).toEqual([]);
+    MoveFunctions.run('delete');
+    expect(ran).toBe('');
+    work.resolve();
+    await done;
+    expect(MoveFunctions.list()).toEqual(['capture', 'delete']);
+  });
+
+  it('lets no computer key through but Escape, which abandons a cancelable wait', async () => {
+    const target = new EventTarget();
+    vi.stubGlobal('window', target);
+    const heard: string[] = [];
+    const key = (k: string) => Object.assign(new Event('keydown', { cancelable: true }), { key: k });
+    const done = MoveViews.load(() => new Promise<void>(() => {}), { title: 'Importing', cancelable: true });
+    target.addEventListener('keydown', (event) => heard.push((event as KeyboardEvent).key));
+    target.dispatchEvent(key('e'));
+    expect(heard).toEqual([]);
+    target.dispatchEvent(key('Escape'));
+    await expect(done).resolves.toBeUndefined();
+    target.dispatchEvent(key('e'));
+    expect(heard).toEqual(['e']);
+    vi.unstubAllGlobals();
+  });
+
+  it('never leaves a wait standing that came up after its work was let go', async () => {
+    // the browser's transition runs its update a frame after it is asked for
+    MoveViews.configureForTest({
+      runner: (change, update) => new Promise<void>((resolve) => setTimeout(() => { changes.push(change); update(); resolve(); }, 16)),
+    });
+    void MoveViews.load(() => new Promise<void>(() => {}), { title: 'Opening A' });
+    await vi.advanceTimersByTimeAsync(MOVE_VIEW_WAIT.delay);
+    const b = MoveViews.load(() => Promise.reject(new Error('gone')), { title: 'Opening B' }).catch(() => 'failed');
+    expect(await b).toBe('failed');
+    await vi.advanceTimersByTimeAsync(50);
+    expect(MoveViews.getState()).toEqual({ busy: false, wait: null });
+    expect(MoveSurfaceStore.getState().wait).toBeNull();
+  });
+});
+
 describe('a cancelable wait', () => {
   it('lights Back as the way out, and Back abandons the work', async () => {
     let signal: AbortSignal | undefined;

@@ -246,6 +246,27 @@ describe('move functions', () => {
     detachDoor();
   });
 
+  it('keeps a sealed suspend dark: what the view behind attaches stays asleep, only `keep` answers', () => {
+    let ran = '';
+    const detachLoop = MoveFunctions.attach('loop', () => { ran = 'loop'; });
+    const endWait = MoveFunctions.suspend(['back'], { sealed: true });
+    const detachLoopAgain = MoveFunctions.attach('loop', () => { ran = 'loop again'; });
+    const detachDelete = MoveFunctions.attach('delete', () => { ran = 'delete'; });
+    const releaseBack = MoveFunctions.push('back', () => { ran = 'cancel'; });
+    assert.deepEqual(MoveFunctions.list(), ['back']);
+    MoveFunctions.run('loop');
+    MoveFunctions.run('delete');
+    assert.equal(ran, '');
+    MoveFunctions.run('back');
+    assert.equal(ran, 'cancel');
+    releaseBack();
+    endWait();
+    assert.deepEqual(MoveFunctions.list(), ['loop', 'delete']);
+    detachLoop();
+    detachLoopAgain();
+    detachDelete();
+  });
+
   it('stacks suspends: a wait over the settings room lets go without waking the room\'s keys', () => {
     const detachLoop = MoveFunctions.attach('loop', () => {});
     const detachMute = MoveFunctions.attach('mute', () => {});

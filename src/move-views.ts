@@ -32,8 +32,9 @@
  *
  * A wait is honest in the hand before it is visible on the screen. The
  * moment work starts the view goes inert and every key goes dark — nothing
- * there can be pressed into doing something twice — and the Move's wheel
- * walks nothing. Work that lands fast never shows a wait; work that does
+ * there can be pressed into doing something twice, not even a key the view
+ * attaches again while it waits — the Move's wheel walks nothing, and the
+ * computer's keys reach nothing but Escape. Work that lands fast never shows a wait; work that does
  * not brings it up, on the screen and on the Move's own display, and holds
  * it long enough to be read. `cancelable` lights Back to abandon the wait.
  * The newest intent wins: a second `load` or a `go` supersedes a running
@@ -228,19 +229,30 @@ let timers = {
 
 /* ---- the hand, while work runs ----------------------------------------- */
 
-/** Darken every key (Back stays, as the way out, when the wait may be
- *  abandoned) and let the wheel walk nothing. Returns the release. */
-function holdHardware(cancelable: boolean): () => void {
-  const wake = MoveFunctions.suspend();
+/** Darken every key and keep it dark — the view behind the wait stays
+ *  mounted and may attach again as its state moves — with Back as the way
+ *  out when the wait may be abandoned. The wheel walks nothing, and the
+ *  computer's keys reach nothing but Escape, which is Back. Returns the
+ *  release. */
+function holdInput(cancelable: boolean): () => void {
+  const wake = MoveFunctions.suspend(cancelable ? ['back'] : [], { sealed: true });
   const releaseBack = cancelable ? MoveFunctions.push('back', () => MoveViews.cancel(), { chip: false }) : null;
   const swallow = (event: Event) => {
     event.preventDefault();
     event.stopImmediatePropagation();
   };
+  const onKey = (event: Event) => {
+    event.stopImmediatePropagation();
+    if ((event as KeyboardEvent).key !== 'Escape') return;
+    event.preventDefault();
+    MoveViews.cancel();
+  };
   const win = typeof window === 'undefined' ? null : window;
   for (const type of JOG_EVENTS) win?.addEventListener(type, swallow, { capture: true });
+  win?.addEventListener('keydown', onKey, { capture: true });
   return () => {
     for (const type of JOG_EVENTS) win?.removeEventListener(type, swallow, { capture: true });
+    win?.removeEventListener('keydown', onKey, { capture: true });
     releaseBack?.();
     wake();
   };
@@ -301,13 +313,16 @@ export const MoveViews = {
         // a wait already up for the work this one replaces stays up
         shownAt: was && state.wait ? was.shownAt : null,
         timer: undefined,
-        release: holdHardware(!!options.cancelable),
+        release: holdInput(!!options.cancelable),
         drop: () => resolve(undefined),
       };
       // the hand is answered before the screen is: keys dark from this frame
       was?.release();
       running = task;
+      // the wait comes up a frame after its timer, inside a transition — by
+      // then the work may have been let go, and a wait nobody runs must not stand
       const show = () => {
+        if (running !== task) return;
         setState({ busy: true, wait: task.wait });
         MoveSurfaceStore.setWait({ title: task.wait.title, ...(task.wait.detail ? { detail: task.wait.detail } : {}) });
       };
