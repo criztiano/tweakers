@@ -9999,6 +9999,9 @@ var FLOAT_LATE_MS = 200;
 var GHOST_ATTR = "data-move-panel-ghost";
 var MOVE_PANEL_MOTION_ATTR = "data-move-panel-motion";
 var ANIMATION_ID = "tweakers-move-panel-motion";
+var HEIGHT_ID = "tweakers-move-panel-height";
+var POSITIONED_ATTR = "data-move-panel-positioned";
+var INNER = ".tweakers-move-inner";
 var compose = (base, scale) => base === "none" ? scale : `${base} ${scale}`;
 function copyCanvases(source, copy) {
   const canvases = source.querySelectorAll("canvas");
@@ -10030,11 +10033,23 @@ function pictureFloats(panel) {
 var reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 function takePanelPicture(panel, scope) {
   if (!panel || typeof panel.animate !== "function") return null;
-  const target = panel.querySelector(TARGET[scope]);
+  const inner = panel.querySelector(`${INNER}:not([${GHOST_ATTR}])`);
+  const innerHeight = inner?.offsetHeight ?? 0;
+  if (scope === "inside" && getComputedStyle(panel).position === "static") {
+    panel.style.position = "relative";
+    panel.setAttribute(POSITIONED_ATTR, "");
+  }
+  const target = panel.querySelector(`${TARGET[scope]}:not([${GHOST_ATTR}])`);
   const box = target?.offsetParent;
-  if (!target || !box) return null;
+  if (!target || !box) {
+    settle(panel);
+    return null;
+  }
   const rect = target.getBoundingClientRect();
-  if (!rect.width || !rect.height) return null;
+  if (!rect.width || !rect.height) {
+    settle(panel);
+    return null;
+  }
   const boxRect = box.getBoundingClientRect();
   const look = getComputedStyle(target);
   const ghost = target.cloneNode(true);
@@ -10064,6 +10079,7 @@ function takePanelPicture(panel, scope) {
     top: rect.top - boxRect.top - box.clientTop + box.scrollTop,
     width: rect.width,
     height: rect.height,
+    innerHeight,
     opacity: Number(look.opacity) || 0,
     transform: look.transform === "none" ? "scale(1)" : look.transform,
     scrolls,
@@ -10084,7 +10100,7 @@ function playPanelChange(picture) {
   const live = panel.querySelector(`${TARGET[scope]}:not([${GHOST_ATTR}])`);
   const parent = live?.parentElement;
   if (!live || !parent || !panel.isConnected) {
-    panel.removeAttribute(MOVE_PANEL_MOTION_ATTR);
+    settle(panel);
     return;
   }
   const plan = movePanelChoreography(reducedMotion());
@@ -10124,8 +10140,62 @@ function playPanelChange(picture) {
   } else {
     animate(live, [{ opacity: 0 }, { opacity: 1 }], arriving.fade.duration, "linear", "linear", "none");
   }
+  easeHeight(picture, plan);
   clearTimeout(settleTimers.get(panel));
-  settleTimers.set(panel, setTimeout(() => panel.removeAttribute(MOVE_PANEL_MOTION_ATTR), plan.duration));
+  settleTimers.set(panel, setTimeout(() => settle(panel), plan.duration));
+}
+function easeHeight(picture, plan) {
+  const inner = picture.panel.querySelector(`${INNER}:not([${GHOST_ATTR}])`);
+  if (!inner || !picture.innerHeight) return;
+  for (const running2 of inner.getAnimations()) if (running2.id === HEIGHT_ID) running2.cancel();
+  let to = naturalHeight(inner);
+  if (Math.abs(to - picture.innerHeight) < 1) {
+    inner.style.removeProperty("overflow-y");
+    inner.style.removeProperty("overflow-clip-margin");
+    return;
+  }
+  inner.style.overflowY = "clip";
+  inner.style.setProperty("overflow-clip-margin", "12px");
+  const frames = (end) => [{ height: `${picture.innerHeight}px` }, { height: `${end}px` }];
+  const easing = plan.arriving.move?.easing ?? "linear";
+  const timing = { duration: plan.duration, fill: "none", id: HEIGHT_ID };
+  let grow;
+  try {
+    grow = inner.animate(frames(to), { ...timing, easing });
+  } catch {
+    grow = inner.animate(frames(to), { ...timing, easing: MOVE_VIEW_EXPO_BEZIER });
+  }
+  const follow = () => {
+    if (grow.playState !== "running") return;
+    const now = naturalHeight(inner);
+    if (Math.abs(now - to) >= 1) {
+      to = now;
+      grow.effect?.setKeyframes(frames(to));
+    }
+    requestAnimationFrame(follow);
+  };
+  requestAnimationFrame(follow);
+}
+function naturalHeight(inner) {
+  let bottom = 0;
+  for (const child2 of Array.from(inner.children)) {
+    if (child2.hasAttribute(GHOST_ATTR)) continue;
+    const { position, marginBottom } = getComputedStyle(child2);
+    if (position === "absolute" || position === "fixed") continue;
+    bottom = Math.max(bottom, child2.offsetTop + child2.offsetHeight + (parseFloat(marginBottom) || 0));
+  }
+  const { paddingBottom, borderBottomWidth } = getComputedStyle(inner);
+  return bottom + (parseFloat(paddingBottom) || 0) + (parseFloat(borderBottomWidth) || 0);
+}
+function settle(panel) {
+  panel.removeAttribute(MOVE_PANEL_MOTION_ATTR);
+  if (panel.hasAttribute(POSITIONED_ATTR)) {
+    panel.style.removeProperty("position");
+    panel.removeAttribute(POSITIONED_ATTR);
+  }
+  const inner = panel.querySelector(`${INNER}:not([${GHOST_ATTR}])`);
+  inner?.style.removeProperty("overflow-y");
+  inner?.style.removeProperty("overflow-clip-margin");
 }
 function playFloats(picture, plan) {
   const { leaving, arriving } = plan;
@@ -13521,7 +13591,7 @@ function letGo() {
   was.drop();
   return was;
 }
-function settle(was, update) {
+function settle2(was, update) {
   was?.release();
   setState(IDLE);
   MoveSurfaceStore.setWait(null);
@@ -13540,7 +13610,7 @@ var MoveViews = {
    */
   go(update, motion2 = "swap") {
     const was = letGo();
-    return runner(motion2, () => settle(was, update));
+    return runner(motion2, () => settle2(was, update));
   },
   /**
    * Change the view once work lands. The view goes inert and its keys dark
@@ -13600,16 +13670,16 @@ var MoveViews = {
         (value) => finish(() => {
           const arrive = options.arrive;
           if (arrive) {
-            void runner(options.motion ?? "open", () => settle(task, () => arrive(value))).then(() => resolve(value));
+            void runner(options.motion ?? "open", () => settle2(task, () => arrive(value))).then(() => resolve(value));
           } else if (task.shownAt !== null) {
-            void runner("resume", () => settle(task)).then(() => resolve(value));
+            void runner("resume", () => settle2(task)).then(() => resolve(value));
           } else {
-            settle(task);
+            settle2(task);
             resolve(value);
           }
         }),
         (error) => finish(() => {
-          const back = task.shownAt !== null ? runner("resume", () => settle(task)) : (settle(task), Promise.resolve());
+          const back = task.shownAt !== null ? runner("resume", () => settle2(task)) : (settle2(task), Promise.resolve());
           void back.then(() => reject(error));
         })
       );
@@ -13620,8 +13690,8 @@ var MoveViews = {
   cancel() {
     if (!running?.wait.cancelable) return false;
     const was = letGo();
-    if (was.shownAt === null) settle(was);
-    else void runner("resume", () => settle(was));
+    if (was.shownAt === null) settle2(was);
+    else void runner("resume", () => settle2(was));
     return true;
   },
   /** @internal The stage counts itself in: without one mounted, changes land
