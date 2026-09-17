@@ -4164,6 +4164,12 @@
   justify-content: center;
 }
 
+/* A host that records puts one more key in the clock: the pill grows by
+   that key and its gap, and still holds the one width. */
+.tweakers-move-wave-time[data-record] {
+  width: calc(128px + 14px + 8px);
+}
+
 /* The transport's state, worn by the clock: play at its left, loop at its
    right — lit while running, ember while not. */
 .tweakers-move-wave-state {
@@ -4175,6 +4181,36 @@
 
 .tweakers-move-wave-state[data-on] {
   color: #dfe2cc;
+}
+
+/* A take in progress is the one state that reads red. */
+.tweakers-move-wave-key[data-name="rec"] .tweakers-move-wave-state[data-on] {
+  color: var(--move-red);
+}
+
+/* Each state on the clock is a key: nothing drawn but the glyph, and a hit
+   area the pill's full height that stops short of its neighbours. */
+.tweakers-move-wave-key {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+}
+
+.tweakers-move-wave-key::before {
+  content: '';
+  position: absolute;
+  inset: -7px -4px;
+}
+
+.tweakers-move-wave-key:focus-visible {
+  outline: var(--move-color-stroke) solid var(--move-text);
+  outline-offset: var(--move-color-stroke);
 }
 
 .tweakers-move-wave-time .tweakers-move-volume-value {

@@ -292,7 +292,13 @@ step row sets the loop and lights it in the card's `accent`, and the panel's
 volume corner carries the card's clock — `m:ss:cc` of the playhead — in place
 of any `MoveVolumeDisplay` readout. Pass `transport` (`playing`, `loopOn`,
 `onPlay`, `onLoop`) and the card takes the Move's Play and Loop keys for the
-host's tape too, with both states lit on the clock. `MoveWaveformStore.setEditor`
+host's tape too, with both states lit on the clock. A host that records adds
+`onRecord` and `recording`: the card takes the Rec key as well, and the clock
+wears a record dot right after Play, red while the take runs. Without
+`onRecord` the Rec key stays the app's and the clock is unchanged. Each state
+on the clock is a button — a click runs the same handler as the hardware key
+(`MoveFunctions.run`), so the screen and the Move never disagree about what
+Play does. `MoveWaveformStore.setEditor`
 widens the claim to the whole step row and the pad row, as the audio
 modulator's editor does.
 
