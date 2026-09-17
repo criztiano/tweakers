@@ -1,12 +1,16 @@
 import { Fragment, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import {
+  ListScreen,
   MoveActionDeck,
+  MoveFunctions,
   MoveNotifications,
   MovePanel,
   MovePresetStore,
   PresetExplorationStore,
   MoveSurfaceStore,
+  MoveViewStage,
+  MoveViews,
   MOVE_NOTIFY_KINDS,
   MOVE_PALETTE,
   MOVE_JOG_EVENT,
@@ -191,10 +195,10 @@ export function Library() {
 
       <Section
         id="deck"
-        title="The action deck"
-        lede="A view with nothing to set yet — a start screen — shows neither a list nor a panel: up to four buttons, one per chip key, in the chip voice, wired to the key. The pale one is the action the view leans on, wearing an icon of its own. Click one, or press the key on the Move; both flash it and run one handler. The greyed one has left its key dark."
+        title="The action deck, and the views around it"
+        lede="A view with nothing to set yet — a start screen — shows neither a list nor a panel: up to four buttons, one per chip key, in the chip voice, wired to the key. The pale one is the action the view leans on, wearing an icon of its own. Click one, or press the key on the Move; both flash it and run one handler. Here the deck stands on a view stage, so its buttons go somewhere: Record from… moves forward onto a list and Back returns; Load file waits on slow work and opens a workspace; the link import can be abandoned with Back; the broken file fails and hands the deck back as it was. A row on the list opens at once — fast work never shows a wait."
       >
-        <DeckPanel />
+        <ViewsPanel />
       </Section>
 
       <Section
@@ -403,18 +407,88 @@ function NotifyPanel() {
   );
 }
 
-/** The deck, live: four actions, one switched off, each press announced. */
-function DeckPanel() {
-  const say = (what: string) => moveNotify.add({ type: 'info', title: what, description: 'from the deck, or the key' });
+/** Work that takes `ms`, stopping when the wait is let go. */
+const pretendWork = (ms: number, signal: AbortSignal, fail?: string) =>
+  new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => (fail ? reject(new Error(fail)) : resolve()), ms);
+    signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
+  });
+
+const SOURCES = ['Spotify', 'Chrome', 'Built-in microphone', 'BlackHole 2ch'];
+
+/** The deck on a view stage: three views and every kind of change between
+ *  them — forward and back, a wait that opens a workspace, one that can be
+ *  abandoned, one that fails, and fast work that never shows a wait. */
+function ViewsPanel() {
+  const [view, setView] = useState<'deck' | 'list' | 'workspace'>('deck');
+  const [file, setFile] = useState('');
+  const [source, setSource] = useState(SOURCES[0]);
+  const failed = (error: unknown) =>
+    moveNotify.add({ type: 'error', title: 'Could not open the file', description: error instanceof Error ? error.message : String(error) });
+  const open = (name: string, ms: number, fail?: string) =>
+    MoveViews.load(({ signal }) => pretendWork(ms, signal, fail), {
+      title: 'Opening',
+      detail: name,
+      arrive: () => { setFile(name); setView('workspace'); },
+    }).catch(failed);
+
+  // Back leaves the list and the workspace; the deck has nowhere to go back to.
+  useEffect(() => {
+    if (view === 'deck') return;
+    return MoveFunctions.attach('back', () =>
+      MoveViews.go(() => setView('deck'), view === 'list' ? 'back' : 'close'),
+    );
+  }, [view]);
+
   return (
-    <MoveActionDeck
-      actions={[
-        { button: 'capture', label: 'Load file', onPress: () => say('Load file') },
-        { button: 'sample', label: 'Record from…', variant: 'highlight', icon: <span className="kit-rec-dot" />, onPress: () => say('Record from…') },
-        { button: 'loop', label: 'Loop last take', onPress: () => say('Loop last take') },
-        { button: 'mute', label: 'Nothing to mute', onPress: () => say('Mute'), disabled: true },
-      ]}
-    />
+    <MoveViewStage className="kit-views-stage">
+      {view === 'deck' ? (
+        <div className="kit-view">
+          <MoveActionDeck
+            actions={[
+              { button: 'capture', label: 'Load file', onPress: () => void open('break-loop-94bpm.wav', 1400) },
+              { button: 'sample', label: 'Record from…', variant: 'highlight', icon: <span className="kit-rec-dot" />, onPress: () => void MoveViews.go(() => setView('list'), 'forward') },
+              {
+                button: 'loop',
+                label: 'Import from a link',
+                onPress: () =>
+                  void MoveViews.load(async ({ signal, say }) => {
+                    await pretendWork(2200, signal);
+                    say('Opening', 'field-recording.mov');
+                    await pretendWork(1200, signal);
+                  }, {
+                    title: 'Downloading',
+                    detail: 'field-recording.mov',
+                    cancelable: true,
+                    arrive: () => { setFile('field-recording.mov'); setView('workspace'); },
+                  }).catch(failed),
+              },
+              { button: 'mute', label: 'Open a broken file', onPress: () => void open('truncated.aif', 900, 'The file ends before its header says it does.') },
+            ]}
+          />
+        </div>
+      ) : view === 'list' ? (
+        <div className="kit-view">
+          <ListScreen
+            back="Deck"
+            onBack={() => void MoveViews.go(() => setView('deck'), 'back')}
+            items={SOURCES}
+            value={source}
+            onSelect={(row) => {
+              setSource(row);
+              void open(`${row} take.wav`, 90);
+            }}
+          />
+        </div>
+      ) : (
+        <div className="kit-view">
+          <p className="kit-view-title">{file}</p>
+          <MoveActionDeck
+            actions={[{ button: 'capture', label: 'Close', onPress: () => void MoveViews.go(() => setView('deck'), 'close') }]}
+          />
+        </div>
+      )}
+    </MoveViewStage>
   );
 }
 
@@ -503,6 +577,9 @@ const NUMERIC_KINDS = ['opacity', 'blur', 'pan', 'stereo-width', 'pitch', 'gauge
 
 const CSS = `
   .kit-rec-dot { flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%; background: #fd3c57; }
+  .kit-views-stage { height: 440px; border-radius: 12px; background: #302e2e; overflow: hidden; }
+  .kit-view { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; height: 100%; }
+  .kit-page .kit-view-title { margin: 0; color: #dee3c9; }
 
 .kit-page {
   --kit-bg: #141414;

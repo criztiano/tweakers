@@ -1013,6 +1013,235 @@
 
 /* End of the action deck skin block. */
 
+/* -- The view stage -------------------------------------------------------
+   Where an app's views change (MoveViewStage + MoveViews). The stage fills
+   its parent; the view sits in its content box, inert while work runs, and
+   hidden under its wait once one stands. The wait is a title, a sweep of
+   eight lights stepping like LEDs, the thing being worked on, and — when
+   Back may abandon it — a Cancel pill in the list's back-pill voice. Names:
+   `.tweakers-move-view-stage[data-busy][data-waiting]`,
+   `.tweakers-move-view-frame` (the picture a change moves),
+   `.tweakers-move-view-content`, `.tweakers-move-view-wait`, `-title`,
+   `-lights`, `-light`, `-detail`, `-cancel`; on the panel,
+   `.tweakers-move[data-move-panel-motion]` and the frozen
+   `[data-move-panel-ghost]` copy a panel change fades out.
+   ------------------------------------------------------------------------ */
+
+.tweakers-move-view-stage {
+  /* One step of the sweep — MOVE_VIEW_WAIT.sweepStep */
+  --move-view-sweep-step: 70ms;
+  position: relative;
+  height: 100%;
+}
+
+.tweakers-move-view-frame {
+  position: relative;
+  height: 100%;
+}
+
+.tweakers-move-view-content {
+  height: 100%;
+}
+
+.tweakers-move-view-stage[data-busy] {
+  cursor: progress;
+}
+
+/* The view stays laid out under its wait — unseen, unreachable, and whole
+   when it comes back. */
+.tweakers-move-view-stage[data-waiting] .tweakers-move-view-content {
+  visibility: hidden;
+}
+
+.tweakers-move-view-wait {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  text-align: center;
+  cursor: progress;
+}
+
+.tweakers-move-view-wait-title {
+  font-size: 20px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.tweakers-move-view-wait-lights {
+  display: flex;
+  gap: 6px;
+}
+
+/* A light is lit on its step and trails off over the next two, then rests
+   dim. steps(1) holds each level until the next — lights switch, they do
+   not glide. The negative delay starts the pass mid-flight, so the first
+   frame is already a sweep and never eight dim lights. */
+.tweakers-move-view-wait-light {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0.12;
+  animation: tweakers-move-view-sweep calc(8 * var(--move-view-sweep-step)) steps(1, end) infinite;
+  animation-delay: calc((var(--i) - 8) * var(--move-view-sweep-step));
+}
+
+@keyframes tweakers-move-view-sweep {
+  0% { opacity: 1; }
+  12.5% { opacity: 0.5; }
+  25% { opacity: 0.24; }
+  37.5%, 100% { opacity: 0.12; }
+}
+
+.tweakers-move-view-wait-detail {
+  max-width: min(360px, 100%);
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.2;
+  opacity: 0.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tweakers-move-view-wait-cancel {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  margin-top: 8px;
+  padding: 0 10px 0 4px;
+  border: none;
+  border-radius: 999px;
+  background: #41403e;
+  color: #dee3c9;
+  font-family: var(--move-font-label);
+  font-size: 14px;
+  line-height: 24px;
+  cursor: pointer;
+  transition: filter 0.12s;
+}
+
+.tweakers-move-view-wait-cancel:hover {
+  filter: brightness(1.15);
+}
+
+.tweakers-move-view-wait-cancel svg {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-view-wait-light {
+    animation: none;
+    opacity: 0.4;
+  }
+}
+
+/* While a change runs, <html> carries its name (data-tweakers-move-view)
+   and the stage's frame is the one picture that moves: the page around it
+   updates in place, and MoveViews plays its own choreography on the
+   pictures instead of the browser's crossfade. Scoped to the attribute, so
+   nothing here touches an app's own view transitions. */
+:root[data-tweakers-move-view] {
+  view-transition-name: none;
+}
+
+:root[data-tweakers-move-view] [data-move-view-frame] {
+  view-transition-name: tweakers-move-view;
+}
+
+/* The pictures sit over the whole window; every layer of them lets the
+   pointer through, so the page around the stage stays in reach. (The views
+   inside the frame take no pointer until the change lands — the browser
+   holds a captured element out of hit testing for as long as it runs. The
+   Move's keys are not held.) */
+:root[data-tweakers-move-view]::view-transition,
+:root[data-tweakers-move-view]::view-transition-group(*),
+:root[data-tweakers-move-view]::view-transition-image-pair(*),
+:root[data-tweakers-move-view]::view-transition-old(*),
+:root[data-tweakers-move-view]::view-transition-new(*) {
+  pointer-events: none;
+}
+
+:root[data-tweakers-move-view]::view-transition-group(tweakers-move-view) {
+  animation: none;
+}
+
+/* The two pictures share one curve, so their opacities always add up to
+   one: laid over each other additively they cross without a dip in light,
+   where plain blending would darken the middle of the change. MoveViews
+   plays the zoom-through on them. */
+:root[data-tweakers-move-view]::view-transition-image-pair(tweakers-move-view) {
+  isolation: isolate;
+}
+
+:root[data-tweakers-move-view]::view-transition-old(tweakers-move-view),
+:root[data-tweakers-move-view]::view-transition-new(tweakers-move-view) {
+  animation: none;
+  mix-blend-mode: plus-lighter;
+}
+
+/* The control panel is a layer of its own — docked to the viewport or
+   standing in the view — named while exactly one stands (two would share
+   the name and void the change). MoveViews plays its short zoom-through:
+   `enter`, `exit`, or `pair` when one panel gives way to another, the two
+   crossing additively like the view; its box eases from one size to the
+   other on the same beat. `hold` — the same panel on both sides — keeps
+   it still while the view moves around it. */
+:root[data-tweakers-move-view][data-tweakers-move-view-panel] .tweakers-move[data-dock] {
+  view-transition-name: tweakers-move-view-panel;
+}
+
+:root[data-tweakers-move-view]::view-transition-group(tweakers-move-view-panel) {
+  animation-duration: 350ms;
+  animation-timing-function: cubic-bezier(0.87, 0, 0.13, 1);
+}
+
+:root[data-tweakers-move-view]::view-transition-old(tweakers-move-view-panel),
+:root[data-tweakers-move-view]::view-transition-new(tweakers-move-view-panel) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+:root[data-tweakers-move-view-panel="pair"]::view-transition-image-pair(tweakers-move-view-panel) {
+  isolation: isolate;
+}
+
+:root[data-tweakers-move-view-panel="pair"]::view-transition-old(tweakers-move-view-panel),
+:root[data-tweakers-move-view-panel="pair"]::view-transition-new(tweakers-move-view-panel) {
+  mix-blend-mode: plus-lighter;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-tweakers-move-view]::view-transition-group(tweakers-move-view-panel) {
+    animation: none;
+  }
+}
+
+/* A change inside the panel (MovePanelMotion): while it plays, the panel's
+   ground eases to the new palette on the controls' beat — the settings
+   room turns cold as it zooms in. */
+.tweakers-move[data-move-panel-motion] {
+  transition: background-color 350ms cubic-bezier(0.87, 0, 0.13, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move[data-move-panel-motion] {
+    transition-duration: 120ms;
+    transition-timing-function: linear;
+  }
+}
+
+/* End of the view stage skin block. */
+
 .tweakers-move-grid {
   display: flex;
   flex-direction: column;

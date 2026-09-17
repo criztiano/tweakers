@@ -82,6 +82,16 @@ that is not under their thumb. A view whose wheel drives no list sends `null`
 and leaves the screen to the frames below it, rather than borrowing it for a
 list some other control owns.
 
+An app's views change in one place. Wrap what it renders for where it is now
+in a single `MoveViewStage`, and make every view change through `MoveViews`:
+`go` for a change the app makes now, with the motion that says where it went,
+and `load` for a change that waits on work. Never swap views bare, never draw
+a spinner or splash of the app's own, and never leave a view live and lit while
+work it started is running — `load` darkens the keys, holds the wheel, puts the
+wait on both screens and hands the view back whole if the work fails. Keep the
+app's state change inside the `update` / `arrive` callback: the transition
+takes its pictures around it, so a state change made outside it jumps.
+
 Every list the wheel walks can be searched, and no app builds that itself:
 holding Capture opens the search on the list in focus (`MoveSearchStore`),
 typing narrows it, the wheel walks what is left, taking a row or Back ends it.

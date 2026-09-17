@@ -140,8 +140,9 @@ describe('the surface store', () => {
   it('reset hands the whole surface back', () => {
     MoveSurfaceStore.claimRows(2);
     MoveSurfaceStore.setScreen({ items: ['a', 'b'], index: 1 });
+    MoveSurfaceStore.setWait({ title: 'Opening' });
     MoveSurfaceStore.reset();
-    assert.deepEqual(MoveSurfaceStore.getState(), { rows: 0, pads: [], padsLabel: null, steps: null, screen: null, search: null });
+    assert.deepEqual(MoveSurfaceStore.getState(), { rows: 0, pads: [], padsLabel: null, steps: null, screen: null, search: null, wait: null });
   });
 });
 

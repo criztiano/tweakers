@@ -40,6 +40,7 @@ import { MoveFunctionChips } from './MoveFunctionChips';
 import { MoveSettingsView } from '../move-settings';
 import { MovePresetStore, type MovePresetView } from '../move-presets';
 import { ListScreen } from './ListScreen';
+import { MovePanelMotion } from './MovePanelMotion';
 
 export interface MovePanelProps {
   theme?: TweakTheme;
@@ -530,6 +531,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     ? buildModMovePage(settingsPanel, modLayout)
     : roomPage ?? pages[Math.min(track, Math.max(0, pages.length - 1))];
   const pageId = page?.panel.id;
+  // Where the panel is, for its own changes to move (MovePanelMotion): a new
+  // page on the track buttons switches the controls, a new surface — the
+  // settings room, a modulator's page — moves the whole inside. Controls
+  // swapped under an unchanged page (another panel list, a mode) stay put.
+  const motionSurface = settingsPanel ? 'mod' : settingsOpen ? 'room' : 'app';
+  const motionPage = settingsPanel ? settingsPanel.id : settingsOpen ? String(roomTrack) : String(track);
   useSyncExternalStore(MovePadListStore.subscribe, MovePadListStore.getVersion, () => 0);
   const padListView = MovePadListStore.getView();
   useEffect(() => {
@@ -1629,7 +1636,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     <div className="tweakers-root tweakers-move-root" data-theme={theme} data-dock={dock}>
       {/* While a composer floats above it the whole instrument comes forward,
           over the app's own panels — you are working in it. */}
-      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-settings={settingsOpen || undefined} data-overlay={padListView || explorationOpen || composition || audioWave != null || roomWave || color || presetSave ? true : undefined}>
+      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-settings={settingsOpen || undefined} data-move-motion-key={`${motionSurface}:${motionPage}|${pages.map((pg) => pg.panel.id).join(' ')}`} data-overlay={padListView || explorationOpen || composition || audioWave != null || roomWave || color || presetSave ? true : undefined}>
         {!explorationOpen && colorMeta && <MoveColorDisplay panelId={page.panel.id} meta={colorMeta} anchor={panelRef} theme={theme} />}
         <PresetExploration />
         {presetSave && <MovePresetSaveInput suggested={presetSave.suggested} />}
@@ -3180,7 +3187,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 
   // Flow docking stays in the host's tree, so the app can centre content and
   // panel as one group; viewport docking portals out and pins to the edge.
-  return dock === 'flow' ? content : createPortal(content, document.body);
+  const moving = (
+    <MovePanelMotion surface={motionSurface} page={motionPage} panel={panelRef}>
+      {content}
+    </MovePanelMotion>
+  );
+  return dock === 'flow' ? moving : createPortal(moving, document.body);
 }
 
 /** A preview's samples as an SVG path across a 100×100 box, y pointing up. */

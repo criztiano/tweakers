@@ -96,6 +96,16 @@ export interface MoveSurfaceState {
    *  by it, the same way the panel narrows the on-screen one. Written by
    *  MoveSearchStore, never by the host. */
   search: MoveScreenSearch | null;
+  /** The wait standing over the view, if any (see `MoveScreenWait`). */
+  wait: MoveScreenWait | null;
+}
+
+/** A wait on the Move's own screen: what is happening, and to what. It
+ *  outranks the wheel's list while it stands — there is nothing to walk
+ *  while the app works. Written by MoveViews, never by the host. */
+export interface MoveScreenWait {
+  title: string;
+  detail?: string;
 }
 
 export interface MoveScreenSearch {
@@ -107,7 +117,7 @@ type Listener = () => void;
 /** `shift`: Shift was held — on the hardware, or on the keyboard for a click. */
 type PressListener = (pad: { x: number; y: 0 | 1; shift: boolean }) => void;
 
-const EMPTY: MoveSurfaceState = { rows: 0, pads: [], padsLabel: null, steps: null, screen: null, search: null };
+const EMPTY: MoveSurfaceState = { rows: 0, pads: [], padsLabel: null, steps: null, screen: null, search: null, wait: null };
 
 let state: MoveSurfaceState = EMPTY;
 const listeners = new Set<Listener>();
@@ -191,6 +201,12 @@ export const MoveSurfaceStore = {
   setScreen(screen: MoveScreenList | null) {
     if (screen) used();
     patch('screen', screen);
+  },
+
+  /** The wait over the view — MoveViews's to write. */
+  setWait(wait: MoveScreenWait | null) {
+    if (wait) used();
+    patch('wait', wait);
   },
 
   /** The search narrowing the wheel list — MoveSearchStore's to write. */
