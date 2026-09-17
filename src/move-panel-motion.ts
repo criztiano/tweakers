@@ -51,6 +51,12 @@ const GHOST_ATTR = 'data-move-panel-ghost';
 export const MOVE_PANEL_MOTION_ATTR = 'data-move-panel-motion';
 /** The id every live-layer animation wears, so the next change can stop it. */
 const ANIMATION_ID = 'tweakers-move-panel-motion';
+/** The panel's height easing from one page's to the next's, apart from the
+ *  controls' own zoom so each can be stopped on its own. */
+const HEIGHT_ID = 'tweakers-move-panel-height';
+/** On a panel this module made positioned for the length of a change. */
+const POSITIONED_ATTR = 'data-move-panel-positioned';
+const INNER = '.tweakers-move-inner';
 
 /** What leaves: a frozen copy of the controls, and where it stood. */
 export interface MovePanelPicture {
@@ -61,6 +67,9 @@ export interface MovePanelPicture {
   top: number;
   width: number;
   height: number;
+  /** How tall the panel's inside stood — mid-change, wherever its height
+   *  had eased to — for the new height to ease from. */
+  innerHeight: number;
   /** The look the leaving layer had reached — mid-change, it is not 1. */
   opacity: number;
   transform: string;
@@ -127,11 +136,26 @@ const reducedMotion = () =>
  */
 export function takePanelPicture(panel: HTMLElement | null, scope: MovePanelChangeScope): MovePanelPicture | null {
   if (!panel || typeof panel.animate !== 'function') return null;
-  const target = panel.querySelector<HTMLElement>(TARGET[scope]);
+  const inner = panel.querySelector<HTMLElement>(`${INNER}:not([${GHOST_ATTR}])`);
+  // layout height: the inside may be mid-zoom, and a scale is not its size
+  const innerHeight = inner?.offsetHeight ?? 0;
+  // The copy of the whole inside hangs in the panel, and must move with it
+  // while the panel's height eases — so the panel holds it, for the change.
+  if (scope === 'inside' && getComputedStyle(panel).position === 'static') {
+    panel.style.position = 'relative';
+    panel.setAttribute(POSITIONED_ATTR, '');
+  }
+  const target = panel.querySelector<HTMLElement>(`${TARGET[scope]}:not([${GHOST_ATTR}])`);
   const box = target?.offsetParent as HTMLElement | null;
-  if (!target || !box) return null;
+  if (!target || !box) {
+    settle(panel);
+    return null;
+  }
   const rect = target.getBoundingClientRect();
-  if (!rect.width || !rect.height) return null;
+  if (!rect.width || !rect.height) {
+    settle(panel);
+    return null;
+  }
   const boxRect = box.getBoundingClientRect();
   const look = getComputedStyle(target);
 
@@ -166,6 +190,7 @@ export function takePanelPicture(panel: HTMLElement | null, scope: MovePanelChan
     top: rect.top - boxRect.top - box.clientTop + box.scrollTop,
     width: rect.width,
     height: rect.height,
+    innerHeight,
     opacity: Number(look.opacity) || 0,
     transform: look.transform === 'none' ? 'scale(1)' : look.transform,
     scrolls,
@@ -193,7 +218,7 @@ export function playPanelChange(picture: MovePanelPicture): void {
   const live = panel.querySelector<HTMLElement>(`${TARGET[scope]}:not([${GHOST_ATTR}])`);
   const parent = live?.parentElement;
   if (!live || !parent || !panel.isConnected) {
-    panel.removeAttribute(MOVE_PANEL_MOTION_ATTR);
+    settle(panel);
     return;
   }
   const plan = movePanelChoreography(reducedMotion());
@@ -243,8 +268,79 @@ export function playPanelChange(picture: MovePanelPicture): void {
     animate(live, [{ opacity: 0 }, { opacity: 1 }], arriving.fade.duration, 'linear', 'linear', 'none');
   }
 
+  easeHeight(picture, plan);
+
   clearTimeout(settleTimers.get(panel));
-  settleTimers.set(panel, setTimeout(() => panel.removeAttribute(MOVE_PANEL_MOTION_ATTR), plan.duration));
+  settleTimers.set(panel, setTimeout(() => settle(panel), plan.duration));
+}
+
+/**
+ * The panel keeps the height it had and eases to the new page's on the
+ * controls' own curve — the page around it moving with it — instead of
+ * jumping the moment the change commits. The controls stay under the
+ * header; what does not fit yet is clipped at the bottom edge (a little past
+ * it, so a zooming copy keeps its corners) until the panel has grown to it.
+ */
+function easeHeight(picture: MovePanelPicture, plan: ReturnType<typeof movePanelChoreography>) {
+  const inner = picture.panel.querySelector<HTMLElement>(`${INNER}:not([${GHOST_ATTR}])`);
+  if (!inner || !picture.innerHeight) return;
+  for (const running of inner.getAnimations()) if (running.id === HEIGHT_ID) running.cancel();
+  let to = naturalHeight(inner);
+  if (Math.abs(to - picture.innerHeight) < 1) {
+    inner.style.removeProperty('overflow-y');
+    inner.style.removeProperty('overflow-clip-margin');
+    return;
+  }
+  inner.style.overflowY = 'clip';
+  inner.style.setProperty('overflow-clip-margin', '12px');
+  const frames = (end: number) => [{ height: `${picture.innerHeight}px` }, { height: `${end}px` }];
+  const easing = plan.arriving.move?.easing ?? 'linear';
+  const timing: KeyframeAnimationOptions = { duration: plan.duration, fill: 'none', id: HEIGHT_ID };
+  let grow: Animation;
+  try {
+    grow = inner.animate(frames(to), { ...timing, easing });
+  } catch {
+    grow = inner.animate(frames(to), { ...timing, easing: MOVE_VIEW_EXPO_BEZIER });
+  }
+  // The new page may still settle a render or two after the commit (a header
+  // chip waking, a row filling in): the easing follows it to where it lands,
+  // so the panel never jumps the last few pixels when the change ends.
+  const follow = () => {
+    if (grow.playState !== 'running') return;
+    const now = naturalHeight(inner);
+    if (Math.abs(now - to) >= 1) {
+      to = now;
+      (grow.effect as KeyframeEffect | null)?.setKeyframes(frames(to));
+    }
+    requestAnimationFrame(follow);
+  };
+  requestAnimationFrame(follow);
+}
+
+/** Where the inside would stand at rest, read while its height is held: the
+ *  bottom of its lowest box in flow, plus its own padding and border. */
+function naturalHeight(inner: HTMLElement): number {
+  let bottom = 0;
+  for (const child of Array.from(inner.children) as HTMLElement[]) {
+    if (child.hasAttribute(GHOST_ATTR)) continue;
+    const { position, marginBottom } = getComputedStyle(child);
+    if (position === 'absolute' || position === 'fixed') continue;
+    bottom = Math.max(bottom, child.offsetTop + child.offsetHeight + (parseFloat(marginBottom) || 0));
+  }
+  const { paddingBottom, borderBottomWidth } = getComputedStyle(inner);
+  return bottom + (parseFloat(paddingBottom) || 0) + (parseFloat(borderBottomWidth) || 0);
+}
+
+/** The change has landed: the panel goes back to how it stands at rest. */
+function settle(panel: HTMLElement) {
+  panel.removeAttribute(MOVE_PANEL_MOTION_ATTR);
+  if (panel.hasAttribute(POSITIONED_ATTR)) {
+    panel.style.removeProperty('position');
+    panel.removeAttribute(POSITIONED_ATTR);
+  }
+  const inner = panel.querySelector<HTMLElement>(`${INNER}:not([${GHOST_ATTR}])`);
+  inner?.style.removeProperty('overflow-y');
+  inner?.style.removeProperty('overflow-clip-margin');
 }
 
 /** Floats that left with the change fade out as copies; floats that came
@@ -284,9 +380,4 @@ function playFloats(picture: MovePanelPicture, plan: ReturnType<typeof movePanel
     if (elapsed < FLOAT_LATE_MS) requestAnimationFrame(arrive);
   };
   arrive();
-}
-
-/** Throw away a picture that will not be played (the change never came). */
-export function dropPanelPicture(picture: MovePanelPicture | null): void {
-  picture?.panel.removeAttribute(MOVE_PANEL_MOTION_ATTR);
 }

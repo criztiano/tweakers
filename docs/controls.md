@@ -9,7 +9,9 @@ adjustment, modulation, readouts and hardware column alignment — and its own
 motion: a page switch zooms the controls through (the leaving page grows to 105%
 and fades, the arriving one grows up from 95%, expo in-out over 350 ms, header
 still), and the settings room or a modulator's page moves the whole inside the
-same way, the ground easing to the room's palette. The live controls answer the
+same way, the ground easing to the room's palette. The panel's height eases from
+the old page's to the new one's on the same curve, the page around it moving
+along, never jumping when the change commits. The live controls answer the
 pointer and the knobs throughout; nothing to wire.
 
 | Kind | Choose for | Configuration / body | Hardware space |
