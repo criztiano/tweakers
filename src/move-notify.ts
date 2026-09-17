@@ -35,6 +35,7 @@ export const MOVE_NOTIFY_GAP = 14;
 export const MOVE_FLOAT_SELECTOR = [
   '.tweakers-move-root .tweakers-move',
   '.tweakers-move-wave[data-variant="dock"]',
+  '.tweakers-move-timeline[data-variant="dock"]',
   '.tweakers-move-curve',
   '.tweakers-move-preset-save',
   '[data-move-float]',

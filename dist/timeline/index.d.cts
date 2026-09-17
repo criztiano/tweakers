@@ -689,6 +689,7 @@ declare class TimelineStoreClass {
     private globalListeners;
     private registrationCounts;
     private loopRegions;
+    private playsOnce;
     private persistTargets;
     private listCache;
     private rafId;
@@ -712,6 +713,10 @@ declare class TimelineStoreClass {
     /** The region the clock actually loops within: the user/code region, or the
      * whole timeline `[0, duration]` when none is set. Playback always wraps. */
     private effectiveRegion;
+    /** Looping on: the playhead wraps within the loop region (or the whole
+     * timeline). Off: it plays to the end once and stops there. */
+    setLooping(id: string, looping: boolean): void;
+    isLooping(id: string): boolean;
     play(id: string): void;
     pause(id: string): void;
     replay(id: string): void;

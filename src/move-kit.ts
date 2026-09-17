@@ -26,6 +26,7 @@ import { MovePadListStore } from './move-pad-list';
 import { MoveColorStore } from './move-color';
 import { MoveFunctions } from './move-functions';
 import { MoveSurfaceStore } from './move-surface-store';
+import { MoveTimelineStore } from './move-timeline';
 import { MoveVolumeDisplay } from './move-volume';
 import { MoveWaveformStore } from './move-waveform';
 import { PresetExplorationStore } from './preset-exploration';
@@ -44,6 +45,27 @@ export interface MoveKitOptions {
   transfer: { sample: typeof sampleTransfer; move: typeof movePoint };
   /** Preset exploration's 32 pads, behind a held Menu. */
   exploration: typeof PresetExplorationStore;
+  /**
+   * The hardware the page holds beyond its registries, forwarded in every
+   * configure — live: `master` (the volume knob) reads true while a timeline
+   * holds it. An app's own `claims` ride inside, and its `master` still wins.
+   */
+  claims: Record<string, unknown>;
+}
+
+/**
+ * The claims, read at every configure. The kit spreads them into each
+ * /configure it sends, and a timeline's mount and unmount push and release
+ * the transport keys — which reconfigures — so the knob is claimed and handed
+ * back on the same beat, with no second bookkeeping.
+ */
+function liveClaims(app?: Record<string, unknown> | null): Record<string, unknown> {
+  const claims: Record<string, unknown> = { ...app };
+  Object.defineProperty(claims, 'master', {
+    enumerable: true,
+    get: () => (app?.master ? app.master : MoveTimelineStore.claimsKnob() || undefined),
+  });
+  return claims;
 }
 
 /** What may ride along: any other bind option, and `null` to decline a
@@ -52,6 +74,7 @@ export type MoveKitOverrides = { [K in keyof MoveKitOptions]?: MoveKitOptions[K]
 
 /** Every registry the bridge kit reads, keyed by its `bindMove` option. */
 export function moveKitOptions<T extends MoveKitOverrides>(overrides?: T): Omit<MoveKitOptions, keyof T> & T {
+  const app = overrides?.claims as Record<string, unknown> | null | undefined;
   return {
     padList: MovePadListStore,
     functions: MoveFunctions,
@@ -63,5 +86,6 @@ export function moveKitOptions<T extends MoveKitOverrides>(overrides?: T): Omit<
     transfer: { sample: sampleTransfer, move: movePoint },
     exploration: PresetExplorationStore,
     ...overrides,
+    claims: app === null ? null : liveClaims(app),
   } as Omit<MoveKitOptions, keyof T> & T;
 }

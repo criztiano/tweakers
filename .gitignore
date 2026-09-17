@@ -23,3 +23,6 @@ CLAUDE.md
 
 # Commercial typefaces once tried here — never redistributed
 example/public/fonts/
+
+# The timeline demo's generated sample video (scripts/demo-video.sh)
+demo/media/

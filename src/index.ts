@@ -111,6 +111,12 @@ export { MOVE_PALETTE } from './move-palette';
 export type { MovePaletteName } from './move-palette';
 export { MoveSettingsView } from './move-settings';
 export { MoveVolumeDisplay } from './move-volume';
+export { MoveTimeline, MoveTimelineClock, MoveTimelineZoom } from './components/MoveTimeline';
+export type { MoveTimelineProps } from './components/MoveTimeline';
+export { MoveTimelineStore, MOVE_TIMELINE_MAX_ZOOM, timelineWindow, followWindow, zoomWindow, timelineTicks, formatTimelineTick, timelineClock, packTimelineRows } from './move-timeline';
+export type { MoveTimelineClaimOptions } from './move-timeline';
+export { useMoveTimeline } from './use-move-timeline';
+export type { UseMoveTimelineOptions, MoveTimelineValues } from './use-move-timeline';
 export type { MoveVolumeDisplayState } from './move-volume';
 export { ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, MOVE_FUNCTION_ICONS } from './icons';
 export type { MoveFunctionGlyph } from './icons';
@@ -195,7 +201,7 @@ export type {
 } from './modulation-core';
 export { ModRing } from './components/ModRing';
 
-// Timeline stores (headless — the Timeline UI lives in dialkit)
+// Timeline stores — the runtime under `useMoveTimeline` and dialkit's sidebar timeline
 export { formatClock } from './timeline-core';
 export { TimelineStore } from './store/TimelineStore';
 export type {

@@ -4291,9 +4291,9 @@ function XYSurface({ label, x, y, disabled, onChange }) {
 }
 
 // src/components/MovePanel.tsx
-import { useEffect as useEffect12, useLayoutEffect as useLayoutEffect3, useId, useRef as useRef12, useState as useState7, useSyncExternalStore as useSyncExternalStore3, useCallback as useCallback2 } from "react";
-import { createPortal as createPortal3 } from "react-dom";
-import { TweakStore as TweakStore13 } from "tweakers/store";
+import { useEffect as useEffect13, useLayoutEffect as useLayoutEffect4, useId, useRef as useRef13, useState as useState8, useSyncExternalStore as useSyncExternalStore4, useCallback as useCallback3 } from "react";
+import { createPortal as createPortal4 } from "react-dom";
+import { TweakStore as TweakStore14 } from "tweakers/store";
 import { ModulationStore as ModulationStore2 } from "tweakers/modulation-store";
 
 // src/curve-composer-core.ts
@@ -9278,24 +9278,1157 @@ function MoveFunctionChips({ className }) {
   return /* @__PURE__ */ jsx14("div", { className: className ? `tweakers-move-chips ${className}` : "tweakers-move-chips", children: chips.map((chip) => /* @__PURE__ */ jsx14(MoveFunctionChipButton, { chip }, chip.name)) });
 }
 
-// src/move-settings.ts
-var open = false;
-var listeners2 = /* @__PURE__ */ new Set();
-var set = (next) => {
-  if (open === next) return;
-  open = next;
-  for (const fn of listeners2) fn();
-};
-var MoveSettingsView = {
-  isOpen: () => open,
-  open: () => set(true),
-  close: () => set(false),
-  toggle: () => set(!open),
-  subscribe(fn) {
-    listeners2.add(fn);
-    return () => listeners2.delete(fn);
+// src/components/MoveTimeline.tsx
+import { useCallback as useCallback2, useEffect as useEffect12, useLayoutEffect as useLayoutEffect3, useMemo as useMemo3, useRef as useRef12, useState as useState7, useSyncExternalStore as useSyncExternalStore3 } from "react";
+import { createPortal as createPortal3 } from "react-dom";
+import { formatLabel as formatLabel2, TweakStore as TweakStore13 } from "tweakers/store";
+
+// src/store/persist.ts
+var STORAGE_VERSION = "v1";
+function resolvePersistTarget(kind, id, persist) {
+  if (!persist) return null;
+  const config = persist === true ? {} : persist;
+  const base = config.key ?? id;
+  if (!base) return null;
+  return {
+    key: `tweakers:${STORAGE_VERSION}:${kind}:${base}`,
+    storage: config.storage ?? "localStorage"
+  };
+}
+function getStorage(name) {
+  try {
+    if (typeof window === "undefined") return null;
+    return name === "sessionStorage" ? window.sessionStorage : window.localStorage;
+  } catch {
+    return null;
+  }
+}
+function loadPersisted(target) {
+  if (!target) return null;
+  try {
+    const storage = getStorage(target.storage);
+    if (!storage) return null;
+    const raw = storage.getItem(target.key);
+    if (raw == null) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+function savePersisted(target, value) {
+  if (!target) return;
+  try {
+    const storage = getStorage(target.storage);
+    if (!storage) return;
+    storage.setItem(target.key, JSON.stringify(value));
+  } catch {
+  }
+}
+function clearPersisted(target) {
+  if (!target) return;
+  try {
+    const storage = getStorage(target.storage);
+    if (!storage) return;
+    storage.removeItem(target.key);
+  } catch {
+  }
+}
+
+// src/store/TimelineStore.ts
+var MIN_LOOP_REGION = 0.02;
+function loopSpan(duration, loopStart, loopEnd) {
+  if (!Number.isFinite(duration) || duration <= 0) return 0;
+  if (!Number.isFinite(loopStart)) loopStart = 0;
+  const end = Number.isFinite(loopEnd) ? Math.min(Math.max(0, loopEnd), duration) : duration;
+  const start = Math.min(Math.max(0, loopStart), duration);
+  const span = end - start;
+  return span > 0 ? span : duration;
+}
+function foldLoopTime(time, duration, loopStart = 0, loopEnd) {
+  if (!Number.isFinite(time) || !Number.isFinite(duration) || duration <= 0) {
+    return { time: 0, wraps: 0 };
+  }
+  const end = Number.isFinite(loopEnd) ? Math.min(Math.max(0, loopEnd), duration) : duration;
+  if (time < end) return { time, wraps: 0 };
+  const span = loopSpan(duration, loopStart, end);
+  const base = end - span;
+  const over = time - base;
+  return { time: base + over % span, wraps: Math.floor(over / span) };
+}
+var TIMELINE_CLIP_COLORS = [
+  "#E8E8E8"
+  // neutral white — slightly off-white so the pure-white selection ring still reads
+];
+var EMPTY_TRANSPORT = Object.freeze({ time: 0, playing: false, duration: 0, wraps: 0 });
+var TimelineStoreClass = class {
+  constructor() {
+    this.timelines = /* @__PURE__ */ new Map();
+    this.transports = /* @__PURE__ */ new Map();
+    this.listeners = /* @__PURE__ */ new Map();
+    this.globalListeners = /* @__PURE__ */ new Set();
+    this.registrationCounts = /* @__PURE__ */ new Map();
+    // User-defined loop windows. Absent = loop the whole timeline. The stored
+    // object reference is stable until set/clear so useSyncExternalStore readers
+    // don't churn.
+    this.loopRegions = /* @__PURE__ */ new Map();
+    // Timelines that play once and stop at the end. Absent = looping, the
+    // preview tool's default. Kept across re-registration: a player that
+    // switched looping off keeps it off through a remount.
+    this.playsOnce = /* @__PURE__ */ new Set();
+    this.persistTargets = /* @__PURE__ */ new Map();
+    this.listCache = null;
+    this.rafId = null;
+    this.lastTick = 0;
+    this.tick = (now) => {
+      const dt = Math.max(0, (now - this.lastTick) / 1e3);
+      this.lastTick = now;
+      let anyPlaying = false;
+      for (const [id, transport] of this.transports) {
+        if (!transport.playing) continue;
+        const meta = this.timelines.get(id);
+        const duration = meta?.duration ?? transport.duration;
+        if (!Number.isFinite(duration) || duration <= 0) {
+          this.transports.set(id, { time: 0, playing: false, duration: 0, wraps: 0 });
+          this.notify(id);
+          continue;
+        }
+        let time = transport.time + dt;
+        let wraps = transport.wraps;
+        if (!this.isLooping(id)) {
+          if (time >= duration) {
+            this.transports.set(id, { time: duration, playing: false, duration, wraps });
+            this.notify(id);
+            continue;
+          }
+          this.transports.set(id, { time, playing: true, duration, wraps });
+          anyPlaying = true;
+          this.notify(id);
+          continue;
+        }
+        const region = this.effectiveRegion(id, duration);
+        if (time >= region.end) {
+          const folded = foldLoopTime(time, duration, region.start, region.end);
+          time = folded.time;
+          wraps += folded.wraps;
+        }
+        this.transports.set(id, { time, playing: true, duration, wraps });
+        anyPlaying = true;
+        this.notify(id);
+      }
+      this.rafId = anyPlaying ? window.requestAnimationFrame(this.tick) : null;
+    };
+  }
+  register(meta, options) {
+    const existing = this.timelines.get(meta.id);
+    if (existing && existing.name !== meta.name) {
+      console.warn(
+        `[tweakers] Timeline id "${meta.id}" is already registered by "${existing.name}"; "${meta.name}" will share and overwrite that transport.`
+      );
+    }
+    const firstRegistration = !this.registrationCounts.has(meta.id);
+    this.registrationCounts.set(meta.id, (this.registrationCounts.get(meta.id) ?? 0) + 1);
+    if (firstRegistration) {
+      this.persistTargets.set(meta.id, resolvePersistTarget("timeline-loop", meta.id, options.persist));
+      this.hydrateLoopRegion(meta);
+    }
+    this.applyMeta(meta, options.autoplay);
+  }
+  update(meta) {
+    if (!this.timelines.has(meta.id)) return;
+    this.applyMeta(meta, false);
+  }
+  unregister(id) {
+    const nextCount = (this.registrationCounts.get(id) ?? 1) - 1;
+    if (nextCount > 0) {
+      this.registrationCounts.set(id, nextCount);
+      return;
+    }
+    this.registrationCounts.delete(id);
+    this.timelines.delete(id);
+    this.transports.delete(id);
+    this.loopRegions.delete(id);
+    this.persistTargets.delete(id);
+    if (this.listeners.get(id)?.size === 0) this.listeners.delete(id);
+    this.listCache = null;
+    this.notifyGlobal();
+  }
+  /** Restore a persisted loop region, or seed one from a code-defined
+   * `options.loop`. No region at all = loop the whole timeline (the default). */
+  hydrateLoopRegion(meta) {
+    const duration = Number.isFinite(meta.duration) ? Math.max(0, meta.duration) : 0;
+    const persisted = loadPersisted(this.persistTargets.get(meta.id) ?? null);
+    if (persisted && Number.isFinite(persisted.start) && Number.isFinite(persisted.end)) {
+      const region = this.normalizeRegion(persisted.start, persisted.end, duration);
+      if (region) this.loopRegions.set(meta.id, region);
+      return;
+    }
+    if (meta.loop) {
+      const region = this.normalizeRegion(meta.loopStart, duration, duration);
+      if (region) this.loopRegions.set(meta.id, region);
+    }
+  }
+  /** Clamp to [0,duration], order min/max, and reject degenerate widths. */
+  normalizeRegion(start, end, duration) {
+    if (!Number.isFinite(start) || !Number.isFinite(end) || duration <= 0) return null;
+    const lo = Math.min(Math.max(0, Math.min(start, end)), duration);
+    const hi = Math.min(Math.max(0, Math.max(start, end)), duration);
+    if (hi - lo < MIN_LOOP_REGION) return null;
+    return { start: lo, end: hi };
+  }
+  setLoopRegion(id, start, end) {
+    const transport = this.transports.get(id);
+    const duration = transport?.duration ?? this.timelines.get(id)?.duration ?? 0;
+    const region = this.normalizeRegion(start, end, duration);
+    if (!region) return;
+    this.loopRegions.set(id, region);
+    savePersisted(this.persistTargets.get(id) ?? null, region);
+    this.notify(id);
+  }
+  clearLoopRegion(id) {
+    if (!this.loopRegions.has(id)) return;
+    this.loopRegions.delete(id);
+    clearPersisted(this.persistTargets.get(id) ?? null);
+    this.notify(id);
+  }
+  /** The raw user/code region, or undefined when looping the whole timeline.
+   * The reference is stable between changes (safe for useSyncExternalStore). */
+  getLoopRegion(id) {
+    return this.loopRegions.get(id);
+  }
+  /** The region the clock actually loops within: the user/code region, or the
+   * whole timeline `[0, duration]` when none is set. Playback always wraps. */
+  effectiveRegion(id, duration) {
+    const region = this.loopRegions.get(id);
+    if (region) return region;
+    return { start: 0, end: Math.max(0, duration) };
+  }
+  /** Looping on: the playhead wraps within the loop region (or the whole
+   * timeline). Off: it plays to the end once and stops there. */
+  setLooping(id, looping) {
+    if (looping === this.isLooping(id)) return;
+    if (looping) this.playsOnce.delete(id);
+    else this.playsOnce.add(id);
+    this.notify(id);
+  }
+  isLooping(id) {
+    return !this.playsOnce.has(id);
+  }
+  play(id) {
+    const transport = this.transports.get(id);
+    if (!transport || transport.duration <= 0 || transport.playing) return;
+    const region = this.isLooping(id) ? this.effectiveRegion(id, transport.duration) : { start: 0, end: transport.duration };
+    const restart = transport.time >= region.end;
+    this.transports.set(id, {
+      ...transport,
+      time: restart ? region.start : transport.time,
+      wraps: restart ? 0 : transport.wraps,
+      playing: true
+    });
+    this.notify(id);
+    this.ensureLoop();
+  }
+  pause(id) {
+    const transport = this.transports.get(id);
+    if (!transport || !transport.playing) return;
+    this.transports.set(id, { ...transport, playing: false });
+    this.notify(id);
+  }
+  replay(id) {
+    const transport = this.transports.get(id);
+    if (!transport || transport.duration <= 0) return;
+    const region = this.isLooping(id) ? this.effectiveRegion(id, transport.duration) : { start: 0, end: transport.duration };
+    this.transports.set(id, { ...transport, time: region.start, wraps: 0, playing: true });
+    this.notify(id);
+    this.ensureLoop();
+  }
+  seek(id, time) {
+    const transport = this.transports.get(id);
+    if (!transport || !Number.isFinite(time)) return;
+    const clamped = Math.min(transport.duration, Math.max(0, time));
+    this.transports.set(id, { ...transport, time: clamped, wraps: 0 });
+    this.notify(id);
+  }
+  getTransport(id) {
+    return this.transports.get(id) ?? EMPTY_TRANSPORT;
+  }
+  getTimeline(id) {
+    return this.timelines.get(id);
+  }
+  getTimelines() {
+    if (!this.listCache) {
+      this.listCache = Array.from(this.timelines.values());
+    }
+    return this.listCache;
+  }
+  subscribe(id, listener) {
+    if (!this.listeners.has(id)) {
+      this.listeners.set(id, /* @__PURE__ */ new Set());
+    }
+    this.listeners.get(id).add(listener);
+    return () => {
+      const listeners5 = this.listeners.get(id);
+      listeners5?.delete(listener);
+      if (listeners5?.size === 0 && !this.timelines.has(id)) {
+        this.listeners.delete(id);
+      }
+    };
+  }
+  subscribeGlobal(listener) {
+    this.globalListeners.add(listener);
+    return () => {
+      this.globalListeners.delete(listener);
+    };
+  }
+  applyMeta(meta, autoplay) {
+    const duration = Number.isFinite(meta.duration) ? Math.max(0, meta.duration) : 0;
+    const loopStart = Number.isFinite(meta.loopStart) ? Math.min(duration, Math.max(0, meta.loopStart)) : 0;
+    const safeMeta = { ...meta, duration, loopStart };
+    this.timelines.set(meta.id, safeMeta);
+    const region = this.loopRegions.get(meta.id);
+    if (region) {
+      const reclamped = this.normalizeRegion(region.start, region.end, duration);
+      if (reclamped) this.loopRegions.set(meta.id, reclamped);
+      else this.loopRegions.delete(meta.id);
+    }
+    const existing = this.transports.get(meta.id);
+    if (existing) {
+      this.transports.set(meta.id, {
+        time: Math.min(existing.time, duration),
+        playing: duration > 0 && existing.playing,
+        duration,
+        wraps: existing.wraps
+      });
+    } else {
+      const playing2 = duration > 0 && autoplay;
+      this.transports.set(meta.id, { time: 0, playing: playing2, duration, wraps: 0 });
+      if (playing2) this.ensureLoop();
+    }
+    this.listCache = null;
+    this.notify(meta.id);
+    this.notifyGlobal();
+  }
+  ensureLoop() {
+    if (this.rafId !== null || typeof window === "undefined") return;
+    this.lastTick = performance.now();
+    this.rafId = window.requestAnimationFrame(this.tick);
+  }
+  notify(id) {
+    this.listeners.get(id)?.forEach((fn) => fn());
+  }
+  notifyGlobal() {
+    this.globalListeners.forEach((fn) => fn());
   }
 };
+var TimelineStore = /* @__PURE__ */ new TimelineStoreClass();
+
+// src/timeline-core.ts
+import { formatLabel, inferStep, isHexColor, resolveTweakValues } from "tweakers/store";
+
+// src/transition-math.ts
+import { isEasingConfigValue, isSpringConfigValue } from "tweakers/store";
+function round22(value) {
+  return Math.round(value * 100) / 100;
+}
+function clamp9(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+function isTransitionConfig(value) {
+  return isSpringConfigValue(value) || isEasingConfigValue(value);
+}
+function isPhysicsSpring(transition) {
+  return transition.type === "spring" && (transition.stiffness !== void 0 || transition.damping !== void 0 || transition.mass !== void 0);
+}
+function springParams(spring) {
+  if (isPhysicsSpring(spring)) {
+    return { stiffness: spring.stiffness ?? 200, damping: spring.damping ?? 25, mass: spring.mass ?? 1 };
+  }
+  const visualDuration = Math.max(0.05, spring.visualDuration ?? 0.3);
+  const bounce = spring.bounce ?? 0.3;
+  const root = 2 * Math.PI / (visualDuration * 1.2);
+  const stiffness = root * root;
+  const damping = 2 * Math.min(1, Math.max(0.05, 1 - bounce)) * Math.sqrt(stiffness);
+  return { stiffness, damping, mass: 1 };
+}
+function springProgress(t, { stiffness, damping, mass }) {
+  if (t <= 0) return 0;
+  const w0 = Math.sqrt(stiffness / mass);
+  const zeta = damping / (2 * Math.sqrt(stiffness * mass));
+  if (zeta < 0.9999) {
+    const wd2 = w0 * Math.sqrt(1 - zeta * zeta);
+    return 1 - Math.exp(-zeta * w0 * t) * (Math.cos(wd2 * t) + zeta * w0 / wd2 * Math.sin(wd2 * t));
+  }
+  if (zeta < 1.0001) {
+    return 1 - Math.exp(-w0 * t) * (1 + w0 * t);
+  }
+  const wd = w0 * Math.sqrt(zeta * zeta - 1);
+  const r1 = -zeta * w0 + wd;
+  const r2 = -zeta * w0 - wd;
+  return 1 + (r2 * Math.exp(r1 * t) - r1 * Math.exp(r2 * t)) / (r1 - r2);
+}
+function springSettleDuration(params) {
+  const w0 = Math.sqrt(params.stiffness / params.mass);
+  const zeta = params.damping / (2 * Math.sqrt(params.stiffness * params.mass));
+  const decay = zeta >= 1 ? zeta * w0 - w0 * Math.sqrt(Math.max(0, zeta * zeta - 1)) : zeta * w0;
+  const duration = Math.log(200) / Math.max(decay, 1e-6);
+  return round22(clamp9(duration, 0.05, 10));
+}
+function cubicBezierProgress(p, [x1, y1, x2, y2]) {
+  if (p <= 0) return 0;
+  if (p >= 1) return 1;
+  const sampleX = (t2) => bezierAxis2(t2, x1, x2);
+  const sampleY = (t2) => bezierAxis2(t2, y1, y2);
+  let t = p;
+  for (let i = 0; i < 8; i++) {
+    const x = sampleX(t) - p;
+    if (Math.abs(x) < 1e-5) return sampleY(t);
+    const dx = bezierAxisDerivative(t, x1, x2);
+    if (Math.abs(dx) < 1e-6) break;
+    t -= x / dx;
+  }
+  let lo = 0;
+  let hi = 1;
+  t = p;
+  while (hi - lo > 1e-5) {
+    if (sampleX(t) < p) lo = t;
+    else hi = t;
+    t = (lo + hi) / 2;
+  }
+  return sampleY(t);
+}
+function bezierAxis2(t, a1, a2) {
+  return (1 - 3 * a2 + 3 * a1) * t * t * t + (3 * a2 - 6 * a1) * t * t + 3 * a1 * t;
+}
+function bezierAxisDerivative(t, a1, a2) {
+  return 3 * (1 - 3 * a2 + 3 * a1) * t * t + 2 * (3 * a2 - 6 * a1) * t + 3 * a1;
+}
+function resolveClipTransition(raw, clipDuration) {
+  const safeDuration = Math.max(0.05, clipDuration);
+  if (raw.type === "easing") {
+    return {
+      transition: { ...raw, duration: safeDuration },
+      duration: safeDuration,
+      isPhysics: false
+    };
+  }
+  if (isPhysicsSpring(raw)) {
+    return {
+      transition: raw,
+      duration: springSettleDuration(springParams(raw)),
+      isPhysics: true
+    };
+  }
+  return {
+    transition: { type: "spring", bounce: raw.bounce ?? 0.2, visualDuration: safeDuration },
+    duration: safeDuration,
+    isPhysics: false
+  };
+}
+
+// src/timeline-core.ts
+var CLIP_VALUE_STEP = 0.01;
+var TIMELINE_MIN_CLIP_DURATION = 0.05;
+var DEFAULT_STEP_DURATION = 0.3;
+var DEFAULT_CLIP_TRANSITION = { type: "spring", bounce: 0.2 };
+var RESERVED_KEYS = /* @__PURE__ */ new Set(["time", "playing", "duration", "play", "pause", "replay", "seek"]);
+function isClipConfig(value) {
+  return isPlainObject(value) && Number.isFinite(value.at);
+}
+function isGroupConfig(value) {
+  if (!isPlainObject(value) || "at" in value) return false;
+  const entries = Object.values(value);
+  return entries.length > 0 && entries.some(isClipConfig);
+}
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function nonNegativeFinite(value, fallback = 0) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : fallback;
+}
+function animatedDuration(value, fallback = DEFAULT_STEP_DURATION) {
+  return Math.max(TIMELINE_MIN_CLIP_DURATION, nonNegativeFinite(value, fallback));
+}
+function transitionDefaultDuration(transition) {
+  if (transition.type === "easing") return animatedDuration(transition.duration);
+  if (isPhysicsSpring(transition)) {
+    return animatedDuration(springSettleDuration(springParams(transition)));
+  }
+  if (transition.visualDuration !== void 0) return animatedDuration(transition.visualDuration);
+  return animatedDuration(springSettleDuration(springParams(transition)));
+}
+function defaultStepDuration(step, inheritedTransition) {
+  const curve = step.transition ?? inheritedTransition;
+  if (curve && isPhysicsSpring(curve)) return transitionDefaultDuration(curve);
+  if (step.duration !== void 0) return animatedDuration(step.duration);
+  if (step.transition) return transitionDefaultDuration(step.transition);
+  return DEFAULT_STEP_DURATION;
+}
+function defaultTrackDuration(track, inheritedTransition) {
+  const curve = track.transition ?? inheritedTransition;
+  if (track.steps?.length) {
+    return track.steps.reduce((sum, step) => sum + defaultStepDuration(step, curve), 0);
+  }
+  if (curve && isPhysicsSpring(curve)) return transitionDefaultDuration(curve);
+  if (track.duration !== void 0) return animatedDuration(track.duration);
+  if (track.transition) return transitionDefaultDuration(track.transition);
+  return DEFAULT_STEP_DURATION;
+}
+function defaultClipDuration(clip) {
+  const defaultCurve = isTransitionConfig(clip.transition) ? clip.transition : DEFAULT_CLIP_TRANSITION;
+  if (clip.props) {
+    return Object.values(clip.props).reduce(
+      (max, track) => Math.max(
+        max,
+        nonNegativeFinite(track.delay) + defaultTrackDuration(track, defaultCurve)
+      ),
+      0
+    );
+  }
+  if (clip.steps?.length) {
+    return clip.steps.reduce((sum, step) => sum + defaultStepDuration(step, defaultCurve), 0);
+  }
+  const animating = Boolean(clip.transition || clip.from || clip.to);
+  if (!animating) return nonNegativeFinite(clip.duration);
+  if (isPhysicsSpring(defaultCurve)) return transitionDefaultDuration(defaultCurve);
+  if (clip.duration !== void 0) return animatedDuration(clip.duration);
+  if (isTransitionConfig(clip.transition)) return transitionDefaultDuration(clip.transition);
+  return clip.from || clip.to ? transitionDefaultDuration(DEFAULT_CLIP_TRANSITION) : 0;
+}
+function normalizeLoopMode(value) {
+  if (value === true || value === "mirror" || value === "repeat") return "repeat";
+  return "off";
+}
+function normalizeStoredTransition(transition, clipDuration) {
+  if (transition.type === "easing") {
+    return { ...transition, duration: clipDuration };
+  }
+  if (isPhysicsSpring(transition)) {
+    return transition;
+  }
+  return { type: "spring", bounce: transition.bounce ?? 0.2 };
+}
+function collectClipEntries(config) {
+  const entries = [];
+  for (const [key, value] of Object.entries(config)) {
+    if (key === "duration") continue;
+    if (RESERVED_KEYS.has(key)) {
+      console.warn(`[tweakers] Timeline key "${key}" collides with a reserved key and was skipped.`);
+      continue;
+    }
+    if (isClipConfig(value)) {
+      entries.push({ path: key, childKey: key, clip: value });
+    } else if (isGroupConfig(value)) {
+      for (const [childKey, childClip] of Object.entries(value)) {
+        if (isClipConfig(childClip)) {
+          entries.push({ path: `${key}.${childKey}`, childKey, group: key, clip: childClip });
+        } else {
+          console.warn(
+            `[tweakers] Timeline clip "${key}.${childKey}" is missing a numeric "at" and was skipped.`
+          );
+        }
+      }
+    } else {
+      console.warn(
+        `[tweakers] Timeline entry "${key}" is neither a clip (needs a numeric "at") nor a group of clips and was skipped.`
+      );
+    }
+  }
+  return entries;
+}
+function definedValues(values) {
+  if (!values) return void 0;
+  const result = {};
+  for (const [key, value] of Object.entries(values)) {
+    if (value !== void 0) result[key] = value;
+  }
+  return result;
+}
+function setTweakPath(tweakConfig, path, value) {
+  const segments = path.split(".");
+  let node = tweakConfig;
+  for (const segment of segments.slice(0, -1)) {
+    node = node[segment] ?? (node[segment] = {});
+  }
+  node[segments[segments.length - 1]] = value;
+}
+function parseTimelineConfig(config) {
+  const entries = collectClipEntries(config);
+  let maxEnd = 0;
+  for (const { clip } of entries) {
+    maxEnd = Math.max(maxEnd, nonNegativeFinite(clip.at) + defaultClipDuration(clip));
+  }
+  const duration = typeof config.duration === "number" && Number.isFinite(config.duration) && config.duration > 0 ? config.duration : maxEnd > 0 ? Math.ceil(maxEnd * 100 - 1e-4) / 100 : 1;
+  const tweakConfig = {};
+  const clips = [];
+  entries.forEach(({ path, childKey, group, clip }, index) => {
+    const raw = clip;
+    if (raw.props && (raw.steps?.length || raw.from || raw.to)) {
+      console.warn(
+        `[tweakers] Timeline clip "${path}": "props" is mutually exclusive with from/to/steps \u2014 using "props".`
+      );
+    } else if (raw.steps?.length && raw.to) {
+      console.warn(
+        `[tweakers] Timeline clip "${path}": "to" is ignored when "steps" is present \u2014 each leg's "to" defines its targets.`
+      );
+    }
+    const hasSteps = Boolean(clip.steps?.length) && !clip.props;
+    const hasProps = Boolean(clip.props);
+    const single = isTransitionConfig(clip.transition) ? clip.transition : void 0;
+    const total = defaultClipDuration(clip);
+    const defaultCurve = single ?? DEFAULT_CLIP_TRANSITION;
+    const clipAt = nonNegativeFinite(clip.at);
+    const clipTweak = {
+      at: [clipAt, 0, duration, CLIP_VALUE_STEP]
+    };
+    if (!hasSteps && !hasProps) {
+      clipTweak.duration = [total, 0, duration, CLIP_VALUE_STEP];
+    }
+    if (!hasSteps && !hasProps && (clip.transition || clip.from || clip.to)) {
+      clipTweak.transition = normalizeStoredTransition(defaultCurve, total);
+    }
+    let tracks;
+    if (clip.props) {
+      tracks = [];
+      for (const [prop, track] of Object.entries(clip.props)) {
+        if (TRACK_RESERVED.has(prop) || /^step\d+$/.test(prop)) {
+          console.warn(`[tweakers] Timeline property "${prop}" collides with a clip field and was skipped.`);
+          continue;
+        }
+        const trackDuration = defaultTrackDuration(track, defaultCurve);
+        const trackCurve = track.transition ?? defaultCurve;
+        const hasTrackSteps = Boolean(track.steps?.length);
+        const trackTweak = {
+          delay: [nonNegativeFinite(track.delay), 0, duration, CLIP_VALUE_STEP]
+        };
+        if (!hasTrackSteps) {
+          trackTweak.duration = [trackDuration, 0, duration, CLIP_VALUE_STEP];
+          trackTweak.transition = normalizeStoredTransition(trackCurve, trackDuration);
+        }
+        const fromValue = track.from ?? (hasTrackSteps ? void 0 : track.to);
+        if (hasTrackSteps && fromValue === void 0) {
+          console.warn(
+            `[tweakers] Timeline clip "${path}": track "${prop}" has steps but no "from" \u2014 declare its starting value.`
+          );
+        }
+        if (fromValue !== void 0) {
+          trackTweak.from = scalarTweak(prop, fromValue, hasTrackSteps ? track.steps[0]?.to : track.to);
+        }
+        if (!hasTrackSteps && track.to !== void 0) {
+          trackTweak.to = scalarTweak(prop, track.to, fromValue);
+        }
+        let trackStepKeys;
+        if (hasTrackSteps) {
+          trackStepKeys = [];
+          let previous = fromValue;
+          track.steps.forEach((step, stepIndex) => {
+            const stepKey = `step${stepIndex + 1}`;
+            trackStepKeys.push(stepKey);
+            const stepDuration = defaultStepDuration(step, trackCurve);
+            const stepTweak = {
+              duration: [stepDuration, 0, duration, CLIP_VALUE_STEP],
+              transition: normalizeStoredTransition(step.transition ?? trackCurve, stepDuration)
+            };
+            if (step.to !== void 0) {
+              stepTweak.to = scalarTweak(prop, step.to, previous);
+              previous = step.to;
+            }
+            trackTweak[stepKey] = stepTweak;
+          });
+        }
+        clipTweak[prop] = trackTweak;
+        tracks.push({ prop, stepKeys: trackStepKeys });
+      }
+    }
+    if (clip.from && !hasProps) {
+      clipTweak.from = withFromToRanges(
+        clip.from,
+        hasSteps ? definedValues(clip.steps[0]?.to) : clip.to
+      );
+    }
+    if (!hasSteps && !hasProps && clip.to) {
+      clipTweak.to = withFromToRanges(clip.to, clip.from);
+    }
+    let stepKeys;
+    if (hasSteps) {
+      stepKeys = [];
+      let running2 = clip.from;
+      clip.steps.forEach((step, stepIndex) => {
+        const stepKey = `step${stepIndex + 1}`;
+        stepKeys.push(stepKey);
+        const stepDuration = defaultStepDuration(step, defaultCurve);
+        const stepTweak = {
+          duration: [stepDuration, 0, duration, CLIP_VALUE_STEP],
+          transition: normalizeStoredTransition(step.transition ?? defaultCurve, stepDuration)
+        };
+        const stepTo = definedValues(step.to);
+        if (stepTo) {
+          for (const prop of Object.keys(stepTo)) {
+            if (!running2 || !(prop in running2)) {
+              console.warn(
+                `[tweakers] Timeline clip "${path}": property "${prop}" first animates in step ${stepIndex + 1} with no starting value \u2014 declare it in "from".`
+              );
+            }
+          }
+          stepTweak.to = withFromToRanges(stepTo, running2);
+        }
+        clipTweak[stepKey] = stepTweak;
+        running2 = { ...running2 ?? {}, ...stepTo ?? {} };
+      });
+    }
+    setTweakPath(tweakConfig, path, clipTweak);
+    clips.push({
+      key: path,
+      label: formatLabel(childKey),
+      color: TIMELINE_CLIP_COLORS[index % TIMELINE_CLIP_COLORS.length],
+      loop: normalizeLoopMode(clip.loop),
+      group,
+      stepKeys,
+      tracks
+    });
+  });
+  return { duration, tweakConfig, clips };
+}
+var TRACK_RESERVED = /* @__PURE__ */ new Set(["at", "duration", "loop", "from", "to", "transition", "delay"]);
+function scalarTweak(prop, value, counterpart) {
+  const record = withFromToRanges(
+    { [prop]: value },
+    counterpart === void 0 ? void 0 : { [prop]: counterpart }
+  );
+  return record[prop];
+}
+var FROM_TO_RANGE_PRESETS = [
+  [/^(x|y|z|tx|ty|offsetx|offsety|translatex|translatey)$/i, { min: -100, max: 100, step: 1 }],
+  [/rotat|angle|skew/i, { min: -180, max: 180, step: 1 }],
+  [/^scale/i, { min: 0, max: 2, step: 0.01 }],
+  [/opacity|alpha/i, { min: 0, max: 1, step: 0.01 }],
+  [/blur|radius|spread/i, { min: 0, max: 100, step: 1 }]
+];
+function inferFromToRange(key, value, counterpart) {
+  const lo = Math.min(value, counterpart ?? value);
+  const hi = Math.max(value, counterpart ?? value);
+  const preset = FROM_TO_RANGE_PRESETS.find(([pattern]) => pattern.test(key))?.[1];
+  if (preset) {
+    return [value, Math.min(preset.min, lo), Math.max(preset.max, hi), preset.step];
+  }
+  if (lo >= 0 && hi <= 1) {
+    return [value, 0, 1, 0.01];
+  }
+  const extent = Math.max(Math.abs(lo), Math.abs(hi), 1);
+  const min = lo < 0 ? -extent * 2 : 0;
+  const max = Math.max(extent * 2, hi);
+  return [value, min, max, inferStep(min, max)];
+}
+function withFromToRanges(config, counterpart) {
+  const result = {};
+  for (const [key, value] of Object.entries(config)) {
+    const other = counterpart?.[key];
+    if (typeof value === "number") {
+      result[key] = inferFromToRange(key, value, typeof other === "number" ? other : void 0);
+    } else if (isPlainObject(value) && !("type" in value)) {
+      result[key] = withFromToRanges(
+        value,
+        isPlainObject(other) && !("type" in other) ? other : void 0
+      );
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+function curveStatic(transition, duration) {
+  if (!transition) return { duration };
+  if (transition.type === "easing") return { duration, ease: transition.ease };
+  const spring = springParams(transition);
+  return { duration, spring, settle: springSettleDuration(spring) };
+}
+function sampleCurve(curve, elapsed) {
+  if (elapsed <= 0) return 0;
+  if (curve.spring) {
+    if (curve.settle !== void 0 && elapsed >= curve.settle) return 1;
+    return springProgress(elapsed, curve.spring);
+  }
+  if (curve.ease) {
+    return cubicBezierProgress(clamp9(curve.duration > 0 ? elapsed / curve.duration : 1, 0, 1), curve.ease);
+  }
+  return curve.duration > 0 ? Math.min(1, elapsed / curve.duration) : 1;
+}
+function resolvedAtPath(resolved, path) {
+  let node = resolved;
+  for (const segment of path.split(".")) {
+    node = isPlainObject(node) ? node[segment] : void 0;
+  }
+  return isPlainObject(node) ? node : {};
+}
+function computeStaticClips(parsed, flatValues) {
+  const resolved = resolveTweakValues(parsed.tweakConfig, flatValues);
+  return parsed.clips.map(
+    (clip) => buildClipStatic(resolvedAtPath(resolved, clip.key), clip, parsed.duration)
+  );
+}
+function computeStaticTimeline(parsed, flatValues) {
+  let clips = computeStaticClips(parsed, flatValues);
+  const maxEnd = clips.reduce(
+    (end, clip) => Math.max(end, clip.at + clip.duration),
+    parsed.duration
+  );
+  const duration = maxEnd > parsed.duration ? Math.ceil(maxEnd * 100 - 1e-4) / 100 : parsed.duration;
+  if (duration !== parsed.duration) {
+    clips = clips.map(
+      (clip) => clip.loop === "repeat" ? { ...clip, end: duration } : clip
+    );
+  }
+  return { duration, clips };
+}
+function computeClipStaticFromValues(values, clip, timelineDuration) {
+  return buildClipStatic(unflattenClipValues(values, clip.key), clip, timelineDuration);
+}
+function buildClipStatic(clipResolved, clip, timelineDuration) {
+  {
+    const at = typeof clipResolved.at === "number" ? clipResolved.at : 0;
+    const from = isPlainObject(clipResolved.from) ? clipResolved.from : void 0;
+    const single = isTransitionConfig(clipResolved.transition) ? clipResolved.transition : void 0;
+    const staticClip = {
+      key: clip.key,
+      childKey: clip.group ? clip.key.slice(clip.group.length + 1) : clip.key,
+      group: clip.group,
+      at,
+      duration: 0,
+      loop: "off",
+      end: 0,
+      isPhysics: false,
+      from,
+      tracks: [],
+      explicitSteps: Boolean(clip.stepKeys?.length)
+    };
+    if (clip.tracks?.length) {
+      const tracks = clip.tracks.map(({ prop, stepKeys }) => {
+        const trackResolved = isPlainObject(clipResolved[prop]) ? clipResolved[prop] : {};
+        const delay = typeof trackResolved.delay === "number" ? trackResolved.delay : 0;
+        const fromValue = trackResolved.from;
+        let steps;
+        let trackDuration = 0;
+        if (stepKeys?.length) {
+          let running2 = fromValue;
+          steps = stepKeys.map((stepKey) => {
+            const stepResolved = isPlainObject(trackResolved[stepKey]) ? trackResolved[stepKey] : {};
+            const storedDuration = typeof stepResolved.duration === "number" ? stepResolved.duration : 0;
+            const raw = isTransitionConfig(stepResolved.transition) ? stepResolved.transition : void 0;
+            const effective = raw ? resolveClipTransition(raw, storedDuration) : { transition: void 0, duration: storedDuration, isPhysics: false };
+            const toValue = stepResolved.to;
+            const step = {
+              key: stepKey,
+              offset: trackDuration,
+              duration: effective.duration,
+              isPhysics: effective.isPhysics,
+              start: running2 === void 0 ? {} : { [prop]: running2 },
+              to: toValue === void 0 ? {} : { [prop]: toValue },
+              curve: curveStatic(effective.transition, effective.duration)
+            };
+            if (toValue !== void 0) running2 = toValue;
+            trackDuration += effective.duration;
+            return step;
+          });
+        } else {
+          const storedDuration = typeof trackResolved.duration === "number" ? trackResolved.duration : 0;
+          const raw = isTransitionConfig(trackResolved.transition) ? trackResolved.transition : void 0;
+          const effective = raw ? resolveClipTransition(raw, storedDuration) : { transition: void 0, duration: storedDuration, isPhysics: false };
+          const toValue = trackResolved.to;
+          trackDuration = effective.duration;
+          steps = [
+            {
+              key: null,
+              offset: 0,
+              duration: effective.duration,
+              isPhysics: effective.isPhysics,
+              start: fromValue === void 0 ? {} : { [prop]: fromValue },
+              to: toValue === void 0 ? {} : { [prop]: toValue },
+              curve: curveStatic(effective.transition, effective.duration)
+            }
+          ];
+        }
+        return { prop, delay, duration: trackDuration, steps };
+      });
+      staticClip.tracks = tracks;
+      staticClip.props = tracks.map((track) => track.prop);
+      staticClip.duration = tracks.reduce((max, track) => Math.max(max, track.delay + track.duration), 0);
+      staticClip.from = Object.fromEntries(
+        tracks.map((track) => [track.prop, track.steps[0].start[track.prop]])
+      );
+      staticClip.to = Object.fromEntries(
+        tracks.map((track) => {
+          const last = track.steps[track.steps.length - 1];
+          return [track.prop, last.to[track.prop] ?? last.start[track.prop]];
+        })
+      );
+      staticClip.loop = staticClip.duration > 0 ? clip.loop : "off";
+      staticClip.end = staticClip.loop === "off" ? staticClip.at + staticClip.duration : timelineDuration;
+      return staticClip;
+    }
+    if (clip.stepKeys?.length) {
+      let running2 = { ...from ?? {} };
+      let offset = 0;
+      const steps = clip.stepKeys.map((stepKey) => {
+        const stepResolved = isPlainObject(clipResolved[stepKey]) ? clipResolved[stepKey] : {};
+        const storedDuration = typeof stepResolved.duration === "number" ? stepResolved.duration : 0;
+        const raw = isTransitionConfig(stepResolved.transition) ? stepResolved.transition : void 0;
+        const effective = raw ? resolveClipTransition(raw, storedDuration) : { transition: void 0, duration: storedDuration, isPhysics: false };
+        const to = isPlainObject(stepResolved.to) ? stepResolved.to : {};
+        const step = {
+          key: stepKey,
+          offset,
+          duration: effective.duration,
+          isPhysics: effective.isPhysics,
+          start: running2,
+          to,
+          curve: curveStatic(effective.transition, effective.duration)
+        };
+        running2 = { ...running2, ...to };
+        offset += effective.duration;
+        return step;
+      });
+      staticClip.tracks = [{ delay: 0, duration: offset, steps }];
+      staticClip.duration = offset;
+      staticClip.to = running2;
+    } else {
+      const storedDuration = typeof clipResolved.duration === "number" ? clipResolved.duration : 0;
+      const to = isPlainObject(clipResolved.to) ? clipResolved.to : void 0;
+      if (single) {
+        const effective = resolveClipTransition(single, storedDuration);
+        staticClip.duration = effective.duration;
+        staticClip.isPhysics = effective.isPhysics;
+        staticClip.transition = effective.transition;
+        staticClip.css = transitionToCss(effective.transition);
+        staticClip.to = to;
+        if (from && to) {
+          staticClip.tracks = [
+            {
+              delay: 0,
+              duration: effective.duration,
+              steps: [
+                {
+                  key: null,
+                  offset: 0,
+                  duration: effective.duration,
+                  isPhysics: effective.isPhysics,
+                  start: from,
+                  to,
+                  curve: curveStatic(effective.transition, effective.duration)
+                }
+              ]
+            }
+          ];
+        }
+      } else {
+        staticClip.duration = storedDuration;
+        staticClip.to = to;
+        if (from && to) {
+          const base = resolveClipTransition(DEFAULT_CLIP_TRANSITION, storedDuration);
+          staticClip.duration = base.duration;
+          staticClip.tracks = [
+            {
+              delay: 0,
+              duration: base.duration,
+              steps: [
+                {
+                  key: null,
+                  offset: 0,
+                  duration: base.duration,
+                  isPhysics: false,
+                  start: from,
+                  to,
+                  curve: curveStatic(base.transition, base.duration)
+                }
+              ]
+            }
+          ];
+        }
+      }
+    }
+    if (staticClip.tracks.length) {
+      const props = new Set(Object.keys(from ?? {}));
+      for (const track of staticClip.tracks) {
+        for (const step of track.steps) {
+          for (const prop of Object.keys(step.to)) props.add(prop);
+        }
+      }
+      staticClip.props = Array.from(props);
+    }
+    staticClip.loop = staticClip.duration > 0 ? clip.loop : "off";
+    staticClip.end = staticClip.loop === "off" ? staticClip.at + staticClip.duration : timelineDuration;
+    return staticClip;
+  }
+}
+function stepAtPosition(steps, pos) {
+  for (const step of steps) {
+    if (pos < step.offset + step.duration) return step;
+  }
+  return steps[steps.length - 1];
+}
+function evalPropAtPos(steps, prop, pos) {
+  const step = stepAtPosition(steps, pos);
+  const within = Math.max(0, pos - step.offset);
+  if (prop in step.to) {
+    const eased = sampleCurve(step.curve, within);
+    return interpolateResolved(step.start[prop], step.to[prop], eased);
+  }
+  return step.start[prop];
+}
+function computeClipState(clip, time, cycleTime = time) {
+  const total = clip.duration;
+  const looping = clip.loop === "repeat" && total > 0;
+  const started = time >= clip.at || looping && cycleTime > time;
+  const done = time >= clip.end;
+  const elapsed = time - clip.at;
+  const phaseElapsed = looping ? cycleTime - clip.at : elapsed;
+  const fold = (e) => looping ? e % total : e;
+  const basePos = started ? fold(Math.max(0, phaseElapsed)) : 0;
+  const progress = total > 0 ? clamp9(basePos / total, 0, 1) : started ? 1 : 0;
+  let current;
+  let stepIndex = 0;
+  if (clip.tracks.length && clip.props?.length) {
+    current = {};
+    for (const track of clip.tracks) {
+      const props = track.prop !== void 0 ? [track.prop] : clip.props;
+      for (const prop of props) {
+        const startValue = track.steps[0]?.start[prop];
+        if (!started) {
+          if (startValue !== void 0) current[prop] = startValue;
+          continue;
+        }
+        const phase = phaseElapsed - track.delay;
+        if (phase <= 0) {
+          if (startValue !== void 0) current[prop] = startValue;
+          continue;
+        }
+        const pos = looping && track.duration > 0 ? phase % track.duration : phase;
+        const value = evalPropAtPos(track.steps, prop, pos);
+        if (value !== void 0) current[prop] = value;
+      }
+    }
+    const shared = clip.tracks[0];
+    if (started && clip.explicitSteps && shared.prop === void 0) {
+      stepIndex = shared.steps.indexOf(stepAtPosition(shared.steps, basePos));
+    }
+  }
+  return {
+    at: clip.at,
+    duration: clip.duration,
+    loop: clip.loop,
+    started,
+    active: started && !done,
+    done,
+    progress,
+    step: clip.explicitSteps ? stepIndex : void 0,
+    from: clip.from,
+    to: clip.to,
+    animate: started ? clip.to : clip.from,
+    transition: clip.transition,
+    css: clip.css,
+    current
+  };
+}
+function interpolateResolved(from, to, p) {
+  if (typeof from === "number" && typeof to === "number") {
+    return from + (to - from) * p;
+  }
+  if (typeof from === "string" && typeof to === "string") {
+    const mixed = mixHexColors(from, to, p);
+    if (mixed) return mixed;
+  }
+  if (isPlainObject(from) && isPlainObject(to)) {
+    const result = {};
+    for (const key of Object.keys(from)) {
+      result[key] = key in to ? interpolateResolved(from[key], to[key], p) : from[key];
+    }
+    for (const key of Object.keys(to)) {
+      if (!(key in from)) result[key] = to[key];
+    }
+    return result;
+  }
+  return p < 0.5 ? from : to;
+}
+function parseHex2(hex) {
+  if (!isHexColor(hex)) return null;
+  let h = hex.slice(1);
+  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+  return [
+    parseInt(h.slice(0, 2), 16),
+    parseInt(h.slice(2, 4), 16),
+    parseInt(h.slice(4, 6), 16),
+    h.length === 8 ? parseInt(h.slice(6, 8), 16) : 255
+  ];
+}
+function mixHexColors(a, b, p) {
+  const ca = parseHex2(a);
+  const cb = parseHex2(b);
+  if (!ca || !cb) return null;
+  const t = clamp9(p, 0, 1);
+  const mixed = ca.map((v, i) => Math.round(v + (cb[i] - v) * t));
+  const hex = (n) => n.toString(16).padStart(2, "0");
+  const rgb = `#${hex(mixed[0])}${hex(mixed[1])}${hex(mixed[2])}`;
+  return mixed[3] === 255 ? rgb : `${rgb}${hex(mixed[3])}`;
+}
+function transitionToCss(transition) {
+  if (!transition) return void 0;
+  if (transition.type === "easing") {
+    return {
+      transitionDuration: `${round22(transition.duration)}s`,
+      transitionTimingFunction: `cubic-bezier(${transition.ease.map((v) => round22(v)).join(", ")})`
+    };
+  }
+  const params = springParams(transition);
+  const dampingRatio = params.damping / (2 * Math.sqrt(params.stiffness * params.mass));
+  const duration = transition.visualDuration ?? springSettleDuration(params);
+  const bounce = transition.bounce ?? Math.max(0, round22(1 - dampingRatio));
+  return {
+    transitionDuration: `${round22(duration)}s`,
+    transitionTimingFunction: bounce > 0.05 ? `cubic-bezier(0.34, ${round22(1.2 + bounce)}, 0.64, 1)` : "cubic-bezier(0.25, 0.6, 0.35, 1)"
+  };
+}
+function unflattenClipValues(values, clipKey) {
+  const prefix = `${clipKey}.`;
+  const result = {};
+  const entries = Object.entries(values).filter(([path]) => path.startsWith(prefix)).map(([path, value]) => ({ segments: path.slice(prefix.length).split("."), value })).sort((a, b) => a.segments.length - b.segments.length);
+  for (const { segments, value } of entries) {
+    let node = result;
+    for (let i = 0; i < segments.length - 1; i++) {
+      const existing = node[segments[i]];
+      node = isPlainObject(existing) ? existing : node[segments[i]] = {};
+    }
+    node[segments[segments.length - 1]] = cloneTimelineValue(value);
+  }
+  return result;
+}
+function cloneTimelineValue(value) {
+  if (Array.isArray(value)) return value.map(cloneTimelineValue);
+  if (!isPlainObject(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, nested]) => [key, cloneTimelineValue(nested)])
+  );
+}
+function clampClipMove(at, duration, timelineDuration) {
+  return clamp9(round22(at), 0, Math.max(0, timelineDuration - duration));
+}
+function clampClipResizeEnd(duration, at, timelineDuration) {
+  return clamp9(round22(duration), TIMELINE_MIN_CLIP_DURATION, timelineDuration - at);
+}
+function clampClipResizeStart(newAt, at, duration) {
+  const clampedAt = clamp9(round22(newAt), 0, at + duration - TIMELINE_MIN_CLIP_DURATION);
+  return { at: clampedAt, duration: round22(at + duration - clampedAt) };
+}
+function clampStepResize(duration, at, otherStepsTotal, timelineDuration) {
+  const max = Math.max(TIMELINE_MIN_CLIP_DURATION, timelineDuration - at - otherStepsTotal);
+  return clamp9(round22(duration), TIMELINE_MIN_CLIP_DURATION, max);
+}
+function formatClock(time, tenths = false) {
+  const safe = Math.max(0, time);
+  const minutes = Math.floor(safe / 60);
+  const seconds = safe - minutes * 60;
+  const secondsText = tenths ? seconds.toFixed(1).padStart(4, "0") : String(Math.floor(seconds)).padStart(2, "0");
+  return `${String(minutes).padStart(2, "0")}:${secondsText}`;
+}
+function formatSeconds(value) {
+  return `${round22(value)}s`;
+}
 
 // src/move-presets.ts
 import { TweakStore as TweakStore12 } from "tweakers/store";
@@ -9485,6 +10618,838 @@ var MovePresetStoreClass = class {
   }
 };
 var MovePresetStore = new MovePresetStoreClass();
+
+// src/move-timeline.ts
+var MOVE_TIMELINE_MAX_ZOOM = 256;
+var PAGE_LEAD = 0.25;
+var clamp10 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+function timelineWindow(duration, zoom, start) {
+  const whole = Number.isFinite(duration) && duration > 0 ? duration : 0;
+  const span = whole / Math.max(1, zoom);
+  return { start: clamp10(Number.isFinite(start) ? start : 0, 0, Math.max(0, whole - span)), span };
+}
+function followWindow(time, duration, zoom, start) {
+  const w = timelineWindow(duration, zoom, start);
+  if (w.span <= 0 || time >= w.start && time <= w.start + w.span) return w.start;
+  const lead = time < w.start ? w.span * (1 - PAGE_LEAD) : w.span * PAGE_LEAD;
+  return timelineWindow(duration, zoom, time - lead).start;
+}
+function zoomWindow(anchor, duration, zoom, start, nextZoom) {
+  const next = clamp10(nextZoom, 1, MOVE_TIMELINE_MAX_ZOOM);
+  const w = timelineWindow(duration, zoom, start);
+  const onScreen = w.span > 0 && anchor >= w.start && anchor <= w.start + w.span;
+  const at = onScreen ? anchor : w.start + w.span / 2;
+  const ratio = w.span > 0 ? (at - w.start) / w.span : 0;
+  const nextSpan = timelineWindow(duration, next, 0).span;
+  return { zoom: next, start: timelineWindow(duration, next, at - ratio * nextSpan).start };
+}
+var TICK_STEPS = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600];
+function timelineTicks(start, span, width, spacing = 96) {
+  if (!(span > 0) || !(width > 0)) return { step: 1, major: [], minor: [] };
+  const wanted = spacing / width * span;
+  const step = TICK_STEPS.find((s) => s >= wanted) ?? TICK_STEPS[TICK_STEPS.length - 1];
+  const leading = Number(String(step).replace(/[0.]/g, "")[0]);
+  const parts = step === 15 ? 3 : leading === 2 ? 4 : 5;
+  const minorStep = step / parts;
+  const major = [];
+  const minor = [];
+  const first = Math.ceil((start - 1e-9) / minorStep);
+  const last = Math.floor((start + span + 1e-9) / minorStep);
+  for (let i = first; i <= last; i++) {
+    const t = Number((i * minorStep).toFixed(6));
+    (i % parts === 0 ? major : minor).push(t);
+  }
+  return { step, major, minor };
+}
+function formatTimelineTick(time, step) {
+  if (step >= 1) return `${Math.floor(time / 60)}:${String(Math.round(time % 60)).padStart(2, "0")}`;
+  const decimals = step >= 0.1 ? 1 : 2;
+  return `${time.toFixed(decimals)}s`;
+}
+function packTimelineRows(spans) {
+  const rowEnds = [];
+  const rows = new Array(spans.length);
+  const order = spans.map((_, i) => i).sort((a, b) => spans[a].at - spans[b].at || a - b);
+  for (const i of order) {
+    const { at, end } = spans[i];
+    let row = rowEnds.findIndex((rowEnd) => rowEnd <= at + 1e-9);
+    if (row < 0) row = rowEnds.push(end) - 1;
+    else rowEnds[row] = end;
+    rows[i] = row;
+  }
+  return rows;
+}
+function timelineClock(time) {
+  const t = Math.max(0, Number.isFinite(time) ? time : 0);
+  return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}:${String(Math.floor(t % 1 * 100)).padStart(2, "0")}`;
+}
+function timelineReadout(time) {
+  const t = Math.max(0, time);
+  const minutes = Math.floor(t / 60);
+  const seconds = t - minutes * 60;
+  return `${minutes}:${seconds < 10 ? "0" : ""}${seconds.toFixed(1)}`;
+}
+var wheelTaken = () => {
+  const presets = MovePresetStore.getView();
+  return MoveSearchStore.isOpen() || !!presets && presets.phase !== "closing" || !!MoveColorStore.getView() || !!PresetExplorationStore.getState() || !!MoveSurfaceStore.getState().screen || MoveWaveformStore.wantsSteps();
+};
+var VOLUME_EVENT = "move-tweakers:volume";
+var JOG_EVENT = "move-tweakers:jog";
+var JOG_CLICK_EVENT = "move-tweakers:jog-click";
+var MoveTimelineStoreClass = class {
+  constructor() {
+    this.claims = [];
+    this.zoom = 1;
+    this.start = 0;
+    this.recording = false;
+    this.recordFrom = 0;
+    this.teardown = null;
+    this.listeners = /* @__PURE__ */ new Set();
+    this.version = 0;
+  }
+  /**
+   * Put a timeline on the surface: the knob, the wheel and the transport keys
+   * are its until the returned release. The knob names itself as the
+   * timeline's time, on the panel and on the Move's screen.
+   */
+  register(id, options = {}) {
+    const claim = { id, options };
+    this.claims.push(claim);
+    this.hold(claim);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const front = this.front() === claim;
+      this.claims = this.claims.filter((c) => c !== claim);
+      if (!front) return;
+      const next = this.front();
+      if (next) this.hold(next);
+      else this.letGo();
+    };
+  }
+  /** The timeline holding the surface, or null. */
+  activeId() {
+    return this.front()?.id ?? null;
+  }
+  isRegistered() {
+    return this.claims.length > 0;
+  }
+  /** True while a timeline holds the volume knob — read by the kit's claims. */
+  claimsKnob() {
+    return this.claims.length > 0;
+  }
+  /** Whether the timeline in front records — the clock's Rec button follows. */
+  canRecord() {
+    return !!this.front()?.options.onRecord;
+  }
+  isRecording() {
+    return this.recording;
+  }
+  /** Where the take in progress started, in seconds. */
+  recordingFrom() {
+    return this.recordFrom;
+  }
+  getZoom() {
+    return this.zoom;
+  }
+  /** The window on screen for the timeline in front. */
+  getWindow() {
+    const id = this.activeId();
+    return timelineWindow(id ? TimelineStore.getTransport(id).duration : 0, this.zoom, this.start);
+  }
+  /** The clock the panel shows: m:ss:cc of the playhead. */
+  clock() {
+    const id = this.activeId();
+    return timelineClock(id ? TimelineStore.getTransport(id).time : 0);
+  }
+  // ── the transport, as the keys and the clock run it ──
+  togglePlay() {
+    const id = this.activeId();
+    if (!id) return;
+    if (TimelineStore.getTransport(id).playing) TimelineStore.pause(id);
+    else TimelineStore.play(id);
+  }
+  toggleLoop() {
+    const id = this.activeId();
+    if (id) TimelineStore.setLooping(id, !TimelineStore.isLooping(id));
+  }
+  /** Let the loop region go — looping, if on, runs the whole timeline again. */
+  clearLoopRegion() {
+    const id = this.activeId();
+    if (id) TimelineStore.clearLoopRegion(id);
+  }
+  /** Start a take (rolling the transport if it stands still), or end the one running. */
+  toggleRecord() {
+    const claim = this.front();
+    if (!claim?.options.onRecord) return;
+    if (this.recording) {
+      this.stopRecording();
+      return;
+    }
+    const transport = TimelineStore.getTransport(claim.id);
+    this.recording = true;
+    this.recordFrom = transport.time >= transport.duration ? 0 : transport.time;
+    this.notify();
+    claim.options.onRecord(true);
+    if (!transport.playing) TimelineStore.play(claim.id);
+  }
+  // ── the hands ──
+  /** The volume knob: the waveform's scrub — its feel, over the shown window. */
+  scrub(delta, fine = false) {
+    const id = this.activeId();
+    if (!id || !delta) return;
+    const { time, duration } = TimelineStore.getTransport(id);
+    if (duration <= 0) return;
+    const at = scrubBy(time / duration, delta, fine, this.zoom, duration) * duration;
+    TimelineStore.seek(id, at);
+  }
+  /** The wheel: proportional zoom, around the playhead. */
+  zoomBy(delta) {
+    const id = this.activeId();
+    if (!id || !delta) return;
+    const { time } = TimelineStore.getTransport(id);
+    this.zoomTo(zoomBy(this.zoom, delta), time);
+  }
+  /** Zoom to a level around `anchor` seconds — the playhead, or a pointer. */
+  zoomTo(zoom, anchor) {
+    const id = this.activeId();
+    if (!id) return;
+    const { duration } = TimelineStore.getTransport(id);
+    const next = zoomWindow(anchor, duration, this.zoom, this.start, zoom);
+    this.setView(next.zoom, next.start);
+  }
+  /** Slide the window to start at `start` seconds, keeping the zoom. */
+  panTo(start) {
+    this.setView(this.zoom, start);
+  }
+  subscribe(fn) {
+    this.listeners.add(fn);
+    return () => {
+      this.listeners.delete(fn);
+    };
+  }
+  getVersion() {
+    return this.version;
+  }
+  // ── internals ──
+  front() {
+    return this.claims[this.claims.length - 1];
+  }
+  setView(zoom, start) {
+    const id = this.activeId();
+    const duration = id ? TimelineStore.getTransport(id).duration : 0;
+    const nextZoom = clamp10(zoom, 1, MOVE_TIMELINE_MAX_ZOOM);
+    const nextStart = timelineWindow(duration, nextZoom, start).start;
+    if (nextZoom === this.zoom && nextStart === this.start) return;
+    this.zoom = nextZoom;
+    this.start = nextStart;
+    this.notify();
+  }
+  stopRecording() {
+    if (!this.recording) return;
+    this.recording = false;
+    this.notify();
+    this.front()?.options.onRecord?.(false);
+  }
+  /** Wire the hardware to `claim`, replacing whatever held it. */
+  hold(claim) {
+    this.letGo(claim);
+    const { id } = claim;
+    const readout = {
+      label: "time",
+      getValue: () => timelineReadout(TimelineStore.getTransport(id).time)
+    };
+    MoveVolumeDisplay.set(readout);
+    const keys = [
+      MoveFunctions.push("play", () => this.togglePlay(), { label: "Play", chip: false }),
+      MoveFunctions.push("loop", ({ shift }) => shift ? this.clearLoopRegion() : this.toggleLoop(), { label: "Loop", chip: false }),
+      ...claim.options.onRecord ? [MoveFunctions.push("rec", () => this.toggleRecord(), { label: "Record", chip: false })] : []
+    ];
+    const onVolume = (event) => {
+      if (event.defaultPrevented) return;
+      event.preventDefault();
+      const detail = event.detail ?? {};
+      this.scrub(Number(detail.delta) || 0, !!detail.shift);
+    };
+    const unclaimed = (event, act) => {
+      if (event.defaultPrevented || wheelTaken()) return;
+      queueMicrotask(() => {
+        if (!event.defaultPrevented && !wheelTaken() && this.activeId() === id) act();
+      });
+    };
+    const onJog = (event) => unclaimed(event, () => this.zoomBy(Number(event.detail?.delta) || 0));
+    const onJogClick = (event) => unclaimed(event, () => this.setView(1, 0));
+    const win = typeof window !== "undefined" ? window : null;
+    win?.addEventListener(VOLUME_EVENT, onVolume);
+    win?.addEventListener(JOG_EVENT, onJog);
+    win?.addEventListener(JOG_CLICK_EVENT, onJogClick);
+    const offTransport = TimelineStore.subscribe(id, () => {
+      const transport = TimelineStore.getTransport(id);
+      if (this.recording && !transport.playing) this.stopRecording();
+      const start = followWindow(transport.time, transport.duration, this.zoom, this.start);
+      if (start !== this.start) this.setView(this.zoom, start);
+    });
+    this.zoom = 1;
+    this.start = 0;
+    this.teardown = () => {
+      offTransport();
+      win?.removeEventListener(VOLUME_EVENT, onVolume);
+      win?.removeEventListener(JOG_EVENT, onJog);
+      win?.removeEventListener(JOG_CLICK_EVENT, onJogClick);
+      if (this.recording) {
+        this.recording = false;
+        claim.options.onRecord?.(false);
+      }
+      for (const release of keys) release();
+      if (MoveVolumeDisplay.get() === readout) MoveVolumeDisplay.clear();
+    };
+    this.notify();
+  }
+  /** Hand the hardware back. `next` is the claim about to take it, if any. */
+  letGo(next) {
+    const teardown = this.teardown;
+    this.teardown = null;
+    teardown?.();
+    if (!next) this.notify();
+  }
+  notify() {
+    this.version += 1;
+    for (const fn of this.listeners) fn();
+  }
+};
+var MoveTimelineStore = new MoveTimelineStoreClass();
+
+// src/components/MoveTimeline.tsx
+import { Fragment as Fragment7, jsx as jsx15, jsxs as jsxs12 } from "react/jsx-runtime";
+var DOCK_GAP2 = 14;
+var DRAG_PX = 4;
+var MIN_CLIP_PX = 6;
+var LABEL_CLIP_PX = 48;
+var LABEL_EDGE_PX = 28;
+var PINCH_GAIN = 0.01;
+function MoveTimeline({
+  id,
+  onRecord,
+  variant = "dock",
+  accent,
+  theme = "system",
+  productionEnabled = isDevDefault,
+  className
+}) {
+  const [mounted, setMounted] = useState7(false);
+  useEffect12(() => setMounted(true), []);
+  const recordRef = useRef12(onRecord);
+  recordRef.current = onRecord;
+  const records = !!onRecord;
+  useEffect12(() => {
+    if (!productionEnabled) return;
+    return MoveTimelineStore.register(id, records ? { onRecord: (on) => recordRef.current?.(on) } : {});
+  }, [productionEnabled, id, records]);
+  const meta = useSyncExternalStore3(
+    useCallback2((cb) => TimelineStore.subscribeGlobal(cb), []),
+    () => TimelineStore.getTimeline(id),
+    () => TimelineStore.getTimeline(id)
+  );
+  const values = useSyncExternalStore3(
+    useCallback2((cb) => TweakStore13.subscribe(id, cb), [id]),
+    () => TweakStore13.getValues(id),
+    () => TweakStore13.getValues(id)
+  );
+  useSyncExternalStore3(
+    useCallback2((cb) => MoveTimelineStore.subscribe(cb), []),
+    () => MoveTimelineStore.getVersion(),
+    () => 0
+  );
+  const subscribeTransport = useCallback2((cb) => TimelineStore.subscribe(id, cb), [id]);
+  const region = useSyncExternalStore3(subscribeTransport, () => TimelineStore.getLoopRegion(id), () => void 0);
+  const looping = useSyncExternalStore3(subscribeTransport, () => TimelineStore.isLooping(id), () => true);
+  const inFront = MoveTimelineStore.activeId() === id;
+  const recording = inFront && MoveTimelineStore.isRecording();
+  const duration = meta?.duration ?? 0;
+  const view = inFront ? MoveTimelineStore.getWindow() : timelineWindow(duration, 1, 0);
+  const rulerRef = useRef12(null);
+  const [width, setWidth] = useState7(0);
+  useLayoutEffect3(() => {
+    const ruler = rulerRef.current;
+    if (!ruler) return;
+    const measure = () => setWidth(Math.round(ruler.getBoundingClientRect().width));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(ruler);
+    return () => ro.disconnect();
+  }, [mounted, meta !== void 0]);
+  const pxPerSecond = view.span > 0 && width > 0 ? width / view.span : 0;
+  const x = (t) => (t - view.start) * pxPerSecond;
+  const timeAt = (clientX) => {
+    const rect = rulerRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0) return 0;
+    return Math.min(duration, Math.max(0, view.start + (clientX - rect.left) / rect.width * view.span));
+  };
+  const heldRows = useRef12(null);
+  const [holding, setHolding] = useState7(false);
+  const liveRows = useMemo3(() => buildRows(meta?.clips ?? [], values, duration), [meta, values, duration]);
+  const rows = holding && heldRows.current ? refreshRows(heldRows.current, values, duration) : liveRows;
+  const playheadRef = useRef12(null);
+  const takeRef = useRef12(null);
+  const frame = useRef12({ start: view.start, pxPerSecond, width });
+  frame.current = { start: view.start, pxPerSecond, width };
+  useEffect12(() => {
+    const paint = () => {
+      const { start, pxPerSecond: pps, width: w } = frame.current;
+      const { time } = TimelineStore.getTransport(id);
+      const at = (time - start) * pps;
+      const head = playheadRef.current;
+      if (head) {
+        head.style.transform = `translateX(${at}px)`;
+        head.style.visibility = pps > 0 && at >= -1 && at <= w + 1 ? "visible" : "hidden";
+      }
+      const take = takeRef.current;
+      if (take) {
+        const from = Math.max(0, (MoveTimelineStore.recordingFrom() - start) * pps);
+        take.style.left = `${from}px`;
+        take.style.width = `${Math.max(0, Math.min(w, at) - from)}px`;
+      }
+    };
+    paint();
+    return TimelineStore.subscribe(id, paint);
+  }, [id, view.start, pxPerSecond, width, recording]);
+  const [loopDraft, setLoopDraft] = useState7(null);
+  const rulerDrag = useRef12(null);
+  const onRulerDown = (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    rulerDrag.current = { x: e.clientX, from: timeAt(e.clientX), moved: false };
+  };
+  const onRulerMove = (e) => {
+    const drag = rulerDrag.current;
+    if (!drag) return;
+    if (!drag.moved && Math.abs(e.clientX - drag.x) <= DRAG_PX) return;
+    drag.moved = true;
+    const to = timeAt(e.clientX);
+    setLoopDraft({ start: Math.min(drag.from, to), end: Math.max(drag.from, to) });
+  };
+  const onRulerUp = () => {
+    const drag = rulerDrag.current;
+    rulerDrag.current = null;
+    if (!drag) return;
+    if (drag.moved && loopDraft) {
+      TimelineStore.setLoopRegion(id, loopDraft.start, loopDraft.end);
+      TimelineStore.setLooping(id, true);
+    } else if (!drag.moved) {
+      TimelineStore.seek(id, drag.from);
+    }
+    setLoopDraft(null);
+  };
+  const onRulerCancel = () => {
+    rulerDrag.current = null;
+    setLoopDraft(null);
+  };
+  const scrub = useRef12(null);
+  const onLanesDown = (e) => {
+    if (e.button !== 0 || e.target.closest(".tweakers-move-timeline-clip")) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    scrub.current = { wasPlaying: TimelineStore.getTransport(id).playing };
+    TimelineStore.pause(id);
+    TimelineStore.seek(id, timeAt(e.clientX));
+  };
+  const onLanesMove = (e) => {
+    if (scrub.current) TimelineStore.seek(id, timeAt(e.clientX));
+  };
+  const onLanesUp = () => {
+    if (scrub.current?.wasPlaying) TimelineStore.play(id);
+    scrub.current = null;
+  };
+  const displayRef = useRef12(null);
+  useEffect12(() => {
+    const el = displayRef.current;
+    if (!el) return;
+    const onWheel = (e) => {
+      if (MoveTimelineStore.activeId() !== id) return;
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        MoveTimelineStore.zoomTo(MoveTimelineStore.getZoom() * Math.exp(-e.deltaY * PINCH_GAIN), timeAtRef.current(e.clientX));
+        return;
+      }
+      const sideways = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.shiftKey ? e.deltaY : 0;
+      if (!sideways || MoveTimelineStore.getZoom() <= 1) return;
+      e.preventDefault();
+      const w = MoveTimelineStore.getWindow();
+      const pps = frame.current.pxPerSecond;
+      if (pps > 0) MoveTimelineStore.panTo(w.start + sideways / pps);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [id, mounted, meta !== void 0]);
+  const timeAtRef = useRef12(timeAt);
+  timeAtRef.current = timeAt;
+  const [dockBottom, setDockBottom] = useState7(DOCK_GAP2);
+  useEffect12(() => {
+    if (variant !== "dock" || typeof window === "undefined") return;
+    const panel = () => document.querySelector(".tweakers-move-root .tweakers-move");
+    const measure = () => {
+      const h = panel()?.getBoundingClientRect().height ?? 0;
+      setDockBottom(h > 0 ? h + DOCK_GAP2 : DOCK_GAP2);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    const el = panel();
+    if (el) ro.observe(el);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [variant, mounted]);
+  if (!productionEnabled || !meta) return null;
+  const ticks = timelineTicks(view.start, view.span, width);
+  const shownLoop = loopDraft ?? region ?? null;
+  const card = /* @__PURE__ */ jsx15(
+    "div",
+    {
+      className: `tweakers-move-surface tweakers-move-timeline${className ? ` ${className}` : ""}`,
+      "data-variant": variant,
+      "data-recording": recording || void 0,
+      style: {
+        ...accent ? { "--move-timeline-accent": accent } : {},
+        ...variant === "dock" ? { bottom: `${dockBottom}px` } : {}
+      },
+      children: /* @__PURE__ */ jsxs12("div", { ref: displayRef, className: "tweakers-move-timeline-display", children: [
+        /* @__PURE__ */ jsx15("div", { className: "tweakers-move-timeline-corner", children: /* @__PURE__ */ jsx15("span", { className: "tweakers-move-timeline-title", children: meta.name }) }),
+        /* @__PURE__ */ jsxs12(
+          "div",
+          {
+            ref: rulerRef,
+            className: "tweakers-move-timeline-ruler",
+            onPointerDown: onRulerDown,
+            onPointerMove: onRulerMove,
+            onPointerUp: onRulerUp,
+            onPointerCancel: onRulerCancel,
+            onDoubleClick: () => TimelineStore.clearLoopRegion(id),
+            title: "Click to jump \xB7 drag to loop \xB7 double-click to let the loop go",
+            children: [
+              shownLoop && pxPerSecond > 0 && /* @__PURE__ */ jsx15(
+                "div",
+                {
+                  className: "tweakers-move-timeline-loop",
+                  "data-on": looping || loopDraft ? true : void 0,
+                  style: { left: `${x(shownLoop.start)}px`, width: `${Math.max(1, (shownLoop.end - shownLoop.start) * pxPerSecond)}px` }
+                }
+              ),
+              recording && /* @__PURE__ */ jsx15("div", { ref: takeRef, className: "tweakers-move-timeline-take" }),
+              ticks.minor.map((t) => /* @__PURE__ */ jsx15("span", { className: "tweakers-move-timeline-tick", style: { left: `${x(t)}px` } }, `m${t}`)),
+              ticks.major.map((t) => /* @__PURE__ */ jsx15("span", { className: "tweakers-move-timeline-tick", "data-major": true, style: { left: `${x(t)}px` }, children: x(t) < width - LABEL_EDGE_PX && /* @__PURE__ */ jsx15("span", { className: "tweakers-move-timeline-tick-label", children: formatTimelineTick(t, ticks.step) }) }, `M${t}`))
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsx15("div", { className: "tweakers-move-timeline-names", children: rows.map((row) => /* @__PURE__ */ jsx15("div", { className: "tweakers-move-timeline-name", title: row.label, children: row.label }, row.key)) }),
+        /* @__PURE__ */ jsxs12(
+          "div",
+          {
+            className: "tweakers-move-timeline-lanes",
+            onPointerDown: onLanesDown,
+            onPointerMove: onLanesMove,
+            onPointerUp: onLanesUp,
+            onPointerCancel: onLanesUp,
+            children: [
+              shownLoop && looping && pxPerSecond > 0 && /* @__PURE__ */ jsx15(
+                "div",
+                {
+                  className: "tweakers-move-timeline-loop-lanes",
+                  style: { left: `${x(shownLoop.start)}px`, width: `${Math.max(1, (shownLoop.end - shownLoop.start) * pxPerSecond)}px` }
+                }
+              ),
+              rows.map((row) => /* @__PURE__ */ jsx15("div", { className: "tweakers-move-timeline-lane", children: row.clips.map(({ meta: clip, stat }) => /* @__PURE__ */ jsx15(
+                TimelineClipBar,
+                {
+                  timelineId: id,
+                  clip,
+                  stat,
+                  duration,
+                  viewStart: view.start,
+                  viewEnd: view.start + view.span,
+                  pxPerSecond,
+                  onHold: (on) => {
+                    heldRows.current = on ? liveRows : null;
+                    setHolding(on);
+                  }
+                },
+                clip.key
+              )) }, row.key))
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsx15("div", { className: "tweakers-move-timeline-heads", "aria-hidden": "true", children: /* @__PURE__ */ jsx15("div", { ref: playheadRef, className: "tweakers-move-timeline-playhead" }) })
+      ] })
+    }
+  );
+  if (variant !== "dock") return card;
+  if (!mounted || typeof document === "undefined") return null;
+  return createPortal3(
+    /* @__PURE__ */ jsx15("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-timeline-dock": "true", children: card }),
+    document.body
+  );
+}
+function buildRows(clips, values, duration) {
+  const rows = [];
+  const layers = /* @__PURE__ */ new Map();
+  for (const clip of clips) {
+    if (!clip.group) {
+      rows.push({ key: clip.key, label: clip.label, clips: [{ meta: clip, stat: computeClipStaticFromValues(values, clip, duration) }] });
+      continue;
+    }
+    let layer = layers.get(clip.group);
+    if (!layer) {
+      layer = [];
+      layers.set(clip.group, layer);
+      rows.push({ key: `layer:${clip.group}`, label: formatLabel2(clip.group), clips: [] });
+    }
+    layer.push(clip);
+  }
+  return rows.flatMap((row) => {
+    if (!row.key.startsWith("layer:")) return [row];
+    const group = row.key.slice("layer:".length);
+    const members = (layers.get(group) ?? []).map((clip) => ({ meta: clip, stat: computeClipStaticFromValues(values, clip, duration) }));
+    const packed = packTimelineRows(members.map(({ stat }) => ({ at: stat.at, end: stat.loop === "repeat" ? duration : stat.at + stat.duration })));
+    const count = members.length ? Math.max(...packed) + 1 : 1;
+    return Array.from({ length: count }, (_, i) => ({
+      key: `${row.key}:${i}`,
+      label: i === 0 ? row.label : "",
+      clips: members.filter((_2, m) => packed[m] === i)
+    }));
+  });
+}
+function refreshRows(rows, values, duration) {
+  return rows.map((row) => ({
+    ...row,
+    clips: row.clips.map(({ meta }) => ({ meta, stat: computeClipStaticFromValues(values, meta, duration) }))
+  }));
+}
+function TimelineClipBar({
+  timelineId,
+  clip,
+  stat,
+  duration,
+  viewStart,
+  viewEnd,
+  pxPerSecond,
+  onHold
+}) {
+  const drag = useRef12(null);
+  const [dragging, setDragging] = useState7(false);
+  const legs = stat.explicitSteps ? stat.tracks[0]?.steps ?? [] : [];
+  const composite = !!clip.tracks?.length;
+  const fixed2 = composite || (legs.length ? false : stat.isPhysics);
+  const resizable = !fixed2 && stat.duration > 0;
+  const onDown = (e) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const target = e.target;
+    const join = target.dataset.join;
+    const edge = target.dataset.edge;
+    drag.current = {
+      mode: join !== void 0 ? "join" : edge && resizable ? edge : "move",
+      join: join !== void 0 ? Number(join) : void 0,
+      x: e.clientX,
+      at: stat.at,
+      duration: stat.duration,
+      legs: legs.map((leg) => leg.duration),
+      moved: false
+    };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    onHold(true);
+  };
+  const onMove = (e) => {
+    const d = drag.current;
+    if (!d || pxPerSecond <= 0) return;
+    const dx = e.clientX - d.x;
+    if (!d.moved) {
+      if (Math.abs(dx) <= DRAG_PX) return;
+      d.moved = true;
+      setDragging(true);
+    }
+    const dt = dx / pxPerSecond;
+    if (d.mode === "join" && d.legs && d.join !== void 0) {
+      const others = d.legs.reduce((sum, leg, i) => i === d.join ? sum : sum + leg, 0);
+      TweakStore13.updateValue(timelineId, `${clip.key}.${legs[d.join].key ?? ""}.duration`, clampStepResize(d.legs[d.join] + dt, d.at, others, duration));
+    } else if (d.mode === "move") {
+      TweakStore13.updateValue(timelineId, `${clip.key}.at`, clampClipMove(d.at + dt, d.duration, duration));
+    } else if (d.mode === "end") {
+      TweakStore13.updateValue(timelineId, `${clip.key}.duration`, clampClipResizeEnd(d.duration + dt, d.at, duration));
+    } else if (d.legs?.length) {
+      const next = clampClipResizeStart(Math.max(0, d.at + dt), d.at, d.legs[0]);
+      TweakStore13.updateValues(timelineId, { [`${clip.key}.at`]: next.at, [`${clip.key}.${legs[0].key ?? ""}.duration`]: next.duration });
+    } else {
+      const next = clampClipResizeStart(Math.max(0, d.at + dt), d.at, d.duration);
+      TweakStore13.updateValues(timelineId, { [`${clip.key}.at`]: next.at, [`${clip.key}.duration`]: next.duration });
+    }
+  };
+  const onUp = () => {
+    const d = drag.current;
+    drag.current = null;
+    setDragging(false);
+    onHold(false);
+    if (d && !d.moved) TimelineStore.seek(timelineId, d.at);
+  };
+  const onCancel = () => {
+    drag.current = null;
+    setDragging(false);
+    onHold(false);
+  };
+  if (pxPerSecond <= 0) return null;
+  const left = (stat.at - viewStart) * pxPerSecond;
+  const width = Math.max(MIN_CLIP_PX, stat.duration * pxPerSecond);
+  const repeats = stat.loop === "repeat" && stat.duration > 0;
+  const ghosts = [];
+  if (repeats) {
+    const first = Math.max(1, Math.floor((viewStart - stat.at) / stat.duration));
+    for (let i = first; i < first + 512; i++) {
+      const start = stat.at + stat.duration * i;
+      if (start >= Math.min(duration, viewEnd) - 1e-6) break;
+      ghosts.push(start);
+    }
+  }
+  const joins = [];
+  let run = 0;
+  for (const leg of legs) {
+    run += leg.duration;
+    joins.push(run);
+  }
+  const length = `${fixed2 && !composite ? "~" : ""}${formatSeconds(stat.duration)}`;
+  return /* @__PURE__ */ jsxs12(Fragment7, { children: [
+    ghosts.map((start) => /* @__PURE__ */ jsx15(
+      "div",
+      {
+        className: "tweakers-move-timeline-ghost",
+        "aria-hidden": "true",
+        style: { left: `${(start - viewStart) * pxPerSecond}px`, width: `${Math.max(1, Math.min(stat.duration, duration - start) * pxPerSecond - 2)}px` }
+      },
+      start
+    )),
+    /* @__PURE__ */ jsxs12(
+      "div",
+      {
+        className: "tweakers-move-timeline-clip",
+        "data-composite": composite || void 0,
+        "data-dragging": dragging || void 0,
+        "data-marker": !stat.tracks.length || void 0,
+        style: { left: `${left}px`, width: `${width}px` },
+        onPointerDown: onDown,
+        onPointerMove: onMove,
+        onPointerUp: onUp,
+        onPointerCancel: onCancel,
+        title: `${clip.label} \u2014 ${formatSeconds(stat.at)} for ${length}${repeats ? ", repeating" : ""}`,
+        children: [
+          legs.length > 1 && joins.slice(0, -1).map((at, i) => /* @__PURE__ */ jsx15("span", { className: "tweakers-move-timeline-join", "data-join": i, style: { left: `${at * pxPerSecond}px` } }, `j${i}`)),
+          width > LABEL_CLIP_PX && /* @__PURE__ */ jsx15("span", { className: "tweakers-move-timeline-clip-length", children: length }),
+          resizable && !legs.length && /* @__PURE__ */ jsx15("span", { className: "tweakers-move-timeline-edge", "data-edge": "start" }),
+          resizable && !legs.length && /* @__PURE__ */ jsx15("span", { className: "tweakers-move-timeline-edge", "data-edge": "end" }),
+          legs.length > 0 && !legs[legs.length - 1].isPhysics && /* @__PURE__ */ jsx15("span", { className: "tweakers-move-timeline-edge", "data-edge": "end", "data-join": legs.length - 1 })
+        ]
+      }
+    )
+  ] });
+}
+function MoveTimelineZoom() {
+  useSyncExternalStore3(
+    useCallback2((cb) => MoveTimelineStore.subscribe(cb), []),
+    () => MoveTimelineStore.getVersion(),
+    () => 0
+  );
+  return /* @__PURE__ */ jsxs12("div", { className: "tweakers-move-wave-zoom", children: [
+    /* @__PURE__ */ jsx15("span", { className: "tweakers-move-wave-zoom-dot" }),
+    /* @__PURE__ */ jsxs12("span", { className: "tweakers-move-wave-zoom-label", children: [
+      "Zoom ",
+      parseFloat(MoveTimelineStore.getZoom().toFixed(1)),
+      "x"
+    ] })
+  ] });
+}
+function MoveTimelineClock() {
+  useSyncExternalStore3(
+    useCallback2((cb) => MoveTimelineStore.subscribe(cb), []),
+    () => MoveTimelineStore.getVersion(),
+    () => 0
+  );
+  const id = MoveTimelineStore.activeId() ?? "";
+  const subscribe = useCallback2((cb) => TimelineStore.subscribe(id, cb), [id]);
+  const playing2 = useSyncExternalStore3(subscribe, () => TimelineStore.getTransport(id).playing, () => false);
+  const looping = useSyncExternalStore3(subscribe, () => TimelineStore.isLooping(id), () => true);
+  const recording = MoveTimelineStore.isRecording();
+  const canRecord = MoveTimelineStore.canRecord();
+  const clockRef = useRef12(null);
+  useEffect12(() => {
+    let raf = requestAnimationFrame(function tick() {
+      const text = MoveTimelineStore.clock();
+      if (clockRef.current && clockRef.current.textContent !== text) clockRef.current.textContent = text;
+      raf = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return /* @__PURE__ */ jsxs12("div", { className: "tweakers-move-volume tweakers-move-timeline-clock", "data-record": canRecord || void 0, children: [
+    /* @__PURE__ */ jsx15(
+      "button",
+      {
+        type: "button",
+        className: "tweakers-move-timeline-key",
+        "data-on": playing2 || void 0,
+        "aria-label": playing2 ? "Pause" : "Play",
+        "aria-pressed": playing2,
+        onClick: (e) => MoveFunctions.run("play", { shift: e.shiftKey }),
+        children: /* @__PURE__ */ jsx15("svg", { viewBox: "0 0 24 24", "aria-hidden": "true", children: /* @__PURE__ */ jsx15("path", { d: ICON_PLAY, fill: "currentColor" }) })
+      }
+    ),
+    /* @__PURE__ */ jsx15("span", { ref: clockRef, className: "tweakers-move-volume-value", children: MoveTimelineStore.clock() }),
+    /* @__PURE__ */ jsx15(
+      "button",
+      {
+        type: "button",
+        className: "tweakers-move-timeline-key",
+        "data-on": looping || void 0,
+        "aria-label": "Loop",
+        "aria-pressed": looping,
+        title: "Loop \xB7 Shift-click lets the loop region go",
+        onClick: (e) => MoveFunctions.run("loop", { shift: e.shiftKey }),
+        children: /* @__PURE__ */ jsx15("svg", { viewBox: "0 0 24 24", "aria-hidden": "true", children: ICON_LOOP.map((d) => /* @__PURE__ */ jsx15("path", { d, fill: "none", stroke: "currentColor", strokeWidth: "2.4", strokeLinecap: "round", strokeLinejoin: "round" }, d)) })
+      }
+    ),
+    canRecord && /* @__PURE__ */ jsx15(
+      "button",
+      {
+        type: "button",
+        className: "tweakers-move-timeline-key",
+        "data-name": "rec",
+        "data-on": recording || void 0,
+        "aria-label": "Record",
+        "aria-pressed": recording,
+        onClick: (e) => MoveFunctions.run("rec", { shift: e.shiftKey }),
+        children: /* @__PURE__ */ jsx15("svg", { viewBox: "0 0 24 24", "aria-hidden": "true", children: /* @__PURE__ */ jsx15("circle", { cx: "12", cy: "12", r: "8", fill: "currentColor" }) })
+      }
+    )
+  ] });
+}
+
+// src/move-settings.ts
+var open = false;
+var listeners2 = /* @__PURE__ */ new Set();
+var set = (next) => {
+  if (open === next) return;
+  open = next;
+  for (const fn of listeners2) fn();
+};
+var MoveSettingsView = {
+  isOpen: () => open,
+  open: () => set(true),
+  close: () => set(false),
+  toggle: () => set(!open),
+  subscribe(fn) {
+    listeners2.add(fn);
+    return () => listeners2.delete(fn);
+  }
+};
 
 // src/components/MovePanelMotion.tsx
 import { Component } from "react";
@@ -9826,7 +11791,7 @@ var MovePanelMotion = class extends Component {
 };
 
 // src/components/MovePanel.tsx
-import { jsx as jsx15, jsxs as jsxs12 } from "react/jsx-runtime";
+import { jsx as jsx16, jsxs as jsxs13 } from "react/jsx-runtime";
 var PAD_ROWS = 4;
 var MIN_PAD_COLUMNS = 4;
 var DIAL_TRACK_INSET = 10;
@@ -9906,7 +11871,7 @@ function searchType(query) {
 }
 function holdPad(panelId, path) {
   const set2 = (on) => {
-    if (TweakStore13.getValue(panelId, path) !== on) TweakStore13.updateValue(panelId, path, on);
+    if (TweakStore14.getValue(panelId, path) !== on) TweakStore14.updateValue(panelId, path, on);
   };
   return {
     onPointerDown: (e) => {
@@ -9934,13 +11899,13 @@ function holdPad(panelId, path) {
 function boldColons(text) {
   if (!text.includes(":")) return text;
   return text.split(":").flatMap(
-    (part, i) => i === 0 ? [part] : [/* @__PURE__ */ jsx15("span", { className: "tweakers-move-volume-sep", children: ":" }, `sep-${i}`), part]
+    (part, i) => i === 0 ? [part] : [/* @__PURE__ */ jsx16("span", { className: "tweakers-move-volume-sep", children: ":" }, `sep-${i}`), part]
   );
 }
 function MoveModRing({ panelId, path, pad }) {
   const assignment = ModulationStore2.getAssignment(panelId, path);
   if (!assignment || !ModulationStore2.getSlot(assignment.slot)) return null;
-  return /* @__PURE__ */ jsx15(
+  return /* @__PURE__ */ jsx16(
     ModRing,
     {
       panelId,
@@ -9963,43 +11928,48 @@ var MOVE_STRIP_EVENT = "move-tweakers:strip";
 var MOVE_SETTINGS_EVENT = "move-tweakers:settings";
 function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only, dock = "viewport", scroll = false, focused = false, headerStart, settings: settings2, functionChips = "clock" }) {
   if (!productionEnabled) return null;
-  const [panels, setPanels] = useState7([]);
-  const [track, setTrack] = useState7(0);
-  const [dragPath, setDragPath] = useState7(null);
-  const [bendHeld, setBendHeld] = useState7(null);
-  const bendRef = useRef12(null);
-  const [waveHeld, setWaveHeld] = useState7(null);
-  const waveRef = useRef12(null);
-  const [handTouch, setHandTouch] = useState7({});
-  const [curvePoint, setCurvePoint] = useState7({});
-  const [rampStop, setRampStop] = useState7({});
-  const rampGesture = useRef12(null);
-  const [hwHeld, setHwHeld] = useState7({});
-  const [hwLatched, setHwLatched] = useState7({});
-  const [appHeld, setAppHeld] = useState7(null);
-  const [held, setHeld] = useState7(null);
-  const [latched, setLatched] = useState7({});
-  const holdStart = useRef12(0);
-  const [mounted, setMounted] = useState7(false);
+  const [panels, setPanels] = useState8([]);
+  const [track, setTrack] = useState8(0);
+  const [dragPath, setDragPath] = useState8(null);
+  const [bendHeld, setBendHeld] = useState8(null);
+  const bendRef = useRef13(null);
+  const [waveHeld, setWaveHeld] = useState8(null);
+  const waveRef = useRef13(null);
+  const [handTouch, setHandTouch] = useState8({});
+  const [curvePoint, setCurvePoint] = useState8({});
+  const [rampStop, setRampStop] = useState8({});
+  const rampGesture = useRef13(null);
+  const [hwHeld, setHwHeld] = useState8({});
+  const [hwLatched, setHwLatched] = useState8({});
+  const [appHeld, setAppHeld] = useState8(null);
+  const [held, setHeld] = useState8(null);
+  const [latched, setLatched] = useState8({});
+  const holdStart = useRef13(0);
+  const [mounted, setMounted] = useState8(false);
   const pageTabsId = useId();
-  const panelRef = useRef12(null);
-  const [dotDrag, setDotDrag] = useState7(null);
-  const fineRef = useRef12(null);
-  const faceDrag = useRef12(null);
-  const rangeHandleRef = useRef12("min");
-  const filterHandRef = useRef12("cutoff");
-  const [volume, setVolume] = useState7(() => MoveVolumeDisplay.get());
-  const waveClaimed = useSyncExternalStore3(
-    useCallback2((cb) => MoveWaveformStore.subscribe(cb), []),
+  const panelRef = useRef13(null);
+  const [dotDrag, setDotDrag] = useState8(null);
+  const fineRef = useRef13(null);
+  const faceDrag = useRef13(null);
+  const rangeHandleRef = useRef13("min");
+  const filterHandRef = useRef13("cutoff");
+  const [volume, setVolume] = useState8(() => MoveVolumeDisplay.get());
+  const waveClaimed = useSyncExternalStore4(
+    useCallback3((cb) => MoveWaveformStore.subscribe(cb), []),
     () => MoveWaveformStore.isRegistered(),
     () => false
   );
-  const [liveValue, setLiveValue] = useState7(null);
-  useEffect12(() => {
+  const timelineClaimed = useSyncExternalStore4(
+    useCallback3((cb) => MoveTimelineStore.subscribe(cb), []),
+    () => MoveTimelineStore.isRegistered(),
+    () => false
+  );
+  const [liveValue, setLiveValue] = useState8(null);
+  useEffect13(() => {
     setVolume(MoveVolumeDisplay.get());
     return MoveVolumeDisplay.subscribe(() => setVolume(MoveVolumeDisplay.get()));
   }, []);
-  useEffect12(() => {
+  useEffect13(() => {
     const poll = volume?.getValue;
     if (!poll) {
       setLiveValue(null);
@@ -10012,25 +11982,25 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     return () => cancelAnimationFrame(raf);
   }, [volume]);
   const onlyKey = only === void 0 ? void 0 : JSON.stringify(Array.isArray(only) ? only : [only]);
-  const read2 = useCallback2(() => {
-    if (onlyKey === void 0) return TweakStore13.selectPanels();
+  const read2 = useCallback3(() => {
+    if (onlyKey === void 0) return TweakStore14.selectPanels();
     const requested = JSON.parse(onlyKey);
-    const registered = TweakStore13.getPanels("panel");
+    const registered = TweakStore14.getPanels("panel");
     return requested.map((key) => registered.find((panel) => panel.id === key || panel.name === key)).filter((panel) => panel !== void 0);
   }, [onlyKey]);
-  useEffect12(() => {
+  useEffect13(() => {
     setMounted(true);
     MoveWaveformStore.ensureSettings();
     setPanels(read2());
-    return TweakStore13.subscribeGlobal(() => setPanels(read2()));
+    return TweakStore14.subscribeGlobal(() => setPanels(read2()));
   }, [read2]);
   const settingsKey = settings2 === void 0 ? void 0 : JSON.stringify(Array.isArray(settings2) ? settings2 : [settings2]);
-  const namedRooms = settingsKey === void 0 ? [] : JSON.parse(settingsKey).map((key) => TweakStore13.getPanels("panel").find((p) => p.id === key || p.name === key)).filter((p) => p !== void 0);
-  const waveRoom = TweakStore13.getPanel(MOVE_WAVEFORM_PANEL);
+  const namedRooms = settingsKey === void 0 ? [] : JSON.parse(settingsKey).map((key) => TweakStore14.getPanels("panel").find((p) => p.id === key || p.name === key)).filter((p) => p !== void 0);
+  const waveRoom = TweakStore14.getPanel(MOVE_WAVEFORM_PANEL);
   const settingsRooms = waveRoom ? [...namedRooms, waveRoom] : namedRooms;
   const roomIds = settingsRooms.map((p) => p.id);
-  const settingsOpen = useSyncExternalStore3(
-    useCallback2((cb) => MoveSettingsView.subscribe(cb), []),
+  const settingsOpen = useSyncExternalStore4(
+    useCallback3((cb) => MoveSettingsView.subscribe(cb), []),
     () => MoveSettingsView.isOpen(),
     () => false
   ) && settingsRooms.length > 0;
@@ -10038,22 +12008,22 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const pages = scroll ? pagePanels.filter((p) => p.kind === void 0).slice(0, MOVE_TRACKS).map(buildMoveStrip) : buildMovePages(pagePanels);
   const underModSettings = ModulationStore2.getSettings();
   const modSettings = settingsOpen ? null : underModSettings;
-  const settingsPanel = modSettings ? TweakStore13.getPanel(modSettings.panelId) : void 0;
+  const settingsPanel = modSettings ? TweakStore14.getPanel(modSettings.panelId) : void 0;
   const modLayout = settingsPanel ? ModulationStore2.getSettingsLayout() : null;
-  const [roomTrack, setRoomTrack] = useState7(0);
+  const [roomTrack, setRoomTrack] = useState8(0);
   const roomPages = settingsOpen ? scroll ? settingsRooms.slice(0, MOVE_TRACKS).map(buildMoveStrip) : buildMovePages(settingsRooms) : [];
   const roomPage = roomPages[Math.min(roomTrack, Math.max(0, roomPages.length - 1))];
   const page = settingsPanel ? buildModMovePage(settingsPanel, modLayout) : roomPage ?? pages[Math.min(track, Math.max(0, pages.length - 1))];
   const pageId = page?.panel.id;
   const motionSurface = settingsPanel ? "mod" : settingsOpen ? "room" : "app";
   const motionPage = settingsPanel ? settingsPanel.id : settingsOpen ? String(roomTrack) : String(track);
-  useSyncExternalStore3(MovePadListStore.subscribe, MovePadListStore.getVersion, () => 0);
+  useSyncExternalStore4(MovePadListStore.subscribe, MovePadListStore.getVersion, () => 0);
   const padListView = MovePadListStore.getView();
-  useEffect12(() => {
+  useEffect13(() => {
     if (padListView && padListView.panelId !== pageId) MovePadListStore.close();
   }, [pageId, padListView]);
   const roomKey = roomIds.join("\0");
-  useEffect12(() => {
+  useEffect13(() => {
     if (!roomKey) return;
     const detach = MoveFunctions.attach("set_overview", () => MoveSettingsView.toggle(), { label: "Settings" });
     return () => {
@@ -10061,7 +12031,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       MoveSettingsView.close();
     };
   }, [roomKey]);
-  useLayoutEffect3(() => {
+  useLayoutEffect4(() => {
     if (!settingsOpen) return;
     const wake = MoveFunctions.suspend(["set_overview"]);
     const releaseBack = MoveFunctions.push("back", () => MoveSettingsView.close(), { label: "Close", chip: false });
@@ -10072,7 +12042,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   }, [settingsOpen]);
   const regularPageId = underModSettings?.panelId ?? pages[Math.min(track, Math.max(0, pages.length - 1))]?.panel.id;
   const roomPageId = roomPage?.panel.id;
-  useEffect12(() => {
+  useEffect13(() => {
     if (!roomKey || typeof window === "undefined") return;
     const ids2 = roomKey.split("\0");
     const announce = () => window.dispatchEvent(new CustomEvent(MOVE_SETTINGS_EVENT, {
@@ -10083,28 +12053,28 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     return () => clearInterval(timer);
   }, [roomKey, settingsOpen, regularPageId, roomPageId]);
   const stripMode = scroll && !settingsPanel && !!page;
-  const [offset, setOffset] = useState7(0);
+  const [offset, setOffset] = useState8(0);
   const stripOffset = stripMode ? clampStripOffset(page, offset) : 0;
-  const stripRef = useRef12({
+  const stripRef = useRef13({
     page: void 0,
     offset: 0,
     on: false
   });
   stripRef.current = { page, offset: stripOffset, on: stripMode };
-  const scrollSlots = useCallback2((delta) => {
+  const scrollSlots = useCallback3((delta) => {
     const { page: pg, offset: cur, on } = stripRef.current;
     if (!on || !pg || !delta) return;
     const next = stepStripOffset(pg, cur, delta);
     if (next !== cur) setOffset(next);
   }, []);
-  const scrollPage = useCallback2((dir) => {
+  const scrollPage = useCallback3((dir) => {
     const { page: pg, offset: cur, on } = stripRef.current;
     if (!on || !pg || !dir) return;
     const next = pageStripOffset(pg, cur, dir);
     if (next !== cur) setOffset(next);
   }, []);
-  useEffect12(() => setOffset(0), [pageId]);
-  useEffect12(() => {
+  useEffect13(() => setOffset(0), [pageId]);
+  useEffect13(() => {
     const onJog = (e) => {
       if (PresetExplorationStore.getState()) {
         e.preventDefault();
@@ -10119,7 +12089,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     window.addEventListener(MOVE_JOG_EVENT, onJog);
     return () => window.removeEventListener(MOVE_JOG_EVENT, onJog);
   }, [scrollSlots]);
-  useEffect12(() => {
+  useEffect13(() => {
     if (!stripMode) return;
     const free = ["left", "right"].filter((name) => !MoveFunctions.list().includes(name));
     const off = free.map(
@@ -10129,8 +12099,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       for (const detach of off) detach();
     };
   }, [stripMode, scrollPage]);
-  const wheelRest = useRef12(0);
-  useEffect12(() => {
+  const wheelRest = useRef13(0);
+  useEffect13(() => {
     const el = panelRef.current;
     if (!el) return;
     const onWheel = (e) => {
@@ -10158,7 +12128,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   }, [scrollSlots, mounted, stripMode]);
-  const announceStrip = useCallback2(() => {
+  const announceStrip = useCallback3(() => {
     const { page: pg, offset: at, on } = stripRef.current;
     if (!on || !pg) return;
     const pads = stripWindowPads(pg, at);
@@ -10181,10 +12151,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       }
     }));
   }, []);
-  useEffect12(() => {
+  useEffect13(() => {
     announceStrip();
   }, [announceStrip, stripMode, pageId, stripOffset]);
-  useEffect12(() => {
+  useEffect13(() => {
     let last = 0;
     const onPage = () => {
       const now = Date.now();
@@ -10195,22 +12165,22 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     window.addEventListener(MOVE_PAGE_EVENT, onPage);
     return () => window.removeEventListener(MOVE_PAGE_EVENT, onPage);
   }, [announceStrip]);
-  useSyncExternalStore3(MoveColorStore.subscribe, MoveColorStore.getVersion, () => 0);
+  useSyncExternalStore4(MoveColorStore.subscribe, MoveColorStore.getVersion, () => 0);
   const colorView = MoveColorStore.getView();
   const gradientEditable = (meta) => meta.type === "gradient" && pageId !== void 0 && (MoveColorStore.gradient(pageId, meta.path)?.stops.length ?? 0) <= MOVE_GRADIENT_STOPS;
   const colorMeta = colorView?.panelId === pageId && page ? [...page.dials, ...page.topValues ?? [], ...page.values, ...page.actionValues ?? []].find((meta) => meta && meta.path === colorView.path && (meta.type === "color" || gradientEditable(meta))) : void 0;
   const color = colorMeta && pageId ? MoveColorStore.read(pageId, colorMeta.path) : null;
   const gradientMeta = colorMeta?.type === "gradient" ? colorMeta : null;
   const gradientValue = gradientMeta && pageId ? MoveColorStore.gradient(pageId, gradientMeta.path) : null;
-  useEffect12(() => () => {
+  useEffect13(() => () => {
     if (MoveColorStore.getView()?.panelId === pageId) MoveColorStore.close();
   }, [pageId]);
   const colorOpenPanel = colorMeta && colorView ? colorView.panelId : null;
-  useEffect12(() => {
+  useEffect13(() => {
     if (!colorOpenPanel) return;
     return MoveFunctions.push("menu", () => MoveColorStore.togglePicker(), { label: "palettes", chip: false });
   }, [colorOpenPanel]);
-  useEffect12(() => {
+  useEffect13(() => {
     if (!colorOpenPanel) return;
     return MoveFunctions.push("copy", ({ shift, hold }) => {
       const view = MoveColorStore.getView();
@@ -10222,11 +12192,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     }, { label: "copy color", chip: false });
   }, [colorOpenPanel]);
   const paletteScreen = colorMeta ? MoveColorStore.isPickerOpen() : false;
-  useEffect12(() => {
+  useEffect13(() => {
     if (!paletteScreen) return;
     return MoveFunctions.push("back", () => MoveColorStore.closePicker(), { label: "back", chip: false });
   }, [paletteScreen]);
-  useEffect12(() => {
+  useEffect13(() => {
     const onJog = (e) => {
       if (e.defaultPrevented || MoveSearchStore.isOpen() || !palettePickerOpen()) return;
       e.preventDefault();
@@ -10244,14 +12214,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       window.removeEventListener(MOVE_JOG_CLICK_EVENT, onJogClick);
     };
   }, []);
-  useSyncExternalStore3(MovePresetStore.subscribe, MovePresetStore.getVersion, () => 0);
-  useSyncExternalStore3(PresetExplorationStore.subscribe, PresetExplorationStore.getVersion, () => 0);
+  useSyncExternalStore4(MovePresetStore.subscribe, MovePresetStore.getVersion, () => 0);
+  useSyncExternalStore4(PresetExplorationStore.subscribe, PresetExplorationStore.getVersion, () => 0);
   const explorationOpen = PresetExplorationStore.getState()?.panelId === pageId;
   const presetView = MovePresetStore.getView();
   const presetSaving = MovePresetStore.getSaving();
   const presetScreen = presetView?.panelId === pageId ? presetView : null;
   const presetSave = presetSaving?.panelId === pageId ? presetSaving : null;
-  useEffect12(() => {
+  useEffect13(() => {
     if (!pageId) return;
     return MoveFunctions.attach("menu", ({ shift, hold }) => {
       if (shift) MovePresetStore.beginSave(pageId);
@@ -10261,7 +12231,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       } else MovePresetStore.toggle(pageId);
     }, { label: "presets", chip: false });
   }, [pageId]);
-  useEffect12(() => () => {
+  useEffect13(() => () => {
     if (MovePresetStore.getView()?.panelId === pageId) MovePresetStore.cancel();
     if (MovePresetStore.getSaving()?.panelId === pageId) MovePresetStore.cancelSave();
     if (PresetExplorationStore.getState()?.panelId === pageId) {
@@ -10270,11 +12240,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     }
   }, [pageId]);
   const presetOpenPanel = presetScreen && presetScreen.phase !== "closing" ? presetScreen.panelId : null;
-  useEffect12(() => {
+  useEffect13(() => {
     if (!presetOpenPanel) return;
     return MoveFunctions.push("back", () => MovePresetStore.cancel(), { label: "revert", chip: false });
   }, [presetOpenPanel]);
-  useEffect12(() => {
+  useEffect13(() => {
     const openView = () => {
       const view = MovePresetStore.getView();
       return view && view.phase !== "closing" ? view : null;
@@ -10317,10 +12287,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       window.removeEventListener(MOVE_MUTE_EVENT, onMute);
     };
   }, []);
-  useSyncExternalStore3(MoveSearchStore.subscribe, MoveSearchStore.getVersion, () => 0);
+  useSyncExternalStore4(MoveSearchStore.subscribe, MoveSearchStore.getVersion, () => 0);
   const search = MoveSearchStore.getView();
-  const screenShown = useRef12(false);
-  useEffect12(() => {
+  const screenShown = useRef13(false);
+  useEffect13(() => {
     const onSearch = (e) => {
       if (e.defaultPrevented) return;
       if (MoveSearchStore.isOpen()) {
@@ -10336,7 +12306,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     window.addEventListener(MOVE_SEARCH_EVENT, onSearch);
     return () => window.removeEventListener(MOVE_SEARCH_EVENT, onSearch);
   }, []);
-  useEffect12(() => {
+  useEffect13(() => {
     const onJog = (e) => {
       const view = MoveSearchStore.getView();
       if (!view) return;
@@ -10357,7 +12327,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     };
   }, []);
   const searchOpen = !!search;
-  useEffect12(() => {
+  useEffect13(() => {
     if (!searchOpen) return;
     return MoveFunctions.push("back", () => MoveSearchStore.close(), { label: "end search", chip: false });
   }, [searchOpen]);
@@ -10367,28 +12337,28 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const roomWave = settingsOpen && page?.panel.id === MOVE_WAVEFORM_PANEL;
   const clipIndex = composition ? Math.min(composition.segments.length - 1, Math.max(0, Math.round(Number(modSlot.params.selected) || 0))) : 0;
   const previewPath = modLayout?.dials.find((d) => d.preview)?.path ?? null;
-  const values = useSyncExternalStore3(
-    useCallback2((cb) => pageId ? TweakStore13.subscribe(pageId, cb) : () => {
+  const values = useSyncExternalStore4(
+    useCallback3((cb) => pageId ? TweakStore14.subscribe(pageId, cb) : () => {
     }, [pageId]),
-    () => pageId ? TweakStore13.getValues(pageId) : void 0,
+    () => pageId ? TweakStore14.getValues(pageId) : void 0,
     () => void 0
   );
-  const [, bumpControlState] = useState7(0);
-  useEffect12(
-    () => pageId ? TweakStore13.subscribeControlState(pageId, () => bumpControlState((n) => n + 1)) : void 0,
+  const [, bumpControlState] = useState8(0);
+  useEffect13(
+    () => pageId ? TweakStore14.subscribeControlState(pageId, () => bumpControlState((n) => n + 1)) : void 0,
     [pageId]
   );
-  useSyncExternalStore3(
-    useCallback2((cb) => ModulationStore2.subscribe(cb), []),
+  useSyncExternalStore4(
+    useCallback3((cb) => ModulationStore2.subscribe(cb), []),
     () => ModulationStore2.getVersion(),
     () => 0
   );
-  const surface = useSyncExternalStore3(
-    useCallback2((cb) => MoveSurfaceStore.subscribe(cb), []),
+  const surface = useSyncExternalStore4(
+    useCallback3((cb) => MoveSurfaceStore.subscribe(cb), []),
     () => MoveSurfaceStore.getState(),
     () => MoveSurfaceStore.getState()
   );
-  useEffect12(() => {
+  useEffect13(() => {
     const forPage = (detail, map) => detail && detail.pageId === pageId ? map ?? {} : {};
     const onTouch = (e) => {
       const d = e.detail;
@@ -10406,13 +12376,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       window.removeEventListener(MOVE_OVERRIDE_EVENT, onOverride);
     };
   }, [pageId]);
-  const pagesRef = useRef12(pages);
+  const pagesRef = useRef13(pages);
   pagesRef.current = pages;
-  const roomIdsRef = useRef12(roomIds);
+  const roomIdsRef = useRef13(roomIds);
   roomIdsRef.current = roomIds;
-  const sawSettings = useRef12(false);
-  const sawRoom = useRef12(false);
-  useEffect12(() => {
+  const sawSettings = useRef13(false);
+  const sawRoom = useRef13(false);
+  useEffect13(() => {
     const onPage = (e) => {
       const id = e.detail?.pageId;
       if (id === MOD_SETTINGS_PANEL) {
@@ -10441,7 +12411,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     window.addEventListener(MOVE_PAGE_EVENT, onPage);
     return () => window.removeEventListener(MOVE_PAGE_EVENT, onPage);
   }, []);
-  useEffect12(() => {
+  useEffect13(() => {
     setHeld(null);
     setLatched({});
   }, [pageId]);
@@ -10450,7 +12420,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const screenSearch = searchTarget === "screen" && screen ? search : null;
   const presetSearch = searchTarget === "presets" && presetOpenPanel ? search : null;
   const paletteSearch = searchTarget === "palette" && paletteScreen ? search : null;
-  useEffect12(() => {
+  useEffect13(() => {
     screenShown.current = !!screen;
     if (searchTarget && !screenSearch && !presetSearch && !paletteSearch) MoveSearchStore.close();
   });
@@ -10474,20 +12444,20 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     return fineRef.current;
   };
   const dialFromKeyboard = (e, meta) => {
-    if (e.altKey || e.ctrlKey || e.metaKey || TweakStore13.isDisabled(page.panel.id, meta.path)) return;
+    if (e.altKey || e.ctrlKey || e.metaKey || TweakStore14.isDisabled(page.panel.id, meta.path)) return;
     const next = moveKeyboardValue(meta, values[meta.path], e.key, e.shiftKey);
     if (next === null) return;
     e.preventDefault();
     e.stopPropagation();
     armMod(meta.path);
-    TweakStore13.updateValue(page.panel.id, meta.path, next);
+    TweakStore14.updateValue(page.panel.id, meta.path, next);
   };
   const dialFromPointer = (e, meta, box = e.currentTarget, inset = DIAL_TRACK_INSET) => {
     const rect = box.getBoundingClientRect();
     const span = rect.width - inset * 2;
     const fine = fineAnchor(e, () => normalizeDial(meta, values[meta.path]));
     const v01 = fine ? fineDragValue({ startValue: fine.v, startPos: fine.x, pos: e.clientX, extentPx: span || 1, min: 0, max: 1, factor: fine.shift ? 0.1 : 1 }) : Math.min(1, Math.max(0, (e.clientX - rect.left - inset) / (span || 1)));
-    TweakStore13.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
+    TweakStore14.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
   };
   const xyFromPointer = (e, meta) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -10511,7 +12481,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     }
     const raw = valueFromPoint({ x: px, y: py }, xa, ya, !!meta.snap);
     const origin = pointFromValue(centerValue(xa, ya), xa, ya);
-    TweakStore13.updateValue(page.panel.id, meta.path, {
+    TweakStore14.updateValue(page.panel.id, meta.path, {
       x: applyDetentAxis(raw.x, xa, Math.abs(px - origin.x) * (w || 1)),
       y: applyDetentAxis(raw.y, ya, Math.abs(py - origin.y) * (h || 1))
     });
@@ -10530,7 +12500,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       setCurvePoint((prev) => ({ ...prev, [meta.path]: Math.min(index, points.length - 1) }));
     }
     index = Math.min(index, points.length - 1);
-    TweakStore13.updateValue(page.panel.id, meta.path, { points: movePoint(points, index, x, y) });
+    TweakStore14.updateValue(page.panel.id, meta.path, { points: movePoint(points, index, x, y) });
   };
   const needleFromPointer = (e, meta) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -10545,7 +12515,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       meta.step ?? 1,
       wraps
     );
-    if (next !== null) TweakStore13.updateValue(page.panel.id, meta.path, next);
+    if (next !== null) TweakStore14.updateValue(page.panel.id, meta.path, next);
   };
   const rampFromPointer = (e, meta, down) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -10567,7 +12537,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     const lo = index > 0 ? g.stops[index - 1].position : 0;
     const hi = index < g.stops.length - 1 ? g.stops[index + 1].position : 1;
     const stops = g.stops.map((st, i) => i === index ? { ...st, position: Math.min(hi, Math.max(lo, x)) } : st);
-    TweakStore13.updateValue(page.panel.id, meta.path, { ...g, stops });
+    TweakStore14.updateValue(page.panel.id, meta.path, { ...g, stops });
   };
   const xyRelease = (meta) => {
     setDragPath(null);
@@ -10575,7 +12545,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     if (!meta.returnToCenter) return;
     const xa = resolveAxis(meta.xAxis);
     const ya = resolveAxis(meta.yAxis);
-    TweakStore13.updateValue(page.panel.id, meta.path, normalizeValue(centerValue(xa, ya), xa, ya, !!meta.snap));
+    TweakStore14.updateValue(page.panel.id, meta.path, normalizeValue(centerValue(xa, ya), xa, ya, !!meta.snap));
   };
   const rangeFromPointer = (e, meta, down) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -10597,7 +12567,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       });
     }
     const next = rangeHandleRef.current === "min" ? { lo: Math.min(p01, cur.hi), hi: cur.hi } : { lo: cur.lo, hi: Math.max(p01, cur.lo) };
-    TweakStore13.updateValue(page.panel.id, meta.path, denormalizeRangeDial(meta, next.lo, next.hi));
+    TweakStore14.updateValue(page.panel.id, meta.path, denormalizeRangeDial(meta, next.lo, next.hi));
   };
   const filterFromPointer = (e, meta, down) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -10624,13 +12594,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       v01 = Math.min(1, Math.max(0, (e.clientX - left) / (span || 1)));
     }
     const next = hand === "cutoff" ? denormalizeFilterDial(meta, v01, cur.resonance) : denormalizeFilterDial(meta, cur.cutoff, v01);
-    TweakStore13.updateValue(page.panel.id, meta.path, next);
+    TweakStore14.updateValue(page.panel.id, meta.path, next);
   };
   const enumFromPointer = (e, meta) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const span = rect.width - DIAL_TRACK_INSET * 2;
     const v01 = Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
-    TweakStore13.updateValue(page.panel.id, meta.path, denormalizeEnumDial(meta, v01));
+    TweakStore14.updateValue(page.panel.id, meta.path, denormalizeEnumDial(meta, v01));
   };
   const dialReading = (meta) => {
     const n = Number(values[meta.path]);
@@ -10669,7 +12639,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   };
   const dragEdge = (kind, isStart, meta, x) => {
     const v01 = kind === "loop" ? x : Math.min(1, (isStart ? x : 1 - x) * 2);
-    TweakStore13.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
+    TweakStore14.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
   };
   const trimSpanAt = (col) => {
     const start = dialAt(col);
@@ -10749,7 +12719,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       const fine = fineAnchor(e, () => normalizeDial(meta, values[meta.path]));
       v01 = fine ? fineDragValue({ startValue: fine.v, startPos: vertical ? -fine.y : fine.x, pos: vertical ? -e.clientY : e.clientX, extentPx: extent, min: 0, max: 1, factor: fine.shift ? 0.1 : 1 }) : Math.min(1, Math.max(0, vertical ? 1 - (e.clientY - rect.top - marker / 2) / extent : (e.clientX - rect.left) / extent));
     }
-    TweakStore13.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
+    TweakStore14.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
   };
   const pressChip = (e, col, meta) => {
     try {
@@ -10796,19 +12766,19 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const stripFrom = stripMode ? stripSlotIndex(page, stripOffset) : 0;
   const stripTo = stripMode ? stripSlotIndex(page, stripOffset + MOVE_DIALS) : 0;
   const volumeReading = liveValue ?? volume?.value;
-  const headerCluster = (waveClaimed || volume || functionChips === "clock") && /* @__PURE__ */ jsxs12("div", { className: "tweakers-move-actions", children: [
-    functionChips === "clock" && /* @__PURE__ */ jsx15(MoveFunctionChips, {}),
-    waveClaimed ? /* @__PURE__ */ jsx15(MoveWaveClock, {}) : volume && /* @__PURE__ */ jsxs12("div", { className: "tweakers-move-volume", children: [
-      /* @__PURE__ */ jsx15("span", { className: "tweakers-move-volume-tick", style: { background: MOVE_TRACK_COLORS[0] } }),
-      volume.label && volumeReading != null && /* @__PURE__ */ jsx15("span", { className: "tweakers-move-volume-label", children: volume.label }),
-      /* @__PURE__ */ jsx15("span", { className: "tweakers-move-volume-value", children: boldColons(volumeReading ?? volume.label ?? "") })
+  const headerCluster = (timelineClaimed || waveClaimed || volume || functionChips === "clock") && /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-actions", children: [
+    functionChips === "clock" && /* @__PURE__ */ jsx16(MoveFunctionChips, {}),
+    timelineClaimed ? /* @__PURE__ */ jsx16(MoveTimelineClock, {}) : waveClaimed ? /* @__PURE__ */ jsx16(MoveWaveClock, {}) : volume && /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-volume", children: [
+      /* @__PURE__ */ jsx16("span", { className: "tweakers-move-volume-tick", style: { background: MOVE_TRACK_COLORS[0] } }),
+      volume.label && volumeReading != null && /* @__PURE__ */ jsx16("span", { className: "tweakers-move-volume-label", children: volume.label }),
+      /* @__PURE__ */ jsx16("span", { className: "tweakers-move-volume-value", children: boldColons(volumeReading ?? volume.label ?? "") })
     ] })
   ] });
-  const content = /* @__PURE__ */ jsx15("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: /* @__PURE__ */ jsxs12("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-settings": settingsOpen || void 0, "data-move-motion-key": `${motionSurface}:${motionPage}|${pages.map((pg) => pg.panel.id).join(" ")}`, "data-overlay": padListView || explorationOpen || composition || audioWave != null || roomWave || color || presetSave ? true : void 0, children: [
-    !explorationOpen && colorMeta && /* @__PURE__ */ jsx15(MoveColorDisplay, { panelId: page.panel.id, meta: colorMeta, anchor: panelRef, theme }),
-    /* @__PURE__ */ jsx15(PresetExploration, {}),
-    presetSave && /* @__PURE__ */ jsx15(MovePresetSaveInput, { suggested: presetSave.suggested }),
-    !explorationOpen && composition && modSettings && /* @__PURE__ */ jsx15(
+  const content = /* @__PURE__ */ jsx16("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: /* @__PURE__ */ jsxs13("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-settings": settingsOpen || void 0, "data-move-motion-key": `${motionSurface}:${motionPage}|${pages.map((pg) => pg.panel.id).join(" ")}`, "data-overlay": padListView || explorationOpen || composition || audioWave != null || roomWave || color || presetSave ? true : void 0, children: [
+    !explorationOpen && colorMeta && /* @__PURE__ */ jsx16(MoveColorDisplay, { panelId: page.panel.id, meta: colorMeta, anchor: panelRef, theme }),
+    /* @__PURE__ */ jsx16(PresetExploration, {}),
+    presetSave && /* @__PURE__ */ jsx16(MovePresetSaveInput, { suggested: presetSave.suggested }),
+    !explorationOpen && composition && modSettings && /* @__PURE__ */ jsx16(
       MoveCurveComposer,
       {
         index: modSettings.index,
@@ -10818,9 +12788,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         selected: clipIndex
       }
     ),
-    !explorationOpen && audioWave != null && /* @__PURE__ */ jsx15(MoveAudioWave, { index: audioWave, theme }),
-    !explorationOpen && roomWave && /* @__PURE__ */ jsx15(MoveRoomWave, { theme }),
-    /* @__PURE__ */ jsxs12(
+    !explorationOpen && audioWave != null && /* @__PURE__ */ jsx16(MoveAudioWave, { index: audioWave, theme }),
+    !explorationOpen && roomWave && /* @__PURE__ */ jsx16(MoveRoomWave, { theme }),
+    /* @__PURE__ */ jsxs13(
       "div",
       {
         className: "tweakers-move-inner",
@@ -10834,13 +12804,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
           "--move-screen-w": screen ? "calc(var(--move-wheel-width) + 2 * var(--move-gap))" : "0px"
         },
         children: [
-          /* @__PURE__ */ jsxs12("div", { className: "tweakers-move-tracks", children: [
-            audioWave != null ? /* @__PURE__ */ jsx15(MoveAudioZoom, {}) : /* @__PURE__ */ jsxs12("div", { className: "tweakers-move-tracks-lead", children: [
-              waveClaimed && /* @__PURE__ */ jsx15(MoveAudioZoom, {}),
-              /* @__PURE__ */ jsxs12("div", { className: "tweakers-move-tracks-group", children: [
-                settingsOpen && /* @__PURE__ */ jsxs12("div", { className: "tweakers-move-settings-title", children: [
-                  /* @__PURE__ */ jsx15("span", { className: "tweakers-move-settings-blink" }),
-                  roomPages.length > 1 ? /* @__PURE__ */ jsx15("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Settings pages", children: roomPages.map((pg, i) => /* @__PURE__ */ jsxs12(
+          /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-tracks", children: [
+            audioWave != null ? /* @__PURE__ */ jsx16(MoveAudioZoom, {}) : /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-tracks-lead", children: [
+              timelineClaimed ? /* @__PURE__ */ jsx16(MoveTimelineZoom, {}) : waveClaimed && /* @__PURE__ */ jsx16(MoveAudioZoom, {}),
+              /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-tracks-group", children: [
+                settingsOpen && /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-settings-title", children: [
+                  /* @__PURE__ */ jsx16("span", { className: "tweakers-move-settings-blink" }),
+                  roomPages.length > 1 ? /* @__PURE__ */ jsx16("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Settings pages", children: roomPages.map((pg, i) => /* @__PURE__ */ jsxs13(
                     "button",
                     {
                       type: "button",
@@ -10854,14 +12824,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                         window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
                       },
                       children: [
-                        /* @__PURE__ */ jsx15("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
-                        /* @__PURE__ */ jsx15("span", { className: "tweakers-move-track-label", children: pg.panel.name })
+                        /* @__PURE__ */ jsx16("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
+                        /* @__PURE__ */ jsx16("span", { className: "tweakers-move-track-label", children: pg.panel.name })
                       ]
                     },
                     pg.panel.id
-                  )) }) : /* @__PURE__ */ jsx15("span", { className: "tweakers-move-track-label", children: page.panel.name })
+                  )) }) : /* @__PURE__ */ jsx16("span", { className: "tweakers-move-track-label", children: page.panel.name })
                 ] }),
-                !settingsOpen && gradientMeta && gradientValue && /* @__PURE__ */ jsx15("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": `${gradientMeta.label} stops`, "data-stops": true, children: gradientValue.stops.slice(0, MOVE_GRADIENT_STOPS).map((stop, i) => /* @__PURE__ */ jsxs12(
+                !settingsOpen && gradientMeta && gradientValue && /* @__PURE__ */ jsx16("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": `${gradientMeta.label} stops`, "data-stops": true, children: gradientValue.stops.slice(0, MOVE_GRADIENT_STOPS).map((stop, i) => /* @__PURE__ */ jsxs13(
                   "button",
                   {
                     type: "button",
@@ -10872,8 +12842,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                     tabIndex: i === MoveColorStore.getStop() ? 0 : -1,
                     onClick: () => MoveColorStore.selectStop(i),
                     children: [
-                      /* @__PURE__ */ jsx15("span", { className: "tweakers-move-track-marker", style: { background: stop.color } }),
-                      /* @__PURE__ */ jsxs12("span", { className: "tweakers-move-track-label", children: [
+                      /* @__PURE__ */ jsx16("span", { className: "tweakers-move-track-marker", style: { background: stop.color } }),
+                      /* @__PURE__ */ jsxs13("span", { className: "tweakers-move-track-label", children: [
                         "Stop ",
                         i + 1
                       ] })
@@ -10881,7 +12851,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                   },
                   i
                 )) }),
-                !settingsOpen && !gradientMeta && pages.length > 1 && /* @__PURE__ */ jsx15("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Move pages", children: pages.map((pg, i) => /* @__PURE__ */ jsxs12(
+                !settingsOpen && !gradientMeta && pages.length > 1 && /* @__PURE__ */ jsx16("div", { className: "tweakers-move-pages", role: "tablist", "aria-label": "Move pages", children: pages.map((pg, i) => /* @__PURE__ */ jsxs13(
                   "button",
                   {
                     id: `${pageTabsId}-tab-${i}`,
@@ -10902,20 +12872,20 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                       event.currentTarget.parentElement?.querySelectorAll('[role="tab"]')[next]?.focus();
                     },
                     children: [
-                      /* @__PURE__ */ jsx15("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
-                      /* @__PURE__ */ jsx15("span", { className: "tweakers-move-track-label", children: pg.panel.name })
+                      /* @__PURE__ */ jsx16("span", { className: "tweakers-move-track-marker", style: { background: MOVE_TRACK_COLORS[i] } }),
+                      /* @__PURE__ */ jsx16("span", { className: "tweakers-move-track-label", children: pg.panel.name })
                     ]
                   },
                   pg.panel.id
                 )) }),
-                functionChips === "tracks" && /* @__PURE__ */ jsx15(MoveFunctionChips, {}),
-                headerStart && /* @__PURE__ */ jsx15("div", { className: "tweakers-move-header-start", children: headerStart })
+                functionChips === "tracks" && /* @__PURE__ */ jsx16(MoveFunctionChips, {}),
+                headerStart && /* @__PURE__ */ jsx16("div", { className: "tweakers-move-header-start", children: headerStart })
               ] })
             ] }),
-            /* @__PURE__ */ jsx15("div", { className: "tweakers-move-mods", children: settingsOpen ? roomWave ? /* @__PURE__ */ jsx15(MoveAudioZoom, {}) : null : color && colorMeta ? /* @__PURE__ */ jsx15(MoveColorSteps, { color, disabled: TweakStore13.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? ModulationStore2.getSlots().map((slot) => /* @__PURE__ */ jsx15(MoveModCircle, { slot }, slot.index)) : null }),
-            audioWave != null ? /* @__PURE__ */ jsx15(MoveAudioTransport, { index: audioWave }) : roomWave ? /* @__PURE__ */ jsx15(MoveRoomTransport, {}) : headerCluster
+            /* @__PURE__ */ jsx16("div", { className: "tweakers-move-mods", children: settingsOpen ? roomWave ? /* @__PURE__ */ jsx16(MoveAudioZoom, {}) : null : color && colorMeta ? /* @__PURE__ */ jsx16(MoveColorSteps, { color, disabled: TweakStore14.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? ModulationStore2.getSlots().map((slot) => /* @__PURE__ */ jsx16(MoveModCircle, { slot }, slot.index)) : null }),
+            audioWave != null ? /* @__PURE__ */ jsx16(MoveAudioTransport, { index: audioWave }) : roomWave ? /* @__PURE__ */ jsx16(MoveRoomTransport, {}) : headerCluster
           ] }),
-          /* @__PURE__ */ jsxs12(
+          /* @__PURE__ */ jsxs13(
             "div",
             {
               id: pages.length > 1 && pageTabIndex >= 0 ? panelIdForTabs : void 0,
@@ -10923,9 +12893,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
               role: pages.length > 1 && pageTabIndex >= 0 ? "tabpanel" : void 0,
               "aria-labelledby": pages.length > 1 && pageTabIndex >= 0 ? `${pageTabsId}-tab-${pageTabIndex}` : void 0,
               children: [
-                screen && /* @__PURE__ */ jsxs12("div", { className: "tweakers-move-wheel-screen", role: "group", "aria-label": screen.title ?? "Wheel selection", "data-search": screenSearch ? true : void 0, children: [
-                  screenSearch && /* @__PURE__ */ jsx15(MoveSearchBar, { view: screenSearch }),
-                  /* @__PURE__ */ jsx15(
+                screen && /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-wheel-screen", role: "group", "aria-label": screen.title ?? "Wheel selection", "data-search": screenSearch ? true : void 0, children: [
+                  screenSearch && /* @__PURE__ */ jsx16(MoveSearchBar, { view: screenSearch }),
+                  /* @__PURE__ */ jsx16(
                     ListScreen,
                     {
                       items: searchedRows(
@@ -10952,8 +12922,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                     }
                   )
                 ] }),
-                explorationOpen && /* @__PURE__ */ jsx15(PresetExplorationSlots, {}),
-                (visibleCols.length > 0 || shownPadRows.length > 0) && /* @__PURE__ */ jsxs12(
+                explorationOpen && /* @__PURE__ */ jsx16(PresetExplorationSlots, {}),
+                (visibleCols.length > 0 || shownPadRows.length > 0) && /* @__PURE__ */ jsxs13(
                   "div",
                   {
                     style: explorationOpen ? { display: "none" } : void 0,
@@ -10961,17 +12931,17 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                     "data-presets": presetScreen?.phase === "open" || paletteScreen || void 0,
                     "data-pad-columns": padGridCols || void 0,
                     children: [
-                      presetScreen && /* @__PURE__ */ jsx15(MovePresetScreen, { view: presetScreen, search: presetSearch }),
-                      paletteScreen && /* @__PURE__ */ jsx15(MovePaletteScreen, { kept: paletteSearch ? moveSearchFilter(["All colors", ...MOVE_COLOR_PALETTES.map((p) => p.name)], paletteSearch.query) : null, children: paletteSearch && /* @__PURE__ */ jsx15(MoveSearchBar, { view: paletteSearch }) }),
-                      /* @__PURE__ */ jsx15("div", { className: "tweakers-move-viewport", "data-scroll": stripMode || void 0, children: /* @__PURE__ */ jsxs12(
+                      presetScreen && /* @__PURE__ */ jsx16(MovePresetScreen, { view: presetScreen, search: presetSearch }),
+                      paletteScreen && /* @__PURE__ */ jsx16(MovePaletteScreen, { kept: paletteSearch ? moveSearchFilter(["All colors", ...MOVE_COLOR_PALETTES.map((p) => p.name)], paletteSearch.query) : null, children: paletteSearch && /* @__PURE__ */ jsx16(MoveSearchBar, { view: paletteSearch }) }),
+                      /* @__PURE__ */ jsx16("div", { className: "tweakers-move-viewport", "data-scroll": stripMode || void 0, children: /* @__PURE__ */ jsxs13(
                         "div",
                         {
                           className: "tweakers-move-strip",
                           "data-scroll": stripMode || void 0,
                           style: stripMode ? { "--move-strip-len": page.dials.length, "--move-offset": stripOffset } : void 0,
                           children: [
-                            /* @__PURE__ */ jsxs12("div", { className: "tweakers-move-dials", "data-scroll": stripMode || void 0, children: [
-                              !stripMode && !settingsPanel && !color && slotGroups(page, visibleCols).map(({ start, span, label }) => /* @__PURE__ */ jsxs12(
+                            /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-dials", "data-scroll": stripMode || void 0, children: [
+                              !stripMode && !settingsPanel && !color && slotGroups(page, visibleCols).map(({ start, span, label }) => /* @__PURE__ */ jsxs13(
                                 "div",
                                 {
                                   className: "tweakers-move-slot-group",
@@ -10979,8 +12949,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   "data-labelled": label ? "true" : void 0,
                                   style: { "--move-group-start": start, "--move-group-span": span },
                                   children: [
-                                    label && /* @__PURE__ */ jsx15("span", { className: "tweakers-move-slot-group-head", children: label }),
-                                    Array.from({ length: span - 1 }, (_, k) => /* @__PURE__ */ jsx15("i", { className: "tweakers-move-slot-group-divider", style: { "--move-group-divider-at": k + 1 } }, k))
+                                    label && /* @__PURE__ */ jsx16("span", { className: "tweakers-move-slot-group-head", children: label }),
+                                    Array.from({ length: span - 1 }, (_, k) => /* @__PURE__ */ jsx16("i", { className: "tweakers-move-slot-group-divider", style: { "--move-group-divider-at": k + 1 } }, k))
                                   ]
                                 },
                                 `group-${start}`
@@ -10990,20 +12960,20 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                 if (!stripMode && visibleCols.includes(i - 1) && trimSpanAt(i - 1)) return null;
                                 if (underFace(i)) return null;
                                 const meta = dialSpan(page.dials[i]) > 1 ? page.dials[i] : dialAt(i);
-                                if (!meta) return /* @__PURE__ */ jsx15("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
-                                const disabled = TweakStore13.isDisabled(page.panel.id, meta.path);
+                                if (!meta) return /* @__PURE__ */ jsx16("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
+                                const disabled = TweakStore14.isDisabled(page.panel.id, meta.path);
                                 const active = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
                                 const valueFirst = (focused || !!settingsPanel || page.panel.kind === "kit") && !(meta.min === 0 && meta.max === 1);
                                 const scopeSlot = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.scope : void 0;
                                 const waveSlot = settingsPanel && meta.type !== "xy" ? modLayout?.dials.find((d) => d.path === meta.path)?.preview : void 0;
-                                const scope = scopeSlot && modSettings ? /* @__PURE__ */ jsx15(MoveScope, { index: modSettings.index }) : waveSlot && modSettings ? /* @__PURE__ */ jsx15(MoveWavePreview, { index: modSettings.index }) : null;
+                                const scope = scopeSlot && modSettings ? /* @__PURE__ */ jsx16(MoveScope, { index: modSettings.index }) : waveSlot && modSettings ? /* @__PURE__ */ jsx16(MoveWavePreview, { index: modSettings.index }) : null;
                                 if (padListView?.panelId === page.panel.id && (page.actions[i] ?? page.valueActions?.[i])?.path === padListView.path) {
                                   const stepList = (event) => {
                                     const rect = event.currentTarget.getBoundingClientRect();
                                     const fraction = (event.clientX - rect.left - DIAL_TRACK_INSET) / Math.max(1, rect.width - DIAL_TRACK_INSET * 2);
                                     MovePadListStore.setCursor(Math.round(fraction * Math.max(0, padListView.options.length - 1)));
                                   };
-                                  return /* @__PURE__ */ jsx15(
+                                  return /* @__PURE__ */ jsx16(
                                     "div",
                                     {
                                       className: "tweakers-move-dial",
@@ -11038,12 +13008,12 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         event.stopPropagation();
                                         MovePadListStore.move(event.deltaY);
                                       },
-                                      children: /* @__PURE__ */ jsx15(MoveSlotDefaultBody, { label: padListView.label, value: padListView.options[padListView.cursor]?.label ?? "No items", pct: 100 * padListView.cursor / Math.max(1, padListView.options.length - 1), originPct: null })
+                                      children: /* @__PURE__ */ jsx16(MoveSlotDefaultBody, { label: padListView.label, value: padListView.options[padListView.cursor]?.label ?? "No items", pct: 100 * padListView.cursor / Math.max(1, padListView.options.length - 1), originPct: null })
                                     },
                                     meta.path
                                   );
                                 }
-                                if (meta.type === "color") return /* @__PURE__ */ jsx15(MoveColorSlot, { panelId: page.panel.id, meta, active, open: colorMeta?.path === meta.path, latched: meta !== page.dials[i] && chipLatched(i, meta) }, meta.path);
+                                if (meta.type === "color") return /* @__PURE__ */ jsx16(MoveColorSlot, { panelId: page.panel.id, meta, active, open: colorMeta?.path === meta.path, latched: meta !== page.dials[i] && chipLatched(i, meta) }, meta.path);
                                 if (meta.type === "filter") {
                                   const fv = normalizeFilterValue(
                                     values[meta.path],
@@ -11051,7 +13021,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     resolveFilterAxis(meta.resonanceAxis, "resonance")
                                   );
                                   const shape = filterShapePath(meta, values[meta.path]);
-                                  return /* @__PURE__ */ jsxs12(
+                                  return /* @__PURE__ */ jsxs13(
                                     "div",
                                     {
                                       className: "tweakers-move-dial",
@@ -11080,8 +13050,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         fineRef.current = null;
                                       },
                                       children: [
-                                        /* @__PURE__ */ jsx15(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                                        /* @__PURE__ */ jsx15(MoveSlotFilterBody, { meta, value: fv, shape })
+                                        /* @__PURE__ */ jsx16(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                                        /* @__PURE__ */ jsx16(MoveSlotFilterBody, { meta, value: fv, shape })
                                       ]
                                     },
                                     meta.path
@@ -11092,7 +13062,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   const open2 = colorMeta?.path === meta.path;
                                   const editable = g.stops.length <= MOVE_GRADIENT_STOPS;
                                   const index = open2 ? Math.min(MoveColorStore.getStop(), g.stops.length - 1) : Math.min(rampStop[meta.path] ?? 0, g.stops.length - 1);
-                                  return /* @__PURE__ */ jsxs12(
+                                  return /* @__PURE__ */ jsxs13(
                                     "div",
                                     {
                                       className: "tweakers-move-dial",
@@ -11124,7 +13094,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         rampGesture.current = null;
                                         setDragPath(null);
                                         fineRef.current = null;
-                                        if (tapped && editable && !TweakStore13.isDisabled(page.panel.id, meta.path)) {
+                                        if (tapped && editable && !TweakStore14.isDisabled(page.panel.id, meta.path)) {
                                           MoveColorStore.toggle(page.panel.id, meta.path);
                                         }
                                       },
@@ -11134,8 +13104,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         fineRef.current = null;
                                       },
                                       children: [
-                                        /* @__PURE__ */ jsx15(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                                        /* @__PURE__ */ jsx15(
+                                        /* @__PURE__ */ jsx16(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                                        /* @__PURE__ */ jsx16(
                                           MoveSlotRampBody,
                                           {
                                             label: meta.label,
@@ -11154,7 +13124,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   const a = String(values[meta.balanceA ?? ""] ?? "#000000");
                                   const b = String(values[meta.balanceB ?? ""] ?? "#ffffff");
                                   const v = Math.min(1, Math.max(0, Number(values[meta.path] ?? 0.5)));
-                                  return /* @__PURE__ */ jsxs12(
+                                  return /* @__PURE__ */ jsxs13(
                                     "div",
                                     {
                                       className: "tweakers-move-dial",
@@ -11182,8 +13152,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         fineRef.current = null;
                                       },
                                       children: [
-                                        /* @__PURE__ */ jsx15(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                                        /* @__PURE__ */ jsx15(
+                                        /* @__PURE__ */ jsx16(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                                        /* @__PURE__ */ jsx16(
                                           MoveSlotRampBody,
                                           {
                                             label: meta.label,
@@ -11203,7 +13173,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                 if (meta.type === "slider" && meta.display === "dial") {
                                   const min = meta.min ?? 0, max = meta.max ?? 1;
                                   const v = Number(values[meta.path] ?? min);
-                                  return /* @__PURE__ */ jsxs12(
+                                  return /* @__PURE__ */ jsxs13(
                                     "div",
                                     {
                                       className: "tweakers-move-dial",
@@ -11231,8 +13201,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         fineRef.current = null;
                                       },
                                       children: [
-                                        /* @__PURE__ */ jsx15(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                                        /* @__PURE__ */ jsx15(
+                                        /* @__PURE__ */ jsx16(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                                        /* @__PURE__ */ jsx16(
                                           MoveSlotDialBody,
                                           {
                                             label: meta.label,
@@ -11251,7 +13221,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   const index = Math.min(curvePoint[meta.path] ?? 0, points.length - 1);
                                   const held2 = points[index];
                                   const samples = Array.from({ length: 48 }, (_, k) => sampleTransfer(points, k / 47));
-                                  return /* @__PURE__ */ jsxs12(
+                                  return /* @__PURE__ */ jsxs13(
                                     "div",
                                     {
                                       className: "tweakers-move-dial",
@@ -11279,8 +13249,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         fineRef.current = null;
                                       },
                                       children: [
-                                        /* @__PURE__ */ jsx15(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                                        /* @__PURE__ */ jsx15(
+                                        /* @__PURE__ */ jsx16(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                                        /* @__PURE__ */ jsx16(
                                           MoveSlotTransferBody,
                                           {
                                             label: meta.label,
@@ -11305,7 +13275,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   const preview = meta.path === previewPath ? ModulationStore2.getSettingsPreview() : null;
                                   const gridBase = meta.grid === false ? 0 : typeof meta.grid === "number" ? meta.grid : XY_GRID_DEFAULT;
                                   const gridN = gridBase > 0 ? Math.round(gridBase * Math.max(0, meta.density ?? 1)) : 0;
-                                  return /* @__PURE__ */ jsxs12(
+                                  return /* @__PURE__ */ jsxs13(
                                     "div",
                                     {
                                       className: "tweakers-move-dial",
@@ -11329,9 +13299,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       onPointerUp: () => xyRelease(meta),
                                       onPointerCancel: () => xyRelease(meta),
                                       children: [
-                                        valueFirst && /* @__PURE__ */ jsx15("span", { className: "tweakers-move-dial-sub", children: meta.label }),
-                                        /* @__PURE__ */ jsx15(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                                        /* @__PURE__ */ jsx15(
+                                        valueFirst && /* @__PURE__ */ jsx16("span", { className: "tweakers-move-dial-sub", children: meta.label }),
+                                        /* @__PURE__ */ jsx16(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                                        /* @__PURE__ */ jsx16(
                                           MoveSlotXYBody,
                                           {
                                             label: meta.label,
@@ -11348,7 +13318,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                 }
                                 if (meta.type === "range") {
                                   const pos = normalizeRangeDial(meta, values[meta.path]);
-                                  return /* @__PURE__ */ jsxs12(
+                                  return /* @__PURE__ */ jsxs13(
                                     "div",
                                     {
                                       className: "tweakers-move-dial",
@@ -11376,8 +13346,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         fineRef.current = null;
                                       },
                                       children: [
-                                        /* @__PURE__ */ jsx15(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                                        /* @__PURE__ */ jsx15(MoveSlotRangeBody, { label: meta.label, value: rangeReading(meta), lo: pos.lo, hi: pos.hi })
+                                        /* @__PURE__ */ jsx16(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                                        /* @__PURE__ */ jsx16(MoveSlotRangeBody, { label: meta.label, value: rangeReading(meta), lo: pos.lo, hi: pos.hi })
                                       ]
                                     },
                                     meta.path
@@ -11391,7 +13361,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   const shape = enumShapePath(meta, values[meta.path]);
                                   const glyph = enumOptionIcon(option);
                                   const playback = movePlaybackMode(meta, values[meta.path]);
-                                  return /* @__PURE__ */ jsxs12(
+                                  return /* @__PURE__ */ jsxs13(
                                     "div",
                                     {
                                       className: "tweakers-move-dial",
@@ -11413,7 +13383,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       "data-shape": shape ? true : void 0,
                                       "data-active": active || void 0,
                                       onPointerDown: (e) => {
-                                        if (TweakStore13.isDisabled(page.panel.id, meta.path)) return;
+                                        if (TweakStore14.isDisabled(page.panel.id, meta.path)) return;
                                         try {
                                           e.currentTarget.setPointerCapture(e.pointerId);
                                         } catch {
@@ -11424,7 +13394,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         enumFromPointer(e, meta);
                                       },
                                       onPointerMove: (e) => {
-                                        if (!TweakStore13.isDisabled(page.panel.id, meta.path) && dragPath === meta.path) enumFromPointer(e, meta);
+                                        if (!TweakStore14.isDisabled(page.panel.id, meta.path) && dragPath === meta.path) enumFromPointer(e, meta);
                                       },
                                       onPointerUp: () => {
                                         setDragPath(null);
@@ -11436,8 +13406,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       },
                                       children: [
                                         scope,
-                                        /* @__PURE__ */ jsx15(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                                        /* @__PURE__ */ jsx15(
+                                        /* @__PURE__ */ jsx16(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                                        /* @__PURE__ */ jsx16(
                                           MoveSlotEnumBody,
                                           {
                                             label: meta.label,
@@ -11456,12 +13426,12 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   );
                                 }
                                 if (meta.moveBlank) {
-                                  return /* @__PURE__ */ jsx15("div", { className: "tweakers-move-dial", "data-kind": "blank", "aria-hidden": "true" }, meta.path);
+                                  return /* @__PURE__ */ jsx16("div", { className: "tweakers-move-dial", "data-kind": "blank", "aria-hidden": "true" }, meta.path);
                                 }
                                 if (meta.type === "toggle") {
                                   const checked = values[meta.path] === true;
                                   const kind = moveSlotKind(meta);
-                                  return /* @__PURE__ */ jsxs12(
+                                  return /* @__PURE__ */ jsxs13(
                                     "button",
                                     {
                                       type: "button",
@@ -11474,20 +13444,20 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       "aria-checked": checked,
                                       disabled,
                                       onClick: () => {
-                                        if (!TweakStore13.isDisabled(page.panel.id, meta.path)) {
-                                          TweakStore13.updateValue(page.panel.id, meta.path, !checked);
+                                        if (!TweakStore14.isDisabled(page.panel.id, meta.path)) {
+                                          TweakStore14.updateValue(page.panel.id, meta.path, !checked);
                                         }
                                       },
                                       children: [
-                                        /* @__PURE__ */ jsx15(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                                        kind === "metronome" ? /* @__PURE__ */ jsx15(
+                                        /* @__PURE__ */ jsx16(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                                        kind === "metronome" ? /* @__PURE__ */ jsx16(
                                           MoveSlotMetronomeBody,
                                           {
                                             label: meta.label,
                                             checked,
                                             swing: meta.moveVisual?.kind === "metronome" ? meta.moveVisual.swing : void 0
                                           }
-                                        ) : /* @__PURE__ */ jsx15(
+                                        ) : /* @__PURE__ */ jsx16(
                                           MoveSlotToggleBody,
                                           {
                                             label: meta.label,
@@ -11503,7 +13473,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   );
                                 }
                                 if (scope) {
-                                  return /* @__PURE__ */ jsxs12(
+                                  return /* @__PURE__ */ jsxs13(
                                     "div",
                                     {
                                       className: "tweakers-move-dial",
@@ -11531,8 +13501,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         fineRef.current = null;
                                       },
                                       children: [
-                                        /* @__PURE__ */ jsx15(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                                        /* @__PURE__ */ jsx15(
+                                        /* @__PURE__ */ jsx16(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                                        /* @__PURE__ */ jsx16(
                                           MoveSlotScopeBody,
                                           {
                                             label: meta.label,
@@ -11573,7 +13543,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     const v = chipValue(m);
                                     return `${v.num}${v.unit ? ` ${v.unit}` : ""}`;
                                   };
-                                  return /* @__PURE__ */ jsxs12(
+                                  return /* @__PURE__ */ jsxs13(
                                     "div",
                                     {
                                       className: "tweakers-move-dial",
@@ -11581,7 +13551,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       "data-active": envActive || void 0,
                                       style: { gridColumn: `span ${stageDials.length}` },
                                       children: [
-                                        /* @__PURE__ */ jsx15(
+                                        /* @__PURE__ */ jsx16(
                                           MoveSlotEnvBody,
                                           {
                                             points: envelopePoints(envParams, 129),
@@ -11589,7 +13559,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                             joints: envelopeJoints(envParams).map((j) => ({ ...j, held: bendHeld === j.stage }))
                                           }
                                         ),
-                                        /* @__PURE__ */ jsx15("div", { className: "tweakers-move-env-zones", children: stageDials.map(({ meta: m }) => /* @__PURE__ */ jsx15(
+                                        /* @__PURE__ */ jsx16("div", { className: "tweakers-move-env-zones", children: stageDials.map(({ meta: m }) => /* @__PURE__ */ jsx16(
                                           "div",
                                           {
                                             className: "tweakers-move-env-zone",
@@ -11614,7 +13584,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                               setDragPath(null);
                                               fineRef.current = null;
                                             },
-                                            children: /* @__PURE__ */ jsx15(MoveModRing, { panelId: page.panel.id, path: m.path })
+                                            children: /* @__PURE__ */ jsx16(MoveModRing, { panelId: page.panel.id, path: m.path })
                                           },
                                           m.path
                                         )) })
@@ -11635,17 +13605,17 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     position: d.position,
                                     active: d.active
                                   });
-                                  const body = face.kind === "channel" ? /* @__PURE__ */ jsx15(MoveSlotChannelBody, { channels: dials.map((d) => {
+                                  const body = face.kind === "channel" ? /* @__PURE__ */ jsx16(MoveSlotChannelBody, { channels: dials.map((d) => {
                                     const visual = d.meta.moveVisual;
                                     return { ...shown(d), ...visual?.kind === "channel" ? { icon: visual.icon, tone: visual.tone } : {} };
-                                  }) }) : face.kind === "gate" ? /* @__PURE__ */ jsx15(MoveSlotGateBody, { threshold: shown(dials[0]), lookahead: shown(dials[1]), release: shown(dials[2]), children: /* @__PURE__ */ jsx15(MoveGateDisplay, { panelId: page.panel.id, threshold: dials[0].position }) }) : /* @__PURE__ */ jsx15(MoveSlotMultibandBody, { amount: shown(dials[0]), speed: shown(dials[1]), bands: dials.slice(2).map(shown), icon: face.icon, children: /* @__PURE__ */ jsx15(
+                                  }) }) : face.kind === "gate" ? /* @__PURE__ */ jsx16(MoveSlotGateBody, { threshold: shown(dials[0]), lookahead: shown(dials[1]), release: shown(dials[2]), children: /* @__PURE__ */ jsx16(MoveGateDisplay, { panelId: page.panel.id, threshold: dials[0].position }) }) : /* @__PURE__ */ jsx16(MoveSlotMultibandBody, { amount: shown(dials[0]), speed: shown(dials[1]), bands: dials.slice(2).map(shown), icon: face.icon, children: /* @__PURE__ */ jsx16(
                                     MoveMultibandDisplay,
                                     {
                                       panelId: page.panel.id,
                                       bands: face.curve.map((b) => ({ position: b.position, active: dragPath === b.meta.path || dials.some((d) => d.active && d.meta === b.meta) }))
                                     }
                                   ) });
-                                  return /* @__PURE__ */ jsxs12(
+                                  return /* @__PURE__ */ jsxs13(
                                     "div",
                                     {
                                       className: "tweakers-move-dial",
@@ -11655,9 +13625,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       style: { gridColumn: `span ${face.span}` },
                                       children: [
                                         body,
-                                        /* @__PURE__ */ jsx15("div", { className: "tweakers-move-face-zones", children: dials.map((d) => {
-                                          const off = TweakStore13.isDisabled(page.panel.id, d.meta.path);
-                                          return /* @__PURE__ */ jsx15(
+                                        /* @__PURE__ */ jsx16("div", { className: "tweakers-move-face-zones", children: dials.map((d) => {
+                                          const off = TweakStore14.isDisabled(page.panel.id, d.meta.path);
+                                          return /* @__PURE__ */ jsx16(
                                             "div",
                                             {
                                               className: "tweakers-move-face-zone",
@@ -11682,7 +13652,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                                     meta2 = face.curve[Math.max(0, Math.min(face.curve.length - 1, k))].meta;
                                                   }
                                                 }
-                                                if (TweakStore13.isDisabled(page.panel.id, meta2.path)) return;
+                                                if (TweakStore14.isDisabled(page.panel.id, meta2.path)) return;
                                                 try {
                                                   p.currentTarget.setPointerCapture(p.pointerId);
                                                 } catch {
@@ -11695,7 +13665,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                               },
                                               onPointerMove: (p) => {
                                                 const meta2 = faceDrag.current;
-                                                if (meta2 && dragPath === meta2.path && !TweakStore13.isDisabled(page.panel.id, meta2.path)) faceFromPointer(p, { ...d, meta: meta2 });
+                                                if (meta2 && dragPath === meta2.path && !TweakStore14.isDisabled(page.panel.id, meta2.path)) faceFromPointer(p, { ...d, meta: meta2 });
                                               },
                                               onPointerUp: () => {
                                                 setDragPath(null);
@@ -11707,7 +13677,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                                 fineRef.current = null;
                                                 faceDrag.current = null;
                                               },
-                                              children: /* @__PURE__ */ jsx15(MoveModRing, { panelId: page.panel.id, path: d.meta.path })
+                                              children: /* @__PURE__ */ jsx16(MoveModRing, { panelId: page.panel.id, path: d.meta.path })
                                             },
                                             d.col
                                           );
@@ -11730,7 +13700,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     position: e.position,
                                     moved: e.edge === "start" ? e.position > 1e-9 : e.position < 1 - 1e-9
                                   });
-                                  return /* @__PURE__ */ jsxs12(
+                                  return /* @__PURE__ */ jsxs13(
                                     "div",
                                     {
                                       className: "tweakers-move-dial",
@@ -11739,10 +13709,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       "data-latched": edges.every((e) => e.meta !== page.dials[e.col] && chipLatched(e.col, e.meta)) || void 0,
                                       style: { gridColumn: "span 2" },
                                       children: [
-                                        /* @__PURE__ */ jsx15(MoveSlotTrimSpanBody, { start: side(edges[0]), end: side(edges[1]) }),
-                                        /* @__PURE__ */ jsx15("div", { className: "tweakers-move-trim-span-zones", children: edges.map((e) => {
-                                          const off = TweakStore13.isDisabled(page.panel.id, e.meta.path);
-                                          return /* @__PURE__ */ jsx15(
+                                        /* @__PURE__ */ jsx16(MoveSlotTrimSpanBody, { start: side(edges[0]), end: side(edges[1]) }),
+                                        /* @__PURE__ */ jsx16("div", { className: "tweakers-move-trim-span-zones", children: edges.map((e) => {
+                                          const off = TweakStore14.isDisabled(page.panel.id, e.meta.path);
+                                          return /* @__PURE__ */ jsx16(
                                             "div",
                                             {
                                               className: "tweakers-move-trim-span-zone",
@@ -11758,7 +13728,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                               "data-disabled": off || void 0,
                                               onKeyDown: (k) => dialFromKeyboard(k, e.meta),
                                               onPointerDown: (p) => {
-                                                if (TweakStore13.isDisabled(page.panel.id, e.meta.path)) return;
+                                                if (TweakStore14.isDisabled(page.panel.id, e.meta.path)) return;
                                                 try {
                                                   p.currentTarget.setPointerCapture(p.pointerId);
                                                 } catch {
@@ -11769,7 +13739,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                                 dialFromPointer(p, e.meta, p.currentTarget.parentElement ?? p.currentTarget, DIAL_TRACK_INSET + TRIM_SPAN_PAD);
                                               },
                                               onPointerMove: (p) => {
-                                                if (!TweakStore13.isDisabled(page.panel.id, e.meta.path) && dragPath === e.meta.path) {
+                                                if (!TweakStore14.isDisabled(page.panel.id, e.meta.path) && dragPath === e.meta.path) {
                                                   dialFromPointer(p, e.meta, p.currentTarget.parentElement ?? p.currentTarget, DIAL_TRACK_INSET + TRIM_SPAN_PAD);
                                                 }
                                               },
@@ -11781,7 +13751,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                                 setDragPath(null);
                                                 fineRef.current = null;
                                               },
-                                              children: /* @__PURE__ */ jsx15(MoveModRing, { panelId: page.panel.id, path: e.meta.path })
+                                              children: /* @__PURE__ */ jsx16(MoveModRing, { panelId: page.panel.id, path: e.meta.path })
                                             },
                                             e.meta.path
                                           );
@@ -11799,7 +13769,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                 const drawing = moveNumericDrawing(meta, values[meta.path]);
                                 const subbed = meta !== page.dials[i];
                                 const subValue = subbed || valueFirst ? chipValue(meta) : null;
-                                return /* @__PURE__ */ jsxs12(
+                                return /* @__PURE__ */ jsxs13(
                                   "div",
                                   {
                                     className: "tweakers-move-dial",
@@ -11819,7 +13789,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     "data-disabled": disabled || void 0,
                                     onKeyDown: (e) => dialFromKeyboard(e, meta),
                                     onPointerDown: (e) => {
-                                      if (TweakStore13.isDisabled(page.panel.id, meta.path)) return;
+                                      if (TweakStore14.isDisabled(page.panel.id, meta.path)) return;
                                       try {
                                         e.currentTarget.setPointerCapture(e.pointerId);
                                       } catch {
@@ -11830,7 +13800,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       dialFromPointer(e, meta);
                                     },
                                     onPointerMove: (e) => {
-                                      if (!TweakStore13.isDisabled(page.panel.id, meta.path) && dragPath === meta.path) dialFromPointer(e, meta);
+                                      if (!TweakStore14.isDisabled(page.panel.id, meta.path) && dragPath === meta.path) dialFromPointer(e, meta);
                                     },
                                     onPointerUp: () => {
                                       setDragPath(null);
@@ -11841,9 +13811,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       fineRef.current = null;
                                     },
                                     children: [
-                                      !drawing && (subbed || valueFirst) && /* @__PURE__ */ jsx15("span", { className: "tweakers-move-dial-sub", children: meta.label }),
-                                      /* @__PURE__ */ jsx15(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                                      drawing ? /* @__PURE__ */ jsx15(MoveSlotNumericBody, { label: meta.label, value: moveVisualReading(meta, Number(values[meta.path])), drawing }) : /* @__PURE__ */ jsx15(
+                                      !drawing && (subbed || valueFirst) && /* @__PURE__ */ jsx16("span", { className: "tweakers-move-dial-sub", children: meta.label }),
+                                      /* @__PURE__ */ jsx16(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                                      drawing ? /* @__PURE__ */ jsx16(MoveSlotNumericBody, { label: meta.label, value: moveVisualReading(meta, Number(values[meta.path])), drawing }) : /* @__PURE__ */ jsx16(
                                         MoveSlotDefaultBody,
                                         {
                                           label: meta.label,
@@ -11859,10 +13829,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                 );
                               })
                             ] }),
-                            color && colorMeta ? /* @__PURE__ */ jsx15(MoveOpacityPads, { color, disabled: TweakStore13.isDisabled(page.panel.id, colorMeta.path) }) : shownPadRows.map((row) => {
+                            color && colorMeta ? /* @__PURE__ */ jsx16(MoveOpacityPads, { color, disabled: TweakStore14.isDisabled(page.panel.id, colorMeta.path) }) : shownPadRows.map((row) => {
                               if (appRowAt(row) !== null && !surface.pads.length) {
                                 if (row > firstAppScreenRow) return null;
-                                return /* @__PURE__ */ jsx15(
+                                return /* @__PURE__ */ jsx16(
                                   "div",
                                   {
                                     className: "tweakers-move-app-row",
@@ -11873,12 +13843,12 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       } catch {
                                       }
                                     },
-                                    children: /* @__PURE__ */ jsx15("span", { className: "tweakers-move-app-row-label", children: surface.padsLabel ?? "the app\u2019s pads" })
+                                    children: /* @__PURE__ */ jsx16("span", { className: "tweakers-move-app-row-label", children: surface.padsLabel ?? "the app\u2019s pads" })
                                   },
                                   "app-rows"
                                 );
                               }
-                              return /* @__PURE__ */ jsx15(
+                              return /* @__PURE__ */ jsx16(
                                 "div",
                                 {
                                   className: "tweakers-move-pads",
@@ -11890,9 +13860,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     if (appRow !== null) {
                                       const cell = padAt(col, appRow);
                                       if (!cell || cell.empty) {
-                                        return /* @__PURE__ */ jsx15("div", { className: "tweakers-move-pad", "data-empty": "true" }, `app-${col}`);
+                                        return /* @__PURE__ */ jsx16("div", { className: "tweakers-move-pad", "data-empty": "true" }, `app-${col}`);
                                       }
-                                      return /* @__PURE__ */ jsx15(
+                                      return /* @__PURE__ */ jsx16(
                                         "button",
                                         {
                                           type: "button",
@@ -11911,7 +13881,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           onPointerUp: () => setAppHeld(null),
                                           onPointerCancel: () => setAppHeld(null),
                                           onClick: (e) => MoveSurfaceStore.press(col, appRow, e.shiftKey),
-                                          children: /* @__PURE__ */ jsx15(MovePadAppBody, { label: cell.label, color: cell.color })
+                                          children: /* @__PURE__ */ jsx16(MovePadAppBody, { label: cell.label, color: cell.color })
                                         },
                                         `app-${col}`
                                       );
@@ -11923,14 +13893,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       const named = isNamedTabs(meta);
                                       const options = meta.options ?? [];
                                       const active = enumIndex(meta, values[meta.path]);
-                                      return /* @__PURE__ */ jsxs12(
+                                      return /* @__PURE__ */ jsxs13(
                                         "div",
                                         {
                                           className: "tweakers-move-tabs",
                                           "data-kind": "tabs",
                                           style: { gridColumn: `span ${span}`, "--move-tabs-cols": span },
                                           children: [
-                                            /* @__PURE__ */ jsx15(
+                                            /* @__PURE__ */ jsx16(
                                               MovePadTabsBody,
                                               {
                                                 name: named ? meta.label : null,
@@ -11938,7 +13908,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                                 activeIdx: active
                                               }
                                             ),
-                                            /* @__PURE__ */ jsx15("div", { className: "tweakers-move-tab-zones", role: "tablist", "aria-label": meta.label, children: options.map((opt, i) => /* @__PURE__ */ jsx15(
+                                            /* @__PURE__ */ jsx16("div", { className: "tweakers-move-tab-zones", role: "tablist", "aria-label": meta.label, children: options.map((opt, i) => /* @__PURE__ */ jsx16(
                                               "button",
                                               {
                                                 type: "button",
@@ -11946,8 +13916,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                                 className: "tweakers-move-tab-zone",
                                                 style: { gridColumnStart: (named ? 2 : 1) + i },
                                                 "aria-selected": i === active,
-                                                disabled: TweakStore13.isDisabled(page.panel.id, meta.path),
-                                                onClick: () => TweakStore13.updateValue(
+                                                disabled: TweakStore14.isDisabled(page.panel.id, meta.path),
+                                                onClick: () => TweakStore14.updateValue(
                                                   page.panel.id,
                                                   meta.path,
                                                   enumOptionValue(opt)
@@ -11963,7 +13933,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     }
                                     const bendStage = !meta && settingsPanel && padRows[row] === page.toggles && modSettings ? modLayout?.dials[col]?.stage : void 0;
                                     if (bendStage && ENV_BEND_STAGES.includes(bendStage)) {
-                                      return /* @__PURE__ */ jsx15(
+                                      return /* @__PURE__ */ jsx16(
                                         "button",
                                         {
                                           className: "tweakers-move-pad",
@@ -11996,7 +13966,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                             setBendHeld(null);
                                             bendRef.current = null;
                                           },
-                                          children: /* @__PURE__ */ jsx15(MovePadToggleBody, { label: "Curve" })
+                                          children: /* @__PURE__ */ jsx16(MovePadToggleBody, { label: "Curve" })
                                         },
                                         `bend-${bendStage}`
                                       );
@@ -12005,7 +13975,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     if (waveStage && ENV_WAVE_STAGES.includes(waveStage)) {
                                       const amount = Number(modSlot?.params[envWaveParam(waveStage)]) || 0;
                                       const flipped = !!modSlot?.params[envWaveFlipParam(waveStage)];
-                                      return /* @__PURE__ */ jsx15(
+                                      return /* @__PURE__ */ jsx16(
                                         "button",
                                         {
                                           className: "tweakers-move-pad",
@@ -12041,12 +14011,12 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                             setWaveHeld(null);
                                             waveRef.current = null;
                                           },
-                                          children: /* @__PURE__ */ jsx15(MovePadWaveBody, { label: flipped ? "Swell" : "Dip", percent: Math.round(amount * 100) })
+                                          children: /* @__PURE__ */ jsx16(MovePadWaveBody, { label: flipped ? "Swell" : "Dip", percent: Math.round(amount * 100) })
                                         },
                                         `wave-${waveStage}`
                                       );
                                     }
-                                    if (!meta) return /* @__PURE__ */ jsx15("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
+                                    if (!meta) return /* @__PURE__ */ jsx16("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
                                     const edges = stripMode ? null : moveEdgesCell(page, padRows, row, col);
                                     if (edges?.tail) return null;
                                     if (edges) {
@@ -12057,7 +14027,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       });
                                       const start = hand(edges.start, edges.start.min ?? 0);
                                       const end = hand(edges.end, edges.kind === "loop" ? edges.end.max ?? 1 : edges.end.min ?? 0);
-                                      return /* @__PURE__ */ jsxs12(
+                                      return /* @__PURE__ */ jsxs13(
                                         "div",
                                         {
                                           className: "tweakers-move-edges",
@@ -12067,7 +14037,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                             const x = edgesFromPointer(e);
                                             const takeStart = edges.kind === "fade" ? x < 0.5 : Math.abs(x - start.at) < Math.abs(x - end.at) || start.at >= end.at && x <= start.at;
                                             const m = takeStart ? edges.start : edges.end;
-                                            if (TweakStore13.isDisabled(page.panel.id, m.path)) return;
+                                            if (TweakStore14.isDisabled(page.panel.id, m.path)) return;
                                             try {
                                               e.currentTarget.setPointerCapture(e.pointerId);
                                             } catch {
@@ -12078,18 +14048,18 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           },
                                           onPointerMove: (e) => {
                                             const m = dragPath === edges.start.path ? edges.start : dragPath === edges.end.path ? edges.end : null;
-                                            if (m && !TweakStore13.isDisabled(page.panel.id, m.path)) dragEdge(edges.kind, m === edges.start, m, edgesFromPointer(e));
+                                            if (m && !TweakStore14.isDisabled(page.panel.id, m.path)) dragEdge(edges.kind, m === edges.start, m, edgesFromPointer(e));
                                           },
                                           onPointerUp: () => setDragPath(null),
                                           onPointerCancel: () => setDragPath(null),
                                           children: [
-                                            edges.kind === "fade" ? /* @__PURE__ */ jsx15(MovePadFadeBody, { fadeIn: start, fadeOut: end }) : /* @__PURE__ */ jsx15(MovePadLoopBody, { start, end }),
-                                            [[edges.start, col], [edges.end, col + 1]].map(([m, at]) => /* @__PURE__ */ jsx15(
+                                            edges.kind === "fade" ? /* @__PURE__ */ jsx16(MovePadFadeBody, { fadeIn: start, fadeOut: end }) : /* @__PURE__ */ jsx16(MovePadLoopBody, { start, end }),
+                                            [[edges.start, col], [edges.end, col + 1]].map(([m, at]) => /* @__PURE__ */ jsx16(
                                               "div",
                                               {
                                                 className: "tweakers-move-edges-zone",
                                                 role: "slider",
-                                                tabIndex: TweakStore13.isDisabled(page.panel.id, m.path) ? -1 : 0,
+                                                tabIndex: TweakStore14.isDisabled(page.panel.id, m.path) ? -1 : 0,
                                                 "aria-label": m.label,
                                                 "aria-valuemin": m.min ?? 0,
                                                 "aria-valuemax": m.max ?? 1,
@@ -12099,7 +14069,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                                 "data-held": chipHeld(m) || void 0,
                                                 "data-latched": chipLatched(at, m) || void 0,
                                                 onKeyDown: (k) => dialFromKeyboard(k, m),
-                                                children: /* @__PURE__ */ jsx15(MoveModRing, { panelId: page.panel.id, path: m.path, pad: true })
+                                                children: /* @__PURE__ */ jsx16(MoveModRing, { panelId: page.panel.id, path: m.path, pad: true })
                                               },
                                               m.path
                                             ))
@@ -12109,7 +14079,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       );
                                     }
                                     const band = moveBandCell(page, padRows, row, col);
-                                    if (band?.tail) return /* @__PURE__ */ jsx15("div", { className: "tweakers-move-band", "data-tail": true, "aria-hidden": "true" }, `band-${col}`);
+                                    if (band?.tail) return /* @__PURE__ */ jsx16("div", { className: "tweakers-move-band", "data-tail": true, "aria-hidden": "true" }, `band-${col}`);
                                     if (band) {
                                       const lower = band.upper === "high" ? band.low : band.high;
                                       const chipHeld = (m) => held !== null && held.meta.path === m.path || !!hwHeld[m.path];
@@ -12119,8 +14089,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         held: chipHeld(m),
                                         latched: chipLatched(col, m)
                                       });
-                                      return /* @__PURE__ */ jsx15("div", { className: "tweakers-move-band", "data-kind": "band", children: /* @__PURE__ */ jsxs12("div", { className: "tweakers-move-band-face", children: [
-                                        /* @__PURE__ */ jsx15(
+                                      return /* @__PURE__ */ jsx16("div", { className: "tweakers-move-band", "data-kind": "band", children: /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-band-face", children: [
+                                        /* @__PURE__ */ jsx16(
                                           MovePadBandBody,
                                           {
                                             low: hand(band.low, band.low.min ?? 0),
@@ -12128,7 +14098,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                             upper: band.upper
                                           }
                                         ),
-                                        [meta, lower].map((m) => /* @__PURE__ */ jsx15(
+                                        [meta, lower].map((m) => /* @__PURE__ */ jsx16(
                                           "button",
                                           {
                                             type: "button",
@@ -12139,14 +14109,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                             onPointerDown: (e) => pressChip(e, col, m),
                                             onPointerUp: () => releaseChip(col, m),
                                             onPointerCancel: () => setHeld(null),
-                                            children: /* @__PURE__ */ jsx15(MoveModRing, { panelId: page.panel.id, path: m.path, pad: true })
+                                            children: /* @__PURE__ */ jsx16(MoveModRing, { panelId: page.panel.id, path: m.path, pad: true })
                                           },
                                           m.path
                                         ))
                                       ] }) }, `band-${col}`);
                                     }
                                     if (page.toggles[col] === meta) {
-                                      return /* @__PURE__ */ jsx15(
+                                      return /* @__PURE__ */ jsx16(
                                         "button",
                                         {
                                           className: "tweakers-move-pad",
@@ -12155,29 +14125,29 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           "aria-label": meta.icon ? meta.label : void 0,
                                           title: meta.icon ? meta.label : void 0,
                                           ...meta.moveHold ? holdPad(page.panel.id, meta.path) : {
-                                            onClick: () => TweakStore13.updateValue(page.panel.id, meta.path, !values[meta.path])
+                                            onClick: () => TweakStore14.updateValue(page.panel.id, meta.path, !values[meta.path])
                                           },
-                                          children: meta.icon ? /* @__PURE__ */ jsx15(MovePadIconBody, { icon: meta.icon }) : /* @__PURE__ */ jsx15(MovePadToggleBody, { label: meta.label })
+                                          children: meta.icon ? /* @__PURE__ */ jsx16(MovePadIconBody, { icon: meta.icon }) : /* @__PURE__ */ jsx16(MovePadToggleBody, { label: meta.label })
                                         },
                                         meta.path
                                       );
                                     }
                                     if (meta.type === "action") {
-                                      if (MovePadListStore.has(page.panel.id, meta.path)) return /* @__PURE__ */ jsx15(MovePadList, { panelId: page.panel.id, path: meta.path, label: meta.label, icon: meta.icon, view: padListView, disabled: TweakStore13.isDisabled(page.panel.id, meta.path) }, meta.path);
-                                      return /* @__PURE__ */ jsx15(
+                                      if (MovePadListStore.has(page.panel.id, meta.path)) return /* @__PURE__ */ jsx16(MovePadList, { panelId: page.panel.id, path: meta.path, label: meta.label, icon: meta.icon, view: padListView, disabled: TweakStore14.isDisabled(page.panel.id, meta.path) }, meta.path);
+                                      return /* @__PURE__ */ jsx16(
                                         "button",
                                         {
                                           className: "tweakers-move-pad",
                                           "data-kind": "action",
-                                          onClick: () => TweakStore13.triggerAction(page.panel.id, meta.path),
-                                          children: meta.icon ? /* @__PURE__ */ jsx15(MovePadIconLabelBody, { icon: meta.icon, label: meta.label }) : /* @__PURE__ */ jsx15(MovePadActionBody, { label: meta.label })
+                                          onClick: () => TweakStore14.triggerAction(page.panel.id, meta.path),
+                                          children: meta.icon ? /* @__PURE__ */ jsx16(MovePadIconLabelBody, { icon: meta.icon, label: meta.label }) : /* @__PURE__ */ jsx16(MovePadActionBody, { label: meta.label })
                                         },
                                         meta.path
                                       );
                                     }
                                     const isColor = meta.type === "color";
                                     const value = isColor ? null : chipValue(meta);
-                                    return /* @__PURE__ */ jsx15(
+                                    return /* @__PURE__ */ jsx16(
                                       "button",
                                       {
                                         className: "tweakers-move-pad",
@@ -12188,7 +14158,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         onPointerDown: (e) => pressChip(e, col, meta),
                                         onPointerUp: () => releaseChip(col, meta),
                                         onPointerCancel: () => setHeld(null),
-                                        children: isColor ? /* @__PURE__ */ jsx15(MovePadColorBody, { label: meta.label, color: String(values[meta.path]) }) : /* @__PURE__ */ jsx15(MovePadValueBody, { label: meta.label, value: value.num, unit: value.unit, children: /* @__PURE__ */ jsx15(MoveModRing, { panelId: page.panel.id, path: meta.path, pad: true }) })
+                                        children: isColor ? /* @__PURE__ */ jsx16(MovePadColorBody, { label: meta.label, color: String(values[meta.path]) }) : /* @__PURE__ */ jsx16(MovePadValueBody, { label: meta.label, value: value.num, unit: value.unit, children: /* @__PURE__ */ jsx16(MoveModRing, { panelId: page.panel.id, path: meta.path, pad: true }) })
                                       },
                                       meta.path
                                     );
@@ -12200,7 +14170,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                           ]
                         }
                       ) }),
-                      !settingsOpen && surface.steps && MoveSurfaceStore.ownsSteps() && /* @__PURE__ */ jsx15("div", { className: "tweakers-move-app-steps", children: stepRuns(surface.steps).map((run) => /* @__PURE__ */ jsx15("span", { className: "tweakers-move-step-group", children: run.map((cell) => /* @__PURE__ */ jsx15(
+                      !settingsOpen && surface.steps && MoveSurfaceStore.ownsSteps() && /* @__PURE__ */ jsx16("div", { className: "tweakers-move-app-steps", children: stepRuns(surface.steps).map((run) => /* @__PURE__ */ jsx16("span", { className: "tweakers-move-step-group", children: run.map((cell) => /* @__PURE__ */ jsx16(
                         "button",
                         {
                           type: "button",
@@ -12209,11 +14179,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                           title: `Step ${cell.step + 1}`,
                           "aria-pressed": !!cell.lit,
                           onClick: (event) => MoveSurfaceStore.pressStep(cell.step, event.shiftKey),
-                          children: /* @__PURE__ */ jsx15("span", { className: "tweakers-move-mod-dot", style: { background: cell.lit ? cell.color ?? "var(--move-text)" : "transparent", boxShadow: cell.lit ? void 0 : "inset 0 0 0 1.5px var(--move-text)" } })
+                          children: /* @__PURE__ */ jsx16("span", { className: "tweakers-move-mod-dot", style: { background: cell.lit ? cell.color ?? "var(--move-text)" : "transparent", boxShadow: cell.lit ? void 0 : "inset 0 0 0 1.5px var(--move-text)" } })
                         },
                         cell.step
                       )) }, run[0].step)) }),
-                      stripMode && /* @__PURE__ */ jsx15(
+                      stripMode && /* @__PURE__ */ jsx16(
                         "div",
                         {
                           className: "tweakers-move-rail",
@@ -12253,7 +14223,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                           },
                           onPointerUp: () => setDotDrag(null),
                           onPointerCancel: () => setDotDrag(null),
-                          children: /* @__PURE__ */ jsx15(
+                          children: /* @__PURE__ */ jsx16(
                             "span",
                             {
                               className: "tweakers-move-rail-window",
@@ -12275,8 +14245,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       }
     )
   ] }) });
-  const moving = /* @__PURE__ */ jsx15(MovePanelMotion, { surface: motionSurface, page: motionPage, panel: panelRef, children: content });
-  return dock === "flow" ? moving : createPortal3(moving, document.body);
+  const moving = /* @__PURE__ */ jsx16(MovePanelMotion, { surface: motionSurface, page: motionPage, panel: panelRef, children: content });
+  return dock === "flow" ? moving : createPortal4(moving, document.body);
 }
 function previewPathData(points) {
   if (points.length < 2) return "";
@@ -12291,7 +14261,7 @@ function MoveCurveComposer({
   gap,
   selected
 }) {
-  return /* @__PURE__ */ jsx15("div", { className: "tweakers-move-curve", children: /* @__PURE__ */ jsx15(
+  return /* @__PURE__ */ jsx16("div", { className: "tweakers-move-curve", children: /* @__PURE__ */ jsx16(
     CurveComposer,
     {
       segments,
@@ -12308,12 +14278,12 @@ function MoveCurveComposer({
 }
 var clampWave01 = (v) => Math.min(1, Math.max(0, Number(v) || 0));
 function MoveAudioWave({ index, theme }) {
-  useSyncExternalStore3(
-    useCallback2((cb) => subscribeAudioMod(cb), []),
+  useSyncExternalStore4(
+    useCallback3((cb) => subscribeAudioMod(cb), []),
     () => getAudioModVersion(),
     () => 0
   );
-  useEffect12(() => {
+  useEffect13(() => {
     const params = ModulationStore2.getSlot(index)?.params ?? {};
     const start = clampWave01(params.loopStart);
     const end = clampWave01(params.loopEnd ?? 1);
@@ -12331,7 +14301,7 @@ function MoveAudioWave({ index, theme }) {
       MoveWaveformStore.setProgressSource(null);
     };
   }, [index]);
-  useEffect12(() => {
+  useEffect13(() => {
     const toggle = (path) => () => {
       const slot = ModulationStore2.getSlot(index);
       if (slot) ModulationStore2.updateSlotParams(index, { [path]: !slot.params[path] });
@@ -12343,7 +14313,7 @@ function MoveAudioWave({ index, theme }) {
     ];
     return () => releases.forEach((release) => release());
   }, [index]);
-  useEffect12(() => {
+  useEffect13(() => {
     const prev = MoveSurfaceStore.getState();
     MoveSurfaceStore.setPadRows(
       1,
@@ -12363,7 +14333,7 @@ function MoveAudioWave({ index, theme }) {
       MoveSurfaceStore.setPadRows(prev.rows, prev.pads, prev.padsLabel);
     };
   }, [index]);
-  return /* @__PURE__ */ jsx15(
+  return /* @__PURE__ */ jsx16(
     MoveWaveform,
     {
       variant: "dock",
@@ -12384,14 +14354,14 @@ function MoveAudioWave({ index, theme }) {
 }
 var MOVE_WAVE_DISPLAY_HEIGHT = 128;
 function MoveRoomWave({ theme }) {
-  useSyncExternalStore3(
-    useCallback2((cb) => subscribeAudioMod(cb), []),
+  useSyncExternalStore4(
+    useCallback3((cb) => subscribeAudioMod(cb), []),
     () => getAudioModVersion(),
     () => 0
   );
   const buffer = MoveWaveformStore.getBuffer() ?? getAudioModBuffer() ?? moveWaveformDemoSample();
   roomClock.duration = buffer.duration || 1;
-  useEffect12(() => {
+  useEffect13(() => {
     let last = null;
     let raf = requestAnimationFrame(function tick(now) {
       raf = requestAnimationFrame(tick);
@@ -12404,7 +14374,7 @@ function MoveRoomWave({ theme }) {
     });
     return () => cancelAnimationFrame(raf);
   }, []);
-  useEffect12(() => {
+  useEffect13(() => {
     MoveWaveformStore.setProgressSource(() => roomClock.pos);
     const releases = [
       MoveFunctions.push("play", () => roomClock.toggle("playing"), { label: "Play", chip: false }),
@@ -12415,7 +14385,7 @@ function MoveRoomWave({ theme }) {
       MoveWaveformStore.setProgressSource(null);
     };
   }, []);
-  return /* @__PURE__ */ jsx15(
+  return /* @__PURE__ */ jsx16(
     MoveWaveform,
     {
       variant: "dock",
@@ -12470,14 +14440,14 @@ var roomClock = {
   }
 };
 function MoveAudioZoom() {
-  useSyncExternalStore3(
-    useCallback2((cb) => MoveWaveformStore.subscribe(cb), []),
+  useSyncExternalStore4(
+    useCallback3((cb) => MoveWaveformStore.subscribe(cb), []),
     () => MoveWaveformStore.getVersion(),
     () => 0
   );
-  return /* @__PURE__ */ jsxs12("div", { className: "tweakers-move-wave-zoom", children: [
-    /* @__PURE__ */ jsx15("span", { className: "tweakers-move-wave-zoom-dot" }),
-    /* @__PURE__ */ jsxs12("span", { className: "tweakers-move-wave-zoom-label", children: [
+  return /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-wave-zoom", children: [
+    /* @__PURE__ */ jsx16("span", { className: "tweakers-move-wave-zoom-dot" }),
+    /* @__PURE__ */ jsxs13("span", { className: "tweakers-move-wave-zoom-label", children: [
       "Zoom ",
       parseFloat(MoveWaveformStore.getView().zoom.toFixed(1)),
       "x"
@@ -12485,14 +14455,14 @@ function MoveAudioZoom() {
   ] });
 }
 function MoveWaveClock() {
-  useSyncExternalStore3(
-    useCallback2((cb) => MoveWaveformStore.subscribe(cb), []),
+  useSyncExternalStore4(
+    useCallback3((cb) => MoveWaveformStore.subscribe(cb), []),
     () => MoveWaveformStore.getVersion(),
     () => 0
   );
   const transport = MoveWaveformStore.getTransport();
-  const clockRef = useRef12(null);
-  useEffect12(() => {
+  const clockRef = useRef13(null);
+  useEffect13(() => {
     let raf = requestAnimationFrame(function tick() {
       const text = MoveWaveformStore.clock();
       if (clockRef.current && clockRef.current.textContent !== text) clockRef.current.textContent = text;
@@ -12500,20 +14470,20 @@ function MoveWaveClock() {
     });
     return () => cancelAnimationFrame(raf);
   }, []);
-  return /* @__PURE__ */ jsxs12("div", { className: "tweakers-move-volume tweakers-move-wave-time", "data-transport": transport ? true : void 0, children: [
-    transport && /* @__PURE__ */ jsx15("svg", { className: "tweakers-move-wave-state", "data-on": transport.playing || void 0, viewBox: "0 0 24 24", "aria-hidden": "true", children: /* @__PURE__ */ jsx15("path", { d: ICON_PLAY, fill: "currentColor" }) }),
-    /* @__PURE__ */ jsx15("span", { ref: clockRef, className: "tweakers-move-volume-value", children: MoveWaveformStore.clock() }),
-    transport && /* @__PURE__ */ jsx15("svg", { className: "tweakers-move-wave-state", "data-on": transport.loopOn || void 0, viewBox: "0 0 24 24", "aria-hidden": "true", children: ICON_LOOP.map((d) => /* @__PURE__ */ jsx15("path", { d, fill: "none", stroke: "currentColor", strokeWidth: "2.4", strokeLinecap: "round", strokeLinejoin: "round" }, d)) })
+  return /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-volume tweakers-move-wave-time", "data-transport": transport ? true : void 0, children: [
+    transport && /* @__PURE__ */ jsx16("svg", { className: "tweakers-move-wave-state", "data-on": transport.playing || void 0, viewBox: "0 0 24 24", "aria-hidden": "true", children: /* @__PURE__ */ jsx16("path", { d: ICON_PLAY, fill: "currentColor" }) }),
+    /* @__PURE__ */ jsx16("span", { ref: clockRef, className: "tweakers-move-volume-value", children: MoveWaveformStore.clock() }),
+    transport && /* @__PURE__ */ jsx16("svg", { className: "tweakers-move-wave-state", "data-on": transport.loopOn || void 0, viewBox: "0 0 24 24", "aria-hidden": "true", children: ICON_LOOP.map((d) => /* @__PURE__ */ jsx16("path", { d, fill: "none", stroke: "currentColor", strokeWidth: "2.4", strokeLinecap: "round", strokeLinejoin: "round" }, d)) })
   ] });
 }
 function MoveAudioTransport({ index }) {
-  useSyncExternalStore3(
-    useCallback2((cb) => ModulationStore2.subscribe(cb), []),
+  useSyncExternalStore4(
+    useCallback3((cb) => ModulationStore2.subscribe(cb), []),
     () => ModulationStore2.getVersion(),
     () => 0
   );
   const params = ModulationStore2.getSlot(index)?.params ?? {};
-  return /* @__PURE__ */ jsx15(
+  return /* @__PURE__ */ jsx16(
     MoveWaveTransport,
     {
       playing: !!params.playing,
@@ -12524,12 +14494,12 @@ function MoveAudioTransport({ index }) {
   );
 }
 function MoveRoomTransport() {
-  useSyncExternalStore3(
-    useCallback2((cb) => roomClock.subscribe(cb), []),
+  useSyncExternalStore4(
+    useCallback3((cb) => roomClock.subscribe(cb), []),
     () => roomClock.version,
     () => 0
   );
-  return /* @__PURE__ */ jsx15(
+  return /* @__PURE__ */ jsx16(
     MoveWaveTransport,
     {
       playing: roomClock.playing,
@@ -12541,10 +14511,10 @@ function MoveRoomTransport() {
 }
 function MoveWaveTransport({ playing: playing2, loopOn, getSeconds, onLoaded }) {
   const params = { playing: playing2, loopOn };
-  const clockRef = useRef12(null);
-  const secondsRef = useRef12(getSeconds);
+  const clockRef = useRef13(null);
+  const secondsRef = useRef13(getSeconds);
   secondsRef.current = getSeconds;
-  useEffect12(() => {
+  useEffect13(() => {
     let raf = requestAnimationFrame(function tick() {
       const t = secondsRef.current();
       const text = `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}:${String(Math.floor(t % 1 * 100)).padStart(2, "0")}`;
@@ -12553,7 +14523,7 @@ function MoveWaveTransport({ playing: playing2, loopOn, getSeconds, onLoaded }) 
     });
     return () => cancelAnimationFrame(raf);
   }, []);
-  const fileRef = useRef12(null);
+  const fileRef = useRef13(null);
   const loadFile = async (file) => {
     const bytes = await file.arrayBuffer();
     const Ctx = window.AudioContext ?? window.webkitAudioContext;
@@ -12567,8 +14537,8 @@ function MoveWaveTransport({ playing: playing2, loopOn, getSeconds, onLoaded }) 
       void ctx.close();
     }
   };
-  return /* @__PURE__ */ jsxs12("div", { className: "tweakers-move-actions", children: [
-    /* @__PURE__ */ jsxs12(
+  return /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-actions", children: [
+    /* @__PURE__ */ jsxs13(
       "button",
       {
         type: "button",
@@ -12576,35 +14546,35 @@ function MoveWaveTransport({ playing: playing2, loopOn, getSeconds, onLoaded }) 
         title: "Load an audio file",
         onClick: () => fileRef.current?.click(),
         children: [
-          /* @__PURE__ */ jsx15("span", { className: "tweakers-move-wave-load-dot" }),
-          /* @__PURE__ */ jsx15("span", { children: "Load" })
+          /* @__PURE__ */ jsx16("span", { className: "tweakers-move-wave-load-dot" }),
+          /* @__PURE__ */ jsx16("span", { children: "Load" })
         ]
       }
     ),
-    /* @__PURE__ */ jsxs12("div", { className: "tweakers-move-volume tweakers-move-wave-time", children: [
-      /* @__PURE__ */ jsx15(
+    /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-volume tweakers-move-wave-time", children: [
+      /* @__PURE__ */ jsx16(
         "svg",
         {
           className: "tweakers-move-wave-state",
           "data-on": params.playing ? true : void 0,
           viewBox: "0 0 24 24",
           "aria-hidden": "true",
-          children: /* @__PURE__ */ jsx15("path", { d: ICON_PLAY, fill: "currentColor" })
+          children: /* @__PURE__ */ jsx16("path", { d: ICON_PLAY, fill: "currentColor" })
         }
       ),
-      /* @__PURE__ */ jsx15("span", { ref: clockRef, className: "tweakers-move-volume-value", children: "0:00:00" }),
-      /* @__PURE__ */ jsx15(
+      /* @__PURE__ */ jsx16("span", { ref: clockRef, className: "tweakers-move-volume-value", children: "0:00:00" }),
+      /* @__PURE__ */ jsx16(
         "svg",
         {
           className: "tweakers-move-wave-state",
           "data-on": params.loopOn ? true : void 0,
           viewBox: "0 0 24 24",
           "aria-hidden": "true",
-          children: ICON_LOOP.map((d) => /* @__PURE__ */ jsx15("path", { d, fill: "none", stroke: "currentColor", strokeWidth: "2.4", strokeLinecap: "round", strokeLinejoin: "round" }, d))
+          children: ICON_LOOP.map((d) => /* @__PURE__ */ jsx16("path", { d, fill: "none", stroke: "currentColor", strokeWidth: "2.4", strokeLinecap: "round", strokeLinejoin: "round" }, d))
         }
       )
     ] }),
-    /* @__PURE__ */ jsx15(
+    /* @__PURE__ */ jsx16(
       "input",
       {
         ref: fileRef,
@@ -12623,7 +14593,7 @@ function MoveWaveTransport({ playing: playing2, loopOn, getSeconds, onLoaded }) 
 function MovePresetScreen({ view, search }) {
   const items = MovePresetStore.items(view.panelId);
   const rows = items.length ? searchedRows(items.map((i) => ({ value: i.id, label: i.label })), search) : [{ value: "", label: "No presets", muted: true }];
-  return /* @__PURE__ */ jsxs12(
+  return /* @__PURE__ */ jsxs13(
     "div",
     {
       className: "tweakers-move-preset-screen",
@@ -12636,8 +14606,8 @@ function MovePresetScreen({ view, search }) {
         if (!search) MovePresetStore.scroll(e.deltaY > 0 ? 1 : -1);
       },
       children: [
-        search && /* @__PURE__ */ jsx15(MoveSearchBar, { view: search }),
-        /* @__PURE__ */ jsx15(
+        search && /* @__PURE__ */ jsx16(MoveSearchBar, { view: search }),
+        /* @__PURE__ */ jsx16(
           ListScreen,
           {
             items: rows,
@@ -12659,13 +14629,13 @@ function searchedRows(rows, search) {
   return kept.length ? kept.map((i) => rows[i]) : [{ value: "", label: "No matches", muted: true }];
 }
 function MoveSearchBar({ view }) {
-  const inputRef = useRef12(null);
-  useEffect12(() => {
+  const inputRef = useRef13(null);
+  useEffect13(() => {
     inputRef.current?.focus();
   }, []);
-  return /* @__PURE__ */ jsxs12("div", { className: "tweakers-move-search", role: "search", children: [
-    /* @__PURE__ */ jsx15("svg", { className: "tweakers-move-search-icon", viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ jsx15("path", { d: ICON_SEARCH, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }) }),
-    /* @__PURE__ */ jsx15(
+  return /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-search", role: "search", children: [
+    /* @__PURE__ */ jsx16("svg", { className: "tweakers-move-search-icon", viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ jsx16("path", { d: ICON_SEARCH, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }) }),
+    /* @__PURE__ */ jsx16(
       "input",
       {
         ref: inputRef,
@@ -12691,11 +14661,11 @@ function MoveSearchBar({ view }) {
   ] });
 }
 function MovePresetSaveInput({ suggested }) {
-  const inputRef = useRef12(null);
-  useEffect12(() => {
+  const inputRef = useRef13(null);
+  useEffect13(() => {
     inputRef.current?.select();
   }, []);
-  return /* @__PURE__ */ jsx15("div", { className: "tweakers-move-preset-save", children: /* @__PURE__ */ jsx15(
+  return /* @__PURE__ */ jsx16("div", { className: "tweakers-move-preset-save", children: /* @__PURE__ */ jsx16(
     "input",
     {
       ref: inputRef,
@@ -12713,8 +14683,8 @@ function MovePresetSaveInput({ suggested }) {
 }
 var SCOPE_SAMPLES = 120;
 function MoveScope({ index }) {
-  const ref = useRef12(null);
-  useEffect12(() => {
+  const ref = useRef13(null);
+  useEffect13(() => {
     const now = (ModulationStore2.getSignal(index) + 1) / 2;
     const pts = Array(SCOPE_SAMPLES).fill(now);
     let raf = requestAnimationFrame(function tick() {
@@ -12725,7 +14695,7 @@ function MoveScope({ index }) {
     });
     return () => cancelAnimationFrame(raf);
   }, [index]);
-  return /* @__PURE__ */ jsx15(
+  return /* @__PURE__ */ jsx16(
     "svg",
     {
       className: "tweakers-move-scope-wave",
@@ -12733,15 +14703,15 @@ function MoveScope({ index }) {
       viewBox: "0 0 100 100",
       preserveAspectRatio: "none",
       "aria-hidden": "true",
-      children: /* @__PURE__ */ jsx15("path", { ref })
+      children: /* @__PURE__ */ jsx16("path", { ref })
     }
   );
 }
 function MoveWavePreview({ index }) {
-  const path = useRef12(null);
-  const line = useRef12(null);
+  const path = useRef13(null);
+  const line = useRef13(null);
   const preview = ModulationStore2.getSettingsPreview(64);
-  useEffect12(() => {
+  useEffect13(() => {
     let shown = "";
     let raf = requestAnimationFrame(function tick() {
       const { start, span } = getAudioModWindow();
@@ -12760,7 +14730,7 @@ function MoveWavePreview({ index }) {
     return () => cancelAnimationFrame(raf);
   }, [index]);
   if (!preview) return null;
-  return /* @__PURE__ */ jsxs12(
+  return /* @__PURE__ */ jsxs13(
     "svg",
     {
       className: "tweakers-move-scope-wave",
@@ -12769,8 +14739,8 @@ function MoveWavePreview({ index }) {
       preserveAspectRatio: "none",
       "aria-hidden": "true",
       children: [
-        /* @__PURE__ */ jsx15("path", { ref: path, d: previewPathData(preview.points) }),
-        /* @__PURE__ */ jsx15("line", { ref: line, x1: "0", y1: "0", x2: "0", y2: "100" })
+        /* @__PURE__ */ jsx16("path", { ref: path, d: previewPathData(preview.points) }),
+        /* @__PURE__ */ jsx16("line", { ref: line, x1: "0", y1: "0", x2: "0", y2: "100" })
       ]
     }
   );
@@ -12785,9 +14755,9 @@ function stepRuns(cells) {
   return runs;
 }
 function MoveModCircle({ slot }) {
-  const dotRef = useRef12(null);
-  const pressAt = useRef12(0);
-  useEffect12(() => {
+  const dotRef = useRef13(null);
+  const pressAt = useRef13(0);
+  useEffect13(() => {
     if (typeof window === "undefined") return;
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     return ModulationStore2.subscribeFrames(() => {
@@ -12797,7 +14767,7 @@ function MoveModCircle({ slot }) {
       el.style.transform = `scale(${(0.66 + 0.34 * level).toFixed(3)})`;
     });
   }, [slot.index]);
-  return /* @__PURE__ */ jsx15(
+  return /* @__PURE__ */ jsx16(
     "button",
     {
       type: "button",
@@ -12818,7 +14788,7 @@ function MoveModCircle({ slot }) {
         if (tapped && open2 && open2.index === slot.index) ModulationStore2.closeSettings();
         else ModulationStore2.openSettings(slot.index);
       },
-      children: /* @__PURE__ */ jsx15(
+      children: /* @__PURE__ */ jsx16(
         "span",
         {
           ref: dotRef,
@@ -12831,8 +14801,8 @@ function MoveModCircle({ slot }) {
 }
 
 // src/components/MoveActionButton.tsx
-import { useEffect as useEffect13, useRef as useRef13, useState as useState8 } from "react";
-import { jsx as jsx16, jsxs as jsxs13 } from "react/jsx-runtime";
+import { useEffect as useEffect14, useRef as useRef14, useState as useState9 } from "react";
+import { jsx as jsx17, jsxs as jsxs14 } from "react/jsx-runtime";
 var PRESS_FLASH_MS2 = 160;
 var KIND_FUNCTION = {
   enter: "jog_click",
@@ -12843,14 +14813,14 @@ var KIND_FUNCTION = {
 };
 function MoveActionButton({ kind, children, onPress, disabled, className }) {
   const name = kind === "shift" ? null : KIND_FUNCTION[kind];
-  const [pressed, setPressed] = useState8(false);
-  const flashTimer = useRef13(void 0);
+  const [pressed, setPressed] = useState9(false);
+  const flashTimer = useRef14(void 0);
   const flash = () => {
     setPressed(true);
     clearTimeout(flashTimer.current);
     flashTimer.current = setTimeout(() => setPressed(false), PRESS_FLASH_MS2);
   };
-  useEffect13(() => {
+  useEffect14(() => {
     if (!name) return () => clearTimeout(flashTimer.current);
     const unsubscribe = MoveFunctions.subscribeRuns((ran) => {
       if (ran === name) flash();
@@ -12860,7 +14830,7 @@ function MoveActionButton({ kind, children, onPress, disabled, className }) {
       clearTimeout(flashTimer.current);
     };
   }, [name]);
-  return /* @__PURE__ */ jsxs13(
+  return /* @__PURE__ */ jsxs14(
     "button",
     {
       className: className ? `tweakers-move-action ${className}` : "tweakers-move-action",
@@ -12874,10 +14844,10 @@ function MoveActionButton({ kind, children, onPress, disabled, className }) {
         onPress?.();
       },
       children: [
-        kind === "capture" ? /* @__PURE__ */ jsx16("svg", { className: "tweakers-move-action-icon", width: "14", height: "14", viewBox: ICON_MOVE_CAPTURE.viewBox, fill: "none", children: /* @__PURE__ */ jsx16("path", { d: ICON_MOVE_CAPTURE.path, fill: "currentColor" }) }) : kind === "loop" || kind === "copy" ? (
+        kind === "capture" ? /* @__PURE__ */ jsx17("svg", { className: "tweakers-move-action-icon", width: "14", height: "14", viewBox: ICON_MOVE_CAPTURE.viewBox, fill: "none", children: /* @__PURE__ */ jsx17("path", { d: ICON_MOVE_CAPTURE.path, fill: "currentColor" }) }) : kind === "loop" || kind === "copy" ? (
           // Stroked, unlike the filled dot and corners: these are the printed
           // marks off the pale function buttons, which the hardware outlines.
-          /* @__PURE__ */ jsx16(
+          /* @__PURE__ */ jsx17(
             "svg",
             {
               className: "tweakers-move-action-icon",
@@ -12885,14 +14855,14 @@ function MoveActionButton({ kind, children, onPress, disabled, className }) {
               height: "14",
               viewBox: (kind === "loop" ? ICON_MOVE_LOOP : ICON_MOVE_COPY).viewBox,
               fill: "none",
-              children: (kind === "loop" ? ICON_MOVE_LOOP : ICON_MOVE_COPY).paths.map((d) => /* @__PURE__ */ jsx16("path", { d, stroke: "currentColor", strokeWidth: "1.5", strokeLinecap: "round", strokeLinejoin: "round" }, d))
+              children: (kind === "loop" ? ICON_MOVE_LOOP : ICON_MOVE_COPY).paths.map((d) => /* @__PURE__ */ jsx17("path", { d, stroke: "currentColor", strokeWidth: "1.5", strokeLinecap: "round", strokeLinejoin: "round" }, d))
             }
           )
         ) : (
           // Enter and shift share the dot: it is drawn with currentColor, so it
           // comes out light-on-green on the enter pill and black on the light
           // shift pill without a second asset.
-          /* @__PURE__ */ jsx16("svg", { className: "tweakers-move-action-icon", width: "12", height: "12", viewBox: ICON_MOVE_ENTER.viewBox, fill: "none", children: /* @__PURE__ */ jsx16("circle", { ...ICON_MOVE_ENTER.circle, fill: "currentColor" }) })
+          /* @__PURE__ */ jsx17("svg", { className: "tweakers-move-action-icon", width: "12", height: "12", viewBox: ICON_MOVE_ENTER.viewBox, fill: "none", children: /* @__PURE__ */ jsx17("circle", { ...ICON_MOVE_ENTER.circle, fill: "currentColor" }) })
         ),
         children
       ]
@@ -12901,7 +14871,7 @@ function MoveActionButton({ kind, children, onPress, disabled, className }) {
 }
 
 // src/components/MoveActionDeck.tsx
-import { useEffect as useEffect14, useMemo as useMemo3, useRef as useRef14, useState as useState9 } from "react";
+import { useEffect as useEffect15, useMemo as useMemo4, useRef as useRef15, useState as useState10 } from "react";
 
 // src/move-deck-core.ts
 var MOVE_DECK_MAX = MOVE_CHIP_BUTTONS.length;
@@ -12929,12 +14899,12 @@ function normalizeDeck(actions) {
 }
 
 // src/components/MoveActionDeck.tsx
-import { jsx as jsx17, jsxs as jsxs14 } from "react/jsx-runtime";
+import { jsx as jsx18, jsxs as jsxs15 } from "react/jsx-runtime";
 var PRESS_FLASH_MS3 = 160;
 function DeckButton({ action }) {
-  const [pressed, setPressed] = useState9(false);
-  const flashTimer = useRef14(void 0);
-  useEffect14(() => {
+  const [pressed, setPressed] = useState10(false);
+  const flashTimer = useRef15(void 0);
+  useEffect15(() => {
     const unsubscribe = MoveFunctions.subscribeRuns((ran) => {
       if (ran !== action.button) return;
       setPressed(true);
@@ -12946,7 +14916,7 @@ function DeckButton({ action }) {
       clearTimeout(flashTimer.current);
     };
   }, [action.button]);
-  return /* @__PURE__ */ jsxs14(
+  return /* @__PURE__ */ jsxs15(
     "button",
     {
       type: "button",
@@ -12960,25 +14930,25 @@ function DeckButton({ action }) {
         MoveFunctions.run(action.button, { shift: false });
       },
       children: [
-        action.icon ?? /* @__PURE__ */ jsx17(MoveFunctionGlyphIcon, { glyph: MOVE_FUNCTION_ICONS[action.button], className: "tweakers-move-deck-icon" }),
-        /* @__PURE__ */ jsx17("span", { className: "tweakers-move-deck-label", children: action.label }),
-        action.detail && /* @__PURE__ */ jsx17("span", { className: "tweakers-move-deck-detail", children: action.detail })
+        action.icon ?? /* @__PURE__ */ jsx18(MoveFunctionGlyphIcon, { glyph: MOVE_FUNCTION_ICONS[action.button], className: "tweakers-move-deck-icon" }),
+        /* @__PURE__ */ jsx18("span", { className: "tweakers-move-deck-label", children: action.label }),
+        action.detail && /* @__PURE__ */ jsx18("span", { className: "tweakers-move-deck-detail", children: action.detail })
       ]
     }
   );
 }
 function MoveActionDeck({ actions, className }) {
-  const { actions: shown, warnings } = useMemo3(
+  const { actions: shown, warnings } = useMemo4(
     () => normalizeDeck(actions),
     [actions]
   );
-  useEffect14(() => {
+  useEffect15(() => {
     for (const warning of warnings) console.warn(`[tweakers] action deck: ${warning}`);
   }, [warnings]);
-  const shownRef = useRef14(shown);
+  const shownRef = useRef15(shown);
   shownRef.current = shown;
   const signature = shown.map((a) => `${a.button}:${a.disabled ? "-" : "+"}${a.label}`).join("|");
-  useEffect14(() => {
+  useEffect15(() => {
     const detaches = shownRef.current.filter((a) => !a.disabled).map(
       (a) => MoveFunctions.attach(
         a.button,
@@ -12991,11 +14961,11 @@ function MoveActionDeck({ actions, className }) {
     };
   }, [signature]);
   if (!shown.length) return null;
-  return /* @__PURE__ */ jsx17("div", { className: className ? `tweakers-move-deck ${className}` : "tweakers-move-deck", children: shown.map((action) => /* @__PURE__ */ jsx17(DeckButton, { action }, action.button)) });
+  return /* @__PURE__ */ jsx18("div", { className: className ? `tweakers-move-deck ${className}` : "tweakers-move-deck", children: shown.map((action) => /* @__PURE__ */ jsx18(DeckButton, { action }, action.button)) });
 }
 
 // src/components/MoveViewStage.tsx
-import { useEffect as useEffect15, useLayoutEffect as useLayoutEffect4, useRef as useRef15, useSyncExternalStore as useSyncExternalStore4 } from "react";
+import { useEffect as useEffect16, useLayoutEffect as useLayoutEffect5, useRef as useRef16, useSyncExternalStore as useSyncExternalStore5 } from "react";
 
 // src/move-views.ts
 import { flushSync } from "react-dom";
@@ -13300,48 +15270,48 @@ var MoveViews = {
 };
 
 // src/components/MoveViewStage.tsx
-import { jsx as jsx18, jsxs as jsxs15 } from "react/jsx-runtime";
+import { jsx as jsx19, jsxs as jsxs16 } from "react/jsx-runtime";
 var LIGHTS = Array.from({ length: 8 }, (_, i) => i);
 function MoveViewWaitScreen({ wait }) {
   return (
     // wears the instrument tokens itself: it stands outside whatever view
     // carried them
-    /* @__PURE__ */ jsxs15("div", { className: "tweakers-move-surface tweakers-move-view-wait", role: "status", "aria-live": "polite", children: [
-      /* @__PURE__ */ jsx18("span", { className: "tweakers-move-view-wait-title", children: wait.title }),
-      /* @__PURE__ */ jsx18("span", { className: "tweakers-move-view-wait-lights", "aria-hidden": "true", children: LIGHTS.map((i) => /* @__PURE__ */ jsx18("span", { className: "tweakers-move-view-wait-light", style: { "--i": i } }, i)) }),
-      wait.detail && /* @__PURE__ */ jsx18("span", { className: "tweakers-move-view-wait-detail", children: wait.detail }),
-      wait.cancelable && /* @__PURE__ */ jsxs15("button", { type: "button", className: "tweakers-move-view-wait-cancel", onClick: () => MoveViews.cancel(), children: [
-        /* @__PURE__ */ jsx18("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ jsx18("path", { d: ICON_CHEVRON_LEFT, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }) }),
-        /* @__PURE__ */ jsx18("span", { children: "Cancel" })
+    /* @__PURE__ */ jsxs16("div", { className: "tweakers-move-surface tweakers-move-view-wait", role: "status", "aria-live": "polite", children: [
+      /* @__PURE__ */ jsx19("span", { className: "tweakers-move-view-wait-title", children: wait.title }),
+      /* @__PURE__ */ jsx19("span", { className: "tweakers-move-view-wait-lights", "aria-hidden": "true", children: LIGHTS.map((i) => /* @__PURE__ */ jsx19("span", { className: "tweakers-move-view-wait-light", style: { "--i": i } }, i)) }),
+      wait.detail && /* @__PURE__ */ jsx19("span", { className: "tweakers-move-view-wait-detail", children: wait.detail }),
+      wait.cancelable && /* @__PURE__ */ jsxs16("button", { type: "button", className: "tweakers-move-view-wait-cancel", onClick: () => MoveViews.cancel(), children: [
+        /* @__PURE__ */ jsx19("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ jsx19("path", { d: ICON_CHEVRON_LEFT, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }) }),
+        /* @__PURE__ */ jsx19("span", { children: "Cancel" })
       ] })
     ] })
   );
 }
 function MoveViewStage({ children, className, style }) {
-  const { busy, wait } = useSyncExternalStore4(MoveViews.subscribe, MoveViews.getState, MoveViews.getState);
-  const content = useRef15(null);
-  useEffect15(() => MoveViews.mountStage(), []);
-  useLayoutEffect4(() => {
+  const { busy, wait } = useSyncExternalStore5(MoveViews.subscribe, MoveViews.getState, MoveViews.getState);
+  const content = useRef16(null);
+  useEffect16(() => MoveViews.mountStage(), []);
+  useLayoutEffect5(() => {
     if (content.current) content.current.inert = busy;
   }, [busy]);
-  return /* @__PURE__ */ jsx18(
+  return /* @__PURE__ */ jsx19(
     "div",
     {
       className: className ? `tweakers-move-view-stage ${className}` : "tweakers-move-view-stage",
       style,
       "data-busy": busy || void 0,
       "data-waiting": wait ? true : void 0,
-      children: /* @__PURE__ */ jsxs15("div", { className: "tweakers-move-view-frame", "data-move-view-frame": "", children: [
-        /* @__PURE__ */ jsx18("div", { ref: content, className: "tweakers-move-view-content", children }),
-        wait && /* @__PURE__ */ jsx18(MoveViewWaitScreen, { wait })
+      children: /* @__PURE__ */ jsxs16("div", { className: "tweakers-move-view-frame", "data-move-view-frame": "", children: [
+        /* @__PURE__ */ jsx19("div", { ref: content, className: "tweakers-move-view-content", children }),
+        wait && /* @__PURE__ */ jsx19(MoveViewWaitScreen, { wait })
       ] })
     }
   );
 }
 
 // src/components/MoveNotifications.tsx
-import { useEffect as useEffect16, useState as useState10 } from "react";
-import { createPortal as createPortal4 } from "react-dom";
+import { useEffect as useEffect17, useState as useState11 } from "react";
+import { createPortal as createPortal5 } from "react-dom";
 import { Toast } from "@base-ui/react/toast";
 
 // src/move-notify.ts
@@ -13350,6 +15320,7 @@ var MOVE_NOTIFY_GAP = 14;
 var MOVE_FLOAT_SELECTOR = [
   ".tweakers-move-root .tweakers-move",
   '.tweakers-move-wave[data-variant="dock"]',
+  '.tweakers-move-timeline[data-variant="dock"]',
   ".tweakers-move-curve",
   ".tweakers-move-preset-save",
   "[data-move-float]"
@@ -13364,13 +15335,13 @@ function notifyDockBottom(tops, viewportHeight, gap = MOVE_NOTIFY_GAP) {
 }
 
 // src/components/MoveNotifications.tsx
-import { jsx as jsx19, jsxs as jsxs16 } from "react/jsx-runtime";
+import { jsx as jsx20, jsxs as jsxs17 } from "react/jsx-runtime";
 var manager = Toast.createToastManager();
 var moveNotify = manager;
 var MEASURE_MS = 100;
 function useDockBottom(active) {
-  const [bottom, setBottom] = useState10(MOVE_NOTIFY_GAP);
-  useEffect16(() => {
+  const [bottom, setBottom] = useState11(MOVE_NOTIFY_GAP);
+  useEffect17(() => {
     if (!active || typeof window === "undefined") return;
     let frame = 0;
     let last = 0;
@@ -13399,22 +15370,22 @@ function useDockBottom(active) {
 function NotifyStack({ className }) {
   const { toasts } = Toast.useToastManager();
   const bottom = useDockBottom(toasts.length > 0);
-  return /* @__PURE__ */ jsx19(
+  return /* @__PURE__ */ jsx20(
     Toast.Viewport,
     {
       className: `tweakers-move-notify${className ? ` ${className}` : ""}`,
       style: { bottom: `${bottom}px` },
-      children: toasts.map((toast) => /* @__PURE__ */ jsx19(Toast.Root, { toast, className: "tweakers-move-notify-card", children: /* @__PURE__ */ jsxs16(Toast.Content, { className: "tweakers-move-notify-body", children: [
-        /* @__PURE__ */ jsxs16("div", { className: "tweakers-move-notify-text", children: [
-          toast.type && toast.type !== "info" && /* @__PURE__ */ jsxs16("span", { className: "tweakers-move-notify-kind", children: [
-            /* @__PURE__ */ jsx19("span", { className: "tweakers-move-notify-dot", "aria-hidden": "true" }),
+      children: toasts.map((toast) => /* @__PURE__ */ jsx20(Toast.Root, { toast, className: "tweakers-move-notify-card", children: /* @__PURE__ */ jsxs17(Toast.Content, { className: "tweakers-move-notify-body", children: [
+        /* @__PURE__ */ jsxs17("div", { className: "tweakers-move-notify-text", children: [
+          toast.type && toast.type !== "info" && /* @__PURE__ */ jsxs17("span", { className: "tweakers-move-notify-kind", children: [
+            /* @__PURE__ */ jsx20("span", { className: "tweakers-move-notify-dot", "aria-hidden": "true" }),
             toast.type
           ] }),
-          toast.title != null && /* @__PURE__ */ jsx19(Toast.Title, { className: "tweakers-move-notify-title" }),
-          toast.description != null && /* @__PURE__ */ jsx19(Toast.Description, { className: "tweakers-move-notify-description" })
+          toast.title != null && /* @__PURE__ */ jsx20(Toast.Title, { className: "tweakers-move-notify-title" }),
+          toast.description != null && /* @__PURE__ */ jsx20(Toast.Description, { className: "tweakers-move-notify-description" })
         ] }),
-        /* @__PURE__ */ jsx19(Toast.Action, { className: "tweakers-move-notify-action" }),
-        /* @__PURE__ */ jsx19(Toast.Close, { className: "tweakers-move-notify-close", "aria-label": "Dismiss", children: /* @__PURE__ */ jsx19("svg", { viewBox: "0 0 24 24", width: "14", height: "14", "aria-hidden": "true", children: /* @__PURE__ */ jsx19("path", { d: ICON_CLOSE }) }) })
+        /* @__PURE__ */ jsx20(Toast.Action, { className: "tweakers-move-notify-action" }),
+        /* @__PURE__ */ jsx20(Toast.Close, { className: "tweakers-move-notify-close", "aria-label": "Dismiss", children: /* @__PURE__ */ jsx20("svg", { viewBox: "0 0 24 24", width: "14", height: "14", "aria-hidden": "true", children: /* @__PURE__ */ jsx20("path", { d: ICON_CLOSE }) }) })
       ] }) }, toast.id))
     }
   );
@@ -13424,18 +15395,18 @@ function MoveNotifications({
   timeout = 5e3,
   className
 }) {
-  const [mounted, setMounted] = useState10(false);
-  useEffect16(() => setMounted(true), []);
+  const [mounted, setMounted] = useState11(false);
+  useEffect17(() => setMounted(true), []);
   if (!mounted || typeof document === "undefined") return null;
-  return createPortal4(
-    /* @__PURE__ */ jsx19("div", { className: "tweakers-root tweakers-move-surface tweakers-move-notify-root", children: /* @__PURE__ */ jsx19(Toast.Provider, { toastManager: manager, limit, timeout, children: /* @__PURE__ */ jsx19(NotifyStack, { ...className ? { className } : {} }) }) }),
+  return createPortal5(
+    /* @__PURE__ */ jsx20("div", { className: "tweakers-root tweakers-move-surface tweakers-move-notify-root", children: /* @__PURE__ */ jsx20(Toast.Provider, { toastManager: manager, limit, timeout, children: /* @__PURE__ */ jsx20(NotifyStack, { ...className ? { className } : {} }) }) }),
     document.body
   );
 }
 
 // src/components/MoveConnectionDot.tsx
-import { useEffect as useEffect17, useState as useState11, useSyncExternalStore as useSyncExternalStore5 } from "react";
-import { createPortal as createPortal5 } from "react-dom";
+import { useEffect as useEffect18, useState as useState12, useSyncExternalStore as useSyncExternalStore6 } from "react";
+import { createPortal as createPortal6 } from "react-dom";
 
 // src/move-connection.ts
 var MOVE_CONNECTION_EVENT = "move-tweakers:connection";
@@ -13476,15 +15447,15 @@ var MoveConnection = {
 };
 
 // src/components/MoveConnectionDot.tsx
-import { jsx as jsx20 } from "react/jsx-runtime";
+import { jsx as jsx21 } from "react/jsx-runtime";
 function MoveConnectionDot({ className }) {
-  const live = useSyncExternalStore5(MoveConnection.subscribe, MoveConnection.isLive, () => false);
-  const [mounted, setMounted] = useState11(false);
-  useEffect17(() => setMounted(true), []);
+  const live = useSyncExternalStore6(MoveConnection.subscribe, MoveConnection.isLive, () => false);
+  const [mounted, setMounted] = useState12(false);
+  useEffect18(() => setMounted(true), []);
   if (!mounted || typeof document === "undefined") return null;
   const label = live ? "Move connected" : "Move not connected";
-  return createPortal5(
-    /* @__PURE__ */ jsx20(
+  return createPortal6(
+    /* @__PURE__ */ jsx21(
       "div",
       {
         className: `tweakers-root tweakers-move-surface tweakers-move-link${className ? ` ${className}` : ""}`,
@@ -13492,16 +15463,149 @@ function MoveConnectionDot({ className }) {
         role: "status",
         "aria-label": label,
         title: label,
-        children: /* @__PURE__ */ jsx20("span", { className: "tweakers-move-link-dot", "aria-hidden": "true" })
+        children: /* @__PURE__ */ jsx21("span", { className: "tweakers-move-link-dot", "aria-hidden": "true" })
       }
     ),
     document.body
   );
 }
 
+// src/use-move-timeline.ts
+import { useCallback as useCallback4, useEffect as useEffect19, useId as useId2, useMemo as useMemo5, useRef as useRef17, useSyncExternalStore as useSyncExternalStore7 } from "react";
+import { TweakStore as TweakStore15 } from "tweakers/store";
+
+// src/timeline/adapter.ts
+function resolveTimelineLoop(loop) {
+  if (typeof loop === "object" && loop !== null) {
+    return {
+      enabled: true,
+      start: Number.isFinite(loop.from) ? Math.max(0, loop.from) : 0
+    };
+  }
+  return { enabled: Boolean(loop), start: 0 };
+}
+function buildTimelineMeta(id, name, duration, parsed, loop) {
+  const resolvedLoop = resolveTimelineLoop(loop);
+  return {
+    id,
+    name,
+    duration,
+    loop: resolvedLoop.enabled,
+    loopStart: resolvedLoop.start,
+    clips: parsed.clips
+  };
+}
+function buildTimelineValues(staticClips, transport, timelineDuration, loopStart, loopEnd, actions) {
+  var _a;
+  const result = {
+    time: transport.time,
+    playing: transport.playing,
+    duration: timelineDuration,
+    ...actions
+  };
+  const span = loopSpan(transport.duration, loopStart, loopEnd);
+  const cycleTime = (span > 0 ? transport.wraps * span : 0) + transport.time;
+  for (const clip of staticClips) {
+    const state4 = computeClipState(clip, transport.time, cycleTime);
+    if (clip.group) {
+      const bucket = result[_a = clip.group] ?? (result[_a] = {});
+      bucket[clip.childKey] = state4;
+    } else {
+      result[clip.key] = state4;
+    }
+  }
+  return result;
+}
+
+// src/use-move-timeline.ts
+function useMoveTimeline(name, config, options) {
+  const serialized = JSON.stringify(config);
+  const parsed = useMemo5(() => parseTimelineConfig(config), [serialized]);
+  const instance = useId2();
+  const id = options?.id ?? `${name}-${instance}`;
+  const optionsRef = useRef17(options);
+  optionsRef.current = options;
+  const panelOptions = () => ({ persist: optionsRef.current?.persist, kind: "timeline", retainOnUnmount: options?.id !== void 0 });
+  const parsedRef = useRef17(parsed);
+  parsedRef.current = parsed;
+  useEffect19(() => {
+    TweakStore15.registerPanel(id, name, parsedRef.current.tweakConfig, void 0, panelOptions());
+    return () => TweakStore15.unregisterPanel(id);
+  }, [id, name]);
+  const shaped = useRef17(false);
+  useEffect19(() => {
+    if (!shaped.current) {
+      shaped.current = true;
+      return;
+    }
+    TweakStore15.updatePanel(id, name, parsed.tweakConfig, void 0, panelOptions());
+  }, [id, name, parsed]);
+  const values = useSyncExternalStore7(
+    useCallback4((cb) => TweakStore15.subscribe(id, cb), [id]),
+    () => TweakStore15.getValues(id),
+    () => TweakStore15.getValues(id)
+  );
+  const statics = useMemo5(() => computeStaticTimeline(parsed, values), [parsed, values]);
+  const duration = statics.duration;
+  const buildMeta = useCallback4(
+    () => buildTimelineMeta(id, name, duration, parsedRef.current, optionsRef.current?.loop),
+    [id, name, duration]
+  );
+  const buildMetaRef = useRef17(buildMeta);
+  buildMetaRef.current = buildMeta;
+  useEffect19(() => {
+    TimelineStore.register(buildMetaRef.current(), {
+      autoplay: optionsRef.current?.autoplay ?? true,
+      persist: optionsRef.current?.persist
+    });
+    return () => TimelineStore.unregister(id);
+  }, [id, name]);
+  const registered = useRef17(false);
+  useEffect19(() => {
+    if (!registered.current) {
+      registered.current = true;
+      return;
+    }
+    TimelineStore.update(buildMeta());
+  }, [buildMeta, parsed]);
+  const subscribeTransport = useCallback4((cb) => TimelineStore.subscribe(id, cb), [id]);
+  const transport = useSyncExternalStore7(
+    subscribeTransport,
+    () => TimelineStore.getTransport(id),
+    () => TimelineStore.getTransport(id)
+  );
+  const region = useSyncExternalStore7(
+    subscribeTransport,
+    () => TimelineStore.getLoopRegion(id),
+    () => TimelineStore.getLoopRegion(id)
+  );
+  const play2 = useCallback4(() => TimelineStore.play(id), [id]);
+  const pause = useCallback4(() => TimelineStore.pause(id), [id]);
+  const replay = useCallback4(() => TimelineStore.replay(id), [id]);
+  const seek = useCallback4((time) => TimelineStore.seek(id, time), [id]);
+  return useMemo5(() => {
+    const frame = buildTimelineValues(statics.clips, transport, duration, region?.start ?? 0, region?.end ?? duration, {
+      play: play2,
+      pause,
+      replay,
+      seek
+    });
+    return Object.assign(frame, { id });
+  }, [statics.clips, transport, duration, region, play2, pause, replay, seek, id]);
+}
+
 // src/move-kit.ts
 import { ModulationStore as ModulationStore3 } from "tweakers/modulation-store";
+function liveClaims(app) {
+  const claims = { ...app };
+  Object.defineProperty(claims, "master", {
+    enumerable: true,
+    get: () => app?.master ? app.master : MoveTimelineStore.claimsKnob() || void 0
+  });
+  return claims;
+}
 function moveKitOptions(overrides) {
+  const app = overrides?.claims;
   return {
     padList: MovePadListStore,
     functions: MoveFunctions,
@@ -13512,335 +15616,14 @@ function moveKitOptions(overrides) {
     volume: MoveVolumeDisplay,
     transfer: { sample: sampleTransfer, move: movePoint },
     exploration: PresetExplorationStore,
-    ...overrides
+    ...overrides,
+    claims: app === null ? null : liveClaims(app)
   };
 }
 
 // src/index.ts
 import { ModulationStore as ModulationStore4, MOD_TOUCH_GRACE_MS } from "tweakers/modulation-store";
-
-// src/timeline-core.ts
-import { formatLabel, inferStep, isHexColor, resolveTweakValues } from "tweakers/store";
-
-// src/store/persist.ts
-var STORAGE_VERSION = "v1";
-function resolvePersistTarget(kind, id, persist) {
-  if (!persist) return null;
-  const config = persist === true ? {} : persist;
-  const base = config.key ?? id;
-  if (!base) return null;
-  return {
-    key: `tweakers:${STORAGE_VERSION}:${kind}:${base}`,
-    storage: config.storage ?? "localStorage"
-  };
-}
-function getStorage(name) {
-  try {
-    if (typeof window === "undefined") return null;
-    return name === "sessionStorage" ? window.sessionStorage : window.localStorage;
-  } catch {
-    return null;
-  }
-}
-function loadPersisted(target) {
-  if (!target) return null;
-  try {
-    const storage = getStorage(target.storage);
-    if (!storage) return null;
-    const raw = storage.getItem(target.key);
-    if (raw == null) return null;
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-function savePersisted(target, value) {
-  if (!target) return;
-  try {
-    const storage = getStorage(target.storage);
-    if (!storage) return;
-    storage.setItem(target.key, JSON.stringify(value));
-  } catch {
-  }
-}
-function clearPersisted(target) {
-  if (!target) return;
-  try {
-    const storage = getStorage(target.storage);
-    if (!storage) return;
-    storage.removeItem(target.key);
-  } catch {
-  }
-}
-
-// src/store/TimelineStore.ts
-var MIN_LOOP_REGION = 0.02;
-function loopSpan(duration, loopStart, loopEnd) {
-  if (!Number.isFinite(duration) || duration <= 0) return 0;
-  if (!Number.isFinite(loopStart)) loopStart = 0;
-  const end = Number.isFinite(loopEnd) ? Math.min(Math.max(0, loopEnd), duration) : duration;
-  const start = Math.min(Math.max(0, loopStart), duration);
-  const span = end - start;
-  return span > 0 ? span : duration;
-}
-function foldLoopTime(time, duration, loopStart = 0, loopEnd) {
-  if (!Number.isFinite(time) || !Number.isFinite(duration) || duration <= 0) {
-    return { time: 0, wraps: 0 };
-  }
-  const end = Number.isFinite(loopEnd) ? Math.min(Math.max(0, loopEnd), duration) : duration;
-  if (time < end) return { time, wraps: 0 };
-  const span = loopSpan(duration, loopStart, end);
-  const base = end - span;
-  const over = time - base;
-  return { time: base + over % span, wraps: Math.floor(over / span) };
-}
-var EMPTY_TRANSPORT = Object.freeze({ time: 0, playing: false, duration: 0, wraps: 0 });
-var TimelineStoreClass = class {
-  constructor() {
-    this.timelines = /* @__PURE__ */ new Map();
-    this.transports = /* @__PURE__ */ new Map();
-    this.listeners = /* @__PURE__ */ new Map();
-    this.globalListeners = /* @__PURE__ */ new Set();
-    this.registrationCounts = /* @__PURE__ */ new Map();
-    // User-defined loop windows. Absent = loop the whole timeline. The stored
-    // object reference is stable until set/clear so useSyncExternalStore readers
-    // don't churn.
-    this.loopRegions = /* @__PURE__ */ new Map();
-    this.persistTargets = /* @__PURE__ */ new Map();
-    this.listCache = null;
-    this.rafId = null;
-    this.lastTick = 0;
-    this.tick = (now) => {
-      const dt = Math.max(0, (now - this.lastTick) / 1e3);
-      this.lastTick = now;
-      let anyPlaying = false;
-      for (const [id, transport] of this.transports) {
-        if (!transport.playing) continue;
-        const meta = this.timelines.get(id);
-        const duration = meta?.duration ?? transport.duration;
-        if (!Number.isFinite(duration) || duration <= 0) {
-          this.transports.set(id, { time: 0, playing: false, duration: 0, wraps: 0 });
-          this.notify(id);
-          continue;
-        }
-        let time = transport.time + dt;
-        let wraps = transport.wraps;
-        const region = this.effectiveRegion(id, duration);
-        if (time >= region.end) {
-          const folded = foldLoopTime(time, duration, region.start, region.end);
-          time = folded.time;
-          wraps += folded.wraps;
-        }
-        this.transports.set(id, { time, playing: true, duration, wraps });
-        anyPlaying = true;
-        this.notify(id);
-      }
-      this.rafId = anyPlaying ? window.requestAnimationFrame(this.tick) : null;
-    };
-  }
-  register(meta, options) {
-    const existing = this.timelines.get(meta.id);
-    if (existing && existing.name !== meta.name) {
-      console.warn(
-        `[tweakers] Timeline id "${meta.id}" is already registered by "${existing.name}"; "${meta.name}" will share and overwrite that transport.`
-      );
-    }
-    const firstRegistration = !this.registrationCounts.has(meta.id);
-    this.registrationCounts.set(meta.id, (this.registrationCounts.get(meta.id) ?? 0) + 1);
-    if (firstRegistration) {
-      this.persistTargets.set(meta.id, resolvePersistTarget("timeline-loop", meta.id, options.persist));
-      this.hydrateLoopRegion(meta);
-    }
-    this.applyMeta(meta, options.autoplay);
-  }
-  update(meta) {
-    if (!this.timelines.has(meta.id)) return;
-    this.applyMeta(meta, false);
-  }
-  unregister(id) {
-    const nextCount = (this.registrationCounts.get(id) ?? 1) - 1;
-    if (nextCount > 0) {
-      this.registrationCounts.set(id, nextCount);
-      return;
-    }
-    this.registrationCounts.delete(id);
-    this.timelines.delete(id);
-    this.transports.delete(id);
-    this.loopRegions.delete(id);
-    this.persistTargets.delete(id);
-    if (this.listeners.get(id)?.size === 0) this.listeners.delete(id);
-    this.listCache = null;
-    this.notifyGlobal();
-  }
-  /** Restore a persisted loop region, or seed one from a code-defined
-   * `options.loop`. No region at all = loop the whole timeline (the default). */
-  hydrateLoopRegion(meta) {
-    const duration = Number.isFinite(meta.duration) ? Math.max(0, meta.duration) : 0;
-    const persisted = loadPersisted(this.persistTargets.get(meta.id) ?? null);
-    if (persisted && Number.isFinite(persisted.start) && Number.isFinite(persisted.end)) {
-      const region = this.normalizeRegion(persisted.start, persisted.end, duration);
-      if (region) this.loopRegions.set(meta.id, region);
-      return;
-    }
-    if (meta.loop) {
-      const region = this.normalizeRegion(meta.loopStart, duration, duration);
-      if (region) this.loopRegions.set(meta.id, region);
-    }
-  }
-  /** Clamp to [0,duration], order min/max, and reject degenerate widths. */
-  normalizeRegion(start, end, duration) {
-    if (!Number.isFinite(start) || !Number.isFinite(end) || duration <= 0) return null;
-    const lo = Math.min(Math.max(0, Math.min(start, end)), duration);
-    const hi = Math.min(Math.max(0, Math.max(start, end)), duration);
-    if (hi - lo < MIN_LOOP_REGION) return null;
-    return { start: lo, end: hi };
-  }
-  setLoopRegion(id, start, end) {
-    const transport = this.transports.get(id);
-    const duration = transport?.duration ?? this.timelines.get(id)?.duration ?? 0;
-    const region = this.normalizeRegion(start, end, duration);
-    if (!region) return;
-    this.loopRegions.set(id, region);
-    savePersisted(this.persistTargets.get(id) ?? null, region);
-    this.notify(id);
-  }
-  clearLoopRegion(id) {
-    if (!this.loopRegions.has(id)) return;
-    this.loopRegions.delete(id);
-    clearPersisted(this.persistTargets.get(id) ?? null);
-    this.notify(id);
-  }
-  /** The raw user/code region, or undefined when looping the whole timeline.
-   * The reference is stable between changes (safe for useSyncExternalStore). */
-  getLoopRegion(id) {
-    return this.loopRegions.get(id);
-  }
-  /** The region the clock actually loops within: the user/code region, or the
-   * whole timeline `[0, duration]` when none is set. Playback always wraps. */
-  effectiveRegion(id, duration) {
-    const region = this.loopRegions.get(id);
-    if (region) return region;
-    return { start: 0, end: Math.max(0, duration) };
-  }
-  play(id) {
-    const transport = this.transports.get(id);
-    if (!transport || transport.duration <= 0 || transport.playing) return;
-    const region = this.effectiveRegion(id, transport.duration);
-    const restart = transport.time >= region.end;
-    this.transports.set(id, {
-      ...transport,
-      time: restart ? region.start : transport.time,
-      wraps: restart ? 0 : transport.wraps,
-      playing: true
-    });
-    this.notify(id);
-    this.ensureLoop();
-  }
-  pause(id) {
-    const transport = this.transports.get(id);
-    if (!transport || !transport.playing) return;
-    this.transports.set(id, { ...transport, playing: false });
-    this.notify(id);
-  }
-  replay(id) {
-    const transport = this.transports.get(id);
-    if (!transport || transport.duration <= 0) return;
-    const region = this.effectiveRegion(id, transport.duration);
-    this.transports.set(id, { ...transport, time: region.start, wraps: 0, playing: true });
-    this.notify(id);
-    this.ensureLoop();
-  }
-  seek(id, time) {
-    const transport = this.transports.get(id);
-    if (!transport || !Number.isFinite(time)) return;
-    const clamped = Math.min(transport.duration, Math.max(0, time));
-    this.transports.set(id, { ...transport, time: clamped, wraps: 0 });
-    this.notify(id);
-  }
-  getTransport(id) {
-    return this.transports.get(id) ?? EMPTY_TRANSPORT;
-  }
-  getTimeline(id) {
-    return this.timelines.get(id);
-  }
-  getTimelines() {
-    if (!this.listCache) {
-      this.listCache = Array.from(this.timelines.values());
-    }
-    return this.listCache;
-  }
-  subscribe(id, listener) {
-    if (!this.listeners.has(id)) {
-      this.listeners.set(id, /* @__PURE__ */ new Set());
-    }
-    this.listeners.get(id).add(listener);
-    return () => {
-      const listeners5 = this.listeners.get(id);
-      listeners5?.delete(listener);
-      if (listeners5?.size === 0 && !this.timelines.has(id)) {
-        this.listeners.delete(id);
-      }
-    };
-  }
-  subscribeGlobal(listener) {
-    this.globalListeners.add(listener);
-    return () => {
-      this.globalListeners.delete(listener);
-    };
-  }
-  applyMeta(meta, autoplay) {
-    const duration = Number.isFinite(meta.duration) ? Math.max(0, meta.duration) : 0;
-    const loopStart = Number.isFinite(meta.loopStart) ? Math.min(duration, Math.max(0, meta.loopStart)) : 0;
-    const safeMeta = { ...meta, duration, loopStart };
-    this.timelines.set(meta.id, safeMeta);
-    const region = this.loopRegions.get(meta.id);
-    if (region) {
-      const reclamped = this.normalizeRegion(region.start, region.end, duration);
-      if (reclamped) this.loopRegions.set(meta.id, reclamped);
-      else this.loopRegions.delete(meta.id);
-    }
-    const existing = this.transports.get(meta.id);
-    if (existing) {
-      this.transports.set(meta.id, {
-        time: Math.min(existing.time, duration),
-        playing: duration > 0 && existing.playing,
-        duration,
-        wraps: existing.wraps
-      });
-    } else {
-      const playing2 = duration > 0 && autoplay;
-      this.transports.set(meta.id, { time: 0, playing: playing2, duration, wraps: 0 });
-      if (playing2) this.ensureLoop();
-    }
-    this.listCache = null;
-    this.notify(meta.id);
-    this.notifyGlobal();
-  }
-  ensureLoop() {
-    if (this.rafId !== null || typeof window === "undefined") return;
-    this.lastTick = performance.now();
-    this.rafId = window.requestAnimationFrame(this.tick);
-  }
-  notify(id) {
-    this.listeners.get(id)?.forEach((fn) => fn());
-  }
-  notifyGlobal() {
-    this.globalListeners.forEach((fn) => fn());
-  }
-};
-var TimelineStore = /* @__PURE__ */ new TimelineStoreClass();
-
-// src/timeline-core.ts
-function formatClock(time, tenths = false) {
-  const safe = Math.max(0, time);
-  const minutes = Math.floor(safe / 60);
-  const seconds = safe - minutes * 60;
-  const secondsText = tenths ? seconds.toFixed(1).padStart(4, "0") : String(Math.floor(seconds)).padStart(2, "0");
-  return `${String(minutes).padStart(2, "0")}:${secondsText}`;
-}
-
-// src/index.ts
-import { TweakStore as TweakStore14, TAB_PATH, parseListItemSchema, groupListFields, defaultListItemParams, normalizeListItems, hintDomId } from "tweakers/store";
+import { TweakStore as TweakStore16, TAB_PATH, parseListItemSchema, groupListFields, defaultListItemParams, normalizeListItems, hintDomId } from "tweakers/store";
 export {
   ADSR_DEF,
   ADSR_STAGE_MAX,
@@ -13917,6 +15700,7 @@ export {
   MOVE_SPECIAL_BUTTONS,
   MOVE_STEP_FUNCTIONS,
   MOVE_STRIP_EVENT,
+  MOVE_TIMELINE_MAX_ZOOM,
   MOVE_TOUCH_EVENT,
   MOVE_TRACKS,
   MOVE_TRACK_COLORS,
@@ -13987,6 +15771,10 @@ export {
   MoveSlotTrimSpanBody,
   MoveSlotXYBody,
   MoveSurfaceStore,
+  MoveTimeline,
+  MoveTimelineClock,
+  MoveTimelineStore,
+  MoveTimelineZoom,
   MoveViewStage,
   MoveViews,
   MoveVolumeDisplay,
@@ -13998,7 +15786,7 @@ export {
   TRANSFER_MAX_POINTS,
   TRANSFER_MIN_GAP,
   TimelineStore,
-  TweakStore14 as TweakStore,
+  TweakStore16 as TweakStore,
   WAVEFORM_BASE_BUCKET,
   WAVEFORM_MAX_ZOOM,
   WAVEFORM_MODES,
@@ -14068,8 +15856,10 @@ export {
   flipSegment,
   flipSegmentX,
   flipSegmentY,
+  followWindow,
   formatClock,
   formatHex,
+  formatTimelineTick,
   geneBounds,
   getAudioModBuffer,
   getAudioModVersion,
@@ -14161,6 +15951,7 @@ export {
   oklchToRgb,
   opacityPercent,
   orderRange,
+  packTimelineRows,
   padPosition,
   padSection,
   padSpan,
@@ -14226,10 +16017,14 @@ export {
   stripStarts,
   stripWindowPads,
   subscribeAudioMod,
+  timelineClock,
+  timelineTicks,
+  timelineWindow,
   toAudioBuffer,
   transferLut,
   triggerLevels,
   triggersCrossed,
+  useMoveTimeline,
   valueFromPoint,
   valueToBearing,
   valueToNorm,
@@ -14239,6 +16034,7 @@ export {
   visibleWindow,
   waveformAsset,
   waveformAssetFromBuffer,
-  zoomBy
+  zoomBy,
+  zoomWindow
 };
 //# sourceMappingURL=index.js.map

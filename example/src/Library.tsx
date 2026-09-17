@@ -20,6 +20,8 @@ import {
   buildMoveStrip,
   moveNotify,
   stripOffsets,
+  MoveTimeline,
+  useMoveTimeline,
 } from 'tweakers';
 import { PANEL_ID, PANEL_NAME } from './panel';
 import { BIG_SLOTS, SMALL_SLOTS, SMALL_SLOT_STATES, MOD_FACES, type Specimen } from './specimens';
@@ -204,6 +206,14 @@ export function Library() {
       </Section>
 
       <Section
+        id="timeline"
+        title="The timeline"
+        lede="Clips that animate values over time, on the waveform’s card. While it is up the timeline has the instrument: the volume knob scrubs, the wheel zooms around the playhead, Play and Loop run its transport, and the header’s clock becomes its own — Play, the time, Loop, each one clickable. Click the ruler to jump, drag it to loop, drag a bar or its edges to retime it. The full sample — a video driven by the timeline, with Rec laying down takes — is the demo’s timeline page."
+      >
+        <TimelinePanel />
+      </Section>
+
+      <Section
         id="notify"
         title="Notifications"
         lede="What the app has to say, standing where the floating displays stand: centred over the instrument, one gap above whatever is already up there. The newest card is in front and the run behind it peeks out under it — rest the pointer on the stack to fan the whole set open. Hold a modulation circle to bring a modulator’s curve up first, then fire one: the stack rises over the display rather than burying it, and settles back when the display goes."
@@ -372,6 +382,32 @@ const NOTIFY_COPY = {
   warning: { title: 'The loop bar gave way', description: 'Two step buttons belong to a modulator.' },
   error: { title: 'Sample not loaded', description: 'kick-07.wav could not be decoded.' },
 } as const;
+
+const TIMELINE = {
+  duration: 6,
+  enter: { at: 0.3, duration: 1.2, from: { x: 0 }, to: { x: 1 }, transition: { type: 'easing' as const, duration: 1.2, ease: [0.2, 0, 0, 1] as [number, number, number, number] } },
+  turn: { at: 1.8, duration: 2, from: { angle: 0 }, to: { angle: 180 }, transition: { type: 'easing' as const, duration: 2, ease: [0.4, 0, 0.2, 1] as [number, number, number, number] } },
+  beat: { at: 4, loop: true, from: { size: 1 }, steps: [{ duration: 0.25, to: { size: 1.3 } }, { duration: 0.25, to: { size: 1 } }] },
+};
+
+/** A timeline, worked for real: a square that slides in, turns, and beats. */
+function TimelinePanel() {
+  const tl = useMoveTimeline('Motion', TIMELINE, { id: 'library-timeline', autoplay: false });
+  const x = Number(tl.enter.current.x);
+  return (
+    <div className="kit-presets">
+      <div style={{ position: 'relative', height: 96, borderRadius: 12, background: '#1e1e1e', overflow: 'hidden', marginBottom: 12 }}>
+        <div
+          style={{
+            position: 'absolute', top: 30, left: `calc(${x} * (100% - 96px) + 30px)`, width: 36, height: 36, borderRadius: 6,
+            background: '#dfe2cc', transform: `rotate(${Number(tl.turn.current.angle)}deg) scale(${Number(tl.beat.current.size)})`,
+          }}
+        />
+      </div>
+      <MoveTimeline id={tl.id} variant="page" theme="dark" productionEnabled />
+    </div>
+  );
+}
 
 /**
  * Notifications, worked for real. The kinds fire one each; the last button

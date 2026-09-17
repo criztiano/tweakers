@@ -4448,6 +4448,371 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* ------------------------------------------------------------------------
+   Move timeline (MoveTimeline) — a dark display in a 4px frame, the ink on
+   it light: the instrument's own ground, so the card reads as part of the
+   panel under it. A ruler on top, a row per clip (a layer shares one), the
+   playhead and the loop band in the host's accent, a take in progress in
+   the record red. The component names `.tweakers-move-timeline[data-variant]
+   [data-recording]` and the `-display`, `-ruler`, `-lane`, `-clip`, `-edge`,
+   `-join`, `-loop`, `-take` and `-playhead` parts — restyle here, not there.
+   ------------------------------------------------------------------------ */
+
+.tweakers-move-timeline {
+  --move-timeline-display: #1e1e1e;
+  --move-timeline-frame: #1e1e1e;
+  --move-timeline-ink: var(--move-text);
+  --move-timeline-accent: #3d9bff;
+  --move-timeline-record: var(--move-red);
+  --move-timeline-names: 88px;
+  --move-timeline-ruler: 24px;
+  --move-timeline-row: 18px;
+  --move-timeline-row-gap: 3px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  border: 4px solid var(--move-timeline-frame);
+  border-radius: var(--move-radius);
+  background: var(--move-timeline-display);
+  color: var(--move-timeline-ink);
+  font-family: var(--move-font-label);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tweakers-move-root[data-timeline-dock] {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* The waveform dock's layer: above the panel, its shadow on the instrument. */
+  z-index: 10002;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.tweakers-move-timeline[data-variant='dock'] {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  width: min(960px, calc(100vw - 48px));
+  box-shadow: 0 40px 20px -24px rgba(0, 0, 0, 0.25);
+}
+
+.tweakers-move-timeline-display {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--move-timeline-names) minmax(0, 1fr);
+  grid-template-rows: var(--move-timeline-ruler) auto;
+  padding: 2px 10px 8px 0;
+}
+
+.tweakers-move-timeline-corner {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 8px 0 10px;
+  font-size: 12px;
+  line-height: normal;
+}
+
+.tweakers-move-timeline-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tweakers-move-timeline-ruler {
+  grid-column: 2;
+  grid-row: 1;
+  position: relative;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.tweakers-move-timeline-tick {
+  position: absolute;
+  bottom: 3px;
+  width: 1px;
+  height: 4px;
+  background: var(--move-timeline-ink);
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+.tweakers-move-timeline-tick[data-major] {
+  height: 8px;
+  opacity: 0.5;
+}
+
+.tweakers-move-timeline-tick-label {
+  position: absolute;
+  bottom: 9px;
+  left: 3px;
+  font-size: 11px;
+  line-height: normal;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tweakers-move-timeline-loop,
+.tweakers-move-timeline-take {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.tweakers-move-timeline-loop {
+  background: color-mix(in srgb, var(--move-timeline-accent) 18%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--move-timeline-accent) 45%, transparent);
+}
+
+.tweakers-move-timeline-loop[data-on] {
+  background: color-mix(in srgb, var(--move-timeline-accent) 40%, transparent);
+  box-shadow: none;
+}
+
+.tweakers-move-timeline-take {
+  background: color-mix(in srgb, var(--move-timeline-record) 55%, transparent);
+}
+
+.tweakers-move-timeline-names {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--move-timeline-row-gap);
+  min-width: 0;
+}
+
+.tweakers-move-timeline-name {
+  height: var(--move-timeline-row);
+  padding: 0 8px 0 10px;
+  font-size: 12px;
+  line-height: var(--move-timeline-row);
+  opacity: 0.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tweakers-move-timeline-lanes {
+  grid-column: 2;
+  grid-row: 2;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--move-timeline-row-gap);
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.tweakers-move-timeline-lane {
+  position: relative;
+  height: var(--move-timeline-row);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--move-timeline-ink) 7%, transparent);
+  overflow: hidden;
+}
+
+.tweakers-move-timeline-loop-lanes {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  background: color-mix(in srgb, var(--move-timeline-accent) 10%, transparent);
+  pointer-events: none;
+}
+
+.tweakers-move-timeline-clip {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  z-index: 1;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 6px;
+  border-radius: 3px;
+  background: var(--move-timeline-ink);
+  color: var(--move-timeline-display);
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+
+.tweakers-move-timeline-clip[data-dragging] {
+  cursor: grabbing;
+  background: color-mix(in srgb, var(--move-timeline-ink) 80%, var(--move-timeline-accent));
+}
+
+/* A props clip is the sum of its tracks — shown, not retimed as one. */
+.tweakers-move-timeline-clip[data-composite] {
+  background: color-mix(in srgb, var(--move-timeline-ink) 60%, transparent);
+}
+
+/* A clip that animates nothing marks a span: an outline, not a bar. */
+.tweakers-move-timeline-clip[data-marker] {
+  background: color-mix(in srgb, var(--move-timeline-ink) 22%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--move-timeline-ink);
+  color: var(--move-timeline-ink);
+}
+
+.tweakers-move-timeline-ghost {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  margin-left: 1px;
+  border-radius: 3px;
+  background: var(--move-timeline-ink);
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+.tweakers-move-timeline-clip-length {
+  font-size: 10px;
+  line-height: normal;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.tweakers-move-timeline-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.tweakers-move-timeline-edge[data-edge='start'] {
+  left: 0;
+}
+
+.tweakers-move-timeline-edge[data-edge='end'] {
+  right: 0;
+}
+
+/* The join between two legs of a sequence: a hairline of display, with a
+   wider grip around it. */
+.tweakers-move-timeline-join {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  margin-left: -3px;
+  cursor: ew-resize;
+}
+
+.tweakers-move-timeline-join::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: var(--move-timeline-display);
+  opacity: 0.6;
+}
+
+.tweakers-move-timeline-heads {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  position: relative;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.tweakers-move-timeline-playhead {
+  position: absolute;
+  top: 2px;
+  bottom: 0;
+  left: -1px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--move-timeline-accent);
+  will-change: transform;
+}
+
+/* The playhead's cap, on the ruler. */
+.tweakers-move-timeline-playhead::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: inherit;
+}
+
+.tweakers-move-timeline[data-recording] .tweakers-move-timeline-playhead {
+  background: var(--move-timeline-record);
+}
+
+/* The timeline's clock in the panel's volume corner: Play, the time, Loop
+   and Rec — ember while off, lit while on, the take in the record red. */
+.tweakers-move-timeline-clock {
+  gap: 4px;
+  padding: 0 4px;
+  justify-content: center;
+}
+
+.tweakers-move-timeline-clock .tweakers-move-volume-value {
+  min-width: 72px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.tweakers-move-timeline-key {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--move-chip);
+  cursor: pointer;
+  transition: color var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-timeline-key svg {
+  width: 14px;
+  height: 14px;
+}
+
+.tweakers-move-timeline-key:hover {
+  color: color-mix(in srgb, var(--move-text) 45%, var(--move-chip));
+}
+
+.tweakers-move-timeline-key[data-on] {
+  color: var(--move-text);
+}
+
+.tweakers-move-timeline-key[data-name='rec'][data-on] {
+  color: var(--move-red);
+}
+
+.tweakers-move-timeline-key:focus-visible {
+  outline: 1px solid var(--move-text);
+  outline-offset: -1px;
+}
+
 .tweakers-list-screen,
 .tweakers-list-screen * {
   box-sizing: border-box;

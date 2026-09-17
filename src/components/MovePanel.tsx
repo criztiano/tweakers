@@ -37,6 +37,8 @@ import { MoveSearchStore, moveSearchFilter, type MoveSearchTarget, type MoveSear
 import { MoveColorSlot, MoveColorDisplay, MoveOpacityPads, MoveColorSteps, MovePaletteScreen, copyHslOfHex, copyOklch } from './MoveColor';
 import { MoveFunctions } from '../move-functions';
 import { MoveFunctionChips } from './MoveFunctionChips';
+import { MoveTimelineClock, MoveTimelineZoom } from './MoveTimeline';
+import { MoveTimelineStore } from '../move-timeline';
 import { MoveSettingsView } from '../move-settings';
 import { MovePresetStore, type MovePresetView } from '../move-presets';
 import { ListScreen } from './ListScreen';
@@ -426,6 +428,13 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const waveClaimed = useSyncExternalStore(
     useCallback((cb) => MoveWaveformStore.subscribe(cb), []),
     () => MoveWaveformStore.isRegistered(),
+    () => false
+  );
+  // A timeline on the surface holds the knob in front of any waveform: its
+  // clock, with its transport, takes the corner.
+  const timelineClaimed = useSyncExternalStore(
+    useCallback((cb) => MoveTimelineStore.subscribe(cb), []),
+    () => MoveTimelineStore.isRegistered(),
     () => false
   );
   const [liveValue, setLiveValue] = useState<string | null>(null);
@@ -1607,10 +1616,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // business.) Nothing registered and nothing attached = no cluster, header
   // unchanged.
   const volumeReading = liveValue ?? volume?.value;
-  const headerCluster = (waveClaimed || volume || functionChips === 'clock') && (
+  const headerCluster = (timelineClaimed || waveClaimed || volume || functionChips === 'clock') && (
     <div className="tweakers-move-actions">
       {functionChips === 'clock' && <MoveFunctionChips />}
-      {waveClaimed ? (
+      {timelineClaimed ? (
+        <MoveTimelineClock />
+      ) : waveClaimed ? (
         <MoveWaveClock />
       ) : volume && (
         <div className="tweakers-move-volume">
@@ -1669,8 +1680,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
             ) : (
             <div className="tweakers-move-tracks-lead">
             {/* A host's card gets the editor's zoom readout too, leading the
-                page names — the far end of the row from its clock. */}
-            {waveClaimed && <MoveAudioZoom />}
+                page names — the far end of the row from its clock. A
+                timeline on the surface holds the wheel first, so its zoom
+                reads here instead. */}
+            {timelineClaimed ? <MoveTimelineZoom /> : waveClaimed && <MoveAudioZoom />}
             <div className="tweakers-move-tracks-group">
               {/* The settings room's name plate: the marker blinks for as
                   long as the room is open — the same pulse the hardware's
