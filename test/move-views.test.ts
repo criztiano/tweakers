@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MoveViews } from '../src/move-views';
 import { MoveFunctions } from '../src/move-functions';
 import { MoveSurfaceStore } from '../src/move-surface-store';
-import { MOVE_VIEW_WAIT, type MoveViewChange } from '../src/move-view-core';
+import { MOVE_VIEW_WAIT, moveViewChoreography, type MoveViewChange } from '../src/move-view-core';
 
 // The registry's sequencing, without a browser: the runner records which
 // change ran and lands the update at once; the clock is vitest's.
@@ -93,13 +93,25 @@ describe('MoveViews.load', () => {
     expect(MoveSurfaceStore.getState().wait).toEqual({ title: 'Opening', detail: 'take.wav' });
   });
 
-  it('holds a wait that came up until it has been read, then arrives', async () => {
+  it('lets work that lands while its wait is still out of sight take the wait\'s place at once', async () => {
     const work = deferred<void>();
     let arrived = false;
     const done = MoveViews.load(() => work.promise, { title: 'Opening', arrive: () => { arrived = true; }, motion: 'forward' });
-    await vi.advanceTimersByTimeAsync(MOVE_VIEW_WAIT.delay + 10);
+    await vi.advanceTimersByTimeAsync(MOVE_VIEW_WAIT.delay + 100);
     work.resolve();
-    await vi.advanceTimersByTimeAsync(MOVE_VIEW_WAIT.hold - 20);
+    await done;
+    expect(arrived).toBe(true);
+    expect(changes).toEqual(['wait', 'forward']);
+  });
+
+  it('holds a wait that came into sight until it has arrived and been read, then arrives', async () => {
+    const work = deferred<void>();
+    let arrived = false;
+    const { quiet, duration } = moveViewChoreography('wait');
+    const done = MoveViews.load(() => work.promise, { title: 'Opening', arrive: () => { arrived = true; }, motion: 'forward' });
+    await vi.advanceTimersByTimeAsync(MOVE_VIEW_WAIT.delay + quiet);
+    work.resolve();
+    await vi.advanceTimersByTimeAsync(duration + MOVE_VIEW_WAIT.hold - quiet - 20);
     expect(arrived).toBe(false);
     await vi.advanceTimersByTimeAsync(20);
     await done;

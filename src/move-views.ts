@@ -24,11 +24,11 @@
  * The change is the browser's own view transition: the view leaving is a
  * picture while the view arriving is already live, so the app commits at
  * once — the new view's keys light, its list reaches the Move, the Move's
- * presses reach its handlers — and only the pictures move. Nothing in the
- * hand waits on an animation (a pointer does, for the change's few hundred
- * ms: the browser keeps a moving picture out of reach); a second change
- * started mid-way cuts the first to its end and moves on from there.
- * Without the API (or on a hidden tab) the change just lands.
+ * presses reach its handlers — and only the pictures move (a pointer waits
+ * for them: the browser keeps a moving picture out of reach). A second
+ * change never cuts the first: it takes the arriving view's place while
+ * that is still out of sight, and otherwise plays once the first has
+ * landed. Without the API (or on a hidden tab) the change just lands.
  *
  * A wait is honest in the hand before it is visible on the screen. The
  * moment work starts the view goes inert and every key goes dark — nothing
@@ -45,6 +45,7 @@ import { flushSync } from 'react-dom';
 import { MoveFunctions } from './move-functions';
 import { MoveSurfaceStore } from './move-surface-store';
 import {
+  MOVE_VIEW_EXPO_BEZIER,
   MOVE_VIEW_WAIT,
   moveViewChoreography,
   moveViewHoldRemaining,
@@ -115,7 +116,7 @@ const IDLE: MoveViewsState = { busy: false, wait: null };
 interface Running {
   controller: AbortController;
   wait: MoveViewWait;
-  /** When the wait came up; null while it has not. */
+  /** When the wait began to come up; null while it has not. */
   shownAt: number | null;
   timer: ReturnType<typeof setTimeout> | undefined;
   /** Hands the keys and the wheel back. */
@@ -141,45 +142,144 @@ function setState(next: MoveViewsState) {
 
 /* ---- the browser's view transition ------------------------------------- */
 
-let active: { skipTransition(): void } | null = null;
-
 const reducedMotion = () =>
   typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+/** A layer's fade and zoom as one animation where they share their timing
+ *  (they always do, but for reduced motion's fade alone), so the two can
+ *  never drift apart by a frame. */
 function play(root: HTMLElement, layer: MoveViewLayer, pseudoElement: string) {
   const { fade, move } = layer;
-  root.animate([{ opacity: fade.from }, { opacity: fade.to }], {
-    duration: fade.duration,
-    delay: fade.delay,
-    easing: fade.easing,
-    fill: 'both',
-    pseudoElement,
-  });
-  if (!move) return;
-  const frames = [{ transform: move.from }, { transform: move.to }];
-  const timing = { duration: move.duration, delay: move.delay, fill: 'both' as const, pseudoElement };
-  try {
-    root.animate(frames, { ...timing, easing: move.easing });
-  } catch {
-    // a browser without linear() easing still gets the kit's ease-out
-    root.animate(frames, { ...timing, easing: 'cubic-bezier(0.2, 0, 0, 1)' });
+  const together = move && move.duration === fade.duration && move.delay === fade.delay && move.easing === fade.easing;
+  const run = (frames: Keyframe[], tween: { duration: number; delay: number; easing: string }) => {
+    const timing = { duration: tween.duration, delay: tween.delay, fill: 'both' as const, pseudoElement };
+    try {
+      root.animate(frames, { ...timing, easing: tween.easing });
+    } catch {
+      // a browser without linear() still plays expo in-out, as a Bézier
+      root.animate(frames, { ...timing, easing: MOVE_VIEW_EXPO_BEZIER });
+    }
+  };
+  if (together) {
+    run([{ opacity: fade.from, transform: move.from }, { opacity: fade.to, transform: move.to }], fade);
+    return;
   }
+  run([{ opacity: fade.from }, { opacity: fade.to }], fade);
+  if (move) run([{ transform: move.from }, { transform: move.to }], move);
 }
 
-type ViewTransitionDocument = Document & {
-  startViewTransition?: (update: () => void) => {
-    ready: Promise<void>;
-    finished: Promise<void>;
-    updateCallbackDone: Promise<void>;
-    skipTransition(): void;
-  };
+type ViewTransition = {
+  ready: Promise<void>;
+  finished: Promise<void>;
+  updateCallbackDone: Promise<void>;
 };
 
-/** The runner the kit uses: a same-document view transition scoped to the
- *  stage, its two pictures moved by the choreography. */
+type ViewTransitionDocument = Document & {
+  startViewTransition?: (update: () => void) => ViewTransition;
+};
+
+/** The change on screen now. */
+interface Playing {
+  /** Updates still waiting for the old picture to be taken; null once they ran. */
+  queue: (() => void)[] | null;
+  /** When the pictures began to move; null until they do. */
+  movingAt: number | null;
+  /** How long the arriving picture stays out of sight, ms. */
+  quiet: number;
+  /** Changes asked for once the arriving picture was in sight: they wait
+   *  for this one to land, then play as one — the last change's name wins. */
+  next: { change: MoveViewChange; updates: (() => void)[]; resolve: () => void; landed: Promise<void> } | null;
+  updated: Promise<void>;
+}
+
+let playing: Playing | null = null;
+
+const VIEWPORT_SHEET = '.tweakers-move[data-dock="viewport"]';
+const SHEET_ATTR = 'data-tweakers-move-view-sheet';
+
+function runUpdates(updates: (() => void)[]) {
+  flushSync(() => {
+    for (const update of updates) {
+      try {
+        update();
+      } catch (error) {
+        console.error('[tweakers] a view change failed', error);
+      }
+    }
+  });
+}
+
+type AnimatableDocument = ViewTransitionDocument & { startViewTransition: NonNullable<ViewTransitionDocument['startViewTransition']> };
+
+/** A change can play: the API is there, a stage is mounted, the tab is seen. */
+const animatable = (doc: ViewTransitionDocument | null): doc is AnimatableDocument =>
+  !!doc?.startViewTransition && stages > 0 && doc.visibilityState !== 'hidden';
+
+function startChange(doc: AnimatableDocument, change: MoveViewChange, updates: (() => void)[]): Promise<void> {
+  const root = doc.documentElement;
+  const plan = moveViewChoreography(change, reducedMotion());
+  // The viewport sheet is a picture of its own, named only while exactly
+  // one stands: a second would share the name and void the whole change.
+  const sheetBefore = doc.querySelectorAll(VIEWPORT_SHEET).length === 1;
+  let sheetAfter = sheetBefore;
+  root.setAttribute(MOVE_VIEW_CHANGE_ATTR, change);
+  root.toggleAttribute(SHEET_ATTR, sheetBefore);
+  const entry: Playing = { queue: [...updates], movingAt: null, quiet: plan.quiet, next: null, updated: Promise.resolve() };
+  const transition = doc.startViewTransition(() => {
+    const queue = entry.queue ?? [];
+    entry.queue = null;
+    runUpdates(queue);
+    sheetAfter = doc.querySelectorAll(VIEWPORT_SHEET).length === 1;
+    if (sheetAfter) root.setAttribute(SHEET_ATTR, '');
+  });
+  entry.updated = transition.updateCallbackDone.catch(() => {});
+  playing = entry;
+  transition.ready
+    .then(() => {
+      entry.movingAt = performance.now();
+      play(root, plan.leaving, `::view-transition-old(${MOVE_VIEW_STAGE_NAME})`);
+      play(root, plan.arriving, `::view-transition-new(${MOVE_VIEW_STAGE_NAME})`);
+      // a sheet that comes or goes with the view makes the same entrance;
+      // one on both sides holds still
+      if (sheetBefore && !sheetAfter) play(root, plan.leaving, `::view-transition-old(${MOVE_VIEW_PANEL_NAME})`);
+      if (!sheetBefore && sheetAfter) play(root, plan.arriving, `::view-transition-new(${MOVE_VIEW_PANEL_NAME})`);
+    })
+    .catch(() => {});
+  transition.finished
+    .catch(() => {})
+    .finally(() => {
+      if (playing !== entry) return;
+      playing = null;
+      root.removeAttribute(MOVE_VIEW_CHANGE_ATTR);
+      root.removeAttribute(SHEET_ATTR);
+      const next = entry.next;
+      if (!next) return;
+      // the stage may be gone, or the tab hidden, by the time this one lands
+      if (animatable(doc)) void startChange(doc, next.change, next.updates).then(next.resolve);
+      else {
+        runUpdates(next.updates);
+        next.resolve();
+      }
+    });
+  return entry.updated;
+}
+
+/**
+ * The runner the kit uses: a same-document view transition scoped to the
+ * stage, its two pictures moved by the choreography.
+ *
+ * The app's update commits the moment the old picture is taken, so the new
+ * view is live — its keys lit, its list on the Move — while the pictures
+ * move. A change asked for while one is playing never cuts it:
+ * - before the old picture is taken, it joins that same change;
+ * - while the arriving picture is still out of sight (`quiet`), it lands in
+ *   place at once, and the picture on its way in is simply the newer view;
+ * - after that, it waits for the pictures to land and plays next, and every
+ *   change asked for meanwhile joins it.
+ */
 export const viewTransitionRunner: MoveViewRunner = (change, update) => {
   const doc = typeof document === 'undefined' ? null : (document as ViewTransitionDocument);
-  if (!doc?.startViewTransition || !stages || doc.visibilityState === 'hidden') {
+  if (!animatable(doc)) {
     // lands the same way the animated change does: a failing update is
     // reported, and never leaves a wait standing
     try {
@@ -189,35 +289,26 @@ export const viewTransitionRunner: MoveViewRunner = (change, update) => {
     }
     return Promise.resolve();
   }
-  const root = doc.documentElement;
-  // A second viewport panel would share the sheet's name, and a duplicate
-  // name throws the whole transition away — then the sheet rides with the page.
-  const sheets = doc.querySelectorAll('.tweakers-move[data-dock="viewport"]').length;
-  active?.skipTransition();
-  root.setAttribute(MOVE_VIEW_CHANGE_ATTR, change);
-  root.toggleAttribute('data-tweakers-move-view-sheet', sheets === 1);
-  const transition = doc.startViewTransition(() => {
-    flushSync(update);
-  });
-  active = transition;
-  const plan = moveViewChoreography(change, reducedMotion());
-  transition.ready
-    .then(() => {
-      play(root, plan.leaving, `::view-transition-old(${MOVE_VIEW_STAGE_NAME})`);
-      play(root, plan.arriving, `::view-transition-new(${MOVE_VIEW_STAGE_NAME})`);
-    })
-    .catch(() => {});
-  transition.finished
-    .catch(() => {})
-    .finally(() => {
-      if (active !== transition) return;
-      active = null;
-      root.removeAttribute(MOVE_VIEW_CHANGE_ATTR);
-      root.removeAttribute('data-tweakers-move-view-sheet');
-    });
-  return transition.updateCallbackDone.catch((error) => {
-    console.error('[tweakers] a view change failed', error);
-  });
+  const now = playing;
+  if (now?.queue) {
+    now.queue.push(update);
+    return now.updated;
+  }
+  if (now && (now.movingAt === null || performance.now() - now.movingAt < now.quiet)) {
+    runUpdates([update]);
+    return Promise.resolve();
+  }
+  if (now) {
+    if (!now.next) {
+      let resolve!: () => void;
+      const landed = new Promise<void>((r) => { resolve = r; });
+      now.next = { change, updates: [], resolve, landed };
+    }
+    now.next.change = change;
+    now.next.updates.push(update);
+    return now.next.landed;
+  }
+  return startChange(doc, change, [update]);
 };
 
 let runner: MoveViewRunner = viewTransitionRunner;
@@ -319,10 +410,12 @@ export const MoveViews = {
       // the hand is answered before the screen is: keys dark from this frame
       was?.release();
       running = task;
-      // the wait comes up a frame after its timer, inside a transition — by
-      // then the work may have been let go, and a wait nobody runs must not stand
+      // the wait comes up inside a transition, a frame or a whole change after
+      // its timer — by then the work may have been let go, and a wait nobody
+      // runs must not stand. It counts as shown from the moment it is.
       const show = () => {
         if (running !== task) return;
+        if (task.shownAt === null) task.shownAt = timers.now();
         setState({ busy: true, wait: task.wait });
         MoveSurfaceStore.setWait({ title: task.wait.title, ...(task.wait.detail ? { detail: task.wait.detail } : {}) });
       };
@@ -331,7 +424,6 @@ export const MoveViews = {
         setState({ busy: true, wait: null });
         task.timer = timers.setTimeout(() => {
           if (running !== task) return;
-          task.shownAt = timers.now();
           void runner('wait', show);
         }, MOVE_VIEW_WAIT.delay);
       }
@@ -344,7 +436,7 @@ export const MoveViews = {
 
       const finish = (landed: () => void) => {
         if (running !== task) return;
-        const hold = moveViewHoldRemaining(task.shownAt, timers.now());
+        const hold = moveViewHoldRemaining(task.shownAt, timers.now(), moveViewChoreography('wait', reducedMotion()));
         const end = () => {
           if (running !== task) return;
           running = null;

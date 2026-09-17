@@ -2,101 +2,111 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   MOVE_VIEW_MOTIONS,
+  MOVE_VIEW_PRESENTATION,
+  MOVE_VIEW_REDUCED,
   MOVE_VIEW_WAIT,
+  expoInOut,
+  linearEasing,
   moveViewChangeDuration,
   moveViewChoreography,
   moveViewHoldRemaining,
-  springEasing,
   type MoveViewChange,
 } from './move-view-core';
 
-// A view change's choreography and a wait's timing. These pin the grammar —
-// leaving is quicker than arriving, only opacity and transform move, reduced
-// motion travels nowhere — rather than every number.
+// A view change's choreography and a wait's timing. The zoom-through is
+// Cri's: 95% up to 100% fading in, 100% up to 105% fading out, expo in-out
+// over a second. These pin that, and the rules that keep it clean — one
+// curve for both layers, only opacity and transform, reduced motion
+// zooming nowhere — and when a wait holds.
 
 const CHANGES: MoveViewChange[] = [...MOVE_VIEW_MOTIONS, 'wait', 'resume'];
 const linearPoints = (easing: string) => easing.slice('linear('.length, -1).split(',').map(Number);
 
-describe('view choreography', () => {
-  it('always fades the leaving view out and the arriving view in', () => {
+describe('the zoom-through', () => {
+  it('fades the leaving view out growing to 105%, and the arriving view in growing from 95%', () => {
     for (const change of CHANGES) {
       const { leaving, arriving } = moveViewChoreography(change);
       assert.deepEqual([leaving.fade.from, leaving.fade.to], [1, 0], change);
       assert.deepEqual([arriving.fade.from, arriving.fade.to], [0, 1], change);
+      assert.deepEqual([leaving.move?.from, leaving.move?.to], ['scale(1)', 'scale(1.05)'], change);
+      assert.deepEqual([arriving.move?.from, arriving.move?.to], ['scale(0.95)', 'scale(1)'], change);
     }
   });
 
-  it('has the leaving view gone before the arriving one is legible', () => {
+  it('runs every layer on one curve over one second, from the same instant', () => {
     for (const change of CHANGES) {
-      const { leaving, arriving } = moveViewChoreography(change);
-      assert.ok(leaving.fade.delay + leaving.fade.duration < arriving.fade.delay + arriving.fade.duration, change);
-      assert.ok(arriving.fade.delay > 0, `${change} arrives a beat late`);
+      const plan = moveViewChoreography(change);
+      const tweens = [plan.leaving.fade, plan.leaving.move!, plan.arriving.fade, plan.arriving.move!];
+      for (const tween of tweens) {
+        assert.equal(tween.duration, 1000, change);
+        assert.equal(tween.delay, 0, change);
+        assert.equal(tween.easing, tweens[0].easing, `${change}: the opacities add up to one only on a shared curve`);
+      }
+      assert.equal(moveViewChangeDuration(plan), MOVE_VIEW_PRESENTATION.duration);
+      assert.equal(plan.duration, MOVE_VIEW_PRESENTATION.duration);
     }
   });
 
-  it('mirrors forward and back, open and close', () => {
-    const forward = moveViewChoreography('forward');
-    const back = moveViewChoreography('back');
-    assert.equal(forward.arriving.move?.from, 'translateX(20px)');
-    assert.equal(back.arriving.move?.from, 'translateX(-20px)');
-    assert.equal(forward.leaving.move?.to, 'translateX(-12px)');
-    assert.equal(back.leaving.move?.to, 'translateX(12px)');
-    const open = moveViewChoreography('open');
-    const close = moveViewChoreography('close');
-    assert.equal(open.arriving.move?.from, close.leaving.move?.to);
-    assert.equal(open.leaving.move?.to, close.arriving.move?.from);
-  });
-
-  it('moves nothing in a swap, and holds the wait itself still', () => {
-    const swap = moveViewChoreography('swap');
-    assert.equal(swap.leaving.move, undefined);
-    assert.equal(swap.arriving.move, undefined);
-    assert.equal(moveViewChoreography('wait').arriving.move, undefined);
-  });
-
-  it('keeps only the fades under reduced motion, and keeps them short', () => {
+  it('keeps a short crossfade and zooms nowhere under reduced motion', () => {
     for (const change of CHANGES) {
       const plan = moveViewChoreography(change, true);
       assert.equal(plan.leaving.move, undefined, change);
       assert.equal(plan.arriving.move, undefined, change);
-      assert.ok(moveViewChangeDuration(plan) <= 150, change);
+      assert.equal(moveViewChangeDuration(plan), MOVE_VIEW_REDUCED.duration);
     }
   });
 
-  it('finishes every change well under half a second', () => {
-    for (const change of CHANGES) assert.ok(moveViewChangeDuration(moveViewChoreography(change)) < 400, change);
+  it('keeps the arriving view out of sight for the curve’s quiet first stretch', () => {
+    const { quiet } = moveViewChoreography('open');
+    assert.ok(expoInOut(quiet / 1000) <= MOVE_VIEW_PRESENTATION.quietLight + 0.001);
+    assert.ok(expoInOut((quiet + 20) / 1000) > MOVE_VIEW_PRESENTATION.quietLight);
+    assert.equal(quiet, 384);
   });
 });
 
-describe('spring easing', () => {
-  it('runs from 0 to exactly 1 without overshoot', () => {
-    const { easing, duration } = springEasing();
-    const points = linearPoints(easing);
-    assert.equal(points[0], 0);
-    assert.equal(points.at(-1), 1);
-    for (let i = 1; i < points.length; i++) assert.ok(points[i] >= points[i - 1], `sample ${i} never falls back`);
-    assert.ok(points.every((p) => p <= 1));
-    assert.ok(duration >= 250 && duration <= 350, `settles in ${duration} ms`);
+describe('expo in-out', () => {
+  it('is the exponential curve: flat ends, half way at the middle, symmetric', () => {
+    assert.equal(expoInOut(0), 0);
+    assert.equal(expoInOut(1), 1);
+    assert.equal(expoInOut(0.5), 0.5);
+    assert.ok(expoInOut(0.2) < 0.01);
+    for (const x of [0.1, 0.3, 0.45]) assert.ok(Math.abs(expoInOut(x) + expoInOut(1 - x) - 1) < 1e-12);
   });
 
-  it('is fast off the mark — half way inside the first third', () => {
-    const points = linearPoints(springEasing().easing);
-    assert.ok(points[Math.floor(points.length / 3)] > 0.5);
+  it('plays as a linear() easing that never falls back and stays within 0.15%', () => {
+    const points = linearPoints(linearEasing(expoInOut));
+    assert.equal(points.length, 97);
+    assert.equal(points[0], 0);
+    assert.equal(points.at(-1), 1);
+    for (let i = 1; i < points.length; i++) assert.ok(points[i] >= points[i - 1]);
+    let worst = 0;
+    for (let i = 0; i <= 1000; i++) {
+      const x = i / 1000;
+      const at = Math.min(95, Math.floor(x * 96));
+      const t = x * 96 - at;
+      worst = Math.max(worst, Math.abs(points[at] + (points[at + 1] - points[at]) * t - expoInOut(x)));
+    }
+    assert.ok(worst < 0.0015, `worst ${worst}`);
   });
 });
 
 describe('wait timing', () => {
+  const plan = moveViewChoreography('wait');
+
   it('holds nothing when the work landed before the wait came up', () => {
-    assert.equal(moveViewHoldRemaining(null, 1000), 0);
+    assert.equal(moveViewHoldRemaining(null, 1000, plan), 0);
   });
 
-  it('holds a wait that came up until it has been read', () => {
-    assert.equal(moveViewHoldRemaining(1000, 1100), MOVE_VIEW_WAIT.hold - 100);
-    assert.equal(moveViewHoldRemaining(1000, 1000 + MOVE_VIEW_WAIT.hold + 1), 0);
+  it('holds nothing while the wait is still out of sight — the view takes its place unseen', () => {
+    assert.equal(moveViewHoldRemaining(1000, 1000 + plan.quiet - 1, plan), 0);
+  });
+
+  it('holds a wait that came into sight until it has arrived and been read', () => {
+    assert.equal(moveViewHoldRemaining(1000, 1000 + plan.quiet, plan), plan.duration + MOVE_VIEW_WAIT.hold - plan.quiet);
+    assert.equal(moveViewHoldRemaining(1000, 1000 + plan.duration + MOVE_VIEW_WAIT.hold + 1, plan), 0);
   });
 
   it('shows no wait for work that answers like a press', () => {
     assert.ok(MOVE_VIEW_WAIT.delay <= 250);
-    assert.ok(MOVE_VIEW_WAIT.hold >= MOVE_VIEW_WAIT.sweepStep * 4, 'a held wait shows at least half a sweep');
   });
 });

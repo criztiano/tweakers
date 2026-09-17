@@ -3,32 +3,30 @@
  * test it without React or a browser.
  *
  * A view is the whole surface an app shows at a time — a deck, a list, a
- * panel. Changing it is a place change, and the eye needs to be told where
- * it went: deeper along the way (`forward`), back out (`back`), into a
- * workspace (`open`) or out of one (`close`), or across to a sibling
- * (`swap`). Each of those is a choreography of two layers, the view leaving
- * and the view arriving, and this file is the choreography.
+ * panel. Changing it is a place change, and the app names which one it is:
+ * deeper along the way (`forward`), back out (`back`), into a workspace
+ * (`open`) or out of one (`close`), or across to a sibling (`swap`). The
+ * names are the app's intent; every one of them is presented the same way.
  *
- * The rules the numbers keep:
- * - Leaving is quick and arriving takes its time. The old view is gone
- *   before the new one is legible, so the two never read as one smeared
- *   picture.
- * - Only opacity and transform move — the compositor plays them, and
- *   nothing lays out while a view changes.
- * - Movement settles on a critically damped spring: fast off the mark, no
- *   overshoot. An instrument does not wobble.
- * - Distances are small. The view travels a hint of the way, enough to say
- *   which way you went, never a full slide across the window.
- * - Reduced motion keeps the fade and drops every movement.
+ * The presentation is a zoom-through: the view leaving grows past you to
+ * 105% as it fades out, the view arriving grows up from 95% as it fades in,
+ * both on one exponential ease-in-out over a second. The two layers share
+ * the curve exactly, so their opacities always add up to one: laid over
+ * each other additively they cross without a dip in light. Only opacity
+ * and transform move — the compositor plays them, and nothing lays out.
+ * Reduced motion keeps a short crossfade and drops the zoom.
+ *
+ * The curve is quiet for its first third: the arriving view is still under
+ * a tenth of its light for 384 ms. A change that lands inside that window
+ * can take the arriving view's place unseen; one that lands later waits for
+ * the pictures to land. That window is part of the choreography (`quiet`).
  *
  * Waiting is part of the same grammar. Work that lands fast never shows a
- * wait at all; work that does not shows one, and a wait that came up stays
- * long enough to be read, so nothing blinks.
+ * wait at all; work that does not shows one, and a wait that has come into
+ * sight stays until it has arrived and been read, so nothing blinks.
  */
 
-import { springParams, springProgress, springSettleDuration } from './transition-math';
-
-/** Where a view change goes, as the eye should read it. */
+/** Where a view change goes, as the app names it. */
 export const MOVE_VIEW_MOTIONS = ['forward', 'back', 'open', 'close', 'swap'] as const;
 
 export type MoveViewMotion = (typeof MOVE_VIEW_MOTIONS)[number];
@@ -38,6 +36,24 @@ export type MoveViewMotion = (typeof MOVE_VIEW_MOTIONS)[number];
 export type MoveViewChange = MoveViewMotion | 'wait' | 'resume';
 
 /**
+ * The zoom-through. Feel constants, set by Cri: retune one only with a
+ * stated feel goal.
+ */
+export const MOVE_VIEW_PRESENTATION = {
+  /** ms, both layers, start to settle */
+  duration: 1000,
+  /** where the arriving view grows up from */
+  enterScale: 0.95,
+  /** where the leaving view grows out to */
+  exitScale: 1.05,
+  /** the arriving view's light below which a swap goes unseen */
+  quietLight: 0.1,
+} as const;
+
+/** Reduced motion: a plain crossfade, short, no zoom. */
+export const MOVE_VIEW_REDUCED = { duration: 180 } as const;
+
+/**
  * The timing of a wait. Feel constants: retune one only with a stated feel
  * goal.
  */
@@ -45,15 +61,34 @@ export const MOVE_VIEW_WAIT = {
   /** Work that lands inside this never shows a wait — under a fifth of a
    *  second still reads as the press answering. */
   delay: 200,
-  /** A wait that came up stays at least this long from its first frame, so
+  /** A wait that came into sight stays this long after it has arrived, so
    *  it is read rather than glimpsed. */
   hold: 500,
   /** One step of the wait's eight-light sweep; eight of them are one pass. */
   sweepStep: 70,
 } as const;
 
-/** The spring every view movement settles on: no bounce, 0.3 s to the eye. */
-export const MOVE_VIEW_SPRING = { type: 'spring', visualDuration: 0.3, bounce: 0 } as const;
+/** Exponential ease-in-out, exactly: flat off the mark, all of the travel
+ *  through the middle, flat into the landing. */
+export function expoInOut(x: number): number {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  return x < 0.5 ? 2 ** (20 * x - 10) / 2 : (2 - 2 ** (-20 * x + 10)) / 2;
+}
+
+/**
+ * A curve as a CSS `linear()` easing, sampled evenly — so the browser plays
+ * the exact curve on the compositor, with no frame loop. 96 samples keep
+ * expo in-out within 0.15% everywhere — under a pixel of zoom on any screen.
+ */
+export function linearEasing(curve: (x: number) => number, samples = 96): string {
+  const points: string[] = [];
+  for (let i = 0; i <= samples; i++) points.push(String(Math.round(curve(i / samples) * 10000) / 10000));
+  return `linear(${points.join(', ')})`;
+}
+
+/** The same curve as a cubic Bézier, for a browser without `linear()`. */
+export const MOVE_VIEW_EXPO_BEZIER = 'cubic-bezier(0.87, 0, 0.13, 1)';
 
 /** One animated value, from → to. */
 export interface MoveViewTween<T> {
@@ -73,106 +108,77 @@ export interface MoveViewLayer {
   move?: MoveViewTween<string>;
 }
 
-/** The two layers of a view change. */
+/** The two layers of a view change, how long it runs, and how long the
+ *  arriving view stays out of sight (both ms). */
 export interface MoveViewChoreography {
   leaving: MoveViewLayer;
   arriving: MoveViewLayer;
+  duration: number;
+  quiet: number;
 }
 
-/** A fade that accelerates away — leaving should not linger. */
-export const MOVE_VIEW_EASE_IN = 'cubic-bezier(0.4, 0, 1, 1)';
-/** A fade that decelerates in — the kit's own ease-out. */
-export const MOVE_VIEW_EASE_OUT = 'cubic-bezier(0.2, 0, 0, 1)';
-
-/**
- * A spring as a CSS `linear()` easing, sampled from the same closed form the
- * timeline scrubs with — so the browser plays a real spring without a frame
- * loop. Returns the easing and the time it takes to settle, which is the
- * animation's duration.
- */
-export function springEasing(
-  spring: { type: 'spring'; visualDuration?: number; bounce?: number } = MOVE_VIEW_SPRING,
-  samples = 24
-): { easing: string; duration: number } {
-  const params = springParams(spring);
-  const seconds = springSettleDuration(params);
-  const points: string[] = [];
-  for (let i = 0; i <= samples; i++) {
-    const t = (i / samples) * seconds;
-    const value = i === samples ? 1 : springProgress(t, params);
-    points.push(String(Math.round(value * 10000) / 10000));
+/** When a curve first reaches `light`, as a share of its run. */
+function reaches(curve: (x: number) => number, light: number): number {
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 30; i++) {
+    const mid = (lo + hi) / 2;
+    if (curve(mid) < light) lo = mid;
+    else hi = mid;
   }
-  return { easing: `linear(${points.join(', ')})`, duration: Math.round(seconds * 1000) };
+  return hi;
 }
 
-const fade = (from: number, to: number, duration: number, delay: number, easing: string): MoveViewTween<number> => ({
-  from,
-  to,
-  duration,
-  delay,
-  easing,
-});
-
-/** The fades, shared by every change: out fast, in unhurried and a beat late. */
-const FADE_OUT = 110;
-const FADE_IN = 200;
-const FADE_IN_DELAY = 40;
-
-/** How far a view travels, as a transform on each end of each change. */
-const TRAVEL: Record<MoveViewChange, { leaving?: [string, string]; arriving?: [string, string] }> = {
-  forward: { leaving: ['translateX(0px)', 'translateX(-12px)'], arriving: ['translateX(20px)', 'translateX(0px)'] },
-  back: { leaving: ['translateX(0px)', 'translateX(12px)'], arriving: ['translateX(-20px)', 'translateX(0px)'] },
-  // into a workspace: it comes up to meet you, and what you left passes by
-  open: { leaving: ['scale(1)', 'scale(1.015)'], arriving: ['scale(0.975)', 'scale(1)'] },
-  close: { leaving: ['scale(1)', 'scale(0.975)'], arriving: ['scale(1.015)', 'scale(1)'] },
-  swap: {},
-  // a view steps back a hair while its wait comes up; the wait holds still
-  wait: { leaving: ['scale(1)', 'scale(0.985)'] },
-  resume: { arriving: ['scale(0.985)', 'scale(1)'] },
-};
+const EXPO_EASING = linearEasing(expoInOut);
+const EXPO_QUIET = Math.round(reaches(expoInOut, MOVE_VIEW_PRESENTATION.quietLight) * MOVE_VIEW_PRESENTATION.duration);
 
 /**
- * The two layers of a change. `reduced` is the reader's reduced-motion
- * setting: the fades stay, shortened, and nothing travels.
+ * The two layers of a change. Every change is the same zoom-through;
+ * `reduced` is the reader's reduced-motion setting, which keeps a short
+ * crossfade and drops the zoom.
  */
-export function moveViewChoreography(change: MoveViewChange, reduced = false, spring = springEasing()): MoveViewChoreography {
+export function moveViewChoreography(_change: MoveViewChange, reduced = false): MoveViewChoreography {
   if (reduced) {
+    const { duration } = MOVE_VIEW_REDUCED;
+    const tween = (from: number, to: number): MoveViewTween<number> => ({ from, to, duration, delay: 0, easing: 'linear' });
     return {
-      leaving: { fade: fade(1, 0, 90, 0, 'linear') },
-      arriving: { fade: fade(0, 1, 140, 0, 'linear') },
+      leaving: { fade: tween(1, 0) },
+      arriving: { fade: tween(0, 1) },
+      duration,
+      quiet: Math.round(duration * MOVE_VIEW_PRESENTATION.quietLight),
     };
   }
-  const travel = TRAVEL[change] ?? {};
-  const move = (ends?: [string, string]): MoveViewTween<string> | undefined =>
-    ends ? { from: ends[0], to: ends[1], duration: spring.duration, delay: 0, easing: spring.easing } : undefined;
-  // the wait comes up slower than a view: it is not an answer yet
-  const arriveDelay = change === 'wait' ? 80 : FADE_IN_DELAY;
-  const arriveFade = change === 'wait' ? 220 : change === 'swap' ? 160 : FADE_IN;
-  const leaving: MoveViewLayer = { fade: fade(1, 0, change === 'wait' ? 140 : FADE_OUT, 0, MOVE_VIEW_EASE_IN) };
-  const arriving: MoveViewLayer = { fade: fade(0, 1, arriveFade, arriveDelay, MOVE_VIEW_EASE_OUT) };
-  const leavingMove = move(travel.leaving);
-  const arrivingMove = move(travel.arriving);
-  if (leavingMove) leaving.move = leavingMove;
-  if (arrivingMove) arriving.move = arrivingMove;
-  return { leaving, arriving };
+  const { duration, enterScale, exitScale } = MOVE_VIEW_PRESENTATION;
+  const tween = <T,>(from: T, to: T): MoveViewTween<T> => ({ from, to, duration, delay: 0, easing: EXPO_EASING });
+  return {
+    leaving: { fade: tween(1, 0), move: tween('scale(1)', `scale(${exitScale})`) },
+    arriving: { fade: tween(0, 1), move: tween(`scale(${enterScale})`, 'scale(1)') },
+    duration,
+    quiet: EXPO_QUIET,
+  };
 }
 
 /** How long the whole change runs, both layers done — ms. */
 export function moveViewChangeDuration(choreography: MoveViewChoreography): number {
   const end = (layer: MoveViewLayer) =>
-    Math.max(
-      layer.fade.delay + layer.fade.duration,
-      layer.move ? layer.move.delay + layer.move.duration : 0
-    );
+    Math.max(layer.fade.delay + layer.fade.duration, layer.move ? layer.move.delay + layer.move.duration : 0);
   return Math.max(end(choreography.leaving), end(choreography.arriving));
 }
 
 /**
- * How long a finished piece of work still holds its wait up, so the wait is
- * read rather than glimpsed. `shownAt` is when the wait came up, `null` when
- * the work landed before it ever did — then nothing holds.
+ * How long a finished piece of work still holds its wait, so the wait is
+ * read rather than glimpsed. `shownAt` is when the wait began to come up,
+ * `null` when the work landed before it ever did. Work that lands while the
+ * wait is still out of sight holds nothing — its view takes the wait's place
+ * unseen; work that lands later holds until the wait has arrived and been
+ * read.
  */
-export function moveViewHoldRemaining(shownAt: number | null, now: number, hold: number = MOVE_VIEW_WAIT.hold): number {
-  if (shownAt === null) return 0;
-  return Math.max(0, shownAt + hold - now);
+export function moveViewHoldRemaining(
+  shownAt: number | null,
+  now: number,
+  choreography: Pick<MoveViewChoreography, 'duration' | 'quiet'>,
+  hold: number = MOVE_VIEW_WAIT.hold
+): number {
+  if (shownAt === null || now - shownAt < choreography.quiet) return 0;
+  return Math.max(0, shownAt + choreography.duration + hold - now);
 }

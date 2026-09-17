@@ -36,7 +36,7 @@ export { MoveViewStage } from './components/MoveViewStage';
 export type { MoveViewStageProps } from './components/MoveViewStage';
 export { MoveViews } from './move-views';
 export type { MoveViewsState, MoveViewWait, MoveViewTask, MoveViewLoadOptions } from './move-views';
-export { MOVE_VIEW_MOTIONS, MOVE_VIEW_WAIT, moveViewChoreography } from './move-view-core';
+export { MOVE_VIEW_MOTIONS, MOVE_VIEW_PRESENTATION, MOVE_VIEW_WAIT, moveViewChoreography } from './move-view-core';
 export type { MoveViewMotion, MoveViewChange, MoveViewChoreography, MoveViewLayer, MoveViewTween } from './move-view-core';
 export { buildMovePages, buildModMovePage, slotGroups, movePadRows, moveAppPadRow, visibleColumns, isToggleDial, normalizeToggleDial, denormalizeToggleDial, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, padSpan, isMoveDial, isMoveTabs, isNamedTabs, moveTabCell, moveBandCell, moveEdgesCell, isSpanContinuation, isPadSpanContinuation, enumOptionIcon, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
 export type { MovePage, MoveBandCell, MoveEdgesCell } from './move-layout';
