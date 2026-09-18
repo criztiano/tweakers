@@ -347,6 +347,7 @@ const p = useTweakers('Specialized', {
 | `pan` | Position between left/centre/right references, defaulting to `-1`, `0`, `1`. Set `left`, `center`, `right` for another domain, such as `-100`, `0`, `100`. |
 | `stereo-width` | Separation around mono and unity references, defaulting to `0` and `1`. Override `mono` and `unity` for another scale. |
 | `pitch` | Signed pitch ruler. `unit` defaults to `'semitones'`; use `'cents'` for fine tuning. The slider's `unit`/`formatValue` still controls its text. |
+| `offset` | A signed nudge away from where something already sits. The face draws the room it can move in: `origin` (0..1) is where it sits at no offset, and the dial's own range is that whole room, so a full turn either way carries it half the track. The stretch between the two fills in, and a chevron beside the pin shows each way it can still go — one way, in the Move's orange, once it has moved. |
 | `playback` | Bundled direction and scissors icons. Map app values using `modes`, e.g. `{ fwd: 'forward', pingPong: 'ping-pong' }`. Options retain their original stored values and labels. |
 
 Each visual uses one column. Graphics update immediately and remain informative
@@ -1261,7 +1262,7 @@ Bipolar sliders (`bipolar: true` or an `origin`) keep their character on the dia
 
 ### The big-slot library, and multi-slot controls
 
-Every face a dial slot can wear lives in one dictionary, `MOVE_SLOT_LIBRARY` (`src/components/move-slots.tsx`): `default`, `value`, `icon`, `curve`, `enum`, `xy`, `range`, `filter`, `env`, `scope`, `toggle`, `toggle-icon`, `metronome`, `color`, `transfer`, `ramp`, `dial`, and the specimens (`opacity`, `blur`, `pan`, `stereo-width`, `pitch`, `playback`). The library app (`cd example && npm run dev`) shows every one of them live in a single scrolling panel, with the dictionary's own descriptions beside it. Each entry is a pure body — a drawing of computed props with no gestures of its own — so a new face is added by writing a body and dispatching to it from the MovePanel, and the gestures (pointer capture, fine drag, modulation arming) stay in one place.
+Every face a dial slot can wear lives in one dictionary, `MOVE_SLOT_LIBRARY` (`src/components/move-slots.tsx`): `default`, `value`, `icon`, `curve`, `enum`, `xy`, `range`, `filter`, `env`, `scope`, `toggle`, `toggle-icon`, `metronome`, `color`, `transfer`, `ramp`, `dial`, and the specimens (`opacity`, `blur`, `pan`, `stereo-width`, `pitch`, `offset`, `playback`). The library app (`cd example && npm run dev`) shows every one of them live in a single scrolling panel, with the dictionary's own descriptions beside it. Each entry is a pure body — a drawing of computed props with no gestures of its own — so a new face is added by writing a body and dispatching to it from the MovePanel, and the gestures (pointer capture, fine drag, modulation arming) stay in one place.
 
 Some controls are bigger than one column. A **multi-slot control** follows one pattern, whatever its width:
 
