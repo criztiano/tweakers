@@ -92,3 +92,51 @@ it('does not submit twice through repeated pad presses while pending', async () 
   finish(); await pending;
   expect(store.getView()).toBeNull();
 });
+
+function picker(onSubmit = vi.fn(), selected = ['plasma']) {
+  const store = new MovePadListStoreClass();
+  releases.push(store.attach('page', 'shader', {
+    label: 'Shader', single: true, selected,
+    options: [{ value: 'gradient', label: 'Gradient' }, { value: 'plasma', label: 'Plasma' }, { value: 'waves', label: 'Waves' }],
+    onSubmit,
+  }));
+  return store;
+}
+it('opens a single list on its current choice, and the closed pad names it', () => {
+  const store = picker();
+  expect(store.choice('page', 'shader')?.label).toBe('Plasma');
+  store.open('page', 'shader');
+  expect(store.getView()?.cursor).toBe(1);
+  expect(store.getView()?.single).toBe(true);
+});
+it('replaces and commits a single choice at once — Sample, the jog click, Capture or the pad', async () => {
+  for (const take of [
+    (s: MovePadListStoreClass) => MoveFunctions.run('sample'),
+    (s: MovePadListStoreClass) => MoveFunctions.run('jog_click'),
+    (s: MovePadListStoreClass) => MoveFunctions.run('capture'),
+    (s: MovePadListStoreClass) => s.activate('page', 'shader'),
+  ]) {
+    const onSubmit = vi.fn();
+    const store = picker(onSubmit);
+    store.open('page', 'shader');
+    MoveFunctions.run('down');
+    await take(store);
+    // the new choice alone — never plasma AND waves
+    expect(onSubmit).toHaveBeenCalledWith(['waves']);
+    expect(store.getView()).toBeNull();
+    expect(store.choice('page', 'shader')?.label).toBe('Waves');
+    for (const release of releases.splice(0).reverse()) release();
+  }
+});
+it('takes the host\'s choice on re-attach, where a checked list keeps what was ticked', () => {
+  const store = picker(vi.fn(), ['plasma']);
+  releases.push(store.attach('page', 'shader', {
+    label: 'Shader', single: true, selected: ['gradient'],
+    options: [{ value: 'gradient', label: 'Gradient' }, { value: 'plasma', label: 'Plasma' }],
+    onSubmit: vi.fn(),
+  }));
+  expect(store.choice('page', 'shader')?.label).toBe('Gradient');
+  // a checked list has no single choice to name
+  const checked = setup();
+  expect(checked.choice('page', 'extract')).toBeNull();
+});

@@ -305,6 +305,14 @@ shares the dial list styling, with no extra submission button: the owning pad be
 Reduced-motion mode keeps it steadily green. `activate(panelId, path)` opens
 a closed list or submits its current selection; `toggle` retains open/close behavior.
 The Library's **Parts** pad demonstrates the same API used by Primecut Extract.
+
+**Single — a picker.** Pass `single: true` for one choice rather than a set (a
+shader, a background source). The list opens on the current choice; Sampling,
+the jog click, Capture or a second pad press takes the row under the cursor —
+it replaces the choice and commits at once, so nothing has to be unticked
+first. The closed pad names the choice (`MovePadListStore.choice(panelId, path)`)
+instead of its action. The host owns the value: a re-attach with a new
+`selected` moves the choice, where a checked list keeps what the user ticked.
 `moveKitOptions()` includes this registry as `padList`.
 
 `MovePadListBody` is the shared drawing in `MOVE_PAD_LIBRARY.list`; it uses

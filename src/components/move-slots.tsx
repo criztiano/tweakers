@@ -1400,7 +1400,7 @@ export function MovePadListBody({ view, onCursor, onToggle }: {
   view: MovePadListView; onCursor: (index: number) => void; onToggle: () => void;
 }) {
   return <div className="tweakers-move-pad-list-body" aria-busy={view.pending || undefined}>
-    <ListScreen className="tweakers-move-dial-list" follow="center" label={view.label} disabled={view.pending} multiselect items={view.options.map(option => ({ ...option, checked: view.selected.includes(option.value) }))}
+    <ListScreen className="tweakers-move-dial-list" follow="center" label={view.label} disabled={view.pending} multiselect={!view.single} items={view.options.map(option => ({ ...option, checked: view.selected.includes(option.value) }))}
       value={view.options[view.cursor]?.value} onFocusItem={value => onCursor(view.options.findIndex(option => option.value === value))}
       onSelect={value => { onCursor(view.options.findIndex(option => option.value === value)); onToggle(); }} />
     {(view.error || view.pending || !view.options.length) && <div className="tweakers-move-pad-list-status" role="status" aria-live="polite">
@@ -1414,7 +1414,7 @@ export const MOVE_PAD_LIBRARY = {
   toggle: { description: 'a switch; the pad inverts when it is on', component: MovePadToggleBody },
   icon: { description: 'a switch drawn as its picture alone — no name, the pad inverts when it is on', component: MovePadIconBody },
   value: { description: 'a value the dial above can borrow — hold to peek, tap to latch', component: MovePadValueBody },
-  list: { description: 'a checked list above a small pad; its dial walks, Sample selects, a second pad press runs', component: MovePadListBody },
+  list: { description: 'a checked list above a small pad; its dial walks, Sample selects, a second pad press runs — or, single, a picker: Sample takes the row and the pad names it', component: MovePadListBody },
   action: { description: 'a button: a press runs the app’s action', component: MovePadActionBody },
   'icon-label': { description: 'a button wearing its picture beside its name — a press runs the app’s action', component: MovePadIconLabelBody },
   app: { description: 'a cell the app paints itself — a track, a slice, a step', component: MovePadAppBody },
