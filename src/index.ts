@@ -18,9 +18,12 @@ export {
   MOVE_PAGE_SELECT_EVENT,
   MOVE_JOG_EVENT,
   MOVE_JOG_CLICK_EVENT,
+  MOVE_VOLUME_EVENT,
+  MOVE_VOLUME_TAP_EVENT,
   MOVE_MUTE_EVENT,
   MOVE_SEARCH_EVENT,
   MOVE_STRIP_EVENT,
+  MOVE_SETTINGS_EVENT,
   MOVE_TRACK_COLORS,
 } from './components/MovePanel';
 export { MoveActionButton } from './components/MoveActionButton';

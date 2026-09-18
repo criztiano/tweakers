@@ -272,6 +272,15 @@ export const MOVE_PAGE_SELECT_EVENT = 'move-tweakers:page-select';
 export const MOVE_JOG_EVENT = 'move-tweakers:jog';
 /** In, cancelable: `{ shift }` — the wheel pressed. Same consumption rule. */
 export const MOVE_JOG_CLICK_EVENT = 'move-tweakers:jog-click';
+/** In, cancelable: `{ delta, shift }` — the volume knob turned, when no slot
+ *  has claimed it as a second hand. A mounted waveform scrubs with it; an app
+ *  that gives the knob its own meaning (a layer's opacity, a gain) listens,
+ *  consumes it with preventDefault, and names what it edits through
+ *  MoveVolumeDisplay — a claimed volume knob with no readout is a bug. */
+export const MOVE_VOLUME_EVENT = 'move-tweakers:volume';
+/** In, cancelable: `{ shift }` — a still tap on the volume knob. It has no
+ *  built-in meaning; the app gives it one (a reset, a toggle to full). */
+export const MOVE_VOLUME_TAP_EVENT = 'move-tweakers:volume-tap';
 /** In, cancelable: `{ pressed, shift }` — the Mute button's raw press and
  *  release. An open preset navigator consumes them: holding Mute plays the
  *  pre-navigator sound to compare. Unconsumed, Mute stays the app's. */
