@@ -1923,16 +1923,23 @@
   border-radius: 8px;
 }
 
+/* Parked on the origin, the dial's zero stands as a line across the bar —
+   the range slot's handle — and goes back to the fill's dot once it leaves.
+   It sits on the bar's padding box, so it reaches as far out as a handle. */
 .tweakers-move-dial-zero {
   position: absolute;
-  top: 50%;
-  width: 5px;
-  height: 5px;
-  margin: -2.5px 0 0 -2.5px;
-  border-radius: 50%;
+  top: -1px;
+  bottom: -1px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
   background: var(--move-text);
-  box-shadow: 0 0 0 2px var(--move-bg), 0 0 0 3px var(--move-text);
   pointer-events: none;
+  transition: box-shadow 0.12s;
+}
+
+.tweakers-move-dial[data-active] .tweakers-move-dial-zero {
+  box-shadow: 0 0 12px 0 rgba(222, 227, 201, 0.7);
 }
 
 .tweakers-move-dial-fill[data-zero] {

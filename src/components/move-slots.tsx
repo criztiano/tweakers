@@ -229,7 +229,7 @@ export function MoveSlotDefaultBody({
             : { width: `${pct}%` }}
         />
         {atOrigin && (
-          <span className="tweakers-move-dial-zero" style={{ left: `${originPct}%` }} />
+          <span className="tweakers-move-dial-zero" style={{ left: `calc(2px + (100% - 4px) * ${(originPct ?? 0) / 100})` }} />
         )}
       </div>
     </>
