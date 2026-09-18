@@ -29,7 +29,13 @@ export type MoveSliderVisual =
   | { kind: 'multiband'; role: 'band'; band: number }
   /** A mixer channel's level: a fader under its icon and name, in its tone.
    *  Channel dials side by side draw as one mixer. */
-  | { kind: 'channel'; icon?: string; tone?: MoveTone };
+  | { kind: 'channel'; icon?: string; tone?: MoveTone }
+  /** One axis of a place — across, up, or into the picture. Three sliders
+   *  carrying x, y and z, side by side in that order, draw as one 3-slot
+   *  stage (the `vector` face); alone, an axis keeps the ordinary face.
+   *  `down` (y only) says the host's y grows downward, as canvas
+   *  coordinates do, so the stage still raises the mark as y goes up. */
+  | { kind: 'axis'; axis: 'x' | 'y' | 'z'; down?: boolean };
 
 /** A Move hue by name, as the theme's `--move-<tone>` token carries it. */
 export type MoveTone = 'red' | 'orange' | 'yellow' | 'lime' | 'emerald' | 'blue' | 'indigo' | 'pink';
@@ -165,6 +171,93 @@ export function moveGateSpan(
   });
   if (at.some((p) => p === null)) return null;
   return { threshold: at[0]!, lookahead: at[1]!, release: at[2]! };
+}
+
+/** Where a place's three axes sit, each 0..1 across its own dial — or null
+ *  unless the three are an x, a y and a z axis, in that order. The gate's
+ *  rule, for a position instead of a gate. `down` is the y axis's own. */
+export function moveVectorAxes(
+  dials: [ControlMeta, unknown][],
+): { x: number; y: number; z: number; down: boolean } | null {
+  if (dials.length !== 3) return null;
+  const axes = ['x', 'y', 'z'] as const;
+  const at = dials.map(([meta, value], i) => {
+    const visual = meta.moveVisual;
+    if (visual?.kind !== 'axis' || visual.axis !== axes[i]) return null;
+    return sliderPosition(meta, value);
+  });
+  if (at.some((p) => p === null)) return null;
+  const y = dials[1][0].moveVisual;
+  return { x: at[0]!, y: at[1]!, z: at[2]!, down: y?.kind === 'axis' && y.down === true };
+}
+
+/** The stage's drawing units — a 240 × 48 plot, the shape of the three slots it
+ *  spans, so the floor stretches to fill them while the mark stays round. */
+export const MOVE_STAGE = { width: 240, height: 48 } as const;
+
+/** The stage's floor, near edge to far edge, in drawing units. The far edge is
+ *  narrower by the same ratio it is higher: one vanishing point, centred, so the
+ *  floor reads as a floor and not as a trapezoid. */
+const STAGE_FLOOR = { near: 44, far: 16, half: 114, farScale: 0.44 } as const;
+/** The mark's radius near and far — distance drawn as size, as well as place. */
+const STAGE_MARK = { near: 5.5, far: 2.5 } as const;
+
+export type MoveStage = {
+  /** The floor's outline, closed. */
+  floor: string;
+  /** Depth rules across it and rails running back to the vanishing point. */
+  rules: string;
+  /** The mark's shadow on the floor, straight under it. */
+  foot: { x: number; y: number; rx: number; ry: number };
+  /** From the shadow up to the mark: how high it stands. */
+  stalk: { x: number; y1: number; y2: number };
+  /** The thing itself. */
+  mark: { x: number; y: number; r: number };
+  /** The depth rule the mark stands on — lit while z is being turned. */
+  depth: string;
+};
+
+/**
+ * A place as one picture: an object standing on a floor seen from the front.
+ *
+ * X places it across the floor AT ITS DEPTH, so it stays on the stage however
+ * far back it is. Z is drawn twice over — how far back it stands, and how big it
+ * is — because on a slot this size a third number only reads as depth when it
+ * does both. Y is how high it stands off the floor: a stalk up from its shadow,
+ * so at zero it sits on its own shadow. All inputs are 0..1.
+ */
+export function moveVectorStage(x01: number, y01: number, z01: number, down = false): MoveStage {
+  const cx = MOVE_STAGE.width / 2;
+  const x = clamp01(x01);
+  const t = clamp01(z01);
+  const lift = down ? 1 - clamp01(y01) : clamp01(y01);
+  const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
+  const floorY = (k: number) => lerp(STAGE_FLOOR.near, STAGE_FLOOR.far, k);
+  const halfAt = (k: number) => STAGE_FLOOR.half * lerp(1, STAGE_FLOOR.farScale, k);
+  const across = (u: number, k: number) => cx + (u * 2 - 1) * halfAt(k);
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+
+  const floor = `M${r2(across(0, 0))} ${STAGE_FLOOR.near}L${r2(across(1, 0))} ${STAGE_FLOOR.near}L${r2(across(1, 1))} ${STAGE_FLOOR.far}L${r2(across(0, 1))} ${STAGE_FLOOR.far}Z`;
+  const rules = [
+    ...[0.25, 0.5, 0.75].map((k) => `M${r2(across(0, k))} ${r2(floorY(k))}L${r2(across(1, k))} ${r2(floorY(k))}`),
+    ...[0.25, 0.5, 0.75].map((u) => `M${r2(across(u, 0))} ${STAGE_FLOOR.near}L${r2(across(u, 1))} ${STAGE_FLOOR.far}`),
+  ].join('');
+
+  const footX = across(x, t);
+  const footY = floorY(t);
+  const r = lerp(STAGE_MARK.near, STAGE_MARK.far, t);
+  // Headroom scales with depth like everything else, and stops short of the top
+  // edge by the mark's own radius so a mark at full height is never clipped.
+  const headroom = (footY - r - 2) * 0.9;
+  const markY = footY - lift * headroom;
+  return {
+    floor,
+    rules,
+    foot: { x: r2(footX), y: r2(footY), rx: r2(r * 1.3), ry: r2(r * 0.45) },
+    stalk: { x: r2(footX), y1: r2(footY), y2: r2(markY) },
+    mark: { x: r2(footX), y: r2(markY), r: r2(r) },
+    depth: `M${r2(across(0, t))} ${r2(footY)}L${r2(across(1, t))} ${r2(footY)}`,
+  };
 }
 
 /** A slider's place across its own range, 0..1 — or null when it has none. */

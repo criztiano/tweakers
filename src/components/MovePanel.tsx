@@ -17,12 +17,12 @@ import type { TweakTheme } from '../theme';
 import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody } from './move-slots';
+import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing } from '../angle-core';
 import { normalizeTransfer, sampleTransfer, type TransferValue } from '../transfer-core';
-import { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveTrimSpan, moveGateSpan, moveMultibandSpan, moveMultibandRole, moveChannelPosition } from '../move-visual-core';
+import { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveTrimSpan, moveGateSpan, moveVectorAxes, moveMultibandSpan, moveMultibandRole, moveChannelPosition } from '../move-visual-core';
 import {
   MOVE_TAP_SLOP,
   moveDialKey, moveRangeValue, moveFilterValue, moveXYValue, moveXYRest, moveNeedleValue,
@@ -1278,7 +1278,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // Multi-slot instruments: one face across a dial per column, each column
   // keeping its knob and drag zone. `role` names the part a dial is drawn as.
   type FaceDial = { role: string; col: number; meta: ControlMeta; position: number; track?: string };
-  type Face = { kind: 'gate' | 'multiband' | 'channel'; col: number; span: number; dials: FaceDial[]; curve?: { meta: ControlMeta; position: number }[]; icon?: string };
+  type Face = { kind: 'gate' | 'vector' | 'multiband' | 'channel'; col: number; span: number; dials: FaceDial[]; curve?: { meta: ControlMeta; position: number }[]; icon?: string; down?: boolean };
 
   // A gate's three dials side by side — threshold, look-ahead, release — draw
   // as one 3-slot control, all the page's own dials or all latched chips.
@@ -1290,6 +1290,23 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     const at = moveGateSpan(metas.map((m) => [m!, values[m!.path]]));
     if (!at) return null;
     return { kind: 'gate', col, span: 3, dials: (['threshold', 'lookahead', 'release'] as const).map((role, k) => ({ role, col: col + k, meta: metas[k]!, position: at[role] })) };
+  };
+
+  // A place's three axes side by side — x, y, z — draw as one 3-slot stage, on
+  // the gate's terms: all the page's own dials or all latched chips, so a chip
+  // latched into one column dissolves the stage into three plain dials and you
+  // always see what you borrowed.
+  const vectorAt = (col: number): Face | null => {
+    const metas = [dialAt(col), dialAt(col + 1), dialAt(col + 2)];
+    if (metas.some((m) => !m) || !visibleCols.includes(col + 1) || !visibleCols.includes(col + 2)) return null;
+    const own = metas.map((m, k) => m === page.dials[col + k]);
+    if (own.some((o) => o !== own[0])) return null;
+    const at = moveVectorAxes(metas.map((m) => [m!, values[m!.path]]));
+    if (!at) return null;
+    return {
+      kind: 'vector', col, span: 3, down: at.down,
+      dials: (['x', 'y', 'z'] as const).map((axis, k) => ({ role: `axis-${axis}`, col: col + k, meta: metas[k]!, position: at[axis] })),
+    };
   };
 
   // A multiband cleaner: its amount, its speed, then every band dial beside
@@ -1333,7 +1350,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     return { kind: 'channel', col, span: dials.length, dials };
   };
 
-  const faceAt = (col: number): Face | null => (stripMode ? null : gateAt(col) ?? multibandAt(col) ?? channelAt(col));
+  const faceAt = (col: number): Face | null => (stripMode ? null : gateAt(col) ?? vectorAt(col) ?? multibandAt(col) ?? channelAt(col));
   /** A column another face already draws across. */
   const underFace = (col: number) => {
     for (let j = col - 1; j >= 0 && j >= col - MOVE_DIALS; j--) {
@@ -2305,6 +2322,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       const visual = d.meta.moveVisual;
                       return { ...shown(d), ...(visual?.kind === 'channel' ? { icon: visual.icon, tone: visual.tone } : {}) };
                     })} />
+                  ) : face.kind === 'vector' ? (
+                    <MoveSlotVectorBody x={shown(dials[0])} y={shown(dials[1])} z={shown(dials[2])} down={face.down} />
                   ) : face.kind === 'gate' ? (
                     <MoveSlotGateBody threshold={shown(dials[0])} lookahead={shown(dials[1])} release={shown(dials[2])}>
                       <MoveGateDisplay panelId={page.panel.id} threshold={dials[0].position} />
@@ -2342,7 +2361,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                               aria-valuemax={d.meta.max ?? 1}
                               aria-valuenow={Number(values[d.meta.path])}
                               aria-valuetext={moveVisualReading(d.meta, Number(values[d.meta.path]))}
-                              aria-orientation={d.role === 'lookahead' ? 'horizontal' : 'vertical'}
+                              aria-orientation={d.role === 'lookahead' || d.role === 'axis-x' ? 'horizontal' : 'vertical'}
                               aria-disabled={off || undefined}
                               data-disabled={off || undefined}
                               onKeyDown={(k) => dialFromKeyboard(k, d.meta)}

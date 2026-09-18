@@ -207,6 +207,47 @@ describe('MovePanel semantic interactions', () => {
     expect(TweakStore.getValues(id).a).toBe(0);
   });
 
+  it('draws x, y and z side by side as one stage, each column reading its own axis of it', () => {
+    mount({
+      x: { type: 'slider', min: 0, max: 1000, default: 250, step: 1, moveVisual: { kind: 'axis', axis: 'x' } },
+      y: { type: 'slider', min: 0, max: 1000, default: 0, step: 1, moveVisual: { kind: 'axis', axis: 'y', down: true } },
+      z: { type: 'slider', min: -500, max: 500, default: 0, step: 1, moveVisual: { kind: 'axis', axis: 'z' } },
+    });
+    const face = renderer!.root.findByProps({ 'data-kind': 'vector' });
+    expect(face.props.style.gridColumn).toBe('span 3');
+    expect(renderer!.root.findAllByProps({ className: 'tweakers-move-dial' })).toHaveLength(1);
+    expect(dial('X').props['aria-orientation']).toBe('horizontal');
+    expect(dial('Z').props['aria-orientation']).toBe('vertical');
+    const stage = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 400, height: 100 }) };
+    const press = (clientX: number, clientY: number) => ({
+      clientX, clientY, pointerId: 1, shiftKey: false,
+      currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }), closest: () => ({ querySelector: () => stage }) },
+    });
+    // x reads across the stage, left to right
+    act(() => dial('X').props.onPointerDown(press(300, 50)));
+    expect(TweakStore.getValues(id).x).toBe(750);
+    act(() => dial('X').props.onPointerUp());
+    // a downward y reads top to bottom: pressing low on the stage is a large y
+    act(() => dial('Y').props.onPointerDown(press(0, 80)));
+    expect(TweakStore.getValues(id).y).toBe(800);
+    act(() => dial('Y').props.onPointerUp());
+    // z reads up the stage: the top is the far end
+    act(() => dial('Z').props.onPointerDown(press(0, 25)));
+    expect(TweakStore.getValues(id).z).toBe(250);
+    act(() => dial('Z').props.onPointerUp());
+  });
+
+  it('keeps the ordinary faces when the axes are out of order or one is missing', () => {
+    mount({
+      y: { type: 'slider', min: 0, max: 100, default: 0, step: 1, moveVisual: { kind: 'axis', axis: 'y' } },
+      x: { type: 'slider', min: 0, max: 100, default: 0, step: 1, moveVisual: { kind: 'axis', axis: 'x' } },
+      z: { type: 'slider', min: 0, max: 100, default: 0, step: 1, moveVisual: { kind: 'axis', axis: 'z' } },
+    });
+    expect(renderer!.root.findAllByProps({ 'data-kind': 'vector' })).toHaveLength(0);
+    // each axis keeps its own ordinary dial
+    expect(renderer!.root.findAllByProps({ className: 'tweakers-move-dial' })).toHaveLength(3);
+  });
+
   it('keeps the ordinary faces when the gate dials are out of order', () => {
     mount({
       look: { type: 'slider', min: 0, max: 40, default: 10, step: 1, moveVisual: { kind: 'gate', role: 'lookahead' } },

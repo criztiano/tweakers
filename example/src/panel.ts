@@ -182,7 +182,7 @@ export const CONFIG = {
 
 /**
  * The instruments the dictionary draws from several dials — a take, a gate,
- * a mixer, a cleaner — and the blend between two colours. A scrolling strip
+ * a place, a mixer, a cleaner — and the blend between two colours. A scrolling strip
  * draws every dial on its own, so these read as one only where the
  * dictionary places them together: they live on a page of their own, which
  * the instrument below does not show and the Move does not mirror.
@@ -198,6 +198,10 @@ export const INSTRUMENTS = {
   threshold: { type: 'slider', default: -10, min: -50, max: 0, step: 1, unit: ' dB', moveVisual: { kind: 'gate', role: 'threshold' } },
   lookahead: { type: 'slider', default: 12, min: 0, max: 40, step: 1, unit: ' ms', moveVisual: { kind: 'gate', role: 'lookahead' } },
   release: { type: 'slider', default: 95, min: 10, max: 180, step: 1, unit: ' ms', moveVisual: { kind: 'gate', role: 'release' } },
+  /* a place on a 1080 × 1920 canvas, with a depth either side of it */
+  placeX: { type: 'slider', default: 640, min: 0, max: 1080, step: 1, unit: ' px', moveVisual: { kind: 'axis', axis: 'x' } },
+  placeY: { type: 'slider', default: 760, min: 0, max: 1920, step: 1, unit: ' px', moveVisual: { kind: 'axis', axis: 'y', down: true } },
+  placeZ: { type: 'slider', default: 480, min: -2048, max: 2048, step: 1, bipolar: true, unit: ' px', moveVisual: { kind: 'axis', axis: 'z' } },
   /* a mixer, one channel a dial */
   restored: { type: 'slider', default: 0, min: 0, max: 100, step: 1, unit: '%', moveVisual: { kind: 'channel', icon: 'broom-sparkles' } },
   denoise: { type: 'slider', default: 21, min: 0, max: 100, step: 1, unit: '%', moveVisual: { kind: 'channel', icon: 'audio-lines-x', tone: 'orange' } },

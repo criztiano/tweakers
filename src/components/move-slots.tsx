@@ -1,7 +1,7 @@
 import type { MovePadListView } from '../move-pad-list';
 import { useEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { moveBandCuts, moveNumericDrawing, movePlaybackMode, MOVE_BAND_H, MOVE_BAND_W, type MovePlaybackMode, type MoveTone } from '../move-visual-core';
+import { moveBandCuts, moveNumericDrawing, movePlaybackMode, moveVectorStage, MOVE_BAND_H, MOVE_BAND_W, MOVE_STAGE, type MovePlaybackMode, type MoveTone } from '../move-visual-core';
 import { MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing } from './move-visuals';
 export { MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing } from './move-visuals';
 import type { ControlMeta } from '../store/TweakStore';
@@ -57,6 +57,10 @@ import { ListScreen } from './ListScreen';
  *   side as one instrument. The threshold and release stand as bars at
  *   the outer columns, the look-ahead is a short line under the middle,
  *   and the grid between the bars shows the gate live around the playhead.
+ * - `vector`  — the 3-slot place: x, y and a depth z side by side as one
+ *   stage. The mark stands on a ruled floor — across it for x, back into it
+ *   for z (and smaller for it), up off its own shadow for y — with each
+ *   axis's name under its own column.
  * - `multiband` — a multiband cleaner, one slot per dial: the amount as a
  *   bar with its icon, the speed as a graded gauge, and the band columns as
  *   one grid with the bands' curve live over what each band is doing.
@@ -105,6 +109,7 @@ export type MoveSlotKind =
   | 'offset'
   | 'trim-span'
   | 'gate'
+  | 'vector'
   | 'multiband'
   | 'channel'
   | 'playback'
@@ -648,6 +653,57 @@ export function MoveSlotGateBody({
         </span>
       </span>
       <MoveFaceName col={2} dial={release} />
+    </div>
+  );
+}
+
+/**
+ * The 3-slot place's face: an object on a stage. A ruled floor seen from the
+ * front, the mark standing on it — across the floor for x, back into it for z
+ * (and smaller the further back), up off its shadow for y. Three bounded
+ * numbers read as one position, which three bars cannot do: on bars, depth is a
+ * number to believe; here it is a distance to see.
+ *
+ * Each axis's drag reads the stage itself (`data-track`): x across it, y and z
+ * up it. Whichever axis is in the hand draws its own guide — a rail across the
+ * floor for x, the stalk for y, the depth rule under the mark for z.
+ */
+export function MoveSlotVectorBody({ x, y, z, down = false }: {
+  x: MoveFaceDial;
+  y: MoveFaceDial;
+  z: MoveFaceDial;
+  /** The host's y grows downward (canvas coordinates). */
+  down?: boolean;
+}) {
+  const stage = moveVectorStage(x.position, y.position, z.position, down);
+  const { width: w, height: h } = MOVE_STAGE;
+  // The floor and its rules stretch with the slots (their strokes do not); the
+  // mark, its shadow and its stalk are placed in percent of the stage and sized
+  // from its height, so they stay round at any width.
+  const at = (px: number, py: number) => ({ '--move-vector-x': `${(px / w) * 100}%`, '--move-vector-y': `${(py / h) * 100}%` });
+  return (
+    <div className="tweakers-move-face" style={{ '--move-face-span': 3 } as CSSProperties}>
+      <div className="tweakers-move-vector-stage" aria-hidden="true">
+        <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+          <path className="tweakers-move-vector-floor" d={stage.floor} />
+          <path className="tweakers-move-vector-rules" d={stage.rules} />
+          <path className="tweakers-move-vector-depth" data-active={z.active || undefined} d={stage.depth} />
+          <line className="tweakers-move-vector-rail" data-active={x.active || undefined}
+            x1={0} x2={w} y1={stage.foot.y} y2={stage.foot.y} />
+        </svg>
+        <i className="tweakers-move-vector-foot"
+          style={{ ...at(stage.foot.x, stage.foot.y), '--move-vector-size': `${((stage.foot.ry * 2) / h) * 100}%` } as CSSProperties} />
+        <i className="tweakers-move-vector-stalk" data-active={y.active || undefined}
+          style={{ ...at(stage.stalk.x, stage.stalk.y2), '--move-vector-size': `${((stage.stalk.y1 - stage.stalk.y2) / h) * 100}%` } as CSSProperties} />
+        <i className="tweakers-move-vector-mark" data-active={x.active || y.active || z.active || undefined}
+          style={{ ...at(stage.mark.x, stage.mark.y), '--move-vector-size': `${((stage.mark.r * 2) / h) * 100}%` } as CSSProperties} />
+        <span className="tweakers-move-vector-track" data-track="axis-x" />
+        <span className="tweakers-move-vector-track" data-track="axis-y" />
+        <span className="tweakers-move-vector-track" data-track="axis-z" />
+      </div>
+      <MoveFaceName col={0} dial={x} />
+      <MoveFaceName col={1} dial={y} />
+      <MoveFaceName col={2} dial={z} />
     </div>
   );
 }
@@ -1388,6 +1444,7 @@ export const MOVE_SLOT_LIBRARY = {
   offset: { description: 'a signed nudge — the room it can move in, a pin where it is now, a chevron for each way left', component: MoveSlotOffsetBody },
   'trim-span': { description: '2 slots: a take’s start and end on one line, a flag per edge', component: MoveSlotTrimSpanBody },
   gate: { description: '3 slots: threshold and release as bars, look-ahead as a line, the gate live on a grid between', component: MoveSlotGateBody },
+  vector: { description: '3 slots: x, y and a depth z as one stage — the mark on a ruled floor, its height a stalk from its shadow, its distance its size', component: MoveSlotVectorBody },
   channel: { description: 'a slot per channel: icon and name in its tone over a fader filled to its level', component: MoveSlotChannelBody },
   multiband: { description: 'a slot per dial: amount as a bar, speed as a gauge, the bands as a live curve on a grid', component: MoveSlotMultibandBody },
   playback: { description: 'explicit playback traversal with a named mode', component: MoveSlotEnumBody },

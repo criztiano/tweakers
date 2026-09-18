@@ -33,7 +33,7 @@ import { PANEL_ID, INSTRUMENTS_NAME, MOD_LFO, MOD_ENV, MOD_CURVE } from './panel
  * Every face, live. Each big card is the control itself — a MoveSlot on the
  * same store the instrument below reads, so dragging a card turns the
  * instrument's dial too, and the other way round. The instruments made of
- * several dials (a take, a gate, a mixer, a cleaner) and the colour blend
+ * several dials (a take, a gate, a place, a mixer, a cleaner) and the colour blend
  * live on a page of their own, which only the dictionary draws. The faces
  * that only ever appear on a modulator's page — the scope, the envelope —
  * are drawn live and open that page, where their dials turn.
@@ -188,6 +188,12 @@ export const BIG_SLOTS: Specimen[] = [
     description: MOVE_SLOT_LIBRARY.gate.description,
     note: 'The grid runs a made-up drum loop; an app attaches its own with MoveGateMeter.',
     live: { panel: INSTRUMENTS_NAME, path: ['threshold', 'lookahead', 'release'] },
+  },
+  {
+    kind: 'vector', span: 3,
+    description: MOVE_SLOT_LIBRARY.vector.description,
+    note: 'Three axis sliders side by side — x, y, z. Drag the left third across, the middle and right thirds up.',
+    live: { panel: INSTRUMENTS_NAME, path: ['placeX', 'placeY', 'placeZ'] },
   },
   {
     kind: 'channel', span: 4,
