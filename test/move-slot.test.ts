@@ -22,8 +22,8 @@ function mount(config: TweakConfig, path: string | string[], props: Record<strin
   act(() => { renderer = create(createElement(MoveSlot, { panel: 'Slots', path, ...props })); });
 }
 /** A pointer at `clientX` on a slot 120 wide at the page's origin. */
-const pointer = (clientX: number, clientY = 70) => ({
-  clientX, clientY, pointerId: 1, shiftKey: false,
+const pointer = (clientX: number, clientY = 70, shiftKey = false) => ({
+  clientX, clientY, pointerId: 1, shiftKey, button: 0,
   currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }) },
 });
 const key = (k: string) => ({ key: k, shiftKey: false, altKey: false, ctrlKey: false, metaKey: false, preventDefault: vi.fn(), stopPropagation: vi.fn() });
@@ -37,16 +37,29 @@ describe('a Move slot placed on its own', () => {
     expect(renderer!.root.findByProps({ className: 'tweakers-move-offset-pin' }).props.style.left).toBe('25%');
   });
 
-  it('turns under a drag, and the store — so the instrument too — moves with it', () => {
+  it('turns under a drag from where it is, and the store — so the instrument too — moves with it', () => {
     mount({ amount: { type: 'slider', min: 0, max: 100, default: 0, step: 1 } }, 'amount');
     act(() => root().props.onPointerDown(pointer(60)));
-    expect(TweakStore.getValues(id).amount).toBe(50);
+    expect(TweakStore.getValues(id).amount).toBe(0);           // a press alone never moves it
     act(() => root().props.onPointerMove(pointer(110)));
-    expect(TweakStore.getValues(id).amount).toBe(100);
-    act(() => root().props.onPointerUp());
+    expect(TweakStore.getValues(id).amount).toBe(50);          // half the 100px track
+    act(() => root().props.onPointerMove(pointer(110, 40)));
+    expect(TweakStore.getValues(id).amount).toBe(80);          // up raises too
+    act(() => root().props.onPointerUp(pointer(110, 40)));
     // A move with no hand on the slot does nothing.
     act(() => root().props.onPointerMove(pointer(10)));
-    expect(TweakStore.getValues(id).amount).toBe(100);
+    expect(TweakStore.getValues(id).amount).toBe(80);
+    // A still Shift+click is the knob's Shift+tap: back to the default.
+    act(() => root().props.onPointerDown(pointer(60, 70, true)));
+    act(() => root().props.onPointerUp(pointer(60, 70, true)));
+    expect(TweakStore.getValues(id).amount).toBe(0);
+  });
+
+  it('moves an option slot on with a click, as the instrument does', () => {
+    mount({ mode: { type: 'select', options: ['a', 'b', 'c'], default: 'c' } }, 'mode');
+    act(() => root().props.onPointerDown(pointer(10)));
+    act(() => root().props.onPointerUp(pointer(10)));
+    expect(TweakStore.getValues(id).mode).toBe('a');
   });
 
   it('follows the store when something else turns the control', () => {
@@ -86,9 +99,12 @@ describe('a Move slot placed on its own', () => {
     expect(root().props['data-kind']).toBe('gate');
     const zones = renderer!.root.findAllByProps({ className: 'tweakers-move-face-zone' });
     expect(zones.map((z) => z.props['data-role'])).toEqual(['threshold', 'lookahead', 'release']);
-    // The release bar, pressed at its top: all the way up.
-    const zone = { ...pointer(0, 0), currentTarget: { setPointerCapture: vi.fn(), closest: () => null, getBoundingClientRect: () => ({ left: 0, top: 0, width: 4, height: 104 }) } };
-    act(() => zones[2].props.onPointerDown(zone));
+    // The release bar turns from where it is, like any dial: up raises it.
+    const zone = (y: number) => ({ ...pointer(0, y), currentTarget: { setPointerCapture: vi.fn(), closest: () => null, getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 104 }) } });
+    act(() => zones[2].props.onPointerDown(zone(50)));
+    expect(TweakStore.getValues(id).release).toBe(95);
+    act(() => zones[2].props.onPointerMove(zone(0)));
+    act(() => zones[2].props.onPointerUp(zone(0)));
     expect(TweakStore.getValues(id).release).toBe(180);
   });
 

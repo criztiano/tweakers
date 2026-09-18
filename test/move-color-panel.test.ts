@@ -49,7 +49,7 @@ describe('Move color panel', () => {
 
   it('opens the editor with hue and lightness sliders and copiable readouts', () => {
     mount();
-    act(() => slot().props.onClick());
+    act(() => slot().props.onClick({ shiftKey: false }));
     expect(renderer!.root.findByProps({ role: 'dialog' }).props['aria-label']).toBe('Color color editor');
     act(() => renderer!.root.findByProps({ 'aria-label': 'Hue' }).props.onChange({ target: { value: '120' } }));
     expect(MoveColorStore.read(id, 'color').h).toBe(120);
@@ -106,13 +106,13 @@ describe('Move color panel', () => {
     mount();
     act(() => slot().props.onPointerDown(pointer(10)));
     act(() => slot().props.onPointerUp());
-    act(() => slot().props.onClick());
+    act(() => slot().props.onClick({ shiftKey: false }));
     expect(MoveColorStore.getView()?.path).toBe('color');
-    act(() => slot().props.onClick());
+    act(() => slot().props.onClick({ shiftKey: false }));
     act(() => slot().props.onPointerDown(pointer(10)));
     act(() => slot().props.onPointerMove(pointer(60)));
     act(() => slot().props.onPointerUp());
-    act(() => slot().props.onClick());
+    act(() => slot().props.onClick({ shiftKey: false }));
     expect(MoveColorStore.read(id, 'color').h).toBe(180);
     expect(MoveColorStore.getView()).toBeNull();
     act(() => slot().props.onKeyDown({ key: 'ArrowRight', shiftKey: true, preventDefault: vi.fn(), stopPropagation: vi.fn() }));
@@ -269,7 +269,7 @@ describe('Move gradient, balance and small colour panel', () => {
     expect(colorSlot()[0].props['data-latched']).toBe(true);
     expect(renderer!.root.findAllByProps({ 'data-kind': 'balance' })).toHaveLength(0);
     // the slot's own tap is the big colour slot's door to the editor
-    act(() => colorSlot()[0].props.onClick());
+    act(() => colorSlot()[0].props.onClick({ shiftKey: false }));
     expect(MoveColorStore.getView()?.path).toBe('colorA');
     act(() => MoveColorStore.close());
     // latching B releases A — one knob, one owner — and tapping B again lets go

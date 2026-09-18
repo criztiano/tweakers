@@ -1,6 +1,6 @@
 import type { ControlMeta } from './store/TweakStore';
 import {
-  normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial,
+  normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial,
   normalizeFilterDial, denormalizeFilterDial, dialOrigin, isEnumDial, enumIndex, enumOptionLabel,
 } from './move-layout';
 import { fineDragValue } from './shortcut-utils';
@@ -10,7 +10,6 @@ import { angleFromPointer } from './angle-core';
 import { normalizeTransfer, movePoint, nearestPoint } from './transfer-core';
 import { normalizeGradient, type GradientValue } from './gradient-core';
 import { moveKeyboardValue } from './move-visual-core';
-import { MOVE_GAUGE } from './components/move-slots';
 
 /**
  * A big slot's hand: how a pointer on a slot's face turns the value under
@@ -25,10 +24,6 @@ import { MOVE_GAUGE } from './components/move-slots';
 
 /** The slider track's inset from the dial slot's edges (Figma 802:767). */
 export const MOVE_DIAL_TRACK_INSET = 10;
-/** The trim span's line sits this much further in than a dial's track. */
-export const MOVE_TRIM_SPAN_PAD = 4;
-/** A face bar's marker height — must match .tweakers-move-face-bar-marker. */
-export const MOVE_FACE_MARKER = 4;
 /** The xy field's inset within its slot — must match .tweakers-move-xy. */
 export const MOVE_XY_INSET = { left: 8, top: 8, right: 9, bottom: 8 };
 /** Default grid when an xy control leaves `grid` on — the XYPad's 5×5. */
@@ -57,33 +52,6 @@ export function moveFineAnchor(fine: MoveGestureRef<MoveFineAnchor | null>, e: M
     fine.current = { shift: e.shiftKey, x: e.clientX, y: e.clientY, v: snapshot() };
   }
   return fine.current;
-}
-
-/** A 0..1 place read off a horizontal track, fine drag included. */
-function trackPlace(e: MoveSlotPointer, box: MoveSlotBox, inset: number, fine: MoveGestureRef<MoveFineAnchor | null>, from: () => number) {
-  const span = box.width - inset * 2;
-  const anchor = moveFineAnchor(fine, e, from);
-  return anchor
-    ? fineDragValue({ startValue: anchor.v as number, startPos: anchor.x, pos: e.clientX, extentPx: span || 1, min: 0, max: 1, factor: anchor.shift ? 0.1 : 1 })
-    : clamp01((e.clientX - box.left - inset) / (span || 1));
-}
-
-/**
- * A dial: the whole slot is the hotspot, and the pointer's place along the
- * track sets the value — the library Slider's card. `inset` is how far in
- * from the box's sides the track runs.
- */
-export function moveDialValue(
-  meta: ControlMeta, value: unknown, e: MoveSlotPointer, box: MoveSlotBox,
-  fine: MoveGestureRef<MoveFineAnchor | null>, inset = MOVE_DIAL_TRACK_INSET,
-) {
-  return denormalizeDial(meta, trackPlace(e, box, inset, fine, () => normalizeDial(meta, value)));
-}
-
-/** A stepped choice: the pointer's place picks the nearest option. */
-export function moveEnumValue(meta: ControlMeta, e: MoveSlotPointer, box: MoveSlotBox) {
-  const span = box.width - MOVE_DIAL_TRACK_INSET * 2;
-  return denormalizeEnumDial(meta, clamp01((e.clientX - box.left - MOVE_DIAL_TRACK_INSET) / (span || 1)));
 }
 
 /**
@@ -252,39 +220,74 @@ export function moveRampValue(value: unknown, e: MoveSlotPointer, box: MoveSlotB
 /** The part a dial is drawn as on a multi-slot instrument's face. */
 export type MoveFaceRole = 'threshold' | 'lookahead' | 'release' | 'amount' | 'speed' | 'band' | 'channel';
 
-/** The drawn part a face dial's drag reads — found on the face the press
- *  landed in, or the pressed element itself where the face draws none. */
-export function moveFaceBox(target: Element, role: MoveFaceRole, track?: string): MoveSlotBox {
-  const face = target.closest?.('.tweakers-move-dial');
-  const name = track ?? (role === 'band' ? 'grid' : role);
-  return (face?.querySelector(`[data-track="${name}"]`) ?? target).getBoundingClientRect();
+/* ── the turn: a slot answers the cursor as its knob answers the hand ── */
+
+/** The pointer travel that steps an option slot to its neighbour. */
+export const MOVE_OPTION_DETENT = 24;
+/** The pointer travel that walks a list one row — a row's own height. */
+export const MOVE_LIST_ROW_TRAVEL = 16;
+
+/**
+ * A press on a slot: where it went down, whether it has travelled past a
+ * tap's slip yet, and the anchor its travel is read from — the value and the
+ * pointer where it started, rebased whenever Shift goes down or up.
+ */
+export type MovePress = { path: string; x: number; y: number; moved: boolean; shift: boolean; ax: number; ay: number; v: number };
+
+export const movePressStart = (path: string, e: MoveSlotPointer, v: number): MovePress =>
+  ({ path, x: e.clientX, y: e.clientY, moved: false, shift: e.shiftKey, ax: e.clientX, ay: e.clientY, v });
+
+/** The press on `path`, once it has really travelled — null while it is still a tap. */
+export function movePressTravel(press: MoveGestureRef<MovePress | null>, path: string, e: MoveSlotPointer, snapshot: () => number) {
+  const p = press.current;
+  if (!p || p.path !== path) return null;
+  if (!p.moved && Math.hypot(e.clientX - p.x, e.clientY - p.y) < MOVE_TAP_SLOP) return null;
+  p.moved = true;
+  if (p.shift !== e.shiftKey) Object.assign(p, { shift: e.shiftKey, ax: e.clientX, ay: e.clientY, v: snapshot() });
+  return p;
+}
+
+/** Ends the press on `path`; true when it never travelled — a tap. */
+export function movePressEnd(press: MoveGestureRef<MovePress | null>, path: string) {
+  const p = press.current;
+  press.current = null;
+  return !!p && p.path === path && !p.moved;
 }
 
 /**
- * A multi-slot instrument's dial reads its own drawn part: a bar or the band
- * grid top (most) to bottom (least), the look-ahead's line left to right, the
- * speed's gauge round its dome.
+ * A one-value slot turns from where it is: right or up raises it, left or
+ * down lowers it, and `extent` px of travel is the whole range — Shift
+ * creeps at 0.1×. A press alone never moves it.
  */
-export function moveFaceValue(
-  meta: ControlMeta, value: unknown, role: MoveFaceRole, e: MoveSlotPointer, box: MoveSlotBox,
-  fine: MoveGestureRef<MoveFineAnchor | null>,
-) {
-  let v01: number;
-  if (role === 'speed') {
-    const dx = e.clientX - (box.left + box.width / 2);
-    const dy = e.clientY - (box.top + (box.height * MOVE_GAUGE.top) / MOVE_GAUGE.height);
-    const bearing = (Math.atan2(dx, -dy) * 180) / Math.PI;
-    v01 = clamp01((bearing + MOVE_GAUGE.sweep) / (MOVE_GAUGE.sweep * 2));
-  } else {
-    const vertical = role !== 'lookahead';
-    const marker = role === 'band' || role === 'channel' ? 0 : MOVE_FACE_MARKER;
-    const extent = (vertical ? box.height - marker : box.width) || 1;
-    const anchor = moveFineAnchor(fine, e, () => normalizeDial(meta, value));
-    v01 = anchor
-      ? fineDragValue({ startValue: anchor.v as number, startPos: vertical ? -anchor.y : anchor.x, pos: vertical ? -e.clientY : e.clientX, extentPx: extent, min: 0, max: 1, factor: anchor.shift ? 0.1 : 1 })
-      : clamp01(vertical ? 1 - (e.clientY - box.top - marker / 2) / extent : (e.clientX - box.left) / extent);
-  }
-  return denormalizeDial(meta, v01);
+export function moveTurnValue(meta: ControlMeta, p: MovePress, e: MoveSlotPointer, extent: number) {
+  const travel = (e.clientX - p.ax) - (e.clientY - p.ay);
+  return denormalizeDial(meta, clamp01(p.v + (travel / (extent || 1)) * (p.shift ? 0.1 : 1)));
+}
+
+/** How far a slot's travel runs for its whole range: its track's width. */
+export const moveTurnExtent = (box: MoveSlotBox) => Math.max(1, box.width - MOVE_DIAL_TRACK_INSET * 2);
+
+const optionValue = (meta: ControlMeta, i: number) => {
+  const option = (meta.options ?? [])[i];
+  return option === undefined ? undefined : typeof option === 'string' ? option : option.value;
+};
+
+/**
+ * An option slot steps with the drag — right or down is the next option, a
+ * list reading downward — one option per detent of travel. Undefined while
+ * the drag has not reached a different option.
+ */
+export function moveOptionStep(meta: ControlMeta, value: unknown, p: MovePress, e: MoveSlotPointer) {
+  const last = (meta.options ?? []).length - 1;
+  const steps = Math.trunc(((e.clientX - p.ax) + (e.clientY - p.ay)) / MOVE_OPTION_DETENT);
+  const next = Math.max(0, Math.min(last, p.v + steps));
+  return next === enumIndex(meta, value) ? undefined : optionValue(meta, next);
+}
+
+/** A click on an option slot moves it on — round to the first after the last. */
+export function moveNextOption(meta: ControlMeta, value: unknown) {
+  const count = (meta.options ?? []).length;
+  return count ? optionValue(meta, (enumIndex(meta, value) + 1) % count) : undefined;
 }
 
 /* ── what a slot reads out ─────────────────────────────────────── */

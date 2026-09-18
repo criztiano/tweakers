@@ -25,9 +25,13 @@ export function MoveColorSlot({ panelId, meta, active, open, latched = false, cl
     data-active={active || open || undefined} data-latched={latched || undefined} data-disabled={disabled || undefined}
     aria-label={`${meta.label}, hue ${Math.round(color.h)} degrees. Open color editor`}
     aria-expanded={open} aria-haspopup="dialog" disabled={disabled}
-    onClick={() => {
+    onClick={(e) => {
       if (suppressClick.current) { suppressClick.current = false; return; }
-      MoveColorStore.toggle(panelId, meta.path);
+      // Shift+click restores the colour the config declares — the
+      // hardware's Shift+tap; a plain click opens (or closes) the editor.
+      const first = TweakStore.getDefault(panelId, meta.path);
+      if (e.shiftKey && typeof first === 'string') TweakStore.updateValue(panelId, meta.path, first);
+      else MoveColorStore.toggle(panelId, meta.path);
     }}
     onKeyDown={(e) => {
       if (e.altKey || e.ctrlKey || e.metaKey || disabled) return;
@@ -49,9 +53,15 @@ export function MoveColorSlot({ panelId, meta, active, open, latched = false, cl
       if (!g || disabled) return;
       if (!g.moved && Math.hypot(e.clientX - g.x, e.clientY - g.y) < 3) return;
       g.moved = true;
+      // The two hands of the hardware at once: across is the knob's hue,
+      // up and down the volume knob's luminosity — up is lighter. A slot's
+      // width of travel is the whole wheel, or the whole light.
       const width = e.currentTarget.getBoundingClientRect().width || 1;
+      const fine = e.shiftKey ? 0.1 : 1;
+      const now = MoveColorStore.read(panelId, meta.path);
       MoveColorStore.update(panelId, meta.path, {
-        h: MoveColorStore.read(panelId, meta.path).h + (e.clientX - g.x) / width * 360 * (e.shiftKey ? 0.1 : 1),
+        h: now.h + (e.clientX - g.x) / width * 360 * fine,
+        l: now.l - (e.clientY - g.y) / width * fine,
       });
       g.x = e.clientX;
       g.y = e.clientY;

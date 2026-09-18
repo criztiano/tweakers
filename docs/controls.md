@@ -32,12 +32,45 @@ outside the instrument — a card, an inspector, a dictionary — use `MoveSlot`
 | `filter` | Cutoff and resonance with a response display | `filter`; `MoveSlotFilterBody` | 2 adjacent dials |
 | `offset` | A signed nudge away from where something already sits — a hit off its step, a clip off its bar line | A slider with `moveVisual: { kind: 'offset', origin }` — `origin` (0..1) is where it sits at no offset, and the dial's own range is the whole room, so a full turn either way carries it half the track; `MoveSlotOffsetBody` | 1 dial |
 | `trim-span` | A take's start and end — one line, a flag per edge | A slider with `moveVisual: { kind: 'trim', edge: 'start' }` in the column before one with `edge: 'end'`; `MoveSlotTrimSpanBody` | 2 adjacent dials, each knob one edge; a drag reads the whole line. Both the page's own dials, or both latched chips — one chip alone keeps its single face |
-| `gate` | A gate's threshold, look-ahead and release — the gate live around the playhead | Three sliders side by side with `moveVisual: { kind: 'gate', role }` — `threshold`, `lookahead`, `release`, in that order; `MoveSlotGateBody`. Feed the grid with `MoveGateMeter.attach(panelId, read)`: `read()` returns `{ levels, open?, ahead? }` — levels on the threshold dial's own 0..1 scale, the playhead at the middle step | 3 adjacent dials: the threshold and release bars drag top to bottom, the look-ahead line left to right. All three the page's own dials, or all three latched chips |
-| `multiband` | A multiband cleaner — its amount, speed and per-band strengths, live per band | Sliders with `moveVisual: { kind: 'multiband', role }`: an `amount` (with an optional `icon`), a `speed` beside it, then one or more `band` dials — the curve draws each band at its own value — each band naming its place from the top of the spectrum down (`band: 0` is the highest). Band chips in the band columns join the curve. `MoveSlotMultibandBody`; feed it with `MoveMultibandMeter.attach(panelId, read)`: `read()` returns `{ levels, open? }`, one entry per band in spectrum order | A dial per column: the amount's bar and the band grid drag top to bottom — the grid takes the band under the cursor, knob or pad —, the speed's gauge turns round its dome. A band chip latched into a band column takes that column's knob and name |
-| `channel` | A mixer channel's level, with the channel's icon and tone | A slider with `moveVisual: { kind: 'channel', icon?, tone? }` — `tone` a Move hue (`orange`, `yellow`, `pink`, …); channel dials side by side draw as one mixer. `MoveSlotChannelBody` | A dial per channel; its fader drags top to bottom. A chip standing in a column ends the mixer there |
-| `color` | One colour the page is about | `color` config; `MoveSlotColorBody` | 1 dial; hue on the knob, luminosity on volume, tap opens the editor |
+| `gate` | A gate's threshold, look-ahead and release — the gate live around the playhead | Three sliders side by side with `moveVisual: { kind: 'gate', role }` — `threshold`, `lookahead`, `release`, in that order; `MoveSlotGateBody`. Feed the grid with `MoveGateMeter.attach(panelId, read)`: `read()` returns `{ levels, open?, ahead? }` — levels on the threshold dial's own 0..1 scale, the playhead at the middle step | 3 adjacent dials, each turning from where it is, like any dial. All three the page's own dials, or all three latched chips |
+| `multiband` | A multiband cleaner — its amount, speed and per-band strengths, live per band | Sliders with `moveVisual: { kind: 'multiband', role }`: an `amount` (with an optional `icon`), a `speed` beside it, then one or more `band` dials — the curve draws each band at its own value — each band naming its place from the top of the spectrum down (`band: 0` is the highest). Band chips in the band columns join the curve. `MoveSlotMultibandBody`; feed it with `MoveMultibandMeter.attach(panelId, read)`: `read()` returns `{ levels, open? }`, one entry per band in spectrum order | A dial per column; each part turns from where it is, like any dial — the band grid takes the band under the cursor, knob or pad. A band chip latched into a band column takes that column's knob and name |
+| `channel` | A mixer channel's level, with the channel's icon and tone | A slider with `moveVisual: { kind: 'channel', icon?, tone? }` — `tone` a Move hue (`orange`, `yellow`, `pink`, …); channel dials side by side draw as one mixer. `MoveSlotChannelBody` | A dial per channel; its fader turns from where it is, like any dial. A chip standing in a column ends the mixer there |
+| `color` | One colour the page is about | `color` config; `MoveSlotColorBody` | 1 dial; hue on the knob, luminosity on volume, tap opens the editor. On screen: drag across for hue, up and down for luminosity |
 | `ramp` | A colour gradient of 2–4 stops, editable in place | `gradient` config; `MoveSlotRampBody` | 1 dial; tap opens the editor — the track buttons become the stops |
 | `balance` | A 0..1 mix between two sibling colour params | `balance` config (`{ type: 'balance', a, b }`); `MoveSlotRampBody` | 1 dial, a plain normalized value on the wire |
+
+### The cursor
+
+Everything the Move's hand can do, the cursor can do too. The panel owns
+these gestures; an app wires nothing.
+
+- **A value slot turns, never jumps.** A plain dial, a face's bar or gauge
+  (gate, multiband, mixer), a trim edge, an envelope stage, a balance: the
+  drag turns it from where it is — right or up raises it, left or down
+  lowers it, one slot's width of travel for the whole range. A press alone
+  changes nothing. Shift mid-drag is fine (0.1×).
+- **An option slot steps.** A click moves it on to the next option, round to
+  the first after the last; a drag steps through them, right or down being
+  the next. No part of the slot means a particular option.
+- **A list walks up and down.** The pad list's dial follows the list's own
+  axis: down is the next row.
+- **A colour takes both hands.** Across turns the hue (the knob), up and down
+  the luminosity (the volume knob) — up is lighter. A still click opens the
+  editor.
+- **Shift+click is Shift+tap.** On a dial it puts the declared default back
+  (`TweakStore.getDefault`); on a colour it restores the first colour.
+- **A cycling dial takes a click as its tap** — the curve modulator's clip
+  moves to its next shape; its point follows the cursor once it travels.
+- **Menu** sits in the window's top-right corner: a click is a press (the
+  preset navigator, or the palettes while the colour editor is up), a held
+  press the hold (exploration), Shift+click the Shift layer (save).
+- **Undo, Delete and Copy** are the computer's keys: ⌘Z / Ctrl+Z (⇧ for the
+  Shift layer), Backspace or Delete, ⌘C / Ctrl+C. A key runs only what its
+  button holds, never while a text field has the keys, and ⌘C yields to a
+  text selection.
+
+XY, range, filter, transfer, needle and ramp slots keep their picture's own
+gesture — the point, handle or stop goes where the cursor puts it.
 
 A select with `moveSpan: 2` uses the same list face and gestures across two
 adjacent columns. Both knobs select the same value; later controls and their

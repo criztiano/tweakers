@@ -1100,6 +1100,9 @@ class TweakStoreClass {
   private presetsHidden: Set<string> = new Set();
   private previewTransactions = new Map<string, { values: PresetDNA; activeId: string | null; schemas: Map<string, string> }>();
   private baseValues: Map<string, Record<string, TweakValue>> = new Map();
+  // What each control's config declares, untouched by edits, presets or
+  // persistence — the value a reset puts back.
+  private defaults: Map<string, Record<string, TweakValue>> = new Map();
   // Resolved storage target per panel (null = persistence off). Absent = not
   // yet registered.
   private presetTargets = new Map<string, PersistTarget | null>();
@@ -1135,6 +1138,7 @@ class TweakStoreClass {
 
     // Set initial transition modes based on config types
     this.initTransitionModes(config, '', values);
+    this.defaults.set(id, { ...values });
 
     // Overlay persisted values onto the config defaults — reconciled against
     // the registration, which is the source of truth: only paths the current
@@ -1171,6 +1175,7 @@ class TweakStoreClass {
     const controlsByPath = this.mapControlsByPath(controls);
     const defaultValues = this.flattenValues(config, '');
     this.initTabValue(controls, defaultValues);
+    this.defaults.set(id, { ...defaultValues });
     const nextValues: Record<string, TweakValue> = {};
 
     for (const [path, defaultValue] of Object.entries(defaultValues)) {
@@ -1236,6 +1241,7 @@ class TweakStoreClass {
     this.disabledPaths.delete(id);
     this.snapshots.delete(id);
     this.baseValues.delete(id);
+    this.defaults.delete(id);
     this.persistTargets.delete(id);
     this.presetTargets.delete(id);
     this.presetProviders.delete(id);
@@ -1404,6 +1410,11 @@ class TweakStoreClass {
   getValue(panelId: string, path: string): TweakValue | undefined {
     const panel = this.panels.get(panelId);
     return panel?.values[path];
+  }
+
+  /** The value a control's config declares — what a reset puts back. */
+  getDefault(panelId: string, path: string): TweakValue | undefined {
+    return this.defaults.get(panelId)?.[path];
   }
 
   getValues(panelId: string): Record<string, TweakValue> {
