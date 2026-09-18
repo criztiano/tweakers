@@ -162,6 +162,12 @@ export const CONFIG = {
     type: 'slider', default: 0, min: -24, max: 24, step: 1, bipolar: true, unit: ' st',
     moveVisual: { kind: 'pitch' },
   },
+  /* A hit pushed off its step: it sits three quarters through the bar, and
+     a full turn either way carries it half the bar. */
+  offset: {
+    type: 'slider', default: -25, min: -25, max: 25, step: 1, bipolar: true,
+    moveVisual: { kind: 'offset', origin: 0.75 },
+  },
   playback: {
     type: 'select', default: 'forward',
     options: [
