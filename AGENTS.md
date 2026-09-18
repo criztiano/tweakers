@@ -21,8 +21,9 @@ can find.
   you write a line of UI.
 - **A new face goes in the shared slot library, never inline in `MovePanel`.**
   Extend `MoveSlotKind` and `MOVE_SLOT_LIBRARY` together. Drawing belongs in
-  the library; gestures stay in the panel. Nothing gets a bespoke body defined
-  next to the panel that renders it.
+  the library; the drag rules belong in `move-slot-core`, which `MovePanel`
+  and `MoveSlot` both call — never in a body, never copied. Nothing gets a
+  bespoke body defined next to the panel that renders it.
 - **Never move a part from its canonical position, and never resize one, unless
   Cri asks for it in that request.** The header, its page tabs, the volume
   pill, the track row, the pad rows and the preset toolbar each have one place.

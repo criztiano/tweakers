@@ -14,23 +14,27 @@ import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from '../theme';
-import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
+import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotMultibandBody, MoveSlotChannelBody, MOVE_GAUGE, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody } from './move-slots';
+import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
-import { valueToBearing, angleFromPointer } from '../angle-core';
-import { normalizeTransfer, movePoint, nearestPoint, sampleTransfer, type TransferValue } from '../transfer-core';
-import { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveKeyboardValue, moveTrimSpan, moveGateSpan, moveMultibandSpan, moveMultibandRole, moveChannelPosition } from '../move-visual-core';
+import { valueToBearing } from '../angle-core';
+import { normalizeTransfer, sampleTransfer, type TransferValue } from '../transfer-core';
+import { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveTrimSpan, moveGateSpan, moveMultibandSpan, moveMultibandRole, moveChannelPosition } from '../move-visual-core';
+import {
+  MOVE_DIAL_TRACK_INSET as DIAL_TRACK_INSET, MOVE_TRIM_SPAN_PAD as TRIM_SPAN_PAD, MOVE_TAP_SLOP,
+  moveDialValue, moveDialKey, moveEnumValue, moveRangeValue, moveFilterValue, moveXYValue, moveXYRest, moveNeedleValue,
+  moveTransferValue, moveRampStop, moveRampValue, moveFaceBox, moveFaceValue, moveDialPercent, moveDialReading,
+  moveRangeReading, moveChipValue, moveXYGrid, moveShapePath, type MoveFaceRole,
+} from '../move-slot-core';
 import { MoveGateDisplay } from './MoveGateDisplay';
 import { MoveMultibandDisplay } from './MoveMultibandDisplay';
-import { ModRing } from './ModRing';
+import { MoveModRing } from './ModRing';
 import { MOVE_TRACK_COLORS } from '../move-palette';
 import { MoveSurfaceStore, moveScreenRowLabel, type MovePadCell, type MoveStepCell } from '../move-surface-store';
-import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValue, applyDetentAxis, type XYValue } from '../xy-pad-core';
-import { nearestHandle, type RangeValue } from '../range-slider-core';
-import { fineDragValue } from '../shortcut-utils';
+import { resolveAxis, pointFromValue, normalizeValue, type XYValue } from '../xy-pad-core';
 import { MoveVolumeDisplay, type MoveVolumeDisplayState } from '../move-volume';
 import { MoveColorStore, MOVE_COLOR_PALETTES, MOVE_GRADIENT_STOPS } from '../move-color';
 import { MoveSearchStore, moveSearchFilter, type MoveSearchTarget, type MoveSearchView } from '../move-search';
@@ -110,20 +114,9 @@ const PAD_ROWS = 4;
  * rather than turning two occupied columns into a tall button list. */
 const MIN_PAD_COLUMNS = 4;
 
-/** The slider track's inset from the dial slot's edges (Figma 802:767). */
-const DIAL_TRACK_INSET = 10;
-/** The trim span's line sits this much further in than a dial's track. */
-const TRIM_SPAN_PAD = 4;
-/** A face bar's marker height — must match .tweakers-move-face-bar-marker. */
-const FACE_MARKER = 4;
 /** A fade or loop line's inset from its pill's sides — must match
  *  .tweakers-move-edges-track. */
 const EDGES_TRACK_INSET = 12;
-/** The xy field's inset within its slot — must match .tweakers-move-xy. */
-const XY_INSET = { left: 8, top: 8, right: 9, bottom: 8 };
-
-/** Default grid when an xy control leaves `grid` on — the XYPad's 5×5. */
-const XY_GRID_DEFAULT = 5;
 
 /** Press shorter than this is a tap (latch); longer is a hold (peek). */
 const TAP_MS = 300;
@@ -248,26 +241,6 @@ function boldColons(text: string) {
   if (!text.includes(':')) return text;
   return text.split(':').flatMap((part, i) =>
     i === 0 ? [part] : [<span key={`sep-${i}`} className="tweakers-move-volume-sep">:</span>, part]
-  );
-}
-
-/**
- * A wired control's ring, on this surface: the dock panel's own ring — slot
- * colour, live arc — placed in a dial slot's corner, or inline on a pad chip.
- * Module scope, not a closure inside the panel: the arc subscribes per frame,
- * and a component re-declared on every render would tear that down and build
- * it again on every value the panel draws.
- */
-function MoveModRing({ panelId, path, pad }: { panelId: string; path: string; pad?: boolean }) {
-  const assignment = ModulationStore.getAssignment(panelId, path);
-  if (!assignment || !ModulationStore.getSlot(assignment.slot)) return null;
-  return (
-    <ModRing
-      panelId={panelId}
-      path={path}
-      assignment={assignment}
-      className={pad ? 'tweakers-move-pad-mod' : 'tweakers-move-dial-mod'}
-    />
   );
 }
 
@@ -1104,122 +1077,43 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 
   if (!mounted || typeof window === 'undefined' || pages.length === 0 || !page || !values) return null;
 
-  // The readout is the dial's position, 0–100 — the same normalized number
-  // the Move itself works in.
-  const dialPercent = (meta: ControlMeta) =>
-    Math.round(normalizeDial(meta, values[meta.path]) * 100);
-
-  // The value chip shows the real value: number in bold, unit trailing —
-  // or, for a chip that picks between options, the option it is on.
-  const chipValue = (meta: ControlMeta): { num: string; unit?: string } => {
-    if (isEnumDial(meta)) {
-      const options = meta.options ?? [];
-      return { num: String(enumOptionLabel(options[enumIndex(meta, values[meta.path])] as never)) };
-    }
-    const n = Number(values[meta.path]);
-    if (!Number.isFinite(n)) return { num: '' };
-    if (meta.formatValue) return { num: meta.formatValue(n) };
-    const num = Math.abs(n) >= 100 ? Math.round(n).toString() : Number(n.toFixed(2)).toString();
-    return { num, unit: meta.unit };
-  };
-
-  // Rebase the fine anchor on every shift transition: press mid-drag snapshots
-  // the value and pointer there; release snapshots again so tracking continues
-  // at 1× from the release point instead of jumping to the cursor.
-  const fineAnchor = (e: React.PointerEvent, snapshot: () => unknown) => {
-    if (e.shiftKey ? !fineRef.current?.shift : fineRef.current?.shift) {
-      fineRef.current = { shift: e.shiftKey, x: e.clientX, y: e.clientY, v: snapshot() };
-    }
-    return fineRef.current;
-  };
+  // What a slot reads out, and how a pointer turns it, live in
+  // move-slot-core — shared with a MoveSlot placed on its own, so a face
+  // drags the same wherever it is drawn. These bind them to this page.
+  const dialPercent = (meta: ControlMeta) => moveDialPercent(meta, values[meta.path]);
+  const chipValue = (meta: ControlMeta) => moveChipValue(meta, values[meta.path]);
+  const dialReading = (meta: ControlMeta) => moveDialReading(meta, values[meta.path]);
+  const rangeReading = (meta: ControlMeta) => moveRangeReading(meta, values[meta.path]);
+  const write = (meta: ControlMeta, next: unknown) => TweakStore.updateValue(page.panel.id, meta.path, next as never);
 
   const dialFromKeyboard = (e: React.KeyboardEvent<HTMLElement>, meta: ControlMeta) => {
-    if (e.altKey || e.ctrlKey || e.metaKey || TweakStore.isDisabled(page.panel.id, meta.path)) return;
-    const next = moveKeyboardValue(meta, values[meta.path], e.key, e.shiftKey);
+    if (TweakStore.isDisabled(page.panel.id, meta.path)) return;
+    const next = moveDialKey(meta, values[meta.path], e);
     if (next === null) return;
     e.preventDefault();
     e.stopPropagation();
     armMod(meta.path);
-    TweakStore.updateValue(page.panel.id, meta.path, next);
+    write(meta, next);
   };
 
-  // Whole-slot hotspot, position-on-the-track sets the value — the same feel
-  // as the library Slider's card.
   // `box` is the track being read, when it is wider than the touched element,
   // and `inset` how far in from its sides the line runs.
-  const dialFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, box: Element = e.currentTarget, inset = DIAL_TRACK_INSET) => {
-    const rect = box.getBoundingClientRect();
-    const span = rect.width - inset * 2;
-    const fine = fineAnchor(e, () => normalizeDial(meta, values[meta.path]));
-    const v01 = fine
-      ? fineDragValue({ startValue: fine.v as number, startPos: fine.x, pos: e.clientX, extentPx: span || 1, min: 0, max: 1, factor: fine.shift ? 0.1 : 1 })
-      : Math.min(1, Math.max(0, (e.clientX - rect.left - inset) / (span || 1)));
-    TweakStore.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
-  };
+  const dialFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, box: Element = e.currentTarget, inset = DIAL_TRACK_INSET) =>
+    write(meta, moveDialValue(meta, values[meta.path], e, box.getBoundingClientRect(), fineRef, inset));
 
-  // An xy slot maps the pointer through the same core as the library XYPad:
-  // value mapping, snap-to-grid, and the escapable centre detent all included.
-  // Fine mode only changes how the point is read off the pointer — the core
-  // still maps it — so shift creeps at 0.1× on both axes.
-  const xyFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const w = rect.width - XY_INSET.left - XY_INSET.right;
-    const h = rect.height - XY_INSET.top - XY_INSET.bottom;
-    const xa = resolveAxis(meta.xAxis);
-    const ya = resolveAxis(meta.yAxis);
-    const fine = fineAnchor(e, () =>
-      pointFromValue(normalizeValue(values[meta.path] as Partial<XYValue>, xa, ya), xa, ya)
-    );
-    let px: number, py: number;
-    if (fine) {
-      const a = fine.v as { x: number; y: number };
-      const factor = fine.shift ? 0.1 : 1;
-      px = fineDragValue({ startValue: a.x, startPos: fine.x, pos: e.clientX, extentPx: w || 1, min: 0, max: 1, factor });
-      py = fineDragValue({ startValue: a.y, startPos: fine.y, pos: e.clientY, extentPx: h || 1, min: 0, max: 1, factor });
-    } else {
-      px = Math.min(1, Math.max(0, (e.clientX - rect.left - XY_INSET.left) / (w || 1)));
-      py = Math.min(1, Math.max(0, (e.clientY - rect.top - XY_INSET.top) / (h || 1)));
-    }
-    const raw = valueFromPoint({ x: px, y: py }, xa, ya, !!meta.snap);
-    const origin = pointFromValue(centerValue(xa, ya), xa, ya);
-    TweakStore.updateValue(page.panel.id, meta.path, {
-      x: applyDetentAxis(raw.x, xa, Math.abs(px - origin.x) * (w || 1)),
-      y: applyDetentAxis(raw.y, ya, Math.abs(py - origin.y) * (h || 1)),
-    });
-  };
+  const xyFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) =>
+    write(meta, moveXYValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), fineRef));
 
-  // A transfer slot's pointer picks the nearest point on press and drags it
-  // after — the same gesture as the panel's own curve editor, in a slot.
+  // The point a transfer slot holds is the page's, so the knob holds it too.
   const transferFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, down: boolean) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const w = rect.width - XY_INSET.left - XY_INSET.right;
-    const h = rect.height - XY_INSET.top - XY_INSET.bottom;
-    const x = Math.min(1, Math.max(0, (e.clientX - rect.left - XY_INSET.left) / (w || 1)));
-    const y = 1 - Math.min(1, Math.max(0, (e.clientY - rect.top - XY_INSET.top) / (h || 1)));
-    const points = normalizeTransfer(values[meta.path]).points;
-    let index = curvePoint[meta.path] ?? 0;
-    if (down) {
-      const hit = nearestPoint(points, x, y, 0.18);
-      index = hit >= 0 ? hit : index;
-      setCurvePoint((prev) => ({ ...prev, [meta.path]: Math.min(index, points.length - 1) }));
-    }
-    index = Math.min(index, points.length - 1);
-    TweakStore.updateValue(page.panel.id, meta.path, { points: movePoint(points, index, x, y) });
+    const next = moveTransferValue(values[meta.path], e, e.currentTarget.getBoundingClientRect(), curvePoint[meta.path] ?? 0, down);
+    if (down) setCurvePoint((prev) => ({ ...prev, [meta.path]: next.held }));
+    write(meta, next.value);
   };
 
-  // A needle follows the pointer round, the way the panel's own dial does —
-  // dragging a bearing sideways along a track is the gesture a needle exists
-  // to replace.
   const needleFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const min = meta.min ?? 0, max = meta.max ?? 1;
-    const wraps = meta.wrap ?? Math.abs(max - min) >= 360;
-    const next = angleFromPointer(
-      e.clientX - (rect.left + rect.width / 2),
-      e.clientY - (rect.top + rect.height / 2),
-      Number(values[meta.path] ?? min), min, max, meta.step ?? 1, wraps,
-    );
-    if (next !== null) TweakStore.updateValue(page.panel.id, meta.path, next);
+    const next = moveNeedleValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect());
+    if (next !== null) write(meta, next);
   };
 
   // A ramp slot's pointer picks the nearest stop on press and slides it once
@@ -1229,141 +1123,36 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // buttons all hold the same stop.
   const rampFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, down: boolean) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    const w = rect.width - XY_INSET.left - XY_INSET.right;
-    const x = Math.min(1, Math.max(0, (e.clientX - rect.left - XY_INSET.left) / (w || 1)));
-    const g = normalizeGradient(values[meta.path] as never);
     const open = colorMeta?.path === meta.path;
-    let index = open
-      ? Math.min(MoveColorStore.getStop(), g.stops.length - 1)
-      : Math.min(rampStop[meta.path] ?? 0, g.stops.length - 1);
     if (down) {
-      let best = 0;
-      g.stops.forEach((st, i) => {
-        if (Math.abs(st.position - x) < Math.abs(g.stops[best]!.position - x)) best = i;
-      });
-      index = best;
+      const index = moveRampStop(values[meta.path], e, rect);
       setRampStop((prev) => ({ ...prev, [meta.path]: index }));
       if (open) MoveColorStore.selectStop(index);
       return;                            /* the press only picks — moving writes */
     }
-    // Stops stay in order: dragging one past its neighbour would reorder the
-    // ramp under the knob that is holding it.
-    const lo = index > 0 ? g.stops[index - 1]!.position : 0;
-    const hi = index < g.stops.length - 1 ? g.stops[index + 1]!.position : 1;
-    const stops = g.stops.map((st, i) =>
-      i === index ? { ...st, position: Math.min(hi, Math.max(lo, x)) } : st);
-    TweakStore.updateValue(page.panel.id, meta.path, { ...g, stops });
+    const stops = normalizeGradient(values[meta.path] as never).stops.length;
+    const index = Math.min(open ? MoveColorStore.getStop() : rampStop[meta.path] ?? 0, stops - 1);
+    write(meta, moveRampValue(values[meta.path], e, rect, index));
   };
 
   // Joystick-style pads rest at their centre when the pointer lets go.
   const xyRelease = (meta: ControlMeta) => {
     setDragPath(null);
     fineRef.current = null;
-    if (!meta.returnToCenter) return;
-    const xa = resolveAxis(meta.xAxis);
-    const ya = resolveAxis(meta.yAxis);
-    TweakStore.updateValue(page.panel.id, meta.path, normalizeValue(centerValue(xa, ya), xa, ya, !!meta.snap));
+    const rest = moveXYRest(meta);
+    if (rest) write(meta, rest);
   };
 
-  // A range slot grabs the nearest handle at pointer-down (locked for the
-  // gesture) and drags it; the untouched handle pins the other bound so the
-  // pair stays ordered, exactly like the RangeSlider's setLow/setHigh.
-  const rangeFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, down: boolean) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const span = rect.width - DIAL_TRACK_INSET * 2;
-    const cur = normalizeRangeDial(meta, values[meta.path]);
-    let p01 = Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
-    if (down) rangeHandleRef.current = nearestHandle(p01, { min: cur.lo, max: cur.hi });
-    const fine = fineAnchor(e, () => cur);
-    if (fine) {
-      const a = fine.v as { lo: number; hi: number };
-      p01 = fineDragValue({
-        startValue: rangeHandleRef.current === 'min' ? a.lo : a.hi,
-        startPos: fine.x,
-        pos: e.clientX,
-        extentPx: span || 1,
-        min: 0,
-        max: 1,
-        factor: fine.shift ? 0.1 : 1,
-      });
-    }
-    const next = rangeHandleRef.current === 'min'
-      ? { lo: Math.min(p01, cur.hi), hi: cur.hi }
-      : { lo: cur.lo, hi: Math.max(p01, cur.lo) };
-    TweakStore.updateValue(page.panel.id, meta.path, denormalizeRangeDial(meta, next.lo, next.hi));
-  };
+  const rangeFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, down: boolean) =>
+    write(meta, moveRangeValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), rangeHandleRef, fineRef, down));
 
-  // A filter slot is two dials wearing one picture: the half the gesture
-  // starts in picks the hand (left = cutoff, right = resonance, locked for
-  // the drag), and the pointer's travel across that half turns it. On the
-  // hardware the left column's knob is cutoff and the right column's is
-  // resonance — two ordinary one-column dials to the bridge.
-  const filterFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, down: boolean) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const half = rect.width / 2;
-    if (down) filterHandRef.current = e.clientX - rect.left < half ? 'cutoff' : 'resonance';
-    const hand = filterHandRef.current;
-    const left = hand === 'cutoff' ? rect.left + DIAL_TRACK_INSET : rect.left + half;
-    const span = half - DIAL_TRACK_INSET;
-    const cur = normalizeFilterDial(meta, values[meta.path]);
-    const fine = fineAnchor(e, () => cur);
-    let v01: number;
-    if (fine) {
-      const a = fine.v as { cutoff: number; resonance: number };
-      v01 = fineDragValue({
-        startValue: hand === 'cutoff' ? a.cutoff : a.resonance,
-        startPos: fine.x,
-        pos: e.clientX,
-        extentPx: span || 1,
-        min: 0,
-        max: 1,
-        factor: fine.shift ? 0.1 : 1,
-      });
-    } else {
-      v01 = Math.min(1, Math.max(0, (e.clientX - left) / (span || 1)));
-    }
-    const next = hand === 'cutoff'
-      ? denormalizeFilterDial(meta, v01, cur.resonance)
-      : denormalizeFilterDial(meta, cur.cutoff, v01);
-    TweakStore.updateValue(page.panel.id, meta.path, next);
-  };
+  // On the hardware the filter's left column's knob is cutoff and the right
+  // column's is resonance — two ordinary one-column dials to the bridge.
+  const filterFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, down: boolean) =>
+    write(meta, moveFilterValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), filterHandRef, fineRef, down));
 
-  // An enum slot steps between the options: the pointer's position on the
-  // track maps to 0..1, and denormalizeEnumDial snaps it to the nearest option.
-  const enumFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const span = rect.width - DIAL_TRACK_INSET * 2;
-    const v01 = Math.min(1, Math.max(0, (e.clientX - rect.left - DIAL_TRACK_INSET) / (span || 1)));
-    TweakStore.updateValue(page.panel.id, meta.path, denormalizeEnumDial(meta, v01));
-  };
-
-
-  // A bipolar (origin-anchored) dial reads out its real signed value; plain
-  // dials keep the 0–100 position the Move itself works in.
-  // A dial reads out in its own domain when it has one — a formatter or a
-  // unit ("2.84 s", "48 px") — and as the Move's 0–100 position otherwise.
-  // A bipolar dial keeps its signed number either way.
-  const dialReading = (meta: ControlMeta): string => {
-    const n = Number(values[meta.path]);
-    const bipolar = dialOrigin(meta) > 0;
-    if (!bipolar && !meta.formatValue && !meta.unit) return `${dialPercent(meta)}%`;
-    if (!Number.isFinite(n)) return '';
-    if (meta.formatValue) return meta.formatValue(n);
-    const num = Math.abs(n) >= 100 ? Math.round(n).toString() : Number(n.toFixed(2)).toString();
-    if (!bipolar) return `${num}${meta.unit ?? ''}`;
-    return n > 0 ? `+${num}` : num;
-  };
-
-  // A range slot reads out `lo–hi`, each bound formatted like a value chip.
-  const rangeReading = (meta: ControlMeta): string => {
-    const v = (values[meta.path] ?? {}) as Partial<RangeValue>;
-    const fmt = (n: number | undefined): string => {
-      if (n == null || !Number.isFinite(n)) return '';
-      if (meta.formatValue) return meta.formatValue(n);
-      return Math.abs(n) >= 100 ? Math.round(n).toString() : Number(n.toFixed(2)).toString();
-    };
-    return `${fmt(v.min)}–${fmt(v.max)}`;
-  };
+  const enumFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) =>
+    write(meta, moveEnumValue(meta, e, e.currentTarget.getBoundingClientRect()));
 
   const chipLatched = (col: number, meta: ControlMeta) =>
     latched[col]?.path === meta.path || !!hwLatched[meta.path];
@@ -1485,31 +1274,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     return false;
   };
 
-  // A face dial's drag reads its own drawn part: a bar or the band grid top
-  // (most) to bottom (least), the look-ahead's line left to right, the
-  // speed's gauge round its dome.
-  const faceFromPointer = (e: React.PointerEvent<HTMLElement>, d: FaceDial) => {
-    const { meta, role } = d;
-    const face = e.currentTarget.closest?.('.tweakers-move-dial');
-    const track = d.track ?? (role === 'band' ? 'grid' : role);
-    const rect = (face?.querySelector(`[data-track="${track}"]`) ?? e.currentTarget).getBoundingClientRect();
-    let v01: number;
-    if (role === 'speed') {
-      const dx = e.clientX - (rect.left + rect.width / 2);
-      const dy = e.clientY - (rect.top + (rect.height * MOVE_GAUGE.top) / MOVE_GAUGE.height);
-      const bearing = (Math.atan2(dx, -dy) * 180) / Math.PI;
-      v01 = Math.min(1, Math.max(0, (bearing + MOVE_GAUGE.sweep) / (MOVE_GAUGE.sweep * 2)));
-    } else {
-      const vertical = role !== 'lookahead';
-      const marker = role === 'band' || role === 'channel' ? 0 : FACE_MARKER;
-      const extent = (vertical ? rect.height - marker : rect.width) || 1;
-      const fine = fineAnchor(e, () => normalizeDial(meta, values[meta.path]));
-      v01 = fine
-        ? fineDragValue({ startValue: fine.v as number, startPos: vertical ? -fine.y : fine.x, pos: vertical ? -e.clientY : e.clientX, extentPx: extent, min: 0, max: 1, factor: fine.shift ? 0.1 : 1 })
-        : Math.min(1, Math.max(0, vertical ? 1 - (e.clientY - rect.top - marker / 2) / extent : (e.clientX - rect.left) / extent));
-    }
-    TweakStore.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
-  };
+  // A face dial's drag reads its own drawn part (see moveFaceValue).
+  const faceFromPointer = (e: React.PointerEvent<HTMLElement>, d: FaceDial) =>
+    write(d.meta, moveFaceValue(d.meta, values[d.meta.path], d.role as MoveFaceRole, e, moveFaceBox(e.currentTarget, d.role as MoveFaceRole, d.track), fineRef));
 
   const pressChip = (e: React.PointerEvent<HTMLElement>, col: number, meta: ControlMeta) => {
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
@@ -2013,7 +1780,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                         if (dragPath !== meta.path || gesture?.path !== meta.path) return;
                         // A finger never holds perfectly still: a few pixels
                         // of slip stays a tap.
-                        if (!gesture.moved && Math.hypot(e.clientX - gesture.x, e.clientY - gesture.y) < 3) return;
+                        if (!gesture.moved && Math.hypot(e.clientX - gesture.x, e.clientY - gesture.y) < MOVE_TAP_SLOP) return;
                         gesture.moved = true;
                         rampFromPointer(e, meta, false);
                       }}
@@ -2142,7 +1909,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       <MoveSlotTransferBody
                         label={meta.label}
                         value={`${index + 1}/${points.length}`}
-                        shape={previewPathData(samples)}
+                        shape={moveShapePath(samples)}
                         point={{ x: held.x, y: 1 - held.y }}
                       />
                     </div>
@@ -2163,8 +1930,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   const preview = meta.path === previewPath ? ModulationStore.getSettingsPreview() : null;
                   // Grid semantics match the XYPad: on by default (5×5), a
                   // number for N×N, density multiplies, false hides.
-                  const gridBase = meta.grid === false ? 0 : typeof meta.grid === 'number' ? meta.grid : XY_GRID_DEFAULT;
-                  const gridN = gridBase > 0 ? Math.round(gridBase * Math.max(0, meta.density ?? 1)) : 0;
+                  const gridN = moveXYGrid(meta);
                   return (
                     <div
                       key={meta.path}
@@ -2193,7 +1959,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                         value={preview ? preview.label : `${Math.round(pos.x * 100)}·${Math.round((1 - pos.y) * 100)}`}
                         position={pos}
                         gridN={gridN}
-                        shape={preview ? previewPathData(preview.points) : null}
+                        shape={preview ? moveShapePath(preview.points) : null}
                       />
                     </div>
                   );
@@ -3197,15 +2963,6 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   return dock === 'flow' ? moving : createPortal(moving, document.body);
 }
 
-/** A preview's samples as an SVG path across a 100×100 box, y pointing up. */
-function previewPathData(points: number[]): string {
-  if (points.length < 2) return '';
-  return points
-    .map((v, i) =>
-      `${i ? 'L' : 'M'} ${((i / (points.length - 1)) * 100).toFixed(2)} ${((1 - v) * 100).toFixed(2)}`)
-    .join(' ');
-}
-
 /** The floating composer's size — a Move-sized read of the whole pass. */
 const MOVE_CURVE_WIDTH = 320;
 const MOVE_CURVE_HEIGHT = 84;
@@ -3794,7 +3551,7 @@ function MoveScope({ index }: { index: number }) {
     let raf = requestAnimationFrame(function tick() {
       pts.push((ModulationStore.getSignal(index) + 1) / 2);
       pts.shift();
-      ref.current?.setAttribute('d', previewPathData(pts));
+      ref.current?.setAttribute('d', moveShapePath(pts));
       raf = requestAnimationFrame(tick);
     });
     return () => cancelAnimationFrame(raf);
@@ -3832,7 +3589,7 @@ function MoveWavePreview({ index }: { index: number }) {
       if (key !== shown) {
         shown = key;
         const p = ModulationStore.getSettingsPreview(64);
-        if (p) path.current?.setAttribute('d', previewPathData(p.points));
+        if (p) path.current?.setAttribute('d', moveShapePath(p.points));
       }
       const at = (ModulationStore.getSlotPhase(index) - start) / span;
       const x = (Math.min(1, Math.max(0, at)) * 100).toFixed(2);
@@ -3851,7 +3608,7 @@ function MoveWavePreview({ index }: { index: number }) {
       preserveAspectRatio="none"
       aria-hidden="true"
     >
-      <path ref={path} d={previewPathData(preview.points)} />
+      <path ref={path} d={moveShapePath(preview.points)} />
       <line ref={line} x1="0" y1="0" x2="0" y2="100" />
     </svg>
   );

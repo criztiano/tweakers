@@ -71,6 +71,32 @@ describe('MovePanel semantic interactions', () => {
     expect(triangle().props['data-offset']).toBe(true);
   });
 
+  it('draws an offset as the room it can move in, the knob carrying the pin across it', () => {
+    mount({
+      offset: {
+        type: 'slider', min: -25, max: 25, default: -25, step: 1,
+        moveVisual: { kind: 'offset', origin: 0.75 },
+      },
+    });
+    const face = () => dial('Offset').findByProps({ className: 'tweakers-move-offset' });
+    const pin = () => dial('Offset').findByProps({ className: 'tweakers-move-offset-pin' });
+    const way = () => dial('Offset').findAllByProps({ className: 'tweakers-move-offset-way' });
+    expect(dial('Offset').props['data-visual']).toBe('offset');
+    // A full turn back from three quarters along carries the pin half the room.
+    expect(pin().props.style.left).toBe('25%');
+    expect(face().props['data-moved']).toBe(true);
+    expect(way()).toHaveLength(1);
+    expect(way()[0].props['data-way']).toBe('back');
+    // Parked, it fills nothing and offers both ways out.
+    act(() => dial('Offset').props.onKeyDown(keyEvent('End')));
+    act(() => dial('Offset').props.onKeyDown(keyEvent('Home')));
+    expect(TweakStore.getValues(id).offset).toBe(-25);
+    act(() => { TweakStore.updateValue(id, 'offset', 0); });
+    expect(pin().props.style.left).toBe('75%');
+    expect(face().props['data-moved']).toBeUndefined();
+    expect(way().map((w) => w.props['data-way'])).toEqual(['back', 'forward']);
+  });
+
   it('draws a trim start beside a trim end as one line, each column editing its own edge', () => {
     mount({
       start: { type: 'slider', min: 0, max: 10, default: 2, step: 0.01, moveVisual: { kind: 'trim', edge: 'start' } },

@@ -12,7 +12,9 @@ still), and the settings room or a modulator's page moves the whole inside the
 same way, the ground easing to the room's palette. The panel's height eases from
 the old page's to the new one's on the same curve, the page around it moving
 along, never jumping when the change commits. The live controls answer the
-pointer and the knobs throughout; nothing to wire.
+pointer and the knobs throughout; nothing to wire. To place one live slot
+outside the instrument — a card, an inspector, a dictionary — use `MoveSlot`
+(below).
 
 | Kind | Choose for | Configuration / body | Hardware space |
 | --- | --- | --- | --- |
@@ -28,6 +30,7 @@ pointer and the knobs throughout; nothing to wire.
 | `xy` | Two axes that form one gesture | `xy`; `MoveSlotXYBody` | Column knob X, touched + volume Y |
 | `range` | Low/high bounds of one interval | `range`; `MoveSlotRangeBody` | Column knob low, touched + volume high |
 | `filter` | Cutoff and resonance with a response display | `filter`; `MoveSlotFilterBody` | 2 adjacent dials |
+| `offset` | A signed nudge away from where something already sits — a hit off its step, a clip off its bar line | A slider with `moveVisual: { kind: 'offset', origin }` — `origin` (0..1) is where it sits at no offset, and the dial's own range is the whole room, so a full turn either way carries it half the track; `MoveSlotOffsetBody` | 1 dial |
 | `trim-span` | A take's start and end — one line, a flag per edge | A slider with `moveVisual: { kind: 'trim', edge: 'start' }` in the column before one with `edge: 'end'`; `MoveSlotTrimSpanBody` | 2 adjacent dials, each knob one edge; a drag reads the whole line. Both the page's own dials, or both latched chips — one chip alone keeps its single face |
 | `gate` | A gate's threshold, look-ahead and release — the gate live around the playhead | Three sliders side by side with `moveVisual: { kind: 'gate', role }` — `threshold`, `lookahead`, `release`, in that order; `MoveSlotGateBody`. Feed the grid with `MoveGateMeter.attach(panelId, read)`: `read()` returns `{ levels, open?, ahead? }` — levels on the threshold dial's own 0..1 scale, the playhead at the middle step | 3 adjacent dials: the threshold and release bars drag top to bottom, the look-ahead line left to right. All three the page's own dials, or all three latched chips |
 | `multiband` | A multiband cleaner — its amount, speed and per-band strengths, live per band | Sliders with `moveVisual: { kind: 'multiband', role }`: an `amount` (with an optional `icon`), a `speed` beside it, then one or more `band` dials — the curve draws each band at its own value — each band naming its place from the top of the spectrum down (`band: 0` is the highest). Band chips in the band columns join the curve. `MoveSlotMultibandBody`; feed it with `MoveMultibandMeter.attach(panelId, read)`: `read()` returns `{ levels, open? }`, one entry per band in spectrum order | A dial per column: the amount's bar and the band grid drag top to bottom — the grid takes the band under the cursor, knob or pad —, the speed's gauge turns round its dome. A band chip latched into a band column takes that column's knob and name |
@@ -51,6 +54,38 @@ default in an integration; it is used only on Cri's direct request for that app.
 parts. The XY face also accepts a shape path for the modulation curve preview.
 The parent supplies normalized screen coordinates (Y down), grid division count,
 and the formatted readout. It retains every gesture and store subscription.
+
+### A slot on its own: `MoveSlot`
+
+`MoveSlot` is one big slot, live, anywhere on the page: the face a control
+wears in the instrument, answering the pointer and the keyboard the way it
+does there. The drag rules are the instrument's own — `MovePanel` and
+`MoveSlot` both call `move-slot-core` — so a face feels the same wherever it
+is placed.
+
+```tsx
+<MoveSlot panel="Move kit" path="offset" />
+<MoveSlot panel="Move kit" path="glide" valueFirst />
+<MoveSlot panel="Instruments" path={['threshold', 'lookahead', 'release']} />
+```
+
+- `panel` names the registered panel, by id or name; the slot waits for a
+  panel that registers after it.
+- `path` is the control. Several paths draw an instrument made of several
+  dials when they read as one — a take (`trim` start, end), a gate, a
+  multiband cleaner (amount, speed, bands), a mixer's channels — each keeping
+  its own drag zone. Paths that are not one instrument draw nothing and warn.
+- `valueFirst` puts the value in the headline, the face a chip wears when a
+  dial borrows it.
+
+It reads and writes the shared store, so a slot and an instrument holding the
+same control stay one control: turn either and both move. A colour or ramp
+slot's tap opens the colour editor wherever the page mounts one. It claims no
+hardware — the Move keeps following the `MovePanel` on screen; a page that
+registers panels only for its slots names the one the Move mirrors with
+`moveKitOptions({ panels })`. The faces that live only on a modulator's page
+(`scope`, `env`) belong to that page: open it with
+`ModulationStore.openSettings(index)`.
 
 ### Small slots and companion components
 

@@ -1,4 +1,4 @@
-import { MovePadListStore, moveNotify, TweakStore, ModulationStore, MoveFunctions, type TweakConfig } from 'tweakers';
+import { MovePadListStore, moveNotify, TweakStore, ModulationStore, MoveFunctions, MoveGateMeter, moveGateDemoReading, MoveMultibandMeter, moveMultibandDemoReading, type TweakConfig } from 'tweakers';
 
 /**
  * The library's instrument: one page carrying every face a Move slot can
@@ -162,6 +162,12 @@ export const CONFIG = {
     type: 'slider', default: 0, min: -24, max: 24, step: 1, bipolar: true, unit: ' st',
     moveVisual: { kind: 'pitch' },
   },
+  /* A hit pushed off its step: it sits three quarters through the bar, and
+     a full turn either way carries it half the bar. */
+  offset: {
+    type: 'slider', default: -25, min: -25, max: 25, step: 1, bipolar: true,
+    moveVisual: { kind: 'offset', origin: 0.75 },
+  },
   playback: {
     type: 'select', default: 'forward',
     options: [
@@ -172,6 +178,41 @@ export const CONFIG = {
     ],
     moveVisual: { kind: 'playback' },
   },
+} satisfies TweakConfig;
+
+/**
+ * The instruments the dictionary draws from several dials — a take, a gate,
+ * a mixer, a cleaner — and the blend between two colours. A scrolling strip
+ * draws every dial on its own, so these read as one only where the
+ * dictionary places them together: they live on a page of their own, which
+ * the instrument below does not show and the Move does not mirror.
+ */
+export const INSTRUMENTS_ID = 'move-kit-instruments';
+export const INSTRUMENTS_NAME = 'Move kit · instruments';
+
+export const INSTRUMENTS = {
+  /* a take: where it starts and ends in an eight-second sample */
+  start: { type: 'slider', default: 1.92, min: 0, max: 8, step: 0.01, unit: ' s', moveVisual: { kind: 'trim', edge: 'start' } },
+  end: { type: 'slider', default: 7.04, min: 0, max: 8, step: 0.01, unit: ' s', moveVisual: { kind: 'trim', edge: 'end' } },
+  /* a gate */
+  threshold: { type: 'slider', default: -10, min: -50, max: 0, step: 1, unit: ' dB', moveVisual: { kind: 'gate', role: 'threshold' } },
+  lookahead: { type: 'slider', default: 12, min: 0, max: 40, step: 1, unit: ' ms', moveVisual: { kind: 'gate', role: 'lookahead' } },
+  release: { type: 'slider', default: 95, min: 10, max: 180, step: 1, unit: ' ms', moveVisual: { kind: 'gate', role: 'release' } },
+  /* a mixer, one channel a dial */
+  restored: { type: 'slider', default: 0, min: 0, max: 100, step: 1, unit: '%', moveVisual: { kind: 'channel', icon: 'broom-sparkles' } },
+  denoise: { type: 'slider', default: 21, min: 0, max: 100, step: 1, unit: '%', moveVisual: { kind: 'channel', icon: 'audio-lines-x', tone: 'orange' } },
+  stereo: { type: 'slider', default: 50, min: 0, max: 100, step: 1, unit: '%', moveVisual: { kind: 'channel', icon: 'boom-box', tone: 'yellow' } },
+  remaster: { type: 'slider', default: 29, min: 0, max: 100, step: 1, unit: '%', moveVisual: { kind: 'channel', icon: 'disc-3', tone: 'pink' } },
+  /* a multiband cleaner: how much, how fast, and three bands */
+  clean: { type: 'slider', default: 60, min: 0, max: 100, step: 1, unit: '%', moveVisual: { kind: 'multiband', role: 'amount', icon: 'broom-sparkles' } },
+  speed: { type: 'slider', default: 15, min: 0, max: 100, step: 1, unit: '%', moveVisual: { kind: 'multiband', role: 'speed' } },
+  hi: { type: 'slider', default: 100, min: 0, max: 100, step: 1, unit: '%', moveVisual: { kind: 'multiband', role: 'band', band: 0 } },
+  mid: { type: 'slider', default: 50, min: 0, max: 100, step: 1, unit: '%', moveVisual: { kind: 'multiband', role: 'band', band: 1 } },
+  sub: { type: 'slider', default: 0, min: 0, max: 100, step: 1, unit: '%', moveVisual: { kind: 'multiband', role: 'band', band: 2 } },
+  /* a blend between two colours */
+  shade: { type: 'color', default: '#632ad5' },
+  glow: { type: 'color', default: '#fccff7' },
+  blend: { type: 'balance', a: 'shade', b: 'glow', default: 0.35 },
 } satisfies TweakConfig;
 
 /**
@@ -212,6 +253,12 @@ export const MOD_CURVE = 2;
 export function registerLibraryPanel() {
   TweakStore.registerPanel(PANEL_ID, PANEL_NAME, CONFIG, undefined, { movePads: MOVE_PADS });
   initialValues = { ...TweakStore.getValues(PANEL_ID) };
+  TweakStore.registerPanel(INSTRUMENTS_ID, INSTRUMENTS_NAME, INSTRUMENTS);
+  // Made-up signals for the gate and the cleaner to answer — an app
+  // attaches what its own audio is doing.
+  const started = performance.now();
+  MoveGateMeter.attach(INSTRUMENTS_ID, () => moveGateDemoReading(96, ((performance.now() - started) / 40) | 0));
+  MoveMultibandMeter.attach(INSTRUMENTS_ID, () => moveMultibandDemoReading(performance.now()));
 
   // An LFO breathing Amount: a pulsing circle in the header, and a ring on
   // the slot whose arc runs from the value to where the modulation holds it.

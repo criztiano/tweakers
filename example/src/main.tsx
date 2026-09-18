@@ -4,7 +4,7 @@ import { TweakStore, ModulationStore, MoveFunctions, MovePresetStore, PresetExpl
 import 'tweakers/styles.css';
 import { Library } from './Library';
 import FlowerPlayground from './FlowerPlayground';
-import { registerLibraryPanel } from './panel';
+import { registerLibraryPanel, PANEL_NAME } from './panel';
 import { bindKeyboardHardware } from './hardware';
 
 const isFlowerPlayground = window.location.pathname.replace(/\/$/, '') === '/flowers';
@@ -31,8 +31,10 @@ function MoveBridge() {
       .then((m) => {
         if (cancelled) return;
         // Every registry the kit reads, in one piece — the kit warns when the
-        // page needs one a bind lacks, so none is ever listed by hand.
-        unbind = m.bindMove(TweakStore, moveKitOptions());
+        // page needs one a bind lacks, so none is ever listed by hand. The
+        // hardware mirrors the instrument on screen and nothing else: the
+        // dictionary's instruments page stays on the screen.
+        unbind = m.bindMove(TweakStore, moveKitOptions({ panels: [PANEL_NAME] }));
       })
       .catch((error) => { if (!cancelled) console.warn('Move bridge could not connect', error); });
     return () => { cancelled = true; unbind?.(); };

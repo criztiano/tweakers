@@ -2,8 +2,8 @@ import type { MovePadListView } from '../move-pad-list';
 import { useEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { moveBandCuts, moveNumericDrawing, movePlaybackMode, MOVE_BAND_H, MOVE_BAND_W, type MovePlaybackMode, type MoveTone } from '../move-visual-core';
-import { MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
-export { MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
+import { MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing } from './move-visuals';
+export { MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing } from './move-visuals';
 import type { ControlMeta } from '../store/TweakStore';
 import { ICON_BADGE_OFF, ICON_BADGE_ON, LUCIDE_ICONS } from '../icons';
 import { enumOptionIcon, enumOptionLabel, enumOptionValue } from '../move-layout';
@@ -16,9 +16,11 @@ import { ListScreen } from './ListScreen';
  *
  * A slot is one column of the Move's dial row (two for the filter). The
  * gestures — pointer capture, fine drag, modulation arming — stay with the
- * MovePanel; what lives here is the slot's face: every body is a pure
- * drawing of computed props, so each case can be read, reused, and tested
- * on its own. `moveSlotKind` names which face a control wears.
+ * surface that holds the slot (the MovePanel, or a MoveSlot on its own), and
+ * the drag rules they share live in move-slot-core; what lives here is the
+ * slot's face: every body is a pure drawing of computed props, so each case
+ * can be read, reused, and tested on its own. `moveSlotKind` names which
+ * face a control wears.
  *
  * The cases:
  * - `default` — the basic slot: name centred, value in its place on touch,
@@ -40,6 +42,10 @@ import { ListScreen } from './ListScreen';
  * - `opacity`, `blur`, `pan`, `stereo-width`, `pitch`, `trim` — explicit
  *   numeric meanings, drawn as specimens or positioned against domain
  *   references (`trim`: one edge of a take, the kept part filled).
+ * - `offset`  — a thing and the room it has to move in: the room hatched
+ *   between two rules, a quiet line where it sits untouched, a pin where the
+ *   offset put it, the stretch between them filled, and a chevron beside the
+ *   pin for each way it can still go.
  * - `playback` — an explicitly mapped playback icon.
  * - `filter`  — the 2-slot control: cutoff and resonance as one picture,
  *   the magnitude response maximised across both columns, each hand's
@@ -96,6 +102,7 @@ export type MoveSlotKind =
   | 'stereo-width'
   | 'pitch'
   | 'trim'
+  | 'offset'
   | 'trim-span'
   | 'gate'
   | 'multiband'
@@ -1378,6 +1385,7 @@ export const MOVE_SLOT_LIBRARY = {
   'stereo-width': { description: 'stereo separation with a unity reference', component: MoveSlotNumericBody },
   pitch: { description: 'signed pitch ruler with a zero reference', component: MoveSlotNumericBody },
   trim: { description: 'one edge of a take — the kept part filled from the far end, the value beneath', component: MoveSlotNumericBody },
+  offset: { description: 'a signed nudge — the room it can move in, a pin where it is now, a chevron for each way left', component: MoveSlotOffsetBody },
   'trim-span': { description: '2 slots: a take’s start and end on one line, a flag per edge', component: MoveSlotTrimSpanBody },
   gate: { description: '3 slots: threshold and release as bars, look-ahead as a line, the gate live on a grid between', component: MoveSlotGateBody },
   channel: { description: 'a slot per channel: icon and name in its tone over a fader filled to its level', component: MoveSlotChannelBody },

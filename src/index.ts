@@ -7,6 +7,8 @@ export type { TweakTheme } from './theme';
 // Move surface mirror (docked bottom panel matching the bridge kit's mapping)
 export { MovePanel } from './components/MovePanel';
 export type { MovePanelProps } from './components/MovePanel';
+export { MoveSlot } from './components/MoveSlot';
+export type { MoveSlotProps } from './components/MoveSlot';
 // The panel's window events — what the bridge kit sends in and hears back.
 export {
   MOVE_TOUCH_EVENT,
@@ -45,7 +47,7 @@ export type { MovePage, MoveBandCell, MoveEdgesCell } from './move-layout';
 export { buildMoveStrip, isStripSlot, stripStarts, stripOffsets, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripSlotCount, stripSlotIndex } from './move-strip';
 
 // The big-slot library — the dictionary of what a Move dial slot can be
-export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MOVE_GATE_GRID, MoveSlotMultibandBody, MoveSlotChannelBody, MOVE_MULTIBAND_GRID, MOVE_GAUGE, moveGaugeBearing, MoveSlotPlaybackDrawing, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotColorBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
+export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MOVE_GATE_GRID, MoveSlotMultibandBody, MoveSlotChannelBody, MOVE_MULTIBAND_GRID, MOVE_GAUGE, moveGaugeBearing, MoveSlotPlaybackDrawing, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotColorBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
 // The small slots — the pad row under the dials
 export { MOVE_PAD_LIBRARY, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody } from './components/move-slots';
 export type { MovePadKind, MovePadBandHand, MovePadEdgeHand } from './components/move-slots';

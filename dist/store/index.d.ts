@@ -41,6 +41,15 @@ type MoveSliderVisual = {
     kind: 'trim';
     edge: 'start' | 'end';
 }
+/** A signed nudge away from where something already sits — a hit pushed off
+ *  its step, a clip off its bar line. The face draws the room it has to
+ *  move in: `origin` (0..1) is where it sits at no offset, and the dial's
+ *  own range is that whole room, so a full turn either way carries it half
+ *  the track. */
+ | {
+    kind: 'offset';
+    origin: number;
+}
 /** One of a gate's three dials. Threshold, look-ahead and release side by
  *  side, in that order, draw as one 3-slot gate; any other arrangement
  *  keeps the ordinary face. */

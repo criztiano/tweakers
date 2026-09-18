@@ -39,6 +39,25 @@ describe('value geometry and references', () => {
     expect(moveVisualReading(numeric({ kind: 'trim', edge: 'end' }, 0, 8), 6)).toBe('6 s');
   });
 
+  it('offset carries the pin half its room per full turn, and offers only the ways that exist', () => {
+    const bar = (origin: number, min = -25, max = 25) => numeric({ kind: 'offset', origin }, min, max);
+    // Pushed back off a place three quarters along: a full turn covers half the room.
+    expect(moveNumericDrawing(bar(0.75), -25)).toEqual({ kind: 'offset', origin: 0.75, position: 0.25, back: true, forward: true });
+    expect(moveNumericDrawing(bar(0.25), 25)).toEqual({ kind: 'offset', origin: 0.25, position: 0.75, back: true, forward: true });
+    expect(moveNumericDrawing(bar(0.5), 0)).toEqual({ kind: 'offset', origin: 0.5, position: 0.5, back: true, forward: true });
+    // Parked against the end of its room: nowhere forward to go.
+    expect(moveNumericDrawing(bar(1), 0)).toEqual({ kind: 'offset', origin: 1, position: 1, back: true, forward: false });
+    // A dial that never crosses zero cannot go back, wherever it sits.
+    expect(moveNumericDrawing(bar(0.5, 0, 50), 0)).toEqual({ kind: 'offset', origin: 0.5, position: 0.5, back: false, forward: true });
+    // A pin driven past the wall stops at it rather than leaving the room.
+    expect(moveNumericDrawing(bar(0.1), -25)).toEqual({ kind: 'offset', origin: 0.1, position: 0, back: true, forward: true });
+    // The offset reads as the signed number it is, with no unit invented.
+    expect(moveVisualReading(bar(0.75), -25)).toBe('-25');
+    // An origin outside the room is not an origin.
+    expect(moveNumericDrawing(numeric({ kind: 'offset', origin: 1.4 }, -25, 25), 0)).toBeNull();
+    expect(moveNumericDrawing(numeric({ kind: 'offset', origin: Number.NaN }, -25, 25), 0)).toBeNull();
+  });
+
   it('opacity uses actual alpha, including partial and percentage domains', () => {
     expect(moveNumericDrawing(numeric({ kind: 'opacity' }, 0.2, 0.8), 0.5)).toEqual({ kind: 'opacity', alpha: 0.5 });
     expect(moveNumericDrawing(numeric({ kind: 'opacity', opaqueValue: 100 }, 0, 100), 25)).toEqual({ kind: 'opacity', alpha: 0.25 });

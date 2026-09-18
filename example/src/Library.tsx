@@ -7,6 +7,8 @@ import {
   MoveConnectionDot,
   MoveNotifications,
   MovePanel,
+  MoveSlot,
+  ModulationStore,
   MovePresetStore,
   PresetExplorationStore,
   MoveSurfaceStore,
@@ -134,7 +136,7 @@ export function Library() {
       <Section
         id="big"
         title="Big slots"
-        lede="One column of the dial row — two for a wide list or filter, four for the envelope. Every body is a pure drawing of computed props, so a face is written once and reused everywhere; the gestures stay with the panel."
+        lede="One column of the dial row — two for a wide list or filter, four for the envelope. Every card is the control itself, a MoveSlot on the same store as the instrument: drag one, and the instrument’s dial moves with it. The drawing is written once and the drag rules live in one place, so a face feels the same wherever it is placed."
       >
         <ul className="kit-cards">
           {BIG_SLOTS.map((item) => (
@@ -188,7 +190,7 @@ export function Library() {
             <li key={item.kind} className="kit-card kit-card-wide">
               <div className="kit-card-head"><code>{item.kind}</code></div>
               <div className="kit-tile kit-tile-free">
-                <div className="tweakers-move">{item.render()}</div>
+                <div className="tweakers-move">{item.render?.()}</div>
               </div>
               <p>{item.description}</p>
               {item.note && <p className="kit-card-note">{item.note}</p>}
@@ -542,9 +544,13 @@ function Section({ id, title, lede, children }: {
   );
 }
 
-/** A dictionary entry: the face itself, its name, what it says, and a way to
- *  bring the live one under the first dial. */
+/** A dictionary entry: the face itself — live, the same control as the
+ *  instrument's — its name, what it says, and a way to bring the
+ *  instrument's own under the first dial. */
 function Card({ item, onShow, tall }: { item: Specimen; onShow: (path: string) => void; tall?: boolean }) {
+  const spanWidth: CSSProperties | undefined = item.span && item.span > 1
+    ? { width: `calc(${item.span} * var(--kit-slot-w) + ${(item.span - 1) * 4}px)` }
+    : undefined;
   return (
     <li className="kit-card" style={item.span && item.span > 1 ? { gridColumn: `span ${Math.min(2, item.span)}` } : undefined}>
       <div className="kit-card-head">
@@ -554,26 +560,42 @@ function Card({ item, onShow, tall }: { item: Specimen; onShow: (path: string) =
       <div className={tall ? 'kit-tile' : 'kit-tile kit-tile-pad'}>
         <div className="tweakers-move">
           {tall ? (
-            <div
-              className="tweakers-move-dial"
-              data-kind={DIAL_KIND[item.kind]}
-              data-on={item.kind === 'toggle' || undefined}
-              data-sub={item.kind === 'value' || undefined}
-              data-visual={NUMERIC_KINDS.includes(item.kind) ? item.kind : undefined}
-              data-shape={item.kind === 'curve' || undefined}
-              style={item.span && item.span > 1 ? { width: `calc(${item.span} * var(--kit-slot-w) + ${(item.span - 1) * 4}px)` } : undefined}
-            >
-              {item.render()}
-            </div>
+            item.live ? (
+              <MoveSlot
+                panel={item.live.panel ?? PANEL_NAME}
+                path={item.live.path}
+                valueFirst={item.live.valueFirst}
+                style={spanWidth}
+              />
+            ) : (
+              // A face that only lives on a modulator's page: drawn live
+              // here, and a tap opens that page, where its dials turn.
+              <div
+                className="tweakers-move-dial"
+                data-kind={item.kind}
+                style={spanWidth}
+                role={item.opens !== undefined ? 'button' : undefined}
+                tabIndex={item.opens !== undefined ? 0 : undefined}
+                aria-label={item.opens !== undefined ? `Open the ${item.kind} modulator's page` : undefined}
+                onClick={item.opens !== undefined ? () => ModulationStore.openSettings(item.opens!) : undefined}
+                onKeyDown={item.opens !== undefined ? (e) => {
+                  if (e.key !== 'Enter' && e.key !== ' ') return;
+                  e.preventDefault();
+                  ModulationStore.openSettings(item.opens!);
+                } : undefined}
+              >
+                {item.render?.()}
+              </div>
+            )
           ) : item.kind === 'band' ? (
             // Two pads tall in one column: the face hangs from its cell.
             <div className="tweakers-move-band" data-kind="band" style={{ width: 'var(--kit-slot-w)', height: 68 }}>
-              <div className="tweakers-move-band-face">{item.render()}</div>
+              <div className="tweakers-move-band-face">{item.render?.()}</div>
             </div>
           ) : item.kind === 'fade' || item.kind === 'loop' ? (
             // Two pads along one row: the pill spans them, as in the panel.
             <div className="tweakers-move-edges" data-kind={item.kind} style={{ width: 'calc(2 * var(--kit-slot-w) + 4px)' }}>
-              {item.render()}
+              {item.render?.()}
             </div>
           ) : item.span && item.span > 1 ? (
             // A small slot that claims a run of pads draws as its own strip,
@@ -587,11 +609,11 @@ function Card({ item, onShow, tall }: { item: Specimen; onShow: (path: string) =
                 width: `calc(${item.span} * var(--kit-slot-w) + ${(item.span - 1) * 4}px)`,
               } as CSSProperties}
             >
-              {item.render()}
+              {item.render?.()}
             </div>
           ) : (
             <button type="button" className="tweakers-move-pad" data-kind={item.kind === 'bend' ? 'bend' : item.kind}>
-              {item.render()}
+              {item.render?.()}
             </button>
           )}
         </div>
@@ -601,17 +623,6 @@ function Card({ item, onShow, tall }: { item: Specimen; onShow: (path: string) =
     </li>
   );
 }
-
-/** The `data-kind` each face needs on its slot for the stylesheet to place it. */
-const DIAL_KIND: Record<string, string | undefined> = {
-  color: 'color', filter: 'filter', xy: 'xy', range: 'range', enum: 'enum', 'enum-wide': 'enum',
-  icon: 'enum', curve: 'enum', playback: 'enum', toggle: 'toggle', 'toggle-icon': 'toggle-icon',
-  metronome: 'metronome',
-  transfer: 'transfer',
-  ramp: 'ramp', dial: 'dial', scope: 'scope', env: 'env', 'trim-span': 'trim-span', gate: 'gate', multiband: 'multiband', channel: 'channel',
-};
-
-const NUMERIC_KINDS = ['opacity', 'blur', 'pan', 'stereo-width', 'pitch'];
 
 const CSS = `
   .kit-rec-dot { flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%; background: #fd3c57; }
@@ -657,15 +668,15 @@ const CSS = `
 .kit-card-note { margin-top: 8px !important; color: #7d7a75; }
 .kit-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: var(--kit-space); }
 .kit-card code, .kit-notes code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--kit-fg); }
-.kit-card button { padding: 4px 10px; color: var(--kit-dim); font: inherit; font-size: 12px; background: none; border: 1px solid var(--kit-line); border-radius: 999px; cursor: pointer; }
-.kit-card button:hover { color: var(--kit-fg); border-color: var(--kit-fg); }
+.kit-card-head button { padding: 4px 10px; color: var(--kit-dim); font: inherit; font-size: 12px; background: none; border: 1px solid var(--kit-line); border-radius: 999px; cursor: pointer; }
+.kit-card-head button:hover { color: var(--kit-fg); border-color: var(--kit-fg); }
 .kit-page :focus-visible { outline: 2px solid var(--kit-fg); outline-offset: 2px; }
 
 /* A specimen tile: the kit's own surface, with the panel's chrome taken off
    so only the face is left. The tokens still come from .tweakers-move. */
 .kit-tile { margin-bottom: var(--kit-space); overflow-x: auto; }
 .kit-tile .tweakers-move { display: block; padding: 0; background: none; }
-.kit-tile .tweakers-move-dial { width: var(--kit-slot-w); height: 140px; cursor: default; }
+.kit-tile .tweakers-move-dial { width: var(--kit-slot-w); height: 140px; }
 .kit-tile-pad .tweakers-move-pad { width: var(--kit-slot-w); cursor: default; }
 .kit-tile-free .tweakers-move { color: var(--move-text, #dee3c9); }
 .kit-tile-free .tweakers-move-curve { position: static; }

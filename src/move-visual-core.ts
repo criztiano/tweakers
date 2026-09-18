@@ -10,6 +10,12 @@ export type MoveSliderVisual =
   /** One edge of a take: the bar is the whole of it, the kept part is filled
    *  from this edge's far end to the value, the edge itself is the marker. */
   | { kind: 'trim'; edge: 'start' | 'end' }
+  /** A signed nudge away from where something already sits — a hit pushed off
+   *  its step, a clip off its bar line. The face draws the room it has to
+   *  move in: `origin` (0..1) is where it sits at no offset, and the dial's
+   *  own range is that whole room, so a full turn either way carries it half
+   *  the track. */
+  | { kind: 'offset'; origin: number }
   /** One of a gate's three dials. Threshold, look-ahead and release side by
    *  side, in that order, draw as one 3-slot gate; any other arrangement
    *  keeps the ordinary face. */
@@ -56,7 +62,17 @@ export type MoveNumericDrawing =
   | { kind: 'pan'; position: number }
   | { kind: 'stereo-width'; separation: number; unity: number | null }
   | { kind: 'pitch'; position: number; zero: number | null }
-  | { kind: 'trim'; edge: 'start' | 'end'; position: number };
+  | { kind: 'trim'; edge: 'start' | 'end'; position: number }
+  | {
+    kind: 'offset';
+    /** Where it sits at no offset, 0..1 across the track. */
+    origin: number;
+    /** Where the offset has put it, 0..1 across the same track. */
+    position: number;
+    /** There is still room, and range, to go that way. */
+    back: boolean;
+    forward: boolean;
+  };
 
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
 const between = (value: number, min: number, max: number) => value >= min && value <= max;
@@ -105,6 +121,20 @@ export function moveNumericDrawing(meta: ControlMeta, value: unknown): MoveNumer
     case 'trim':
       if (visual.edge !== 'start' && visual.edge !== 'end') return null;
       return { kind: 'trim', edge: visual.edge, position: clamp01((v - lo) / (hi - lo)) };
+    case 'offset': {
+      const origin = visual.origin;
+      if (!Number.isFinite(origin) || origin < 0 || origin > 1) return null;
+      // A way out is real only where the room and the dial both allow it: a
+      // thing parked against an end has nowhere to go that side, and neither
+      // has one whose range never crosses zero.
+      return {
+        kind: 'offset',
+        origin,
+        position: clamp01(origin + v / (hi - lo)),
+        back: lo < 0 && origin > 0,
+        forward: hi > 0 && origin < 1,
+      };
+    }
     default:
       return null;
   }
