@@ -170,11 +170,20 @@ declare const MOVE_STRIP_EVENT = "move-tweakers:strip";
  *
  * A select with options takes a dial slot as a stepped enum dial: the bar
  * splits into one cell per option, the active cell filled, and the readout
- * shows the option's label. A drag picks the nearest cell.
+ * shows the option's label. A click moves it on to the next option; a drag
+ * steps through them, right or down being the next.
  *
- * Holding Shift mid-drag switches any slot to fine mode: pointer travel
- * applies at 0.1× relative to where shift went down, and releasing shift
- * rebases at 1× so the value never jumps.
+ * Every other one-value slot — a plain dial, a face's bar, a trim edge —
+ * takes the cursor the way its knob takes the hand: a drag turns it from
+ * where it is (right or up raises it), and a press alone never moves it. A
+ * still Shift+click puts any slot back to its default, the knob's Shift+tap.
+ * Holding Shift mid-drag switches to fine mode: pointer travel applies at
+ * 0.1× relative to where shift went down, and releasing shift rebases at 1×
+ * so the value never jumps.
+ *
+ * The panel also carries the Move's Menu button, pinned to the window's
+ * top-right corner, and the computer's keys for Undo (⌘Z), Delete
+ * (Backspace) and Copy (⌘C) — each running what its button holds.
  *
  * Controls wired to a modulation slot wear the dock panel's own modulation
  * ring — the slot's colour, and an arc running from the control's value to
@@ -2498,6 +2507,7 @@ declare class TweakStoreClass {
     private presetsHidden;
     private previewTransactions;
     private baseValues;
+    private defaults;
     private presetTargets;
     private persistTargets;
     private moveKitUses;
@@ -2522,6 +2532,8 @@ declare class TweakStoreClass {
     updateTransitionMode(panelId: string, path: string, mode: 'easing' | 'simple' | 'advanced'): void;
     getTransitionMode(panelId: string, path: string): 'easing' | 'simple' | 'advanced';
     getValue(panelId: string, path: string): TweakValue | undefined;
+    /** The value a control's config declares — what a reset puts back. */
+    getDefault(panelId: string, path: string): TweakValue | undefined;
     getValues(panelId: string): Record<string, TweakValue>;
     getPanels(kind?: 'panel' | 'timeline'): PanelConfig[];
     /**
