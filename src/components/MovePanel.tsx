@@ -24,11 +24,17 @@ import { valueToBearing } from '../angle-core';
 import { normalizeTransfer, sampleTransfer, type TransferValue } from '../transfer-core';
 import { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveTrimSpan, moveGateSpan, moveMultibandSpan, moveMultibandRole, moveChannelPosition } from '../move-visual-core';
 import {
-  MOVE_DIAL_TRACK_INSET as DIAL_TRACK_INSET, MOVE_TRIM_SPAN_PAD as TRIM_SPAN_PAD, MOVE_TAP_SLOP,
-  moveDialValue, moveDialKey, moveEnumValue, moveRangeValue, moveFilterValue, moveXYValue, moveXYRest, moveNeedleValue,
-  moveTransferValue, moveRampStop, moveRampValue, moveFaceBox, moveFaceValue, moveDialPercent, moveDialReading,
-  moveRangeReading, moveChipValue, moveXYGrid, moveShapePath, type MoveFaceRole,
+  MOVE_TAP_SLOP,
+  moveDialKey, moveRangeValue, moveFilterValue, moveXYValue, moveXYRest, moveNeedleValue,
+  moveTransferValue, moveRampStop, moveRampValue, moveDialPercent, moveDialReading,
+  moveRangeReading, moveChipValue, moveXYGrid, moveShapePath,
 } from '../move-slot-core';
+import {
+  MOVE_LIST_ROW_TRAVEL, movePressStart, movePressTravel, movePressEnd, moveTurnValue, moveTurnExtent,
+  moveOptionStep, moveNextOption, type MovePress,
+} from '../move-slot-core';
+import { attachMoveKeys } from '../move-keys';
+import { MoveMenuButton } from './MoveMenuButton';
 import { MoveGateDisplay } from './MoveGateDisplay';
 import { MoveMultibandDisplay } from './MoveMultibandDisplay';
 import { MoveModRing } from './ModRing';
@@ -322,11 +328,20 @@ export const MOVE_SETTINGS_EVENT = 'move-tweakers:settings';
  *
  * A select with options takes a dial slot as a stepped enum dial: the bar
  * splits into one cell per option, the active cell filled, and the readout
- * shows the option's label. A drag picks the nearest cell.
+ * shows the option's label. A click moves it on to the next option; a drag
+ * steps through them, right or down being the next.
  *
- * Holding Shift mid-drag switches any slot to fine mode: pointer travel
- * applies at 0.1× relative to where shift went down, and releasing shift
- * rebases at 1× so the value never jumps.
+ * Every other one-value slot — a plain dial, a face's bar, a trim edge —
+ * takes the cursor the way its knob takes the hand: a drag turns it from
+ * where it is (right or up raises it), and a press alone never moves it. A
+ * still Shift+click puts any slot back to its default, the knob's Shift+tap.
+ * Holding Shift mid-drag switches to fine mode: pointer travel applies at
+ * 0.1× relative to where shift went down, and releasing shift rebases at 1×
+ * so the value never jumps.
+ *
+ * The panel also carries the Move's Menu button, pinned to the window's
+ * top-right corner, and the computer's keys for Undo (⌘Z), Delete
+ * (Backspace) and Copy (⌘C) — each running what its button holds.
  *
  * Controls wired to a modulation slot wear the dock panel's own modulation
  * ring — the slot's colour, and an arc running from the control's value to
@@ -386,6 +401,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const fineRef = useRef<{ shift: boolean; x: number; y: number; v: unknown } | null>(null);
   // The control a face's drag holds — on a band grid, the band nearest the press.
   const faceDrag = useRef<ControlMeta | null>(null);
+  // A value slot's press, until it lets go (see MovePress).
+  const pressRef = useRef<MovePress | null>(null);
   // Which range handle a gesture grabbed — locked at pointer-down.
   const rangeHandleRef = useRef<'min' | 'max'>('min');
   // Which filter hand a gesture grabbed (left half = cutoff, right half =
@@ -813,6 +830,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       else MovePresetStore.toggle(pageId);
     }, { label: 'presets', chip: false });
   }, [pageId]);
+  // Undo, Delete and Copy on the computer's keys, for whatever the buttons
+  // hold — the Move's editing keys without a picture of them on screen.
+  useEffect(() => attachMoveKeys(), []);
   useEffect(() => () => {
     if (MovePresetStore.getView()?.panelId === pageId) MovePresetStore.cancel();
     if (MovePresetStore.getSaving()?.panelId === pageId) MovePresetStore.cancelSave();
@@ -1096,10 +1116,63 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     write(meta, next);
   };
 
-  // `box` is the track being read, when it is wider than the touched element,
-  // and `inset` how far in from its sides the line runs.
-  const dialFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, box: Element = e.currentTarget, inset = DIAL_TRACK_INSET) =>
-    write(meta, moveDialValue(meta, values[meta.path], e, box.getBoundingClientRect(), fineRef, inset));
+  // A value slot answers the pointer the way its knob answers the hand: a
+  // drag turns it from where it is (moveTurnValue), and a press alone never
+  // moves it. A still Shift+click puts it back to its default, the
+  // hardware's Shift+tap.
+  const beginPress = (e: React.PointerEvent<HTMLElement>, path: string, v: number) => {
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+    fineRef.current = null;
+    pressRef.current = movePressStart(path, e, v);
+    setDragPath(path);
+    armMod(path);
+  };
+  const endPress = (path: string) => {
+    const tapped = movePressEnd(pressRef, path);
+    setDragPath(null);
+    fineRef.current = null;
+    return tapped;
+  };
+  const resetValue = (meta: ControlMeta) => {
+    const value = TweakStore.getDefault(page.panel.id, meta.path);
+    if (value !== undefined && !TweakStore.isDisabled(page.panel.id, meta.path)) write(meta, value);
+  };
+  const dialDrag = (meta: ControlMeta) => ({
+    onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
+      if (e.button > 0 || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      beginPress(e, meta.path, normalizeDial(meta, values[meta.path]));
+    },
+    onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
+      const p = movePressTravel(pressRef, meta.path, e, () => normalizeDial(meta, values[meta.path]));
+      if (p && !TweakStore.isDisabled(page.panel.id, meta.path)) write(meta, moveTurnValue(meta, p, e, moveTurnExtent(e.currentTarget.getBoundingClientRect())));
+    },
+    onPointerUp: (e: React.PointerEvent<HTMLElement>) => {
+      if (endPress(meta.path) && e.shiftKey) resetValue(meta);
+    },
+    onPointerCancel: () => { endPress(meta.path); },
+  });
+  // An option slot has no hot spots: a click moves it on, a drag steps it
+  // (moveOptionStep), a still Shift+click puts it back to its default.
+  const optionDrag = (meta: ControlMeta) => ({
+    onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
+      if (e.button > 0 || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      beginPress(e, meta.path, enumIndex(meta, values[meta.path]));
+    },
+    onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
+      const p = movePressTravel(pressRef, meta.path, e, () => enumIndex(meta, values[meta.path]));
+      const next = p && !TweakStore.isDisabled(page.panel.id, meta.path) ? moveOptionStep(meta, values[meta.path], p, e) : undefined;
+      if (next !== undefined) write(meta, next);
+    },
+    onPointerUp: (e: React.PointerEvent<HTMLElement>) => {
+      if (!endPress(meta.path) || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      if (e.shiftKey) resetValue(meta);
+      else {
+        const next = moveNextOption(meta, values[meta.path]);
+        if (next !== undefined) write(meta, next);
+      }
+    },
+    onPointerCancel: () => { endPress(meta.path); },
+  });
 
   const xyFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) =>
     write(meta, moveXYValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), fineRef));
@@ -1150,9 +1223,6 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // column's is resonance — two ordinary one-column dials to the bridge.
   const filterFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, down: boolean) =>
     write(meta, moveFilterValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), filterHandRef, fineRef, down));
-
-  const enumFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) =>
-    write(meta, moveEnumValue(meta, e, e.currentTarget.getBoundingClientRect()));
 
   const chipLatched = (col: number, meta: ControlMeta) =>
     latched[col]?.path === meta.path || !!hwLatched[meta.path];
@@ -1273,10 +1343,6 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     }
     return false;
   };
-
-  // A face dial's drag reads its own drawn part (see moveFaceValue).
-  const faceFromPointer = (e: React.PointerEvent<HTMLElement>, d: FaceDial) =>
-    write(d.meta, moveFaceValue(d.meta, values[d.meta.path], d.role as MoveFaceRole, e, moveFaceBox(e.currentTarget, d.role as MoveFaceRole, d.track), fineRef));
 
   const pressChip = (e: React.PointerEvent<HTMLElement>, col: number, meta: ControlMeta) => {
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
@@ -1404,6 +1470,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 
   const content = (
     <div className="tweakers-root tweakers-move-root" data-theme={theme} data-dock={dock}>
+      <MoveMenuButton
+        theme={theme}
+        open={!!presetScreen || paletteScreen}
+        label={paletteScreen || colorOpenPanel ? 'Palettes' : 'Presets'}
+      />
       {/* While a composer floats above it the whole instrument comes forward,
           over the app's own panels — you are working in it. */}
       <div ref={panelRef} className="tweakers-move" data-dock={dock} data-settings={settingsOpen || undefined} data-move-motion-key={`${motionSurface}:${motionPage}|${pages.map((pg) => pg.panel.id).join(' ')}`} data-overlay={padListView || explorationOpen || composition || audioWave != null || roomWave || color || presetSave ? true : undefined}>
@@ -1693,19 +1764,30 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   ? <MoveWavePreview index={modSettings.index} />
                   : null;
                 if (padListView?.panelId === page.panel.id && (page.actions[i] ?? page.valueActions?.[i])?.path === padListView.path) {
-                  const stepList = (event: React.PointerEvent<HTMLElement>) => {
-                    const rect = event.currentTarget.getBoundingClientRect();
-                    const fraction = (event.clientX - rect.left - DIAL_TRACK_INSET) / Math.max(1, rect.width - DIAL_TRACK_INSET * 2);
-                    MovePadListStore.setCursor(Math.round(fraction * Math.max(0, padListView.options.length - 1)));
-                  };
+                  // The list reads downward, so the drag walks it that way:
+                  // down is the next row, up the one before, a row's height
+                  // of travel per step. A press alone keeps the cursor.
+                  const listPath = `${padListView.panelId}:${padListView.path}`;
                   return <div key={meta.path} className="tweakers-move-dial" data-active="true" data-latched="true" data-pad-list-dial="true"
                     role="slider" tabIndex={0} aria-label={`${padListView.label} list dial`} aria-valuemin={0}
                     aria-valuemax={Math.max(0, padListView.options.length - 1)} aria-valuenow={padListView.cursor}
                     aria-valuetext={padListView.options[padListView.cursor]?.label ?? 'No items'} aria-disabled={padListView.pending || undefined}
-                    onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); MovePadListStore.move(event.key === 'ArrowLeft' ? -1 : 1); } }}
-                    onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); stepList(event); }}
-                    onPointerMove={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) stepList(event); }}
-                    onPointerUp={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }}
+                    aria-orientation="vertical"
+                    onKeyDown={event => {
+                      const step = event.key === 'ArrowUp' || event.key === 'ArrowLeft' ? -1 : event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : 0;
+                      if (!step) return;
+                      event.preventDefault();
+                      MovePadListStore.move(step);
+                    }}
+                    onPointerDown={event => { if (event.button <= 0) beginPress(event, listPath, padListView.cursor); }}
+                    onPointerMove={event => {
+                      const p = movePressTravel(pressRef, listPath, event, () => MovePadListStore.getView()?.cursor ?? 0);
+                      if (!p) return;
+                      const want = Math.max(0, Math.min(padListView.options.length - 1, p.v + Math.trunc((event.clientY - p.ay) / MOVE_LIST_ROW_TRAVEL)));
+                      if (want !== padListView.cursor) MovePadListStore.setCursor(want);
+                    }}
+                    onPointerUp={() => { endPress(listPath); }}
+                    onPointerCancel={() => { endPress(listPath); }}
                     onWheel={event => { event.stopPropagation(); MovePadListStore.move(event.deltaY); }}>
                     <MoveSlotDefaultBody label={padListView.label} value={padListView.options[padListView.cursor]?.label ?? 'No items'} pct={100 * padListView.cursor / Math.max(1, padListView.options.length - 1)} originPct={null} />
                   </div>;
@@ -1819,18 +1901,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       className="tweakers-move-dial"
                       data-kind="balance"
                       data-active={active || undefined}
-                      onPointerDown={(e) => {
-                        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
-                        fineRef.current = null;
-                        setDragPath(meta.path);
-                        armMod(meta.path);
-                        dialFromPointer(e, meta);
-                      }}
-                      onPointerMove={(e) => {
-                        if (dragPath === meta.path) dialFromPointer(e, meta);
-                      }}
-                      onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
-                      onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                      {...dialDrag(meta)}
                     >
                       <MoveModRing panelId={page.panel.id} path={meta.path} />
                       <MoveSlotRampBody
@@ -1931,6 +2002,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   // Grid semantics match the XYPad: on by default (5×5), a
                   // number for N×N, density multiplies, false hides.
                   const gridN = moveXYGrid(meta);
+                  // A dial that cycles — the curve's clip through its shapes —
+                  // takes a still click as the knob's tap, so the point only
+                  // follows the pointer once it travels.
+                  const cycles = !!settingsPanel && !!modLayout?.dials.find((d) => d.path === meta.path)?.cycle;
                   return (
                     <div
                       key={meta.path}
@@ -1940,17 +2015,22 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       data-sub={valueFirst || undefined}
                       data-active={active || undefined}
                       onPointerDown={(e) => {
-                        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
-                        fineRef.current = null;
-                        setDragPath(meta.path);
-                        armMod(meta.path);
-                        xyFromPointer(e, meta);
+                        if (e.button > 0) return;
+                        beginPress(e, meta.path, 0);
+                        if (!cycles) xyFromPointer(e, meta);
                       }}
                       onPointerMove={(e) => {
-                        if (dragPath === meta.path) xyFromPointer(e, meta);
+                        const p = movePressTravel(pressRef, meta.path, e, () => 0);
+                        if (p || (!cycles && dragPath === meta.path)) xyFromPointer(e, meta);
                       }}
-                      onPointerUp={() => xyRelease(meta)}
-                      onPointerCancel={() => xyRelease(meta)}
+                      onPointerUp={(e) => {
+                        const tapped = endPress(meta.path);
+                        xyRelease(meta);
+                        if (!tapped) return;
+                        if (e.shiftKey) resetValue(meta);
+                        else if (cycles) ModulationStore.tapSettingsControl(meta.path);
+                      }}
+                      onPointerCancel={() => { endPress(meta.path); xyRelease(meta); }}
                     >
                       {valueFirst && <span className="tweakers-move-dial-sub">{meta.label}</span>}
                       <MoveModRing panelId={page.panel.id} path={meta.path} />
@@ -1997,9 +2077,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 // A select with options is a stepped enum dial: the bar splits
                 // into one cell per option, the active cell filled, and the
                 // slot shows the option — as a picture where there is one, and
-                // otherwise as the whole list, lit on the current row. A drag
-                // picks the nearest cell; on the hardware the column's knob
-                // steps the same way.
+                // otherwise as the whole list, lit on the current row. A click
+                // moves it on and a drag steps it; on the hardware the
+                // column's knob steps the same way.
                 if (isEnumDial(meta)) {
                   const options = meta.options ?? [];
                   const activeIdx = enumIndex(meta, values[meta.path]);
@@ -2031,19 +2111,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onKeyDown={(e) => dialFromKeyboard(e, meta)}
                       data-shape={shape ? true : undefined}
                       data-active={active || undefined}
-                      onPointerDown={(e) => {
-                      if (TweakStore.isDisabled(page.panel.id, meta.path)) return;
-                        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
-                        fineRef.current = null;
-                        setDragPath(meta.path);
-                        armMod(meta.path);
-                        enumFromPointer(e, meta);
-                      }}
-                      onPointerMove={(e) => {
-                        if (!TweakStore.isDisabled(page.panel.id, meta.path) && dragPath === meta.path) enumFromPointer(e, meta);
-                      }}
-                      onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
-                      onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                      {...optionDrag(meta)}
                     >
                       {/* An option slot reads top down: what the knob is on
                           the chip, the picture — curve, glyph or list —
@@ -2129,18 +2197,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       className="tweakers-move-dial"
                       data-kind="scope"
                       data-active={active || undefined}
-                      onPointerDown={(e) => {
-                        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
-                        fineRef.current = null;
-                        setDragPath(meta.path);
-                        armMod(meta.path);
-                        dialFromPointer(e, meta);
-                      }}
-                      onPointerMove={(e) => {
-                        if (dragPath === meta.path) dialFromPointer(e, meta);
-                      }}
-                      onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
-                      onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                      {...dialDrag(meta)}
                     >
                       <MoveModRing panelId={page.panel.id} path={meta.path} />
                       <MoveSlotScopeBody
@@ -2219,18 +2276,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           <div
                             key={m.path}
                             className="tweakers-move-env-zone"
-                            onPointerDown={(e) => {
-                              try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
-                              fineRef.current = null;
-                              setDragPath(m.path);
-                              armMod(m.path);
-                              dialFromPointer(e, m);
-                            }}
-                            onPointerMove={(e) => {
-                              if (dragPath === m.path) dialFromPointer(e, m);
-                            }}
-                            onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
-                            onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                            {...dialDrag(m)}
                           >
                             <MoveModRing panelId={page.panel.id} path={m.path} />
                           </div>
@@ -2310,20 +2356,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                                     meta = face.curve[Math.max(0, Math.min(face.curve.length - 1, k))].meta;
                                   }
                                 }
-                                if (TweakStore.isDisabled(page.panel.id, meta.path)) return;
-                                try { p.currentTarget.setPointerCapture(p.pointerId); } catch { /* synthetic pointer */ }
-                                fineRef.current = null;
                                 faceDrag.current = meta;
-                                setDragPath(meta.path);
-                                armMod(meta.path);
-                                faceFromPointer(p, { ...d, meta });
+                                dialDrag(meta).onPointerDown(p);
                               }}
-                              onPointerMove={(p) => {
-                                const meta = faceDrag.current;
-                                if (meta && dragPath === meta.path && !TweakStore.isDisabled(page.panel.id, meta.path)) faceFromPointer(p, { ...d, meta });
-                              }}
-                              onPointerUp={() => { setDragPath(null); fineRef.current = null; faceDrag.current = null; }}
-                              onPointerCancel={() => { setDragPath(null); fineRef.current = null; faceDrag.current = null; }}
+                              onPointerMove={(p) => { if (faceDrag.current) dialDrag(faceDrag.current).onPointerMove(p); }}
+                              onPointerUp={(p) => { if (faceDrag.current) dialDrag(faceDrag.current).onPointerUp(p); faceDrag.current = null; }}
+                              onPointerCancel={() => { if (faceDrag.current) dialDrag(faceDrag.current).onPointerCancel(); faceDrag.current = null; }}
                             >
                               <MoveModRing panelId={page.panel.id} path={d.meta.path} />
                             </div>
@@ -2379,21 +2417,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                               aria-disabled={off || undefined}
                               data-disabled={off || undefined}
                               onKeyDown={(k) => dialFromKeyboard(k, e.meta)}
-                              onPointerDown={(p) => {
-                                if (TweakStore.isDisabled(page.panel.id, e.meta.path)) return;
-                                try { p.currentTarget.setPointerCapture(p.pointerId); } catch { /* synthetic pointer */ }
-                                fineRef.current = null;
-                                setDragPath(e.meta.path);
-                                armMod(e.meta.path);
-                                dialFromPointer(p, e.meta, p.currentTarget.parentElement ?? p.currentTarget, DIAL_TRACK_INSET + TRIM_SPAN_PAD);
-                              }}
-                              onPointerMove={(p) => {
-                                if (!TweakStore.isDisabled(page.panel.id, e.meta.path) && dragPath === e.meta.path) {
-                                  dialFromPointer(p, e.meta, p.currentTarget.parentElement ?? p.currentTarget, DIAL_TRACK_INSET + TRIM_SPAN_PAD);
-                                }
-                              }}
-                              onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
-                              onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                              {...dialDrag(e.meta)}
                             >
                               <MoveModRing panelId={page.panel.id} path={e.meta.path} />
                             </div>
@@ -2441,19 +2465,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     aria-disabled={disabled || undefined}
                     data-disabled={disabled || undefined}
                     onKeyDown={(e) => dialFromKeyboard(e, meta)}
-                    onPointerDown={(e) => {
-                      if (TweakStore.isDisabled(page.panel.id, meta.path)) return;
-                      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
-                      fineRef.current = null;
-                      setDragPath(meta.path);
-                      armMod(meta.path);
-                      dialFromPointer(e, meta);
-                    }}
-                    onPointerMove={(e) => {
-                      if (!TweakStore.isDisabled(page.panel.id, meta.path) && dragPath === meta.path) dialFromPointer(e, meta);
-                    }}
-                    onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
-                    onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                    {...dialDrag(meta)}
                   >
                     {!drawing && (subbed || valueFirst) && <span className="tweakers-move-dial-sub">{meta.label}</span>}
                     <MoveModRing panelId={page.panel.id} path={meta.path} />

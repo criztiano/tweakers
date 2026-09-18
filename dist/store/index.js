@@ -314,6 +314,9 @@ var TweakStoreClass = class {
     this.presetsHidden = /* @__PURE__ */ new Set();
     this.previewTransactions = /* @__PURE__ */ new Map();
     this.baseValues = /* @__PURE__ */ new Map();
+    // What each control's config declares, untouched by edits, presets or
+    // persistence — the value a reset puts back.
+    this.defaults = /* @__PURE__ */ new Map();
     // Resolved storage target per panel (null = persistence off). Absent = not
     // yet registered.
     this.presetTargets = /* @__PURE__ */ new Map();
@@ -340,6 +343,7 @@ var TweakStoreClass = class {
     const values = this.flattenValues(config, "");
     this.initTabValue(controls, values);
     this.initTransitionModes(config, "", values);
+    this.defaults.set(id, { ...values });
     this.overlayPersistedValues(id, target, values, this.mapControlsByPath(controls));
     this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, moveTopRow: options.moveTopRow, moveActionRow: options.moveActionRow, moveValueRow: options.moveValueRow, moveSlotGroups: options.moveSlotGroups, moveBands: options.moveBands, moveEdges: options.moveEdges, module: "_enabled" in config ? true : void 0, kind: options.kind });
     this.snapshots.set(id, { ...values });
@@ -367,6 +371,7 @@ var TweakStoreClass = class {
     const controlsByPath = this.mapControlsByPath(controls);
     const defaultValues = this.flattenValues(config, "");
     this.initTabValue(controls, defaultValues);
+    this.defaults.set(id, { ...defaultValues });
     const nextValues = {};
     for (const [path, defaultValue] of Object.entries(defaultValues)) {
       nextValues[path] = this.normalizePreservedValue(
@@ -418,6 +423,7 @@ var TweakStoreClass = class {
     this.disabledPaths.delete(id);
     this.snapshots.delete(id);
     this.baseValues.delete(id);
+    this.defaults.delete(id);
     this.persistTargets.delete(id);
     this.presetTargets.delete(id);
     this.presetProviders.delete(id);
@@ -547,6 +553,10 @@ var TweakStoreClass = class {
   getValue(panelId, path) {
     const panel = this.panels.get(panelId);
     return panel?.values[path];
+  }
+  /** The value a control's config declares — what a reset puts back. */
+  getDefault(panelId, path) {
+    return this.defaults.get(panelId)?.[path];
   }
   getValues(panelId) {
     return this.snapshots.get(panelId) ?? EMPTY_VALUES;

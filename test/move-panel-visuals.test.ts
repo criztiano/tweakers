@@ -28,6 +28,15 @@ const pointer = (clientX: number, shiftKey = false) => ({
   clientX, clientY: 0, pointerId: 1, shiftKey,
   currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }) },
 });
+// A press at (x, y), then the pointer's travel to (x + dx, y + dy): a slot
+// turns from where it is — right or up raises — and a press alone moves nothing.
+const target = { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }), closest: () => null };
+const at = (clientX: number, clientY: number, extra: object = {}) => ({ clientX, clientY, pointerId: 1, shiftKey: false, button: 0, currentTarget: target, ...extra });
+function drag(slot: { props: Record<string, (e: unknown) => void> }, dx: number, dy: number, from = at(0, 0)) {
+  act(() => slot.props.onPointerDown(from));
+  act(() => slot.props.onPointerMove({ ...from, clientX: from.clientX + dx, clientY: from.clientY + dy }));
+  act(() => slot.props.onPointerUp({ ...from, clientX: from.clientX + dx, clientY: from.clientY + dy }));
+}
 const opacity = { type: 'slider', min: 0, max: 1, default: 0.5, step: 0.01, moveVisual: { kind: 'opacity' } } as const;
 
 describe('MovePanel semantic interactions', () => {
@@ -111,11 +120,12 @@ describe('MovePanel semantic interactions', () => {
     expect(flag('end').props['data-offset']).toBeUndefined();
     act(() => dial('End').props.onKeyDown(keyEvent('Home')));
     expect(TweakStore.getValues(id)).toMatchObject({ start: 2, end: 0 });
-    // the drag reads the whole line, not the touched column
-    const zone = { ...pointer(130), currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, width: 120 }), parentElement: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 260, height: 140 }) } } };
-    act(() => dial('End').props.onPointerDown(zone));
-    expect(TweakStore.getValues(id).end).toBe(5); // the middle of a 260px line inset 14px each side
-    act(() => dial('End').props.onPointerUp());
+    // a press alone leaves the edge where it is; the drag turns it from there
+    act(() => dial('End').props.onPointerDown(at(130, 0)));
+    expect(TweakStore.getValues(id).end).toBe(0);
+    act(() => dial('End').props.onPointerUp(at(130, 0)));
+    drag(dial('End'), 50, 0); // half a 100px track to the right
+    expect(TweakStore.getValues(id).end).toBe(5);
     expect(flag('end').props['data-offset']).toBe(true);
   });
 
@@ -132,12 +142,9 @@ describe('MovePanel semantic interactions', () => {
     expect(bar('release').props.style['--move-face-at']).toBe(0.5);
     act(() => dial('Release').props.onKeyDown(keyEvent('End')));
     expect(TweakStore.getValues(id)).toMatchObject({ gate: -20, look: 10, release: 510 });
-    // a bar's drag reads its own drawn track, top to bottom
-    const track = { getBoundingClientRect: () => ({ left: 0, top: 30, width: 4, height: 84 }) };
-    const press = { clientX: 0, clientY: 32 + 40, pointerId: 1, shiftKey: false, currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }), closest: () => ({ querySelector: () => track }) } };
-    act(() => dial('Gate').props.onPointerDown(press));
+    // a bar turns like any dial: down lowers it from where it is
+    drag(dial('Gate'), 0, 25);
     expect(TweakStore.getValues(id).gate).toBe(-40);
-    act(() => dial('Gate').props.onPointerUp());
   });
 
   it('draws an amount, a speed and band dials as one multiband face, band chips joining the curve', () => {
@@ -162,14 +169,12 @@ describe('MovePanel semantic interactions', () => {
     expect(TweakStore.getValues(id).mid).toBe(100);
     const moved = renderer!.root.findByProps({ 'data-kind': 'multiband' }).findByType(MoveMultibandDisplay).props.bands.map((b: { position: number }) => b.position);
     expect(moved[2]).toBe(1);
-    // the speed turns round its gauge: straight up is the middle
-    const gauge = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 98, height: 64 }) };
-    const press = { clientX: 49, clientY: 0, pointerId: 1, shiftKey: false, currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }), closest: () => ({ querySelector: () => gauge }) } };
-    act(() => dial('Speed').props.onPointerDown(press));
+    // the speed turns from where it is, like every dial
+    act(() => dial('Speed').props.onPointerDown(at(49, 0)));
     expect(TweakStore.getValues(id).speed).toBe(51);
-    act(() => dial('Speed').props.onPointerDown({ ...press, clientX: 98, clientY: 42 }));
-    expect(TweakStore.getValues(id).speed).toBeCloseTo(1 + 100 * (0.5 + 90 / 220), 0);
-    act(() => dial('Speed').props.onPointerUp());
+    act(() => dial('Speed').props.onPointerUp(at(49, 0)));
+    drag(dial('Speed'), 20, 0);
+    expect(TweakStore.getValues(id).speed).toBe(71);
   });
 
   it('takes the band under the cursor on the band grid, pads included', () => {
@@ -185,10 +190,9 @@ describe('MovePanel semantic interactions', () => {
     act(() => { renderer = create(createElement(MovePanel, { panels: 'Visual', dock: 'flow', productionEnabled: true })); });
     const grid = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 300, height: 100 }) };
     // x 75 of 300 is the second of six bands: Hi mid, on a pad
-    const press = { clientX: 75, clientY: 75, pointerId: 1, shiftKey: false, currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }), closest: () => ({ querySelector: () => grid }) } };
-    act(() => dial('Hi').props.onPointerDown(press));
-    expect(TweakStore.getValues(id)).toMatchObject({ hi: 100, hiMid: 25 });
-    act(() => dial('Hi').props.onPointerUp());
+    const press = at(75, 75, { currentTarget: { ...target, closest: () => ({ querySelector: () => grid }) } });
+    drag(dial('Hi'), 0, 25, press);
+    expect(TweakStore.getValues(id)).toMatchObject({ hi: 100, hiMid: 75 });
   });
 
   it('draws channel dials side by side as one mixer, each fader in its own column', () => {
@@ -198,11 +202,9 @@ describe('MovePanel semantic interactions', () => {
     expect(face.props.style.gridColumn).toBe('span 2');
     const fills = face.findAllByProps({ className: 'tweakers-move-channel-fill' });
     expect(fills.map((f) => [f.props.style['--move-face-at'], f.props['data-empty']])).toEqual([[0, true], [0.4, undefined]]);
-    const well = { getBoundingClientRect: () => ({ left: 0, top: 40, width: 100, height: 100 }) };
-    const press = { clientX: 0, clientY: 65, pointerId: 1, shiftKey: false, currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }), closest: () => ({ querySelector: (q: string) => (q === '[data-track="channel-1"]' ? well : null) }) } };
-    act(() => dial('B').props.onPointerDown(press));
+    drag(dial('B'), 0, -35); // up raises the fader
     expect(TweakStore.getValues(id).b).toBe(75);
-    act(() => dial('B').props.onPointerUp());
+    expect(TweakStore.getValues(id).a).toBe(0);
   });
 
   it('keeps the ordinary faces when the gate dials are out of order', () => {

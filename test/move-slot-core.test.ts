@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { ControlMeta } from '../src/store/TweakStore';
 import {
-  MOVE_DIAL_TRACK_INSET, moveDialValue, moveDialKey, moveEnumValue, moveRangeValue, moveFilterValue, moveXYValue,
-  moveXYRest, moveNeedleValue, moveTransferValue, moveRampStop, moveRampValue, moveFaceValue, moveDialReading,
-  moveRangeReading, moveChipValue, moveXYGrid, moveShapePath, type MoveFineAnchor,
+  moveDialKey, moveRangeValue, moveFilterValue, moveXYValue,
+  moveXYRest, moveNeedleValue, moveTransferValue, moveRampStop, moveRampValue, moveDialReading,
+  moveRangeReading, moveChipValue, moveXYGrid, moveShapePath, movePressStart, movePressTravel, movePressEnd,
+  moveTurnValue, moveTurnExtent, moveOptionStep, moveNextOption, type MoveFineAnchor, type MovePress,
 } from '../src/move-slot-core';
 
 const slider = (extra: Partial<ControlMeta> = {}): ControlMeta =>
@@ -14,27 +15,34 @@ const at = (clientX: number, clientY = 70, shiftKey = false) => ({ clientX, clie
 const fine = () => ({ current: null as MoveFineAnchor | null });
 
 describe('a slot read by the pointer', () => {
-  it('sets a dial from where the pointer is on its track', () => {
-    expect(moveDialValue(slider(), 0, at(MOVE_DIAL_TRACK_INSET), box, fine())).toBe(0);
-    expect(moveDialValue(slider(), 0, at(60), box, fine())).toBe(50);
-    expect(moveDialValue(slider(), 0, at(500), box, fine())).toBe(100);
+  it('turns a dial from where it is: right or up raises, a track’s width is the whole range', () => {
+    const p = movePressStart('v', at(60), 0.5);
+    expect(moveTurnExtent(box)).toBe(100);
+    expect(moveTurnValue(slider(), p, at(80), 100)).toBe(70);
+    expect(moveTurnValue(slider(), p, at(60, 50), 100)).toBe(70);      // 20px up
+    expect(moveTurnValue(slider(), p, at(60, 100), 100)).toBe(20);     // 30px down
+    expect(moveTurnValue(slider(), p, at(500), 100)).toBe(100);
   });
 
-  it('creeps at a tenth while shift is held, and carries on from where shift let go', () => {
-    const f = fine();
-    // Shift down at x=60 on a value of 50: a 50px move is a tenth of the 100px track's worth.
-    expect(moveDialValue(slider(), 50, at(60, 70, true), box, f)).toBe(50);
-    expect(moveDialValue(slider(), 50, at(110, 70, true), box, f)).toBe(55);
-    // Shift up: the drag goes on at full rate from here, it does not jump to the pointer.
-    expect(moveDialValue(slider(), 55, at(110), box, f)).toBe(55);
-    expect(moveDialValue(slider(), 55, at(100), box, f)).toBe(45);
+  it('keeps a still press a tap, and rebases on Shift so the value never jumps', () => {
+    const press = { current: movePressStart('v', at(60), 0.5) as MovePress | null };
+    expect(movePressTravel(press, 'v', at(62), () => 0.5)).toBeNull();  // within the slip
+    const p = movePressTravel(press, 'v', at(70, 70, true), () => 0.6)!;
+    expect(p).toMatchObject({ moved: true, shift: true, ax: 70, v: 0.6 });
+    expect(moveTurnValue(slider(), p, at(120, 70, true), 100)).toBe(65); // 50px at a tenth
+    expect(movePressEnd(press, 'v')).toBe(false);                      // it travelled
+    press.current = movePressStart('v', at(60), 0.5);
+    expect(movePressEnd(press, 'v')).toBe(true);                       // a tap
   });
 
-  it('steps a choice to the nearest option', () => {
+  it('steps a choice with the drag, and moves it on with a click', () => {
     const select = { type: 'select', path: 's', label: 'S', options: ['a', 'b', 'c'] } as ControlMeta;
-    expect(moveEnumValue(select, at(12), box)).toBe('a');
-    expect(moveEnumValue(select, at(60), box)).toBe('b');
-    expect(moveEnumValue(select, at(108), box)).toBe('c');
+    const p = movePressStart('s', at(60), 0);
+    expect(moveOptionStep(select, 'a', p, at(70))).toBeUndefined();     // short of a detent
+    expect(moveOptionStep(select, 'a', p, at(90))).toBe('b');
+    expect(moveOptionStep(select, 'a', p, at(60, 130))).toBe('c');      // down is the next too
+    expect(moveNextOption(select, 'b')).toBe('c');
+    expect(moveNextOption(select, 'c')).toBe('a');
   });
 
   it('lets a range drag keep the handle it took, and never cross the other', () => {
@@ -98,13 +106,6 @@ describe('a slot read by the pointer', () => {
     expect(past.stops[1].position).toBe(1);             // stops at its neighbour, never past it
   });
 
-  it('reads a face bar top to bottom, most at the top', () => {
-    const bar = { left: 0, top: 0, width: 4, height: 104 };
-    expect(moveFaceValue(slider(), 0, 'threshold', at(2, 2), bar, fine())).toBe(100);
-    expect(moveFaceValue(slider(), 0, 'threshold', at(2, 102), bar, fine())).toBe(0);
-    // The look-ahead's line runs left to right.
-    expect(moveFaceValue(slider(), 0, 'lookahead', at(2, 50), bar, fine())).toBe(50);
-  });
 });
 
 describe('what a slot reads out', () => {

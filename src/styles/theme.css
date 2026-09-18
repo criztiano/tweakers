@@ -1272,6 +1272,56 @@
 
 /* End of the connection dot skin block. */
 
+/* The Menu button on screen: a round dark well pinned to the window's
+   top-right corner, the three-line mark in the panel's text colour. It lights
+   while what it opened — the presets, the palettes — is up. */
+.tweakers-move-menu {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 10003;
+  line-height: 0;
+}
+
+.tweakers-move-menu-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--move-display, #1e1e1e);
+  color: var(--move-text);
+  cursor: pointer;
+  transition: background-color 0.12s, color 0.12s;
+}
+
+.tweakers-move-menu-button:hover {
+  background: var(--move-chip);
+}
+
+.tweakers-move-menu-button[data-open] {
+  background: var(--move-text);
+  color: var(--move-display, #1e1e1e);
+}
+
+.tweakers-move-menu-button:focus-visible {
+  outline: 2px solid var(--move-text);
+  outline-offset: 2px;
+}
+
+.tweakers-move-menu-icon {
+  width: 14px;
+  height: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-menu-button {
+    transition: none;
+  }
+}
+
 .tweakers-move-grid {
   display: flex;
   flex-direction: column;
@@ -1923,16 +1973,23 @@
   border-radius: 8px;
 }
 
+/* Parked on the origin, the dial's zero stands as a line across the bar —
+   the range slot's handle — and goes back to the fill's dot once it leaves.
+   It sits on the bar's padding box, so it reaches as far out as a handle. */
 .tweakers-move-dial-zero {
   position: absolute;
-  top: 50%;
-  width: 5px;
-  height: 5px;
-  margin: -2.5px 0 0 -2.5px;
-  border-radius: 50%;
+  top: -1px;
+  bottom: -1px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
   background: var(--move-text);
-  box-shadow: 0 0 0 2px var(--move-bg), 0 0 0 3px var(--move-text);
   pointer-events: none;
+  transition: box-shadow 0.12s;
+}
+
+.tweakers-move-dial[data-active] .tweakers-move-dial-zero {
+  box-shadow: 0 0 12px 0 rgba(222, 227, 201, 0.7);
 }
 
 .tweakers-move-dial-fill[data-zero] {
@@ -2251,8 +2308,7 @@
 }
 
 /* The 2-slot take (`trim-span`): one line across both columns, inset 4px
-   past the dial's own track inset (`TRIM_SPAN_PAD`) so the drawing gets air
-   while a drag still lands the flag under the finger. The
+   past the dial's own track inset so the drawing gets air. The
    start keeps the left side — its name up top, its value below — and the
    end the right. */
 .tweakers-move-trim-span-tag,

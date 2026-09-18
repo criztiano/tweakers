@@ -1086,6 +1086,7 @@ declare class TweakStoreClass {
     private presetsHidden;
     private previewTransactions;
     private baseValues;
+    private defaults;
     private presetTargets;
     private persistTargets;
     private moveKitUses;
@@ -1110,6 +1111,8 @@ declare class TweakStoreClass {
     updateTransitionMode(panelId: string, path: string, mode: 'easing' | 'simple' | 'advanced'): void;
     getTransitionMode(panelId: string, path: string): 'easing' | 'simple' | 'advanced';
     getValue(panelId: string, path: string): TweakValue | undefined;
+    /** The value a control's config declares — what a reset puts back. */
+    getDefault(panelId: string, path: string): TweakValue | undefined;
     getValues(panelId: string): Record<string, TweakValue>;
     getPanels(kind?: 'panel' | 'timeline'): PanelConfig[];
     /**

@@ -17,10 +17,11 @@ import {
   moveChannelPosition,
 } from '../move-visual-core';
 import {
-  MOVE_DIAL_TRACK_INSET, MOVE_TRIM_SPAN_PAD, MOVE_TAP_SLOP, moveDialValue, moveDialKey, moveEnumValue, moveRangeValue,
+  MOVE_TAP_SLOP, moveDialKey, moveRangeValue,
   moveFilterValue, moveXYValue, moveXYRest, moveNeedleValue, moveTransferValue, moveRampStop, moveRampValue,
-  moveFaceBox, moveFaceValue, moveDialPercent, moveDialReading, moveRangeReading, moveChipValue, moveXYGrid,
-  moveShapePath, type MoveFaceRole, type MoveFineAnchor,
+  moveDialPercent, moveDialReading, moveRangeReading, moveChipValue, moveXYGrid,
+  moveShapePath, movePressStart, movePressTravel, movePressEnd, moveTurnValue, moveTurnExtent, moveOptionStep,
+  moveNextOption, type MoveFaceRole, type MoveFineAnchor, type MovePress,
 } from '../move-slot-core';
 import {
   moveSlotKind, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotXYBody, MoveSlotRangeBody, MoveSlotFilterBody,
@@ -115,6 +116,7 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
   const rangeHandle = useRef<'min' | 'max'>('min');
   const filterHand = useRef<'cutoff' | 'resonance'>('cutoff');
   const faceDrag = useRef<ControlMeta | null>(null);
+  const press = useRef<MovePress | null>(null);
   const tap = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   const [dragPath, setDragPath] = useState<string | null>(null);
   const [heldPoint, setHeldPoint] = useState(0);
@@ -148,6 +150,52 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
     },
     onPointerUp: () => { setDragPath(null); fine.current = null; release?.(); },
     onPointerCancel: () => { setDragPath(null); fine.current = null; },
+  });
+
+  /* A one-value slot turns from where it is and a press alone never moves
+     it; an option slot steps on a click; a still Shift+click puts either
+     back to its default — the instrument's own rules (move-slot-core). */
+  const begin = (e: ReactPointerEvent<HTMLElement>, meta: ControlMeta, v: number) => {
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+    fine.current = null;
+    press.current = movePressStart(meta.path, e, v);
+    setDragPath(meta.path);
+    ModulationStore.noteTouch(panelId!, meta.path);
+  };
+  const end = (meta: ControlMeta) => {
+    setDragPath(null);
+    return movePressEnd(press, meta.path);
+  };
+  const reset = (meta: ControlMeta) => {
+    const first = TweakStore.getDefault(panelId!, meta.path);
+    if (first !== undefined && !off(meta)) write(meta, first);
+  };
+  const turn = (meta: ControlMeta) => ({
+    onPointerDown: (e: ReactPointerEvent<HTMLElement>) => {
+      if (e.button <= 0 && !off(meta)) begin(e, meta, normalizeDial(meta, values![meta.path]));
+    },
+    onPointerMove: (e: ReactPointerEvent<HTMLElement>) => {
+      const p = movePressTravel(press, meta.path, e, () => normalizeDial(meta, values![meta.path]));
+      if (p && !off(meta)) write(meta, moveTurnValue(meta, p, e, moveTurnExtent(e.currentTarget.getBoundingClientRect())));
+    },
+    onPointerUp: (e: ReactPointerEvent<HTMLElement>) => { if (end(meta) && e.shiftKey) reset(meta); },
+    onPointerCancel: () => { end(meta); },
+  });
+  const step = (meta: ControlMeta) => ({
+    onPointerDown: (e: ReactPointerEvent<HTMLElement>) => {
+      if (e.button <= 0 && !off(meta)) begin(e, meta, enumIndex(meta, values![meta.path]));
+    },
+    onPointerMove: (e: ReactPointerEvent<HTMLElement>) => {
+      const p = movePressTravel(press, meta.path, e, () => enumIndex(meta, values![meta.path]));
+      const next = p && !off(meta) ? moveOptionStep(meta, values![meta.path], p, e) : undefined;
+      if (next !== undefined) write(meta, next);
+    },
+    onPointerUp: (e: ReactPointerEvent<HTMLElement>) => {
+      if (!end(meta) || off(meta)) return;
+      const next = e.shiftKey ? TweakStore.getDefault(panelId!, meta.path) : moveNextOption(meta, values![meta.path]);
+      if (next !== undefined) write(meta, next);
+    },
+    onPointerCancel: () => { end(meta); },
   });
 
   const keys = (meta: ControlMeta) => (e: ReactKeyboardEvent<HTMLElement>) => {
@@ -192,17 +240,12 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
         ...reading(e.meta), position: e.position,
         moved: e.edge === 'start' ? e.position > 1e-9 : e.position < 1 - 1e-9,
       });
-      // The drag reads the whole line, not the touched half.
-      const along = (m: ControlMeta) => (e: ReactPointerEvent<HTMLElement>) => write(m, moveDialValue(
-        m, vals[m.path], e, (e.currentTarget.parentElement ?? e.currentTarget).getBoundingClientRect(), fine,
-        MOVE_DIAL_TRACK_INSET + MOVE_TRIM_SPAN_PAD,
-      ));
       return (
         <div className={cls} style={style} data-kind="trim-span" data-active={edges.some((e) => dragPath === e.meta.path) || undefined}>
           <MoveSlotTrimSpanBody start={side(edges[0])} end={side(edges[1])} />
           <div className="tweakers-move-trim-span-zones">
             {edges.map((e) => (
-              <div key={e.meta.path} className="tweakers-move-trim-span-zone" {...slider(e.meta)} {...drag(e.meta, along(e.meta))}>
+              <div key={e.meta.path} className="tweakers-move-trim-span-zone" {...slider(e.meta)} {...turn(e.meta)}>
                 <MoveModRing panelId={panelId!} path={e.meta.path} />
               </div>
             ))}
@@ -275,22 +318,12 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
                     m = cleaner.bands[Math.max(0, Math.min(cleaner.bands.length - 1, k))].meta;
                   }
                 }
-                if (off(m)) return;
-                try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
-                fine.current = null;
                 faceDrag.current = m;
-                setDragPath(m.path);
-                ModulationStore.noteTouch(panelId!, m.path);
-                write(m, moveFaceValue(m, vals[m.path], d.role, e, moveFaceBox(e.currentTarget, d.role, d.track), fine));
+                turn(m).onPointerDown(e);
               }}
-              onPointerMove={(e) => {
-                const m = faceDrag.current;
-                if (m && dragPath === m.path && !off(m)) {
-                  write(m, moveFaceValue(m, vals[m.path], d.role, e, moveFaceBox(e.currentTarget, d.role, d.track), fine));
-                }
-              }}
-              onPointerUp={() => { setDragPath(null); fine.current = null; faceDrag.current = null; }}
-              onPointerCancel={() => { setDragPath(null); fine.current = null; faceDrag.current = null; }}
+              onPointerMove={(e) => { if (faceDrag.current) turn(faceDrag.current).onPointerMove(e); }}
+              onPointerUp={(e) => { if (faceDrag.current) turn(faceDrag.current).onPointerUp(e); faceDrag.current = null; }}
+              onPointerCancel={() => { if (faceDrag.current) turn(faceDrag.current).onPointerCancel(); faceDrag.current = null; }}
             >
               <MoveModRing panelId={panelId!} path={d.meta.path} />
             </div>
@@ -385,7 +418,7 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
     const v = Math.min(1, Math.max(0, Number(value ?? 0.5)));
     return (
       <div className={cls} style={style} data-kind="balance" data-active={active || undefined} {...slider(meta)}
-        {...drag(meta, (e) => write(meta, moveDialValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), fine)))}>
+        {...turn(meta)}>
         <MoveModRing panelId={panelId} path={meta.path} />
         <MoveSlotRampBody label={meta.label} value={`${Math.round(v * 100)}%`}
           css={rampCss([{ color: a, position: 0 }, { color: b, position: 1 }])} stop={v} />
@@ -469,7 +502,7 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
       <div className={cls} style={style} data-kind="enum" data-visual={playback ? 'playback' : undefined}
         data-shape={shape ? true : undefined} data-active={active || undefined}
         {...slider(meta)} aria-valuemin={0} aria-valuemax={Math.max(0, options.length - 1)} aria-valuenow={activeIdx} aria-valuetext={optionLabel}
-        {...drag(meta, (e) => write(meta, moveEnumValue(meta, e, e.currentTarget.getBoundingClientRect())))}>
+        {...step(meta)}>
         <MoveModRing panelId={panelId} path={meta.path} />
         <MoveSlotEnumBody label={meta.label} optionLabel={optionLabel} options={options} activeIdx={activeIdx}
           shape={shape} glyph={enumOptionIcon(option as never)} playback={playback} />
@@ -486,7 +519,7 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
   return (
     <div className={cls} style={style} data-active={active || undefined} data-sub={(!drawing && valueFirst) || undefined}
       data-visual={drawing?.kind} {...slider(meta)}
-      {...drag(meta, (e) => write(meta, moveDialValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), fine)))}>
+      {...turn(meta)}>
       {!drawing && valueFirst && <span className="tweakers-move-dial-sub">{meta.label}</span>}
       <MoveModRing panelId={panelId} path={meta.path} />
       {drawing ? (
