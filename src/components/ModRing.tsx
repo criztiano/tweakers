@@ -96,3 +96,23 @@ export function ModRing({
     </svg>
   );
 }
+
+/**
+ * A wired control's ring, on this surface: the dock panel's own ring — slot
+ * colour, live arc — placed in a dial slot's corner, or inline on a pad chip.
+ * Module scope, not a closure inside the panel: the arc subscribes per frame,
+ * and a component re-declared on every render would tear that down and build
+ * it again on every value the panel draws.
+ */
+export function MoveModRing({ panelId, path, pad }: { panelId: string; path: string; pad?: boolean }) {
+  const assignment = ModulationStore.getAssignment(panelId, path);
+  if (!assignment || !ModulationStore.getSlot(assignment.slot)) return null;
+  return (
+    <ModRing
+      panelId={panelId}
+      path={path}
+      assignment={assignment}
+      className={pad ? 'tweakers-move-pad-mod' : 'tweakers-move-dial-mod'}
+    />
+  );
+}
