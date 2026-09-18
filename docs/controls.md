@@ -12,7 +12,9 @@ still), and the settings room or a modulator's page moves the whole inside the
 same way, the ground easing to the room's palette. The panel's height eases from
 the old page's to the new one's on the same curve, the page around it moving
 along, never jumping when the change commits. The live controls answer the
-pointer and the knobs throughout; nothing to wire.
+pointer and the knobs throughout; nothing to wire. To place one live slot
+outside the instrument — a card, an inspector, a dictionary — use `MoveSlot`
+(below).
 
 | Kind | Choose for | Configuration / body | Hardware space |
 | --- | --- | --- | --- |
@@ -52,6 +54,38 @@ default in an integration; it is used only on Cri's direct request for that app.
 parts. The XY face also accepts a shape path for the modulation curve preview.
 The parent supplies normalized screen coordinates (Y down), grid division count,
 and the formatted readout. It retains every gesture and store subscription.
+
+### A slot on its own: `MoveSlot`
+
+`MoveSlot` is one big slot, live, anywhere on the page: the face a control
+wears in the instrument, answering the pointer and the keyboard the way it
+does there. The drag rules are the instrument's own — `MovePanel` and
+`MoveSlot` both call `move-slot-core` — so a face feels the same wherever it
+is placed.
+
+```tsx
+<MoveSlot panel="Move kit" path="offset" />
+<MoveSlot panel="Move kit" path="glide" valueFirst />
+<MoveSlot panel="Instruments" path={['threshold', 'lookahead', 'release']} />
+```
+
+- `panel` names the registered panel, by id or name; the slot waits for a
+  panel that registers after it.
+- `path` is the control. Several paths draw an instrument made of several
+  dials when they read as one — a take (`trim` start, end), a gate, a
+  multiband cleaner (amount, speed, bands), a mixer's channels — each keeping
+  its own drag zone. Paths that are not one instrument draw nothing and warn.
+- `valueFirst` puts the value in the headline, the face a chip wears when a
+  dial borrows it.
+
+It reads and writes the shared store, so a slot and an instrument holding the
+same control stay one control: turn either and both move. A colour or ramp
+slot's tap opens the colour editor wherever the page mounts one. It claims no
+hardware — the Move keeps following the `MovePanel` on screen; a page that
+registers panels only for its slots names the one the Move mirrors with
+`moveKitOptions({ panels })`. The faces that live only on a modulator's page
+(`scope`, `env`) belong to that page: open it with
+`ModulationStore.openSettings(index)`.
 
 ### Small slots and companion components
 

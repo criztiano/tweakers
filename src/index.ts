@@ -7,6 +7,8 @@ export type { TweakTheme } from './theme';
 // Move surface mirror (docked bottom panel matching the bridge kit's mapping)
 export { MovePanel } from './components/MovePanel';
 export type { MovePanelProps } from './components/MovePanel';
+export { MoveSlot } from './components/MoveSlot';
+export type { MoveSlotProps } from './components/MoveSlot';
 // The panel's window events — what the bridge kit sends in and hears back.
 export {
   MOVE_TOUCH_EVENT,

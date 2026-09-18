@@ -16,9 +16,11 @@ import { ListScreen } from './ListScreen';
  *
  * A slot is one column of the Move's dial row (two for the filter). The
  * gestures — pointer capture, fine drag, modulation arming — stay with the
- * MovePanel; what lives here is the slot's face: every body is a pure
- * drawing of computed props, so each case can be read, reused, and tested
- * on its own. `moveSlotKind` names which face a control wears.
+ * surface that holds the slot (the MovePanel, or a MoveSlot on its own), and
+ * the drag rules they share live in move-slot-core; what lives here is the
+ * slot's face: every body is a pure drawing of computed props, so each case
+ * can be read, reused, and tested on its own. `moveSlotKind` names which
+ * face a control wears.
  *
  * The cases:
  * - `default` — the basic slot: name centred, value in its place on touch,
