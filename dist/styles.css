@@ -4304,6 +4304,16 @@
     font-size: 13px;
     line-height: 13px;
   }
+/* The short slot: the room gives up height so the pin's head still stands
+   clear of the name above it. */
+.tweakers-move-dial[data-visual="offset"] {
+    --move-offset-room: 30px;
+    --move-offset-foot: 28px;
+    --move-offset-pin-w: 12px;
+    --move-offset-pin-h: 16px;
+    --move-offset-way-w: 11px;
+    --move-offset-way-gap: 5px;
+  }
 }
 
 /* The card every waveform wears — the audio editor's mockup: a light
@@ -5172,6 +5182,132 @@
 .tweakers-move-dial[data-visual] .tweakers-move-visual,
 .tweakers-move-dial[data-visual] .tweakers-move-dial-icon {
   transform: translateY(8px);
+}
+
+/* ---------------------------------------------------------------------------
+   The offset face (Figma 988:1563)
+
+   A thing and the room it has to move in. The room is ruled top and bottom
+   and hatched across, so it reads as somewhere rather than as a bar; the
+   stretch the offset has pushed through is the same room filled in and ruled
+   harder. The pin stands over the room rather than inside it, because the
+   room is short and a marker on the line would be lost in the hatching.
+
+   The room keeps its own metrics — it needs the air above it for the pin's
+   head, which no other face wants — and stands clear of the name above and
+   the reading below. */
+.tweakers-move-dial[data-visual="offset"] {
+  /* the room: its side margins, its height, and the air it leaves the reading */
+  --move-offset-inset: 15%;
+  --move-offset-room: 55px;
+  --move-offset-foot: 36px;
+  /* the two markers, and the rules that close the room */
+  --move-offset-rule: 2px;
+  /* the pin standing over the room, and the ways out beside it */
+  --move-offset-pin-w: 15px;
+  --move-offset-pin-h: 20px;
+  --move-offset-way-w: 14px;
+  --move-offset-way-gap: 7px;
+  /* one step of the diagonal ruling, measured across the lines */
+  --move-offset-hatch: 4.25px;
+}
+
+.tweakers-move-offset {
+  position: absolute;
+  left: var(--move-offset-inset);
+  right: var(--move-offset-inset);
+  bottom: var(--move-offset-foot);
+  height: var(--move-offset-room);
+  border-top: var(--move-offset-rule) solid var(--move-bg);
+  border-bottom: var(--move-offset-rule) solid var(--move-bg);
+  background: repeating-linear-gradient(
+    45deg,
+    color-mix(in srgb, var(--move-bg) 40%, transparent) 0 1px,
+    transparent 1px var(--move-offset-hatch)
+  );
+  color: var(--move-text);
+  pointer-events: none;
+}
+
+/* Moved off where it sits, the pin and the way it took carry the Move's
+   orange. That is the one thing colour says on this face. */
+.tweakers-move-offset[data-moved] {
+  color: var(--move-orange);
+}
+
+.tweakers-move-offset-span,
+.tweakers-move-offset-origin,
+.tweakers-move-offset-pin {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.tweakers-move-offset-span {
+  left: 0;
+  right: 0;
+  background:
+    repeating-linear-gradient(45deg, var(--move-bg) 0 1px, transparent 1px var(--move-offset-hatch)),
+    color-mix(in srgb, var(--move-bg) 50%, var(--move-chip));
+}
+
+.tweakers-move-offset-origin,
+.tweakers-move-offset-pin {
+  width: var(--move-offset-rule);
+  margin-left: calc(var(--move-offset-rule) / -2);
+}
+
+.tweakers-move-offset-origin {
+  background: color-mix(in srgb, var(--move-text) 30%, transparent);
+}
+
+/* The head of the untouched place, stated outright — a quiet line alone is
+   too easy to take for one more hatch stroke. */
+.tweakers-move-offset-origin::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: var(--move-offset-rule);
+  background: var(--move-text);
+}
+
+.tweakers-move-offset-pin {
+  background: color-mix(in srgb, currentColor 30%, transparent);
+}
+
+.tweakers-move-offset-head {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  width: var(--move-offset-pin-w);
+  height: var(--move-offset-pin-h);
+  margin-left: calc(var(--move-offset-pin-w) / -2);
+  fill: currentColor;
+}
+
+/* A way out sits a fixed step off the pin, on the side it points to. It is
+   pinned by the edge nearest the pin, never by the far one: a pin driven
+   against the wall pushes its way out into the margin rather than sliding
+   back across the pin, where it would read as pointing the other way. */
+.tweakers-move-offset-way {
+  position: absolute;
+  top: 50%;
+  width: var(--move-offset-way-w);
+  height: calc(var(--move-offset-way-w) * 11.73 / 13.6609);
+  transform: translateY(-50%);
+  fill: currentColor;
+}
+
+.tweakers-move-offset-way[data-way="back"] {
+  right: calc(100% - var(--move-offset-at) + var(--move-offset-way-gap));
+}
+
+.tweakers-move-offset-way[data-way="forward"] {
+  left: calc(var(--move-offset-at) + var(--move-offset-way-gap));
+}
+
+.tweakers-move-offset-trail {
+  opacity: 0.3;
 }
 
 /* ---------------------------------------------------------------------------

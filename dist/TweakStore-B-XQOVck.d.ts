@@ -29,6 +29,15 @@ type MoveSliderVisual = {
     kind: 'trim';
     edge: 'start' | 'end';
 }
+/** A signed nudge away from where something already sits — a hit pushed off
+ *  its step, a clip off its bar line. The face draws the room it has to
+ *  move in: `origin` (0..1) is where it sits at no offset, and the dial's
+ *  own range is that whole room, so a full turn either way carries it half
+ *  the track. */
+ | {
+    kind: 'offset';
+    origin: number;
+}
 /** One of a gate's three dials. Threshold, look-ahead and release side by
  *  side, in that order, draw as one 3-slot gate; any other arrangement
  *  keeps the ordinary face. */
@@ -100,6 +109,15 @@ type MoveNumericDrawing = {
     kind: 'trim';
     edge: 'start' | 'end';
     position: number;
+} | {
+    kind: 'offset';
+    /** Where it sits at no offset, 0..1 across the track. */
+    origin: number;
+    /** Where the offset has put it, 0..1 across the same track. */
+    position: number;
+    /** There is still room, and range, to go that way. */
+    back: boolean;
+    forward: boolean;
 };
 /** Invalid or incompatible metadata falls back to the ordinary face. No label inference. */
 declare function moveNumericDrawing(meta: ControlMeta, value: unknown): MoveNumericDrawing | null;

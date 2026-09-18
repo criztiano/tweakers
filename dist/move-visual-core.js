@@ -40,6 +40,17 @@ function moveNumericDrawing(meta, value) {
     case "trim":
       if (visual.edge !== "start" && visual.edge !== "end") return null;
       return { kind: "trim", edge: visual.edge, position: clamp01((v - lo) / (hi - lo)) };
+    case "offset": {
+      const origin = visual.origin;
+      if (!Number.isFinite(origin) || origin < 0 || origin > 1) return null;
+      return {
+        kind: "offset",
+        origin,
+        position: clamp01(origin + v / (hi - lo)),
+        back: lo < 0 && origin > 0,
+        forward: hi > 0 && origin < 1
+      };
+    }
     default:
       return null;
   }
