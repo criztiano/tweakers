@@ -5826,6 +5826,10 @@ declare class MoveColorStoreClass {
     getLock: () => MoveColorPalette | null;
     /** Which palette colour the open control sits on — null off-palette. */
     paletteIndex(panelId: string, path: string): number | null;
+    /** Which palette colour a control holds: the colour it IS, when it is one of
+     *  them — a value the app wrote carries no position on the segmented wheel —
+     *  else the segment its hue sits in. */
+    private paletteAtValue;
     /** Lock the open editor to a palette (null = back to all colours), and
      *  bring its colour onto the palette right away — the nearest of its hues,
      *  then that segment's centre so a turn steps cleanly from there. */
