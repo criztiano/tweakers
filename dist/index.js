@@ -11053,6 +11053,12 @@ function packTimelineRows(spans) {
   }
   return rows;
 }
+function timelineRowHeight(rows, compact = false) {
+  if (compact) return 4;
+  if (rows >= 8) return 10;
+  if (rows >= 6) return 14;
+  return 18;
+}
 function timelineClock(time) {
   const t = Math.max(0, Number.isFinite(time) ? time : 0);
   return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}:${String(Math.floor(t % 1 * 100)).padStart(2, "0")}`;
@@ -11364,6 +11370,8 @@ function MoveTimeline({
   const [holding, setHolding] = useState8(false);
   const liveRows = useMemo3(() => buildRows(meta?.clips ?? [], values, duration), [meta, values, duration]);
   const rows = holding && heldRows.current ? refreshRows(heldRows.current, values, duration) : liveRows;
+  const [compact, setCompact] = useState8(false);
+  const rowHeight = timelineRowHeight(rows.length, compact);
   const playheadRef = useRef13(null);
   const takeRef = useRef13(null);
   const frame = useRef13({ start: view.start, pxPerSecond, width });
@@ -11486,12 +11494,25 @@ function MoveTimeline({
       className: `tweakers-move-surface tweakers-move-timeline${className ? ` ${className}` : ""}`,
       "data-variant": variant,
       "data-recording": recording || void 0,
+      "data-rows": rowHeight,
       style: {
         ...accent ? { "--move-timeline-accent": accent } : {},
         ...variant === "dock" ? { bottom: `${dockBottom}px` } : {}
       },
       children: /* @__PURE__ */ jsxs12("div", { ref: displayRef, className: "tweakers-move-timeline-display", children: [
         /* @__PURE__ */ jsx16("div", { className: "tweakers-move-timeline-corner", children: /* @__PURE__ */ jsx16("span", { className: "tweakers-move-timeline-title", children: meta.name }) }),
+        /* @__PURE__ */ jsx16(
+          "button",
+          {
+            type: "button",
+            className: "tweakers-move-timeline-compact",
+            "aria-pressed": compact,
+            "aria-label": compact ? "Show rows with names" : "Squeeze rows",
+            title: compact ? "Show rows with names" : "Squeeze rows",
+            onClick: () => setCompact((on) => !on),
+            children: /* @__PURE__ */ jsx16("svg", { viewBox: "0 0 12 12", "aria-hidden": "true", children: compact ? [2.5, 6, 9.5].map((y) => /* @__PURE__ */ jsx16("path", { d: `M2 ${y}H10` }, y)) : [4.5, 6, 7.5].map((y) => /* @__PURE__ */ jsx16("path", { d: `M2 ${y}H10` }, y)) })
+          }
+        ),
         /* @__PURE__ */ jsxs12(
           "div",
           {
@@ -16743,6 +16764,7 @@ export {
   stripWindowPads,
   subscribeAudioMod,
   timelineClock,
+  timelineRowHeight,
   timelineTicks,
   timelineWindow,
   toAudioBuffer,
