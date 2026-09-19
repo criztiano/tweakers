@@ -262,12 +262,19 @@ var MovePadListStoreClass = class {
   selected(panelId, path) {
     return [...this.attachments.get(this.key(panelId, path))?.selected ?? []];
   }
+  /** A single list's current choice — what its closed pad shows. Null for a checked list, or before anything is chosen. */
+  choice(panelId, path) {
+    const attachment = this.attachments.get(this.key(panelId, path));
+    if (!attachment?.config.single) return null;
+    return attachment.config.options.find((option) => option.value === attachment.selected[0]) ?? null;
+  }
   attach(panelId, path, config) {
     TweakStore2.noteMoveKitUse("padList");
     const key = this.key(panelId, path);
     const previous = this.attachments.get(key);
     const valid2 = new Set(config.options.map((option) => option.value));
-    const attachment = { config, selected: [...new Set(previous?.selected ?? config.selected ?? [])].filter((value) => valid2.has(value)), cursor: previous?.cursor ?? 0, submission: previous?.submission ?? { pending: false } };
+    const kept = config.single ? config.selected ?? previous?.selected : previous?.selected ?? config.selected;
+    const attachment = { config, selected: [...new Set(kept ?? [])].filter((value) => valid2.has(value)).slice(0, config.single ? 1 : void 0), cursor: previous?.cursor ?? 0, submission: previous?.submission ?? { pending: false } };
     this.attachments.set(key, attachment);
     if (this.view?.panelId === panelId && this.view.path === path) this.close();
     this.notify();
@@ -283,7 +290,10 @@ var MovePadListStoreClass = class {
     if (!attachment || TweakStore2.isDisabled(panelId, path)) return;
     this.close();
     const { config } = attachment;
-    this.view = { panelId, path, label: config.label ?? path, submitLabel: config.submitLabel, options: config.options, selected: [...attachment.selected], cursor: Math.min(attachment.cursor, Math.max(0, config.options.length - 1)), pending: attachment.submission.pending, error: null };
+    const single = config.single === true;
+    const chosen = single ? config.options.findIndex((option) => option.value === attachment.selected[0]) : -1;
+    const cursor = chosen >= 0 ? chosen : Math.min(attachment.cursor, Math.max(0, config.options.length - 1));
+    this.view = { panelId, path, label: config.label ?? path, submitLabel: config.submitLabel, options: config.options, selected: [...attachment.selected], cursor, pending: attachment.submission.pending, error: null, single };
     this.releases = [
       MoveFunctions.push("back", () => this.close(), { label: "close list" }),
       MoveFunctions.push("sample", () => this.toggleCursor(), { label: "select" }),
@@ -291,14 +301,18 @@ var MovePadListStoreClass = class {
       MoveFunctions.push("down", () => this.move(1)),
       MoveFunctions.push("jog_click", () => this.toggleCursor(), { label: "select", chip: false }),
       MoveFunctions.push("capture", () => {
-        void this.submit();
+        if (single) this.toggleCursor();
+        else void this.submit();
       }, { label: config.submitLabel ?? config.label ?? "run selected", chip: false })
     ];
     this.notify();
   }
   /** The same pad opens its list, then becomes its submission action. */
   activate(panelId, path) {
-    if (this.view?.panelId === panelId && this.view.path === path) return this.submit();
+    if (this.view?.panelId === panelId && this.view.path === path) {
+      if (this.view.single) return this.toggleCursor();
+      return this.submit();
+    }
     this.open(panelId, path);
   }
   toggle(panelId, path) {
@@ -326,6 +340,11 @@ var MovePadListStoreClass = class {
     const view = this.view;
     const option = view?.options[view.cursor];
     if (!view || view.pending || !option) return;
+    if (view.single) {
+      this.view = { ...view, selected: [option.value], error: null };
+      this.save();
+      return this.submit();
+    }
     const selected = view.selected.includes(option.value) ? view.selected.filter((value) => value !== option.value) : [...view.selected, option.value];
     this.view = { ...view, selected, error: null };
     this.save();
@@ -448,6 +467,50 @@ function moveGateSpan(dials) {
   });
   if (at2.some((p) => p === null)) return null;
   return { threshold: at2[0], lookahead: at2[1], release: at2[2] };
+}
+function moveVectorAxes(dials) {
+  if (dials.length !== 3) return null;
+  const axes = ["x", "y", "z"];
+  const at2 = dials.map(([meta, value], i) => {
+    const visual = meta.moveVisual;
+    if (visual?.kind !== "axis" || visual.axis !== axes[i]) return null;
+    return sliderPosition(meta, value);
+  });
+  if (at2.some((p) => p === null)) return null;
+  const y = dials[1][0].moveVisual;
+  return { x: at2[0], y: at2[1], z: at2[2], down: y?.kind === "axis" && y.down === true };
+}
+var MOVE_STAGE = { width: 240, height: 48 };
+var STAGE_FLOOR = { near: 44, far: 16, half: 114, farScale: 0.44 };
+var STAGE_MARK = { near: 5.5, far: 2.5 };
+function moveVectorStage(x01, y01, z01, down = false) {
+  const cx = MOVE_STAGE.width / 2;
+  const x = clamp01(x01);
+  const t = clamp01(z01);
+  const lift = down ? 1 - clamp01(y01) : clamp01(y01);
+  const lerp2 = (a, b, k) => a + (b - a) * k;
+  const floorY = (k) => lerp2(STAGE_FLOOR.near, STAGE_FLOOR.far, k);
+  const halfAt = (k) => STAGE_FLOOR.half * lerp2(1, STAGE_FLOOR.farScale, k);
+  const across = (u, k) => cx + (u * 2 - 1) * halfAt(k);
+  const r2 = (n) => Math.round(n * 100) / 100;
+  const floor = `M${r2(across(0, 0))} ${STAGE_FLOOR.near}L${r2(across(1, 0))} ${STAGE_FLOOR.near}L${r2(across(1, 1))} ${STAGE_FLOOR.far}L${r2(across(0, 1))} ${STAGE_FLOOR.far}Z`;
+  const rules = [
+    ...[0.25, 0.5, 0.75].map((k) => `M${r2(across(0, k))} ${r2(floorY(k))}L${r2(across(1, k))} ${r2(floorY(k))}`),
+    ...[0.25, 0.5, 0.75].map((u) => `M${r2(across(u, 0))} ${STAGE_FLOOR.near}L${r2(across(u, 1))} ${STAGE_FLOOR.far}`)
+  ].join("");
+  const footX = across(x, t);
+  const footY = floorY(t);
+  const r = lerp2(STAGE_MARK.near, STAGE_MARK.far, t);
+  const headroom = (footY - r - 2) * 0.9;
+  const markY = footY - lift * headroom;
+  return {
+    floor,
+    rules,
+    foot: { x: r2(footX), y: r2(footY), rx: r2(r * 1.3), ry: r2(r * 0.45) },
+    stalk: { x: r2(footX), y1: r2(footY), y2: r2(markY) },
+    mark: { x: r2(footX), y: r2(markY), r: r2(r) },
+    depth: `M${r2(across(0, t))} ${r2(footY)}L${r2(across(1, t))} ${r2(footY)}`
+  };
 }
 function sliderPosition(meta, value) {
   const { min, max } = meta;
@@ -2292,6 +2355,60 @@ function MoveSlotGateBody({
     /* @__PURE__ */ jsx3(MoveFaceName, { col: 2, dial: release })
   ] });
 }
+function MoveSlotVectorBody({ x, y, z, down = false }) {
+  const stage = moveVectorStage(x.position, y.position, z.position, down);
+  const { width: w, height: h } = MOVE_STAGE;
+  const at2 = (px, py) => ({ "--move-vector-x": `${px / w * 100}%`, "--move-vector-y": `${py / h * 100}%` });
+  return /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-face", style: { "--move-face-span": 3 }, children: [
+    /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-vector-stage", "aria-hidden": "true", children: [
+      /* @__PURE__ */ jsxs3("svg", { viewBox: `0 0 ${w} ${h}`, preserveAspectRatio: "none", children: [
+        /* @__PURE__ */ jsx3("path", { className: "tweakers-move-vector-floor", d: stage.floor }),
+        /* @__PURE__ */ jsx3("path", { className: "tweakers-move-vector-rules", d: stage.rules }),
+        /* @__PURE__ */ jsx3("path", { className: "tweakers-move-vector-depth", "data-active": z.active || void 0, d: stage.depth }),
+        /* @__PURE__ */ jsx3(
+          "line",
+          {
+            className: "tweakers-move-vector-rail",
+            "data-active": x.active || void 0,
+            x1: 0,
+            x2: w,
+            y1: stage.foot.y,
+            y2: stage.foot.y
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsx3(
+        "i",
+        {
+          className: "tweakers-move-vector-foot",
+          style: { ...at2(stage.foot.x, stage.foot.y), "--move-vector-size": `${stage.foot.ry * 2 / h * 100}%` }
+        }
+      ),
+      /* @__PURE__ */ jsx3(
+        "i",
+        {
+          className: "tweakers-move-vector-stalk",
+          "data-active": y.active || void 0,
+          style: { ...at2(stage.stalk.x, stage.stalk.y2), "--move-vector-size": `${(stage.stalk.y1 - stage.stalk.y2) / h * 100}%` }
+        }
+      ),
+      /* @__PURE__ */ jsx3(
+        "i",
+        {
+          className: "tweakers-move-vector-mark",
+          "data-active": x.active || y.active || z.active || void 0,
+          style: { ...at2(stage.mark.x, stage.mark.y), "--move-vector-size": `${stage.mark.r * 2 / h * 100}%` }
+        }
+      ),
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-vector-track", "data-track": "axis-x" }),
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-vector-track", "data-track": "axis-y" }),
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-vector-track", "data-track": "axis-z" })
+    ] }),
+    /* @__PURE__ */ jsx3(MoveFaceName, { col: 0, dial: x }),
+    /* @__PURE__ */ jsx3(MoveFaceName, { col: 1, dial: y }),
+    /* @__PURE__ */ jsx3(MoveFaceName, { col: 2, dial: z })
+  ] });
+}
 function MoveSlotChannelBody({ channels }) {
   return /* @__PURE__ */ jsx3("div", { className: "tweakers-move-face", style: { "--move-face-span": channels.length }, children: channels.map((channel, k) => /* @__PURE__ */ jsxs3(
     "div",
@@ -2719,7 +2836,7 @@ function MovePadListBody({ view, onCursor, onToggle }) {
         follow: "center",
         label: view.label,
         disabled: view.pending,
-        multiselect: true,
+        multiselect: !view.single,
         items: view.options.map((option) => ({ ...option, checked: view.selected.includes(option.value) })),
         value: view.options[view.cursor]?.value,
         onFocusItem: (value) => onCursor(view.options.findIndex((option) => option.value === value)),
@@ -2736,7 +2853,7 @@ var MOVE_PAD_LIBRARY = {
   toggle: { description: "a switch; the pad inverts when it is on", component: MovePadToggleBody },
   icon: { description: "a switch drawn as its picture alone \u2014 no name, the pad inverts when it is on", component: MovePadIconBody },
   value: { description: "a value the dial above can borrow \u2014 hold to peek, tap to latch", component: MovePadValueBody },
-  list: { description: "a checked list above a small pad; its dial walks, Sample selects, a second pad press runs", component: MovePadListBody },
+  list: { description: "a checked list above a small pad; its dial walks, Sample selects, a second pad press runs \u2014 or, single, a picker: Sample takes the row and the pad names it", component: MovePadListBody },
   action: { description: "a button: a press runs the app\u2019s action", component: MovePadActionBody },
   "icon-label": { description: "a button wearing its picture beside its name \u2014 a press runs the app\u2019s action", component: MovePadIconLabelBody },
   app: { description: "a cell the app paints itself \u2014 a track, a slice, a step", component: MovePadAppBody },
@@ -2759,6 +2876,7 @@ var MOVE_SLOT_LIBRARY = {
   offset: { description: "a signed nudge \u2014 the room it can move in, a pin where it is now, a chevron for each way left", component: MoveSlotOffsetBody },
   "trim-span": { description: "2 slots: a take\u2019s start and end on one line, a flag per edge", component: MoveSlotTrimSpanBody },
   gate: { description: "3 slots: threshold and release as bars, look-ahead as a line, the gate live on a grid between", component: MoveSlotGateBody },
+  vector: { description: "3 slots: x, y and a depth z as one stage \u2014 the mark on a ruled floor, its height a stalk from its shadow, its distance its size", component: MoveSlotVectorBody },
   channel: { description: "a slot per channel: icon and name in its tone over a fader filled to its level", component: MoveSlotChannelBody },
   multiband: { description: "a slot per dial: amount as a bar, speed as a gauge, the bands as a live curve on a grid", component: MoveSlotMultibandBody },
   playback: { description: "explicit playback traversal with a named mode", component: MoveSlotEnumBody },
@@ -2786,6 +2904,7 @@ import { jsx as jsx4, jsxs as jsxs4 } from "react/jsx-runtime";
 function MovePadList({ panelId, path, label, icon, view, disabled }) {
   const root = useRef3(null);
   const open2 = view?.panelId === panelId && view.path === path;
+  const shown = open2 ? view.submitLabel ?? label : MovePadListStore.choice(panelId, path)?.label ?? label;
   useEffect3(() => () => {
     const current = MovePadListStore.getView();
     if (current?.panelId === panelId && current.path === path) MovePadListStore.close();
@@ -2840,7 +2959,7 @@ function MovePadList({ panelId, path, label, icon, view, disabled }) {
         onClick: () => {
           void MovePadListStore.activate(panelId, path);
         },
-        children: icon ? /* @__PURE__ */ jsx4(MovePadIconLabelBody, { icon, label: open2 ? view.submitLabel ?? label : label }) : /* @__PURE__ */ jsx4(MovePadActionBody, { label: open2 ? view.submitLabel ?? label : label })
+        children: icon ? /* @__PURE__ */ jsx4(MovePadIconLabelBody, { icon, label: shown }) : /* @__PURE__ */ jsx4(MovePadActionBody, { label: shown })
       }
     ),
     open2 && /* @__PURE__ */ jsx4("div", { className: "tweakers-move-dial-screen tweakers-move-pad-list-overlay", onWheel: (event) => {
@@ -12299,6 +12418,8 @@ var MOVE_PAGE_EVENT = "move-tweakers:page";
 var MOVE_PAGE_SELECT_EVENT = "move-tweakers:page-select";
 var MOVE_JOG_EVENT = "move-tweakers:jog";
 var MOVE_JOG_CLICK_EVENT = "move-tweakers:jog-click";
+var MOVE_VOLUME_EVENT = "move-tweakers:volume";
+var MOVE_VOLUME_TAP_EVENT = "move-tweakers:volume-tap";
 var MOVE_MUTE_EVENT = "move-tweakers:mute";
 var MOVE_SEARCH_EVENT = "move-tweakers:search";
 var MOVE_STRIP_EVENT = "move-tweakers:strip";
@@ -12943,6 +13064,21 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     if (!at2) return null;
     return { kind: "gate", col, span: 3, dials: ["threshold", "lookahead", "release"].map((role, k) => ({ role, col: col + k, meta: metas[k], position: at2[role] })) };
   };
+  const vectorAt = (col) => {
+    const metas = [dialAt(col), dialAt(col + 1), dialAt(col + 2)];
+    if (metas.some((m) => !m) || !visibleCols.includes(col + 1) || !visibleCols.includes(col + 2)) return null;
+    const own = metas.map((m, k) => m === page.dials[col + k]);
+    if (own.some((o) => o !== own[0])) return null;
+    const at2 = moveVectorAxes(metas.map((m) => [m, values[m.path]]));
+    if (!at2) return null;
+    return {
+      kind: "vector",
+      col,
+      span: 3,
+      down: at2.down,
+      dials: ["x", "y", "z"].map((axis, k) => ({ role: `axis-${axis}`, col: col + k, meta: metas[k], position: at2[axis] }))
+    };
+  };
   const multibandAt = (col) => {
     if (moveMultibandRole(page.dials[col]) !== "amount" || !visibleCols.includes(col + 1)) return null;
     const cols = [col, col + 1];
@@ -12978,7 +13114,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     }
     return { kind: "channel", col, span: dials.length, dials };
   };
-  const faceAt = (col) => stripMode ? null : gateAt(col) ?? multibandAt(col) ?? channelAt(col);
+  const faceAt = (col) => stripMode ? null : gateAt(col) ?? vectorAt(col) ?? multibandAt(col) ?? channelAt(col);
   const underFace = (col) => {
     for (let j = col - 1; j >= 0 && j >= col - MOVE_DIALS; j--) {
       if (!visibleCols.includes(j)) continue;
@@ -13809,7 +13945,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     const body = face.kind === "channel" ? /* @__PURE__ */ jsx17(MoveSlotChannelBody, { channels: dials.map((d) => {
                                       const visual = d.meta.moveVisual;
                                       return { ...shown(d), ...visual?.kind === "channel" ? { icon: visual.icon, tone: visual.tone } : {} };
-                                    }) }) : face.kind === "gate" ? /* @__PURE__ */ jsx17(MoveSlotGateBody, { threshold: shown(dials[0]), lookahead: shown(dials[1]), release: shown(dials[2]), children: /* @__PURE__ */ jsx17(MoveGateDisplay, { panelId: page.panel.id, threshold: dials[0].position }) }) : /* @__PURE__ */ jsx17(MoveSlotMultibandBody, { amount: shown(dials[0]), speed: shown(dials[1]), bands: dials.slice(2).map(shown), icon: face.icon, children: /* @__PURE__ */ jsx17(
+                                    }) }) : face.kind === "vector" ? /* @__PURE__ */ jsx17(MoveSlotVectorBody, { x: shown(dials[0]), y: shown(dials[1]), z: shown(dials[2]), down: face.down }) : face.kind === "gate" ? /* @__PURE__ */ jsx17(MoveSlotGateBody, { threshold: shown(dials[0]), lookahead: shown(dials[1]), release: shown(dials[2]), children: /* @__PURE__ */ jsx17(MoveGateDisplay, { panelId: page.panel.id, threshold: dials[0].position }) }) : /* @__PURE__ */ jsx17(MoveSlotMultibandBody, { amount: shown(dials[0]), speed: shown(dials[1]), bands: dials.slice(2).map(shown), icon: face.icon, children: /* @__PURE__ */ jsx17(
                                       MoveMultibandDisplay,
                                       {
                                         panelId: page.panel.id,
@@ -13840,7 +13976,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                                 "aria-valuemax": d.meta.max ?? 1,
                                                 "aria-valuenow": Number(values[d.meta.path]),
                                                 "aria-valuetext": moveVisualReading(d.meta, Number(values[d.meta.path])),
-                                                "aria-orientation": d.role === "lookahead" ? "horizontal" : "vertical",
+                                                "aria-orientation": d.role === "lookahead" || d.role === "axis-x" ? "horizontal" : "vertical",
                                                 "aria-disabled": off || void 0,
                                                 "data-disabled": off || void 0,
                                                 onKeyDown: (k) => dialFromKeyboard(k, d.meta),
@@ -15134,12 +15270,17 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
     let body;
     const shown = (d) => ({ ...reading(d.meta), position: d.position });
     const gate = dials.length === 3 ? moveGateSpan(dials.map((m) => [m, vals[m.path]])) : null;
+    const place3 = dials.length === 3 ? moveVectorAxes(dials.map((m) => [m, vals[m.path]])) : null;
     const cleaner = dials.length >= 3 ? moveMultibandSpan(dials.map((m) => [m, vals[m.path]]), dials.slice(2).map((m) => [m, vals[m.path]])) : null;
     const channels = dials.map((m) => moveChannelPosition(m, vals[m.path]));
     if (gate) {
       kind = "gate";
       parts = ["threshold", "lookahead", "release"].map((role, k) => ({ role, meta: dials[k], position: gate[role] }));
       body = /* @__PURE__ */ jsx18(MoveSlotGateBody, { threshold: shown(parts[0]), lookahead: shown(parts[1]), release: shown(parts[2]), children: /* @__PURE__ */ jsx18(MoveGateDisplay, { panelId, threshold: parts[0].position }) });
+    } else if (place3) {
+      kind = "vector";
+      parts = ["x", "y", "z"].map((axis, k) => ({ role: `axis-${axis}`, meta: dials[k], position: place3[axis] }));
+      body = /* @__PURE__ */ jsx18(MoveSlotVectorBody, { x: shown(parts[0]), y: shown(parts[1]), z: shown(parts[2]), down: place3.down });
     } else if (cleaner) {
       kind = "multiband";
       parts = dials.map((meta2, k) => ({
@@ -15186,7 +15327,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
           className: "tweakers-move-face-zone",
           "data-role": d.role,
           ...slider(d.meta),
-          "aria-orientation": d.role === "lookahead" ? "horizontal" : "vertical",
+          "aria-orientation": d.role === "lookahead" || d.role === "axis-x" ? "horizontal" : "vertical",
           onPointerDown: (e) => {
             let m = d.meta;
             if (d.role === "band" && cleaner) {
@@ -16440,8 +16581,10 @@ export {
   MOVE_PAGE_SELECT_EVENT,
   MOVE_PALETTE,
   MOVE_SEARCH_EVENT,
+  MOVE_SETTINGS_EVENT,
   MOVE_SLOT_LIBRARY,
   MOVE_SPECIAL_BUTTONS,
+  MOVE_STAGE,
   MOVE_STEP_FUNCTIONS,
   MOVE_STRIP_EVENT,
   MOVE_TIMELINE_MAX_ZOOM,
@@ -16451,6 +16594,8 @@ export {
   MOVE_VIEW_MOTIONS,
   MOVE_VIEW_PRESENTATION,
   MOVE_VIEW_WAIT,
+  MOVE_VOLUME_EVENT,
+  MOVE_VOLUME_TAP_EVENT,
   MOVE_WAVEFORM_DEMO_SECONDS,
   MOVE_WAVEFORM_PADS,
   MOVE_WAVEFORM_PANEL,
@@ -16515,6 +16660,7 @@ export {
   MoveSlotToggleBody,
   MoveSlotTransferBody,
   MoveSlotTrimSpanBody,
+  MoveSlotVectorBody,
   MoveSlotXYBody,
   MoveSurfaceStore,
   MoveTimeline,
@@ -16665,6 +16811,8 @@ export {
   moveStop,
   moveTabCell,
   moveTrimSpan,
+  moveVectorAxes,
+  moveVectorStage,
   moveViewChoreography,
   moveVisualReading,
   defaultStyle as moveWaveformDefaultStyle,

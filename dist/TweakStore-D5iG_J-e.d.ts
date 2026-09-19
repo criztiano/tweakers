@@ -67,6 +67,16 @@ type MoveSliderVisual = {
     kind: 'channel';
     icon?: string;
     tone?: MoveTone;
+}
+/** One axis of a place — across, up, or into the picture. Three sliders
+ *  carrying x, y and z, side by side in that order, draw as one 3-slot
+ *  stage (the `vector` face); alone, an axis keeps the ordinary face.
+ *  `down` (y only) says the host's y grows downward, as canvas
+ *  coordinates do, so the stage still raises the mark as y goes up. */
+ | {
+    kind: 'axis';
+    axis: 'x' | 'y' | 'z';
+    down?: boolean;
 };
 /** A Move hue by name, as the theme's `--move-<tone>` token carries it. */
 type MoveTone = 'red' | 'orange' | 'yellow' | 'lime' | 'emerald' | 'blue' | 'indigo' | 'pink';
@@ -134,6 +144,58 @@ declare function moveGateSpan(dials: [ControlMeta, unknown][]): {
     lookahead: number;
     release: number;
 } | null;
+/** Where a place's three axes sit, each 0..1 across its own dial — or null
+ *  unless the three are an x, a y and a z axis, in that order. The gate's
+ *  rule, for a position instead of a gate. `down` is the y axis's own. */
+declare function moveVectorAxes(dials: [ControlMeta, unknown][]): {
+    x: number;
+    y: number;
+    z: number;
+    down: boolean;
+} | null;
+/** The stage's drawing units — a 240 × 48 plot, the shape of the three slots it
+ *  spans, so the floor stretches to fill them while the mark stays round. */
+declare const MOVE_STAGE: {
+    readonly width: 240;
+    readonly height: 48;
+};
+type MoveStage = {
+    /** The floor's outline, closed. */
+    floor: string;
+    /** Depth rules across it and rails running back to the vanishing point. */
+    rules: string;
+    /** The mark's shadow on the floor, straight under it. */
+    foot: {
+        x: number;
+        y: number;
+        rx: number;
+        ry: number;
+    };
+    /** From the shadow up to the mark: how high it stands. */
+    stalk: {
+        x: number;
+        y1: number;
+        y2: number;
+    };
+    /** The thing itself. */
+    mark: {
+        x: number;
+        y: number;
+        r: number;
+    };
+    /** The depth rule the mark stands on — lit while z is being turned. */
+    depth: string;
+};
+/**
+ * A place as one picture: an object standing on a floor seen from the front.
+ *
+ * X places it across the floor AT ITS DEPTH, so it stays on the stage however
+ * far back it is. Z is drawn twice over — how far back it stands, and how big it
+ * is — because on a slot this size a third number only reads as depth when it
+ * does both. Y is how high it stands off the floor: a stalk up from its shadow,
+ * so at zero it sits on its own shadow. All inputs are 0..1.
+ */
+declare function moveVectorStage(x01: number, y01: number, z01: number, down?: boolean): MoveStage;
 /** A mixer channel's fader position (0..1), or null unless it is a channel slider. */
 declare function moveChannelPosition(meta: ControlMeta | undefined, value: unknown): number | null;
 type MoveMultibandRole = 'amount' | 'speed' | 'band';
@@ -847,4 +909,4 @@ type PanelConfig = {
     kind?: 'timeline' | 'modulation' | 'kit';
 };
 
-export { type ControlMeta as C, type MoveEdges as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_H as d, MOVE_BAND_W as e, type MoveGateRole as f, type MoveMultibandRole as g, type MoveNumericDrawing as h, type MovePlaybackMode as i, type MoveSelectVisual as j, type MoveSliderVisual as k, type MoveToggleVisual as l, type MoveTone as m, type MoveVisual as n, moveBandCuts as o, moveChannelPosition as p, moveGateSpan as q, moveKeyboardValue as r, moveMultibandRole as s, moveMultibandSpan as t, moveNumericDrawing as u, movePlaybackMode as v, moveTrimSpan as w, moveVisualReading as x };
+export { moveVectorStage as A, moveVisualReading as B, type ControlMeta as C, type MoveEdges as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_H as d, MOVE_BAND_W as e, MOVE_STAGE as f, type MoveGateRole as g, type MoveMultibandRole as h, type MoveNumericDrawing as i, type MovePlaybackMode as j, type MoveSelectVisual as k, type MoveSliderVisual as l, type MoveStage as m, type MoveToggleVisual as n, type MoveTone as o, type MoveVisual as p, moveBandCuts as q, moveChannelPosition as r, moveGateSpan as s, moveKeyboardValue as t, moveMultibandRole as u, moveMultibandSpan as v, moveNumericDrawing as w, movePlaybackMode as x, moveTrimSpan as y, moveVectorAxes as z };

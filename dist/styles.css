@@ -2414,6 +2414,7 @@
    column. A face lays its parts out by column — `--move-face-span` columns,
    each `--move-face-col-w` wide — so each part stands over its own knob. */
 .tweakers-move-dial[data-kind="gate"],
+.tweakers-move-dial[data-kind="vector"],
 .tweakers-move-dial[data-kind="multiband"],
 .tweakers-move-dial[data-kind="channel"] {
   --move-face-bar-w: 4px;
@@ -2772,6 +2773,89 @@
   background: var(--move-text);
 }
 
+/* ── vector: a place on a stage ─────────────────────────────────── */
+
+.tweakers-move-vector-stage {
+  position: absolute;
+  top: 29px;
+  bottom: 27px;
+  left: 12px;
+  right: 12px;
+  overflow: hidden;
+  border-radius: var(--move-radius-small);
+  background: var(--move-face-well);
+  pointer-events: none;
+}
+
+.tweakers-move-vector-stage > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.tweakers-move-vector-floor { fill: var(--move-face-cell); }
+
+.tweakers-move-vector-rules,
+.tweakers-move-vector-depth,
+.tweakers-move-vector-rail {
+  fill: none;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.tweakers-move-vector-rules { stroke: color-mix(in srgb, var(--move-text) 16%, transparent); }
+
+/* The guides only appear for the axis in the hand. */
+.tweakers-move-vector-depth,
+.tweakers-move-vector-rail { stroke: transparent; }
+
+.tweakers-move-vector-depth[data-active],
+.tweakers-move-vector-rail[data-active] { stroke: color-mix(in srgb, var(--move-text) 60%, transparent); }
+
+.tweakers-move-vector-foot,
+.tweakers-move-vector-stalk,
+.tweakers-move-vector-mark {
+  position: absolute;
+  left: var(--move-vector-x);
+  top: var(--move-vector-y);
+  pointer-events: none;
+}
+
+.tweakers-move-vector-foot {
+  height: var(--move-vector-size);
+  aspect-ratio: 2.9;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--move-text) 18%, transparent);
+  transform: translate(-50%, -50%);
+}
+
+.tweakers-move-vector-stalk {
+  width: 1px;
+  height: var(--move-vector-size);
+  background: color-mix(in srgb, var(--move-text) 40%, transparent);
+  transform: translateX(-50%);
+}
+
+.tweakers-move-vector-stalk[data-active] { background: var(--move-text); }
+
+.tweakers-move-vector-mark {
+  height: var(--move-vector-size);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--move-text) 80%, transparent);
+  transform: translate(-50%, -50%);
+}
+
+.tweakers-move-vector-mark[data-active] { background: var(--move-text); }
+
+/* Each axis's part of the stage, named like the other faces' tracks. */
+.tweakers-move-vector-track {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
 .tweakers-move-face-zones {
   position: absolute;
   inset: 0;
@@ -2786,7 +2870,8 @@
   touch-action: none;
 }
 
-.tweakers-move-face-zone[data-role="lookahead"] { cursor: ew-resize; }
+.tweakers-move-face-zone[data-role="lookahead"],
+.tweakers-move-face-zone[data-role="axis-x"] { cursor: ew-resize; }
 .tweakers-move-face-zone[data-role="speed"] { cursor: grab; }
 
 .tweakers-move-face-zone:focus-visible {
