@@ -17,8 +17,9 @@ import '../src/styles/theme.css';
  *
  * The timeline is the clock — Play runs it, the volume knob scrubs it, and
  * the video follows. Its clips animate what sits over the picture (a title,
- * a slow push-in, a vignette, a pulse), and Rec lays a take down on its own
- * row. The panel's one page grades the picture, every dial modulatable.
+ * a slow push-in, a vignette, a pulse, a caption, a shake), and Rec lays
+ * takes down on their own rows — six rows start the card at its 14px rows,
+ * and a few overlapping takes take it to 10px. The panel's one page grades the picture, every dial modulatable.
  */
 
 // The picture: real units, the page the knobs hold.
@@ -74,6 +75,25 @@ function App() {
       steps: [
         { duration: 0.5, to: { glow: 1 }, transition: { type: 'easing' as const, duration: 0.5, ease: [0.4, 0, 0.2, 1] as [number, number, number, number] } },
         { duration: 0.5, to: { glow: 0 }, transition: { type: 'easing' as const, duration: 0.5, ease: [0.4, 0, 0.2, 1] as [number, number, number, number] } },
+      ],
+    },
+    caption: {
+      at: Math.min(9.5, length * 0.4),
+      from: { opacity: 0 },
+      steps: [
+        { duration: 0.4, to: { opacity: 1 }, transition: { type: 'easing' as const, duration: 0.4, ease: [0.4, 0, 0.2, 1] as [number, number, number, number] } },
+        { duration: 2.6, to: { opacity: 1 } },
+        { duration: 0.4, to: { opacity: 0 }, transition: { type: 'easing' as const, duration: 0.4, ease: [0.4, 0, 0.2, 1] as [number, number, number, number] } },
+      ],
+    },
+    shake: {
+      at: Math.min(20, length * 0.83),
+      from: { x: 0 },
+      steps: [
+        { duration: 0.15, to: { x: -10 } },
+        { duration: 0.15, to: { x: 8 } },
+        { duration: 0.15, to: { x: -5 } },
+        { duration: 0.15, to: { x: 0 } },
       ],
     },
     // Every take is a marker on one row — a layer packs into as few rows as it needs.
@@ -157,6 +177,8 @@ function App() {
   const push = tl.push.current;
   const vignette = tl.vignette.current;
   const pulse = tl.pulse.current;
+  const caption = tl.caption.current;
+  const shake = tl.shake.current;
 
   return (
     <>
@@ -174,11 +196,14 @@ function App() {
               if (Number.isFinite(seconds) && seconds > 0) setLength(Number(seconds.toFixed(2)));
             }}
             onError={() => setMissing(src === SAMPLE)}
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', filter: grade, transform: `scale(${Number(push.scale)})` }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', filter: grade, transform: `translateX(${Number(shake.x)}px) scale(${Number(push.scale)})` }}
           />
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'radial-gradient(ellipse at center, transparent 45%, #000 100%)', opacity: Number(vignette.amount) }} />
           <div style={{ position: 'absolute', left: 0, right: 0, bottom: '14%', textAlign: 'center', pointerEvents: 'none', fontFamily: "'Geist Pixel', system-ui", fontSize: 'clamp(24px, 5vw, 56px)', color: '#fff', opacity: Number(title.opacity), transform: `translateY(${Number(title.y)}px)` }}>
             Twenty-four seconds
+          </div>
+          <div style={{ position: 'absolute', left: 24, top: 18, pointerEvents: 'none', fontFamily: "'Geist Pixel', system-ui", fontSize: 14, color: '#fff', opacity: Number(caption.opacity) }}>
+            a caption, for a while
           </div>
           <div style={{ position: 'absolute', top: 18, right: 18, width: 14, height: 14, borderRadius: 7, background: '#fd3c57', pointerEvents: 'none', opacity: 0.25 + 0.75 * Number(pulse.glow), boxShadow: `0 0 ${Math.round(24 * Number(pulse.glow))}px #fd3c57` }} />
           {missing && (
