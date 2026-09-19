@@ -4828,6 +4828,168 @@
   background: var(--move-timeline-record);
 }
 
+/* Rows thin out as layers pile up (data-rows, set by the component): each
+   step gives up what no longer fits — lengths, then names, then the lane
+   ground — so the card spends its height on the clips. */
+.tweakers-move-timeline[data-rows='14'] {
+  --move-timeline-row: 14px;
+}
+
+.tweakers-move-timeline[data-rows='14'] .tweakers-move-timeline-name {
+  font-size: 11px;
+}
+
+.tweakers-move-timeline[data-rows='14'] .tweakers-move-timeline-clip-length {
+  font-size: 9px;
+}
+
+.tweakers-move-timeline[data-rows='10'] {
+  --move-timeline-row: 10px;
+  --move-timeline-row-gap: 2px;
+}
+
+.tweakers-move-timeline[data-rows='10'] .tweakers-move-timeline-name {
+  font-size: 10px;
+}
+
+.tweakers-move-timeline[data-rows='10'] .tweakers-move-timeline-lane {
+  border-radius: 3px;
+}
+
+.tweakers-move-timeline[data-rows='10'] .tweakers-move-timeline-clip,
+.tweakers-move-timeline[data-rows='10'] .tweakers-move-timeline-ghost {
+  top: 1px;
+  bottom: 1px;
+  border-radius: 2px;
+}
+
+/* The ruler already tells the time a length would. */
+.tweakers-move-timeline[data-rows='10'] .tweakers-move-timeline-clip-length,
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-clip-length {
+  display: none;
+}
+
+/* Squeezed: shapes only — a mark per row where its name was (hover says
+   it), bars on a hairline, the joins cut through them. */
+.tweakers-move-timeline[data-rows='4'] {
+  --move-timeline-row: 4px;
+  --move-timeline-row-gap: 2px;
+  --move-timeline-names: 28px;
+  --move-timeline-ruler: 20px;
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-title {
+  display: none;
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-name {
+  position: relative;
+  font-size: 0;
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-name::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 8px;
+  height: 1px;
+  background: var(--move-timeline-ink);
+  opacity: 0.35;
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-lane {
+  background: none;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-lane::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--move-timeline-ink);
+  opacity: 0.1;
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-clip,
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-ghost {
+  top: 0;
+  bottom: 0;
+  padding: 0;
+  border-radius: 999px;
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-ghost {
+  opacity: 0.28;
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-clip[data-marker] {
+  box-shadow: none;
+  background: color-mix(in srgb, var(--move-timeline-ink) 45%, transparent);
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-join::after {
+  left: 2.5px;
+  width: 2px;
+  opacity: 1;
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-tick-label {
+  bottom: 8px;
+  font-size: 10px;
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-playhead::before {
+  left: -2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+}
+
+/* The squeeze switch, in the card's top-right corner: three lines that
+   close up while the rows are squeezed. */
+.tweakers-move-timeline-compact {
+  appearance: none;
+  position: absolute;
+  top: 3px;
+  right: 6px;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: var(--move-timeline-display);
+  color: var(--move-timeline-ink);
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-timeline-compact:hover,
+.tweakers-move-timeline-compact[aria-pressed='true'] {
+  opacity: 1;
+}
+
+.tweakers-move-timeline-compact:focus-visible {
+  outline: 1px solid var(--move-timeline-ink);
+}
+
+.tweakers-move-timeline-compact svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+}
+
 /* The timeline's clock in the panel's volume corner: Play, the time, Loop
    and Rec — ember while off, lit while on, the take in the record red. */
 .tweakers-move-timeline-clock {

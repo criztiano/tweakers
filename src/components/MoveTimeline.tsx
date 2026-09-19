@@ -16,6 +16,7 @@ import {
   formatTimelineTick,
   MoveTimelineStore,
   packTimelineRows,
+  timelineRowHeight,
   timelineTicks,
   timelineWindow,
   type MoveTimelineClaimOptions,
@@ -150,6 +151,10 @@ export function MoveTimeline({
   const [holding, setHolding] = useState(false);
   const liveRows = useMemo(() => buildRows(meta?.clips ?? [], values, duration), [meta, values, duration]);
   const rows = holding && heldRows.current ? refreshRows(heldRows.current, values, duration) : liveRows;
+  // Rows thin out on their own as layers pile up; the corner button squeezes
+  // them to bare shapes. A screen-only choice — the Move has no key for it.
+  const [compact, setCompact] = useState(false);
+  const rowHeight = timelineRowHeight(rows.length, compact);
 
   // The playhead and the take in progress move every frame: written straight
   // to their elements, so a playing timeline re-renders nothing.
@@ -286,6 +291,7 @@ export function MoveTimeline({
       className={`tweakers-move-surface tweakers-move-timeline${className ? ` ${className}` : ''}`}
       data-variant={variant}
       data-recording={recording || undefined}
+      data-rows={rowHeight}
       style={{
         ...(accent ? { '--move-timeline-accent': accent } : {}),
         ...(variant === 'dock' ? { bottom: `${dockBottom}px` } : {}),
@@ -295,6 +301,20 @@ export function MoveTimeline({
         <div className="tweakers-move-timeline-corner">
           <span className="tweakers-move-timeline-title">{meta.name}</span>
         </div>
+        <button
+          type="button"
+          className="tweakers-move-timeline-compact"
+          aria-pressed={compact}
+          aria-label={compact ? 'Show rows with names' : 'Squeeze rows'}
+          title={compact ? 'Show rows with names' : 'Squeeze rows'}
+          onClick={() => setCompact((on) => !on)}
+        >
+          <svg viewBox="0 0 12 12" aria-hidden="true">
+            {compact
+              ? [2.5, 6, 9.5].map((y) => <path key={y} d={`M2 ${y}H10`} />)
+              : [4.5, 6, 7.5].map((y) => <path key={y} d={`M2 ${y}H10`} />)}
+          </svg>
+        </button>
         <div
           ref={rulerRef}
           className="tweakers-move-timeline-ruler"
