@@ -2849,7 +2849,7 @@
 
 .tweakers-move-vector-mark[data-active] { background: var(--move-text); }
 
-/* What each axis's drag reads: the stage itself (see moveFaceValue). */
+/* Each axis's part of the stage, named like the other faces' tracks. */
 .tweakers-move-vector-track {
   position: absolute;
   inset: 0;
