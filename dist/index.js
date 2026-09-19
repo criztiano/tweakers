@@ -9063,10 +9063,11 @@ var moveWheelSlot = (h) => {
 };
 var paletteCoords = /* @__PURE__ */ new Map();
 var paletteHsl = (palette) => {
-  const cached = paletteCoords.get(palette.id);
+  const key = `${palette.id}:${palette.colors.join()}`;
+  const cached = paletteCoords.get(key);
   if (cached) return cached;
   const coords = palette.colors.map((hex) => rgbToHsl(parseHex(hex) ?? { r: 255, g: 0, b: 0, a: 1 }));
-  paletteCoords.set(palette.id, coords);
+  paletteCoords.set(key, coords);
   return coords;
 };
 var paletteSlot = (palette, h) => {
@@ -9092,6 +9093,9 @@ var MoveColorStoreClass = class {
     this.coordinates = /* @__PURE__ */ new Map();
     /** The palette the dial is locked to — null is the whole wheel. */
     this.paletteId = null;
+    /** The app's own palette, holding EVERY colour control to its colours —
+     *  open or not. It outranks the editor's navigator, which it closes. */
+    this.lock = null;
     /** The palette navigator behind Menu while the editor is open. */
     this.picker = false;
     this.pickerCursor = 0;
@@ -9107,8 +9111,9 @@ var MoveColorStoreClass = class {
     };
     this.getStop = () => this.stop;
     /* ---- the palette lock and its navigator ---- */
-    this.getPaletteId = () => this.paletteId;
-    this.getPalette = () => this.paletteId ? MOVE_COLOR_PALETTES.find((p) => p.id === this.paletteId) ?? null : null;
+    this.getPaletteId = () => this.lock?.id ?? this.paletteId;
+    this.getPalette = () => this.lock ?? (this.paletteId ? MOVE_COLOR_PALETTES.find((p) => p.id === this.paletteId) ?? null : null);
+    this.getLock = () => this.lock;
     this.isPickerOpen = () => this.picker && !!this.view;
     this.getPickerCursor = () => this.pickerCursor;
   }
@@ -9222,7 +9227,7 @@ var MoveColorStoreClass = class {
     color.s = clamp8(color.s);
     color.l = clamp8(color.l);
     color.a = clamp8(color.a);
-    const palette = this.view?.panelId === panelId && this.view.path === path ? this.getPalette() : null;
+    const palette = this.lockFor(panelId, path);
     const snapped = palette ? paletteHsl(palette)[paletteAt(palette, color.h)] : null;
     const painted = snapped ? { ...color, h: snapped.h, s: snapped.s, l: snapped.l } : color;
     const g = stop === null ? null : this.gradient(panelId, path);
@@ -9243,7 +9248,7 @@ var MoveColorStoreClass = class {
     if (this.view) this.update(this.view.panelId, this.view.path, { a });
   }
   turn(panelId, path, delta, fine = false) {
-    const palette = this.view?.panelId === panelId && this.view.path === path ? this.getPalette() : null;
+    const palette = this.lockFor(panelId, path);
     if (palette && delta) {
       const at2 = paletteAt(palette, this.read(panelId, path).h);
       const next = (at2 + Math.sign(delta) + palette.colors.length) % palette.colors.length;
@@ -9255,6 +9260,29 @@ var MoveColorStoreClass = class {
   turnLuminosity(panelId, path, delta, fine = false) {
     this.update(panelId, path, { l: this.read(panelId, path).l + delta * (fine ? 2e-3 : 0.02) });
   }
+  /** The palette a control's edits snap to: the app's lock on every control,
+   *  else the navigator's choice on the one the editor has open. */
+  lockFor(panelId, path) {
+    if (this.lock) return this.lock;
+    return this.view?.panelId === panelId && this.view.path === path ? this.getPalette() : null;
+  }
+  /**
+   * Hold every colour control in the app to one palette — an app-wide
+   * setting, not the editor's: a turn steps through its colours, a drag or a
+   * write through the editor lands on the nearest segment, on screen and on
+   * the hardware, open editor or not. The navigator behind Menu stands down
+   * while the lock holds, since the palette is the app's to choose. `null`
+   * hands every control back its whole wheel. Values the app writes itself
+   * are the app's to keep on the palette.
+   */
+  lockPalette(palette) {
+    const next = palette && palette.colors.length > 0 ? { ...palette, colors: [...palette.colors] } : null;
+    const same = next?.id === this.lock?.id && next?.colors.join() === this.lock?.colors.join();
+    if (same) return;
+    this.lock = next;
+    this.picker = false;
+    this.notify();
+  }
   /** Which palette colour the open control sits on — null off-palette. */
   paletteIndex(panelId, path) {
     const palette = this.getPalette();
@@ -9264,6 +9292,7 @@ var MoveColorStoreClass = class {
    *  bring its colour onto the palette right away — the nearest of its hues,
    *  then that segment's centre so a turn steps cleanly from there. */
   setPalette(id) {
+    if (this.lock) return;
     this.paletteId = id && MOVE_COLOR_PALETTES.some((p) => p.id === id) ? id : null;
     this.picker = false;
     const palette = this.getPalette();
@@ -9279,7 +9308,7 @@ var MoveColorStoreClass = class {
     if (palette && this.view) this.update(this.view.panelId, this.view.path, { h: paletteCenter(palette, index) });
   }
   openPicker() {
-    if (!this.view || this.picker) return;
+    if (!this.view || this.picker || this.lock) return;
     const at2 = MOVE_COLOR_PALETTES.findIndex((p) => p.id === this.paletteId);
     this.pickerCursor = at2 < 0 ? 0 : at2 + 1;
     this.picker = true;

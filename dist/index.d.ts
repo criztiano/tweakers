@@ -5761,6 +5761,9 @@ declare class MoveColorStoreClass {
     private coordinates;
     /** The palette the dial is locked to — null is the whole wheel. */
     private paletteId;
+    /** The app's own palette, holding EVERY colour control to its colours —
+     *  open or not. It outranks the editor's navigator, which it closes. */
+    private lock;
     /** The palette navigator behind Menu while the editor is open. */
     private picker;
     private pickerCursor;
@@ -5807,6 +5810,20 @@ declare class MoveColorStoreClass {
     turnLuminosity(panelId: string, path: string, delta: number, fine?: boolean): void;
     getPaletteId: () => string | null;
     getPalette: () => MoveColorPalette | null;
+    /** The palette a control's edits snap to: the app's lock on every control,
+     *  else the navigator's choice on the one the editor has open. */
+    private lockFor;
+    /**
+     * Hold every colour control in the app to one palette — an app-wide
+     * setting, not the editor's: a turn steps through its colours, a drag or a
+     * write through the editor lands on the nearest segment, on screen and on
+     * the hardware, open editor or not. The navigator behind Menu stands down
+     * while the lock holds, since the palette is the app's to choose. `null`
+     * hands every control back its whole wheel. Values the app writes itself
+     * are the app's to keep on the palette.
+     */
+    lockPalette(palette: MoveColorPalette | null): void;
+    getLock: () => MoveColorPalette | null;
     /** Which palette colour the open control sits on — null off-palette. */
     paletteIndex(panelId: string, path: string): number | null;
     /** Lock the open editor to a palette (null = back to all colours), and
