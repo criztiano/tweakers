@@ -133,6 +133,12 @@ describe('Move gradient editing', () => {
     expect(TweakStore.getValue(id, 'tint')).toBe('#00ff00');
     MoveColorStore.turn(id, 'tint', 1);
     expect(TweakStore.getValue(id, 'tint')).toBe('#0000ff');
+    // a colour the app wrote itself steps on from where it is in the palette
+    TweakStore.updateValue(id, 'tint', '#0000ff');
+    MoveColorStore.turn(id, 'tint', 1);
+    expect(TweakStore.getValue(id, 'tint')).toBe('#ff0000');
+    MoveColorStore.turn(id, 'tint', -1);
+    expect(TweakStore.getValue(id, 'tint')).toBe('#0000ff');
     // a free hue or luminosity edit lands on a colour of the lock
     MoveColorStore.update(id, 'tint', { h: 20, l: 0.3 });
     expect(colors).toContain(TweakStore.getValue(id, 'tint'));

@@ -250,7 +250,7 @@ class MoveColorStoreClass {
     // With a palette locked in, a turn is a step to the next of its colours.
     const palette = this.lockFor(panelId, path);
     if (palette && delta) {
-      const at = paletteAt(palette, this.read(panelId, path).h);
+      const at = this.paletteAtValue(palette, panelId, path);
       const next = (at + Math.sign(delta) + palette.colors.length) % palette.colors.length;
       this.update(panelId, path, { h: paletteCenter(palette, next) });
       return;
@@ -294,7 +294,15 @@ class MoveColorStoreClass {
   /** Which palette colour the open control sits on — null off-palette. */
   paletteIndex(panelId: string, path: string): number | null {
     const palette = this.getPalette();
-    return palette ? paletteAt(palette, this.read(panelId, path).h) : null;
+    return palette ? this.paletteAtValue(palette, panelId, path) : null;
+  }
+  /** Which palette colour a control holds: the colour it IS, when it is one of
+   *  them — a value the app wrote carries no position on the segmented wheel —
+   *  else the segment its hue sits in. */
+  private paletteAtValue(palette: MoveColorPalette, panelId: string, path: string): number {
+    const hex = this.hex(panelId, path).slice(0, 7).toLowerCase();
+    const exact = palette.colors.findIndex((color) => color.slice(0, 7).toLowerCase() === hex);
+    return exact >= 0 ? exact : paletteAt(palette, this.read(panelId, path).h);
   }
   /** Lock the open editor to a palette (null = back to all colours), and
    *  bring its colour onto the palette right away — the nearest of its hues,
