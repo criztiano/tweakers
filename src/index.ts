@@ -115,7 +115,7 @@ export { MoveSettingsView } from './move-settings';
 export { MoveVolumeDisplay } from './move-volume';
 export { MoveTimeline, MoveTimelineClock, MoveTimelineZoom } from './components/MoveTimeline';
 export type { MoveTimelineProps } from './components/MoveTimeline';
-export { MoveTimelineStore, MOVE_TIMELINE_MAX_ZOOM, timelineWindow, followWindow, zoomWindow, timelineTicks, formatTimelineTick, timelineClock, packTimelineRows } from './move-timeline';
+export { MoveTimelineStore, MOVE_TIMELINE_MAX_ZOOM, timelineWindow, followWindow, zoomWindow, timelineTicks, formatTimelineTick, timelineClock, packTimelineRows, timelineRowHeight } from './move-timeline';
 export type { MoveTimelineClaimOptions } from './move-timeline';
 export { useMoveTimeline } from './use-move-timeline';
 export type { UseMoveTimelineOptions, MoveTimelineValues } from './use-move-timeline';

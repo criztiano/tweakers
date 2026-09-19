@@ -125,6 +125,19 @@ export function packTimelineRows(spans: readonly { at: number; end: number }[]):
   return rows;
 }
 
+/**
+ * How tall a row is, in px, for this many rows. The card keeps its roomy
+ * rows until the layers crowd it — six rows go to 14px, eight to 10px — so
+ * a growing edit costs the screen above it as little height as it can.
+ * `compact` is the screen's own choice: 4px rows, shapes only, no names.
+ */
+export function timelineRowHeight(rows: number, compact = false): 18 | 14 | 10 | 4 {
+  if (compact) return 4;
+  if (rows >= 8) return 10;
+  if (rows >= 6) return 14;
+  return 18;
+}
+
 /** The panel's clock: m:ss:cc — the waveform's, so every transport reads alike. */
 export function timelineClock(time: number): string {
   const t = Math.max(0, Number.isFinite(time) ? time : 0);

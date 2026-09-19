@@ -6,6 +6,7 @@ import {
   MoveTimelineStore,
   packTimelineRows,
   timelineClock,
+  timelineRowHeight,
   timelineTicks,
   timelineWindow,
   zoomWindow,
@@ -79,6 +80,16 @@ describe('a layer', () => {
     // Config order is not time order: the rows still pack.
     expect(packTimelineRows([{ at: 6, end: 8 }, { at: 0, end: 2 }])).toEqual([0, 0]);
   });
+});
+
+it('thins its rows as layers pile up, and squeezes them on request', () => {
+  expect(timelineRowHeight(1)).toBe(18);
+  expect(timelineRowHeight(5)).toBe(18);
+  expect(timelineRowHeight(6)).toBe(14);
+  expect(timelineRowHeight(7)).toBe(14);
+  expect(timelineRowHeight(8)).toBe(10);
+  expect(timelineRowHeight(30)).toBe(10);
+  expect(timelineRowHeight(2, true)).toBe(4);
 });
 
 it('reads the clock as m:ss:cc', () => {
