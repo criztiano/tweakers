@@ -20,7 +20,7 @@ function gradientPanel(stops = [
   return id;
 }
 const stopsOf = (id: string) => (TweakStore.getValue(id, 'ramp') as GradientValue).stops;
-afterEach(() => { MoveColorStore.close(); ids.splice(0).forEach(id => TweakStore.unregisterPanel(id)); });
+afterEach(() => { MoveColorStore.lockPalette(null); MoveColorStore.close(); ids.splice(0).forEach(id => TweakStore.unregisterPanel(id)); });
 describe('Move color editing', () => {
   it('wraps hue and keeps luminosity and opacity independent', () => {
     const id = panel('#ff000080');
@@ -122,5 +122,30 @@ describe('Move gradient editing', () => {
     const b = gradientPanel();
     MoveColorStore.open(b, 'ramp');
     expect(MoveColorStore.getStop()).toBe(0);
+  });
+  it('holds every colour control to the app\'s palette, open or not, until the lock lets go', () => {
+    const colors = ['#ff0000', '#00ff00', '#0000ff'];
+    const id = panel('#ff0000');
+    MoveColorStore.lockPalette({ id: 'app', name: 'App', colors });
+    expect(MoveColorStore.getPalette()?.colors).toEqual(colors);
+    // no editor open: a turn still steps to the next colour of the lock
+    MoveColorStore.turn(id, 'tint', 1);
+    expect(TweakStore.getValue(id, 'tint')).toBe('#00ff00');
+    MoveColorStore.turn(id, 'tint', 1);
+    expect(TweakStore.getValue(id, 'tint')).toBe('#0000ff');
+    // a free hue or luminosity edit lands on a colour of the lock
+    MoveColorStore.update(id, 'tint', { h: 20, l: 0.3 });
+    expect(colors).toContain(TweakStore.getValue(id, 'tint'));
+    // the navigator stands down: the palette is the app's to choose
+    MoveColorStore.open(id, 'tint');
+    MoveColorStore.openPicker();
+    expect(MoveColorStore.isPickerOpen()).toBe(false);
+    MoveColorStore.setPalette('ember');
+    expect(MoveColorStore.getPalette()?.id).toBe('app');
+    // released, the wheel is whole again
+    MoveColorStore.lockPalette(null);
+    MoveColorStore.close();
+    MoveColorStore.update(id, 'tint', { h: 20, s: 1, l: 0.5 });
+    expect(colors).not.toContain(TweakStore.getValue(id, 'tint'));
   });
 });
