@@ -283,8 +283,13 @@ class MoveColorStoreClass {
    */
   setPalettes(palettes: readonly MoveColorPalette[] | null, onPick?: (id: string | null) => void) {
     const next = palettes && palettes.length > 0 ? palettes.map((p) => ({ ...p, colors: [...p.colors] })) : null;
-    this.hostPalettes = next;
+    // Safe to call on every render, like setPresetProvider: the callback is always
+    // taken (it closes over live host state), but an unchanged list leaves the open
+    // navigator exactly where it is — re-seating it would close it under the hand.
     this.onPickPalette = next ? onPick ?? null : null;
+    const same = JSON.stringify(next) === JSON.stringify(this.hostPalettes);
+    if (same) return;
+    this.hostPalettes = next;
     this.picker = false;
     this.pickerCursor = 0;
     this.notify();

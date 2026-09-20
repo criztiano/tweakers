@@ -9286,8 +9286,10 @@ var MoveColorStoreClass = class {
    */
   setPalettes(palettes, onPick) {
     const next = palettes && palettes.length > 0 ? palettes.map((p) => ({ ...p, colors: [...p.colors] })) : null;
-    this.hostPalettes = next;
     this.onPickPalette = next ? onPick ?? null : null;
+    const same = JSON.stringify(next) === JSON.stringify(this.hostPalettes);
+    if (same) return;
+    this.hostPalettes = next;
     this.picker = false;
     this.pickerCursor = 0;
     this.notify();
