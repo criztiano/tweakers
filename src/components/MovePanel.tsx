@@ -51,6 +51,7 @@ import { MoveTimelineClock, MoveTimelineZoom } from './MoveTimeline';
 import { MoveTimelineStore } from '../move-timeline';
 import { MoveSettingsView } from '../move-settings';
 import { MovePresetStore, type MovePresetView } from '../move-presets';
+import { MoveAgentStore, MOVE_JOG_HOLD_EVENT, type MoveAgentView } from '../move-agent';
 import { ListScreen } from './ListScreen';
 import { MovePanelMotion } from './MovePanelMotion';
 
@@ -927,6 +928,32 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     window.addEventListener(MOVE_SEARCH_EVENT, onSearch);
     return () => window.removeEventListener(MOVE_SEARCH_EVENT, onSearch);
   }, []);
+  // The agent, behind a held wheel: the prompt opens above the panel, a
+  // second hold closes it. A click of the wheel while a reply is showing
+  // takes the change back — the one gesture that needs no keyboard.
+  useSyncExternalStore(MoveAgentStore.subscribe, MoveAgentStore.getVersion, () => 0);
+  const agent = MoveAgentStore.getView();
+  const agentFocus = useRef<string | undefined>(undefined);
+  agentFocus.current = pageId;
+  useEffect(() => {
+    const onHold = (e: Event) => {
+      if (e.defaultPrevented) return;
+      e.preventDefault();
+      MoveAgentStore.toggle(agentFocus.current);
+    };
+    const onJogClick = (e: Event) => {
+      if (MoveAgentStore.getView()?.phase !== 'done' || !MoveAgentStore.canUndo()) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      MoveAgentStore.undo();
+    };
+    window.addEventListener(MOVE_JOG_HOLD_EVENT, onHold);
+    window.addEventListener(MOVE_JOG_CLICK_EVENT, onJogClick, { capture: true });
+    return () => {
+      window.removeEventListener(MOVE_JOG_HOLD_EVENT, onHold);
+      window.removeEventListener(MOVE_JOG_CLICK_EVENT, onJogClick, { capture: true });
+    };
+  }, []);
   // The wheel and its click, while a search runs. Registration order does
   // not decide who wins: the search takes every turn while it is open, and
   // every other reader of the wheel — the navigators, the strip, a host's
@@ -1507,6 +1534,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
         {!explorationOpen && colorMeta && <MoveColorDisplay panelId={page.panel.id} meta={colorMeta} anchor={panelRef} theme={theme} />}
         <PresetExploration />
         {presetSave && <MovePresetSaveInput suggested={presetSave.suggested} />}
+        {agent && !presetSave && <MoveAgentPrompt view={agent} />}
         {!explorationOpen && composition && modSettings && (
           <MoveCurveComposer
             index={modSettings.index}
@@ -3570,6 +3598,49 @@ function MovePresetSaveInput({ suggested }: { suggested: string }) {
         }}
         onBlur={() => MovePresetStore.cancelSave()}
       />
+    </div>
+  );
+}
+
+/**
+ * The agent's prompt, floating where the preset name does. Enter sends the
+ * words, Escape closes. The field stays open after a reply — asking again
+ * refines what just landed — and the reply sits under it with its undo.
+ */
+function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const thinking = view.phase === 'thinking';
+  useEffect(() => { if (!thinking) inputRef.current?.select(); }, [thinking]);
+  const changed = view.phase === 'done' && view.changed > 0;
+  const note = thinking ? 'Turning the dials…'
+    : [changed ? `${view.changed} ${view.changed === 1 ? 'value' : 'values'} changed.` : '', view.message].filter(Boolean).join(' ');
+  return (
+    <div className="tweakers-move-preset-save tweakers-move-agent" data-phase={view.phase}>
+      <input
+        ref={inputRef}
+        className="tweakers-move-preset-save-input tweakers-move-agent-input"
+        defaultValue={view.prompt}
+        placeholder="Ask for a change"
+        aria-label="Ask the agent for a change"
+        autoFocus
+        readOnly={thinking}
+        spellCheck={false}
+        autoComplete="off"
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter') void MoveAgentStore.ask(e.currentTarget.value);
+          else if (e.key === 'Escape') MoveAgentStore.close();
+          else if (e.key === 'z' && (e.metaKey || e.ctrlKey) && changed) { e.preventDefault(); MoveAgentStore.undo(); }
+        }}
+      />
+      {note && (
+        <p className="tweakers-move-agent-note" role="status">
+          {note}
+          {changed && MoveAgentStore.canUndo() && (
+            <button type="button" className="tweakers-move-agent-undo" onClick={() => MoveAgentStore.undo()}>Undo</button>
+          )}
+        </p>
+      )}
     </div>
   );
 }

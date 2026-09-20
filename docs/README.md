@@ -9,6 +9,7 @@ belongs here; transport and device protocol belong there; engine behavior belong
 in the consuming app.
 
 - [Preset exploration](preset-exploration.md): breeding, morphing, Move controls, and host adapters.
+- [The agent](agent.md): the held wheel's prompt — ask in words, an agent turns the dials.
 - [Control dictionary](controls.md): choose a control and understand Move coverage.
 - [Design language](design-language.md): surfaces, typography, layout and interaction.
 - [Integration standards](integration.md): state, hardware lifecycle, packaging and updates.

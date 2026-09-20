@@ -183,7 +183,8 @@ MoveVolumeDisplay.set({
 // Keyboard stand-ins for the hardware. M = the Menu button (tap opens and
 // dismisses; Shift+M is the long press, the save input). Holding C is the
 // Mute button held — the compare, relayed raw like the kit does it.
-// Backspace = Back, Enter = jog click, arrows = wheel detents.
+// Backspace = Back, Enter = jog click, arrows = wheel detents. Shift+Enter is
+// the wheel held down — the agent's prompt — relayed like the kit does it.
 const muteEvent = (pressed: boolean, shift: boolean) =>
   !window.dispatchEvent(new CustomEvent('move-tweakers:mute', { detail: { pressed, shift }, cancelable: true }));
 window.addEventListener('keydown', (e) => {
@@ -194,6 +195,7 @@ window.addEventListener('keydown', (e) => {
   else if (e.key.toLowerCase() === 'l') MoveFunctions.run('loop', {});
   else if (e.key.toLowerCase() === 's') MoveFunctions.run('set_overview', { shift: true, step: 0 });
   else if (e.key === 'Backspace') MoveFunctions.run('back', {});
+  else if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); window.dispatchEvent(new CustomEvent('move-tweakers:jog-hold', { detail: { shift: false }, cancelable: true })); }
   else if (e.key === 'Enter') MovePresetStore.confirm();
   else if (e.key === 'ArrowDown') MovePresetStore.scroll(1);
   else if (e.key === 'ArrowUp') MovePresetStore.scroll(-1);

@@ -71,6 +71,12 @@ function numeric(value: number, p: GeneParameter) {
 function valid(value: unknown, p: GeneParameter): boolean {
   return p.kind === 'number' ? typeof value === 'number' && Number.isFinite(value) : !!p.options?.includes(value as string | boolean);
 }
+/** A raw value fitted to its gene — clamped and stepped — or undefined when it cannot be one. */
+export function fitGene(value: unknown, p: GeneParameter): unknown {
+  if (p.kind === 'number') return typeof value === 'number' && Number.isFinite(value) ? numeric(value, p) : undefined;
+  if (p.options?.every(o => typeof o === 'boolean') && (value === 'true' || value === 'false')) return value === 'true';
+  return valid(value, p) ? value : undefined;
+}
 function randomGene(p: GeneParameter, random: () => number): unknown {
   return p.kind === 'number' ? numeric((p.low ?? p.min ?? 0) + random() * ((p.high ?? p.max ?? 1) - (p.low ?? p.min ?? 0)), p)
     : p.options?.[Math.floor(random() * p.options.length)];

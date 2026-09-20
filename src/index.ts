@@ -416,6 +416,9 @@ export type { MoveColorView, MoveColorPalette } from './move-color';
 // bridge kit drives (scroll on wheel turns, confirm on jog click,
 // beginSave on Shift+Menu; a hold opens generative exploration).
 export { MovePresetStore } from './move-presets';
+// Generative presetting — a held wheel opens a prompt, an agent turns the dials.
+export { MoveAgentStore, describeAgentControls, applyAgentWrites, restoreAgentWrites, MOVE_JOG_HOLD_EVENT } from './move-agent';
+export type { MoveAgentControl, MoveAgentWrite, MoveAgentRequest, MoveAgentReply, MoveAgentAsk, MoveAgentOptions, MoveAgentView, MoveAgentPhase } from './move-agent';
 export { MoveSearchStore, moveSearchMatch, moveSearchFilter } from './move-search';
 export type { MoveSearchTarget, MoveSearchView } from './move-search';
 export type { MovePresetItem, MovePresetView, MovePresetSave, MovePresetPhase } from './move-presets';
