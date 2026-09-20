@@ -1551,6 +1551,12 @@
   z-index: 1;
 }
 
+/* On a colour slot the colour is the ground: the name sits straight on it, with no
+   chip behind it, in whichever ink the colour can carry. */
+.tweakers-move-dial[data-kind="color"] .tweakers-move-dial-head {
+  background: none;
+}
+
 .tweakers-move-dial-head[data-ink="dark"] { color: var(--move-text-inverse, #1e1e1e); }
 .tweakers-move-dial-head[data-ink="light"] { color: var(--move-text); }
 
