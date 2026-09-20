@@ -336,6 +336,10 @@ an overlay above app reattachments and restores the latest app handler.
 
 ### Stacked actions
 
+A `moveTopRow` chip rides the top pad row in its `movePads` column — right under
+its dial — and a colour chip may ride it too, so a page can put a colour
+directly beneath its big slot and keep the value row for what comes after it.
+
 An action named in both `movePads` and `moveTopRow` occupies that column’s
 top pad row. Another action can use its ordinary bottom action row in the same
 column. Both remain momentary actions; neither borrows the dial or toggles a
