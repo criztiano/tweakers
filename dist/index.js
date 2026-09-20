@@ -12425,7 +12425,7 @@ function searchRows(view) {
   }
   if (!palettePickerOpen()) return null;
   return {
-    labels: ["All colors", ...MOVE_COLOR_PALETTES.map((p) => p.name)],
+    labels: ["All colors", ...MoveColorStore.palettes().map((p) => p.name)],
     cursor: MoveColorStore.getPickerCursor(),
     rest: (index) => MoveColorStore.setPickerCursor(index),
     take: (index) => {
@@ -12768,7 +12768,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       });
     }, { label: "copy color", chip: false });
   }, [colorOpenPanel]);
-  const paletteScreen = colorMeta ? MoveColorStore.isPickerOpen() : false;
+  const paletteScreen = MoveColorStore.isPickerOpen();
   useEffect14(() => {
     if (!paletteScreen) return;
     return MoveFunctions.push("back", () => MoveColorStore.closePicker(), { label: "back", chip: false });
@@ -13421,7 +13421,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                       "data-pad-columns": padGridCols || void 0,
                       children: [
                         presetScreen && /* @__PURE__ */ jsx17(MovePresetScreen, { view: presetScreen, search: presetSearch }),
-                        paletteScreen && /* @__PURE__ */ jsx17(MovePaletteScreen, { kept: paletteSearch ? moveSearchFilter(["All colors", ...MOVE_COLOR_PALETTES.map((p) => p.name)], paletteSearch.query) : null, children: paletteSearch && /* @__PURE__ */ jsx17(MoveSearchBar, { view: paletteSearch }) }),
+                        paletteScreen && /* @__PURE__ */ jsx17(MovePaletteScreen, { kept: paletteSearch ? moveSearchFilter(["All colors", ...MoveColorStore.palettes().map((p) => p.name)], paletteSearch.query) : null, children: paletteSearch && /* @__PURE__ */ jsx17(MoveSearchBar, { view: paletteSearch }) }),
                         /* @__PURE__ */ jsx17("div", { className: "tweakers-move-viewport", "data-scroll": stripMode || void 0, children: /* @__PURE__ */ jsxs13(
                           "div",
                           {

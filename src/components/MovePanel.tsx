@@ -42,7 +42,7 @@ import { MOVE_TRACK_COLORS } from '../move-palette';
 import { MoveSurfaceStore, moveScreenRowLabel, type MovePadCell, type MoveStepCell } from '../move-surface-store';
 import { resolveAxis, pointFromValue, normalizeValue, type XYValue } from '../xy-pad-core';
 import { MoveVolumeDisplay, type MoveVolumeDisplayState } from '../move-volume';
-import { MoveColorStore, MOVE_COLOR_PALETTES, MOVE_GRADIENT_STOPS } from '../move-color';
+import { MoveColorStore, MOVE_GRADIENT_STOPS } from '../move-color';
 import { MoveSearchStore, moveSearchFilter, type MoveSearchTarget, type MoveSearchView } from '../move-search';
 import { MoveColorSlot, MoveColorDisplay, MoveOpacityPads, MoveColorSteps, MovePaletteScreen, copyHslOfHex, copyOklch } from './MoveColor';
 import { MoveFunctions } from '../move-functions';
@@ -182,7 +182,7 @@ function searchRows(view: MoveSearchView): SearchRows | null {
   }
   if (!palettePickerOpen()) return null;
   return {
-    labels: ['All colors', ...MOVE_COLOR_PALETTES.map((p) => p.name)],
+    labels: ['All colors', ...MoveColorStore.palettes().map((p) => p.name)],
     cursor: MoveColorStore.getPickerCursor(),
     rest: (index) => MoveColorStore.setPickerCursor(index),
     take: (index) => { MoveSearchStore.close(); MoveColorStore.choosePicker(index); },
@@ -794,7 +794,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       navigator.clipboard?.writeText(text).catch(() => {});
     }, { label: 'copy color', chip: false });
   }, [colorOpenPanel]);
-  const paletteScreen = colorMeta ? MoveColorStore.isPickerOpen() : false;
+  // The navigator stands on its own when the app owns the palettes: a palette is
+  // then an app-wide setting, opened from wherever the app puts it, with no colour
+  // editor up. The store decides; the panel just shows it.
+  const paletteScreen = MoveColorStore.isPickerOpen();
   useEffect(() => {
     if (!paletteScreen) return;
     return MoveFunctions.push('back', () => MoveColorStore.closePicker(), { label: 'back', chip: false });
@@ -1715,7 +1718,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
           >
             {presetScreen && <MovePresetScreen view={presetScreen} search={presetSearch} />}
             {paletteScreen && (
-              <MovePaletteScreen kept={paletteSearch ? moveSearchFilter(['All colors', ...MOVE_COLOR_PALETTES.map((p) => p.name)], paletteSearch.query) : null}>
+              <MovePaletteScreen kept={paletteSearch ? moveSearchFilter(['All colors', ...MoveColorStore.palettes().map((p) => p.name)], paletteSearch.query) : null}>
                 {paletteSearch && <MoveSearchBar view={paletteSearch} />}
               </MovePaletteScreen>
             )}
