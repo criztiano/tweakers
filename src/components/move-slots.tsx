@@ -8,6 +8,7 @@ import type { ControlMeta } from '../store/TweakStore';
 import { ICON_BADGE_OFF, ICON_BADGE_ON, LUCIDE_ICONS } from '../icons';
 import { enumOptionIcon, enumOptionLabel, enumOptionValue } from '../move-layout';
 import { arcPath } from '../angle-core';
+import { parseHex } from '../color-core';
 import { resolveFilterAxis, type FilterValue } from '../filter-core';
 import { ListScreen } from './ListScreen';
 
@@ -804,12 +805,29 @@ export function MoveSlotMultibandBody({
 }
 
 /** Selected color over a transparency checker, with its current hue. */
-export function MoveSlotColorBody({ label, color, hue }: { label: string; color: string; hue: number }) {
+export function MoveSlotColorBody({ label, color }: { label: string; color: string }) {
+  // The colour IS the slot: it fills the whole face, and the name reads on top of
+  // it in whichever ink the colour can carry. No number — a hue in degrees says
+  // nothing the colour does not say better.
   return <>
-    <span className="tweakers-move-dial-head">{label}</span>
     <span className="tweakers-move-color-swatch" aria-hidden="true"><span style={{ background: color }} /></span>
-    <span className="tweakers-move-color-reading">{Math.round(hue)}°</span>
+    <span className="tweakers-move-dial-head" data-ink={colorInk(color)}>{label}</span>
   </>;
+}
+
+/** Which ink a colour can carry: `dark` on a light colour, `light` on a dark one.
+ *  Rec. 709 luminance, the same rule the palette swatches use. */
+export function colorInk(hex: string): 'dark' | 'light' {
+  const rgb = parseHex(hex);
+  if (!rgb) return 'light';
+  const channel = (v: number) => {
+    const c = v / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = 0.2126 * channel(rgb.r) + 0.7152 * channel(rgb.g) + 0.0722 * channel(rgb.b);
+  // Alpha is the slot's checkerboard showing through: a see-through colour reads
+  // light, because the board behind it is light.
+  return luminance * (rgb.a ?? 1) > 0.42 ? 'dark' : 'light';
 }
 
 /**

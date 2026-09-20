@@ -115,6 +115,10 @@ class MoveColorStoreClass {
   /** The app's own palette, holding EVERY colour control to its colours —
    *  open or not. It outranks the editor's navigator, which it closes. */
   private lock: MoveColorPalette | null = null;
+  /** The app's own palettes, when it has a set of its own: the navigator lists
+   *  these instead of the built-in ones. */
+  private hostPalettes: MoveColorPalette[] | null = null;
+  private onPickPalette: ((id: string | null) => void) | null = null;
   /** The palette navigator behind Menu while the editor is open. */
   private picker = false;
   private pickerCursor = 0;
@@ -265,7 +269,28 @@ class MoveColorStoreClass {
 
   getPaletteId = (): string | null => this.lock?.id ?? this.paletteId;
   getPalette = (): MoveColorPalette | null =>
-    this.lock ?? (this.paletteId ? MOVE_COLOR_PALETTES.find((p) => p.id === this.paletteId) ?? null : null);
+    this.lock ?? (this.paletteId ? this.palettes().find((p) => p.id === this.paletteId) ?? null : null);
+
+  /**
+   * The app's own palettes, in the navigator the instrument already has: the rows
+   * list these instead of the built-in ones, the first row ("All colors") still
+   * means no palette, and a choice goes back through `onPick` — the app owns what
+   * a palette means, and answers by locking one (`lockPalette`). With a set
+   * installed the navigator opens on its own, with no colour editor up, so a
+   * palette can be an app-wide setting rather than one control's.
+   *
+   * `null` gives the navigator the built-in palettes back.
+   */
+  setPalettes(palettes: readonly MoveColorPalette[] | null, onPick?: (id: string | null) => void) {
+    const next = palettes && palettes.length > 0 ? palettes.map((p) => ({ ...p, colors: [...p.colors] })) : null;
+    this.hostPalettes = next;
+    this.onPickPalette = next ? onPick ?? null : null;
+    this.picker = false;
+    this.pickerCursor = 0;
+    this.notify();
+  }
+  /** The palettes the navigator lists — the app's when it has some. */
+  palettes = (): MoveColorPalette[] => this.hostPalettes ?? MOVE_COLOR_PALETTES;
   /** The palette a control's edits snap to: the app's lock on every control,
    *  else the navigator's choice on the one the editor has open. */
   private lockFor(panelId: string, path: string): MoveColorPalette | null {
@@ -309,7 +334,7 @@ class MoveColorStoreClass {
    *  then that segment's centre so a turn steps cleanly from there. */
   setPalette(id: string | null) {
     if (this.lock) return;
-    this.paletteId = id && MOVE_COLOR_PALETTES.some((p) => p.id === id) ? id : null;
+    this.paletteId = id && this.palettes().some((p) => p.id === id) ? id : null;
     this.picker = false;
     const palette = this.getPalette();
     if (palette && this.view) {
@@ -324,11 +349,13 @@ class MoveColorStoreClass {
     if (palette && this.view) this.update(this.view.panelId, this.view.path, { h: paletteCenter(palette, index) });
   }
 
-  isPickerOpen = (): boolean => this.picker && !!this.view;
+  isPickerOpen = (): boolean => this.picker && (!!this.view || !!this.hostPalettes);
   getPickerCursor = (): number => this.pickerCursor;
   openPicker() {
-    if (!this.view || this.picker || this.lock) return;
-    const at = MOVE_COLOR_PALETTES.findIndex((p) => p.id === this.paletteId);
+    // The app's own set is reachable whether or not a colour is open, and whether
+    // or not one of its palettes is in force; the built-in set is the editor's.
+    if (this.picker || (!this.hostPalettes && (!this.view || this.lock))) return;
+    const at = this.palettes().findIndex((p) => p.id === this.getPaletteId());
     this.pickerCursor = at < 0 ? 0 : at + 1; // row 0 is "All colors"
     this.picker = true;
     this.notify();
@@ -339,7 +366,7 @@ class MoveColorStoreClass {
   movePickerCursor(delta: number) {
     if (!this.isPickerOpen() || !delta) return;
     const step = Math.round(delta) || Math.sign(delta);
-    const next = Math.max(0, Math.min(MOVE_COLOR_PALETTES.length, this.pickerCursor + step));
+    const next = Math.max(0, Math.min(this.palettes().length, this.pickerCursor + step));
     if (next === this.pickerCursor) return;
     this.pickerCursor = next;
     this.notify();
@@ -347,7 +374,7 @@ class MoveColorStoreClass {
   /** Rest the cursor on a row — a search landing the wheel on the next match. */
   setPickerCursor(cursor: number) {
     if (!this.isPickerOpen()) return;
-    const next = Math.max(0, Math.min(MOVE_COLOR_PALETTES.length, cursor));
+    const next = Math.max(0, Math.min(this.palettes().length, cursor));
     if (next === this.pickerCursor) return;
     this.pickerCursor = next;
     this.notify();
@@ -355,12 +382,19 @@ class MoveColorStoreClass {
   /** Keep the cursor's row: the palette locks in and the navigator dismisses. */
   confirmPicker() {
     if (!this.isPickerOpen()) return;
-    this.setPalette(this.pickerCursor === 0 ? null : MOVE_COLOR_PALETTES[this.pickerCursor - 1]?.id ?? null);
+    const id = this.pickerCursor === 0 ? null : this.palettes()[this.pickerCursor - 1]?.id ?? null;
+    if (this.onPickPalette) {
+      this.picker = false;
+      this.notify();
+      this.onPickPalette(id);
+      return;
+    }
+    this.setPalette(id);
   }
   /** A clicked row: cursor and confirm in one. */
   choosePicker(cursor: number) {
     if (!this.isPickerOpen()) return;
-    this.pickerCursor = Math.max(0, Math.min(MOVE_COLOR_PALETTES.length, cursor));
+    this.pickerCursor = Math.max(0, Math.min(this.palettes().length, cursor));
     this.confirmPicker();
   }
 }

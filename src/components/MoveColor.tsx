@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { rampCss, type GradientValue } from '../gradient-core';
-import { MoveColorStore, MOVE_COLOR_PALETTES, MOVE_COLOR_STEPS, MOVE_OPACITY_PADS, type MoveColorPalette } from '../move-color';
+import { MoveColorStore, MOVE_COLOR_STEPS, MOVE_OPACITY_PADS, type MoveColorPalette } from '../move-color';
 import { TweakStore, type ControlMeta } from '../store/TweakStore';
 import { parseHex, rgbToHsl, rgbToOklch, displayHex, type HSLA } from '../color-core';
 import type { TweakTheme } from '../theme';
@@ -69,7 +69,7 @@ export function MoveColorSlot({ panelId, meta, active, open, latched = false, cl
     onPointerUp={() => { suppressClick.current = !!gesture.current?.moved; gesture.current = null; }}
     onPointerCancel={() => { suppressClick.current = true; gesture.current = null; }}
     onLostPointerCapture={() => { gesture.current = null; }}
-  ><MoveSlotColorBody label={meta.label} color={String(TweakStore.getValue(panelId, meta.path))} hue={color.h} /></button>;
+  ><MoveSlotColorBody label={meta.label} color={String(TweakStore.getValue(panelId, meta.path))} /></button>;
 }
 
 /**
@@ -292,7 +292,7 @@ export function MovePaletteScreen({ kept = null, children }: { kept?: number[] |
   // rows and hands the wheel to the panel; its line rides in as children.
   const rows: { name: string; colors: string[] | null; index: number }[] = [
     { name: 'All colors', colors: null, index: 0 },
-    ...MOVE_COLOR_PALETTES.map((p, i) => ({ name: p.name, colors: p.colors, index: i + 1 })),
+    ...MoveColorStore.palettes().map((p, i) => ({ name: p.name, colors: p.colors, index: i + 1 })),
   ].filter((row) => !kept || kept.includes(row.index));
   // The view follows the cursor the way the list screen does: scroll only
   // this screen, and only far enough to bring the row into sight.
