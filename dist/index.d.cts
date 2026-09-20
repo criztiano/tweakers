@@ -4135,10 +4135,9 @@ declare function MoveSlotMultibandBody({ amount, speed, bands, icon, children, }
     children?: ReactNode;
 }): react_jsx_runtime.JSX.Element;
 /** Selected color over a transparency checker, with its current hue. */
-declare function MoveSlotColorBody({ label, color, hue }: {
+declare function MoveSlotColorBody({ label, color }: {
     label: string;
     color: string;
-    hue: number;
 }): react_jsx_runtime.JSX.Element;
 /**
  * The 4-slot envelope's face, the filter's big sibling: the whole ADSR
@@ -5764,6 +5763,10 @@ declare class MoveColorStoreClass {
     /** The app's own palette, holding EVERY colour control to its colours —
      *  open or not. It outranks the editor's navigator, which it closes. */
     private lock;
+    /** The app's own palettes, when it has a set of its own: the navigator lists
+     *  these instead of the built-in ones. */
+    private hostPalettes;
+    private onPickPalette;
     /** The palette navigator behind Menu while the editor is open. */
     private picker;
     private pickerCursor;
@@ -5810,6 +5813,19 @@ declare class MoveColorStoreClass {
     turnLuminosity(panelId: string, path: string, delta: number, fine?: boolean): void;
     getPaletteId: () => string | null;
     getPalette: () => MoveColorPalette | null;
+    /**
+     * The app's own palettes, in the navigator the instrument already has: the rows
+     * list these instead of the built-in ones, the first row ("All colors") still
+     * means no palette, and a choice goes back through `onPick` — the app owns what
+     * a palette means, and answers by locking one (`lockPalette`). With a set
+     * installed the navigator opens on its own, with no colour editor up, so a
+     * palette can be an app-wide setting rather than one control's.
+     *
+     * `null` gives the navigator the built-in palettes back.
+     */
+    setPalettes(palettes: readonly MoveColorPalette[] | null, onPick?: (id: string | null) => void): void;
+    /** The palettes the navigator lists — the app's when it has some. */
+    palettes: () => MoveColorPalette[];
     /** The palette a control's edits snap to: the app's lock on every control,
      *  else the navigator's choice on the one the editor has open. */
     private lockFor;

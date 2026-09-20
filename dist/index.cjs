@@ -2307,6 +2307,147 @@ function arcPath(from, to, radius, cx = 0, cy = 0) {
   return `M ${point(from)} A ${radius} ${radius} 0 ${Math.abs(delta) > 180 ? 1 : 0} ${delta > 0 ? 1 : 0} ${point(to)}`;
 }
 
+// src/color-core.ts
+var COLOR_FORMATS = ["hex", "rgb", "hsl", "oklch"];
+var LONG_PRESS_MS = 500;
+var HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
+var clamp4 = (n, min, max) => Math.min(max, Math.max(min, n));
+var clamp012 = (n) => clamp4(n, 0, 1);
+var byte = (n) => clamp4(Math.round(n), 0, 255);
+function parseHex(input) {
+  if (typeof input !== "string") return null;
+  let s = input.trim();
+  if (!s.startsWith("#")) s = `#${s}`;
+  if (!HEX_COLOR_REGEX.test(s)) return null;
+  let h = s.slice(1);
+  if (h.length <= 4) h = h.split("").map((c) => c + c).join("");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const a = h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1;
+  return { r, g, b, a };
+}
+function formatHex(rgba, alphaEnabled) {
+  const hx = (n) => byte(n).toString(16).padStart(2, "0");
+  const base = `#${hx(rgba.r)}${hx(rgba.g)}${hx(rgba.b)}`;
+  return alphaEnabled ? `${base}${hx(clamp012(rgba.a) * 255)}` : base;
+}
+function normalizeHex(input, alphaEnabled) {
+  const rgba = parseHex(input);
+  return rgba ? formatHex(rgba, alphaEnabled) : null;
+}
+function displayHex(value) {
+  const rgba = parseHex(value);
+  if (!rgba) return (value ?? "").toUpperCase();
+  return formatHex(rgba, false).toUpperCase();
+}
+function opacityPercent(rgba) {
+  return Math.round(clamp012(rgba.a) * 100);
+}
+function rgbToHsv(rgba) {
+  const r = rgba.r / 255, g = rgba.g / 255, b = rgba.b / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    if (max === r) h = (g - b) / d % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  return { h, s: max === 0 ? 0 : d / max, v: max, a: rgba.a };
+}
+function hsvToRgb(hsva) {
+  const h = (hsva.h % 360 + 360) % 360;
+  const s = clamp012(hsva.s), v = clamp012(hsva.v);
+  const c = v * s;
+  const x = c * (1 - Math.abs(h / 60 % 2 - 1));
+  const m = v - c;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  return { r: byte((r + m) * 255), g: byte((g + m) * 255), b: byte((b + m) * 255), a: hsva.a };
+}
+function rgbToHsl(rgba) {
+  const { h, s, v, a } = rgbToHsv(rgba);
+  const l = v * (1 - s / 2);
+  const sl = l === 0 || l === 1 ? 0 : (v - l) / Math.min(l, 1 - l);
+  return { h, s: sl, l, a };
+}
+function hslToRgb(hsla) {
+  const l = clamp012(hsla.l), s = clamp012(hsla.s);
+  const v = l + s * Math.min(l, 1 - l);
+  const sv = v === 0 ? 0 : 2 * (1 - l / v);
+  return hsvToRgb({ h: hsla.h, s: sv, v, a: hsla.a });
+}
+var srgbToLinear = (c) => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+var linearToSrgb = (c) => c <= 31308e-7 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+function rgbToOklab(rgba) {
+  const r = srgbToLinear(rgba.r / 255);
+  const g = srgbToLinear(rgba.g / 255);
+  const b = srgbToLinear(rgba.b / 255);
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return {
+    L: 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    A: 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    B: 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
+  };
+}
+function oklabToLinearRgb(L, A, B) {
+  const l = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3;
+  const m = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3;
+  const s = (L - 0.0894841775 * A - 1.291485548 * B) ** 3;
+  return {
+    r: 4.0767416621 * l - 3.3077115913 * m + 0.2307590544 * s,
+    g: -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    b: -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
+  };
+}
+function rgbToOklch(rgba) {
+  const { L, A, B } = rgbToOklab(rgba);
+  const c = Math.sqrt(A * A + B * B);
+  let h = Math.atan2(B, A) * 180 / Math.PI;
+  if (h < 0) h += 360;
+  return { l: L, c, h: c < 1e-6 ? 0 : h, a: rgba.a };
+}
+var GAMUT_EPS = 1e-4;
+function inSrgbGamut(l, c, h) {
+  const rad = h * Math.PI / 180;
+  const { r, g, b } = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
+  return r >= -GAMUT_EPS && r <= 1 + GAMUT_EPS && g >= -GAMUT_EPS && g <= 1 + GAMUT_EPS && b >= -GAMUT_EPS && b <= 1 + GAMUT_EPS;
+}
+function clampOklchToSrgb(oklch) {
+  const l = clamp012(oklch.l);
+  const h = (oklch.h % 360 + 360) % 360;
+  const c = Math.max(0, oklch.c);
+  if (inSrgbGamut(l, c, h)) return { l, c, h, a: clamp012(oklch.a) };
+  let lo = 0, hi = c;
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    if (inSrgbGamut(l, mid, h)) lo = mid;
+    else hi = mid;
+  }
+  return { l, c: lo, h, a: clamp012(oklch.a) };
+}
+function oklchToRgb(oklch) {
+  const { l, c, h, a } = clampOklchToSrgb(oklch);
+  const rad = h * Math.PI / 180;
+  const lin = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
+  return {
+    r: byte(linearToSrgb(clamp012(lin.r)) * 255),
+    g: byte(linearToSrgb(clamp012(lin.g)) * 255),
+    b: byte(linearToSrgb(clamp012(lin.b)) * 255),
+    a: clamp012(a)
+  };
+}
+
 // src/components/ListScreen.tsx
 var import_react = require("react");
 var import_jsx_runtime2 = require("react/jsx-runtime");
@@ -2932,15 +3073,21 @@ function MoveSlotMultibandBody({
     bands.map((band, k) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveFaceName, { col: 2 + k, dial: band }, k))
   ] });
 }
-function MoveSlotColorBody({ label, color, hue: hue2 }) {
+function MoveSlotColorBody({ label, color }) {
   return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
-    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-head", children: label }),
     /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-color-swatch", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { style: { background: color } }) }),
-    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("span", { className: "tweakers-move-color-reading", children: [
-      Math.round(hue2),
-      "\xB0"
-    ] })
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-head", "data-ink": colorInk(color), children: label })
   ] });
+}
+function colorInk(hex) {
+  const rgb = parseHex(hex);
+  if (!rgb) return "light";
+  const channel = (v) => {
+    const c = v / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = 0.2126 * channel(rgb.r) + 0.7152 * channel(rgb.g) + 0.0722 * channel(rgb.b);
+  return luminance * (rgb.a ?? 1) > 0.42 ? "dark" : "light";
 }
 function MoveSlotEnvBody({
   points,
@@ -3423,7 +3570,7 @@ var import_TweakStore3 = require("tweakers/store");
 
 // src/preset-genetics.ts
 var cloneDNA = (value) => structuredClone(value);
-var clamp4 = (v, min = 0, max = 1) => Math.max(min, Math.min(max, v));
+var clamp5 = (v, min = 0, max = 1) => Math.max(min, Math.min(max, v));
 var newDNAId = () => `dna-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
 function collectGenes(controls, group = "") {
   return controls.flatMap((c) => {
@@ -3478,8 +3625,8 @@ function geneBounds(p) {
 }
 function numeric(value, p) {
   const [lo, hi] = geneBounds(p);
-  const clipped = clamp4(value, lo, hi);
-  return p.step && p.step > 0 ? clamp4((p.min ?? 0) + Math.round((clipped - (p.min ?? 0)) / p.step) * p.step, lo, hi) : clipped;
+  const clipped = clamp5(value, lo, hi);
+  return p.step && p.step > 0 ? clamp5((p.min ?? 0) + Math.round((clipped - (p.min ?? 0)) / p.step) * p.step, lo, hi) : clipped;
 }
 function valid(value, p) {
   return p.kind === "number" ? typeof value === "number" && Number.isFinite(value) : !!p.options?.includes(value);
@@ -3541,7 +3688,7 @@ function breedDNA(a, b, baseline, parameters, settings2, random = Math.random) {
       const neighbor = adjacent[Math.floor(random() * adjacent.length)];
       if (!neighbor) continue;
       const value = read(inherited, neighbor);
-      write(result, p, p.kind === "number" ? numeric((p.low ?? p.min ?? 0) + clamp4((value - neighbor.min) / (neighbor.max - neighbor.min)) * ((p.high ?? p.max ?? 1) - (p.low ?? p.min ?? 0)), p) : value);
+      write(result, p, p.kind === "number" ? numeric((p.low ?? p.min ?? 0) + clamp5((value - neighbor.min) / (neighbor.max - neighbor.min)) * ((p.high ?? p.max ?? 1) - (p.low ?? p.min ?? 0)), p) : value);
     }
   }
   return repairRanges(result, parameters);
@@ -3549,8 +3696,8 @@ function breedDNA(a, b, baseline, parameters, settings2, random = Math.random) {
 function chooseParents(pool, random = Math.random) {
   if (pool.length < 2) throw new Error("Mark at least two parents in the breeding window.");
   const pick = (list) => {
-    let ticket = random() * list.reduce((n, p) => n + clamp4(p.rating, 1, 5), 0);
-    return list.find((p) => (ticket -= clamp4(p.rating, 1, 5)) < 0) ?? list[list.length - 1];
+    let ticket = random() * list.reduce((n, p) => n + clamp5(p.rating, 1, 5), 0);
+    return list.find((p) => (ticket -= clamp5(p.rating, 1, 5)) < 0) ?? list[list.length - 1];
   };
   const a = pick(pool);
   return [a, pick(pool.filter((p) => p.id !== a.id))];
@@ -3734,8 +3881,8 @@ var ExplorationStore = class {
         if (old) {
           p.enabled = old.enabled;
           if (p.kind === "number") {
-            p.low = clamp4(old.low ?? p.min, p.min, p.max);
-            p.high = clamp4(old.high ?? p.max, p.low, p.max);
+            p.low = clamp5(old.low ?? p.min, p.min, p.max);
+            p.high = clamp5(old.high ?? p.max, p.low, p.max);
           }
         }
       }
@@ -3835,8 +3982,8 @@ var ExplorationStore = class {
       if (old) {
         p.enabled = old.enabled;
         if (p.kind === "number") {
-          p.low = clamp4(old.low ?? p.min, p.min, p.max);
-          p.high = clamp4(old.high ?? p.max, p.low, p.max);
+          p.low = clamp5(old.low ?? p.min, p.min, p.max);
+          p.high = clamp5(old.high ?? p.max, p.low, p.max);
           try {
             geneBounds(p);
           } catch {
@@ -3867,7 +4014,7 @@ var ExplorationStore = class {
   }
   setGeneration(index) {
     if (!this.state) return;
-    this.state.generation = clamp4(Math.round(index), 0, this.currentTree().generations.length - 1);
+    this.state.generation = clamp5(Math.round(index), 0, this.currentTree().generations.length - 1);
     this.notify();
   }
   selectTree(id) {
@@ -3906,13 +4053,13 @@ var ExplorationStore = class {
   jog(delta) {
     if (!this.ready()) return;
     if (this.state.view === "parameters") {
-      this.parameterIndex = clamp4(this.parameterIndex + Math.sign(delta), 0, this.state.parameters.length - 1);
+      this.parameterIndex = clamp5(this.parameterIndex + Math.sign(delta), 0, this.state.parameters.length - 1);
       this.notify(false);
       return;
     }
     const children = this.currentTree().generations[this.state.generation].children;
     const index = children.findIndex((c2) => c2.id === this.state.activeId);
-    const c = children[clamp4(index + Math.sign(delta), 0, children.length - 1)];
+    const c = children[clamp5(index + Math.sign(delta), 0, children.length - 1)];
     if (c) this.select(c.id);
   }
   toggleParent() {
@@ -3927,7 +4074,7 @@ var ExplorationStore = class {
     if (!this.ready()) return;
     const c = this.active();
     if (c) {
-      c.rating = clamp4(Math.round(rating), 1, 5);
+      c.rating = clamp5(Math.round(rating), 1, 5);
       this.notify();
     }
   }
@@ -3939,9 +4086,9 @@ var ExplorationStore = class {
     if (!Number.isFinite(s.spread)) s.spread = 0;
     if (!Number.isFinite(s.seedCount)) s.seedCount = 1;
     if (!Number.isFinite(s.breedWindow)) s.breedWindow = 0;
-    s.mutation = clamp4(s.mutation);
-    s.spread = clamp4(s.spread);
-    s.seedCount = clamp4(Math.round(s.seedCount), 1, 32);
+    s.mutation = clamp5(s.mutation);
+    s.spread = clamp5(s.spread);
+    s.seedCount = clamp5(Math.round(s.seedCount), 1, 32);
     s.breedWindow = Math.max(0, Math.round(s.breedWindow));
     this.notify();
   }
@@ -4094,8 +4241,8 @@ var ExplorationStore = class {
     const candidate = { ...p };
     if (typeof patch2.enabled === "boolean") candidate.enabled = patch2.enabled;
     if (p.kind === "number") {
-      candidate.low = clamp4(patch2.low ?? p.low ?? p.min, p.min, p.max);
-      candidate.high = clamp4(patch2.high ?? p.high ?? p.max, candidate.low, p.max);
+      candidate.low = clamp5(patch2.low ?? p.low ?? p.min, p.min, p.max);
+      candidate.high = clamp5(patch2.high ?? p.high ?? p.max, candidate.low, p.max);
       try {
         const [lo, hi] = geneBounds(candidate);
         const other = this.state.parameters.find((q) => q.path === p.path && q.id !== p.id && ["min", "max"].includes(q.component ?? ""));
@@ -4130,8 +4277,8 @@ var ExplorationStore = class {
     if (!this.ready()) return;
     const s = this.state;
     Object.assign(s.morph, patch2);
-    for (const key of ["ax", "ay", "bx", "by", "blend"]) s.morph[key] = Number.isFinite(s.morph[key]) ? clamp4(s.morph[key]) : 0.5;
-    s.morph.corner = clamp4(Math.round(s.morph.corner), 0, 7);
+    for (const key of ["ax", "ay", "bx", "by", "blend"]) s.morph[key] = Number.isFinite(s.morph[key]) ? clamp5(s.morph[key]) : 0.5;
+    s.morph.corner = clamp5(Math.round(s.morph.corner), 0, 7);
     this.preview(morphDNA(this.allChildren(), s.morph, this.baseline(), s.parameters));
     this.notify();
   }
@@ -4157,7 +4304,7 @@ var ExplorationStore = class {
     if (!this.ready()) return;
     const s = this.state, slot = this.slots()[index];
     if (!slot || !Number.isFinite(value)) return;
-    value = clamp4(value, slot.min, slot.max);
+    value = clamp5(value, slot.min, slot.max);
     if (slot.step === 1) value = Math.round(value);
     if (s.view === "morph") {
       const key = ["ax", "ay", "bx", "by", "blend", "corner"][index];
@@ -4432,7 +4579,7 @@ function presetFlowerSvg(values) {
 var import_TweakStore4 = require("tweakers/store");
 var import_jsx_runtime5 = require("react/jsx-runtime");
 var SHELL_MOTION = { duration: 0.15, ease: [0.2, 0, 0, 1] };
-var clamp5 = (value) => Math.max(0, Math.min(1, value));
+var clamp6 = (value) => Math.max(0, Math.min(1, value));
 var useBrowserLayoutEffect = typeof window === "undefined" ? import_react4.useEffect : import_react4.useLayoutEffect;
 function PresetArtwork({ values }) {
   const seed = presetFlowerSeed(values);
@@ -4872,7 +5019,7 @@ function XYSurface({ label, x, y, disabled, onChange }) {
   const pointer = (0, import_react4.useRef)(null);
   const update = (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
-    onChange(clamp5((event.clientX - rect.left) / Math.max(1, rect.width)), clamp5((event.clientY - rect.top) / Math.max(1, rect.height)));
+    onChange(clamp6((event.clientX - rect.left) / Math.max(1, rect.width)), clamp6((event.clientY - rect.top) / Math.max(1, rect.height)));
   };
   return /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)("div", { role: "group", "aria-label": `Morph quadrant ${label}`, children: [
     /* @__PURE__ */ (0, import_jsx_runtime5.jsxs)(
@@ -4938,7 +5085,7 @@ var DRAG_THRESHOLD = 3;
 var EDGE_HIT = 6;
 var CURVE_MIN_WEIGHT_FRAC = 0.06;
 var lerp = (a, b, t) => a + (b - a) * t;
-var clamp012 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+var clamp013 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
 var clampBipolar = (v) => v < -1 ? -1 : v > 1 ? 1 : v;
 var SKEW_MAX = 0.45;
 var BACK_MAX = 0.8;
@@ -4961,10 +5108,10 @@ function deriveEase(type, curvature, steepness = 0, overshoot = 0, anticipate = 
   const pts = s >= 0 ? lerp4(base, easingExtremes[key], s) : lerp4(easingPresets.linear, base, s + 1);
   let [x1, y1, x2, y2] = pts;
   const shift = clampBipolar(curvature) * SKEW_MAX;
-  x1 = clamp012(x1 + shift);
-  x2 = clamp012(x2 + shift);
-  y2 += clamp012(overshoot) * BACK_MAX;
-  y1 -= clamp012(anticipate) * BACK_MAX;
+  x1 = clamp013(x1 + shift);
+  x2 = clamp013(x2 + shift);
+  y2 += clamp013(overshoot) * BACK_MAX;
+  y1 -= clamp013(anticipate) * BACK_MAX;
   return [x1, y1, x2, y2];
 }
 function bezierAxis(p1, p2, s) {
@@ -4976,14 +5123,14 @@ function bezierAxisDeriv(p1, p2, s) {
   return 3 * u * u * p1 + 6 * u * s * (p2 - p1) + 3 * s * s * (1 - p2);
 }
 function bezierY(ease, x) {
-  const tx = clamp012(x);
+  const tx = clamp013(x);
   let s = tx;
   for (let i = 0; i < 6; i++) {
     const xs = bezierAxis(ease[0], ease[2], s) - tx;
     if (Math.abs(xs) < 1e-5) break;
     const d = bezierAxisDeriv(ease[0], ease[2], s);
     if (Math.abs(d) < 1e-6) break;
-    s = clamp012(s - xs / d);
+    s = clamp013(s - xs / d);
   }
   return bezierAxis(ease[1], ease[3], s);
 }
@@ -5016,7 +5163,7 @@ function integrateSpringTrace(targets, stiffness, damping, mass, initial, collec
 }
 function springPoints(curvature, steepness = 0) {
   const visualDuration = 1;
-  const bounce = clamp012((clampBipolar(curvature) + 1) / 2) * 0.6;
+  const bounce = clamp013((clampBipolar(curvature) + 1) / 2) * 0.6;
   const mass = 1;
   let stiffness = 2 * Math.PI / visualDuration;
   stiffness = stiffness * stiffness;
@@ -5029,7 +5176,7 @@ function springPoints(curvature, steepness = 0) {
   }).points;
 }
 function interp(points, t) {
-  const x = clamp012(t) * (points.length - 1);
+  const x = clamp013(t) * (points.length - 1);
   const i = Math.floor(x);
   if (i >= points.length - 1) return points[points.length - 1];
   return lerp(points[i], points[i + 1], x - i);
@@ -5111,7 +5258,7 @@ function totalWeight(segments) {
 }
 function timelineSlots(segments, gap = 0) {
   const n = segments.length;
-  const g = n > 1 ? clamp012(gap) : 0;
+  const g = n > 1 ? clamp013(gap) : 0;
   const total = totalWeight(segments);
   const content = 1 - g;
   const gapW = n > 1 ? g / (n - 1) : 0;
@@ -5151,13 +5298,13 @@ function segmentSpan(segments, index, gap = 0) {
 }
 function segmentIndexAt(xNorm, segments, gap = 0) {
   if (gap > 0) {
-    const x2 = clamp012(xNorm);
+    const x2 = clamp013(xNorm);
     const slots = timelineSlots(segments, gap);
     for (const s of slots) if (x2 < s.b) return s.index;
     return segments.length - 1;
   }
   const total = totalWeight(segments);
-  const x = clamp012(xNorm) * total;
+  const x = clamp013(xNorm) * total;
   let acc = 0;
   for (let i = 0; i < segments.length; i++) {
     acc += segments[i].weight;
@@ -5180,7 +5327,7 @@ function boundaryAt(xNorm, segments, edgeHitNorm, gap = 0) {
   return best;
 }
 function smootherstep(t) {
-  const x = clamp012(t);
+  const x = clamp013(t);
   return x * x * x * (x * (x * 6 - 15) + 10);
 }
 function cloneSegments(comp, segments) {
@@ -5260,14 +5407,14 @@ function setSegmentOvershoot(comp, index, overshoot) {
   const src = comp.segments[index];
   if (!src) return comp;
   const next = comp.segments.slice();
-  next[index] = { ...src, overshoot: clamp012(overshoot) };
+  next[index] = { ...src, overshoot: clamp013(overshoot) };
   return cloneSegments(comp, next);
 }
 function setSegmentAnticipate(comp, index, anticipate) {
   const src = comp.segments[index];
   if (!src) return comp;
   const next = comp.segments.slice();
-  next[index] = { ...src, anticipate: clamp012(anticipate) };
+  next[index] = { ...src, anticipate: clamp013(anticipate) };
   return cloneSegments(comp, next);
 }
 function redistributeWeight(comp, boundaryIndex, deltaFrac) {
@@ -5306,11 +5453,11 @@ function setDriverSteepness(comp, steepness) {
 }
 function setDriverOvershoot(comp, overshoot) {
   if (!comp.driver) return comp;
-  return { ...comp, driver: { ...comp.driver, overshoot: clamp012(overshoot) } };
+  return { ...comp, driver: { ...comp.driver, overshoot: clamp013(overshoot) } };
 }
 function setDriverAnticipate(comp, anticipate) {
   if (!comp.driver) return comp;
-  return { ...comp, driver: { ...comp.driver, anticipate: clamp012(anticipate) } };
+  return { ...comp, driver: { ...comp.driver, anticipate: clamp013(anticipate) } };
 }
 var DRAG_ENERGY_GAIN = 0.6;
 var DRAG_STEEP_GAIN = 0.6;
@@ -5321,7 +5468,7 @@ function headerHit(xN, py, segments, layout) {
   return null;
 }
 function toLocalCoords(clientX, clientY, rect, totalH) {
-  const xN = clamp012((clientX - rect.left) / (rect.width || 1));
+  const xN = clamp013((clientX - rect.left) / (rect.width || 1));
   const py = (clientY - rect.top) / (rect.height || 1) * totalH;
   return { xN, py };
 }
@@ -5347,14 +5494,14 @@ function buildSamplers(comp) {
   };
 }
 function directionPhase(u, dir) {
-  const x = clamp012(u);
+  const x = clamp013(u);
   if (dir === "reverse") return 1 - x;
   if (dir === "mirror") return 1 - Math.abs(1 - 2 * x);
   return x;
 }
 function readComposition(comp, u, s) {
   const inputPhase = directionPhase(u, comp.direction);
-  const warpedPhase = s.driver ? clamp012(s.driver(inputPhase)) : inputPhase;
+  const warpedPhase = s.driver ? clamp013(s.driver(inputPhase)) : inputPhase;
   const gap = comp.gap ?? 0;
   if (gap > 0 && comp.segments.length > 1) {
     const slots = timelineSlots(comp.segments, gap);
@@ -5456,8 +5603,8 @@ var TRIGGER_FLYBACK = 0.5;
 function triggersCrossed(prevValue, curValue, steps) {
   const n = Math.max(2, Math.floor(steps));
   const seg = 1 / (n - 1);
-  const p = clamp012(prevValue);
-  const c = clamp012(curValue);
+  const p = clamp013(prevValue);
+  const c = clamp013(curValue);
   const delta = c - p;
   const fired = [];
   if (Math.abs(delta) > TRIGGER_FLYBACK) {
@@ -5622,20 +5769,20 @@ var modPageWidth = () => Math.min(
 );
 var MOD_SETTINGS_PANEL = "mod-settings";
 var modKey = (panelId, path) => `${panelId}\0${path}`;
-var clamp6 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-var clamp013 = (v) => clamp6(Number(v) || 0, 0, 1);
-var clampSigned = (v) => clamp6(Number(v) || 0, -1, 1);
+var clamp7 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+var clamp014 = (v) => clamp7(Number(v) || 0, 0, 1);
+var clampSigned = (v) => clamp7(Number(v) || 0, -1, 1);
 function applyModulation(base, signal, amount, min, max) {
-  const offset = clamp6(signal, -1, 1) * clamp013(amount) * (max - min) / 2;
-  return clamp6(base + offset, min, max);
+  const offset = clamp7(signal, -1, 1) * clamp014(amount) * (max - min) / 2;
+  return clamp7(base + offset, min, max);
 }
 var MOD_RING_RADIUS = 6;
 var MOD_RING_CIRCUMFERENCE = 2 * Math.PI * MOD_RING_RADIUS;
 var RING_SWEEP_START = 135 / 360;
 var RING_SWEEP_LEN = 270 / 360;
 function modRingArc(from01, to01) {
-  const a = RING_SWEEP_START + clamp013(from01) * RING_SWEEP_LEN;
-  const b = RING_SWEEP_START + clamp013(to01) * RING_SWEEP_LEN;
+  const a = RING_SWEEP_START + clamp014(from01) * RING_SWEEP_LEN;
+  const b = RING_SWEEP_START + clamp014(to01) * RING_SWEEP_LEN;
   return {
     length: Math.abs(b - a) * MOD_RING_CIRCUMFERENCE,
     offset: -Math.min(a, b) * MOD_RING_CIRCUMFERENCE
@@ -5659,7 +5806,7 @@ function lfoDivisionBeats(division) {
   if (typeof division !== "number" || !Number.isFinite(division)) {
     return LFO_SYNC_DIVISIONS.find((d) => d.label === LFO_SYNC_DEFAULT).beats;
   }
-  return LFO_SYNC_DIVISIONS[clamp6(Math.round(division), 0, LFO_SYNC_DIVISIONS.length - 1)].beats;
+  return LFO_SYNC_DIVISIONS[clamp7(Math.round(division), 0, LFO_SYNC_DIVISIONS.length - 1)].beats;
 }
 function lfoSyncedHz(division, bpm) {
   return (Number(bpm) || 120) / 60 / lfoDivisionBeats(division);
@@ -5669,7 +5816,7 @@ var previewNoise = (i, salt = 0) => {
   return (x - Math.floor(x)) * 2 - 1;
 };
 function previewSlew(values, smooth) {
-  const s = clamp013(smooth);
+  const s = clamp014(smooth);
   if (s <= 0 || values.length < 2) return values;
   const k = 1 - Math.exp(-(1 / values.length) / (s * s * 0.4 + 1e-6));
   let out = values[0];
@@ -5698,16 +5845,16 @@ var LFO_DEF = {
     const hz = params.sync ? lfoSyncedHz(params.division, bpm) : Math.max(0, Number(params.rate) || 0);
     const before = s.phase;
     s.phase = (s.phase + dt * hz) % 1;
-    if (s.phase < before) s.driftTarget = (Math.random() * 2 - 1) * clamp013(params.jitter);
-    if (!clamp013(params.jitter)) {
+    if (s.phase < before) s.driftTarget = (Math.random() * 2 - 1) * clamp014(params.jitter);
+    if (!clamp014(params.jitter)) {
       s.drift = 0;
       s.driftTarget = 0;
     } else s.drift += (s.driftTarget - s.drift) * Math.min(1, dt * hz * 4);
-    const w = clamp6(Number(params.width) || 0, 0.01, 0.99);
-    const ph = (s.phase + clamp013(params.phase)) % 1;
+    const w = clamp7(Number(params.width) || 0, 0.01, 0.99);
+    const ph = (s.phase + clamp014(params.phase)) % 1;
     const tri = ph < w ? ph / w : 1 - (ph - w) / (1 - w);
-    let v = clamp6(tri * 2 - 1 + s.drift, -1, 1);
-    const smooth = clamp013(params.smooth);
+    let v = clamp7(tri * 2 - 1 + s.drift, -1, 1);
+    const smooth = clamp014(params.smooth);
     if (smooth > 0 && s.out !== null) {
       const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
       v = s.out + (v - s.out) * k;
@@ -5723,18 +5870,18 @@ var LFO_DEF = {
    */
   preview(params, count) {
     const n = Math.max(2, count);
-    const w = clamp6(Number(params.width) || 0, 0.01, 0.99);
-    const jitter = clamp013(params.jitter);
+    const w = clamp7(Number(params.width) || 0, 0.01, 0.99);
+    const jitter = clamp014(params.jitter);
     const wobble = Math.max(2, Math.round(n / 8));
     const raw = Array.from({ length: n }, (_, i) => {
-      const ph = (i / (n - 1) * 2 + clamp013(params.phase)) % 1;
+      const ph = (i / (n - 1) * 2 + clamp014(params.phase)) % 1;
       const tri = ph < w ? ph / w : 1 - (ph - w) / (1 - w);
       const drift = previewNoise(Math.floor(i / wobble)) * jitter * 0.5;
-      return clamp6(tri * 2 - 1 + drift, -1, 1);
+      return clamp7(tri * 2 - 1 + drift, -1, 1);
     });
-    const shape = clamp013(params.smooth) > 0.55 ? "Sine" : w <= 0.25 ? "Saw" : w >= 0.75 ? "Ramp" : "Tri";
+    const shape = clamp014(params.smooth) > 0.55 ? "Sine" : w <= 0.25 ? "Saw" : w >= 0.75 ? "Ramp" : "Tri";
     return {
-      points: previewSlew(raw, clamp013(params.smooth)).map((v) => (v + 1) / 2),
+      points: previewSlew(raw, clamp014(params.smooth)).map((v) => (v + 1) / 2),
       label: jitter > 0.4 ? `${shape} \xB7 Jitter` : shape
     };
   }
@@ -5758,12 +5905,12 @@ var SH_DEF = {
     if (s.out === null || s.wait <= 0) {
       s.held = Math.random() * 2 - 1;
       const hz = Math.max(0.01, Number(params.rate) || 0);
-      const len = 1 / hz * (1 + (Math.random() * 2 - 1) * clamp013(params.jitter) * 0.9);
+      const len = 1 / hz * (1 + (Math.random() * 2 - 1) * clamp014(params.jitter) * 0.9);
       s.wait = Math.max(5e-3, len);
     }
-    const offset = clamp6(Number(params.offset) || 0, -1, 1);
-    let v = clamp6(s.held * clamp013(params.depth) + offset, -1, 1);
-    const smooth = clamp013(params.smooth);
+    const offset = clamp7(Number(params.offset) || 0, -1, 1);
+    let v = clamp7(s.held * clamp014(params.depth) + offset, -1, 1);
+    const smooth = clamp014(params.smooth);
     if (smooth > 0 && s.out !== null) {
       const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
       v = s.out + (v - s.out) * k;
@@ -5779,9 +5926,9 @@ var SH_DEF = {
    */
   preview(params, count) {
     const n = Math.max(2, count);
-    const depth = clamp013(params.depth);
-    const offset = clamp6(Number(params.offset) || 0, -1, 1);
-    const jitter = clamp013(params.jitter);
+    const depth = clamp014(params.depth);
+    const offset = clamp7(Number(params.offset) || 0, -1, 1);
+    const jitter = clamp014(params.jitter);
     const steps = 8;
     const lens = Array.from({ length: steps }, (_, i) => 1 + previewNoise(i, 1) * jitter * 0.9);
     const total = lens.reduce((a, b) => a + b, 0);
@@ -5791,11 +5938,11 @@ var SH_DEF = {
     const raw = Array.from({ length: n }, (_, i) => {
       const t = i / (n - 1);
       const step = edges.findIndex((e) => t <= e);
-      return clamp6(previewNoise(step < 0 ? steps - 1 : step) * depth + offset, -1, 1);
+      return clamp7(previewNoise(step < 0 ? steps - 1 : step) * depth + offset, -1, 1);
     });
     return {
-      points: previewSlew(raw, clamp013(params.smooth)).map((v) => (v + 1) / 2),
-      label: clamp013(params.smooth) > 0.55 ? "Drift" : "Steps"
+      points: previewSlew(raw, clamp014(params.smooth)).map((v) => (v + 1) / 2),
+      label: clamp014(params.smooth) > 0.55 ? "Drift" : "Steps"
     };
   }
 };
@@ -5810,18 +5957,18 @@ var envWaveFlipParam = (stage) => `${stage}WaveFlip`;
 var ENV_SUSTAIN_WAVE_BEATS = 1;
 var ENV_SUSTAIN_WAVE_CYCLES = 2;
 function envStageWave(stage, phase, level, params) {
-  const amount = clamp013(params[envWaveParam(stage)]);
+  const amount = clamp014(params[envWaveParam(stage)]);
   if (amount <= 0) return level;
   const w = amount * (1 - Math.cos(2 * Math.PI * phase)) / 2;
   return params[envWaveFlipParam(stage)] ? level + (1 - level) * w : level * (1 - w);
 }
 var adsrShape = (p, curve) => {
-  const c = clamp6(Number(curve) || 0, -1, 1);
+  const c = clamp7(Number(curve) || 0, -1, 1);
   return 1 - Math.pow(1 - p, Math.pow(4, c));
 };
 function envelopePoints(params, count) {
   const n = Math.max(2, count);
-  const sustain = clamp013(params.sustain);
+  const sustain = clamp014(params.sustain);
   const share = (key) => 0.04 + 0.24 * Math.min(1, secs(params[key]) * 1e3 / ADSR_STAGE_MAX[key]);
   const wA = share("attack");
   const wD = share("decay");
@@ -5845,7 +5992,7 @@ function envelopePoints(params, count) {
   return Array.from({ length: n }, (_, i) => at2(i / (n - 1)));
 }
 function envelopeJoints(params) {
-  const sustain = clamp013(params.sustain);
+  const sustain = clamp014(params.sustain);
   const share = (key) => 0.04 + 0.24 * Math.min(1, secs(params[key]) * 1e3 / ADSR_STAGE_MAX[key]);
   const wA = share("attack");
   return [
@@ -5911,7 +6058,7 @@ var ADSR_DEF = {
   tick(state4, params, dt, bpm) {
     const s = state4;
     const loop = !!params.loop;
-    const sustain = clamp013(params.sustain);
+    const sustain = clamp014(params.sustain);
     if (s.stage === "idle") {
       if (!loop) return s.env = 0;
       s.stage = "attack";
@@ -5946,7 +6093,7 @@ var ADSR_DEF = {
       const wp = s.stage === "sustain" ? s.t / beat % 1 : p;
       s.env = envStageWave(s.stage, wp, s.env, params);
     }
-    return clamp013(s.env);
+    return clamp014(s.env);
   }
 };
 registerModType(ADSR_DEF);
@@ -5978,18 +6125,18 @@ function readClips(params) {
   return list.length ? list.slice(0, CURVE_MAX_CLIPS) : [newClip()];
 }
 var writeClips = (list) => list;
-var selectedClip = (params, count) => clamp6(Math.round(Number(params.selected) || 0), 0, Math.max(0, count - 1));
+var selectedClip = (params, count) => clamp7(Math.round(Number(params.selected) || 0), 0, Math.max(0, count - 1));
 function curveComposition(params) {
   const i = DIRECTIONS.indexOf(params.direction);
   return {
     segments: readClips(params),
     driver: null,
     direction: DIRECTIONS[i < 0 ? 0 : i],
-    gap: clamp013(params.gap)
+    gap: clamp014(params.gap)
   };
 }
 function curveDuration(params, bpm) {
-  if (!params.sync) return clamp6(Number(params.duration) || 0, CURVE_MIN_DURATION, CURVE_MAX_DURATION);
+  if (!params.sync) return clamp7(Number(params.duration) || 0, CURVE_MIN_DURATION, CURVE_MAX_DURATION);
   const beat = 60 / (Number(bpm) || 120);
   return Math.max(CURVE_MIN_DURATION, lfoDivisionBeats(params.division) * beat);
 }
@@ -6089,7 +6236,7 @@ var CURVE_DEF = {
       s.samplers = buildSamplers(comp);
     }
     s.phase = (s.phase + dt / curveDuration(params, bpm)) % 1;
-    let v = clamp013(readComposition(comp, s.phase, s.samplers).value);
+    let v = clamp014(readComposition(comp, s.phase, s.samplers).value);
     if (params.flip) v = 1 - v;
     if (params.signal !== "trigger") {
       s.prev = v;
@@ -6112,7 +6259,7 @@ var CURVE_DEF = {
     const changed = (key) => key in patch2 && patch2[key] !== current[key];
     let list = "clips" in patch2 ? readClips(patch2) : readClips(current);
     if (!("clips" in patch2) && changed("segments")) {
-      const want = clamp6(Math.round(Number(patch2.segments) || 1), 1, CURVE_MAX_CLIPS);
+      const want = clamp7(Math.round(Number(patch2.segments) || 1), 1, CURVE_MAX_CLIPS);
       while (list.length > want) list.pop();
       while (list.length < want) list.push(newClip());
       list = list.map((c) => ({ ...c, weight: 1 }));
@@ -6123,8 +6270,8 @@ var CURVE_DEF = {
         ...list[sel],
         curvature: clampSigned(next.curvature),
         steepness: clampSigned(next.steepness),
-        anticipate: clamp013(next.anticipate),
-        overshoot: clamp013(next.overshoot)
+        anticipate: clamp014(next.anticipate),
+        overshoot: clamp014(next.overshoot)
       };
     } else {
       const clip = list[sel];
@@ -6165,7 +6312,7 @@ var CURVE_DEF = {
     const span = CURVE_PREVIEW_BAND.hi - CURVE_PREVIEW_BAND.lo;
     const n = Math.max(2, count);
     return {
-      points: Array.from({ length: n }, (_, i) => clamp013((sampler(i / (n - 1)) - CURVE_PREVIEW_BAND.lo) / span)),
+      points: Array.from({ length: n }, (_, i) => clamp014((sampler(i / (n - 1)) - CURVE_PREVIEW_BAND.lo) / span)),
       label: `${CURVE_LABELS[list[sel].type]} ${sel + 1}/${list.length}`
     };
   }
@@ -6210,16 +6357,16 @@ function setAudioModWindowSource(fn) {
 function getAudioModWindow() {
   const win = audioModWindow?.();
   if (!win || !(win.span > 0) || win.span >= 1) return { start: 0, span: 1 };
-  return { start: clamp013(win.start), span: Math.min(win.span, 1 - clamp013(win.start)) };
+  return { start: clamp014(win.start), span: Math.min(win.span, 1 - clamp014(win.start)) };
 }
 function audioModLevel(position) {
   if (!audioModEnv) return 0;
-  const i = Math.floor(clamp013(position) * audioModEnv.length);
+  const i = Math.floor(clamp014(position) * audioModEnv.length);
   return audioModEnv[Math.min(audioModEnv.length - 1, i)];
 }
 function audioLoop(params) {
-  const start = clamp013(params.loopStart);
-  const end = clamp013(params.loopEnd);
+  const start = clamp014(params.loopStart);
+  const end = clamp014(params.loopEnd);
   if (end - start < 1e-3 || start === 0 && end === 1) return null;
   return { start, end };
 }
@@ -6248,13 +6395,13 @@ var AUDIO_DEF = {
   createState: () => ({ pos: 0, out: null, seek: null }),
   tick(state4, params, dt) {
     const s = state4;
-    const seek = clamp013(params.position);
+    const seek = clamp014(params.position);
     if (s.seek !== seek) {
       s.seek = seek;
       s.pos = seek;
     }
     if (params.playing) {
-      const speed = clamp6(Number(params.speed) || 1, 0.05, 16);
+      const speed = clamp7(Number(params.speed) || 1, 0.05, 16);
       s.pos += dt * speed / audioModDuration;
       const loop = params.loopOn ? audioLoop(params) : null;
       if (loop) {
@@ -6265,8 +6412,8 @@ var AUDIO_DEF = {
         s.pos = params.loopOn ? s.pos % 1 : 1;
       }
     }
-    let v = audioModEnv === null ? 0 : (audioModLevel(s.pos) * 2 - 1) * clamp013(params.depth);
-    const smooth = clamp013(params.smooth);
+    let v = audioModEnv === null ? 0 : (audioModLevel(s.pos) * 2 - 1) * clamp014(params.depth);
+    const smooth = clamp014(params.smooth);
     if (smooth > 0 && s.out !== null) {
       const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
       v = s.out + (v - s.out) * k;
@@ -6289,7 +6436,7 @@ var AUDIO_DEF = {
     }
     const { start, span } = getAudioModWindow();
     return {
-      points: Array.from({ length: n }, (_, i) => clamp013(audioModLevel(start + i / (n - 1) * span))),
+      points: Array.from({ length: n }, (_, i) => clamp014(audioModLevel(start + i / (n - 1) * span))),
       label: "Audio"
     };
   },
@@ -7265,7 +7412,7 @@ var SCRUB_MIN_MS = 25;
 var SCRUB_FINE_MIN_MS = 5;
 var SCRUB_CHAIN_MS = 250;
 var ZOOM_PER_DETENT = 0.08;
-var clamp014 = (v) => Math.min(1, Math.max(0, v));
+var clamp015 = (v) => Math.min(1, Math.max(0, v));
 function defaultView() {
   return { position: 0, zoom: 1, loop: null, loopAnchor: null };
 }
@@ -7275,7 +7422,7 @@ function scrubBy(position, delta, fine = false, zoom = 1, durationSec) {
   const share = fine ? SCRUB_FINE : SCRUB_PER_DETENT;
   const floor = durationSec && durationSec > 0 ? (fine ? SCRUB_FINE_MIN_MS : SCRUB_MIN_MS) / 1e3 / durationSec : 0;
   const step = Math.max(share, floor) / Math.max(1, zoom);
-  const next = clamp014(position + Math.sign(delta) * magnitude * step);
+  const next = clamp015(position + Math.sign(delta) * magnitude * step);
   return Number(next.toFixed(6));
 }
 function zoomBy(zoom, delta) {
@@ -7299,15 +7446,15 @@ function loopFromStep(view, index, steps = MOVE_WAVEFORM_STEPS) {
 }
 function visibleWindow(position, zoom) {
   const span = 1 / Math.max(1, zoom);
-  let start = clamp014(position) - span / 2;
+  let start = clamp015(position) - span / 2;
   if (start < 0) start = 0;
   else if (start > 1 - span) start = 1 - span;
   return { start, span };
 }
-var padPosition = (window2, index, pads = MOVE_WAVEFORM_PADS) => clamp014(window2.start + Math.min(pads - 1, Math.max(0, index)) / pads * window2.span);
+var padPosition = (window2, index, pads = MOVE_WAVEFORM_PADS) => clamp015(window2.start + Math.min(pads - 1, Math.max(0, index)) / pads * window2.span);
 function padSection(window2, index, pads = MOVE_WAVEFORM_PADS) {
   const start = padPosition(window2, index, pads);
-  return { start, end: clamp014(start + window2.span / pads) };
+  return { start, end: clamp015(start + window2.span / pads) };
 }
 function loopSteps(view, steps = MOVE_WAVEFORM_STEPS) {
   if (view.loop) {
@@ -7384,8 +7531,8 @@ var MoveWaveformStoreClass = class {
    *  what makes a scrub look like it stutters), else the engine's while one
    *  reports, else the last scrub. */
   playhead(now = Date.now()) {
-    if (this.isScrubbing(now)) return clamp014(this.view.position);
-    return clamp014(this.progressSource ? this.progressSource() : this.view.position);
+    if (this.isScrubbing(now)) return clamp015(this.view.position);
+    return clamp015(this.progressSource ? this.progressSource() : this.view.position);
   }
   /** The clock the panel shows for the knob: m:ss:cc of the playhead. */
   clock() {
@@ -7562,7 +7709,7 @@ var MoveWaveformStoreClass = class {
    * that subdivision (preview it), a hold selects it as the loop.
    */
   pressPad(index, hold = false) {
-    const at2 = this.progressSource ? clamp014(this.progressSource()) : this.view.position;
+    const at2 = this.progressSource ? clamp015(this.progressSource()) : this.view.position;
     const window2 = visibleWindow(at2, this.shownZoom());
     if (hold) this.setView({ loop: padSection(window2, index), loopAnchor: null });
     else this.setView({ position: padPosition(window2, index) });
@@ -8262,147 +8409,6 @@ function stripWindowPads(page, offset, cols = MOVE_DIALS) {
 }
 var stripSlotCount = (page) => stripStarts(page).length;
 var stripSlotIndex = (page, offset) => stripStarts(page).filter((start) => start < offset).length;
-
-// src/color-core.ts
-var COLOR_FORMATS = ["hex", "rgb", "hsl", "oklch"];
-var LONG_PRESS_MS = 500;
-var HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
-var clamp7 = (n, min, max) => Math.min(max, Math.max(min, n));
-var clamp015 = (n) => clamp7(n, 0, 1);
-var byte = (n) => clamp7(Math.round(n), 0, 255);
-function parseHex(input) {
-  if (typeof input !== "string") return null;
-  let s = input.trim();
-  if (!s.startsWith("#")) s = `#${s}`;
-  if (!HEX_COLOR_REGEX.test(s)) return null;
-  let h = s.slice(1);
-  if (h.length <= 4) h = h.split("").map((c) => c + c).join("");
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  const a = h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1;
-  return { r, g, b, a };
-}
-function formatHex(rgba, alphaEnabled) {
-  const hx = (n) => byte(n).toString(16).padStart(2, "0");
-  const base = `#${hx(rgba.r)}${hx(rgba.g)}${hx(rgba.b)}`;
-  return alphaEnabled ? `${base}${hx(clamp015(rgba.a) * 255)}` : base;
-}
-function normalizeHex(input, alphaEnabled) {
-  const rgba = parseHex(input);
-  return rgba ? formatHex(rgba, alphaEnabled) : null;
-}
-function displayHex(value) {
-  const rgba = parseHex(value);
-  if (!rgba) return (value ?? "").toUpperCase();
-  return formatHex(rgba, false).toUpperCase();
-}
-function opacityPercent(rgba) {
-  return Math.round(clamp015(rgba.a) * 100);
-}
-function rgbToHsv(rgba) {
-  const r = rgba.r / 255, g = rgba.g / 255, b = rgba.b / 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  const d = max - min;
-  let h = 0;
-  if (d !== 0) {
-    if (max === r) h = (g - b) / d % 6;
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    h *= 60;
-    if (h < 0) h += 360;
-  }
-  return { h, s: max === 0 ? 0 : d / max, v: max, a: rgba.a };
-}
-function hsvToRgb(hsva) {
-  const h = (hsva.h % 360 + 360) % 360;
-  const s = clamp015(hsva.s), v = clamp015(hsva.v);
-  const c = v * s;
-  const x = c * (1 - Math.abs(h / 60 % 2 - 1));
-  const m = v - c;
-  let r = 0, g = 0, b = 0;
-  if (h < 60) [r, g, b] = [c, x, 0];
-  else if (h < 120) [r, g, b] = [x, c, 0];
-  else if (h < 180) [r, g, b] = [0, c, x];
-  else if (h < 240) [r, g, b] = [0, x, c];
-  else if (h < 300) [r, g, b] = [x, 0, c];
-  else [r, g, b] = [c, 0, x];
-  return { r: byte((r + m) * 255), g: byte((g + m) * 255), b: byte((b + m) * 255), a: hsva.a };
-}
-function rgbToHsl(rgba) {
-  const { h, s, v, a } = rgbToHsv(rgba);
-  const l = v * (1 - s / 2);
-  const sl = l === 0 || l === 1 ? 0 : (v - l) / Math.min(l, 1 - l);
-  return { h, s: sl, l, a };
-}
-function hslToRgb(hsla) {
-  const l = clamp015(hsla.l), s = clamp015(hsla.s);
-  const v = l + s * Math.min(l, 1 - l);
-  const sv = v === 0 ? 0 : 2 * (1 - l / v);
-  return hsvToRgb({ h: hsla.h, s: sv, v, a: hsla.a });
-}
-var srgbToLinear = (c) => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-var linearToSrgb = (c) => c <= 31308e-7 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
-function rgbToOklab(rgba) {
-  const r = srgbToLinear(rgba.r / 255);
-  const g = srgbToLinear(rgba.g / 255);
-  const b = srgbToLinear(rgba.b / 255);
-  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
-  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
-  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
-  return {
-    L: 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
-    A: 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
-    B: 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
-  };
-}
-function oklabToLinearRgb(L, A, B) {
-  const l = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3;
-  const m = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3;
-  const s = (L - 0.0894841775 * A - 1.291485548 * B) ** 3;
-  return {
-    r: 4.0767416621 * l - 3.3077115913 * m + 0.2307590544 * s,
-    g: -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
-    b: -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
-  };
-}
-function rgbToOklch(rgba) {
-  const { L, A, B } = rgbToOklab(rgba);
-  const c = Math.sqrt(A * A + B * B);
-  let h = Math.atan2(B, A) * 180 / Math.PI;
-  if (h < 0) h += 360;
-  return { l: L, c, h: c < 1e-6 ? 0 : h, a: rgba.a };
-}
-var GAMUT_EPS = 1e-4;
-function inSrgbGamut(l, c, h) {
-  const rad = h * Math.PI / 180;
-  const { r, g, b } = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
-  return r >= -GAMUT_EPS && r <= 1 + GAMUT_EPS && g >= -GAMUT_EPS && g <= 1 + GAMUT_EPS && b >= -GAMUT_EPS && b <= 1 + GAMUT_EPS;
-}
-function clampOklchToSrgb(oklch) {
-  const l = clamp015(oklch.l);
-  const h = (oklch.h % 360 + 360) % 360;
-  const c = Math.max(0, oklch.c);
-  if (inSrgbGamut(l, c, h)) return { l, c, h, a: clamp015(oklch.a) };
-  let lo = 0, hi = c;
-  for (let i = 0; i < 24; i++) {
-    const mid = (lo + hi) / 2;
-    if (inSrgbGamut(l, mid, h)) lo = mid;
-    else hi = mid;
-  }
-  return { l, c: lo, h, a: clamp015(oklch.a) };
-}
-function oklchToRgb(oklch) {
-  const { l, c, h, a } = clampOklchToSrgb(oklch);
-  const rad = h * Math.PI / 180;
-  const lin = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
-  return {
-    r: byte(linearToSrgb(clamp015(lin.r)) * 255),
-    g: byte(linearToSrgb(clamp015(lin.g)) * 255),
-    b: byte(linearToSrgb(clamp015(lin.b)) * 255),
-    a: clamp015(a)
-  };
-}
 
 // src/gradient-core.ts
 var MIN_STOPS = 2;
@@ -9542,6 +9548,10 @@ var MoveColorStoreClass = class {
     /** The app's own palette, holding EVERY colour control to its colours —
      *  open or not. It outranks the editor's navigator, which it closes. */
     this.lock = null;
+    /** The app's own palettes, when it has a set of its own: the navigator lists
+     *  these instead of the built-in ones. */
+    this.hostPalettes = null;
+    this.onPickPalette = null;
     /** The palette navigator behind Menu while the editor is open. */
     this.picker = false;
     this.pickerCursor = 0;
@@ -9558,9 +9568,11 @@ var MoveColorStoreClass = class {
     this.getStop = () => this.stop;
     /* ---- the palette lock and its navigator ---- */
     this.getPaletteId = () => this.lock?.id ?? this.paletteId;
-    this.getPalette = () => this.lock ?? (this.paletteId ? MOVE_COLOR_PALETTES.find((p) => p.id === this.paletteId) ?? null : null);
+    this.getPalette = () => this.lock ?? (this.paletteId ? this.palettes().find((p) => p.id === this.paletteId) ?? null : null);
+    /** The palettes the navigator lists — the app's when it has some. */
+    this.palettes = () => this.hostPalettes ?? MOVE_COLOR_PALETTES;
     this.getLock = () => this.lock;
-    this.isPickerOpen = () => this.picker && !!this.view;
+    this.isPickerOpen = () => this.picker && (!!this.view || !!this.hostPalettes);
     this.getPickerCursor = () => this.pickerCursor;
   }
   notify() {
@@ -9706,6 +9718,24 @@ var MoveColorStoreClass = class {
   turnLuminosity(panelId, path, delta, fine = false) {
     this.update(panelId, path, { l: this.read(panelId, path).l + delta * (fine ? 2e-3 : 0.02) });
   }
+  /**
+   * The app's own palettes, in the navigator the instrument already has: the rows
+   * list these instead of the built-in ones, the first row ("All colors") still
+   * means no palette, and a choice goes back through `onPick` — the app owns what
+   * a palette means, and answers by locking one (`lockPalette`). With a set
+   * installed the navigator opens on its own, with no colour editor up, so a
+   * palette can be an app-wide setting rather than one control's.
+   *
+   * `null` gives the navigator the built-in palettes back.
+   */
+  setPalettes(palettes, onPick) {
+    const next = palettes && palettes.length > 0 ? palettes.map((p) => ({ ...p, colors: [...p.colors] })) : null;
+    this.hostPalettes = next;
+    this.onPickPalette = next ? onPick ?? null : null;
+    this.picker = false;
+    this.pickerCursor = 0;
+    this.notify();
+  }
   /** The palette a control's edits snap to: the app's lock on every control,
    *  else the navigator's choice on the one the editor has open. */
   lockFor(panelId, path) {
@@ -9747,7 +9777,7 @@ var MoveColorStoreClass = class {
    *  then that segment's centre so a turn steps cleanly from there. */
   setPalette(id) {
     if (this.lock) return;
-    this.paletteId = id && MOVE_COLOR_PALETTES.some((p) => p.id === id) ? id : null;
+    this.paletteId = id && this.palettes().some((p) => p.id === id) ? id : null;
     this.picker = false;
     const palette = this.getPalette();
     if (palette && this.view) {
@@ -9762,8 +9792,8 @@ var MoveColorStoreClass = class {
     if (palette && this.view) this.update(this.view.panelId, this.view.path, { h: paletteCenter(palette, index) });
   }
   openPicker() {
-    if (!this.view || this.picker || this.lock) return;
-    const at2 = MOVE_COLOR_PALETTES.findIndex((p) => p.id === this.paletteId);
+    if (this.picker || !this.hostPalettes && (!this.view || this.lock)) return;
+    const at2 = this.palettes().findIndex((p) => p.id === this.getPaletteId());
     this.pickerCursor = at2 < 0 ? 0 : at2 + 1;
     this.picker = true;
     this.notify();
@@ -9782,7 +9812,7 @@ var MoveColorStoreClass = class {
   movePickerCursor(delta) {
     if (!this.isPickerOpen() || !delta) return;
     const step = Math.round(delta) || Math.sign(delta);
-    const next = Math.max(0, Math.min(MOVE_COLOR_PALETTES.length, this.pickerCursor + step));
+    const next = Math.max(0, Math.min(this.palettes().length, this.pickerCursor + step));
     if (next === this.pickerCursor) return;
     this.pickerCursor = next;
     this.notify();
@@ -9790,7 +9820,7 @@ var MoveColorStoreClass = class {
   /** Rest the cursor on a row — a search landing the wheel on the next match. */
   setPickerCursor(cursor) {
     if (!this.isPickerOpen()) return;
-    const next = Math.max(0, Math.min(MOVE_COLOR_PALETTES.length, cursor));
+    const next = Math.max(0, Math.min(this.palettes().length, cursor));
     if (next === this.pickerCursor) return;
     this.pickerCursor = next;
     this.notify();
@@ -9798,12 +9828,19 @@ var MoveColorStoreClass = class {
   /** Keep the cursor's row: the palette locks in and the navigator dismisses. */
   confirmPicker() {
     if (!this.isPickerOpen()) return;
-    this.setPalette(this.pickerCursor === 0 ? null : MOVE_COLOR_PALETTES[this.pickerCursor - 1]?.id ?? null);
+    const id = this.pickerCursor === 0 ? null : this.palettes()[this.pickerCursor - 1]?.id ?? null;
+    if (this.onPickPalette) {
+      this.picker = false;
+      this.notify();
+      this.onPickPalette(id);
+      return;
+    }
+    this.setPalette(id);
   }
   /** A clicked row: cursor and confirm in one. */
   choosePicker(cursor) {
     if (!this.isPickerOpen()) return;
-    this.pickerCursor = Math.max(0, Math.min(MOVE_COLOR_PALETTES.length, cursor));
+    this.pickerCursor = Math.max(0, Math.min(this.palettes().length, cursor));
     this.confirmPicker();
   }
 };
@@ -9937,7 +9974,7 @@ function MoveColorSlot({ panelId, meta, active, open: open2, latched = false, cl
       onLostPointerCapture: () => {
         gesture.current = null;
       },
-      children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(MoveSlotColorBody, { label: meta.label, color: String(import_TweakStore11.TweakStore.getValue(panelId, meta.path)), hue: color.h })
+      children: /* @__PURE__ */ (0, import_jsx_runtime15.jsx)(MoveSlotColorBody, { label: meta.label, color: String(import_TweakStore11.TweakStore.getValue(panelId, meta.path)) })
     }
   );
 }
@@ -10204,7 +10241,7 @@ function MovePaletteScreen({ kept = null, children }) {
   const cursor = MoveColorStore.getPickerCursor();
   const rows = [
     { name: "All colors", colors: null, index: 0 },
-    ...MOVE_COLOR_PALETTES.map((p, i) => ({ name: p.name, colors: p.colors, index: i + 1 }))
+    ...MoveColorStore.palettes().map((p, i) => ({ name: p.name, colors: p.colors, index: i + 1 }))
   ].filter((row) => !kept || kept.includes(row.index));
   (0, import_react13.useEffect)(() => {
     const el = root.current;

@@ -1538,27 +1538,28 @@
   border-radius: var(--move-radius-small);
 }
 
+/* The colour fills its slot, edge to edge: the slot IS the swatch. The name reads
+   on top of it, in the ink the colour can carry. */
 .tweakers-move-color-swatch {
   position: absolute;
-  inset: var(--move-shape-top) var(--move-color-gap) var(--move-shape-top);
+  inset: 0;
+  border-radius: inherit;
 }
+
+.tweakers-move-dial[data-kind="color"] .tweakers-move-dial-head {
+  position: relative;
+  z-index: 1;
+}
+
+.tweakers-move-dial-head[data-ink="dark"] { color: var(--move-text-inverse, #1e1e1e); }
+.tweakers-move-dial-head[data-ink="light"] { color: var(--move-text); }
 
 .tweakers-move-color-swatch > span,
 .tweakers-move-color-preview > span { display: block; width: 100%; height: 100%; }
 
-.tweakers-move-color-reading {
-  position: absolute;
-  bottom: var(--move-color-gap);
-  left: var(--move-color-gap);
-  right: var(--move-color-gap);
-  font-size: var(--move-color-font);
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-
 .tweakers-move-dial[data-kind="color"][aria-expanded="true"] .tweakers-move-color-swatch,
 .tweakers-move-dial[data-kind="color"]:hover .tweakers-move-color-swatch {
-  box-shadow: 0 0 0 var(--move-color-stroke) var(--move-text);
+  box-shadow: inset 0 0 0 var(--move-color-stroke) var(--move-text);
 }
 
 .tweakers-move-color-display {
