@@ -357,8 +357,9 @@ function buildMovePages(panels) {
     }
     const lift = panel.moveTopRow ?? [];
     const chipFits = (c) => isDial(c) && !noChip(c) && !dials.includes(c) && !balanceRefs.has(c) && !isPadColor(c);
+    const liftFits = (c) => chipFits(c) || isPadColor(c) && !balanceRefs.has(c);
     for (const c of controls) {
-      if (!lift.includes(c.path) || c.type !== "action" && !chipFits(c)) continue;
+      if (!lift.includes(c.path) || c.type !== "action" && !liftFits(c)) continue;
       const col = padCols.get(c) ?? null;
       if (col === null) {
         reportMoveLayoutIssue(
@@ -421,8 +422,9 @@ function buildMovePages(panels) {
           place(actions, "action", c, null);
         } else if (col !== null) place(actions, "action", c, col);
       } else if (balanceRefs.has(c)) place(values, "value", c, col);
-      else if (isPadColor(c)) place(values, "value", c, col);
-      else if (dials.includes(c)) {
+      else if (isPadColor(c)) {
+        if (!topValues.includes(c)) place(values, "value", c, col);
+      } else if (dials.includes(c)) {
         if (col !== null) {
           reportMoveLayoutIssue(
             "pad-column-on-dial",
