@@ -51,6 +51,8 @@ declare const clamp: (v: number, min?: number, max?: number) => number;
 declare const newDNAId: () => string;
 declare function collectGenes(controls: ControlMeta[], group?: string): GeneParameter[];
 declare function geneBounds(p: GeneParameter): [number, number];
+/** A raw value fitted to its gene — clamped and stepped — or undefined when it cannot be one. */
+declare function fitGene(value: unknown, p: GeneParameter): unknown;
 /** Merge only enabled, compatible genes into a fresh live baseline. */
 declare function reconcileDNA(source: PresetDNA, baseline: PresetDNA, parameters: GeneParameter[]): PresetDNA;
 declare function seedDNA(baseline: PresetDNA, parameters: GeneParameter[], settings: GeneticsSettings, random?: () => number): PresetDNA;
@@ -67,4 +69,4 @@ interface MorphState {
 }
 declare function morphDNA(children: ExplorationChild[], morph: MorphState, baseline: PresetDNA, parameters: GeneParameter[]): PresetDNA;
 
-export { type ExplorationChild, type ExplorationTree, type GeneParameter, type GeneticsSettings, type MorphState, type PresetDNA, breedDNA, chooseParents, clamp, cloneDNA, collectGenes, geneBounds, morphDNA, newDNAId, reconcileDNA, seedDNA };
+export { type ExplorationChild, type ExplorationTree, type GeneParameter, type GeneticsSettings, type MorphState, type PresetDNA, breedDNA, chooseParents, clamp, cloneDNA, collectGenes, fitGene, geneBounds, morphDNA, newDNAId, reconcileDNA, seedDNA };

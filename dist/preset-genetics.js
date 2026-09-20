@@ -61,6 +61,11 @@ function numeric(value, p) {
 function valid(value, p) {
   return p.kind === "number" ? typeof value === "number" && Number.isFinite(value) : !!p.options?.includes(value);
 }
+function fitGene(value, p) {
+  if (p.kind === "number") return typeof value === "number" && Number.isFinite(value) ? numeric(value, p) : void 0;
+  if (p.options?.every((o) => typeof o === "boolean") && (value === "true" || value === "false")) return value === "true";
+  return valid(value, p) ? value : void 0;
+}
 function randomGene(p, random) {
   return p.kind === "number" ? numeric((p.low ?? p.min ?? 0) + random() * ((p.high ?? p.max ?? 1) - (p.low ?? p.min ?? 0)), p) : p.options?.[Math.floor(random() * p.options.length)];
 }
@@ -155,6 +160,7 @@ export {
   clamp,
   cloneDNA,
   collectGenes,
+  fitGene,
   geneBounds,
   morphDNA,
   newDNAId,
