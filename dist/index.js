@@ -12075,6 +12075,44 @@ function applyAgentWrites(writes, only) {
   for (const [panelId, values] of Object.entries(updates)) TweakStore14.updateValues(panelId, values);
   return { before, changed };
 }
+function fitParams(action, given = {}) {
+  const out = {};
+  for (const [name, p] of Object.entries(action.params ?? {})) {
+    let v = given[name];
+    if (v === void 0 || v === null) {
+      if (p.optional) continue;
+      return void 0;
+    }
+    if (p.type === "boolean" && (v === "true" || v === "false")) v = v === "true";
+    if (typeof v !== p.type) return void 0;
+    if (p.type === "number") {
+      if (!Number.isFinite(v)) return void 0;
+      let n = Math.max(p.min ?? -Infinity, Math.min(p.max ?? Infinity, v));
+      if (p.step && p.step > 0) n = (p.min ?? 0) + Math.round((n - (p.min ?? 0)) / p.step) * p.step;
+      v = n;
+    } else if (p.options && !p.options.includes(v)) return void 0;
+    out[name] = v;
+  }
+  return out;
+}
+async function runAgentActions(calls, actions) {
+  const undos = [];
+  let ran = 0, undoable = true;
+  for (const call of calls) {
+    const action = actions.find((a) => a.id === call.id);
+    const params = action && fitParams(action, call.params);
+    if (!action || !params) continue;
+    try {
+      const undo = await action.run(params);
+      ran++;
+      if (typeof undo === "function") undos.push(undo);
+      else undoable = false;
+    } catch (error) {
+      return { ran, undos, undoable, error: `${action.label}: ${error instanceof Error ? error.message : "failed"}` };
+    }
+  }
+  return { ran, undos, undoable };
+}
 function restoreAgentWrites(before) {
   for (const [panelId, values] of Object.entries(before)) if (TweakStore14.getPanel(panelId)) TweakStore14.updateValues(panelId, values);
 }
@@ -12083,6 +12121,7 @@ var MoveAgentStoreClass = class {
     this.options = {};
     this.view = null;
     this.before = null;
+    this.undos = [];
     this.flight = null;
     this.version = 0;
     this.listeners = /* @__PURE__ */ new Set();
@@ -12095,7 +12134,7 @@ var MoveAgentStoreClass = class {
         this.listeners.delete(fn);
       };
     };
-    this.canUndo = () => !!this.before;
+    this.canUndo = () => !!this.before || this.undos.length > 0;
     this.askBridge = async (request, signal) => {
       let res;
       try {
@@ -12126,7 +12165,7 @@ var MoveAgentStoreClass = class {
   /** Open the prompt; `focus` is the page in front of the user. */
   open(focus) {
     this.focus = focus;
-    if (!this.view) this.set({ phase: "prompt", prompt: "", message: "", changed: 0 });
+    if (!this.view) this.set({ phase: "prompt", prompt: "", message: "", changed: 0, acted: 0 });
   }
   /** Close — and let go of an ask still in the air. What landed stays. */
   close() {
@@ -12142,32 +12181,62 @@ var MoveAgentStoreClass = class {
     const text = prompt.trim();
     if (!this.view || !text || this.view.phase === "thinking") return;
     const controls = describeAgentControls(this.options.panels);
-    if (!controls.length) {
+    const actions = this.options.actions ?? [];
+    if (!controls.length && !actions.length) {
       this.set({ ...this.view, phase: "error", prompt: text, message: "Nothing here to turn." });
       return;
     }
     const flight = this.flight = new AbortController();
-    this.set({ phase: "thinking", prompt: text, message: "", changed: 0 });
+    this.set({ phase: "thinking", prompt: text, message: "", changed: 0, acted: 0 });
     try {
       const focus = this.focus && TweakStore14.getPanel(this.focus)?.name;
-      const reply = await (this.options.ask ?? this.askBridge)({ prompt: text, context: this.options.context, focus, controls }, flight.signal);
+      const reply = await (this.options.ask ?? this.askBridge)({
+        prompt: text,
+        context: this.options.context,
+        brief: this.options.brief,
+        focus,
+        scene: this.options.scene?.(),
+        controls,
+        actions: actions.length ? actions.map(({ run: _run, ...described }) => described) : void 0
+      }, flight.signal);
       if (flight.signal.aborted) return;
+      const acted = await runAgentActions(reply.actions ?? [], actions);
       const { before, changed } = applyAgentWrites(reply.writes ?? [], this.options.panels);
-      if (changed) this.before = before;
-      this.set({ phase: "done", prompt: text, changed, message: reply.message || (changed ? "" : "Nothing changed.") });
+      if (changed || acted.ran) {
+        this.before = changed ? before : null;
+        this.undos = acted.undos;
+      }
+      const moved = changed > 0 || acted.ran > 0;
+      this.set({
+        phase: acted.error ? "error" : "done",
+        prompt: text,
+        changed,
+        acted: acted.ran,
+        message: acted.error ?? (reply.message || (moved ? "" : "Nothing changed."))
+      });
     } catch (error) {
       if (flight.signal.aborted) return;
-      this.set({ phase: "error", prompt: text, changed: 0, message: error instanceof Error ? error.message : "The agent did not answer." });
+      this.set({ phase: "error", prompt: text, changed: 0, acted: 0, message: error instanceof Error ? error.message : "The agent did not answer." });
     } finally {
       if (this.flight === flight) this.flight = null;
     }
   }
-  /** Put back every value the last ask moved. */
-  undo() {
-    if (!this.before) return;
-    restoreAgentWrites(this.before);
+  /** Put back what the last ask did: the values, then its actions, last one first. */
+  async undo() {
+    if (!this.canUndo()) return;
+    const before = this.before, undos = this.undos;
     this.before = null;
-    if (this.view) this.set({ ...this.view, phase: "prompt", message: "Undone.", changed: 0 });
+    this.undos = [];
+    if (before) restoreAgentWrites(before);
+    let failed = false;
+    for (const undo of undos.reverse()) {
+      try {
+        await undo();
+      } catch {
+        failed = true;
+      }
+    }
+    if (this.view) this.set({ ...this.view, phase: "prompt", message: failed ? "Some of it could not be undone." : "Undone.", changed: 0, acted: 0 });
   }
 };
 var MoveAgentStore = new MoveAgentStoreClass();
@@ -13024,10 +13093,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       MoveAgentStore.toggle(agentFocus.current);
     };
     const onJogClick = (e) => {
-      if (MoveAgentStore.getView()?.phase !== "done" || !MoveAgentStore.canUndo()) return;
+      const view = MoveAgentStore.getView();
+      if (!view || view.phase === "thinking" || !(view.changed || view.acted) || !MoveAgentStore.canUndo()) return;
       e.preventDefault();
       e.stopImmediatePropagation();
-      MoveAgentStore.undo();
+      void MoveAgentStore.undo();
     };
     window.addEventListener(MOVE_JOG_HOLD_EVENT, onHold);
     window.addEventListener(MOVE_JOG_CLICK_EVENT, onJogClick, { capture: true });
@@ -15197,8 +15267,10 @@ function MoveAgentPrompt({ view }) {
   useEffect14(() => {
     if (!thinking) inputRef.current?.select();
   }, [thinking]);
-  const changed = view.phase === "done" && view.changed > 0;
-  const note = thinking ? "Turning the dials\u2026" : [changed ? `${view.changed} ${view.changed === 1 ? "value" : "values"} changed.` : "", view.message].filter(Boolean).join(" ");
+  const changed = view.phase !== "thinking" && (view.changed > 0 || view.acted > 0);
+  const count = (n, one, many) => n ? `${n} ${n === 1 ? one : many}` : "";
+  const did = [count(view.acted, "action", "actions"), count(view.changed, "value changed", "values changed")].filter(Boolean).join(", ");
+  const note = thinking ? "Turning the dials\u2026" : [did && `${did}.`, view.message].filter(Boolean).join(" ");
   return /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-preset-save tweakers-move-agent", "data-phase": view.phase, children: [
     /* @__PURE__ */ jsx17(
       "input",
@@ -15218,14 +15290,14 @@ function MoveAgentPrompt({ view }) {
           else if (e.key === "Escape") MoveAgentStore.close();
           else if (e.key === "z" && (e.metaKey || e.ctrlKey) && changed) {
             e.preventDefault();
-            MoveAgentStore.undo();
+            void MoveAgentStore.undo();
           }
         }
       }
     ),
     note && /* @__PURE__ */ jsxs13("p", { className: "tweakers-move-agent-note", role: "status", children: [
       note,
-      changed && MoveAgentStore.canUndo() && /* @__PURE__ */ jsx17("button", { type: "button", className: "tweakers-move-agent-undo", onClick: () => MoveAgentStore.undo(), children: "Undo" })
+      changed && MoveAgentStore.canUndo() && /* @__PURE__ */ jsx17("button", { type: "button", className: "tweakers-move-agent-undo", onClick: () => void MoveAgentStore.undo(), children: "Undo" })
     ] })
   ] });
 }
@@ -17154,6 +17226,7 @@ export {
   rgbToHsl,
   rgbToHsv,
   rgbToOklch,
+  runAgentActions,
   sampleTransfer,
   scrubBy,
   seedDNA,
