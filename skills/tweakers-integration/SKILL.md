@@ -247,6 +247,33 @@ them wholesale. The panel's theme is the design anchor for the whole window:
   by default).
 - Wire **presets** so the whole surface snapshots meaningfully.
 
+## The agent pass (the held wheel)
+
+The kit ships an agent: a held wheel opens a prompt, and Claude turns the
+dials (`docs/agent.md`). It reads the store, so an integration has it the
+moment its panels are registered — there is nothing to build. What is left
+is making it *good* here, and that is three small jobs:
+
+1. **Give it the app in a sentence or two.** `moveKitOptions({ agent:
+   { context } })`. Say what the app makes, what a panel stands for (a track?
+   a clip? a layer?), and any word the user will say that no label carries.
+   This is the only thing the agent cannot read off the store.
+2. **Read the panel as the agent does.** Call `describeAgentControls()` in
+   the console and read the list cold. Every label that needs the screen
+   next to it to make sense ("Amt", "A", "Mode 2") is a control the agent
+   will guess at. Fix the label or add a hint — the same work the refinement
+   pass asks for, now with a second reader.
+3. **Ask it five things a user of this app would say** — one nudge, one
+   whole new look, one that names a control, one that names a feeling, one
+   it cannot do. Watch what moves. A wrong move is almost always a label or
+   a missing line of context, not a prompt to patch.
+
+The agent only sees values: sliders, numbers, toggles, selects, xy, range,
+filter, colour, text. It cannot press an action, and it does not see lists,
+gradients, curves or the timeline. An app whose real work is *doing* things
+— cutting a clip, adding a layer — gets values-only help until those verbs
+are given to it on purpose; do not fake a verb as a toggle to reach it.
+
 ## Anti-patterns to catch in review
 
 - A curve, envelope, or easing edited through bare numeric sliders while a
