@@ -3441,6 +3441,7 @@ function collectGenes(controls, group = "") {
   return controls.flatMap((c) => {
     if (c.type === "folder") return collectGenes(c.children ?? [], group ? `${group} / ${c.label}` : c.label);
     if (c.tabBar || c.path === "_tab") return [];
+    if (c.moveBlank) return [];
     const trouble = c.path.endsWith("_enabled") || /^(device on|bypass)$/i.test(c.label);
     const base = { id: c.path, path: c.path, label: c.label, group, trouble, enabled: !trouble };
     const number = (component2, min, max, step) => Number.isFinite(min) && Number.isFinite(max) && max > min ? [{
@@ -4940,6 +4941,15 @@ function XYSurface({ label, x, y, disabled, onChange }) {
 // src/components/MovePanel.tsx
 var import_react16 = require("react");
 var import_react_dom5 = require("react-dom");
+
+// src/move-float.ts
+var MOVE_FLOAT_GAP = 10;
+function moveFloatSitsInside(panelTop, boxHeight, gap = MOVE_FLOAT_GAP) {
+  if (!Number.isFinite(panelTop) || !Number.isFinite(boxHeight)) return false;
+  return panelTop - gap - boxHeight < 0;
+}
+
+// src/components/MovePanel.tsx
 var import_TweakStore17 = require("tweakers/store");
 var import_ModulationStore2 = require("tweakers/modulation-store");
 
@@ -12469,6 +12479,7 @@ var MoveSettingsView = {
 var import_TweakStore16 = require("tweakers/store");
 
 // src/move-agent-perception.ts
+var readLive = (live) => typeof live === "function" ? live() : live;
 var EPS = 1e-9;
 var rateOf = (s) => Number.isFinite(s.rate) && s.rate > 0 ? s.rate : 1;
 var sound = (s) => Number.isFinite(s.srcIn) && Number.isFinite(s.srcOut) && Number.isFinite(s.at) && s.srcOut > s.srcIn;
@@ -12515,16 +12526,19 @@ function formatAgentTime(seconds) {
   return `${pad(Math.floor(ms / 6e4), 2)}:${pad(Math.floor(ms / 1e3) % 60, 2)}.${pad(ms % 1e3, 3)}`;
 }
 var STOP_WORDS = /* @__PURE__ */ new Set(["a", "an", "and", "at", "in", "is", "of", "on", "or", "the", "to"]);
-function formatEntries(projected, options = {}) {
-  if (!projected.length) return "Nothing here.";
-  const said = (options.query ?? "").toLowerCase().split(/[^\p{L}\p{N}']+/u).filter(Boolean);
+function queryEntries(projected, query) {
+  const said = (query ?? "").toLowerCase().split(/[^\p{L}\p{N}']+/u).filter(Boolean);
   const words = said.some((w) => !STOP_WORDS.has(w)) ? said.filter((w) => !STOP_WORDS.has(w)) : said;
   const hits = (e) => {
     const text = `${e.label ?? ""} ${e.id} ${e.type}`.toLowerCase();
     return words.filter((w) => text.includes(w)).length;
   };
   const found = words.length ? projected.filter((e) => hits(e) > 0) : projected;
-  const kept = found.length ? [...found.filter((e) => hits(e) === words.length), ...found.filter((e) => hits(e) < words.length)] : projected;
+  return { found, kept: found.length ? [...found.filter((e) => hits(e) === words.length), ...found.filter((e) => hits(e) < words.length)] : projected };
+}
+function formatEntries(projected, options = {}) {
+  if (!projected.length) return "Nothing here.";
+  const { found, kept } = queryEntries(projected, options.query);
   const limit = Math.max(1, Math.floor(options.limit ?? 120));
   const lines = kept.slice(0, limit).map((e) => [
     e.id,
@@ -12542,7 +12556,7 @@ function resolveBoundary(ref, known, segments) {
   if (!ref || typeof ref.entry !== "string" || ref.edge !== "start" && ref.edge !== "end") return void 0;
   const resolved = known.filter((e) => e.id === ref.entry && Number.isFinite(e.t0)).map((entry) => {
     const sourceTime = ref.edge === "start" ? entry.t0 : entry.t1 !== void 0 && entry.t1 > entry.t0 ? entry.t1 : entry.t0;
-    const base = { entry: ref.entry, edge: ref.edge, source: entry.source, sourceTime };
+    const base = { entry: ref.entry, edge: ref.edge, of: entry, source: entry.source, sourceTime };
     if (!segments) return { ...base, time: sourceTime };
     const held = segments.filter((s) => sound(s) && s.source === entry.source);
     const inside = (s) => ref.edge === "start" ? sourceTime >= s.srcIn - EPS && sourceTime < s.srcOut - EPS : sourceTime > s.srcIn + EPS && sourceTime <= s.srcOut + EPS;
@@ -12655,7 +12669,10 @@ function fitParams(declared, given = {}, resolve) {
       let n = Math.max(p.min ?? -Infinity, Math.min(p.max ?? Infinity, v));
       if (p.step && p.step > 0) n = (p.min ?? 0) + Math.round((n - (p.min ?? 0)) / p.step) * p.step;
       v = n;
-    } else if (p.options && !p.options.includes(v)) return void 0;
+    } else {
+      const options = readLive(p.options);
+      if (options && !options.includes(v)) return void 0;
+    }
     out[name] = v;
   }
   return out;
@@ -12699,6 +12716,15 @@ var abortable = (work, signal) => new Promise((resolve, reject) => {
   signal.addEventListener("abort", onAbort, { once: true });
   Promise.resolve(work).then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
 });
+var describeParams = (params) => params && Object.fromEntries(Object.entries(params).map(([name, { options, ...p }]) => {
+  const now = readLive(options);
+  return [name, now ? { ...p, options: now } : p];
+}));
+var describeAction = ({ run: _run, params, ...a }) => params ? { ...a, params: describeParams(params) } : a;
+var describeTool = ({ run: _run, progress: _progress, done: _done, cost, params, ...t }) => {
+  const now = readLive(cost);
+  return { ...t, ...now ? { cost: now } : {}, ...params ? { params: describeParams(params) } : {} };
+};
 var isEntry = (e) => !!e && typeof e === "object" && typeof e.id === "string" && typeof e.source === "string" && Number.isFinite(e.t0);
 function readSignalTool(signals, editMap) {
   return {
@@ -12712,17 +12738,24 @@ function readSignalTool(signals, editMap) {
       to: { type: "number", min: 0, optional: true, hint: "timeline seconds" },
       query: { type: "string", optional: true, hint: "optional \u2014 one or two plain words" }
     },
+    done: (params, result) => {
+      const label = signals.find((s) => s.id === params.signal)?.label.toLowerCase() ?? "signal";
+      const count = result.count;
+      return count === void 0 ? `Read the ${label}` : `Read the ${label} \u2014 ${count}`;
+    },
     run: async (params, abort) => {
       const chosen = signals.find((s) => s.id === params.signal);
-      if (chosen.state() === "unavailable") throw new Error(`${chosen.label} cannot be read here${chosen.cost ? ` (${chosen.cost})` : ""}.`);
+      const cost = readLive(chosen.cost);
+      if (chosen.state() === "unavailable") throw new Error(`${chosen.label} cannot be read here${cost ? ` (${cost})` : ""}.`);
       const from = params.from, to = params.to;
       const segments = editMap?.();
       const held = segments && timelineToSource({ from, to }, segments);
-      if (held && !held.length) return { text: "Nothing of the edit is in that range." };
+      if (held && !held.length) return { text: "Nothing of the edit is in that range.", count: 0 };
       const entries2 = (await chosen.read(chosen.whole ? void 0 : held, abort)).filter(isEntry);
       const projected = segments ? projectEntries(entries2, segments) : entries2.map((e) => ({ ...e, at0: e.t0, ...e.t1 !== void 0 && e.t1 > e.t0 ? { at1: e.t1 } : {} })).sort((a, b) => a.at0 - b.at0);
       const inRange = projected.filter((e) => (e.at1 ?? e.at0) >= (from ?? -Infinity) && e.at0 <= (to ?? Infinity));
-      return { text: formatEntries(inRange, { query: params.query }), entries: entries2 };
+      const query = params.query;
+      return { text: formatEntries(inRange, { query }), entries: entries2, count: queryEntries(inRange, query).kept.length };
     }
   };
 }
@@ -12809,13 +12842,7 @@ var MoveAgentStoreClass = class {
   async ask(prompt) {
     const text = prompt.trim();
     if (!this.view || !text || this.view.phase === "thinking") return;
-    const controls = describeAgentControls(this.options.panels);
-    const actions = this.options.actions ?? [];
     const idle = { prompt: text, message: "", changed: 0, acted: 0, skipped: 0, steps: [] };
-    if (!controls.length && !actions.length) {
-      this.set({ ...idle, phase: "error", message: "Nothing here to turn." });
-      return;
-    }
     const flight = this.flight = new AbortController();
     this.set({ ...idle, phase: "thinking" });
     let late = false;
@@ -12823,11 +12850,17 @@ var MoveAgentStoreClass = class {
       late = true;
       flight.abort();
     }, BUDGET_MS);
+    const { onRequest } = this.options;
+    const outcome = { changed: 0, acted: 0, skipped: 0, cancelled: false };
     try {
+      await abortable(onRequest?.begin?.(text), flight.signal);
+      const controls = describeAgentControls(this.options.panels);
+      const actions = readLive(this.options.actions) ?? [];
+      if (!controls.length && !actions.length) throw new Error("Nothing here to turn.");
       const focus = this.focus && import_TweakStore16.TweakStore.getPanel(this.focus)?.name;
-      const signals = this.options.signals ?? [], editMap = this.options.editMap;
-      const caps = signals.length || this.options.tools?.length ? await this.capable(flight.signal) : null;
-      const tools = caps ? [...signals.length ? [readSignalTool(signals, editMap)] : [], ...(this.options.tools ?? []).filter((t) => t.id !== READ_SIGNAL)] : [];
+      const signals = readLive(this.options.signals) ?? [], hostTools = readLive(this.options.tools) ?? [], editMap = this.options.editMap;
+      const caps = signals.length || hostTools.length ? await this.capable(flight.signal) : null;
+      const tools = caps ? [...signals.length ? [readSignalTool(signals, editMap)] : [], ...hostTools.filter((t) => t.id !== READ_SIGNAL)] : [];
       const maxPasses = tools.length ? Math.max(1, Math.floor(Math.min(this.options.maxPasses ?? 3, caps?.maxPasses ?? Infinity))) : 1;
       const known = [], seen = /* @__PURE__ */ new Set();
       const learn = (found) => {
@@ -12853,10 +12886,10 @@ ${e.id}`);
           focus,
           scene,
           controls,
-          actions: actions.length ? actions.map(({ run: _run, ...described }) => described) : void 0,
+          actions: actions.length ? actions.map(describeAction) : void 0,
           ...tools.length ? {
-            tools: tools.map(({ run: _run, progress: _progress, ...described }) => described),
-            signals: signals.length ? signals.map(({ id, label, hint, cost, state: state4 }) => ({ id, label, hint, state: state4(), cost })) : void 0,
+            tools: tools.map(describeTool),
+            signals: signals.length ? signals.map(({ id, label, hint, cost, state: state4 }) => ({ id, label, hint, state: state4(), cost: readLive(cost) })) : void 0,
             history: history.length ? history : void 0,
             passesLeft
           } : {}
@@ -12867,13 +12900,17 @@ ${e.id}`);
       const calls = reply.actions ?? [];
       if (calls.length && this.options.checkpoint) await abortable(this.options.checkpoint(), flight.signal);
       clearTimeout(budget);
-      if (flight.signal.aborted) return;
+      if (flight.signal.aborted) {
+        outcome.cancelled = true;
+        return;
+      }
       const acted = await runAgentActions(calls, actions, resolve);
       const { before, changed } = applyAgentWrites(reply.writes ?? [], this.options.panels);
       if (changed || acted.ran) {
         this.before = changed ? before : null;
         this.undos = acted.undos;
       }
+      Object.assign(outcome, { changed, acted: acted.ran, skipped: acted.skipped }, acted.error ? { error: acted.error } : {});
       const moved = changed > 0 || acted.ran > 0;
       const unanswered = !moved && !!reply.calls?.length && tools.length > 0;
       if (this.view) this.set({
@@ -12886,11 +12923,20 @@ ${e.id}`);
         message: acted.error ?? (reply.message || (unanswered ? "It kept looking and ran out of passes. Nothing changed." : moved ? "" : "Nothing changed."))
       });
     } catch (error) {
-      if (flight.signal.aborted && !late) return;
-      if (this.view) this.set({ ...idle, steps: this.view.steps, phase: "error", message: late ? "That took too long, so it was stopped. Nothing changed." : error instanceof Error ? error.message : "The agent did not answer." });
+      if (flight.signal.aborted && !late) {
+        outcome.cancelled = true;
+        return;
+      }
+      outcome.error = late ? "That took too long, so it was stopped. Nothing changed." : error instanceof Error ? error.message : "The agent did not answer.";
+      if (this.view) this.set({ ...idle, steps: this.view.steps, phase: "error", message: outcome.error });
     } finally {
       clearTimeout(budget);
       if (this.flight === flight) this.flight = null;
+      try {
+        onRequest?.end?.(outcome);
+      } catch (error) {
+        console.warn("tweakers agent: onRequest.end failed", error);
+      }
     }
   }
   /**
@@ -12900,11 +12946,24 @@ ${e.id}`);
    */
   async perceive(calls, tools, signals, resolve, learn, images, signal) {
     const first = this.view?.steps.length ?? 0;
-    const name = (call, running2) => {
+    const running2 = (call) => {
       const tool = tools.find((t) => t.id === call.tool);
       const read2 = call.tool === READ_SIGNAL && signals.find((s) => s.id === call.params?.signal)?.label.toLowerCase();
-      if (read2) return running2 ? `Reading the ${read2}\u2026` : `Read the ${read2}`;
-      return tool ? running2 ? tool.progress ?? `${tool.label}\u2026` : tool.label : call.tool;
+      if (read2) return `Reading the ${read2}\u2026`;
+      return tool ? tool.progress ?? `${tool.label}\u2026` : call.tool;
+    };
+    const finished = calls.map((call) => {
+      const tool = tools.find((t) => t.id === call.tool);
+      const read2 = call.tool === READ_SIGNAL && signals.find((s) => s.id === call.params?.signal)?.label.toLowerCase();
+      return read2 ? `Read the ${read2}` : tool?.label ?? call.tool;
+    });
+    const said = (tool, params, result) => {
+      if (typeof tool.done !== "function") return tool.done;
+      try {
+        return tool.done(params, result) || void 0;
+      } catch {
+        return void 0;
+      }
     };
     const mark = (index, step) => {
       if (!this.view || signal.aborted) return;
@@ -12912,7 +12971,7 @@ ${e.id}`);
       steps[first + index] = step;
       this.set({ ...this.view, steps });
     };
-    if (this.view) this.set({ ...this.view, steps: [...this.view.steps, ...calls.map((call) => ({ label: name(call, true), state: "running" }))] });
+    if (this.view) this.set({ ...this.view, steps: [...this.view.steps, ...calls.map((call) => ({ label: running2(call), state: "running" }))] });
     const results = await Promise.all(calls.map(async (call, index) => {
       try {
         const tool = tools.find((t) => t.id === call.tool);
@@ -12921,17 +12980,18 @@ ${e.id}`);
         if (!params) throw new Error("The arguments do not fit what the tool takes.");
         const result = await abortable(tool.run(params, signal), signal) ?? {};
         learn(result.entries);
-        mark(index, { label: name(call, false), state: "done" });
+        finished[index] = said(tool, params, result) ?? finished[index];
+        mark(index, { label: finished[index], state: "done" });
         return { tool: call.tool, text: result.text, images: result.images };
       } catch (error) {
         if (signal.aborted) throw error;
-        mark(index, { label: name(call, false), state: "failed" });
+        mark(index, { label: finished[index], state: "failed" });
         return { tool: call.tool, error: error instanceof Error ? error.message : "failed" };
       }
     }));
     const trimmed = trimImages(results, images);
     trimmed.left.forEach((n, index) => {
-      if (n) mark(index, { label: `${name(calls[index], false)} \u2014 ${leftOut(n, images)}`, state: trimmed.results[index].images ? "done" : "failed" });
+      if (n) mark(index, { label: `${finished[index]} \u2014 ${leftOut(n, images)}`, state: trimmed.results[index].images ? "done" : "failed" });
     });
     return { calls: calls.map(({ tool, params }) => ({ tool, params })), results: trimmed.results };
   }
@@ -12968,15 +13028,18 @@ ${e.id}`);
     this.before = null;
     this.undos = [];
     if (before) restoreAgentWrites(before);
-    let failed = false;
+    const failures = [];
     for (const undo of undos.reverse()) {
       try {
         await undo();
-      } catch {
-        failed = true;
+      } catch (error) {
+        failures.push(error);
       }
     }
-    if (this.view) this.set({ ...this.view, phase: "prompt", message: failed ? "Some of it could not be undone." : "Undone.", changed: 0, acted: 0, skipped: 0, steps: [] });
+    for (const error of failures.slice(1)) console.warn("tweakers agent: an undo failed", error);
+    const reason = failures[0] instanceof Error ? failures[0].message.trim() : typeof failures[0] === "string" ? failures[0].trim() : "";
+    const message = !failures.length ? "Undone." : reason ? `Could not undo: ${reason}` : "Some of it could not be undone.";
+    if (this.view) this.set({ ...this.view, phase: "prompt", message, changed: 0, acted: 0, skipped: 0, steps: [] });
   }
 };
 var MoveAgentStore = new MoveAgentStoreClass();
@@ -13498,10 +13561,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   }, [volume]);
   const onlyKey = only === void 0 ? void 0 : JSON.stringify(Array.isArray(only) ? only : [only]);
   const read2 = (0, import_react16.useCallback)(() => {
-    if (onlyKey === void 0) return import_TweakStore17.TweakStore.selectPanels();
-    const requested = JSON.parse(onlyKey);
-    const registered = import_TweakStore17.TweakStore.getPanels("panel");
-    return requested.map((key) => registered.find((panel) => panel.id === key || panel.name === key)).filter((panel) => panel !== void 0);
+    return import_TweakStore17.TweakStore.selectPanels(onlyKey === void 0 ? void 0 : JSON.parse(onlyKey));
   }, [onlyKey]);
   (0, import_react16.useEffect)(() => {
     setMounted(true);
@@ -13510,7 +13570,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     return import_TweakStore17.TweakStore.subscribeGlobal(() => setPanels(read2()));
   }, [read2]);
   const settingsKey = settings2 === void 0 ? void 0 : JSON.stringify(Array.isArray(settings2) ? settings2 : [settings2]);
-  const namedRooms = settingsKey === void 0 ? [] : JSON.parse(settingsKey).map((key) => import_TweakStore17.TweakStore.getPanels("panel").find((p) => p.id === key || p.name === key)).filter((p) => p !== void 0);
+  const namedRooms = settingsKey === void 0 ? [] : import_TweakStore17.TweakStore.selectPanels(JSON.parse(settingsKey));
   const waveRoom = import_TweakStore17.TweakStore.getPanel(MOVE_WAVEFORM_PANEL);
   const settingsRooms = waveRoom ? [...namedRooms, waveRoom] : namedRooms;
   const roomIds = settingsRooms.map((p) => p.id);
@@ -15980,12 +16040,34 @@ function MoveSearchBar({ view }) {
     )
   ] });
 }
+function useMoveFloat() {
+  const ref = (0, import_react16.useRef)(null);
+  const [inside, setInside] = (0, import_react16.useState)(false);
+  (0, import_react16.useLayoutEffect)(() => {
+    const box = ref.current, panel = box?.parentElement;
+    if (!box || !panel) return;
+    const measure = () => setInside(moveFloatSitsInside(panel.getBoundingClientRect().top, box.offsetHeight));
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(box);
+    observer?.observe(panel);
+    window.addEventListener("resize", measure);
+    window.addEventListener("scroll", measure, true);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("scroll", measure, true);
+    };
+  }, []);
+  return { ref, inside };
+}
 function MovePresetSaveInput({ suggested }) {
   const inputRef = (0, import_react16.useRef)(null);
+  const float = useMoveFloat();
   (0, import_react16.useEffect)(() => {
     inputRef.current?.select();
   }, []);
-  return /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { className: "tweakers-move-preset-save", children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
+  return /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { ref: float.ref, className: "tweakers-move-preset-save", "data-inside": float.inside || void 0, children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
     "input",
     {
       ref: inputRef,
@@ -16003,6 +16085,7 @@ function MovePresetSaveInput({ suggested }) {
 }
 function MoveAgentPrompt({ view }) {
   const inputRef = (0, import_react16.useRef)(null);
+  const float = useMoveFloat();
   const thinking = view.phase === "thinking";
   (0, import_react16.useEffect)(() => {
     if (!thinking) inputRef.current?.select();
@@ -16011,7 +16094,7 @@ function MoveAgentPrompt({ view }) {
   const count = (n, one, many) => n ? `${n} ${n === 1 ? one : many}` : "";
   const did = [count(view.acted, "action", "actions"), count(view.changed, "value changed", "values changed"), count(view.skipped, "action skipped", "actions skipped")].filter(Boolean).join(", ");
   const note = thinking ? "Turning the dials\u2026" : [did && `${did}.`, view.message].filter(Boolean).join(" ");
-  return /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "tweakers-move-preset-save tweakers-move-agent", "data-phase": view.phase, children: [
+  return /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { ref: float.ref, className: "tweakers-move-preset-save tweakers-move-agent", "data-phase": view.phase, "data-inside": float.inside || void 0, children: [
     /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
       "input",
       {

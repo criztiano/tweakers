@@ -6,6 +6,7 @@ function collectGenes(controls, group = "") {
   return controls.flatMap((c) => {
     if (c.type === "folder") return collectGenes(c.children ?? [], group ? `${group} / ${c.label}` : c.label);
     if (c.tabBar || c.path === "_tab") return [];
+    if (c.moveBlank) return [];
     const trouble = c.path.endsWith("_enabled") || /^(device on|bypass)$/i.test(c.label);
     const base = { id: c.path, path: c.path, label: c.label, group, trouble, enabled: !trouble };
     const number = (component, min, max, step) => Number.isFinite(min) && Number.isFinite(max) && max > min ? [{
