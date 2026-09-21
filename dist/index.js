@@ -12009,6 +12009,94 @@ var MoveSettingsView = {
 
 // src/move-agent.ts
 import { TweakStore as TweakStore14 } from "tweakers/store";
+
+// src/move-agent-perception.ts
+var EPS = 1e-9;
+var rateOf = (s) => Number.isFinite(s.rate) && s.rate > 0 ? s.rate : 1;
+var sound = (s) => Number.isFinite(s.srcIn) && Number.isFinite(s.srcOut) && Number.isFinite(s.at) && s.srcOut > s.srcIn;
+var toTimeline = (s, t) => s.at + (t - s.srcIn) / rateOf(s);
+function projectEntries(entries2, segments) {
+  const out = [];
+  for (const segment of segments.filter(sound)) {
+    for (const entry of entries2) {
+      if (entry.source !== segment.source || !Number.isFinite(entry.t0)) continue;
+      if (entry.t1 === void 0 || !(entry.t1 > entry.t0)) {
+        if (entry.t0 < segment.srcIn - EPS || entry.t0 >= segment.srcOut - EPS) continue;
+        out.push({ ...entry, at0: toTimeline(segment, entry.t0) });
+        continue;
+      }
+      const c0 = Math.max(entry.t0, segment.srcIn), c1 = Math.min(entry.t1, segment.srcOut);
+      if (c1 - c0 <= EPS) continue;
+      const partial = c0 > entry.t0 + EPS || c1 < entry.t1 - EPS;
+      out.push({ ...entry, at0: toTimeline(segment, c0), at1: toTimeline(segment, c1), ...partial ? { partial } : {} });
+    }
+  }
+  return out.map((e, i) => ({ e, i })).sort((a, b) => a.e.at0 - b.e.at0 || a.i - b.i).map(({ e }) => e);
+}
+function timelineToSource(range, segments) {
+  const from = range?.from ?? -Infinity, to = range?.to ?? Infinity;
+  const found = [];
+  for (const segment of segments.filter(sound)) {
+    const rate = rateOf(segment), end = segment.at + (segment.srcOut - segment.srcIn) / rate;
+    const a = Math.max(from, segment.at), b = Math.min(to, end);
+    if (b - a <= EPS) continue;
+    found.push({ source: segment.source, t0: segment.srcIn + (a - segment.at) * rate, t1: segment.srcIn + (b - segment.at) * rate });
+  }
+  found.sort((a, b) => a.source === b.source ? a.t0 - b.t0 : a.source < b.source ? -1 : 1);
+  const merged = [];
+  for (const r of found) {
+    const last = merged[merged.length - 1];
+    if (last && last.source === r.source && r.t0 <= last.t1 + EPS) last.t1 = Math.max(last.t1, r.t1);
+    else merged.push({ ...r });
+  }
+  return merged;
+}
+function formatAgentTime(seconds) {
+  const ms = Math.max(0, Math.round((Number.isFinite(seconds) ? seconds : 0) * 1e3));
+  const pad = (n, w) => String(n).padStart(w, "0");
+  return `${pad(Math.floor(ms / 6e4), 2)}:${pad(Math.floor(ms / 1e3) % 60, 2)}.${pad(ms % 1e3, 3)}`;
+}
+var STOP_WORDS = /* @__PURE__ */ new Set(["a", "an", "and", "at", "in", "is", "of", "on", "or", "the", "to"]);
+function formatEntries(projected, options = {}) {
+  if (!projected.length) return "Nothing here.";
+  const said = (options.query ?? "").toLowerCase().split(/[^\p{L}\p{N}']+/u).filter(Boolean);
+  const words = said.some((w) => !STOP_WORDS.has(w)) ? said.filter((w) => !STOP_WORDS.has(w)) : said;
+  const hits = (e) => {
+    const text = `${e.label ?? ""} ${e.id} ${e.type}`.toLowerCase();
+    return words.filter((w) => text.includes(w)).length;
+  };
+  const found = words.length ? projected.filter((e) => hits(e) > 0) : projected;
+  const kept = found.length ? [...found.filter((e) => hits(e) === words.length), ...found.filter((e) => hits(e) < words.length)] : projected;
+  const limit = Math.max(1, Math.floor(options.limit ?? 120));
+  const lines = kept.slice(0, limit).map((e) => [
+    e.id,
+    e.type,
+    e.at1 === void 0 ? formatAgentTime(e.at0) : `${formatAgentTime(e.at0)}\u2013${formatAgentTime(e.at1)}`,
+    e.label,
+    e.score === void 0 ? "" : `score ${Math.round(e.score * 100) / 100}`,
+    e.partial ? "partial" : ""
+  ].filter(Boolean).join(" | "));
+  if (!found.length) lines.unshift(`Nothing matches "${options.query.trim()}" \u2014 this is everything in the range:`);
+  if (kept.length > limit) lines.push(`${kept.length - limit} more \u2014 narrow the range`);
+  return lines.join("\n");
+}
+function resolveBoundary(ref, known, segments) {
+  if (!ref || typeof ref.entry !== "string" || ref.edge !== "start" && ref.edge !== "end") return void 0;
+  const resolved = known.filter((e) => e.id === ref.entry && Number.isFinite(e.t0)).map((entry) => {
+    const sourceTime = ref.edge === "start" ? entry.t0 : entry.t1 !== void 0 && entry.t1 > entry.t0 ? entry.t1 : entry.t0;
+    const base = { entry: ref.entry, edge: ref.edge, source: entry.source, sourceTime };
+    if (!segments) return { ...base, time: sourceTime };
+    const held = segments.filter((s) => sound(s) && s.source === entry.source);
+    const inside = (s) => ref.edge === "start" ? sourceTime >= s.srcIn - EPS && sourceTime < s.srcOut - EPS : sourceTime > s.srcIn + EPS && sourceTime <= s.srcOut + EPS;
+    const touching = (s) => sourceTime >= s.srcIn - EPS && sourceTime <= s.srcOut + EPS;
+    const byTime = (a, b) => a.at - b.at;
+    const segment = held.filter(inside).sort(byTime)[0] ?? held.filter(touching).sort(byTime)[0];
+    return segment ? { ...base, time: toTimeline(segment, sourceTime) } : base;
+  });
+  return resolved.find((b) => b.time !== void 0) ?? resolved[0];
+}
+
+// src/move-agent.ts
 var MOVE_JOG_HOLD_EVENT = "move-tweakers:jog-hold";
 var SEP = "::";
 var flat3 = (controls) => controls.flatMap((c) => c.type === "folder" ? flat3(c.children ?? []) : [c]);
@@ -12075,13 +12163,32 @@ function applyAgentWrites(writes, only) {
   for (const [panelId, values] of Object.entries(updates)) TweakStore14.updateValues(panelId, values);
   return { before, changed };
 }
-function fitParams(action, given = {}) {
+function boundaryRef(value) {
+  let v = value;
+  if (typeof v === "string") {
+    const spelled = /^(.+?)[\s@|,]+(start|end)$/.exec(v.trim());
+    try {
+      v = spelled ? { entry: spelled[1], edge: spelled[2] } : JSON.parse(v);
+    } catch {
+      return void 0;
+    }
+  }
+  const ref = v;
+  return ref && typeof ref === "object" && typeof ref.entry === "string" && (ref.edge === "start" || ref.edge === "end") ? { entry: ref.entry, edge: ref.edge } : void 0;
+}
+function fitParams(declared, given = {}, resolve) {
   const out = {};
-  for (const [name, p] of Object.entries(action.params ?? {})) {
+  for (const [name, p] of Object.entries(declared ?? {})) {
     let v = given[name];
     if (v === void 0 || v === null) {
       if (p.optional) continue;
       return void 0;
+    }
+    if (p.type === "boundary") {
+      const ref = boundaryRef(v), boundary = ref && resolve?.(ref);
+      if (!boundary) return void 0;
+      out[name] = boundary;
+      continue;
     }
     if (p.type === "boolean" && (v === "true" || v === "false")) v = v === "true";
     if (typeof v !== p.type) return void 0;
@@ -12095,27 +12202,85 @@ function fitParams(action, given = {}) {
   }
   return out;
 }
-async function runAgentActions(calls, actions) {
+async function runAgentActions(calls, actions, resolve) {
   const undos = [];
-  let ran = 0, undoable = true;
+  let ran = 0, skipped = 0, undoable = true;
   for (const call of calls) {
     const action = actions.find((a) => a.id === call.id);
-    const params = action && fitParams(action, call.params);
-    if (!action || !params) continue;
+    const params = action && fitParams(action.params, call.params, resolve);
+    if (!action || !params) {
+      skipped++;
+      continue;
+    }
     try {
       const undo = await action.run(params);
       ran++;
       if (typeof undo === "function") undos.push(undo);
       else undoable = false;
     } catch (error) {
-      return { ran, undos, undoable, error: `${action.label}: ${error instanceof Error ? error.message : "failed"}` };
+      return { ran, skipped, undos, undoable, error: `${action.label}: ${error instanceof Error ? error.message : "failed"}` };
     }
   }
-  return { ran, undos, undoable };
+  return { ran, skipped, undos, undoable };
 }
 function restoreAgentWrites(before) {
   for (const [panelId, values] of Object.entries(before)) if (TweakStore14.getPanel(panelId)) TweakStore14.updateValues(panelId, values);
 }
+var READ_SIGNAL = "read_signal";
+var DEFAULT_URL = "http://localhost:7787/agent";
+var BUDGET_MS = 12e4;
+var MAX_IMAGES = 8;
+var MAX_IMAGE_BYTES = 6e5;
+var IMAGE = /^data:image\/(jpeg|png);base64,/;
+var abortable = (work, signal) => new Promise((resolve, reject) => {
+  const onAbort = () => reject(new Error("aborted"));
+  if (signal.aborted) {
+    onAbort();
+    return;
+  }
+  signal.addEventListener("abort", onAbort, { once: true });
+  Promise.resolve(work).then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
+});
+var isEntry = (e) => !!e && typeof e === "object" && typeof e.id === "string" && typeof e.source === "string" && Number.isFinite(e.t0);
+function readSignalTool(signals, editMap) {
+  return {
+    id: READ_SIGNAL,
+    label: "Read a signal",
+    kind: "read",
+    hint: "Read what one signal of the menu knows, as entries with ids and timeline times. `from`/`to` are timeline seconds and only say where to read \u2014 leave them out for the whole edit. `query` is optional: one or two plain words, to keep the entries that hold them. A signal that is not ready is computed first, at the cost its menu line names.",
+    params: {
+      signal: { type: "string", options: signals.map((s) => s.id) },
+      from: { type: "number", min: 0, optional: true, hint: "timeline seconds" },
+      to: { type: "number", min: 0, optional: true, hint: "timeline seconds" },
+      query: { type: "string", optional: true, hint: "optional \u2014 one or two plain words" }
+    },
+    run: async (params, abort) => {
+      const chosen = signals.find((s) => s.id === params.signal);
+      if (chosen.state() === "unavailable") throw new Error(`${chosen.label} cannot be read here${chosen.cost ? ` (${chosen.cost})` : ""}.`);
+      const from = params.from, to = params.to;
+      const segments = editMap?.();
+      const held = segments && timelineToSource({ from, to }, segments);
+      if (held && !held.length) return { text: "Nothing of the edit is in that range." };
+      const entries2 = (await chosen.read(chosen.whole ? void 0 : held, abort)).filter(isEntry);
+      const projected = segments ? projectEntries(entries2, segments) : entries2.map((e) => ({ ...e, at0: e.t0, ...e.t1 !== void 0 && e.t1 > e.t0 ? { at1: e.t1 } : {} })).sort((a, b) => a.at0 - b.at0);
+      const inRange = projected.filter((e) => (e.at1 ?? e.at0) >= (from ?? -Infinity) && e.at0 <= (to ?? Infinity));
+      return { text: formatEntries(inRange, { query: params.query }), entries: entries2 };
+    }
+  };
+}
+function trimImages(results, allowed) {
+  let room = allowed ? MAX_IMAGES : 0;
+  const left = [];
+  const trimmed = results.map((result, index) => {
+    if (!result.images?.length) return result;
+    const images = result.images.filter((image) => typeof image?.dataUrl === "string" && IMAGE.test(image.dataUrl) && image.dataUrl.length * 0.75 <= MAX_IMAGE_BYTES && room-- > 0);
+    left[index] = result.images.length - images.length;
+    if (!left[index]) return result;
+    return { ...result, text: [result.text, `(${leftOut(left[index], allowed)})`].filter(Boolean).join(" "), images: images.length ? images : void 0 };
+  });
+  return { results: trimmed, left };
+}
+var leftOut = (n, allowed) => `${n} ${n === 1 ? "image" : "images"} left out: ${allowed ? `at most ${MAX_IMAGES} a pass, JPEG or PNG, under ${MAX_IMAGE_BYTES / 1e3} KB each` : "images cannot be sent here"}`;
 var MoveAgentStoreClass = class {
   constructor() {
     this.options = {};
@@ -12123,6 +12288,8 @@ var MoveAgentStoreClass = class {
     this.before = null;
     this.undos = [];
     this.flight = null;
+    /** What the bridge said it can do, kept per url — and forgotten when it fails. */
+    this.caps = null;
     this.version = 0;
     this.listeners = /* @__PURE__ */ new Set();
     this.getView = () => this.view;
@@ -12138,7 +12305,7 @@ var MoveAgentStoreClass = class {
     this.askBridge = async (request, signal) => {
       let res;
       try {
-        res = await fetch(this.options.url ?? "http://localhost:7787/agent", {
+        res = await fetch(this.options.url ?? DEFAULT_URL, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(request),
@@ -12146,10 +12313,14 @@ var MoveAgentStoreClass = class {
         });
       } catch (error) {
         if (signal.aborted) throw error;
+        this.caps = null;
         throw new Error("The Move bridge is not answering.");
       }
       const body = await res.json().catch(() => null);
-      if (!res.ok || !body) throw new Error(body?.error || `The agent failed (${res.status}).`);
+      if (!res.ok || !body) {
+        this.caps = null;
+        throw new Error(body?.error || `The agent failed (${res.status}).`);
+      }
       return body;
     };
   }
@@ -12165,9 +12336,9 @@ var MoveAgentStoreClass = class {
   /** Open the prompt; `focus` is the page in front of the user. */
   open(focus) {
     this.focus = focus;
-    if (!this.view) this.set({ phase: "prompt", prompt: "", message: "", changed: 0, acted: 0 });
+    if (!this.view) this.set({ phase: "prompt", prompt: "", message: "", changed: 0, acted: 0, skipped: 0, steps: [] });
   }
-  /** Close — and let go of an ask still in the air. What landed stays. */
+  /** Close — and let go of an ask still in the air, its tools with it. What landed stays. */
   close() {
     this.flight?.abort();
     this.flight = null;
@@ -12182,43 +12353,154 @@ var MoveAgentStoreClass = class {
     if (!this.view || !text || this.view.phase === "thinking") return;
     const controls = describeAgentControls(this.options.panels);
     const actions = this.options.actions ?? [];
+    const idle = { prompt: text, message: "", changed: 0, acted: 0, skipped: 0, steps: [] };
     if (!controls.length && !actions.length) {
-      this.set({ ...this.view, phase: "error", prompt: text, message: "Nothing here to turn." });
+      this.set({ ...idle, phase: "error", message: "Nothing here to turn." });
       return;
     }
     const flight = this.flight = new AbortController();
-    this.set({ phase: "thinking", prompt: text, message: "", changed: 0, acted: 0 });
+    this.set({ ...idle, phase: "thinking" });
+    let late = false;
+    const budget = setTimeout(() => {
+      late = true;
+      flight.abort();
+    }, BUDGET_MS);
     try {
       const focus = this.focus && TweakStore14.getPanel(this.focus)?.name;
-      const reply = await (this.options.ask ?? this.askBridge)({
-        prompt: text,
-        context: this.options.context,
-        brief: this.options.brief,
-        focus,
-        scene: this.options.scene?.(),
-        controls,
-        actions: actions.length ? actions.map(({ run: _run, ...described }) => described) : void 0
-      }, flight.signal);
+      const signals = this.options.signals ?? [], editMap = this.options.editMap;
+      const caps = signals.length || this.options.tools?.length ? await this.capable(flight.signal) : null;
+      const tools = caps ? [...signals.length ? [readSignalTool(signals, editMap)] : [], ...(this.options.tools ?? []).filter((t) => t.id !== READ_SIGNAL)] : [];
+      const maxPasses = tools.length ? Math.max(1, Math.floor(Math.min(this.options.maxPasses ?? 3, caps?.maxPasses ?? Infinity))) : 1;
+      const known = [], seen = /* @__PURE__ */ new Set();
+      const learn = (found) => {
+        for (const e of Array.isArray(found) ? found : []) {
+          if (!isEntry(e) || seen.has(`${e.source}
+${e.id}`)) continue;
+          seen.add(`${e.source}
+${e.id}`);
+          known.push(e);
+        }
+      };
+      const resolve = (ref) => resolveBoundary(ref, known, editMap?.());
+      const history = [];
+      let reply;
+      for (let pass = 1; ; pass++) {
+        const scene = this.options.scene?.();
+        learn(scene?.entries);
+        const passesLeft = maxPasses - pass;
+        reply = await abortable((this.options.ask ?? this.askBridge)({
+          prompt: text,
+          context: this.options.context,
+          brief: this.options.brief,
+          focus,
+          scene,
+          controls,
+          actions: actions.length ? actions.map(({ run: _run, ...described }) => described) : void 0,
+          ...tools.length ? {
+            tools: tools.map(({ run: _run, progress: _progress, ...described }) => described),
+            signals: signals.length ? signals.map(({ id, label, hint, cost, state: state4 }) => ({ id, label, hint, state: state4(), cost })) : void 0,
+            history: history.length ? history : void 0,
+            passesLeft
+          } : {}
+        }, flight.signal), flight.signal);
+        if (!tools.length || !reply.calls?.length || passesLeft <= 0) break;
+        history.push(await this.perceive(reply.calls, tools, signals, resolve, learn, caps?.images !== false, flight.signal));
+      }
+      const calls = reply.actions ?? [];
+      if (calls.length && this.options.checkpoint) await abortable(this.options.checkpoint(), flight.signal);
+      clearTimeout(budget);
       if (flight.signal.aborted) return;
-      const acted = await runAgentActions(reply.actions ?? [], actions);
+      const acted = await runAgentActions(calls, actions, resolve);
       const { before, changed } = applyAgentWrites(reply.writes ?? [], this.options.panels);
       if (changed || acted.ran) {
         this.before = changed ? before : null;
         this.undos = acted.undos;
       }
       const moved = changed > 0 || acted.ran > 0;
-      this.set({
+      const unanswered = !moved && !!reply.calls?.length && tools.length > 0;
+      if (this.view) this.set({
         phase: acted.error ? "error" : "done",
         prompt: text,
         changed,
         acted: acted.ran,
-        message: acted.error ?? (reply.message || (moved ? "" : "Nothing changed."))
+        skipped: acted.skipped,
+        steps: this.view.steps,
+        message: acted.error ?? (reply.message || (unanswered ? "It kept looking and ran out of passes. Nothing changed." : moved ? "" : "Nothing changed."))
       });
     } catch (error) {
-      if (flight.signal.aborted) return;
-      this.set({ phase: "error", prompt: text, changed: 0, acted: 0, message: error instanceof Error ? error.message : "The agent did not answer." });
+      if (flight.signal.aborted && !late) return;
+      if (this.view) this.set({ ...idle, steps: this.view.steps, phase: "error", message: late ? "That took too long, so it was stopped. Nothing changed." : error instanceof Error ? error.message : "The agent did not answer." });
     } finally {
+      clearTimeout(budget);
       if (this.flight === flight) this.flight = null;
+    }
+  }
+  /**
+   * One pass of perceiving: every call at once, each abortable, each a step
+   * in the view. A call that fails does not fail the ask — the agent is told,
+   * and may try another way.
+   */
+  async perceive(calls, tools, signals, resolve, learn, images, signal) {
+    const first = this.view?.steps.length ?? 0;
+    const name = (call, running2) => {
+      const tool = tools.find((t) => t.id === call.tool);
+      const read2 = call.tool === READ_SIGNAL && signals.find((s) => s.id === call.params?.signal)?.label.toLowerCase();
+      if (read2) return running2 ? `Reading the ${read2}\u2026` : `Read the ${read2}`;
+      return tool ? running2 ? tool.progress ?? `${tool.label}\u2026` : tool.label : call.tool;
+    };
+    const mark = (index, step) => {
+      if (!this.view || signal.aborted) return;
+      const steps = [...this.view.steps];
+      steps[first + index] = step;
+      this.set({ ...this.view, steps });
+    };
+    if (this.view) this.set({ ...this.view, steps: [...this.view.steps, ...calls.map((call) => ({ label: name(call, true), state: "running" }))] });
+    const results = await Promise.all(calls.map(async (call, index) => {
+      try {
+        const tool = tools.find((t) => t.id === call.tool);
+        if (!tool) throw new Error("No such tool.");
+        const params = fitParams(tool.params, call.params, resolve);
+        if (!params) throw new Error("The arguments do not fit what the tool takes.");
+        const result = await abortable(tool.run(params, signal), signal) ?? {};
+        learn(result.entries);
+        mark(index, { label: name(call, false), state: "done" });
+        return { tool: call.tool, text: result.text, images: result.images };
+      } catch (error) {
+        if (signal.aborted) throw error;
+        mark(index, { label: name(call, false), state: "failed" });
+        return { tool: call.tool, error: error instanceof Error ? error.message : "failed" };
+      }
+    }));
+    const trimmed = trimImages(results, images);
+    trimmed.left.forEach((n, index) => {
+      if (n) mark(index, { label: `${name(calls[index], false)} \u2014 ${leftOut(n, images)}`, state: trimmed.results[index].images ? "done" : "failed" });
+    });
+    return { calls: calls.map(({ tool, params }) => ({ tool, params })), results: trimmed.results };
+  }
+  /**
+   * What the transport can take. A host's own `ask` is taken at its word; the
+   * bridge is asked once, and asked again only after it has failed — a bridge
+   * left running is often older than the page that loads the kit. No answer,
+   * or one without `passes`, means a single pass.
+   */
+  async capable(signal) {
+    if (this.options.ask) return { images: true };
+    const url = `${(this.options.url ?? DEFAULT_URL).replace(/\/$/, "")}/capabilities`;
+    if (this.caps?.url === url) return this.caps;
+    const patience = new AbortController();
+    const timer = setTimeout(() => patience.abort(), 2e3);
+    try {
+      const res = await abortable(fetch(url, { signal: patience.signal }), signal);
+      const body = res.ok ? await res.json().catch(() => null) : null;
+      if (body?.passes !== true) return null;
+      this.caps = { url, images: body.images === true, maxPasses: typeof body.maxPasses === "number" && body.maxPasses >= 1 ? body.maxPasses : void 0 };
+      return this.caps;
+    } catch (error) {
+      if (signal.aborted) throw error;
+      return null;
+    } finally {
+      clearTimeout(timer);
+      if (signal.aborted) patience.abort();
     }
   }
   /** Put back what the last ask did: the values, then its actions, last one first. */
@@ -12236,7 +12518,7 @@ var MoveAgentStoreClass = class {
         failed = true;
       }
     }
-    if (this.view) this.set({ ...this.view, phase: "prompt", message: failed ? "Some of it could not be undone." : "Undone.", changed: 0, acted: 0 });
+    if (this.view) this.set({ ...this.view, phase: "prompt", message: failed ? "Some of it could not be undone." : "Undone.", changed: 0, acted: 0, skipped: 0, steps: [] });
   }
 };
 var MoveAgentStore = new MoveAgentStoreClass();
@@ -15269,7 +15551,7 @@ function MoveAgentPrompt({ view }) {
   }, [thinking]);
   const changed = view.phase !== "thinking" && (view.changed > 0 || view.acted > 0);
   const count = (n, one, many) => n ? `${n} ${n === 1 ? one : many}` : "";
-  const did = [count(view.acted, "action", "actions"), count(view.changed, "value changed", "values changed")].filter(Boolean).join(", ");
+  const did = [count(view.acted, "action", "actions"), count(view.changed, "value changed", "values changed"), count(view.skipped, "action skipped", "actions skipped")].filter(Boolean).join(", ");
   const note = thinking ? "Turning the dials\u2026" : [did && `${did}.`, view.message].filter(Boolean).join(" ");
   return /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-preset-save tweakers-move-agent", "data-phase": view.phase, children: [
     /* @__PURE__ */ jsx17(
@@ -15295,6 +15577,10 @@ function MoveAgentPrompt({ view }) {
         }
       }
     ),
+    view.steps.length > 0 && /* @__PURE__ */ jsx17("ul", { className: "tweakers-move-agent-steps", "aria-label": "What the agent did", children: view.steps.map((step, i) => /* @__PURE__ */ jsxs13("li", { className: "tweakers-move-agent-step", "data-state": step.state, children: [
+      step.label,
+      step.state === "failed" && " \u2014 failed"
+    ] }, i)) }),
     note && /* @__PURE__ */ jsxs13("p", { className: "tweakers-move-agent-note", role: "status", children: [
       note,
       changed && MoveAgentStore.canUndo() && /* @__PURE__ */ jsx17("button", { type: "button", className: "tweakers-move-agent-undo", onClick: () => void MoveAgentStore.undo(), children: "Undo" })
@@ -17101,7 +17387,9 @@ export {
   flipSegmentX,
   flipSegmentY,
   followWindow,
+  formatAgentTime,
   formatClock,
+  formatEntries,
   formatHex,
   formatTimelineTick,
   geneBounds,
@@ -17210,6 +17498,7 @@ export {
   pointFromValue,
   presetFlowerSeed,
   presetFlowerSvg,
+  projectEntries,
   rampCss,
   rangesDuration,
   readComposition,
@@ -17221,6 +17510,7 @@ export {
   removeSegment,
   removeStop,
   resolveAxis,
+  resolveBoundary,
   resolveFilterAxis,
   restoreAgentWrites,
   rgbToHsl,
@@ -17268,6 +17558,7 @@ export {
   timelineClock,
   timelineRowHeight,
   timelineTicks,
+  timelineToSource,
   timelineWindow,
   toAudioBuffer,
   transferLut,

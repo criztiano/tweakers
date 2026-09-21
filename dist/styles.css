@@ -3765,6 +3765,40 @@
   line-height: 16px;
 }
 
+/* What it read and looked at on the way: a quiet list between the field and
+   the reply. A finished step steps back; the one running breathes. */
+.tweakers-move-agent-steps {
+  width: 340px;
+  margin: 8px 0 0;
+  padding: 0 2px;
+  list-style: none;
+  font-family: var(--move-font-label);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.tweakers-move-agent-step {
+  color: color-mix(in srgb, var(--move-text) 40%, transparent);
+}
+
+.tweakers-move-agent-step[data-state="running"] {
+  color: color-mix(in srgb, var(--move-text) 65%, transparent);
+  animation: tweakers-move-agent-breathe var(--move-confirm-pulse-duration) ease-in-out infinite;
+}
+
+.tweakers-move-agent-steps + .tweakers-move-agent-note {
+  margin-top: 4px;
+}
+
+@keyframes tweakers-move-agent-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-agent-step[data-state="running"] { animation: none; }
+}
+
 .tweakers-move-agent[data-phase="error"] .tweakers-move-agent-note {
   color: #ff8a70;
 }
