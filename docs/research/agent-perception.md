@@ -175,6 +175,47 @@ For the kit this means the host contract is two things, not one: **signals**
 every ask). The kit does the projection, so every app gets edit-proof
 indexing by describing its edits, not by re-indexing.
 
+## Checked against two community skills, 2026-09-21
+
+`curiositech/some_claude_skills › video-processing-editing` and
+`affaan-m/ECC › video-editing`. Both are ffmpeg production cookbooks
+(cutting, concat, colour space, audio sync, export presets, Remotion,
+generated voice and music). **Neither says anything about how an agent
+perceives or indexes media**, so nothing above changes. Their perception
+story is the simple one — transcript + `silencedetect` + ffmpeg scene
+filter, fed to the model — which is the baseline this design already goes
+past. Six practical points are worth taking:
+
+1. **Work on a proxy.** Make one small proxy per source (960 px wide, fast
+   preset), lazily, and run shot detection, captions, frame search and
+   contact sheets on it. Decoding is the bottleneck of every index (Adobe
+   says the same), and a proxy cuts it several times over. Times map 1:1.
+2. **The reply is an edit decision list.** Name it as such: an ordered list
+   of edits in candidate ids. One object to preview, to apply, to undo, and
+   to show the user — and the natural thing to collect across a multi-pass
+   run before anything lands.
+3. **Keyframes are a candidate type, for hosts that stream-copy.** A cut that
+   is not re-encoded can only land on a keyframe. Primecut re-encodes short
+   samples frame-accurately, so it does not need this; a host that copies
+   streams must offer keyframes as snap targets or its cuts will be wrong.
+4. **Read back the result, not the call.** "An API readback proves the
+   in-memory state, not that it was saved." After an action the host checks
+   what is really there; after an export it checks the file: duration as
+   planned, no unintended silence, audio still in sync.
+5. **Checkpoint on disk around a multi-pass run,** and verify the checkpoint
+   exists — in-memory undo is enough for a single reply, not for a run that
+   may be cancelled halfway.
+6. **Capability handshake.** The kit must ask the bridge what it supports
+   (actions, signals, the look) before offering it to the agent. Our bridge
+   and kit already drift: a bridge left running is older than the kit a page
+   loads. Without the handshake, a new feature fails silently.
+
+Also noted: *"the value is compression, not generation"* and *"taste is the
+last layer"* — the agent structures and clears the repetitive work; the
+final creative call stays with the person. That matches the propose-first
+finding above. Both skills name VideoDB as a hosted index; it joins Twelve
+Labs and Gemini as a cloud benchmark, not a dependency.
+
 ## Open risks
 
 - **Subscription route and images.** The bridge runs a bare Claude Code turn
