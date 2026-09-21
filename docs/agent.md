@@ -42,7 +42,9 @@ with its own model or server passes `agent: { ask }` instead, a function from
 ## Where the model runs
 
 By default the ask goes to the Move bridge, `POST /agent` (move repo,
-`app/agent.mjs`). The bridge holds the key — start it with
-`ANTHROPIC_API_KEY` set — so no key is ever in a page. The route answers only
-pages on the local machine. `MOVE_AGENT_MODEL` and `MOVE_AGENT_EFFORT` tune
-it; the defaults are `claude-opus-5` at `low` effort, for a reply in seconds.
+`app/agent.mjs`). The bridge asks through the Claude Code on the same machine
+— one bare turn: no tools, no settings, no saved session — so it runs on the
+Claude subscription that is logged in there. No API key exists anywhere, in a
+page or in the bridge. The route answers only pages on the local machine.
+`MOVE_AGENT_MODEL` and `MOVE_AGENT_EFFORT` tune it; the defaults are `opus`
+at `low` effort, a reply in about four seconds.
