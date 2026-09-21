@@ -6820,7 +6820,8 @@ declare const MovePresetStore: MovePresetStoreClass;
  * project that registers panels gets the agent with no work of its own; a
  * host adds only what words alone cannot carry — `context`, a line about what
  * the app is — or swaps the transport with `ask`. By default the ask goes to
- * the Move bridge (`/agent`), which holds the API key; no key lives in a page.
+ * the Move bridge (`/agent`), which asks through the machine's own Claude Code,
+ * on the Claude subscription logged in there; no API key lives anywhere.
  */
 
 /** The held wheel, from the bridge kit: cancelable, like every overlay gesture. */
