@@ -90,7 +90,7 @@ drop"); saying honestly "there are no beach shots here".
    `drums_out`, `drop`) derived from the stems Primecut already makes —
    loudness gate + voice detection, snapped to the beat. Seconds per file.
    This alone answers "where the singer comes in", which no product does.
-3. **The index (route 2),** cached per file, in three levels: a header
+3. **The index (route 2),** computed lazily per signal and cached per source file, in three levels: a header
    (~300 tokens), a section timeline always in the prompt (4–8k tokens per
    hour), and detail (shots, transcript, words) fetched by time range.
    Local stack: ffmpeg loudness/silence, Parakeet or Whisper-MLX for words,
@@ -113,13 +113,75 @@ In the kit this is one registry of host tools with a `kind` (read · index ·
 perceive · act) and a cost hint in each description — so an image app plugs
 in *look*, a synth plugs in *listen*, and the agent core stays the same.
 
+## Decided with Cri, 2026-09-21
+
+### Nothing is indexed until a request needs it
+
+There is no "index the file" step. The index is a set of **independent
+signals** — loudness, silence, words, shots, sound tags, sections, stem
+events, captions — each computed the first time the agent asks for it, then
+cached for good.
+
+- The agent always sees the **menu**: each signal, what it answers, its state
+  (`ready` · `not computed`) and its cost ("about 20 s for this file"). Asking
+  for a signal is a tool call like any other; the cost hint is how it chooses
+  the cheapest route that can answer.
+- **Range first.** A signal is computed for the part the request is about —
+  the clips on the timeline, a time range — not the whole source, wherever the
+  tool allows it (captions, frame search, sound tags do; sections and beat
+  grids need the whole track).
+- A request that needs no signal costs nothing and stays a ~4 s reply. The
+  first request that needs a slow signal waits for it, visibly ("listening to
+  the file… 20 s"), with a cancel. Every later request finds it ready.
+- Cached by the source file's identity (path + the `revision` Primecut
+  already keeps), so a file re-opened next week is still indexed, and a file
+  that changed on disk is not trusted.
+
+### The index belongs to the source, never to the edit
+
+An edit must not break the index, and it does not have to, because **the
+index never describes the timeline.** It describes the *source file*, in
+source time, and the source file does not change when you edit. Primecut is
+already non-destructive — slots and removed ranges are source-time ranges —
+so the host has the other half for free: the **edit map**, source time ↔
+timeline time.
+
+What the agent reads is always a **projection**, made fresh at every ask:
+index entries × edit map.
+
+- Remove a chunk → its entries drop out of the projection; everything after
+  shifts. Nothing is recomputed. Undo the removal and they are back.
+- Move "the beach" earlier → the same entries appear at the new place.
+- An entry the cut runs through (a word, a shot, a vocal phrase) is kept and
+  marked `partial`, so the agent knows the sentence now starts mid-word.
+- Candidates stay valid across edits because they are named in source terms
+  ("shot 14", "word 212", "vocal_in #2") — so a follow-up request can still
+  say "the same shot as before".
+- Structure that depended on order (song sections after a rearrange) keeps
+  its labels per piece; the agent is told the order is now the edit's, not
+  the song's.
+
+**Where this stops** — the "up to a point":
+
+| Edit | Index |
+|---|---|
+| Cut, trim, remove, move, reorder, duplicate | Survives whole. Pure projection. |
+| Speed / time-stretch by a known factor | Survives: the edit map scales the times. Pitch-sensitive signals (key) are flagged. |
+| A new rendered file — stem extraction, Polish, a bounce | A new source, with its own index, computed lazily. It inherits from its parent whatever rendering cannot have changed (words and shots survive a Polish; loudness does not). |
+| The file replaced on disk | The `revision` changes: the index is dropped. |
+
+For the kit this means the host contract is two things, not one: **signals**
+(source-time, cacheable, host-computed) and an **edit map** (cheap, read at
+every ask). The kit does the projection, so every app gets edit-proof
+indexing by describing its edits, not by re-indexing.
+
 ## Open risks
 
 - **Subscription route and images.** The bridge runs a bare Claude Code turn
   with no tools. Looking means letting that turn read an image file —
   opening, narrowly, what is deliberately closed today. Needs a spike before
   anything depends on it.
-- **The index is the accuracy ceiling**, and goes stale after edits.
+- **The index is the accuracy ceiling.** (It no longer goes stale after edits: see the projection above.)
 - **DJ sets and strobes** break structure and shot models trained on single
   songs and clean footage: split by track first; merge near-identical shots.
 - **Install weight and licences.** allin1 is flaky on macOS (unmerged fix);
