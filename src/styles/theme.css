@@ -606,8 +606,11 @@
   max-width: 100%;
 }
 
+/* A host's own status leads the page names, on the same row — never a second line
+   under them. */
 .tweakers-move-header-start {
   min-width: 0;
+  flex: none;
 }
 
 .tweakers-move-track {

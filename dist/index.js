@@ -11955,7 +11955,6 @@ function MoveTimelineZoom() {
   return /* @__PURE__ */ jsxs12("div", { className: "tweakers-move-wave-zoom", children: [
     /* @__PURE__ */ jsx16("span", { className: "tweakers-move-wave-zoom-dot" }),
     /* @__PURE__ */ jsxs12("span", { className: "tweakers-move-wave-zoom-label", children: [
-      "Zoom ",
       parseFloat(MoveTimelineStore.getZoom().toFixed(1)),
       "x"
     ] })
@@ -13298,6 +13297,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-tracks", children: [
               audioWave != null ? /* @__PURE__ */ jsx17(MoveAudioZoom, {}) : /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-tracks-lead", children: [
                 timelineClaimed ? /* @__PURE__ */ jsx17(MoveTimelineZoom, {}) : waveClaimed && /* @__PURE__ */ jsx17(MoveAudioZoom, {}),
+                headerStart && /* @__PURE__ */ jsx17("div", { className: "tweakers-move-header-start", children: headerStart }),
                 /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-tracks-group", children: [
                   settingsOpen && /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-settings-title", children: [
                     /* @__PURE__ */ jsx17("span", { className: "tweakers-move-settings-blink" }),
@@ -13369,8 +13369,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                     },
                     pg.panel.id
                   )) }),
-                  functionChips === "tracks" && /* @__PURE__ */ jsx17(MoveFunctionChips, {}),
-                  headerStart && /* @__PURE__ */ jsx17("div", { className: "tweakers-move-header-start", children: headerStart })
+                  functionChips === "tracks" && /* @__PURE__ */ jsx17(MoveFunctionChips, {})
                 ] })
               ] }),
               /* @__PURE__ */ jsx17("div", { className: "tweakers-move-mods", children: settingsOpen ? roomWave ? /* @__PURE__ */ jsx17(MoveAudioZoom, {}) : null : color && colorMeta ? /* @__PURE__ */ jsx17(MoveColorSteps, { color, disabled: TweakStore14.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? ModulationStore2.getSlots().map((slot) => /* @__PURE__ */ jsx17(MoveModCircle, { slot }, slot.index)) : null }),
@@ -14807,7 +14806,6 @@ function MoveAudioZoom() {
   return /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-wave-zoom", children: [
     /* @__PURE__ */ jsx17("span", { className: "tweakers-move-wave-zoom-dot" }),
     /* @__PURE__ */ jsxs13("span", { className: "tweakers-move-wave-zoom-label", children: [
-      "Zoom ",
       parseFloat(MoveWaveformStore.getView().zoom.toFixed(1)),
       "x"
     ] })

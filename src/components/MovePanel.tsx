@@ -1560,6 +1560,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 timeline on the surface holds the wheel first, so its zoom
                 reads here instead. */}
             {timelineClaimed ? <MoveTimelineZoom /> : waveClaimed && <MoveAudioZoom />}
+            {headerStart && <div className="tweakers-move-header-start">{headerStart}</div>}
             <div className="tweakers-move-tracks-group">
               {/* The settings room's name plate: the marker blinks for as
                   long as the room is open — the same pulse the hardware's
@@ -1656,7 +1657,6 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 </div>
               )}
               {functionChips === 'tracks' && <MoveFunctionChips />}
-              {headerStart && <div className="tweakers-move-header-start">{headerStart}</div>}
             </div>
             </div>
             )}
@@ -3283,8 +3283,10 @@ function MoveAudioZoom() {
   return (
     <div className="tweakers-move-wave-zoom">
       <span className="tweakers-move-wave-zoom-dot" />
+      {/* The factor alone: the dot beside it already says what it reads, and the
+          header has better uses for the width than the word "Zoom". */}
       <span className="tweakers-move-wave-zoom-label">
-        Zoom {parseFloat(MoveWaveformStore.getView().zoom.toFixed(1))}x
+        {parseFloat(MoveWaveformStore.getView().zoom.toFixed(1))}x
       </span>
     </div>
   );
