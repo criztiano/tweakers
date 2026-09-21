@@ -52,10 +52,13 @@ const jog = (delta: number) => {
 };
 
 describe('the scrolling panel', () => {
-  it('places a view status in the start of the native panel header', () => {
-    mount(many(1), false, undefined, createElement('output', { 'data-testid': 'view-status' }, 'Zoom 4×'));
-    const header = byClass('tweakers-move-tracks-group')[0];
-    expect(header.findByProps({ 'data-testid': 'view-status' }).props.children).toBe('Zoom 4×');
+  it('leads the page names with a view status, on the same row', () => {
+    mount(many(1), false, undefined, createElement('output', { 'data-testid': 'view-status' }, '4x'));
+    const lead = byClass('tweakers-move-tracks-lead')[0];
+    expect(lead.findByProps({ 'data-testid': 'view-status' }).props.children).toBe('4x');
+    // the names come after it, in the same row rather than under it
+    const names = lead.findAllByProps({ className: 'tweakers-move-tracks-group' });
+    expect(names.length).toBe(1);
   });
 
   it('shows native page labels in the top-left header when tracks paginate', () => {

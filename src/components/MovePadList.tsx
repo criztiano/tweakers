@@ -8,6 +8,8 @@ export function MovePadList({ panelId, path, label, icon, view, disabled }: {
 }) {
   const root = useRef<HTMLDivElement>(null);
   const open = view?.panelId === panelId && view.path === path;
+  // A picker's closed pad names its choice rather than its action.
+  const shown = open ? view.submitLabel ?? label : MovePadListStore.choice(panelId, path)?.label ?? label;
   useEffect(() => () => {
     const current = MovePadListStore.getView();
     if (current?.panelId === panelId && current.path === path) MovePadListStore.close();
@@ -42,8 +44,8 @@ export function MovePadList({ panelId, path, label, icon, view, disabled }: {
       aria-expanded={open} aria-haspopup="listbox" aria-busy={open && view.pending || undefined} disabled={disabled || (open && view.pending)}
       onClick={() => { void MovePadListStore.activate(panelId, path); }}>
       {icon
-        ? <MovePadIconLabelBody icon={icon} label={open ? view.submitLabel ?? label : label} />
-        : <MovePadActionBody label={open ? view.submitLabel ?? label : label} />}
+        ? <MovePadIconLabelBody icon={icon} label={shown} />
+        : <MovePadActionBody label={shown} />}
     </button>
     {open && <div className="tweakers-move-dial-screen tweakers-move-pad-list-overlay" onWheel={event => { event.stopPropagation(); MovePadListStore.move(event.deltaY); }}>
       <MovePadListBody view={view} onCursor={index => MovePadListStore.setCursor(index)} onToggle={() => MovePadListStore.toggleCursor()} />

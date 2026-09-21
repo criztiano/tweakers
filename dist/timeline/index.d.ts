@@ -61,6 +61,16 @@ type MoveSliderVisual = {
     kind: 'channel';
     icon?: string;
     tone?: MoveTone;
+}
+/** One axis of a place — across, up, or into the picture. Three sliders
+ *  carrying x, y and z, side by side in that order, draw as one 3-slot
+ *  stage (the `vector` face); alone, an axis keeps the ordinary face.
+ *  `down` (y only) says the host's y grows downward, as canvas
+ *  coordinates do, so the stage still raises the mark as y goes up. */
+ | {
+    kind: 'axis';
+    axis: 'x' | 'y' | 'z';
+    down?: boolean;
 };
 /** A Move hue by name, as the theme's `--move-<tone>` token carries it. */
 type MoveTone = 'red' | 'orange' | 'yellow' | 'lime' | 'emerald' | 'blue' | 'indigo' | 'pink';

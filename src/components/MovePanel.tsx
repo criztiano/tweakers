@@ -17,12 +17,12 @@ import type { TweakTheme } from '../theme';
 import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody } from './move-slots';
+import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing } from '../angle-core';
 import { normalizeTransfer, sampleTransfer, type TransferValue } from '../transfer-core';
-import { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveTrimSpan, moveGateSpan, moveMultibandSpan, moveMultibandRole, moveChannelPosition } from '../move-visual-core';
+import { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveTrimSpan, moveGateSpan, moveVectorAxes, moveMultibandSpan, moveMultibandRole, moveChannelPosition } from '../move-visual-core';
 import {
   MOVE_TAP_SLOP,
   moveDialKey, moveRangeValue, moveFilterValue, moveXYValue, moveXYRest, moveNeedleValue,
@@ -42,7 +42,7 @@ import { MOVE_TRACK_COLORS } from '../move-palette';
 import { MoveSurfaceStore, moveScreenRowLabel, type MovePadCell, type MoveStepCell } from '../move-surface-store';
 import { resolveAxis, pointFromValue, normalizeValue, type XYValue } from '../xy-pad-core';
 import { MoveVolumeDisplay, type MoveVolumeDisplayState } from '../move-volume';
-import { MoveColorStore, MOVE_COLOR_PALETTES, MOVE_GRADIENT_STOPS } from '../move-color';
+import { MoveColorStore, MOVE_GRADIENT_STOPS } from '../move-color';
 import { MoveSearchStore, moveSearchFilter, type MoveSearchTarget, type MoveSearchView } from '../move-search';
 import { MoveColorSlot, MoveColorDisplay, MoveOpacityPads, MoveColorSteps, MovePaletteScreen, copyHslOfHex, copyOklch } from './MoveColor';
 import { MoveFunctions } from '../move-functions';
@@ -97,6 +97,14 @@ export interface MovePanelProps {
    * waveform zoom), not for another row of page controls.
    */
   headerStart?: React.ReactNode;
+  /**
+   * View-owned status placed at the far end of the header, after the function
+   * chips — where the instrument's own time indicator sits. A view whose app
+   * keeps the clock itself (an app transport rather than a timeline or a
+   * waveform) puts it here, so the reading is always the last thing on the row
+   * and every button stands to its left.
+   */
+  headerEnd?: React.ReactNode;
   /**
    * Where the attached-function chips sit (see `MoveFunctionChips`): every
    * function the app attaches renders as a chip that runs the same handler
@@ -182,7 +190,7 @@ function searchRows(view: MoveSearchView): SearchRows | null {
   }
   if (!palettePickerOpen()) return null;
   return {
-    labels: ['All colors', ...MOVE_COLOR_PALETTES.map((p) => p.name)],
+    labels: ['All colors', ...MoveColorStore.palettes().map((p) => p.name)],
     cursor: MoveColorStore.getPickerCursor(),
     rest: (index) => MoveColorStore.setPickerCursor(index),
     take: (index) => { MoveSearchStore.close(); MoveColorStore.choosePicker(index); },
@@ -272,6 +280,15 @@ export const MOVE_PAGE_SELECT_EVENT = 'move-tweakers:page-select';
 export const MOVE_JOG_EVENT = 'move-tweakers:jog';
 /** In, cancelable: `{ shift }` — the wheel pressed. Same consumption rule. */
 export const MOVE_JOG_CLICK_EVENT = 'move-tweakers:jog-click';
+/** In, cancelable: `{ delta, shift }` — the volume knob turned, when no slot
+ *  has claimed it as a second hand. A mounted waveform scrubs with it; an app
+ *  that gives the knob its own meaning (a layer's opacity, a gain) listens,
+ *  consumes it with preventDefault, and names what it edits through
+ *  MoveVolumeDisplay — a claimed volume knob with no readout is a bug. */
+export const MOVE_VOLUME_EVENT = 'move-tweakers:volume';
+/** In, cancelable: `{ shift }` — a still tap on the volume knob. It has no
+ *  built-in meaning; the app gives it one (a reset, a toggle to full). */
+export const MOVE_VOLUME_TAP_EVENT = 'move-tweakers:volume-tap';
 /** In, cancelable: `{ pressed, shift }` — the Mute button's raw press and
  *  release. An open preset navigator consumes them: holding Mute plays the
  *  pre-navigator sound to compare. Unconsumed, Mute stays the app's. */
@@ -354,7 +371,7 @@ export const MOVE_SETTINGS_EVENT = 'move-tweakers:settings';
  * are the eight the dials are holding, their pads with them, so all of them
  * can be reached without a single one shrinking to a chip.
  */
-export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport', scroll = false, focused = false, headerStart, settings, functionChips = 'clock' }: MovePanelProps) {
+export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport', scroll = false, focused = false, headerStart, headerEnd, settings, functionChips = 'clock' }: MovePanelProps) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [track, setTrack] = useState(0);
@@ -785,7 +802,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       navigator.clipboard?.writeText(text).catch(() => {});
     }, { label: 'copy color', chip: false });
   }, [colorOpenPanel]);
-  const paletteScreen = colorMeta ? MoveColorStore.isPickerOpen() : false;
+  // The navigator stands on its own when the app owns the palettes: a palette is
+  // then an app-wide setting, opened from wherever the app puts it, with no colour
+  // editor up. The store decides; the panel just shows it.
+  const paletteScreen = MoveColorStore.isPickerOpen();
   useEffect(() => {
     if (!paletteScreen) return;
     return MoveFunctions.push('back', () => MoveColorStore.closePicker(), { label: 'back', chip: false });
@@ -1278,7 +1298,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // Multi-slot instruments: one face across a dial per column, each column
   // keeping its knob and drag zone. `role` names the part a dial is drawn as.
   type FaceDial = { role: string; col: number; meta: ControlMeta; position: number; track?: string };
-  type Face = { kind: 'gate' | 'multiband' | 'channel'; col: number; span: number; dials: FaceDial[]; curve?: { meta: ControlMeta; position: number }[]; icon?: string };
+  type Face = { kind: 'gate' | 'vector' | 'multiband' | 'channel'; col: number; span: number; dials: FaceDial[]; curve?: { meta: ControlMeta; position: number }[]; icon?: string; down?: boolean };
 
   // A gate's three dials side by side — threshold, look-ahead, release — draw
   // as one 3-slot control, all the page's own dials or all latched chips.
@@ -1290,6 +1310,23 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     const at = moveGateSpan(metas.map((m) => [m!, values[m!.path]]));
     if (!at) return null;
     return { kind: 'gate', col, span: 3, dials: (['threshold', 'lookahead', 'release'] as const).map((role, k) => ({ role, col: col + k, meta: metas[k]!, position: at[role] })) };
+  };
+
+  // A place's three axes side by side — x, y, z — draw as one 3-slot stage, on
+  // the gate's terms: all the page's own dials or all latched chips, so a chip
+  // latched into one column dissolves the stage into three plain dials and you
+  // always see what you borrowed.
+  const vectorAt = (col: number): Face | null => {
+    const metas = [dialAt(col), dialAt(col + 1), dialAt(col + 2)];
+    if (metas.some((m) => !m) || !visibleCols.includes(col + 1) || !visibleCols.includes(col + 2)) return null;
+    const own = metas.map((m, k) => m === page.dials[col + k]);
+    if (own.some((o) => o !== own[0])) return null;
+    const at = moveVectorAxes(metas.map((m) => [m!, values[m!.path]]));
+    if (!at) return null;
+    return {
+      kind: 'vector', col, span: 3, down: at.down,
+      dials: (['x', 'y', 'z'] as const).map((axis, k) => ({ role: `axis-${axis}`, col: col + k, meta: metas[k]!, position: at[axis] })),
+    };
   };
 
   // A multiband cleaner: its amount, its speed, then every band dial beside
@@ -1333,7 +1370,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     return { kind: 'channel', col, span: dials.length, dials };
   };
 
-  const faceAt = (col: number): Face | null => (stripMode ? null : gateAt(col) ?? multibandAt(col) ?? channelAt(col));
+  const faceAt = (col: number): Face | null => (stripMode ? null : gateAt(col) ?? vectorAt(col) ?? multibandAt(col) ?? channelAt(col));
   /** A column another face already draws across. */
   const underFace = (col: number) => {
     for (let j = col - 1; j >= 0 && j >= col - MOVE_DIALS; j--) {
@@ -1449,7 +1486,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // business.) Nothing registered and nothing attached = no cluster, header
   // unchanged.
   const volumeReading = liveValue ?? volume?.value;
-  const headerCluster = (timelineClaimed || waveClaimed || volume || functionChips === 'clock') && (
+  const headerCluster = (timelineClaimed || waveClaimed || volume || headerEnd || functionChips === 'clock') && (
     <div className="tweakers-move-actions">
       {functionChips === 'clock' && <MoveFunctionChips />}
       {timelineClaimed ? (
@@ -1465,6 +1502,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
           <span className="tweakers-move-volume-value">{boldColons(volumeReading ?? volume.label ?? '')}</span>
         </div>
       )}
+      {headerEnd}
     </div>
   );
 
@@ -1522,6 +1560,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 timeline on the surface holds the wheel first, so its zoom
                 reads here instead. */}
             {timelineClaimed ? <MoveTimelineZoom /> : waveClaimed && <MoveAudioZoom />}
+            {headerStart && <div className="tweakers-move-header-start">{headerStart}</div>}
             <div className="tweakers-move-tracks-group">
               {/* The settings room's name plate: the marker blinks for as
                   long as the room is open — the same pulse the hardware's
@@ -1618,7 +1657,6 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 </div>
               )}
               {functionChips === 'tracks' && <MoveFunctionChips />}
-              {headerStart && <div className="tweakers-move-header-start">{headerStart}</div>}
             </div>
             </div>
             )}
@@ -1689,7 +1727,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
           >
             {presetScreen && <MovePresetScreen view={presetScreen} search={presetSearch} />}
             {paletteScreen && (
-              <MovePaletteScreen kept={paletteSearch ? moveSearchFilter(['All colors', ...MOVE_COLOR_PALETTES.map((p) => p.name)], paletteSearch.query) : null}>
+              <MovePaletteScreen kept={paletteSearch ? moveSearchFilter(['All colors', ...MoveColorStore.palettes().map((p) => p.name)], paletteSearch.query) : null}>
                 {paletteSearch && <MoveSearchBar view={paletteSearch} />}
               </MovePaletteScreen>
             )}
@@ -2305,6 +2343,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       const visual = d.meta.moveVisual;
                       return { ...shown(d), ...(visual?.kind === 'channel' ? { icon: visual.icon, tone: visual.tone } : {}) };
                     })} />
+                  ) : face.kind === 'vector' ? (
+                    <MoveSlotVectorBody x={shown(dials[0])} y={shown(dials[1])} z={shown(dials[2])} down={face.down} />
                   ) : face.kind === 'gate' ? (
                     <MoveSlotGateBody threshold={shown(dials[0])} lookahead={shown(dials[1])} release={shown(dials[2])}>
                       <MoveGateDisplay panelId={page.panel.id} threshold={dials[0].position} />
@@ -2342,7 +2382,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                               aria-valuemax={d.meta.max ?? 1}
                               aria-valuenow={Number(values[d.meta.path])}
                               aria-valuetext={moveVisualReading(d.meta, Number(values[d.meta.path]))}
-                              aria-orientation={d.role === 'lookahead' ? 'horizontal' : 'vertical'}
+                              aria-orientation={d.role === 'lookahead' || d.role === 'axis-x' ? 'horizontal' : 'vertical'}
                               aria-disabled={off || undefined}
                               data-disabled={off || undefined}
                               onKeyDown={(k) => dialFromKeyboard(k, d.meta)}
@@ -3243,8 +3283,10 @@ function MoveAudioZoom() {
   return (
     <div className="tweakers-move-wave-zoom">
       <span className="tweakers-move-wave-zoom-dot" />
+      {/* The factor alone: the dot beside it already says what it reads, and the
+          header has better uses for the width than the word "Zoom". */}
       <span className="tweakers-move-wave-zoom-label">
-        Zoom {parseFloat(MoveWaveformStore.getView().zoom.toFixed(1))}x
+        {parseFloat(MoveWaveformStore.getView().zoom.toFixed(1))}x
       </span>
     </div>
   );

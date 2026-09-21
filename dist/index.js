@@ -262,12 +262,20 @@ var MovePadListStoreClass = class {
   selected(panelId, path) {
     return [...this.attachments.get(this.key(panelId, path))?.selected ?? []];
   }
+  /** A single list's current choice — what its closed pad shows. Null for a checked
+   *  list, for a list that keeps its own name, or before anything is chosen. */
+  choice(panelId, path) {
+    const attachment = this.attachments.get(this.key(panelId, path));
+    if (!attachment?.config.single || attachment.config.keepLabel) return null;
+    return attachment.config.options.find((option) => option.value === attachment.selected[0]) ?? null;
+  }
   attach(panelId, path, config) {
     TweakStore2.noteMoveKitUse("padList");
     const key = this.key(panelId, path);
     const previous = this.attachments.get(key);
     const valid2 = new Set(config.options.map((option) => option.value));
-    const attachment = { config, selected: [...new Set(previous?.selected ?? config.selected ?? [])].filter((value) => valid2.has(value)), cursor: previous?.cursor ?? 0, submission: previous?.submission ?? { pending: false } };
+    const kept = config.single ? config.selected ?? previous?.selected : previous?.selected ?? config.selected;
+    const attachment = { config, selected: [...new Set(kept ?? [])].filter((value) => valid2.has(value)).slice(0, config.single ? 1 : void 0), cursor: previous?.cursor ?? 0, submission: previous?.submission ?? { pending: false } };
     this.attachments.set(key, attachment);
     if (this.view?.panelId === panelId && this.view.path === path) this.close();
     this.notify();
@@ -283,7 +291,10 @@ var MovePadListStoreClass = class {
     if (!attachment || TweakStore2.isDisabled(panelId, path)) return;
     this.close();
     const { config } = attachment;
-    this.view = { panelId, path, label: config.label ?? path, submitLabel: config.submitLabel, options: config.options, selected: [...attachment.selected], cursor: Math.min(attachment.cursor, Math.max(0, config.options.length - 1)), pending: attachment.submission.pending, error: null };
+    const single = config.single === true;
+    const chosen = single ? config.options.findIndex((option) => option.value === attachment.selected[0]) : -1;
+    const cursor = chosen >= 0 ? chosen : Math.min(attachment.cursor, Math.max(0, config.options.length - 1));
+    this.view = { panelId, path, label: config.label ?? path, submitLabel: config.submitLabel, options: config.options, selected: [...attachment.selected], cursor, pending: attachment.submission.pending, error: null, single };
     this.releases = [
       MoveFunctions.push("back", () => this.close(), { label: "close list" }),
       MoveFunctions.push("sample", () => this.toggleCursor(), { label: "select" }),
@@ -291,14 +302,18 @@ var MovePadListStoreClass = class {
       MoveFunctions.push("down", () => this.move(1)),
       MoveFunctions.push("jog_click", () => this.toggleCursor(), { label: "select", chip: false }),
       MoveFunctions.push("capture", () => {
-        void this.submit();
+        if (single) this.toggleCursor();
+        else void this.submit();
       }, { label: config.submitLabel ?? config.label ?? "run selected", chip: false })
     ];
     this.notify();
   }
   /** The same pad opens its list, then becomes its submission action. */
   activate(panelId, path) {
-    if (this.view?.panelId === panelId && this.view.path === path) return this.submit();
+    if (this.view?.panelId === panelId && this.view.path === path) {
+      if (this.view.single) return this.toggleCursor();
+      return this.submit();
+    }
     this.open(panelId, path);
   }
   toggle(panelId, path) {
@@ -326,6 +341,11 @@ var MovePadListStoreClass = class {
     const view = this.view;
     const option = view?.options[view.cursor];
     if (!view || view.pending || !option) return;
+    if (view.single) {
+      this.view = { ...view, selected: [option.value], error: null };
+      this.save();
+      return this.submit();
+    }
     const selected = view.selected.includes(option.value) ? view.selected.filter((value) => value !== option.value) : [...view.selected, option.value];
     this.view = { ...view, selected, error: null };
     this.save();
@@ -448,6 +468,50 @@ function moveGateSpan(dials) {
   });
   if (at2.some((p) => p === null)) return null;
   return { threshold: at2[0], lookahead: at2[1], release: at2[2] };
+}
+function moveVectorAxes(dials) {
+  if (dials.length !== 3) return null;
+  const axes = ["x", "y", "z"];
+  const at2 = dials.map(([meta, value], i) => {
+    const visual = meta.moveVisual;
+    if (visual?.kind !== "axis" || visual.axis !== axes[i]) return null;
+    return sliderPosition(meta, value);
+  });
+  if (at2.some((p) => p === null)) return null;
+  const y = dials[1][0].moveVisual;
+  return { x: at2[0], y: at2[1], z: at2[2], down: y?.kind === "axis" && y.down === true };
+}
+var MOVE_STAGE = { width: 240, height: 48 };
+var STAGE_FLOOR = { near: 44, far: 16, half: 114, farScale: 0.44 };
+var STAGE_MARK = { near: 5.5, far: 2.5 };
+function moveVectorStage(x01, y01, z01, down = false) {
+  const cx = MOVE_STAGE.width / 2;
+  const x = clamp01(x01);
+  const t = clamp01(z01);
+  const lift = down ? 1 - clamp01(y01) : clamp01(y01);
+  const lerp2 = (a, b, k) => a + (b - a) * k;
+  const floorY = (k) => lerp2(STAGE_FLOOR.near, STAGE_FLOOR.far, k);
+  const halfAt = (k) => STAGE_FLOOR.half * lerp2(1, STAGE_FLOOR.farScale, k);
+  const across = (u, k) => cx + (u * 2 - 1) * halfAt(k);
+  const r2 = (n) => Math.round(n * 100) / 100;
+  const floor = `M${r2(across(0, 0))} ${STAGE_FLOOR.near}L${r2(across(1, 0))} ${STAGE_FLOOR.near}L${r2(across(1, 1))} ${STAGE_FLOOR.far}L${r2(across(0, 1))} ${STAGE_FLOOR.far}Z`;
+  const rules = [
+    ...[0.25, 0.5, 0.75].map((k) => `M${r2(across(0, k))} ${r2(floorY(k))}L${r2(across(1, k))} ${r2(floorY(k))}`),
+    ...[0.25, 0.5, 0.75].map((u) => `M${r2(across(u, 0))} ${STAGE_FLOOR.near}L${r2(across(u, 1))} ${STAGE_FLOOR.far}`)
+  ].join("");
+  const footX = across(x, t);
+  const footY = floorY(t);
+  const r = lerp2(STAGE_MARK.near, STAGE_MARK.far, t);
+  const headroom = (footY - r - 2) * 0.9;
+  const markY = footY - lift * headroom;
+  return {
+    floor,
+    rules,
+    foot: { x: r2(footX), y: r2(footY), rx: r2(r * 1.3), ry: r2(r * 0.45) },
+    stalk: { x: r2(footX), y1: r2(footY), y2: r2(markY) },
+    mark: { x: r2(footX), y: r2(markY), r: r2(r) },
+    depth: `M${r2(across(0, t))} ${r2(footY)}L${r2(across(1, t))} ${r2(footY)}`
+  };
 }
 function sliderPosition(meta, value) {
   const { min, max } = meta;
@@ -1423,8 +1487,9 @@ function buildMovePages(panels) {
     }
     const lift = panel.moveTopRow ?? [];
     const chipFits = (c) => isDial(c) && !noChip(c) && !dials.includes(c) && !balanceRefs.has(c) && !isPadColor(c);
+    const liftFits = (c) => chipFits(c) || isPadColor(c) && !balanceRefs.has(c);
     for (const c of controls) {
-      if (!lift.includes(c.path) || c.type !== "action" && !chipFits(c)) continue;
+      if (!lift.includes(c.path) || c.type !== "action" && !liftFits(c)) continue;
       const col = padCols.get(c) ?? null;
       if (col === null) {
         reportMoveLayoutIssue(
@@ -1487,8 +1552,9 @@ function buildMovePages(panels) {
           place3(actions, "action", c, null);
         } else if (col !== null) place3(actions, "action", c, col);
       } else if (balanceRefs.has(c)) place3(values, "value", c, col);
-      else if (isPadColor(c)) place3(values, "value", c, col);
-      else if (dials.includes(c)) {
+      else if (isPadColor(c)) {
+        if (!topValues.includes(c)) place3(values, "value", c, col);
+      } else if (dials.includes(c)) {
         if (col !== null) {
           reportMoveLayoutIssue(
             "pad-column-on-dial",
@@ -1797,6 +1863,147 @@ function arcPath(from, to, radius, cx = 0, cy = 0) {
     return `M ${point(from)} A ${radius} ${radius} 0 0 1 ${point(from + 180)} A ${radius} ${radius} 0 0 1 ${point(from + 359.99)}`;
   }
   return `M ${point(from)} A ${radius} ${radius} 0 ${Math.abs(delta) > 180 ? 1 : 0} ${delta > 0 ? 1 : 0} ${point(to)}`;
+}
+
+// src/color-core.ts
+var COLOR_FORMATS = ["hex", "rgb", "hsl", "oklch"];
+var LONG_PRESS_MS = 500;
+var HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
+var clamp4 = (n, min, max) => Math.min(max, Math.max(min, n));
+var clamp012 = (n) => clamp4(n, 0, 1);
+var byte = (n) => clamp4(Math.round(n), 0, 255);
+function parseHex(input) {
+  if (typeof input !== "string") return null;
+  let s = input.trim();
+  if (!s.startsWith("#")) s = `#${s}`;
+  if (!HEX_COLOR_REGEX.test(s)) return null;
+  let h = s.slice(1);
+  if (h.length <= 4) h = h.split("").map((c) => c + c).join("");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const a = h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1;
+  return { r, g, b, a };
+}
+function formatHex(rgba, alphaEnabled) {
+  const hx = (n) => byte(n).toString(16).padStart(2, "0");
+  const base = `#${hx(rgba.r)}${hx(rgba.g)}${hx(rgba.b)}`;
+  return alphaEnabled ? `${base}${hx(clamp012(rgba.a) * 255)}` : base;
+}
+function normalizeHex(input, alphaEnabled) {
+  const rgba = parseHex(input);
+  return rgba ? formatHex(rgba, alphaEnabled) : null;
+}
+function displayHex(value) {
+  const rgba = parseHex(value);
+  if (!rgba) return (value ?? "").toUpperCase();
+  return formatHex(rgba, false).toUpperCase();
+}
+function opacityPercent(rgba) {
+  return Math.round(clamp012(rgba.a) * 100);
+}
+function rgbToHsv(rgba) {
+  const r = rgba.r / 255, g = rgba.g / 255, b = rgba.b / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    if (max === r) h = (g - b) / d % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  return { h, s: max === 0 ? 0 : d / max, v: max, a: rgba.a };
+}
+function hsvToRgb(hsva) {
+  const h = (hsva.h % 360 + 360) % 360;
+  const s = clamp012(hsva.s), v = clamp012(hsva.v);
+  const c = v * s;
+  const x = c * (1 - Math.abs(h / 60 % 2 - 1));
+  const m = v - c;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  return { r: byte((r + m) * 255), g: byte((g + m) * 255), b: byte((b + m) * 255), a: hsva.a };
+}
+function rgbToHsl(rgba) {
+  const { h, s, v, a } = rgbToHsv(rgba);
+  const l = v * (1 - s / 2);
+  const sl = l === 0 || l === 1 ? 0 : (v - l) / Math.min(l, 1 - l);
+  return { h, s: sl, l, a };
+}
+function hslToRgb(hsla) {
+  const l = clamp012(hsla.l), s = clamp012(hsla.s);
+  const v = l + s * Math.min(l, 1 - l);
+  const sv = v === 0 ? 0 : 2 * (1 - l / v);
+  return hsvToRgb({ h: hsla.h, s: sv, v, a: hsla.a });
+}
+var srgbToLinear = (c) => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+var linearToSrgb = (c) => c <= 31308e-7 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+function rgbToOklab(rgba) {
+  const r = srgbToLinear(rgba.r / 255);
+  const g = srgbToLinear(rgba.g / 255);
+  const b = srgbToLinear(rgba.b / 255);
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return {
+    L: 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    A: 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    B: 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
+  };
+}
+function oklabToLinearRgb(L, A, B) {
+  const l = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3;
+  const m = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3;
+  const s = (L - 0.0894841775 * A - 1.291485548 * B) ** 3;
+  return {
+    r: 4.0767416621 * l - 3.3077115913 * m + 0.2307590544 * s,
+    g: -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    b: -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
+  };
+}
+function rgbToOklch(rgba) {
+  const { L, A, B } = rgbToOklab(rgba);
+  const c = Math.sqrt(A * A + B * B);
+  let h = Math.atan2(B, A) * 180 / Math.PI;
+  if (h < 0) h += 360;
+  return { l: L, c, h: c < 1e-6 ? 0 : h, a: rgba.a };
+}
+var GAMUT_EPS = 1e-4;
+function inSrgbGamut(l, c, h) {
+  const rad = h * Math.PI / 180;
+  const { r, g, b } = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
+  return r >= -GAMUT_EPS && r <= 1 + GAMUT_EPS && g >= -GAMUT_EPS && g <= 1 + GAMUT_EPS && b >= -GAMUT_EPS && b <= 1 + GAMUT_EPS;
+}
+function clampOklchToSrgb(oklch) {
+  const l = clamp012(oklch.l);
+  const h = (oklch.h % 360 + 360) % 360;
+  const c = Math.max(0, oklch.c);
+  if (inSrgbGamut(l, c, h)) return { l, c, h, a: clamp012(oklch.a) };
+  let lo = 0, hi = c;
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    if (inSrgbGamut(l, mid, h)) lo = mid;
+    else hi = mid;
+  }
+  return { l, c: lo, h, a: clamp012(oklch.a) };
+}
+function oklchToRgb(oklch) {
+  const { l, c, h, a } = clampOklchToSrgb(oklch);
+  const rad = h * Math.PI / 180;
+  const lin = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
+  return {
+    r: byte(linearToSrgb(clamp012(lin.r)) * 255),
+    g: byte(linearToSrgb(clamp012(lin.g)) * 255),
+    b: byte(linearToSrgb(clamp012(lin.b)) * 255),
+    a: clamp012(a)
+  };
 }
 
 // src/components/ListScreen.tsx
@@ -2292,6 +2499,60 @@ function MoveSlotGateBody({
     /* @__PURE__ */ jsx3(MoveFaceName, { col: 2, dial: release })
   ] });
 }
+function MoveSlotVectorBody({ x, y, z, down = false }) {
+  const stage = moveVectorStage(x.position, y.position, z.position, down);
+  const { width: w, height: h } = MOVE_STAGE;
+  const at2 = (px, py) => ({ "--move-vector-x": `${px / w * 100}%`, "--move-vector-y": `${py / h * 100}%` });
+  return /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-face", style: { "--move-face-span": 3 }, children: [
+    /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-vector-stage", "aria-hidden": "true", children: [
+      /* @__PURE__ */ jsxs3("svg", { viewBox: `0 0 ${w} ${h}`, preserveAspectRatio: "none", children: [
+        /* @__PURE__ */ jsx3("path", { className: "tweakers-move-vector-floor", d: stage.floor }),
+        /* @__PURE__ */ jsx3("path", { className: "tweakers-move-vector-rules", d: stage.rules }),
+        /* @__PURE__ */ jsx3("path", { className: "tweakers-move-vector-depth", "data-active": z.active || void 0, d: stage.depth }),
+        /* @__PURE__ */ jsx3(
+          "line",
+          {
+            className: "tweakers-move-vector-rail",
+            "data-active": x.active || void 0,
+            x1: 0,
+            x2: w,
+            y1: stage.foot.y,
+            y2: stage.foot.y
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsx3(
+        "i",
+        {
+          className: "tweakers-move-vector-foot",
+          style: { ...at2(stage.foot.x, stage.foot.y), "--move-vector-size": `${stage.foot.ry * 2 / h * 100}%` }
+        }
+      ),
+      /* @__PURE__ */ jsx3(
+        "i",
+        {
+          className: "tweakers-move-vector-stalk",
+          "data-active": y.active || void 0,
+          style: { ...at2(stage.stalk.x, stage.stalk.y2), "--move-vector-size": `${(stage.stalk.y1 - stage.stalk.y2) / h * 100}%` }
+        }
+      ),
+      /* @__PURE__ */ jsx3(
+        "i",
+        {
+          className: "tweakers-move-vector-mark",
+          "data-active": x.active || y.active || z.active || void 0,
+          style: { ...at2(stage.mark.x, stage.mark.y), "--move-vector-size": `${stage.mark.r * 2 / h * 100}%` }
+        }
+      ),
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-vector-track", "data-track": "axis-x" }),
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-vector-track", "data-track": "axis-y" }),
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-vector-track", "data-track": "axis-z" })
+    ] }),
+    /* @__PURE__ */ jsx3(MoveFaceName, { col: 0, dial: x }),
+    /* @__PURE__ */ jsx3(MoveFaceName, { col: 1, dial: y }),
+    /* @__PURE__ */ jsx3(MoveFaceName, { col: 2, dial: z })
+  ] });
+}
 function MoveSlotChannelBody({ channels }) {
   return /* @__PURE__ */ jsx3("div", { className: "tweakers-move-face", style: { "--move-face-span": channels.length }, children: channels.map((channel, k) => /* @__PURE__ */ jsxs3(
     "div",
@@ -2370,15 +2631,21 @@ function MoveSlotMultibandBody({
     bands.map((band, k) => /* @__PURE__ */ jsx3(MoveFaceName, { col: 2 + k, dial: band }, k))
   ] });
 }
-function MoveSlotColorBody({ label, color, hue: hue2 }) {
+function MoveSlotColorBody({ label, color }) {
   return /* @__PURE__ */ jsxs3(Fragment3, { children: [
-    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-head", children: label }),
     /* @__PURE__ */ jsx3("span", { className: "tweakers-move-color-swatch", "aria-hidden": "true", children: /* @__PURE__ */ jsx3("span", { style: { background: color } }) }),
-    /* @__PURE__ */ jsxs3("span", { className: "tweakers-move-color-reading", children: [
-      Math.round(hue2),
-      "\xB0"
-    ] })
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-head", "data-ink": colorInk(color), children: label })
   ] });
+}
+function colorInk(hex) {
+  const rgb = parseHex(hex);
+  if (!rgb) return "light";
+  const channel = (v) => {
+    const c = v / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = 0.2126 * channel(rgb.r) + 0.7152 * channel(rgb.g) + 0.0722 * channel(rgb.b);
+  return luminance * (rgb.a ?? 1) > 0.42 ? "dark" : "light";
 }
 function MoveSlotEnvBody({
   points,
@@ -2719,7 +2986,7 @@ function MovePadListBody({ view, onCursor, onToggle }) {
         follow: "center",
         label: view.label,
         disabled: view.pending,
-        multiselect: true,
+        multiselect: !view.single,
         items: view.options.map((option) => ({ ...option, checked: view.selected.includes(option.value) })),
         value: view.options[view.cursor]?.value,
         onFocusItem: (value) => onCursor(view.options.findIndex((option) => option.value === value)),
@@ -2736,7 +3003,7 @@ var MOVE_PAD_LIBRARY = {
   toggle: { description: "a switch; the pad inverts when it is on", component: MovePadToggleBody },
   icon: { description: "a switch drawn as its picture alone \u2014 no name, the pad inverts when it is on", component: MovePadIconBody },
   value: { description: "a value the dial above can borrow \u2014 hold to peek, tap to latch", component: MovePadValueBody },
-  list: { description: "a checked list above a small pad; its dial walks, Sample selects, a second pad press runs", component: MovePadListBody },
+  list: { description: "a checked list above a small pad; its dial walks, Sample selects, a second pad press runs \u2014 or, single, a picker: Sample takes the row and the pad names it", component: MovePadListBody },
   action: { description: "a button: a press runs the app\u2019s action", component: MovePadActionBody },
   "icon-label": { description: "a button wearing its picture beside its name \u2014 a press runs the app\u2019s action", component: MovePadIconLabelBody },
   app: { description: "a cell the app paints itself \u2014 a track, a slice, a step", component: MovePadAppBody },
@@ -2759,6 +3026,7 @@ var MOVE_SLOT_LIBRARY = {
   offset: { description: "a signed nudge \u2014 the room it can move in, a pin where it is now, a chevron for each way left", component: MoveSlotOffsetBody },
   "trim-span": { description: "2 slots: a take\u2019s start and end on one line, a flag per edge", component: MoveSlotTrimSpanBody },
   gate: { description: "3 slots: threshold and release as bars, look-ahead as a line, the gate live on a grid between", component: MoveSlotGateBody },
+  vector: { description: "3 slots: x, y and a depth z as one stage \u2014 the mark on a ruled floor, its height a stalk from its shadow, its distance its size", component: MoveSlotVectorBody },
   channel: { description: "a slot per channel: icon and name in its tone over a fader filled to its level", component: MoveSlotChannelBody },
   multiband: { description: "a slot per dial: amount as a bar, speed as a gauge, the bands as a live curve on a grid", component: MoveSlotMultibandBody },
   playback: { description: "explicit playback traversal with a named mode", component: MoveSlotEnumBody },
@@ -2786,6 +3054,7 @@ import { jsx as jsx4, jsxs as jsxs4 } from "react/jsx-runtime";
 function MovePadList({ panelId, path, label, icon, view, disabled }) {
   const root = useRef3(null);
   const open2 = view?.panelId === panelId && view.path === path;
+  const shown = open2 ? view.submitLabel ?? label : MovePadListStore.choice(panelId, path)?.label ?? label;
   useEffect3(() => () => {
     const current = MovePadListStore.getView();
     if (current?.panelId === panelId && current.path === path) MovePadListStore.close();
@@ -2840,7 +3109,7 @@ function MovePadList({ panelId, path, label, icon, view, disabled }) {
         onClick: () => {
           void MovePadListStore.activate(panelId, path);
         },
-        children: icon ? /* @__PURE__ */ jsx4(MovePadIconLabelBody, { icon, label: open2 ? view.submitLabel ?? label : label }) : /* @__PURE__ */ jsx4(MovePadActionBody, { label: open2 ? view.submitLabel ?? label : label })
+        children: icon ? /* @__PURE__ */ jsx4(MovePadIconLabelBody, { icon, label: shown }) : /* @__PURE__ */ jsx4(MovePadActionBody, { label: shown })
       }
     ),
     open2 && /* @__PURE__ */ jsx4("div", { className: "tweakers-move-dial-screen tweakers-move-pad-list-overlay", onWheel: (event) => {
@@ -2859,7 +3128,7 @@ import { TweakStore as TweakStore3 } from "tweakers/store";
 
 // src/preset-genetics.ts
 var cloneDNA = (value) => structuredClone(value);
-var clamp4 = (v, min = 0, max = 1) => Math.max(min, Math.min(max, v));
+var clamp5 = (v, min = 0, max = 1) => Math.max(min, Math.min(max, v));
 var newDNAId = () => `dna-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
 function collectGenes(controls, group = "") {
   return controls.flatMap((c) => {
@@ -2914,8 +3183,8 @@ function geneBounds(p) {
 }
 function numeric(value, p) {
   const [lo, hi] = geneBounds(p);
-  const clipped = clamp4(value, lo, hi);
-  return p.step && p.step > 0 ? clamp4((p.min ?? 0) + Math.round((clipped - (p.min ?? 0)) / p.step) * p.step, lo, hi) : clipped;
+  const clipped = clamp5(value, lo, hi);
+  return p.step && p.step > 0 ? clamp5((p.min ?? 0) + Math.round((clipped - (p.min ?? 0)) / p.step) * p.step, lo, hi) : clipped;
 }
 function valid(value, p) {
   return p.kind === "number" ? typeof value === "number" && Number.isFinite(value) : !!p.options?.includes(value);
@@ -2977,7 +3246,7 @@ function breedDNA(a, b, baseline, parameters, settings2, random = Math.random) {
       const neighbor = adjacent[Math.floor(random() * adjacent.length)];
       if (!neighbor) continue;
       const value = read(inherited, neighbor);
-      write(result, p, p.kind === "number" ? numeric((p.low ?? p.min ?? 0) + clamp4((value - neighbor.min) / (neighbor.max - neighbor.min)) * ((p.high ?? p.max ?? 1) - (p.low ?? p.min ?? 0)), p) : value);
+      write(result, p, p.kind === "number" ? numeric((p.low ?? p.min ?? 0) + clamp5((value - neighbor.min) / (neighbor.max - neighbor.min)) * ((p.high ?? p.max ?? 1) - (p.low ?? p.min ?? 0)), p) : value);
     }
   }
   return repairRanges(result, parameters);
@@ -2985,8 +3254,8 @@ function breedDNA(a, b, baseline, parameters, settings2, random = Math.random) {
 function chooseParents(pool, random = Math.random) {
   if (pool.length < 2) throw new Error("Mark at least two parents in the breeding window.");
   const pick = (list) => {
-    let ticket = random() * list.reduce((n, p) => n + clamp4(p.rating, 1, 5), 0);
-    return list.find((p) => (ticket -= clamp4(p.rating, 1, 5)) < 0) ?? list[list.length - 1];
+    let ticket = random() * list.reduce((n, p) => n + clamp5(p.rating, 1, 5), 0);
+    return list.find((p) => (ticket -= clamp5(p.rating, 1, 5)) < 0) ?? list[list.length - 1];
   };
   const a = pick(pool);
   return [a, pick(pool.filter((p) => p.id !== a.id))];
@@ -3170,8 +3439,8 @@ var ExplorationStore = class {
         if (old) {
           p.enabled = old.enabled;
           if (p.kind === "number") {
-            p.low = clamp4(old.low ?? p.min, p.min, p.max);
-            p.high = clamp4(old.high ?? p.max, p.low, p.max);
+            p.low = clamp5(old.low ?? p.min, p.min, p.max);
+            p.high = clamp5(old.high ?? p.max, p.low, p.max);
           }
         }
       }
@@ -3271,8 +3540,8 @@ var ExplorationStore = class {
       if (old) {
         p.enabled = old.enabled;
         if (p.kind === "number") {
-          p.low = clamp4(old.low ?? p.min, p.min, p.max);
-          p.high = clamp4(old.high ?? p.max, p.low, p.max);
+          p.low = clamp5(old.low ?? p.min, p.min, p.max);
+          p.high = clamp5(old.high ?? p.max, p.low, p.max);
           try {
             geneBounds(p);
           } catch {
@@ -3303,7 +3572,7 @@ var ExplorationStore = class {
   }
   setGeneration(index) {
     if (!this.state) return;
-    this.state.generation = clamp4(Math.round(index), 0, this.currentTree().generations.length - 1);
+    this.state.generation = clamp5(Math.round(index), 0, this.currentTree().generations.length - 1);
     this.notify();
   }
   selectTree(id) {
@@ -3342,13 +3611,13 @@ var ExplorationStore = class {
   jog(delta) {
     if (!this.ready()) return;
     if (this.state.view === "parameters") {
-      this.parameterIndex = clamp4(this.parameterIndex + Math.sign(delta), 0, this.state.parameters.length - 1);
+      this.parameterIndex = clamp5(this.parameterIndex + Math.sign(delta), 0, this.state.parameters.length - 1);
       this.notify(false);
       return;
     }
     const children = this.currentTree().generations[this.state.generation].children;
     const index = children.findIndex((c2) => c2.id === this.state.activeId);
-    const c = children[clamp4(index + Math.sign(delta), 0, children.length - 1)];
+    const c = children[clamp5(index + Math.sign(delta), 0, children.length - 1)];
     if (c) this.select(c.id);
   }
   toggleParent() {
@@ -3363,7 +3632,7 @@ var ExplorationStore = class {
     if (!this.ready()) return;
     const c = this.active();
     if (c) {
-      c.rating = clamp4(Math.round(rating), 1, 5);
+      c.rating = clamp5(Math.round(rating), 1, 5);
       this.notify();
     }
   }
@@ -3375,9 +3644,9 @@ var ExplorationStore = class {
     if (!Number.isFinite(s.spread)) s.spread = 0;
     if (!Number.isFinite(s.seedCount)) s.seedCount = 1;
     if (!Number.isFinite(s.breedWindow)) s.breedWindow = 0;
-    s.mutation = clamp4(s.mutation);
-    s.spread = clamp4(s.spread);
-    s.seedCount = clamp4(Math.round(s.seedCount), 1, 32);
+    s.mutation = clamp5(s.mutation);
+    s.spread = clamp5(s.spread);
+    s.seedCount = clamp5(Math.round(s.seedCount), 1, 32);
     s.breedWindow = Math.max(0, Math.round(s.breedWindow));
     this.notify();
   }
@@ -3530,8 +3799,8 @@ var ExplorationStore = class {
     const candidate = { ...p };
     if (typeof patch2.enabled === "boolean") candidate.enabled = patch2.enabled;
     if (p.kind === "number") {
-      candidate.low = clamp4(patch2.low ?? p.low ?? p.min, p.min, p.max);
-      candidate.high = clamp4(patch2.high ?? p.high ?? p.max, candidate.low, p.max);
+      candidate.low = clamp5(patch2.low ?? p.low ?? p.min, p.min, p.max);
+      candidate.high = clamp5(patch2.high ?? p.high ?? p.max, candidate.low, p.max);
       try {
         const [lo, hi] = geneBounds(candidate);
         const other = this.state.parameters.find((q) => q.path === p.path && q.id !== p.id && ["min", "max"].includes(q.component ?? ""));
@@ -3566,8 +3835,8 @@ var ExplorationStore = class {
     if (!this.ready()) return;
     const s = this.state;
     Object.assign(s.morph, patch2);
-    for (const key of ["ax", "ay", "bx", "by", "blend"]) s.morph[key] = Number.isFinite(s.morph[key]) ? clamp4(s.morph[key]) : 0.5;
-    s.morph.corner = clamp4(Math.round(s.morph.corner), 0, 7);
+    for (const key of ["ax", "ay", "bx", "by", "blend"]) s.morph[key] = Number.isFinite(s.morph[key]) ? clamp5(s.morph[key]) : 0.5;
+    s.morph.corner = clamp5(Math.round(s.morph.corner), 0, 7);
     this.preview(morphDNA(this.allChildren(), s.morph, this.baseline(), s.parameters));
     this.notify();
   }
@@ -3593,7 +3862,7 @@ var ExplorationStore = class {
     if (!this.ready()) return;
     const s = this.state, slot = this.slots()[index];
     if (!slot || !Number.isFinite(value)) return;
-    value = clamp4(value, slot.min, slot.max);
+    value = clamp5(value, slot.min, slot.max);
     if (slot.step === 1) value = Math.round(value);
     if (s.view === "morph") {
       const key = ["ax", "ay", "bx", "by", "blend", "corner"][index];
@@ -3868,7 +4137,7 @@ function presetFlowerSvg(values) {
 import { TweakStore as TweakStore4 } from "tweakers/store";
 import { Fragment as Fragment4, jsx as jsx5, jsxs as jsxs5 } from "react/jsx-runtime";
 var SHELL_MOTION = { duration: 0.15, ease: [0.2, 0, 0, 1] };
-var clamp5 = (value) => Math.max(0, Math.min(1, value));
+var clamp6 = (value) => Math.max(0, Math.min(1, value));
 var useBrowserLayoutEffect = typeof window === "undefined" ? useEffect4 : useLayoutEffect;
 function PresetArtwork({ values }) {
   const seed = presetFlowerSeed(values);
@@ -4308,7 +4577,7 @@ function XYSurface({ label, x, y, disabled, onChange }) {
   const pointer = useRef4(null);
   const update = (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
-    onChange(clamp5((event.clientX - rect.left) / Math.max(1, rect.width)), clamp5((event.clientY - rect.top) / Math.max(1, rect.height)));
+    onChange(clamp6((event.clientX - rect.left) / Math.max(1, rect.width)), clamp6((event.clientY - rect.top) / Math.max(1, rect.height)));
   };
   return /* @__PURE__ */ jsxs5("div", { role: "group", "aria-label": `Morph quadrant ${label}`, children: [
     /* @__PURE__ */ jsxs5(
@@ -4374,7 +4643,7 @@ var DRAG_THRESHOLD = 3;
 var EDGE_HIT = 6;
 var CURVE_MIN_WEIGHT_FRAC = 0.06;
 var lerp = (a, b, t) => a + (b - a) * t;
-var clamp012 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
+var clamp013 = (v) => v < 0 ? 0 : v > 1 ? 1 : v;
 var clampBipolar = (v) => v < -1 ? -1 : v > 1 ? 1 : v;
 var SKEW_MAX = 0.45;
 var BACK_MAX = 0.8;
@@ -4397,10 +4666,10 @@ function deriveEase(type, curvature, steepness = 0, overshoot = 0, anticipate = 
   const pts = s >= 0 ? lerp4(base, easingExtremes[key], s) : lerp4(easingPresets.linear, base, s + 1);
   let [x1, y1, x2, y2] = pts;
   const shift = clampBipolar(curvature) * SKEW_MAX;
-  x1 = clamp012(x1 + shift);
-  x2 = clamp012(x2 + shift);
-  y2 += clamp012(overshoot) * BACK_MAX;
-  y1 -= clamp012(anticipate) * BACK_MAX;
+  x1 = clamp013(x1 + shift);
+  x2 = clamp013(x2 + shift);
+  y2 += clamp013(overshoot) * BACK_MAX;
+  y1 -= clamp013(anticipate) * BACK_MAX;
   return [x1, y1, x2, y2];
 }
 function bezierAxis(p1, p2, s) {
@@ -4412,14 +4681,14 @@ function bezierAxisDeriv(p1, p2, s) {
   return 3 * u * u * p1 + 6 * u * s * (p2 - p1) + 3 * s * s * (1 - p2);
 }
 function bezierY(ease, x) {
-  const tx = clamp012(x);
+  const tx = clamp013(x);
   let s = tx;
   for (let i = 0; i < 6; i++) {
     const xs = bezierAxis(ease[0], ease[2], s) - tx;
     if (Math.abs(xs) < 1e-5) break;
     const d = bezierAxisDeriv(ease[0], ease[2], s);
     if (Math.abs(d) < 1e-6) break;
-    s = clamp012(s - xs / d);
+    s = clamp013(s - xs / d);
   }
   return bezierAxis(ease[1], ease[3], s);
 }
@@ -4452,7 +4721,7 @@ function integrateSpringTrace(targets, stiffness, damping, mass, initial, collec
 }
 function springPoints(curvature, steepness = 0) {
   const visualDuration = 1;
-  const bounce = clamp012((clampBipolar(curvature) + 1) / 2) * 0.6;
+  const bounce = clamp013((clampBipolar(curvature) + 1) / 2) * 0.6;
   const mass = 1;
   let stiffness = 2 * Math.PI / visualDuration;
   stiffness = stiffness * stiffness;
@@ -4465,7 +4734,7 @@ function springPoints(curvature, steepness = 0) {
   }).points;
 }
 function interp(points, t) {
-  const x = clamp012(t) * (points.length - 1);
+  const x = clamp013(t) * (points.length - 1);
   const i = Math.floor(x);
   if (i >= points.length - 1) return points[points.length - 1];
   return lerp(points[i], points[i + 1], x - i);
@@ -4547,7 +4816,7 @@ function totalWeight(segments) {
 }
 function timelineSlots(segments, gap = 0) {
   const n = segments.length;
-  const g = n > 1 ? clamp012(gap) : 0;
+  const g = n > 1 ? clamp013(gap) : 0;
   const total = totalWeight(segments);
   const content = 1 - g;
   const gapW = n > 1 ? g / (n - 1) : 0;
@@ -4587,13 +4856,13 @@ function segmentSpan(segments, index, gap = 0) {
 }
 function segmentIndexAt(xNorm, segments, gap = 0) {
   if (gap > 0) {
-    const x2 = clamp012(xNorm);
+    const x2 = clamp013(xNorm);
     const slots = timelineSlots(segments, gap);
     for (const s of slots) if (x2 < s.b) return s.index;
     return segments.length - 1;
   }
   const total = totalWeight(segments);
-  const x = clamp012(xNorm) * total;
+  const x = clamp013(xNorm) * total;
   let acc = 0;
   for (let i = 0; i < segments.length; i++) {
     acc += segments[i].weight;
@@ -4616,7 +4885,7 @@ function boundaryAt(xNorm, segments, edgeHitNorm, gap = 0) {
   return best;
 }
 function smootherstep(t) {
-  const x = clamp012(t);
+  const x = clamp013(t);
   return x * x * x * (x * (x * 6 - 15) + 10);
 }
 function cloneSegments(comp, segments) {
@@ -4696,14 +4965,14 @@ function setSegmentOvershoot(comp, index, overshoot) {
   const src = comp.segments[index];
   if (!src) return comp;
   const next = comp.segments.slice();
-  next[index] = { ...src, overshoot: clamp012(overshoot) };
+  next[index] = { ...src, overshoot: clamp013(overshoot) };
   return cloneSegments(comp, next);
 }
 function setSegmentAnticipate(comp, index, anticipate) {
   const src = comp.segments[index];
   if (!src) return comp;
   const next = comp.segments.slice();
-  next[index] = { ...src, anticipate: clamp012(anticipate) };
+  next[index] = { ...src, anticipate: clamp013(anticipate) };
   return cloneSegments(comp, next);
 }
 function redistributeWeight(comp, boundaryIndex, deltaFrac) {
@@ -4742,11 +5011,11 @@ function setDriverSteepness(comp, steepness) {
 }
 function setDriverOvershoot(comp, overshoot) {
   if (!comp.driver) return comp;
-  return { ...comp, driver: { ...comp.driver, overshoot: clamp012(overshoot) } };
+  return { ...comp, driver: { ...comp.driver, overshoot: clamp013(overshoot) } };
 }
 function setDriverAnticipate(comp, anticipate) {
   if (!comp.driver) return comp;
-  return { ...comp, driver: { ...comp.driver, anticipate: clamp012(anticipate) } };
+  return { ...comp, driver: { ...comp.driver, anticipate: clamp013(anticipate) } };
 }
 var DRAG_ENERGY_GAIN = 0.6;
 var DRAG_STEEP_GAIN = 0.6;
@@ -4757,7 +5026,7 @@ function headerHit(xN, py, segments, layout) {
   return null;
 }
 function toLocalCoords(clientX, clientY, rect, totalH) {
-  const xN = clamp012((clientX - rect.left) / (rect.width || 1));
+  const xN = clamp013((clientX - rect.left) / (rect.width || 1));
   const py = (clientY - rect.top) / (rect.height || 1) * totalH;
   return { xN, py };
 }
@@ -4783,14 +5052,14 @@ function buildSamplers(comp) {
   };
 }
 function directionPhase(u, dir) {
-  const x = clamp012(u);
+  const x = clamp013(u);
   if (dir === "reverse") return 1 - x;
   if (dir === "mirror") return 1 - Math.abs(1 - 2 * x);
   return x;
 }
 function readComposition(comp, u, s) {
   const inputPhase = directionPhase(u, comp.direction);
-  const warpedPhase = s.driver ? clamp012(s.driver(inputPhase)) : inputPhase;
+  const warpedPhase = s.driver ? clamp013(s.driver(inputPhase)) : inputPhase;
   const gap = comp.gap ?? 0;
   if (gap > 0 && comp.segments.length > 1) {
     const slots = timelineSlots(comp.segments, gap);
@@ -4892,8 +5161,8 @@ var TRIGGER_FLYBACK = 0.5;
 function triggersCrossed(prevValue, curValue, steps) {
   const n = Math.max(2, Math.floor(steps));
   const seg = 1 / (n - 1);
-  const p = clamp012(prevValue);
-  const c = clamp012(curValue);
+  const p = clamp013(prevValue);
+  const c = clamp013(curValue);
   const delta = c - p;
   const fired = [];
   if (Math.abs(delta) > TRIGGER_FLYBACK) {
@@ -5058,20 +5327,20 @@ var modPageWidth = () => Math.min(
 );
 var MOD_SETTINGS_PANEL = "mod-settings";
 var modKey = (panelId, path) => `${panelId}\0${path}`;
-var clamp6 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-var clamp013 = (v) => clamp6(Number(v) || 0, 0, 1);
-var clampSigned = (v) => clamp6(Number(v) || 0, -1, 1);
+var clamp7 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+var clamp014 = (v) => clamp7(Number(v) || 0, 0, 1);
+var clampSigned = (v) => clamp7(Number(v) || 0, -1, 1);
 function applyModulation(base, signal, amount, min, max) {
-  const offset = clamp6(signal, -1, 1) * clamp013(amount) * (max - min) / 2;
-  return clamp6(base + offset, min, max);
+  const offset = clamp7(signal, -1, 1) * clamp014(amount) * (max - min) / 2;
+  return clamp7(base + offset, min, max);
 }
 var MOD_RING_RADIUS = 6;
 var MOD_RING_CIRCUMFERENCE = 2 * Math.PI * MOD_RING_RADIUS;
 var RING_SWEEP_START = 135 / 360;
 var RING_SWEEP_LEN = 270 / 360;
 function modRingArc(from01, to01) {
-  const a = RING_SWEEP_START + clamp013(from01) * RING_SWEEP_LEN;
-  const b = RING_SWEEP_START + clamp013(to01) * RING_SWEEP_LEN;
+  const a = RING_SWEEP_START + clamp014(from01) * RING_SWEEP_LEN;
+  const b = RING_SWEEP_START + clamp014(to01) * RING_SWEEP_LEN;
   return {
     length: Math.abs(b - a) * MOD_RING_CIRCUMFERENCE,
     offset: -Math.min(a, b) * MOD_RING_CIRCUMFERENCE
@@ -5095,7 +5364,7 @@ function lfoDivisionBeats(division) {
   if (typeof division !== "number" || !Number.isFinite(division)) {
     return LFO_SYNC_DIVISIONS.find((d) => d.label === LFO_SYNC_DEFAULT).beats;
   }
-  return LFO_SYNC_DIVISIONS[clamp6(Math.round(division), 0, LFO_SYNC_DIVISIONS.length - 1)].beats;
+  return LFO_SYNC_DIVISIONS[clamp7(Math.round(division), 0, LFO_SYNC_DIVISIONS.length - 1)].beats;
 }
 function lfoSyncedHz(division, bpm) {
   return (Number(bpm) || 120) / 60 / lfoDivisionBeats(division);
@@ -5105,7 +5374,7 @@ var previewNoise = (i, salt = 0) => {
   return (x - Math.floor(x)) * 2 - 1;
 };
 function previewSlew(values, smooth) {
-  const s = clamp013(smooth);
+  const s = clamp014(smooth);
   if (s <= 0 || values.length < 2) return values;
   const k = 1 - Math.exp(-(1 / values.length) / (s * s * 0.4 + 1e-6));
   let out = values[0];
@@ -5134,16 +5403,16 @@ var LFO_DEF = {
     const hz = params.sync ? lfoSyncedHz(params.division, bpm) : Math.max(0, Number(params.rate) || 0);
     const before = s.phase;
     s.phase = (s.phase + dt * hz) % 1;
-    if (s.phase < before) s.driftTarget = (Math.random() * 2 - 1) * clamp013(params.jitter);
-    if (!clamp013(params.jitter)) {
+    if (s.phase < before) s.driftTarget = (Math.random() * 2 - 1) * clamp014(params.jitter);
+    if (!clamp014(params.jitter)) {
       s.drift = 0;
       s.driftTarget = 0;
     } else s.drift += (s.driftTarget - s.drift) * Math.min(1, dt * hz * 4);
-    const w = clamp6(Number(params.width) || 0, 0.01, 0.99);
-    const ph = (s.phase + clamp013(params.phase)) % 1;
+    const w = clamp7(Number(params.width) || 0, 0.01, 0.99);
+    const ph = (s.phase + clamp014(params.phase)) % 1;
     const tri = ph < w ? ph / w : 1 - (ph - w) / (1 - w);
-    let v = clamp6(tri * 2 - 1 + s.drift, -1, 1);
-    const smooth = clamp013(params.smooth);
+    let v = clamp7(tri * 2 - 1 + s.drift, -1, 1);
+    const smooth = clamp014(params.smooth);
     if (smooth > 0 && s.out !== null) {
       const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
       v = s.out + (v - s.out) * k;
@@ -5159,18 +5428,18 @@ var LFO_DEF = {
    */
   preview(params, count) {
     const n = Math.max(2, count);
-    const w = clamp6(Number(params.width) || 0, 0.01, 0.99);
-    const jitter = clamp013(params.jitter);
+    const w = clamp7(Number(params.width) || 0, 0.01, 0.99);
+    const jitter = clamp014(params.jitter);
     const wobble = Math.max(2, Math.round(n / 8));
     const raw = Array.from({ length: n }, (_, i) => {
-      const ph = (i / (n - 1) * 2 + clamp013(params.phase)) % 1;
+      const ph = (i / (n - 1) * 2 + clamp014(params.phase)) % 1;
       const tri = ph < w ? ph / w : 1 - (ph - w) / (1 - w);
       const drift = previewNoise(Math.floor(i / wobble)) * jitter * 0.5;
-      return clamp6(tri * 2 - 1 + drift, -1, 1);
+      return clamp7(tri * 2 - 1 + drift, -1, 1);
     });
-    const shape = clamp013(params.smooth) > 0.55 ? "Sine" : w <= 0.25 ? "Saw" : w >= 0.75 ? "Ramp" : "Tri";
+    const shape = clamp014(params.smooth) > 0.55 ? "Sine" : w <= 0.25 ? "Saw" : w >= 0.75 ? "Ramp" : "Tri";
     return {
-      points: previewSlew(raw, clamp013(params.smooth)).map((v) => (v + 1) / 2),
+      points: previewSlew(raw, clamp014(params.smooth)).map((v) => (v + 1) / 2),
       label: jitter > 0.4 ? `${shape} \xB7 Jitter` : shape
     };
   }
@@ -5194,12 +5463,12 @@ var SH_DEF = {
     if (s.out === null || s.wait <= 0) {
       s.held = Math.random() * 2 - 1;
       const hz = Math.max(0.01, Number(params.rate) || 0);
-      const len = 1 / hz * (1 + (Math.random() * 2 - 1) * clamp013(params.jitter) * 0.9);
+      const len = 1 / hz * (1 + (Math.random() * 2 - 1) * clamp014(params.jitter) * 0.9);
       s.wait = Math.max(5e-3, len);
     }
-    const offset = clamp6(Number(params.offset) || 0, -1, 1);
-    let v = clamp6(s.held * clamp013(params.depth) + offset, -1, 1);
-    const smooth = clamp013(params.smooth);
+    const offset = clamp7(Number(params.offset) || 0, -1, 1);
+    let v = clamp7(s.held * clamp014(params.depth) + offset, -1, 1);
+    const smooth = clamp014(params.smooth);
     if (smooth > 0 && s.out !== null) {
       const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
       v = s.out + (v - s.out) * k;
@@ -5215,9 +5484,9 @@ var SH_DEF = {
    */
   preview(params, count) {
     const n = Math.max(2, count);
-    const depth = clamp013(params.depth);
-    const offset = clamp6(Number(params.offset) || 0, -1, 1);
-    const jitter = clamp013(params.jitter);
+    const depth = clamp014(params.depth);
+    const offset = clamp7(Number(params.offset) || 0, -1, 1);
+    const jitter = clamp014(params.jitter);
     const steps = 8;
     const lens = Array.from({ length: steps }, (_, i) => 1 + previewNoise(i, 1) * jitter * 0.9);
     const total = lens.reduce((a, b) => a + b, 0);
@@ -5227,11 +5496,11 @@ var SH_DEF = {
     const raw = Array.from({ length: n }, (_, i) => {
       const t = i / (n - 1);
       const step = edges.findIndex((e) => t <= e);
-      return clamp6(previewNoise(step < 0 ? steps - 1 : step) * depth + offset, -1, 1);
+      return clamp7(previewNoise(step < 0 ? steps - 1 : step) * depth + offset, -1, 1);
     });
     return {
-      points: previewSlew(raw, clamp013(params.smooth)).map((v) => (v + 1) / 2),
-      label: clamp013(params.smooth) > 0.55 ? "Drift" : "Steps"
+      points: previewSlew(raw, clamp014(params.smooth)).map((v) => (v + 1) / 2),
+      label: clamp014(params.smooth) > 0.55 ? "Drift" : "Steps"
     };
   }
 };
@@ -5246,18 +5515,18 @@ var envWaveFlipParam = (stage) => `${stage}WaveFlip`;
 var ENV_SUSTAIN_WAVE_BEATS = 1;
 var ENV_SUSTAIN_WAVE_CYCLES = 2;
 function envStageWave(stage, phase, level, params) {
-  const amount = clamp013(params[envWaveParam(stage)]);
+  const amount = clamp014(params[envWaveParam(stage)]);
   if (amount <= 0) return level;
   const w = amount * (1 - Math.cos(2 * Math.PI * phase)) / 2;
   return params[envWaveFlipParam(stage)] ? level + (1 - level) * w : level * (1 - w);
 }
 var adsrShape = (p, curve) => {
-  const c = clamp6(Number(curve) || 0, -1, 1);
+  const c = clamp7(Number(curve) || 0, -1, 1);
   return 1 - Math.pow(1 - p, Math.pow(4, c));
 };
 function envelopePoints(params, count) {
   const n = Math.max(2, count);
-  const sustain = clamp013(params.sustain);
+  const sustain = clamp014(params.sustain);
   const share = (key) => 0.04 + 0.24 * Math.min(1, secs(params[key]) * 1e3 / ADSR_STAGE_MAX[key]);
   const wA = share("attack");
   const wD = share("decay");
@@ -5281,7 +5550,7 @@ function envelopePoints(params, count) {
   return Array.from({ length: n }, (_, i) => at2(i / (n - 1)));
 }
 function envelopeJoints(params) {
-  const sustain = clamp013(params.sustain);
+  const sustain = clamp014(params.sustain);
   const share = (key) => 0.04 + 0.24 * Math.min(1, secs(params[key]) * 1e3 / ADSR_STAGE_MAX[key]);
   const wA = share("attack");
   return [
@@ -5347,7 +5616,7 @@ var ADSR_DEF = {
   tick(state4, params, dt, bpm) {
     const s = state4;
     const loop = !!params.loop;
-    const sustain = clamp013(params.sustain);
+    const sustain = clamp014(params.sustain);
     if (s.stage === "idle") {
       if (!loop) return s.env = 0;
       s.stage = "attack";
@@ -5382,7 +5651,7 @@ var ADSR_DEF = {
       const wp = s.stage === "sustain" ? s.t / beat % 1 : p;
       s.env = envStageWave(s.stage, wp, s.env, params);
     }
-    return clamp013(s.env);
+    return clamp014(s.env);
   }
 };
 registerModType(ADSR_DEF);
@@ -5414,18 +5683,18 @@ function readClips(params) {
   return list.length ? list.slice(0, CURVE_MAX_CLIPS) : [newClip()];
 }
 var writeClips = (list) => list;
-var selectedClip = (params, count) => clamp6(Math.round(Number(params.selected) || 0), 0, Math.max(0, count - 1));
+var selectedClip = (params, count) => clamp7(Math.round(Number(params.selected) || 0), 0, Math.max(0, count - 1));
 function curveComposition(params) {
   const i = DIRECTIONS.indexOf(params.direction);
   return {
     segments: readClips(params),
     driver: null,
     direction: DIRECTIONS[i < 0 ? 0 : i],
-    gap: clamp013(params.gap)
+    gap: clamp014(params.gap)
   };
 }
 function curveDuration(params, bpm) {
-  if (!params.sync) return clamp6(Number(params.duration) || 0, CURVE_MIN_DURATION, CURVE_MAX_DURATION);
+  if (!params.sync) return clamp7(Number(params.duration) || 0, CURVE_MIN_DURATION, CURVE_MAX_DURATION);
   const beat = 60 / (Number(bpm) || 120);
   return Math.max(CURVE_MIN_DURATION, lfoDivisionBeats(params.division) * beat);
 }
@@ -5525,7 +5794,7 @@ var CURVE_DEF = {
       s.samplers = buildSamplers(comp);
     }
     s.phase = (s.phase + dt / curveDuration(params, bpm)) % 1;
-    let v = clamp013(readComposition(comp, s.phase, s.samplers).value);
+    let v = clamp014(readComposition(comp, s.phase, s.samplers).value);
     if (params.flip) v = 1 - v;
     if (params.signal !== "trigger") {
       s.prev = v;
@@ -5548,7 +5817,7 @@ var CURVE_DEF = {
     const changed = (key) => key in patch2 && patch2[key] !== current[key];
     let list = "clips" in patch2 ? readClips(patch2) : readClips(current);
     if (!("clips" in patch2) && changed("segments")) {
-      const want = clamp6(Math.round(Number(patch2.segments) || 1), 1, CURVE_MAX_CLIPS);
+      const want = clamp7(Math.round(Number(patch2.segments) || 1), 1, CURVE_MAX_CLIPS);
       while (list.length > want) list.pop();
       while (list.length < want) list.push(newClip());
       list = list.map((c) => ({ ...c, weight: 1 }));
@@ -5559,8 +5828,8 @@ var CURVE_DEF = {
         ...list[sel],
         curvature: clampSigned(next.curvature),
         steepness: clampSigned(next.steepness),
-        anticipate: clamp013(next.anticipate),
-        overshoot: clamp013(next.overshoot)
+        anticipate: clamp014(next.anticipate),
+        overshoot: clamp014(next.overshoot)
       };
     } else {
       const clip = list[sel];
@@ -5601,7 +5870,7 @@ var CURVE_DEF = {
     const span = CURVE_PREVIEW_BAND.hi - CURVE_PREVIEW_BAND.lo;
     const n = Math.max(2, count);
     return {
-      points: Array.from({ length: n }, (_, i) => clamp013((sampler(i / (n - 1)) - CURVE_PREVIEW_BAND.lo) / span)),
+      points: Array.from({ length: n }, (_, i) => clamp014((sampler(i / (n - 1)) - CURVE_PREVIEW_BAND.lo) / span)),
       label: `${CURVE_LABELS[list[sel].type]} ${sel + 1}/${list.length}`
     };
   }
@@ -5646,16 +5915,16 @@ function setAudioModWindowSource(fn) {
 function getAudioModWindow() {
   const win = audioModWindow?.();
   if (!win || !(win.span > 0) || win.span >= 1) return { start: 0, span: 1 };
-  return { start: clamp013(win.start), span: Math.min(win.span, 1 - clamp013(win.start)) };
+  return { start: clamp014(win.start), span: Math.min(win.span, 1 - clamp014(win.start)) };
 }
 function audioModLevel(position) {
   if (!audioModEnv) return 0;
-  const i = Math.floor(clamp013(position) * audioModEnv.length);
+  const i = Math.floor(clamp014(position) * audioModEnv.length);
   return audioModEnv[Math.min(audioModEnv.length - 1, i)];
 }
 function audioLoop(params) {
-  const start = clamp013(params.loopStart);
-  const end = clamp013(params.loopEnd);
+  const start = clamp014(params.loopStart);
+  const end = clamp014(params.loopEnd);
   if (end - start < 1e-3 || start === 0 && end === 1) return null;
   return { start, end };
 }
@@ -5684,13 +5953,13 @@ var AUDIO_DEF = {
   createState: () => ({ pos: 0, out: null, seek: null }),
   tick(state4, params, dt) {
     const s = state4;
-    const seek = clamp013(params.position);
+    const seek = clamp014(params.position);
     if (s.seek !== seek) {
       s.seek = seek;
       s.pos = seek;
     }
     if (params.playing) {
-      const speed = clamp6(Number(params.speed) || 1, 0.05, 16);
+      const speed = clamp7(Number(params.speed) || 1, 0.05, 16);
       s.pos += dt * speed / audioModDuration;
       const loop = params.loopOn ? audioLoop(params) : null;
       if (loop) {
@@ -5701,8 +5970,8 @@ var AUDIO_DEF = {
         s.pos = params.loopOn ? s.pos % 1 : 1;
       }
     }
-    let v = audioModEnv === null ? 0 : (audioModLevel(s.pos) * 2 - 1) * clamp013(params.depth);
-    const smooth = clamp013(params.smooth);
+    let v = audioModEnv === null ? 0 : (audioModLevel(s.pos) * 2 - 1) * clamp014(params.depth);
+    const smooth = clamp014(params.smooth);
     if (smooth > 0 && s.out !== null) {
       const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
       v = s.out + (v - s.out) * k;
@@ -5725,7 +5994,7 @@ var AUDIO_DEF = {
     }
     const { start, span } = getAudioModWindow();
     return {
-      points: Array.from({ length: n }, (_, i) => clamp013(audioModLevel(start + i / (n - 1) * span))),
+      points: Array.from({ length: n }, (_, i) => clamp014(audioModLevel(start + i / (n - 1) * span))),
       label: "Audio"
     };
   },
@@ -6701,7 +6970,7 @@ var SCRUB_MIN_MS = 25;
 var SCRUB_FINE_MIN_MS = 5;
 var SCRUB_CHAIN_MS = 250;
 var ZOOM_PER_DETENT = 0.08;
-var clamp014 = (v) => Math.min(1, Math.max(0, v));
+var clamp015 = (v) => Math.min(1, Math.max(0, v));
 function defaultView() {
   return { position: 0, zoom: 1, loop: null, loopAnchor: null };
 }
@@ -6711,7 +6980,7 @@ function scrubBy(position, delta, fine = false, zoom = 1, durationSec) {
   const share = fine ? SCRUB_FINE : SCRUB_PER_DETENT;
   const floor = durationSec && durationSec > 0 ? (fine ? SCRUB_FINE_MIN_MS : SCRUB_MIN_MS) / 1e3 / durationSec : 0;
   const step = Math.max(share, floor) / Math.max(1, zoom);
-  const next = clamp014(position + Math.sign(delta) * magnitude * step);
+  const next = clamp015(position + Math.sign(delta) * magnitude * step);
   return Number(next.toFixed(6));
 }
 function zoomBy(zoom, delta) {
@@ -6735,15 +7004,15 @@ function loopFromStep(view, index, steps = MOVE_WAVEFORM_STEPS) {
 }
 function visibleWindow(position, zoom) {
   const span = 1 / Math.max(1, zoom);
-  let start = clamp014(position) - span / 2;
+  let start = clamp015(position) - span / 2;
   if (start < 0) start = 0;
   else if (start > 1 - span) start = 1 - span;
   return { start, span };
 }
-var padPosition = (window2, index, pads = MOVE_WAVEFORM_PADS) => clamp014(window2.start + Math.min(pads - 1, Math.max(0, index)) / pads * window2.span);
+var padPosition = (window2, index, pads = MOVE_WAVEFORM_PADS) => clamp015(window2.start + Math.min(pads - 1, Math.max(0, index)) / pads * window2.span);
 function padSection(window2, index, pads = MOVE_WAVEFORM_PADS) {
   const start = padPosition(window2, index, pads);
-  return { start, end: clamp014(start + window2.span / pads) };
+  return { start, end: clamp015(start + window2.span / pads) };
 }
 function loopSteps(view, steps = MOVE_WAVEFORM_STEPS) {
   if (view.loop) {
@@ -6820,8 +7089,8 @@ var MoveWaveformStoreClass = class {
    *  what makes a scrub look like it stutters), else the engine's while one
    *  reports, else the last scrub. */
   playhead(now = Date.now()) {
-    if (this.isScrubbing(now)) return clamp014(this.view.position);
-    return clamp014(this.progressSource ? this.progressSource() : this.view.position);
+    if (this.isScrubbing(now)) return clamp015(this.view.position);
+    return clamp015(this.progressSource ? this.progressSource() : this.view.position);
   }
   /** The clock the panel shows for the knob: m:ss:cc of the playhead. */
   clock() {
@@ -6998,7 +7267,7 @@ var MoveWaveformStoreClass = class {
    * that subdivision (preview it), a hold selects it as the loop.
    */
   pressPad(index, hold = false) {
-    const at2 = this.progressSource ? clamp014(this.progressSource()) : this.view.position;
+    const at2 = this.progressSource ? clamp015(this.progressSource()) : this.view.position;
     const window2 = visibleWindow(at2, this.shownZoom());
     if (hold) this.setView({ loop: padSection(window2, index), loopAnchor: null });
     else this.setView({ position: padPosition(window2, index) });
@@ -7697,147 +7966,6 @@ function stripWindowPads(page, offset, cols = MOVE_DIALS) {
 }
 var stripSlotCount = (page) => stripStarts(page).length;
 var stripSlotIndex = (page, offset) => stripStarts(page).filter((start) => start < offset).length;
-
-// src/color-core.ts
-var COLOR_FORMATS = ["hex", "rgb", "hsl", "oklch"];
-var LONG_PRESS_MS = 500;
-var HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
-var clamp7 = (n, min, max) => Math.min(max, Math.max(min, n));
-var clamp015 = (n) => clamp7(n, 0, 1);
-var byte = (n) => clamp7(Math.round(n), 0, 255);
-function parseHex(input) {
-  if (typeof input !== "string") return null;
-  let s = input.trim();
-  if (!s.startsWith("#")) s = `#${s}`;
-  if (!HEX_COLOR_REGEX.test(s)) return null;
-  let h = s.slice(1);
-  if (h.length <= 4) h = h.split("").map((c) => c + c).join("");
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  const a = h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1;
-  return { r, g, b, a };
-}
-function formatHex(rgba, alphaEnabled) {
-  const hx = (n) => byte(n).toString(16).padStart(2, "0");
-  const base = `#${hx(rgba.r)}${hx(rgba.g)}${hx(rgba.b)}`;
-  return alphaEnabled ? `${base}${hx(clamp015(rgba.a) * 255)}` : base;
-}
-function normalizeHex(input, alphaEnabled) {
-  const rgba = parseHex(input);
-  return rgba ? formatHex(rgba, alphaEnabled) : null;
-}
-function displayHex(value) {
-  const rgba = parseHex(value);
-  if (!rgba) return (value ?? "").toUpperCase();
-  return formatHex(rgba, false).toUpperCase();
-}
-function opacityPercent(rgba) {
-  return Math.round(clamp015(rgba.a) * 100);
-}
-function rgbToHsv(rgba) {
-  const r = rgba.r / 255, g = rgba.g / 255, b = rgba.b / 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  const d = max - min;
-  let h = 0;
-  if (d !== 0) {
-    if (max === r) h = (g - b) / d % 6;
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    h *= 60;
-    if (h < 0) h += 360;
-  }
-  return { h, s: max === 0 ? 0 : d / max, v: max, a: rgba.a };
-}
-function hsvToRgb(hsva) {
-  const h = (hsva.h % 360 + 360) % 360;
-  const s = clamp015(hsva.s), v = clamp015(hsva.v);
-  const c = v * s;
-  const x = c * (1 - Math.abs(h / 60 % 2 - 1));
-  const m = v - c;
-  let r = 0, g = 0, b = 0;
-  if (h < 60) [r, g, b] = [c, x, 0];
-  else if (h < 120) [r, g, b] = [x, c, 0];
-  else if (h < 180) [r, g, b] = [0, c, x];
-  else if (h < 240) [r, g, b] = [0, x, c];
-  else if (h < 300) [r, g, b] = [x, 0, c];
-  else [r, g, b] = [c, 0, x];
-  return { r: byte((r + m) * 255), g: byte((g + m) * 255), b: byte((b + m) * 255), a: hsva.a };
-}
-function rgbToHsl(rgba) {
-  const { h, s, v, a } = rgbToHsv(rgba);
-  const l = v * (1 - s / 2);
-  const sl = l === 0 || l === 1 ? 0 : (v - l) / Math.min(l, 1 - l);
-  return { h, s: sl, l, a };
-}
-function hslToRgb(hsla) {
-  const l = clamp015(hsla.l), s = clamp015(hsla.s);
-  const v = l + s * Math.min(l, 1 - l);
-  const sv = v === 0 ? 0 : 2 * (1 - l / v);
-  return hsvToRgb({ h: hsla.h, s: sv, v, a: hsla.a });
-}
-var srgbToLinear = (c) => c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-var linearToSrgb = (c) => c <= 31308e-7 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
-function rgbToOklab(rgba) {
-  const r = srgbToLinear(rgba.r / 255);
-  const g = srgbToLinear(rgba.g / 255);
-  const b = srgbToLinear(rgba.b / 255);
-  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
-  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
-  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
-  return {
-    L: 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
-    A: 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
-    B: 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
-  };
-}
-function oklabToLinearRgb(L, A, B) {
-  const l = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3;
-  const m = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3;
-  const s = (L - 0.0894841775 * A - 1.291485548 * B) ** 3;
-  return {
-    r: 4.0767416621 * l - 3.3077115913 * m + 0.2307590544 * s,
-    g: -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
-    b: -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
-  };
-}
-function rgbToOklch(rgba) {
-  const { L, A, B } = rgbToOklab(rgba);
-  const c = Math.sqrt(A * A + B * B);
-  let h = Math.atan2(B, A) * 180 / Math.PI;
-  if (h < 0) h += 360;
-  return { l: L, c, h: c < 1e-6 ? 0 : h, a: rgba.a };
-}
-var GAMUT_EPS = 1e-4;
-function inSrgbGamut(l, c, h) {
-  const rad = h * Math.PI / 180;
-  const { r, g, b } = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
-  return r >= -GAMUT_EPS && r <= 1 + GAMUT_EPS && g >= -GAMUT_EPS && g <= 1 + GAMUT_EPS && b >= -GAMUT_EPS && b <= 1 + GAMUT_EPS;
-}
-function clampOklchToSrgb(oklch) {
-  const l = clamp015(oklch.l);
-  const h = (oklch.h % 360 + 360) % 360;
-  const c = Math.max(0, oklch.c);
-  if (inSrgbGamut(l, c, h)) return { l, c, h, a: clamp015(oklch.a) };
-  let lo = 0, hi = c;
-  for (let i = 0; i < 24; i++) {
-    const mid = (lo + hi) / 2;
-    if (inSrgbGamut(l, mid, h)) lo = mid;
-    else hi = mid;
-  }
-  return { l, c: lo, h, a: clamp015(oklch.a) };
-}
-function oklchToRgb(oklch) {
-  const { l, c, h, a } = clampOklchToSrgb(oklch);
-  const rad = h * Math.PI / 180;
-  const lin = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
-  return {
-    r: byte(linearToSrgb(clamp015(lin.r)) * 255),
-    g: byte(linearToSrgb(clamp015(lin.g)) * 255),
-    b: byte(linearToSrgb(clamp015(lin.b)) * 255),
-    a: clamp015(a)
-  };
-}
 
 // src/gradient-core.ts
 var MIN_STOPS = 2;
@@ -8944,10 +9072,11 @@ var moveWheelSlot = (h) => {
 };
 var paletteCoords = /* @__PURE__ */ new Map();
 var paletteHsl = (palette) => {
-  const cached = paletteCoords.get(palette.id);
+  const key = `${palette.id}:${palette.colors.join()}`;
+  const cached = paletteCoords.get(key);
   if (cached) return cached;
   const coords = palette.colors.map((hex) => rgbToHsl(parseHex(hex) ?? { r: 255, g: 0, b: 0, a: 1 }));
-  paletteCoords.set(palette.id, coords);
+  paletteCoords.set(key, coords);
   return coords;
 };
 var paletteSlot = (palette, h) => {
@@ -8973,6 +9102,13 @@ var MoveColorStoreClass = class {
     this.coordinates = /* @__PURE__ */ new Map();
     /** The palette the dial is locked to — null is the whole wheel. */
     this.paletteId = null;
+    /** The app's own palette, holding EVERY colour control to its colours —
+     *  open or not. It outranks the editor's navigator, which it closes. */
+    this.lock = null;
+    /** The app's own palettes, when it has a set of its own: the navigator lists
+     *  these instead of the built-in ones. */
+    this.hostPalettes = null;
+    this.onPickPalette = null;
     /** The palette navigator behind Menu while the editor is open. */
     this.picker = false;
     this.pickerCursor = 0;
@@ -8988,9 +9124,12 @@ var MoveColorStoreClass = class {
     };
     this.getStop = () => this.stop;
     /* ---- the palette lock and its navigator ---- */
-    this.getPaletteId = () => this.paletteId;
-    this.getPalette = () => this.paletteId ? MOVE_COLOR_PALETTES.find((p) => p.id === this.paletteId) ?? null : null;
-    this.isPickerOpen = () => this.picker && !!this.view;
+    this.getPaletteId = () => this.lock?.id ?? this.paletteId;
+    this.getPalette = () => this.lock ?? (this.paletteId ? this.palettes().find((p) => p.id === this.paletteId) ?? null : null);
+    /** The palettes the navigator lists — the app's when it has some. */
+    this.palettes = () => this.hostPalettes ?? MOVE_COLOR_PALETTES;
+    this.getLock = () => this.lock;
+    this.isPickerOpen = () => this.picker && (!!this.view || !!this.hostPalettes);
     this.getPickerCursor = () => this.pickerCursor;
   }
   notify() {
@@ -9103,7 +9242,7 @@ var MoveColorStoreClass = class {
     color.s = clamp8(color.s);
     color.l = clamp8(color.l);
     color.a = clamp8(color.a);
-    const palette = this.view?.panelId === panelId && this.view.path === path ? this.getPalette() : null;
+    const palette = this.lockFor(panelId, path);
     const snapped = palette ? paletteHsl(palette)[paletteAt(palette, color.h)] : null;
     const painted = snapped ? { ...color, h: snapped.h, s: snapped.s, l: snapped.l } : color;
     const g = stop === null ? null : this.gradient(panelId, path);
@@ -9124,9 +9263,9 @@ var MoveColorStoreClass = class {
     if (this.view) this.update(this.view.panelId, this.view.path, { a });
   }
   turn(panelId, path, delta, fine = false) {
-    const palette = this.view?.panelId === panelId && this.view.path === path ? this.getPalette() : null;
+    const palette = this.lockFor(panelId, path);
     if (palette && delta) {
-      const at2 = paletteAt(palette, this.read(panelId, path).h);
+      const at2 = this.paletteAtValue(palette, panelId, path);
       const next = (at2 + Math.sign(delta) + palette.colors.length) % palette.colors.length;
       this.update(panelId, path, { h: paletteCenter(palette, next) });
       return;
@@ -9136,16 +9275,68 @@ var MoveColorStoreClass = class {
   turnLuminosity(panelId, path, delta, fine = false) {
     this.update(panelId, path, { l: this.read(panelId, path).l + delta * (fine ? 2e-3 : 0.02) });
   }
+  /**
+   * The app's own palettes, in the navigator the instrument already has: the rows
+   * list these instead of the built-in ones, the first row ("All colors") still
+   * means no palette, and a choice goes back through `onPick` — the app owns what
+   * a palette means, and answers by locking one (`lockPalette`). With a set
+   * installed the navigator opens on its own, with no colour editor up, so a
+   * palette can be an app-wide setting rather than one control's.
+   *
+   * `null` gives the navigator the built-in palettes back.
+   */
+  setPalettes(palettes, onPick) {
+    const next = palettes && palettes.length > 0 ? palettes.map((p) => ({ ...p, colors: [...p.colors] })) : null;
+    this.onPickPalette = next ? onPick ?? null : null;
+    const same = JSON.stringify(next) === JSON.stringify(this.hostPalettes);
+    if (same) return;
+    this.hostPalettes = next;
+    this.picker = false;
+    this.pickerCursor = 0;
+    this.notify();
+  }
+  /** The palette a control's edits snap to: the app's lock on every control,
+   *  else the navigator's choice on the one the editor has open. */
+  lockFor(panelId, path) {
+    if (this.lock) return this.lock;
+    return this.view?.panelId === panelId && this.view.path === path ? this.getPalette() : null;
+  }
+  /**
+   * Hold every colour control in the app to one palette — an app-wide
+   * setting, not the editor's: a turn steps through its colours, a drag or a
+   * write through the editor lands on the nearest segment, on screen and on
+   * the hardware, open editor or not. The navigator behind Menu stands down
+   * while the lock holds, since the palette is the app's to choose. `null`
+   * hands every control back its whole wheel. Values the app writes itself
+   * are the app's to keep on the palette.
+   */
+  lockPalette(palette) {
+    const next = palette && palette.colors.length > 0 ? { ...palette, colors: [...palette.colors] } : null;
+    const same = next?.id === this.lock?.id && next?.colors.join() === this.lock?.colors.join();
+    if (same) return;
+    this.lock = next;
+    this.picker = false;
+    this.notify();
+  }
   /** Which palette colour the open control sits on — null off-palette. */
   paletteIndex(panelId, path) {
     const palette = this.getPalette();
-    return palette ? paletteAt(palette, this.read(panelId, path).h) : null;
+    return palette ? this.paletteAtValue(palette, panelId, path) : null;
+  }
+  /** Which palette colour a control holds: the colour it IS, when it is one of
+   *  them — a value the app wrote carries no position on the segmented wheel —
+   *  else the segment its hue sits in. */
+  paletteAtValue(palette, panelId, path) {
+    const hex = this.hex(panelId, path).slice(0, 7).toLowerCase();
+    const exact = palette.colors.findIndex((color) => color.slice(0, 7).toLowerCase() === hex);
+    return exact >= 0 ? exact : paletteAt(palette, this.read(panelId, path).h);
   }
   /** Lock the open editor to a palette (null = back to all colours), and
    *  bring its colour onto the palette right away — the nearest of its hues,
    *  then that segment's centre so a turn steps cleanly from there. */
   setPalette(id) {
-    this.paletteId = id && MOVE_COLOR_PALETTES.some((p) => p.id === id) ? id : null;
+    if (this.lock) return;
+    this.paletteId = id && this.palettes().some((p) => p.id === id) ? id : null;
     this.picker = false;
     const palette = this.getPalette();
     if (palette && this.view) {
@@ -9160,8 +9351,8 @@ var MoveColorStoreClass = class {
     if (palette && this.view) this.update(this.view.panelId, this.view.path, { h: paletteCenter(palette, index) });
   }
   openPicker() {
-    if (!this.view || this.picker) return;
-    const at2 = MOVE_COLOR_PALETTES.findIndex((p) => p.id === this.paletteId);
+    if (this.picker || !this.hostPalettes && (!this.view || this.lock)) return;
+    const at2 = this.palettes().findIndex((p) => p.id === this.getPaletteId());
     this.pickerCursor = at2 < 0 ? 0 : at2 + 1;
     this.picker = true;
     this.notify();
@@ -9180,7 +9371,7 @@ var MoveColorStoreClass = class {
   movePickerCursor(delta) {
     if (!this.isPickerOpen() || !delta) return;
     const step = Math.round(delta) || Math.sign(delta);
-    const next = Math.max(0, Math.min(MOVE_COLOR_PALETTES.length, this.pickerCursor + step));
+    const next = Math.max(0, Math.min(this.palettes().length, this.pickerCursor + step));
     if (next === this.pickerCursor) return;
     this.pickerCursor = next;
     this.notify();
@@ -9188,7 +9379,7 @@ var MoveColorStoreClass = class {
   /** Rest the cursor on a row — a search landing the wheel on the next match. */
   setPickerCursor(cursor) {
     if (!this.isPickerOpen()) return;
-    const next = Math.max(0, Math.min(MOVE_COLOR_PALETTES.length, cursor));
+    const next = Math.max(0, Math.min(this.palettes().length, cursor));
     if (next === this.pickerCursor) return;
     this.pickerCursor = next;
     this.notify();
@@ -9196,12 +9387,19 @@ var MoveColorStoreClass = class {
   /** Keep the cursor's row: the palette locks in and the navigator dismisses. */
   confirmPicker() {
     if (!this.isPickerOpen()) return;
-    this.setPalette(this.pickerCursor === 0 ? null : MOVE_COLOR_PALETTES[this.pickerCursor - 1]?.id ?? null);
+    const id = this.pickerCursor === 0 ? null : this.palettes()[this.pickerCursor - 1]?.id ?? null;
+    if (this.onPickPalette) {
+      this.picker = false;
+      this.notify();
+      this.onPickPalette(id);
+      return;
+    }
+    this.setPalette(id);
   }
   /** A clicked row: cursor and confirm in one. */
   choosePicker(cursor) {
     if (!this.isPickerOpen()) return;
-    this.pickerCursor = Math.max(0, Math.min(MOVE_COLOR_PALETTES.length, cursor));
+    this.pickerCursor = Math.max(0, Math.min(this.palettes().length, cursor));
     this.confirmPicker();
   }
 };
@@ -9335,7 +9533,7 @@ function MoveColorSlot({ panelId, meta, active, open: open2, latched = false, cl
       onLostPointerCapture: () => {
         gesture.current = null;
       },
-      children: /* @__PURE__ */ jsx15(MoveSlotColorBody, { label: meta.label, color: String(TweakStore11.getValue(panelId, meta.path)), hue: color.h })
+      children: /* @__PURE__ */ jsx15(MoveSlotColorBody, { label: meta.label, color: String(TweakStore11.getValue(panelId, meta.path)) })
     }
   );
 }
@@ -9602,7 +9800,7 @@ function MovePaletteScreen({ kept = null, children }) {
   const cursor = MoveColorStore.getPickerCursor();
   const rows = [
     { name: "All colors", colors: null, index: 0 },
-    ...MOVE_COLOR_PALETTES.map((p, i) => ({ name: p.name, colors: p.colors, index: i + 1 }))
+    ...MoveColorStore.palettes().map((p, i) => ({ name: p.name, colors: p.colors, index: i + 1 }))
   ].filter((row) => !kept || kept.includes(row.index));
   useEffect12(() => {
     const el = root.current;
@@ -11757,7 +11955,6 @@ function MoveTimelineZoom() {
   return /* @__PURE__ */ jsxs12("div", { className: "tweakers-move-wave-zoom", children: [
     /* @__PURE__ */ jsx16("span", { className: "tweakers-move-wave-zoom-dot" }),
     /* @__PURE__ */ jsxs12("span", { className: "tweakers-move-wave-zoom-label", children: [
-      "Zoom ",
       parseFloat(MoveTimelineStore.getZoom().toFixed(1)),
       "x"
     ] })
@@ -12228,7 +12425,7 @@ function searchRows(view) {
   }
   if (!palettePickerOpen()) return null;
   return {
-    labels: ["All colors", ...MOVE_COLOR_PALETTES.map((p) => p.name)],
+    labels: ["All colors", ...MoveColorStore.palettes().map((p) => p.name)],
     cursor: MoveColorStore.getPickerCursor(),
     rest: (index) => MoveColorStore.setPickerCursor(index),
     take: (index) => {
@@ -12299,11 +12496,13 @@ var MOVE_PAGE_EVENT = "move-tweakers:page";
 var MOVE_PAGE_SELECT_EVENT = "move-tweakers:page-select";
 var MOVE_JOG_EVENT = "move-tweakers:jog";
 var MOVE_JOG_CLICK_EVENT = "move-tweakers:jog-click";
+var MOVE_VOLUME_EVENT = "move-tweakers:volume";
+var MOVE_VOLUME_TAP_EVENT = "move-tweakers:volume-tap";
 var MOVE_MUTE_EVENT = "move-tweakers:mute";
 var MOVE_SEARCH_EVENT = "move-tweakers:search";
 var MOVE_STRIP_EVENT = "move-tweakers:strip";
 var MOVE_SETTINGS_EVENT = "move-tweakers:settings";
-function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only, dock = "viewport", scroll = false, focused = false, headerStart, settings: settings2, functionChips = "clock" }) {
+function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only, dock = "viewport", scroll = false, focused = false, headerStart, headerEnd, settings: settings2, functionChips = "clock" }) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState9([]);
   const [track, setTrack] = useState9(0);
@@ -12569,7 +12768,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       });
     }, { label: "copy color", chip: false });
   }, [colorOpenPanel]);
-  const paletteScreen = colorMeta ? MoveColorStore.isPickerOpen() : false;
+  const paletteScreen = MoveColorStore.isPickerOpen();
   useEffect14(() => {
     if (!paletteScreen) return;
     return MoveFunctions.push("back", () => MoveColorStore.closePicker(), { label: "back", chip: false });
@@ -12943,6 +13142,21 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     if (!at2) return null;
     return { kind: "gate", col, span: 3, dials: ["threshold", "lookahead", "release"].map((role, k) => ({ role, col: col + k, meta: metas[k], position: at2[role] })) };
   };
+  const vectorAt = (col) => {
+    const metas = [dialAt(col), dialAt(col + 1), dialAt(col + 2)];
+    if (metas.some((m) => !m) || !visibleCols.includes(col + 1) || !visibleCols.includes(col + 2)) return null;
+    const own = metas.map((m, k) => m === page.dials[col + k]);
+    if (own.some((o) => o !== own[0])) return null;
+    const at2 = moveVectorAxes(metas.map((m) => [m, values[m.path]]));
+    if (!at2) return null;
+    return {
+      kind: "vector",
+      col,
+      span: 3,
+      down: at2.down,
+      dials: ["x", "y", "z"].map((axis, k) => ({ role: `axis-${axis}`, col: col + k, meta: metas[k], position: at2[axis] }))
+    };
+  };
   const multibandAt = (col) => {
     if (moveMultibandRole(page.dials[col]) !== "amount" || !visibleCols.includes(col + 1)) return null;
     const cols = [col, col + 1];
@@ -12978,7 +13192,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     }
     return { kind: "channel", col, span: dials.length, dials };
   };
-  const faceAt = (col) => stripMode ? null : gateAt(col) ?? multibandAt(col) ?? channelAt(col);
+  const faceAt = (col) => stripMode ? null : gateAt(col) ?? vectorAt(col) ?? multibandAt(col) ?? channelAt(col);
   const underFace = (col) => {
     for (let j = col - 1; j >= 0 && j >= col - MOVE_DIALS; j--) {
       if (!visibleCols.includes(j)) continue;
@@ -13032,13 +13246,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const stripFrom = stripMode ? stripSlotIndex(page, stripOffset) : 0;
   const stripTo = stripMode ? stripSlotIndex(page, stripOffset + MOVE_DIALS) : 0;
   const volumeReading = liveValue ?? volume?.value;
-  const headerCluster = (timelineClaimed || waveClaimed || volume || functionChips === "clock") && /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-actions", children: [
+  const headerCluster = (timelineClaimed || waveClaimed || volume || headerEnd || functionChips === "clock") && /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-actions", children: [
     functionChips === "clock" && /* @__PURE__ */ jsx17(MoveFunctionChips, {}),
     timelineClaimed ? /* @__PURE__ */ jsx17(MoveTimelineClock, {}) : waveClaimed ? /* @__PURE__ */ jsx17(MoveWaveClock, {}) : volume && /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-volume", children: [
       /* @__PURE__ */ jsx17("span", { className: "tweakers-move-volume-tick", style: { background: MOVE_TRACK_COLORS[0] } }),
       volume.label && volumeReading != null && /* @__PURE__ */ jsx17("span", { className: "tweakers-move-volume-label", children: volume.label }),
       /* @__PURE__ */ jsx17("span", { className: "tweakers-move-volume-value", children: boldColons(volumeReading ?? volume.label ?? "") })
-    ] })
+    ] }),
+    headerEnd
   ] });
   const content = /* @__PURE__ */ jsxs13("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: [
     /* @__PURE__ */ jsx17(
@@ -13082,6 +13297,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
             /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-tracks", children: [
               audioWave != null ? /* @__PURE__ */ jsx17(MoveAudioZoom, {}) : /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-tracks-lead", children: [
                 timelineClaimed ? /* @__PURE__ */ jsx17(MoveTimelineZoom, {}) : waveClaimed && /* @__PURE__ */ jsx17(MoveAudioZoom, {}),
+                headerStart && /* @__PURE__ */ jsx17("div", { className: "tweakers-move-header-start", children: headerStart }),
                 /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-tracks-group", children: [
                   settingsOpen && /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-settings-title", children: [
                     /* @__PURE__ */ jsx17("span", { className: "tweakers-move-settings-blink" }),
@@ -13153,8 +13369,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                     },
                     pg.panel.id
                   )) }),
-                  functionChips === "tracks" && /* @__PURE__ */ jsx17(MoveFunctionChips, {}),
-                  headerStart && /* @__PURE__ */ jsx17("div", { className: "tweakers-move-header-start", children: headerStart })
+                  functionChips === "tracks" && /* @__PURE__ */ jsx17(MoveFunctionChips, {})
                 ] })
               ] }),
               /* @__PURE__ */ jsx17("div", { className: "tweakers-move-mods", children: settingsOpen ? roomWave ? /* @__PURE__ */ jsx17(MoveAudioZoom, {}) : null : color && colorMeta ? /* @__PURE__ */ jsx17(MoveColorSteps, { color, disabled: TweakStore14.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? ModulationStore2.getSlots().map((slot) => /* @__PURE__ */ jsx17(MoveModCircle, { slot }, slot.index)) : null }),
@@ -13207,7 +13422,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                       "data-pad-columns": padGridCols || void 0,
                       children: [
                         presetScreen && /* @__PURE__ */ jsx17(MovePresetScreen, { view: presetScreen, search: presetSearch }),
-                        paletteScreen && /* @__PURE__ */ jsx17(MovePaletteScreen, { kept: paletteSearch ? moveSearchFilter(["All colors", ...MOVE_COLOR_PALETTES.map((p) => p.name)], paletteSearch.query) : null, children: paletteSearch && /* @__PURE__ */ jsx17(MoveSearchBar, { view: paletteSearch }) }),
+                        paletteScreen && /* @__PURE__ */ jsx17(MovePaletteScreen, { kept: paletteSearch ? moveSearchFilter(["All colors", ...MoveColorStore.palettes().map((p) => p.name)], paletteSearch.query) : null, children: paletteSearch && /* @__PURE__ */ jsx17(MoveSearchBar, { view: paletteSearch }) }),
                         /* @__PURE__ */ jsx17("div", { className: "tweakers-move-viewport", "data-scroll": stripMode || void 0, children: /* @__PURE__ */ jsxs13(
                           "div",
                           {
@@ -13809,7 +14024,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     const body = face.kind === "channel" ? /* @__PURE__ */ jsx17(MoveSlotChannelBody, { channels: dials.map((d) => {
                                       const visual = d.meta.moveVisual;
                                       return { ...shown(d), ...visual?.kind === "channel" ? { icon: visual.icon, tone: visual.tone } : {} };
-                                    }) }) : face.kind === "gate" ? /* @__PURE__ */ jsx17(MoveSlotGateBody, { threshold: shown(dials[0]), lookahead: shown(dials[1]), release: shown(dials[2]), children: /* @__PURE__ */ jsx17(MoveGateDisplay, { panelId: page.panel.id, threshold: dials[0].position }) }) : /* @__PURE__ */ jsx17(MoveSlotMultibandBody, { amount: shown(dials[0]), speed: shown(dials[1]), bands: dials.slice(2).map(shown), icon: face.icon, children: /* @__PURE__ */ jsx17(
+                                    }) }) : face.kind === "vector" ? /* @__PURE__ */ jsx17(MoveSlotVectorBody, { x: shown(dials[0]), y: shown(dials[1]), z: shown(dials[2]), down: face.down }) : face.kind === "gate" ? /* @__PURE__ */ jsx17(MoveSlotGateBody, { threshold: shown(dials[0]), lookahead: shown(dials[1]), release: shown(dials[2]), children: /* @__PURE__ */ jsx17(MoveGateDisplay, { panelId: page.panel.id, threshold: dials[0].position }) }) : /* @__PURE__ */ jsx17(MoveSlotMultibandBody, { amount: shown(dials[0]), speed: shown(dials[1]), bands: dials.slice(2).map(shown), icon: face.icon, children: /* @__PURE__ */ jsx17(
                                       MoveMultibandDisplay,
                                       {
                                         panelId: page.panel.id,
@@ -13840,7 +14055,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                                 "aria-valuemax": d.meta.max ?? 1,
                                                 "aria-valuenow": Number(values[d.meta.path]),
                                                 "aria-valuetext": moveVisualReading(d.meta, Number(values[d.meta.path])),
-                                                "aria-orientation": d.role === "lookahead" ? "horizontal" : "vertical",
+                                                "aria-orientation": d.role === "lookahead" || d.role === "axis-x" ? "horizontal" : "vertical",
                                                 "aria-disabled": off || void 0,
                                                 "data-disabled": off || void 0,
                                                 onKeyDown: (k) => dialFromKeyboard(k, d.meta),
@@ -14591,7 +14806,6 @@ function MoveAudioZoom() {
   return /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-wave-zoom", children: [
     /* @__PURE__ */ jsx17("span", { className: "tweakers-move-wave-zoom-dot" }),
     /* @__PURE__ */ jsxs13("span", { className: "tweakers-move-wave-zoom-label", children: [
-      "Zoom ",
       parseFloat(MoveWaveformStore.getView().zoom.toFixed(1)),
       "x"
     ] })
@@ -15134,12 +15348,17 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
     let body;
     const shown = (d) => ({ ...reading(d.meta), position: d.position });
     const gate = dials.length === 3 ? moveGateSpan(dials.map((m) => [m, vals[m.path]])) : null;
+    const place3 = dials.length === 3 ? moveVectorAxes(dials.map((m) => [m, vals[m.path]])) : null;
     const cleaner = dials.length >= 3 ? moveMultibandSpan(dials.map((m) => [m, vals[m.path]]), dials.slice(2).map((m) => [m, vals[m.path]])) : null;
     const channels = dials.map((m) => moveChannelPosition(m, vals[m.path]));
     if (gate) {
       kind = "gate";
       parts = ["threshold", "lookahead", "release"].map((role, k) => ({ role, meta: dials[k], position: gate[role] }));
       body = /* @__PURE__ */ jsx18(MoveSlotGateBody, { threshold: shown(parts[0]), lookahead: shown(parts[1]), release: shown(parts[2]), children: /* @__PURE__ */ jsx18(MoveGateDisplay, { panelId, threshold: parts[0].position }) });
+    } else if (place3) {
+      kind = "vector";
+      parts = ["x", "y", "z"].map((axis, k) => ({ role: `axis-${axis}`, meta: dials[k], position: place3[axis] }));
+      body = /* @__PURE__ */ jsx18(MoveSlotVectorBody, { x: shown(parts[0]), y: shown(parts[1]), z: shown(parts[2]), down: place3.down });
     } else if (cleaner) {
       kind = "multiband";
       parts = dials.map((meta2, k) => ({
@@ -15186,7 +15405,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
           className: "tweakers-move-face-zone",
           "data-role": d.role,
           ...slider(d.meta),
-          "aria-orientation": d.role === "lookahead" ? "horizontal" : "vertical",
+          "aria-orientation": d.role === "lookahead" || d.role === "axis-x" ? "horizontal" : "vertical",
           onPointerDown: (e) => {
             let m = d.meta;
             if (d.role === "band" && cleaner) {
@@ -16440,8 +16659,10 @@ export {
   MOVE_PAGE_SELECT_EVENT,
   MOVE_PALETTE,
   MOVE_SEARCH_EVENT,
+  MOVE_SETTINGS_EVENT,
   MOVE_SLOT_LIBRARY,
   MOVE_SPECIAL_BUTTONS,
+  MOVE_STAGE,
   MOVE_STEP_FUNCTIONS,
   MOVE_STRIP_EVENT,
   MOVE_TIMELINE_MAX_ZOOM,
@@ -16451,6 +16672,8 @@ export {
   MOVE_VIEW_MOTIONS,
   MOVE_VIEW_PRESENTATION,
   MOVE_VIEW_WAIT,
+  MOVE_VOLUME_EVENT,
+  MOVE_VOLUME_TAP_EVENT,
   MOVE_WAVEFORM_DEMO_SECONDS,
   MOVE_WAVEFORM_PADS,
   MOVE_WAVEFORM_PANEL,
@@ -16515,6 +16738,7 @@ export {
   MoveSlotToggleBody,
   MoveSlotTransferBody,
   MoveSlotTrimSpanBody,
+  MoveSlotVectorBody,
   MoveSlotXYBody,
   MoveSurfaceStore,
   MoveTimeline,
@@ -16665,6 +16889,8 @@ export {
   moveStop,
   moveTabCell,
   moveTrimSpan,
+  moveVectorAxes,
+  moveVectorStage,
   moveViewChoreography,
   moveVisualReading,
   defaultStyle as moveWaveformDefaultStyle,

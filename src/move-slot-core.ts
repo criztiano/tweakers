@@ -218,7 +218,8 @@ export function moveRampValue(value: unknown, e: MoveSlotPointer, box: MoveSlotB
 }
 
 /** The part a dial is drawn as on a multi-slot instrument's face. */
-export type MoveFaceRole = 'threshold' | 'lookahead' | 'release' | 'amount' | 'speed' | 'band' | 'channel';
+export type MoveFaceRole = 'threshold' | 'lookahead' | 'release' | 'amount' | 'speed' | 'band' | 'channel'
+  | 'axis-x' | 'axis-y' | 'axis-z';
 
 /* ── the turn: a slot answers the cursor as its knob answers the hand ── */
 

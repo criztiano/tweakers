@@ -18,9 +18,12 @@ export {
   MOVE_PAGE_SELECT_EVENT,
   MOVE_JOG_EVENT,
   MOVE_JOG_CLICK_EVENT,
+  MOVE_VOLUME_EVENT,
+  MOVE_VOLUME_TAP_EVENT,
   MOVE_MUTE_EVENT,
   MOVE_SEARCH_EVENT,
   MOVE_STRIP_EVENT,
+  MOVE_SETTINGS_EVENT,
   MOVE_TRACK_COLORS,
 } from './components/MovePanel';
 export { MoveActionButton } from './components/MoveActionButton';
@@ -47,12 +50,12 @@ export type { MovePage, MoveBandCell, MoveEdgesCell } from './move-layout';
 export { buildMoveStrip, isStripSlot, stripStarts, stripOffsets, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripSlotCount, stripSlotIndex } from './move-strip';
 
 // The big-slot library — the dictionary of what a Move dial slot can be
-export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MOVE_GATE_GRID, MoveSlotMultibandBody, MoveSlotChannelBody, MOVE_MULTIBAND_GRID, MOVE_GAUGE, moveGaugeBearing, MoveSlotPlaybackDrawing, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotColorBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
+export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MOVE_GATE_GRID, MoveSlotMultibandBody, MoveSlotChannelBody, MOVE_MULTIBAND_GRID, MOVE_GAUGE, moveGaugeBearing, MoveSlotPlaybackDrawing, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotColorBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
 // The small slots — the pad row under the dials
 export { MOVE_PAD_LIBRARY, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody } from './components/move-slots';
 export type { MovePadKind, MovePadBandHand, MovePadEdgeHand } from './components/move-slots';
-export { moveNumericDrawing, moveTrimSpan, moveGateSpan, moveMultibandSpan, moveMultibandRole, moveChannelPosition, movePlaybackMode, moveVisualReading, moveBandCuts, MOVE_BAND_W, MOVE_BAND_H } from './move-visual-core';
-export type { MoveGateRole, MoveMultibandRole, MoveTone, MoveVisual, MoveSliderVisual, MoveSelectVisual, MoveToggleVisual, MovePlaybackMode, MoveNumericDrawing } from './move-visual-core';
+export { moveNumericDrawing, moveTrimSpan, moveGateSpan, moveVectorAxes, moveVectorStage, MOVE_STAGE, moveMultibandSpan, moveMultibandRole, moveChannelPosition, movePlaybackMode, moveVisualReading, moveBandCuts, MOVE_BAND_W, MOVE_BAND_H } from './move-visual-core';
+export type { MoveStage, MoveGateRole, MoveMultibandRole, MoveTone, MoveVisual, MoveSliderVisual, MoveSelectVisual, MoveToggleVisual, MovePlaybackMode, MoveNumericDrawing } from './move-visual-core';
 export type { MoveSlotKind, MoveTrimSpanEdge, MoveFaceDial, MoveChannelDial } from './components/move-slots';
 // The gate face's live picture — the app attaches what the gate is doing around the playhead
 export { MoveGateMeter, drawMoveGate, moveGateDemoReading } from './move-gate';

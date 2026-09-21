@@ -418,8 +418,12 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
       const lift = panel.moveTopRow ?? [];
       const chipFits = (c: ControlMeta) =>
         isDial(c) && !noChip(c) && !dials.includes(c) && !balanceRefs.has(c) && !isPadColor(c);
+      // A colour chip rides the top row too, when the page asks for it: a colour
+      // belongs on the top or the value row (the balance's own colour already
+      // sits up there), so a page can put one right under its big slot.
+      const liftFits = (c: ControlMeta) => chipFits(c) || (isPadColor(c) && !balanceRefs.has(c));
       for (const c of controls) {
-        if (!lift.includes(c.path) || (c.type !== 'action' && !chipFits(c))) continue;
+        if (!lift.includes(c.path) || (c.type !== 'action' && !liftFits(c))) continue;
         const col = padCols.get(c) ?? null;
         if (col === null) {
           reportMoveLayoutIssue(
@@ -500,8 +504,11 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         // to the ordinary chip: the value row, leftmost free (or as named).
         else if (balanceRefs.has(c)) place(values, 'value', c, col);
         // The small colour selector: a swatch on the value row, in its named
-        // column — a chip like any other (tap latches, hold peeks).
-        else if (isPadColor(c)) place(values, 'value', c, col);
+        // column — a chip like any other (tap latches, hold peeks). A page can
+        // lift it to the top row with `moveTopRow`.
+        else if (isPadColor(c)) {
+          if (!topValues.includes(c)) place(values, 'value', c, col);
+        }
         // A control holding a dial slot never reaches the pads — the pad grid
         // must not mirror a dial. A movePads column on one is ignored, out
         // loud, so a page that still maps its dials to pads announces itself.

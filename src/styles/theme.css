@@ -606,8 +606,11 @@
   max-width: 100%;
 }
 
+/* A host's own status leads the page names, on the same row — never a second line
+   under them. */
 .tweakers-move-header-start {
   min-width: 0;
+  flex: none;
 }
 
 .tweakers-move-track {
@@ -1538,27 +1541,34 @@
   border-radius: var(--move-radius-small);
 }
 
+/* The colour fills its slot, edge to edge: the slot IS the swatch. The name reads
+   on top of it, in the ink the colour can carry. */
 .tweakers-move-color-swatch {
   position: absolute;
-  inset: var(--move-shape-top) var(--move-color-gap) var(--move-shape-top);
+  inset: 0;
+  border-radius: inherit;
 }
+
+.tweakers-move-dial[data-kind="color"] .tweakers-move-dial-head {
+  position: relative;
+  z-index: 1;
+}
+
+/* On a colour slot the colour is the ground: the name sits straight on it, with no
+   chip behind it, in whichever ink the colour can carry. */
+.tweakers-move-dial[data-kind="color"] .tweakers-move-dial-head {
+  background: none;
+}
+
+.tweakers-move-dial-head[data-ink="dark"] { color: var(--move-text-inverse, #1e1e1e); }
+.tweakers-move-dial-head[data-ink="light"] { color: var(--move-text); }
 
 .tweakers-move-color-swatch > span,
 .tweakers-move-color-preview > span { display: block; width: 100%; height: 100%; }
 
-.tweakers-move-color-reading {
-  position: absolute;
-  bottom: var(--move-color-gap);
-  left: var(--move-color-gap);
-  right: var(--move-color-gap);
-  font-size: var(--move-color-font);
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-
 .tweakers-move-dial[data-kind="color"][aria-expanded="true"] .tweakers-move-color-swatch,
 .tweakers-move-dial[data-kind="color"]:hover .tweakers-move-color-swatch {
-  box-shadow: 0 0 0 var(--move-color-stroke) var(--move-text);
+  box-shadow: inset 0 0 0 var(--move-color-stroke) var(--move-text);
 }
 
 .tweakers-move-color-display {
@@ -2414,6 +2424,7 @@
    column. A face lays its parts out by column — `--move-face-span` columns,
    each `--move-face-col-w` wide — so each part stands over its own knob. */
 .tweakers-move-dial[data-kind="gate"],
+.tweakers-move-dial[data-kind="vector"],
 .tweakers-move-dial[data-kind="multiband"],
 .tweakers-move-dial[data-kind="channel"] {
   --move-face-bar-w: 4px;
@@ -2772,6 +2783,89 @@
   background: var(--move-text);
 }
 
+/* ── vector: a place on a stage ─────────────────────────────────── */
+
+.tweakers-move-vector-stage {
+  position: absolute;
+  top: 29px;
+  bottom: 27px;
+  left: 12px;
+  right: 12px;
+  overflow: hidden;
+  border-radius: var(--move-radius-small);
+  background: var(--move-face-well);
+  pointer-events: none;
+}
+
+.tweakers-move-vector-stage > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.tweakers-move-vector-floor { fill: var(--move-face-cell); }
+
+.tweakers-move-vector-rules,
+.tweakers-move-vector-depth,
+.tweakers-move-vector-rail {
+  fill: none;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.tweakers-move-vector-rules { stroke: color-mix(in srgb, var(--move-text) 16%, transparent); }
+
+/* The guides only appear for the axis in the hand. */
+.tweakers-move-vector-depth,
+.tweakers-move-vector-rail { stroke: transparent; }
+
+.tweakers-move-vector-depth[data-active],
+.tweakers-move-vector-rail[data-active] { stroke: color-mix(in srgb, var(--move-text) 60%, transparent); }
+
+.tweakers-move-vector-foot,
+.tweakers-move-vector-stalk,
+.tweakers-move-vector-mark {
+  position: absolute;
+  left: var(--move-vector-x);
+  top: var(--move-vector-y);
+  pointer-events: none;
+}
+
+.tweakers-move-vector-foot {
+  height: var(--move-vector-size);
+  aspect-ratio: 2.9;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--move-text) 18%, transparent);
+  transform: translate(-50%, -50%);
+}
+
+.tweakers-move-vector-stalk {
+  width: 1px;
+  height: var(--move-vector-size);
+  background: color-mix(in srgb, var(--move-text) 40%, transparent);
+  transform: translateX(-50%);
+}
+
+.tweakers-move-vector-stalk[data-active] { background: var(--move-text); }
+
+.tweakers-move-vector-mark {
+  height: var(--move-vector-size);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--move-text) 80%, transparent);
+  transform: translate(-50%, -50%);
+}
+
+.tweakers-move-vector-mark[data-active] { background: var(--move-text); }
+
+/* Each axis's part of the stage, named like the other faces' tracks. */
+.tweakers-move-vector-track {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
 .tweakers-move-face-zones {
   position: absolute;
   inset: 0;
@@ -2786,7 +2880,8 @@
   touch-action: none;
 }
 
-.tweakers-move-face-zone[data-role="lookahead"] { cursor: ew-resize; }
+.tweakers-move-face-zone[data-role="lookahead"],
+.tweakers-move-face-zone[data-role="axis-x"] { cursor: ew-resize; }
 .tweakers-move-face-zone[data-role="speed"] { cursor: grab; }
 
 .tweakers-move-face-zone:focus-visible {

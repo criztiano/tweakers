@@ -108,6 +108,14 @@ releases the other. A `balance` is this same stacked column with nothing to
 declare: its `a` colour is the chip up top, its `b` the chip under it, and it
 seats them before any switch or lifted chip, so its column is always its own.
 
+The volume knob, when no slot has borrowed it as a second hand, is the app's to
+give a meaning. Listen for `MOVE_VOLUME_EVENT` (`{ delta, shift }`, cancelable)
+and `MOVE_VOLUME_TAP_EVENT` (`{ shift }`) on `window`, consume what you take with
+`preventDefault`, and name what the knob edits with `MoveVolumeDisplay` — a
+claimed volume knob with no readout is a bug. A mounted waveform takes the knob
+first. Listen for the settings room with `MOVE_SETTINGS_EVENT` or
+`MoveSettingsView.subscribe`, never by the raw event string.
+
 Hardware has four tracks and eight dial columns. `buildMovePages`, `dialSpan`,
 `visibleColumns` and `movePadRows` define the layout, not app CSS. Validate pages
 for overflow, two-column filter boundaries, enums and small-pad placement.

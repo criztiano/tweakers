@@ -13,7 +13,7 @@ import {
   enumShapePath, filterShapePath,
 } from '../move-layout';
 import {
-  moveNumericDrawing, movePlaybackMode, moveVisualReading, moveTrimSpan, moveGateSpan, moveMultibandSpan,
+  moveNumericDrawing, movePlaybackMode, moveVisualReading, moveTrimSpan, moveGateSpan, moveVectorAxes, moveMultibandSpan,
   moveChannelPosition,
 } from '../move-visual-core';
 import {
@@ -25,7 +25,7 @@ import {
 } from '../move-slot-core';
 import {
   moveSlotKind, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotXYBody, MoveSlotRangeBody, MoveSlotFilterBody,
-  MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotMultibandBody, MoveSlotChannelBody,
+  MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotMultibandBody, MoveSlotChannelBody,
   MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody,
 } from './move-slots';
 import { MoveColorSlot } from './MoveColor';
@@ -255,11 +255,12 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
     }
 
     type Dial = { role: MoveFaceRole; meta: ControlMeta; position: number; track?: string };
-    let kind: 'gate' | 'multiband' | 'channel';
+    let kind: 'gate' | 'vector' | 'multiband' | 'channel';
     let parts: Dial[];
     let body: ReactNode;
     const shown = (d: Dial) => ({ ...reading(d.meta), position: d.position });
     const gate = dials.length === 3 ? moveGateSpan(dials.map((m) => [m, vals[m.path]])) : null;
+    const place = dials.length === 3 ? moveVectorAxes(dials.map((m) => [m, vals[m.path]])) : null;
     const cleaner = dials.length >= 3
       ? moveMultibandSpan(dials.map((m) => [m, vals[m.path]]), dials.slice(2).map((m) => [m, vals[m.path]]))
       : null;
@@ -272,6 +273,10 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
           <MoveGateDisplay panelId={panelId} threshold={parts[0].position} />
         </MoveSlotGateBody>
       );
+    } else if (place) {
+      kind = 'vector';
+      parts = (['x', 'y', 'z'] as const).map((axis, k) => ({ role: `axis-${axis}` as const, meta: dials[k], position: place[axis] }));
+      body = <MoveSlotVectorBody x={shown(parts[0])} y={shown(parts[1])} z={shown(parts[2])} down={place.down} />;
     } else if (cleaner) {
       kind = 'multiband';
       parts = dials.map((meta, k) => ({
@@ -307,7 +312,7 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
         <div className="tweakers-move-face-zones">
           {parts.map((d) => (
             <div key={d.meta.path} className="tweakers-move-face-zone" data-role={d.role} {...slider(d.meta)}
-              aria-orientation={d.role === 'lookahead' ? 'horizontal' : 'vertical'}
+              aria-orientation={d.role === 'lookahead' || d.role === 'axis-x' ? 'horizontal' : 'vertical'}
               onPointerDown={(e) => {
                 // On the band grid the press takes the band under it.
                 let m = d.meta;

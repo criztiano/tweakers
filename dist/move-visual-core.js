@@ -73,6 +73,50 @@ function moveGateSpan(dials) {
   if (at.some((p) => p === null)) return null;
   return { threshold: at[0], lookahead: at[1], release: at[2] };
 }
+function moveVectorAxes(dials) {
+  if (dials.length !== 3) return null;
+  const axes = ["x", "y", "z"];
+  const at = dials.map(([meta, value], i) => {
+    const visual = meta.moveVisual;
+    if (visual?.kind !== "axis" || visual.axis !== axes[i]) return null;
+    return sliderPosition(meta, value);
+  });
+  if (at.some((p) => p === null)) return null;
+  const y = dials[1][0].moveVisual;
+  return { x: at[0], y: at[1], z: at[2], down: y?.kind === "axis" && y.down === true };
+}
+var MOVE_STAGE = { width: 240, height: 48 };
+var STAGE_FLOOR = { near: 44, far: 16, half: 114, farScale: 0.44 };
+var STAGE_MARK = { near: 5.5, far: 2.5 };
+function moveVectorStage(x01, y01, z01, down = false) {
+  const cx = MOVE_STAGE.width / 2;
+  const x = clamp01(x01);
+  const t = clamp01(z01);
+  const lift = down ? 1 - clamp01(y01) : clamp01(y01);
+  const lerp = (a, b, k) => a + (b - a) * k;
+  const floorY = (k) => lerp(STAGE_FLOOR.near, STAGE_FLOOR.far, k);
+  const halfAt = (k) => STAGE_FLOOR.half * lerp(1, STAGE_FLOOR.farScale, k);
+  const across = (u, k) => cx + (u * 2 - 1) * halfAt(k);
+  const r2 = (n) => Math.round(n * 100) / 100;
+  const floor = `M${r2(across(0, 0))} ${STAGE_FLOOR.near}L${r2(across(1, 0))} ${STAGE_FLOOR.near}L${r2(across(1, 1))} ${STAGE_FLOOR.far}L${r2(across(0, 1))} ${STAGE_FLOOR.far}Z`;
+  const rules = [
+    ...[0.25, 0.5, 0.75].map((k) => `M${r2(across(0, k))} ${r2(floorY(k))}L${r2(across(1, k))} ${r2(floorY(k))}`),
+    ...[0.25, 0.5, 0.75].map((u) => `M${r2(across(u, 0))} ${STAGE_FLOOR.near}L${r2(across(u, 1))} ${STAGE_FLOOR.far}`)
+  ].join("");
+  const footX = across(x, t);
+  const footY = floorY(t);
+  const r = lerp(STAGE_MARK.near, STAGE_MARK.far, t);
+  const headroom = (footY - r - 2) * 0.9;
+  const markY = footY - lift * headroom;
+  return {
+    floor,
+    rules,
+    foot: { x: r2(footX), y: r2(footY), rx: r2(r * 1.3), ry: r2(r * 0.45) },
+    stalk: { x: r2(footX), y1: r2(footY), y2: r2(markY) },
+    mark: { x: r2(footX), y: r2(markY), r: r2(r) },
+    depth: `M${r2(across(0, t))} ${r2(footY)}L${r2(across(1, t))} ${r2(footY)}`
+  };
+}
 function sliderPosition(meta, value) {
   const { min, max } = meta;
   if (meta.type !== "slider" || typeof value !== "number" || !Number.isFinite(value) || !Number.isFinite(min) || !Number.isFinite(max) || max <= min) return null;
@@ -185,6 +229,7 @@ function moveBandCuts(low, high) {
 export {
   MOVE_BAND_H,
   MOVE_BAND_W,
+  MOVE_STAGE,
   moveBandCuts,
   moveChannelPosition,
   moveGateSpan,
@@ -194,6 +239,8 @@ export {
   moveNumericDrawing,
   movePlaybackMode,
   moveTrimSpan,
+  moveVectorAxes,
+  moveVectorStage,
   moveVisualReading
 };
 //# sourceMappingURL=move-visual-core.js.map

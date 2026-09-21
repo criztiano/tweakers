@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { TweakStore, type ControlMeta, type MoveVisual } from '../src/store/TweakStore';
 import { buildMovePages, denormalizeDial, normalizeDial } from '../src/move-layout';
-import { moveKeyboardValue, moveNumericDrawing, movePlaybackMode, moveVisualReading } from '../src/move-visual-core';
+import { moveKeyboardValue, moveNumericDrawing, movePlaybackMode, moveVectorAxes, moveVectorStage, moveVisualReading, MOVE_STAGE } from '../src/move-visual-core';
 
 const numeric = (moveVisual: MoveVisual, min = 0, max = 1): ControlMeta => ({
   type: 'slider', path: 'value', label: 'Unrelated label', min, max, step: 0.01, moveVisual,
@@ -133,5 +133,53 @@ describe('playback mapping and editing', () => {
     expect(moveKeyboardValue(meta, 'f', 'ArrowRight')).toBe('r');
     expect(moveKeyboardValue(meta, 'r', 'ArrowRight')).toBe('r');
     expect(moveKeyboardValue(meta, 'r', 'Home')).toBe('f');
+  });
+});
+
+describe('the vector stage', () => {
+  const axis = (a: 'x' | 'y' | 'z', min = 0, max = 100, down?: boolean): ControlMeta => ({
+    type: 'slider', path: a, label: a.toUpperCase(), min, max, step: 1, moveVisual: { kind: 'axis', axis: a, down },
+  });
+
+  it('reads x, y and z in that order only, each across its own range', () => {
+    expect(moveVectorAxes([[axis('x'), 25], [axis('y', 0, 200), 50], [axis('z', -100, 100), 0]]))
+      .toEqual({ x: 0.25, y: 0.25, z: 0.5, down: false });
+    expect(moveVectorAxes([[axis('y'), 0], [axis('x'), 0], [axis('z'), 0]])).toBeNull();
+    expect(moveVectorAxes([[axis('x'), 0], [axis('y'), 0]])).toBeNull();
+    // a non-axis slider between two axes is not a place
+    expect(moveVectorAxes([[axis('x'), 0], [numeric({ kind: 'opacity' }), 0], [axis('z'), 0]])).toBeNull();
+    // down rides on the y axis
+    expect(moveVectorAxes([[axis('x'), 0], [axis('y', 0, 100, true), 0], [axis('z'), 0]])?.down).toBe(true);
+  });
+
+  it('keeps an axis alone on the ordinary face', () => {
+    expect(moveNumericDrawing(axis('x'), 50)).toBeNull();
+  });
+
+  it('draws depth as place and size: far is higher on the floor and smaller', () => {
+    const near = moveVectorStage(0.5, 0, 0);
+    const far = moveVectorStage(0.5, 0, 1);
+    expect(far.foot.y).toBeLessThan(near.foot.y);
+    expect(far.mark.r).toBeLessThan(near.mark.r);
+    // x stays on the floor at every depth: the far edge is narrower
+    const farLeft = moveVectorStage(0, 0, 1).foot.x;
+    const nearLeft = moveVectorStage(0, 0, 0).foot.x;
+    expect(farLeft).toBeGreaterThan(nearLeft);
+    expect(moveVectorStage(0.5, 0, 0).foot.x).toBe(MOVE_STAGE.width / 2);
+  });
+
+  it('parks the mark on its shadow at zero height, and raises it with y', () => {
+    const ground = moveVectorStage(0.5, 0, 0.5);
+    expect(ground.mark.y).toBe(ground.foot.y);
+    const raised = moveVectorStage(0.5, 1, 0.5);
+    expect(raised.mark.y).toBeLessThan(ground.mark.y);
+    // a downward y is the other way up: its zero is the top
+    expect(moveVectorStage(0.5, 0, 0.5, true).mark.y).toBe(raised.mark.y);
+    // never clipped: the top of the mark stays inside the stage
+    expect(raised.mark.y - raised.mark.r).toBeGreaterThanOrEqual(0);
+  });
+
+  it('clamps out-of-range inputs onto the stage', () => {
+    expect(moveVectorStage(-1, 2, 5)).toEqual(moveVectorStage(0, 1, 1));
   });
 });
