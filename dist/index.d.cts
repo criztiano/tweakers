@@ -88,6 +88,14 @@ interface MovePanelProps {
      */
     headerStart?: React.ReactNode;
     /**
+     * View-owned status placed at the far end of the header, after the function
+     * chips — where the instrument's own time indicator sits. A view whose app
+     * keeps the clock itself (an app transport rather than a timeline or a
+     * waveform) puts it here, so the reading is always the last thing on the row
+     * and every button stands to its left.
+     */
+    headerEnd?: React.ReactNode;
+    /**
      * Where the attached-function chips sit (see `MoveFunctionChips`): every
      * function the app attaches renders as a chip that runs the same handler
      * as the hardware key. `clock` (the default) puts the row immediately
@@ -210,7 +218,7 @@ declare const MOVE_SETTINGS_EVENT = "move-tweakers:settings";
  * are the eight the dials are holding, their pads with them, so all of them
  * can be reached without a single one shrinking to a chip.
  */
-declare function MovePanel({ theme, productionEnabled, panels: only, dock, scroll, focused, headerStart, settings, functionChips }: MovePanelProps): react_jsx_runtime.JSX.Element | null;
+declare function MovePanel({ theme, productionEnabled, panels: only, dock, scroll, focused, headerStart, headerEnd, settings, functionChips }: MovePanelProps): react_jsx_runtime.JSX.Element | null;
 
 interface MoveSlotProps {
     /** The registered panel the control lives in — its id or its name. */

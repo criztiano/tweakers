@@ -98,6 +98,14 @@ export interface MovePanelProps {
    */
   headerStart?: React.ReactNode;
   /**
+   * View-owned status placed at the far end of the header, after the function
+   * chips — where the instrument's own time indicator sits. A view whose app
+   * keeps the clock itself (an app transport rather than a timeline or a
+   * waveform) puts it here, so the reading is always the last thing on the row
+   * and every button stands to its left.
+   */
+  headerEnd?: React.ReactNode;
+  /**
    * Where the attached-function chips sit (see `MoveFunctionChips`): every
    * function the app attaches renders as a chip that runs the same handler
    * as the hardware key. `clock` (the default) puts the row immediately
@@ -363,7 +371,7 @@ export const MOVE_SETTINGS_EVENT = 'move-tweakers:settings';
  * are the eight the dials are holding, their pads with them, so all of them
  * can be reached without a single one shrinking to a chip.
  */
-export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport', scroll = false, focused = false, headerStart, settings, functionChips = 'clock' }: MovePanelProps) {
+export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport', scroll = false, focused = false, headerStart, headerEnd, settings, functionChips = 'clock' }: MovePanelProps) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [track, setTrack] = useState(0);
@@ -1478,7 +1486,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // business.) Nothing registered and nothing attached = no cluster, header
   // unchanged.
   const volumeReading = liveValue ?? volume?.value;
-  const headerCluster = (timelineClaimed || waveClaimed || volume || functionChips === 'clock') && (
+  const headerCluster = (timelineClaimed || waveClaimed || volume || headerEnd || functionChips === 'clock') && (
     <div className="tweakers-move-actions">
       {functionChips === 'clock' && <MoveFunctionChips />}
       {timelineClaimed ? (
@@ -1494,6 +1502,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
           <span className="tweakers-move-volume-value">{boldColons(volumeReading ?? volume.label ?? '')}</span>
         </div>
       )}
+      {headerEnd}
     </div>
   );
 

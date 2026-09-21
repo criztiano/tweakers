@@ -12949,7 +12949,7 @@ var MOVE_MUTE_EVENT = "move-tweakers:mute";
 var MOVE_SEARCH_EVENT = "move-tweakers:search";
 var MOVE_STRIP_EVENT = "move-tweakers:strip";
 var MOVE_SETTINGS_EVENT = "move-tweakers:settings";
-function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only, dock = "viewport", scroll = false, focused = false, headerStart, settings: settings2, functionChips = "clock" }) {
+function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only, dock = "viewport", scroll = false, focused = false, headerStart, headerEnd, settings: settings2, functionChips = "clock" }) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = (0, import_react16.useState)([]);
   const [track, setTrack] = (0, import_react16.useState)(0);
@@ -13693,13 +13693,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const stripFrom = stripMode ? stripSlotIndex(page, stripOffset) : 0;
   const stripTo = stripMode ? stripSlotIndex(page, stripOffset + MOVE_DIALS) : 0;
   const volumeReading = liveValue ?? volume?.value;
-  const headerCluster = (timelineClaimed || waveClaimed || volume || functionChips === "clock") && /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "tweakers-move-actions", children: [
+  const headerCluster = (timelineClaimed || waveClaimed || volume || headerEnd || functionChips === "clock") && /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "tweakers-move-actions", children: [
     functionChips === "clock" && /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(MoveFunctionChips, {}),
     timelineClaimed ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(MoveTimelineClock, {}) : waveClaimed ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(MoveWaveClock, {}) : volume && /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "tweakers-move-volume", children: [
       /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "tweakers-move-volume-tick", style: { background: MOVE_TRACK_COLORS[0] } }),
       volume.label && volumeReading != null && /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "tweakers-move-volume-label", children: volume.label }),
       /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("span", { className: "tweakers-move-volume-value", children: boldColons(volumeReading ?? volume.label ?? "") })
-    ] })
+    ] }),
+    headerEnd
   ] });
   const content = /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-dock": dock, children: [
     /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
