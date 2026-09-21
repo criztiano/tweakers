@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { TweakStore } from '../src/store/TweakStore';
-import { MoveAgentStore, applyAgentWrites, describeAgentControls, restoreAgentWrites } from '../src/move-agent';
+import { MoveAgentStore, applyAgentWrites, describeAgentControls, restoreAgentWrites, runAgentActions, type MoveAgentAction } from '../src/move-agent';
 
 const PANEL = 'agent-test';
 const register = () => TweakStore.registerPanel(PANEL, 'Look', {
@@ -12,7 +12,7 @@ const register = () => TweakStore.registerPanel(PANEL, 'Look', {
   tint: { type: 'color', default: '#ff0000' },
 });
 
-afterEach(() => { MoveAgentStore.close(); TweakStore.unregisterPanel(PANEL); });
+afterEach(() => { MoveAgentStore.close(); MoveAgentStore.configure({ actions: undefined, scene: undefined, brief: undefined, ask: undefined }); TweakStore.unregisterPanel(PANEL); });
 
 describe('the agent reads the store', () => {
   it('describes every writable value with its limits and where it stands', () => {
@@ -75,6 +75,62 @@ describe('the agent writes through the store', () => {
     MoveAgentStore.open();
     await MoveAgentStore.ask('anything');
     expect(MoveAgentStore.getView()).toMatchObject({ phase: 'error', message: 'The Move bridge is not answering.' });
+    expect(TweakStore.getValue(PANEL, 'blur')).toBe(4);
+  });
+});
+
+describe('the agent uses the app\'s verbs', () => {
+  const timeline = () => {
+    const clips = ['intro', 'interview', 'beach'];
+    const actions: MoveAgentAction[] = [
+      { id: 'move', label: 'Move clip', params: { clip: { type: 'string', options: ['intro', 'interview', 'beach'] }, index: { type: 'number', min: 0, max: 2, step: 1 } },
+        run: ({ clip, index }) => {
+          const was = [...clips];
+          clips.splice(clips.indexOf(clip as string), 1);
+          clips.splice(index as number, 0, clip as string);
+          return () => { clips.splice(0, clips.length, ...was); };
+        } },
+      { id: 'export', label: 'Export', run: () => { throw new Error('disk full'); } },
+    ];
+    return { clips, actions };
+  };
+
+  it('fits the arguments, skips what does not fit, and hands back the undos', async () => {
+    const { clips, actions } = timeline();
+    const result = await runAgentActions([
+      { id: 'move', params: { clip: 'beach', index: 0.6 } },      // stepped to 1
+      { id: 'move', params: { clip: 'nobody', index: 0 } },       // not an option
+      { id: 'move', params: { clip: 'intro' } },                  // an argument missing
+      { id: 'erase', params: {} },                                // never offered
+    ], actions);
+    expect(result).toMatchObject({ ran: 1, undoable: true });
+    expect(clips).toEqual(['intro', 'beach', 'interview']);
+  });
+
+  it('stops at a verb that fails, and says which', async () => {
+    const { clips, actions } = timeline();
+    const result = await runAgentActions([{ id: 'export' }, { id: 'move', params: { clip: 'beach', index: 0 } }], actions);
+    expect(result).toMatchObject({ ran: 0, error: 'Export: disk full' });
+    expect(clips).toEqual(['intro', 'interview', 'beach']);
+  });
+
+  it('sends the brief, the scene and the verbs, runs them before the writes, and undoes both', async () => {
+    register();
+    const { clips, actions } = timeline();
+    let asked: any;
+    MoveAgentStore.configure({ panels: 'Look', brief: 'Punchy means more blur.', actions, scene: () => ({ clips: [...clips] }), ask: async (request) => {
+      asked = request;
+      return { actions: [{ id: 'move', params: { clip: 'beach', index: 0 } }], writes: [{ id: `${PANEL}::blur`, value: 9 }], message: 'Done.' };
+    } });
+    MoveAgentStore.open();
+    await MoveAgentStore.ask('beach first, punchy');
+    expect(asked).toMatchObject({ brief: 'Punchy means more blur.', scene: { clips: ['intro', 'interview', 'beach'] } });
+    expect(asked.actions[0]).toMatchObject({ id: 'move', label: 'Move clip' });
+    expect(asked.actions[0].run).toBeUndefined();
+    expect(MoveAgentStore.getView()).toMatchObject({ phase: 'done', changed: 1, acted: 1 });
+    expect(clips).toEqual(['beach', 'intro', 'interview']);
+    await MoveAgentStore.undo();
+    expect(clips).toEqual(['intro', 'interview', 'beach']);
     expect(TweakStore.getValue(PANEL, 'blur')).toBe(4);
   });
 });

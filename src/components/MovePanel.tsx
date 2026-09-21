@@ -942,10 +942,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       MoveAgentStore.toggle(agentFocus.current);
     };
     const onJogClick = (e: Event) => {
-      if (MoveAgentStore.getView()?.phase !== 'done' || !MoveAgentStore.canUndo()) return;
+      const view = MoveAgentStore.getView();
+      if (!view || view.phase === 'thinking' || !(view.changed || view.acted) || !MoveAgentStore.canUndo()) return;
       e.preventDefault();
       e.stopImmediatePropagation();
-      MoveAgentStore.undo();
+      void MoveAgentStore.undo();
     };
     window.addEventListener(MOVE_JOG_HOLD_EVENT, onHold);
     window.addEventListener(MOVE_JOG_CLICK_EVENT, onJogClick, { capture: true });
@@ -3611,9 +3612,10 @@ function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const thinking = view.phase === 'thinking';
   useEffect(() => { if (!thinking) inputRef.current?.select(); }, [thinking]);
-  const changed = view.phase === 'done' && view.changed > 0;
-  const note = thinking ? 'Turning the dials…'
-    : [changed ? `${view.changed} ${view.changed === 1 ? 'value' : 'values'} changed.` : '', view.message].filter(Boolean).join(' ');
+  const changed = view.phase !== 'thinking' && (view.changed > 0 || view.acted > 0);
+  const count = (n: number, one: string, many: string) => (n ? `${n} ${n === 1 ? one : many}` : '');
+  const did = [count(view.acted, 'action', 'actions'), count(view.changed, 'value changed', 'values changed')].filter(Boolean).join(', ');
+  const note = thinking ? 'Turning the dials…' : [did && `${did}.`, view.message].filter(Boolean).join(' ');
   return (
     <div className="tweakers-move-preset-save tweakers-move-agent" data-phase={view.phase}>
       <input
@@ -3630,14 +3632,14 @@ function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
           e.stopPropagation();
           if (e.key === 'Enter') void MoveAgentStore.ask(e.currentTarget.value);
           else if (e.key === 'Escape') MoveAgentStore.close();
-          else if (e.key === 'z' && (e.metaKey || e.ctrlKey) && changed) { e.preventDefault(); MoveAgentStore.undo(); }
+          else if (e.key === 'z' && (e.metaKey || e.ctrlKey) && changed) { e.preventDefault(); void MoveAgentStore.undo(); }
         }}
       />
       {note && (
         <p className="tweakers-move-agent-note" role="status">
           {note}
           {changed && MoveAgentStore.canUndo() && (
-            <button type="button" className="tweakers-move-agent-undo" onClick={() => MoveAgentStore.undo()}>Undo</button>
+            <button type="button" className="tweakers-move-agent-undo" onClick={() => void MoveAgentStore.undo()}>Undo</button>
           )}
         </p>
       )}

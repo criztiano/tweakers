@@ -172,7 +172,7 @@ it does not prove the build is current. The explicit build gate above does that.
 - Both directions of state sync verified after preset/undo.
 - Binding, function listeners, timers and subscriptions cleaned up.
 - Snapshot provenance, full vendor package and matching lockfile committed.
-- The agent: `agent: { context }` set on the bind, `describeAgentControls()` read cold for labels that need a hint, five real asks tried ([the agent](agent.md)).
+- The agent: `context` set; `describeAgentControls()` read cold for labels that need a hint; a brief and actions each evaluated and the decision stated; every content-changing action returns its undo; five real asks tried ([the agent](agent.md)).
 
 ### Settings view (Set Overview)
 
