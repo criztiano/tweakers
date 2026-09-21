@@ -17,8 +17,10 @@ The agent reads the store, not the app. `describeAgentControls()` lists each
 writable value of every registered panel — label, group, range, step, unit,
 options, hint, current value — with pairs split per axis (`point:x`). Sliders,
 numbers, toggles, selects, xy pads, ranges, filters, colours and text are
-covered; disabled controls are left out. Labels and hints are what the agent
-reasons from, so a well-named panel is a well-driven one.
+covered; disabled controls are left out, and so is a column held open with
+`moveBlank` — a seat, not a value (preset exploration leaves it out the same
+way). Labels and hints are what the agent reasons from, so a well-named panel
+is a well-driven one.
 
 Writes never land raw. `applyAgentWrites()` fits each one to its control
 (clamped, stepped, checked against the options), drops what fits nothing, and
@@ -34,6 +36,11 @@ m.bindMove(TweakStore, moveKitOptions({
   agent: { context: 'A video colour grader. Panels are per clip.' },
 }));
 ```
+
+`panels` names the pages the agent may touch by **id or name**, the id first
+— the same list the bind and `<MovePanel panels>` take
+(`TweakStore.selectPanels`). Prefer ids: a name is display copy, and a page
+named after what is on it changes under the bind.
 
 `context` is the least to add: a sentence on what the app is. The brief and
 the actions, below, are what make the agent good at *this* app. A host with
@@ -96,6 +103,51 @@ agent: {
 - Actions run first, in order, each awaited; the writes land after. A `run`
   that throws stops the rest and its message is shown.
 
+### What depends on the open file: a value, or a getter
+
+The bind is made once; the file, and the edit, change all day. So everything
+that depends on them takes **the value or a function that gives it**:
+
+| Option | Read |
+| --- | --- |
+| `actions`, `signals`, `tools` | at every ask, once, before the first pass |
+| a param's `options` (an action's or a tool's) | as each request is built, and again when the arguments are fitted |
+| a signal's or a tool's `cost` | as each request is built |
+| `scene`, `editMap`, a signal's `state` | fresh at every pass, as before |
+
+```ts
+agent: {
+  actions: () => (editor.open ? verbs : []),
+  tools: () => (editor.open?.kind === 'video' ? [look] : []),
+  signals: () => index.signals(),                       // the open file's menu
+  // inside a verb: params: { sample: { type: 'string', options: () => editor.sampleIds() } }
+}
+```
+
+A plain array or string works as it always did. Never call
+`MoveAgentStore.configure()` again to refresh any of this.
+
+### The edges of a request
+
+```ts
+agent: {
+  onRequest: {
+    begin: (prompt) => history.openGroup(prompt),       // before anything is read or sent; awaited
+    end: ({ changed, acted, skipped, cancelled, error }) => history.closeGroup(),
+  },
+}
+```
+
+`end` runs once for every `begin`, however the ask ended: landed, nothing to
+do, failed (`error` carries the note the user read) or let go (`cancelled`).
+`checkpoint` is not this: it runs only before an answer *with actions* lands
+— the host's save point — and a failure there lands nothing.
+
+An undo that cannot run should throw a short sentence ("The sample was
+changed by hand since."). The prompt shows the first one — `Could not undo:
+…` — and logs the rest with `console.warn`; "Some of it could not be undone."
+is what is left when the failure has no words.
+
 The agent plans the whole reply from one look at the scene; it does not see
 the result between steps. So give it verbs that **finish a job in one step**
 — `trim`, not split-then-delete-the-new-half, whose id it cannot know. Leave
@@ -120,15 +172,17 @@ agent: {
   editMap: () => clips.map((c) => ({ source: c.file, srcIn: c.in, srcOut: c.out, at: c.start })),
   // The host's own eyes and ears, for what no signal can answer.
   tools: [{
-    id: 'look', label: 'Look at the frames', progress: 'Looking at the frames…', kind: 'perceive',
+    id: 'look', label: 'Look at the frames', kind: 'perceive',
+    progress: 'Looking at the frames…',                                   // the step while it runs
+    done: (params, result) => `Looked at ${result.entries?.length ?? 0} frames`,   // the step once it has
     hint: 'A contact sheet of a timeline range. Only to check or refine a boundary.',
     params: { from: { type: 'number' }, to: { type: 'number' } },
-    run: async ({ from, to }, signal) => ({ text: 'Six frames…', images: [{ name: 'sheet.jpg', dataUrl }] }),
+    run: async ({ from, to }, signal) => ({ text: 'Six frames…', images: [{ name: 'sheet.jpg', dataUrl }], entries: frames }),
   }],
   // Verbs take a boundary, never a time.
   actions: [{
     id: 'trim_to', label: 'Trim to', params: { at: { type: 'boundary' } },
-    run: ({ at }) => editor.trimTo(at.source, at.sourceTime),        // at: { entry, edge, source, sourceTime, time? }
+    run: ({ at }) => editor.trimTo(at.source, at.sourceTime),        // at: { entry, edge, of, source, sourceTime, time? }
   }],
   checkpoint: () => project.save(),                 // once, before an answer with actions lands
 }
@@ -145,11 +199,17 @@ agent: {
   (`undefined` for a `whole` signal, or with no edit map). Cache per source.
 - **Boundaries, not times.** No model is frame-accurate; signal tools are. The
   agent names `{ entry, edge }` and `run` gets the entry's exact `sourceTime`,
-  plus `time` on the timeline when the edit holds that moment. An entry the
+  plus `time` on the timeline when the edit holds that moment, and `of` — the
+  entry itself, with its `type` and `label`, so a verb that snaps a bar but
+  not a frame reads `at.of.type` and never parses an id. An entry the
   request never saw is never guessed: the action is skipped and the note says
   so. Entries listed under `scene.entries` are known from the start.
 - **A few passes, one change.** With signals or tools, a reply may be calls;
-  the kit runs them at once, shows each as a step under the field, and asks
+  the kit runs them at once, shows each as a step under the field — a tool's
+  `progress` while it runs, its `done` once it has (a string, or a function of
+  the arguments and the result: "Looked at 12 frames"); `label` stays the
+  name the model reads, and the step's text when neither is given. The kit's
+  own read says how many entries it gave: "Read the shots — 14" — and asks
   again — three passes and 120 seconds at most (`maxPasses`). Nothing lands
   until the answer, so it is still one undo, and Esc mid-way leaves nothing.
 - Images are JPEG or PNG data URLs, 8 a pass, 600 KB each; the kit leaves out

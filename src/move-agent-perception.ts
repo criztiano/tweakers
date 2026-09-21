@@ -58,6 +58,8 @@ export interface MoveAgentSourceRange { source: string; t0: number; t1: number }
 export interface MoveAgentBoundaryRef { entry: string; edge: 'start' | 'end' }
 /** The same, resolved by the kit — what an action's `run` is handed. */
 export interface MoveAgentBoundary extends MoveAgentBoundaryRef {
+  /** The entry the boundary is an edge of, whole — its `type`, its `label`, its own `t0`/`t1` — so a host never reads them out of the id. */
+  of: MoveAgentEntry;
   source: string;
   /** Source seconds: exact, and true under any edit. */
   sourceTime: number;
@@ -70,14 +72,23 @@ export interface MoveAgentBoundary extends MoveAgentBoundaryRef {
 export type MoveAgentArg = MoveAgentParamValue | MoveAgentBoundary;
 
 export type MoveAgentSignalState = 'ready' | 'missing' | 'computing' | 'unavailable';
+/**
+ * What a host knows only with a file open, handed over as the value or as a
+ * function that gives it. A function is read fresh — at every ask, or when the
+ * request is built — so the host never has to say it again when the file or
+ * the edit changes.
+ */
+export type MoveAgentLive<T> = T | (() => T);
+export const readLive = <T>(live: MoveAgentLive<T>): T => (typeof live === 'function' ? (live as () => T)() : live);
+
 /** A named producer of entries for a source, computed only when asked for. */
 export interface MoveAgentSignal {
   id: string;
   label: string;
   /** What questions it answers — how the agent picks the cheapest route. */
   hint: string;
-  /** A short human hint: "about 20 s for this file". */
-  cost?: string;
+  /** A short human hint: "about 20 s for this file". A function is read as each request is built. */
+  cost?: MoveAgentLive<string | undefined>;
   /** Cannot be computed for a range: `read` is handed `undefined`. */
   whole?: boolean;
   state: () => MoveAgentSignalState;
@@ -95,12 +106,16 @@ export interface MoveAgentToolResult {
 /** One way for the agent to perceive, offered by the host: look, listen, search. */
 export interface MoveAgentTool {
   id: string;
+  /** The name the model reads. Also the step's text, when `progress` and `done` are left out. */
   label: string;
   hint: string;
   kind: 'read' | 'perceive';
-  cost?: string;
+  /** A function is read as each request is built. */
+  cost?: MoveAgentLive<string | undefined>;
   /** Shown while it runs: "Looking at the frames…". */
   progress?: string;
+  /** Shown once it has run, with what it found: "Looked at 12 frames". Handed the fitted arguments and the result. */
+  done?: string | ((params: Record<string, MoveAgentArg>, result: MoveAgentToolResult) => string);
   params?: Record<string, MoveAgentParam>;
   run(params: Record<string, MoveAgentArg>, signal: AbortSignal): Promise<MoveAgentToolResult>;
 }
@@ -178,6 +193,15 @@ export function formatAgentTime(seconds: number): string {
 /** Words that carry no meaning in a query: "vocals in" is a search for vocals. */
 const STOP_WORDS = new Set(['a', 'an', 'and', 'at', 'in', 'is', 'of', 'on', 'or', 'the', 'to']);
 
+/** The entries a query keeps, those that hold every word first — all of them when it finds none (`found` is then empty). */
+export function queryEntries(projected: MoveAgentProjectedEntry[], query?: string): { found: MoveAgentProjectedEntry[]; kept: MoveAgentProjectedEntry[] } {
+  const said = (query ?? '').toLowerCase().split(/[^\p{L}\p{N}']+/u).filter(Boolean);
+  const words = said.some((w) => !STOP_WORDS.has(w)) ? said.filter((w) => !STOP_WORDS.has(w)) : said;
+  const hits = (e: MoveAgentProjectedEntry) => { const text = `${e.label ?? ''} ${e.id} ${e.type}`.toLowerCase(); return words.filter((w) => text.includes(w)).length; };
+  const found = words.length ? projected.filter((e) => hits(e) > 0) : projected;
+  return { found, kept: found.length ? [...found.filter((e) => hits(e) === words.length), ...found.filter((e) => hits(e) < words.length)] : projected };
+}
+
 /**
  * Projected entries as the agent reads them, one to a line:
  * `shot:14 | shot | 01:12.480–01:15.200 | beach, two people | partial`.
@@ -192,11 +216,7 @@ const STOP_WORDS = new Set(['a', 'an', 'and', 'at', 'in', 'is', 'of', 'on', 'or'
  */
 export function formatEntries(projected: MoveAgentProjectedEntry[], options: { limit?: number; query?: string } = {}): string {
   if (!projected.length) return 'Nothing here.';
-  const said = (options.query ?? '').toLowerCase().split(/[^\p{L}\p{N}']+/u).filter(Boolean);
-  const words = said.some((w) => !STOP_WORDS.has(w)) ? said.filter((w) => !STOP_WORDS.has(w)) : said;
-  const hits = (e: MoveAgentProjectedEntry) => { const text = `${e.label ?? ''} ${e.id} ${e.type}`.toLowerCase(); return words.filter((w) => text.includes(w)).length; };
-  const found = words.length ? projected.filter((e) => hits(e) > 0) : projected;
-  const kept = found.length ? [...found.filter((e) => hits(e) === words.length), ...found.filter((e) => hits(e) < words.length)] : projected;
+  const { found, kept } = queryEntries(projected, options.query);
   const limit = Math.max(1, Math.floor(options.limit ?? 120));
   const lines = kept.slice(0, limit).map((e) => [
     e.id, e.type,
@@ -213,7 +233,8 @@ export function formatEntries(projected: MoveAgentProjectedEntry[], options: { l
  * seen; an id nobody has seen resolves to nothing, and is never guessed at.
  * `sourceTime` is the entry's own edge. `time` is where that moment plays on
  * the timeline — for a start, the segment it opens in; for an end, the one it
- * closes in — and is left out when the edit does not hold it. With no edit
+ * closes in — and is left out when the edit does not hold it. `of` is the
+ * entry itself, so `run` knows what kind of thing it was handed. With no edit
  * map (`segments` undefined) the timeline is the source, and the two agree.
  * Ids are source-scoped, so when two sources share one, the entry the edit
  * holds wins.
@@ -222,7 +243,7 @@ export function resolveBoundary(ref: MoveAgentBoundaryRef, known: MoveAgentEntry
   if (!ref || typeof ref.entry !== 'string' || (ref.edge !== 'start' && ref.edge !== 'end')) return undefined;
   const resolved = known.filter((e) => e.id === ref.entry && Number.isFinite(e.t0)).map((entry): MoveAgentBoundary => {
     const sourceTime = ref.edge === 'start' ? entry.t0 : entry.t1 !== undefined && entry.t1 > entry.t0 ? entry.t1 : entry.t0;
-    const base = { entry: ref.entry, edge: ref.edge, source: entry.source, sourceTime };
+    const base = { entry: ref.entry, edge: ref.edge, of: entry, source: entry.source, sourceTime };
     if (!segments) return { ...base, time: sourceTime };
     const held = segments.filter((s) => sound(s) && s.source === entry.source);
     const inside = (s: MoveAgentSegment) => (ref.edge === 'start'

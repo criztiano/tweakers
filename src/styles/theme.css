@@ -543,6 +543,14 @@
   z-index: 9990;
 }
 
+/* What floats above the panel — the preset's name, the agent's prompt — hangs
+   from the panel itself (`bottom: 100%`). A panel in the page's flow is the
+   box they hang from too: left static, they would hang from whatever the host
+   happens to have positioned, usually out of sight above the page. */
+.tweakers-move[data-dock="flow"] {
+  position: relative;
+}
+
 .tweakers-move-inner {
   /* Only occupied columns show: --move-cols (set inline by MovePanel) is
      how many. The header row and the grid share this width — N slots at
@@ -3725,6 +3733,15 @@
   border-radius: var(--move-radius);
   background: var(--move-bg);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+/* No room above the panel (it is docked high in the page): the box sits
+   inside the panel's top instead, over the header, where it can be typed in.
+   `data-inside` is set from a measurement (`moveFloatSitsInside`). */
+.tweakers-move-preset-save[data-inside] {
+  top: 10px;
+  bottom: auto;
+  z-index: 5;
 }
 
 .tweakers-move-preset-save-input {

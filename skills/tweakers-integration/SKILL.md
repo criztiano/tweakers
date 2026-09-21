@@ -261,7 +261,11 @@ to make and write down, not a box to tick.
    the console and read the list cold. Every label that needs the screen
    next to it to make sense ("Amt", "A", "Mode 2") is a control the agent
    will guess at. Fix the label or add a hint — the refinement pass's work,
-   now with a second reader.
+   now with a second reader. An empty list means the agent's `panels` match
+   nothing: name pages by **id** (names are display copy, and a page named
+   after what is on it changes) — the bind, the mirror and the agent all
+   take an id or a name, the id first. Held-open columns (`moveBlank`) are
+   never listed; do not write hints for them.
 3. **Evaluate a brief — always, and say what you decided.** Does this field
    have words whose meaning on these controls is not obvious (warm, punchy,
    filmic, tight, airy)? Limits a newcomer would break? Looks or sounds
@@ -276,6 +280,13 @@ to make and write down, not a box to tick.
    changes content. Prefer verbs that finish a job in one step: the agent
    plans from one look at the scene and cannot see between steps. Never
    fake a verb as a toggle to reach it, and leave out what has no way back.
+   **Anything that depends on the open file is a getter, not a value**:
+   `actions`, `signals`, `tools`, a param's `options` (the samples there are
+   now), a `cost`. The bind happens once, the file changes all day — never
+   call `MoveAgentStore.configure()` again to refresh them. To open and close
+   something around one ask (an undo group, a busy flag) use `onRequest`
+   (`begin`/`end`); `checkpoint` is only the save point before an edit lands.
+   An undo that cannot run throws a short sentence: the prompt shows it.
 5. **Evaluate perception — always, and say what you decided.** Does the app
    hold media the agent must understand to do its work (video, audio, a long
    document)? If not, say so and move on. If so, give it `signals` — what is
@@ -284,7 +295,10 @@ to make and write down, not a box to tick.
    wrong. Actions take a `boundary`, never a time: the agent names the edge
    of an entry, the host gets the exact second. Index nothing until asked:
    every signal is lazy, with an honest `state` and `cost`, cached per
-   source. Add a `look` or `listen` tool only for what no signal can answer.
+   source. Add a `look` or `listen` tool only for what no signal can answer,
+   and give it a `done` text that says what it found ("Looked at 12 frames")
+   — the step list is all the user sees of a long wait. A boundary arrives
+   with its entry (`at.of.type`, `at.of.label`): never parse an id.
 6. **Ask it five things a user of this app would say** — one nudge, one
    whole new look, one that names a control, one that names a feeling, one
    it cannot do; add one edit if it has actions. Watch what moves. A wrong

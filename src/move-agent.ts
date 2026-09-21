@@ -38,10 +38,10 @@ import { TweakStore } from './store/TweakStore';
 import type { ControlMeta, TweakValue } from './store/TweakStore';
 import { collectGenes, fitGene } from './preset-genetics';
 import type { GeneParameter } from './preset-genetics';
-import { formatEntries, projectEntries, resolveBoundary, timelineToSource } from './move-agent-perception';
+import { formatEntries, projectEntries, queryEntries, readLive, resolveBoundary, timelineToSource } from './move-agent-perception';
 import type {
-  MoveAgentArg, MoveAgentBoundary, MoveAgentBoundaryRef, MoveAgentEntry, MoveAgentPass, MoveAgentPassResult, MoveAgentProjectedEntry,
-  MoveAgentSegment, MoveAgentSignal, MoveAgentSignalInfo, MoveAgentTool, MoveAgentToolCall,
+  MoveAgentArg, MoveAgentBoundary, MoveAgentBoundaryRef, MoveAgentEntry, MoveAgentLive, MoveAgentPass, MoveAgentPassResult, MoveAgentProjectedEntry,
+  MoveAgentSegment, MoveAgentSignal, MoveAgentSignalInfo, MoveAgentTool, MoveAgentToolCall, MoveAgentToolResult,
 } from './move-agent-perception';
 
 /** The held wheel, from the bridge kit: cancelable, like every overlay gesture. */
@@ -69,8 +69,8 @@ export interface MoveAgentParam {
   type: 'number' | 'string' | 'boolean' | 'boundary';
   hint?: string;
   min?: number; max?: number; step?: number;
-  /** A string that must be one of these. */
-  options?: string[];
+  /** A string that must be one of these. A function is read as each request is built — the samples there are now. */
+  options?: MoveAgentLive<string[] | undefined>;
   /** May be left out. */
   optional?: boolean;
 }
@@ -86,6 +86,12 @@ export interface MoveAgentAction {
   run(params: Record<string, MoveAgentArg>): MoveAgentActionResult | Promise<MoveAgentActionResult>;
 }
 export interface MoveAgentCall { id: string; params?: Record<string, MoveAgentParamValue | MoveAgentBoundaryRef> }
+/** A param as it travels: its options and nothing to call. */
+export type MoveAgentParamInfo = Omit<MoveAgentParam, 'options'> & { options?: string[] };
+export type MoveAgentActionInfo = Omit<MoveAgentAction, 'run' | 'params'> & { params?: Record<string, MoveAgentParamInfo> };
+export type MoveAgentToolInfo = Omit<MoveAgentTool, 'run' | 'progress' | 'done' | 'cost' | 'params'> & { cost?: string; params?: Record<string, MoveAgentParamInfo> };
+/** How one ask ended, for the host that opened something at `begin`. */
+export interface MoveAgentOutcome { changed: number; acted: number; skipped: number; cancelled: boolean; error?: string }
 export interface MoveAgentRequest {
   prompt: string;
   context?: string;
@@ -96,9 +102,9 @@ export interface MoveAgentRequest {
   /** What the actions act on — the clips, the layers — as the host tells it. */
   scene?: unknown;
   controls: MoveAgentControl[];
-  actions?: Omit<MoveAgentAction, 'run'>[];
+  actions?: MoveAgentActionInfo[];
   /** The ways to perceive on offer — only to a transport that can take passes. */
-  tools?: Omit<MoveAgentTool, 'run' | 'progress'>[];
+  tools?: MoveAgentToolInfo[];
   /** The signal menu: what could be read, its state and its cost. */
   signals?: MoveAgentSignalInfo[];
   /** The passes so far: what was called, and what came back. */
@@ -122,22 +128,28 @@ export interface MoveAgentOptions {
   context?: string;
   /** A page on the field — what its words mean here, what never to do, a few recipes. */
   brief?: string;
-  /** The app's verbs. Nothing is offered that is not listed here. */
-  actions?: MoveAgentAction[];
+  /** The app's verbs. Nothing is offered that is not listed here. A function is read at every ask. */
+  actions?: MoveAgentLive<MoveAgentAction[] | undefined>;
   /** What the actions act on, read fresh at every ask. Keep it small and plain. */
   scene?: () => unknown;
   /** The panels the agent may touch — same selection the panel mirror takes. */
   panels?: string | string[];
-  /** What is in the media, in SOURCE time. Nothing is computed until the agent asks. */
-  signals?: MoveAgentSignal[];
+  /** What is in the media, in SOURCE time. Nothing is computed until the agent asks. A function is read at every ask — the open file's menu. */
+  signals?: MoveAgentLive<MoveAgentSignal[] | undefined>;
   /** The edit as it stands — which piece of which source plays where. Read fresh at every pass. */
   editMap?: () => MoveAgentSegment[];
-  /** The host's own perception: look, listen, search. */
-  tools?: MoveAgentTool[];
+  /** The host's own perception: look, listen, search. A function is read at every ask — eyes only while a picture is open. */
+  tools?: MoveAgentLive<MoveAgentTool[] | undefined>;
   /** How many turns one ask may take, the answer included. Default 3. */
   maxPasses?: number;
   /** Called once before an answer with actions lands — the host's save point. */
   checkpoint?: () => void | Promise<void>;
+  /**
+   * The edges of one ask. `begin` runs before anything is read or sent, and is
+   * awaited; `end` runs once for every `begin`, however the ask ended — landed,
+   * nothing to do, failed (`error`), or let go (`cancelled`).
+   */
+  onRequest?: { begin?: (prompt: string) => void | Promise<void>; end?: (outcome: MoveAgentOutcome) => void };
 }
 
 export type MoveAgentPhase = 'prompt' | 'thinking' | 'done' | 'error';
@@ -258,7 +270,7 @@ function fitParams(declared: Record<string, MoveAgentParam> | undefined, given: 
       let n = Math.max(p.min ?? -Infinity, Math.min(p.max ?? Infinity, v as number));
       if (p.step && p.step > 0) n = (p.min ?? 0) + Math.round((n - (p.min ?? 0)) / p.step) * p.step;
       v = n;
-    } else if (p.options && !p.options.includes(v as string)) return undefined;
+    } else { const options = readLive(p.options); if (options && !options.includes(v as string)) return undefined; }
     out[name] = v as MoveAgentParamValue;
   }
   return out;
@@ -309,6 +321,18 @@ const abortable = <T>(work: Promise<T> | T, signal: AbortSignal): Promise<T> => 
   Promise.resolve(work).then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
 });
 
+/** Params as they travel: every live list read now. */
+const describeParams = (params?: Record<string, MoveAgentParam>): Record<string, MoveAgentParamInfo> | undefined => params
+  && Object.fromEntries(Object.entries(params).map(([name, { options, ...p }]): [string, MoveAgentParamInfo] => { const now = readLive(options); return [name, now ? { ...p, options: now } : p]; }));
+const describeAction = ({ run: _run, params, ...a }: MoveAgentAction): MoveAgentActionInfo => (params ? { ...a, params: describeParams(params) } : a);
+const describeTool = ({ run: _run, progress: _progress, done: _done, cost, params, ...t }: MoveAgentTool): MoveAgentToolInfo => {
+  const now = readLive(cost);
+  return { ...t, ...(now ? { cost: now } : {}), ...(params ? { params: describeParams(params) } : {}) };
+};
+
+/** What `read_signal` hands back, with how many entries the agent was given — the step says it. */
+interface ReadSignalResult extends MoveAgentToolResult { count: number }
+
 const isEntry = (e: unknown): e is MoveAgentEntry => !!e && typeof e === 'object'
   && typeof (e as MoveAgentEntry).id === 'string' && typeof (e as MoveAgentEntry).source === 'string' && Number.isFinite((e as MoveAgentEntry).t0);
 
@@ -329,18 +353,25 @@ function readSignalTool(signals: MoveAgentSignal[], editMap?: () => MoveAgentSeg
       to: { type: 'number', min: 0, optional: true, hint: 'timeline seconds' },
       query: { type: 'string', optional: true, hint: 'optional — one or two plain words' },
     },
-    run: async (params, abort) => {
+    done: (params, result) => {
+      const label = signals.find((s) => s.id === params.signal)?.label.toLowerCase() ?? 'signal';
+      const count = (result as Partial<ReadSignalResult>).count;
+      return count === undefined ? `Read the ${label}` : `Read the ${label} — ${count}`;
+    },
+    run: async (params, abort): Promise<ReadSignalResult> => {
       const chosen = signals.find((s) => s.id === params.signal)!;
-      if (chosen.state() === 'unavailable') throw new Error(`${chosen.label} cannot be read here${chosen.cost ? ` (${chosen.cost})` : ''}.`);
+      const cost = readLive(chosen.cost);
+      if (chosen.state() === 'unavailable') throw new Error(`${chosen.label} cannot be read here${cost ? ` (${cost})` : ''}.`);
       const from = params.from as number | undefined, to = params.to as number | undefined;
       const segments = editMap?.();
       const held = segments && timelineToSource({ from, to }, segments);
-      if (held && !held.length) return { text: 'Nothing of the edit is in that range.' };
+      if (held && !held.length) return { text: 'Nothing of the edit is in that range.', count: 0 };
       const entries = (await chosen.read(chosen.whole ? undefined : held, abort)).filter(isEntry);
       const projected: MoveAgentProjectedEntry[] = segments ? projectEntries(entries, segments)
         : entries.map((e) => ({ ...e, at0: e.t0, ...(e.t1 !== undefined && e.t1 > e.t0 ? { at1: e.t1 } : {}) })).sort((a, b) => a.at0 - b.at0);
       const inRange = projected.filter((e) => (e.at1 ?? e.at0) >= (from ?? -Infinity) && e.at0 <= (to ?? Infinity));
-      return { text: formatEntries(inRange, { query: params.query as string | undefined }), entries };
+      const query = params.query as string | undefined;
+      return { text: formatEntries(inRange, { query }), entries, count: queryEntries(inRange, query).kept.length };
     },
   };
 }
@@ -408,21 +439,25 @@ class MoveAgentStoreClass {
   async ask(prompt: string): Promise<void> {
     const text = prompt.trim();
     if (!this.view || !text || this.view.phase === 'thinking') return;
-    const controls = describeAgentControls(this.options.panels);
-    const actions = this.options.actions ?? [];
     const idle = { prompt: text, message: '', changed: 0, acted: 0, skipped: 0, steps: [] as MoveAgentStep[] };
-    if (!controls.length && !actions.length) { this.set({ ...idle, phase: 'error', message: 'Nothing here to turn.' }); return; }
     const flight = (this.flight = new AbortController());
     this.set({ ...idle, phase: 'thinking' });
     let late = false;
     const budget = setTimeout(() => { late = true; flight.abort(); }, BUDGET_MS);
+    const { onRequest } = this.options;
+    const outcome: MoveAgentOutcome = { changed: 0, acted: 0, skipped: 0, cancelled: false };
     try {
+      await abortable(onRequest?.begin?.(text), flight.signal);
+      // What depends on the open file is read now, once, for the whole ask.
+      const controls = describeAgentControls(this.options.panels);
+      const actions = readLive(this.options.actions) ?? [];
+      if (!controls.length && !actions.length) throw new Error('Nothing here to turn.');
       const focus = this.focus && TweakStore.getPanel(this.focus)?.name;
-      const signals = this.options.signals ?? [], editMap = this.options.editMap;
+      const signals = readLive(this.options.signals) ?? [], hostTools = readLive(this.options.tools) ?? [], editMap = this.options.editMap;
       // Senses are offered only to a transport that can take passes; to any
       // other the ask is what it always was — one request, one reply.
-      const caps = signals.length || this.options.tools?.length ? await this.capable(flight.signal) : null;
-      const tools = caps ? [...(signals.length ? [readSignalTool(signals, editMap)] : []), ...(this.options.tools ?? []).filter((t) => t.id !== READ_SIGNAL)] : [];
+      const caps = signals.length || hostTools.length ? await this.capable(flight.signal) : null;
+      const tools = caps ? [...(signals.length ? [readSignalTool(signals, editMap)] : []), ...hostTools.filter((t) => t.id !== READ_SIGNAL)] : [];
       const maxPasses = tools.length ? Math.max(1, Math.floor(Math.min(this.options.maxPasses ?? 3, caps?.maxPasses ?? Infinity))) : 1;
       // Every entry this request has seen: what a boundary may name.
       const known: MoveAgentEntry[] = [], seen = new Set<string>();
@@ -442,10 +477,10 @@ class MoveAgentStoreClass {
         const passesLeft = maxPasses - pass;
         reply = await abortable((this.options.ask ?? this.askBridge)({
           prompt: text, context: this.options.context, brief: this.options.brief, focus, scene, controls,
-          actions: actions.length ? actions.map(({ run: _run, ...described }) => described) : undefined,
+          actions: actions.length ? actions.map(describeAction) : undefined,
           ...(tools.length ? {
-            tools: tools.map(({ run: _run, progress: _progress, ...described }) => described),
-            signals: signals.length ? signals.map(({ id, label, hint, cost, state }): MoveAgentSignalInfo => ({ id, label, hint, state: state(), cost })) : undefined,
+            tools: tools.map(describeTool),
+            signals: signals.length ? signals.map(({ id, label, hint, cost, state }): MoveAgentSignalInfo => ({ id, label, hint, state: state(), cost: readLive(cost) })) : undefined,
             history: history.length ? history : undefined,
             passesLeft,
           } : {}),
@@ -457,11 +492,12 @@ class MoveAgentStoreClass {
       const calls = reply.actions ?? [];
       if (calls.length && this.options.checkpoint) await abortable(this.options.checkpoint(), flight.signal);
       clearTimeout(budget);
-      if (flight.signal.aborted) return;
+      if (flight.signal.aborted) { outcome.cancelled = true; return; }
       // Actions first: a verb may reshape what the values then land on.
       const acted = await runAgentActions(calls, actions, resolve);
       const { before, changed } = applyAgentWrites(reply.writes ?? [], this.options.panels);
       if (changed || acted.ran) { this.before = changed ? before : null; this.undos = acted.undos; }
+      Object.assign(outcome, { changed, acted: acted.ran, skipped: acted.skipped }, acted.error ? { error: acted.error } : {});
       const moved = changed > 0 || acted.ran > 0;
       const unanswered = !moved && !!reply.calls?.length && tools.length > 0;
       if (this.view) this.set({
@@ -469,11 +505,14 @@ class MoveAgentStoreClass {
         message: acted.error ?? (reply.message || (unanswered ? 'It kept looking and ran out of passes. Nothing changed.' : moved ? '' : 'Nothing changed.')),
       });
     } catch (error) {
-      if (flight.signal.aborted && !late) return;
-      if (this.view) this.set({ ...idle, steps: this.view.steps, phase: 'error', message: late ? 'That took too long, so it was stopped. Nothing changed.' : error instanceof Error ? error.message : 'The agent did not answer.' });
+      if (flight.signal.aborted && !late) { outcome.cancelled = true; return; }
+      outcome.error = late ? 'That took too long, so it was stopped. Nothing changed.' : error instanceof Error ? error.message : 'The agent did not answer.';
+      if (this.view) this.set({ ...idle, steps: this.view.steps, phase: 'error', message: outcome.error });
     } finally {
       clearTimeout(budget);
       if (this.flight === flight) this.flight = null;
+      // The host's own end must not break the ask it closes.
+      try { onRequest?.end?.(outcome); } catch (error) { console.warn('tweakers agent: onRequest.end failed', error); }
     }
   }
 
@@ -484,11 +523,21 @@ class MoveAgentStoreClass {
    */
   private async perceive(calls: MoveAgentToolCall[], tools: MoveAgentTool[], signals: MoveAgentSignal[], resolve: ResolveBoundary, learn: (found: unknown) => void, images: boolean, signal: AbortSignal): Promise<MoveAgentPass> {
     const first = this.view?.steps.length ?? 0;
-    const name = (call: MoveAgentToolCall, running: boolean) => {
+    const running = (call: MoveAgentToolCall) => {
       const tool = tools.find((t) => t.id === call.tool);
       const read = call.tool === READ_SIGNAL && signals.find((s) => s.id === call.params?.signal)?.label.toLowerCase();
-      if (read) return running ? `Reading the ${read}…` : `Read the ${read}`;
-      return tool ? (running ? tool.progress ?? `${tool.label}…` : tool.label) : call.tool;
+      if (read) return `Reading the ${read}…`;
+      return tool ? tool.progress ?? `${tool.label}…` : call.tool;
+    };
+    // The finished text, per call: the tool's `done` with what it found, its label without one.
+    const finished: string[] = calls.map((call) => {
+      const tool = tools.find((t) => t.id === call.tool);
+      const read = call.tool === READ_SIGNAL && signals.find((s) => s.id === call.params?.signal)?.label.toLowerCase();
+      return read ? `Read the ${read}` : tool?.label ?? call.tool;
+    });
+    const said = (tool: MoveAgentTool, params: Record<string, MoveAgentArg>, result: MoveAgentToolResult): string | undefined => {
+      if (typeof tool.done !== 'function') return tool.done;
+      try { return tool.done(params, result) || undefined; } catch { return undefined; }
     };
     const mark = (index: number, step: MoveAgentStep) => {
       if (!this.view || signal.aborted) return;
@@ -496,7 +545,7 @@ class MoveAgentStoreClass {
       steps[first + index] = step;
       this.set({ ...this.view, steps });
     };
-    if (this.view) this.set({ ...this.view, steps: [...this.view.steps, ...calls.map((call): MoveAgentStep => ({ label: name(call, true), state: 'running' }))] });
+    if (this.view) this.set({ ...this.view, steps: [...this.view.steps, ...calls.map((call): MoveAgentStep => ({ label: running(call), state: 'running' }))] });
     const results = await Promise.all(calls.map(async (call, index): Promise<MoveAgentPassResult> => {
       try {
         const tool = tools.find((t) => t.id === call.tool);
@@ -505,17 +554,18 @@ class MoveAgentStoreClass {
         if (!params) throw new Error('The arguments do not fit what the tool takes.');
         const result = await abortable(tool.run(params, signal), signal) ?? {};
         learn(result.entries);
-        mark(index, { label: name(call, false), state: 'done' });
+        finished[index] = said(tool, params, result) ?? finished[index];
+        mark(index, { label: finished[index], state: 'done' });
         return { tool: call.tool, text: result.text, images: result.images };
       } catch (error) {
         if (signal.aborted) throw error;
-        mark(index, { label: name(call, false), state: 'failed' });
+        mark(index, { label: finished[index], state: 'failed' });
         return { tool: call.tool, error: error instanceof Error ? error.message : 'failed' };
       }
     }));
     // A look whose pictures cannot travel has not shown the agent anything: the step says so.
     const trimmed = trimImages(results, images);
-    trimmed.left.forEach((n, index) => { if (n) mark(index, { label: `${name(calls[index], false)} — ${leftOut(n, images)}`, state: trimmed.results[index].images ? 'done' : 'failed' }); });
+    trimmed.left.forEach((n, index) => { if (n) mark(index, { label: `${finished[index]} — ${leftOut(n, images)}`, state: trimmed.results[index].images ? 'done' : 'failed' }); });
     return { calls: calls.map(({ tool, params }) => ({ tool, params })), results: trimmed.results };
   }
 
@@ -553,9 +603,13 @@ class MoveAgentStoreClass {
     this.before = null;
     this.undos = [];
     if (before) restoreAgentWrites(before);
-    let failed = false;
-    for (const undo of undos.reverse()) { try { await undo(); } catch { failed = true; } }
-    if (this.view) this.set({ ...this.view, phase: 'prompt', message: failed ? 'Some of it could not be undone.' : 'Undone.', changed: 0, acted: 0, skipped: 0, steps: [] });
+    // The first reason is the one the user reads; the rest are kept where they can be found.
+    const failures: unknown[] = [];
+    for (const undo of undos.reverse()) { try { await undo(); } catch (error) { failures.push(error); } }
+    for (const error of failures.slice(1)) console.warn('tweakers agent: an undo failed', error);
+    const reason = failures[0] instanceof Error ? failures[0].message.trim() : typeof failures[0] === 'string' ? failures[0].trim() : '';
+    const message = !failures.length ? 'Undone.' : reason ? `Could not undo: ${reason}` : 'Some of it could not be undone.';
+    if (this.view) this.set({ ...this.view, phase: 'prompt', message, changed: 0, acted: 0, skipped: 0, steps: [] });
   }
 
   private askBridge: MoveAgentAsk = async (request, signal) => {

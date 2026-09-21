@@ -98,14 +98,14 @@ describe('the agent takes a few passes', () => {
       results: [{ tool: 'look', text: '4 tiles', images: [{ name: 'sheet.png', dataUrl: 'data:image/png;base64,AAAA' }] }],
     });
     // The tool got its arguments fitted, and its boundary already a time.
-    expect(looked).toEqual([{ around: { entry: 'shot:2', edge: 'end', source: 'a.mov', sourceTime: 30 }, n: 12 }]);
+    expect(looked).toEqual([{ around: { entry: 'shot:2', edge: 'end', of: SHOTS[1], source: 'a.mov', sourceTime: 30 }, n: 12 }]);
 
     expect(labels[0]).toEqual(['Reading the shots… · running']);
-    expect(labels[labels.length - 1]).toEqual(['Read the shots · done', 'Look at the frames · done']);
-    expect(labels).toContainEqual(['Read the shots · done', 'Looking at the frames… · running']);
+    expect(labels[labels.length - 1]).toEqual(['Read the shots — 1 · done', 'Look at the frames · done']);
+    expect(labels).toContainEqual(['Read the shots — 1 · done', 'Looking at the frames… · running']);
 
     expect(MoveAgentStore.getView()).toMatchObject({ phase: 'done', changed: 1, acted: 1, skipped: 0, message: 'Trimmed to the beach.' });
-    expect(trims).toEqual([{ entry: 'shot:2', edge: 'end', source: 'a.mov', sourceTime: 30 }]);
+    expect(trims).toEqual([{ entry: 'shot:2', edge: 'end', of: SHOTS[1], source: 'a.mov', sourceTime: 30 }]);
     expect(checkpoint).toHaveBeenCalledTimes(1);
     expect(log).toEqual(['checkpoint', 'trim']);
     expect(TweakStore.getValue(PANEL, 'blur')).toBe(9);
@@ -228,7 +228,7 @@ describe('boundaries, in the loop', () => {
     await MoveAgentStore.ask('start on the beach');
     expect(asked).toHaveLength(1);
     expect(asked[0].passesLeft).toBeUndefined();
-    expect(trims).toEqual([{ entry: 'shot:2', edge: 'start', source: 'a.mov', sourceTime: 12, time: 2 }]);
+    expect(trims).toEqual([{ entry: 'shot:2', edge: 'start', of: SHOTS[1], source: 'a.mov', sourceTime: 12, time: 2 }]);
     expect(MoveAgentStore.getView()).toMatchObject({ phase: 'done', acted: 1, skipped: 1 });
   });
 

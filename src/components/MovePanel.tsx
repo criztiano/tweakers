@@ -4,6 +4,7 @@ import { PresetExploration, PresetExplorationSlots } from './PresetExploration';
 import { PresetExplorationStore } from '../preset-exploration';
 import { useEffect, useLayoutEffect, useId, useRef, useState, useSyncExternalStore, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { moveFloatSitsInside } from '../move-float';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { ModulationStore } from '../store/ModulationStore';
 import { modColor, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, getAudioModBuffer, setAudioModBuffer, subscribeAudioMod, getAudioModVersion, setAudioModWindowSource, getAudioModWindow, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
@@ -460,15 +461,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // serialized rather than joined: panel names have spaces in them.
   const onlyKey = only === undefined ? undefined : JSON.stringify(Array.isArray(only) ? only : [only]);
   const read = useCallback(() => {
-    if (onlyKey === undefined) return TweakStore.selectPanels();
-    const requested = JSON.parse(onlyKey) as string[];
-    const registered = TweakStore.getPanels('panel');
     // App pages are addressed by stable panel id. Names remain display copy:
     // changing "snare" to "snare top" must not create a new hardware page.
-    // Name lookup stays as a compatibility path for existing integrations.
-    return requested
-      .map((key) => registered.find((panel) => panel.id === key || panel.name === key))
-      .filter((panel): panel is PanelConfig => panel !== undefined);
+    // Name lookup stays as a compatibility path for existing integrations —
+    // `selectPanels` takes either, the id first.
+    return TweakStore.selectPanels(onlyKey === undefined ? undefined : JSON.parse(onlyKey) as string[]);
   }, [onlyKey]);
 
   useEffect(() => {
@@ -489,9 +486,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const settingsKey = settings === undefined ? undefined : JSON.stringify(Array.isArray(settings) ? settings : [settings]);
   const namedRooms = settingsKey === undefined
     ? []
-    : (JSON.parse(settingsKey) as string[])
-        .map((key) => TweakStore.getPanels('panel').find((p) => p.id === key || p.name === key))
-        .filter((p): p is PanelConfig => p !== undefined);
+    : TweakStore.selectPanels(JSON.parse(settingsKey) as string[]);
   // The kit's own pages ride after the app's: the waveform's look, once a
   // waveform has claimed the surface. An app with no room of its own still
   // gets the door, because the page behind it is the kit's.
@@ -3578,15 +3573,44 @@ function MoveSearchBar({ view }: { view: MoveSearchView }) {
 }
 
 /**
+ * A box floating above the panel — the preset's name, the agent's prompt —
+ * measured against the viewport: with no room above the panel it sits inside
+ * the panel's top (`data-inside`). Measured again when the box grows (the
+ * agent's steps), the panel resizes, or the page scrolls under a flow dock.
+ */
+function useMoveFloat() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [inside, setInside] = useState(false);
+  useLayoutEffect(() => {
+    const box = ref.current, panel = box?.parentElement;
+    if (!box || !panel) return;
+    const measure = () => setInside(moveFloatSitsInside(panel.getBoundingClientRect().top, box.offsetHeight));
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(box);
+    observer?.observe(panel);
+    window.addEventListener('resize', measure);
+    window.addEventListener('scroll', measure, true);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, true);
+    };
+  }, []);
+  return { ref, inside };
+}
+
+/**
  * The save-a-preset input, floating centred above the panel like the curve
  * composer does. Enter keeps the name, Escape — or clicking away — lets it
  * go. The suggested "Preset N" arrives selected, so typing replaces it.
  */
 function MovePresetSaveInput({ suggested }: { suggested: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const float = useMoveFloat();
   useEffect(() => { inputRef.current?.select(); }, []);
   return (
-    <div className="tweakers-move-preset-save">
+    <div ref={float.ref} className="tweakers-move-preset-save" data-inside={float.inside || undefined}>
       <input
         ref={inputRef}
         className="tweakers-move-preset-save-input"
@@ -3612,6 +3636,7 @@ function MovePresetSaveInput({ suggested }: { suggested: string }) {
  */
 function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const float = useMoveFloat();
   const thinking = view.phase === 'thinking';
   useEffect(() => { if (!thinking) inputRef.current?.select(); }, [thinking]);
   const changed = view.phase !== 'thinking' && (view.changed > 0 || view.acted > 0);
@@ -3619,7 +3644,7 @@ function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
   const did = [count(view.acted, 'action', 'actions'), count(view.changed, 'value changed', 'values changed'), count(view.skipped, 'action skipped', 'actions skipped')].filter(Boolean).join(', ');
   const note = thinking ? 'Turning the dials…' : [did && `${did}.`, view.message].filter(Boolean).join(' ');
   return (
-    <div className="tweakers-move-preset-save tweakers-move-agent" data-phase={view.phase}>
+    <div ref={float.ref} className="tweakers-move-preset-save tweakers-move-agent" data-phase={view.phase} data-inside={float.inside || undefined}>
       <input
         ref={inputRef}
         className="tweakers-move-preset-save-input tweakers-move-agent-input"

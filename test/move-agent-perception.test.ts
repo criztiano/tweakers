@@ -159,7 +159,9 @@ describe('a boundary, resolved', () => {
   const segments: MoveAgentSegment[] = [{ source: 'a.mov', srcIn: 10, srcOut: 20, at: 100 }];
 
   it('takes the time from the entry, exactly, and carries it through the edit', () => {
-    expect(resolveBoundary({ entry: 'shot:14', edge: 'start' }, known, segments)).toEqual({ entry: 'shot:14', edge: 'start', source: 'a.mov', sourceTime: 12, time: 102 });
+    expect(resolveBoundary({ entry: 'shot:14', edge: 'start' }, known, segments)).toEqual({ entry: 'shot:14', edge: 'start', of: known[0], source: 'a.mov', sourceTime: 12, time: 102 });
+    // the entry rides along whole: what kind of thing the boundary is an edge of, and what it is called
+    expect(resolveBoundary({ entry: 'bar:17', edge: 'start' }, known, segments)!.of).toBe(known[1]);
     expect(resolveBoundary({ entry: 'shot:14', edge: 'end' }, known, segments)).toMatchObject({ sourceTime: 15, time: 105 });
     expect(resolveBoundary({ entry: 'bar:17', edge: 'end' }, known, segments)).toMatchObject({ sourceTime: 13, time: 103 });   // a moment has one edge
     expect(resolveBoundary({ entry: 'shot:14', edge: 'end' }, known, [{ ...segments[0], rate: 2 }])).toMatchObject({ time: 102.5 });
@@ -173,7 +175,7 @@ describe('a boundary, resolved', () => {
 
   it('keeps the source time and leaves the timeline time out when the edit does not hold that moment', () => {
     const cutOff = resolveBoundary({ entry: 'shot:14', edge: 'start' }, [shot(14, 8, 12)], segments)!;
-    expect(cutOff).toEqual({ entry: 'shot:14', edge: 'start', source: 'a.mov', sourceTime: 8 });
+    expect(cutOff).toEqual({ entry: 'shot:14', edge: 'start', of: shot(14, 8, 12), source: 'a.mov', sourceTime: 8 });
     expect(resolveBoundary({ entry: 'shot:14', edge: 'end' }, [shot(14, 8, 12)], segments)).toMatchObject({ time: 102 });
     const emptied = resolveBoundary({ entry: 'shot:14', edge: 'start' }, known, [])!;
     expect(emptied.sourceTime).toBe(12);

@@ -75,8 +75,9 @@ interface MoveAgentToolResult {
 `{ entry, edge }`; the kit resolves it against every entry seen in this
 request (signals read, tool results, `scene` entries the host lists under
 `scene.entries`) and hands `run` a resolved object:
-`{ entry, edge, source, sourceTime, time }` (`time` = timeline seconds through
-the current edit map). An unknown entry id skips that action and is counted.
+`{ entry, edge, of, source, sourceTime, time }` (`time` = timeline seconds through
+the current edit map; `of` = the entry itself, added after the first host had
+to read an entry's type out of its id). An unknown entry id skips that action and is counted.
 
 The kit itself offers the model one built-in tool when `signals` exist:
 
