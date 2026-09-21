@@ -262,10 +262,11 @@ var MovePadListStoreClass = class {
   selected(panelId, path) {
     return [...this.attachments.get(this.key(panelId, path))?.selected ?? []];
   }
-  /** A single list's current choice — what its closed pad shows. Null for a checked list, or before anything is chosen. */
+  /** A single list's current choice — what its closed pad shows. Null for a checked
+   *  list, for a list that keeps its own name, or before anything is chosen. */
   choice(panelId, path) {
     const attachment = this.attachments.get(this.key(panelId, path));
-    if (!attachment?.config.single) return null;
+    if (!attachment?.config.single || attachment.config.keepLabel) return null;
     return attachment.config.options.find((option) => option.value === attachment.selected[0]) ?? null;
   }
   attach(panelId, path, config) {

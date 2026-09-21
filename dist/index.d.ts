@@ -3719,6 +3719,12 @@ interface MovePadListConfig {
      * choice, and the closed pad names it.
      */
     single?: boolean;
+    /**
+     * The closed pad keeps its own name instead of naming the choice — for a picker
+     * whose value already reads somewhere beside it (a slot group's header, say),
+     * where naming it twice says the same thing twice and hides what a press does.
+     */
+    keepLabel?: boolean;
 }
 interface MovePadListView {
     panelId: string;
@@ -3746,7 +3752,8 @@ declare class MovePadListStoreClass {
     private notify;
     has(panelId: string, path: string): boolean;
     selected(panelId: string, path: string): string[];
-    /** A single list's current choice — what its closed pad shows. Null for a checked list, or before anything is chosen. */
+    /** A single list's current choice — what its closed pad shows. Null for a checked
+     *  list, for a list that keeps its own name, or before anything is chosen. */
     choice(panelId: string, path: string): MovePadListOption | null;
     attach(panelId: string, path: string, config: MovePadListConfig): () => void;
     open(panelId: string, path: string): void;

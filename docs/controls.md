@@ -326,7 +326,9 @@ shader, a background source). The list opens on the current choice; Sampling,
 the jog click, Capture or a second pad press takes the row under the cursor —
 it replaces the choice and commits at once, so nothing has to be unticked
 first. The closed pad names the choice (`MovePadListStore.choice(panelId, path)`)
-instead of its action. The host owns the value: a re-attach with a new
+instead of its action — unless `keepLabel: true`, for a picker whose value
+already reads beside it (a slot group's header), where the pad says what a
+press does instead of repeating what is chosen. The host owns the value: a re-attach with a new
 `selected` moves the choice, where a checked list keeps what the user ticked.
 `moveKitOptions()` includes this registry as `padList`.
 
