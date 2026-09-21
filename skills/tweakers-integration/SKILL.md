@@ -276,7 +276,16 @@ to make and write down, not a box to tick.
    changes content. Prefer verbs that finish a job in one step: the agent
    plans from one look at the scene and cannot see between steps. Never
    fake a verb as a toggle to reach it, and leave out what has no way back.
-5. **Ask it five things a user of this app would say** — one nudge, one
+5. **Evaluate perception — always, and say what you decided.** Does the app
+   hold media the agent must understand to do its work (video, audio, a long
+   document)? If not, say so and move on. If so, give it `signals` — what is
+   *in* each source, in SOURCE time, with stable ids — and an `editMap`, so
+   the kit projects them through the edit and no cut can make the index
+   wrong. Actions take a `boundary`, never a time: the agent names the edge
+   of an entry, the host gets the exact second. Index nothing until asked:
+   every signal is lazy, with an honest `state` and `cost`, cached per
+   source. Add a `look` or `listen` tool only for what no signal can answer.
+6. **Ask it five things a user of this app would say** — one nudge, one
    whole new look, one that names a control, one that names a feeling, one
    it cannot do; add one edit if it has actions. Watch what moves. A wrong
    move is almost always a label, a missing line of brief, or a vague action

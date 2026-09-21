@@ -418,7 +418,9 @@ export type { MoveColorView, MoveColorPalette } from './move-color';
 export { MovePresetStore } from './move-presets';
 // Generative presetting — a held wheel opens a prompt, an agent turns the dials.
 export { MoveAgentStore, describeAgentControls, applyAgentWrites, restoreAgentWrites, runAgentActions, MOVE_JOG_HOLD_EVENT } from './move-agent';
-export type { MoveAgentControl, MoveAgentWrite, MoveAgentRequest, MoveAgentReply, MoveAgentAsk, MoveAgentOptions, MoveAgentView, MoveAgentPhase, MoveAgentAction, MoveAgentParam, MoveAgentParamValue, MoveAgentCall, MoveAgentActionResult } from './move-agent';
+export type { MoveAgentControl, MoveAgentWrite, MoveAgentRequest, MoveAgentReply, MoveAgentAsk, MoveAgentOptions, MoveAgentView, MoveAgentPhase, MoveAgentAction, MoveAgentParam, MoveAgentParamValue, MoveAgentCall, MoveAgentActionResult, MoveAgentStep } from './move-agent';
+export { projectEntries, timelineToSource, formatEntries, formatAgentTime, resolveBoundary } from './move-agent-perception';
+export type { MoveAgentEntry, MoveAgentSegment, MoveAgentProjectedEntry, MoveAgentSourceRange, MoveAgentBoundaryRef, MoveAgentBoundary, MoveAgentArg, MoveAgentSignal, MoveAgentSignalState, MoveAgentSignalInfo, MoveAgentTool, MoveAgentToolResult, MoveAgentToolCall, MoveAgentPass, MoveAgentPassResult } from './move-agent-perception';
 export { MoveSearchStore, moveSearchMatch, moveSearchFilter } from './move-search';
 export type { MoveSearchTarget, MoveSearchView } from './move-search';
 export type { MovePresetItem, MovePresetView, MovePresetSave, MovePresetPhase } from './move-presets';

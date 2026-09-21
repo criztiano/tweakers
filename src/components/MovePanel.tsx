@@ -3607,6 +3607,8 @@ function MovePresetSaveInput({ suggested }: { suggested: string }) {
  * The agent's prompt, floating where the preset name does. Enter sends the
  * words, Escape closes. The field stays open after a reply — asking again
  * refines what just landed — and the reply sits under it with its undo.
+ * When the agent reads or looks on the way, each step shows as it happens,
+ * so a longer wait is never a silent one.
  */
 function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -3614,7 +3616,7 @@ function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
   useEffect(() => { if (!thinking) inputRef.current?.select(); }, [thinking]);
   const changed = view.phase !== 'thinking' && (view.changed > 0 || view.acted > 0);
   const count = (n: number, one: string, many: string) => (n ? `${n} ${n === 1 ? one : many}` : '');
-  const did = [count(view.acted, 'action', 'actions'), count(view.changed, 'value changed', 'values changed')].filter(Boolean).join(', ');
+  const did = [count(view.acted, 'action', 'actions'), count(view.changed, 'value changed', 'values changed'), count(view.skipped, 'action skipped', 'actions skipped')].filter(Boolean).join(', ');
   const note = thinking ? 'Turning the dials…' : [did && `${did}.`, view.message].filter(Boolean).join(' ');
   return (
     <div className="tweakers-move-preset-save tweakers-move-agent" data-phase={view.phase}>
@@ -3635,6 +3637,15 @@ function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
           else if (e.key === 'z' && (e.metaKey || e.ctrlKey) && changed) { e.preventDefault(); void MoveAgentStore.undo(); }
         }}
       />
+      {view.steps.length > 0 && (
+        <ul className="tweakers-move-agent-steps" aria-label="What the agent did">
+          {view.steps.map((step, i) => (
+            <li key={i} className="tweakers-move-agent-step" data-state={step.state}>
+              {step.label}{step.state === 'failed' && ' — failed'}
+            </li>
+          ))}
+        </ul>
+      )}
       {note && (
         <p className="tweakers-move-agent-note" role="status">
           {note}

@@ -23,12 +23,26 @@
  * the app is — or swaps the transport with `ask`. By default the ask goes to
  * the Move bridge (`/agent`), which asks through the machine's own Claude Code,
  * on the Claude subscription logged in there; no API key lives anywhere.
+ *
+ * An app that holds media gives the agent senses as well. `signals` say what
+ * is in a source — words, shots, bars — and `tools` look or listen; with
+ * either, an ask may take a few passes: the reply is calls, the kit runs them
+ * and asks again with what came back, and the first reply without calls is
+ * the answer. Nothing lands until that answer, so however many passes it took
+ * it is still one change and one undo, and a cancel leaves nothing behind.
+ * The maths of it — the edit map, the projection, the boundaries an edit is
+ * named by — is in `move-agent-perception`.
  */
 
 import { TweakStore } from './store/TweakStore';
 import type { ControlMeta, TweakValue } from './store/TweakStore';
 import { collectGenes, fitGene } from './preset-genetics';
 import type { GeneParameter } from './preset-genetics';
+import { formatEntries, projectEntries, resolveBoundary, timelineToSource } from './move-agent-perception';
+import type {
+  MoveAgentArg, MoveAgentBoundary, MoveAgentBoundaryRef, MoveAgentEntry, MoveAgentPass, MoveAgentPassResult, MoveAgentProjectedEntry,
+  MoveAgentSegment, MoveAgentSignal, MoveAgentSignalInfo, MoveAgentTool, MoveAgentToolCall,
+} from './move-agent-perception';
 
 /** The held wheel, from the bridge kit: cancelable, like every overlay gesture. */
 export const MOVE_JOG_HOLD_EVENT = 'move-tweakers:jog-hold';
@@ -51,7 +65,8 @@ export interface MoveAgentWrite { id: string; value: number | string | boolean }
 export type MoveAgentParamValue = number | string | boolean;
 /** One argument of an action, described as plainly as a control is. */
 export interface MoveAgentParam {
-  type: 'number' | 'string' | 'boolean';
+  /** A `boundary` is an edge of an entry — the agent names it, `run` gets its time. */
+  type: 'number' | 'string' | 'boolean' | 'boundary';
   hint?: string;
   min?: number; max?: number; step?: number;
   /** A string that must be one of these. */
@@ -68,9 +83,9 @@ export interface MoveAgentAction {
   /** What it does and when to reach for it — the agent reads this, not the code. */
   hint?: string;
   params?: Record<string, MoveAgentParam>;
-  run: (params: Record<string, MoveAgentParamValue>) => MoveAgentActionResult | Promise<MoveAgentActionResult>;
+  run(params: Record<string, MoveAgentArg>): MoveAgentActionResult | Promise<MoveAgentActionResult>;
 }
-export interface MoveAgentCall { id: string; params?: Record<string, MoveAgentParamValue> }
+export interface MoveAgentCall { id: string; params?: Record<string, MoveAgentParamValue | MoveAgentBoundaryRef> }
 export interface MoveAgentRequest {
   prompt: string;
   context?: string;
@@ -82,9 +97,20 @@ export interface MoveAgentRequest {
   scene?: unknown;
   controls: MoveAgentControl[];
   actions?: Omit<MoveAgentAction, 'run'>[];
+  /** The ways to perceive on offer — only to a transport that can take passes. */
+  tools?: Omit<MoveAgentTool, 'run' | 'progress'>[];
+  /** The signal menu: what could be read, its state and its cost. */
+  signals?: MoveAgentSignalInfo[];
+  /** The passes so far: what was called, and what came back. */
+  history?: MoveAgentPass[];
+  /** How many more times the reply may be calls. At 0 it must be the answer. */
+  passesLeft?: number;
 }
-/** Actions run first, in order; the writes land after them. */
-export interface MoveAgentReply { writes: MoveAgentWrite[]; actions?: MoveAgentCall[]; message?: string }
+/**
+ * Actions run first, in order; the writes land after them. A reply with
+ * `calls` is not the answer yet: it asks to perceive, and carries no edits.
+ */
+export interface MoveAgentReply { writes: MoveAgentWrite[]; actions?: MoveAgentCall[]; message?: string; calls?: MoveAgentToolCall[] }
 export type MoveAgentAsk = (request: MoveAgentRequest, signal: AbortSignal) => Promise<MoveAgentReply>;
 
 export interface MoveAgentOptions {
@@ -102,9 +128,21 @@ export interface MoveAgentOptions {
   scene?: () => unknown;
   /** The panels the agent may touch — same selection the panel mirror takes. */
   panels?: string | string[];
+  /** What is in the media, in SOURCE time. Nothing is computed until the agent asks. */
+  signals?: MoveAgentSignal[];
+  /** The edit as it stands — which piece of which source plays where. Read fresh at every pass. */
+  editMap?: () => MoveAgentSegment[];
+  /** The host's own perception: look, listen, search. */
+  tools?: MoveAgentTool[];
+  /** How many turns one ask may take, the answer included. Default 3. */
+  maxPasses?: number;
+  /** Called once before an answer with actions lands — the host's save point. */
+  checkpoint?: () => void | Promise<void>;
 }
 
 export type MoveAgentPhase = 'prompt' | 'thinking' | 'done' | 'error';
+/** One thing the agent did to perceive, as the prompt shows it. */
+export interface MoveAgentStep { label: string; state: 'running' | 'done' | 'failed' }
 export interface MoveAgentView {
   phase: MoveAgentPhase;
   prompt: string;
@@ -113,6 +151,10 @@ export interface MoveAgentView {
   changed: number;
   /** How many actions it ran. */
   acted: number;
+  /** How many it asked for that could not run — no such verb, arguments that do not fit, a boundary nobody has seen. */
+  skipped: number;
+  /** What it read and looked at on the way, as it happens. */
+  steps: MoveAgentStep[];
 }
 
 interface Entry { panelId: string; path: string; component?: string; gene?: GeneParameter; control: MoveAgentControl }
@@ -183,12 +225,32 @@ export function applyAgentWrites(writes: MoveAgentWrite[], only?: string | strin
   return { before, changed };
 }
 
-/** An action's arguments fitted to what it declared, or undefined when one cannot be. */
-function fitParams(action: MoveAgentAction, given: Record<string, unknown> = {}): Record<string, MoveAgentParamValue> | undefined {
-  const out: Record<string, MoveAgentParamValue> = {};
-  for (const [name, p] of Object.entries(action.params ?? {})) {
+type ResolveBoundary = (ref: MoveAgentBoundaryRef) => MoveAgentBoundary | undefined;
+
+/** A boundary as the model sends it — or, from a bridge too old to know the type, spelled in a string. */
+function boundaryRef(value: unknown): MoveAgentBoundaryRef | undefined {
+  let v = value;
+  if (typeof v === 'string') {
+    const spelled = /^(.+?)[\s@|,]+(start|end)$/.exec(v.trim());
+    try { v = spelled ? { entry: spelled[1], edge: spelled[2] } : JSON.parse(v); } catch { return undefined; }
+  }
+  const ref = v as Partial<MoveAgentBoundaryRef> | null;
+  return ref && typeof ref === 'object' && typeof ref.entry === 'string' && (ref.edge === 'start' || ref.edge === 'end')
+    ? { entry: ref.entry, edge: ref.edge } : undefined;
+}
+
+/** Arguments fitted to what was declared, or undefined when one cannot be — a boundary nobody has seen included. */
+function fitParams(declared: Record<string, MoveAgentParam> | undefined, given: Record<string, unknown> = {}, resolve?: ResolveBoundary): Record<string, MoveAgentArg> | undefined {
+  const out: Record<string, MoveAgentArg> = {};
+  for (const [name, p] of Object.entries(declared ?? {})) {
     let v = given[name];
     if (v === undefined || v === null) { if (p.optional) continue; return undefined; }
+    if (p.type === 'boundary') {
+      const ref = boundaryRef(v), boundary = ref && resolve?.(ref);
+      if (!boundary) return undefined;
+      out[name] = boundary;
+      continue;
+    }
     if (p.type === 'boolean' && (v === 'true' || v === 'false')) v = v === 'true';
     if (typeof v !== p.type) return undefined;
     if (p.type === 'number') {
@@ -204,30 +266,104 @@ function fitParams(action: MoveAgentAction, given: Record<string, unknown> = {})
 
 /**
  * Run an agent's calls, in order, each awaited. A call that names no offered
- * action or whose arguments do not fit is skipped; one that throws stops the
- * rest, since a later step may lean on it. Returns the undos handed back.
+ * action or whose arguments do not fit is skipped, and counted; one that
+ * throws stops the rest, since a later step may lean on it. A boundary is
+ * resolved as its call comes up, not before — the step ahead of it may have
+ * moved the edit. Returns the undos handed back.
  */
-export async function runAgentActions(calls: MoveAgentCall[], actions: MoveAgentAction[]): Promise<{ ran: number; undos: (() => void | Promise<void>)[]; undoable: boolean; error?: string }> {
+export async function runAgentActions(calls: MoveAgentCall[], actions: MoveAgentAction[], resolve?: ResolveBoundary): Promise<{ ran: number; skipped: number; undos: (() => void | Promise<void>)[]; undoable: boolean; error?: string }> {
   const undos: (() => void | Promise<void>)[] = [];
-  let ran = 0, undoable = true;
+  let ran = 0, skipped = 0, undoable = true;
   for (const call of calls) {
     const action = actions.find((a) => a.id === call.id);
-    const params = action && fitParams(action, call.params);
-    if (!action || !params) continue;
+    const params = action && fitParams(action.params, call.params, resolve);
+    if (!action || !params) { skipped++; continue; }
     try {
       const undo = await action.run(params);
       ran++;
       if (typeof undo === 'function') undos.push(undo); else undoable = false;
     } catch (error) {
-      return { ran, undos, undoable, error: `${action.label}: ${error instanceof Error ? error.message : 'failed'}` };
+      return { ran, skipped, undos, undoable, error: `${action.label}: ${error instanceof Error ? error.message : 'failed'}` };
     }
   }
-  return { ran, undos, undoable };
+  return { ran, skipped, undos, undoable };
 }
 
 export function restoreAgentWrites(before: Record<string, Record<string, TweakValue>>): void {
   for (const [panelId, values] of Object.entries(before)) if (TweakStore.getPanel(panelId)) TweakStore.updateValues(panelId, values);
 }
+
+/** The kit's own tool, offered whenever the host gave signals. */
+const READ_SIGNAL = 'read_signal';
+const DEFAULT_URL = 'http://localhost:7787/agent';
+/** One ask, every pass and tool in it: past this it is stopped, with nothing landed. */
+const BUDGET_MS = 120_000;
+/** What the bridge takes in one pass; past it the request is refused whole, so the kit trims first. */
+const MAX_IMAGES = 8, MAX_IMAGE_BYTES = 600_000, IMAGE = /^data:image\/(jpeg|png);base64,/;
+
+/** Settle with the work, or reject the moment the ask is let go — whether or not the work listens. */
+const abortable = <T>(work: Promise<T> | T, signal: AbortSignal): Promise<T> => new Promise<T>((resolve, reject) => {
+  const onAbort = () => reject(new Error('aborted'));
+  if (signal.aborted) { onAbort(); return; }
+  signal.addEventListener('abort', onAbort, { once: true });
+  Promise.resolve(work).then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort));
+});
+
+const isEntry = (e: unknown): e is MoveAgentEntry => !!e && typeof e === 'object'
+  && typeof (e as MoveAgentEntry).id === 'string' && typeof (e as MoveAgentEntry).source === 'string' && Number.isFinite((e as MoveAgentEntry).t0);
+
+/**
+ * `read_signal`: timeline range in, compact lines out. The range goes back
+ * through the edit map to source ranges, the host reads (and computes, if it
+ * must) only those, and the entries come forward through the map again — so
+ * the agent asks and reads in the timeline's time while the index never
+ * leaves the source's.
+ */
+function readSignalTool(signals: MoveAgentSignal[], editMap?: () => MoveAgentSegment[]): MoveAgentTool {
+  return {
+    id: READ_SIGNAL, label: 'Read a signal', kind: 'read',
+    hint: 'Read what one signal of the menu knows, as entries with ids and timeline times. `from`/`to` are timeline seconds and only say where to read — leave them out for the whole edit. `query` is optional: one or two plain words, to keep the entries that hold them. A signal that is not ready is computed first, at the cost its menu line names.',
+    params: {
+      signal: { type: 'string', options: signals.map((s) => s.id) },
+      from: { type: 'number', min: 0, optional: true, hint: 'timeline seconds' },
+      to: { type: 'number', min: 0, optional: true, hint: 'timeline seconds' },
+      query: { type: 'string', optional: true, hint: 'optional — one or two plain words' },
+    },
+    run: async (params, abort) => {
+      const chosen = signals.find((s) => s.id === params.signal)!;
+      if (chosen.state() === 'unavailable') throw new Error(`${chosen.label} cannot be read here${chosen.cost ? ` (${chosen.cost})` : ''}.`);
+      const from = params.from as number | undefined, to = params.to as number | undefined;
+      const segments = editMap?.();
+      const held = segments && timelineToSource({ from, to }, segments);
+      if (held && !held.length) return { text: 'Nothing of the edit is in that range.' };
+      const entries = (await chosen.read(chosen.whole ? undefined : held, abort)).filter(isEntry);
+      const projected: MoveAgentProjectedEntry[] = segments ? projectEntries(entries, segments)
+        : entries.map((e) => ({ ...e, at0: e.t0, ...(e.t1 !== undefined && e.t1 > e.t0 ? { at1: e.t1 } : {}) })).sort((a, b) => a.at0 - b.at0);
+      const inRange = projected.filter((e) => (e.at1 ?? e.at0) >= (from ?? -Infinity) && e.at0 <= (to ?? Infinity));
+      return { text: formatEntries(inRange, { query: params.query as string | undefined }), entries };
+    },
+  };
+}
+
+/**
+ * Hold a pass's images to what the bridge takes — JPEG or PNG, so many, so
+ * large; anything else and it refuses the whole request. What was left out is
+ * said to the agent in the result, and counted per call for the step.
+ */
+function trimImages(results: MoveAgentPassResult[], allowed: boolean): { results: MoveAgentPassResult[]; left: number[] } {
+  let room = allowed ? MAX_IMAGES : 0;
+  const left: number[] = [];
+  const trimmed = results.map((result, index) => {
+    if (!result.images?.length) return result;
+    const images = result.images.filter((image) => typeof image?.dataUrl === 'string' && IMAGE.test(image.dataUrl)
+      && image.dataUrl.length * 0.75 <= MAX_IMAGE_BYTES && room-- > 0);
+    left[index] = result.images.length - images.length;
+    if (!left[index]) return result;
+    return { ...result, text: [result.text, `(${leftOut(left[index], allowed)})`].filter(Boolean).join(' '), images: images.length ? images : undefined };
+  });
+  return { results: trimmed, left };
+}
+const leftOut = (n: number, allowed: boolean) => `${n} ${n === 1 ? 'image' : 'images'} left out: ${allowed ? `at most ${MAX_IMAGES} a pass, JPEG or PNG, under ${MAX_IMAGE_BYTES / 1000} KB each` : 'images cannot be sent here'}`;
 
 class MoveAgentStoreClass {
   private options: MoveAgentOptions = {};
@@ -236,6 +372,8 @@ class MoveAgentStoreClass {
   private undos: (() => void | Promise<void>)[] = [];
   private focus: string | undefined;
   private flight: AbortController | null = null;
+  /** What the bridge said it can do, kept per url — and forgotten when it fails. */
+  private caps: { url: string; maxPasses?: number; images: boolean } | null = null;
   private version = 0;
   private listeners = new Set<() => void>();
 
@@ -255,10 +393,10 @@ class MoveAgentStoreClass {
   /** Open the prompt; `focus` is the page in front of the user. */
   open(focus?: string) {
     this.focus = focus;
-    if (!this.view) this.set({ phase: 'prompt', prompt: '', message: '', changed: 0, acted: 0 });
+    if (!this.view) this.set({ phase: 'prompt', prompt: '', message: '', changed: 0, acted: 0, skipped: 0, steps: [] });
   }
 
-  /** Close — and let go of an ask still in the air. What landed stays. */
+  /** Close — and let go of an ask still in the air, its tools with it. What landed stays. */
   close() {
     this.flight?.abort();
     this.flight = null;
@@ -272,31 +410,139 @@ class MoveAgentStoreClass {
     if (!this.view || !text || this.view.phase === 'thinking') return;
     const controls = describeAgentControls(this.options.panels);
     const actions = this.options.actions ?? [];
-    if (!controls.length && !actions.length) { this.set({ ...this.view, phase: 'error', prompt: text, message: 'Nothing here to turn.' }); return; }
+    const idle = { prompt: text, message: '', changed: 0, acted: 0, skipped: 0, steps: [] as MoveAgentStep[] };
+    if (!controls.length && !actions.length) { this.set({ ...idle, phase: 'error', message: 'Nothing here to turn.' }); return; }
     const flight = (this.flight = new AbortController());
-    this.set({ phase: 'thinking', prompt: text, message: '', changed: 0, acted: 0 });
+    this.set({ ...idle, phase: 'thinking' });
+    let late = false;
+    const budget = setTimeout(() => { late = true; flight.abort(); }, BUDGET_MS);
     try {
       const focus = this.focus && TweakStore.getPanel(this.focus)?.name;
-      const reply = await (this.options.ask ?? this.askBridge)({
-        prompt: text, context: this.options.context, brief: this.options.brief, focus,
-        scene: this.options.scene?.(), controls,
-        actions: actions.length ? actions.map(({ run: _run, ...described }) => described) : undefined,
-      }, flight.signal);
+      const signals = this.options.signals ?? [], editMap = this.options.editMap;
+      // Senses are offered only to a transport that can take passes; to any
+      // other the ask is what it always was — one request, one reply.
+      const caps = signals.length || this.options.tools?.length ? await this.capable(flight.signal) : null;
+      const tools = caps ? [...(signals.length ? [readSignalTool(signals, editMap)] : []), ...(this.options.tools ?? []).filter((t) => t.id !== READ_SIGNAL)] : [];
+      const maxPasses = tools.length ? Math.max(1, Math.floor(Math.min(this.options.maxPasses ?? 3, caps?.maxPasses ?? Infinity))) : 1;
+      // Every entry this request has seen: what a boundary may name.
+      const known: MoveAgentEntry[] = [], seen = new Set<string>();
+      const learn = (found: unknown) => {
+        for (const e of Array.isArray(found) ? found : []) {
+          if (!isEntry(e) || seen.has(`${e.source}\n${e.id}`)) continue;
+          seen.add(`${e.source}\n${e.id}`);
+          known.push(e);
+        }
+      };
+      const resolve = (ref: MoveAgentBoundaryRef) => resolveBoundary(ref, known, editMap?.());
+      const history: MoveAgentPass[] = [];
+      let reply: MoveAgentReply;
+      for (let pass = 1; ; pass++) {
+        const scene = this.options.scene?.();
+        learn((scene as { entries?: unknown } | null | undefined)?.entries);
+        const passesLeft = maxPasses - pass;
+        reply = await abortable((this.options.ask ?? this.askBridge)({
+          prompt: text, context: this.options.context, brief: this.options.brief, focus, scene, controls,
+          actions: actions.length ? actions.map(({ run: _run, ...described }) => described) : undefined,
+          ...(tools.length ? {
+            tools: tools.map(({ run: _run, progress: _progress, ...described }) => described),
+            signals: signals.length ? signals.map(({ id, label, hint, cost, state }): MoveAgentSignalInfo => ({ id, label, hint, state: state(), cost })) : undefined,
+            history: history.length ? history : undefined,
+            passesLeft,
+          } : {}),
+        }, flight.signal), flight.signal);
+        if (!tools.length || !reply.calls?.length || passesLeft <= 0) break;
+        history.push(await this.perceive(reply.calls, tools, signals, resolve, learn, caps?.images !== false, flight.signal));
+      }
+      // The answer. From here it lands whole: the budget and a cancel are behind it.
+      const calls = reply.actions ?? [];
+      if (calls.length && this.options.checkpoint) await abortable(this.options.checkpoint(), flight.signal);
+      clearTimeout(budget);
       if (flight.signal.aborted) return;
       // Actions first: a verb may reshape what the values then land on.
-      const acted = await runAgentActions(reply.actions ?? [], actions);
+      const acted = await runAgentActions(calls, actions, resolve);
       const { before, changed } = applyAgentWrites(reply.writes ?? [], this.options.panels);
       if (changed || acted.ran) { this.before = changed ? before : null; this.undos = acted.undos; }
       const moved = changed > 0 || acted.ran > 0;
-      this.set({
-        phase: acted.error ? 'error' : 'done', prompt: text, changed, acted: acted.ran,
-        message: acted.error ?? (reply.message || (moved ? '' : 'Nothing changed.')),
+      const unanswered = !moved && !!reply.calls?.length && tools.length > 0;
+      if (this.view) this.set({
+        phase: acted.error ? 'error' : 'done', prompt: text, changed, acted: acted.ran, skipped: acted.skipped, steps: this.view.steps,
+        message: acted.error ?? (reply.message || (unanswered ? 'It kept looking and ran out of passes. Nothing changed.' : moved ? '' : 'Nothing changed.')),
       });
     } catch (error) {
-      if (flight.signal.aborted) return;
-      this.set({ phase: 'error', prompt: text, changed: 0, acted: 0, message: error instanceof Error ? error.message : 'The agent did not answer.' });
+      if (flight.signal.aborted && !late) return;
+      if (this.view) this.set({ ...idle, steps: this.view.steps, phase: 'error', message: late ? 'That took too long, so it was stopped. Nothing changed.' : error instanceof Error ? error.message : 'The agent did not answer.' });
     } finally {
+      clearTimeout(budget);
       if (this.flight === flight) this.flight = null;
+    }
+  }
+
+  /**
+   * One pass of perceiving: every call at once, each abortable, each a step
+   * in the view. A call that fails does not fail the ask — the agent is told,
+   * and may try another way.
+   */
+  private async perceive(calls: MoveAgentToolCall[], tools: MoveAgentTool[], signals: MoveAgentSignal[], resolve: ResolveBoundary, learn: (found: unknown) => void, images: boolean, signal: AbortSignal): Promise<MoveAgentPass> {
+    const first = this.view?.steps.length ?? 0;
+    const name = (call: MoveAgentToolCall, running: boolean) => {
+      const tool = tools.find((t) => t.id === call.tool);
+      const read = call.tool === READ_SIGNAL && signals.find((s) => s.id === call.params?.signal)?.label.toLowerCase();
+      if (read) return running ? `Reading the ${read}…` : `Read the ${read}`;
+      return tool ? (running ? tool.progress ?? `${tool.label}…` : tool.label) : call.tool;
+    };
+    const mark = (index: number, step: MoveAgentStep) => {
+      if (!this.view || signal.aborted) return;
+      const steps = [...this.view.steps];
+      steps[first + index] = step;
+      this.set({ ...this.view, steps });
+    };
+    if (this.view) this.set({ ...this.view, steps: [...this.view.steps, ...calls.map((call): MoveAgentStep => ({ label: name(call, true), state: 'running' }))] });
+    const results = await Promise.all(calls.map(async (call, index): Promise<MoveAgentPassResult> => {
+      try {
+        const tool = tools.find((t) => t.id === call.tool);
+        if (!tool) throw new Error('No such tool.');
+        const params = fitParams(tool.params, call.params, resolve);
+        if (!params) throw new Error('The arguments do not fit what the tool takes.');
+        const result = await abortable(tool.run(params, signal), signal) ?? {};
+        learn(result.entries);
+        mark(index, { label: name(call, false), state: 'done' });
+        return { tool: call.tool, text: result.text, images: result.images };
+      } catch (error) {
+        if (signal.aborted) throw error;
+        mark(index, { label: name(call, false), state: 'failed' });
+        return { tool: call.tool, error: error instanceof Error ? error.message : 'failed' };
+      }
+    }));
+    // A look whose pictures cannot travel has not shown the agent anything: the step says so.
+    const trimmed = trimImages(results, images);
+    trimmed.left.forEach((n, index) => { if (n) mark(index, { label: `${name(calls[index], false)} — ${leftOut(n, images)}`, state: trimmed.results[index].images ? 'done' : 'failed' }); });
+    return { calls: calls.map(({ tool, params }) => ({ tool, params })), results: trimmed.results };
+  }
+
+  /**
+   * What the transport can take. A host's own `ask` is taken at its word; the
+   * bridge is asked once, and asked again only after it has failed — a bridge
+   * left running is often older than the page that loads the kit. No answer,
+   * or one without `passes`, means a single pass.
+   */
+  private async capable(signal: AbortSignal): Promise<{ maxPasses?: number; images: boolean } | null> {
+    if (this.options.ask) return { images: true };
+    const url = `${(this.options.url ?? DEFAULT_URL).replace(/\/$/, '')}/capabilities`;
+    if (this.caps?.url === url) return this.caps;
+    const patience = new AbortController();
+    const timer = setTimeout(() => patience.abort(), 2000);
+    try {
+      const res = await abortable(fetch(url, { signal: patience.signal }), signal);
+      const body = res.ok ? await res.json().catch(() => null) as { passes?: unknown; images?: unknown; maxPasses?: unknown } | null : null;
+      if (body?.passes !== true) return null;
+      this.caps = { url, images: body.images === true, maxPasses: typeof body.maxPasses === 'number' && body.maxPasses >= 1 ? body.maxPasses : undefined };
+      return this.caps;
+    } catch (error) {
+      if (signal.aborted) throw error;
+      return null;
+    } finally {
+      clearTimeout(timer);
+      if (signal.aborted) patience.abort();
     }
   }
 
@@ -309,21 +555,22 @@ class MoveAgentStoreClass {
     if (before) restoreAgentWrites(before);
     let failed = false;
     for (const undo of undos.reverse()) { try { await undo(); } catch { failed = true; } }
-    if (this.view) this.set({ ...this.view, phase: 'prompt', message: failed ? 'Some of it could not be undone.' : 'Undone.', changed: 0, acted: 0 });
+    if (this.view) this.set({ ...this.view, phase: 'prompt', message: failed ? 'Some of it could not be undone.' : 'Undone.', changed: 0, acted: 0, skipped: 0, steps: [] });
   }
 
   private askBridge: MoveAgentAsk = async (request, signal) => {
     let res: Response;
     try {
-      res = await fetch(this.options.url ?? 'http://localhost:7787/agent', {
+      res = await fetch(this.options.url ?? DEFAULT_URL, {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(request), signal,
       });
     } catch (error) {
       if (signal.aborted) throw error;
+      this.caps = null;
       throw new Error('The Move bridge is not answering.');
     }
     const body = await res.json().catch(() => null) as (MoveAgentReply & { error?: string }) | null;
-    if (!res.ok || !body) throw new Error(body?.error || `The agent failed (${res.status}).`);
+    if (!res.ok || !body) { this.caps = null; throw new Error(body?.error || `The agent failed (${res.status}).`); }
     return body;
   };
 }

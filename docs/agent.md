@@ -101,11 +101,70 @@ the result between steps. So give it verbs that **finish a job in one step**
 — `trim`, not split-then-delete-the-new-half, whose id it cannot know. Leave
 out verbs with no way back (export, delete project) or confirm inside `run`.
 
+## Seeing and hearing: signals, the edit map, and looking
+
+An app that holds media — video, audio — has asks the scene cannot answer:
+"cut where the singer comes in", "keep the beach shots". The host gives the
+agent senses, in two halves, and the kit does the rest.
+
+```ts
+agent: {
+  // What is IN a source, in SOURCE seconds. Computed only when the agent asks.
+  signals: [{
+    id: 'words', label: 'Words', hint: 'The transcript, word by word. For anything said or sung.',
+    cost: 'about 20 s for this file',
+    state: () => index.stateOf('words'),            // ready · missing · computing · unavailable
+    read: (ranges, signal) => index.read('words', ranges, signal),   // → [{ id: 'word:212', type: 'word', source, t0, t1, label }]
+  }],
+  // Where the pieces of those sources sit on the timeline NOW. Read at every pass.
+  editMap: () => clips.map((c) => ({ source: c.file, srcIn: c.in, srcOut: c.out, at: c.start })),
+  // The host's own eyes and ears, for what no signal can answer.
+  tools: [{
+    id: 'look', label: 'Look at the frames', progress: 'Looking at the frames…', kind: 'perceive',
+    hint: 'A contact sheet of a timeline range. Only to check or refine a boundary.',
+    params: { from: { type: 'number' }, to: { type: 'number' } },
+    run: async ({ from, to }, signal) => ({ text: 'Six frames…', images: [{ name: 'sheet.jpg', dataUrl }] }),
+  }],
+  // Verbs take a boundary, never a time.
+  actions: [{
+    id: 'trim_to', label: 'Trim to', params: { at: { type: 'boundary' } },
+    run: ({ at }) => editor.trimTo(at.source, at.sourceTime),        // at: { entry, edge, source, sourceTime, time? }
+  }],
+  checkpoint: () => project.save(),                 // once, before an answer with actions lands
+}
+```
+
+- **Index the source, never the edit.** Entries are in source seconds with
+  stable ids (`shot:14`, `word:212`, `bar:17`, `vocal_in:2`), so no cut can
+  make them wrong. The kit multiplies them by the edit map at every read: an
+  entry the edit removed is absent, one a cut runs through is marked
+  `partial`, one the edit plays twice appears twice. Nothing is re-indexed.
+- **Index nothing until asked.** The agent always sees the *menu* — each
+  signal's hint, state and cost — and picks the cheapest route. `read` is
+  called only when it asks, with the source ranges the request is about
+  (`undefined` for a `whole` signal, or with no edit map). Cache per source.
+- **Boundaries, not times.** No model is frame-accurate; signal tools are. The
+  agent names `{ entry, edge }` and `run` gets the entry's exact `sourceTime`,
+  plus `time` on the timeline when the edit holds that moment. An entry the
+  request never saw is never guessed: the action is skipped and the note says
+  so. Entries listed under `scene.entries` are known from the start.
+- **A few passes, one change.** With signals or tools, a reply may be calls;
+  the kit runs them at once, shows each as a step under the field, and asks
+  again — three passes and 120 seconds at most (`maxPasses`). Nothing lands
+  until the answer, so it is still one undo, and Esc mid-way leaves nothing.
+- Images are JPEG or PNG data URLs, 8 a pass, 600 KB each; the kit leaves out
+  the rest and tells the agent. A bridge too old for passes gets none of
+  this, and the ask is the single reply it always was.
+
+`projectEntries`, `timelineToSource`, `formatEntries` and `resolveBoundary`
+are exported for a host that wants the same maths on its own side.
+
 ## Where the model runs
 
 By default the ask goes to the Move bridge, `POST /agent` (move repo,
 `app/agent.mjs`). The bridge asks through the Claude Code on the same machine
-— one bare turn: no tools, no settings, no saved session — so it runs on the
+— one bare turn per pass: no tools, no settings, no saved session (a pass
+that carries frames may read those files, and nothing else) — so it runs on the
 Claude subscription that is logged in there. No API key exists anywhere, in a
 page or in the bridge. The route answers only pages on the local machine.
 `MOVE_AGENT_MODEL` and `MOVE_AGENT_EFFORT` tune it; the defaults are `opus`
