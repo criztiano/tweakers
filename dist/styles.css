@@ -442,6 +442,12 @@
   --move-radius: 12px;
   --move-slot-height: 140px;
   --move-gap: 4px;
+  /* A group's name is inset this far from the edges of its container. */
+  --move-group-inset: 2px;
+  /* The band a labelled group's name owns along the top of its container —
+     the inset and the name's own head. The slots start under it, so a group
+     name and a slot name are never on the same line. */
+  --move-group-band: 20px;
   --move-wheel-width: 200px;
   --move-glyph-stroke: 1.25;
   --move-radius-small: 8px;
@@ -610,14 +616,6 @@
 .tweakers-move-header-start {
   min-width: 0;
   flex: none;
-}
-
-/* The view's readout past the right-hand pill: on the pill's centre line,
-   one gap out, never inside it. */
-.tweakers-move-header-end {
-  display: flex;
-  align-items: center;
-  min-width: 0;
 }
 
 .tweakers-move-track {
@@ -1504,26 +1502,42 @@
 }
 
 /* A labelled group's name, in a small header along its top: the dial list's
-   head, inset 2px from the top and the sides, its top corners following the
-   container's. It sits over the slots — the pointer passes through to them. */
+   head, inset from the top and the sides, its top corners following the
+   container's. Inset and head together are the band the name owns — the
+   slots below start clear of it, so a group's name and a slot's name tag
+   never share a line. */
 .tweakers-move-slot-group-head {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  right: 2px;
+  top: var(--move-group-inset);
+  left: var(--move-group-inset);
+  right: var(--move-group-inset);
   z-index: 1;
-  height: var(--move-head-h, 18px);
+  height: calc(var(--move-group-band) - var(--move-group-inset));
   padding: 0 8px;
-  border-radius: calc(var(--move-radius) - 2px) calc(var(--move-radius) - 2px) 0 0;
+  border-radius: calc(var(--move-radius) - var(--move-group-inset)) calc(var(--move-radius) - var(--move-group-inset)) 0 0;
   background: var(--move-group-head);
   color: var(--move-text);
   font-family: var(--move-font-label);
   font-size: 13px;
-  line-height: var(--move-head-h, 18px);
+  line-height: calc(var(--move-group-band) - var(--move-group-inset));
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* A row carrying a labelled group is that band taller, and every slot on it
+   stands at the bottom keeping its own height: the group's container grows
+   with the row, its name takes the new band, and no slot face changes size
+   or moves under the name. A row of unlabelled groups keeps its old height
+   exactly. */
+.tweakers-move-dials:has(> .tweakers-move-slot-group[data-labelled]) {
+  height: calc(var(--move-slot-height) + var(--move-group-band));
+  align-items: end;
+}
+
+.tweakers-move-dials:has(> .tweakers-move-slot-group[data-labelled]) > .tweakers-move-dial {
+  height: var(--move-slot-height);
 }
 
 .tweakers-move-slot-group-divider {
@@ -1537,6 +1551,12 @@
   border-radius: 1px;
   background: var(--move-group-divider);
   transform: translateY(-50%);
+}
+
+/* Under a name, the dividers centre on the slots rather than on the taller
+   container, so they stay on the line of the faces they separate. */
+.tweakers-move-slot-group[data-labelled] > .tweakers-move-slot-group-divider {
+  top: calc(50% + var(--move-group-band) / 2);
 }
 
 .tweakers-move-dial[data-empty="true"] {
@@ -4500,6 +4520,7 @@
 .tweakers-move {
     padding: 12px 12px 10px;
     --move-slot-height: 100px;
+    --move-group-band: 18px;
   }
 .tweakers-move-dial-label {
     font-size: 16px;

@@ -985,6 +985,12 @@ type MoveSliderVisual = {
     kind: 'pitch';
     unit?: 'semitones' | 'cents';
 }
+/** A speed: a needle on a graded dome, the slowest end on the left and the
+ *  fastest on the right. It reads as a multiple ("1.5×") unless the host
+ *  gives a unit or a formatter. */
+ | {
+    kind: 'gauge';
+}
 /** One edge of a take: the bar is the whole of it, the kept part is filled
  *  from this edge's far end to the value, the edge itself is the marker. */
  | {
@@ -1077,6 +1083,9 @@ type MoveNumericDrawing = {
     kind: 'pitch';
     position: number;
     zero: number | null;
+} | {
+    kind: 'gauge';
+    position: number;
 } | {
     kind: 'trim';
     edge: 'start' | 'end';
@@ -1976,8 +1985,13 @@ type SliderConfig = {
      * parameters whose two ends are the same place (a heading, a sun position,
      * a tilt). It stays a slider everywhere else, so a hardware knob and a
      * preset see no difference; only the drawing changes.
+     *
+     * `value` keeps the track but puts the value first on the Move panel: the
+     * number is the headline at rest and the name a tag — for a value that
+     * already says what it is (250 ms, 120 BPM). Everywhere else it is an
+     * ordinary slider.
      */
-    display?: 'track' | 'dial';
+    display?: 'track' | 'dial' | 'value';
     /**
      * Past the end, come back around instead of stopping. Dial only; defaults
      * to true when the range covers a full turn (360, or -180..180).
@@ -2298,8 +2312,8 @@ type ControlMeta = {
     /** Select declared `moveTabs` — it lies across the small slots as a tabs
      *  strip instead of claiming a dial; `'named'` adds its leading name pad. */
     moveTabs?: boolean | 'named';
-    /** Select's rendering mode, or a slider's `dial` form. */
-    display?: 'dropdown' | 'segmented' | 'track' | 'dial';
+    /** Select's rendering mode, or a slider's `dial` / `value` form. */
+    display?: 'dropdown' | 'segmented' | 'track' | 'dial' | 'value';
     /** Dial slider: wrap past the ends instead of stopping. */
     wrap?: boolean;
     placeholder?: string;
@@ -3777,6 +3791,20 @@ declare class MovePadListStoreClass {
 }
 declare const MovePadListStore: MovePadListStoreClass;
 
+/** The speed gauge's drawing, in its own viewBox units (1 unit = 1px): a
+ *  dome of radius `r` on a baseline `base` below its centre, graded across
+ *  `sweep` degrees either side of straight up. */
+declare const MOVE_GAUGE: {
+    readonly r: 36;
+    readonly base: 18;
+    readonly half: 43;
+    readonly top: 37;
+    readonly height: 56;
+    readonly sweep: 110;
+    readonly ticks: 11;
+};
+/** Where a value (0..1) points on the gauge: a compass bearing, 0 = up. */
+declare const moveGaugeBearing: (position: number) => number;
 /** A static value specimen; labels and precise readouts never inherit its effects. */
 declare function MoveSlotNumericBody({ label, value, drawing }: {
     label: string;
@@ -3829,8 +3857,9 @@ declare function MoveSlotPlaybackDrawing({ mode }: {
  *   fill bar at the bottom (an origin tick when the dial is bipolar).
  * - `value`   — the same slot the other way round: the value is the
  *   headline, the name shrinks to a tag on top. For dials whose value
- *   already says what it is (two seconds, three clips), and for a value
- *   chip substituted into the slot.
+ *   already says what it is (two seconds, three clips) — a slider asks for
+ *   it with `display: 'value'` — and for a value chip substituted into the
+ *   slot.
  * - `icon`    — an option picker whose current option shows as a glyph:
  *   at arm's length you read a picture, not a word.
  * - `curve`   — an option picker whose current option draws its shape (the
@@ -3841,9 +3870,10 @@ declare function MoveSlotPlaybackDrawing({ mode }: {
  *   knob turns X and the volume knob turns Y while touched.
  * - `range`   — two handles on one bar; column knob = low end, volume
  *   knob = high end while touched.
- * - `opacity`, `blur`, `pan`, `stereo-width`, `pitch`, `trim` — explicit
- *   numeric meanings, drawn as specimens or positioned against domain
- *   references (`trim`: one edge of a take, the kept part filled).
+ * - `opacity`, `blur`, `pan`, `stereo-width`, `pitch`, `trim`, `gauge` —
+ *   explicit numeric meanings, drawn as specimens or positioned against
+ *   domain references (`trim`: one edge of a take, the kept part filled;
+ *   `gauge`: a speed, the multiband cleaner's gauge in a slot of its own).
  * - `offset`  — a thing and the room it has to move in: the room hatched
  *   between two rules, a quiet line where it sits untouched, a pin where the
  *   offset put it, the stretch between them filled, and a chevron beside the
@@ -3888,7 +3918,7 @@ declare function MoveSlotPlaybackDrawing({ mode }: {
  * small caption where its own single slot's label would have been — so the
  * hardware's one-knob-per-column rule still holds under the shared picture.
  */
-type MoveSlotKind = 'default' | 'value' | 'icon' | 'curve' | 'enum' | 'xy' | 'range' | 'filter' | 'color' | 'transfer' | 'ramp' | 'balance' | 'dial' | 'opacity' | 'blur' | 'pan' | 'stereo-width' | 'pitch' | 'trim' | 'offset' | 'trim-span' | 'gate' | 'vector' | 'multiband' | 'channel' | 'playback' | 'env' | 'scope' | 'toggle' | 'toggle-icon' | 'metronome';
+type MoveSlotKind = 'default' | 'value' | 'icon' | 'curve' | 'enum' | 'xy' | 'range' | 'filter' | 'color' | 'transfer' | 'ramp' | 'balance' | 'dial' | 'opacity' | 'blur' | 'pan' | 'stereo-width' | 'pitch' | 'gauge' | 'trim' | 'offset' | 'trim-span' | 'gate' | 'vector' | 'multiband' | 'channel' | 'playback' | 'env' | 'scope' | 'toggle' | 'toggle-icon' | 'metronome';
 /** Which face a control wears in its slot, from its meta and moment. */
 declare function moveSlotKind(meta: ControlMeta, opts?: {
     enum?: boolean;
@@ -4118,20 +4148,6 @@ type MoveChannelDial = MoveFaceDial & {
 declare function MoveSlotChannelBody({ channels }: {
     channels: MoveChannelDial[];
 }): react_jsx_runtime.JSX.Element;
-/** The speed gauge's drawing, in its own viewBox units (1 unit = 1px): a
- *  dome of radius `r` on a baseline `base` below its centre, graded across
- *  `sweep` degrees either side of straight up. */
-declare const MOVE_GAUGE: {
-    readonly r: 36;
-    readonly base: 18;
-    readonly half: 43;
-    readonly top: 37;
-    readonly height: 56;
-    readonly sweep: 110;
-    readonly ticks: 11;
-};
-/** Where a value (0..1) points on the gauge: a compass bearing, 0 = up. */
-declare const moveGaugeBearing: (position: number) => number;
 /**
  * The multiband cleaner's face, one slot per dial: the amount as a bar with
  * its icon over the first column, the speed as a graded gauge over the
@@ -4475,6 +4491,10 @@ declare const MOVE_SLOT_LIBRARY: {
         readonly description: "signed pitch ruler with a zero reference";
         readonly component: typeof MoveSlotNumericBody;
     };
+    readonly gauge: {
+        readonly description: "a speed: a needle on a graded dome, slowest to the left, fastest to the right";
+        readonly component: typeof MoveSlotNumericBody;
+    };
     readonly trim: {
         readonly description: "one edge of a take — the kept part filled from the far end, the value beneath";
         readonly component: typeof MoveSlotNumericBody;
@@ -4758,6 +4778,8 @@ type MoveWaveformVariant =
 type MoveWaveformTransport = {
     playing: boolean;
     loopOn: boolean;
+    /** Present only when the host records: the clock then wears a record key. */
+    recording?: boolean;
 };
 /** The one card every waveform wears: at most this wide and this tall, the
  *  12px frame included — the mockup's display is 728×128 inside it. */
@@ -5009,12 +5031,19 @@ interface MoveWaveformProps {
      * Loop keys for as long as it is mounted — Play runs the host's tape, Loop
      * arms its brackets — and the panel's clock wears both states. Without
      * it the keys stay the app's and the clock shows the time alone.
+     *
+     * A host that records adds `onRecord`: the waveform takes the Rec key too,
+     * and the clock wears a record key beside Play, red while `recording`.
+     * Every key on the clock is a button that runs the same handler as its
+     * hardware key, so a click and a press are one action.
      */
     transport?: {
         playing: boolean;
         loopOn: boolean;
         onPlay: () => void;
         onLoop: () => void;
+        recording?: boolean;
+        onRecord?: () => void;
     };
     /** The colour of the playhead, the loop band and the lit steps — the host's signature on the card. */
     accent?: string;
