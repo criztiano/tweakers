@@ -3669,6 +3669,41 @@
   opacity: 1;
 }
 
+/* The way into the search from the computer: a small magnifier pinned in
+   the list screen's top-right corner, 4px off both edges — across from
+   where a back pill sits. Faint until the pointer finds it, so the list
+   stays the thing you read. */
+.tweakers-move-search-door {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--move-text);
+  opacity: 0.35;
+  cursor: pointer;
+  transition: opacity 0.12s, background-color 0.12s;
+}
+
+.tweakers-move-search-door:hover,
+.tweakers-move-search-door:focus-visible {
+  opacity: 1;
+  background: #41403e;
+  outline: none;
+}
+
+.tweakers-move-search-door svg {
+  width: 11px;
+  height: 11px;
+}
+
 /* On the wheel screen the list is pinned to the screen's box; while a
    search runs the field takes the top and the list is pinned below it —
    and the rows read from the top, not from the middle: a narrowed list

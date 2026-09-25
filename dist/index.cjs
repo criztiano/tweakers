@@ -316,6 +316,7 @@ __export(index_exports, {
   movePoint: () => movePoint,
   moveScreenChecked: () => moveScreenChecked,
   moveScreenRowLabel: () => moveScreenRowLabel,
+  moveScreenRowSearchText: () => moveScreenRowSearchText,
   moveSearchFilter: () => moveSearchFilter,
   moveSearchMatch: () => moveSearchMatch,
   moveSlotKind: () => moveSlotKind,
@@ -7231,6 +7232,7 @@ function WaveformVisualization({
 // src/move-surface-store.ts
 var import_TweakStore5 = require("tweakers/store");
 var moveScreenRowLabel = (row) => typeof row === "string" ? row : row.label;
+var moveScreenRowSearchText = (row) => typeof row === "string" || !row.keywords ? moveScreenRowLabel(row) : `${row.label} ${row.keywords}`;
 var moveScreenChecked = (rows) => rows.flatMap((row, i) => typeof row !== "string" && row.checked ? [i] : []);
 var EMPTY = { rows: 0, pads: [], padsLabel: null, steps: null, screen: null, search: null, wait: null };
 var state = EMPTY;
@@ -12846,7 +12848,7 @@ function searchRows(view) {
     const screen = MoveSurfaceStore.getState().screen;
     if (!screen) return null;
     return {
-      labels: screen.items.map(moveScreenRowLabel),
+      labels: screen.items.map(moveScreenRowSearchText),
       cursor: view.cursor,
       rest: (index) => MoveSearchStore.setCursor(index),
       take: (index) => {
@@ -13329,6 +13331,30 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     };
     window.addEventListener(MOVE_SEARCH_EVENT, onSearch);
     return () => window.removeEventListener(MOVE_SEARCH_EVENT, onSearch);
+  }, []);
+  (0, import_react16.useEffect)(() => {
+    const onKey2 = (e) => {
+      const find = (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "f";
+      const slash = e.key === "/" && !e.metaKey && !e.ctrlKey && !e.altKey;
+      if (!find && !slash) return;
+      const t = e.target;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) {
+        if (find && t.classList.contains("tweakers-move-search-input")) e.preventDefault();
+        return;
+      }
+      if (MoveSearchStore.isOpen()) {
+        const field = document.querySelector(".tweakers-move-search-input");
+        if (!field) return;
+        e.preventDefault();
+        field.focus();
+        return;
+      }
+      const ask = new CustomEvent(MOVE_SEARCH_EVENT, { detail: { shift: false }, cancelable: true });
+      window.dispatchEvent(ask);
+      if (ask.defaultPrevented) e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey2);
+    return () => window.removeEventListener("keydown", onKey2);
   }, []);
   (0, import_react16.useEffect)(() => {
     const onJog = (e) => {
@@ -13830,7 +13856,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                 "aria-labelledby": pages.length > 1 && pageTabIndex >= 0 ? `${pageTabsId}-tab-${pageTabIndex}` : void 0,
                 children: [
                   screen && /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { className: "tweakers-move-wheel-screen", role: "group", "aria-label": screen.title ?? "Wheel selection", "data-search": screenSearch ? true : void 0, children: [
-                    screenSearch && /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(MoveSearchBar, { view: screenSearch }),
+                    screenSearch ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(MoveSearchBar, { view: screenSearch }) : /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(MoveSearchDoor, { onOpen: () => MoveSearchStore.open("screen", screen.index) }),
                     /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
                       ListScreen,
                       {
@@ -13844,7 +13870,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                               ...row.tag ? { tag: row.tag } : {}
                             }
                           })),
-                          screenSearch
+                          screenSearch,
+                          screen.items.map(moveScreenRowSearchText)
                         ),
                         value: String(screenSearch ? screenSearch.cursor : screen.index),
                         follow: "center",
@@ -15409,7 +15436,7 @@ function MovePresetScreen({ view, search }) {
         if (!search) MovePresetStore.scroll(e.deltaY > 0 ? 1 : -1);
       },
       children: [
-        search && /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(MoveSearchBar, { view: search }),
+        search ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(MoveSearchBar, { view: search }) : items.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(MoveSearchDoor, { onOpen: () => MoveSearchStore.open("presets") }),
         /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
           ListScreen,
           {
@@ -15426,10 +15453,13 @@ function MovePresetScreen({ view, search }) {
     }
   );
 }
-function searchedRows(rows, search) {
+function searchedRows(rows, search, hay) {
   if (!search) return rows;
-  const kept = moveSearchFilter(rows.map((r) => r.label), search.query);
+  const kept = moveSearchFilter(hay ?? rows.map((r) => r.label), search.query);
   return kept.length ? kept.map((i) => rows[i]) : [{ value: "", label: "No matches", muted: true }];
+}
+function MoveSearchDoor({ onOpen }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("button", { type: "button", className: "tweakers-move-search-door", "aria-label": "Search the list", title: "Search ( / )", onClick: onOpen, children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("path", { d: ICON_SEARCH, stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round", strokeLinejoin: "round" }) }) });
 }
 function MoveSearchBar({ view }) {
   const inputRef = (0, import_react16.useRef)(null);
@@ -17330,6 +17360,7 @@ var import_TweakStore19 = require("tweakers/store");
   movePoint,
   moveScreenChecked,
   moveScreenRowLabel,
+  moveScreenRowSearchText,
   moveSearchFilter,
   moveSearchMatch,
   moveSlotKind,
