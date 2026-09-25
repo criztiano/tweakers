@@ -3671,8 +3671,9 @@
 
 /* The way into the search from the computer: a small magnifier pinned in
    the list screen's top-right corner, 4px off both edges — across from
-   where a back pill sits. Faint until the pointer finds it, so the list
-   stays the thing you read. */
+   where a back pill sits. Hidden until the pointer is over the list, faint
+   until it is over the magnifier, so the list stays the thing you read.
+   (A screen with no hover — touch — keeps it faintly in sight.) */
 .tweakers-move-search-door {
   position: absolute;
   top: 4px;
@@ -3687,13 +3688,26 @@
   border-radius: 999px;
   background: none;
   color: var(--move-text);
-  opacity: 0.35;
+  opacity: 0;
   cursor: pointer;
   transition: opacity 0.12s, background-color 0.12s;
 }
 
-.tweakers-move-search-door:hover,
-.tweakers-move-search-door:focus-visible {
+.tweakers-move-wheel-screen:hover .tweakers-move-search-door,
+.tweakers-move-preset-screen:hover .tweakers-move-search-door {
+  opacity: 0.35;
+}
+
+@media (hover: none) {
+  .tweakers-move-search-door {
+    opacity: 0.35;
+  }
+}
+
+.tweakers-move-wheel-screen .tweakers-move-search-door:hover,
+.tweakers-move-preset-screen .tweakers-move-search-door:hover,
+.tweakers-move-wheel-screen .tweakers-move-search-door:focus-visible,
+.tweakers-move-preset-screen .tweakers-move-search-door:focus-visible {
   opacity: 1;
   background: #41403e;
   outline: none;
