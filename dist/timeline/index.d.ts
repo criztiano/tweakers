@@ -29,6 +29,15 @@ type MoveSliderVisual = {
     kind: 'trim';
     edge: 'start' | 'end';
 }
+/** A signed nudge away from where something already sits — a hit pushed off
+ *  its step, a clip off its bar line. The face draws the room it has to
+ *  move in: `origin` (0..1) is where it sits at no offset, and the dial's
+ *  own range is that whole room, so a full turn either way carries it half
+ *  the track. */
+ | {
+    kind: 'offset';
+    origin: number;
+}
 /** One of a gate's three dials. Threshold, look-ahead and release side by
  *  side, in that order, draw as one 3-slot gate; any other arrangement
  *  keeps the ordinary face. */
@@ -58,6 +67,16 @@ type MoveSliderVisual = {
     kind: 'channel';
     icon?: string;
     tone?: MoveTone;
+}
+/** One axis of a place — across, up, or into the picture. Three sliders
+ *  carrying x, y and z, side by side in that order, draw as one 3-slot
+ *  stage (the `vector` face); alone, an axis keeps the ordinary face.
+ *  `down` (y only) says the host's y grows downward, as canvas
+ *  coordinates do, so the stage still raises the mark as y goes up. */
+ | {
+    kind: 'axis';
+    axis: 'x' | 'y' | 'z';
+    down?: boolean;
 };
 /** A Move hue by name, as the theme's `--move-<tone>` token carries it. */
 type MoveTone = 'red' | 'orange' | 'yellow' | 'lime' | 'emerald' | 'blue' | 'indigo' | 'pink';
@@ -700,6 +719,7 @@ declare class TimelineStoreClass {
     private globalListeners;
     private registrationCounts;
     private loopRegions;
+    private playsOnce;
     private persistTargets;
     private listCache;
     private rafId;
@@ -723,6 +743,10 @@ declare class TimelineStoreClass {
     /** The region the clock actually loops within: the user/code region, or the
      * whole timeline `[0, duration]` when none is set. Playback always wraps. */
     private effectiveRegion;
+    /** Looping on: the playhead wraps within the loop region (or the whole
+     * timeline). Off: it plays to the end once and stops there. */
+    setLooping(id: string, looping: boolean): void;
+    isLooping(id: string): boolean;
     play(id: string): void;
     pause(id: string): void;
     replay(id: string): void;

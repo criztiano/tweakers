@@ -8,6 +8,20 @@ export interface MovePadListConfig {
   options: MovePadListOption[];
   selected?: string[];
   onSubmit: (selected: string[]) => void | Promise<void>;
+  /**
+   * One choice, not a set — a picker (a shader, a background source). Selecting
+   * a row replaces the choice and commits it at once, and the pad's second press
+   * and Capture take the row under the cursor, so a picker never asks for a
+   * choice to be unticked before another is taken. The list opens on the current
+   * choice, and the closed pad names it.
+   */
+  single?: boolean;
+  /**
+   * The closed pad keeps its own name instead of naming the choice — for a picker
+   * whose value already reads somewhere beside it (a slot group's header, say),
+   * where naming it twice says the same thing twice and hides what a press does.
+   */
+  keepLabel?: boolean;
 }
 export interface MovePadListView {
   panelId: string;
@@ -19,6 +33,7 @@ export interface MovePadListView {
   cursor: number;
   pending: boolean;
   error: string | null;
+  single: boolean;
 }
 type Attachment = { config: MovePadListConfig; selected: string[]; cursor: number; submission: { pending: boolean } };
 
@@ -36,12 +51,23 @@ export class MovePadListStoreClass {
   private notify() { this.version++; for (const listener of this.listeners) listener(); }
   has(panelId: string, path: string) { return this.attachments.has(this.key(panelId, path)); }
   selected(panelId: string, path: string) { return [...(this.attachments.get(this.key(panelId, path))?.selected ?? [])]; }
+  /** A single list's current choice — what its closed pad shows. Null for a checked
+   *  list, for a list that keeps its own name, or before anything is chosen. */
+  choice(panelId: string, path: string): MovePadListOption | null {
+    const attachment = this.attachments.get(this.key(panelId, path));
+    if (!attachment?.config.single || attachment.config.keepLabel) return null;
+    return attachment.config.options.find(option => option.value === attachment.selected[0]) ?? null;
+  }
   attach(panelId: string, path: string, config: MovePadListConfig) {
     TweakStore.noteMoveKitUse('padList');
     const key = this.key(panelId, path);
     const previous = this.attachments.get(key);
     const valid = new Set(config.options.map(option => option.value));
-    const attachment = { config, selected: [...new Set(previous?.selected ?? config.selected ?? [])].filter(value => valid.has(value)), cursor: previous?.cursor ?? 0, submission: previous?.submission ?? { pending: false } };
+    // A checked list keeps what the user ticked across a re-attach. A picker's
+    // choice is the host's value, so the host's `selected` wins — otherwise a choice
+    // made elsewhere in the app would never reach the pad.
+    const kept = config.single ? config.selected ?? previous?.selected : previous?.selected ?? config.selected;
+    const attachment = { config, selected: [...new Set(kept ?? [])].filter(value => valid.has(value)).slice(0, config.single ? 1 : undefined), cursor: previous?.cursor ?? 0, submission: previous?.submission ?? { pending: false } };
     this.attachments.set(key, attachment);
     if (this.view?.panelId === panelId && this.view.path === path) this.close();
     this.notify();
@@ -57,20 +83,28 @@ export class MovePadListStoreClass {
     if (!attachment || TweakStore.isDisabled(panelId, path)) return;
     this.close();
     const { config } = attachment;
-    this.view = { panelId, path, label: config.label ?? path, submitLabel: config.submitLabel, options: config.options, selected: [...attachment.selected], cursor: Math.min(attachment.cursor, Math.max(0, config.options.length - 1)), pending: attachment.submission.pending, error: null };
+    const single = config.single === true;
+    // A picker opens on what is chosen, so the dial starts from the current value.
+    const chosen = single ? config.options.findIndex(option => option.value === attachment.selected[0]) : -1;
+    const cursor = chosen >= 0 ? chosen : Math.min(attachment.cursor, Math.max(0, config.options.length - 1));
+    this.view = { panelId, path, label: config.label ?? path, submitLabel: config.submitLabel, options: config.options, selected: [...attachment.selected], cursor, pending: attachment.submission.pending, error: null, single };
     this.releases = [
       MoveFunctions.push('back', () => this.close(), { label: 'close list' }),
       MoveFunctions.push('sample', () => this.toggleCursor(), { label: 'select' }),
       MoveFunctions.push('up', () => this.move(-1)),
       MoveFunctions.push('down', () => this.move(1)),
       MoveFunctions.push('jog_click', () => this.toggleCursor(), { label: 'select', chip: false }),
-      MoveFunctions.push('capture', () => { void this.submit(); }, { label: config.submitLabel ?? config.label ?? 'run selected', chip: false }),
+      MoveFunctions.push('capture', () => { if (single) this.toggleCursor(); else void this.submit(); }, { label: config.submitLabel ?? config.label ?? 'run selected', chip: false }),
     ];
     this.notify();
   }
   /** The same pad opens its list, then becomes its submission action. */
   activate(panelId: string, path: string) {
-    if (this.view?.panelId === panelId && this.view.path === path) return this.submit();
+    if (this.view?.panelId === panelId && this.view.path === path) {
+      // A picker's second press takes the row under the cursor.
+      if (this.view.single) return this.toggleCursor();
+      return this.submit();
+    }
     this.open(panelId, path);
   }
   toggle(panelId: string, path: string) {
@@ -95,6 +129,12 @@ export class MovePadListStoreClass {
     const view = this.view;
     const option = view?.options[view.cursor];
     if (!view || view.pending || !option) return;
+    if (view.single) {
+      // Replace, then commit: choosing IS the action for a picker.
+      this.view = { ...view, selected: [option.value], error: null };
+      this.save();
+      return this.submit();
+    }
     const selected = view.selected.includes(option.value) ? view.selected.filter(value => value !== option.value) : [...view.selected, option.value];
     this.view = { ...view, selected, error: null };
     this.save(); this.notify();

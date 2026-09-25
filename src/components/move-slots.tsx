@@ -1,13 +1,14 @@
 import type { MovePadListView } from '../move-pad-list';
 import { useEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { moveBandCuts, moveNumericDrawing, movePlaybackMode, MOVE_BAND_H, MOVE_BAND_W, type MovePlaybackMode, type MoveTone } from '../move-visual-core';
-import { MoveGauge, MoveSlotNumericBody, MoveSlotPlaybackDrawing } from './move-visuals';
-export { MoveSlotNumericBody, MoveSlotPlaybackDrawing, MOVE_GAUGE, moveGaugeBearing } from './move-visuals';
+import { moveBandCuts, moveNumericDrawing, movePlaybackMode, moveVectorStage, MOVE_BAND_H, MOVE_BAND_W, MOVE_STAGE, type MovePlaybackMode, type MoveTone } from '../move-visual-core';
+import { MoveGauge, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing } from './move-visuals';
+export { MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing, MOVE_GAUGE, moveGaugeBearing } from './move-visuals';
 import type { ControlMeta } from '../store/TweakStore';
 import { ICON_BADGE_OFF, ICON_BADGE_ON, LUCIDE_ICONS } from '../icons';
 import { enumOptionIcon, enumOptionLabel, enumOptionValue } from '../move-layout';
 import { arcPath } from '../angle-core';
+import { parseHex } from '../color-core';
 import { resolveFilterAxis, type FilterValue } from '../filter-core';
 import { ListScreen } from './ListScreen';
 
@@ -16,9 +17,11 @@ import { ListScreen } from './ListScreen';
  *
  * A slot is one column of the Move's dial row (two for the filter). The
  * gestures — pointer capture, fine drag, modulation arming — stay with the
- * MovePanel; what lives here is the slot's face: every body is a pure
- * drawing of computed props, so each case can be read, reused, and tested
- * on its own. `moveSlotKind` names which face a control wears.
+ * surface that holds the slot (the MovePanel, or a MoveSlot on its own), and
+ * the drag rules they share live in move-slot-core; what lives here is the
+ * slot's face: every body is a pure drawing of computed props, so each case
+ * can be read, reused, and tested on its own. `moveSlotKind` names which
+ * face a control wears.
  *
  * The cases:
  * - `default` — the basic slot: name centred, value in its place on touch,
@@ -42,6 +45,10 @@ import { ListScreen } from './ListScreen';
  *   explicit numeric meanings, drawn as specimens or positioned against
  *   domain references (`trim`: one edge of a take, the kept part filled;
  *   `gauge`: a speed, the multiband cleaner's gauge in a slot of its own).
+ * - `offset`  — a thing and the room it has to move in: the room hatched
+ *   between two rules, a quiet line where it sits untouched, a pin where the
+ *   offset put it, the stretch between them filled, and a chevron beside the
+ *   pin for each way it can still go.
  * - `playback` — an explicitly mapped playback icon.
  * - `filter`  — the 2-slot control: cutoff and resonance as one picture,
  *   the magnitude response maximised across both columns, each hand's
@@ -53,6 +60,10 @@ import { ListScreen } from './ListScreen';
  *   side as one instrument. The threshold and release stand as bars at
  *   the outer columns, the look-ahead is a short line under the middle,
  *   and the grid between the bars shows the gate live around the playhead.
+ * - `vector`  — the 3-slot place: x, y and a depth z side by side as one
+ *   stage. The mark stands on a ruled floor — across it for x, back into it
+ *   for z (and smaller for it), up off its own shadow for y — with each
+ *   axis's name under its own column.
  * - `multiband` — a multiband cleaner, one slot per dial: the amount as a
  *   bar with its icon, the speed as a graded gauge, and the band columns as
  *   one grid with the bands' curve live over what each band is doing.
@@ -99,8 +110,10 @@ export type MoveSlotKind =
   | 'pitch'
   | 'gauge'
   | 'trim'
+  | 'offset'
   | 'trim-span'
   | 'gate'
+  | 'vector'
   | 'multiband'
   | 'channel'
   | 'playback'
@@ -227,7 +240,7 @@ export function MoveSlotDefaultBody({
             : { width: `${pct}%` }}
         />
         {atOrigin && (
-          <span className="tweakers-move-dial-zero" style={{ left: `${originPct}%` }} />
+          <span className="tweakers-move-dial-zero" style={{ left: `calc(2px + (100% - 4px) * ${(originPct ?? 0) / 100})` }} />
         )}
       </div>
     </>
@@ -650,6 +663,57 @@ export function MoveSlotGateBody({
   );
 }
 
+/**
+ * The 3-slot place's face: an object on a stage. A ruled floor seen from the
+ * front, the mark standing on it — across the floor for x, back into it for z
+ * (and smaller the further back), up off its shadow for y. Three bounded
+ * numbers read as one position, which three bars cannot do: on bars, depth is a
+ * number to believe; here it is a distance to see.
+ *
+ * Each axis's drag reads the stage itself (`data-track`): x across it, y and z
+ * up it. Whichever axis is in the hand draws its own guide — a rail across the
+ * floor for x, the stalk for y, the depth rule under the mark for z.
+ */
+export function MoveSlotVectorBody({ x, y, z, down = false }: {
+  x: MoveFaceDial;
+  y: MoveFaceDial;
+  z: MoveFaceDial;
+  /** The host's y grows downward (canvas coordinates). */
+  down?: boolean;
+}) {
+  const stage = moveVectorStage(x.position, y.position, z.position, down);
+  const { width: w, height: h } = MOVE_STAGE;
+  // The floor and its rules stretch with the slots (their strokes do not); the
+  // mark, its shadow and its stalk are placed in percent of the stage and sized
+  // from its height, so they stay round at any width.
+  const at = (px: number, py: number) => ({ '--move-vector-x': `${(px / w) * 100}%`, '--move-vector-y': `${(py / h) * 100}%` });
+  return (
+    <div className="tweakers-move-face" style={{ '--move-face-span': 3 } as CSSProperties}>
+      <div className="tweakers-move-vector-stage" aria-hidden="true">
+        <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+          <path className="tweakers-move-vector-floor" d={stage.floor} />
+          <path className="tweakers-move-vector-rules" d={stage.rules} />
+          <path className="tweakers-move-vector-depth" data-active={z.active || undefined} d={stage.depth} />
+          <line className="tweakers-move-vector-rail" data-active={x.active || undefined}
+            x1={0} x2={w} y1={stage.foot.y} y2={stage.foot.y} />
+        </svg>
+        <i className="tweakers-move-vector-foot"
+          style={{ ...at(stage.foot.x, stage.foot.y), '--move-vector-size': `${((stage.foot.ry * 2) / h) * 100}%` } as CSSProperties} />
+        <i className="tweakers-move-vector-stalk" data-active={y.active || undefined}
+          style={{ ...at(stage.stalk.x, stage.stalk.y2), '--move-vector-size': `${((stage.stalk.y1 - stage.stalk.y2) / h) * 100}%` } as CSSProperties} />
+        <i className="tweakers-move-vector-mark" data-active={x.active || y.active || z.active || undefined}
+          style={{ ...at(stage.mark.x, stage.mark.y), '--move-vector-size': `${((stage.mark.r * 2) / h) * 100}%` } as CSSProperties} />
+        <span className="tweakers-move-vector-track" data-track="axis-x" />
+        <span className="tweakers-move-vector-track" data-track="axis-y" />
+        <span className="tweakers-move-vector-track" data-track="axis-z" />
+      </div>
+      <MoveFaceName col={0} dial={x} />
+      <MoveFaceName col={1} dial={y} />
+      <MoveFaceName col={2} dial={z} />
+    </div>
+  );
+}
+
 /** One channel of a mixer face: its dial, and the icon and tone it wears. */
 export type MoveChannelDial = MoveFaceDial & { icon?: string; tone?: MoveTone };
 
@@ -712,12 +776,29 @@ export function MoveSlotMultibandBody({
 }
 
 /** Selected color over a transparency checker, with its current hue. */
-export function MoveSlotColorBody({ label, color, hue }: { label: string; color: string; hue: number }) {
+export function MoveSlotColorBody({ label, color }: { label: string; color: string }) {
+  // The colour IS the slot: it fills the whole face, and the name reads on top of
+  // it in whichever ink the colour can carry. No number — a hue in degrees says
+  // nothing the colour does not say better.
   return <>
-    <span className="tweakers-move-dial-head">{label}</span>
     <span className="tweakers-move-color-swatch" aria-hidden="true"><span style={{ background: color }} /></span>
-    <span className="tweakers-move-color-reading">{Math.round(hue)}°</span>
+    <span className="tweakers-move-dial-head" data-ink={colorInk(color)}>{label}</span>
   </>;
+}
+
+/** Which ink a colour can carry: `dark` on a light colour, `light` on a dark one.
+ *  Rec. 709 luminance, the same rule the palette swatches use. */
+export function colorInk(hex: string): 'dark' | 'light' {
+  const rgb = parseHex(hex);
+  if (!rgb) return 'light';
+  const channel = (v: number) => {
+    const c = v / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = 0.2126 * channel(rgb.r) + 0.7152 * channel(rgb.g) + 0.0722 * channel(rgb.b);
+  // Alpha is the slot's checkerboard showing through: a see-through colour reads
+  // light, because the board behind it is light.
+  return luminance * (rgb.a ?? 1) > 0.42 ? 'dark' : 'light';
 }
 
 /**
@@ -1308,7 +1389,7 @@ export function MovePadListBody({ view, onCursor, onToggle }: {
   view: MovePadListView; onCursor: (index: number) => void; onToggle: () => void;
 }) {
   return <div className="tweakers-move-pad-list-body" aria-busy={view.pending || undefined}>
-    <ListScreen className="tweakers-move-dial-list" follow="center" label={view.label} disabled={view.pending} multiselect items={view.options.map(option => ({ ...option, checked: view.selected.includes(option.value) }))}
+    <ListScreen className="tweakers-move-dial-list" follow="center" label={view.label} disabled={view.pending} multiselect={!view.single} items={view.options.map(option => ({ ...option, checked: view.selected.includes(option.value) }))}
       value={view.options[view.cursor]?.value} onFocusItem={value => onCursor(view.options.findIndex(option => option.value === value))}
       onSelect={value => { onCursor(view.options.findIndex(option => option.value === value)); onToggle(); }} />
     {(view.error || view.pending || !view.options.length) && <div className="tweakers-move-pad-list-status" role="status" aria-live="polite">
@@ -1322,7 +1403,7 @@ export const MOVE_PAD_LIBRARY = {
   toggle: { description: 'a switch; the pad inverts when it is on', component: MovePadToggleBody },
   icon: { description: 'a switch drawn as its picture alone — no name, the pad inverts when it is on', component: MovePadIconBody },
   value: { description: 'a value the dial above can borrow — hold to peek, tap to latch', component: MovePadValueBody },
-  list: { description: 'a checked list above a small pad; its dial walks, Sample selects, a second pad press runs', component: MovePadListBody },
+  list: { description: 'a checked list above a small pad; its dial walks, Sample selects, a second pad press runs — or, single, a picker: Sample takes the row and the pad names it', component: MovePadListBody },
   action: { description: 'a button: a press runs the app’s action', component: MovePadActionBody },
   'icon-label': { description: 'a button wearing its picture beside its name — a press runs the app’s action', component: MovePadIconLabelBody },
   app: { description: 'a cell the app paints itself — a track, a slice, a step', component: MovePadAppBody },
@@ -1350,8 +1431,10 @@ export const MOVE_SLOT_LIBRARY = {
   pitch: { description: 'signed pitch ruler with a zero reference', component: MoveSlotNumericBody },
   gauge: { description: 'a speed: a needle on a graded dome, slowest to the left, fastest to the right', component: MoveSlotNumericBody },
   trim: { description: 'one edge of a take — the kept part filled from the far end, the value beneath', component: MoveSlotNumericBody },
+  offset: { description: 'a signed nudge — the room it can move in, a pin where it is now, a chevron for each way left', component: MoveSlotOffsetBody },
   'trim-span': { description: '2 slots: a take’s start and end on one line, a flag per edge', component: MoveSlotTrimSpanBody },
   gate: { description: '3 slots: threshold and release as bars, look-ahead as a line, the gate live on a grid between', component: MoveSlotGateBody },
+  vector: { description: '3 slots: x, y and a depth z as one stage — the mark on a ruled floor, its height a stalk from its shadow, its distance its size', component: MoveSlotVectorBody },
   channel: { description: 'a slot per channel: icon and name in its tone over a fader filled to its level', component: MoveSlotChannelBody },
   multiband: { description: 'a slot per dial: amount as a bar, speed as a gauge, the bands as a live curve on a grid', component: MoveSlotMultibandBody },
   playback: { description: 'explicit playback traversal with a named mode', component: MoveSlotEnumBody },

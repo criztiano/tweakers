@@ -113,6 +113,10 @@ class TimelineStoreClass {
   // object reference is stable until set/clear so useSyncExternalStore readers
   // don't churn.
   private loopRegions: Map<string, TimelineLoopRegion> = new Map();
+  // Timelines that play once and stop at the end. Absent = looping, the
+  // preview tool's default. Kept across re-registration: a player that
+  // switched looping off keeps it off through a remount.
+  private playsOnce: Set<string> = new Set();
   private persistTargets: Map<string, PersistTarget | null> = new Map();
   private listCache: TimelineMeta[] | null = null;
   private rafId: number | null = null;
@@ -218,12 +222,28 @@ class TimelineStoreClass {
     return { start: 0, end: Math.max(0, duration) };
   }
 
+  /** Looping on: the playhead wraps within the loop region (or the whole
+   * timeline). Off: it plays to the end once and stops there. */
+  setLooping(id: string, looping: boolean): void {
+    if (looping === this.isLooping(id)) return;
+    if (looping) this.playsOnce.delete(id);
+    else this.playsOnce.add(id);
+    this.notify(id);
+  }
+
+  isLooping(id: string): boolean {
+    return !this.playsOnce.has(id);
+  }
+
   play(id: string): void {
     const transport = this.transports.get(id);
     if (!transport || transport.duration <= 0 || transport.playing) return;
     // Play from the loop start when the playhead is parked at (or past) the
     // loop end — for the default full-timeline loop that means restart from 0.
-    const region = this.effectiveRegion(id, transport.duration);
+    // A timeline that plays once starts over from 0 when it stands at the end.
+    const region = this.isLooping(id)
+      ? this.effectiveRegion(id, transport.duration)
+      : { start: 0, end: transport.duration };
     const restart = transport.time >= region.end;
     this.transports.set(id, {
       ...transport,
@@ -245,8 +265,11 @@ class TimelineStoreClass {
   replay(id: string): void {
     const transport = this.transports.get(id);
     if (!transport || transport.duration <= 0) return;
-    // Replay = jump to the loop's beginning (0 for a full-timeline loop).
-    const region = this.effectiveRegion(id, transport.duration);
+    // Replay = jump to the loop's beginning (0 for a full-timeline loop, and
+    // for a timeline that plays once).
+    const region = this.isLooping(id)
+      ? this.effectiveRegion(id, transport.duration)
+      : { start: 0, end: transport.duration };
     this.transports.set(id, { ...transport, time: region.start, wraps: 0, playing: true });
     this.notify(id);
     this.ensureLoop();
@@ -359,8 +382,21 @@ class TimelineStoreClass {
       let time = transport.time + dt;
       let wraps = transport.wraps;
 
-      // This preview tool always loops: no user region loops the whole
-      // timeline (restart from 0), a region loops within [start, end].
+      // Playing once: run to the end and stop on it.
+      if (!this.isLooping(id)) {
+        if (time >= duration) {
+          this.transports.set(id, { time: duration, playing: false, duration, wraps });
+          this.notify(id);
+          continue;
+        }
+        this.transports.set(id, { time, playing: true, duration, wraps });
+        anyPlaying = true;
+        this.notify(id);
+        continue;
+      }
+
+      // Looping (the default): no user region loops the whole timeline
+      // (restart from 0), a region loops within [start, end].
       const region = this.effectiveRegion(id, duration);
       if (time >= region.end) {
         const folded = foldLoopTime(time, duration, region.start, region.end);

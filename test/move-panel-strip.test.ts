@@ -53,13 +53,16 @@ const jog = (delta: number) => {
 };
 
 describe('the scrolling panel', () => {
-  it('places a view status in the start of the native panel header', () => {
-    mount(many(1), false, undefined, createElement('output', { 'data-testid': 'view-status' }, 'Zoom 4×'));
-    const header = byClass('tweakers-move-tracks-group')[0];
-    expect(header.findByProps({ 'data-testid': 'view-status' }).props.children).toBe('Zoom 4×');
+  it('leads the page names with a view status, on the same row', () => {
+    mount(many(1), false, undefined, createElement('output', { 'data-testid': 'view-status' }, '4x'));
+    const lead = byClass('tweakers-move-tracks-lead')[0];
+    expect(lead.findByProps({ 'data-testid': 'view-status' }).props.children).toBe('4x');
+    // the names come after it, in the same row rather than under it
+    const names = lead.findAllByProps({ className: 'tweakers-move-tracks-group' });
+    expect(names.length).toBe(1);
   });
 
-  it('places a view readout right of the header pill, outside it', () => {
+  it('places a view readout last on the header row, outside the pill', () => {
     const level = createElement('output', { 'data-testid': 'input-level' }, '-12 dB');
     MoveVolumeDisplay.set({ label: 'gain', value: '-6.0 dB' });
     try {
@@ -68,10 +71,10 @@ describe('the scrolling panel', () => {
         renderer = create(createElement(MovePanel, { panels: 'Strip', dock: 'flow', productionEnabled: true, headerEnd: level }));
       });
       const cluster = byClass('tweakers-move-actions')[0];
-      const seats = cluster.children.map((node) => (typeof node === 'string' ? node : node.props.className));
-      expect(seats.slice(-2)).toEqual(['tweakers-move-volume', 'tweakers-move-header-end']);
+      const seats = cluster.children.map((node) => (typeof node === 'string' ? node : node.props['data-testid'] ?? node.props.className));
+      expect(seats.slice(-2)).toEqual(['tweakers-move-volume', 'input-level']);
       expect(byClass('tweakers-move-volume')[0].findAllByProps({ 'data-testid': 'input-level' })).toHaveLength(0);
-      expect(byClass('tweakers-move-header-end')[0].findByProps({ 'data-testid': 'input-level' }).props.children).toBe('-12 dB');
+      expect(cluster.findByProps({ 'data-testid': 'input-level' }).props.children).toBe('-12 dB');
     } finally {
       MoveVolumeDisplay.clear();
     }
@@ -85,7 +88,7 @@ describe('the scrolling panel', () => {
         headerEnd: createElement('output', { 'data-testid': 'input-level' }, '-12 dB'),
       }));
     });
-    expect(byClass('tweakers-move-header-end')[0].findByProps({ 'data-testid': 'input-level' })).toBeTruthy();
+    expect(byClass('tweakers-move-actions')[0].findByProps({ 'data-testid': 'input-level' })).toBeTruthy();
     act(() => renderer!.update(createElement(MovePanel, { panels: 'Strip', dock: 'flow', productionEnabled: true, functionChips: 'none' })));
     expect(byClass('tweakers-move-actions')).toHaveLength(0);
   });

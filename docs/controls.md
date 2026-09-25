@@ -12,7 +12,9 @@ still), and the settings room or a modulator's page moves the whole inside the
 same way, the ground easing to the room's palette. The panel's height eases from
 the old page's to the new one's on the same curve, the page around it moving
 along, never jumping when the change commits. The live controls answer the
-pointer and the knobs throughout; nothing to wire.
+pointer and the knobs throughout; nothing to wire. To place one live slot
+outside the instrument — a card, an inspector, a dictionary — use `MoveSlot`
+(below).
 
 | Kind | Choose for | Configuration / body | Hardware space |
 | --- | --- | --- | --- |
@@ -28,14 +30,49 @@ pointer and the knobs throughout; nothing to wire.
 | `xy` | Two axes that form one gesture | `xy`; `MoveSlotXYBody` | Column knob X, touched + volume Y |
 | `range` | Low/high bounds of one interval | `range`; `MoveSlotRangeBody` | Column knob low, touched + volume high |
 | `filter` | Cutoff and resonance with a response display | `filter`; `MoveSlotFilterBody` | 2 adjacent dials |
-| `gauge` | A speed — a playback rate, a tempo multiple | A slider with `moveVisual: { kind: 'gauge' }`: the multiband cleaner's speed gauge in a slot of its own, the needle sweeping the slider's range, the name on top and the reading under it — a multiple (`1.5×`) unless the slider brings a `unit` or `formatValue`. Invalid metadata keeps the ordinary face; `MoveSlotNumericBody` | 1 dial, an ordinary dial on the wire; the drag runs left to right |
+| `gauge` | A speed — a playback rate, a tempo multiple | A slider with `moveVisual: { kind: 'gauge' }`: the multiband cleaner's speed gauge in a slot of its own, the needle sweeping the slider's range, the name on top and the reading under it — a multiple (`1.5×`) unless the slider brings a `unit` or `formatValue`. Invalid metadata keeps the ordinary face; `MoveSlotNumericBody` | 1 dial, an ordinary dial on the wire; it turns from where it is, like any dial |
+| `offset` | A signed nudge away from where something already sits — a hit off its step, a clip off its bar line | A slider with `moveVisual: { kind: 'offset', origin }` — `origin` (0..1) is where it sits at no offset, and the dial's own range is the whole room, so a full turn either way carries it half the track; `MoveSlotOffsetBody` | 1 dial |
 | `trim-span` | A take's start and end — one line, a flag per edge | A slider with `moveVisual: { kind: 'trim', edge: 'start' }` in the column before one with `edge: 'end'`; `MoveSlotTrimSpanBody` | 2 adjacent dials, each knob one edge; a drag reads the whole line. Both the page's own dials, or both latched chips — one chip alone keeps its single face |
-| `gate` | A gate's threshold, look-ahead and release — the gate live around the playhead | Three sliders side by side with `moveVisual: { kind: 'gate', role }` — `threshold`, `lookahead`, `release`, in that order; `MoveSlotGateBody`. Feed the grid with `MoveGateMeter.attach(panelId, read)`: `read()` returns `{ levels, open?, ahead? }` — levels on the threshold dial's own 0..1 scale, the playhead at the middle step | 3 adjacent dials: the threshold and release bars drag top to bottom, the look-ahead line left to right. All three the page's own dials, or all three latched chips |
-| `multiband` | A multiband cleaner — its amount, speed and per-band strengths, live per band | Sliders with `moveVisual: { kind: 'multiband', role }`: an `amount` (with an optional `icon`), a `speed` beside it, then one or more `band` dials — the curve draws each band at its own value — each band naming its place from the top of the spectrum down (`band: 0` is the highest). Band chips in the band columns join the curve. `MoveSlotMultibandBody`; feed it with `MoveMultibandMeter.attach(panelId, read)`: `read()` returns `{ levels, open? }`, one entry per band in spectrum order | A dial per column: the amount's bar and the band grid drag top to bottom — the grid takes the band under the cursor, knob or pad —, the speed's gauge turns round its dome. A band chip latched into a band column takes that column's knob and name |
-| `channel` | A mixer channel's level, with the channel's icon and tone | A slider with `moveVisual: { kind: 'channel', icon?, tone? }` — `tone` a Move hue (`orange`, `yellow`, `pink`, …); channel dials side by side draw as one mixer. `MoveSlotChannelBody` | A dial per channel; its fader drags top to bottom. A chip standing in a column ends the mixer there |
-| `color` | One colour the page is about | `color` config; `MoveSlotColorBody` | 1 dial; hue on the knob, luminosity on volume, tap opens the editor |
+| `gate` | A gate's threshold, look-ahead and release — the gate live around the playhead | Three sliders side by side with `moveVisual: { kind: 'gate', role }` — `threshold`, `lookahead`, `release`, in that order; `MoveSlotGateBody`. Feed the grid with `MoveGateMeter.attach(panelId, read)`: `read()` returns `{ levels, open?, ahead? }` — levels on the threshold dial's own 0..1 scale, the playhead at the middle step | 3 adjacent dials, each turning from where it is, like any dial. All three the page's own dials, or all three latched chips |
+| `vector` | A place in three axes — across, up, and a real depth into the picture | Three sliders side by side with `moveVisual: { kind: 'axis', axis }` — `x`, `y`, `z`, in that order (add `down: true` on the y axis for canvas coordinates, where y grows downward); `MoveSlotVectorBody`. Extent comes from each slider's own range, so an axis alone keeps the ordinary face | 3 adjacent dials, each knob one axis, each turning from where it is, like any dial. The mark stands on a ruled floor — across it for x, back into it and smaller for z, up off its shadow for y. All three the page's own dials, or all three latched chips; no volume-knob second hand, since every axis already has a knob |
+| `multiband` | A multiband cleaner — its amount, speed and per-band strengths, live per band | Sliders with `moveVisual: { kind: 'multiband', role }`: an `amount` (with an optional `icon`), a `speed` beside it, then one or more `band` dials — the curve draws each band at its own value — each band naming its place from the top of the spectrum down (`band: 0` is the highest). Band chips in the band columns join the curve. `MoveSlotMultibandBody`; feed it with `MoveMultibandMeter.attach(panelId, read)`: `read()` returns `{ levels, open? }`, one entry per band in spectrum order | A dial per column; each part turns from where it is, like any dial — the band grid takes the band under the cursor, knob or pad. A band chip latched into a band column takes that column's knob and name |
+| `channel` | A mixer channel's level, with the channel's icon and tone | A slider with `moveVisual: { kind: 'channel', icon?, tone? }` — `tone` a Move hue (`orange`, `yellow`, `pink`, …); channel dials side by side draw as one mixer. `MoveSlotChannelBody` | A dial per channel; its fader turns from where it is, like any dial. A chip standing in a column ends the mixer there |
+| `color` | One colour the page is about — the colour fills the slot, its name on top in the ink the colour carries, no number | `color` config; `MoveSlotColorBody` | 1 dial; hue on the knob, luminosity on volume, tap opens the editor. On screen: drag across for hue, up and down for luminosity |
 | `ramp` | A colour gradient of 2–4 stops, editable in place | `gradient` config; `MoveSlotRampBody` | 1 dial; tap opens the editor — the track buttons become the stops |
 | `balance` | A 0..1 mix between two sibling colour params | `balance` config (`{ type: 'balance', a, b }`); `MoveSlotRampBody` | 1 dial, a plain normalized value on the wire |
+
+### The cursor
+
+Everything the Move's hand can do, the cursor can do too. The panel owns
+these gestures; an app wires nothing.
+
+- **A value slot turns, never jumps.** A plain dial, a face's bar or gauge
+  (gate, multiband, mixer), a trim edge, an envelope stage, a balance: the
+  drag turns it from where it is — right or up raises it, left or down
+  lowers it, one slot's width of travel for the whole range. A press alone
+  changes nothing. Shift mid-drag is fine (0.1×).
+- **An option slot steps.** A click moves it on to the next option, round to
+  the first after the last; a drag steps through them, right or down being
+  the next. No part of the slot means a particular option.
+- **A list walks up and down.** The pad list's dial follows the list's own
+  axis: down is the next row.
+- **A colour takes both hands.** Across turns the hue (the knob), up and down
+  the luminosity (the volume knob) — up is lighter. A still click opens the
+  editor.
+- **Shift+click is Shift+tap.** On a dial it puts the declared default back
+  (`TweakStore.getDefault`); on a colour it restores the first colour.
+- **A cycling dial takes a click as its tap** — the curve modulator's clip
+  moves to its next shape; its point follows the cursor once it travels.
+- **Menu** sits in the window's top-right corner: a click is a press (the
+  preset navigator, or the palettes while the colour editor is up), a held
+  press the hold (exploration), Shift+click the Shift layer (save).
+- **Undo, Delete and Copy** are the computer's keys: ⌘Z / Ctrl+Z (⇧ for the
+  Shift layer), Backspace or Delete, ⌘C / Ctrl+C. A key runs only what its
+  button holds, never while a text field has the keys, and ⌘C yields to a
+  text selection.
+
+XY, range, filter, transfer, needle and ramp slots keep their picture's own
+gesture — the point, handle or stop goes where the cursor puts it.
 
 A select with `moveSpan: 2` uses the same list face and gestures across two
 adjacent columns. Both knobs select the same value; later controls and their
@@ -52,6 +89,38 @@ default in an integration; it is used only on Cri's direct request for that app.
 parts. The XY face also accepts a shape path for the modulation curve preview.
 The parent supplies normalized screen coordinates (Y down), grid division count,
 and the formatted readout. It retains every gesture and store subscription.
+
+### A slot on its own: `MoveSlot`
+
+`MoveSlot` is one big slot, live, anywhere on the page: the face a control
+wears in the instrument, answering the pointer and the keyboard the way it
+does there. The drag rules are the instrument's own — `MovePanel` and
+`MoveSlot` both call `move-slot-core` — so a face feels the same wherever it
+is placed.
+
+```tsx
+<MoveSlot panel="Move kit" path="offset" />
+<MoveSlot panel="Move kit" path="glide" valueFirst />
+<MoveSlot panel="Instruments" path={['threshold', 'lookahead', 'release']} />
+```
+
+- `panel` names the registered panel, by id or name; the slot waits for a
+  panel that registers after it.
+- `path` is the control. Several paths draw an instrument made of several
+  dials when they read as one — a take (`trim` start, end), a gate, a
+  multiband cleaner (amount, speed, bands), a mixer's channels — each keeping
+  its own drag zone. Paths that are not one instrument draw nothing and warn.
+- `valueFirst` puts the value in the headline, the face a chip wears when a
+  dial borrows it.
+
+It reads and writes the shared store, so a slot and an instrument holding the
+same control stay one control: turn either and both move. A colour or ramp
+slot's tap opens the colour editor wherever the page mounts one. It claims no
+hardware — the Move keeps following the `MovePanel` on screen; a page that
+registers panels only for its slots names the one the Move mirrors with
+`moveKitOptions({ panels })`. The faces that live only on a modulator's page
+(`scope`, `env`) belong to that page: open it with
+`ModulationStore.openSettings(index)`.
 
 ### Small slots and companion components
 
@@ -92,6 +161,20 @@ ramp instead; pads and steps set the selected stop's opacity. The track
 buttons return to page duty the moment the editor closes (the settings
 room's suppress/restore precedent). Palette locks apply per stop. A gradient
 with more than four stops keeps the plain ramp slot and its on-screen drag.
+
+An app whose colours come from one palette — an app-wide setting, not a
+per-control one — holds every colour control to it with
+`MoveColorStore.lockPalette({ id, name, colors })`. Every turn then steps
+through its colours and every drag or editor write lands on one of them, on
+screen and on the hardware, whether the editor is open or not; the editor's
+palette row shows the lock, and the navigator behind Menu stands down, since
+the palette is the app's to choose. `lockPalette(null)` gives every control its
+whole wheel back. An app with a set of palettes of its own puts them in the
+navigator with `MoveColorStore.setPalettes(list, onPick)`: the rows become the
+app's, the first row ("All colors") still means no palette, a choice goes back
+through `onPick` — and the navigator opens with no colour editor up, so a
+palette can be an app-wide setting rather than one control's. What the app writes itself stays the app's to keep on the
+palette.
 
 A `color` control given a `movePads` column becomes the **small colour
 selector**: a swatch chip on the value row for pages where colour is not the
@@ -165,14 +248,17 @@ config can answer, the kit answers.
 | `MoveActionButton` / `MoveFunctions` | Hardware-named action pills and one shared action registry |
 | `MoveActionDeck` | A view's whole surface when it has nothing to set yet — a start screen, a "what now" page: up to four buttons in the page's middle, one per chip key (`sample`, `capture`, `loop`, `mute`), in the chip voice (`variant: 'highlight'` for the pale key look, an `icon` of its own or the key's glyph) and attached to the key through `MoveFunctions`, so a click and a press run one handler and both flash the button. A disabled action leaves its key dark; the deck is the chip, so its attachments show no header chip. One of three: a view shows the deck, the list screen, or a panel — never two. `normalizeDeck` is the rule (order kept, first action per key wins, a fifth is dropped, every drop warned). |
 | `MoveViewStage` / `MoveViews` | Views and the changes between them. Wrap what the app renders for where it is now in one `MoveViewStage`; change view with `MoveViews.go(update, motion)` — `update` is the app's own setState or dispatch, `motion` names the change: `forward` / `back` (along the way, and out again), `open` / `close` (into a workspace, and out), `swap` (a sibling). Every change plays one zoom-through: the leaving view grows to 105% as it fades out, the arriving view grows from 95% as it fades in, both on exact expo in-out over a second, crossing additively so the light never dips (`MOVE_VIEW_PRESENTATION`); the control panel moves as its own layer on its 350 ms zoom-through — in, out, or one panel into another — and holds still when the same panel stands on both sides. The change is the browser's view transition: the new view is live at once (its keys light, its list reaches the Move) while only the pictures move. A change never cuts one that is playing — in the curve's quiet first 384 ms it takes the arriving view's place unseen, later it plays once the first has landed, every change asked for meanwhile joining it. Work that changes view goes through `MoveViews.load(work, { title, detail, arrive, motion, cancelable })`: the view goes inert and every key dark at once (and dark it stays, whatever the view behind attaches meanwhile; the computer's keys reach only Escape, which is Back), a wait (title, an eight-light sweep, the detail) comes up only if the work outlasts `MOVE_VIEW_WAIT.delay` — work that lands while it is still out of sight takes its place unseen, and once in sight it holds until it has arrived plus `MOVE_VIEW_WAIT.hold` — and stands on the Move's screen too; `arrive(value)` makes the change, a failure hands the view back and rejects, `cancelable` lights Back to abandon it, `say(title, detail)` re-words it as the work moves on, and the newest `load` or `go` supersedes a running wait (its promise resolves `undefined`). Choreography is `moveViewChoreography`; reduced motion keeps a 180 ms crossfade and no zoom. |
-| `MoveFunctionChips` | The attached functions as header chips, for free — but only for `MOVE_CHIP_BUTTONS` (`sample`, `capture`, `mute`, `loop`: the keys whose meaning is the app's to give), and only with a `label` saying what the button does in this app. A chip never wears a hardware name; unlabelled or non-chip-button attachments light the key and nothing else (Play is the time indicator's story). Naming: `sample` is the printed Sampling key — the surface's second confirm, often called "the enter button"; `jog_click` is the wheel pressed, never a chip. Clicking a chip runs the hardware key's handler. Default dress is the slot idiom; `chip: { variant: 'highlight' }` is the pale key look, `chip: { color }` takes a `MOVE_PALETTE` name only. `MovePanel` places the row by its `functionChips` option — `clock` (default, left of the volume readout), `tracks` (after the track labels), `none`. `chip: false` hides one. |
+| `MoveColorStore.lockPalette` / `setPalettes` | An app-wide palette: every colour control held to its colours, open editor or not, on screen and on the hardware, and the app's own palettes listed in the instrument's palette navigator. See the colour section above. |
+| `headerStart` / `headerEnd` | A view's own readings in the panel header: `headerStart` leads the page names on the same row (where the timeline's and the waveform's zoom read — the factor alone, `1.5x`), `headerEnd` closes the row after the function chips (where a clock reads). Neither takes a second line. |
+| `MoveFunctionChips` | The attached functions as header chips, for free — but only for `MOVE_CHIP_BUTTONS` (`sample`, `capture`, `mute`, `loop`: the keys whose meaning is the app's to give), and only with a `label` saying what the button does in this app. A chip never wears a hardware name; unlabelled or non-chip-button attachments light the key and nothing else (Play is the time indicator's story). Naming: `sample` is the printed Sampling key — the surface's second confirm, often called "the enter button"; `jog_click` is the wheel pressed, never a chip. Clicking a chip runs the hardware key's handler. Default dress is the slot idiom; `chip: { variant: 'highlight' }` is the pale key look, `chip: { color }` takes a `MOVE_PALETTE` name only. `MovePanel` places the row by its `functionChips` option — `clock` (default, left of the volume readout), `tracks` (after the track labels), `none`. The reading itself is always last on the row: a timeline's or waveform's clock, the volume readout, or an app's own through `headerEnd` — every button stands to its left. `chip: false` hides one. |
 | `MoveWaveform` / `MoveWaveformStore` | Sample display, navigation, loop and scrub state. The look — style (`smooth` / `pixelated` / `striped`), bar width, grid, EQ bands, centre line — is the kit's own **Waveform** page (`MOVE_WAVEFORM_PANEL`, kind `'kit'`), put in the settings room by the first waveform to claim the surface and persisted per machine; the component's look props only seed it. `striped` draws the pixel bars untouched with a gap after each, so the wave is twice as long and nothing is lost. The card itself is the kit's — light display, dark frame, at most 1200×176 — with wheel zoom (a press resets it), a knob scrub from the playhead, the step loop, the clock with the host's play/loop state, and `cuts` that split it into pieces. `transport` (`playing`, `loopOn`, `onPlay`, `onLoop`) takes the Play and Loop keys; add `onRecord` (and `recording`) and it takes Rec too, the clock wearing a record dot beside Play, red while a take runs. Every state on the clock is a button that runs its hardware key's handler (`Play`/`Stop`, `Record`/`Stop recording`, `Loop on`/`Loop off`). `asset` (prepared peaks from `buildWaveformLevels` / `waveformAsset`) and `ranges` (the stretches that play) draw a long or trimmed sample without scanning or copying its audio. |
+| `useMoveTimeline` / `MoveTimeline` / `MoveTimelineStore` | A timeline of clips that animate values over time, on the Move. `useMoveTimeline(name, config, { id })` defines the clips (dialkit's timeline config: `at`, `duration`, `from`/`to`, `steps`, `props`, `loop`, groups) and returns each clip's `current` values per frame plus the transport and the timeline's `id`. `<MoveTimeline id onRecord? />` floats the waveform's card above the panel (`variant="dock"`, as wide as the slots on show) or sits in the page (`variant="page"`), and puts the timeline on the instrument while mounted: the volume knob scrubs (the waveform's feel), the wheel zooms around the playhead on any turn nothing else takes, its press shows everything; Play and Loop (Shift + Loop lets a loop region go) are its keys, Rec too when `onRecord` says what recording means. The panel's volume corner becomes `MoveTimelineClock` — Play, the time, Loop, Rec, each clickable. On the card: click the ruler to jump, drag it to draw a loop, drag the lanes to scrub, drag a clip / its edges / a sequence's joins to retime it, pinch to zoom. A group of clips is one row, split only where its clips overlap. `moveKitOptions()` claims the knob for it — no bind change. |
 | `MoveVolumeDisplay` | Contextual volume-knob readout |
-| `MovePanel` `headerStart` / `headerEnd` | A view's own compact, live readout in the panel header: `headerStart` beside the page names at the top left (a waveform zoom), `headerEnd` immediately right of the right-hand pill — the waveform clock, else the `MoveVolumeDisplay` pill — outside it and on its centre line (an input level while recording). Not for another row of page controls. |
 | `MoveNotifications` / `moveNotify` | The app's messages, stacked over the instrument. Mount the component once; call `moveNotify.add({ type, title, description })` from anywhere. `type` is `info`, `success`, `warning` or `error` — the card says the kind in a word and repeats it in the palette's hue, never in hue alone. The stack clears the panel and any display floating over it (curve composer, docked waveform, save input); an app-drawn float opts in with `data-move-float`. |
+| `MoveConnectionDot` / `MoveConnection` | Whether the Move is with this app: mount `MoveConnectionDot` once and a 6px dot pins itself 20px off the window's bottom-left corner — emerald while the Move is connected and following this app, red while it is not (no bridge, no Move, or another app holding it); it says the same to a screen reader and on hover. `MoveConnection` is the registry behind it (`getState()` → `{ bridge, device, active }`, `isLive()`, `subscribe`), fed by the kit's `move-tweakers:connection` window event (see the move repo's PROTOCOL.md). No bridge running, nothing said: the Move reads as away. |
 | `MOVE_PALETTE` | The Move's colours on screen — the same set the hardware lights, matched by eye against the device's LED palette. `MOVE_TRACK_COLORS` is built from it. Colour on this surface always means something; never decoration. |
 | `MoveSurfaceStore` | Mirror app-owned raw pads, step buttons and screen state; `onStep` takes the sixteen steps for the app (presses arrive there, `setSteps` lights them) until the listener detaches |
-| `MoveSearchStore` | Search on whichever list has the wheel — a system gesture, the same in every app, nothing to wire. Holding **Capture** opens it on the list in focus (the palette navigator, else the preset navigator, else the app's wheel list); typing on the computer keyboard narrows the rows as the letters land, the wheel (and ↑ ↓) walks what is left, taking a row (jog click, Enter, a click) or Back ends it, and holding Capture again closes it. The device's screen narrows with the wheel list and shows the query as its title. A host reading the wheel itself checks `MoveSearchStore.isOpen()` before taking a turn (the panel consumes the events first, but a listener registered ahead of it must still yield). `moveSearchMatch` / `moveSearchFilter` are the rule: every word of the query, any case, any order. |
+| `MoveSearchStore` | Search on whichever list has the wheel — a system gesture, the same in every app, nothing to wire. Holding **Capture** opens it on the list in focus (the palette navigator, else the preset navigator, else the app's wheel list), as do the small magnifier in the list screen's top-right corner and `/` or ⌘F on the computer; typing on the computer keyboard narrows the rows as the letters land, the wheel (and ↑ ↓) walks what is left, taking a row (jog click, Enter, a click) or Back ends it, and holding Capture again closes it. The device's screen narrows with the wheel list and shows the query as its title. A host reading the wheel itself checks `MoveSearchStore.isOpen()` before taking a turn (the panel consumes the events first, but a listener registered ahead of it must still yield). `moveSearchMatch` / `moveSearchFilter` are the rule: every word of the query, any case, any order — against a wheel-list row's label plus its optional `keywords` (`moveScreenRowSearchText`). |
 | `ListScreen` | Controlled list presentation matching the device display. A row may carry `icon` (an image URL) at its left end — an app's icon, a file kind — pinned like the mark so a centred name stays put; the hardware screen has no room for it and takes the label alone |
 | `ModulationStore` | LFO, sample-and-hold, ADSR and curve modulation; settings layouts and assignments |
 
@@ -236,6 +322,16 @@ shares the dial list styling, with no extra submission button: the owning pad be
 Reduced-motion mode keeps it steadily green. `activate(panelId, path)` opens
 a closed list or submits its current selection; `toggle` retains open/close behavior.
 The Library's **Parts** pad demonstrates the same API used by Primecut Extract.
+
+**Single — a picker.** Pass `single: true` for one choice rather than a set (a
+shader, a background source). The list opens on the current choice; Sampling,
+the jog click, Capture or a second pad press takes the row under the cursor —
+it replaces the choice and commits at once, so nothing has to be unticked
+first. The closed pad names the choice (`MovePadListStore.choice(panelId, path)`)
+instead of its action — unless `keepLabel: true`, for a picker whose value
+already reads beside it (a slot group's header), where the pad says what a
+press does instead of repeating what is chosen. The host owns the value: a re-attach with a new
+`selected` moves the choice, where a checked list keeps what the user ticked.
 `moveKitOptions()` includes this registry as `padList`.
 
 `MovePadListBody` is the shared drawing in `MOVE_PAD_LIBRARY.list`; it uses
@@ -243,6 +339,10 @@ The Library's **Parts** pad demonstrates the same API used by Primecut Extract.
 an overlay above app reattachments and restores the latest app handler.
 
 ### Stacked actions
+
+A `moveTopRow` chip rides the top pad row in its `movePads` column — right under
+its dial — and a colour chip may ride it too, so a page can put a colour
+directly beneath its big slot and keep the value row for what comes after it.
 
 An action named in both `movePads` and `moveTopRow` occupies that column’s
 top pad row. Another action can use its ordinary bottom action row in the same

@@ -1,30 +1,37 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { rampCss, type GradientValue } from '../gradient-core';
-import { MoveColorStore, MOVE_COLOR_PALETTES, MOVE_COLOR_STEPS, MOVE_OPACITY_PADS, type MoveColorPalette } from '../move-color';
+import { MoveColorStore, MOVE_COLOR_STEPS, MOVE_OPACITY_PADS, type MoveColorPalette } from '../move-color';
 import { TweakStore, type ControlMeta } from '../store/TweakStore';
 import { parseHex, rgbToHsl, rgbToOklch, displayHex, type HSLA } from '../color-core';
 import type { TweakTheme } from '../theme';
 import { MoveSlotColorBody } from './move-slots';
 import { ICON_MOVE_COPY } from '../icons';
 
-export function MoveColorSlot({ panelId, meta, active, open, latched = false }: {
+export function MoveColorSlot({ panelId, meta, active, open, latched = false, className, style }: {
   panelId: string; meta: ControlMeta; active: boolean; open: boolean;
   /** A colour chip latched into this slot: it pulses with its chip, as a latched value does. */
   latched?: boolean;
+  /** The host's own layout, for a slot placed on its own (MoveSlot). */
+  className?: string;
+  style?: CSSProperties;
 }) {
   const gesture = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   const suppressClick = useRef(false);
   const disabled = TweakStore.isDisabled(panelId, meta.path);
   const color = MoveColorStore.read(panelId, meta.path);
   return <button
-    type="button" className="tweakers-move-dial" data-kind="color"
+    type="button" className={className ? `tweakers-move-dial ${className}` : 'tweakers-move-dial'} style={style} data-kind="color"
     data-active={active || open || undefined} data-latched={latched || undefined} data-disabled={disabled || undefined}
     aria-label={`${meta.label}, hue ${Math.round(color.h)} degrees. Open color editor`}
     aria-expanded={open} aria-haspopup="dialog" disabled={disabled}
-    onClick={() => {
+    onClick={(e) => {
       if (suppressClick.current) { suppressClick.current = false; return; }
-      MoveColorStore.toggle(panelId, meta.path);
+      // Shift+click restores the colour the config declares — the
+      // hardware's Shift+tap; a plain click opens (or closes) the editor.
+      const first = TweakStore.getDefault(panelId, meta.path);
+      if (e.shiftKey && typeof first === 'string') TweakStore.updateValue(panelId, meta.path, first);
+      else MoveColorStore.toggle(panelId, meta.path);
     }}
     onKeyDown={(e) => {
       if (e.altKey || e.ctrlKey || e.metaKey || disabled) return;
@@ -46,9 +53,15 @@ export function MoveColorSlot({ panelId, meta, active, open, latched = false }: 
       if (!g || disabled) return;
       if (!g.moved && Math.hypot(e.clientX - g.x, e.clientY - g.y) < 3) return;
       g.moved = true;
+      // The two hands of the hardware at once: across is the knob's hue,
+      // up and down the volume knob's luminosity — up is lighter. A slot's
+      // width of travel is the whole wheel, or the whole light.
       const width = e.currentTarget.getBoundingClientRect().width || 1;
+      const fine = e.shiftKey ? 0.1 : 1;
+      const now = MoveColorStore.read(panelId, meta.path);
       MoveColorStore.update(panelId, meta.path, {
-        h: MoveColorStore.read(panelId, meta.path).h + (e.clientX - g.x) / width * 360 * (e.shiftKey ? 0.1 : 1),
+        h: now.h + (e.clientX - g.x) / width * 360 * fine,
+        l: now.l - (e.clientY - g.y) / width * fine,
       });
       g.x = e.clientX;
       g.y = e.clientY;
@@ -56,7 +69,7 @@ export function MoveColorSlot({ panelId, meta, active, open, latched = false }: 
     onPointerUp={() => { suppressClick.current = !!gesture.current?.moved; gesture.current = null; }}
     onPointerCancel={() => { suppressClick.current = true; gesture.current = null; }}
     onLostPointerCapture={() => { gesture.current = null; }}
-  ><MoveSlotColorBody label={meta.label} color={String(TweakStore.getValue(panelId, meta.path))} hue={color.h} /></button>;
+  ><MoveSlotColorBody label={meta.label} color={String(TweakStore.getValue(panelId, meta.path))} /></button>;
 }
 
 /**
@@ -279,7 +292,7 @@ export function MovePaletteScreen({ kept = null, children }: { kept?: number[] |
   // rows and hands the wheel to the panel; its line rides in as children.
   const rows: { name: string; colors: string[] | null; index: number }[] = [
     { name: 'All colors', colors: null, index: 0 },
-    ...MOVE_COLOR_PALETTES.map((p, i) => ({ name: p.name, colors: p.colors, index: i + 1 })),
+    ...MoveColorStore.palettes().map((p, i) => ({ name: p.name, colors: p.colors, index: i + 1 })),
   ].filter((row) => !kept || kept.includes(row.index));
   // The view follows the cursor the way the list screen does: scroll only
   // this screen, and only far enough to bring the row into sight.

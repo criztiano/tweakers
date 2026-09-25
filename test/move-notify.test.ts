@@ -56,6 +56,7 @@ describe('the floats the stack has to clear', () => {
     for (const part of [
       '.tweakers-move-root .tweakers-move',
       '.tweakers-move-wave[data-variant="dock"]',
+      '.tweakers-move-timeline[data-variant="dock"]',
       '.tweakers-move-curve',
       '.tweakers-move-preset-save',
       '[data-move-float]',

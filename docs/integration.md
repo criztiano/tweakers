@@ -94,7 +94,10 @@ takes its pictures around it, so a state change made outside it jumps.
 
 Every list the wheel walks can be searched, and no app builds that itself:
 holding Capture opens the search on the list in focus (`MoveSearchStore`),
-typing narrows it, the wheel walks what is left, taking a row or Back ends it.
+and so do the small magnifier in the list screen's top-right corner and the
+`/` or ⌘F keys on the computer; typing narrows it, the wheel walks what is
+left, taking a row or Back ends it. A wheel-list row may carry `keywords` —
+words the search also finds it by (an effect's tags), never drawn.
 A host that reads the wheel events for its own list yields while
 `MoveSearchStore.isOpen()`, exactly as it yields to an open navigator.
 
@@ -107,6 +110,14 @@ column sits right under it, and both take that column's knob — a tap on one
 releases the other. A `balance` is this same stacked column with nothing to
 declare: its `a` colour is the chip up top, its `b` the chip under it, and it
 seats them before any switch or lifted chip, so its column is always its own.
+
+The volume knob, when no slot has borrowed it as a second hand, is the app's to
+give a meaning. Listen for `MOVE_VOLUME_EVENT` (`{ delta, shift }`, cancelable)
+and `MOVE_VOLUME_TAP_EVENT` (`{ shift }`) on `window`, consume what you take with
+`preventDefault`, and name what the knob edits with `MoveVolumeDisplay` — a
+claimed volume knob with no readout is a bug. A mounted waveform takes the knob
+first. Listen for the settings room with `MOVE_SETTINGS_EVENT` or
+`MoveSettingsView.subscribe`, never by the raw event string.
 
 Hardware has four tracks and eight dial columns. `buildMovePages`, `dialSpan`,
 `visibleColumns` and `movePadRows` define the layout, not app CSS. Validate pages

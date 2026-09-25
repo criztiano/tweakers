@@ -58,6 +58,9 @@ export type MoveScreenRow =
        *  the name — a file's format, a status. The hardware screen has no room
        *  for it and takes the label alone. */
       tag?: string;
+      /** Words a search on the list also finds the row by, never drawn — an
+       *  effect's tags, a file's folder. */
+      keywords?: string;
     };
 
 /** The app's list on the Move's own 128×64 screen. */
@@ -73,6 +76,10 @@ export interface MoveScreenList {
 /** A row's label, whichever form the host wrote it in. */
 export const moveScreenRowLabel = (row: MoveScreenRow): string =>
   typeof row === 'string' ? row : row.label;
+
+/** What a search on the list reads a row by: its label and its keywords. */
+export const moveScreenRowSearchText = (row: MoveScreenRow): string =>
+  typeof row === 'string' || !row.keywords ? moveScreenRowLabel(row) : `${row.label} ${row.keywords}`;
 
 /** The rows a list has switched on, by index — what the hardware screen needs
  * to mark them, since it takes labels rather than rows. */

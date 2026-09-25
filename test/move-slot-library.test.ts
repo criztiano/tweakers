@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { MOVE_SLOT_LIBRARY, MoveSlotMultibandBody, MoveSlotNumericBody, MoveSlotXYBody, moveSlotKind } from '../src/components/move-slots';
+import { MOVE_SLOT_LIBRARY, MoveSlotMultibandBody, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotXYBody, moveSlotKind } from '../src/components/move-slots';
 import type { ControlMeta } from '../src/store/TweakStore';
 
 describe('shared XY slot face', () => {
@@ -56,5 +56,45 @@ describe('the standalone speed gauge', () => {
       amount: dial('Clean', 0.5), speed: dial('Speed', 1), bands: [dial('Hi', 1)],
     }));
     expect(html).toContain('<svg class="tweakers-move-multiband-gauge" data-track="speed" viewBox="-43 -37 86 56"');
+  });
+});
+
+describe('shared offset slot face', () => {
+  const props = { label: 'Offset', value: '-25', origin: 0.75, position: 0.25, back: true, forward: true };
+
+  it('exposes the same face used by the panel, and fills the stretch between where it sits and where it is', () => {
+    expect(MOVE_SLOT_LIBRARY.offset.component).toBe(MoveSlotOffsetBody);
+    const html = renderToStaticMarkup(createElement(MoveSlotOffsetBody, props));
+    expect(html).toContain('data-moved="true"');
+    // The stretch is cut out of a full-width layer, so its ruling stays in
+    // step with the ruling either side of it.
+    expect(html).toContain('clip-path:inset(0 25% 0 25%)');
+    expect(html).toContain('left:25%'); // the pin
+    expect(html).toContain('left:75%'); // where it sits untouched
+    expect(html).toContain('-25');
+  });
+
+  it('shows only the way it took once it has moved', () => {
+    const html = renderToStaticMarkup(createElement(MoveSlotOffsetBody, props));
+    expect(html).toContain('data-way="back"');
+    expect(html).not.toContain('data-way="forward"');
+  });
+
+  it('parked, offers every way that has room — and nothing to fill', () => {
+    const html = renderToStaticMarkup(createElement(MoveSlotOffsetBody, {
+      ...props, value: '0', origin: 0.5, position: 0.5,
+    }));
+    expect(html).not.toContain('data-moved');
+    expect(html).toContain('data-way="back"');
+    expect(html).toContain('data-way="forward"');
+    expect(html).toContain('clip-path:inset(0 50% 0 50%)');
+  });
+
+  it('parked against an end, offers only the way that is left', () => {
+    const html = renderToStaticMarkup(createElement(MoveSlotOffsetBody, {
+      ...props, value: '0', origin: 1, position: 1, forward: false,
+    }));
+    expect(html).toContain('data-way="back"');
+    expect(html).not.toContain('data-way="forward"');
   });
 });

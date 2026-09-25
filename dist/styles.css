@@ -385,6 +385,9 @@
      than a slot you can press, so it never reads as a control. */
   --move-slot-empty: rgba(222, 227, 201, 0.03);
   --move-chip: #41403e;
+  /* A big slot at rest sits a step quieter than the chip; the slot whose
+     dial is in the hand comes back up to the chip, so the eye finds it. */
+  --move-slot-rest: color-mix(in srgb, var(--move-chip) 60%, var(--move-bg));
   /* A drawn screen's grid (the gate, the cleaner, the band pad): the well
      it sits in, and the cells across it. */
   --move-face-well: var(--move-bg);
@@ -425,9 +428,6 @@
   --move-toggle-on: #34c759;
   --move-toggle-off: #ff2d55;
   --move-toggle-halo: 4px;
-  /* The slot's own surface, flattened — the punch-out reads as a gap in the
-     picture, not as a hole down to the panel. */
-  --move-toggle-halo-color: var(--move-chip);
   /* The metronome's body sits a step behind its arm, so the thing that moves
      is the brightest thing in the slot. */
   --move-metronome-body-opacity: 0.85;
@@ -499,7 +499,6 @@
   --move-chip: #2e2e30;
   --move-group-divider: #353333;
   --move-group-head: #1f1f21;
-  --move-toggle-halo-color: var(--move-chip);
   --move-text: #f0f0ee;
   --move-face-well: var(--move-bg);
   --move-face-cell: color-mix(in srgb, var(--move-text) 5%, var(--move-bg));
@@ -606,8 +605,11 @@
   max-width: 100%;
 }
 
+/* A host's own status leads the page names, on the same row — never a second line
+   under them. */
 .tweakers-move-header-start {
   min-width: 0;
+  flex: none;
 }
 
 /* The view's readout past the right-hand pill: on the pill's centre line,
@@ -1242,6 +1244,94 @@
 
 /* End of the view stage skin block. */
 
+/* -- The connection dot ----------------------------------------------------
+   Whether the Move is with this app (MoveConnectionDot): six pixels pinned
+   20px off the window's bottom-left corner, emerald while the Move follows
+   this app, red while it does not. The box around the dot is a little
+   larger than the dot, so the pointer can find it for its tooltip. Names:
+   `.tweakers-move-link[data-live]`, `.tweakers-move-link-dot`.
+   ------------------------------------------------------------------------ */
+
+.tweakers-move-link {
+  position: fixed;
+  left: 13px;
+  bottom: 13px;
+  z-index: 10003;
+  padding: 7px;
+  line-height: 0;
+}
+
+.tweakers-move-link-dot {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--move-red);
+  transition: background-color 0.2s ease;
+}
+
+.tweakers-move-link[data-live] .tweakers-move-link-dot {
+  background: var(--move-emerald);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-link-dot {
+    transition: none;
+  }
+}
+
+/* End of the connection dot skin block. */
+
+/* The Menu button on screen: a round dark well pinned to the window's
+   top-right corner, the three-line mark in the panel's text colour. It lights
+   while what it opened — the presets, the palettes — is up. */
+.tweakers-move-menu {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 10003;
+  line-height: 0;
+}
+
+.tweakers-move-menu-button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--move-display, #1e1e1e);
+  color: var(--move-text);
+  cursor: pointer;
+  transition: background-color 0.12s, color 0.12s;
+}
+
+.tweakers-move-menu-button:hover {
+  background: var(--move-chip);
+}
+
+.tweakers-move-menu-button[data-open] {
+  background: var(--move-text);
+  color: var(--move-display, #1e1e1e);
+}
+
+.tweakers-move-menu-button:focus-visible {
+  outline: 2px solid var(--move-text);
+  outline-offset: 2px;
+}
+
+.tweakers-move-menu-icon {
+  width: 14px;
+  height: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-menu-button {
+    transition: none;
+  }
+}
+
 .tweakers-move-grid {
   display: flex;
   flex-direction: column;
@@ -1374,28 +1464,41 @@
   opacity: 0.6;
 }
 
+/* The slot's surface: quiet at rest, the full chip while its dial is touched
+   or dragged. Parts that mask the slot behind them read `--move-dial-surface`
+   so they follow it. */
 .tweakers-move-dial {
+  --move-dial-surface: var(--move-slot-rest);
+  /* The slot's own surface, flattened — the punch-out reads as a gap in the
+     picture, not as a hole down to the panel. */
+  --move-toggle-halo-color: var(--move-dial-surface);
   position: relative;
   height: 100%;
-  background: var(--move-chip);
+  background: var(--move-dial-surface);
   border-radius: var(--move-radius);
   cursor: pointer;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  transition: background-color var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-dial[data-active] {
+  --move-dial-surface: var(--move-chip);
 }
 
 /* Grouped slots (`moveSlotGroups`): the container carries the slot surface
    across its columns and the gaps between them, so the slots on it read as
    one; each gap gets a 2 × 48px rounded divider. It sits under the slots,
-   whose own surface is the same colour. */
+   whose own resting surface is the same colour — a touched slot lights up
+   on it alone. */
 .tweakers-move-slot-group {
   position: absolute;
   top: 0;
   bottom: 0;
   left: calc(var(--move-group-start) * (var(--move-slot-w) + var(--move-gap)));
   width: calc(var(--move-group-span) * var(--move-slot-w) + (var(--move-group-span) - 1) * var(--move-gap));
-  background: var(--move-chip);
+  background: var(--move-slot-rest);
   border-radius: var(--move-radius);
   pointer-events: none;
 }
@@ -1458,27 +1561,34 @@
   border-radius: var(--move-radius-small);
 }
 
+/* The colour fills its slot, edge to edge: the slot IS the swatch. The name reads
+   on top of it, in the ink the colour can carry. */
 .tweakers-move-color-swatch {
   position: absolute;
-  inset: var(--move-shape-top) var(--move-color-gap) var(--move-shape-top);
+  inset: 0;
+  border-radius: inherit;
 }
+
+.tweakers-move-dial[data-kind="color"] .tweakers-move-dial-head {
+  position: relative;
+  z-index: 1;
+}
+
+/* On a colour slot the colour is the ground: the name sits straight on it, with no
+   chip behind it, in whichever ink the colour can carry. */
+.tweakers-move-dial[data-kind="color"] .tweakers-move-dial-head {
+  background: none;
+}
+
+.tweakers-move-dial-head[data-ink="dark"] { color: var(--move-text-inverse, #1e1e1e); }
+.tweakers-move-dial-head[data-ink="light"] { color: var(--move-text); }
 
 .tweakers-move-color-swatch > span,
 .tweakers-move-color-preview > span { display: block; width: 100%; height: 100%; }
 
-.tweakers-move-color-reading {
-  position: absolute;
-  bottom: var(--move-color-gap);
-  left: var(--move-color-gap);
-  right: var(--move-color-gap);
-  font-size: var(--move-color-font);
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-
 .tweakers-move-dial[data-kind="color"][aria-expanded="true"] .tweakers-move-color-swatch,
 .tweakers-move-dial[data-kind="color"]:hover .tweakers-move-color-swatch {
-  box-shadow: 0 0 0 var(--move-color-stroke) var(--move-text);
+  box-shadow: inset 0 0 0 var(--move-color-stroke) var(--move-text);
 }
 
 .tweakers-move-color-display {
@@ -1788,7 +1898,7 @@
   max-width: calc(100% - 16px);
   padding: 1px 8px;
   border-radius: 999px;
-  background: var(--move-chip);
+  background: var(--move-dial-surface);
   font-family: var(--move-font-label);
   font-size: 13px;
   line-height: 16px;
@@ -1879,7 +1989,7 @@
 
 .tweakers-move-dial[data-shape] .tweakers-move-dial-label {
   z-index: 1;
-  text-shadow: 0 0 6px var(--move-chip), 0 0 6px var(--move-chip);
+  text-shadow: 0 0 6px var(--move-dial-surface), 0 0 6px var(--move-dial-surface);
 }
 
 .tweakers-move-dial-bar {
@@ -1893,16 +2003,23 @@
   border-radius: 8px;
 }
 
+/* Parked on the origin, the dial's zero stands as a line across the bar —
+   the range slot's handle — and goes back to the fill's dot once it leaves.
+   It sits on the bar's padding box, so it reaches as far out as a handle. */
 .tweakers-move-dial-zero {
   position: absolute;
-  top: 50%;
-  width: 5px;
-  height: 5px;
-  margin: -2.5px 0 0 -2.5px;
-  border-radius: 50%;
+  top: -1px;
+  bottom: -1px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
   background: var(--move-text);
-  box-shadow: 0 0 0 2px var(--move-bg), 0 0 0 3px var(--move-text);
   pointer-events: none;
+  transition: box-shadow 0.12s;
+}
+
+.tweakers-move-dial[data-active] .tweakers-move-dial-zero {
+  box-shadow: 0 0 12px 0 rgba(222, 227, 201, 0.7);
 }
 
 .tweakers-move-dial-fill[data-zero] {
@@ -2221,8 +2338,7 @@
 }
 
 /* The 2-slot take (`trim-span`): one line across both columns, inset 4px
-   past the dial's own track inset (`TRIM_SPAN_PAD`) so the drawing gets air
-   while a drag still lands the flag under the finger. The
+   past the dial's own track inset so the drawing gets air. The
    start keeps the left side — its name up top, its value below — and the
    end the right. */
 .tweakers-move-trim-span-tag,
@@ -2328,6 +2444,7 @@
    column. A face lays its parts out by column — `--move-face-span` columns,
    each `--move-face-col-w` wide — so each part stands over its own knob. */
 .tweakers-move-dial[data-kind="gate"],
+.tweakers-move-dial[data-kind="vector"],
 .tweakers-move-dial[data-kind="multiband"],
 .tweakers-move-dial[data-kind="channel"] {
   --move-face-bar-w: 4px;
@@ -2688,6 +2805,89 @@
   background: var(--move-text);
 }
 
+/* ── vector: a place on a stage ─────────────────────────────────── */
+
+.tweakers-move-vector-stage {
+  position: absolute;
+  top: 29px;
+  bottom: 27px;
+  left: 12px;
+  right: 12px;
+  overflow: hidden;
+  border-radius: var(--move-radius-small);
+  background: var(--move-face-well);
+  pointer-events: none;
+}
+
+.tweakers-move-vector-stage > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.tweakers-move-vector-floor { fill: var(--move-face-cell); }
+
+.tweakers-move-vector-rules,
+.tweakers-move-vector-depth,
+.tweakers-move-vector-rail {
+  fill: none;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.tweakers-move-vector-rules { stroke: color-mix(in srgb, var(--move-text) 16%, transparent); }
+
+/* The guides only appear for the axis in the hand. */
+.tweakers-move-vector-depth,
+.tweakers-move-vector-rail { stroke: transparent; }
+
+.tweakers-move-vector-depth[data-active],
+.tweakers-move-vector-rail[data-active] { stroke: color-mix(in srgb, var(--move-text) 60%, transparent); }
+
+.tweakers-move-vector-foot,
+.tweakers-move-vector-stalk,
+.tweakers-move-vector-mark {
+  position: absolute;
+  left: var(--move-vector-x);
+  top: var(--move-vector-y);
+  pointer-events: none;
+}
+
+.tweakers-move-vector-foot {
+  height: var(--move-vector-size);
+  aspect-ratio: 2.9;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--move-text) 18%, transparent);
+  transform: translate(-50%, -50%);
+}
+
+.tweakers-move-vector-stalk {
+  width: 1px;
+  height: var(--move-vector-size);
+  background: color-mix(in srgb, var(--move-text) 40%, transparent);
+  transform: translateX(-50%);
+}
+
+.tweakers-move-vector-stalk[data-active] { background: var(--move-text); }
+
+.tweakers-move-vector-mark {
+  height: var(--move-vector-size);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--move-text) 80%, transparent);
+  transform: translate(-50%, -50%);
+}
+
+.tweakers-move-vector-mark[data-active] { background: var(--move-text); }
+
+/* Each axis's part of the stage, named like the other faces' tracks. */
+.tweakers-move-vector-track {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
 .tweakers-move-face-zones {
   position: absolute;
   inset: 0;
@@ -2702,7 +2902,8 @@
   touch-action: none;
 }
 
-.tweakers-move-face-zone[data-role="lookahead"] { cursor: ew-resize; }
+.tweakers-move-face-zone[data-role="lookahead"],
+.tweakers-move-face-zone[data-role="axis-x"] { cursor: ew-resize; }
 .tweakers-move-face-zone[data-role="speed"] { cursor: grab; }
 
 .tweakers-move-face-zone:focus-visible {
@@ -2827,7 +3028,7 @@
   border: 0;
   padding: 0;
   color: var(--move-text);
-  background: var(--move-slot);
+  background: var(--move-dial-surface);
   appearance: none;
 }
 
@@ -3164,10 +3365,13 @@
   box-shadow: var(--move-list-shadow);
 }
 
+/* The list screen covers its whole slot, so the head is the slot surface
+   that shows: quiet at rest, lit while the dial is in the hand. */
 .tweakers-move-dial-head {
   flex: 0 0 var(--move-head-h);
   padding: 0 8px;
-  background: var(--move-chip);
+  background: var(--move-dial-surface, var(--move-chip));
+  transition: background-color var(--move-duration-press) var(--move-ease-out);
   color: var(--move-text);
   font-family: var(--move-font-label);
   font-size: 13px;
@@ -3488,6 +3692,55 @@
 .tweakers-move-search-input::placeholder {
   color: inherit;
   opacity: 1;
+}
+
+/* The way into the search from the computer: a small magnifier pinned in
+   the list screen's top-right corner, 4px off both edges — across from
+   where a back pill sits. Hidden until the pointer is over the list, faint
+   until it is over the magnifier, so the list stays the thing you read.
+   (A screen with no hover — touch — keeps it faintly in sight.) */
+.tweakers-move-search-door {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--move-text);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.12s, background-color 0.12s;
+}
+
+.tweakers-move-wheel-screen:hover .tweakers-move-search-door,
+.tweakers-move-preset-screen:hover .tweakers-move-search-door {
+  opacity: 0.35;
+}
+
+@media (hover: none) {
+  .tweakers-move-search-door {
+    opacity: 0.35;
+  }
+}
+
+.tweakers-move-wheel-screen .tweakers-move-search-door:hover,
+.tweakers-move-preset-screen .tweakers-move-search-door:hover,
+.tweakers-move-wheel-screen .tweakers-move-search-door:focus-visible,
+.tweakers-move-preset-screen .tweakers-move-search-door:focus-visible {
+  opacity: 1;
+  background: #41403e;
+  outline: none;
+}
+
+.tweakers-move-search-door svg {
+  width: 11px;
+  height: 11px;
 }
 
 /* On the wheel screen the list is pinned to the screen's box; while a
@@ -4276,6 +4529,16 @@
     font-size: 13px;
     line-height: 13px;
   }
+/* The short slot: the room gives up height so the pin's head still stands
+   clear of the name above it. */
+.tweakers-move-dial[data-visual="offset"] {
+    --move-offset-room: 30px;
+    --move-offset-foot: 28px;
+    --move-offset-pin-w: 12px;
+    --move-offset-pin-h: 16px;
+    --move-offset-way-w: 11px;
+    --move-offset-way-gap: 5px;
+  }
 }
 
 /* The card every waveform wears — the audio editor's mockup: a light
@@ -4454,6 +4717,533 @@
 
 .tweakers-move-wave-time .tweakers-move-volume-value {
   font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------------
+   Move timeline (MoveTimeline) — a dark display in a 4px frame, the ink on
+   it light: the instrument's own ground, so the card reads as part of the
+   panel under it. A ruler on top, a row per clip (a layer shares one), the
+   playhead and the loop band in the host's accent, a take in progress in
+   the record red. The component names `.tweakers-move-timeline[data-variant]
+   [data-recording]` and the `-display`, `-ruler`, `-lane`, `-clip`, `-edge`,
+   `-join`, `-loop`, `-take` and `-playhead` parts — restyle here, not there.
+   ------------------------------------------------------------------------ */
+
+.tweakers-move-timeline {
+  --move-timeline-display: #1e1e1e;
+  --move-timeline-frame: #1e1e1e;
+  --move-timeline-ink: var(--move-text);
+  --move-timeline-accent: #3d9bff;
+  --move-timeline-record: var(--move-red);
+  --move-timeline-names: 88px;
+  --move-timeline-ruler: 24px;
+  --move-timeline-row: 18px;
+  --move-timeline-row-gap: 3px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  border: 4px solid var(--move-timeline-frame);
+  border-radius: var(--move-radius);
+  background: var(--move-timeline-display);
+  color: var(--move-timeline-ink);
+  font-family: var(--move-font-label);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tweakers-move-root[data-timeline-dock] {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* The waveform dock's layer: above the panel, its shadow on the instrument. */
+  z-index: 10002;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.tweakers-move-timeline[data-variant='dock'] {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  width: min(960px, calc(100vw - 48px));
+  box-shadow: 0 40px 20px -24px rgba(0, 0, 0, 0.25);
+}
+
+.tweakers-move-timeline-display {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--move-timeline-names) minmax(0, 1fr);
+  grid-template-rows: var(--move-timeline-ruler) auto;
+  padding: 2px 10px 8px 0;
+}
+
+.tweakers-move-timeline-corner {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 8px 0 10px;
+  font-size: 12px;
+  line-height: normal;
+}
+
+.tweakers-move-timeline-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tweakers-move-timeline-ruler {
+  grid-column: 2;
+  grid-row: 1;
+  position: relative;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.tweakers-move-timeline-tick {
+  position: absolute;
+  bottom: 3px;
+  width: 1px;
+  height: 4px;
+  background: var(--move-timeline-ink);
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+.tweakers-move-timeline-tick[data-major] {
+  height: 8px;
+  opacity: 0.5;
+}
+
+.tweakers-move-timeline-tick-label {
+  position: absolute;
+  bottom: 9px;
+  left: 3px;
+  font-size: 11px;
+  line-height: normal;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tweakers-move-timeline-loop,
+.tweakers-move-timeline-take {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.tweakers-move-timeline-loop {
+  background: color-mix(in srgb, var(--move-timeline-accent) 18%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--move-timeline-accent) 45%, transparent);
+}
+
+.tweakers-move-timeline-loop[data-on] {
+  background: color-mix(in srgb, var(--move-timeline-accent) 40%, transparent);
+  box-shadow: none;
+}
+
+.tweakers-move-timeline-take {
+  background: color-mix(in srgb, var(--move-timeline-record) 55%, transparent);
+}
+
+.tweakers-move-timeline-names {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--move-timeline-row-gap);
+  min-width: 0;
+}
+
+.tweakers-move-timeline-name {
+  height: var(--move-timeline-row);
+  padding: 0 8px 0 10px;
+  font-size: 12px;
+  line-height: var(--move-timeline-row);
+  opacity: 0.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tweakers-move-timeline-lanes {
+  grid-column: 2;
+  grid-row: 2;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--move-timeline-row-gap);
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.tweakers-move-timeline-lane {
+  position: relative;
+  height: var(--move-timeline-row);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--move-timeline-ink) 7%, transparent);
+  overflow: hidden;
+}
+
+.tweakers-move-timeline-loop-lanes {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  background: color-mix(in srgb, var(--move-timeline-accent) 10%, transparent);
+  pointer-events: none;
+}
+
+.tweakers-move-timeline-clip {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  z-index: 1;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 0 6px;
+  border-radius: 3px;
+  background: var(--move-timeline-ink);
+  color: var(--move-timeline-display);
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+
+.tweakers-move-timeline-clip[data-dragging] {
+  cursor: grabbing;
+  background: color-mix(in srgb, var(--move-timeline-ink) 80%, var(--move-timeline-accent));
+}
+
+/* A props clip is the sum of its tracks — shown, not retimed as one. */
+.tweakers-move-timeline-clip[data-composite] {
+  background: color-mix(in srgb, var(--move-timeline-ink) 60%, transparent);
+}
+
+/* A clip that animates nothing marks a span: an outline, not a bar. */
+.tweakers-move-timeline-clip[data-marker] {
+  background: color-mix(in srgb, var(--move-timeline-ink) 22%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--move-timeline-ink);
+  color: var(--move-timeline-ink);
+}
+
+.tweakers-move-timeline-ghost {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  margin-left: 1px;
+  border-radius: 3px;
+  background: var(--move-timeline-ink);
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+.tweakers-move-timeline-clip-length {
+  font-size: 10px;
+  line-height: normal;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.tweakers-move-timeline-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.tweakers-move-timeline-edge[data-edge='start'] {
+  left: 0;
+}
+
+.tweakers-move-timeline-edge[data-edge='end'] {
+  right: 0;
+}
+
+/* The join between two legs of a sequence: a hairline of display, with a
+   wider grip around it. */
+.tweakers-move-timeline-join {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  margin-left: -3px;
+  cursor: ew-resize;
+}
+
+.tweakers-move-timeline-join::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: var(--move-timeline-display);
+  opacity: 0.6;
+}
+
+.tweakers-move-timeline-heads {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  position: relative;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.tweakers-move-timeline-playhead {
+  position: absolute;
+  top: 2px;
+  bottom: 0;
+  left: -1px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--move-timeline-accent);
+  will-change: transform;
+}
+
+/* The playhead's cap, on the ruler. */
+.tweakers-move-timeline-playhead::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: inherit;
+}
+
+.tweakers-move-timeline[data-recording] .tweakers-move-timeline-playhead {
+  background: var(--move-timeline-record);
+}
+
+/* Rows thin out as layers pile up (data-rows, set by the component): each
+   step gives up what no longer fits — lengths, then names, then the lane
+   ground — so the card spends its height on the clips. */
+.tweakers-move-timeline[data-rows='14'] {
+  --move-timeline-row: 14px;
+}
+
+.tweakers-move-timeline[data-rows='14'] .tweakers-move-timeline-name {
+  font-size: 11px;
+}
+
+.tweakers-move-timeline[data-rows='14'] .tweakers-move-timeline-clip-length {
+  font-size: 9px;
+}
+
+.tweakers-move-timeline[data-rows='10'] {
+  --move-timeline-row: 10px;
+  --move-timeline-row-gap: 2px;
+}
+
+.tweakers-move-timeline[data-rows='10'] .tweakers-move-timeline-name {
+  font-size: 10px;
+}
+
+.tweakers-move-timeline[data-rows='10'] .tweakers-move-timeline-lane {
+  border-radius: 3px;
+}
+
+.tweakers-move-timeline[data-rows='10'] .tweakers-move-timeline-clip,
+.tweakers-move-timeline[data-rows='10'] .tweakers-move-timeline-ghost {
+  top: 1px;
+  bottom: 1px;
+  border-radius: 2px;
+}
+
+/* The ruler already tells the time a length would. */
+.tweakers-move-timeline[data-rows='10'] .tweakers-move-timeline-clip-length,
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-clip-length {
+  display: none;
+}
+
+/* Squeezed: shapes only — a mark per row where its name was (hover says
+   it), bars on a hairline, the joins cut through them. */
+.tweakers-move-timeline[data-rows='4'] {
+  --move-timeline-row: 4px;
+  --move-timeline-row-gap: 2px;
+  --move-timeline-names: 28px;
+  --move-timeline-ruler: 20px;
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-title {
+  display: none;
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-name {
+  position: relative;
+  font-size: 0;
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-name::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 8px;
+  height: 1px;
+  background: var(--move-timeline-ink);
+  opacity: 0.35;
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-lane {
+  background: none;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-lane::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--move-timeline-ink);
+  opacity: 0.1;
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-clip,
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-ghost {
+  top: 0;
+  bottom: 0;
+  padding: 0;
+  border-radius: 999px;
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-ghost {
+  opacity: 0.28;
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-clip[data-marker] {
+  box-shadow: none;
+  background: color-mix(in srgb, var(--move-timeline-ink) 45%, transparent);
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-join::after {
+  left: 2.5px;
+  width: 2px;
+  opacity: 1;
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-tick-label {
+  bottom: 8px;
+  font-size: 10px;
+}
+
+.tweakers-move-timeline[data-rows='4'] .tweakers-move-timeline-playhead::before {
+  left: -2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+}
+
+/* The squeeze switch, in the card's top-right corner: three lines that
+   close up while the rows are squeezed. */
+.tweakers-move-timeline-compact {
+  appearance: none;
+  position: absolute;
+  top: 3px;
+  right: 6px;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: var(--move-timeline-display);
+  color: var(--move-timeline-ink);
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-timeline-compact:hover,
+.tweakers-move-timeline-compact[aria-pressed='true'] {
+  opacity: 1;
+}
+
+.tweakers-move-timeline-compact:focus-visible {
+  outline: 1px solid var(--move-timeline-ink);
+}
+
+.tweakers-move-timeline-compact svg {
+  width: 12px;
+  height: 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+}
+
+/* The timeline's clock in the panel's volume corner: Play, the time, Loop
+   and Rec — ember while off, lit while on, the take in the record red. */
+.tweakers-move-timeline-clock {
+  gap: 4px;
+  padding: 0 4px;
+  justify-content: center;
+}
+
+.tweakers-move-timeline-clock .tweakers-move-volume-value {
+  min-width: 72px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.tweakers-move-timeline-key {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--move-chip);
+  cursor: pointer;
+  transition: color var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-timeline-key svg {
+  width: 14px;
+  height: 14px;
+}
+
+.tweakers-move-timeline-key:hover {
+  color: color-mix(in srgb, var(--move-text) 45%, var(--move-chip));
+}
+
+.tweakers-move-timeline-key[data-on] {
+  color: var(--move-text);
+}
+
+.tweakers-move-timeline-key[data-name='rec'][data-on] {
+  color: var(--move-red);
+}
+
+.tweakers-move-timeline-key:focus-visible {
+  outline: 1px solid var(--move-text);
+  outline-offset: -1px;
 }
 
 .tweakers-list-screen,
@@ -4815,6 +5605,132 @@
 .tweakers-move-dial[data-visual] .tweakers-move-visual,
 .tweakers-move-dial[data-visual] .tweakers-move-dial-icon {
   transform: translateY(8px);
+}
+
+/* ---------------------------------------------------------------------------
+   The offset face (Figma 988:1563)
+
+   A thing and the room it has to move in. The room is ruled top and bottom
+   and hatched across, so it reads as somewhere rather than as a bar; the
+   stretch the offset has pushed through is the same room filled in and ruled
+   harder. The pin stands over the room rather than inside it, because the
+   room is short and a marker on the line would be lost in the hatching.
+
+   The room keeps its own metrics — it needs the air above it for the pin's
+   head, which no other face wants — and stands clear of the name above and
+   the reading below. */
+.tweakers-move-dial[data-visual="offset"] {
+  /* the room: its side margins, its height, and the air it leaves the reading */
+  --move-offset-inset: 15%;
+  --move-offset-room: 55px;
+  --move-offset-foot: 36px;
+  /* the two markers, and the rules that close the room */
+  --move-offset-rule: 2px;
+  /* the pin standing over the room, and the ways out beside it */
+  --move-offset-pin-w: 15px;
+  --move-offset-pin-h: 20px;
+  --move-offset-way-w: 14px;
+  --move-offset-way-gap: 7px;
+  /* one step of the diagonal ruling, measured across the lines */
+  --move-offset-hatch: 4.25px;
+}
+
+.tweakers-move-offset {
+  position: absolute;
+  left: var(--move-offset-inset);
+  right: var(--move-offset-inset);
+  bottom: var(--move-offset-foot);
+  height: var(--move-offset-room);
+  border-top: var(--move-offset-rule) solid var(--move-bg);
+  border-bottom: var(--move-offset-rule) solid var(--move-bg);
+  background: repeating-linear-gradient(
+    45deg,
+    color-mix(in srgb, var(--move-bg) 40%, transparent) 0 1px,
+    transparent 1px var(--move-offset-hatch)
+  );
+  color: var(--move-text);
+  pointer-events: none;
+}
+
+/* Moved off where it sits, the pin and the way it took carry the Move's
+   orange. That is the one thing colour says on this face. */
+.tweakers-move-offset[data-moved] {
+  color: var(--move-orange);
+}
+
+.tweakers-move-offset-span,
+.tweakers-move-offset-origin,
+.tweakers-move-offset-pin {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.tweakers-move-offset-span {
+  left: 0;
+  right: 0;
+  background:
+    repeating-linear-gradient(45deg, var(--move-bg) 0 1px, transparent 1px var(--move-offset-hatch)),
+    color-mix(in srgb, var(--move-bg) 50%, var(--move-chip));
+}
+
+.tweakers-move-offset-origin,
+.tweakers-move-offset-pin {
+  width: var(--move-offset-rule);
+  margin-left: calc(var(--move-offset-rule) / -2);
+}
+
+.tweakers-move-offset-origin {
+  background: color-mix(in srgb, var(--move-text) 30%, transparent);
+}
+
+/* The head of the untouched place, stated outright — a quiet line alone is
+   too easy to take for one more hatch stroke. */
+.tweakers-move-offset-origin::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: var(--move-offset-rule);
+  background: var(--move-text);
+}
+
+.tweakers-move-offset-pin {
+  background: color-mix(in srgb, currentColor 30%, transparent);
+}
+
+.tweakers-move-offset-head {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  width: var(--move-offset-pin-w);
+  height: var(--move-offset-pin-h);
+  margin-left: calc(var(--move-offset-pin-w) / -2);
+  fill: currentColor;
+}
+
+/* A way out sits a fixed step off the pin, on the side it points to. It is
+   pinned by the edge nearest the pin, never by the far one: a pin driven
+   against the wall pushes its way out into the margin rather than sliding
+   back across the pin, where it would read as pointing the other way. */
+.tweakers-move-offset-way {
+  position: absolute;
+  top: 50%;
+  width: var(--move-offset-way-w);
+  height: calc(var(--move-offset-way-w) * 11.73 / 13.6609);
+  transform: translateY(-50%);
+  fill: currentColor;
+}
+
+.tweakers-move-offset-way[data-way="back"] {
+  right: calc(100% - var(--move-offset-at) + var(--move-offset-way-gap));
+}
+
+.tweakers-move-offset-way[data-way="forward"] {
+  left: calc(var(--move-offset-at) + var(--move-offset-way-gap));
+}
+
+.tweakers-move-offset-trail {
+  opacity: 0.3;
 }
 
 /* ---------------------------------------------------------------------------

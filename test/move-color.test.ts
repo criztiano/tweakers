@@ -20,7 +20,7 @@ function gradientPanel(stops = [
   return id;
 }
 const stopsOf = (id: string) => (TweakStore.getValue(id, 'ramp') as GradientValue).stops;
-afterEach(() => { MoveColorStore.close(); ids.splice(0).forEach(id => TweakStore.unregisterPanel(id)); });
+afterEach(() => { MoveColorStore.lockPalette(null); MoveColorStore.setPalettes(null); MoveColorStore.close(); ids.splice(0).forEach(id => TweakStore.unregisterPanel(id)); });
 describe('Move color editing', () => {
   it('wraps hue and keeps luminosity and opacity independent', () => {
     const id = panel('#ff000080');
@@ -122,5 +122,57 @@ describe('Move gradient editing', () => {
     const b = gradientPanel();
     MoveColorStore.open(b, 'ramp');
     expect(MoveColorStore.getStop()).toBe(0);
+  });
+  it('holds every colour control to the app\'s palette, open or not, until the lock lets go', () => {
+    const colors = ['#ff0000', '#00ff00', '#0000ff'];
+    const id = panel('#ff0000');
+    MoveColorStore.lockPalette({ id: 'app', name: 'App', colors });
+    expect(MoveColorStore.getPalette()?.colors).toEqual(colors);
+    // no editor open: a turn still steps to the next colour of the lock
+    MoveColorStore.turn(id, 'tint', 1);
+    expect(TweakStore.getValue(id, 'tint')).toBe('#00ff00');
+    MoveColorStore.turn(id, 'tint', 1);
+    expect(TweakStore.getValue(id, 'tint')).toBe('#0000ff');
+    // a colour the app wrote itself steps on from where it is in the palette
+    TweakStore.updateValue(id, 'tint', '#0000ff');
+    MoveColorStore.turn(id, 'tint', 1);
+    expect(TweakStore.getValue(id, 'tint')).toBe('#ff0000');
+    MoveColorStore.turn(id, 'tint', -1);
+    expect(TweakStore.getValue(id, 'tint')).toBe('#0000ff');
+    // a free hue or luminosity edit lands on a colour of the lock
+    MoveColorStore.update(id, 'tint', { h: 20, l: 0.3 });
+    expect(colors).toContain(TweakStore.getValue(id, 'tint'));
+    // the navigator stands down: the palette is the app's to choose
+    MoveColorStore.open(id, 'tint');
+    MoveColorStore.openPicker();
+    expect(MoveColorStore.isPickerOpen()).toBe(false);
+    MoveColorStore.setPalette('ember');
+    expect(MoveColorStore.getPalette()?.id).toBe('app');
+    // released, the wheel is whole again
+    MoveColorStore.lockPalette(null);
+    MoveColorStore.close();
+    MoveColorStore.update(id, 'tint', { h: 20, s: 1, l: 0.5 });
+    expect(colors).not.toContain(TweakStore.getValue(id, 'tint'));
+  });
+  it("lists the app's own palettes in the navigator, with no colour open", () => {
+    const picked: (string | null)[] = [];
+    MoveColorStore.setPalettes([
+      { id: 'warm', name: 'Warm', colors: ['#ff0000', '#ffaa00'] },
+      { id: 'cool', name: 'Cool', colors: ['#0000ff', '#00ffaa'] },
+    ], (id) => picked.push(id));
+    expect(MoveColorStore.palettes().map((p) => p.id)).toEqual(['warm', 'cool']);
+    // no editor open, and it still opens: the palette is the app's own setting
+    MoveColorStore.openPicker();
+    expect(MoveColorStore.isPickerOpen()).toBe(true);
+    MoveColorStore.choosePicker(2);
+    expect(picked).toEqual(['cool']);
+    expect(MoveColorStore.isPickerOpen()).toBe(false);
+    // row 0 is "All colors" — no palette
+    MoveColorStore.openPicker();
+    MoveColorStore.choosePicker(0);
+    expect(picked).toEqual(['cool', null]);
+    // released, the built-in palettes are back
+    MoveColorStore.setPalettes(null);
+    expect(MoveColorStore.palettes().length).toBeGreaterThan(2);
   });
 });

@@ -7,6 +7,8 @@ export type { TweakTheme } from './theme';
 // Move surface mirror (docked bottom panel matching the bridge kit's mapping)
 export { MovePanel } from './components/MovePanel';
 export type { MovePanelProps } from './components/MovePanel';
+export { MoveSlot } from './components/MoveSlot';
+export type { MoveSlotProps } from './components/MoveSlot';
 // The panel's window events — what the bridge kit sends in and hears back.
 export {
   MOVE_TOUCH_EVENT,
@@ -16,9 +18,12 @@ export {
   MOVE_PAGE_SELECT_EVENT,
   MOVE_JOG_EVENT,
   MOVE_JOG_CLICK_EVENT,
+  MOVE_VOLUME_EVENT,
+  MOVE_VOLUME_TAP_EVENT,
   MOVE_MUTE_EVENT,
   MOVE_SEARCH_EVENT,
   MOVE_STRIP_EVENT,
+  MOVE_SETTINGS_EVENT,
   MOVE_TRACK_COLORS,
 } from './components/MovePanel';
 export { MoveActionButton } from './components/MoveActionButton';
@@ -45,12 +50,12 @@ export type { MovePage, MoveBandCell, MoveEdgesCell } from './move-layout';
 export { buildMoveStrip, isStripSlot, stripStarts, stripOffsets, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripSlotCount, stripSlotIndex } from './move-strip';
 
 // The big-slot library — the dictionary of what a Move dial slot can be
-export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MOVE_GATE_GRID, MoveSlotMultibandBody, MoveSlotChannelBody, MOVE_MULTIBAND_GRID, MOVE_GAUGE, moveGaugeBearing, MoveSlotPlaybackDrawing, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotColorBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
+export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MOVE_GATE_GRID, MoveSlotMultibandBody, MoveSlotChannelBody, MOVE_MULTIBAND_GRID, MOVE_GAUGE, moveGaugeBearing, MoveSlotPlaybackDrawing, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotColorBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
 // The small slots — the pad row under the dials
 export { MOVE_PAD_LIBRARY, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody } from './components/move-slots';
 export type { MovePadKind, MovePadBandHand, MovePadEdgeHand } from './components/move-slots';
-export { moveNumericDrawing, moveTrimSpan, moveGateSpan, moveMultibandSpan, moveMultibandRole, moveChannelPosition, movePlaybackMode, moveVisualReading, moveBandCuts, MOVE_BAND_W, MOVE_BAND_H } from './move-visual-core';
-export type { MoveGateRole, MoveMultibandRole, MoveTone, MoveVisual, MoveSliderVisual, MoveSelectVisual, MoveToggleVisual, MovePlaybackMode, MoveNumericDrawing } from './move-visual-core';
+export { moveNumericDrawing, moveTrimSpan, moveGateSpan, moveVectorAxes, moveVectorStage, MOVE_STAGE, moveMultibandSpan, moveMultibandRole, moveChannelPosition, movePlaybackMode, moveVisualReading, moveBandCuts, MOVE_BAND_W, MOVE_BAND_H } from './move-visual-core';
+export type { MoveStage, MoveGateRole, MoveMultibandRole, MoveTone, MoveVisual, MoveSliderVisual, MoveSelectVisual, MoveToggleVisual, MovePlaybackMode, MoveNumericDrawing } from './move-visual-core';
 export type { MoveSlotKind, MoveTrimSpanEdge, MoveFaceDial, MoveChannelDial } from './components/move-slots';
 // The gate face's live picture — the app attaches what the gate is doing around the playhead
 export { MoveGateMeter, drawMoveGate, moveGateDemoReading } from './move-gate';
@@ -100,12 +105,23 @@ export type { MoveWaveformVariant, MoveWaveformView, MoveWaveformStyle, MoveWave
 // whatever display is already up there.
 export { MoveNotifications, moveNotify } from './components/MoveNotifications';
 export type { MoveNotificationsProps, MoveNotifyOptions } from './components/MoveNotifications';
+// Whether the Move is with this app — the kit says it, a dot shows it
+export { MoveConnectionDot } from './components/MoveConnectionDot';
+export type { MoveConnectionDotProps } from './components/MoveConnectionDot';
+export { MoveConnection, MOVE_CONNECTION_EVENT, MOVE_CONNECTION_ASK_EVENT } from './move-connection';
+export type { MoveConnectionState } from './move-connection';
 export { MOVE_NOTIFY_KINDS, MOVE_NOTIFY_GAP, MOVE_FLOAT_SELECTOR, notifyDockBottom } from './move-notify';
 export type { MoveNotifyKind } from './move-notify';
 export { MOVE_PALETTE } from './move-palette';
 export type { MovePaletteName } from './move-palette';
 export { MoveSettingsView } from './move-settings';
 export { MoveVolumeDisplay } from './move-volume';
+export { MoveTimeline, MoveTimelineClock, MoveTimelineZoom } from './components/MoveTimeline';
+export type { MoveTimelineProps } from './components/MoveTimeline';
+export { MoveTimelineStore, MOVE_TIMELINE_MAX_ZOOM, timelineWindow, followWindow, zoomWindow, timelineTicks, formatTimelineTick, timelineClock, packTimelineRows, timelineRowHeight } from './move-timeline';
+export type { MoveTimelineClaimOptions } from './move-timeline';
+export { useMoveTimeline } from './use-move-timeline';
+export type { UseMoveTimelineOptions, MoveTimelineValues } from './use-move-timeline';
 export type { MoveVolumeDisplayState } from './move-volume';
 export { ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, MOVE_FUNCTION_ICONS } from './icons';
 export type { MoveFunctionGlyph } from './icons';
@@ -117,7 +133,7 @@ export type { MoveKitRegistry } from './store/TweakStore';
 
 // Raw hardware an app claims for itself — the bottom pad rows, the step
 // buttons, the device screen — kept for the on-screen mirror.
-export { MoveSurfaceStore, moveScreenRowLabel, moveScreenChecked } from './move-surface-store';
+export { MoveSurfaceStore, moveScreenRowLabel, moveScreenRowSearchText, moveScreenChecked } from './move-surface-store';
 export type { MovePadCell, MoveStepCell, MoveScreenList, MoveScreenRow, MoveScreenSearch, MoveScreenWait, MoveSurfaceState } from './move-surface-store';
 
 // List screen (the Move's dark display list, standalone)
@@ -190,7 +206,7 @@ export type {
 } from './modulation-core';
 export { ModRing } from './components/ModRing';
 
-// Timeline stores (headless — the Timeline UI lives in dialkit)
+// Timeline stores — the runtime under `useMoveTimeline` and dialkit's sidebar timeline
 export { formatClock } from './timeline-core';
 export { TimelineStore } from './store/TimelineStore';
 export type {

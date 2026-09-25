@@ -28,6 +28,15 @@ const pointer = (clientX: number, shiftKey = false) => ({
   clientX, clientY: 0, pointerId: 1, shiftKey,
   currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }) },
 });
+// A press at (x, y), then the pointer's travel to (x + dx, y + dy): a slot
+// turns from where it is — right or up raises — and a press alone moves nothing.
+const target = { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }), closest: () => null };
+const at = (clientX: number, clientY: number, extra: object = {}) => ({ clientX, clientY, pointerId: 1, shiftKey: false, button: 0, currentTarget: target, ...extra });
+function drag(slot: { props: Record<string, (e: unknown) => void> }, dx: number, dy: number, from = at(0, 0)) {
+  act(() => slot.props.onPointerDown(from));
+  act(() => slot.props.onPointerMove({ ...from, clientX: from.clientX + dx, clientY: from.clientY + dy }));
+  act(() => slot.props.onPointerUp({ ...from, clientX: from.clientX + dx, clientY: from.clientY + dy }));
+}
 const opacity = { type: 'slider', min: 0, max: 1, default: 0.5, step: 0.01, moveVisual: { kind: 'opacity' } } as const;
 
 describe('MovePanel semantic interactions', () => {
@@ -81,10 +90,41 @@ describe('MovePanel semantic interactions', () => {
     act(() => dial('Speed').props.onKeyDown(keyEvent('End')));
     expect(TweakStore.getValues(id).speed).toBe(4);
     expect(needle().props.x2).toBeGreaterThan(0);
-    // the drag is the dial's own: left to right across the slot
-    act(() => dial('Speed').props.onPointerDown(pointer(60)));
-    expect(TweakStore.getValues(id).speed).toBeCloseTo(2.125, 2);
-    act(() => dial('Speed').props.onPointerUp());
+    // the drag is the dial's own: a press moves nothing, and it turns from
+    // where it is — right raises
+    act(() => dial('Speed').props.onKeyDown(keyEvent('Home')));
+    act(() => dial('Speed').props.onPointerDown(at(60, 0)));
+    expect(TweakStore.getValues(id).speed).toBe(0.25);
+    act(() => dial('Speed').props.onPointerUp(at(60, 0)));
+    drag(dial('Speed'), 20, 0);
+    expect(TweakStore.getValues(id).speed).toBeCloseTo(1, 2); // a fifth of the turn, a fifth of the range
+    expect(needle().props.x2).toBeLessThan(0);
+  });
+
+  it('draws an offset as the room it can move in, the knob carrying the pin across it', () => {
+    mount({
+      offset: {
+        type: 'slider', min: -25, max: 25, default: -25, step: 1,
+        moveVisual: { kind: 'offset', origin: 0.75 },
+      },
+    });
+    const face = () => dial('Offset').findByProps({ className: 'tweakers-move-offset' });
+    const pin = () => dial('Offset').findByProps({ className: 'tweakers-move-offset-pin' });
+    const way = () => dial('Offset').findAllByProps({ className: 'tweakers-move-offset-way' });
+    expect(dial('Offset').props['data-visual']).toBe('offset');
+    // A full turn back from three quarters along carries the pin half the room.
+    expect(pin().props.style.left).toBe('25%');
+    expect(face().props['data-moved']).toBe(true);
+    expect(way()).toHaveLength(1);
+    expect(way()[0].props['data-way']).toBe('back');
+    // Parked, it fills nothing and offers both ways out.
+    act(() => dial('Offset').props.onKeyDown(keyEvent('End')));
+    act(() => dial('Offset').props.onKeyDown(keyEvent('Home')));
+    expect(TweakStore.getValues(id).offset).toBe(-25);
+    act(() => { TweakStore.updateValue(id, 'offset', 0); });
+    expect(pin().props.style.left).toBe('75%');
+    expect(face().props['data-moved']).toBeUndefined();
+    expect(way().map((w) => w.props['data-way'])).toEqual(['back', 'forward']);
   });
 
   it('draws a trim start beside a trim end as one line, each column editing its own edge', () => {
@@ -101,11 +141,12 @@ describe('MovePanel semantic interactions', () => {
     expect(flag('end').props['data-offset']).toBeUndefined();
     act(() => dial('End').props.onKeyDown(keyEvent('Home')));
     expect(TweakStore.getValues(id)).toMatchObject({ start: 2, end: 0 });
-    // the drag reads the whole line, not the touched column
-    const zone = { ...pointer(130), currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, width: 120 }), parentElement: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 260, height: 140 }) } } };
-    act(() => dial('End').props.onPointerDown(zone));
-    expect(TweakStore.getValues(id).end).toBe(5); // the middle of a 260px line inset 14px each side
-    act(() => dial('End').props.onPointerUp());
+    // a press alone leaves the edge where it is; the drag turns it from there
+    act(() => dial('End').props.onPointerDown(at(130, 0)));
+    expect(TweakStore.getValues(id).end).toBe(0);
+    act(() => dial('End').props.onPointerUp(at(130, 0)));
+    drag(dial('End'), 50, 0); // half a 100px track to the right
+    expect(TweakStore.getValues(id).end).toBe(5);
     expect(flag('end').props['data-offset']).toBe(true);
   });
 
@@ -122,12 +163,9 @@ describe('MovePanel semantic interactions', () => {
     expect(bar('release').props.style['--move-face-at']).toBe(0.5);
     act(() => dial('Release').props.onKeyDown(keyEvent('End')));
     expect(TweakStore.getValues(id)).toMatchObject({ gate: -20, look: 10, release: 510 });
-    // a bar's drag reads its own drawn track, top to bottom
-    const track = { getBoundingClientRect: () => ({ left: 0, top: 30, width: 4, height: 84 }) };
-    const press = { clientX: 0, clientY: 32 + 40, pointerId: 1, shiftKey: false, currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }), closest: () => ({ querySelector: () => track }) } };
-    act(() => dial('Gate').props.onPointerDown(press));
+    // a bar turns like any dial: down lowers it from where it is
+    drag(dial('Gate'), 0, 25);
     expect(TweakStore.getValues(id).gate).toBe(-40);
-    act(() => dial('Gate').props.onPointerUp());
   });
 
   it('draws an amount, a speed and band dials as one multiband face, band chips joining the curve', () => {
@@ -152,14 +190,12 @@ describe('MovePanel semantic interactions', () => {
     expect(TweakStore.getValues(id).mid).toBe(100);
     const moved = renderer!.root.findByProps({ 'data-kind': 'multiband' }).findByType(MoveMultibandDisplay).props.bands.map((b: { position: number }) => b.position);
     expect(moved[2]).toBe(1);
-    // the speed turns round its gauge: straight up is the middle
-    const gauge = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 98, height: 64 }) };
-    const press = { clientX: 49, clientY: 0, pointerId: 1, shiftKey: false, currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }), closest: () => ({ querySelector: () => gauge }) } };
-    act(() => dial('Speed').props.onPointerDown(press));
+    // the speed turns from where it is, like every dial
+    act(() => dial('Speed').props.onPointerDown(at(49, 0)));
     expect(TweakStore.getValues(id).speed).toBe(51);
-    act(() => dial('Speed').props.onPointerDown({ ...press, clientX: 98, clientY: 42 }));
-    expect(TweakStore.getValues(id).speed).toBeCloseTo(1 + 100 * (0.5 + 90 / 220), 0);
-    act(() => dial('Speed').props.onPointerUp());
+    act(() => dial('Speed').props.onPointerUp(at(49, 0)));
+    drag(dial('Speed'), 20, 0);
+    expect(TweakStore.getValues(id).speed).toBe(71);
   });
 
   it('takes the band under the cursor on the band grid, pads included', () => {
@@ -175,10 +211,9 @@ describe('MovePanel semantic interactions', () => {
     act(() => { renderer = create(createElement(MovePanel, { panels: 'Visual', dock: 'flow', productionEnabled: true })); });
     const grid = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 300, height: 100 }) };
     // x 75 of 300 is the second of six bands: Hi mid, on a pad
-    const press = { clientX: 75, clientY: 75, pointerId: 1, shiftKey: false, currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }), closest: () => ({ querySelector: () => grid }) } };
-    act(() => dial('Hi').props.onPointerDown(press));
-    expect(TweakStore.getValues(id)).toMatchObject({ hi: 100, hiMid: 25 });
-    act(() => dial('Hi').props.onPointerUp());
+    const press = at(75, 75, { currentTarget: { ...target, closest: () => ({ querySelector: () => grid }) } });
+    drag(dial('Hi'), 0, 25, press);
+    expect(TweakStore.getValues(id)).toMatchObject({ hi: 100, hiMid: 75 });
   });
 
   it('draws channel dials side by side as one mixer, each fader in its own column', () => {
@@ -188,11 +223,48 @@ describe('MovePanel semantic interactions', () => {
     expect(face.props.style.gridColumn).toBe('span 2');
     const fills = face.findAllByProps({ className: 'tweakers-move-channel-fill' });
     expect(fills.map((f) => [f.props.style['--move-face-at'], f.props['data-empty']])).toEqual([[0, true], [0.4, undefined]]);
-    const well = { getBoundingClientRect: () => ({ left: 0, top: 40, width: 100, height: 100 }) };
-    const press = { clientX: 0, clientY: 65, pointerId: 1, shiftKey: false, currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }), closest: () => ({ querySelector: (q: string) => (q === '[data-track="channel-1"]' ? well : null) }) } };
-    act(() => dial('B').props.onPointerDown(press));
+    drag(dial('B'), 0, -35); // up raises the fader
     expect(TweakStore.getValues(id).b).toBe(75);
-    act(() => dial('B').props.onPointerUp());
+    expect(TweakStore.getValues(id).a).toBe(0);
+  });
+
+  it('draws x, y and z side by side as one stage, each column turning its own axis', () => {
+    mount({
+      x: { type: 'slider', min: 0, max: 1000, default: 250, step: 1, moveVisual: { kind: 'axis', axis: 'x' } },
+      y: { type: 'slider', min: 0, max: 1000, default: 0, step: 1, moveVisual: { kind: 'axis', axis: 'y', down: true } },
+      z: { type: 'slider', min: -500, max: 500, default: 0, step: 1, moveVisual: { kind: 'axis', axis: 'z' } },
+    });
+    const face = renderer!.root.findByProps({ 'data-kind': 'vector' });
+    expect(face.props.style.gridColumn).toBe('span 3');
+    expect(renderer!.root.findAllByProps({ className: 'tweakers-move-dial' })).toHaveLength(1);
+    expect(dial('X').props['aria-orientation']).toBe('horizontal');
+    expect(dial('Z').props['aria-orientation']).toBe('vertical');
+    // each column turns its own axis from where it is, like any dial: right or
+    // up raises it, and the other two axes stay put
+    const start = TweakStore.getValues(id);
+    drag(dial('X'), 30, 0);
+    const x = TweakStore.getValues(id).x as number;
+    expect(x).toBeGreaterThan(start.x as number);
+    drag(dial('Y'), 0, -30);
+    expect(TweakStore.getValues(id).y).toBeGreaterThan(start.y as number);
+    drag(dial('Z'), 0, 30);
+    expect(TweakStore.getValues(id).z).toBeLessThan(start.z as number);
+    expect(TweakStore.getValues(id).x).toBe(x);
+    // a press alone never moves an axis
+    act(() => dial('X').props.onPointerDown(at(390, 5)));
+    act(() => dial('X').props.onPointerUp(at(390, 5)));
+    expect(TweakStore.getValues(id).x).toBe(x);
+  });
+
+  it('keeps the ordinary faces when the axes are out of order or one is missing', () => {
+    mount({
+      y: { type: 'slider', min: 0, max: 100, default: 0, step: 1, moveVisual: { kind: 'axis', axis: 'y' } },
+      x: { type: 'slider', min: 0, max: 100, default: 0, step: 1, moveVisual: { kind: 'axis', axis: 'x' } },
+      z: { type: 'slider', min: 0, max: 100, default: 0, step: 1, moveVisual: { kind: 'axis', axis: 'z' } },
+    });
+    expect(renderer!.root.findAllByProps({ 'data-kind': 'vector' })).toHaveLength(0);
+    // each axis keeps its own ordinary dial
+    expect(renderer!.root.findAllByProps({ className: 'tweakers-move-dial' })).toHaveLength(3);
   });
 
   it('keeps the ordinary faces when the gate dials are out of order', () => {
