@@ -76,6 +76,20 @@ describe('the plain option slot (React)', () => {
     assert.equal(curve.caption()[0].props.children, 'Landscape');
   });
 
+  it('lays an option picture under the whole face, in place of any glyph', () => {
+    const nodes = create(
+      createElement(MoveSlotEnumBody, {
+        label: 'Pattern', optionLabel: 'Portrait', options: OPTIONS, activeIdx: 0,
+        shape: null, glyph: 'arrow-right', picture: '/p/rings.png',
+      })
+    ).root.findAll((n) => typeof n.type === 'string');
+    const picture = nodes.find((n) => n.props.className === 'tweakers-move-dial-picture');
+    assert.equal(picture?.props.style.maskImage, 'url("/p/rings.png")');
+    assert.equal(nodes.some((n) => n.props.className === 'tweakers-move-dial-icon'), false);
+    assert.equal(nodes.filter((n) => n.props.className === 'tweakers-move-dial-enum-cell').length, OPTIONS.length);
+    assert.equal(nodes.find((n) => n.props.className === 'tweakers-move-dial-option')?.props.children, 'Portrait');
+  });
+
   it('leaves the pagination cells to the faces that name one option', () => {
     // A list has the whole run on it; the cells would only repeat it.
     assert.equal(renderSlot().cells().length, 0);

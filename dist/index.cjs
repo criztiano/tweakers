@@ -2175,6 +2175,7 @@ function normalizeXYDial(meta, value) {
 var enumOptionValue = (o) => typeof o === "string" ? o : o.value;
 var enumOptionLabel = (o) => typeof o === "string" ? o : o.label ?? o.value;
 var enumOptionIcon = (o) => typeof o === "string" ? null : o.icon ?? null;
+var enumOptionPicture = (o) => typeof o === "string" ? null : o.picture ?? null;
 var ENUM_SHAPE_SAMPLES = 64;
 function enumShapePath(meta, value) {
   if (!meta.preview) return null;
@@ -2626,6 +2627,7 @@ function moveSlotKind(meta, opts = {}) {
   if (movePlaybackMode(meta, opts.value)) return "playback";
   if (opts.enum) {
     if (opts.shape) return "curve";
+    if (opts.picture) return "picture";
     if (opts.glyph) return "icon";
     return "enum";
   }
@@ -2697,16 +2699,18 @@ function MoveSlotEnumBody({
   activeIdx,
   shape,
   glyph,
+  picture = null,
   playback,
   scoped
 }) {
   const selected = options[activeIdx];
-  if (playback || shape || glyph || scoped) {
+  if (playback || shape || glyph || picture || scoped) {
     return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
+      !playback && picture && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotPicture, { src: picture }),
       /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-tag", children: label }),
       playback && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotPlaybackDrawing, { mode: playback }),
       !playback && shape && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotShape, { d: shape }),
-      !playback && glyph && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotGlyph, { name: glyph, className: "tweakers-move-dial-icon" }),
+      !playback && !picture && glyph && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotGlyph, { name: glyph, className: "tweakers-move-dial-icon" }),
       /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-option", children: optionLabel }),
       /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "tweakers-move-dial-enum", children: options.map((opt, j) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
         "span",
@@ -3252,6 +3256,17 @@ function MoveSlotMetronomeBody({ label, checked, swing }) {
     ) })
   ] });
 }
+function MoveSlotPicture({ src }) {
+  const mask = `url(${JSON.stringify(src)})`;
+  return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+    "span",
+    {
+      className: "tweakers-move-dial-picture",
+      "aria-hidden": "true",
+      style: { maskImage: mask, WebkitMaskImage: mask }
+    }
+  );
+}
 function MoveSlotIcon({ icon, className }) {
   if (LUCIDE_ICONS[icon]) return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotGlyph, { name: icon, className });
   const mask = `url(${JSON.stringify(icon)})`;
@@ -3479,6 +3494,7 @@ var MOVE_SLOT_LIBRARY = {
   default: { description: "name centred, value on touch, fill bar", component: MoveSlotDefaultBody },
   value: { description: "value-first: the value is the headline, the name a tag on top", component: MoveSlotDefaultBody },
   icon: { description: "option picker showing the current option as a glyph", component: MoveSlotEnumBody },
+  picture: { description: "option picker whose current option fills the slot as a picture, its name over it", component: MoveSlotEnumBody },
   curve: { description: "option picker drawing the current option\u2019s shape \u2014 curve selection", component: MoveSlotEnumBody },
   enum: { description: "stepped option picker showing every option on a list screen", component: MoveSlotEnumBody },
   xy: { description: "two axes in one gesture field, or a live shape preview", component: MoveSlotXYBody },
@@ -14310,6 +14326,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     const optionLabel = enumOptionLabel(option);
                                     const shape = enumShapePath(meta, values[meta.path]);
                                     const glyph = enumOptionIcon(option);
+                                    const picture = enumOptionPicture(option);
                                     const playback = movePlaybackMode(meta, values[meta.path]);
                                     return /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)(
                                       "div",
@@ -14345,6 +14362,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                               activeIdx,
                                               shape,
                                               glyph,
+                                              picture,
                                               playback,
                                               scoped: !!scope
                                             }
@@ -16200,6 +16218,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
               activeIdx,
               shape,
               glyph: enumOptionIcon(option),
+              picture: enumOptionPicture(option),
               playback
             }
           )

@@ -444,6 +444,8 @@
   --move-gap: 4px;
   --move-wheel-width: 200px;
   --move-glyph-stroke: 1.25;
+  /* A full-slot option picture sits under the slot's name: this much of it. */
+  --move-picture-opacity: 0.55;
   --move-radius-small: 8px;
   --move-font-label: 'Geist Pixel', system-ui, -apple-system, sans-serif;
   /* The big readouts — a dial's value, the volume pill — run the line shape. */
@@ -1927,6 +1929,30 @@
   stroke-width: var(--move-glyph-stroke);
   color: var(--move-text);
   pointer-events: none;
+}
+
+/* An option's picture fills the slot edge to edge, under its name and
+   pagination. A host image rides as a mask, so it takes the slot's ink; held
+   back so the name over it still reads first. */
+.tweakers-move-dial-picture {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--move-text);
+  opacity: var(--move-picture-opacity);
+  mask-size: cover;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: cover;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  pointer-events: none;
+}
+
+/* Over a picture the option's name keeps a halo of the slot's own surface,
+   so it reads first whatever the picture draws behind it. */
+.tweakers-move-dial:has(> .tweakers-move-dial-picture) .tweakers-move-dial-option {
+  text-shadow: 0 0 2px var(--move-dial-surface), 0 0 5px var(--move-dial-surface), 0 0 9px var(--move-dial-surface);
 }
 
 .tweakers-move-dial-option {

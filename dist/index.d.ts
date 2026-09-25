@@ -1812,12 +1812,16 @@ type SelectConfig = {
     moveVisual?: MoveSelectVisual;
     /**
      * An option may name an `icon` from `LUCIDE_ICONS` — the Move slot draws it
-     * instead of making you read the mode name off a controller.
+     * instead of making you read the mode name off a controller. An option may
+     * instead carry a `picture` (an image URL) that fills the whole slot, drawn
+     * as a mask in the slot's own colour — for choices that are a texture or a
+     * pattern, where the picture is the thing chosen.
      */
     options: (string | {
         value: string;
         label: string;
         icon?: string;
+        picture?: string;
     })[];
     default?: string;
     /** 'segmented' renders the options as an inline segmented control instead of a dropdown. Suits 2–4 short options. */
@@ -2280,6 +2284,7 @@ type ControlMeta = {
         value: string;
         label: string;
         icon?: string;
+        picture?: string;
     })[];
     /** Toggle's own picture and state badges, from the explicit ToggleConfig form; an action's pad glyph. */
     icon?: string;
@@ -3833,6 +3838,9 @@ declare function MoveSlotPlaybackDrawing({ mode }: {
  *   chip substituted into the slot.
  * - `icon`    — an option picker whose current option shows as a glyph:
  *   at arm's length you read a picture, not a word.
+ * - `picture` — an option picker whose current option fills the slot as a
+ *   picture (the option's `picture`): a pattern or texture you choose by
+ *   seeing it, the name and position over it.
  * - `curve`   — an option picker whose current option draws its shape (the
  *   select's `preview` sampler) — the curve-selection slot.
  * - `enum`    — a plain stepped option picker: every option on the Move's
@@ -3888,12 +3896,13 @@ declare function MoveSlotPlaybackDrawing({ mode }: {
  * small caption where its own single slot's label would have been — so the
  * hardware's one-knob-per-column rule still holds under the shared picture.
  */
-type MoveSlotKind = 'default' | 'value' | 'icon' | 'curve' | 'enum' | 'xy' | 'range' | 'filter' | 'color' | 'transfer' | 'ramp' | 'balance' | 'dial' | 'opacity' | 'blur' | 'pan' | 'stereo-width' | 'pitch' | 'trim' | 'offset' | 'trim-span' | 'gate' | 'vector' | 'multiband' | 'channel' | 'playback' | 'env' | 'scope' | 'toggle' | 'toggle-icon' | 'metronome';
+type MoveSlotKind = 'default' | 'value' | 'icon' | 'curve' | 'enum' | 'xy' | 'range' | 'filter' | 'color' | 'transfer' | 'ramp' | 'balance' | 'dial' | 'opacity' | 'blur' | 'pan' | 'stereo-width' | 'pitch' | 'trim' | 'offset' | 'trim-span' | 'gate' | 'vector' | 'multiband' | 'channel' | 'playback' | 'env' | 'scope' | 'toggle' | 'toggle-icon' | 'metronome' | 'picture';
 /** Which face a control wears in its slot, from its meta and moment. */
 declare function moveSlotKind(meta: ControlMeta, opts?: {
     enum?: boolean;
     shape?: string | null;
     glyph?: string | null;
+    picture?: string | null;
     valueFirst?: boolean;
     value?: unknown;
     stage?: string | null;
@@ -3948,13 +3957,15 @@ declare function MoveSlotDefaultBody({ label, value, pct, originPct, atOrigin, }
  *  A slot the page has put its oscilloscope in already has a picture — the
  *  live wave — so it keeps the named option and drops the list, which the
  *  wave would be running behind. */
-declare function MoveSlotEnumBody({ label, optionLabel, options, activeIdx, shape, glyph, playback, scoped, }: {
+declare function MoveSlotEnumBody({ label, optionLabel, options, activeIdx, shape, glyph, picture, playback, scoped, }: {
     label: string;
     optionLabel: string;
     options: NonNullable<ControlMeta['options']>;
     activeIdx: number;
     shape: string | null;
     glyph: string | null;
+    /** The current option's full-slot picture; it fills the slot under the name. */
+    picture?: string | null;
     playback?: MovePlaybackMode | null;
     /** The slot draws the modulator's live signal behind this face. */
     scoped?: boolean;
@@ -4517,6 +4528,10 @@ declare const MOVE_SLOT_LIBRARY: {
     };
     readonly icon: {
         readonly description: "option picker showing the current option as a glyph";
+        readonly component: typeof MoveSlotEnumBody;
+    };
+    readonly picture: {
+        readonly description: "option picker whose current option fills the slot as a picture, its name over it";
         readonly component: typeof MoveSlotEnumBody;
     };
     readonly curve: {

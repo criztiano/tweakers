@@ -599,6 +599,7 @@ function normalizeXYDial(meta, value) {
 var enumOptionValue = (o) => typeof o === "string" ? o : o.value;
 var enumOptionLabel = (o) => typeof o === "string" ? o : o.label ?? o.value;
 var enumOptionIcon = (o) => typeof o === "string" ? null : o.icon ?? null;
+var enumOptionPicture = (o) => typeof o === "string" ? null : o.picture ?? null;
 var ENUM_SHAPE_SAMPLES = 64;
 function enumShapePath(meta, value) {
   if (!meta.preview) return null;
@@ -708,6 +709,7 @@ export {
   enumIndex,
   enumOptionIcon,
   enumOptionLabel,
+  enumOptionPicture,
   enumOptionValue,
   enumShapePath,
   filterShapePath,

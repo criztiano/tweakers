@@ -9,7 +9,7 @@ import { resolveAxis, pointFromValue, normalizeValue, type XYValue } from '../xy
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
 import { valueToBearing } from '../angle-core';
 import {
-  normalizeDial, normalizeRangeDial, dialOrigin, isEnumDial, enumIndex, enumOptionLabel, enumOptionIcon,
+  normalizeDial, normalizeRangeDial, dialOrigin, isEnumDial, enumIndex, enumOptionLabel, enumOptionIcon, enumOptionPicture,
   enumShapePath, filterShapePath,
 } from '../move-layout';
 import {
@@ -510,7 +510,8 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
         {...step(meta)}>
         <MoveModRing panelId={panelId} path={meta.path} />
         <MoveSlotEnumBody label={meta.label} optionLabel={optionLabel} options={options} activeIdx={activeIdx}
-          shape={shape} glyph={enumOptionIcon(option as never)} playback={playback} />
+          shape={shape} glyph={enumOptionIcon(option as never)} picture={enumOptionPicture(option as never)}
+          playback={playback} />
       </div>
     );
   }

@@ -784,6 +784,9 @@ export const enumOptionLabel = (o: string | { value: string; label?: string }) =
 /** The option's glyph name, or null — a bare string option never has one. */
 export const enumOptionIcon = (o: string | { icon?: string }): string | null =>
   typeof o === 'string' ? null : (o.icon ?? null);
+/** The option's full-slot picture URL, or null. */
+export const enumOptionPicture = (o: string | { picture?: string }): string | null =>
+  typeof o === 'string' ? null : (o.picture ?? null);
 
 /** Enough points to read a bell or a bounce at slot width, and no more. */
 export const ENUM_SHAPE_SAMPLES = 64;
