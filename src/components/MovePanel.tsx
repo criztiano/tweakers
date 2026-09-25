@@ -39,7 +39,7 @@ import { MoveGateDisplay } from './MoveGateDisplay';
 import { MoveMultibandDisplay } from './MoveMultibandDisplay';
 import { MoveModRing } from './ModRing';
 import { MOVE_TRACK_COLORS } from '../move-palette';
-import { MoveSurfaceStore, moveScreenRowLabel, type MovePadCell, type MoveStepCell } from '../move-surface-store';
+import { MoveSurfaceStore, moveScreenRowLabel, moveScreenRowSearchText, type MovePadCell, type MoveStepCell } from '../move-surface-store';
 import { resolveAxis, pointFromValue, normalizeValue, type XYValue } from '../xy-pad-core';
 import { MoveVolumeDisplay, type MoveVolumeDisplayState } from '../move-volume';
 import { MoveColorStore, MOVE_GRADIENT_STOPS } from '../move-color';
@@ -155,7 +155,7 @@ const palettePickerOpen = () => MoveColorStore.isPickerOpen();
 
 /**
  * The list a search is running on, read as one shape whichever store owns
- * it: its labels in row order, the row the wheel rests on, and the two
+ * it: its labels in row order (with any words the rows are also found by), the row the wheel rests on, and the two
  * things the search does to it — rest the wheel on a row (the next match,
  * previewed exactly as a wheel turn is) and take a row (which ends the
  * search). Null when the list has gone from under the search.
@@ -171,7 +171,7 @@ function searchRows(view: MoveSearchView): SearchRows | null {
     const screen = MoveSurfaceStore.getState().screen;
     if (!screen) return null;
     return {
-      labels: screen.items.map(moveScreenRowLabel),
+      labels: screen.items.map(moveScreenRowSearchText),
       cursor: view.cursor,
       rest: (index) => MoveSearchStore.setCursor(index),
       take: (index) => { MoveSearchStore.close(); MoveSurfaceStore.selectScreen(index); },
@@ -938,6 +938,35 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     window.addEventListener(MOVE_SEARCH_EVENT, onSearch);
     return () => window.removeEventListener(MOVE_SEARCH_EVENT, onSearch);
   }, []);
+  // The computer keyboard's way in: `/` or ⌘F (Ctrl+F) asks for the same
+  // search a held Capture does. Only a list that takes it keeps the key from
+  // the page — with nothing to search, ⌘F is still the browser's find. A
+  // key typed into a field is the field's; a search already open keeps its
+  // field and just takes the focus back.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const find = (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'f';
+      const slash = e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey;
+      if (!find && !slash) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) {
+        if (find && t.classList.contains('tweakers-move-search-input')) e.preventDefault();
+        return;
+      }
+      if (MoveSearchStore.isOpen()) {
+        const field = document.querySelector<HTMLInputElement>('.tweakers-move-search-input');
+        if (!field) return;
+        e.preventDefault();
+        field.focus();
+        return;
+      }
+      const ask = new CustomEvent(MOVE_SEARCH_EVENT, { detail: { shift: false }, cancelable: true });
+      window.dispatchEvent(ask);
+      if (ask.defaultPrevented) e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   // The wheel and its click, while a search runs. Registration order does
   // not decide who wins: the search takes every turn while it is open, and
   // every other reader of the wheel — the navigators, the strip, a host's
@@ -1693,7 +1722,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               the value means, exactly as it does for a wheel turn. */}
           {screen && (
             <div className="tweakers-move-wheel-screen" role="group" aria-label={screen.title ?? 'Wheel selection'} data-search={screenSearch ? true : undefined}>
-              {screenSearch && <MoveSearchBar view={screenSearch} />}
+              {screenSearch
+                ? <MoveSearchBar view={screenSearch} />
+                : <MoveSearchDoor onOpen={() => MoveSearchStore.open('screen', screen.index)} />}
               <ListScreen
                 items={searchedRows(
                   screen.items.map((row, index) => ({
@@ -1705,7 +1736,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       ...(row.tag ? { tag: row.tag } : {}),
                     }),
                   })),
-                  screenSearch
+                  screenSearch,
+                  screen.items.map(moveScreenRowSearchText)
                 )}
                 value={String(screenSearch ? screenSearch.cursor : screen.index)}
                 follow="center"
@@ -3499,7 +3531,9 @@ function MovePresetScreen({ view, search }: { view: MovePresetView; search: Move
         if (!search) MovePresetStore.scroll(e.deltaY > 0 ? 1 : -1);
       }}
     >
-      {search && <MoveSearchBar view={search} />}
+      {search
+        ? <MoveSearchBar view={search} />
+        : items.length > 0 && <MoveSearchDoor onOpen={() => MoveSearchStore.open('presets')} />}
       <ListScreen
         items={rows}
         value={view.chosen ?? view.cursor ?? undefined}
@@ -3515,11 +3549,27 @@ function MovePresetScreen({ view, search }: { view: MovePresetView; search: Move
 
 /** A list's rows narrowed to what the search keeps — or the one muted row
  *  that says nothing matched, so the screen never reads as empty. No search,
- *  the rows as they were. */
-function searchedRows<T extends { value: string; label: string }>(rows: T[], search: MoveSearchView | null): (T | { value: string; label: string; muted: true })[] {
+ *  the rows as they were. `hay` is what each row is searched by, when that
+ *  is more than its label. */
+function searchedRows<T extends { value: string; label: string }>(rows: T[], search: MoveSearchView | null, hay?: string[]): (T | { value: string; label: string; muted: true })[] {
   if (!search) return rows;
-  const kept = moveSearchFilter(rows.map((r) => r.label), search.query);
+  const kept = moveSearchFilter(hay ?? rows.map((r) => r.label), search.query);
   return kept.length ? kept.map((i) => rows[i]) : [{ value: '', label: 'No matches', muted: true }];
+}
+
+/**
+ * The way into a list's search from the computer: a small magnifier in the
+ * screen's top-right corner, across from where a back pill sits. The Move's
+ * way in is a held Capture; this is the same search, opened by a click.
+ */
+function MoveSearchDoor({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button type="button" className="tweakers-move-search-door" aria-label="Search the list" title="Search ( / )" onClick={onOpen}>
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d={ICON_SEARCH} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
+  );
 }
 
 /**

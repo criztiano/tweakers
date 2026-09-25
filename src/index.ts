@@ -133,7 +133,7 @@ export type { MoveKitRegistry } from './store/TweakStore';
 
 // Raw hardware an app claims for itself — the bottom pad rows, the step
 // buttons, the device screen — kept for the on-screen mirror.
-export { MoveSurfaceStore, moveScreenRowLabel, moveScreenChecked } from './move-surface-store';
+export { MoveSurfaceStore, moveScreenRowLabel, moveScreenRowSearchText, moveScreenChecked } from './move-surface-store';
 export type { MovePadCell, MoveStepCell, MoveScreenList, MoveScreenRow, MoveScreenSearch, MoveScreenWait, MoveSurfaceState } from './move-surface-store';
 
 // List screen (the Move's dark display list, standalone)
