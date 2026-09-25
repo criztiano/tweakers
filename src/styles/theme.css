@@ -3355,10 +3355,13 @@
   box-shadow: var(--move-list-shadow);
 }
 
+/* The list screen covers its whole slot, so the head is the slot surface
+   that shows: quiet at rest, lit while the dial is in the hand. */
 .tweakers-move-dial-head {
   flex: 0 0 var(--move-head-h);
   padding: 0 8px;
-  background: var(--move-chip);
+  background: var(--move-dial-surface, var(--move-chip));
+  transition: background-color var(--move-duration-press) var(--move-ease-out);
   color: var(--move-text);
   font-family: var(--move-font-label);
   font-size: 13px;
