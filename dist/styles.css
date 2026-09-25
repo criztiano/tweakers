@@ -385,6 +385,9 @@
      than a slot you can press, so it never reads as a control. */
   --move-slot-empty: rgba(222, 227, 201, 0.03);
   --move-chip: #41403e;
+  /* A big slot at rest sits a step quieter than the chip; the slot whose
+     dial is in the hand comes back up to the chip, so the eye finds it. */
+  --move-slot-rest: color-mix(in srgb, var(--move-chip) 60%, var(--move-bg));
   /* A drawn screen's grid (the gate, the cleaner, the band pad): the well
      it sits in, and the cells across it. */
   --move-face-well: var(--move-bg);
@@ -425,9 +428,6 @@
   --move-toggle-on: #34c759;
   --move-toggle-off: #ff2d55;
   --move-toggle-halo: 4px;
-  /* The slot's own surface, flattened — the punch-out reads as a gap in the
-     picture, not as a hole down to the panel. */
-  --move-toggle-halo-color: var(--move-chip);
   /* The metronome's body sits a step behind its arm, so the thing that moves
      is the brightest thing in the slot. */
   --move-metronome-body-opacity: 0.85;
@@ -499,7 +499,6 @@
   --move-chip: #2e2e30;
   --move-group-divider: #353333;
   --move-group-head: #1f1f21;
-  --move-toggle-halo-color: var(--move-chip);
   --move-text: #f0f0ee;
   --move-face-well: var(--move-bg);
   --move-face-cell: color-mix(in srgb, var(--move-text) 5%, var(--move-bg));
@@ -1457,28 +1456,41 @@
   opacity: 0.6;
 }
 
+/* The slot's surface: quiet at rest, the full chip while its dial is touched
+   or dragged. Parts that mask the slot behind them read `--move-dial-surface`
+   so they follow it. */
 .tweakers-move-dial {
+  --move-dial-surface: var(--move-slot-rest);
+  /* The slot's own surface, flattened — the punch-out reads as a gap in the
+     picture, not as a hole down to the panel. */
+  --move-toggle-halo-color: var(--move-dial-surface);
   position: relative;
   height: 100%;
-  background: var(--move-chip);
+  background: var(--move-dial-surface);
   border-radius: var(--move-radius);
   cursor: pointer;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  transition: background-color var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-dial[data-active] {
+  --move-dial-surface: var(--move-chip);
 }
 
 /* Grouped slots (`moveSlotGroups`): the container carries the slot surface
    across its columns and the gaps between them, so the slots on it read as
    one; each gap gets a 2 × 48px rounded divider. It sits under the slots,
-   whose own surface is the same colour. */
+   whose own resting surface is the same colour — a touched slot lights up
+   on it alone. */
 .tweakers-move-slot-group {
   position: absolute;
   top: 0;
   bottom: 0;
   left: calc(var(--move-group-start) * (var(--move-slot-w) + var(--move-gap)));
   width: calc(var(--move-group-span) * var(--move-slot-w) + (var(--move-group-span) - 1) * var(--move-gap));
-  background: var(--move-chip);
+  background: var(--move-slot-rest);
   border-radius: var(--move-radius);
   pointer-events: none;
 }
@@ -1878,7 +1890,7 @@
   max-width: calc(100% - 16px);
   padding: 1px 8px;
   border-radius: 999px;
-  background: var(--move-chip);
+  background: var(--move-dial-surface);
   font-family: var(--move-font-label);
   font-size: 13px;
   line-height: 16px;
@@ -1969,7 +1981,7 @@
 
 .tweakers-move-dial[data-shape] .tweakers-move-dial-label {
   z-index: 1;
-  text-shadow: 0 0 6px var(--move-chip), 0 0 6px var(--move-chip);
+  text-shadow: 0 0 6px var(--move-dial-surface), 0 0 6px var(--move-dial-surface);
 }
 
 .tweakers-move-dial-bar {
@@ -3006,7 +3018,7 @@
   border: 0;
   padding: 0;
   color: var(--move-text);
-  background: var(--move-slot);
+  background: var(--move-dial-surface);
   appearance: none;
 }
 

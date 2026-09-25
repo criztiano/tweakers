@@ -24,6 +24,12 @@ Dark display wells carry waveforms and response curves. Neutral surfaces carry
 controls. Track colors identify pages; modulation colors identify assignments.
 Reserve color for those meanings and for actionable state.
 
+A big slot rests on the quiet `--move-slot-rest` surface. While its dial is
+touched on the Move, or dragged on screen, it comes up to the full
+`--move-chip`, so the eye finds the control in the hand. Anything drawn to
+mask the slot behind it reads `--move-dial-surface`, which follows that
+change.
+
 ## Panel composition
 
 For Move apps, use the bottom `MovePanel` as the main parameter surface. Choose
