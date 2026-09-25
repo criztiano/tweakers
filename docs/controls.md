@@ -239,7 +239,7 @@ config can answer, the kit answers.
 
 | Component / API | Purpose |
 | --- | --- |
-| `moveSlotGroups` option | Draw big slots that read as one thing (a gate's threshold, look-ahead, release) as one container, with a short divider between them and, given `{ label, slots }`, a small header with the group's name; the columns keep their places |
+| `moveSlotGroups` option | Draw big slots that read as one thing (a gate's threshold, look-ahead, release) as one container, with a short divider between them and, given `{ label, slots }`, a small header with the group's name — the name takes a band of its own along the top, the container grows by it and the grouped slots start under it, so a group's name never lies on a slot's own name tag. An unnamed group keeps exactly the height it had; the columns keep their places |
 | `moveValueRow` option | Seat actions on the value row in their `movePads` column, so one column stacks two buttons |
 | `moveBands` option | Draw a high cut chip and a low cut chip stacked in one column as one band on a small screen; a pair not stacked reports `band-apart` and stays two chips |
 | `moveEdges` option | Draw a start chip and the end chip right after it in one row as one line — `kind: 'fade'` or `'loop'`; a pair not side by side reports `edges-apart` and stays two chips |
