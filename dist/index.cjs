@@ -16305,40 +16305,51 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
     }
     return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)("div", { className: cls, style, "data-kind": kind, "data-active": parts.some((d) => dragPath === d.meta.path) || void 0, children: [
       body,
-      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "tweakers-move-face-zones", children: parts.map((d) => /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
-        "div",
-        {
-          className: "tweakers-move-face-zone",
-          "data-role": d.role,
-          ...slider(d.meta),
-          "aria-orientation": d.role === "lookahead" || d.role === "axis-x" ? "horizontal" : "vertical",
-          onPointerDown: (e) => {
-            let m = d.meta;
-            if (d.role === "band" && cleaner) {
-              const grid = e.currentTarget.closest?.(".tweakers-move-dial")?.querySelector('[data-track="grid"]')?.getBoundingClientRect();
-              if (grid?.width) {
-                const k = Math.floor((e.clientX - grid.left) / grid.width * cleaner.bands.length);
-                m = cleaner.bands[Math.max(0, Math.min(cleaner.bands.length - 1, k))].meta;
+      /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("div", { className: "tweakers-move-face-zones", children: parts.map((d) => {
+        const grip = (m) => m.type === "select" ? step(m) : turn(m);
+        const options = d.meta.type === "select" ? d.meta.options ?? [] : null;
+        const at2 = options ? enumIndex(d.meta, vals[d.meta.path]) : 0;
+        return /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          "div",
+          {
+            className: "tweakers-move-face-zone",
+            "data-role": d.role,
+            ...slider(d.meta),
+            ...options ? {
+              "aria-valuemin": 0,
+              "aria-valuemax": Math.max(0, options.length - 1),
+              "aria-valuenow": at2,
+              "aria-valuetext": enumOptionLabel(options[at2])
+            } : {},
+            "aria-orientation": d.role === "lookahead" || d.role === "axis-x" ? "horizontal" : "vertical",
+            onPointerDown: (e) => {
+              let m = d.meta;
+              if (d.role === "band" && cleaner) {
+                const grid = e.currentTarget.closest?.(".tweakers-move-dial")?.querySelector('[data-track="grid"]')?.getBoundingClientRect();
+                if (grid?.width) {
+                  const k = Math.floor((e.clientX - grid.left) / grid.width * cleaner.bands.length);
+                  m = cleaner.bands[Math.max(0, Math.min(cleaner.bands.length - 1, k))].meta;
+                }
               }
-            }
-            faceDrag.current = m;
-            turn(m).onPointerDown(e);
+              faceDrag.current = m;
+              grip(m).onPointerDown(e);
+            },
+            onPointerMove: (e) => {
+              if (faceDrag.current) grip(faceDrag.current).onPointerMove(e);
+            },
+            onPointerUp: (e) => {
+              if (faceDrag.current) grip(faceDrag.current).onPointerUp(e);
+              faceDrag.current = null;
+            },
+            onPointerCancel: () => {
+              if (faceDrag.current) grip(faceDrag.current).onPointerCancel();
+              faceDrag.current = null;
+            },
+            children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(MoveModRing, { panelId, path: d.meta.path })
           },
-          onPointerMove: (e) => {
-            if (faceDrag.current) turn(faceDrag.current).onPointerMove(e);
-          },
-          onPointerUp: (e) => {
-            if (faceDrag.current) turn(faceDrag.current).onPointerUp(e);
-            faceDrag.current = null;
-          },
-          onPointerCancel: () => {
-            if (faceDrag.current) turn(faceDrag.current).onPointerCancel();
-            faceDrag.current = null;
-          },
-          children: /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(MoveModRing, { panelId, path: d.meta.path })
-        },
-        d.meta.path
-      )) })
+          d.meta.path
+        );
+      }) })
     ] });
   };
   if (all.length > 1) return face(all);
