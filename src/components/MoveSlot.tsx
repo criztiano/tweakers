@@ -319,8 +319,19 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
       <div className={cls} style={style} data-kind={kind} data-active={parts.some((d) => dragPath === d.meta.path) || undefined}>
         {body}
         <div className="tweakers-move-face-zones">
-          {parts.map((d) => (
+          {parts.map((d) => {
+            // An option picker on a face steps as its own slot does.
+            const grip = (m: ControlMeta) => (m.type === 'select' ? step(m) : turn(m));
+            const options = d.meta.type === 'select' ? d.meta.options ?? [] : null;
+            const at = options ? enumIndex(d.meta, vals[d.meta.path]) : 0;
+            return (
             <div key={d.meta.path} className="tweakers-move-face-zone" data-role={d.role} {...slider(d.meta)}
+              {...(options ? {
+                'aria-valuemin': 0,
+                'aria-valuemax': Math.max(0, options.length - 1),
+                'aria-valuenow': at,
+                'aria-valuetext': enumOptionLabel(options[at] as never),
+              } : {})}
               aria-orientation={d.role === 'lookahead' || d.role === 'axis-x' ? 'horizontal' : 'vertical'}
               onPointerDown={(e) => {
                 // On the band grid the press takes the band under it.
@@ -333,15 +344,16 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
                   }
                 }
                 faceDrag.current = m;
-                turn(m).onPointerDown(e);
+                grip(m).onPointerDown(e);
               }}
-              onPointerMove={(e) => { if (faceDrag.current) turn(faceDrag.current).onPointerMove(e); }}
-              onPointerUp={(e) => { if (faceDrag.current) turn(faceDrag.current).onPointerUp(e); faceDrag.current = null; }}
-              onPointerCancel={() => { if (faceDrag.current) turn(faceDrag.current).onPointerCancel(); faceDrag.current = null; }}
+              onPointerMove={(e) => { if (faceDrag.current) grip(faceDrag.current).onPointerMove(e); }}
+              onPointerUp={(e) => { if (faceDrag.current) grip(faceDrag.current).onPointerUp(e); faceDrag.current = null; }}
+              onPointerCancel={() => { if (faceDrag.current) grip(faceDrag.current).onPointerCancel(); faceDrag.current = null; }}
             >
               <MoveModRing panelId={panelId!} path={d.meta.path} />
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
