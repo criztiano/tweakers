@@ -80,6 +80,27 @@ describe('MovePanel semantic interactions', () => {
     expect(triangle().props['data-offset']).toBe(true);
   });
 
+  it('draws a speed as a gauge in its own slot, an ordinary dial underneath', () => {
+    mount({ speed: { type: 'slider', min: 0.25, max: 4, default: 1, step: 0.01, moveVisual: { kind: 'gauge' } } });
+    const needle = () => dial('Speed').findByProps({ className: 'tweakers-move-multiband-gauge-needle' });
+    expect(dial('Speed').props['data-visual']).toBe('gauge');
+    expect(dial('Speed').props['aria-valuetext']).toBe('1×');
+    expect(dial('Speed').findByProps({ className: 'tweakers-move-dial-option tweakers-move-visual-value' }).props.children).toBe('1×');
+    expect(needle().props.x2).toBeLessThan(0);
+    act(() => dial('Speed').props.onKeyDown(keyEvent('End')));
+    expect(TweakStore.getValues(id).speed).toBe(4);
+    expect(needle().props.x2).toBeGreaterThan(0);
+    // the drag is the dial's own: a press moves nothing, and it turns from
+    // where it is — right raises
+    act(() => dial('Speed').props.onKeyDown(keyEvent('Home')));
+    act(() => dial('Speed').props.onPointerDown(at(60, 0)));
+    expect(TweakStore.getValues(id).speed).toBe(0.25);
+    act(() => dial('Speed').props.onPointerUp(at(60, 0)));
+    drag(dial('Speed'), 20, 0);
+    expect(TweakStore.getValues(id).speed).toBeCloseTo(1, 2); // a fifth of the turn, a fifth of the range
+    expect(needle().props.x2).toBeLessThan(0);
+  });
+
   it('draws an offset as the room it can move in, the knob carrying the pin across it', () => {
     mount({
       offset: {

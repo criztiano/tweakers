@@ -433,6 +433,8 @@ function moveNumericDrawing(meta, value) {
     case "pitch":
       if (visual.unit !== void 0 && visual.unit !== "semitones" && visual.unit !== "cents") return null;
       return { kind: "pitch", position: (v - lo) / (hi - lo), zero: between(0, lo, hi) ? -lo / (hi - lo) : null };
+    case "gauge":
+      return { kind: "gauge", position: clamp01((v - lo) / (hi - lo)) };
     case "trim":
       if (visual.edge !== "start" && visual.edge !== "end") return null;
       return { kind: "trim", edge: visual.edge, position: clamp01((v - lo) / (hi - lo)) };
@@ -570,6 +572,8 @@ function moveVisualReading(meta, value) {
       return value === (visual.mono ?? 0) ? "Mono" : `${Number(((value - (visual.mono ?? 0)) / ((visual.unity ?? 1) - (visual.mono ?? 0))).toFixed(2))}\xD7`;
     case "pitch":
       return `${value > 0 ? "+" : ""}${number} ${visual.unit === "cents" ? "ct" : "st"}`;
+    case "gauge":
+      return `${number}\xD7`;
     case "trim":
       return `${number} s`;
     default:
@@ -835,7 +839,51 @@ var ICON_BADGE_ON = "M12 24C5.391 24 0 18.6094 0 12C0 5.3906 5.391 0 12 0C18.609
 
 // src/components/move-visuals.tsx
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
+var MOVE_GAUGE = { r: 36, base: 18, half: 43, top: 37, height: 56, sweep: 110, ticks: 11 };
+var place = (position) => Math.max(0, Math.min(1, position));
+var moveGaugeBearing = (position) => (place(position) * 2 - 1) * MOVE_GAUGE.sweep;
+function MoveGauge({ position, className, track }) {
+  const { r, base, half, top, height, sweep, ticks } = MOVE_GAUGE;
+  const foot = Math.sqrt(r * r - base * base);
+  const point = (bearing, radius) => {
+    const rad = bearing * Math.PI / 180;
+    return [radius * Math.sin(rad), -radius * Math.cos(rad)];
+  };
+  const needle = point(moveGaugeBearing(position), r * 0.62);
+  return /* @__PURE__ */ jsxs("svg", { className, "data-track": track, viewBox: `${-half} ${-top} ${half * 2} ${height}`, "aria-hidden": "true", children: [
+    /* @__PURE__ */ jsx("path", { className: "tweakers-move-multiband-gauge-dome", d: `M${-foot} ${base}A${r} ${r} 0 1 1 ${foot} ${base}Z` }),
+    /* @__PURE__ */ jsx("line", { className: "tweakers-move-multiband-gauge-base", x1: -half + 1, y1: base, x2: half - 1, y2: base }),
+    Array.from({ length: ticks }, (_, k) => {
+      const at2 = k / (ticks - 1);
+      const major = k % 5 === 0;
+      const [x1, y1] = point(-sweep + at2 * sweep * 2, r - 4);
+      const [x2, y2] = point(-sweep + at2 * sweep * 2, r - (major ? 10 : 7));
+      return /* @__PURE__ */ jsx(
+        "line",
+        {
+          className: "tweakers-move-multiband-gauge-tick",
+          "data-major": major || void 0,
+          "data-lit": at2 <= place(position) + 1e-9 || void 0,
+          x1,
+          y1,
+          x2,
+          y2
+        },
+        k
+      );
+    }),
+    /* @__PURE__ */ jsx("line", { className: "tweakers-move-multiband-gauge-needle", x1: "0", y1: "0", x2: needle[0], y2: needle[1] }),
+    /* @__PURE__ */ jsx("circle", { className: "tweakers-move-multiband-gauge-pivot", cx: "0", cy: "0", r: "2.5" })
+  ] });
+}
 function MoveSlotNumericBody({ label, value, drawing }) {
+  if (drawing.kind === "gauge") {
+    return /* @__PURE__ */ jsxs(Fragment, { children: [
+      /* @__PURE__ */ jsx("span", { className: "tweakers-move-dial-tag", children: label }),
+      /* @__PURE__ */ jsx(MoveGauge, { position: drawing.position, className: "tweakers-move-visual" }),
+      /* @__PURE__ */ jsx("span", { className: "tweakers-move-dial-option tweakers-move-visual-value", children: value })
+    ] });
+  }
   if (drawing.kind === "offset") {
     return /* @__PURE__ */ jsx(
       MoveSlotOffsetBody,
@@ -933,7 +981,6 @@ var OFFSET_PIN = "M7.5 0C11.6406 0 15 3.28125 15 7.38281C15 12.0312 10.3125 17.6
 var OFFSET_WAY_NEAR = "M13.4277 11.4969C13.1168 11.8078 12.6126 11.8077 12.3015 11.4969L7.23278 6.42815C6.92176 6.11712 6.92176 5.61296 7.23278 5.30193L12.3015 0.233194C12.6126 -0.0775985 13.1168 -0.0777559 13.4277 0.233194C13.7387 0.544144 13.7385 1.04836 13.4277 1.35941L9.71854 5.0686L9.71854 6.66148L13.4277 10.3707C13.7385 10.6817 13.7387 11.1859 13.4277 11.4969Z";
 var OFFSET_WAY_FAR = "M6.42822 11.4968C6.11727 11.8078 5.61306 11.8076 5.30201 11.4968L0.23327 6.42811C-0.0777563 6.11708 -0.0777563 5.61292 0.233271 5.30189L5.30201 0.233154C5.61306 -0.0776386 6.11728 -0.077796 6.42822 0.233154C6.73917 0.544104 6.73902 1.04832 6.42822 1.35937L2.71903 5.06856L2.71903 6.66144L6.42822 10.3706C6.73902 10.6817 6.73917 11.1859 6.42822 11.4968Z";
 var OFFSET_WAY_BOX = { w: 13.6609, h: 11.73 };
-var place = (position) => Math.max(0, Math.min(1, position));
 var at = (position) => `${place(position) * 100}%`;
 function MoveSlotOffsetBody({ label, value, origin, position, back, forward }) {
   const moved = Math.abs(position - origin) > 1e-9;
@@ -2185,7 +2232,7 @@ function moveSlotKind(meta, opts = {}) {
     if (opts.glyph) return "icon";
     return "enum";
   }
-  return opts.valueFirst ? "value" : "default";
+  return opts.valueFirst || meta.type === "slider" && meta.display === "value" ? "value" : "default";
 }
 function MoveSlotGlyph({ name, className }) {
   const paths = LUCIDE_ICONS[name];
@@ -2582,42 +2629,6 @@ function MoveSlotChannelBody({ channels }) {
     k
   )) });
 }
-var MOVE_GAUGE = { r: 36, base: 18, half: 43, top: 37, height: 56, sweep: 110, ticks: 11 };
-var moveGaugeBearing = (position) => (place2(position) * 2 - 1) * MOVE_GAUGE.sweep;
-function MoveGauge({ position }) {
-  const { r, base, half, top, height, sweep, ticks } = MOVE_GAUGE;
-  const foot = Math.sqrt(r * r - base * base);
-  const point = (bearing, radius) => {
-    const rad = bearing * Math.PI / 180;
-    return [radius * Math.sin(rad), -radius * Math.cos(rad)];
-  };
-  const needle = point(moveGaugeBearing(position), r * 0.62);
-  return /* @__PURE__ */ jsxs3("svg", { className: "tweakers-move-multiband-gauge", "data-track": "speed", viewBox: `${-half} ${-top} ${half * 2} ${height}`, "aria-hidden": "true", children: [
-    /* @__PURE__ */ jsx3("path", { className: "tweakers-move-multiband-gauge-dome", d: `M${-foot} ${base}A${r} ${r} 0 1 1 ${foot} ${base}Z` }),
-    /* @__PURE__ */ jsx3("line", { className: "tweakers-move-multiband-gauge-base", x1: -half + 1, y1: base, x2: half - 1, y2: base }),
-    Array.from({ length: ticks }, (_, k) => {
-      const at2 = k / (ticks - 1);
-      const major = k % 5 === 0;
-      const [x1, y1] = point(-sweep + at2 * sweep * 2, r - 4);
-      const [x2, y2] = point(-sweep + at2 * sweep * 2, r - (major ? 10 : 7));
-      return /* @__PURE__ */ jsx3(
-        "line",
-        {
-          className: "tweakers-move-multiband-gauge-tick",
-          "data-major": major || void 0,
-          "data-lit": at2 <= place2(position) + 1e-9 || void 0,
-          x1,
-          y1,
-          x2,
-          y2
-        },
-        k
-      );
-    }),
-    /* @__PURE__ */ jsx3("line", { className: "tweakers-move-multiband-gauge-needle", x1: "0", y1: "0", x2: needle[0], y2: needle[1] }),
-    /* @__PURE__ */ jsx3("circle", { className: "tweakers-move-multiband-gauge-pivot", cx: "0", cy: "0", r: "2.5" })
-  ] });
-}
 function MoveSlotMultibandBody({
   amount,
   speed,
@@ -2628,7 +2639,7 @@ function MoveSlotMultibandBody({
   return /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-face", style: { "--move-face-span": 2 + bands.length }, children: [
     /* @__PURE__ */ jsx3(MoveFaceBar, { role: "amount", dial: amount }),
     icon && /* @__PURE__ */ jsx3(MoveSlotIcon, { icon, className: "tweakers-move-multiband-icon" }),
-    /* @__PURE__ */ jsx3(MoveGauge, { position: speed.position }),
+    /* @__PURE__ */ jsx3(MoveGauge, { position: speed.position, className: "tweakers-move-multiband-gauge", track: "speed" }),
     /* @__PURE__ */ jsx3(MoveFaceGrid, { columns: MOVE_MULTIBAND_GRID.columnsPerSlot * bands.length, rows: MOVE_MULTIBAND_GRID.rows, children }),
     /* @__PURE__ */ jsx3(MoveFaceName, { col: 0, dial: amount }),
     /* @__PURE__ */ jsx3(MoveFaceName, { col: 1, dial: speed }),
@@ -3037,6 +3048,7 @@ var MOVE_SLOT_LIBRARY = {
   pan: { description: "position between L, C and R references", component: MoveSlotNumericBody },
   "stereo-width": { description: "stereo separation with a unity reference", component: MoveSlotNumericBody },
   pitch: { description: "signed pitch ruler with a zero reference", component: MoveSlotNumericBody },
+  gauge: { description: "a speed: a needle on a graded dome, slowest to the left, fastest to the right", component: MoveSlotNumericBody },
   trim: { description: "one edge of a take \u2014 the kept part filled from the far end, the value beneath", component: MoveSlotNumericBody },
   offset: { description: "a signed nudge \u2014 the room it can move in, a pin where it is now, a chevron for each way left", component: MoveSlotOffsetBody },
   "trim-span": { description: "2 slots: a take\u2019s start and end on one line, a flag per edge", component: MoveSlotTrimSpanBody },
@@ -7090,7 +7102,7 @@ var MoveWaveformStoreClass = class {
   }
   /** The host's transport, for the clock to wear; null when it runs none. */
   setTransport(transport) {
-    if (transport?.playing === this.transport?.playing && transport?.loopOn === this.transport?.loopOn && transport === null === (this.transport === null)) return;
+    if (transport?.playing === this.transport?.playing && transport?.loopOn === this.transport?.loopOn && transport?.recording === this.transport?.recording && transport === null === (this.transport === null)) return;
     this.transport = transport;
     this.notify();
   }
@@ -7426,20 +7438,25 @@ function MoveWaveform({
   const transportRef = useRef6(transport);
   transportRef.current = transport;
   const hasTransport = !!transport;
+  const hasRecord = !!transport?.onRecord;
   useEffect6(() => {
     if (!productionEnabled || !hasTransport) return;
     const releases = [
       MoveFunctions.push("play", () => transportRef.current?.onPlay(), { label: "Play", chip: false }),
-      MoveFunctions.push("loop", () => transportRef.current?.onLoop(), { label: "Loop", chip: false })
+      MoveFunctions.push("loop", () => transportRef.current?.onLoop(), { label: "Loop", chip: false }),
+      ...hasRecord ? [MoveFunctions.push("rec", () => transportRef.current?.onRecord?.(), { label: "Record", chip: false })] : []
     ];
     return () => releases.forEach((release) => release());
-  }, [productionEnabled, hasTransport]);
+  }, [productionEnabled, hasTransport, hasRecord]);
   const playing2 = transport?.playing ?? false;
   const loopOn = transport?.loopOn ?? false;
+  const recording = transport?.recording ?? false;
   useEffect6(() => {
     if (!productionEnabled) return;
-    MoveWaveformStore.setTransport(hasTransport ? { playing: playing2, loopOn } : null);
-  }, [productionEnabled, hasTransport, playing2, loopOn]);
+    MoveWaveformStore.setTransport(
+      hasTransport ? { playing: playing2, loopOn, ...hasRecord ? { recording } : {} } : null
+    );
+  }, [productionEnabled, hasTransport, hasRecord, playing2, loopOn, recording]);
   useEffect6(() => {
     if (!productionEnabled) return;
     const prev = MoveSurfaceStore.getState().steps;
@@ -13519,7 +13536,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   if (!meta) return /* @__PURE__ */ jsx17("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
                                   const disabled = TweakStore14.isDisabled(page.panel.id, meta.path);
                                   const active = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
-                                  const valueFirst = meta.display === "value" || (focused || !!settingsPanel || page.panel.kind === "kit") && !(meta.min === 0 && meta.max === 1);
+                                  const valueFirst = meta.type === "slider" && meta.display === "value" || (focused || !!settingsPanel || page.panel.kind === "kit") && !(meta.min === 0 && meta.max === 1);
                                   const scopeSlot = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.scope : void 0;
                                   const waveSlot = settingsPanel && meta.type !== "xy" ? modLayout?.dials.find((d) => d.path === meta.path)?.preview : void 0;
                                   const scope = scopeSlot && modSettings ? /* @__PURE__ */ jsx17(MoveScope, { index: modSettings.index }) : waveSlot && modSettings ? /* @__PURE__ */ jsx17(MoveWavePreview, { index: modSettings.index }) : null;
@@ -14886,6 +14903,7 @@ function MoveWaveClock() {
     () => 0
   );
   const transport = MoveWaveformStore.getTransport();
+  const records = transport?.recording !== void 0;
   const clockRef = useRef14(null);
   useEffect14(() => {
     let raf = requestAnimationFrame(function tick() {
@@ -14895,11 +14913,33 @@ function MoveWaveClock() {
     });
     return () => cancelAnimationFrame(raf);
   }, []);
-  return /* @__PURE__ */ jsxs13("div", { className: "tweakers-move-volume tweakers-move-wave-time", "data-transport": transport ? true : void 0, children: [
-    transport && /* @__PURE__ */ jsx17("svg", { className: "tweakers-move-wave-state", "data-on": transport.playing || void 0, viewBox: "0 0 24 24", "aria-hidden": "true", children: /* @__PURE__ */ jsx17("path", { d: ICON_PLAY, fill: "currentColor" }) }),
-    /* @__PURE__ */ jsx17("span", { ref: clockRef, className: "tweakers-move-volume-value", children: MoveWaveformStore.clock() }),
-    transport && /* @__PURE__ */ jsx17("svg", { className: "tweakers-move-wave-state", "data-on": transport.loopOn || void 0, viewBox: "0 0 24 24", "aria-hidden": "true", children: ICON_LOOP.map((d) => /* @__PURE__ */ jsx17("path", { d, fill: "none", stroke: "currentColor", strokeWidth: "2.4", strokeLinecap: "round", strokeLinejoin: "round" }, d)) })
-  ] });
+  return /* @__PURE__ */ jsxs13(
+    "div",
+    {
+      className: "tweakers-move-volume tweakers-move-wave-time",
+      "data-transport": transport ? true : void 0,
+      "data-record": records || void 0,
+      children: [
+        transport && /* @__PURE__ */ jsx17(MoveWaveKey, { name: "play", on: transport.playing, label: transport.playing ? "Stop" : "Play", children: /* @__PURE__ */ jsx17("path", { d: ICON_PLAY, fill: "currentColor" }) }),
+        transport && records && /* @__PURE__ */ jsx17(MoveWaveKey, { name: "rec", on: !!transport.recording, label: transport.recording ? "Stop recording" : "Record", children: /* @__PURE__ */ jsx17("circle", { cx: "12", cy: "12", r: "7", fill: "currentColor" }) }),
+        /* @__PURE__ */ jsx17("span", { ref: clockRef, className: "tweakers-move-volume-value", children: MoveWaveformStore.clock() }),
+        transport && /* @__PURE__ */ jsx17(MoveWaveKey, { name: "loop", on: transport.loopOn, label: transport.loopOn ? "Loop off" : "Loop on", children: ICON_LOOP.map((d) => /* @__PURE__ */ jsx17("path", { d, fill: "none", stroke: "currentColor", strokeWidth: "2.4", strokeLinecap: "round", strokeLinejoin: "round" }, d)) })
+      ]
+    }
+  );
+}
+function MoveWaveKey({ name, on, label, children }) {
+  return /* @__PURE__ */ jsx17(
+    "button",
+    {
+      type: "button",
+      className: "tweakers-move-wave-key",
+      "data-name": name,
+      "aria-label": label,
+      onClick: () => MoveFunctions.run(name),
+      children: /* @__PURE__ */ jsx17("svg", { className: "tweakers-move-wave-state", "data-on": on || void 0, viewBox: "0 0 24 24", "aria-hidden": "true", children })
+    }
+  );
 }
 function MoveAudioTransport({ index }) {
   useSyncExternalStore5(
@@ -15333,8 +15373,8 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
     return movePressEnd(press, meta2.path);
   };
   const reset = (meta2) => {
-    const first = TweakStore15.getDefault(panelId, meta2.path);
-    if (first !== void 0 && !off(meta2)) write2(meta2, first);
+    const first2 = TweakStore15.getDefault(panelId, meta2.path);
+    if (first2 !== void 0 && !off(meta2)) write2(meta2, first2);
   };
   const turn = (meta2) => ({
     onPointerDown: (e) => {
@@ -15806,20 +15846,20 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
   const drawing = moveNumericDrawing(meta, value);
   const origin01 = dialOrigin(meta);
   const originPct = origin01 > 0 ? origin01 * 100 : null;
-  const headline = valueFirst || meta.display === "value";
-  const chip = headline ? moveChipValue(meta, value) : null;
+  const first = valueFirst || meta.type === "slider" && meta.display === "value";
+  const chip = first ? moveChipValue(meta, value) : null;
   return /* @__PURE__ */ jsxs14(
     "div",
     {
       className: cls,
       style,
       "data-active": active || void 0,
-      "data-sub": !drawing && headline || void 0,
+      "data-sub": !drawing && first || void 0,
       "data-visual": drawing?.kind,
       ...slider(meta),
       ...turn(meta),
       children: [
-        !drawing && headline && /* @__PURE__ */ jsx18("span", { className: "tweakers-move-dial-sub", children: meta.label }),
+        !drawing && first && /* @__PURE__ */ jsx18("span", { className: "tweakers-move-dial-sub", children: meta.label }),
         /* @__PURE__ */ jsx18(MoveModRing, { panelId, path: meta.path }),
         drawing ? /* @__PURE__ */ jsx18(MoveSlotNumericBody, { label: meta.label, value: moveVisualReading(meta, Number(value)), drawing }) : /* @__PURE__ */ jsx18(
           MoveSlotDefaultBody,

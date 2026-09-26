@@ -23,6 +23,12 @@ type MoveSliderVisual = {
     kind: 'pitch';
     unit?: 'semitones' | 'cents';
 }
+/** A speed: a needle on a graded dome, the slowest end on the left and the
+ *  fastest on the right. It reads as a multiple ("1.5×") unless the host
+ *  gives a unit or a formatter. */
+ | {
+    kind: 'gauge';
+}
 /** One edge of a take: the bar is the whole of it, the kept part is filled
  *  from this edge's far end to the value, the edge itself is the marker. */
  | {
@@ -115,6 +121,9 @@ type MoveNumericDrawing = {
     kind: 'pitch';
     position: number;
     zero: number | null;
+} | {
+    kind: 'gauge';
+    position: number;
 } | {
     kind: 'trim';
     edge: 'start' | 'end';
@@ -522,9 +531,12 @@ type SliderConfig = {
      * `dial` draws the value as a rotary needle instead of a track — for the
      * parameters whose two ends are the same place (a heading, a sun position,
      * a tilt). It stays a slider everywhere else, so a hardware knob and a
-     * preset see no difference; only the drawing changes. `value` keeps the
-     * track and makes the value the headline, the name a tag on top — for a
-     * number that says what it is on its own (a size, a count, a duration).
+     * preset see no difference; only the drawing changes.
+     *
+     * `value` keeps the track but puts the value first on the Move panel: the
+     * number is the headline at rest and the name a tag — for a value that
+     * already says what it is (250 ms, 120 BPM). Everywhere else it is an
+     * ordinary slider.
      */
     display?: 'track' | 'dial' | 'value';
     /**
@@ -825,7 +837,7 @@ type ControlMeta = {
     /** Select declared `moveTabs` — it lies across the small slots as a tabs
      *  strip instead of claiming a dial; `'named'` adds its leading name pad. */
     moveTabs?: boolean | 'named';
-    /** Select's rendering mode, or a slider's `dial` form. */
+    /** Select's rendering mode, or a slider's `dial` / `value` form. */
     display?: 'dropdown' | 'segmented' | 'track' | 'dial' | 'value';
     /** Dial slider: wrap past the ends instead of stopping. */
     wrap?: boolean;

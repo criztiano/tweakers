@@ -25,7 +25,7 @@ import {
   MoveTimeline,
   useMoveTimeline,
 } from 'tweakers';
-import { PANEL_ID, PANEL_NAME } from './panel';
+import { PANEL_ID, PANEL_NAME, INSTRUMENTS_NAME } from './panel';
 import { BIG_SLOTS, SMALL_SLOTS, SMALL_SLOT_STATES, MOD_FACES, type Specimen } from './specimens';
 import { KEYS, openPresets, savePreset } from './hardware';
 
@@ -143,6 +143,15 @@ export function Library() {
             <Card key={item.kind} item={item} onShow={show} tall />
           ))}
         </ul>
+      </Section>
+
+      <Section
+        id="groups"
+        title="Grouped slots"
+        lede="Slots that read as one thing sit on one container, with a short divider in each gap — the page says which ones with moveSlotGroups. Give the group a name and the name takes a band of its own along the top: the container grows by that band and the slots start under it, so a group's name and a slot's own name tag never land on the same line. An unnamed group is exactly as it was."
+      >
+        <GroupedSlots label="Stream 2" />
+        <GroupedSlots />
       </Section>
 
       <Section
@@ -547,6 +556,38 @@ function Section({ id, title, lede, children }: {
 /** A dictionary entry: the face itself — live, the same control as the
  *  instrument's — its name, what it says, and a way to bring the
  *  instrument's own under the first dial. */
+/**
+ * A group of slots that read as one thing, as the panel draws it: one
+ * container behind them, a divider in each gap, and — with a label — a band
+ * along the top carrying the group's name. The slots are the live controls
+ * themselves, so their own name tags show what the band has to keep clear of.
+ */
+function GroupedSlots({ label }: { label?: string }) {
+  const row = { '--move-cols': 3, '--move-slot-w': 'var(--kit-slot-w)' } as CSSProperties;
+  return (
+    <div className="kit-tile kit-tile-free">
+      <div className="tweakers-move">
+        <div className="tweakers-move-dials" style={row}>
+          <div
+            className="tweakers-move-slot-group"
+            aria-hidden="true"
+            data-labelled={label ? 'true' : undefined}
+            style={{ '--move-group-start': 0, '--move-group-span': 3 } as CSSProperties}
+          >
+            {label && <span className="tweakers-move-slot-group-head">{label}</span>}
+            {[0, 1].map((k) => (
+              <i key={k} className="tweakers-move-slot-group-divider" style={{ '--move-group-divider-at': k + 1 } as CSSProperties} />
+            ))}
+          </div>
+          <MoveSlot panel={INSTRUMENTS_NAME} path="denoise" />
+          <MoveSlot panel={PANEL_NAME} path="scale" />
+          <MoveSlot panel={PANEL_NAME} path="pitch" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Card({ item, onShow, tall }: { item: Specimen; onShow: (path: string) => void; tall?: boolean }) {
   const spanWidth: CSSProperties | undefined = item.span && item.span > 1
     ? { width: `calc(${item.span} * var(--kit-slot-w) + ${(item.span - 1) * 4}px)` }
