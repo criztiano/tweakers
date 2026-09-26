@@ -3370,14 +3370,16 @@ function MoveSlotGrainBody({ span, length, shape, trail, direction }) {
       )),
       /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("path", { className: "tweakers-move-grain-hero", "data-active": shape.active || void 0, d: picture.hero }),
       role === "offset" && picture.copies.map((copy, k) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("path", { className: "tweakers-move-grain-edge", d: copy.d }, `edge-${k}`)),
-      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-        "path",
-        {
-          className: "tweakers-move-grain-length",
-          "data-active": length.active || void 0,
-          d: `M${picture.span.from} ${base + 5}H${picture.span.to}M${picture.span.from} ${base + 2}V${base + 8}M${picture.span.to} ${base + 2}V${base + 8}`
-        }
-      )
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("g", { className: "tweakers-move-grain-length", "data-active": length.active || void 0, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("path", { className: "tweakers-move-grain-length-rule", d: `M${picture.span.from} ${base + 4}H${picture.span.to}` }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+          "path",
+          {
+            className: "tweakers-move-grain-length-ends",
+            d: `M${picture.span.from} ${base + 1}V${base + 7}M${picture.span.to} ${base + 1}V${base + 7}`
+          }
+        )
+      ] })
     ] }) }),
     /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveGrainArrows, { mode: span.direction, active: direction.active }),
     /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-grain-name", "data-role": "length", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveFaceName, { col: 0, dial: length }) }),
