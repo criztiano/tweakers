@@ -6,6 +6,7 @@ import { TweakStore, type TweakConfig } from '../src/store/TweakStore';
 import { MOVE_DIALS } from '../src/move-layout';
 import { MoveFunctions } from '../src/move-functions';
 import { MoveSurfaceStore } from '../src/move-surface-store';
+import { MoveVolumeDisplay } from '../src/move-volume';
 
 let renderer: ReactTestRenderer | undefined;
 const id = 'move-strip-panel';
@@ -59,6 +60,37 @@ describe('the scrolling panel', () => {
     // the names come after it, in the same row rather than under it
     const names = lead.findAllByProps({ className: 'tweakers-move-tracks-group' });
     expect(names.length).toBe(1);
+  });
+
+  it('places a view readout last on the header row, outside the pill', () => {
+    const level = createElement('output', { 'data-testid': 'input-level' }, '-12 dB');
+    MoveVolumeDisplay.set({ label: 'gain', value: '-6.0 dB' });
+    try {
+      TweakStore.registerPanel(id, 'Strip', many(1));
+      act(() => {
+        renderer = create(createElement(MovePanel, { panels: 'Strip', dock: 'flow', productionEnabled: true, headerEnd: level }));
+      });
+      const cluster = byClass('tweakers-move-actions')[0];
+      const seats = cluster.children.map((node) => (typeof node === 'string' ? node : node.props['data-testid'] ?? node.props.className));
+      expect(seats.slice(-2)).toEqual(['tweakers-move-volume', 'input-level']);
+      expect(byClass('tweakers-move-volume')[0].findAllByProps({ 'data-testid': 'input-level' })).toHaveLength(0);
+      expect(cluster.findByProps({ 'data-testid': 'input-level' }).props.children).toBe('-12 dB');
+    } finally {
+      MoveVolumeDisplay.clear();
+    }
+  });
+
+  it('keeps the header end readout when no pill and no chips are shown', () => {
+    TweakStore.registerPanel(id, 'Strip', many(1));
+    act(() => {
+      renderer = create(createElement(MovePanel, {
+        panels: 'Strip', dock: 'flow', productionEnabled: true, functionChips: 'none',
+        headerEnd: createElement('output', { 'data-testid': 'input-level' }, '-12 dB'),
+      }));
+    });
+    expect(byClass('tweakers-move-actions')[0].findByProps({ 'data-testid': 'input-level' })).toBeTruthy();
+    act(() => renderer!.update(createElement(MovePanel, { panels: 'Strip', dock: 'flow', productionEnabled: true, functionChips: 'none' })));
+    expect(byClass('tweakers-move-actions')).toHaveLength(0);
   });
 
   it('shows native page labels in the top-left header when tracks paginate', () => {

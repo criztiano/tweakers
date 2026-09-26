@@ -37,6 +37,8 @@ function moveNumericDrawing(meta, value) {
     case "pitch":
       if (visual.unit !== void 0 && visual.unit !== "semitones" && visual.unit !== "cents") return null;
       return { kind: "pitch", position: (v - lo) / (hi - lo), zero: between(0, lo, hi) ? -lo / (hi - lo) : null };
+    case "gauge":
+      return { kind: "gauge", position: clamp01((v - lo) / (hi - lo)) };
     case "trim":
       if (visual.edge !== "start" && visual.edge !== "end") return null;
       return { kind: "trim", edge: visual.edge, position: clamp01((v - lo) / (hi - lo)) };
@@ -174,6 +176,8 @@ function moveVisualReading(meta, value) {
       return value === (visual.mono ?? 0) ? "Mono" : `${Number(((value - (visual.mono ?? 0)) / ((visual.unity ?? 1) - (visual.mono ?? 0))).toFixed(2))}\xD7`;
     case "pitch":
       return `${value > 0 ? "+" : ""}${number} ${visual.unit === "cents" ? "ct" : "st"}`;
+    case "gauge":
+      return `${number}\xD7`;
     case "trim":
       return `${number} s`;
     default:

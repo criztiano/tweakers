@@ -31,6 +31,8 @@ export type MoveWaveformVariant =
 export type MoveWaveformTransport = {
   playing: boolean;
   loopOn: boolean;
+  /** Present only when the host records: the clock then wears a record key. */
+  recording?: boolean;
 };
 
 /** The one card every waveform wears: at most this wide and this tall, the
@@ -302,6 +304,7 @@ class MoveWaveformStoreClass {
     if (
       transport?.playing === this.transport?.playing &&
       transport?.loopOn === this.transport?.loopOn &&
+      transport?.recording === this.transport?.recording &&
       (transport === null) === (this.transport === null)
     ) return;
     this.transport = transport;

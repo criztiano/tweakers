@@ -114,6 +114,10 @@ export const CONFIG = {
     returnToCenter: true,
   },
 
+  /* ── a number that says what it is: the value the headline, the name a
+        tag — asked for with `display: 'value'` ───────────────────── */
+  decay: { type: 'slider', default: 250, min: 0, max: 2000, step: 1, unit: ' ms', display: 'value' },
+
   /* ── values a bar cannot say: a bearing, a colour, a shape ────── */
   heading: { type: 'slider', default: 270, min: 0, max: 360, step: 1, display: 'dial' },
   tint: { type: 'color', default: '#eb644dff', alpha: true },
@@ -161,6 +165,10 @@ export const CONFIG = {
   pitch: {
     type: 'slider', default: 0, min: -24, max: 24, step: 1, bipolar: true, unit: ' st',
     moveVisual: { kind: 'pitch' },
+  },
+  speed: {
+    type: 'slider', default: 1, min: 0.25, max: 4, step: 0.01,
+    moveVisual: { kind: 'gauge' },
   },
   /* A hit pushed off its step: it sits three quarters through the bar, and
      a full turn either way carries it half the bar. */

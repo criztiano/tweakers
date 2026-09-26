@@ -132,9 +132,9 @@ export function LiveComposer() {
 export const BIG_SLOTS: Specimen[] = [
   { kind: 'default', path: 'amount', description: MOVE_SLOT_LIBRARY.default.description, live: { path: 'amount' } },
   {
-    kind: 'value',
+    kind: 'value', path: 'decay',
     description: MOVE_SLOT_LIBRARY.value.description,
-    note: 'The face a chip wears when a dial borrows it, and every named value on a modulator’s page. This one is Glide, the chip under Bias.',
+    note: 'A slider asks for it with `display: \'value\'` — whatever its range: Decay, on the strip below. It is also the face a chip wears when a dial borrows it, and every named value on a modulator’s page. This one is Glide, the chip under Bias.',
     live: { path: 'glide', valueFirst: true },
   },
   { kind: 'icon', path: 'direction', description: MOVE_SLOT_LIBRARY.icon.description, live: { path: 'direction' } },
@@ -177,6 +177,12 @@ export const BIG_SLOTS: Specimen[] = [
     description: MOVE_SLOT_LIBRARY.offset.description,
     note: 'A hit three quarters through its bar, pushed back a full turn: the pin and the way it took carry the colour, the stretch between fills. Bring it back to zero and both ways out return.',
     live: { path: 'offset' },
+  },
+  {
+    kind: 'gauge', path: 'speed',
+    description: MOVE_SLOT_LIBRARY.gauge.description,
+    note: 'A slider with `moveVisual: { kind: \'gauge\' }` — the multiband cleaner’s speed gauge in a slot of its own. An ordinary dial on the wire; it reads as a multiple unless the slider brings a unit or a formatter.',
+    live: { path: 'speed' },
   },
   {
     kind: 'trim-span', span: 2,

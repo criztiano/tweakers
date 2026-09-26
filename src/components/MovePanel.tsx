@@ -1812,8 +1812,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 // top and the value takes the slot. Plain 0..1 amounts keep
                 // the big name, since "40%" on its own says nothing.
                 // The kit's own room pages read the same way: the bar width
-                // says "2×" big, with its name as the tag.
-                const valueFirst = (focused || !!settingsPanel || page.panel.kind === 'kit') && !(meta.min === 0 && meta.max === 1);
+                // says "2×" big, with its name as the tag. An app asks for it
+                // per slider with `display: 'value'`, whatever the range — it
+                // knows its number says what it is.
+                const valueFirst = (meta.type === 'slider' && meta.display === 'value')
+                  || ((focused || !!settingsPanel || page.panel.kind === 'kit') && !(meta.min === 0 && meta.max === 1));
                 // The modulator's oscilloscope belongs to a place on the page,
                 // not to one control: the LFO's first slot shows the live wave
                 // whether it is holding a rate in Hz or a tempo division.
@@ -3327,9 +3330,10 @@ function MoveAudioZoom() {
 /**
  * The clock every host's waveform gets, in the panel's volume corner: the
  * playhead's time, flanked by the host's transport state — play on the left,
- * loop on the right, lit when running — when it runs one. The time is
- * written straight to its span every frame at a fixed width, so the pill
- * never breathes.
+ * record beside it for a host that records, loop on the right, lit when
+ * running — when it runs one. Each state is a key: a click runs the handler
+ * the hardware key runs. The time is written straight to its span every
+ * frame at a fixed width, so the pill never breathes.
  */
 function MoveWaveClock() {
   useSyncExternalStore(
@@ -3338,6 +3342,7 @@ function MoveWaveClock() {
     () => 0
   );
   const transport = MoveWaveformStore.getTransport();
+  const records = transport?.recording !== undefined;
   const clockRef = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     let raf = requestAnimationFrame(function tick() {
@@ -3348,21 +3353,57 @@ function MoveWaveClock() {
     return () => cancelAnimationFrame(raf);
   }, []);
   return (
-    <div className="tweakers-move-volume tweakers-move-wave-time" data-transport={transport ? true : undefined}>
+    <div
+      className="tweakers-move-volume tweakers-move-wave-time"
+      data-transport={transport ? true : undefined}
+      data-record={records || undefined}
+    >
       {transport && (
-        <svg className="tweakers-move-wave-state" data-on={transport.playing || undefined} viewBox="0 0 24 24" aria-hidden="true">
+        <MoveWaveKey name="play" on={transport.playing} label={transport.playing ? 'Stop' : 'Play'}>
           <path d={ICON_PLAY} fill="currentColor" />
-        </svg>
+        </MoveWaveKey>
+      )}
+      {transport && records && (
+        <MoveWaveKey name="rec" on={!!transport.recording} label={transport.recording ? 'Stop recording' : 'Record'}>
+          <circle cx="12" cy="12" r="7" fill="currentColor" />
+        </MoveWaveKey>
       )}
       <span ref={clockRef} className="tweakers-move-volume-value">{MoveWaveformStore.clock()}</span>
       {transport && (
-        <svg className="tweakers-move-wave-state" data-on={transport.loopOn || undefined} viewBox="0 0 24 24" aria-hidden="true">
+        <MoveWaveKey name="loop" on={transport.loopOn} label={transport.loopOn ? 'Loop off' : 'Loop on'}>
           {ICON_LOOP.map((d) => (
             <path key={d} d={d} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
           ))}
-        </svg>
+        </MoveWaveKey>
       )}
     </div>
+  );
+}
+
+/**
+ * One transport key on the clock: its state glyph, lit while running, and a
+ * click that runs the hardware key's own handler — the screen and the Move
+ * never keep two versions of what Play does. The name says what a press
+ * will do now.
+ */
+function MoveWaveKey({ name, on, label, children }: {
+  name: 'play' | 'rec' | 'loop';
+  on: boolean;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className="tweakers-move-wave-key"
+      data-name={name}
+      aria-label={label}
+      onClick={() => MoveFunctions.run(name)}
+    >
+      <svg className="tweakers-move-wave-state" data-on={on || undefined} viewBox="0 0 24 24" aria-hidden="true">
+        {children}
+      </svg>
+    </button>
   );
 }
 
