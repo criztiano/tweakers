@@ -1783,7 +1783,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   so the columns and their gestures stay exactly where they are. */}
               {!stripMode && !settingsPanel && !color && slotGroups(page, visibleCols).map(({ start, span, label }) => (
                 <div key={`group-${start}`} className="tweakers-move-slot-group" aria-hidden="true" data-labelled={label ? 'true' : undefined}
-                  style={{ '--move-group-start': start, '--move-group-span': span } as React.CSSProperties}>
+                  style={{ gridColumn: `${start + 1} / span ${span}`, gridRow: 1, '--move-group-span': span } as React.CSSProperties}>
                   {label && <span className="tweakers-move-slot-group-head">{label}</span>}
                   {Array.from({ length: span - 1 }, (_, k) => (
                     <i key={k} className="tweakers-move-slot-group-divider" style={{ '--move-group-divider-at': k + 1 } as React.CSSProperties} />

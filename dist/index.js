@@ -13479,7 +13479,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     className: "tweakers-move-slot-group",
                                     "aria-hidden": "true",
                                     "data-labelled": label ? "true" : void 0,
-                                    style: { "--move-group-start": start, "--move-group-span": span },
+                                    style: { gridColumn: `${start + 1} / span ${span}`, gridRow: 1, "--move-group-span": span },
                                     children: [
                                       label && /* @__PURE__ */ jsx17("span", { className: "tweakers-move-slot-group-head", children: label }),
                                       Array.from({ length: span - 1 }, (_, k) => /* @__PURE__ */ jsx17("i", { className: "tweakers-move-slot-group-divider", style: { "--move-group-divider-at": k + 1 } }, k))
