@@ -623,14 +623,16 @@ function moveGrainSpan(dials) {
     positions: [length, option(shapeMeta, shapeValue), amount, option(directionMeta, directionValue)]
   };
 }
-var MOVE_GRAIN = { width: 300, height: 100, base: 92, top: 10, copies: 7 };
+var MOVE_GRAIN = { width: 300, height: 100, base: 100, top: 6, copies: 7 };
 function moveGrainPicture(span) {
   const { width: W, base, top, copies: most } = MOVE_GRAIN;
   const margin = 6;
-  const g = W * (0.2 + 0.46 * clamp01(span.length));
   const sample = span.shape ?? ((t) => Math.sin(Math.PI * t));
   const both = span.direction === "ping-pong" || span.direction === "bounce" || span.direction === "scissors";
-  const step = span.trail.role === "density" ? span.trail.spacing * g : span.trail.lag * g;
+  const ratio = span.trail.role === "density" ? span.trail.spacing : span.trail.lag;
+  const fits = (W - 2 * margin) / (1 + ratio * (both ? 2 : 1));
+  const g = Math.min(W * (0.2 + 0.46 * clamp01(span.length)), fits);
+  const step = ratio * g;
   const room = both ? (W - g) / 2 - margin : W - g - 2 * margin;
   const count = span.trail.role === "offset" ? 1 : Math.max(1, Math.min(most, Math.ceil(room / Math.max(step, 1e-6))));
   const reach = span.trail.role === "offset" ? step : Math.min(count * step, room);
@@ -2897,33 +2899,36 @@ function MoveGrainArrows({ mode, active }) {
 }
 function MoveSlotGrainBody({ span, length, shape, trail, direction }) {
   const picture = moveGrainPicture(span);
-  const { width: w, height: h, base } = MOVE_GRAIN;
+  const { width: w, height: h } = MOVE_GRAIN;
   const role = span.trail.role;
   return /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-face", style: { "--move-face-span": 4 }, children: [
-    /* @__PURE__ */ jsx3("div", { className: "tweakers-move-grain-stage", "data-trail": role, "aria-hidden": "true", children: /* @__PURE__ */ jsxs3("svg", { viewBox: `0 0 ${w} ${h}`, preserveAspectRatio: "none", children: [
-      picture.copies.map((copy, k) => /* @__PURE__ */ jsx3(
-        "path",
-        {
-          className: "tweakers-move-grain-copy",
-          "data-near": copy.rank === 1 || void 0,
-          "data-active": copy.rank === 1 && trail.active || void 0,
-          style: { "--move-grain-rank": copy.rank },
-          d: copy.d
-        },
-        k
-      )),
-      /* @__PURE__ */ jsx3("path", { className: "tweakers-move-grain-hero", "data-active": shape.active || void 0, d: picture.hero }),
-      role === "offset" && picture.copies.map((copy, k) => /* @__PURE__ */ jsx3("path", { className: "tweakers-move-grain-edge", d: copy.d }, `edge-${k}`)),
-      /* @__PURE__ */ jsxs3("g", { className: "tweakers-move-grain-length", "data-active": length.active || void 0, children: [
-        /* @__PURE__ */ jsx3("path", { className: "tweakers-move-grain-length-rule", d: `M${picture.span.from} ${base + 4}H${picture.span.to}` }),
-        /* @__PURE__ */ jsx3(
+    /* @__PURE__ */ jsx3("div", { className: "tweakers-move-grain-stage", "data-trail": role, "aria-hidden": "true", children: /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-grain-plot", children: [
+      /* @__PURE__ */ jsxs3("svg", { viewBox: `0 0 ${w} ${h}`, preserveAspectRatio: "none", children: [
+        picture.copies.map((copy, k) => /* @__PURE__ */ jsx3(
           "path",
           {
-            className: "tweakers-move-grain-length-ends",
-            d: `M${picture.span.from} ${base + 1}V${base + 7}M${picture.span.to} ${base + 1}V${base + 7}`
-          }
-        )
-      ] })
+            className: "tweakers-move-grain-copy",
+            "data-near": copy.rank === 1 || void 0,
+            "data-active": copy.rank === 1 && trail.active || void 0,
+            d: copy.d
+          },
+          k
+        )),
+        /* @__PURE__ */ jsx3("path", { className: "tweakers-move-grain-hero", "data-active": shape.active || void 0, d: picture.hero }),
+        role === "offset" && picture.copies.map((copy, k) => /* @__PURE__ */ jsx3("path", { className: "tweakers-move-grain-edge", d: copy.d }, `edge-${k}`))
+      ] }),
+      /* @__PURE__ */ jsxs3(
+        "span",
+        {
+          className: "tweakers-move-grain-length",
+          "data-active": length.active || void 0,
+          style: { left: `${picture.span.from / w * 100}%`, width: `${(picture.span.to - picture.span.from) / w * 100}%` },
+          children: [
+            /* @__PURE__ */ jsx3("i", {}),
+            /* @__PURE__ */ jsx3("i", {})
+          ]
+        }
+      )
     ] }) }),
     /* @__PURE__ */ jsx3(MoveGrainArrows, { mode: span.direction, active: direction.active }),
     /* @__PURE__ */ jsx3("span", { className: "tweakers-move-grain-name", "data-role": "length", children: /* @__PURE__ */ jsx3(MoveFaceName, { col: 0, dial: length }) }),

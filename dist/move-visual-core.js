@@ -227,14 +227,16 @@ function moveGrainSpan(dials) {
     positions: [length, option(shapeMeta, shapeValue), amount, option(directionMeta, directionValue)]
   };
 }
-var MOVE_GRAIN = { width: 300, height: 100, base: 92, top: 10, copies: 7 };
+var MOVE_GRAIN = { width: 300, height: 100, base: 100, top: 6, copies: 7 };
 function moveGrainPicture(span) {
   const { width: W, base, top, copies: most } = MOVE_GRAIN;
   const margin = 6;
-  const g = W * (0.2 + 0.46 * clamp01(span.length));
   const sample = span.shape ?? ((t) => Math.sin(Math.PI * t));
   const both = span.direction === "ping-pong" || span.direction === "bounce" || span.direction === "scissors";
-  const step = span.trail.role === "density" ? span.trail.spacing * g : span.trail.lag * g;
+  const ratio = span.trail.role === "density" ? span.trail.spacing : span.trail.lag;
+  const fits = (W - 2 * margin) / (1 + ratio * (both ? 2 : 1));
+  const g = Math.min(W * (0.2 + 0.46 * clamp01(span.length)), fits);
+  const step = ratio * g;
   const room = both ? (W - g) / 2 - margin : W - g - 2 * margin;
   const count = span.trail.role === "offset" ? 1 : Math.max(1, Math.min(most, Math.ceil(room / Math.max(step, 1e-6))));
   const reach = span.trail.role === "offset" ? step : Math.min(count * step, room);

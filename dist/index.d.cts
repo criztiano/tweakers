@@ -1313,12 +1313,13 @@ type MoveGrainSpan = {
  * offset, and a direction, in that order — or null for any other run.
  */
 declare function moveGrainSpan(dials: [ControlMeta, unknown][]): MoveGrainSpan | null;
-/** The grain picture's drawing units: three slots of room, 100 high. */
+/** The grain picture's drawing units: three slots of room, 100 high, the
+ *  floor the grains stand on along the bottom edge. */
 declare const MOVE_GRAIN: {
     readonly width: 300;
     readonly height: 100;
-    readonly base: 92;
-    readonly top: 10;
+    readonly base: 100;
+    readonly top: 6;
     readonly copies: 7;
 };
 type MoveGrainPicture = {
