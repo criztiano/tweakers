@@ -500,8 +500,9 @@ export function moveGrainSpan(dials: [ControlMeta, unknown][]): MoveGrainSpan | 
   };
 }
 
-/** The grain picture's drawing units: three slots of room, 100 high. */
-export const MOVE_GRAIN = { width: 300, height: 100, base: 92, top: 10, copies: 7 } as const;
+/** The grain picture's drawing units: three slots of room, 100 high, the
+ *  floor the grains stand on along the bottom edge. */
+export const MOVE_GRAIN = { width: 300, height: 100, base: 100, top: 6, copies: 7 } as const;
 
 export type MoveGrainPicture = {
   /** The lit grain's outline, closed along the floor. */
@@ -525,10 +526,16 @@ export type MoveGrainPicture = {
 export function moveGrainPicture(span: MoveGrainSpan): MoveGrainPicture {
   const { width: W, base, top, copies: most } = MOVE_GRAIN;
   const margin = 6;
-  const g = W * (0.2 + 0.46 * clamp01(span.length));
   const sample = span.shape ?? ((t: number) => Math.sin(Math.PI * t));
   const both = span.direction === 'ping-pong' || span.direction === 'bounce' || span.direction === 'scissors';
-  const step = span.trail.role === 'density' ? span.trail.spacing * g : span.trail.lag * g;
+  // The trail between copies, in grain lengths.
+  const ratio = span.trail.role === 'density' ? span.trail.spacing : span.trail.lag;
+  // The lit grain and its nearest copy — both of them, played both ways —
+  // always fit whole: when they would not, the whole picture shrinks until
+  // they do, so a sparse cloud draws small rather than cut off.
+  const fits = (W - 2 * margin) / (1 + ratio * (both ? 2 : 1));
+  const g = Math.min(W * (0.2 + 0.46 * clamp01(span.length)), fits);
+  const step = ratio * g;
   const room = both ? (W - g) / 2 - margin : W - g - 2 * margin;
   const count = span.trail.role === 'offset'
     ? 1

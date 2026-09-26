@@ -283,6 +283,22 @@ describe('the grain cloud', () => {
     expect(picture.copies).toHaveLength(1);
   });
 
+  it('never cuts off the lit grain or its nearest copy — a sparse cloud draws smaller instead', () => {
+    const xs = (d: string) => [...d.matchAll(/(-?[\d.]+) -?[\d.]+/g)].map((m) => Number(m[1]));
+    const inside = (d: string) => xs(d).every((x) => x >= 0 && x <= MOVE_GRAIN.width);
+    for (const mode of ['fwd', 'rev', 'pp']) {
+      for (const trail of [density(() => 0.05), density(() => 0.5), offset(() => 4)]) {
+        const picture = moveGrainPicture(cloud(trail, mode)!);
+        expect(inside(picture.hero)).toBe(true);
+        for (const near of picture.copies.filter((c) => c.rank === 1)) expect(inside(near.d)).toBe(true);
+      }
+    }
+    // A dense cloud keeps the size the length asks for.
+    const dense = moveGrainPicture(cloud(density(() => 8))!);
+    const sparse = moveGrainPicture(cloud(density(() => 0.05))!);
+    expect(sparse.span.to - sparse.span.from).toBeLessThan(dense.span.to - dense.span.from);
+  });
+
   it('trails the copies where the grains come from, and mirrors a reversed cloud', () => {
     const lead = (d: string) => Number(/^M(-?[\d.]+)/.exec(d)![1]);
     const forward = moveGrainPicture(cloud(density(() => 4))!);

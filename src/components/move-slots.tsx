@@ -846,28 +846,30 @@ export function MoveSlotGrainBody({ span, length, shape, trail, direction }: {
   direction: MoveFaceDial;
 }) {
   const picture = moveGrainPicture(span);
-  const { width: w, height: h, base } = MOVE_GRAIN;
+  const { width: w, height: h } = MOVE_GRAIN;
   const role = span.trail.role;
   return (
     <div className="tweakers-move-face" style={{ '--move-face-span': 4 } as CSSProperties}>
+      {/* The stage runs the face's whole width and clips there; the plot the
+          grains stand on is the first three columns, the length's rule under
+          it. */}
       <div className="tweakers-move-grain-stage" data-trail={role} aria-hidden="true">
-        <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-          {picture.copies.map((copy, k) => (
-            <path key={k} className="tweakers-move-grain-copy" data-near={copy.rank === 1 || undefined}
-              data-active={(copy.rank === 1 && trail.active) || undefined}
-              style={{ '--move-grain-rank': copy.rank } as CSSProperties} d={copy.d} />
-          ))}
-          <path className="tweakers-move-grain-hero" data-active={shape.active || undefined} d={picture.hero} />
-          {role === 'offset' && picture.copies.map((copy, k) => (
-            <path key={`edge-${k}`} className="tweakers-move-grain-edge" d={copy.d} />
-          ))}
-          {/* The length's rule, dashed, between two solid end ticks centred on it. */}
-          <g className="tweakers-move-grain-length" data-active={length.active || undefined}>
-            <path className="tweakers-move-grain-length-rule" d={`M${picture.span.from} ${base + 4}H${picture.span.to}`} />
-            <path className="tweakers-move-grain-length-ends"
-              d={`M${picture.span.from} ${base + 1}V${base + 7}M${picture.span.to} ${base + 1}V${base + 7}`} />
-          </g>
-        </svg>
+        <div className="tweakers-move-grain-plot">
+          <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+            {picture.copies.map((copy, k) => (
+              <path key={k} className="tweakers-move-grain-copy" data-near={copy.rank === 1 || undefined}
+                data-active={(copy.rank === 1 && trail.active) || undefined} d={copy.d} />
+            ))}
+            <path className="tweakers-move-grain-hero" data-active={shape.active || undefined} d={picture.hero} />
+            {role === 'offset' && picture.copies.map((copy, k) => (
+              <path key={`edge-${k}`} className="tweakers-move-grain-edge" d={copy.d} />
+            ))}
+          </svg>
+          <span className="tweakers-move-grain-length" data-active={length.active || undefined}
+            style={{ left: `${(picture.span.from / w) * 100}%`, width: `${((picture.span.to - picture.span.from) / w) * 100}%` }}>
+            <i /><i />
+          </span>
+        </div>
       </div>
       <MoveGrainArrows mode={span.direction} active={direction.active} />
       <span className="tweakers-move-grain-name" data-role="length"><MoveFaceName col={0} dial={length} /></span>

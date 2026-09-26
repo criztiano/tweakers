@@ -6101,11 +6101,9 @@
 
 .tweakers-move-grain-stage {
   position: absolute;
-  top: 16px;
-  bottom: 30px;
-  left: 12px;
-  width: calc(var(--move-face-col-w) * 3 + var(--move-gap) * 2 - 24px);
+  inset: 0;
   overflow: hidden;
+  border-radius: var(--move-radius);
   pointer-events: none;
 }
 
@@ -6114,12 +6112,22 @@
   --move-face-name-size: var(--move-toggle-label-size);
 }
 
-.tweakers-move-grain-stage > svg {
+/* The grains stand on the plot's bottom edge; the length's rule hangs 4px
+   under it. */
+.tweakers-move-grain-plot {
+  position: absolute;
+  top: 16px;
+  bottom: 44px;
+  left: 12px;
+  width: calc(var(--move-face-col-w) * 3 + var(--move-gap) * 2 - 24px);
+}
+
+.tweakers-move-grain-plot > svg {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .tweakers-move-grain-hero {
@@ -6130,9 +6138,10 @@
   stroke-linejoin: round;
 }
 
-/* Each copy further off sinks a step further into the slot. */
+/* The copies behind the lit grain are the app's own ground, each outlined
+   in the slot's surface so its edge still reads against the next. */
 .tweakers-move-grain-copy {
-  fill: color-mix(in srgb, var(--move-text) calc(34% - var(--move-grain-rank) * 4%), var(--move-dial-surface));
+  fill: var(--move-bg);
   stroke: var(--move-dial-surface);
   stroke-width: 1.5;
   vector-effect: non-scaling-stroke;
@@ -6166,26 +6175,30 @@
   opacity: 0.8;
 }
 
-.tweakers-move-grain-length path {
-  fill: none;
-  stroke: var(--move-grain-length);
-  stroke-width: 2;
-  stroke-linecap: round;
-  vector-effect: non-scaling-stroke;
+/* The length's rule: round dots between two solid ends, the dots drawn in
+   pixels so they stay round however wide the plot stretches. Touched, it
+   brightens and keeps its dots. */
+.tweakers-move-grain-length {
+  position: absolute;
+  top: calc(100% + 4px);
+  height: 6px;
   opacity: 0.75;
+  background: radial-gradient(circle, var(--move-grain-length) 1px, transparent 1.4px) center / 6px 2px repeat-x;
 }
 
-.tweakers-move-grain-length-rule {
-  stroke-dasharray: 2 5;
+.tweakers-move-grain-length[data-active] { opacity: 1; }
+
+.tweakers-move-grain-length > i {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  border-radius: 1px;
+  background: var(--move-grain-length);
 }
 
-.tweakers-move-grain-length[data-active] path {
-  opacity: 1;
-}
-
-.tweakers-move-grain-length[data-active] .tweakers-move-grain-length-rule {
-  stroke-dasharray: none;
-}
+.tweakers-move-grain-length > i:first-child { left: -1px; }
+.tweakers-move-grain-length > i:last-child { right: -1px; }
 
 .tweakers-move-grain-arrows {
   position: absolute;
