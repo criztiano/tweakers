@@ -54,6 +54,11 @@ const ANIMATION_ID = 'tweakers-move-panel-motion';
 /** The panel's height easing from one page's to the next's, apart from the
  *  controls' own zoom so each can be stopped on its own. */
 const HEIGHT_ID = 'tweakers-move-panel-height';
+/** The panel's width easing the same way: the page's column count, which
+ *  every width in the panel is measured from (a registered number, so it
+ *  moves through the fractions between two pages' counts). */
+const WIDTH_ID = 'tweakers-move-panel-width';
+const SURFACE_COLS = '--move-surface-cols';
 /** On a panel this module made positioned for the length of a change. */
 const POSITIONED_ATTR = 'data-move-panel-positioned';
 const INNER = '.tweakers-move-inner';
@@ -70,6 +75,8 @@ export interface MovePanelPicture {
   /** How tall the panel's inside stood — mid-change, wherever its height
    *  had eased to — for the new height to ease from. */
   innerHeight: number;
+  /** How many columns wide it stood, the same way — for the new width. */
+  surfaceCols: number;
   /** The look the leaving layer had reached — mid-change, it is not 1. */
   opacity: number;
   transform: string;
@@ -139,6 +146,7 @@ export function takePanelPicture(panel: HTMLElement | null, scope: MovePanelChan
   const inner = panel.querySelector<HTMLElement>(`${INNER}:not([${GHOST_ATTR}])`);
   // layout height: the inside may be mid-zoom, and a scale is not its size
   const innerHeight = inner?.offsetHeight ?? 0;
+  const surfaceCols = inner ? parseFloat(getComputedStyle(inner).getPropertyValue(SURFACE_COLS)) || 0 : 0;
   // The copy of the whole inside hangs in the panel, and must move with it
   // while the panel's height eases — so the panel holds it, for the change.
   if (scope === 'inside' && getComputedStyle(panel).position === 'static') {
@@ -191,6 +199,7 @@ export function takePanelPicture(panel: HTMLElement | null, scope: MovePanelChan
     width: rect.width,
     height: rect.height,
     innerHeight,
+    surfaceCols,
     opacity: Number(look.opacity) || 0,
     transform: look.transform === 'none' ? 'scale(1)' : look.transform,
     scrolls,
@@ -269,6 +278,7 @@ export function playPanelChange(picture: MovePanelPicture): void {
   }
 
   easeHeight(picture, plan);
+  easeWidth(picture, plan);
 
   clearTimeout(settleTimers.get(panel));
   settleTimers.set(panel, setTimeout(() => settle(panel), plan.duration));
@@ -315,6 +325,27 @@ function easeHeight(picture: MovePanelPicture, plan: ReturnType<typeof movePanel
     requestAnimationFrame(follow);
   };
   requestAnimationFrame(follow);
+}
+
+/**
+ * The panel's width follows on the same curve. Every width in it — the dial
+ * cluster, the header row, where the wheel screen stands — is measured from
+ * the page's column count, so the count itself eases from the old page's to
+ * the new one's instead of snapping when the change commits.
+ */
+function easeWidth(picture: MovePanelPicture, plan: ReturnType<typeof movePanelChoreography>) {
+  const inner = picture.panel.querySelector<HTMLElement>(`${INNER}:not([${GHOST_ATTR}])`);
+  if (!inner || !picture.surfaceCols) return;
+  for (const running of inner.getAnimations()) if (running.id === WIDTH_ID) running.cancel();
+  const to = parseFloat(inner.style.getPropertyValue(SURFACE_COLS));
+  if (!to || Math.abs(to - picture.surfaceCols) < 0.01) return;
+  const frames = [{ [SURFACE_COLS]: String(picture.surfaceCols) }, { [SURFACE_COLS]: String(to) }];
+  const timing: KeyframeAnimationOptions = { duration: plan.duration, fill: 'none', id: WIDTH_ID };
+  try {
+    inner.animate(frames, { ...timing, easing: plan.arriving.move?.easing ?? 'linear' });
+  } catch {
+    inner.animate(frames, { ...timing, easing: MOVE_VIEW_EXPO_BEZIER });
+  }
 }
 
 /** Where the inside would stand at rest, read while its height is held: the

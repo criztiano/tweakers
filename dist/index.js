@@ -12155,6 +12155,8 @@ var GHOST_ATTR = "data-move-panel-ghost";
 var MOVE_PANEL_MOTION_ATTR = "data-move-panel-motion";
 var ANIMATION_ID = "tweakers-move-panel-motion";
 var HEIGHT_ID = "tweakers-move-panel-height";
+var WIDTH_ID = "tweakers-move-panel-width";
+var SURFACE_COLS = "--move-surface-cols";
 var POSITIONED_ATTR = "data-move-panel-positioned";
 var INNER = ".tweakers-move-inner";
 var compose = (base, scale) => base === "none" ? scale : `${base} ${scale}`;
@@ -12190,6 +12192,7 @@ function takePanelPicture(panel, scope) {
   if (!panel || typeof panel.animate !== "function") return null;
   const inner = panel.querySelector(`${INNER}:not([${GHOST_ATTR}])`);
   const innerHeight = inner?.offsetHeight ?? 0;
+  const surfaceCols = inner ? parseFloat(getComputedStyle(inner).getPropertyValue(SURFACE_COLS)) || 0 : 0;
   if (scope === "inside" && getComputedStyle(panel).position === "static") {
     panel.style.position = "relative";
     panel.setAttribute(POSITIONED_ATTR, "");
@@ -12235,6 +12238,7 @@ function takePanelPicture(panel, scope) {
     width: rect.width,
     height: rect.height,
     innerHeight,
+    surfaceCols,
     opacity: Number(look.opacity) || 0,
     transform: look.transform === "none" ? "scale(1)" : look.transform,
     scrolls,
@@ -12296,6 +12300,7 @@ function playPanelChange(picture) {
     animate(live, [{ opacity: 0 }, { opacity: 1 }], arriving.fade.duration, "linear", "linear", "none");
   }
   easeHeight(picture, plan);
+  easeWidth(picture, plan);
   clearTimeout(settleTimers.get(panel));
   settleTimers.set(panel, setTimeout(() => settle(panel), plan.duration));
 }
@@ -12330,6 +12335,20 @@ function easeHeight(picture, plan) {
     requestAnimationFrame(follow);
   };
   requestAnimationFrame(follow);
+}
+function easeWidth(picture, plan) {
+  const inner = picture.panel.querySelector(`${INNER}:not([${GHOST_ATTR}])`);
+  if (!inner || !picture.surfaceCols) return;
+  for (const running2 of inner.getAnimations()) if (running2.id === WIDTH_ID) running2.cancel();
+  const to = parseFloat(inner.style.getPropertyValue(SURFACE_COLS));
+  if (!to || Math.abs(to - picture.surfaceCols) < 0.01) return;
+  const frames = [{ [SURFACE_COLS]: String(picture.surfaceCols) }, { [SURFACE_COLS]: String(to) }];
+  const timing = { duration: plan.duration, fill: "none", id: WIDTH_ID };
+  try {
+    inner.animate(frames, { ...timing, easing: plan.arriving.move?.easing ?? "linear" });
+  } catch {
+    inner.animate(frames, { ...timing, easing: MOVE_VIEW_EXPO_BEZIER });
+  }
 }
 function naturalHeight(inner) {
   let bottom = 0;

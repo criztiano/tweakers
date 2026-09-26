@@ -544,6 +544,17 @@
   z-index: 9990;
 }
 
+/* The page's column count is a registered number so a page change can ease
+   it (move-panel-motion's easeWidth): the widths measured from it move
+   through the fractions between two pages instead of snapping. MovePanel
+   always sets it on the panel's inside; the initial value is the full
+   eight-wide surface. */
+@property --move-surface-cols {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 8;
+}
+
 .tweakers-move-inner {
   /* Only occupied columns show: --move-cols (set inline by MovePanel) is
      how many. The header row and the grid share this width — N slots at
