@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import type { CSSProperties } from 'react';
 import { LUCIDE_ICONS } from '../icons';
 import type { MoveNumericDrawing, MovePlaybackMode } from '../move-visual-core';
@@ -59,6 +60,16 @@ export function MoveSlotNumericBody({ label, value, drawing }: {
         <span className="tweakers-move-dial-option tweakers-move-visual-value">{value}</span>
       </>
     );
+  }
+  if (drawing.kind === 'diaphragm') {
+    return <MoveSlotDiaphragmBody label={label} value={value} position={drawing.position} zero={drawing.zero} />;
+  }
+  if (drawing.kind === 'streak') {
+    return <MoveSlotStreakBody label={label} value={value} position={drawing.position} />;
+  }
+  if (drawing.kind === 'clock') {
+    return <MoveSlotClockBody label={label} value={value} rate={drawing.rate} frozen={drawing.frozen}
+      tempo={drawing.tempo} hand={drawing.hand} />;
   }
   // The offset is a room, not a specimen: it wants rules, hatching and a
   // standing pin rather than a line in the shared 100 × 60 picture band.
@@ -239,7 +250,7 @@ export function MoveSlotOffsetBody({ label, value, origin, position, back, forwa
 
 /** Reuse the bundled option icons for playback, mirroring forward for reverse. */
 export function MoveSlotPlaybackDrawing({ mode }: { mode: MovePlaybackMode }) {
-  const icon = mode === 'scissors' ? 'scissors' : mode === 'ping-pong' ? 'arrow-left-right' : 'arrow-right';
+  const icon = mode === 'scissors' ? 'scissors' : mode === 'ping-pong' ? 'arrow-left-right' : mode === 'bounce' ? 'repeat' : 'arrow-right';
   return (
     <svg className="tweakers-move-dial-icon" viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -247,5 +258,184 @@ export function MoveSlotPlaybackDrawing({ mode }: { mode: MovePlaybackMode }) {
         {LUCIDE_ICONS[icon].map((d) => <path key={d} d={d} />)}
       </g>
     </svg>
+  );
+}
+
+/** The diaphragm's track, top and bottom, in percent of the slot's height:
+ *  between the name on top and the reading underneath. */
+const DIAPHRAGM_TRACK = { top: 23, bottom: 70 } as const;
+/** How far the sides draw in at the waist, in percent of the slot's width:
+ *  a resting throat, and the most it closes at either end of the range. */
+const DIAPHRAGM_PULL = { rest: 7, most: 30 } as const;
+/** How far up and down the pinch reaches from the waist, in percent of the
+ *  slot's height. */
+const DIAPHRAGM_REACH = 42;
+
+/**
+ * The slot's surface pinched in at `waist` (percent down the slot) by
+ * `depth` (percent in from each side): a smooth bump on each side, straight
+ * away from it, so the corners keep the slot's own rounding.
+ */
+function diaphragmClip(waist: number, depth: number): string {
+  const steps = 16;
+  // Near an end the pinch draws in tighter rather than running off the slot,
+  // so the top and bottom edges keep their width and their rounded corners.
+  const reach = Math.max(14, Math.min(DIAPHRAGM_REACH, waist - 4, 96 - waist));
+  const side = Array.from({ length: steps + 1 }, (_, k) => {
+    const y = waist - reach + (2 * reach * k) / steps;
+    const u = (y - waist) / reach;
+    return { y: Math.max(0, Math.min(100, y)), x: (depth * (1 + Math.cos(Math.PI * u))) / 2 };
+  });
+  const n = (v: number) => Number(v.toFixed(2));
+  const right = side.map((p) => `${n(100 - p.x)}% ${n(p.y)}%`);
+  const left = [...side].reverse().map((p) => `${n(p.x)}% ${n(p.y)}%`);
+  return `polygon(0% 0%, 100% 0%, ${right.join(', ')}, 100% 100%, 0% 100%, ${left.join(', ')})`;
+}
+
+/**
+ * A pitch stood upright: the mark rides a vertical line — up is higher —
+ * and the slot's own sides draw in toward it like a throat closing, the
+ * tighter the further it is from zero. The line is lit from zero to the
+ * mark. The name sits on top and the reading underneath, as on every
+ * specimen.
+ */
+export function MoveSlotDiaphragmBody({ label, value, position, zero }: {
+  label: string;
+  value: string;
+  /** Where the pitch is, 0 (lowest) .. 1 (highest). */
+  position: number;
+  /** Where zero sits on the same run, or null when the range misses it. */
+  zero: number | null;
+}) {
+  const at = place(position);
+  const home = zero ?? 0.5;
+  const reach = Math.max(home, 1 - home, 1e-9);
+  const pull = Math.min(1, Math.abs(at - home) / reach);
+  const track = DIAPHRAGM_TRACK.bottom - DIAPHRAGM_TRACK.top;
+  const y = (p: number) => DIAPHRAGM_TRACK.top + (1 - place(p)) * track;
+  const waist = y(at);
+  const depth = DIAPHRAGM_PULL.rest + (DIAPHRAGM_PULL.most - DIAPHRAGM_PULL.rest) * pull;
+  const lit = { top: Math.min(waist, y(home)), bottom: 100 - Math.max(waist, y(home)) };
+  return (
+    <>
+      <i className="tweakers-move-diaphragm-surface" style={{ clipPath: diaphragmClip(waist, depth) }} aria-hidden="true" />
+      <span className="tweakers-move-dial-tag">{label}</span>
+      <span className="tweakers-move-diaphragm-line" style={{ top: `${DIAPHRAGM_TRACK.top}%`, bottom: `${100 - DIAPHRAGM_TRACK.bottom}%` }} aria-hidden="true" />
+      <span className="tweakers-move-diaphragm-lit" data-offset={pull > 1e-9 || undefined}
+        style={{ top: `${lit.top}%`, bottom: `${lit.bottom}%` }} aria-hidden="true" />
+      {zero !== null && <span className="tweakers-move-diaphragm-zero" style={{ top: `${y(zero)}%` }} aria-hidden="true" />}
+      <span className="tweakers-move-diaphragm-mark" data-offset={pull > 1e-9 || undefined} style={{ top: `${waist}%` }} aria-hidden="true" />
+      <span className="tweakers-move-dial-option tweakers-move-visual-value">{value}</span>
+    </>
+  );
+}
+
+/** A reading split at its last digit: "1.5×" is 1.5 and ×. */
+const splitAtNumber = (value: string) => {
+  const m = /^(.*\d)(\D*)$/.exec(value.trim());
+  return m ? { num: m[1], unit: m[2].trim() } : { num: value, unit: '' };
+};
+
+/** The speed lines, top to bottom, each as a share of the longest. */
+const STREAK_LINES = [0.5, 0.85, 1, 0.7, 0.4] as const;
+
+/**
+ * A speed as its own number, rushing: the reading is the headline and speed
+ * lines trail off behind it, longer the faster it runs — at the slow end they
+ * shrink to stubs and the number stands still.
+ */
+export function MoveSlotStreakBody({ label, value, position }: {
+  label: string;
+  value: string;
+  /** Where the speed sits across the dial, 0 (slowest) .. 1 (fastest). */
+  position: number;
+}) {
+  const { num, unit } = splitAtNumber(value);
+  const reach = 8 + place(position) * 48;
+  return (
+    <>
+      <span className="tweakers-move-dial-tag">{label}</span>
+      <span className="tweakers-move-streak" aria-hidden="true">
+        <svg className="tweakers-move-streak-lines" viewBox="0 0 56 40" preserveAspectRatio="xMaxYMid meet">
+          {STREAK_LINES.map((share, k) => (
+            <line key={k} x1={56 - reach * share} x2={52} y1={6 + k * 7} y2={6 + k * 7}
+              style={{ opacity: 0.35 + 0.65 * share }} />
+          ))}
+        </svg>
+        <span className="tweakers-move-streak-number">
+          {num}
+          {unit && <span className="tweakers-move-streak-unit">{unit}</span>}
+        </span>
+      </span>
+    </>
+  );
+}
+
+/**
+ * A rate something runs at on its own, as a clock. The rate is the headline,
+ * top right; the clock keeps the bottom-left corner with its hand where the
+ * host says — so the hand going round is the thing running. When the host
+ * knows the beat at 1×, the beat this rate makes stands bottom right;
+ * otherwise the control's name does. At the dial's minimum it is stopped and
+ * the whole face frosts over: the clock goes to ice, the hand stays put.
+ *
+ * The hand is turned straight on its element, never through a render, like
+ * the metronome's arm.
+ */
+export function MoveSlotClockBody({ label, value, rate, frozen, tempo, hand }: {
+  label: string;
+  value: string;
+  rate: number;
+  frozen: boolean;
+  tempo: number | null;
+  /** Where the hand points now, 0..1 of a turn, or null for twelve. */
+  hand?: () => number | null;
+}) {
+  const needle = useRef<SVGGElement>(null);
+  const read = useRef(hand);
+  read.current = hand;
+  const turns = !!hand && !frozen;
+
+  useEffect(() => {
+    const g = needle.current;
+    if (!g || !turns || typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') return;
+    let frame = 0;
+    const tick = () => {
+      const at = read.current?.();
+      if (typeof at === 'number' && Number.isFinite(at)) g.setAttribute('transform', `rotate(${(((at % 1) + 1) % 1 * 360).toFixed(2)})`);
+      else if (at === null) g.setAttribute('transform', 'rotate(0)');
+      frame = window.requestAnimationFrame(tick);
+    };
+    tick();
+    return () => window.cancelAnimationFrame(frame);
+  }, [turns]);
+
+  const { num, unit } = splitAtNumber(value);
+  const beat = tempo !== null && !frozen ? `${Number((tempo * rate).toFixed(1))} BPM` : null;
+  return (
+    <>
+      {frozen && <i className="tweakers-move-clock-frost" aria-hidden="true" />}
+      <span className="tweakers-move-clock-readout" data-frozen={frozen || undefined}>
+        <span className="tweakers-move-dial-number">{num}</span>
+        {unit && <span className="tweakers-move-clock-unit">{unit}</span>}
+      </span>
+      <span className="tweakers-move-clock-picture" aria-hidden="true">
+        <svg className="tweakers-move-clock" data-frozen={frozen || undefined} viewBox="-22 -22 44 44">
+          {frozen && (
+            <g className="tweakers-move-clock-ice">
+              {Array.from({ length: 12 }, (_, k) => (
+                <path key={k} transform={`rotate(${k * 30})`} d={k % 3 === 0 ? 'M0 -17.5V-21.5M-1.8 -20.2L0 -21.5L1.8 -20.2' : 'M0 -17.5V-19.8'} />
+              ))}
+            </g>
+          )}
+          <circle className="tweakers-move-clock-disc" r="16" />
+          <g ref={needle} transform="rotate(0)">
+            <line className="tweakers-move-clock-hand" x1="0" y1="2" x2="0" y2="-10.5" />
+          </g>
+          <circle className="tweakers-move-clock-pivot" r="2.2" />
+        </svg>
+      </span>
+      <span className="tweakers-move-clock-foot">{beat ?? label}</span>
+    </>
   );
 }

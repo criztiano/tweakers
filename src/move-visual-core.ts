@@ -6,11 +6,28 @@ export type MoveSliderVisual =
   | { kind: 'blur' }
   | { kind: 'pan'; left?: number; center?: number; right?: number }
   | { kind: 'stereo-width'; mono?: number; unity?: number }
-  | { kind: 'pitch'; unit?: 'semitones' | 'cents' }
+  /** A signed pitch. `look: 'diaphragm'` stands it up: a mark on a vertical
+   *  line, the slot's own sides drawn in toward it like a throat closing —
+   *  tighter the further it is from zero. */
+  | { kind: 'pitch'; unit?: 'semitones' | 'cents'; look?: 'ruler' | 'diaphragm' }
   /** A speed: a needle on a graded dome, the slowest end on the left and the
    *  fastest on the right. It reads as a multiple ("1.5×") unless the host
-   *  gives a unit or a formatter. */
-  | { kind: 'gauge' }
+   *  gives a unit or a formatter. `look: 'streak'` draws the reading itself as
+   *  the headline, with speed lines trailing it — longer the faster it goes. */
+  | { kind: 'gauge'; look?: 'dome' | 'streak' }
+  /**
+   * A rate at which something runs on its own — a scan, a playhead — drawn as
+   * a clock. The value is a multiple of the thing's own pace (1 = as
+   * recorded), and the dial's minimum stops it: the clock freezes over.
+   * `tempo` is the beat at 1×, when the host knows one — the face then shows
+   * the beat the rate makes. The host owns time: `hand` is polled every frame
+   * for where the hand points, 0..1 of a turn, or `null` to leave it at
+   * twelve.
+   */
+  | { kind: 'clock'; tempo?: number | null; hand?: () => number | null }
+  /** A grain cloud's length, how thickly it repeats, or how far one copy
+   *  trails — see `MoveGrainVisual`. */
+  | MoveGrainSliderVisual
   /** One edge of a take: the bar is the whole of it, the kept part is filled
    *  from this edge's far end to the value, the edge itself is the marker. */
   | { kind: 'trim'; edge: 'start' | 'end' }
@@ -46,12 +63,52 @@ export type MoveTone = 'red' | 'orange' | 'yellow' | 'lime' | 'emerald' | 'blue'
 
 export type MoveGateRole = 'threshold' | 'lookahead' | 'release';
 
-export type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
-export type MoveSelectVisual = {
-  kind: 'playback';
-  /** Map host option values to drawings. Omit when values are mode names. */
-  modes?: Record<string, MovePlaybackMode>;
-};
+export type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'bounce' | 'scissors';
+export type MoveSelectVisual =
+  | {
+    kind: 'playback';
+    /** Map host option values to drawings. Omit when values are mode names. */
+    modes?: Record<string, MovePlaybackMode>;
+  }
+  /**
+   * A choice between parallel voices — layers, streams, lanes — drawn as
+   * lanes running away from you, the chosen one lit. `silent` names the
+   * options that are switched off: their lanes fade and carry a red cross,
+   * so which voices sound reads at a glance whichever one is chosen.
+   */
+  | { kind: 'lanes'; silent?: readonly string[] }
+  | MoveGrainSelectVisual;
+
+/**
+ * One dial of a grain cloud — a sound cut into short windows that repeat.
+ * Four dials side by side, in this order, draw as one 4-slot face:
+ *
+ * - `length` (slider) — how long one window is: the width of the lit grain.
+ * - `shape` (select with a `preview`) — the window's curve: the grain's
+ *   outline is the option's own sampler.
+ * - `density` (slider) — how thickly the windows repeat: copies stack up
+ *   behind the lit grain. `overlap` answers how many windows sound at once
+ *   (density × length, in the host's units); polled on each draw. Without
+ *   it the copies are spaced by the dial alone.
+ * - or `offset` (slider) — how far one other voice trails the lit grain:
+ *   a single copy in its own hue. `lag` answers the trail as a fraction of
+ *   one window's length; without it the dial's place stands in.
+ * - `direction` (select) — which way the grains play, drawn as a field of
+ *   arrows. `modes` maps option values to drawings, as `playback` does. The
+ *   copies trail on the side the grains come from, and a reversed cloud is
+ *   drawn mirrored.
+ *
+ * Any other arrangement keeps each dial's ordinary face.
+ */
+export type MoveGrainSliderVisual =
+  | { kind: 'grain'; role: 'length' }
+  | { kind: 'grain'; role: 'density'; overlap?: () => number }
+  | { kind: 'grain'; role: 'offset'; lag?: () => number };
+export type MoveGrainSelectVisual =
+  | { kind: 'grain'; role: 'shape' }
+  | { kind: 'grain'; role: 'direction'; modes?: Record<string, MovePlaybackMode> };
+export type MoveGrainVisual = MoveGrainSliderVisual | MoveGrainSelectVisual;
+export type MoveGrainRole = MoveGrainVisual['role'];
 
 /**
  * A switch that draws what it switches. `metronome`: a metronome whose arm
@@ -72,7 +129,19 @@ export type MoveNumericDrawing =
   | { kind: 'pan'; position: number }
   | { kind: 'stereo-width'; separation: number; unity: number | null }
   | { kind: 'pitch'; position: number; zero: number | null }
+  | { kind: 'diaphragm'; position: number; zero: number | null }
   | { kind: 'gauge'; position: number }
+  | { kind: 'streak'; position: number }
+  | {
+    kind: 'clock';
+    /** The rate, as the host's multiple: 1 = its own pace. */
+    rate: number;
+    /** At the dial's minimum: stopped, and frozen over. */
+    frozen: boolean;
+    /** The beat the rate makes, when the host knows one at 1×. */
+    tempo: number | null;
+    hand?: () => number | null;
+  }
   | { kind: 'trim'; edge: 'start' | 'end'; position: number }
   | {
     kind: 'offset';
@@ -128,10 +197,18 @@ export function moveNumericDrawing(meta: ControlMeta, value: unknown): MoveNumer
     }
     case 'pitch':
       if (visual.unit !== undefined && visual.unit !== 'semitones' && visual.unit !== 'cents') return null;
-      return { kind: 'pitch', position: (v - lo) / (hi - lo), zero: between(0, lo, hi) ? -lo / (hi - lo) : null };
+      return {
+        kind: visual.look === 'diaphragm' ? 'diaphragm' : 'pitch',
+        position: (v - lo) / (hi - lo),
+        zero: between(0, lo, hi) ? -lo / (hi - lo) : null,
+      };
     case 'gauge':
       // The needle sweeps the range the dial turns, so the two always agree.
-      return { kind: 'gauge', position: clamp01((v - lo) / (hi - lo)) };
+      return { kind: visual.look === 'streak' ? 'streak' : 'gauge', position: clamp01((v - lo) / (hi - lo)) };
+    case 'clock': {
+      const tempo = typeof visual.tempo === 'number' && Number.isFinite(visual.tempo) && visual.tempo > 0 ? visual.tempo : null;
+      return { kind: 'clock', rate: v, frozen: v <= lo, tempo, ...(visual.hand ? { hand: visual.hand } : {}) };
+    }
     case 'trim':
       if (visual.edge !== 'start' && visual.edge !== 'end') return null;
       return { kind: 'trim', edge: visual.edge, position: clamp01((v - lo) / (hi - lo)) };
@@ -315,13 +392,176 @@ export function moveMultibandSpan(
   return { amount, speed, bands: drawn.map(({ meta, position }) => ({ meta, position })) };
 }
 
-export function movePlaybackMode(meta: ControlMeta, value: unknown): MovePlaybackMode | null {
-  if (meta.type !== 'select' || meta.moveVisual?.kind !== 'playback' || typeof value !== 'string') return null;
+const PLAYBACK_MODES: readonly MovePlaybackMode[] = ['forward', 'reverse', 'ping-pong', 'bounce', 'scissors'];
+
+/** The drawing an option value stands for: through the host's map when it
+ *  gives one, or the value itself when it is already a mode's name. */
+function playbackModeOf(meta: ControlMeta, modes: unknown, value: unknown): MovePlaybackMode | null {
+  if (meta.type !== 'select' || typeof value !== 'string') return null;
   if (!meta.options?.some((option) => (typeof option === 'string' ? option : option.value) === value)) return null;
-  const modes = meta.moveVisual.modes;
   if (modes !== undefined && (typeof modes !== 'object' || modes === null || Array.isArray(modes))) return null;
-  const mode = modes ? (Object.prototype.hasOwnProperty.call(modes, value) ? modes[value] : undefined) : value;
-  return mode === 'forward' || mode === 'reverse' || mode === 'ping-pong' || mode === 'scissors' ? mode : null;
+  const map = modes as Record<string, unknown> | undefined;
+  const mode = map ? (Object.prototype.hasOwnProperty.call(map, value) ? map[value] : undefined) : value;
+  return PLAYBACK_MODES.includes(mode as MovePlaybackMode) ? mode as MovePlaybackMode : null;
+}
+
+export function movePlaybackMode(meta: ControlMeta, value: unknown): MovePlaybackMode | null {
+  return meta.moveVisual?.kind === 'playback' ? playbackModeOf(meta, meta.moveVisual.modes, value) : null;
+}
+
+/** A lanes picker's lanes, in option order: which one is chosen, and which
+ *  are switched off — or null unless the select asks to be drawn as lanes. */
+export function moveLanes(meta: ControlMeta, value: unknown): { chosen: number; silent: boolean[] } | null {
+  const visual = meta.moveVisual;
+  if (meta.type !== 'select' || visual?.kind !== 'lanes' || !meta.options?.length) return null;
+  const values = meta.options.map((option) => (typeof option === 'string' ? option : option.value));
+  const silent = Array.isArray(visual.silent) ? visual.silent : [];
+  return { chosen: Math.max(0, values.indexOf(value as string)), silent: values.map((v) => silent.includes(v)) };
+}
+
+/** A dial's grain role, or null when it is not one of a grain cloud's. */
+export function moveGrainRole(meta: ControlMeta | undefined): MoveGrainRole | null {
+  const visual = meta?.moveVisual;
+  if (visual?.kind !== 'grain') return null;
+  const slider = visual.role === 'length' || visual.role === 'density' || visual.role === 'offset';
+  return (slider ? meta!.type === 'slider' : meta!.type === 'select') ? visual.role : null;
+}
+
+/** What the grain face draws, read off its four dials. */
+export type MoveGrainSpan = {
+  /** One window's length, 0..1 across its dial. */
+  length: number;
+  /** The window's outline, sampled 0..1 → 0..1; null draws a plain hump. */
+  shape: ((t: number) => number) | null;
+  /** How the copies trail: stacked `density` copies, `spacing` apart in
+   *  window lengths, or one `offset` copy `lag` window lengths behind. */
+  trail: { role: 'density'; spacing: number } | { role: 'offset'; lag: number };
+  direction: MovePlaybackMode;
+  /** Each dial's place 0..1, in column order — an option picker's is its
+   *  option's place in the run. */
+  positions: [number, number, number, number];
+};
+
+/** How thin the copies may pack, in window lengths. Past it they read as one
+ *  wall, not a stack — the stack is the picture. */
+const GRAIN_MIN_SPACING = 0.035;
+
+/**
+ * Read a grain cloud off four dials: a length, a shape, a density or an
+ * offset, and a direction, in that order — or null for any other run.
+ */
+export function moveGrainSpan(dials: [ControlMeta, unknown][]): MoveGrainSpan | null {
+  if (dials.length !== 4) return null;
+  const roles = dials.map(([meta]) => moveGrainRole(meta));
+  if (roles[0] !== 'length' || roles[1] !== 'shape' || (roles[2] !== 'density' && roles[2] !== 'offset') || roles[3] !== 'direction') return null;
+  const length = sliderPosition(...dials[0]);
+  const amount = sliderPosition(...dials[2]);
+  const [shapeMeta, shapeValue] = dials[1];
+  const [directionMeta, directionValue] = dials[3];
+  const visual = directionMeta.moveVisual as Extract<MoveGrainVisual, { role: 'direction' }>;
+  const direction = playbackModeOf(directionMeta, visual.modes, directionValue);
+  if (length === null || amount === null || !direction) return null;
+
+  let shape: ((t: number) => number) | null = null;
+  try {
+    const sampler = shapeMeta.preview?.(String(shapeValue ?? ''));
+    if (typeof sampler === 'function') shape = sampler;
+  } catch {
+    shape = null;                      /* a throwing preview draws the plain hump */
+  }
+
+  const polled = (read: (() => number) | undefined) => {
+    try {
+      const n = read?.();
+      return typeof n === 'number' && Number.isFinite(n) ? n : null;
+    } catch {
+      return null;
+    }
+  };
+  const trailVisual = dials[2][0].moveVisual as Extract<MoveGrainVisual, { role: 'density' | 'offset' }>;
+  let trail: MoveGrainSpan['trail'];
+  if (trailVisual.role === 'density') {
+    // So many windows at once are this far apart: overlap 4 stacks a copy
+    // every quarter window. With no host answer the dial alone spaces them,
+    // from a window and a half apart to a thin stack.
+    const overlap = polled(trailVisual.overlap) ?? 0.66 * 2 ** (amount * 6);
+    trail = { role: 'density', spacing: Math.max(GRAIN_MIN_SPACING, 1 / Math.max(1e-6, overlap)) };
+  } else {
+    trail = { role: 'offset', lag: Math.max(0, polled(trailVisual.lag) ?? amount) };
+  }
+
+  const option = (meta: ControlMeta, value: unknown) => {
+    const values = (meta.options ?? []).map((o) => (typeof o === 'string' ? o : o.value));
+    return values.length > 1 ? Math.max(0, values.indexOf(value as string)) / (values.length - 1) : 0;
+  };
+  return {
+    length, shape, trail, direction,
+    positions: [length, option(shapeMeta, shapeValue), amount, option(directionMeta, directionValue)],
+  };
+}
+
+/** The grain picture's drawing units: three slots of room, 100 high. */
+export const MOVE_GRAIN = { width: 300, height: 100, base: 92, top: 10, copies: 7 } as const;
+
+export type MoveGrainPicture = {
+  /** The lit grain's outline, closed along the floor. */
+  hero: string;
+  /** Where its length runs, floor-level, for the length rule under it. */
+  span: { from: number; to: number };
+  /** The copies, farthest first: each outline and how near it is (1 = the
+   *  nearest, which wears the trail's hue). */
+  copies: { d: string; rank: number }[];
+};
+
+/**
+ * The grain face's picture in `MOVE_GRAIN` units. The lit grain is one
+ * window at its length; the copies sit behind it, each offset by the
+ * spacing, so where they overlap it only their trailing edges show — a
+ * dense cloud reads as a stack of edges, a sparse one as separate grains.
+ * Forward trails the copies to the right (the grains that went before); a
+ * reversed cloud is the same picture mirrored, window and all; the modes
+ * that play both ways trail on both sides.
+ */
+export function moveGrainPicture(span: MoveGrainSpan): MoveGrainPicture {
+  const { width: W, base, top, copies: most } = MOVE_GRAIN;
+  const margin = 6;
+  const g = W * (0.2 + 0.46 * clamp01(span.length));
+  const sample = span.shape ?? ((t: number) => Math.sin(Math.PI * t));
+  const both = span.direction === 'ping-pong' || span.direction === 'bounce' || span.direction === 'scissors';
+  const step = span.trail.role === 'density' ? span.trail.spacing * g : span.trail.lag * g;
+  const room = both ? (W - g) / 2 - margin : W - g - 2 * margin;
+  const count = span.trail.role === 'offset'
+    ? 1
+    : Math.max(1, Math.min(most, Math.ceil(room / Math.max(step, 1e-6))));
+  // The group — the grain and as much trail as fits — stands centred.
+  const reach = span.trail.role === 'offset' ? step : Math.min(count * step, room);
+  const x0 = both ? (W - g) / 2 : Math.max(margin, (W - g - reach) / 2);
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const outline = (at: number) => {
+    const points: string[] = [];
+    const n = 48;
+    for (let k = 0; k <= n; k++) {
+      const t = k / n;
+      const y = clamp01(Number(sample(t)) || 0);
+      points.push(`${r2(at + t * g)} ${r2(base - y * (base - top))}`);
+    }
+    return `M${r2(at)} ${base}L${points.join('L')}L${r2(at + g)} ${base}Z`;
+  };
+  const shifts = Array.from({ length: count }, (_, k) => {
+    const rank = k + 1;
+    if (!both) return { rank, dx: rank * step };
+    // Both ways: the copies alternate sides, the nearest pair first.
+    const side = k % 2 === 0 ? 1 : -1;
+    return { rank: Math.ceil(rank / 2), dx: side * Math.ceil(rank / 2) * step };
+  });
+  const mirror = (d: string) => (span.direction === 'reverse'
+    ? d.replace(/(-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?)/g, (_, x, y) => `${r2(W - Number(x))} ${y}`)
+    : d);
+  const copies = shifts
+    .sort((a, b) => b.rank - a.rank)
+    .map(({ rank, dx }) => ({ d: mirror(outline(x0 + dx)), rank }));
+  const from = span.direction === 'reverse' ? W - x0 - g : x0;
+  return { hero: mirror(outline(x0)), span: { from: r2(from), to: r2(from + g) }, copies };
 }
 
 /** Semantic formatting is a fallback; a host formatter or unit always wins. */
@@ -344,6 +584,7 @@ export function moveVisualReading(meta: ControlMeta, value: number): string {
       return value === (visual.mono ?? 0) ? 'Mono' : `${Number(((value - (visual.mono ?? 0)) / ((visual.unity ?? 1) - (visual.mono ?? 0))).toFixed(2))}×`;
     case 'pitch': return `${value > 0 ? '+' : ''}${number} ${visual.unit === 'cents' ? 'ct' : 'st'}`;
     case 'gauge': return `${number}×`;
+    case 'clock': return `${number}×`;
     case 'trim': return `${number} s`;
     default: return number;
   }

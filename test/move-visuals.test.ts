@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { TweakStore, type ControlMeta, type MoveVisual } from '../src/store/TweakStore';
 import { buildMovePages, denormalizeDial, normalizeDial } from '../src/move-layout';
-import { moveKeyboardValue, moveNumericDrawing, movePlaybackMode, moveVectorAxes, moveVectorStage, moveVisualReading, MOVE_STAGE } from '../src/move-visual-core';
+import { moveGrainPicture, moveGrainRole, moveGrainSpan, moveKeyboardValue, moveLanes, moveNumericDrawing, movePlaybackMode, moveVectorAxes, moveVectorStage, moveVisualReading, MOVE_GRAIN, MOVE_STAGE } from '../src/move-visual-core';
 
 const numeric = (moveVisual: MoveVisual, min = 0, max = 1): ControlMeta => ({
   type: 'slider', path: 'value', label: 'Unrelated label', min, max, step: 0.01, moveVisual,
@@ -196,5 +196,107 @@ describe('the vector stage', () => {
 
   it('clamps out-of-range inputs onto the stage', () => {
     expect(moveVectorStage(-1, 2, 5)).toEqual(moveVectorStage(0, 1, 1));
+  });
+});
+
+describe('the playback faces', () => {
+  it('stands a pitch up as a diaphragm, reading as the pitch it is', () => {
+    const throat = numeric({ kind: 'pitch', look: 'diaphragm' }, -24, 24);
+    expect(moveNumericDrawing(throat, 12)).toEqual({ kind: 'diaphragm', position: 0.75, zero: 0.5 });
+    expect(moveVisualReading(throat, 12)).toBe('+12 st');
+    // No look is the ruler it always was.
+    expect(moveNumericDrawing(numeric({ kind: 'pitch' }, -24, 24), 12)?.kind).toBe('pitch');
+  });
+
+  it('draws a streaking speed where the gauge asks for it, and the dome otherwise', () => {
+    expect(moveNumericDrawing(numeric({ kind: 'gauge', look: 'streak' }, 0, 4), 1)).toEqual({ kind: 'streak', position: 0.25 });
+    expect(moveNumericDrawing(numeric({ kind: 'gauge' }, 0, 4), 1)).toEqual({ kind: 'gauge', position: 0.25 });
+  });
+
+  it('freezes the clock at its minimum and shows the beat only when there is one', () => {
+    const hand = () => 0.5;
+    const clock = numeric({ kind: 'clock', tempo: 120, hand }, 0, 2);
+    expect(moveNumericDrawing(clock, 0)).toEqual({ kind: 'clock', rate: 0, frozen: true, tempo: 120, hand });
+    expect(moveNumericDrawing(clock, 1.5)).toMatchObject({ rate: 1.5, frozen: false });
+    expect(moveVisualReading(clock, 1.5)).toBe('1.5×');
+    // No tempo, or a nonsense one, is no beat.
+    expect(moveNumericDrawing(numeric({ kind: 'clock' }, 0, 2), 1)).toMatchObject({ tempo: null });
+    expect(moveNumericDrawing(numeric({ kind: 'clock', tempo: -3 }, 0, 2), 1)).toMatchObject({ tempo: null });
+  });
+
+  it('lays out lanes in option order, the chosen one and the silent ones', () => {
+    const voices: ControlMeta = {
+      type: 'select', path: 'voice', label: 'Voice', options: ['a', { value: 'b', label: 'B' }, 'c'],
+      moveVisual: { kind: 'lanes', silent: ['c'] },
+    };
+    expect(moveLanes(voices, 'b')).toEqual({ chosen: 1, silent: [false, false, true] });
+    expect(moveLanes({ ...voices, moveVisual: undefined }, 'b')).toBeNull();
+    expect(moveLanes({ ...voices, moveVisual: { kind: 'lanes' } }, 'a')).toEqual({ chosen: 0, silent: [false, false, false] });
+  });
+
+  it('plays bounce as a playback mode of its own', () => {
+    const mode: ControlMeta = { type: 'select', path: 'm', label: 'M', options: ['bounce'], moveVisual: { kind: 'playback' } };
+    expect(movePlaybackMode(mode, 'bounce')).toBe('bounce');
+  });
+});
+
+describe('the grain cloud', () => {
+  const bell = (t: number) => Math.sin(Math.PI * t);
+  const length: ControlMeta = { type: 'slider', path: 'size', label: 'Size', min: 0, max: 1, moveVisual: { kind: 'grain', role: 'length' } };
+  const shape: ControlMeta = { type: 'select', path: 'curve', label: 'Curve', options: ['bell', 'flat'], preview: (v) => (v === 'bell' ? bell : null), moveVisual: { kind: 'grain', role: 'shape' } };
+  const density = (overlap?: () => number): ControlMeta => ({ type: 'slider', path: 'density', label: 'Density', min: 0, max: 1, moveVisual: { kind: 'grain', role: 'density', overlap } });
+  const offset = (lag?: () => number): ControlMeta => ({ type: 'slider', path: 'offset', label: 'Offset', min: 0, max: 1, moveVisual: { kind: 'grain', role: 'offset', lag } });
+  const direction: ControlMeta = {
+    type: 'select', path: 'mode', label: 'Direction', options: ['fwd', 'rev', 'pp'],
+    moveVisual: { kind: 'grain', role: 'direction', modes: { fwd: 'forward', rev: 'reverse', pp: 'ping-pong' } },
+  };
+  const cloud = (trail: ControlMeta, mode = 'fwd', amount = 0.5) =>
+    moveGrainSpan([[length, 0.5], [shape, 'bell'], [trail, amount], [direction, mode]]);
+
+  it('reads four dials in order as one cloud, and nothing else', () => {
+    const span = cloud(density(() => 4))!;
+    expect(span).toMatchObject({ length: 0.5, direction: 'forward', trail: { role: 'density', spacing: 0.25 }, positions: [0.5, 0, 0.5, 0] });
+    expect(span.shape).toBe(bell);
+    expect(moveGrainSpan([[shape, 'bell'], [length, 0.5], [density(), 0.5], [direction, 'fwd']])).toBeNull();
+    expect(moveGrainSpan([[length, 0.5], [shape, 'bell'], [density(), 0.5]])).toBeNull();
+    // A dial wearing a grain role alone keeps its ordinary face.
+    expect(moveNumericDrawing(length, 0.5)).toBeNull();
+    expect(moveGrainRole(shape)).toBe('shape');
+    expect(moveGrainRole({ ...shape, type: 'slider' })).toBeNull();
+  });
+
+  it('stacks by the host’s overlap, and by the dial alone without one', () => {
+    expect(cloud(density(() => 10))!.trail).toEqual({ role: 'density', spacing: 0.1 });
+    // Past a thin stack the copies stop packing.
+    expect((cloud(density(() => 1e6))!.trail as { spacing: number }).spacing).toBeGreaterThan(0.01);
+    const thin = (cloud(density(), 'fwd', 0)!.trail as { spacing: number }).spacing;
+    const thick = (cloud(density(), 'fwd', 1)!.trail as { spacing: number }).spacing;
+    expect(thick).toBeLessThan(thin);
+    // A host that throws or answers nonsense falls back to the dial.
+    expect(cloud(density(() => Number.NaN))!.trail).toEqual(cloud(density())!.trail);
+  });
+
+  it('trails one copy by an offset, in window lengths', () => {
+    expect(cloud(offset(() => 0.5))!.trail).toEqual({ role: 'offset', lag: 0.5 });
+    expect(cloud(offset(), 'fwd', 0.25)!.trail).toEqual({ role: 'offset', lag: 0.25 });
+    const picture = moveGrainPicture(cloud(offset(() => 0.5))!);
+    expect(picture.copies).toHaveLength(1);
+  });
+
+  it('trails the copies where the grains come from, and mirrors a reversed cloud', () => {
+    const lead = (d: string) => Number(/^M(-?[\d.]+)/.exec(d)![1]);
+    const forward = moveGrainPicture(cloud(density(() => 4))!);
+    const reverse = moveGrainPicture(cloud(density(() => 4), 'rev')!);
+    const both = moveGrainPicture(cloud(density(() => 4), 'pp')!);
+    // Forward: every copy sits to the right of the lit grain.
+    expect(forward.copies.every((c) => lead(c.d) > lead(forward.hero))).toBe(true);
+    // Reversed: the same picture, mirrored — the lit grain's run included.
+    expect(reverse.span.from).toBeCloseTo(MOVE_GRAIN.width - forward.span.to);
+    expect(reverse.copies.every((c) => lead(c.d) < lead(reverse.hero))).toBe(true);
+    // Both ways: copies either side.
+    expect(both.copies.some((c) => lead(c.d) > lead(both.hero))).toBe(true);
+    expect(both.copies.some((c) => lead(c.d) < lead(both.hero))).toBe(true);
+    // Farthest first, so the nearest lands on top of the stack.
+    expect(forward.copies[forward.copies.length - 1].rank).toBe(1);
   });
 });
