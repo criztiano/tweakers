@@ -6099,11 +6099,19 @@
    the fourth the direction's field of arrows. Each name wears its dial's hue.
    --------------------------------------------------------------------------- */
 
+/* The stage runs from the slot's own left edge to just past the third
+   column, and clips there: the slot's rounded edge on the left, a short fade
+   on the right so the far copies never run under the direction's arrows. */
 .tweakers-move-grain-stage {
   position: absolute;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(var(--move-face-col-w) * 3 + var(--move-gap) * 2 + 12px);
   overflow: hidden;
-  border-radius: var(--move-radius);
+  border-radius: var(--move-radius) 0 0 var(--move-radius);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
   pointer-events: none;
 }
 
@@ -6113,13 +6121,17 @@
 }
 
 /* The grains stand on the plot's bottom edge; the length's rule hangs 4px
-   under it. */
+   under it. The plot is as tall as the other pictures in the row — the
+   standing pitch's track — so the cloud never reaches the names. */
 .tweakers-move-grain-plot {
   position: absolute;
-  top: 16px;
+  top: var(--move-shape-top);
   bottom: 44px;
+  /* The first three columns, 12px in from each side: the stage is those
+     columns and 12px more, so the plot stops 24px short of its right edge.
+     (A column width read in here would measure the stage, not the face.) */
   left: 12px;
-  width: calc(var(--move-face-col-w) * 3 + var(--move-gap) * 2 - 24px);
+  right: 24px;
 }
 
 .tweakers-move-grain-plot > svg {

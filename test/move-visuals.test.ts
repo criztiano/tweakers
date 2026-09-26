@@ -297,6 +297,9 @@ describe('the grain cloud', () => {
     const dense = moveGrainPicture(cloud(density(() => 8))!);
     const sparse = moveGrainPicture(cloud(density(() => 0.05))!);
     expect(sparse.span.to - sparse.span.from).toBeLessThan(dense.span.to - dense.span.from);
+    // ...but never to a speck: the sparsest cloud keeps a readable grain.
+    const sparsest = moveGrainPicture(cloud(density(() => 1e-4))!);
+    expect(sparsest.span.to - sparsest.span.from).toBeGreaterThan(MOVE_GRAIN.width / 5);
   });
 
   it('trails the copies where the grains come from, and mirrors a reversed cloud', () => {
