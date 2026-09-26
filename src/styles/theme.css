@@ -855,13 +855,15 @@
 
 .tweakers-move-chips {
   display: flex;
-  /* An app that attaches many functions grows a second chip line rather
-     than clipping — every attached function stays visible, like every
-     attached key stays lit. */
-  flex-wrap: wrap;
+  /* One line, always: a chip row that wraps breaks the header's line while
+     the room beside it stands empty (Cri's rule). The row claims its own
+     width, so the header cell it sits in cannot squeeze it; the page names
+     beside it give way instead — they already truncate. */
+  flex-wrap: nowrap;
+  flex: none;
   gap: 4px;
   align-items: center;
-  min-width: 0;
+  white-space: nowrap;
 }
 
 /* In the header cluster the chips hang off the right edge, so wrapped
