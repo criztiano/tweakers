@@ -521,12 +521,13 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
   const drawing = moveNumericDrawing(meta, value);
   const origin01 = dialOrigin(meta);
   const originPct = origin01 > 0 ? origin01 * 100 : null;
-  const chip = valueFirst ? moveChipValue(meta, value) : null;
+  const headline = valueFirst || meta.display === 'value';
+  const chip = headline ? moveChipValue(meta, value) : null;
   return (
-    <div className={cls} style={style} data-active={active || undefined} data-sub={(!drawing && valueFirst) || undefined}
+    <div className={cls} style={style} data-active={active || undefined} data-sub={(!drawing && headline) || undefined}
       data-visual={drawing?.kind} {...slider(meta)}
       {...turn(meta)}>
-      {!drawing && valueFirst && <span className="tweakers-move-dial-sub">{meta.label}</span>}
+      {!drawing && headline && <span className="tweakers-move-dial-sub">{meta.label}</span>}
       <MoveModRing panelId={panelId} path={meta.path} />
       {drawing ? (
         <MoveSlotNumericBody label={meta.label} value={moveVisualReading(meta, Number(value))} drawing={drawing} />

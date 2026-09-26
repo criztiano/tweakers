@@ -13942,7 +13942,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   if (!meta) return /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
                                   const disabled = import_TweakStore16.TweakStore.isDisabled(page.panel.id, meta.path);
                                   const active = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
-                                  const valueFirst = (focused || !!settingsPanel || page.panel.kind === "kit") && !(meta.min === 0 && meta.max === 1);
+                                  const valueFirst = meta.display === "value" || (focused || !!settingsPanel || page.panel.kind === "kit") && !(meta.min === 0 && meta.max === 1);
                                   const scopeSlot = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.scope : void 0;
                                   const waveSlot = settingsPanel && meta.type !== "xy" ? modLayout?.dials.find((d) => d.path === meta.path)?.preview : void 0;
                                   const scope = scopeSlot && modSettings ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(MoveScope, { index: modSettings.index }) : waveSlot && modSettings ? /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(MoveWavePreview, { index: modSettings.index }) : null;
@@ -16229,19 +16229,20 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
   const drawing = moveNumericDrawing(meta, value);
   const origin01 = dialOrigin(meta);
   const originPct = origin01 > 0 ? origin01 * 100 : null;
-  const chip = valueFirst ? moveChipValue(meta, value) : null;
+  const headline = valueFirst || meta.display === "value";
+  const chip = headline ? moveChipValue(meta, value) : null;
   return /* @__PURE__ */ (0, import_jsx_runtime18.jsxs)(
     "div",
     {
       className: cls,
       style,
       "data-active": active || void 0,
-      "data-sub": !drawing && valueFirst || void 0,
+      "data-sub": !drawing && headline || void 0,
       "data-visual": drawing?.kind,
       ...slider(meta),
       ...turn(meta),
       children: [
-        !drawing && valueFirst && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "tweakers-move-dial-sub", children: meta.label }),
+        !drawing && headline && /* @__PURE__ */ (0, import_jsx_runtime18.jsx)("span", { className: "tweakers-move-dial-sub", children: meta.label }),
         /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(MoveModRing, { panelId, path: meta.path }),
         drawing ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(MoveSlotNumericBody, { label: meta.label, value: moveVisualReading(meta, Number(value)), drawing }) : /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
           MoveSlotDefaultBody,

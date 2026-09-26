@@ -19,7 +19,7 @@ outside the instrument — a card, an inspector, a dictionary — use `MoveSlot`
 | Kind | Choose for | Configuration / body | Hardware space |
 | --- | --- | --- | --- |
 | `default` | Bounded continuous quantity; signed values use `bipolar` / `origin` | Slider tuple, `slider`, bounded `number`; `MoveSlotDefaultBody` | 1 dial |
-| `value` | A value that is the headline, including a substituted value chip | Panel-selected presentation of `MoveSlotDefaultBody` | 1 dial |
+| `value` | A value that is the headline, including a substituted value chip | A slider with `display: 'value'`, or the panel's own choice (settings pages, substituted chips); `MoveSlotDefaultBody` | 1 dial |
 | `enum` | A stepped choice | `select.options`, optional `moveSpan: 2` for a wider list; `MoveSlotEnumBody` | 1 dial by default; 2 adjacent dials with `moveSpan: 2`, either knob selects |
 | `icon` | A choice recognized by its picture | Select option `icon`; `MoveSlotEnumBody` | 1 dial |
 | `picture` | A choice that is a pattern or texture you pick by seeing it | Select option `picture` (an image URL, drawn as a mask in the slot's ink); `MoveSlotEnumBody` | 1 dial; the picture fills the slot under the name and pagination |

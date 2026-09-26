@@ -1813,7 +1813,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 // the big name, since "40%" on its own says nothing.
                 // The kit's own room pages read the same way: the bar width
                 // says "2×" big, with its name as the tag.
-                const valueFirst = (focused || !!settingsPanel || page.panel.kind === 'kit') && !(meta.min === 0 && meta.max === 1);
+                const valueFirst = meta.display === 'value' ||
+                  ((focused || !!settingsPanel || page.panel.kind === 'kit') && !(meta.min === 0 && meta.max === 1));
                 // The modulator's oscilloscope belongs to a place on the page,
                 // not to one control: the LFO's first slot shows the live wave
                 // whether it is holding a rate in Hz or a tempo division.

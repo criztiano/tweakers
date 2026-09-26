@@ -1,4 +1,4 @@
-import { P as PanelConfig, C as ControlMeta } from './TweakStore-DozoSmef.js';
+import { P as PanelConfig, C as ControlMeta } from './TweakStore-Cvn1eGaH.js';
 import { MovePage } from './move-layout.js';
 import './gradient-core.js';
 import './color-core.js';

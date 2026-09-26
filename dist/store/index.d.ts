@@ -471,9 +471,11 @@ type SliderConfig = {
      * `dial` draws the value as a rotary needle instead of a track — for the
      * parameters whose two ends are the same place (a heading, a sun position,
      * a tilt). It stays a slider everywhere else, so a hardware knob and a
-     * preset see no difference; only the drawing changes.
+     * preset see no difference; only the drawing changes. `value` keeps the
+     * track and makes the value the headline, the name a tag on top — for a
+     * number that says what it is on its own (a size, a count, a duration).
      */
-    display?: 'track' | 'dial';
+    display?: 'track' | 'dial' | 'value';
     /**
      * Past the end, come back around instead of stopping. Dial only; defaults
      * to true when the range covers a full turn (360, or -180..180).
@@ -796,7 +798,7 @@ type ControlMeta = {
      *  strip instead of claiming a dial; `'named'` adds its leading name pad. */
     moveTabs?: boolean | 'named';
     /** Select's rendering mode, or a slider's `dial` form. */
-    display?: 'dropdown' | 'segmented' | 'track' | 'dial';
+    display?: 'dropdown' | 'segmented' | 'track' | 'dial' | 'value';
     /** Dial slider: wrap past the ends instead of stopping. */
     wrap?: boolean;
     placeholder?: string;
