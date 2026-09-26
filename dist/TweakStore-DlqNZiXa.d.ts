@@ -364,12 +364,16 @@ type SelectConfig = {
     moveVisual?: MoveSelectVisual;
     /**
      * An option may name an `icon` from `LUCIDE_ICONS` — the Move slot draws it
-     * instead of making you read the mode name off a controller.
+     * instead of making you read the mode name off a controller. An option may
+     * instead carry a `picture` (an image URL) that fills the whole slot, drawn
+     * as a mask in the slot's own colour — for choices that are a texture or a
+     * pattern, where the picture is the thing chosen.
      */
     options: (string | {
         value: string;
         label: string;
         icon?: string;
+        picture?: string;
     })[];
     default?: string;
     /** 'segmented' renders the options as an inline segmented control instead of a dropdown. Suits 2–4 short options. */
@@ -814,6 +818,7 @@ type ControlMeta = {
         value: string;
         label: string;
         icon?: string;
+        picture?: string;
     })[];
     /** Toggle's own picture and state badges, from the explicit ToggleConfig form; an action's pad glyph. */
     icon?: string;

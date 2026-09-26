@@ -1,4 +1,4 @@
-import { C as ControlMeta, M as MoveEdges, P as PanelConfig } from './TweakStore-CdY7zCOJ.js';
+import { C as ControlMeta, M as MoveEdges, P as PanelConfig } from './TweakStore-DlqNZiXa.js';
 import { ModPageLayout } from './modulation-core.js';
 import { XYValue } from './xy-pad-core.js';
 import { RangeValue } from './range-slider-core.js';
@@ -228,6 +228,10 @@ declare const enumOptionLabel: (o: string | {
 declare const enumOptionIcon: (o: string | {
     icon?: string;
 }) => string | null;
+/** The option's full-slot picture URL, or null. */
+declare const enumOptionPicture: (o: string | {
+    picture?: string;
+}) => string | null;
 /** Enough points to read a bell or a bounce at slot width, and no more. */
 declare const ENUM_SHAPE_SAMPLES = 64;
 /**
@@ -275,4 +279,4 @@ declare function dialOrigin(meta: ControlMeta): number;
 /** Axis positions 0..1 back to the control's real {x, y}, kit-identical. */
 declare function denormalizeXYDial(meta: ControlMeta, x01: number, y01: number): XYValue;
 
-export { ENUM_SHAPE_SAMPLES, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MoveBandCell, type MoveEdgesCell, type MoveLayoutIssueCode, type MovePage, type MoveTabCell, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, denormalizeXYDial, dialOrigin, dialSpan, enumIndex, enumOptionIcon, enumOptionLabel, enumOptionValue, enumShapePath, filterShapePath, isEnumDial, isMoveDial, isMoveTabs, isNamedTabs, isPadSpanContinuation, isSpanContinuation, isToggleDial, moveAppPadRow, moveBandCell, moveEdgesCell, movePadRows, moveTabCell, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeToggleDial, normalizeXYDial, padSpan, reportMoveLayoutIssue, setMoveLayoutReporter, slotGroups, visibleColumns };
+export { ENUM_SHAPE_SAMPLES, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MoveBandCell, type MoveEdgesCell, type MoveLayoutIssueCode, type MovePage, type MoveTabCell, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, denormalizeXYDial, dialOrigin, dialSpan, enumIndex, enumOptionIcon, enumOptionLabel, enumOptionPicture, enumOptionValue, enumShapePath, filterShapePath, isEnumDial, isMoveDial, isMoveTabs, isNamedTabs, isPadSpanContinuation, isSpanContinuation, isToggleDial, moveAppPadRow, moveBandCell, moveEdgesCell, movePadRows, moveTabCell, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeToggleDial, normalizeXYDial, padSpan, reportMoveLayoutIssue, setMoveLayoutReporter, slotGroups, visibleColumns };

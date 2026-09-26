@@ -33,6 +33,9 @@ import { ListScreen } from './ListScreen';
  *   slot.
  * - `icon`    — an option picker whose current option shows as a glyph:
  *   at arm's length you read a picture, not a word.
+ * - `picture` — an option picker whose current option fills the slot as a
+ *   picture (the option's `picture`): a pattern or texture you choose by
+ *   seeing it, the name and position over it.
  * - `curve`   — an option picker whose current option draws its shape (the
  *   select's `preview` sampler) — the curve-selection slot.
  * - `enum`    — a plain stepped option picker: every option on the Move's
@@ -121,12 +124,13 @@ export type MoveSlotKind =
   | 'scope'
   | 'toggle'
   | 'toggle-icon'
-  | 'metronome';
+  | 'metronome'
+  | 'picture';
 
 /** Which face a control wears in its slot, from its meta and moment. */
 export function moveSlotKind(
   meta: ControlMeta,
-  opts: { enum?: boolean; shape?: string | null; glyph?: string | null; valueFirst?: boolean; value?: unknown; stage?: string | null } = {}
+  opts: { enum?: boolean; shape?: string | null; glyph?: string | null; picture?: string | null; valueFirst?: boolean; value?: unknown; stage?: string | null } = {}
 ): MoveSlotKind {
   if (meta.type === 'color') return 'color';
   if (meta.type === 'filter') return 'filter';
@@ -144,6 +148,7 @@ export function moveSlotKind(
   if (movePlaybackMode(meta, opts.value)) return 'playback';
   if (opts.enum) {
     if (opts.shape) return 'curve';
+    if (opts.picture) return 'picture';
     if (opts.glyph) return 'icon';
     return 'enum';
   }
@@ -274,7 +279,7 @@ export const MOVE_LIST_ROWS = 5;
  *  live wave — so it keeps the named option and drops the list, which the
  *  wave would be running behind. */
 export function MoveSlotEnumBody({
-  label, optionLabel, options, activeIdx, shape, glyph, playback, scoped,
+  label, optionLabel, options, activeIdx, shape, glyph, picture = null, playback, scoped,
 }: {
   label: string;
   optionLabel: string;
@@ -282,6 +287,8 @@ export function MoveSlotEnumBody({
   activeIdx: number;
   shape: string | null;
   glyph: string | null;
+  /** The current option's full-slot picture; it fills the slot under the name. */
+  picture?: string | null;
   playback?: MovePlaybackMode | null;
   /** The slot draws the modulator's live signal behind this face. */
   scoped?: boolean;
@@ -290,13 +297,14 @@ export function MoveSlotEnumBody({
 
   // A picture names one option at a time, so it keeps the pagination cells
   // to say where that one sits. A list has the whole run on it already.
-  if (playback || shape || glyph || scoped) {
+  if (playback || shape || glyph || picture || scoped) {
     return (
       <>
+        {!playback && picture && <MoveSlotPicture src={picture} />}
         <span className="tweakers-move-dial-tag">{label}</span>
         {playback && <MoveSlotPlaybackDrawing mode={playback} />}
         {!playback && shape && <MoveSlotShape d={shape} />}
-        {!playback && glyph && <MoveSlotGlyph name={glyph} className="tweakers-move-dial-icon" />}
+        {!playback && !picture && glyph && <MoveSlotGlyph name={glyph} className="tweakers-move-dial-icon" />}
         <span className="tweakers-move-dial-option">{optionLabel}</span>
         <div className="tweakers-move-dial-bar">
           <div className="tweakers-move-dial-enum">
@@ -1055,6 +1063,19 @@ export function MoveSlotMetronomeBody({ label, checked, swing }: {
   );
 }
 
+/** An option's picture, edge to edge under the slot's name: a host image
+ *  riding as a mask, so it takes the slot's colour and its states. */
+function MoveSlotPicture({ src }: { src: string }) {
+  const mask = `url(${JSON.stringify(src)})`;
+  return (
+    <span
+      className="tweakers-move-dial-picture"
+      aria-hidden="true"
+      style={{ maskImage: mask, WebkitMaskImage: mask }}
+    />
+  );
+}
+
 /** A bundled glyph or a host-owned asset; both take the slot's own colour. */
 function MoveSlotIcon({ icon, className }: { icon: string; className: string }) {
   if (LUCIDE_ICONS[icon]) return <MoveSlotGlyph name={icon} className={className} />;
@@ -1441,6 +1462,7 @@ export const MOVE_SLOT_LIBRARY = {
   default: { description: 'name centred, value on touch, fill bar', component: MoveSlotDefaultBody },
   value: { description: 'value-first: the value is the headline, the name a tag on top', component: MoveSlotDefaultBody },
   icon: { description: 'option picker showing the current option as a glyph', component: MoveSlotEnumBody },
+  picture: { description: 'option picker whose current option fills the slot as a picture, its name over it', component: MoveSlotEnumBody },
   curve: { description: 'option picker drawing the current option’s shape — curve selection', component: MoveSlotEnumBody },
   enum: { description: 'stepped option picker showing every option on a list screen', component: MoveSlotEnumBody },
   xy: { description: 'two axes in one gesture field, or a live shape preview', component: MoveSlotXYBody },

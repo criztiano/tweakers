@@ -23,6 +23,16 @@ const SHAPES: Record<string, (t: number) => number> = {
   bounce: (t) => Math.abs(Math.sin(t * Math.PI * 2)) * (1 - t),
 };
 
+/** The texture picker's pictures — any image URL; here tiny SVGs, as masks. */
+const svg = (body: string) =>
+  `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 140">${body}</svg>`)}`;
+const PATTERNS = {
+  stripes: svg(Array.from({ length: 14 }, (_, i) => `<path d="M${i * 20 - 140} 140 L${i * 20} 0" stroke="#000" stroke-width="4"/>`).join('')),
+  dots: svg(Array.from({ length: 42 }, (_, i) => `<circle cx="${(i % 6) * 20 + 10}" cy="${Math.floor(i / 6) * 20 + 10}" r="4"/>`).join('')),
+  checks: svg(Array.from({ length: 42 }, (_, i) => ((i % 6) + Math.floor(i / 6)) % 2
+    ? `<rect x="${(i % 6) * 20}" y="${Math.floor(i / 6) * 20}" width="20" height="20"/>` : '').join('')),
+};
+
 /**
  * The library's own beat, for the metronome to swing to: a full sweep a beat,
  * at an extreme on every click. A real app reads its transport here, and
@@ -68,6 +78,16 @@ export const CONFIG = {
       { value: 'bounce', label: 'Bounce' },
     ],
     preview: (name: string) => SHAPES[name] ?? null,
+  },
+
+  /* a choice that is a pattern: each option's picture fills the slot */
+  texture: {
+    type: 'select', default: 'stripes',
+    options: [
+      { value: 'stripes', label: 'Stripes', picture: PATTERNS.stripes },
+      { value: 'dots', label: 'Dots', picture: PATTERNS.dots },
+      { value: 'checks', label: 'Checks', picture: PATTERNS.checks },
+    ],
   },
 
   /* ── a switch that earned a slot of its own ───────────────────── */

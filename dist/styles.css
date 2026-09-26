@@ -450,6 +450,8 @@
   --move-group-band: 20px;
   --move-wheel-width: 200px;
   --move-glyph-stroke: 1.25;
+  /* A full-slot option picture sits under the slot's name: this much of it. */
+  --move-picture-opacity: 0.55;
   --move-radius-small: 8px;
   --move-font-label: 'Geist Pixel', system-ui, -apple-system, sans-serif;
   /* The big readouts — a dial's value, the volume pill — run the line shape. */
@@ -546,6 +548,17 @@
   left: 0;
   right: 0;
   z-index: 9990;
+}
+
+/* The page's column count is a registered number so a page change can ease
+   it (move-panel-motion's easeWidth): the widths measured from it move
+   through the fractions between two pages instead of snapping. MovePanel
+   always sets it on the panel's inside; the initial value is the full
+   eight-wide surface. */
+@property --move-surface-cols {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 8;
 }
 
 .tweakers-move-inner {
@@ -859,13 +872,15 @@
 
 .tweakers-move-chips {
   display: flex;
-  /* An app that attaches many functions grows a second chip line rather
-     than clipping — every attached function stays visible, like every
-     attached key stays lit. */
-  flex-wrap: wrap;
+  /* One line, always: a chip row that wraps breaks the header's line while
+     the room beside it stands empty (Cri's rule). The row claims its own
+     width, so the header cell it sits in cannot squeeze it; the page names
+     beside it give way instead — they already truncate. */
+  flex-wrap: nowrap;
+  flex: none;
   gap: 4px;
   align-items: center;
-  min-width: 0;
+  white-space: nowrap;
 }
 
 /* In the header cluster the chips hang off the right edge, so wrapped
@@ -1489,13 +1504,16 @@
    across its columns and the gaps between them, so the slots on it read as
    one; each gap gets a 2 × 48px rounded divider. It sits under the slots,
    whose own resting surface is the same colour — a touched slot lights up
-   on it alone. */
+   on it alone. It is placed on the dial grid's own columns (its grid area is
+   its containing block), never measured from --move-slot-w: that token is a
+   share of whatever box reads it, and on a page of fewer than eight columns
+   a measured group came out narrower than its slots, header and all. */
 .tweakers-move-slot-group {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: calc(var(--move-group-start) * (var(--move-slot-w) + var(--move-gap)));
-  width: calc(var(--move-group-span) * var(--move-slot-w) + (var(--move-group-span) - 1) * var(--move-gap));
+  left: 0;
+  right: 0;
   background: var(--move-slot-rest);
   border-radius: var(--move-radius);
   pointer-events: none;
@@ -1955,6 +1973,30 @@
   stroke-width: var(--move-glyph-stroke);
   color: var(--move-text);
   pointer-events: none;
+}
+
+/* An option's picture fills the slot edge to edge, under its name and
+   pagination. A host image rides as a mask, so it takes the slot's ink; held
+   back so the name over it still reads first. */
+.tweakers-move-dial-picture {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--move-text);
+  opacity: var(--move-picture-opacity);
+  mask-size: cover;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: cover;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  pointer-events: none;
+}
+
+/* Over a picture the option's name keeps a halo of the slot's own surface,
+   so it reads first whatever the picture draws behind it. */
+.tweakers-move-dial:has(> .tweakers-move-dial-picture) .tweakers-move-dial-option {
+  text-shadow: 0 0 2px var(--move-dial-surface), 0 0 5px var(--move-dial-surface), 0 0 9px var(--move-dial-surface);
 }
 
 .tweakers-move-dial-option {
