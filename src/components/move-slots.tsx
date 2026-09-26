@@ -861,8 +861,12 @@ export function MoveSlotGrainBody({ span, length, shape, trail, direction }: {
           {role === 'offset' && picture.copies.map((copy, k) => (
             <path key={`edge-${k}`} className="tweakers-move-grain-edge" d={copy.d} />
           ))}
-          <path className="tweakers-move-grain-length" data-active={length.active || undefined}
-            d={`M${picture.span.from} ${base + 5}H${picture.span.to}M${picture.span.from} ${base + 2}V${base + 8}M${picture.span.to} ${base + 2}V${base + 8}`} />
+          {/* The length's rule, dashed, between two solid end ticks centred on it. */}
+          <g className="tweakers-move-grain-length" data-active={length.active || undefined}>
+            <path className="tweakers-move-grain-length-rule" d={`M${picture.span.from} ${base + 4}H${picture.span.to}`} />
+            <path className="tweakers-move-grain-length-ends"
+              d={`M${picture.span.from} ${base + 1}V${base + 7}M${picture.span.to} ${base + 1}V${base + 7}`} />
+          </g>
         </svg>
       </div>
       <MoveGrainArrows mode={span.direction} active={direction.active} />
