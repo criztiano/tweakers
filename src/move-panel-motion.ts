@@ -179,6 +179,14 @@ export function takePanelPicture(panel: HTMLElement | null, scope: MovePanelChan
       const name = vars[i];
       if (name.startsWith('--move-')) ghost.style.setProperty(name, vars.getPropertyValue(name));
     }
+  } else {
+    // The copy hangs inside the live panel, so it would read the NEW page's
+    // columns — eight old dials folding into two rows of four. It keeps the
+    // columns it was drawn with.
+    const vars = getComputedStyle(target);
+    for (const name of ['--move-cols', '--move-surface-cols', '--move-screen-w']) {
+      ghost.style.setProperty(name, vars.getPropertyValue(name));
+    }
   }
   const scrolls: MovePanelPicture['scrolls'] = [];
   const copies = ghost.querySelectorAll('*');

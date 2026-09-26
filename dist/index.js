@@ -12221,6 +12221,11 @@ function takePanelPicture(panel, scope) {
       const name = vars[i];
       if (name.startsWith("--move-")) ghost.style.setProperty(name, vars.getPropertyValue(name));
     }
+  } else {
+    const vars = getComputedStyle(target);
+    for (const name of ["--move-cols", "--move-surface-cols", "--move-screen-w"]) {
+      ghost.style.setProperty(name, vars.getPropertyValue(name));
+    }
   }
   const scrolls = [];
   const copies = ghost.querySelectorAll("*");
