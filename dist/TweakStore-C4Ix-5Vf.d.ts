@@ -19,16 +19,40 @@ type MoveSliderVisual = {
     kind: 'stereo-width';
     mono?: number;
     unity?: number;
-} | {
+}
+/** A signed pitch. `look: 'diaphragm'` stands it up: a mark on a vertical
+ *  line, the slot's own sides drawn in toward it like a throat closing —
+ *  tighter the further it is from zero. */
+ | {
     kind: 'pitch';
     unit?: 'semitones' | 'cents';
+    look?: 'ruler' | 'diaphragm';
 }
 /** A speed: a needle on a graded dome, the slowest end on the left and the
  *  fastest on the right. It reads as a multiple ("1.5×") unless the host
- *  gives a unit or a formatter. */
+ *  gives a unit or a formatter. `look: 'streak'` draws the reading itself as
+ *  the headline, with speed lines trailing it — longer the faster it goes. */
  | {
     kind: 'gauge';
+    look?: 'dome' | 'streak';
 }
+/**
+ * A rate at which something runs on its own — a scan, a playhead — drawn as
+ * a clock. The value is a multiple of the thing's own pace (1 = as
+ * recorded), and the dial's minimum stops it: the clock freezes over.
+ * `tempo` is the beat at 1×, when the host knows one — the face then shows
+ * the beat the rate makes. The host owns time: `hand` is polled every frame
+ * for where the hand points, 0..1 of a turn, or `null` to leave it at
+ * twelve.
+ */
+ | {
+    kind: 'clock';
+    tempo?: number | null;
+    hand?: () => number | null;
+}
+/** A grain cloud's length, how thickly it repeats, or how far one copy
+ *  trails — see `MoveGrainVisual`. */
+ | MoveGrainSliderVisual
 /** One edge of a take: the bar is the whole of it, the kept part is filled
  *  from this edge's far end to the value, the edge itself is the marker. */
  | {
@@ -87,12 +111,65 @@ type MoveSliderVisual = {
 /** A Move hue by name, as the theme's `--move-<tone>` token carries it. */
 type MoveTone = 'red' | 'orange' | 'yellow' | 'lime' | 'emerald' | 'blue' | 'indigo' | 'pink';
 type MoveGateRole = 'threshold' | 'lookahead' | 'release';
-type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
+type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'bounce' | 'scissors';
 type MoveSelectVisual = {
     kind: 'playback';
     /** Map host option values to drawings. Omit when values are mode names. */
     modes?: Record<string, MovePlaybackMode>;
+}
+/**
+ * A choice between parallel voices — layers, streams, lanes — drawn as
+ * lanes running away from you, the chosen one lit. `silent` names the
+ * options that are switched off: their lanes fade and carry a red cross,
+ * so which voices sound reads at a glance whichever one is chosen.
+ */
+ | {
+    kind: 'lanes';
+    silent?: readonly string[];
+} | MoveGrainSelectVisual;
+/**
+ * One dial of a grain cloud — a sound cut into short windows that repeat.
+ * Four dials side by side, in this order, draw as one 4-slot face:
+ *
+ * - `length` (slider) — how long one window is: the width of the lit grain.
+ * - `shape` (select with a `preview`) — the window's curve: the grain's
+ *   outline is the option's own sampler.
+ * - `density` (slider) — how thickly the windows repeat: copies stack up
+ *   behind the lit grain. `overlap` answers how many windows sound at once
+ *   (density × length, in the host's units); polled on each draw. Without
+ *   it the copies are spaced by the dial alone.
+ * - or `offset` (slider) — how far one other voice trails the lit grain:
+ *   a single copy in its own hue. `lag` answers the trail as a fraction of
+ *   one window's length; without it the dial's place stands in.
+ * - `direction` (select) — which way the grains play, drawn as a field of
+ *   arrows. `modes` maps option values to drawings, as `playback` does. The
+ *   copies trail on the side the grains come from, and a reversed cloud is
+ *   drawn mirrored.
+ *
+ * Any other arrangement keeps each dial's ordinary face.
+ */
+type MoveGrainSliderVisual = {
+    kind: 'grain';
+    role: 'length';
+} | {
+    kind: 'grain';
+    role: 'density';
+    overlap?: () => number;
+} | {
+    kind: 'grain';
+    role: 'offset';
+    lag?: () => number;
 };
+type MoveGrainSelectVisual = {
+    kind: 'grain';
+    role: 'shape';
+} | {
+    kind: 'grain';
+    role: 'direction';
+    modes?: Record<string, MovePlaybackMode>;
+};
+type MoveGrainVisual = MoveGrainSliderVisual | MoveGrainSelectVisual;
+type MoveGrainRole = MoveGrainVisual['role'];
 /**
  * A switch that draws what it switches. `metronome`: a metronome whose arm
  * swings while it is on. The host owns time — `swing` is polled every frame
@@ -122,8 +199,24 @@ type MoveNumericDrawing = {
     position: number;
     zero: number | null;
 } | {
+    kind: 'diaphragm';
+    position: number;
+    zero: number | null;
+} | {
     kind: 'gauge';
     position: number;
+} | {
+    kind: 'streak';
+    position: number;
+} | {
+    kind: 'clock';
+    /** The rate, as the host's multiple: 1 = its own pace. */
+    rate: number;
+    /** At the dial's minimum: stopped, and frozen over. */
+    frozen: boolean;
+    /** The beat the rate makes, when the host knows one at 1×. */
+    tempo: number | null;
+    hand?: () => number | null;
 } | {
     kind: 'trim';
     edge: 'start' | 'end';
@@ -225,6 +318,72 @@ declare function moveMultibandSpan(dials: [ControlMeta, unknown][], bands: [Cont
     }[];
 } | null;
 declare function movePlaybackMode(meta: ControlMeta, value: unknown): MovePlaybackMode | null;
+/** A lanes picker's lanes, in option order: which one is chosen, and which
+ *  are switched off — or null unless the select asks to be drawn as lanes. */
+declare function moveLanes(meta: ControlMeta, value: unknown): {
+    chosen: number;
+    silent: boolean[];
+} | null;
+/** A dial's grain role, or null when it is not one of a grain cloud's. */
+declare function moveGrainRole(meta: ControlMeta | undefined): MoveGrainRole | null;
+/** What the grain face draws, read off its four dials. */
+type MoveGrainSpan = {
+    /** One window's length, 0..1 across its dial. */
+    length: number;
+    /** The window's outline, sampled 0..1 → 0..1; null draws a plain hump. */
+    shape: ((t: number) => number) | null;
+    /** How the copies trail: stacked `density` copies, `spacing` apart in
+     *  window lengths, or one `offset` copy `lag` window lengths behind. */
+    trail: {
+        role: 'density';
+        spacing: number;
+    } | {
+        role: 'offset';
+        lag: number;
+    };
+    direction: MovePlaybackMode;
+    /** Each dial's place 0..1, in column order — an option picker's is its
+     *  option's place in the run. */
+    positions: [number, number, number, number];
+};
+/**
+ * Read a grain cloud off four dials: a length, a shape, a density or an
+ * offset, and a direction, in that order — or null for any other run.
+ */
+declare function moveGrainSpan(dials: [ControlMeta, unknown][]): MoveGrainSpan | null;
+/** The grain picture's drawing units: three slots of room, 100 high. */
+declare const MOVE_GRAIN: {
+    readonly width: 300;
+    readonly height: 100;
+    readonly base: 92;
+    readonly top: 10;
+    readonly copies: 7;
+};
+type MoveGrainPicture = {
+    /** The lit grain's outline, closed along the floor. */
+    hero: string;
+    /** Where its length runs, floor-level, for the length rule under it. */
+    span: {
+        from: number;
+        to: number;
+    };
+    /** The copies, farthest first: each outline and how near it is (1 = the
+     *  nearest, which wears the trail's hue). */
+    copies: {
+        d: string;
+        rank: number;
+    }[];
+};
+/**
+ * The grain face's picture in `MOVE_GRAIN` units. The lit grain is one
+ * window at its length; the copies sit behind it, each offset by the
+ * spacing, so where they overlap it only their trailing edges show — a
+ * dense cloud reads as a stack of edges, a sparse one as separate grains.
+ * Forward trails the copies to the right (the grains that went before); a
+ * reversed cloud is the same picture mirrored, window and all; the modes
+ * that play both ways trail on both sides.
+ */
+declare function moveGrainPicture(span: MoveGrainSpan): MoveGrainPicture;
 /** Semantic formatting is a fallback; a host formatter or unit always wins. */
 declare function moveVisualReading(meta: ControlMeta, value: number): string;
 /** Returns a new value only for editing keys. Shift uses the configured smallest step. */
@@ -923,4 +1082,4 @@ type PanelConfig = {
     kind?: 'timeline' | 'modulation' | 'kit';
 };
 
-export { moveVectorStage as A, moveVisualReading as B, type ControlMeta as C, type MoveEdges as M, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_H as d, MOVE_BAND_W as e, MOVE_STAGE as f, type MoveGateRole as g, type MoveMultibandRole as h, type MoveNumericDrawing as i, type MovePlaybackMode as j, type MoveSelectVisual as k, type MoveSliderVisual as l, type MoveStage as m, type MoveToggleVisual as n, type MoveTone as o, type MoveVisual as p, moveBandCuts as q, moveChannelPosition as r, moveGateSpan as s, moveKeyboardValue as t, moveMultibandRole as u, moveMultibandSpan as v, moveNumericDrawing as w, movePlaybackMode as x, moveTrimSpan as y, moveVectorAxes as z };
+export { moveGrainPicture as A, moveGrainRole as B, type ControlMeta as C, moveGrainSpan as D, moveKeyboardValue as E, moveLanes as F, moveMultibandRole as G, moveMultibandSpan as H, moveNumericDrawing as I, movePlaybackMode as J, moveTrimSpan as K, moveVectorAxes as L, type MoveEdges as M, moveVectorStage as N, moveVisualReading as O, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_H as d, MOVE_BAND_W as e, MOVE_GRAIN as f, MOVE_STAGE as g, type MoveGateRole as h, type MoveGrainPicture as i, type MoveGrainRole as j, type MoveGrainSelectVisual as k, type MoveGrainSliderVisual as l, type MoveGrainSpan as m, type MoveGrainVisual as n, type MoveMultibandRole as o, type MoveNumericDrawing as p, type MovePlaybackMode as q, type MoveSelectVisual as r, type MoveSliderVisual as s, type MoveStage as t, type MoveToggleVisual as u, type MoveTone as v, type MoveVisual as w, moveBandCuts as x, moveChannelPosition as y, moveGateSpan as z };

@@ -13,16 +13,40 @@ type MoveSliderVisual = {
     kind: 'stereo-width';
     mono?: number;
     unity?: number;
-} | {
+}
+/** A signed pitch. `look: 'diaphragm'` stands it up: a mark on a vertical
+ *  line, the slot's own sides drawn in toward it like a throat closing —
+ *  tighter the further it is from zero. */
+ | {
     kind: 'pitch';
     unit?: 'semitones' | 'cents';
+    look?: 'ruler' | 'diaphragm';
 }
 /** A speed: a needle on a graded dome, the slowest end on the left and the
  *  fastest on the right. It reads as a multiple ("1.5×") unless the host
- *  gives a unit or a formatter. */
+ *  gives a unit or a formatter. `look: 'streak'` draws the reading itself as
+ *  the headline, with speed lines trailing it — longer the faster it goes. */
  | {
     kind: 'gauge';
+    look?: 'dome' | 'streak';
 }
+/**
+ * A rate at which something runs on its own — a scan, a playhead — drawn as
+ * a clock. The value is a multiple of the thing's own pace (1 = as
+ * recorded), and the dial's minimum stops it: the clock freezes over.
+ * `tempo` is the beat at 1×, when the host knows one — the face then shows
+ * the beat the rate makes. The host owns time: `hand` is polled every frame
+ * for where the hand points, 0..1 of a turn, or `null` to leave it at
+ * twelve.
+ */
+ | {
+    kind: 'clock';
+    tempo?: number | null;
+    hand?: () => number | null;
+}
+/** A grain cloud's length, how thickly it repeats, or how far one copy
+ *  trails — see `MoveGrainVisual`. */
+ | MoveGrainSliderVisual
 /** One edge of a take: the bar is the whole of it, the kept part is filled
  *  from this edge's far end to the value, the edge itself is the marker. */
  | {
@@ -81,10 +105,61 @@ type MoveSliderVisual = {
 /** A Move hue by name, as the theme's `--move-<tone>` token carries it. */
 type MoveTone = 'red' | 'orange' | 'yellow' | 'lime' | 'emerald' | 'blue' | 'indigo' | 'pink';
 type MoveGateRole = 'threshold' | 'lookahead' | 'release';
-type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'scissors';
+type MovePlaybackMode = 'forward' | 'reverse' | 'ping-pong' | 'bounce' | 'scissors';
 type MoveSelectVisual = {
     kind: 'playback';
     /** Map host option values to drawings. Omit when values are mode names. */
+    modes?: Record<string, MovePlaybackMode>;
+}
+/**
+ * A choice between parallel voices — layers, streams, lanes — drawn as
+ * lanes running away from you, the chosen one lit. `silent` names the
+ * options that are switched off: their lanes fade and carry a red cross,
+ * so which voices sound reads at a glance whichever one is chosen.
+ */
+ | {
+    kind: 'lanes';
+    silent?: readonly string[];
+} | MoveGrainSelectVisual;
+/**
+ * One dial of a grain cloud — a sound cut into short windows that repeat.
+ * Four dials side by side, in this order, draw as one 4-slot face:
+ *
+ * - `length` (slider) — how long one window is: the width of the lit grain.
+ * - `shape` (select with a `preview`) — the window's curve: the grain's
+ *   outline is the option's own sampler.
+ * - `density` (slider) — how thickly the windows repeat: copies stack up
+ *   behind the lit grain. `overlap` answers how many windows sound at once
+ *   (density × length, in the host's units); polled on each draw. Without
+ *   it the copies are spaced by the dial alone.
+ * - or `offset` (slider) — how far one other voice trails the lit grain:
+ *   a single copy in its own hue. `lag` answers the trail as a fraction of
+ *   one window's length; without it the dial's place stands in.
+ * - `direction` (select) — which way the grains play, drawn as a field of
+ *   arrows. `modes` maps option values to drawings, as `playback` does. The
+ *   copies trail on the side the grains come from, and a reversed cloud is
+ *   drawn mirrored.
+ *
+ * Any other arrangement keeps each dial's ordinary face.
+ */
+type MoveGrainSliderVisual = {
+    kind: 'grain';
+    role: 'length';
+} | {
+    kind: 'grain';
+    role: 'density';
+    overlap?: () => number;
+} | {
+    kind: 'grain';
+    role: 'offset';
+    lag?: () => number;
+};
+type MoveGrainSelectVisual = {
+    kind: 'grain';
+    role: 'shape';
+} | {
+    kind: 'grain';
+    role: 'direction';
     modes?: Record<string, MovePlaybackMode>;
 };
 /**
