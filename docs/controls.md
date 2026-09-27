@@ -22,6 +22,7 @@ outside the instrument — a card, an inspector, a dictionary — use `MoveSlot`
 | `value` | A value that is the headline, including a substituted value chip | A slider asks for it with `display: 'value'`, whatever its range (`{ type: 'slider', …, unit: ' ms', display: 'value' }`); the panel also selects it for a focused panel, the settings room and a substituted chip. The value large at rest, the name a tag; `MoveSlotDefaultBody`. Elsewhere — the sidebar, a pad chip — the slider is unchanged | 1 dial |
 | `enum` | A stepped choice | `select.options`, optional `moveSpan: 2` for a wider list; `MoveSlotEnumBody` | 1 dial by default; 2 adjacent dials with `moveSpan: 2`, either knob selects |
 | `icon` | A choice recognized by its picture | Select option `icon`; `MoveSlotEnumBody` | 1 dial |
+| `picture` | A choice that is a pattern or texture you pick by seeing it | Select option `picture` (an image URL, drawn as a mask in the slot's ink); `MoveSlotEnumBody` | 1 dial; the picture fills the slot under the name and pagination |
 | `curve` | A choice whose value is a shape | Select `preview(option)` sampler; `MoveSlotEnumBody` | 1 dial |
 | `toggle` | A switch the page is about | `toggle` config with `moveSlot`; `MoveSlotToggleBody` | 1 dial |
 | `toggle-icon` | The same switch as a picture, badged with a check or a ban | `toggle` config with `moveSlot` + `icon` (glyph name or asset URL; optional `onIcon` / `offIcon`); `MoveSlotToggleBody` | 1 dial |

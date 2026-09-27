@@ -1,5 +1,5 @@
 import { ModulationSlot, ModulationType, ModulationParams, ModulationAssignment, ModPageLayout } from './modulation-core.js';
-import './TweakStore-DTHC488u.js';
+import './TweakStore-BgrRwP-W.js';
 import './gradient-core.js';
 import './color-core.js';
 import './xy-pad-core.js';
