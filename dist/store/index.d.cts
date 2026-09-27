@@ -133,11 +133,13 @@ type MoveSelectVisual = {
  * A choice between parallel voices — layers, streams, lanes — drawn as
  * lanes running away from you, the chosen one lit. `silent` names the
  * options that are switched off: their lanes fade and carry a red cross,
- * so which voices sound reads at a glance whichever one is chosen.
+ * so which voices sound reads at a glance whichever one is chosen. `solo`
+ * names the one voice heard alone: its lane lights emerald.
  */
  | {
     kind: 'lanes';
     silent?: readonly string[];
+    solo?: string;
 } | MoveGrainSelectVisual;
 /**
  * One dial of a grain cloud — a sound cut into short windows that repeat.

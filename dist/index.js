@@ -568,7 +568,12 @@ function moveLanes(meta, value) {
   if (meta.type !== "select" || visual?.kind !== "lanes" || !meta.options?.length) return null;
   const values = meta.options.map((option) => typeof option === "string" ? option : option.value);
   const silent = Array.isArray(visual.silent) ? visual.silent : [];
-  return { chosen: Math.max(0, values.indexOf(value)), silent: values.map((v) => silent.includes(v)) };
+  const solo = visual.solo === void 0 ? -1 : values.indexOf(visual.solo);
+  return {
+    chosen: Math.max(0, values.indexOf(value)),
+    silent: values.map((v) => silent.includes(v)),
+    ...solo >= 0 ? { solo } : {}
+  };
 }
 function moveGrainRole(meta) {
   const visual = meta?.moveVisual;
@@ -2635,7 +2640,7 @@ function MoveSlotEnumBody({
     }
   );
 }
-function MoveSlotLanesBody({ label, optionLabel, count, chosen, silent }) {
+function MoveSlotLanesBody({ label, optionLabel, count, chosen, silent, solo }) {
   const n = Math.max(1, count);
   const near = { y: 58, from: 4, to: 96 };
   const far = { y: 4, from: 34, to: 66 };
@@ -2648,7 +2653,7 @@ function MoveSlotLanesBody({ label, optionLabel, count, chosen, silent }) {
       const g = (row) => gap * (row === near ? 1 : 0.45);
       const d = `M${r2(edge(near, k) + g(near))} ${near.y}L${r2(edge(far, k) + g(far))} ${far.y}L${r2(edge(far, k + 1) - g(far))} ${far.y}L${r2(edge(near, k + 1) - g(near))} ${near.y}Z`;
       const cx = (edge(near, k) + edge(near, k + 1) + edge(far, k) + edge(far, k + 1)) / 4;
-      return /* @__PURE__ */ jsxs3("g", { className: "tweakers-move-lane", "data-chosen": k === chosen || void 0, "data-silent": silent[k] || void 0, children: [
+      return /* @__PURE__ */ jsxs3("g", { className: "tweakers-move-lane", "data-chosen": k === chosen || void 0, "data-silent": silent[k] || void 0, "data-solo": k === solo || void 0, children: [
         /* @__PURE__ */ jsx3("path", { d }),
         silent[k] && /* @__PURE__ */ jsx3("path", { className: "tweakers-move-lane-cross", d: `M${r2(cx - 4.5)} 27.5l9 9M${r2(cx + 4.5)} 27.5l-9 9` })
       ] }, k);
@@ -14382,7 +14387,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                               optionLabel,
                                               count: options.length,
                                               chosen: lanes.chosen,
-                                              silent: lanes.silent
+                                              silent: lanes.silent,
+                                              solo: lanes.solo
                                             }
                                           ) : /* @__PURE__ */ jsx17(
                                             MoveSlotEnumBody,
@@ -16298,7 +16304,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
         ...step(meta),
         children: [
           /* @__PURE__ */ jsx18(MoveModRing, { panelId, path: meta.path }),
-          lanes ? /* @__PURE__ */ jsx18(MoveSlotLanesBody, { label: meta.label, optionLabel, count: options.length, chosen: lanes.chosen, silent: lanes.silent }) : /* @__PURE__ */ jsx18(
+          lanes ? /* @__PURE__ */ jsx18(MoveSlotLanesBody, { label: meta.label, optionLabel, count: options.length, chosen: lanes.chosen, silent: lanes.silent, solo: lanes.solo }) : /* @__PURE__ */ jsx18(
             MoveSlotEnumBody,
             {
               label: meta.label,

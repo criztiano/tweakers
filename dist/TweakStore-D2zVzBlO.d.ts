@@ -121,11 +121,13 @@ type MoveSelectVisual = {
  * A choice between parallel voices — layers, streams, lanes — drawn as
  * lanes running away from you, the chosen one lit. `silent` names the
  * options that are switched off: their lanes fade and carry a red cross,
- * so which voices sound reads at a glance whichever one is chosen.
+ * so which voices sound reads at a glance whichever one is chosen. `solo`
+ * names the one voice heard alone: its lane lights emerald.
  */
  | {
     kind: 'lanes';
     silent?: readonly string[];
+    solo?: string;
 } | MoveGrainSelectVisual;
 /**
  * One dial of a grain cloud — a sound cut into short windows that repeat.
@@ -318,11 +320,13 @@ declare function moveMultibandSpan(dials: [ControlMeta, unknown][], bands: [Cont
     }[];
 } | null;
 declare function movePlaybackMode(meta: ControlMeta, value: unknown): MovePlaybackMode | null;
-/** A lanes picker's lanes, in option order: which one is chosen, and which
- *  are switched off — or null unless the select asks to be drawn as lanes. */
+/** A lanes picker's lanes, in option order: which one is chosen, which are
+ *  switched off, and which one is soloed (absent when none is) — or null
+ *  unless the select asks to be drawn as lanes. */
 declare function moveLanes(meta: ControlMeta, value: unknown): {
     chosen: number;
     silent: boolean[];
+    solo?: number;
 } | null;
 /** A dial's grain role, or null when it is not one of a grain cloud's. */
 declare function moveGrainRole(meta: ControlMeta | undefined): MoveGrainRole | null;

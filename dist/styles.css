@@ -6328,6 +6328,10 @@
   fill: color-mix(in srgb, var(--move-text) 55%, var(--move-dial-surface));
 }
 
+.tweakers-move-lane[data-solo] path:first-child {
+  fill: var(--move-emerald);
+}
+
 .tweakers-move-lane-cross {
   fill: none;
   stroke: var(--move-red);
