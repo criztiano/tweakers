@@ -232,6 +232,8 @@ describe('the playback faces', () => {
     expect(moveLanes(voices, 'b')).toEqual({ chosen: 1, silent: [false, false, true] });
     expect(moveLanes({ ...voices, moveVisual: undefined }, 'b')).toBeNull();
     expect(moveLanes({ ...voices, moveVisual: { kind: 'lanes' } }, 'a')).toEqual({ chosen: 0, silent: [false, false, false] });
+    expect(moveLanes({ ...voices, moveVisual: { kind: 'lanes', solo: 'c' } }, 'a')?.solo).toBe(2);
+    expect(moveLanes(voices, 'a')).not.toHaveProperty('solo');
   });
 
   it('plays bounce as a playback mode of its own', () => {

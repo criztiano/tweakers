@@ -2230,7 +2230,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       <MoveModRing panelId={page.panel.id} path={meta.path} />
                       {lanes ? (
                         <MoveSlotLanesBody label={meta.label} optionLabel={optionLabel} count={options.length}
-                          chosen={lanes.chosen} silent={lanes.silent} />
+                          chosen={lanes.chosen} silent={lanes.silent} solo={lanes.solo} />
                       ) : (
                         <MoveSlotEnumBody
                           label={meta.label}

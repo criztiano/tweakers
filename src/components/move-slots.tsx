@@ -368,16 +368,19 @@ export function MoveSlotEnumBody({
  * A choice between parallel voices, drawn as lanes running away from you —
  * the chosen lane lit, the others dim. A voice that is switched off fades
  * further and carries a red cross, so which voices sound reads at a glance
- * whichever one the knob is on. The name is the tag, the chosen option is
+ * whichever one the knob is on; a soloed voice lights emerald, the one heard
+ * alone. The name is the tag, the chosen option is
  * underneath, as on every picture an option picker draws.
  */
-export function MoveSlotLanesBody({ label, optionLabel, count, chosen, silent }: {
+export function MoveSlotLanesBody({ label, optionLabel, count, chosen, silent, solo }: {
   label: string;
   optionLabel: string;
   count: number;
   chosen: number;
   /** One flag per lane, in option order: that voice is switched off. */
   silent: boolean[];
+  /** The lane heard alone, lit emerald; absent when nothing is soloed. */
+  solo?: number;
 }) {
   const n = Math.max(1, count);
   // One vanishing point, centred: the near edge spans the slot, the far edge
@@ -397,7 +400,7 @@ export function MoveSlotLanesBody({ label, optionLabel, count, chosen, silent }:
             + `L${r2(edge(far, k + 1) - g(far))} ${far.y}L${r2(edge(near, k + 1) - g(near))} ${near.y}Z`;
           const cx = (edge(near, k) + edge(near, k + 1) + edge(far, k) + edge(far, k + 1)) / 4;
           return (
-            <g key={k} className="tweakers-move-lane" data-chosen={k === chosen || undefined} data-silent={silent[k] || undefined}>
+            <g key={k} className="tweakers-move-lane" data-chosen={k === chosen || undefined} data-silent={silent[k] || undefined} data-solo={k === solo || undefined}>
               <path d={d} />
               {silent[k] && <path className="tweakers-move-lane-cross" d={`M${r2(cx - 4.5)} 27.5l9 9M${r2(cx + 4.5)} 27.5l-9 9`} />}
             </g>

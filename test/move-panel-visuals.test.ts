@@ -255,7 +255,16 @@ describe('MovePanel semantic interactions', () => {
     const slot = renderer!.root.findByProps({ 'data-kind': 'lanes' });
     const lanes = slot.findAll((n) => n.props.className === 'tweakers-move-lane');
     expect(lanes.map((l) => [!!l.props['data-chosen'], !!l.props['data-silent']])).toEqual([[false, false], [true, false], [false, true]]);
+    expect(lanes.some((l) => l.props['data-solo'])).toBe(false);
     expect(slot.findAllByProps({ className: 'tweakers-move-lane-cross' })).toHaveLength(1);
+  });
+
+  it('lights a soloed lane emerald', () => {
+    mount({ soloed: { type: 'select', options: ['a', 'b', 'c'], default: 'b', moveVisual: { kind: 'lanes', solo: 'a' } } });
+    const slot = renderer!.root.findByProps({ 'data-kind': 'lanes' });
+    const lanes = slot.findAll((n) => n.props.className === 'tweakers-move-lane');
+    expect(lanes.map((l) => !!l.props['data-solo'])).toEqual([true, false, false]);
+    expect(slot.findAllByProps({ className: 'tweakers-move-lane-cross' })).toHaveLength(0);
   });
 
   it('frosts the clock over at its minimum and names the beat above it', () => {

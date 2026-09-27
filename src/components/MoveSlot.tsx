@@ -532,7 +532,7 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
         {...step(meta)}>
         <MoveModRing panelId={panelId} path={meta.path} />
         {lanes ? (
-          <MoveSlotLanesBody label={meta.label} optionLabel={optionLabel} count={options.length} chosen={lanes.chosen} silent={lanes.silent} />
+          <MoveSlotLanesBody label={meta.label} optionLabel={optionLabel} count={options.length} chosen={lanes.chosen} silent={lanes.silent} solo={lanes.solo} />
         ) : (
           <MoveSlotEnumBody label={meta.label} optionLabel={optionLabel} options={options} activeIdx={activeIdx}
             shape={shape} glyph={enumOptionIcon(option as never)} picture={enumOptionPicture(option as never)}

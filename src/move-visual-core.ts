@@ -74,9 +74,10 @@ export type MoveSelectVisual =
    * A choice between parallel voices — layers, streams, lanes — drawn as
    * lanes running away from you, the chosen one lit. `silent` names the
    * options that are switched off: their lanes fade and carry a red cross,
-   * so which voices sound reads at a glance whichever one is chosen.
+   * so which voices sound reads at a glance whichever one is chosen. `solo`
+   * names the one voice heard alone: its lane lights emerald.
    */
-  | { kind: 'lanes'; silent?: readonly string[] }
+  | { kind: 'lanes'; silent?: readonly string[]; solo?: string }
   | MoveGrainSelectVisual;
 
 /**
@@ -409,14 +410,20 @@ export function movePlaybackMode(meta: ControlMeta, value: unknown): MovePlaybac
   return meta.moveVisual?.kind === 'playback' ? playbackModeOf(meta, meta.moveVisual.modes, value) : null;
 }
 
-/** A lanes picker's lanes, in option order: which one is chosen, and which
- *  are switched off — or null unless the select asks to be drawn as lanes. */
-export function moveLanes(meta: ControlMeta, value: unknown): { chosen: number; silent: boolean[] } | null {
+/** A lanes picker's lanes, in option order: which one is chosen, which are
+ *  switched off, and which one is soloed (absent when none is) — or null
+ *  unless the select asks to be drawn as lanes. */
+export function moveLanes(meta: ControlMeta, value: unknown): { chosen: number; silent: boolean[]; solo?: number } | null {
   const visual = meta.moveVisual;
   if (meta.type !== 'select' || visual?.kind !== 'lanes' || !meta.options?.length) return null;
   const values = meta.options.map((option) => (typeof option === 'string' ? option : option.value));
   const silent = Array.isArray(visual.silent) ? visual.silent : [];
-  return { chosen: Math.max(0, values.indexOf(value as string)), silent: values.map((v) => silent.includes(v)) };
+  const solo = visual.solo === undefined ? -1 : values.indexOf(visual.solo);
+  return {
+    chosen: Math.max(0, values.indexOf(value as string)),
+    silent: values.map((v) => silent.includes(v)),
+    ...(solo >= 0 ? { solo } : {}),
+  };
 }
 
 /** A dial's grain role, or null when it is not one of a grain cloud's. */
