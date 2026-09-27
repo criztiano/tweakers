@@ -101,6 +101,8 @@ export {
   styleFromValues as moveWaveformStyleFromValues,
 } from './move-waveform';
 export type { MoveWaveformVariant, MoveWaveformView, MoveWaveformStyle, MoveWaveformTransport } from './move-waveform';
+export { MOVE_PANEL_SETTINGS, MOVE_TRACK_LABEL_STYLES } from './move-track-labels';
+export type { MoveTrackLabelStyle } from './move-track-labels';
 // Notifications — the app's messages, floating over the instrument and over
 // whatever display is already up there.
 export { MoveNotifications, moveNotify } from './components/MoveNotifications';

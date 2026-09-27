@@ -17,7 +17,7 @@ import type { TweakTheme } from '../theme';
 import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, filterChipValue, isColumnFilter, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody } from './move-slots';
+import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody, MoveSlotGlyph } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing } from '../angle-core';
@@ -50,6 +50,7 @@ import { MoveFunctionChips } from './MoveFunctionChips';
 import { MoveTimelineClock, MoveTimelineZoom } from './MoveTimeline';
 import { MoveTimelineStore } from '../move-timeline';
 import { MoveSettingsView } from '../move-settings';
+import { MoveTrackLabels, MOVE_PANEL_SETTINGS, moveTrackIcon, moveTrackLabelStyle } from '../move-track-labels';
 import { MovePresetStore, type MovePresetView } from '../move-presets';
 import { ListScreen } from './ListScreen';
 import { MovePanelMotion } from './MovePanelMotion';
@@ -484,6 +485,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     // start, not from the first time a sample happens to show: a room that
     // gains a page while you stand in it is a room you cannot trust.
     MoveWaveformStore.ensureSettings();
+    MoveTrackLabels.ensureSettings();
     setPanels(read());
     return TweakStore.subscribeGlobal(() => setPanels(read()));
   }, [read]);
@@ -499,11 +501,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     : (JSON.parse(settingsKey) as string[])
         .map((key) => TweakStore.getPanels('panel').find((p) => p.id === key || p.name === key))
         .filter((p): p is PanelConfig => p !== undefined);
-  // The kit's own pages ride after the app's: the waveform's look, once a
-  // waveform has claimed the surface. An app with no room of its own still
-  // gets the door, because the page behind it is the kit's.
-  const waveRoom = TweakStore.getPanel(MOVE_WAVEFORM_PANEL);
-  const settingsRooms = waveRoom ? [...namedRooms, waveRoom] : namedRooms;
+  // The kit's own pages ride after the app's: the waveform's look, then the
+  // panel's own (how the track row names its pages). An app with no room of
+  // its own still gets the door, because the pages behind it are the kit's.
+  const kitRooms = [TweakStore.getPanel(MOVE_WAVEFORM_PANEL), TweakStore.getPanel(MOVE_PANEL_SETTINGS)]
+    .filter((p): p is PanelConfig => p !== undefined);
+  const settingsRooms = [...namedRooms, ...kitRooms];
   const roomIds = settingsRooms.map((p) => p.id);
   const settingsOpen = useSyncExternalStore(
     useCallback((cb) => MoveSettingsView.subscribe(cb), []),
@@ -517,6 +520,33 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const pages = scroll
     ? pagePanels.filter((p) => p.kind === undefined).slice(0, MOVE_TRACKS).map(buildMoveStrip)
     : buildMovePages(pagePanels);
+  // The track row's look. A picture on a row that shows — the page row, or
+  // the room's own tab row — makes the Panel page's choice live; with none
+  // there is nothing to choose, and names it is. One page is no row at all.
+  const trackIcons = [...(pages.length > 1 ? pages.map((pg) => pg.panel) : []), ...(settingsRooms.length > 1 ? settingsRooms : [])]
+    .some((panel) => moveTrackIcon(panel) !== undefined);
+  useEffect(() => MoveTrackLabels.setIconsAvailable(trackIcons), [trackIcons]);
+  const panelSettings = useSyncExternalStore(
+    useCallback((cb) => TweakStore.subscribe(MOVE_PANEL_SETTINGS, cb), []),
+    () => TweakStore.getValues(MOVE_PANEL_SETTINGS),
+    () => TweakStore.getValues(MOVE_PANEL_SETTINGS)
+  );
+  const trackLabelStyle = moveTrackLabelStyle(panelSettings, trackIcons);
+  // One face for every track button: the marker, then the page's picture
+  // and its name as the row's look asks. A picture alone still names its
+  // page to a screen reader and under the pointer.
+  const trackFace = (panel: PanelConfig, color: string) => {
+    const icon = trackLabelStyle === 'name' ? undefined : moveTrackIcon(panel);
+    return (
+      <>
+        <span className="tweakers-move-track-marker" style={{ background: color }} />
+        {icon && <MoveSlotGlyph name={icon} className="tweakers-move-track-icon" />}
+        {icon && trackLabelStyle === 'icon'
+          ? <span className="tweakers-move-track-label" data-hidden>{panel.name}</span>
+          : <span className="tweakers-move-track-label">{panel.name}</span>}
+      </>
+    );
+  };
   // An open modulator-settings page takes the surface over; the track
   // buttons put a regular page back (and close the settings with it).
   // The settings room stands in front of even that: while it is open the
@@ -1631,14 +1661,14 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           className="tweakers-move-track"
                           data-active={pg === page}
                           aria-selected={pg === page}
+                          title={trackLabelStyle === 'icon' ? pg.panel.name : undefined}
                           tabIndex={pg === page ? 0 : -1}
                           onClick={() => {
                             setRoomTrack(i);
                             window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
                           }}
                         >
-                          <span className="tweakers-move-track-marker" style={{ background: MOVE_TRACK_COLORS[i] }} />
-                          <span className="tweakers-move-track-label">{pg.panel.name}</span>
+                          {trackFace(pg.panel, MOVE_TRACK_COLORS[i])}
                         </button>
                       ))}
                     </div>
@@ -1683,6 +1713,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       data-active={pg === page}
                       aria-selected={pg === page}
                       aria-controls={panelIdForTabs}
+                      title={trackLabelStyle === 'icon' ? pg.panel.name : undefined}
                       tabIndex={pg === page ? 0 : -1}
                       onClick={() => selectPage(i)}
                       onKeyDown={(event) => {
@@ -1700,8 +1731,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           ?.focus();
                       }}
                     >
-                      <span className="tweakers-move-track-marker" style={{ background: MOVE_TRACK_COLORS[i] }} />
-                      <span className="tweakers-move-track-label">{pg.panel.name}</span>
+                      {trackFace(pg.panel, MOVE_TRACK_COLORS[i])}
                     </button>
                   ))}
                 </div>

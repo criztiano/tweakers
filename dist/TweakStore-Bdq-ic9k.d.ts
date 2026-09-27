@@ -1078,6 +1078,8 @@ type ControlMeta = {
 type PanelConfig = {
     id: string;
     name: string;
+    /** The page's picture on the Move's track row, retained on the same terms as `hints`. */
+    icon?: string;
     controls: ControlMeta[];
     values: Record<string, TweakValue>;
     shortcuts: Record<string, ShortcutConfig>;

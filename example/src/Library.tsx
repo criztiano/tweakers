@@ -275,6 +275,14 @@ export function Library() {
             Under the strip: how far along the whole set the window sits. Drag it to
             move the window.
           </dd>
+          <dt>The track row</dt>
+          <dd>
+            One button per page, in its track colour. A page registered with an
+            <code>icon</code> (a name from the lucide subset) wears that picture
+            beside its name; the settings room's Panel page then chooses name,
+            picture and name, or picture alone. With no picture on the row the
+            choice is greyed out.
+          </dd>
           <dt>The circles</dt>
           <dd>
             The modulation slots, in the header. Touch a control then tap a circle to
