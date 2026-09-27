@@ -624,13 +624,15 @@ function moveGrainSpan(dials) {
   };
 }
 var MOVE_GRAIN = { width: 300, height: 100, base: 100, top: 6, copies: 7 };
-var GRAIN_MAX_TRAIL = 3;
+var GRAIN_TRAIL_LOG = 0.75;
+var GRAIN_MAX_TRAIL = 5;
 function moveGrainPicture(span) {
   const { width: W, base, top, copies: most } = MOVE_GRAIN;
   const margin = 6;
   const sample = span.shape ?? ((t) => Math.sin(Math.PI * t));
   const both = span.direction === "ping-pong" || span.direction === "bounce" || span.direction === "scissors";
-  const ratio = Math.min(GRAIN_MAX_TRAIL, span.trail.role === "density" ? span.trail.spacing : span.trail.lag);
+  const trail = span.trail.role === "density" ? span.trail.spacing : span.trail.lag;
+  const ratio = trail <= 1 ? trail : Math.min(GRAIN_MAX_TRAIL, 1 + GRAIN_TRAIL_LOG * Math.log(trail));
   const fits = (W - 2 * margin) / (1 + ratio * (both ? 2 : 1));
   const g = Math.min(W * (0.2 + 0.46 * clamp01(span.length)), fits);
   const step = ratio * g;
