@@ -11,7 +11,8 @@ import {
   type FilterResponse,
 } from './filter-core';
 import { TweakStore } from './store/TweakStore';
-import { buildMovePages, visibleColumns, dialSpan, isSpanContinuation, normalizeFilterDial, denormalizeFilterDial, filterShapePath, MOVE_DIALS } from './move-layout';
+import { buildMovePages, movePadRows, visibleColumns, dialSpan, isSpanContinuation, isColumnFilter, filterChipValue, normalizeFilterDial, denormalizeFilterDial, filterShapePath, MOVE_DIALS } from './move-layout';
+import { buildMoveStrip } from './move-strip';
 
 let seq = 0;
 const nextId = () => `filter-core-${++seq}`;
@@ -144,5 +145,80 @@ describe('filter on the move layout', () => {
     const d = filterShapePath(page.dials[0], TweakStore.getValues(id)!['filter']);
     assert.ok(d && d.endsWith('L 100.00 0.00'));
     assert.deepEqual(saw, [1, 0]); /* open filter: cutoff max, resonance min */
+  });
+});
+
+describe('a filter that stands in one column', () => {
+  const config = {
+    gain: [0.5, 0, 1],
+    tone: {
+      type: 'filter', moveVertical: true, default: { cutoff: 800, resonance: 0.4 },
+      cutoff: { min: 20, max: 20000, label: 'Freq' },
+      resonance: { min: 0, max: 1, step: 0.01, label: 'Res', formatValue: (v: number) => `Q ${v}` },
+    },
+    drive: [0.2, 0, 1],
+  };
+
+  it('claims one dial column, and the next dial takes the column beside it', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, config as never);
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    assert.deepEqual(page.dials.map((d) => d.path), ['gain', 'tone', 'drive']);
+    assert.ok(isColumnFilter(page.dials[1]));
+    assert.equal(dialSpan(page.dials[1]), 1);
+    assert.ok(!isSpanContinuation(page, 2));
+    assert.deepEqual(visibleColumns(page), [0, 1, 2]);
+    TweakStore.unregisterPanel(id);
+  });
+
+  it('seats its resonance as a value chip on the top row, under its own column', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, config as never);
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    const chip = page.topValues?.[1];
+    assert.ok(chip);
+    assert.equal(chip.path, 'tone:resonance');
+    assert.equal(chip.label, 'Res');
+    assert.equal(chip.type, 'slider');
+    assert.equal(chip.resonanceOf, 'tone');
+    assert.deepEqual([chip.min, chip.max, chip.step], [0, 1, 0.01]);
+    assert.equal(chip.formatValue?.(0.4), 'Q 0.4');
+    assert.equal(page.toggles[1], undefined);
+    assert.equal(page.values[1], undefined);
+    assert.equal(movePadRows(page, 0)[0][1], chip, 'the chip is the switch row\'s cell under the filter');
+    // The same chip from build to build, so a latch holds across renders.
+    assert.equal(buildMovePages([TweakStore.getPanel(id)!])[0].topValues?.[1], chip);
+    TweakStore.unregisterPanel(id);
+  });
+
+  it('reads its chip from the one stored pair — nothing new is stored', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, config as never);
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    const values = TweakStore.getValues(id)!;
+    assert.deepEqual(values['tone'], { cutoff: 800, resonance: 0.4 });
+    assert.equal(values['tone:resonance'], undefined);
+    assert.equal(filterChipValue(page.topValues![1], values['tone']), 0.4);
+    assert.equal(filterChipValue(page.topValues![1], {}), 0, 'no resonance reads as the minimum');
+    TweakStore.unregisterPanel(id);
+  });
+
+  it('keeps its chip under it on a scrolling page too', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, config as never);
+    const page = buildMoveStrip(TweakStore.getPanel(id)!);
+    assert.deepEqual(page.dials.map((d) => d.path), ['gain', 'tone', 'drive']);
+    assert.equal(page.topValues?.[1]?.path, 'tone:resonance');
+    TweakStore.unregisterPanel(id);
+  });
+
+  it('leaves a filter without the flag on its two columns, with no chip', () => {
+    const id = nextId();
+    const { moveVertical: _, ...plain } = config.tone as Record<string, unknown>;
+    TweakStore.registerPanel(id, id, { ...config, tone: plain } as never);
+    const [page] = buildMovePages([TweakStore.getPanel(id)!]);
+    assert.deepEqual(page.dials.map((d) => d.path), ['gain', 'tone', 'tone', 'drive']);
+    assert.equal(page.topValues, undefined);
+    TweakStore.unregisterPanel(id);
   });
 });

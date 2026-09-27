@@ -1,5 +1,5 @@
 import type { PanelConfig, ControlMeta } from './store/TweakStore';
-import { MOVE_DIALS, dialSpan, padSpan, isMoveDial, isMoveTabs, type MovePage } from './move-layout';
+import { MOVE_DIALS, dialSpan, padSpan, isMoveDial, isMoveTabs, isColumnFilter, filterResonanceChip, type MovePage } from './move-layout';
 
 /**
  * The endless strip — a page with more slots than the Move has dials.
@@ -91,6 +91,10 @@ export function buildMoveStrip(panel: PanelConfig): MovePage {
     if (ref.path === bal.balanceA) topValues[col] = ref;
     else values[col] = ref;
   }
+  // A one-column filter's resonance chip rides up top under it, the same way.
+  dials.forEach((c, col) => {
+    if (isColumnFilter(c)) topValues[col] = filterResonanceChip(c);
+  });
   // A tabs strip claims a RUN of pads in the switch row, not a pad — the same
   // multi-slot rule the 8-wide page keeps, on the strip's own unbounded row.
   // It starts at the column it names, and packs left when it names none;

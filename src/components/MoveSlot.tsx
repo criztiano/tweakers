@@ -393,7 +393,7 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
   if (meta.type === 'filter') {
     const fv = normalizeFilterValue(value, resolveFilterAxis(meta.cutoffAxis, 'cutoff'), resolveFilterAxis(meta.resonanceAxis, 'resonance'));
     return (
-      <div className={cls} style={style} data-kind="filter" data-active={active || undefined}
+      <div className={cls} style={style} data-kind="filter" data-vertical={meta.moveVertical || undefined} data-active={active || undefined}
         data-disabled={meta.filterEnabled === false || undefined}
         {...drag(meta, (e, down) => write(meta, moveFilterValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), filterHand, fine, down)))}>
         <MoveModRing panelId={panelId} path={meta.path} />

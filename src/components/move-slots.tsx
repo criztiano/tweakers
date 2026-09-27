@@ -600,18 +600,37 @@ export function MoveSlotRangeBody({
  * a small label per hand — each sitting inline where its own single slot's
  * label would have been, cutoff on the left half, resonance on the right.
  * Each label gives way to its hand's value on touch, like any slot.
+ *
+ * A one-column filter (`moveVertical`) draws the same response in its one
+ * slot, with one readout: the hand its knob holds — `hand`, the cutoff
+ * unless its resonance chip is in.
  */
 export function MoveSlotFilterBody({
-  meta, value, shape,
+  meta, value, shape, hand = 'cutoff',
 }: {
   meta: ControlMeta;
   value: FilterValue;
   shape: string | null;
+  hand?: 'cutoff' | 'resonance';
 }) {
   const ca = resolveFilterAxis(meta.cutoffAxis, 'cutoff');
   const ra = resolveFilterAxis(meta.resonanceAxis, 'resonance');
   const fmt = (v: number, f?: (n: number) => string) =>
     f ? f(v) : Math.abs(v) >= 100 ? Math.round(v).toString() : Number(v.toFixed(2)).toString();
+  if (meta.moveVertical) {
+    const axis = hand === 'resonance' ? ra : ca;
+    return (
+      <>
+        <div className="tweakers-move-filter-display">
+          {shape && <MoveSlotShape d={shape} className="tweakers-move-filter-shape" />}
+        </div>
+        <div className="tweakers-move-filter-readout" data-side="column" data-hand={hand}>
+          <span className="tweakers-move-dial-label">{axis.label}</span>
+          <span className="tweakers-move-dial-value">{fmt(value[hand], axis.formatValue)}</span>
+        </div>
+      </>
+    );
+  }
   return (
     <>
       {/* The drawing sits on a display — the same dark hole in the face the

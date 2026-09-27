@@ -14,7 +14,7 @@ import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from '../theme';
-import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
+import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, filterChipValue, isColumnFilter, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
 import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody } from './move-slots';
@@ -1150,7 +1150,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // move-slot-core — shared with a MoveSlot placed on its own, so a face
   // drags the same wherever it is drawn. These bind them to this page.
   const dialPercent = (meta: ControlMeta) => moveDialPercent(meta, values[meta.path]);
-  const chipValue = (meta: ControlMeta) => moveChipValue(meta, values[meta.path]);
+  // A one-column filter's resonance chip reads its filter's pair.
+  const chipValue = (meta: ControlMeta) =>
+    moveChipValue(meta, meta.resonanceOf ? filterChipValue(meta, values[meta.resonanceOf]) : values[meta.path]);
   const dialReading = (meta: ControlMeta) => moveDialReading(meta, values[meta.path]);
   const rangeReading = (meta: ControlMeta) => moveRangeReading(meta, values[meta.path]);
   const write = (meta: ControlMeta, next: unknown) => TweakStore.updateValue(page.panel.id, meta.path, next as never);
@@ -1269,9 +1271,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     write(meta, moveRangeValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), rangeHandleRef, fineRef, down));
 
   // On the hardware the filter's left column's knob is cutoff and the right
-  // column's is resonance — two ordinary one-column dials to the bridge.
-  const filterFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, down: boolean) =>
-    write(meta, moveFilterValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), filterHandRef, fineRef, down));
+  // column's is resonance — two ordinary one-column dials to the bridge. A
+  // one-column filter's slot turns whichever hand its knob holds (`take`).
+  const filterFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, down: boolean, take?: 'cutoff' | 'resonance') =>
+    write(meta, moveFilterValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), filterHandRef, fineRef, down, take));
 
   const chipLatched = (col: number, meta: ControlMeta) =>
     latched[col]?.path === meta.path || !!hwLatched[meta.path];
@@ -1431,7 +1434,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const pressChip = (e: React.PointerEvent<HTMLElement>, col: number, meta: ControlMeta) => {
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
     holdStart.current = Date.now();
-    armMod(meta.path);
+    armMod(meta.resonanceOf ?? meta.path);
     setHeld({ col, meta });
   };
 
@@ -1816,7 +1819,13 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 if (isSpanContinuation(page, i)) return null;
                 if (!stripMode && visibleCols.includes(i - 1) && trimSpanAt(i - 1)) return null;
                 if (underFace(i)) return null;
-                const meta = dialSpan(page.dials[i]) > 1 ? page.dials[i] : dialAt(i);
+                // A one-column filter keeps its slot too: its own resonance
+                // chip takes the knob, not the slot — the picture stays, and
+                // the slot turns the hand the knob now holds.
+                const sub = dialAt(i);
+                const meta = dialSpan(page.dials[i]) > 1 || (isColumnFilter(page.dials[i]) && sub?.resonanceOf === page.dials[i].path)
+                  ? page.dials[i]
+                  : sub;
                 if (!meta) return <div key={`empty-${i}`} className="tweakers-move-dial" data-empty="true" />;
                 const disabled = TweakStore.isDisabled(page.panel.id, meta.path);
                 const active =
@@ -1894,19 +1903,25 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     resolveFilterAxis(meta.resonanceAxis, 'resonance')
                   );
                   const shape = filterShapePath(meta, values[meta.path]);
+                  // The hand a one-column filter's knob holds: its cutoff, or
+                  // its resonance while that chip is held or latched in.
+                  const take = sub && sub !== meta ? 'resonance' : 'cutoff';
+                  const column = isColumnFilter(meta);
                   return (
                     <div
                       key={meta.path}
                       className="tweakers-move-dial"
                       data-kind="filter"
+                      data-vertical={column || undefined}
                       data-active={active || undefined}
+                      data-latched={(column && take === 'resonance' && chipLatched(i, sub!)) || undefined}
                       data-disabled={meta.filterEnabled === false || undefined}
                       onPointerDown={(e) => {
                         try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
                         fineRef.current = null;
                         setDragPath(meta.path);
                         armMod(meta.path);
-                        filterFromPointer(e, meta, true);
+                        filterFromPointer(e, meta, true, take);
                       }}
                       onPointerMove={(e) => {
                         if (dragPath === meta.path) filterFromPointer(e, meta, false);
@@ -1915,7 +1930,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
                     >
                       <MoveModRing panelId={page.panel.id} path={meta.path} />
-                      <MoveSlotFilterBody meta={meta} value={fv} shape={shape} />
+                      <MoveSlotFilterBody meta={meta} value={fv} shape={shape} hand={column ? take : undefined} />
                     </div>
                   );
                 }
