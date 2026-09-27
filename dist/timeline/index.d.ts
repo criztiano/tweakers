@@ -463,6 +463,13 @@ type FilterConfig = {
      * disabled module dims. Defaults to on.
      */
     enabled?: boolean;
+    /**
+     * Stand in one dial column instead of two. The slot draws the same
+     * response and its knob turns the cutoff; the resonance becomes a value
+     * chip on the top pad row under it — tap latches the knob to it, hold
+     * peeks. The value stays the same `{ cutoff, resonance }` pair.
+     */
+    moveVertical?: boolean;
 };
 /**
  * An editable transfer curve — input on x, output on y, both 0..1. For the

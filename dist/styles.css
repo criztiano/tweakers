@@ -2115,6 +2115,11 @@
   grid-column: span 2;
 }
 
+/* A filter standing in one column: one slot, its resonance a chip below. */
+.tweakers-move-dial[data-kind="filter"][data-vertical] {
+  grid-column: auto;
+}
+
 .tweakers-move-slot-display {
   position: absolute;
   top: 8px;
@@ -2298,6 +2303,8 @@
 .tweakers-move-filter-readout[data-side="cutoff"] { left: 0; }
 
 .tweakers-move-filter-readout[data-side="resonance"] { right: 0; }
+
+.tweakers-move-filter-readout[data-side="column"] { left: 0; width: 100%; }
 
 .tweakers-move-filter-readout .tweakers-move-dial-label {
   font-size: 13px;

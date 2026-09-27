@@ -490,6 +490,13 @@ type FilterConfig = {
      * disabled module dims. Defaults to on.
      */
     enabled?: boolean;
+    /**
+     * Stand in one dial column instead of two. The slot draws the same
+     * response and its knob turns the cutoff; the resonance becomes a value
+     * chip on the top pad row under it — tap latches the knob to it, hold
+     * peeks. The value stays the same `{ cutoff, resonance }` pair.
+     */
+    moveVertical?: boolean;
 };
 /**
  * An editable transfer curve — input on x, output on y, both 0..1. For the
@@ -922,6 +929,12 @@ type ControlMeta = {
     response?: (cutoff01: number, resonance01: number) => (t: number) => number;
     /** Filter control declared `enabled: false` — the slot draws bypassed (dimmed). */
     filterEnabled?: boolean;
+    /** Filter control declared `moveVertical` — one dial column, its resonance a chip under it. */
+    moveVertical?: boolean;
+    /** The one-column filter whose resonance this chip carries (a path in the
+     *  same panel). The chip exists only on the Move page; its value is that
+     *  filter's `resonance`, and editing it writes the filter's whole pair. */
+    resonanceOf?: string;
     /** Curve preview's host-supplied sampler — swapped in place by syncCurveConfigs. */
     sample?: (t: number) => number;
     /** Curve preview's fixed y-range; absent = auto-fit per draw. */

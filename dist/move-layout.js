@@ -194,7 +194,33 @@ var isToggleDial = (c) => c.type === "toggle" && c.moveSlot === true;
 var isMoveDial = (c) => isToggleDial(c) || c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || c.type === "balance" || isEnumDial(c) && !isMoveTabs(c) || c.type === "number" && c.min != null && c.max != null;
 var isDial = isMoveDial;
 var noChip = (c) => isToggleDial(c) || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || c.type === "balance" || isEnumDial(c);
-var dialSpan = (c) => c?.type === "filter" || c?.type === "select" && c.moveSpan === 2 && !isMoveTabs(c) ? 2 : 1;
+var isColumnFilter = (c) => c?.type === "filter" && !!c.moveVertical;
+var dialSpan = (c) => c?.type === "filter" && !isColumnFilter(c) || c?.type === "select" && c.moveSpan === 2 && !isMoveTabs(c) ? 2 : 1;
+var resonanceChips = /* @__PURE__ */ new WeakMap();
+function filterResonanceChip(filter) {
+  let chip = resonanceChips.get(filter);
+  if (!chip) {
+    const ra = resolveFilterAxis(filter.resonanceAxis, "resonance");
+    chip = {
+      type: "slider",
+      path: `${filter.path}:resonance`,
+      label: ra.label,
+      min: ra.min,
+      max: ra.max,
+      ...ra.step > 0 ? { step: ra.step } : {},
+      ...ra.formatValue ? { formatValue: ra.formatValue } : {},
+      resonanceOf: filter.path
+    };
+    resonanceChips.set(filter, chip);
+  }
+  return chip;
+}
+function filterChipValue(chip, filterValue) {
+  const r = filterValue?.resonance;
+  const min = chip.min ?? 0;
+  const max = chip.max ?? 1;
+  return typeof r === "number" && Number.isFinite(r) ? Math.min(max, Math.max(min, r)) : min;
+}
 var isSpanContinuation = (page, i) => i > 0 && page.dials[i] !== void 0 && page.dials[i] === page.dials[i - 1];
 function buildModMovePage(panel, layout) {
   const controls = flat(panel.controls);
@@ -348,6 +374,9 @@ function buildMovePages(panels) {
       }
       if (first) topValues[at] = ref;
       else values[at] = ref;
+    }
+    for (let col = 0; col < dials.length; col++) {
+      if (isColumnFilter(dials[col])) topValues[col] = filterResonanceChip(dials[col]);
     }
     const seated = (c) => topValues.includes(c) || values.includes(c);
     const lowered = (c) => c.type === "toggle" && !isToggleDial(c) && (panel.moveValueRow ?? []).includes(c.path) && padCols.get(c) != null;
@@ -719,7 +748,10 @@ export {
   enumOptionPicture,
   enumOptionValue,
   enumShapePath,
+  filterChipValue,
+  filterResonanceChip,
   filterShapePath,
+  isColumnFilter,
   isEnumDial,
   isMoveDial,
   isMoveTabs,

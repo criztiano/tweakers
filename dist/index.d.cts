@@ -2090,6 +2090,13 @@ type FilterConfig = {
      * disabled module dims. Defaults to on.
      */
     enabled?: boolean;
+    /**
+     * Stand in one dial column instead of two. The slot draws the same
+     * response and its knob turns the cutoff; the resonance becomes a value
+     * chip on the top pad row under it — tap latches the knob to it, hold
+     * peeks. The value stays the same `{ cutoff, resonance }` pair.
+     */
+    moveVertical?: boolean;
 };
 /**
  * An editable transfer curve — input on x, output on y, both 0..1. For the
@@ -2522,6 +2529,12 @@ type ControlMeta = {
     response?: (cutoff01: number, resonance01: number) => (t: number) => number;
     /** Filter control declared `enabled: false` — the slot draws bypassed (dimmed). */
     filterEnabled?: boolean;
+    /** Filter control declared `moveVertical` — one dial column, its resonance a chip under it. */
+    moveVertical?: boolean;
+    /** The one-column filter whose resonance this chip carries (a path in the
+     *  same panel). The chip exists only on the Move page; its value is that
+     *  filter's `resonance`, and editing it writes the filter's whole pair. */
+    resonanceOf?: string;
     /** Curve preview's host-supplied sampler — swapped in place by syncCurveConfigs. */
     sample?: (t: number) => number;
     /** Curve preview's fixed y-range; absent = auto-fit per draw. */
@@ -3682,7 +3695,8 @@ declare const isToggleDial: (c: ControlMeta) => boolean;
 declare const isMoveDial: (c: ControlMeta) => boolean;
 /**
  * How many dial columns a control claims. Filters give each knob its own
- * axis; a two-column select gives both knobs the same list.
+ * axis — unless one stands in a single column; a two-column select gives
+ * both knobs the same list.
  */
 declare const dialSpan: (c: ControlMeta | undefined) => number;
 /** True when column i only continues the span-2 dial sitting at i-1. */
@@ -4310,11 +4324,16 @@ declare function MoveSlotRangeBody({ label, value, lo, hi, }: {
  * a small label per hand — each sitting inline where its own single slot's
  * label would have been, cutoff on the left half, resonance on the right.
  * Each label gives way to its hand's value on touch, like any slot.
+ *
+ * A one-column filter (`moveVertical`) draws the same response in its one
+ * slot, with one readout: the hand its knob holds — `hand`, the cutoff
+ * unless its resonance chip is in.
  */
-declare function MoveSlotFilterBody({ meta, value, shape, }: {
+declare function MoveSlotFilterBody({ meta, value, shape, hand, }: {
     meta: ControlMeta;
     value: FilterValue;
     shape: string | null;
+    hand?: 'cutoff' | 'resonance';
 }): react_jsx_runtime.JSX.Element;
 /** One edge of a take on the shared line: its place (0..1), its name and its
  *  reading. `moved` is an edge off its own end of the take. */
