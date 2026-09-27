@@ -13,6 +13,7 @@ import {
   type DriverDirection,
 } from './curve-composer-core';
 import { mixToMono, fillPeaks, envelope } from './waveform-dsp';
+import type { ModGlyph } from './icons';
 
 /**
  * The modulation layer's shared ground — types, palette, math, and the
@@ -186,6 +187,12 @@ export interface ModTypeDef {
    * leave it out and the store ignores the call.
    */
   gate?(state: unknown, on: boolean): void;
+  /**
+   * The mark cut out of the slot's dot in the step row, so a row of circles
+   * says which modulator is which. A function of the params, because one type
+   * can play two roles: an envelope struck by the keys wears the keys.
+   */
+  glyph?(params: ModulationParams): ModGlyph;
 }
 
 /* ── the settings page's layout ───────────────────────────────────────── */
@@ -288,6 +295,10 @@ export function registerModType(def: ModTypeDef): void {
 
 export const getModType = (type: ModulationType): ModTypeDef | undefined => registry.get(type);
 
+/** The mark a slot's dot wears — null for a type that names none (a plain dot). */
+export const modGlyph = (slot: ModulationSlot): ModGlyph | null =>
+  getModType(slot.type)?.glyph?.(slot.params) ?? null;
+
 /** The registered types, registration order — the settings page's type enum. */
 export const listModTypes = (): ModTypeDef[] => [...registry.values()];
 
@@ -349,14 +360,19 @@ const RING_SWEEP_LEN = 270 / 360;
  * pattern that draws it: SVG lays a circle's path clockwise from 3 o'clock,
  * so a dash of `length` pushed to `offset` lands exactly on the arc.
  * Feed it base and modulated value and the ring shows where the modulation
- * is holding the control right now.
+ * is holding the control right now. A ring of another size passes its own
+ * circumference; the sweep is the same.
  */
-export function modRingArc(from01: number, to01: number): { length: number; offset: number } {
+export function modRingArc(
+  from01: number,
+  to01: number,
+  circumference = MOD_RING_CIRCUMFERENCE
+): { length: number; offset: number } {
   const a = RING_SWEEP_START + clamp01(from01) * RING_SWEEP_LEN;
   const b = RING_SWEEP_START + clamp01(to01) * RING_SWEEP_LEN;
   return {
-    length: Math.abs(b - a) * MOD_RING_CIRCUMFERENCE,
-    offset: -Math.min(a, b) * MOD_RING_CIRCUMFERENCE,
+    length: Math.abs(b - a) * circumference,
+    offset: -Math.min(a, b) * circumference,
   };
 }
 
@@ -439,6 +455,7 @@ function previewSlew(values: number[], smooth: number): number[] {
 export const LFO_DEF: ModTypeDef = {
   type: 'lfo',
   label: 'LFO',
+  glyph: () => 'lfo',
   defaults: { rate: 1, division: LFO_SYNC_DEFAULT, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false },
   controls: [
     /* One slot for how fast, wearing whichever control the moment calls for:
@@ -529,6 +546,7 @@ interface ShState {
 export const SH_DEF: ModTypeDef = {
   type: 'sh',
   label: 'S&H',
+  glyph: () => 'sh',
   defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0 },
   controls: [
     { type: 'slider', path: 'rate', label: 'Rate', min: 0.1, max: 30, step: 0.01, unit: 'Hz', scope: true },
@@ -763,6 +781,9 @@ function adsrStageLength(stage: AdsrStage, params: ModulationParams): number {
 export const ADSR_DEF: ModTypeDef = {
   type: 'adsr',
   label: 'ADSR',
+  // Struck by the played keys (a trigger of 'keys'), the envelope wears the
+  // keys; free or looping, its own shape.
+  glyph: (params) => (params.trigger === 'keys' ? 'keys' : 'adsr'),
   defaults: {
     attack: 10, decay: 300, sustain: 0.6, release: 600, loop: false,
     // The attack keeps its analog leap; decay and release start straight,
@@ -944,6 +965,7 @@ interface CurveState {
 export const CURVE_DEF: ModTypeDef = {
   type: 'curve',
   label: 'Curve',
+  glyph: () => 'curve',
   defaults: {
     duration: 2, sync: false, division: LFO_SYNC_DEFAULT, signal: 'continuous', triggers: DEFAULT_TRIGGER_STEPS,
     direction: 'forward', flip: false, gap: 0, segments: 1, selected: 0,
@@ -1217,6 +1239,7 @@ function audioLoop(params: ModulationParams): { start: number; end: number } | n
 export const AUDIO_DEF: ModTypeDef = {
   type: 'audio',
   label: 'Audio',
+  glyph: () => 'audio',
   defaults: {
     speed: 1, depth: 1, smooth: 0,
     playing: true, loopOn: true, loopStart: 0, loopEnd: 1, position: 0,

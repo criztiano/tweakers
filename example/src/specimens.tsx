@@ -20,6 +20,7 @@ import {
   MovePadLoopBody,
   CurveComposer,
   ModRing,
+  ModDot,
   ModulationStore,
   envelopePoints,
   envelopeJoints,
@@ -27,7 +28,7 @@ import {
   type MoveSlotKind,
   type MovePadKind,
 } from 'tweakers';
-import { PANEL_ID, INSTRUMENTS_NAME, MOD_LFO, MOD_ENV, MOD_CURVE } from './panel';
+import { PANEL_ID, INSTRUMENTS_NAME, MOD_LFO, MOD_ENV, MOD_CURVE, MOD_SH } from './panel';
 
 /**
  * Every face, live. Each big card is the control itself — a MoveSlot on the
@@ -361,6 +362,18 @@ export const SMALL_SLOT_STATES: { label: string; kind: MovePadKind; props: Recor
 
 export const MOD_FACES: { kind: string; description: string; note?: string; render: () => ReactNode }[] = [
   {
+    kind: 'circle',
+    description: 'a modulation slot in the step row: its colour, its type’s mark cut out of the dot, and a ring swinging with its live signal',
+    note: 'LFO, S&H, ADSR, Keys, Curve, Audio. The first four and the curve are the library’s own slots, so their rings move; Keys and Audio stand still, with no slot behind them.',
+    render: () => (
+      <div className="tweakers-move-mods">
+        {MOD_DOTS.map((slot) => (
+          <span key={slot.index} className="tweakers-move-mod"><ModDot slot={slot} /></span>
+        ))}
+      </div>
+    ),
+  },
+  {
     kind: 'ring',
     description: 'the ring a wired control wears: the slot’s colour, and an arc from the value to where the modulation is holding it',
     note: 'In the slot’s corner, where it lives. This one is the library’s own LFO on Amount — the arc moves.',
@@ -377,6 +390,16 @@ export const MOD_FACES: { kind: string; description: string; note?: string; rend
     note: 'Drag a clip, walk them with the arrows; the playhead runs on the modulator’s own phase.',
     render: () => <LiveComposer />,
   },
+];
+
+/** One circle per mark: the library's running slots where it has them. */
+const MOD_DOTS = [
+  { index: MOD_LFO, type: 'lfo' as const, params: {} },
+  { index: MOD_SH, type: 'sh' as const, params: {} },
+  { index: MOD_ENV, type: 'adsr' as const, params: {} },
+  { index: 4, type: 'adsr' as const, params: { trigger: 'keys' } },
+  { index: MOD_CURVE, type: 'curve' as const, params: {} },
+  { index: 5, type: 'audio' as const, params: {} },
 ];
 
 /** The ring on the library's own wired control — a real assignment, so the

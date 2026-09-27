@@ -126,6 +126,7 @@ export { useMoveTimeline } from './use-move-timeline';
 export type { UseMoveTimelineOptions, MoveTimelineValues } from './use-move-timeline';
 export type { MoveVolumeDisplayState } from './move-volume';
 export { ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, MOVE_FUNCTION_ICONS } from './icons';
+export type { ModGlyph } from './icons';
 export type { MoveFunctionGlyph } from './icons';
 // The one bind: every registry the bridge kit reads, keyed by its option
 // name — bindMove(TweakStore, moveKitOptions()).
@@ -177,6 +178,7 @@ export {
   visibleModControls,
   MOD_PAGE_DIALS,
   modRingArc,
+  modGlyph,
   MOD_RING_RADIUS,
   MOD_RING_CIRCUMFERENCE,
   LFO_SYNC_DIVISIONS,
@@ -206,7 +208,7 @@ export type {
   ModPageSlot,
   AudioModWindow,
 } from './modulation-core';
-export { ModRing } from './components/ModRing';
+export { ModRing, ModDot } from './components/ModRing';
 
 // Timeline stores — the runtime under `useMoveTimeline` and dialkit's sidebar timeline
 export { formatClock } from './timeline-core';

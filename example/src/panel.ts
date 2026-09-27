@@ -319,10 +319,11 @@ function resetTheStrip() {
   TweakStore.updateValues(PANEL_ID, initialValues as Record<string, never>);
 }
 
-/** The modulation slots the library runs: an LFO, an envelope, a curve. */
+/** The modulation slots the library runs: an LFO, an envelope, a curve, a sample & hold. */
 export const MOD_LFO = 0;
 export const MOD_ENV = 1;
 export const MOD_CURVE = 2;
+export const MOD_SH = 3;
 
 /**
  * Registers the page, its modulation slots and the Copy button. Called once
@@ -356,6 +357,12 @@ export function registerLibraryPanel() {
   if (!ModulationStore.getSlot(MOD_CURVE)) {
     ModulationStore.createSlot(MOD_CURVE, 'curve');
     ModulationStore.assign(PANEL_ID, 'sweep', MOD_CURVE, 0.8);
+  }
+  // A sample & hold on Glide: a new random step at every tick, so the step
+  // row carries four different marks.
+  if (!ModulationStore.getSlot(MOD_SH)) {
+    ModulationStore.createSlot(MOD_SH, 'sh');
+    ModulationStore.assign(PANEL_ID, 'glide', MOD_SH, 0.5);
   }
 
   // The pad-row button. An action's presses arrive on the panel's action

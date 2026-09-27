@@ -336,3 +336,38 @@ export const ICON_BADGE_OFF =
 
 export const ICON_BADGE_ON =
   'M12 24C5.391 24 0 18.6094 0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24ZM17.531 6.8438C17.016 6.4688 16.313 6.5625 15.984 7.0781L10.359 14.7656L7.922 12.3281C7.5 11.9062 6.75 11.9062 6.328 12.3281C5.906 12.7969 5.906 13.5 6.328 13.9219L9.703 17.2969C9.937 17.5312 10.266 17.6719 10.594 17.625C10.922 17.625 11.203 17.4375 11.391 17.1562L17.766 8.3906C18.141 7.9219 18.047 7.2188 17.531 6.8438Z';
+
+/**
+ * The modulator types, as the marks cut out of a modulation circle's dot:
+ * the wave an LFO runs, the die S&H throws, the envelope's rise and fall,
+ * the keys that strike it, a curve's arch, the note an audio slot plays.
+ * Drawn on a 24px grid around a 16px dot centred at 12,12 — `paths` are
+ * stroked with round ends, `fills` and `circles` are solid — and a mark may
+ * run off the dot's edge: the dot is the cut's boundary.
+ */
+export type ModGlyph = 'lfo' | 'sh' | 'adsr' | 'keys' | 'curve' | 'audio';
+
+export const MOD_GLYPHS: Record<ModGlyph, Omit<MoveFunctionGlyph, 'viewBox' | 'size' | 'text'>> = {
+  lfo: { paths: ['M3.5 12C5.75 5.75 9.5 5.75 12 12C14.5 18.25 18.25 18.25 20.5 12'] },
+  sh: {
+    circles: [
+      { cx: '8.75', cy: '8.75', r: '1.4' }, { cx: '15.25', cy: '8.75', r: '1.4' },
+      { cx: '12', cy: '12', r: '1.4' },
+      { cx: '8.75', cy: '15.25', r: '1.4' }, { cx: '15.25', cy: '15.25', r: '1.4' },
+    ],
+  },
+  adsr: { paths: ['M3 18L8.75 7.5L12.25 12.75H15.5L21 18'] },
+  keys: {
+    fills: [
+      'M8.1 2H10.9V11.1A1.4 1.4 0 0 1 8.1 11.1Z',
+      'M13.1 2H15.9V11.1A1.4 1.4 0 0 1 13.1 11.1Z',
+    ],
+    paths: ['M9.5 12.5V22', 'M14.5 12.5V22'],
+  },
+  curve: { paths: ['M2.5 16.25H5C8 16.25 8.25 8.25 12 8.25C15.75 8.25 16 16.25 19 16.25H21.5'] },
+  audio: {
+    circles: [{ cx: '8.75', cy: '15.5', r: '2.25' }, { cx: '15', cy: '14.25', r: '2.25' }],
+    fills: ['M9.875 8.1L17.875 6.5V8.5L9.875 10.1Z'],
+    paths: ['M10.75 15.5V9', 'M17 14.25V7.5'],
+  },
+};

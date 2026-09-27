@@ -6,7 +6,7 @@ import { useEffect, useLayoutEffect, useId, useRef, useState, useSyncExternalSto
 import { createPortal } from 'react-dom';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { ModulationStore } from '../store/ModulationStore';
-import { modColor, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, getAudioModBuffer, setAudioModBuffer, subscribeAudioMod, getAudioModVersion, setAudioModWindowSource, getAudioModWindow, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
+import { modColor, getModType, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, getAudioModBuffer, setAudioModBuffer, subscribeAudioMod, getAudioModVersion, setAudioModWindowSource, getAudioModWindow, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
 import { MoveWaveform } from './MoveWaveform';
 import { MoveWaveformStore, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_PANEL, visibleWindow, moveWaveformDemoSample } from '../move-waveform';
 import { ICON_PLAY, ICON_LOOP, ICON_SEARCH } from '../icons';
@@ -37,7 +37,7 @@ import { attachMoveKeys } from '../move-keys';
 import { MoveMenuButton } from './MoveMenuButton';
 import { MoveGateDisplay } from './MoveGateDisplay';
 import { MoveMultibandDisplay } from './MoveMultibandDisplay';
-import { MoveModRing } from './ModRing';
+import { MoveModRing, ModDot } from './ModRing';
 import { MOVE_TRACK_COLORS } from '../move-palette';
 import { MoveSurfaceStore, moveScreenRowLabel, moveScreenRowSearchText, type MovePadCell, type MoveStepCell } from '../move-surface-store';
 import { resolveAxis, pointFromValue, normalizeValue, type XYValue } from '../xy-pad-core';
@@ -3865,25 +3865,14 @@ function stepRuns(cells: MoveStepCell[]): MoveStepCell[][] {
 }
 
 function MoveModCircle({ slot }: { slot: ModulationSlot }) {
-  const dotRef = useRef<HTMLSpanElement>(null);
   const pressAt = useRef(0);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-    return ModulationStore.subscribeFrames(() => {
-      const el = dotRef.current;
-      if (!el) return;
-      const level = (ModulationStore.getSignal(slot.index) + 1) / 2;
-      el.style.transform = `scale(${(0.66 + 0.34 * level).toFixed(3)})`;
-    });
-  }, [slot.index]);
+  const name = getModType(slot.type)?.label ?? slot.type.toUpperCase();
 
   return (
     <button
       type="button"
       className="tweakers-move-mod"
-      title={`${slot.type.toUpperCase()} · step ${slot.index + 1}`}
+      title={`${name} · step ${slot.index + 1}`}
       onPointerDown={() => {
         pressAt.current = Date.now();
       }}
@@ -3900,11 +3889,7 @@ function MoveModCircle({ slot }: { slot: ModulationSlot }) {
         else ModulationStore.openSettings(slot.index);
       }}
     >
-      <span
-        ref={dotRef}
-        className="tweakers-move-mod-dot"
-        style={{ background: modColor(slot.index) }}
-      />
+      <ModDot slot={slot} />
     </button>
   );
 }
