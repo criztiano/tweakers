@@ -504,8 +504,11 @@ export function moveGrainSpan(dials: [ControlMeta, unknown][]): MoveGrainSpan | 
  *  floor the grains stand on along the bottom edge. */
 export const MOVE_GRAIN = { width: 300, height: 100, base: 100, top: 6, copies: 7 } as const;
 
-/** The widest trail the picture draws, in grain lengths. */
-const GRAIN_MAX_TRAIL = 3;
+/** How a gap wider than one grain is drawn: 1 + this × ln(gap), and never
+ *  wider than the ceiling, in grain lengths. The sparsest cloud GRASSO plays
+ *  (2 grains a second of 10 ms) is a gap of 50, drawn about 3.9 wide. */
+const GRAIN_TRAIL_LOG = 0.75;
+const GRAIN_MAX_TRAIL = 5;
 
 export type MoveGrainPicture = {
   /** The lit grain's outline, closed along the floor. */
@@ -531,10 +534,12 @@ export function moveGrainPicture(span: MoveGrainSpan): MoveGrainPicture {
   const margin = 6;
   const sample = span.shape ?? ((t: number) => Math.sin(Math.PI * t));
   const both = span.direction === 'ping-pong' || span.direction === 'bounce' || span.direction === 'scissors';
-  // The trail between copies, in grain lengths — drawn no wider than a few
-  // grains, so the sparsest cloud still reads as a grain, a gap and the next
-  // one rather than two specks.
-  const ratio = Math.min(GRAIN_MAX_TRAIL, span.trail.role === 'density' ? span.trail.spacing : span.trail.lag);
+  // The trail between copies, in grain lengths. Past one grain length the gap
+  // is drawn on a log scale: it keeps growing with every turn of the dial,
+  // but slowly enough that the sparsest cloud still reads as a grain, a gap
+  // and the next one rather than two specks.
+  const trail = span.trail.role === 'density' ? span.trail.spacing : span.trail.lag;
+  const ratio = trail <= 1 ? trail : Math.min(GRAIN_MAX_TRAIL, 1 + GRAIN_TRAIL_LOG * Math.log(trail));
   // The lit grain and its nearest copy — both of them, played both ways —
   // always fit whole: when they would not, the whole picture shrinks until
   // they do, so a sparse cloud draws small rather than cut off.

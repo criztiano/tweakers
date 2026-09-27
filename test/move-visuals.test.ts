@@ -298,8 +298,19 @@ describe('the grain cloud', () => {
     const sparse = moveGrainPicture(cloud(density(() => 0.05))!);
     expect(sparse.span.to - sparse.span.from).toBeLessThan(dense.span.to - dense.span.from);
     // ...but never to a speck: the sparsest cloud keeps a readable grain.
-    const sparsest = moveGrainPicture(cloud(density(() => 1e-4))!);
-    expect(sparsest.span.to - sparsest.span.from).toBeGreaterThan(MOVE_GRAIN.width / 5);
+    const sparsest = moveGrainPicture(cloud(density(() => 0.02))!);
+    expect(sparsest.span.to - sparsest.span.from).toBeGreaterThan(MOVE_GRAIN.width / 6);
+    // ...and it keeps answering the dial all the way down: a sparser cloud
+    // always draws a wider gap relative to its grain.
+    const gap = (overlap: number) => {
+      const p = moveGrainPicture(cloud(density(() => overlap))!);
+      const near = p.copies.find((c) => c.rank === 1)!;
+      const lead = (d: string) => Number(/^M(-?[\d.]+)/.exec(d)![1]);
+      return (lead(near.d) - lead(p.hero)) / (p.span.to - p.span.from);
+    };
+    const overlaps = [1, 0.5, 0.25, 0.1, 0.05, 0.02];
+    const gaps = overlaps.map(gap);
+    for (let k = 1; k < gaps.length; k++) expect(gaps[k]).toBeGreaterThan(gaps[k - 1]);
   });
 
   it('trails the copies where the grains come from, and mirrors a reversed cloud', () => {
