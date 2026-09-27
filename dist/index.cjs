@@ -311,6 +311,7 @@ __export(index_exports, {
   moveGateDemoReading: () => moveGateDemoReading,
   moveGateSpan: () => moveGateSpan,
   moveGaugeBearing: () => moveGaugeBearing,
+  moveGrainGap: () => moveGrainGap,
   moveGrainPicture: () => moveGrainPicture,
   moveGrainRole: () => moveGrainRole,
   moveGrainSpan: () => moveGrainSpan,
@@ -1032,7 +1033,6 @@ function moveGrainRole(meta) {
   const slider = visual.role === "length" || visual.role === "density" || visual.role === "offset";
   return (slider ? meta.type === "slider" : meta.type === "select") ? visual.role : null;
 }
-var GRAIN_MIN_SPACING = 0.035;
 function moveGrainSpan(dials) {
   if (dials.length !== 4) return null;
   const roles = dials.map(([meta]) => moveGrainRole(meta));
@@ -1063,7 +1063,7 @@ function moveGrainSpan(dials) {
   let trail;
   if (trailVisual.role === "density") {
     const overlap = polled(trailVisual.overlap) ?? 0.66 * 2 ** (amount * 6);
-    trail = { role: "density", spacing: Math.max(GRAIN_MIN_SPACING, 1 / Math.max(1e-6, overlap)) };
+    trail = { role: "density", spacing: 1 / Math.max(1e-6, overlap) };
   } else {
     trail = { role: "offset", lag: Math.max(0, polled(trailVisual.lag) ?? amount) };
   }
@@ -1080,15 +1080,20 @@ function moveGrainSpan(dials) {
   };
 }
 var MOVE_GRAIN = { width: 300, height: 100, base: 100, top: 6, copies: 7 };
-var GRAIN_TRAIL_LOG = 0.75;
-var GRAIN_MAX_TRAIL = 5;
+var GRAIN_GAP = { sparse: 0.02, dense: 1e3, wide: 3.5, thin: 0.045 };
+var GRAIN_MAX_LAG = 3.5;
+function moveGrainGap(spacing) {
+  const { sparse, dense, wide, thin } = GRAIN_GAP;
+  const overlap = 1 / Math.max(1e-9, spacing);
+  const u = clamp01(Math.log(overlap / sparse) / Math.log(dense / sparse));
+  return wide * (thin / wide) ** u;
+}
 function moveGrainPicture(span) {
   const { width: W, base, top, copies: most } = MOVE_GRAIN;
   const margin = 6;
   const sample = span.shape ?? ((t) => Math.sin(Math.PI * t));
   const both = span.direction === "ping-pong" || span.direction === "bounce" || span.direction === "scissors";
-  const trail = span.trail.role === "density" ? span.trail.spacing : span.trail.lag;
-  const ratio = trail <= 1 ? trail : Math.min(GRAIN_MAX_TRAIL, 1 + GRAIN_TRAIL_LOG * Math.log(trail));
+  const ratio = span.trail.role === "density" ? moveGrainGap(span.trail.spacing) : Math.min(GRAIN_MAX_LAG, span.trail.lag);
   const fits = (W - 2 * margin) / (1 + ratio * (both ? 2 : 1));
   const g = Math.min(W * (0.2 + 0.46 * clamp01(span.length)), fits);
   const step = ratio * g;
@@ -17808,6 +17813,7 @@ var import_TweakStore19 = require("tweakers/store");
   moveGateDemoReading,
   moveGateSpan,
   moveGaugeBearing,
+  moveGrainGap,
   moveGrainPicture,
   moveGrainRole,
   moveGrainSpan,

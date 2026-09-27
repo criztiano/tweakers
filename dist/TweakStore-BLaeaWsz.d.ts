@@ -360,6 +360,8 @@ declare const MOVE_GRAIN: {
     readonly top: 6;
     readonly copies: 7;
 };
+/** The gap the picture draws for a density's true spacing, in grain lengths. */
+declare function moveGrainGap(spacing: number): number;
 type MoveGrainPicture = {
     /** The lit grain's outline, closed along the floor. */
     hero: string;
@@ -1083,4 +1085,4 @@ type PanelConfig = {
     kind?: 'timeline' | 'modulation' | 'kit';
 };
 
-export { moveGrainPicture as A, moveGrainRole as B, type ControlMeta as C, moveGrainSpan as D, moveKeyboardValue as E, moveLanes as F, moveMultibandRole as G, moveMultibandSpan as H, moveNumericDrawing as I, movePlaybackMode as J, moveTrimSpan as K, moveVectorAxes as L, type MoveEdges as M, moveVectorStage as N, moveVisualReading as O, type PanelConfig as P, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_H as d, MOVE_BAND_W as e, MOVE_GRAIN as f, MOVE_STAGE as g, type MoveGateRole as h, type MoveGrainPicture as i, type MoveGrainRole as j, type MoveGrainSelectVisual as k, type MoveGrainSliderVisual as l, type MoveGrainSpan as m, type MoveGrainVisual as n, type MoveMultibandRole as o, type MoveNumericDrawing as p, type MovePlaybackMode as q, type MoveSelectVisual as r, type MoveSliderVisual as s, type MoveStage as t, type MoveToggleVisual as u, type MoveTone as v, type MoveVisual as w, moveBandCuts as x, moveChannelPosition as y, moveGateSpan as z };
+export { moveGrainGap as A, moveGrainPicture as B, type ControlMeta as C, moveGrainRole as D, moveGrainSpan as E, moveKeyboardValue as F, moveLanes as G, moveMultibandRole as H, moveMultibandSpan as I, moveNumericDrawing as J, movePlaybackMode as K, moveTrimSpan as L, type MoveEdges as M, moveVectorAxes as N, moveVectorStage as O, type PanelConfig as P, moveVisualReading as Q, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_H as d, MOVE_BAND_W as e, MOVE_GRAIN as f, MOVE_STAGE as g, type MoveGateRole as h, type MoveGrainPicture as i, type MoveGrainRole as j, type MoveGrainSelectVisual as k, type MoveGrainSliderVisual as l, type MoveGrainSpan as m, type MoveGrainVisual as n, type MoveMultibandRole as o, type MoveNumericDrawing as p, type MovePlaybackMode as q, type MoveSelectVisual as r, type MoveSliderVisual as s, type MoveStage as t, type MoveToggleVisual as u, type MoveTone as v, type MoveVisual as w, moveBandCuts as x, moveChannelPosition as y, moveGateSpan as z };
