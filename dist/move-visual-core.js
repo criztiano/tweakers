@@ -172,7 +172,12 @@ function moveLanes(meta, value) {
   if (meta.type !== "select" || visual?.kind !== "lanes" || !meta.options?.length) return null;
   const values = meta.options.map((option) => typeof option === "string" ? option : option.value);
   const silent = Array.isArray(visual.silent) ? visual.silent : [];
-  return { chosen: Math.max(0, values.indexOf(value)), silent: values.map((v) => silent.includes(v)) };
+  const solo = visual.solo === void 0 ? -1 : values.indexOf(visual.solo);
+  return {
+    chosen: Math.max(0, values.indexOf(value)),
+    silent: values.map((v) => silent.includes(v)),
+    ...solo >= 0 ? { solo } : {}
+  };
 }
 function moveGrainRole(meta) {
   const visual = meta?.moveVisual;

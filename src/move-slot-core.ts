@@ -96,15 +96,22 @@ export function moveRangeValue(
  * A filter is two dials wearing one picture: the half the press lands in
  * picks the hand — left cutoff, right resonance — and keeps it for the
  * gesture; the pointer's travel across that half turns it.
+ *
+ * A one-column filter (`moveVertical`) has one hand at a time across its
+ * whole track: `take`, the hand its knob holds — the cutoff, or the
+ * resonance while its chip is held or latched in — kept for the gesture.
+ * Either way the answer is the whole pair, the other hand untouched.
  */
 export function moveFilterValue(
   meta: ControlMeta, value: unknown, e: MoveSlotPointer, box: MoveSlotBox,
   hand: MoveGestureRef<'cutoff' | 'resonance'>, fine: MoveGestureRef<MoveFineAnchor | null>, down: boolean,
+  take: 'cutoff' | 'resonance' = 'cutoff',
 ) {
+  const column = !!meta.moveVertical;
   const half = box.width / 2;
-  if (down) hand.current = e.clientX - box.left < half ? 'cutoff' : 'resonance';
-  const left = hand.current === 'cutoff' ? box.left + MOVE_DIAL_TRACK_INSET : box.left + half;
-  const span = half - MOVE_DIAL_TRACK_INSET;
+  if (down) hand.current = column ? take : e.clientX - box.left < half ? 'cutoff' : 'resonance';
+  const left = column || hand.current === 'cutoff' ? box.left + MOVE_DIAL_TRACK_INSET : box.left + half;
+  const span = column ? box.width - MOVE_DIAL_TRACK_INSET * 2 : half - MOVE_DIAL_TRACK_INSET;
   const cur = normalizeFilterDial(meta, value);
   const anchor = moveFineAnchor(fine, e, () => cur);
   const v01 = anchor

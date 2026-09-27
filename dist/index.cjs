@@ -1027,7 +1027,12 @@ function moveLanes(meta, value) {
   if (meta.type !== "select" || visual?.kind !== "lanes" || !meta.options?.length) return null;
   const values = meta.options.map((option) => typeof option === "string" ? option : option.value);
   const silent = Array.isArray(visual.silent) ? visual.silent : [];
-  return { chosen: Math.max(0, values.indexOf(value)), silent: values.map((v) => silent.includes(v)) };
+  const solo = visual.solo === void 0 ? -1 : values.indexOf(visual.solo);
+  return {
+    chosen: Math.max(0, values.indexOf(value)),
+    silent: values.map((v) => silent.includes(v)),
+    ...solo >= 0 ? { solo } : {}
+  };
 }
 function moveGrainRole(meta) {
   const visual = meta?.moveVisual;
@@ -2124,7 +2129,33 @@ var isToggleDial = (c) => c.type === "toggle" && c.moveSlot === true;
 var isMoveDial = (c) => isToggleDial(c) || c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || c.type === "balance" || isEnumDial(c) && !isMoveTabs(c) || c.type === "number" && c.min != null && c.max != null;
 var isDial = isMoveDial;
 var noChip = (c) => isToggleDial(c) || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || c.type === "balance" || isEnumDial(c);
-var dialSpan = (c) => c?.type === "filter" || c?.type === "select" && c.moveSpan === 2 && !isMoveTabs(c) ? 2 : 1;
+var isColumnFilter = (c) => c?.type === "filter" && !!c.moveVertical;
+var dialSpan = (c) => c?.type === "filter" && !isColumnFilter(c) || c?.type === "select" && c.moveSpan === 2 && !isMoveTabs(c) ? 2 : 1;
+var resonanceChips = /* @__PURE__ */ new WeakMap();
+function filterResonanceChip(filter) {
+  let chip = resonanceChips.get(filter);
+  if (!chip) {
+    const ra = resolveFilterAxis(filter.resonanceAxis, "resonance");
+    chip = {
+      type: "slider",
+      path: `${filter.path}:resonance`,
+      label: ra.label,
+      min: ra.min,
+      max: ra.max,
+      ...ra.step > 0 ? { step: ra.step } : {},
+      ...ra.formatValue ? { formatValue: ra.formatValue } : {},
+      resonanceOf: filter.path
+    };
+    resonanceChips.set(filter, chip);
+  }
+  return chip;
+}
+function filterChipValue(chip, filterValue) {
+  const r = filterValue?.resonance;
+  const min = chip.min ?? 0;
+  const max = chip.max ?? 1;
+  return typeof r === "number" && Number.isFinite(r) ? Math.min(max, Math.max(min, r)) : min;
+}
 var isSpanContinuation = (page, i) => i > 0 && page.dials[i] !== void 0 && page.dials[i] === page.dials[i - 1];
 function buildModMovePage(panel, layout) {
   const controls = flat(panel.controls);
@@ -2275,6 +2306,9 @@ function buildMovePages(panels) {
       }
       if (first) topValues[at2] = ref;
       else values[at2] = ref;
+    }
+    for (let col = 0; col < dials.length; col++) {
+      if (isColumnFilter(dials[col])) topValues[col] = filterResonanceChip(dials[col]);
     }
     const seated = (c) => topValues.includes(c) || values.includes(c);
     const lowered = (c) => c.type === "toggle" && !isToggleDial(c) && (panel.moveValueRow ?? []).includes(c.path) && padCols.get(c) != null;
@@ -3105,7 +3139,7 @@ function MoveSlotEnumBody({
     }
   );
 }
-function MoveSlotLanesBody({ label, optionLabel, count, chosen, silent }) {
+function MoveSlotLanesBody({ label, optionLabel, count, chosen, silent, solo }) {
   const n = Math.max(1, count);
   const near = { y: 58, from: 4, to: 96 };
   const far = { y: 4, from: 34, to: 66 };
@@ -3118,7 +3152,7 @@ function MoveSlotLanesBody({ label, optionLabel, count, chosen, silent }) {
       const g = (row) => gap * (row === near ? 1 : 0.45);
       const d = `M${r2(edge(near, k) + g(near))} ${near.y}L${r2(edge(far, k) + g(far))} ${far.y}L${r2(edge(far, k + 1) - g(far))} ${far.y}L${r2(edge(near, k + 1) - g(near))} ${near.y}Z`;
       const cx = (edge(near, k) + edge(near, k + 1) + edge(far, k) + edge(far, k + 1)) / 4;
-      return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("g", { className: "tweakers-move-lane", "data-chosen": k === chosen || void 0, "data-silent": silent[k] || void 0, children: [
+      return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("g", { className: "tweakers-move-lane", "data-chosen": k === chosen || void 0, "data-silent": silent[k] || void 0, "data-solo": k === solo || void 0, children: [
         /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("path", { d }),
         silent[k] && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("path", { className: "tweakers-move-lane-cross", d: `M${r2(cx - 4.5)} 27.5l9 9M${r2(cx + 4.5)} 27.5l-9 9` })
       ] }, k);
@@ -3227,11 +3261,22 @@ function MoveSlotRangeBody({
 function MoveSlotFilterBody({
   meta,
   value,
-  shape
+  shape,
+  hand = "cutoff"
 }) {
   const ca = resolveFilterAxis(meta.cutoffAxis, "cutoff");
   const ra = resolveFilterAxis(meta.resonanceAxis, "resonance");
   const fmt = (v, f) => f ? f(v) : Math.abs(v) >= 100 ? Math.round(v).toString() : Number(v.toFixed(2)).toString();
+  if (meta.moveVertical) {
+    const axis = hand === "resonance" ? ra : ca;
+    return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "tweakers-move-filter-display", children: shape && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotShape, { d: shape, className: "tweakers-move-filter-shape" }) }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "tweakers-move-filter-readout", "data-side": "column", "data-hand": hand, children: [
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-label", children: axis.label }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-value", children: fmt(value[hand], axis.formatValue) })
+      ] })
+    ] });
+  }
   return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
     /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "tweakers-move-filter-display", children: shape && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotShape, { d: shape, className: "tweakers-move-filter-shape" }) }),
     /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "tweakers-move-filter-readout", "data-side": "cutoff", children: [
@@ -8779,6 +8824,9 @@ function buildMoveStrip(panel) {
     if (ref.path === bal.balanceA) topValues[col] = ref;
     else values[col] = ref;
   }
+  dials.forEach((c, col) => {
+    if (isColumnFilter(c)) topValues[col] = filterResonanceChip(c);
+  });
   const placeRun = (c, col) => {
     const span = padSpan(c);
     const fits = (start2) => Array.from({ length: span }, (_, k) => topAt(start2 + k)).every((p) => p === void 0);
@@ -9215,11 +9263,12 @@ function moveRangeValue(meta, value, e, box, handle, fine, down) {
   const next = handle.current === "min" ? { lo: Math.min(p01, cur.hi), hi: cur.hi } : { lo: cur.lo, hi: Math.max(p01, cur.lo) };
   return denormalizeRangeDial(meta, next.lo, next.hi);
 }
-function moveFilterValue(meta, value, e, box, hand, fine, down) {
+function moveFilterValue(meta, value, e, box, hand, fine, down, take = "cutoff") {
+  const column = !!meta.moveVertical;
   const half = box.width / 2;
-  if (down) hand.current = e.clientX - box.left < half ? "cutoff" : "resonance";
-  const left = hand.current === "cutoff" ? box.left + MOVE_DIAL_TRACK_INSET : box.left + half;
-  const span = half - MOVE_DIAL_TRACK_INSET;
+  if (down) hand.current = column ? take : e.clientX - box.left < half ? "cutoff" : "resonance";
+  const left = column || hand.current === "cutoff" ? box.left + MOVE_DIAL_TRACK_INSET : box.left + half;
+  const span = column ? box.width - MOVE_DIAL_TRACK_INSET * 2 : half - MOVE_DIAL_TRACK_INSET;
   const cur = normalizeFilterDial(meta, value);
   const anchor = moveFineAnchor(fine, e, () => cur);
   const v01 = anchor ? fineDragValue({
@@ -14007,7 +14056,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   });
   if (!mounted || typeof window === "undefined" || pages.length === 0 || !page || !values) return null;
   const dialPercent = (meta) => moveDialPercent(meta, values[meta.path]);
-  const chipValue = (meta) => moveChipValue(meta, values[meta.path]);
+  const chipValue = (meta) => moveChipValue(meta, meta.resonanceOf ? filterChipValue(meta, values[meta.resonanceOf]) : values[meta.path]);
   const dialReading = (meta) => moveDialReading(meta, values[meta.path]);
   const rangeReading = (meta) => moveRangeReading(meta, values[meta.path]);
   const write2 = (meta, next) => import_TweakStore17.TweakStore.updateValue(page.panel.id, meta.path, next);
@@ -14108,7 +14157,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     if (rest) write2(meta, rest);
   };
   const rangeFromPointer = (e, meta, down) => write2(meta, moveRangeValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), rangeHandleRef, fineRef, down));
-  const filterFromPointer = (e, meta, down) => write2(meta, moveFilterValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), filterHandRef, fineRef, down));
+  const filterFromPointer = (e, meta, down, take) => write2(meta, moveFilterValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), filterHandRef, fineRef, down, take));
   const chipLatched = (col, meta) => latched[col]?.path === meta.path || !!hwLatched[meta.path];
   const armMod = (path) => import_ModulationStore2.ModulationStore.noteTouch(page.panel.id, path);
   const chipsAt = (col) => [page.topValues?.[col], page.values[col], page.actionValues?.[col]].filter((m) => !!m);
@@ -14227,7 +14276,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     } catch {
     }
     holdStart.current = Date.now();
-    armMod(meta.path);
+    armMod(meta.resonanceOf ?? meta.path);
     setHeld({ col, meta });
   };
   const releaseChip = (col, meta) => {
@@ -14466,7 +14515,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   if (isSpanContinuation(page, i)) return null;
                                   if (!stripMode && visibleCols.includes(i - 1) && trimSpanAt(i - 1)) return null;
                                   if (underFace(i)) return null;
-                                  const meta = dialSpan(page.dials[i]) > 1 ? page.dials[i] : dialAt(i);
+                                  const sub = dialAt(i);
+                                  const meta = dialSpan(page.dials[i]) > 1 || isColumnFilter(page.dials[i]) && sub?.resonanceOf === page.dials[i].path ? page.dials[i] : sub;
                                   if (!meta) return /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
                                   const disabled = import_TweakStore17.TweakStore.isDisabled(page.panel.id, meta.path);
                                   const active = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
@@ -14530,12 +14580,16 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       resolveFilterAxis(meta.resonanceAxis, "resonance")
                                     );
                                     const shape = filterShapePath(meta, values[meta.path]);
+                                    const take = sub && sub !== meta ? "resonance" : "cutoff";
+                                    const column = isColumnFilter(meta);
                                     return /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)(
                                       "div",
                                       {
                                         className: "tweakers-move-dial",
                                         "data-kind": "filter",
+                                        "data-vertical": column || void 0,
                                         "data-active": active || void 0,
+                                        "data-latched": column && take === "resonance" && chipLatched(i, sub) || void 0,
                                         "data-disabled": meta.filterEnabled === false || void 0,
                                         onPointerDown: (e) => {
                                           try {
@@ -14545,7 +14599,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           fineRef.current = null;
                                           setDragPath(meta.path);
                                           armMod(meta.path);
-                                          filterFromPointer(e, meta, true);
+                                          filterFromPointer(e, meta, true, take);
                                         },
                                         onPointerMove: (e) => {
                                           if (dragPath === meta.path) filterFromPointer(e, meta, false);
@@ -14560,7 +14614,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         },
                                         children: [
                                           /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(MoveModRing, { panelId: page.panel.id, path: meta.path }),
-                                          /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(MoveSlotFilterBody, { meta, value: fv, shape })
+                                          /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(MoveSlotFilterBody, { meta, value: fv, shape, hand: column ? take : void 0 })
                                         ]
                                       },
                                       meta.path
@@ -14889,7 +14943,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                               optionLabel,
                                               count: options.length,
                                               chosen: lanes.chosen,
-                                              silent: lanes.silent
+                                              silent: lanes.silent,
+                                              solo: lanes.solo
                                             }
                                           ) : /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
                                             MoveSlotEnumBody,
@@ -16581,6 +16636,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
         className: cls,
         style,
         "data-kind": "filter",
+        "data-vertical": meta.moveVertical || void 0,
         "data-active": active || void 0,
         "data-disabled": meta.filterEnabled === false || void 0,
         ...drag(meta, (e, down) => write2(meta, moveFilterValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), filterHand, fine, down))),
@@ -16804,7 +16860,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
         ...step(meta),
         children: [
           /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(MoveModRing, { panelId, path: meta.path }),
-          lanes ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(MoveSlotLanesBody, { label: meta.label, optionLabel, count: options.length, chosen: lanes.chosen, silent: lanes.silent }) : /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
+          lanes ? /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(MoveSlotLanesBody, { label: meta.label, optionLabel, count: options.length, chosen: lanes.chosen, silent: lanes.silent, solo: lanes.solo }) : /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
             MoveSlotEnumBody,
             {
               label: meta.label,

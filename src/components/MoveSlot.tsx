@@ -393,7 +393,7 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
   if (meta.type === 'filter') {
     const fv = normalizeFilterValue(value, resolveFilterAxis(meta.cutoffAxis, 'cutoff'), resolveFilterAxis(meta.resonanceAxis, 'resonance'));
     return (
-      <div className={cls} style={style} data-kind="filter" data-active={active || undefined}
+      <div className={cls} style={style} data-kind="filter" data-vertical={meta.moveVertical || undefined} data-active={active || undefined}
         data-disabled={meta.filterEnabled === false || undefined}
         {...drag(meta, (e, down) => write(meta, moveFilterValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), filterHand, fine, down)))}>
         <MoveModRing panelId={panelId} path={meta.path} />
@@ -532,7 +532,7 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
         {...step(meta)}>
         <MoveModRing panelId={panelId} path={meta.path} />
         {lanes ? (
-          <MoveSlotLanesBody label={meta.label} optionLabel={optionLabel} count={options.length} chosen={lanes.chosen} silent={lanes.silent} />
+          <MoveSlotLanesBody label={meta.label} optionLabel={optionLabel} count={options.length} chosen={lanes.chosen} silent={lanes.silent} solo={lanes.solo} />
         ) : (
           <MoveSlotEnumBody label={meta.label} optionLabel={optionLabel} options={options} activeIdx={activeIdx}
             shape={shape} glyph={enumOptionIcon(option as never)} picture={enumOptionPicture(option as never)}

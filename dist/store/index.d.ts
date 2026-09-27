@@ -133,11 +133,13 @@ type MoveSelectVisual = {
  * A choice between parallel voices — layers, streams, lanes — drawn as
  * lanes running away from you, the chosen one lit. `silent` names the
  * options that are switched off: their lanes fade and carry a red cross,
- * so which voices sound reads at a glance whichever one is chosen.
+ * so which voices sound reads at a glance whichever one is chosen. `solo`
+ * names the one voice heard alone: its lane lights emerald.
  */
  | {
     kind: 'lanes';
     silent?: readonly string[];
+    solo?: string;
 } | MoveGrainSelectVisual;
 /**
  * One dial of a grain cloud — a sound cut into short windows that repeat.
@@ -490,6 +492,13 @@ type FilterConfig = {
      * disabled module dims. Defaults to on.
      */
     enabled?: boolean;
+    /**
+     * Stand in one dial column instead of two. The slot draws the same
+     * response and its knob turns the cutoff; the resonance becomes a value
+     * chip on the top pad row under it — tap latches the knob to it, hold
+     * peeks. The value stays the same `{ cutoff, resonance }` pair.
+     */
+    moveVertical?: boolean;
 };
 /**
  * An editable transfer curve — input on x, output on y, both 0..1. For the
@@ -922,6 +931,12 @@ type ControlMeta = {
     response?: (cutoff01: number, resonance01: number) => (t: number) => number;
     /** Filter control declared `enabled: false` — the slot draws bypassed (dimmed). */
     filterEnabled?: boolean;
+    /** Filter control declared `moveVertical` — one dial column, its resonance a chip under it. */
+    moveVertical?: boolean;
+    /** The one-column filter whose resonance this chip carries (a path in the
+     *  same panel). The chip exists only on the Move page; its value is that
+     *  filter's `resonance`, and editing it writes the filter's whole pair. */
+    resonanceOf?: string;
     /** Curve preview's host-supplied sampler — swapped in place by syncCurveConfigs. */
     sample?: (t: number) => number;
     /** Curve preview's fixed y-range; absent = auto-fit per draw. */

@@ -1273,6 +1273,8 @@ Some controls are bigger than one column. A **multi-slot control** follows one p
 
 Two ship today: `filter` (2 slots — cutoff and resonance as one magnitude response) and `env` (4 slots — the whole ADSR as one shape on the modulator's settings page, one caption and drag zone per stage).
 
+A filter can also stand in one column. `moveVertical: true` draws the same response in one slot, whose knob turns the cutoff, and puts the resonance on the top pad row under it as a value chip — tap latches the knob to it, hold peeks, and the slot keeps its picture while it turns whichever hand the knob holds. The chip wears `resonance.label` and reads through `resonance.formatValue`; the value is still the one `{ cutoff, resonance }` pair, so presets and modulation see no change. The chip takes its top cell before anything else, so a switch or a `moveTopRow` chip asked into it moves along, said out loud.
+
 ### The small slots
 
 The pad row under the dials has its own dictionary, `MOVE_PAD_LIBRARY`, on the same terms — pure bodies, gestures left with the panel: `toggle` (a switch), `value` (a value the dial above can borrow — hold to peek, tap to latch), `action` (a button), `app` (a cell the host paints itself through `MoveSurfaceStore`) and `bend` (hold and drag to bend the envelope ramp above it). The library app draws each of them, and their states.

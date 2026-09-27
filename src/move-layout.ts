@@ -138,12 +138,56 @@ const noChip = (c: ControlMeta) =>
   isToggleDial(c) || c.type === 'color' || c.type === 'xy' || c.type === 'range' || c.type === 'filter' ||
   c.type === 'transfer' || c.type === 'gradient' || c.type === 'balance' || isEnumDial(c);
 
+/** A filter that stands in one column: its knob the cutoff, its resonance a
+ *  chip on the top pad row under it (`moveVertical`). */
+export const isColumnFilter = (c: ControlMeta | undefined): c is ControlMeta =>
+  c?.type === 'filter' && !!c.moveVertical;
+
 /**
  * How many dial columns a control claims. Filters give each knob its own
- * axis; a two-column select gives both knobs the same list.
+ * axis — unless one stands in a single column; a two-column select gives
+ * both knobs the same list.
  */
 export const dialSpan = (c: ControlMeta | undefined): number =>
-  c?.type === 'filter' || (c?.type === 'select' && c.moveSpan === 2 && !isMoveTabs(c)) ? 2 : 1;
+  (c?.type === 'filter' && !isColumnFilter(c)) || (c?.type === 'select' && c.moveSpan === 2 && !isMoveTabs(c)) ? 2 : 1;
+
+const resonanceChips = new WeakMap<ControlMeta, ControlMeta>();
+
+/**
+ * The resonance of a one-column filter, as the value chip it becomes on the
+ * top pad row: a bounded number named and ranged by the filter's `resonance`
+ * axis, at `<filter path>:resonance`. It exists on the Move page only — the
+ * store keeps the one `{ cutoff, resonance }` pair, `resonanceOf` points back
+ * at it, and editing the chip writes that whole pair. One chip per filter,
+ * so the page keeps the same chip from build to build.
+ */
+export function filterResonanceChip(filter: ControlMeta): ControlMeta {
+  let chip = resonanceChips.get(filter);
+  if (!chip) {
+    const ra = resolveFilterAxis(filter.resonanceAxis, 'resonance');
+    chip = {
+      type: 'slider',
+      path: `${filter.path}:resonance`,
+      label: ra.label,
+      min: ra.min,
+      max: ra.max,
+      ...(ra.step > 0 ? { step: ra.step } : {}),
+      ...(ra.formatValue ? { formatValue: ra.formatValue } : {}),
+      resonanceOf: filter.path,
+    };
+    resonanceChips.set(filter, chip);
+  }
+  return chip;
+}
+
+/** What a resonance chip reads: its filter's stored resonance, clamped into
+ *  the chip's range — the resonance minimum when the pair has none. */
+export function filterChipValue(chip: ControlMeta, filterValue: unknown): number {
+  const r = (filterValue as Partial<FilterValue> | null | undefined)?.resonance;
+  const min = chip.min ?? 0;
+  const max = chip.max ?? 1;
+  return typeof r === 'number' && Number.isFinite(r) ? Math.min(max, Math.max(min, r)) : min;
+}
 
 /** True when column i only continues the span-2 dial sitting at i-1. */
 export const isSpanContinuation = (page: MovePage, i: number): boolean =>
@@ -400,6 +444,11 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         }
         if (first) topValues[at] = ref;
         else values[at] = ref;
+      }
+      //    A one-column filter seats its resonance the same way: the chip up
+      //    top in its own column, before anything else asks for that cell.
+      for (let col = 0; col < dials.length; col++) {
+        if (isColumnFilter(dials[col])) topValues[col] = filterResonanceChip(dials[col]);
       }
       const seated = (c: ControlMeta) => topValues.includes(c) || values.includes(c);
 

@@ -1,3 +1,19 @@
+// src/filter-core.ts
+var FILTER_AXIS_DEFAULTS = {
+  cutoff: { min: 0, max: 1, step: 0, label: "Freq" },
+  resonance: { min: 0, max: 1, step: 0, label: "Res" }
+};
+function resolveFilterAxis(axis, hand) {
+  const base = FILTER_AXIS_DEFAULTS[hand];
+  return {
+    min: axis?.min ?? base.min,
+    max: axis?.max ?? base.max,
+    step: axis?.step ?? base.step,
+    label: axis?.label ?? base.label,
+    formatValue: axis?.formatValue
+  };
+}
+
 // src/move-layout.ts
 var MOVE_DIALS = 8;
 var isEnumDial = (c) => c.type === "select" && Array.isArray(c.options) && c.options.length > 1;
@@ -6,7 +22,27 @@ var isNamedTabs = (c) => c.moveTabs === "named";
 var padSpan = (c) => c && isMoveTabs(c) ? c.options.length + (isNamedTabs(c) ? 1 : 0) : 1;
 var isToggleDial = (c) => c.type === "toggle" && c.moveSlot === true;
 var isMoveDial = (c) => isToggleDial(c) || c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || c.type === "balance" || isEnumDial(c) && !isMoveTabs(c) || c.type === "number" && c.min != null && c.max != null;
-var dialSpan = (c) => c?.type === "filter" || c?.type === "select" && c.moveSpan === 2 && !isMoveTabs(c) ? 2 : 1;
+var isColumnFilter = (c) => c?.type === "filter" && !!c.moveVertical;
+var dialSpan = (c) => c?.type === "filter" && !isColumnFilter(c) || c?.type === "select" && c.moveSpan === 2 && !isMoveTabs(c) ? 2 : 1;
+var resonanceChips = /* @__PURE__ */ new WeakMap();
+function filterResonanceChip(filter) {
+  let chip = resonanceChips.get(filter);
+  if (!chip) {
+    const ra = resolveFilterAxis(filter.resonanceAxis, "resonance");
+    chip = {
+      type: "slider",
+      path: `${filter.path}:resonance`,
+      label: ra.label,
+      min: ra.min,
+      max: ra.max,
+      ...ra.step > 0 ? { step: ra.step } : {},
+      ...ra.formatValue ? { formatValue: ra.formatValue } : {},
+      resonanceOf: filter.path
+    };
+    resonanceChips.set(filter, chip);
+  }
+  return chip;
+}
 
 // src/move-strip.ts
 var flat = (controls, out = []) => {
@@ -47,6 +83,9 @@ function buildMoveStrip(panel) {
     if (ref.path === bal.balanceA) topValues[col] = ref;
     else values[col] = ref;
   }
+  dials.forEach((c, col) => {
+    if (isColumnFilter(c)) topValues[col] = filterResonanceChip(c);
+  });
   const placeRun = (c, col) => {
     const span = padSpan(c);
     const fits = (start2) => Array.from({ length: span }, (_, k) => topAt(start2 + k)).every((p) => p === void 0);

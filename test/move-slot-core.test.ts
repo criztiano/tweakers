@@ -71,6 +71,20 @@ describe('a slot read by the pointer', () => {
     expect(right).toMatchObject({ cutoff: 10, resonance: 1 });
   });
 
+  it('turns a one-column filter\'s hand across its whole track, the other hand untouched', () => {
+    const filter = {
+      type: 'filter', path: 'f', label: 'F', moveVertical: true,
+      cutoffAxis: { min: 0, max: 100, step: 1 }, resonanceAxis: { min: 0, max: 1, step: 0.01 },
+    } as ControlMeta;
+    const hand = { current: 'cutoff' as 'cutoff' | 'resonance' };
+    // Its knob holds the cutoff: even the right half of the slot turns it.
+    expect(moveFilterValue(filter, { cutoff: 10, resonance: 0.5 }, at(110), box, hand, fine(), true)).toEqual({ cutoff: 100, resonance: 0.5 });
+    expect(hand.current).toBe('cutoff');
+    // Its resonance chip in: the same track turns the resonance alone, for the whole gesture.
+    expect(moveFilterValue(filter, { cutoff: 10, resonance: 0.5 }, at(10), box, hand, fine(), true, 'resonance')).toEqual({ cutoff: 10, resonance: 0 });
+    expect(moveFilterValue(filter, { cutoff: 10, resonance: 0 }, at(60), box, hand, fine(), false)).toEqual({ cutoff: 10, resonance: 0.5 });
+  });
+
   it('moves an xy pad through the XYPad core, and brings a spring-loaded one back to centre', () => {
     const xy = { type: 'xy', path: 'p', label: 'P', xAxis: { min: 0, max: 1 }, yAxis: { min: 0, max: 1 } } as ControlMeta;
     const moved = moveXYValue(xy, { x: 0.5, y: 0.5 }, at(8, 8), box, fine());

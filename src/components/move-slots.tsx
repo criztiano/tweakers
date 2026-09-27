@@ -368,16 +368,19 @@ export function MoveSlotEnumBody({
  * A choice between parallel voices, drawn as lanes running away from you —
  * the chosen lane lit, the others dim. A voice that is switched off fades
  * further and carries a red cross, so which voices sound reads at a glance
- * whichever one the knob is on. The name is the tag, the chosen option is
+ * whichever one the knob is on; a soloed voice lights emerald, the one heard
+ * alone. The name is the tag, the chosen option is
  * underneath, as on every picture an option picker draws.
  */
-export function MoveSlotLanesBody({ label, optionLabel, count, chosen, silent }: {
+export function MoveSlotLanesBody({ label, optionLabel, count, chosen, silent, solo }: {
   label: string;
   optionLabel: string;
   count: number;
   chosen: number;
   /** One flag per lane, in option order: that voice is switched off. */
   silent: boolean[];
+  /** The lane heard alone, lit emerald; absent when nothing is soloed. */
+  solo?: number;
 }) {
   const n = Math.max(1, count);
   // One vanishing point, centred: the near edge spans the slot, the far edge
@@ -397,7 +400,7 @@ export function MoveSlotLanesBody({ label, optionLabel, count, chosen, silent }:
             + `L${r2(edge(far, k + 1) - g(far))} ${far.y}L${r2(edge(near, k + 1) - g(near))} ${near.y}Z`;
           const cx = (edge(near, k) + edge(near, k + 1) + edge(far, k) + edge(far, k + 1)) / 4;
           return (
-            <g key={k} className="tweakers-move-lane" data-chosen={k === chosen || undefined} data-silent={silent[k] || undefined}>
+            <g key={k} className="tweakers-move-lane" data-chosen={k === chosen || undefined} data-silent={silent[k] || undefined} data-solo={k === solo || undefined}>
               <path d={d} />
               {silent[k] && <path className="tweakers-move-lane-cross" d={`M${r2(cx - 4.5)} 27.5l9 9M${r2(cx + 4.5)} 27.5l-9 9`} />}
             </g>
@@ -600,18 +603,37 @@ export function MoveSlotRangeBody({
  * a small label per hand — each sitting inline where its own single slot's
  * label would have been, cutoff on the left half, resonance on the right.
  * Each label gives way to its hand's value on touch, like any slot.
+ *
+ * A one-column filter (`moveVertical`) draws the same response in its one
+ * slot, with one readout: the hand its knob holds — `hand`, the cutoff
+ * unless its resonance chip is in.
  */
 export function MoveSlotFilterBody({
-  meta, value, shape,
+  meta, value, shape, hand = 'cutoff',
 }: {
   meta: ControlMeta;
   value: FilterValue;
   shape: string | null;
+  hand?: 'cutoff' | 'resonance';
 }) {
   const ca = resolveFilterAxis(meta.cutoffAxis, 'cutoff');
   const ra = resolveFilterAxis(meta.resonanceAxis, 'resonance');
   const fmt = (v: number, f?: (n: number) => string) =>
     f ? f(v) : Math.abs(v) >= 100 ? Math.round(v).toString() : Number(v.toFixed(2)).toString();
+  if (meta.moveVertical) {
+    const axis = hand === 'resonance' ? ra : ca;
+    return (
+      <>
+        <div className="tweakers-move-filter-display">
+          {shape && <MoveSlotShape d={shape} className="tweakers-move-filter-shape" />}
+        </div>
+        <div className="tweakers-move-filter-readout" data-side="column" data-hand={hand}>
+          <span className="tweakers-move-dial-label">{axis.label}</span>
+          <span className="tweakers-move-dial-value">{fmt(value[hand], axis.formatValue)}</span>
+        </div>
+      </>
+    );
+  }
   return (
     <>
       {/* The drawing sits on a display — the same dark hole in the face the
