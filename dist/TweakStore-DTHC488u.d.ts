@@ -1071,7 +1071,7 @@ type PanelConfig = {
     moveTopRow?: string[];
     /** Value chips sunk onto the action pad row, retained on the same terms as `hints`. */
     moveActionRow?: string[];
-    /** Actions raised onto the value pad row, retained on the same terms as `hints`. */
+    /** Actions and switches lowered onto the value pad row, retained on the same terms as `hints`. */
     moveValueRow?: string[];
     /** Big slots drawn as one container, retained on the same terms as `hints`. */
     moveSlotGroups?: MoveSlotGroup[];

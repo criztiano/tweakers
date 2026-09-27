@@ -350,10 +350,11 @@ function buildMovePages(panels) {
       else values[at] = ref;
     }
     const seated = (c) => topValues.includes(c) || values.includes(c);
+    const lowered = (c) => c.type === "toggle" && !isToggleDial(c) && (panel.moveValueRow ?? []).includes(c.path) && padCols.get(c) != null;
     for (const c of controls) {
       const col = padCols.get(c) ?? null;
       if (isMoveTabs(c)) placeTabs(c, col);
-      else if (c.type === "toggle" && !isToggleDial(c)) place(toggles, "toggle", c, col);
+      else if (c.type === "toggle" && !isToggleDial(c) && !lowered(c)) place(toggles, "toggle", c, col);
     }
     const lift = panel.moveTopRow ?? [];
     const chipFits = (c) => isDial(c) && !noChip(c) && !dials.includes(c) && !balanceRefs.has(c) && !isPadColor(c);
@@ -396,6 +397,12 @@ function buildMovePages(panels) {
     }
     const raise = panel.moveValueRow ?? [];
     for (const c of controls) {
+      if (lowered(c)) {
+        const col2 = padCols.get(c);
+        if (cellAt(values, col2) === void 0) valueActions[col2] = c;
+        else place(toggles, "toggle", c, col2);
+        continue;
+      }
       if (!raise.includes(c.path) || c.type !== "action" || topValues.includes(c)) continue;
       const col = padCols.get(c) ?? null;
       if (col === null) {
