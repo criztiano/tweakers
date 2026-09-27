@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { TweakStore, type ControlMeta, type MoveVisual } from '../src/store/TweakStore';
 import { buildMovePages, denormalizeDial, normalizeDial } from '../src/move-layout';
-import { moveGrainPicture, moveGrainRole, moveGrainSpan, moveKeyboardValue, moveLanes, moveNumericDrawing, movePlaybackMode, moveVectorAxes, moveVectorStage, moveVisualReading, MOVE_GRAIN, MOVE_STAGE } from '../src/move-visual-core';
+import { moveGrainGap, moveGrainPicture, moveGrainRole, moveGrainSpan, moveKeyboardValue, moveLanes, moveNumericDrawing, movePlaybackMode, moveVectorAxes, moveVectorStage, moveVisualReading, MOVE_GRAIN, MOVE_STAGE } from '../src/move-visual-core';
 
 const numeric = (moveVisual: MoveVisual, min = 0, max = 1): ControlMeta => ({
   type: 'slider', path: 'value', label: 'Unrelated label', min, max, step: 0.01, moveVisual,
@@ -267,8 +267,6 @@ describe('the grain cloud', () => {
 
   it('stacks by the host’s overlap, and by the dial alone without one', () => {
     expect(cloud(density(() => 10))!.trail).toEqual({ role: 'density', spacing: 0.1 });
-    // Past a thin stack the copies stop packing.
-    expect((cloud(density(() => 1e6))!.trail as { spacing: number }).spacing).toBeGreaterThan(0.01);
     const thin = (cloud(density(), 'fwd', 0)!.trail as { spacing: number }).spacing;
     const thick = (cloud(density(), 'fwd', 1)!.trail as { spacing: number }).spacing;
     expect(thick).toBeLessThan(thin);
@@ -308,7 +306,11 @@ describe('the grain cloud', () => {
       const lead = (d: string) => Number(/^M(-?[\d.]+)/.exec(d)![1]);
       return (lead(near.d) - lead(p.hero)) / (p.span.to - p.span.from);
     };
-    const overlaps = [1, 0.5, 0.25, 0.1, 0.05, 0.02];
+    // Over the whole run a grain engine plays — 2 grains a second of 10 ms up
+    // to 600 of 1.5 s — every step denser draws a tighter stack.
+    const overlaps = [900, 300, 100, 45, 20, 8, 3, 1, 0.5, 0.25, 0.1, 0.05, 0.02];
+    expect(moveGrainGap(1 / 0.02)).toBeCloseTo(3.5);
+    expect(moveGrainGap(1 / 1000)).toBeCloseTo(0.045);
     const gaps = overlaps.map(gap);
     for (let k = 1; k < gaps.length; k++) expect(gaps[k]).toBeGreaterThan(gaps[k - 1]);
   });

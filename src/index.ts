@@ -54,7 +54,7 @@ export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, M
 // The small slots — the pad row under the dials
 export { MOVE_PAD_LIBRARY, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody } from './components/move-slots';
 export type { MovePadKind, MovePadBandHand, MovePadEdgeHand } from './components/move-slots';
-export { moveNumericDrawing, moveTrimSpan, moveGateSpan, moveVectorAxes, moveVectorStage, MOVE_STAGE, moveGrainSpan, moveGrainPicture, moveGrainRole, MOVE_GRAIN, moveLanes, moveMultibandSpan, moveMultibandRole, moveChannelPosition, movePlaybackMode, moveVisualReading, moveBandCuts, MOVE_BAND_W, MOVE_BAND_H } from './move-visual-core';
+export { moveNumericDrawing, moveTrimSpan, moveGateSpan, moveVectorAxes, moveVectorStage, MOVE_STAGE, moveGrainSpan, moveGrainPicture, moveGrainGap, moveGrainRole, MOVE_GRAIN, moveLanes, moveMultibandSpan, moveMultibandRole, moveChannelPosition, movePlaybackMode, moveVisualReading, moveBandCuts, MOVE_BAND_W, MOVE_BAND_H } from './move-visual-core';
 export type { MoveStage, MoveGateRole, MoveMultibandRole, MoveTone, MoveVisual, MoveSliderVisual, MoveSelectVisual, MoveToggleVisual, MovePlaybackMode, MoveNumericDrawing, MoveGrainVisual, MoveGrainRole, MoveGrainSpan, MoveGrainPicture } from './move-visual-core';
 export type { MoveSlotKind, MoveTrimSpanEdge, MoveFaceDial, MoveChannelDial } from './components/move-slots';
 // The gate face's live picture — the app attaches what the gate is doing around the playhead
