@@ -695,6 +695,30 @@
   opacity: 1;
 }
 
+/* A page's picture, beside its name or in its place: the label's size and
+   the label's dimming, so a picture and a word read as one voice. */
+.tweakers-move-track-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  opacity: 0.22;
+  transition: opacity var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-track[data-active="true"] .tweakers-move-track-icon { opacity: 1; }
+.tweakers-move-track:hover .tweakers-move-track-icon { opacity: 0.7; }
+.tweakers-move-track[data-active="true"]:hover .tweakers-move-track-icon { opacity: 1; }
+
+/* The picture alone on the row: the name stays for a screen reader. */
+.tweakers-move-track-label[data-hidden] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .tweakers-move-mods {
   display: flex;
   gap: 8px;
@@ -4155,7 +4179,8 @@
 @media (prefers-reduced-motion: reduce) {
   .tweakers-move-pad,
   .tweakers-move-track,
-  .tweakers-move-track-label {
+  .tweakers-move-track-label,
+  .tweakers-move-track-icon {
     transition-duration: 0.01ms;
   }
 
