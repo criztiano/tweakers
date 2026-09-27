@@ -501,22 +501,38 @@ export function moveGrainSpan(dials: [ControlMeta, unknown][]): MoveGrainSpan | 
 export const MOVE_GRAIN = { width: 300, height: 100, base: 100, top: 6, copies: 7 } as const;
 
 /**
- * The picture is a guide, not a meter: the gap between copies is eased so it
- * moves over the whole run of overlaps a grain engine plays, sparsest to
- * densest. An overlap's place on a log scale between `sparse` and `dense`
- * picks a drawn gap between `wide` and `thin` grain lengths, geometrically —
- * so each turn of the dial moves the stack about as much at either end.
+ * The picture is a guide, not a meter. A density is read by its overlap —
+ * how many grains sound at once — on a log scale, in two halves:
+ *
+ * - Overlapping (1 up to `dense`): the copies pull in from touching (one
+ *   grain length apart) to `tight` drawing units apart — a couple of
+ *   pixels, so a thick cloud reads as a wall of edges.
+ * - Apart (1 down to `sparse`): a gap that opens from touching to `wide`
+ *   grain lengths. Past a clear gap the ear hears "apart" and nothing more,
+ *   so this half is drawn loosely.
+ *
+ * The top of the density dial's own run (from `from` up) pulls the picture
+ * the rest of the way to tight, so the densest setting reads as a wall at
+ * any grain size — short grains included, which barely overlap in truth.
  */
-const GRAIN_GAP = { sparse: 0.02, dense: 1000, wide: 3.5, thin: 0.045 } as const;
+const GRAIN_GAP = { sparse: 0.02, dense: 1000, wide: 2, tight: 1.8, from: 0.6 } as const;
 /** The widest trail an offset copy is drawn at, in grain lengths. */
 const GRAIN_MAX_LAG = 3.5;
 
-/** The gap the picture draws for a density's true spacing, in grain lengths. */
-export function moveGrainGap(spacing: number): number {
-  const { sparse, dense, wide, thin } = GRAIN_GAP;
+/** The gap the picture draws between copies, in grain lengths, for a
+ *  density's true `spacing`, its dial's place `dial` (0..1), and a grain
+ *  drawn `width` units wide. */
+export function moveGrainGap(spacing: number, width: number, dial = 0): number {
+  const { sparse, dense, wide, tight, from } = GRAIN_GAP;
   const overlap = 1 / Math.max(1e-9, spacing);
-  const u = clamp01(Math.log(overlap / sparse) / Math.log(dense / sparse));
-  return wide * (thin / wide) ** u;
+  // Where the density sits: -1 (sparsest) .. 0 (touching) .. 1 (densest).
+  const at = overlap >= 1
+    ? clamp01(Math.log(overlap) / Math.log(dense))
+    : -clamp01(Math.log(1 / overlap) / Math.log(1 / sparse));
+  const k = clamp01((clamp01(dial) - from) / (1 - from));
+  const pull = k * k * (3 - 2 * k);
+  const x = at + (1 - at) * pull;
+  return x >= 0 ? Math.min(1, tight / Math.max(1e-9, width)) ** x : wide ** -x;
 }
 
 export type MoveGrainPicture = {
@@ -545,14 +561,15 @@ export function moveGrainPicture(span: MoveGrainSpan): MoveGrainPicture {
   const both = span.direction === 'ping-pong' || span.direction === 'bounce' || span.direction === 'scissors';
   // The drawn gap between copies, in grain lengths: a density's eased over
   // its whole run (moveGrainGap), an offset's as it is up to a ceiling.
+  const asked = W * (0.2 + 0.46 * clamp01(span.length));
   const ratio = span.trail.role === 'density'
-    ? moveGrainGap(span.trail.spacing)
+    ? moveGrainGap(span.trail.spacing, asked, span.positions[2])
     : Math.min(GRAIN_MAX_LAG, span.trail.lag);
   // The lit grain and its nearest copy — both of them, played both ways —
   // always fit whole: when they would not, the whole picture shrinks until
   // they do, so a sparse cloud draws small rather than cut off.
   const fits = (W - 2 * margin) / (1 + ratio * (both ? 2 : 1));
-  const g = Math.min(W * (0.2 + 0.46 * clamp01(span.length)), fits);
+  const g = Math.min(asked, fits);
   const step = ratio * g;
   const room = both ? (W - g) / 2 - margin : W - g - 2 * margin;
   const count = span.trail.role === 'offset'

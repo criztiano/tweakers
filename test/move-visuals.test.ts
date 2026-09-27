@@ -309,8 +309,18 @@ describe('the grain cloud', () => {
     // Over the whole run a grain engine plays — 2 grains a second of 10 ms up
     // to 600 of 1.5 s — every step denser draws a tighter stack.
     const overlaps = [900, 300, 100, 45, 20, 8, 3, 1, 0.5, 0.25, 0.1, 0.05, 0.02];
-    expect(moveGrainGap(1 / 0.02)).toBeCloseTo(3.5);
-    expect(moveGrainGap(1 / 1000)).toBeCloseTo(0.045);
+    // Touching at an overlap of one, a clear gap at the sparsest, and a
+    // couple of drawing units between copies at the densest.
+    expect(moveGrainGap(1, 100)).toBeCloseTo(1);
+    expect(moveGrainGap(1 / 0.02, 100)).toBeCloseTo(2);
+    expect(moveGrainGap(1 / 1000, 100) * 100).toBeCloseTo(1.8);
+    expect(moveGrainGap(1 / 1000, 200) * 200).toBeCloseTo(1.8);
+    // The top of the density dial pulls the stack tight at any grain size —
+    // short grains that barely overlap in truth included.
+    expect(moveGrainGap(1 / 6, 60, 1) * 60).toBeCloseTo(1.8);
+    expect(moveGrainGap(1 / 6, 60, 0.5)).toBeCloseTo(moveGrainGap(1 / 6, 60));
+    // ...and gets there smoothly: a little higher on the dial, a little tighter.
+    expect(moveGrainGap(1 / 6, 60, 0.8)).toBeLessThan(moveGrainGap(1 / 6, 60, 0.7));
     const gaps = overlaps.map(gap);
     for (let k = 1; k < gaps.length; k++) expect(gaps[k]).toBeGreaterThan(gaps[k - 1]);
   });

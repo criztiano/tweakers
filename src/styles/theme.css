@@ -6145,7 +6145,7 @@
 .tweakers-move-grain-hero {
   fill: var(--move-grain-hero);
   stroke: var(--move-dial-surface);
-  stroke-width: 1.5;
+  stroke-width: 1;
   vector-effect: non-scaling-stroke;
   stroke-linejoin: round;
 }
@@ -6155,7 +6155,7 @@
 .tweakers-move-grain-copy {
   fill: var(--move-bg);
   stroke: var(--move-dial-surface);
-  stroke-width: 1.5;
+  stroke-width: 1;
   vector-effect: non-scaling-stroke;
   stroke-linejoin: round;
 }
