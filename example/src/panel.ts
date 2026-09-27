@@ -40,6 +40,9 @@ const PATTERNS = {
  */
 export const LIBRARY_BPM = 120;
 export const librarySwing = () => Math.cos((performance.now() / 60000) * LIBRARY_BPM * Math.PI);
+/** The clock's hand: a turn every eight seconds, as a scan through an
+ *  eight-second sample would go. */
+export const libraryHand = () => (performance.now() / 8000) % 1;
 
 export const CONFIG = {
   /* ── the everyday dial: a name, a number, a bar ───────────────── */
@@ -186,9 +189,37 @@ export const CONFIG = {
     type: 'slider', default: 0, min: -24, max: 24, step: 1, bipolar: true, unit: ' st',
     moveVisual: { kind: 'pitch' },
   },
+  /* the same pitch stood upright: the slot's sides close in on the mark */
+  throat: {
+    type: 'slider', default: 7, min: -24, max: 24, step: 1, bipolar: true, unit: ' st',
+    moveVisual: { kind: 'pitch', look: 'diaphragm' },
+  },
   speed: {
     type: 'slider', default: 1, min: 0.25, max: 4, step: 0.01,
     moveVisual: { kind: 'gauge' },
+  },
+  /* the same speed as its own number, rushing */
+  rush: {
+    type: 'slider', default: 1.5, min: 0.25, max: 4, step: 0.05,
+    formatValue: (v: number) => `${Number(v.toFixed(2))}×`,
+    moveVisual: { kind: 'gauge', look: 'streak' },
+  },
+  /* a scan's rate as a clock, the beat it makes at 120 at 1× — turn it to
+     zero and it freezes */
+  scan: {
+    type: 'slider', default: 1, min: 0, max: 2, step: 0.05,
+    formatValue: (v: number) => `${Number(v.toFixed(2))}×`,
+    moveVisual: { kind: 'clock', tempo: LIBRARY_BPM, hand: libraryHand },
+  },
+  /* which of three voices the page is showing; the third is off */
+  voice: {
+    type: 'select', default: 'main',
+    options: [
+      { value: 'main', label: 'Main' },
+      { value: 'second', label: 'Second' },
+      { value: 'third', label: 'Third' },
+    ],
+    moveVisual: { kind: 'lanes', silent: ['third'] },
   },
   /* A hit pushed off its step: it sits three quarters through the bar, and
      a full turn either way carries it half the bar. */
@@ -241,6 +272,21 @@ export const INSTRUMENTS = {
   hi: { type: 'slider', default: 100, min: 0, max: 100, step: 1, unit: '%', moveVisual: { kind: 'multiband', role: 'band', band: 0 } },
   mid: { type: 'slider', default: 50, min: 0, max: 100, step: 1, unit: '%', moveVisual: { kind: 'multiband', role: 'band', band: 1 } },
   sub: { type: 'slider', default: 0, min: 0, max: 100, step: 1, unit: '%', moveVisual: { kind: 'multiband', role: 'band', band: 2 } },
+  /* a grain cloud: how long a grain is, its window, how thick, which way */
+  grainLength: { type: 'slider', default: 0.5, min: 0, max: 1, step: 0.01, formatValue: (v: number) => `${Math.round(10 + v * 490)} ms`, moveVisual: { kind: 'grain', role: 'length' } },
+  grainShape: { type: 'select', default: 'bell', options: ['bell', 'ease', 'rise', 'fall'], preview: (v: string) => SHAPES[v], moveVisual: { kind: 'grain', role: 'shape' } },
+  grainDensity: { type: 'slider', default: 0.6, min: 0, max: 1, step: 0.01, formatValue: (v: number) => `${Math.round(2 ** (v * 8))} g/s`, moveVisual: { kind: 'grain', role: 'density' } },
+  grainDirection: {
+    type: 'select', default: 'forward',
+    options: [
+      { value: 'forward', label: 'Forward' },
+      { value: 'reverse', label: 'Reverse' },
+      { value: 'ping-pong', label: 'Ping-pong' },
+      { value: 'bounce', label: 'Bounce' },
+      { value: 'scissors', label: 'Scissors' },
+    ],
+    moveVisual: { kind: 'grain', role: 'direction' },
+  },
   /* a blend between two colours */
   shade: { type: 'color', default: '#632ad5' },
   glow: { type: 'color', default: '#fccff7' },

@@ -228,6 +228,54 @@ describe('MovePanel semantic interactions', () => {
     expect(TweakStore.getValues(id).a).toBe(0);
   });
 
+  it('draws a length, a shape, a density and a direction as one grain cloud, the pickers stepping on a click', () => {
+    mount({
+      size: { type: 'slider', min: 0, max: 1, default: 0.5, step: 0.01, moveVisual: { kind: 'grain', role: 'length' } },
+      curve: { type: 'select', options: ['bell', 'rise'], default: 'bell', preview: () => (t: number) => t, moveVisual: { kind: 'grain', role: 'shape' } },
+      density: { type: 'slider', min: 0, max: 1, default: 0.5, step: 0.01, moveVisual: { kind: 'grain', role: 'density', overlap: () => 3 } },
+      way: { type: 'select', options: ['forward', 'reverse'], default: 'forward', moveVisual: { kind: 'grain', role: 'direction' } },
+    });
+    const face = renderer!.root.findByProps({ 'data-kind': 'grain' });
+    expect(face.props.style.gridColumn).toBe('span 4');
+    expect(renderer!.root.findAllByProps({ className: 'tweakers-move-dial' })).toHaveLength(1);
+    // copies stack behind the lit grain
+    expect(face.findAllByProps({ className: 'tweakers-move-grain-copy' }).length).toBeGreaterThan(1);
+    // a picker's column reads as its option, and a click moves it on
+    expect(dial('Way').props['aria-valuetext']).toBe('forward');
+    act(() => dial('Way').props.onPointerDown(at(10, 10)));
+    act(() => dial('Way').props.onPointerUp(at(10, 10)));
+    expect(TweakStore.getValues(id).way).toBe('reverse');
+    // a slider's column turns from where it is, like any dial
+    drag(dial('Density'), 0, -10);
+    expect(TweakStore.getValues(id).density).toBeGreaterThan(0.5);
+  });
+
+  it('draws a lanes picker with its silent voices crossed out', () => {
+    mount({ voice: { type: 'select', options: ['a', 'b', 'c'], default: 'b', moveVisual: { kind: 'lanes', silent: ['c'] } } });
+    const slot = renderer!.root.findByProps({ 'data-kind': 'lanes' });
+    const lanes = slot.findAll((n) => n.props.className === 'tweakers-move-lane');
+    expect(lanes.map((l) => [!!l.props['data-chosen'], !!l.props['data-silent']])).toEqual([[false, false], [true, false], [false, true]]);
+    expect(slot.findAllByProps({ className: 'tweakers-move-lane-cross' })).toHaveLength(1);
+  });
+
+  it('frosts the clock over at its minimum and names the beat above it', () => {
+    mount({ scan: { type: 'slider', min: 0, max: 2, default: 0, step: 0.25, moveVisual: { kind: 'clock', tempo: 100 } } });
+    const frozen = renderer!.root.findByProps({ 'data-visual': 'clock' });
+    expect(frozen.findAllByProps({ className: 'tweakers-move-clock-frost' })).toHaveLength(1);
+    act(() => dial('Scan').props.onKeyDown(keyEvent('End')));
+    const running = renderer!.root.findByProps({ 'data-visual': 'clock' });
+    expect(running.findAllByProps({ className: 'tweakers-move-clock-frost' })).toHaveLength(0);
+    expect(running.findByProps({ className: 'tweakers-move-clock-foot' }).props.children).toBe('200 BPM');
+  });
+
+  it('fades a mixer channel whose control is switched off', () => {
+    const channel = (v: number) => ({ type: 'slider', min: 0, max: 100, default: v, step: 1, moveVisual: { kind: 'channel' } }) as const;
+    mount({ a: channel(50), b: channel(50) });
+    act(() => TweakStore.setDisabled(id, 'b', true));
+    const lanes = renderer!.root.findByProps({ 'data-kind': 'channel' }).findAll((n) => n.props.className === 'tweakers-move-channel');
+    expect(lanes.map((l) => !!l.props['data-off'])).toEqual([false, true]);
+  });
+
   it('draws x, y and z side by side as one stage, each column turning its own axis', () => {
     mount({
       x: { type: 'slider', min: 0, max: 1000, default: 250, step: 1, moveVisual: { kind: 'axis', axis: 'x' } },

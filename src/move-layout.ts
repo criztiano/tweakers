@@ -403,11 +403,15 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
       }
       const seated = (c: ControlMeta) => topValues.includes(c) || values.includes(c);
 
-      // 2. The switches take the top row — around the chips already there.
+      // 2. The switches take the top row — around the chips already there. A
+      //    switch the panel names in `moveValueRow`, with a column, waits for
+      //    3c: it rides the value row, leaving its top cell to a chip.
+      const lowered = (c: ControlMeta) =>
+        c.type === 'toggle' && !isToggleDial(c) && (panel.moveValueRow ?? []).includes(c.path) && padCols.get(c) != null;
       for (const c of controls) {
         const col = padCols.get(c) ?? null;
         if (isMoveTabs(c)) placeTabs(c, col);
-        else if (c.type === 'toggle' && !isToggleDial(c)) place(toggles, 'toggle', c, col);
+        else if (c.type === 'toggle' && !isToggleDial(c) && !lowered(c)) place(toggles, 'toggle', c, col);
       }
 
       // 3. A value chip the panel names in `moveTopRow` rides the top row in
@@ -467,9 +471,17 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
       // 3c. An action the panel names in `moveValueRow` rides the value row in
       //     its movePads column, when no chip holds that cell — a button over
       //     the column's action pad. No column, or a taken cell, and it keeps
-      //     the action row.
+      //     the action row. A switch named there rides it the same way — the
+      //     chip that shapes a control above it, the switch below (a curve's
+      //     Bell over its Flip); with its cell taken it goes back up top.
       const raise = panel.moveValueRow ?? [];
       for (const c of controls) {
+        if (lowered(c)) {
+          const col = padCols.get(c)!;
+          if (cellAt(values, col) === undefined) valueActions[col] = c;
+          else place(toggles, 'toggle', c, col);
+          continue;
+        }
         if (!raise.includes(c.path) || c.type !== 'action' || topValues.includes(c)) continue;
         const col = padCols.get(c) ?? null;
         if (col === null) {

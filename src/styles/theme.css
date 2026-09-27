@@ -437,6 +437,17 @@
      floor: its swing room already pads the left side. */
   --move-metronome-inset-left: 6px;
   --move-metronome-inset-bottom: 14px;
+  /* The grain cloud names each of its dials by a hue it wears in the
+     picture: the length's rule, the density's nearest copy — or, for
+     another voice, the offset's one copy. */
+  --move-grain-length: var(--move-blue);
+  --move-grain-density: var(--move-indigo);
+  --move-grain-offset: var(--move-emerald);
+  --move-grain-hero: var(--move-text);
+  /* A standing pitch's line and mark. */
+  --move-diaphragm: var(--move-orange);
+  /* A stopped clock goes to ice. */
+  --move-clock-ice: color-mix(in srgb, var(--move-blue) 45%, var(--move-text));
   --move-text: #dee3c9;
   --move-text-inverse: #31322f;
   --move-radius: 12px;
@@ -6122,4 +6133,397 @@
   .tweakers-move-pad[data-confirm]::before { animation: none; }
   .tweakers-move-pad-list-overlay .tweakers-list-screen-row,
   .tweakers-move-pad-list-overlay .tweakers-list-screen-label { transition: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   The grain cloud: four slots, one picture. The first three columns hold
+   the stage — the lit grain, its copies behind it, the length's rule — and
+   the fourth the direction's field of arrows. Each name wears its dial's hue.
+   --------------------------------------------------------------------------- */
+
+/* The stage runs from the slot's own left edge to just past the third
+   column, and clips there: the slot's rounded edge on the left, a short fade
+   on the right so the far copies never run under the direction's arrows. */
+.tweakers-move-grain-stage {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(var(--move-face-col-w) * 3 + var(--move-gap) * 2 + 12px);
+  overflow: hidden;
+  border-radius: var(--move-radius) 0 0 var(--move-radius);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
+  pointer-events: none;
+}
+
+/* The names read at a slot label's size, not a specimen's. */
+.tweakers-move-dial[data-kind="grain"] {
+  --move-face-name-size: var(--move-toggle-label-size);
+}
+
+/* The grains stand on the plot's bottom edge; the length's rule hangs 4px
+   under it. The plot is as tall as the other pictures in the row — the
+   standing pitch's track — so the cloud never reaches the names. */
+.tweakers-move-grain-plot {
+  position: absolute;
+  top: var(--move-shape-top);
+  bottom: 44px;
+  /* The first three columns, 12px in from each side: the stage is those
+     columns and 12px more, so the plot stops 24px short of its right edge.
+     (A column width read in here would measure the stage, not the face.) */
+  left: 12px;
+  right: 24px;
+}
+
+.tweakers-move-grain-plot > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.tweakers-move-grain-hero {
+  fill: var(--move-grain-hero);
+  stroke: var(--move-dial-surface);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+
+/* The copies behind the lit grain are the app's own ground, each outlined
+   in the slot's surface so its edge still reads against the next. */
+.tweakers-move-grain-copy {
+  fill: var(--move-bg);
+  stroke: var(--move-dial-surface);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+
+.tweakers-move-grain-copy[data-near] {
+  fill: color-mix(in srgb, var(--move-grain-density) 80%, var(--move-dial-surface));
+}
+
+.tweakers-move-grain-stage[data-trail="offset"] .tweakers-move-grain-copy[data-near] {
+  fill: color-mix(in srgb, var(--move-grain-offset) 80%, var(--move-dial-surface));
+}
+
+.tweakers-move-grain-copy[data-near][data-active] {
+  fill: var(--move-grain-density);
+}
+
+.tweakers-move-grain-stage[data-trail="offset"] .tweakers-move-grain-copy[data-near][data-active] {
+  fill: var(--move-grain-offset);
+}
+
+/* The other voice's copy is also outlined over the lit grain, so it still
+   reads where the two overlap. */
+.tweakers-move-grain-edge {
+  fill: none;
+  stroke: var(--move-grain-offset);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.8;
+}
+
+/* The length's rule: round dots between two solid ends, the dots drawn in
+   pixels so they stay round however wide the plot stretches. Touched, it
+   brightens and keeps its dots. */
+.tweakers-move-grain-length {
+  position: absolute;
+  top: calc(100% + 4px);
+  height: 6px;
+  opacity: 0.75;
+  background: radial-gradient(circle, var(--move-grain-length) 1px, transparent 1.4px) center / 6px 2px repeat-x;
+}
+
+.tweakers-move-grain-length[data-active] { opacity: 1; }
+
+.tweakers-move-grain-length > i {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  border-radius: 1px;
+  background: var(--move-grain-length);
+}
+
+.tweakers-move-grain-length > i:first-child { left: -1px; }
+.tweakers-move-grain-length > i:last-child { right: -1px; }
+
+.tweakers-move-grain-arrows {
+  position: absolute;
+  top: 18px;
+  bottom: 30px;
+  right: 10px;
+  width: calc(var(--move-face-col-w) - 20px);
+  height: calc(100% - 48px);
+  pointer-events: none;
+}
+
+.tweakers-move-grain-arrow {
+  fill: none;
+  stroke: color-mix(in srgb, var(--move-text) 28%, var(--move-dial-surface));
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tweakers-move-grain-arrow[data-lead] {
+  stroke: var(--move-text);
+  stroke-width: 4;
+}
+
+.tweakers-move-grain-arrows[data-active] .tweakers-move-grain-arrow:not([data-lead]) {
+  stroke: color-mix(in srgb, var(--move-text) 45%, var(--move-dial-surface));
+}
+
+.tweakers-move-grain-name { display: contents; }
+.tweakers-move-grain-name[data-role="length"] .tweakers-move-face-name { color: var(--move-grain-length); }
+.tweakers-move-grain-name[data-role="density"] .tweakers-move-face-name { color: var(--move-grain-density); }
+.tweakers-move-grain-name[data-role="offset"] .tweakers-move-face-name { color: var(--move-grain-offset); }
+
+.tweakers-move-face-zone[data-role="length"],
+.tweakers-move-face-zone[data-role="shape"],
+.tweakers-move-face-zone[data-role="direction"] { cursor: pointer; }
+
+/* ---------------------------------------------------------------------------
+   Lanes: a choice between parallel voices, lanes running away from you.
+   --------------------------------------------------------------------------- */
+
+.tweakers-move-lanes {
+  position: absolute;
+  top: var(--move-shape-top);
+  left: 10px;
+  width: calc(100% - 20px);
+  height: calc(100% - var(--move-shape-top) - var(--move-shape-bottom));
+  overflow: visible;
+  pointer-events: none;
+}
+
+.tweakers-move-lane path:first-child {
+  fill: color-mix(in srgb, var(--move-text) 26%, var(--move-dial-surface));
+  transition: fill var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-lane[data-silent] path:first-child {
+  fill: color-mix(in srgb, var(--move-text) 12%, var(--move-dial-surface));
+}
+
+.tweakers-move-lane[data-chosen] path:first-child {
+  fill: var(--move-text);
+}
+
+.tweakers-move-lane[data-chosen][data-silent] path:first-child {
+  fill: color-mix(in srgb, var(--move-text) 55%, var(--move-dial-surface));
+}
+
+.tweakers-move-lane-cross {
+  fill: none;
+  stroke: var(--move-red);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+/* ---------------------------------------------------------------------------
+   The diaphragm: a pitch stood upright. The slot's own surface is drawn by
+   the face, pinched at the mark, so the dial's box steps out of the way.
+   --------------------------------------------------------------------------- */
+
+.tweakers-move-dial[data-visual="diaphragm"] {
+  background: transparent;
+}
+
+.tweakers-move-diaphragm-surface {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--move-radius);
+  background: var(--move-dial-surface);
+  transition: clip-path 90ms var(--move-ease-out), background-color var(--move-duration-press) var(--move-ease-out);
+  pointer-events: none;
+}
+
+.tweakers-move-diaphragm-line,
+.tweakers-move-diaphragm-lit {
+  position: absolute;
+  left: 50%;
+  width: 3px;
+  transform: translateX(-50%);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.tweakers-move-diaphragm-line {
+  background: color-mix(in srgb, var(--move-diaphragm) 30%, var(--move-dial-surface));
+}
+
+.tweakers-move-diaphragm-lit {
+  background: var(--move-diaphragm);
+  opacity: 0;
+}
+
+.tweakers-move-diaphragm-lit[data-offset] { opacity: 1; }
+
+.tweakers-move-diaphragm-zero {
+  position: absolute;
+  left: 50%;
+  width: 13px;
+  height: 2px;
+  transform: translate(-50%, -50%);
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--move-text) 45%, transparent);
+  pointer-events: none;
+}
+
+.tweakers-move-diaphragm-mark {
+  position: absolute;
+  left: 50%;
+  width: 13px;
+  height: 13px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--move-text);
+  box-shadow: 0 0 0 3px var(--move-dial-surface);
+  transition: top 90ms var(--move-ease-out);
+  pointer-events: none;
+}
+
+.tweakers-move-diaphragm-mark[data-offset] { background: var(--move-diaphragm); }
+
+/* ---------------------------------------------------------------------------
+   The streak: a speed as its own number, speed lines trailing behind it.
+   --------------------------------------------------------------------------- */
+
+.tweakers-move-streak {
+  position: absolute;
+  top: 28px;
+  bottom: 10px;
+  left: 6px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.tweakers-move-streak-lines {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 36px;
+  overflow: visible;
+}
+
+.tweakers-move-streak-lines line {
+  stroke: var(--move-text);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.tweakers-move-streak-number {
+  font-family: var(--move-font-value);
+  font-variation-settings: var(--move-font-value-shape);
+  font-size: 56px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--move-text);
+  white-space: nowrap;
+}
+
+.tweakers-move-streak-unit {
+  font-size: 0.55em;
+  margin-left: 1px;
+  opacity: var(--move-metronome-unit-opacity);
+}
+
+/* ---------------------------------------------------------------------------
+   The clock: a rate something runs at on its own. Laid out as the
+   metronome is — the reading top right, the picture bottom left — with the
+   beat it makes, or its name, bottom right. Stopped, it frosts over.
+   --------------------------------------------------------------------------- */
+
+.tweakers-move-clock-readout {
+  position: absolute;
+  top: var(--move-toggle-label-inset);
+  right: var(--move-toggle-label-inset);
+  display: flex;
+  align-items: baseline;
+  font-family: var(--move-font-value);
+  font-variation-settings: var(--move-font-value-shape);
+  font-size: 40px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--move-text);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.tweakers-move-clock-unit {
+  font-size: 0.6em;
+  margin-left: 1px;
+  opacity: var(--move-metronome-unit-opacity);
+}
+
+.tweakers-move-clock-readout[data-frozen] { color: var(--move-clock-ice); }
+
+.tweakers-move-clock-picture {
+  position: absolute;
+  left: var(--move-metronome-inset-left);
+  bottom: var(--move-metronome-inset-bottom);
+  pointer-events: none;
+}
+
+.tweakers-move-clock {
+  display: block;
+  width: calc(var(--move-toggle-icon-size) + 8px);
+  height: calc(var(--move-toggle-icon-size) + 8px);
+  overflow: visible;
+}
+
+.tweakers-move-clock-disc { fill: var(--move-text); transition: fill 240ms var(--move-ease-out); }
+.tweakers-move-clock-hand { stroke: var(--move-dial-surface); stroke-width: 3.2; stroke-linecap: round; }
+.tweakers-move-clock-pivot { fill: var(--move-dial-surface); }
+
+.tweakers-move-clock[data-frozen] .tweakers-move-clock-disc { fill: var(--move-clock-ice); }
+
+.tweakers-move-clock-ice path {
+  fill: none;
+  stroke: var(--move-clock-ice);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tweakers-move-clock-foot {
+  position: absolute;
+  right: var(--move-toggle-label-inset);
+  bottom: calc(var(--move-metronome-inset-bottom) + 2px);
+  font-family: var(--move-font-label);
+  font-size: var(--move-toggle-label-size);
+  line-height: 16px;
+  color: var(--move-text);
+  opacity: 0.7;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* The frost creeps in from the corners of a stopped clock's slot. */
+.tweakers-move-clock-frost {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--move-radius);
+  background:
+    radial-gradient(120% 90% at 0% 100%, color-mix(in srgb, var(--move-clock-ice) 22%, transparent), transparent 60%),
+    radial-gradient(80% 70% at 100% 0%, color-mix(in srgb, var(--move-clock-ice) 14%, transparent), transparent 65%);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--move-clock-ice) 35%, transparent);
+  pointer-events: none;
+}
+
+/* A channel whose control is switched off fades back, its fader and all. */
+.tweakers-move-channel[data-off] {
+  opacity: var(--move-visual-disabled-opacity);
 }

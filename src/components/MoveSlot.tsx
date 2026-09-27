@@ -14,7 +14,7 @@ import {
 } from '../move-layout';
 import {
   moveNumericDrawing, movePlaybackMode, moveVisualReading, moveTrimSpan, moveGateSpan, moveVectorAxes, moveMultibandSpan,
-  moveChannelPosition,
+  moveChannelPosition, moveGrainSpan, moveLanes,
 } from '../move-visual-core';
 import {
   MOVE_TAP_SLOP, moveDialKey, moveRangeValue,
@@ -25,7 +25,7 @@ import {
 } from '../move-slot-core';
 import {
   moveSlotKind, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotXYBody, MoveSlotRangeBody, MoveSlotFilterBody,
-  MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotMultibandBody, MoveSlotChannelBody,
+  MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody,
   MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody,
 } from './move-slots';
 import { MoveColorSlot } from './MoveColor';
@@ -255,12 +255,13 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
     }
 
     type Dial = { role: MoveFaceRole; meta: ControlMeta; position: number; track?: string };
-    let kind: 'gate' | 'vector' | 'multiband' | 'channel';
+    let kind: 'gate' | 'vector' | 'grain' | 'multiband' | 'channel';
     let parts: Dial[];
     let body: ReactNode;
     const shown = (d: Dial) => ({ ...reading(d.meta), position: d.position });
     const gate = dials.length === 3 ? moveGateSpan(dials.map((m) => [m, vals[m.path]])) : null;
     const place = dials.length === 3 ? moveVectorAxes(dials.map((m) => [m, vals[m.path]])) : null;
+    const cloud = dials.length === 4 ? moveGrainSpan(dials.map((m) => [m, vals[m.path]])) : null;
     const cleaner = dials.length >= 3
       ? moveMultibandSpan(dials.map((m) => [m, vals[m.path]]), dials.slice(2).map((m) => [m, vals[m.path]]))
       : null;
@@ -277,6 +278,14 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
       kind = 'vector';
       parts = (['x', 'y', 'z'] as const).map((axis, k) => ({ role: `axis-${axis}` as const, meta: dials[k], position: place[axis] }));
       body = <MoveSlotVectorBody x={shown(parts[0])} y={shown(parts[1])} z={shown(parts[2])} down={place.down} />;
+    } else if (cloud) {
+      kind = 'grain';
+      const roles = ['length', 'shape', cloud.trail.role, 'direction'] as const;
+      parts = dials.map((meta, k) => ({ role: roles[k], meta, position: cloud.positions[k] }));
+      const named = (d: Dial) => (d.meta.type === 'select'
+        ? { ...shown(d), value: enumOptionLabel(d.meta.options?.[enumIndex(d.meta, vals[d.meta.path])] as never) }
+        : shown(d));
+      body = <MoveSlotGrainBody span={cloud} length={named(parts[0])} shape={named(parts[1])} trail={named(parts[2])} direction={named(parts[3])} />;
     } else if (cleaner) {
       kind = 'multiband';
       parts = dials.map((meta, k) => ({
@@ -298,7 +307,7 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
       body = (
         <MoveSlotChannelBody channels={parts.map((d) => {
           const visual = d.meta.moveVisual;
-          return { ...shown(d), ...(visual?.kind === 'channel' ? { icon: visual.icon, tone: visual.tone } : {}) };
+          return { ...shown(d), ...(visual?.kind === 'channel' ? { icon: visual.icon, tone: visual.tone } : {}), off: off(d.meta) };
         })} />
       );
     } else {
@@ -310,8 +319,19 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
       <div className={cls} style={style} data-kind={kind} data-active={parts.some((d) => dragPath === d.meta.path) || undefined}>
         {body}
         <div className="tweakers-move-face-zones">
-          {parts.map((d) => (
+          {parts.map((d) => {
+            // An option picker on a face steps as its own slot does.
+            const grip = (m: ControlMeta) => (m.type === 'select' ? step(m) : turn(m));
+            const options = d.meta.type === 'select' ? d.meta.options ?? [] : null;
+            const at = options ? enumIndex(d.meta, vals[d.meta.path]) : 0;
+            return (
             <div key={d.meta.path} className="tweakers-move-face-zone" data-role={d.role} {...slider(d.meta)}
+              {...(options ? {
+                'aria-valuemin': 0,
+                'aria-valuemax': Math.max(0, options.length - 1),
+                'aria-valuenow': at,
+                'aria-valuetext': enumOptionLabel(options[at] as never),
+              } : {})}
               aria-orientation={d.role === 'lookahead' || d.role === 'axis-x' ? 'horizontal' : 'vertical'}
               onPointerDown={(e) => {
                 // On the band grid the press takes the band under it.
@@ -324,15 +344,16 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
                   }
                 }
                 faceDrag.current = m;
-                turn(m).onPointerDown(e);
+                grip(m).onPointerDown(e);
               }}
-              onPointerMove={(e) => { if (faceDrag.current) turn(faceDrag.current).onPointerMove(e); }}
-              onPointerUp={(e) => { if (faceDrag.current) turn(faceDrag.current).onPointerUp(e); faceDrag.current = null; }}
-              onPointerCancel={() => { if (faceDrag.current) turn(faceDrag.current).onPointerCancel(); faceDrag.current = null; }}
+              onPointerMove={(e) => { if (faceDrag.current) grip(faceDrag.current).onPointerMove(e); }}
+              onPointerUp={(e) => { if (faceDrag.current) grip(faceDrag.current).onPointerUp(e); faceDrag.current = null; }}
+              onPointerCancel={() => { if (faceDrag.current) grip(faceDrag.current).onPointerCancel(); faceDrag.current = null; }}
             >
               <MoveModRing panelId={panelId!} path={d.meta.path} />
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
@@ -503,15 +524,20 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
     const optionLabel = enumOptionLabel(option as never);
     const shape = enumShapePath(meta, value);
     const playback = movePlaybackMode(meta, value);
+    const lanes = moveLanes(meta, value);
     return (
-      <div className={cls} style={style} data-kind="enum" data-visual={playback ? 'playback' : undefined}
+      <div className={cls} style={style} data-kind={lanes ? 'lanes' : 'enum'} data-visual={playback ? 'playback' : undefined}
         data-shape={shape ? true : undefined} data-active={active || undefined}
         {...slider(meta)} aria-valuemin={0} aria-valuemax={Math.max(0, options.length - 1)} aria-valuenow={activeIdx} aria-valuetext={optionLabel}
         {...step(meta)}>
         <MoveModRing panelId={panelId} path={meta.path} />
-        <MoveSlotEnumBody label={meta.label} optionLabel={optionLabel} options={options} activeIdx={activeIdx}
-          shape={shape} glyph={enumOptionIcon(option as never)} picture={enumOptionPicture(option as never)}
-          playback={playback} />
+        {lanes ? (
+          <MoveSlotLanesBody label={meta.label} optionLabel={optionLabel} count={options.length} chosen={lanes.chosen} silent={lanes.silent} />
+        ) : (
+          <MoveSlotEnumBody label={meta.label} optionLabel={optionLabel} options={options} activeIdx={activeIdx}
+            shape={shape} glyph={enumOptionIcon(option as never)} picture={enumOptionPicture(option as never)}
+            playback={playback} />
+        )}
       </div>
     );
   }

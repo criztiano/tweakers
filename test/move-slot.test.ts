@@ -108,6 +108,31 @@ describe('a Move slot placed on its own', () => {
     expect(TweakStore.getValues(id).release).toBe(180);
   });
 
+  it('steps a grain cloud’s pickers as pickers, and turns its sliders as dials', () => {
+    mount({
+      size: { type: 'slider', min: 0, max: 1, default: 0.5, step: 0.01, moveVisual: { kind: 'grain', role: 'length' } },
+      curve: { type: 'select', options: ['bell', 'rise'], default: 'bell', preview: () => (t: number) => t, moveVisual: { kind: 'grain', role: 'shape' } },
+      density: { type: 'slider', min: 0, max: 1, default: 0.5, step: 0.01, moveVisual: { kind: 'grain', role: 'density' } },
+      way: { type: 'select', options: ['forward', 'reverse'], default: 'forward', moveVisual: { kind: 'grain', role: 'direction' } },
+    }, ['size', 'curve', 'density', 'way']);
+    expect(root().props['data-kind']).toBe('grain');
+    const zone = (role: string) => renderer!.root.findByProps({ className: 'tweakers-move-face-zone', 'data-role': role });
+    expect(zone('direction').props['aria-valuetext']).toBe('forward');
+    // A click moves a picker on; a drag steps it, and never writes a number.
+    act(() => zone('direction').props.onPointerDown(pointer(60)));
+    act(() => zone('direction').props.onPointerUp(pointer(60)));
+    expect(TweakStore.getValues(id).way).toBe('reverse');
+    act(() => zone('shape').props.onPointerDown(pointer(10)));
+    act(() => zone('shape').props.onPointerMove(pointer(110)));
+    act(() => zone('shape').props.onPointerUp(pointer(110)));
+    expect(['bell', 'rise']).toContain(TweakStore.getValues(id).curve);
+    expect(root().props['data-kind']).toBe('grain');
+    act(() => zone('density').props.onPointerDown(pointer(60)));
+    act(() => zone('density').props.onPointerMove(pointer(90)));
+    act(() => zone('density').props.onPointerUp(pointer(90)));
+    expect(TweakStore.getValues(id).density).toBeGreaterThan(0.5);
+  });
+
   it('draws a take’s start and end as one line', () => {
     mount({
       start: { type: 'slider', min: 0, max: 8, default: 2, step: 0.01, moveVisual: { kind: 'trim', edge: 'start' } },

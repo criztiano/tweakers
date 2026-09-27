@@ -36,9 +36,17 @@ function moveNumericDrawing(meta, value) {
     }
     case "pitch":
       if (visual.unit !== void 0 && visual.unit !== "semitones" && visual.unit !== "cents") return null;
-      return { kind: "pitch", position: (v - lo) / (hi - lo), zero: between(0, lo, hi) ? -lo / (hi - lo) : null };
+      return {
+        kind: visual.look === "diaphragm" ? "diaphragm" : "pitch",
+        position: (v - lo) / (hi - lo),
+        zero: between(0, lo, hi) ? -lo / (hi - lo) : null
+      };
     case "gauge":
-      return { kind: "gauge", position: clamp01((v - lo) / (hi - lo)) };
+      return { kind: visual.look === "streak" ? "streak" : "gauge", position: clamp01((v - lo) / (hi - lo)) };
+    case "clock": {
+      const tempo = typeof visual.tempo === "number" && Number.isFinite(visual.tempo) && visual.tempo > 0 ? visual.tempo : null;
+      return { kind: "clock", rate: v, frozen: v <= lo, tempo, ...visual.hand ? { hand: visual.hand } : {} };
+    }
     case "trim":
       if (visual.edge !== "start" && visual.edge !== "end") return null;
       return { kind: "trim", edge: visual.edge, position: clamp01((v - lo) / (hi - lo)) };
@@ -147,13 +155,124 @@ function moveMultibandSpan(dials, bands) {
   drawn.sort((a, b) => a.band - b.band);
   return { amount, speed, bands: drawn.map(({ meta, position }) => ({ meta, position })) };
 }
-function movePlaybackMode(meta, value) {
-  if (meta.type !== "select" || meta.moveVisual?.kind !== "playback" || typeof value !== "string") return null;
+var PLAYBACK_MODES = ["forward", "reverse", "ping-pong", "bounce", "scissors"];
+function playbackModeOf(meta, modes, value) {
+  if (meta.type !== "select" || typeof value !== "string") return null;
   if (!meta.options?.some((option) => (typeof option === "string" ? option : option.value) === value)) return null;
-  const modes = meta.moveVisual.modes;
   if (modes !== void 0 && (typeof modes !== "object" || modes === null || Array.isArray(modes))) return null;
-  const mode = modes ? Object.prototype.hasOwnProperty.call(modes, value) ? modes[value] : void 0 : value;
-  return mode === "forward" || mode === "reverse" || mode === "ping-pong" || mode === "scissors" ? mode : null;
+  const map = modes;
+  const mode = map ? Object.prototype.hasOwnProperty.call(map, value) ? map[value] : void 0 : value;
+  return PLAYBACK_MODES.includes(mode) ? mode : null;
+}
+function movePlaybackMode(meta, value) {
+  return meta.moveVisual?.kind === "playback" ? playbackModeOf(meta, meta.moveVisual.modes, value) : null;
+}
+function moveLanes(meta, value) {
+  const visual = meta.moveVisual;
+  if (meta.type !== "select" || visual?.kind !== "lanes" || !meta.options?.length) return null;
+  const values = meta.options.map((option) => typeof option === "string" ? option : option.value);
+  const silent = Array.isArray(visual.silent) ? visual.silent : [];
+  return { chosen: Math.max(0, values.indexOf(value)), silent: values.map((v) => silent.includes(v)) };
+}
+function moveGrainRole(meta) {
+  const visual = meta?.moveVisual;
+  if (visual?.kind !== "grain") return null;
+  const slider = visual.role === "length" || visual.role === "density" || visual.role === "offset";
+  return (slider ? meta.type === "slider" : meta.type === "select") ? visual.role : null;
+}
+function moveGrainSpan(dials) {
+  if (dials.length !== 4) return null;
+  const roles = dials.map(([meta]) => moveGrainRole(meta));
+  if (roles[0] !== "length" || roles[1] !== "shape" || roles[2] !== "density" && roles[2] !== "offset" || roles[3] !== "direction") return null;
+  const length = sliderPosition(...dials[0]);
+  const amount = sliderPosition(...dials[2]);
+  const [shapeMeta, shapeValue] = dials[1];
+  const [directionMeta, directionValue] = dials[3];
+  const visual = directionMeta.moveVisual;
+  const direction = playbackModeOf(directionMeta, visual.modes, directionValue);
+  if (length === null || amount === null || !direction) return null;
+  let shape = null;
+  try {
+    const sampler = shapeMeta.preview?.(String(shapeValue ?? ""));
+    if (typeof sampler === "function") shape = sampler;
+  } catch {
+    shape = null;
+  }
+  const polled = (read) => {
+    try {
+      const n = read?.();
+      return typeof n === "number" && Number.isFinite(n) ? n : null;
+    } catch {
+      return null;
+    }
+  };
+  const trailVisual = dials[2][0].moveVisual;
+  let trail;
+  if (trailVisual.role === "density") {
+    const overlap = polled(trailVisual.overlap) ?? 0.66 * 2 ** (amount * 6);
+    trail = { role: "density", spacing: 1 / Math.max(1e-6, overlap) };
+  } else {
+    trail = { role: "offset", lag: Math.max(0, polled(trailVisual.lag) ?? amount) };
+  }
+  const option = (meta, value) => {
+    const values = (meta.options ?? []).map((o) => typeof o === "string" ? o : o.value);
+    return values.length > 1 ? Math.max(0, values.indexOf(value)) / (values.length - 1) : 0;
+  };
+  return {
+    length,
+    shape,
+    trail,
+    direction,
+    positions: [length, option(shapeMeta, shapeValue), amount, option(directionMeta, directionValue)]
+  };
+}
+var MOVE_GRAIN = { width: 300, height: 100, base: 100, top: 6, copies: 7 };
+var GRAIN_GAP = { sparse: 0.02, dense: 1e3, wide: 2, tight: 1.8, from: 0.6 };
+var GRAIN_MAX_LAG = 3.5;
+function moveGrainGap(spacing, width, dial = 0) {
+  const { sparse, dense, wide, tight, from } = GRAIN_GAP;
+  const overlap = 1 / Math.max(1e-9, spacing);
+  const at = overlap >= 1 ? clamp01(Math.log(overlap) / Math.log(dense)) : -clamp01(Math.log(1 / overlap) / Math.log(1 / sparse));
+  const k = clamp01((clamp01(dial) - from) / (1 - from));
+  const pull = k * k * (3 - 2 * k);
+  const x = at + (1 - at) * pull;
+  return x >= 0 ? Math.min(1, tight / Math.max(1e-9, width)) ** x : wide ** -x;
+}
+function moveGrainPicture(span) {
+  const { width: W, base, top, copies: most } = MOVE_GRAIN;
+  const margin = 6;
+  const sample = span.shape ?? ((t) => Math.sin(Math.PI * t));
+  const both = span.direction === "ping-pong" || span.direction === "bounce" || span.direction === "scissors";
+  const asked = W * (0.2 + 0.46 * clamp01(span.length));
+  const ratio = span.trail.role === "density" ? moveGrainGap(span.trail.spacing, asked, span.positions[2]) : Math.min(GRAIN_MAX_LAG, span.trail.lag);
+  const fits = (W - 2 * margin) / (1 + ratio * (both ? 2 : 1));
+  const g = Math.min(asked, fits);
+  const step = ratio * g;
+  const room = both ? (W - g) / 2 - margin : W - g - 2 * margin;
+  const count = span.trail.role === "offset" ? 1 : Math.max(1, Math.min(most, Math.ceil(room / Math.max(step, 1e-6))));
+  const reach = span.trail.role === "offset" ? step : Math.min(count * step, room);
+  const x0 = both ? (W - g) / 2 : Math.max(margin, (W - g - reach) / 2);
+  const r2 = (n) => Math.round(n * 100) / 100;
+  const outline = (at) => {
+    const points = [];
+    const n = 48;
+    for (let k = 0; k <= n; k++) {
+      const t = k / n;
+      const y = clamp01(Number(sample(t)) || 0);
+      points.push(`${r2(at + t * g)} ${r2(base - y * (base - top))}`);
+    }
+    return `M${r2(at)} ${base}L${points.join("L")}L${r2(at + g)} ${base}Z`;
+  };
+  const shifts = Array.from({ length: count }, (_, k) => {
+    const rank = k + 1;
+    if (!both) return { rank, dx: rank * step };
+    const side = k % 2 === 0 ? 1 : -1;
+    return { rank: Math.ceil(rank / 2), dx: side * Math.ceil(rank / 2) * step };
+  });
+  const mirror = (d) => span.direction === "reverse" ? d.replace(/(-?\d+(?:\.\d+)?) (-?\d+(?:\.\d+)?)/g, (_, x, y) => `${r2(W - Number(x))} ${y}`) : d;
+  const copies = shifts.sort((a, b) => b.rank - a.rank).map(({ rank, dx }) => ({ d: mirror(outline(x0 + dx)), rank }));
+  const from = span.direction === "reverse" ? W - x0 - g : x0;
+  return { hero: mirror(outline(x0)), span: { from: r2(from), to: r2(from + g) }, copies };
 }
 function moveVisualReading(meta, value) {
   if (meta.formatValue) return meta.formatValue(value);
@@ -177,6 +296,8 @@ function moveVisualReading(meta, value) {
     case "pitch":
       return `${value > 0 ? "+" : ""}${number} ${visual.unit === "cents" ? "ct" : "st"}`;
     case "gauge":
+      return `${number}\xD7`;
+    case "clock":
       return `${number}\xD7`;
     case "trim":
       return `${number} s`;
@@ -233,11 +354,17 @@ function moveBandCuts(low, high) {
 export {
   MOVE_BAND_H,
   MOVE_BAND_W,
+  MOVE_GRAIN,
   MOVE_STAGE,
   moveBandCuts,
   moveChannelPosition,
   moveGateSpan,
+  moveGrainGap,
+  moveGrainPicture,
+  moveGrainRole,
+  moveGrainSpan,
   moveKeyboardValue,
+  moveLanes,
   moveMultibandRole,
   moveMultibandSpan,
   moveNumericDrawing,
