@@ -4397,6 +4397,8 @@ declare function MoveSlotGrainBody({ span, length, shape, trail, direction }: {
 type MoveChannelDial = MoveFaceDial & {
     icon?: string;
     tone?: MoveTone;
+    /** The channel is switched off (its control disabled): it fades back. */
+    off?: boolean;
 };
 /**
  * A mixer's face, one slot per channel: each channel's icon and name along

@@ -2954,6 +2954,7 @@ function MoveSlotChannelBody({ channels }) {
     {
       className: "tweakers-move-channel",
       "data-active": channel.active || void 0,
+      "data-off": channel.off || void 0,
       style: { "--move-face-col": k, "--move-channel-tone": channel.tone ? `var(--move-${channel.tone})` : void 0 },
       children: [
         /* @__PURE__ */ jsxs3("span", { className: "tweakers-move-channel-head", children: [
@@ -14446,7 +14447,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     });
                                     const body = face.kind === "channel" ? /* @__PURE__ */ jsx17(MoveSlotChannelBody, { channels: dials.map((d) => {
                                       const visual = d.meta.moveVisual;
-                                      return { ...shown(d), ...visual?.kind === "channel" ? { icon: visual.icon, tone: visual.tone } : {} };
+                                      return {
+                                        ...shown(d),
+                                        ...visual?.kind === "channel" ? { icon: visual.icon, tone: visual.tone } : {},
+                                        off: TweakStore14.isDisabled(page.panel.id, d.meta.path)
+                                      };
                                     }) }) : face.kind === "vector" ? /* @__PURE__ */ jsx17(MoveSlotVectorBody, { x: shown(dials[0]), y: shown(dials[1]), z: shown(dials[2]), down: face.down }) : face.kind === "grain" ? /* @__PURE__ */ jsx17(
                                       MoveSlotGrainBody,
                                       {
@@ -15855,7 +15860,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
       parts = dials.map((meta2, k) => ({ role: "channel", meta: meta2, position: channels[k], track: `channel-${k}` }));
       body = /* @__PURE__ */ jsx18(MoveSlotChannelBody, { channels: parts.map((d) => {
         const visual = d.meta.moveVisual;
-        return { ...shown(d), ...visual?.kind === "channel" ? { icon: visual.icon, tone: visual.tone } : {} };
+        return { ...shown(d), ...visual?.kind === "channel" ? { icon: visual.icon, tone: visual.tone } : {}, off: off(d.meta) };
       }) });
     } else {
       warnOnce(
