@@ -8,6 +8,7 @@ import './filter-core.js';
 import './range-slider-core.js';
 import './modulation-core.js';
 import './curve-composer-core.js';
+import './icons.js';
 
 /**
  * What earns a slot on the strip: everything the hardware would turn, plus

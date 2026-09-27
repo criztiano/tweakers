@@ -119,6 +119,7 @@ __export(index_exports, {
   MOVE_WAVE_MAX_DISPLAY: () => MOVE_WAVE_MAX_DISPLAY,
   MOVE_WAVE_MAX_HEIGHT: () => MOVE_WAVE_MAX_HEIGHT,
   MOVE_WAVE_MAX_WIDTH: () => MOVE_WAVE_MAX_WIDTH,
+  ModDot: () => ModDot,
   ModRing: () => ModRing,
   ModulationStore: () => import_ModulationStore5.ModulationStore,
   MoveActionButton: () => MoveActionButton,
@@ -300,6 +301,7 @@ __export(index_exports, {
   loopFromStep: () => loopFromStep,
   loopSteps: () => loopSteps,
   modColor: () => modColor,
+  modGlyph: () => modGlyph,
   modKey: () => modKey,
   modPageLayout: () => modPageLayout,
   modPageWidth: () => modPageWidth,
@@ -1464,6 +1466,32 @@ var LUCIDE_ICONS = {
 };
 var ICON_BADGE_OFF = "M17.203 19.3594L4.6875 6.7969C3.6094 8.25 3 10.0781 3 12C3 16.9688 7.031 21 12 21C13.969 21 15.75 20.3906 17.203 19.3594ZM19.359 17.2031C20.391 15.75 21 13.9219 21 12C21 7.0312 16.969 3 12 3C10.078 3 8.25 3.6094 6.797 4.6875L19.359 17.2031ZM0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24C5.391 24 0 18.6094 0 12Z";
 var ICON_BADGE_ON = "M12 24C5.391 24 0 18.6094 0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24ZM17.531 6.8438C17.016 6.4688 16.313 6.5625 15.984 7.0781L10.359 14.7656L7.922 12.3281C7.5 11.9062 6.75 11.9062 6.328 12.3281C5.906 12.7969 5.906 13.5 6.328 13.9219L9.703 17.2969C9.937 17.5312 10.266 17.6719 10.594 17.625C10.922 17.625 11.203 17.4375 11.391 17.1562L17.766 8.3906C18.141 7.9219 18.047 7.2188 17.531 6.8438Z";
+var MOD_GLYPHS = {
+  lfo: { paths: ["M3.5 12C5.75 5.75 9.5 5.75 12 12C14.5 18.25 18.25 18.25 20.5 12"] },
+  sh: {
+    circles: [
+      { cx: "8.75", cy: "8.75", r: "1.4" },
+      { cx: "15.25", cy: "8.75", r: "1.4" },
+      { cx: "12", cy: "12", r: "1.4" },
+      { cx: "8.75", cy: "15.25", r: "1.4" },
+      { cx: "15.25", cy: "15.25", r: "1.4" }
+    ]
+  },
+  adsr: { paths: ["M3 18L8.75 7.5L12.25 12.75H15.5L21 18"] },
+  keys: {
+    fills: [
+      "M8.1 2H10.9V11.1A1.4 1.4 0 0 1 8.1 11.1Z",
+      "M13.1 2H15.9V11.1A1.4 1.4 0 0 1 13.1 11.1Z"
+    ],
+    paths: ["M9.5 12.5V22", "M14.5 12.5V22"]
+  },
+  curve: { paths: ["M2.5 16.25H5C8 16.25 8.25 8.25 12 8.25C15.75 8.25 16 16.25 19 16.25H21.5"] },
+  audio: {
+    circles: [{ cx: "8.75", cy: "15.5", r: "2.25" }, { cx: "15", cy: "14.25", r: "2.25" }],
+    fills: ["M9.875 8.1L17.875 6.5V8.5L9.875 10.1Z"],
+    paths: ["M10.75 15.5V9", "M17 14.25V7.5"]
+  }
+};
 
 // src/components/move-visuals.tsx
 var import_jsx_runtime = require("react/jsx-runtime");
@@ -6250,6 +6278,7 @@ function registerModType(def) {
   registry.set(def.type, def);
 }
 var getModType = (type) => registry.get(type);
+var modGlyph = (slot) => getModType(slot.type)?.glyph?.(slot.params) ?? null;
 var listModTypes = () => [...registry.values()];
 var modPageWidth = () => Math.min(
   MOD_PAGE_DIALS,
@@ -6271,12 +6300,12 @@ var MOD_RING_RADIUS = 6;
 var MOD_RING_CIRCUMFERENCE = 2 * Math.PI * MOD_RING_RADIUS;
 var RING_SWEEP_START = 135 / 360;
 var RING_SWEEP_LEN = 270 / 360;
-function modRingArc(from01, to01) {
+function modRingArc(from01, to01, circumference = MOD_RING_CIRCUMFERENCE) {
   const a = RING_SWEEP_START + clamp014(from01) * RING_SWEEP_LEN;
   const b = RING_SWEEP_START + clamp014(to01) * RING_SWEEP_LEN;
   return {
-    length: Math.abs(b - a) * MOD_RING_CIRCUMFERENCE,
-    offset: -Math.min(a, b) * MOD_RING_CIRCUMFERENCE
+    length: Math.abs(b - a) * circumference,
+    offset: -Math.min(a, b) * circumference
   };
 }
 var LFO_SYNC_DIVISIONS = [
@@ -6316,6 +6345,7 @@ function previewSlew(values, smooth) {
 var LFO_DEF = {
   type: "lfo",
   label: "LFO",
+  glyph: () => "lfo",
   defaults: { rate: 1, division: LFO_SYNC_DEFAULT, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false },
   controls: [
     /* One slot for how fast, wearing whichever control the moment calls for:
@@ -6381,6 +6411,7 @@ registerModType(LFO_DEF);
 var SH_DEF = {
   type: "sh",
   label: "S&H",
+  glyph: () => "sh",
   defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0 },
   controls: [
     { type: "slider", path: "rate", label: "Rate", min: 0.1, max: 30, step: 0.01, unit: "Hz", scope: true },
@@ -6501,6 +6532,9 @@ function adsrStageLength(stage, params) {
 var ADSR_DEF = {
   type: "adsr",
   label: "ADSR",
+  // Struck by the played keys (a trigger of 'keys'), the envelope wears the
+  // keys; free or looping, its own shape.
+  glyph: (params) => params.trigger === "keys" ? "keys" : "adsr",
   defaults: {
     attack: 10,
     decay: 300,
@@ -6634,6 +6668,7 @@ function curveDuration(params, bpm) {
 var CURVE_DEF = {
   type: "curve",
   label: "Curve",
+  glyph: () => "curve",
   defaults: {
     duration: 2,
     sync: false,
@@ -6864,6 +6899,7 @@ function audioLoop(params) {
 var AUDIO_DEF = {
   type: "audio",
   label: "Audio",
+  glyph: () => "audio",
   defaults: {
     speed: 1,
     depth: 1,
@@ -9886,6 +9922,61 @@ function ModRing({
       ]
     }
   );
+}
+var DOT_RING_RADIUS = 10.5;
+var DOT_RING_CIRCUMFERENCE = 2 * Math.PI * DOT_RING_RADIUS;
+var DOT_RADIUS = 8;
+function ModDot({ slot }) {
+  const arcRef = (0, import_react13.useRef)(null);
+  const maskId = `tweakers-mod-dot-${(0, import_react13.useId)().replace(/:/g, "")}`;
+  const color = modColor(slot.index);
+  const glyph = modGlyph(slot);
+  const mark = glyph ? MOD_GLYPHS[glyph] : null;
+  (0, import_react13.useEffect)(() => {
+    if (typeof window === "undefined") return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    return import_ModulationStore.ModulationStore.subscribeFrames(() => {
+      const el = arcRef.current;
+      if (!el) return;
+      const { length, offset } = modRingArc(0.5, (import_ModulationStore.ModulationStore.getSignal(slot.index) + 1) / 2, DOT_RING_CIRCUMFERENCE);
+      el.setAttribute("stroke-dasharray", `${length.toFixed(2)} ${DOT_RING_CIRCUMFERENCE.toFixed(2)}`);
+      el.setAttribute("stroke-dashoffset", offset.toFixed(2));
+    });
+  }, [slot.index]);
+  return /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("svg", { className: "tweakers-move-mod-face", viewBox: "0 0 24 24", "aria-hidden": "true", "data-glyph": glyph ?? void 0, children: [
+    mark && /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("mask", { id: maskId, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("circle", { cx: "12", cy: "12", r: DOT_RADIUS, fill: "white" }),
+      /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("g", { fill: "none", stroke: "black", strokeWidth: "1.75", strokeLinecap: "round", strokeLinejoin: "round", children: mark.paths?.map((d) => /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("path", { d }, d)) }),
+      /* @__PURE__ */ (0, import_jsx_runtime14.jsxs)("g", { fill: "black", children: [
+        mark.fills?.map((d) => /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("path", { d }, d)),
+        mark.circles?.map((c) => /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("circle", { ...c }, `${c.cx},${c.cy}`))
+      ] })
+    ] }),
+    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("circle", { className: "tweakers-mod-ring-track tweakers-move-mod-track", cx: "12", cy: "12", r: DOT_RING_RADIUS }),
+    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+      "circle",
+      {
+        ref: arcRef,
+        className: "tweakers-mod-ring-arc tweakers-move-mod-arc",
+        cx: "12",
+        cy: "12",
+        r: DOT_RING_RADIUS,
+        stroke: color,
+        strokeDasharray: `0 ${DOT_RING_CIRCUMFERENCE}`
+      }
+    ),
+    /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+      "circle",
+      {
+        className: "tweakers-move-mod-dot",
+        cx: "12",
+        cy: "12",
+        r: DOT_RADIUS,
+        fill: color,
+        mask: mark ? `url(#${maskId})` : void 0
+      }
+    )
+  ] });
 }
 function MoveModRing({ panelId, path, pad }) {
   const assignment = import_ModulationStore.ModulationStore.getAssignment(panelId, path);
@@ -16237,24 +16328,14 @@ function stepRuns(cells) {
   return runs;
 }
 function MoveModCircle({ slot }) {
-  const dotRef = (0, import_react17.useRef)(null);
   const pressAt = (0, import_react17.useRef)(0);
-  (0, import_react17.useEffect)(() => {
-    if (typeof window === "undefined") return;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    return import_ModulationStore2.ModulationStore.subscribeFrames(() => {
-      const el = dotRef.current;
-      if (!el) return;
-      const level = (import_ModulationStore2.ModulationStore.getSignal(slot.index) + 1) / 2;
-      el.style.transform = `scale(${(0.66 + 0.34 * level).toFixed(3)})`;
-    });
-  }, [slot.index]);
+  const name = getModType(slot.type)?.label ?? slot.type.toUpperCase();
   return /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
     "button",
     {
       type: "button",
       className: "tweakers-move-mod",
-      title: `${slot.type.toUpperCase()} \xB7 step ${slot.index + 1}`,
+      title: `${name} \xB7 step ${slot.index + 1}`,
       onPointerDown: () => {
         pressAt.current = Date.now();
       },
@@ -16270,14 +16351,7 @@ function MoveModCircle({ slot }) {
         if (tapped && open2 && open2.index === slot.index) import_ModulationStore2.ModulationStore.closeSettings();
         else import_ModulationStore2.ModulationStore.openSettings(slot.index);
       },
-      children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
-        "span",
-        {
-          ref: dotRef,
-          className: "tweakers-move-mod-dot",
-          style: { background: modColor(slot.index) }
-        }
-      )
+      children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(ModDot, { slot })
     }
   );
 }
@@ -17834,6 +17908,7 @@ var import_TweakStore20 = require("tweakers/store");
   MOVE_WAVE_MAX_DISPLAY,
   MOVE_WAVE_MAX_HEIGHT,
   MOVE_WAVE_MAX_WIDTH,
+  ModDot,
   ModRing,
   ModulationStore,
   MoveActionButton,
@@ -18015,6 +18090,7 @@ var import_TweakStore20 = require("tweakers/store");
   loopFromStep,
   loopSteps,
   modColor,
+  modGlyph,
   modKey,
   modPageLayout,
   modPageWidth,

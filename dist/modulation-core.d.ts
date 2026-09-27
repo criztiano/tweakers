@@ -1,5 +1,6 @@
 import { C as ControlMeta } from './TweakStore-Bdq-ic9k.js';
 import { CurveType, CurveComposition } from './curve-composer-core.js';
+import { ModGlyph } from './icons.js';
 import './gradient-core.js';
 import './color-core.js';
 import './xy-pad-core.js';
@@ -150,6 +151,12 @@ interface ModTypeDef {
      * leave it out and the store ignores the call.
      */
     gate?(state: unknown, on: boolean): void;
+    /**
+     * The mark cut out of the slot's dot in the step row, so a row of circles
+     * says which modulator is which. A function of the params, because one type
+     * can play two roles: an envelope struck by the keys wears the keys.
+     */
+    glyph?(params: ModulationParams): ModGlyph;
 }
 /** One control's place on the Move page, with the gestures it answers to. */
 interface ModPageSlot {
@@ -197,6 +204,8 @@ declare const visibleModControls: (def: ModTypeDef, params: ModulationParams) =>
 /** Plug a modulator type in; registering a type again replaces it. */
 declare function registerModType(def: ModTypeDef): void;
 declare const getModType: (type: ModulationType) => ModTypeDef | undefined;
+/** The mark a slot's dot wears — null for a type that names none (a plain dot). */
+declare const modGlyph: (slot: ModulationSlot) => ModGlyph | null;
 /** The registered types, registration order — the settings page's type enum. */
 declare const listModTypes: () => ModTypeDef[];
 /**
@@ -227,9 +236,10 @@ declare const MOD_RING_CIRCUMFERENCE: number;
  * pattern that draws it: SVG lays a circle's path clockwise from 3 o'clock,
  * so a dash of `length` pushed to `offset` lands exactly on the arc.
  * Feed it base and modulated value and the ring shows where the modulation
- * is holding the control right now.
+ * is holding the control right now. A ring of another size passes its own
+ * circumference; the sweep is the same.
  */
-declare function modRingArc(from01: number, to01: number): {
+declare function modRingArc(from01: number, to01: number, circumference?: number): {
     length: number;
     offset: number;
 };
@@ -403,4 +413,4 @@ declare function audioModLevel(position: number): number;
  */
 declare const AUDIO_DEF: ModTypeDef;
 
-export { ADSR_DEF, ADSR_STAGE_MAX, AUDIO_DEF, type AudioModWindow, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EnvStage, LFO_DEF, LFO_SYNC_DEFAULT, LFO_SYNC_DIVISIONS, LFO_SYNC_OPTIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, audioModLevel, curveComposition, curveDuration, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, getAudioModBuffer, getAudioModVersion, getAudioModWindow, getModType, lfoDivisionBeats, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modPageWidth, modRingArc, registerModType, restoreModParams, setAudioModBuffer, setAudioModWindowSource, subscribeAudioMod, visibleModControls };
+export { ADSR_DEF, ADSR_STAGE_MAX, AUDIO_DEF, type AudioModWindow, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EnvStage, LFO_DEF, LFO_SYNC_DEFAULT, LFO_SYNC_DIVISIONS, LFO_SYNC_OPTIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, audioModLevel, curveComposition, curveDuration, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, getAudioModBuffer, getAudioModVersion, getAudioModWindow, getModType, lfoDivisionBeats, lfoSyncedHz, listModTypes, modColor, modGlyph, modKey, modPageLayout, modPageWidth, modRingArc, registerModType, restoreModParams, setAudioModBuffer, setAudioModWindowSource, subscribeAudioMod, visibleModControls };

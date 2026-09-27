@@ -381,6 +381,7 @@ function previewSlew(values, smooth) {
 var LFO_DEF = {
   type: "lfo",
   label: "LFO",
+  glyph: () => "lfo",
   defaults: { rate: 1, division: LFO_SYNC_DEFAULT, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false },
   controls: [
     /* One slot for how fast, wearing whichever control the moment calls for:
@@ -446,6 +447,7 @@ registerModType(LFO_DEF);
 var SH_DEF = {
   type: "sh",
   label: "S&H",
+  glyph: () => "sh",
   defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0 },
   controls: [
     { type: "slider", path: "rate", label: "Rate", min: 0.1, max: 30, step: 0.01, unit: "Hz", scope: true },
@@ -527,6 +529,9 @@ function adsrStageLength(stage, params) {
 var ADSR_DEF = {
   type: "adsr",
   label: "ADSR",
+  // Struck by the played keys (a trigger of 'keys'), the envelope wears the
+  // keys; free or looping, its own shape.
+  glyph: (params) => params.trigger === "keys" ? "keys" : "adsr",
   defaults: {
     attack: 10,
     decay: 300,
@@ -660,6 +665,7 @@ function curveDuration(params, bpm) {
 var CURVE_DEF = {
   type: "curve",
   label: "Curve",
+  glyph: () => "curve",
   defaults: {
     duration: 2,
     sync: false,
@@ -857,6 +863,7 @@ function audioLoop(params) {
 var AUDIO_DEF = {
   type: "audio",
   label: "Audio",
+  glyph: () => "audio",
   defaults: {
     speed: 1,
     depth: 1,

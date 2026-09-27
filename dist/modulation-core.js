@@ -354,6 +354,7 @@ function registerModType(def) {
   registry.set(def.type, def);
 }
 var getModType = (type) => registry.get(type);
+var modGlyph = (slot) => getModType(slot.type)?.glyph?.(slot.params) ?? null;
 var listModTypes = () => [...registry.values()];
 var modPageWidth = () => Math.min(
   MOD_PAGE_DIALS,
@@ -375,12 +376,12 @@ var MOD_RING_RADIUS = 6;
 var MOD_RING_CIRCUMFERENCE = 2 * Math.PI * MOD_RING_RADIUS;
 var RING_SWEEP_START = 135 / 360;
 var RING_SWEEP_LEN = 270 / 360;
-function modRingArc(from01, to01) {
+function modRingArc(from01, to01, circumference = MOD_RING_CIRCUMFERENCE) {
   const a = RING_SWEEP_START + clamp012(from01) * RING_SWEEP_LEN;
   const b = RING_SWEEP_START + clamp012(to01) * RING_SWEEP_LEN;
   return {
-    length: Math.abs(b - a) * MOD_RING_CIRCUMFERENCE,
-    offset: -Math.min(a, b) * MOD_RING_CIRCUMFERENCE
+    length: Math.abs(b - a) * circumference,
+    offset: -Math.min(a, b) * circumference
   };
 }
 var LFO_SYNC_DIVISIONS = [
@@ -420,6 +421,7 @@ function previewSlew(values, smooth) {
 var LFO_DEF = {
   type: "lfo",
   label: "LFO",
+  glyph: () => "lfo",
   defaults: { rate: 1, division: LFO_SYNC_DEFAULT, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false },
   controls: [
     /* One slot for how fast, wearing whichever control the moment calls for:
@@ -485,6 +487,7 @@ registerModType(LFO_DEF);
 var SH_DEF = {
   type: "sh",
   label: "S&H",
+  glyph: () => "sh",
   defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0 },
   controls: [
     { type: "slider", path: "rate", label: "Rate", min: 0.1, max: 30, step: 0.01, unit: "Hz", scope: true },
@@ -605,6 +608,9 @@ function adsrStageLength(stage, params) {
 var ADSR_DEF = {
   type: "adsr",
   label: "ADSR",
+  // Struck by the played keys (a trigger of 'keys'), the envelope wears the
+  // keys; free or looping, its own shape.
+  glyph: (params) => params.trigger === "keys" ? "keys" : "adsr",
   defaults: {
     attack: 10,
     decay: 300,
@@ -738,6 +744,7 @@ function curveDuration(params, bpm) {
 var CURVE_DEF = {
   type: "curve",
   label: "Curve",
+  glyph: () => "curve",
   defaults: {
     duration: 2,
     sync: false,
@@ -968,6 +975,7 @@ function audioLoop(params) {
 var AUDIO_DEF = {
   type: "audio",
   label: "Audio",
+  glyph: () => "audio",
   defaults: {
     speed: 1,
     depth: 1,
@@ -1086,6 +1094,7 @@ export {
   lfoSyncedHz,
   listModTypes,
   modColor,
+  modGlyph,
   modKey,
   modPageLayout,
   modPageWidth,

@@ -765,10 +765,17 @@
   border-radius: 50%;
 }
 
-@media (prefers-reduced-motion: reduce) {
-.tweakers-move-mod-dot {
-    transform: none !important;
-  }
+/* A modulation slot's face: its type's mark cut from the dot, and a ring
+   swinging with its live signal. The face fills the circle it sits in. */
+.tweakers-move-mod-face {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.tweakers-move-mod-track,
+.tweakers-move-mod-arc {
+  stroke-width: 2;
 }
 
 .tweakers-mod-ring.tweakers-move-dial-mod {

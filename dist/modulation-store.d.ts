@@ -7,6 +7,7 @@ import './transfer-core.js';
 import './filter-core.js';
 import './range-slider-core.js';
 import './curve-composer-core.js';
+import './icons.js';
 
 /**
  * The modulation layer's runtime — a singleton beside the TweakStore.
