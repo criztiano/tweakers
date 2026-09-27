@@ -1080,22 +1080,26 @@ function moveGrainSpan(dials) {
   };
 }
 var MOVE_GRAIN = { width: 300, height: 100, base: 100, top: 6, copies: 7 };
-var GRAIN_GAP = { sparse: 0.02, dense: 1e3, wide: 3.5, thin: 0.045 };
+var GRAIN_GAP = { sparse: 0.02, dense: 1e3, wide: 2, tight: 1.8, from: 0.6 };
 var GRAIN_MAX_LAG = 3.5;
-function moveGrainGap(spacing) {
-  const { sparse, dense, wide, thin } = GRAIN_GAP;
+function moveGrainGap(spacing, width, dial = 0) {
+  const { sparse, dense, wide, tight, from } = GRAIN_GAP;
   const overlap = 1 / Math.max(1e-9, spacing);
-  const u = clamp01(Math.log(overlap / sparse) / Math.log(dense / sparse));
-  return wide * (thin / wide) ** u;
+  const at2 = overlap >= 1 ? clamp01(Math.log(overlap) / Math.log(dense)) : -clamp01(Math.log(1 / overlap) / Math.log(1 / sparse));
+  const k = clamp01((clamp01(dial) - from) / (1 - from));
+  const pull = k * k * (3 - 2 * k);
+  const x = at2 + (1 - at2) * pull;
+  return x >= 0 ? Math.min(1, tight / Math.max(1e-9, width)) ** x : wide ** -x;
 }
 function moveGrainPicture(span) {
   const { width: W, base, top, copies: most } = MOVE_GRAIN;
   const margin = 6;
   const sample = span.shape ?? ((t) => Math.sin(Math.PI * t));
   const both = span.direction === "ping-pong" || span.direction === "bounce" || span.direction === "scissors";
-  const ratio = span.trail.role === "density" ? moveGrainGap(span.trail.spacing) : Math.min(GRAIN_MAX_LAG, span.trail.lag);
+  const asked = W * (0.2 + 0.46 * clamp01(span.length));
+  const ratio = span.trail.role === "density" ? moveGrainGap(span.trail.spacing, asked, span.positions[2]) : Math.min(GRAIN_MAX_LAG, span.trail.lag);
   const fits = (W - 2 * margin) / (1 + ratio * (both ? 2 : 1));
-  const g = Math.min(W * (0.2 + 0.46 * clamp01(span.length)), fits);
+  const g = Math.min(asked, fits);
   const step = ratio * g;
   const room = both ? (W - g) / 2 - margin : W - g - 2 * margin;
   const count = span.trail.role === "offset" ? 1 : Math.max(1, Math.min(most, Math.ceil(room / Math.max(step, 1e-6))));

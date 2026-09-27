@@ -360,8 +360,10 @@ declare const MOVE_GRAIN: {
     readonly top: 6;
     readonly copies: 7;
 };
-/** The gap the picture draws for a density's true spacing, in grain lengths. */
-declare function moveGrainGap(spacing: number): number;
+/** The gap the picture draws between copies, in grain lengths, for a
+ *  density's true `spacing`, its dial's place `dial` (0..1), and a grain
+ *  drawn `width` units wide. */
+declare function moveGrainGap(spacing: number, width: number, dial?: number): number;
 type MoveGrainPicture = {
     /** The lit grain's outline, closed along the floor. */
     hero: string;
