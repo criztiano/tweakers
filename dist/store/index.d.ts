@@ -943,6 +943,8 @@ declare const TAB_PATH = "_tab";
 type PanelConfig = {
     id: string;
     name: string;
+    /** The page's picture on the Move's track row, retained on the same terms as `hints`. */
+    icon?: string;
     controls: ControlMeta[];
     values: Record<string, TweakValue>;
     shortcuts: Record<string, ShortcutConfig>;
@@ -1075,6 +1077,13 @@ type TweakStorePanelOptions = {
      * persisted entry and its shortcut binding.
      */
     labels?: Record<string, string>;
+    /**
+     * The page's picture on the Move's track row — a name from the bundled
+     * lucide subset (`LUCIDE_ICONS`), drawn beside the page name. A picture
+     * reads at arm's length where a word does not; the settings room's Panel
+     * page says whether the row shows names, pictures, or both.
+     */
+    icon?: string;
     /**
      * Which Move pad column a control sits in, by control path (0-7) — the
      * page's hand-authored hardware layout. Without it the surface packs pads
