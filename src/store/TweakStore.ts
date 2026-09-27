@@ -780,7 +780,7 @@ export type PanelConfig = {
   moveTopRow?: string[];
   /** Value chips sunk onto the action pad row, retained on the same terms as `hints`. */
   moveActionRow?: string[];
-  /** Actions raised onto the value pad row, retained on the same terms as `hints`. */
+  /** Actions and switches lowered onto the value pad row, retained on the same terms as `hints`. */
   moveValueRow?: string[];
   /** Big slots drawn as one container, retained on the same terms as `hints`. */
   moveSlotGroups?: MoveSlotGroup[];
@@ -934,7 +934,8 @@ export type TweakStorePanelOptions = {
    * Actions, by control path, that sit on the value pad row in their
    * `movePads` column — so one column can stack two buttons (Extract over
    * Export). An action whose value cell is taken, or that names no column,
-   * keeps the action row.
+   * keeps the action row. A switch named here, with a column, rides the value
+   * row too and leaves its top cell to a `moveTopRow` chip.
    */
   moveValueRow?: string[];
   /**
