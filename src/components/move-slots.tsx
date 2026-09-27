@@ -881,7 +881,12 @@ export function MoveSlotGrainBody({ span, length, shape, trail, direction }: {
 }
 
 /** One channel of a mixer face: its dial, and the icon and tone it wears. */
-export type MoveChannelDial = MoveFaceDial & { icon?: string; tone?: MoveTone };
+export type MoveChannelDial = MoveFaceDial & {
+  icon?: string;
+  tone?: MoveTone;
+  /** The channel is switched off (its control disabled): it fades back. */
+  off?: boolean;
+};
 
 /**
  * A mixer's face, one slot per channel: each channel's icon and name along
@@ -893,7 +898,7 @@ export function MoveSlotChannelBody({ channels }: { channels: MoveChannelDial[] 
   return (
     <div className="tweakers-move-face" style={{ '--move-face-span': channels.length } as CSSProperties}>
       {channels.map((channel, k) => (
-        <div key={k} className="tweakers-move-channel" data-active={channel.active || undefined}
+        <div key={k} className="tweakers-move-channel" data-active={channel.active || undefined} data-off={channel.off || undefined}
           style={{ '--move-face-col': k, '--move-channel-tone': channel.tone ? `var(--move-${channel.tone})` : undefined } as CSSProperties}>
           <span className="tweakers-move-channel-head">
             {channel.icon && <MoveSlotIcon icon={channel.icon} className="tweakers-move-channel-icon" />}

@@ -307,7 +307,7 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
       body = (
         <MoveSlotChannelBody channels={parts.map((d) => {
           const visual = d.meta.moveVisual;
-          return { ...shown(d), ...(visual?.kind === 'channel' ? { icon: visual.icon, tone: visual.tone } : {}) };
+          return { ...shown(d), ...(visual?.kind === 'channel' ? { icon: visual.icon, tone: visual.tone } : {}), off: off(d.meta) };
         })} />
       );
     } else {

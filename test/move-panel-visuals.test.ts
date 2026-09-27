@@ -268,6 +268,14 @@ describe('MovePanel semantic interactions', () => {
     expect(running.findByProps({ className: 'tweakers-move-clock-foot' }).props.children).toBe('200 BPM');
   });
 
+  it('fades a mixer channel whose control is switched off', () => {
+    const channel = (v: number) => ({ type: 'slider', min: 0, max: 100, default: v, step: 1, moveVisual: { kind: 'channel' } }) as const;
+    mount({ a: channel(50), b: channel(50) });
+    act(() => TweakStore.setDisabled(id, 'b', true));
+    const lanes = renderer!.root.findByProps({ 'data-kind': 'channel' }).findAll((n) => n.props.className === 'tweakers-move-channel');
+    expect(lanes.map((l) => !!l.props['data-off'])).toEqual([false, true]);
+  });
+
   it('draws x, y and z side by side as one stage, each column turning its own axis', () => {
     mount({
       x: { type: 'slider', min: 0, max: 1000, default: 250, step: 1, moveVisual: { kind: 'axis', axis: 'x' } },
