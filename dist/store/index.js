@@ -1110,6 +1110,7 @@ var TweakStoreClass = class {
           orientation: value.orientation,
           display: value.display,
           wrap: value.wrap,
+          onTap: value.onTap,
           shortcut
         });
       } else if (this.isNumberConfig(value)) {
