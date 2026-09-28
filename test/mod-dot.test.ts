@@ -74,6 +74,19 @@ describe('the step row circle (React)', () => {
     expect(root.findByType('svg').props['data-glyph']).toBe('sh');
   });
 
+  it('says whether its page is the one open', () => {
+    expect(mount(slot(0, 'lfo')).findByType('svg').props['data-state']).toBeUndefined();
+    act(() => renderer!.update(createElement(ModDot, { slot: slot(0, 'lfo'), state: 'inactive' })));
+    expect(renderer!.root.findByType('svg').props['data-state']).toBe('inactive');
+  });
+
+  it('draws a one-way ring up from the bottom-left', () => {
+    mount(slot(2, 'adsr', { range: 'positive' }));
+    vi.spyOn(ModulationStore, 'getSignal').mockReturnValue(0.5);
+    frame!();
+    expect(Number(written.get('stroke-dashoffset'))).toBeCloseTo(modRingArc(0, 0.5, 2 * Math.PI * 10.5).offset, 1);
+  });
+
   it('draws a plain dot for a type with no mark', () => {
     const root = mount(slot(2, 'sequencer'));
     expect(root.findAllByType('mask')).toHaveLength(0);

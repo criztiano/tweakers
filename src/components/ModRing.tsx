@@ -4,6 +4,8 @@ import { ModulationStore } from '../store/ModulationStore';
 import {
   modColor,
   modGlyph,
+  modRange,
+  modRangeArc,
   modRingArc,
   MOD_RING_RADIUS,
   MOD_RING_CIRCUMFERENCE,
@@ -65,11 +67,19 @@ export function ModRing({
       typeof window !== 'undefined' &&
       window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     if (still) {
-      // The reach: half the span each way at full amount, the same geometry
-      // applyModulation sweeps through. It follows the base the user drags,
+      // The reach, the same geometry applyModulation sweeps through: half
+      // the span each way at full amount, or the whole span in the one
+      // direction the slot pushes. It follows the base the user drags,
       // just not the signal.
-      const reach = assignment.amount / 2;
-      const drawReach = () => draw(base01() - reach, base01() + reach);
+      const slot = ModulationStore.getSlot(assignment.slot);
+      const range = slot ? modRange(slot) : 'bipolar';
+      const a = assignment.amount;
+      const drawReach = () => {
+        const b = base01();
+        if (range === 'positive') draw(b, b + a);
+        else if (range === 'negative') draw(b - a, b);
+        else draw(b - a / 2, b + a / 2);
+      };
       drawReach();
       return TweakStore.subscribe(panelId, drawReach);
     }
@@ -100,7 +110,7 @@ export function ModRing({
   );
 }
 
-/** The step circle's face, on a 24px grid: the value ring, and the dot inside it. */
+/** The step circle's face, on a 24px grid: the well, the value ring, and the dot inside it. */
 const DOT_RING_RADIUS = 10.5;
 const DOT_RING_CIRCUMFERENCE = 2 * Math.PI * DOT_RING_RADIUS;
 const DOT_RADIUS = 8;
@@ -110,14 +120,20 @@ const DOT_RADIUS = 8;
  * its type's mark cut out of it — the wave, the die, the envelope, the keys,
  * the arch, the note — so a row of circles says which modulator is which.
  * A ring around it swings with the slot's live signal on a knob's sweep,
- * out from the top the way the signal pushes a control from its base: an
- * LFO rocks either side, an envelope climbs one way and falls back to rest.
+ * the way the signal pushes a control from its base: out from the top when
+ * it swings both ways (an LFO rocks either side), up from the bottom-left
+ * when it pushes up (an envelope climbs and falls back to rest), down from
+ * the bottom-right when it pushes down.
+ *
+ * While a modulator's page is open the row says whose page it is: that
+ * slot's circle is `active`, the rest `inactive` — their colour drawn out to
+ * grey, so the one lit circle is the one the page belongs to.
  *
  * The arc is written straight to its dash attributes per frame, the ring's
  * own pattern, so the panel never re-renders for it. Under reduced motion
  * the ring stays empty and the dot and its mark still say which slot it is.
  */
-export function ModDot({ slot }: { slot: ModulationSlot }) {
+export function ModDot({ slot, state }: { slot: ModulationSlot; state?: 'active' | 'inactive' }) {
   const arcRef = useRef<SVGCircleElement>(null);
   const maskId = `tweakers-mod-dot-${useId().replace(/:/g, '')}`;
   const color = modColor(slot.index);
@@ -130,14 +146,23 @@ export function ModDot({ slot }: { slot: ModulationSlot }) {
     return ModulationStore.subscribeFrames(() => {
       const el = arcRef.current;
       if (!el) return;
-      const { length, offset } = modRingArc(0.5, (ModulationStore.getSignal(slot.index) + 1) / 2, DOT_RING_CIRCUMFERENCE);
+      // The slot object is the store's own, its params replaced in place, so
+      // a range picked on the page reads here on the next frame.
+      const { from, to } = modRangeArc(modRange(slot), ModulationStore.getSignal(slot.index));
+      const { length, offset } = modRingArc(from, to, DOT_RING_CIRCUMFERENCE);
       el.setAttribute('stroke-dasharray', `${length.toFixed(2)} ${DOT_RING_CIRCUMFERENCE.toFixed(2)}`);
       el.setAttribute('stroke-dashoffset', offset.toFixed(2));
     });
-  }, [slot.index]);
+  }, [slot]);
 
   return (
-    <svg className="tweakers-move-mod-face" viewBox="0 0 24 24" aria-hidden="true" data-glyph={glyph ?? undefined}>
+    <svg
+      className="tweakers-move-mod-face"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      data-glyph={glyph ?? undefined}
+      data-state={state}
+    >
       {mark && (
         <mask id={maskId}>
           <circle cx="12" cy="12" r={DOT_RADIUS} fill="white" />
@@ -151,7 +176,7 @@ export function ModDot({ slot }: { slot: ModulationSlot }) {
           </g>
         </mask>
       )}
-      <circle className="tweakers-mod-ring-track tweakers-move-mod-track" cx="12" cy="12" r={DOT_RING_RADIUS} />
+      <circle className="tweakers-move-mod-well" cx="12" cy="12" r="12" />
       <circle
         ref={arcRef}
         className="tweakers-mod-ring-arc tweakers-move-mod-arc"

@@ -9,6 +9,9 @@ import {
   restoreModParams,
   listModTypes,
   applyModulation,
+  modRange,
+  modReach,
+  rangeSignal,
   modPageLayout,
   visibleModControls,
   type ModTypeDef,
@@ -102,6 +105,8 @@ class ModulationStoreClass {
   private pending: ModulationAssignment[] = [];
   private states = new Map<number, unknown>();
   private signals: number[] = Array(MOD_SLOTS).fill(0);
+  /** Each slot's level, 0..1 — its own shape, before the range turns it. */
+  private levels: number[] = Array(MOD_SLOTS).fill(0);
   private sources = new Map<string, ModulationSourceConfig>();
   private sourceValues = new Map<string, number>();
   private metas = new Map<string, NumericMeta | null>();
@@ -257,6 +262,7 @@ class ModulationStoreClass {
     this.slots[index] = null;
     this.states.delete(index);
     this.signals[index] = 0;
+    this.levels[index] = 0;
     for (const [key, a] of this.assignments) {
       if (a.slot === index) this.assignments.delete(key);
     }
@@ -444,7 +450,8 @@ class ModulationStoreClass {
     return {
       dials: [{ path: 'type' }, ...layout.dials].slice(0, 8),
       toggles: [null, ...layout.toggles].slice(0, 8),
-      values: [null, ...layout.values].slice(0, 8),
+      // The range chip sits under the type picker on every page.
+      values: [{ path: 'range' }, ...layout.values].slice(0, 8),
     };
   }
 
@@ -501,7 +508,8 @@ class ModulationStoreClass {
           options: c.options ?? [],
           moveVisual: c.moveVisual,
           preview: c.preview,
-          default: String(slot.params[c.path] ?? def.defaults[c.path] ?? ''),
+          // The range falls back past a type that names no default of its own.
+          default: c.path === 'range' ? modRange(slot) : String(slot.params[c.path] ?? def.defaults[c.path] ?? ''),
         };
       } else if (c.type === 'slider') {
         config[c.path] = {
@@ -661,9 +669,17 @@ class ModulationStoreClass {
 
   /* ── reading the modulated layer ──────────────────────────────────── */
 
-  /** A slot's live signal, -1..1. */
+  /**
+   * A slot's live signal, -1..1, turned by its range: 0..1 for a slot that
+   * pushes up, -1..0 for one that pushes down, -1..1 for both ways.
+   */
   getSignal(index: number): number {
     return this.signals[index] ?? 0;
+  }
+
+  /** A slot's live level, 0..1 — the modulator's own shape, whichever way it pushes. */
+  getLevel(index: number): number {
+    return this.levels[index] ?? 0;
   }
 
   /** Where a slot sits in its cycle, 0..1 — a curve composer's playhead. */
@@ -685,7 +701,9 @@ class ModulationStoreClass {
     if (!meta) return 0;
     const base = Number(TweakStore.getValue(panelId, path));
     if (!Number.isFinite(base)) return 0;
-    return applyModulation(base, this.signals[a.slot], a.amount, meta.min, meta.max) - base;
+    // An app's own source sends its signal as it is: both ways.
+    const reach = slot.source ? modReach('bipolar') : modReach(modRange(slot));
+    return applyModulation(base, this.signals[a.slot], a.amount, meta.min, meta.max, reach) - base;
   }
 
   /**
@@ -755,6 +773,7 @@ class ModulationStoreClass {
           try { v = clamp(Number(src.sample(slot)) || 0, -1, 1); } catch { v = 0; }
         }
         this.signals[slot.index] = v;
+        this.levels[slot.index] = (v + 1) / 2;
         continue;
       }
       const def = getModType(slot.type);
@@ -764,7 +783,10 @@ class ModulationStoreClass {
         state = def.createState();
         this.states.set(slot.index, state);
       }
-      this.signals[slot.index] = clamp(def.tick(state, slot.params, step, this.bpm), -1, 1);
+      const raw = def.tick(state, slot.params, step, this.bpm);
+      const level = def.unipolar?.(slot.params) ? clamp(raw, 0, 1) : (clamp(raw, -1, 1) + 1) / 2;
+      this.levels[slot.index] = level;
+      this.signals[slot.index] = rangeSignal(level, modRange(slot));
     }
     this.frameListeners.forEach((fn) => fn());
   }

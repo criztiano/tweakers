@@ -21,6 +21,7 @@ import {
   CurveComposer,
   ModRing,
   ModDot,
+  type ModulationSlot,
   ModulationStore,
   envelopePoints,
   envelopeJoints,
@@ -364,11 +365,17 @@ export const MOD_FACES: { kind: string; description: string; note?: string; rend
   {
     kind: 'circle',
     description: 'a modulation slot in the step row: its colour, its type’s mark cut out of the dot, and a ring swinging with its live signal',
-    note: 'LFO, S&H, ADSR, Keys, Curve, Audio. The first four and the curve are the library’s own slots, so their rings move; Keys and Audio stand still, with no slot behind them.',
+    note: 'LFO, S&H, ADSR, Keys, Curve, Audio. The LFO, S&H, ADSR and Curve are the library’s own slots, so their rings move — both ways from the top, or up from the bottom-left, as each slot’s range says; Keys and Audio stand still, with no slot behind them. Below: the LFO’s page is open, so the rest go grey.',
     render: () => (
-      <div className="tweakers-move-mods">
-        {MOD_DOTS.map((slot) => (
-          <span key={slot.index} className="tweakers-move-mod"><ModDot slot={slot} /></span>
+      <div style={{ display: 'grid', gap: 12 }}>
+        {[undefined, MOD_LFO].map((open) => (
+          <div key={open ?? 'none'} className="tweakers-move-mods">
+            {modDots().map((slot) => (
+              <span key={slot.index} className="tweakers-move-mod">
+                <ModDot slot={slot} state={open === undefined ? undefined : slot.index === open ? 'active' : 'inactive'} />
+              </span>
+            ))}
+          </div>
         ))}
       </div>
     ),
@@ -393,14 +400,15 @@ export const MOD_FACES: { kind: string; description: string; note?: string; rend
 ];
 
 /** One circle per mark: the library's running slots where it has them. */
-const MOD_DOTS = [
+/** The store's own slot where there is one, so its range and ring are live. */
+const modDots = (): ModulationSlot[] => ([
   { index: MOD_LFO, type: 'lfo' as const, params: {} },
   { index: MOD_SH, type: 'sh' as const, params: {} },
   { index: MOD_ENV, type: 'adsr' as const, params: {} },
   { index: 4, type: 'adsr' as const, params: { trigger: 'keys' } },
   { index: MOD_CURVE, type: 'curve' as const, params: {} },
   { index: 5, type: 'audio' as const, params: {} },
-];
+] as ModulationSlot[]).map((dot) => ModulationStore.getSlot(dot.index) ?? dot);
 
 /** The ring on the library's own wired control — a real assignment, so the
  *  arc moves with the LFO rather than sitting still. */

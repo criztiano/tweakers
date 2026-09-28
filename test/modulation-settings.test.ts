@@ -30,7 +30,7 @@ describe('the modulator settings page', () => {
     expect(panel.kind).toBe('modulation');
     expect(panel.name).toBe('LFO 4');
     // The scope is a display, not a control — it registers no panel value.
-    expect(panel.controls.map((c) => c.path)).toEqual(['type', 'rate', 'sync', 'phase', 'width', 'jitter', 'smooth']);
+    expect(panel.controls.map((c) => c.path)).toEqual(['type', 'range', 'rate', 'sync', 'phase', 'width', 'jitter', 'smooth']);
 
     // Hidden: not a dock panel, not a Move track page.
     expect(TweakStore.getPanels('panel').some((p) => p.id === MOD_SETTINGS_PANEL)).toBe(false);
@@ -39,19 +39,21 @@ describe('the modulator settings page', () => {
   it('lays the page out with type in the first big slot and sync beside rate', () => {
     ModulationStore.createSlot(0);
     ModulationStore.openSettings(0);
-    const page = buildModMovePage(TweakStore.getPanel(MOD_SETTINGS_PANEL)!);
+    const page = buildModMovePage(TweakStore.getPanel(MOD_SETTINGS_PANEL)!, ModulationStore.getSettingsLayout());
     // Sync is the switch the rate slot is about, so it takes a slot of its
     // own next to it rather than a pad underneath — and wears its picture.
     expect(page.dials.map((c) => c.path)).toEqual(['type', 'rate', 'sync', 'phase', 'width', 'jitter', 'smooth']);
     expect(page.dials[2]?.icon).toBe('timer');
     expect(page.toggles.filter(Boolean)).toEqual([]);
+    // The range is a chip under the type picker, not a slot of its own.
+    expect(page.values[0]?.path).toBe('range');
   });
 
   it('swaps the rate slot for a division picker while synced', () => {
     ModulationStore.createSlot(0);
     ModulationStore.openSettings(0);
     TweakStore.updateValue(MOD_SETTINGS_PANEL, 'sync', true);
-    const page = buildModMovePage(TweakStore.getPanel(MOD_SETTINGS_PANEL)!);
+    const page = buildModMovePage(TweakStore.getPanel(MOD_SETTINGS_PANEL)!, ModulationStore.getSettingsLayout());
     expect(page.dials.map((c) => c.path)).toEqual(['type', 'division', 'sync', 'phase', 'width', 'jitter', 'smooth']);
     // The picker holds the divisions, and the page keeps its scope on that slot.
     expect(page.dials[1]?.options).toContain('1/4');
@@ -80,7 +82,7 @@ describe('the modulator settings page', () => {
     expect(ModulationStore.getSlot(0)!.params).toEqual({ rate: 2 });
     const panel = TweakStore.getPanel(MOD_SETTINGS_PANEL)!;
     expect(panel.name).toBe('S&H 1');
-    expect(panel.controls.map((c) => c.path)).toEqual(['type', 'rate']);
+    expect(panel.controls.map((c) => c.path)).toEqual(['type', 'range', 'rate']);
   });
 
   it('closes cleanly: unregisters the panel and stops following edits', () => {

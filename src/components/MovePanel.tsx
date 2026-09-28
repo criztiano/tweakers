@@ -3774,10 +3774,10 @@ const SCOPE_SAMPLES = 120;
 function MoveScope({ index }: { index: number }) {
   const ref = useRef<SVGPathElement>(null);
   useEffect(() => {
-    const now = (ModulationStore.getSignal(index) + 1) / 2;
+    const now = ModulationStore.getLevel(index);
     const pts: number[] = Array(SCOPE_SAMPLES).fill(now);
     let raf = requestAnimationFrame(function tick() {
-      pts.push((ModulationStore.getSignal(index) + 1) / 2);
+      pts.push(ModulationStore.getLevel(index));
       pts.shift();
       ref.current?.setAttribute('d', moveShapePath(pts));
       raf = requestAnimationFrame(tick);
@@ -3867,12 +3867,15 @@ function stepRuns(cells: MoveStepCell[]): MoveStepCell[][] {
 function MoveModCircle({ slot }: { slot: ModulationSlot }) {
   const pressAt = useRef(0);
   const name = getModType(slot.type)?.label ?? slot.type.toUpperCase();
+  // The page open now, if any: its slot's circle stays lit, the rest go grey.
+  const shown = ModulationStore.getSettings();
 
   return (
     <button
       type="button"
       className="tweakers-move-mod"
       title={`${name} · step ${slot.index + 1}`}
+      aria-pressed={shown?.index === slot.index}
       onPointerDown={() => {
         pressAt.current = Date.now();
       }}
@@ -3889,7 +3892,7 @@ function MoveModCircle({ slot }: { slot: ModulationSlot }) {
         else ModulationStore.openSettings(slot.index);
       }}
     >
-      <ModDot slot={slot} />
+      <ModDot slot={slot} state={shown ? (shown.index === slot.index ? 'active' : 'inactive') : undefined} />
     </button>
   );
 }
