@@ -1339,12 +1339,12 @@
 /* End of the connection dot skin block. */
 
 /* The Menu button on screen: a round dark well pinned to the window's
-   top-right corner, the three-line mark in the panel's text colour. It lights
+   top-left corner, the three-line mark in the panel's text colour. It lights
    while what it opened — the presets, the palettes — is up. */
 .tweakers-move-menu {
   position: fixed;
   top: 16px;
-  right: 16px;
+  left: 16px;
   z-index: 10003;
   line-height: 0;
 }
