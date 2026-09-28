@@ -55,6 +55,23 @@ describe('MovePanel semantic interactions', () => {
     expect(TweakStore.getValues(id).opacity).toBe(0);
   });
 
+  it('an opacity slot with a picture shows the picture at its opacity, and a still press runs onTap', () => {
+    const onTap = vi.fn();
+    mount({ opacity: { ...opacity, moveVisual: { kind: 'opacity', picture: 'blob:photo' }, onTap } });
+    const image = () => dial('Opacity').findByType('image');
+    expect(image().props.href).toBe('blob:photo');
+    expect(image().props.opacity).toBe(0.5);
+    act(() => dial('Opacity').props.onKeyDown(keyEvent('End')));
+    expect(image().props.opacity).toBe(1);
+    // a still press is the slot's door; a drag only turns the value
+    act(() => dial('Opacity').props.onPointerDown(at(0, 0)));
+    act(() => dial('Opacity').props.onPointerUp(at(0, 0)));
+    expect(onTap).toHaveBeenCalledTimes(1);
+    drag(dial('Opacity'), -40, 0);
+    expect(onTap).toHaveBeenCalledTimes(1);
+    expect(TweakStore.getValues(id).opacity).toBeLessThan(1);
+  });
+
   it('updates the rendered specimens when shared values change', () => {
     mount({
       opacity,

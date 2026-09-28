@@ -89,7 +89,13 @@ export function MoveSlotNumericBody({ label, value, drawing }: {
     <>
       <span className="tweakers-move-dial-tag">{label}</span>
       <svg className="tweakers-move-visual" viewBox="0 0 100 60" aria-hidden="true">
-        {drawing.kind === 'opacity' && (
+        {drawing.kind === 'opacity' && drawing.picture && (
+          <>
+            <rect className="tweakers-move-visual-guide" x="0.5" y="0.5" width="99" height="59" rx="3" />
+            <image href={drawing.picture} x="0" y="0" width="100" height="60" preserveAspectRatio="xMidYMid meet" opacity={drawing.alpha} />
+          </>
+        )}
+        {drawing.kind === 'opacity' && !drawing.picture && (
           <>
             <circle className="tweakers-move-visual-guide" cx="40" cy="30" r="18" />
             <circle className="tweakers-move-visual-guide" cx="60" cy="30" r="18" />
