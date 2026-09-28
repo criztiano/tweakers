@@ -212,9 +212,86 @@ function fit(entry: Entry, value: unknown): unknown {
 }
 
 /**
+ * How long an agent's number takes to arrive. A hand on a knob moves a value
+ * through every step between; the agent's writes land the same way, so a
+ * change reads as a turn and not a jump. Longer than the bridge's catch-up
+ * glide (120 ms, a lag hidden) — this one is a gesture, meant to be seen.
+ */
+export const MOVE_AGENT_GLIDE_MS = 420;
+
+/* One glide per value, keyed by panel, path and component. Each frame writes
+   the eased value through the store like any edit, reading the live object
+   first so two components of one control (x and y) glide side by side. A
+   value that moved under the glide — a hand, a preset, a later ask — is
+   left alone: the glide is presentation, and it never fights a hand.
+   Headless (no rAF: tests, node) the target lands at once. */
+const glides = new Map<string, { t0: number; from: number; to: number; wrote: number }>();
+let glideFrame: number | null = null;
+const easeOut = (t: number) => 1 - (1 - t) * (1 - t) * (1 - t);
+
+function glideStep(now: number) {
+  glideFrame = null;
+  for (const [key, g] of glides) {
+    const [panelId, path, comp] = key.split('\0');
+    const live = TweakStore.getPanel(panelId)?.values[path];
+    const seen = component(live, comp || undefined);
+    if (live === undefined || seen !== g.wrote) { glides.delete(key); continue; }
+    const t = Math.min(1, (now - g.t0) / MOVE_AGENT_GLIDE_MS);
+    const value = t >= 1 ? g.to : g.from + (g.to - g.from) * easeOut(t);
+    g.wrote = value;
+    TweakStore.updateValues(panelId, { [path]: (comp ? { ...(live as object), [comp]: value } : value) as TweakValue });
+    if (t >= 1) glides.delete(key);
+  }
+  if (glides.size) glideFrame = requestAnimationFrame(glideStep);
+}
+
+/** Start (or retarget) a value's glide from where it stands now. */
+function glide(panelId: string, path: string, comp: string | undefined, from: number, to: number) {
+  const key = `${panelId}\0${path}\0${comp ?? ''}`;
+  const live = glides.get(key);
+  glides.set(key, { t0: performance.now(), from: live?.wrote ?? from, to, wrote: live?.wrote ?? from });
+  if (glideFrame === null) glideFrame = requestAnimationFrame(glideStep);
+}
+
+const canGlide = () => typeof requestAnimationFrame === 'function' && typeof performance !== 'undefined';
+
+/**
+ * Land a set of values, per panel: numbers glide to their targets, anything
+ * else (a switch, an option, a colour, a text) lands at once — there is
+ * nothing between its states to pass through. The pre-values are read from
+ * the store, so a glide already in flight retargets from where it is.
+ */
+function landValues(updates: Record<string, Record<string, TweakValue>>, glideNumbers: boolean): void {
+  for (const [panelId, values] of Object.entries(updates)) {
+    if (!glideNumbers || !canGlide()) { TweakStore.updateValues(panelId, values); continue; }
+    const live = TweakStore.getValues(panelId);
+    const now: Record<string, TweakValue> = {};
+    for (const [path, target] of Object.entries(values)) {
+      const from = live[path];
+      if (typeof target === 'number' && typeof from === 'number') { glide(panelId, path, undefined, from, target); continue; }
+      if (target && typeof target === 'object' && from && typeof from === 'object' && !Array.isArray(target)) {
+        // a composite: glide each number in it, land the rest at once
+        const rest: Record<string, unknown> = { ...(from as object) };
+        let landed = false;
+        for (const [comp, v] of Object.entries(target as Record<string, unknown>)) {
+          const f = (from as Record<string, unknown>)[comp];
+          if (typeof v === 'number' && typeof f === 'number') { if (v !== f) glide(panelId, path, comp, f, v); }
+          else if (v !== f) { rest[comp] = v; landed = true; }
+        }
+        if (landed) now[path] = rest as TweakValue;
+        continue;
+      }
+      now[path] = target;
+    }
+    if (Object.keys(now).length) TweakStore.updateValues(panelId, now);
+  }
+}
+
+/**
  * Commit an agent's writes. Unknown ids and values that fit no control are
- * dropped, never guessed at. Returns the values from before, per panel —
- * hand it to `restoreAgentWrites` to undo — and how many values moved.
+ * dropped, never guessed at. Numbers glide in; the rest lands. Returns the
+ * values from before, per panel — hand it to `restoreAgentWrites` to undo —
+ * and how many values moved.
  */
 export function applyAgentWrites(writes: MoveAgentWrite[], only?: string | string[]): { before: Record<string, Record<string, TweakValue>>; changed: number } {
   const byId = new Map(entries(only).map((e) => [e.control.id, e]));
@@ -233,7 +310,7 @@ export function applyAgentWrites(writes: MoveAgentWrite[], only?: string | strin
     pending[entry.path] = (entry.component ? { ...(current as object), [entry.component]: value } : value) as TweakValue;
     changed++;
   }
-  for (const [panelId, values] of Object.entries(updates)) TweakStore.updateValues(panelId, values);
+  landValues(updates, true);
   return { before, changed };
 }
 
@@ -301,8 +378,11 @@ export async function runAgentActions(calls: MoveAgentCall[], actions: MoveAgent
   return { ran, skipped, undos, undoable };
 }
 
+/** Put values back the way they came: gliding, so an undo is a turn back and not a jump. */
 export function restoreAgentWrites(before: Record<string, Record<string, TweakValue>>): void {
-  for (const [panelId, values] of Object.entries(before)) if (TweakStore.getPanel(panelId)) TweakStore.updateValues(panelId, values);
+  const live: Record<string, Record<string, TweakValue>> = {};
+  for (const [panelId, values] of Object.entries(before)) if (TweakStore.getPanel(panelId)) live[panelId] = values;
+  landValues(live, true);
 }
 
 /** The kit's own tool, offered whenever the host gave signals. */

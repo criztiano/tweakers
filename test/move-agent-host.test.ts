@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TweakStore } from '../src/store/TweakStore';
 import { collectGenes } from '../src/preset-genetics';
-import { MoveAgentStore, applyAgentWrites, describeAgentControls, type MoveAgentAction, type MoveAgentOutcome, type MoveAgentReply, type MoveAgentRequest } from '../src/move-agent';
+import { MoveAgentStore, applyAgentWrites, describeAgentControls, restoreAgentWrites, MOVE_AGENT_GLIDE_MS, type MoveAgentAction, type MoveAgentOutcome, type MoveAgentReply, type MoveAgentRequest } from '../src/move-agent';
 import type { MoveAgentEntry, MoveAgentSignal, MoveAgentTool } from '../src/move-agent-perception';
 
 // What the first real host (a sampling editor) needed and the kit did not
@@ -234,5 +234,54 @@ describe('an undo that fails says why', () => {
     await landed([() => { throw new Error(''); }]);
     await MoveAgentStore.undo();
     expect(MoveAgentStore.getView()!.message).toBe('Some of it could not be undone.');
+  });
+});
+
+describe('an agent write glides in', () => {
+  const PANEL = 'glide-test';
+  const frames: FrameRequestCallback[] = [];
+  let clock = 0;
+  beforeEach(() => {
+    clock = 0; frames.length = 0;
+    vi.stubGlobal('requestAnimationFrame', (fn: FrameRequestCallback) => { frames.push(fn); return frames.length; });
+    vi.stubGlobal('performance', { now: () => clock });
+    TweakStore.registerPanel(PANEL, 'Glide', { blur: [4, 0, 20], point: { type: 'xy', default: { x: 0.2, y: 0.8 } }, glow: true });
+  });
+  afterEach(() => { TweakStore.unregisterPanel(PANEL); vi.unstubAllGlobals(); });
+  const tick = (ms: number) => { clock += ms; const due = frames.splice(0); for (const f of due) f(clock); };
+
+  it('moves a number through the values between, and lands exactly on the target', () => {
+    applyAgentWrites([{ id: `${PANEL}::blur`, value: 14 }], 'Glide');
+    expect(TweakStore.getValue(PANEL, 'blur')).toBe(4);              // nothing yet: the first frame is to come
+    tick(MOVE_AGENT_GLIDE_MS / 2);
+    const mid = TweakStore.getValue(PANEL, 'blur') as number;
+    expect(mid).toBeGreaterThan(4); expect(mid).toBeLessThan(14);
+    tick(MOVE_AGENT_GLIDE_MS);
+    expect(TweakStore.getValue(PANEL, 'blur')).toBe(14);
+    expect(frames.length).toBe(0);                                    // landed: no frame left pending
+  });
+
+  it('glides one axis of a pair and lands a switch at once', () => {
+    applyAgentWrites([{ id: `${PANEL}::point:y`, value: 0.1 }, { id: `${PANEL}::glow`, value: false }], 'Glide');
+    expect(TweakStore.getValue(PANEL, 'glow')).toBe(false);
+    tick(MOVE_AGENT_GLIDE_MS + 1);
+    expect(TweakStore.getValue(PANEL, 'point')).toEqual({ x: 0.2, y: 0.1 });
+  });
+
+  it('lets go the moment a hand moves the value, and undo glides back', () => {
+    applyAgentWrites([{ id: `${PANEL}::blur`, value: 14 }], 'Glide');
+    tick(100);
+    TweakStore.updateValue(PANEL, 'blur', 2);                         // a hand on the knob
+    tick(MOVE_AGENT_GLIDE_MS);
+    expect(TweakStore.getValue(PANEL, 'blur')).toBe(2);
+    const { before } = applyAgentWrites([{ id: `${PANEL}::blur`, value: 18 }], 'Glide');
+    tick(MOVE_AGENT_GLIDE_MS + 1);
+    expect(TweakStore.getValue(PANEL, 'blur')).toBe(18);
+    restoreAgentWrites(before);
+    tick(MOVE_AGENT_GLIDE_MS / 3);
+    const mid = TweakStore.getValue(PANEL, 'blur') as number;
+    expect(mid).toBeLessThan(18); expect(mid).toBeGreaterThan(2);
+    tick(MOVE_AGENT_GLIDE_MS);
+    expect(TweakStore.getValue(PANEL, 'blur')).toBe(2);
   });
 });
