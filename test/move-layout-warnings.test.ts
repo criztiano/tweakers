@@ -91,6 +91,34 @@ describe('the layout builder says what it drops', () => {
     });
   });
 
+  it('holds a one-column filter\'s top cell for its resonance chip — a switch asked there moves along', () => {
+    const issues = capture();
+    const tone = control('tone', { type: 'filter', moveVertical: true, min: undefined, max: undefined });
+    const [page] = buildMovePages([panel('p', [tone, control('mute', { type: 'toggle' })], { mute: 0 })]);
+    expect(page.topValues?.[0]?.path).toBe('tone:resonance');
+    expect(page.toggles[1]?.path).toBe('mute');
+    expect(issues).toContainEqual({
+      code: 'pad-column-taken',
+      message: "panel 'p': control 'mute': toggle column 0 already occupied by 'tone:resonance' — moved to column 1",
+    });
+  });
+
+  it('keeps a moveTopRow chip off a one-column filter\'s resonance chip', () => {
+    const issues = capture();
+    const sliders = Array.from({ length: MOVE_DIALS - 1 }, (_, i) => control(`s${i}`));
+    const tone = control('tone', { type: 'filter', moveVertical: true, min: undefined, max: undefined });
+    const [page] = buildMovePages([{
+      ...panel('p', [tone, ...sliders, control('bell')], { bell: 0 }),
+      moveTopRow: ['bell'],
+    }]);
+    expect(page.topValues?.[0]?.path).toBe('tone:resonance');
+    expect(page.values[0]?.path).toBe('bell');
+    expect(issues).toContainEqual({
+      code: 'top-row-taken',
+      message: "panel 'p': control 'bell': top-row column 0 holds 'tone:resonance' — the chip keeps the value row",
+    });
+  });
+
   it('says when a full pad row swallows a control', () => {
     const issues = capture();
     const toggles = Array.from({ length: MOVE_PADS + 1 }, (_, i) =>

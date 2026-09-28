@@ -23,6 +23,16 @@ const SHAPES: Record<string, (t: number) => number> = {
   bounce: (t) => Math.abs(Math.sin(t * Math.PI * 2)) * (1 - t),
 };
 
+/** The texture picker's pictures — any image URL; here tiny SVGs, as masks. */
+const svg = (body: string) =>
+  `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 140">${body}</svg>`)}`;
+const PATTERNS = {
+  stripes: svg(Array.from({ length: 14 }, (_, i) => `<path d="M${i * 20 - 140} 140 L${i * 20} 0" stroke="#000" stroke-width="4"/>`).join('')),
+  dots: svg(Array.from({ length: 42 }, (_, i) => `<circle cx="${(i % 6) * 20 + 10}" cy="${Math.floor(i / 6) * 20 + 10}" r="4"/>`).join('')),
+  checks: svg(Array.from({ length: 42 }, (_, i) => ((i % 6) + Math.floor(i / 6)) % 2
+    ? `<rect x="${(i % 6) * 20}" y="${Math.floor(i / 6) * 20}" width="20" height="20"/>` : '').join('')),
+};
+
 /**
  * The library's own beat, for the metronome to swing to: a full sweep a beat,
  * at an extreme on every click. A real app reads its transport here, and
@@ -30,6 +40,9 @@ const SHAPES: Record<string, (t: number) => number> = {
  */
 export const LIBRARY_BPM = 120;
 export const librarySwing = () => Math.cos((performance.now() / 60000) * LIBRARY_BPM * Math.PI);
+/** The clock's hand: a turn every eight seconds, as a scan through an
+ *  eight-second sample would go. */
+export const libraryHand = () => (performance.now() / 8000) % 1;
 
 export const CONFIG = {
   /* ── the everyday dial: a name, a number, a bar ───────────────── */
@@ -68,6 +81,16 @@ export const CONFIG = {
       { value: 'bounce', label: 'Bounce' },
     ],
     preview: (name: string) => SHAPES[name] ?? null,
+  },
+
+  /* a choice that is a pattern: each option's picture fills the slot */
+  texture: {
+    type: 'select', default: 'stripes',
+    options: [
+      { value: 'stripes', label: 'Stripes', picture: PATTERNS.stripes },
+      { value: 'dots', label: 'Dots', picture: PATTERNS.dots },
+      { value: 'checks', label: 'Checks', picture: PATTERNS.checks },
+    ],
   },
 
   /* ── a switch that earned a slot of its own ───────────────────── */
@@ -113,6 +136,10 @@ export const CONFIG = {
     default: { x: 0, y: 5 },
     returnToCenter: true,
   },
+
+  /* ── a number that says what it is: the value the headline, the name a
+        tag — asked for with `display: 'value'` ───────────────────── */
+  decay: { type: 'slider', default: 250, min: 0, max: 2000, step: 1, unit: ' ms', display: 'value' },
 
   /* ── values a bar cannot say: a bearing, a colour, a shape ────── */
   heading: { type: 'slider', default: 270, min: 0, max: 360, step: 1, display: 'dial' },
@@ -161,6 +188,38 @@ export const CONFIG = {
   pitch: {
     type: 'slider', default: 0, min: -24, max: 24, step: 1, bipolar: true, unit: ' st',
     moveVisual: { kind: 'pitch' },
+  },
+  /* the same pitch stood upright: the slot's sides close in on the mark */
+  throat: {
+    type: 'slider', default: 7, min: -24, max: 24, step: 1, bipolar: true, unit: ' st',
+    moveVisual: { kind: 'pitch', look: 'diaphragm' },
+  },
+  speed: {
+    type: 'slider', default: 1, min: 0.25, max: 4, step: 0.01,
+    moveVisual: { kind: 'gauge' },
+  },
+  /* the same speed as its own number, rushing */
+  rush: {
+    type: 'slider', default: 1.5, min: 0.25, max: 4, step: 0.05,
+    formatValue: (v: number) => `${Number(v.toFixed(2))}×`,
+    moveVisual: { kind: 'gauge', look: 'streak' },
+  },
+  /* a scan's rate as a clock, the beat it makes at 120 at 1× — turn it to
+     zero and it freezes */
+  scan: {
+    type: 'slider', default: 1, min: 0, max: 2, step: 0.05,
+    formatValue: (v: number) => `${Number(v.toFixed(2))}×`,
+    moveVisual: { kind: 'clock', tempo: LIBRARY_BPM, hand: libraryHand },
+  },
+  /* which of three voices the page is showing; the third is off */
+  voice: {
+    type: 'select', default: 'main',
+    options: [
+      { value: 'main', label: 'Main' },
+      { value: 'second', label: 'Second' },
+      { value: 'third', label: 'Third' },
+    ],
+    moveVisual: { kind: 'lanes', silent: ['third'] },
   },
   /* A hit pushed off its step: it sits three quarters through the bar, and
      a full turn either way carries it half the bar. */
@@ -213,6 +272,21 @@ export const INSTRUMENTS = {
   hi: { type: 'slider', default: 100, min: 0, max: 100, step: 1, unit: '%', moveVisual: { kind: 'multiband', role: 'band', band: 0 } },
   mid: { type: 'slider', default: 50, min: 0, max: 100, step: 1, unit: '%', moveVisual: { kind: 'multiband', role: 'band', band: 1 } },
   sub: { type: 'slider', default: 0, min: 0, max: 100, step: 1, unit: '%', moveVisual: { kind: 'multiband', role: 'band', band: 2 } },
+  /* a grain cloud: how long a grain is, its window, how thick, which way */
+  grainLength: { type: 'slider', default: 0.5, min: 0, max: 1, step: 0.01, formatValue: (v: number) => `${Math.round(10 + v * 490)} ms`, moveVisual: { kind: 'grain', role: 'length' } },
+  grainShape: { type: 'select', default: 'bell', options: ['bell', 'ease', 'rise', 'fall'], preview: (v: string) => SHAPES[v], moveVisual: { kind: 'grain', role: 'shape' } },
+  grainDensity: { type: 'slider', default: 0.6, min: 0, max: 1, step: 0.01, formatValue: (v: number) => `${Math.round(2 ** (v * 8))} g/s`, moveVisual: { kind: 'grain', role: 'density' } },
+  grainDirection: {
+    type: 'select', default: 'forward',
+    options: [
+      { value: 'forward', label: 'Forward' },
+      { value: 'reverse', label: 'Reverse' },
+      { value: 'ping-pong', label: 'Ping-pong' },
+      { value: 'bounce', label: 'Bounce' },
+      { value: 'scissors', label: 'Scissors' },
+    ],
+    moveVisual: { kind: 'grain', role: 'direction' },
+  },
   /* a blend between two colours */
   shade: { type: 'color', default: '#632ad5' },
   glow: { type: 'color', default: '#fccff7' },

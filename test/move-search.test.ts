@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { TweakStore } from '../src/store/TweakStore';
 import { MoveSearchStore, moveSearchFilter, moveSearchMatch } from '../src/move-search';
-import { MoveSurfaceStore } from '../src/move-surface-store';
+import { MoveSurfaceStore, moveScreenRowSearchText } from '../src/move-surface-store';
 import { MovePresetStore } from '../src/move-presets';
 import { MoveColorStore, MOVE_COLOR_PALETTES } from '../src/move-color';
 
@@ -22,6 +22,12 @@ describe('the query against a label', () => {
   it('filters to indices, in list order', () => {
     expect(moveSearchFilter(['Bloom', 'Grain', 'Trails', 'Rain'], 'ai')).toEqual([1, 2, 3]);
     expect(moveSearchFilter(['Bloom', 'Grain'], 'zzz')).toEqual([]);
+  });
+
+  it('finds a row by its keywords as well as its label', () => {
+    const rows = ['Bloom', { label: 'Embers', keywords: 'fire glow' }, { label: 'Fire Wall' }];
+    expect(moveSearchFilter(rows.map(moveScreenRowSearchText), 'fire')).toEqual([1, 2]);
+    expect(moveScreenRowSearchText({ label: 'Embers' })).toBe('Embers');
   });
 });
 

@@ -132,9 +132,9 @@ export function LiveComposer() {
 export const BIG_SLOTS: Specimen[] = [
   { kind: 'default', path: 'amount', description: MOVE_SLOT_LIBRARY.default.description, live: { path: 'amount' } },
   {
-    kind: 'value',
+    kind: 'value', path: 'decay',
     description: MOVE_SLOT_LIBRARY.value.description,
-    note: 'The face a chip wears when a dial borrows it, and every named value on a modulator’s page. This one is Glide, the chip under Bias.',
+    note: 'A slider asks for it with `display: \'value\'` — whatever its range: Decay, on the strip below. It is also the face a chip wears when a dial borrows it, and every named value on a modulator’s page. This one is Glide, the chip under Bias.',
     live: { path: 'glide', valueFirst: true },
   },
   { kind: 'icon', path: 'direction', description: MOVE_SLOT_LIBRARY.icon.description, live: { path: 'direction' } },
@@ -179,6 +179,36 @@ export const BIG_SLOTS: Specimen[] = [
     live: { path: 'offset' },
   },
   {
+    kind: 'diaphragm', path: 'throat',
+    description: MOVE_SLOT_LIBRARY.diaphragm.description,
+    note: 'A pitch slider with `moveVisual: { kind: \'pitch\', look: \'diaphragm\' }`. Up is higher; at zero the throat rests half open.',
+    live: { path: 'throat' },
+  },
+  {
+    kind: 'streak', path: 'rush',
+    description: MOVE_SLOT_LIBRARY.streak.description,
+    note: 'A speed slider with `moveVisual: { kind: \'gauge\', look: \'streak\' }`. The reading is the headline, so give it a formatter that reads as the number you want big ("1.5×").',
+    live: { path: 'rush' },
+  },
+  {
+    kind: 'clock', path: 'scan',
+    description: MOVE_SLOT_LIBRARY.clock.description,
+    note: 'A rate slider with `moveVisual: { kind: \'clock\', tempo, hand }` — 1 is the thing’s own pace, the minimum stops it. With a `tempo` (the beat at 1×) the corner shows the beat the rate makes; `hand()` answers where the hand points, 0..1 of a turn. Turn it to zero to freeze it.',
+    live: { path: 'scan' },
+  },
+  {
+    kind: 'lanes', path: 'voice',
+    description: MOVE_SLOT_LIBRARY.lanes.description,
+    note: 'A select with `moveVisual: { kind: \'lanes\', silent }` — `silent` lists the option values that are switched off.',
+    live: { path: 'voice' },
+  },
+  {
+    kind: 'gauge', path: 'speed',
+    description: MOVE_SLOT_LIBRARY.gauge.description,
+    note: 'A slider with `moveVisual: { kind: \'gauge\' }` — the multiband cleaner’s speed gauge in a slot of its own. An ordinary dial on the wire; it reads as a multiple unless the slider brings a unit or a formatter.',
+    live: { path: 'speed' },
+  },
+  {
     kind: 'trim-span', span: 2,
     description: MOVE_SLOT_LIBRARY['trim-span'].description,
     live: { panel: INSTRUMENTS_NAME, path: ['start', 'end'] },
@@ -188,6 +218,12 @@ export const BIG_SLOTS: Specimen[] = [
     description: MOVE_SLOT_LIBRARY.gate.description,
     note: 'The grid runs a made-up drum loop; an app attaches its own with MoveGateMeter.',
     live: { panel: INSTRUMENTS_NAME, path: ['threshold', 'lookahead', 'release'] },
+  },
+  {
+    kind: 'grain', span: 4,
+    description: MOVE_SLOT_LIBRARY.grain.description,
+    note: 'A length, a shape (a select with a preview), a density and a direction side by side, each with `moveVisual: { kind: \'grain\', role }`. The density can answer `overlap()` — how many grains sound at once — for a true stack; an `offset` dial in its place (with `lag()`) draws one other voice trailing instead.',
+    live: { panel: INSTRUMENTS_NAME, path: ['grainLength', 'grainShape', 'grainDensity', 'grainDirection'] },
   },
   {
     kind: 'vector', span: 3,

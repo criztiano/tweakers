@@ -345,7 +345,7 @@ var TweakStoreClass = class {
     this.initTransitionModes(config, "", values);
     this.defaults.set(id, { ...values });
     this.overlayPersistedValues(id, target, values, this.mapControlsByPath(controls));
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, moveTopRow: options.moveTopRow, moveActionRow: options.moveActionRow, moveValueRow: options.moveValueRow, moveSlotGroups: options.moveSlotGroups, moveBands: options.moveBands, moveEdges: options.moveEdges, module: "_enabled" in config ? true : void 0, kind: options.kind });
+    this.panels.set(id, { id, name, icon: options.icon, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, moveTopRow: options.moveTopRow, moveActionRow: options.moveActionRow, moveValueRow: options.moveValueRow, moveSlotGroups: options.moveSlotGroups, moveBands: options.moveBands, moveEdges: options.moveEdges, module: "_enabled" in config ? true : void 0, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -359,6 +359,7 @@ var TweakStoreClass = class {
     const hints = options.hints ?? existing.hints;
     const affordances = options.affordances ?? existing.affordances;
     const labels = options.labels ?? existing.labels;
+    const icon = options.icon ?? existing.icon;
     const movePads = options.movePads ?? existing.movePads;
     const moveTopRow = options.moveTopRow ?? existing.moveTopRow;
     const moveActionRow = options.moveActionRow ?? existing.moveActionRow;
@@ -391,7 +392,7 @@ var TweakStoreClass = class {
         nextValues[path] = mode;
       }
     }
-    const nextPanel = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, moveTopRow, moveActionRow, moveValueRow, moveSlotGroups, moveBands, moveEdges, module: "_enabled" in config ? true : void 0, kind: options.kind ?? existing.kind };
+    const nextPanel = { id, name, icon, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, moveTopRow, moveActionRow, moveValueRow, moveSlotGroups, moveBands, moveEdges, module: "_enabled" in config ? true : void 0, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
     const previousBaseValues = this.baseValues.get(id) ?? {};
@@ -1112,6 +1113,7 @@ var TweakStoreClass = class {
           orientation: value.orientation,
           display: value.display,
           wrap: value.wrap,
+          onTap: value.onTap,
           shortcut
         });
       } else if (this.isNumberConfig(value)) {
@@ -1170,7 +1172,7 @@ var TweakStoreClass = class {
       } else if (this.isXYConfig(value)) {
         controls.push({ type: "xy", path, label, xAxis: value.x, yAxis: value.y, grid: value.grid, density: value.density, snap: value.snap, returnToCenter: value.returnToCenter, showValues: value.showValues });
       } else if (this.isFilterConfig(value)) {
-        controls.push({ type: "filter", path, label, cutoffAxis: value.cutoff, resonanceAxis: value.resonance, response: value.response, filterEnabled: value.enabled });
+        controls.push({ type: "filter", path, label, cutoffAxis: value.cutoff, resonanceAxis: value.resonance, response: value.response, filterEnabled: value.enabled, moveVertical: value.moveVertical });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: "text", path, label, placeholder: value.placeholder });
       } else if (this.isTransferConfig(value)) {

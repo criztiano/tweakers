@@ -55,6 +55,23 @@ describe('MovePanel semantic interactions', () => {
     expect(TweakStore.getValues(id).opacity).toBe(0);
   });
 
+  it('an opacity slot with a picture shows the picture at its opacity, and a still press runs onTap', () => {
+    const onTap = vi.fn();
+    mount({ opacity: { ...opacity, moveVisual: { kind: 'opacity', picture: 'blob:photo' }, onTap } });
+    const image = () => dial('Opacity').findByType('image');
+    expect(image().props.href).toBe('blob:photo');
+    expect(image().props.opacity).toBe(0.5);
+    act(() => dial('Opacity').props.onKeyDown(keyEvent('End')));
+    expect(image().props.opacity).toBe(1);
+    // a still press is the slot's door; a drag only turns the value
+    act(() => dial('Opacity').props.onPointerDown(at(0, 0)));
+    act(() => dial('Opacity').props.onPointerUp(at(0, 0)));
+    expect(onTap).toHaveBeenCalledTimes(1);
+    drag(dial('Opacity'), -40, 0);
+    expect(onTap).toHaveBeenCalledTimes(1);
+    expect(TweakStore.getValues(id).opacity).toBeLessThan(1);
+  });
+
   it('updates the rendered specimens when shared values change', () => {
     mount({
       opacity,
@@ -78,6 +95,27 @@ describe('MovePanel semantic interactions', () => {
     expect(point().props['data-offset']).toBe(true);
     expect(triangle().props.d).toBe('M92 22l-5 -7h10z');
     expect(triangle().props['data-offset']).toBe(true);
+  });
+
+  it('draws a speed as a gauge in its own slot, an ordinary dial underneath', () => {
+    mount({ speed: { type: 'slider', min: 0.25, max: 4, default: 1, step: 0.01, moveVisual: { kind: 'gauge' } } });
+    const needle = () => dial('Speed').findByProps({ className: 'tweakers-move-multiband-gauge-needle' });
+    expect(dial('Speed').props['data-visual']).toBe('gauge');
+    expect(dial('Speed').props['aria-valuetext']).toBe('1×');
+    expect(dial('Speed').findByProps({ className: 'tweakers-move-dial-option tweakers-move-visual-value' }).props.children).toBe('1×');
+    expect(needle().props.x2).toBeLessThan(0);
+    act(() => dial('Speed').props.onKeyDown(keyEvent('End')));
+    expect(TweakStore.getValues(id).speed).toBe(4);
+    expect(needle().props.x2).toBeGreaterThan(0);
+    // the drag is the dial's own: a press moves nothing, and it turns from
+    // where it is — right raises
+    act(() => dial('Speed').props.onKeyDown(keyEvent('Home')));
+    act(() => dial('Speed').props.onPointerDown(at(60, 0)));
+    expect(TweakStore.getValues(id).speed).toBe(0.25);
+    act(() => dial('Speed').props.onPointerUp(at(60, 0)));
+    drag(dial('Speed'), 20, 0);
+    expect(TweakStore.getValues(id).speed).toBeCloseTo(1, 2); // a fifth of the turn, a fifth of the range
+    expect(needle().props.x2).toBeLessThan(0);
   });
 
   it('draws an offset as the room it can move in, the knob carrying the pin across it', () => {
@@ -205,6 +243,63 @@ describe('MovePanel semantic interactions', () => {
     drag(dial('B'), 0, -35); // up raises the fader
     expect(TweakStore.getValues(id).b).toBe(75);
     expect(TweakStore.getValues(id).a).toBe(0);
+  });
+
+  it('draws a length, a shape, a density and a direction as one grain cloud, the pickers stepping on a click', () => {
+    mount({
+      size: { type: 'slider', min: 0, max: 1, default: 0.5, step: 0.01, moveVisual: { kind: 'grain', role: 'length' } },
+      curve: { type: 'select', options: ['bell', 'rise'], default: 'bell', preview: () => (t: number) => t, moveVisual: { kind: 'grain', role: 'shape' } },
+      density: { type: 'slider', min: 0, max: 1, default: 0.5, step: 0.01, moveVisual: { kind: 'grain', role: 'density', overlap: () => 3 } },
+      way: { type: 'select', options: ['forward', 'reverse'], default: 'forward', moveVisual: { kind: 'grain', role: 'direction' } },
+    });
+    const face = renderer!.root.findByProps({ 'data-kind': 'grain' });
+    expect(face.props.style.gridColumn).toBe('span 4');
+    expect(renderer!.root.findAllByProps({ className: 'tweakers-move-dial' })).toHaveLength(1);
+    // copies stack behind the lit grain
+    expect(face.findAllByProps({ className: 'tweakers-move-grain-copy' }).length).toBeGreaterThan(1);
+    // a picker's column reads as its option, and a click moves it on
+    expect(dial('Way').props['aria-valuetext']).toBe('forward');
+    act(() => dial('Way').props.onPointerDown(at(10, 10)));
+    act(() => dial('Way').props.onPointerUp(at(10, 10)));
+    expect(TweakStore.getValues(id).way).toBe('reverse');
+    // a slider's column turns from where it is, like any dial
+    drag(dial('Density'), 0, -10);
+    expect(TweakStore.getValues(id).density).toBeGreaterThan(0.5);
+  });
+
+  it('draws a lanes picker with its silent voices crossed out', () => {
+    mount({ voice: { type: 'select', options: ['a', 'b', 'c'], default: 'b', moveVisual: { kind: 'lanes', silent: ['c'] } } });
+    const slot = renderer!.root.findByProps({ 'data-kind': 'lanes' });
+    const lanes = slot.findAll((n) => n.props.className === 'tweakers-move-lane');
+    expect(lanes.map((l) => [!!l.props['data-chosen'], !!l.props['data-silent']])).toEqual([[false, false], [true, false], [false, true]]);
+    expect(lanes.some((l) => l.props['data-solo'])).toBe(false);
+    expect(slot.findAllByProps({ className: 'tweakers-move-lane-cross' })).toHaveLength(1);
+  });
+
+  it('lights a soloed lane emerald', () => {
+    mount({ soloed: { type: 'select', options: ['a', 'b', 'c'], default: 'b', moveVisual: { kind: 'lanes', solo: 'a' } } });
+    const slot = renderer!.root.findByProps({ 'data-kind': 'lanes' });
+    const lanes = slot.findAll((n) => n.props.className === 'tweakers-move-lane');
+    expect(lanes.map((l) => !!l.props['data-solo'])).toEqual([true, false, false]);
+    expect(slot.findAllByProps({ className: 'tweakers-move-lane-cross' })).toHaveLength(0);
+  });
+
+  it('frosts the clock over at its minimum and names the beat above it', () => {
+    mount({ scan: { type: 'slider', min: 0, max: 2, default: 0, step: 0.25, moveVisual: { kind: 'clock', tempo: 100 } } });
+    const frozen = renderer!.root.findByProps({ 'data-visual': 'clock' });
+    expect(frozen.findAllByProps({ className: 'tweakers-move-clock-frost' })).toHaveLength(1);
+    act(() => dial('Scan').props.onKeyDown(keyEvent('End')));
+    const running = renderer!.root.findByProps({ 'data-visual': 'clock' });
+    expect(running.findAllByProps({ className: 'tweakers-move-clock-frost' })).toHaveLength(0);
+    expect(running.findByProps({ className: 'tweakers-move-clock-foot' }).props.children).toBe('200 BPM');
+  });
+
+  it('fades a mixer channel whose control is switched off', () => {
+    const channel = (v: number) => ({ type: 'slider', min: 0, max: 100, default: v, step: 1, moveVisual: { kind: 'channel' } }) as const;
+    mount({ a: channel(50), b: channel(50) });
+    act(() => TweakStore.setDisabled(id, 'b', true));
+    const lanes = renderer!.root.findByProps({ 'data-kind': 'channel' }).findAll((n) => n.props.className === 'tweakers-move-channel');
+    expect(lanes.map((l) => !!l.props['data-off'])).toEqual([false, true]);
   });
 
   it('draws x, y and z side by side as one stage, each column turning its own axis', () => {

@@ -347,6 +347,7 @@ const p = useTweakers('Specialized', {
 | `pan` | Position between left/centre/right references, defaulting to `-1`, `0`, `1`. Set `left`, `center`, `right` for another domain, such as `-100`, `0`, `100`. |
 | `stereo-width` | Separation around mono and unity references, defaulting to `0` and `1`. Override `mono` and `unity` for another scale. |
 | `pitch` | Signed pitch ruler. `unit` defaults to `'semitones'`; use `'cents'` for fine tuning. The slider's `unit`/`formatValue` still controls its text. |
+| `gauge` | A speed: a needle on a graded dome sweeping the slider's range, slowest on the left. Reads as a multiple (`1.5×`) unless the slider's `unit`/`formatValue` says otherwise. |
 | `offset` | A signed nudge away from where something already sits. The face draws the room it can move in: `origin` (0..1) is where it sits at no offset, and the dial's own range is that whole room, so a full turn either way carries it half the track. The stretch between the two fills in, and a chevron beside the pin shows each way it can still go — one way, in the Move's orange, once it has moved. |
 | `playback` | Bundled direction and scissors icons. Map app values using `modes`, e.g. `{ fwd: 'forward', pingPong: 'ping-pong' }`. Options retain their original stored values and labels. |
 
@@ -371,7 +372,7 @@ coneAngle:  { type: 'slider', default: 24, min: 0, max: 90, display: 'dial', wra
 
 | Prop | Type | Description |
 |------|------|-------------|
-| `display` | `'track' \| 'dial'` | `dial` draws a needle in place of the track. Default `track`. |
+| `display` | `'track' \| 'dial' \| 'value'` | `dial` draws a needle in place of the track. `value` keeps the track, and on the Move panel shows the value first — the number the headline, the name a tag. Default `track`. |
 | `wrap` | `boolean` | Past the end, come back around instead of stopping. Defaults to true when the range covers a full turn (360, or −180..180). |
 
 The needle follows the pointer directly — a compass gesture, not a fader one —
@@ -1072,7 +1073,7 @@ import('http://localhost:7787/kit.js')
 <MovePanel />
 ```
 
-Panels become pages behind the track buttons (max 4), sliders and bounded numbers become the 8 dials, toggles become pads, and overflow bounded params become value chips (hold to peek, tap to latch).
+Panels become pages behind the track buttons (max 4), sliders and bounded numbers become the 8 dials, toggles become pads, and overflow bounded params become value chips (hold to peek, tap to latch — one latch per page: taking a chip lets any other go).
 
 The on-screen panel shows only occupied slots: a column renders only when it has a dial, a toggle pad, or a value chip. Visible columns keep their full 8-wide slot size and centre in the panel, with the header aligned to the first one — an app with two dials gets a tight two-column cluster, not six empty sockets. Hidden columns are skipped, never renumbered, so each on-screen column still matches its hardware knob; an empty page shows the header alone. The track row follows the same rule: only tracks that carry a page get a tick and a name, so a one-panel app shows one label instead of three blank coloured lines. Each page keeps its own track colour whichever tracks are missing.
 
@@ -1262,7 +1263,7 @@ Bipolar sliders (`bipolar: true` or an `origin`) keep their character on the dia
 
 ### The big-slot library, and multi-slot controls
 
-Every face a dial slot can wear lives in one dictionary, `MOVE_SLOT_LIBRARY` (`src/components/move-slots.tsx`): `default`, `value`, `icon`, `curve`, `enum`, `xy`, `range`, `filter`, `env`, `scope`, `toggle`, `toggle-icon`, `metronome`, `color`, `transfer`, `ramp`, `dial`, and the specimens (`opacity`, `blur`, `pan`, `stereo-width`, `pitch`, `offset`, `playback`). The library app (`cd example && npm run dev`) shows every one of them live in a single scrolling panel, and again on its own card beside the dictionary's description — each card a `MoveSlot`, the same control as the instrument's, so dragging either moves both. Each entry is a pure body — a drawing of computed props with no gestures of its own — so a new face is added by writing a body and dispatching to it from the MovePanel and `MoveSlot`, and the drag rules (`move-slot-core`: the turn from where a value is, the option step, fine drag, which handle a press takes) stay in one place. `MoveSlot` puts one live slot anywhere on a page: `<MoveSlot panel="Move kit" path="offset" />`, or several paths for an instrument of several dials (see `docs/controls.md`).
+Every face a dial slot can wear lives in one dictionary, `MOVE_SLOT_LIBRARY` (`src/components/move-slots.tsx`): `default`, `value`, `icon`, `curve`, `enum`, `xy`, `range`, `filter`, `env`, `scope`, `toggle`, `toggle-icon`, `metronome`, `color`, `transfer`, `ramp`, `dial`, and the specimens (`opacity`, `blur`, `pan`, `stereo-width`, `pitch`, `gauge`, `offset`, `playback`). The library app (`cd example && npm run dev`) shows every one of them live in a single scrolling panel, and again on its own card beside the dictionary's description — each card a `MoveSlot`, the same control as the instrument's, so dragging either moves both. Each entry is a pure body — a drawing of computed props with no gestures of its own — so a new face is added by writing a body and dispatching to it from the MovePanel and `MoveSlot`, and the drag rules (`move-slot-core`: the turn from where a value is, the option step, fine drag, which handle a press takes) stay in one place. `MoveSlot` puts one live slot anywhere on a page: `<MoveSlot panel="Move kit" path="offset" />`, or several paths for an instrument of several dials (see `docs/controls.md`).
 
 Some controls are bigger than one column. A **multi-slot control** follows one pattern, whatever its width:
 
@@ -1271,6 +1272,8 @@ Some controls are bigger than one column. A **multi-slot control** follows one p
 - Each column keeps a small caption where its own single slot's label would have been, crossfading to its value on touch — so the hardware's one-knob-per-column rule still holds under the shared picture: every knob edits the hand or stage its column names.
 
 Two ship today: `filter` (2 slots — cutoff and resonance as one magnitude response) and `env` (4 slots — the whole ADSR as one shape on the modulator's settings page, one caption and drag zone per stage).
+
+A filter can also stand in one column. `moveVertical: true` draws the same response in one slot, whose knob turns the cutoff, and puts the resonance on the top pad row under it as a value chip — tap latches the knob to it, hold peeks, and the slot keeps its picture while it turns whichever hand the knob holds. The chip wears `resonance.label` and reads through `resonance.formatValue`; the value is still the one `{ cutoff, resonance }` pair, so presets and modulation see no change. The chip takes its top cell before anything else, so a switch or a `moveTopRow` chip asked into it moves along, said out loud.
 
 ### The small slots
 

@@ -50,12 +50,12 @@ export type { MovePage, MoveBandCell, MoveEdgesCell } from './move-layout';
 export { buildMoveStrip, isStripSlot, stripStarts, stripOffsets, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripSlotCount, stripSlotIndex } from './move-strip';
 
 // The big-slot library — the dictionary of what a Move dial slot can be
-export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MOVE_GATE_GRID, MoveSlotMultibandBody, MoveSlotChannelBody, MOVE_MULTIBAND_GRID, MOVE_GAUGE, moveGaugeBearing, MoveSlotPlaybackDrawing, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotColorBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
+export { MOVE_SLOT_LIBRARY, moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotDiaphragmBody, MoveSlotStreakBody, MoveSlotClockBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MOVE_GATE_GRID, MoveSlotMultibandBody, MoveSlotChannelBody, MOVE_MULTIBAND_GRID, MOVE_GAUGE, moveGaugeBearing, MoveSlotPlaybackDrawing, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotColorBody, MoveSlotGlyph, MoveSlotReadout, MoveSlotShape } from './components/move-slots';
 // The small slots — the pad row under the dials
 export { MOVE_PAD_LIBRARY, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody } from './components/move-slots';
 export type { MovePadKind, MovePadBandHand, MovePadEdgeHand } from './components/move-slots';
-export { moveNumericDrawing, moveTrimSpan, moveGateSpan, moveVectorAxes, moveVectorStage, MOVE_STAGE, moveMultibandSpan, moveMultibandRole, moveChannelPosition, movePlaybackMode, moveVisualReading, moveBandCuts, MOVE_BAND_W, MOVE_BAND_H } from './move-visual-core';
-export type { MoveStage, MoveGateRole, MoveMultibandRole, MoveTone, MoveVisual, MoveSliderVisual, MoveSelectVisual, MoveToggleVisual, MovePlaybackMode, MoveNumericDrawing } from './move-visual-core';
+export { moveNumericDrawing, moveTrimSpan, moveGateSpan, moveVectorAxes, moveVectorStage, MOVE_STAGE, moveGrainSpan, moveGrainPicture, moveGrainGap, moveGrainRole, MOVE_GRAIN, moveLanes, moveMultibandSpan, moveMultibandRole, moveChannelPosition, movePlaybackMode, moveVisualReading, moveBandCuts, MOVE_BAND_W, MOVE_BAND_H } from './move-visual-core';
+export type { MoveStage, MoveGateRole, MoveMultibandRole, MoveTone, MoveVisual, MoveSliderVisual, MoveSelectVisual, MoveToggleVisual, MovePlaybackMode, MoveNumericDrawing, MoveGrainVisual, MoveGrainRole, MoveGrainSpan, MoveGrainPicture } from './move-visual-core';
 export type { MoveSlotKind, MoveTrimSpanEdge, MoveFaceDial, MoveChannelDial } from './components/move-slots';
 // The gate face's live picture — the app attaches what the gate is doing around the playhead
 export { MoveGateMeter, drawMoveGate, moveGateDemoReading } from './move-gate';
@@ -101,6 +101,8 @@ export {
   styleFromValues as moveWaveformStyleFromValues,
 } from './move-waveform';
 export type { MoveWaveformVariant, MoveWaveformView, MoveWaveformStyle, MoveWaveformTransport } from './move-waveform';
+export { MOVE_PANEL_SETTINGS, MOVE_TRACK_LABEL_STYLES } from './move-track-labels';
+export type { MoveTrackLabelStyle } from './move-track-labels';
 // Notifications — the app's messages, floating over the instrument and over
 // whatever display is already up there.
 export { MoveNotifications, moveNotify } from './components/MoveNotifications';
@@ -133,7 +135,7 @@ export type { MoveKitRegistry } from './store/TweakStore';
 
 // Raw hardware an app claims for itself — the bottom pad rows, the step
 // buttons, the device screen — kept for the on-screen mirror.
-export { MoveSurfaceStore, moveScreenRowLabel, moveScreenChecked } from './move-surface-store';
+export { MoveSurfaceStore, moveScreenRowLabel, moveScreenRowSearchText, moveScreenChecked } from './move-surface-store';
 export type { MovePadCell, MoveStepCell, MoveScreenList, MoveScreenRow, MoveScreenSearch, MoveScreenWait, MoveSurfaceState } from './move-surface-store';
 
 // List screen (the Move's dark display list, standalone)

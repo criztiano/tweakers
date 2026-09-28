@@ -1,13 +1,14 @@
 import type { MovePadListView } from '../move-pad-list';
 import { useEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { moveBandCuts, moveNumericDrawing, movePlaybackMode, moveVectorStage, MOVE_BAND_H, MOVE_BAND_W, MOVE_STAGE, type MovePlaybackMode, type MoveTone } from '../move-visual-core';
-import { MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing } from './move-visuals';
-export { MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing } from './move-visuals';
+import { moveBandCuts, moveGrainPicture, moveLanes, moveNumericDrawing, movePlaybackMode, MOVE_GRAIN, type MoveGrainSpan, moveVectorStage, MOVE_BAND_H, MOVE_BAND_W, MOVE_STAGE, type MovePlaybackMode, type MoveTone } from '../move-visual-core';
+import { MoveGauge, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing } from './move-visuals';
+export { MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotDiaphragmBody, MoveSlotStreakBody, MoveSlotClockBody, MoveSlotPlaybackDrawing, MOVE_GAUGE, moveGaugeBearing } from './move-visuals';
 import type { ControlMeta } from '../store/TweakStore';
 import { ICON_BADGE_OFF, ICON_BADGE_ON, LUCIDE_ICONS } from '../icons';
 import { enumOptionIcon, enumOptionLabel, enumOptionValue } from '../move-layout';
 import { arcPath } from '../angle-core';
+import { parseHex } from '../color-core';
 import { resolveFilterAxis, type FilterValue } from '../filter-core';
 import { ListScreen } from './ListScreen';
 
@@ -27,10 +28,14 @@ import { ListScreen } from './ListScreen';
  *   fill bar at the bottom (an origin tick when the dial is bipolar).
  * - `value`   — the same slot the other way round: the value is the
  *   headline, the name shrinks to a tag on top. For dials whose value
- *   already says what it is (two seconds, three clips), and for a value
- *   chip substituted into the slot.
+ *   already says what it is (two seconds, three clips) — a slider asks for
+ *   it with `display: 'value'` — and for a value chip substituted into the
+ *   slot.
  * - `icon`    — an option picker whose current option shows as a glyph:
  *   at arm's length you read a picture, not a word.
+ * - `picture` — an option picker whose current option fills the slot as a
+ *   picture (the option's `picture`): a pattern or texture you choose by
+ *   seeing it, the name and position over it.
  * - `curve`   — an option picker whose current option draws its shape (the
  *   select's `preview` sampler) — the curve-selection slot.
  * - `enum`    — a plain stepped option picker: every option on the Move's
@@ -39,14 +44,25 @@ import { ListScreen } from './ListScreen';
  *   knob turns X and the volume knob turns Y while touched.
  * - `range`   — two handles on one bar; column knob = low end, volume
  *   knob = high end while touched.
- * - `opacity`, `blur`, `pan`, `stereo-width`, `pitch`, `trim` — explicit
- *   numeric meanings, drawn as specimens or positioned against domain
- *   references (`trim`: one edge of a take, the kept part filled).
+ * - `opacity`, `blur`, `pan`, `stereo-width`, `pitch`, `trim`, `gauge` —
+ *   explicit numeric meanings, drawn as specimens or positioned against
+ *   domain references (`trim`: one edge of a take, the kept part filled;
+ *   `gauge`: a speed, the multiband cleaner's gauge in a slot of its own).
+ * - `diaphragm` — a pitch stood upright: a mark on a vertical line, the
+ *   slot's own sides drawn in toward it, tighter the further from zero.
+ * - `streak`  — a speed as its own number, speed lines trailing it —
+ *   longer the faster it runs.
+ * - `clock`   — a rate something runs at on its own, as a clock: the rate
+ *   as the headline, the beat it makes when the host knows one, the hand
+ *   where the host says it is — frozen over at the dial's minimum.
  * - `offset`  — a thing and the room it has to move in: the room hatched
  *   between two rules, a quiet line where it sits untouched, a pin where the
  *   offset put it, the stretch between them filled, and a chevron beside the
  *   pin for each way it can still go.
  * - `playback` — an explicitly mapped playback icon.
+ * - `lanes`   — a choice between parallel voices as lanes running away from
+ *   you: the chosen lane lit, a switched-off voice's lane faded under a red
+ *   cross.
  * - `filter`  — the 2-slot control: cutoff and resonance as one picture,
  *   the magnitude response maximised across both columns, each hand's
  *   small label sitting where its own slot's label would have been.
@@ -57,6 +73,10 @@ import { ListScreen } from './ListScreen';
  *   side as one instrument. The threshold and release stand as bars at
  *   the outer columns, the look-ahead is a short line under the middle,
  *   and the grid between the bars shows the gate live around the playhead.
+ * - `grain`   — the 4-slot grain cloud: a length, a window shape, a density
+ *   (or one voice's offset) and a direction as one picture — the lit grain
+ *   at its length and in its shape, the copies stacked behind it on the
+ *   side the grains come from, and a field of arrows for the way they play.
  * - `vector`  — the 3-slot place: x, y and a depth z side by side as one
  *   stage. The mark stands on a ruled floor — across it for x, back into it
  *   for z (and smaller for it), up off its own shadow for y — with each
@@ -105,6 +125,10 @@ export type MoveSlotKind =
   | 'pan'
   | 'stereo-width'
   | 'pitch'
+  | 'diaphragm'
+  | 'gauge'
+  | 'streak'
+  | 'clock'
   | 'trim'
   | 'offset'
   | 'trim-span'
@@ -113,16 +137,19 @@ export type MoveSlotKind =
   | 'multiband'
   | 'channel'
   | 'playback'
+  | 'lanes'
+  | 'grain'
   | 'env'
   | 'scope'
   | 'toggle'
   | 'toggle-icon'
-  | 'metronome';
+  | 'metronome'
+  | 'picture';
 
 /** Which face a control wears in its slot, from its meta and moment. */
 export function moveSlotKind(
   meta: ControlMeta,
-  opts: { enum?: boolean; shape?: string | null; glyph?: string | null; valueFirst?: boolean; value?: unknown; stage?: string | null } = {}
+  opts: { enum?: boolean; shape?: string | null; glyph?: string | null; picture?: string | null; valueFirst?: boolean; value?: unknown; stage?: string | null } = {}
 ): MoveSlotKind {
   if (meta.type === 'color') return 'color';
   if (meta.type === 'filter') return 'filter';
@@ -137,13 +164,17 @@ export function moveSlotKind(
   if (meta.type === 'range') return 'range';
   const drawing = moveNumericDrawing(meta, opts.value ?? meta.min);
   if (drawing) return drawing.kind;
+  if (moveLanes(meta, opts.value)) return 'lanes';
   if (movePlaybackMode(meta, opts.value)) return 'playback';
   if (opts.enum) {
     if (opts.shape) return 'curve';
+    if (opts.picture) return 'picture';
     if (opts.glyph) return 'icon';
     return 'enum';
   }
-  return opts.valueFirst ? 'value' : 'default';
+  // The panel's moment (a focused view, the settings room) or the app's own
+  // ask (`display: 'value'`) turns the value first.
+  return opts.valueFirst || (meta.type === 'slider' && meta.display === 'value') ? 'value' : 'default';
 }
 
 /** One glyph from the bundled lucide subset; an unknown name draws nothing. */
@@ -268,7 +299,7 @@ export const MOVE_LIST_ROWS = 5;
  *  live wave — so it keeps the named option and drops the list, which the
  *  wave would be running behind. */
 export function MoveSlotEnumBody({
-  label, optionLabel, options, activeIdx, shape, glyph, playback, scoped,
+  label, optionLabel, options, activeIdx, shape, glyph, picture = null, playback, scoped,
 }: {
   label: string;
   optionLabel: string;
@@ -276,6 +307,8 @@ export function MoveSlotEnumBody({
   activeIdx: number;
   shape: string | null;
   glyph: string | null;
+  /** The current option's full-slot picture; it fills the slot under the name. */
+  picture?: string | null;
   playback?: MovePlaybackMode | null;
   /** The slot draws the modulator's live signal behind this face. */
   scoped?: boolean;
@@ -284,13 +317,14 @@ export function MoveSlotEnumBody({
 
   // A picture names one option at a time, so it keeps the pagination cells
   // to say where that one sits. A list has the whole run on it already.
-  if (playback || shape || glyph || scoped) {
+  if (playback || shape || glyph || picture || scoped) {
     return (
       <>
+        {!playback && picture && <MoveSlotPicture src={picture} />}
         <span className="tweakers-move-dial-tag">{label}</span>
         {playback && <MoveSlotPlaybackDrawing mode={playback} />}
         {!playback && shape && <MoveSlotShape d={shape} />}
-        {!playback && glyph && <MoveSlotGlyph name={glyph} className="tweakers-move-dial-icon" />}
+        {!playback && !picture && glyph && <MoveSlotGlyph name={glyph} className="tweakers-move-dial-icon" />}
         <span className="tweakers-move-dial-option">{optionLabel}</span>
         <div className="tweakers-move-dial-bar">
           <div className="tweakers-move-dial-enum">
@@ -327,6 +361,61 @@ export function MoveSlotEnumBody({
         follow="center"
       />
     </div>
+  );
+}
+
+/**
+ * A choice between parallel voices, drawn as lanes running away from you —
+ * the chosen lane lit, the others dim. A voice that is switched off fades
+ * further and carries a red cross, so which voices sound reads at a glance
+ * whichever one the knob is on; a soloed voice lights emerald, the one heard
+ * alone. The name is the tag, the chosen option is
+ * underneath, as on every picture an option picker draws.
+ */
+export function MoveSlotLanesBody({ label, optionLabel, count, chosen, silent, solo }: {
+  label: string;
+  optionLabel: string;
+  count: number;
+  chosen: number;
+  /** One flag per lane, in option order: that voice is switched off. */
+  silent: boolean[];
+  /** The lane heard alone, lit emerald; absent when nothing is soloed. */
+  solo?: number;
+}) {
+  const n = Math.max(1, count);
+  // One vanishing point, centred: the near edge spans the slot, the far edge
+  // a third of it, and each lane keeps a sliver of road between it and the next.
+  const near = { y: 58, from: 4, to: 96 };
+  const far = { y: 4, from: 34, to: 66 };
+  const gap = 2.2;
+  const edge = (row: typeof near, k: number) => row.from + ((row.to - row.from) * k) / n;
+  const r2 = (v: number) => Math.round(v * 100) / 100;
+  return (
+    <>
+      <span className="tweakers-move-dial-tag">{label}</span>
+      <svg className="tweakers-move-lanes" viewBox="0 0 100 62" aria-hidden="true">
+        {Array.from({ length: n }, (_, k) => {
+          const g = (row: typeof near) => gap * (row === near ? 1 : 0.45);
+          const d = `M${r2(edge(near, k) + g(near))} ${near.y}L${r2(edge(far, k) + g(far))} ${far.y}`
+            + `L${r2(edge(far, k + 1) - g(far))} ${far.y}L${r2(edge(near, k + 1) - g(near))} ${near.y}Z`;
+          const cx = (edge(near, k) + edge(near, k + 1) + edge(far, k) + edge(far, k + 1)) / 4;
+          return (
+            <g key={k} className="tweakers-move-lane" data-chosen={k === chosen || undefined} data-silent={silent[k] || undefined} data-solo={k === solo || undefined}>
+              <path d={d} />
+              {silent[k] && <path className="tweakers-move-lane-cross" d={`M${r2(cx - 4.5)} 27.5l9 9M${r2(cx + 4.5)} 27.5l-9 9`} />}
+            </g>
+          );
+        })}
+      </svg>
+      <span className="tweakers-move-dial-option">{optionLabel}</span>
+      <div className="tweakers-move-dial-bar">
+        <div className="tweakers-move-dial-enum">
+          {Array.from({ length: n }, (_, j) => (
+            <span key={j} className="tweakers-move-dial-enum-cell" data-on={j === chosen || undefined} />
+          ))}
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -514,18 +603,37 @@ export function MoveSlotRangeBody({
  * a small label per hand — each sitting inline where its own single slot's
  * label would have been, cutoff on the left half, resonance on the right.
  * Each label gives way to its hand's value on touch, like any slot.
+ *
+ * A one-column filter (`moveVertical`) draws the same response in its one
+ * slot, with one readout: the hand its knob holds — `hand`, the cutoff
+ * unless its resonance chip is in.
  */
 export function MoveSlotFilterBody({
-  meta, value, shape,
+  meta, value, shape, hand = 'cutoff',
 }: {
   meta: ControlMeta;
   value: FilterValue;
   shape: string | null;
+  hand?: 'cutoff' | 'resonance';
 }) {
   const ca = resolveFilterAxis(meta.cutoffAxis, 'cutoff');
   const ra = resolveFilterAxis(meta.resonanceAxis, 'resonance');
   const fmt = (v: number, f?: (n: number) => string) =>
     f ? f(v) : Math.abs(v) >= 100 ? Math.round(v).toString() : Number(v.toFixed(2)).toString();
+  if (meta.moveVertical) {
+    const axis = hand === 'resonance' ? ra : ca;
+    return (
+      <>
+        <div className="tweakers-move-filter-display">
+          {shape && <MoveSlotShape d={shape} className="tweakers-move-filter-shape" />}
+        </div>
+        <div className="tweakers-move-filter-readout" data-side="column" data-hand={hand}>
+          <span className="tweakers-move-dial-label">{axis.label}</span>
+          <span className="tweakers-move-dial-value">{fmt(value[hand], axis.formatValue)}</span>
+        </div>
+      </>
+    );
+  }
   return (
     <>
       {/* The drawing sits on a display — the same dark hole in the face the
@@ -708,8 +816,107 @@ export function MoveSlotVectorBody({ x, y, z, down = false }: {
   );
 }
 
+/** Which way each arrow in the grain face's field points, row by row
+ *  (three rows of three, the middle one standing in for the big arrow):
+ *  1 is forward, -1 back. */
+const GRAIN_FIELD: Record<MovePlaybackMode, number[]> = {
+  forward: [1, 1, 1, 1, 1, 1, 1, 1, 1],
+  reverse: [-1, -1, -1, -1, -1, -1, -1, -1, -1],
+  'ping-pong': [1, -1, 1, -1, 1, -1, 1, -1, 1],
+  bounce: [1, 1, -1, 1, 1, -1, 1, 1, -1],
+  scissors: [1, 1, 1, 1, 1, -1, -1, -1, -1],
+};
+
+/** The big arrow at the middle of the field, one per mode, in a box ±16. */
+const GRAIN_ARROW: Record<MovePlaybackMode, string> = {
+  forward: 'M-14 0H14M6 -8L14 0L6 8',
+  reverse: 'M14 0H-14M-6 -8L-14 0L-6 8',
+  'ping-pong': 'M-14 -6H14M8 -12L14 -6L8 0M14 6H-14M-8 0L-14 6L-8 12',
+  bounce: 'M-14 -7H6A7 7 0 0 1 6 7H-6M0 1L-6 7L0 13',
+  scissors: 'M-13 11L13 -11M5 -11H13V-3M13 11L-13 -11M-5 -11H-13V-3',
+};
+
+/** The field of arrows the grain face draws for its direction. */
+function MoveGrainArrows({ mode, active }: { mode: MovePlaybackMode; active?: boolean }) {
+  const cells = GRAIN_FIELD[mode];
+  return (
+    <svg className="tweakers-move-grain-arrows" data-active={active || undefined} viewBox="0 0 100 100" aria-hidden="true">
+      {cells.map((dir, k) => {
+        if (k === 4) return null;
+        const x = 18 + (k % 3) * 32;
+        const y = 20 + Math.floor(k / 3) * 30;
+        return (
+          <path key={k} className="tweakers-move-grain-arrow" transform={`translate(${x} ${y}) scale(${dir} 1)`}
+            d="M-7 0H7M3 -4L7 0L3 4" />
+        );
+      })}
+      <path className="tweakers-move-grain-arrow" data-lead transform="translate(50 50)" d={GRAIN_ARROW[mode]} />
+    </svg>
+  );
+}
+
+/**
+ * The 4-slot grain cloud's face. Over the first three columns, one grain lit
+ * at its length and in its shape, and behind it its copies: a stack of them
+ * spaced by the density — or, for another voice, the one copy its offset
+ * trails by — the nearest in the trail's hue, each further one darker, so
+ * only their trailing edges show past the lit grain. The length is a rule
+ * under the lit grain. The fourth column is the direction: a field of
+ * arrows pointing the way the grains play, the lead arrow drawing the mode.
+ * The copies trail on the side the grains come from, and a reversed cloud
+ * is the whole picture mirrored. Each dial's name sits under its column, in
+ * its hue; a touched dial shows its reading there instead.
+ */
+export function MoveSlotGrainBody({ span, length, shape, trail, direction }: {
+  span: MoveGrainSpan;
+  length: MoveFaceDial;
+  shape: MoveFaceDial;
+  /** The density, or the offset — `span.trail.role` says which. */
+  trail: MoveFaceDial;
+  direction: MoveFaceDial;
+}) {
+  const picture = moveGrainPicture(span);
+  const { width: w, height: h } = MOVE_GRAIN;
+  const role = span.trail.role;
+  return (
+    <div className="tweakers-move-face" style={{ '--move-face-span': 4 } as CSSProperties}>
+      {/* The stage runs the face's whole width and clips there; the plot the
+          grains stand on is the first three columns, the length's rule under
+          it. */}
+      <div className="tweakers-move-grain-stage" data-trail={role} aria-hidden="true">
+        <div className="tweakers-move-grain-plot">
+          <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+            {picture.copies.map((copy, k) => (
+              <path key={k} className="tweakers-move-grain-copy" data-near={copy.rank === 1 || undefined}
+                data-active={(copy.rank === 1 && trail.active) || undefined} d={copy.d} />
+            ))}
+            <path className="tweakers-move-grain-hero" data-active={shape.active || undefined} d={picture.hero} />
+            {role === 'offset' && picture.copies.map((copy, k) => (
+              <path key={`edge-${k}`} className="tweakers-move-grain-edge" d={copy.d} />
+            ))}
+          </svg>
+          <span className="tweakers-move-grain-length" data-active={length.active || undefined}
+            style={{ left: `${(picture.span.from / w) * 100}%`, width: `${((picture.span.to - picture.span.from) / w) * 100}%` }}>
+            <i /><i />
+          </span>
+        </div>
+      </div>
+      <MoveGrainArrows mode={span.direction} active={direction.active} />
+      <span className="tweakers-move-grain-name" data-role="length"><MoveFaceName col={0} dial={length} /></span>
+      <span className="tweakers-move-grain-name" data-role="shape"><MoveFaceName col={1} dial={shape} /></span>
+      <span className="tweakers-move-grain-name" data-role={role}><MoveFaceName col={2} dial={trail} /></span>
+      <span className="tweakers-move-grain-name" data-role="direction"><MoveFaceName col={3} dial={direction} /></span>
+    </div>
+  );
+}
+
 /** One channel of a mixer face: its dial, and the icon and tone it wears. */
-export type MoveChannelDial = MoveFaceDial & { icon?: string; tone?: MoveTone };
+export type MoveChannelDial = MoveFaceDial & {
+  icon?: string;
+  tone?: MoveTone;
+  /** The channel is switched off (its control disabled): it fades back. */
+  off?: boolean;
+};
 
 /**
  * A mixer's face, one slot per channel: each channel's icon and name along
@@ -721,7 +928,7 @@ export function MoveSlotChannelBody({ channels }: { channels: MoveChannelDial[] 
   return (
     <div className="tweakers-move-face" style={{ '--move-face-span': channels.length } as CSSProperties}>
       {channels.map((channel, k) => (
-        <div key={k} className="tweakers-move-channel" data-active={channel.active || undefined}
+        <div key={k} className="tweakers-move-channel" data-active={channel.active || undefined} data-off={channel.off || undefined}
           style={{ '--move-face-col': k, '--move-channel-tone': channel.tone ? `var(--move-${channel.tone})` : undefined } as CSSProperties}>
           <span className="tweakers-move-channel-head">
             {channel.icon && <MoveSlotIcon icon={channel.icon} className="tweakers-move-channel-icon" />}
@@ -734,40 +941,6 @@ export function MoveSlotChannelBody({ channels }: { channels: MoveChannelDial[] 
         </div>
       ))}
     </div>
-  );
-}
-
-/** The speed gauge's drawing, in its own viewBox units (1 unit = 1px): a
- *  dome of radius `r` on a baseline `base` below its centre, graded across
- *  `sweep` degrees either side of straight up. */
-export const MOVE_GAUGE = { r: 36, base: 18, half: 43, top: 37, height: 56, sweep: 110, ticks: 11 } as const;
-
-/** Where a value (0..1) points on the gauge: a compass bearing, 0 = up. */
-export const moveGaugeBearing = (position: number) => (place(position) * 2 - 1) * MOVE_GAUGE.sweep;
-
-function MoveGauge({ position }: { position: number }) {
-  const { r, base, half, top, height, sweep, ticks } = MOVE_GAUGE;
-  const foot = Math.sqrt(r * r - base * base);
-  const point = (bearing: number, radius: number) => {
-    const rad = (bearing * Math.PI) / 180;
-    return [radius * Math.sin(rad), -radius * Math.cos(rad)] as const;
-  };
-  const needle = point(moveGaugeBearing(position), r * 0.62);
-  return (
-    <svg className="tweakers-move-multiband-gauge" data-track="speed" viewBox={`${-half} ${-top} ${half * 2} ${height}`} aria-hidden="true">
-      <path className="tweakers-move-multiband-gauge-dome" d={`M${-foot} ${base}A${r} ${r} 0 1 1 ${foot} ${base}Z`} />
-      <line className="tweakers-move-multiband-gauge-base" x1={-half + 1} y1={base} x2={half - 1} y2={base} />
-      {Array.from({ length: ticks }, (_, k) => {
-        const at = k / (ticks - 1);
-        const major = k % 5 === 0;
-        const [x1, y1] = point(-sweep + at * sweep * 2, r - 4);
-        const [x2, y2] = point(-sweep + at * sweep * 2, r - (major ? 10 : 7));
-        return <line key={k} className="tweakers-move-multiband-gauge-tick" data-major={major || undefined}
-          data-lit={at <= place(position) + 1e-9 || undefined} x1={x1} y1={y1} x2={x2} y2={y2} />;
-      })}
-      <line className="tweakers-move-multiband-gauge-needle" x1="0" y1="0" x2={needle[0]} y2={needle[1]} />
-      <circle className="tweakers-move-multiband-gauge-pivot" cx="0" cy="0" r="2.5" />
-    </svg>
   );
 }
 
@@ -794,7 +967,7 @@ export function MoveSlotMultibandBody({
     <div className="tweakers-move-face" style={{ '--move-face-span': 2 + bands.length } as CSSProperties}>
       <MoveFaceBar role="amount" dial={amount} />
       {icon && <MoveSlotIcon icon={icon} className="tweakers-move-multiband-icon" />}
-      <MoveGauge position={speed.position} />
+      <MoveGauge position={speed.position} className="tweakers-move-multiband-gauge" track="speed" />
       <MoveFaceGrid columns={MOVE_MULTIBAND_GRID.columnsPerSlot * bands.length} rows={MOVE_MULTIBAND_GRID.rows}>{children}</MoveFaceGrid>
       <MoveFaceName col={0} dial={amount} />
       <MoveFaceName col={1} dial={speed} />
@@ -804,12 +977,29 @@ export function MoveSlotMultibandBody({
 }
 
 /** Selected color over a transparency checker, with its current hue. */
-export function MoveSlotColorBody({ label, color, hue }: { label: string; color: string; hue: number }) {
+export function MoveSlotColorBody({ label, color }: { label: string; color: string }) {
+  // The colour IS the slot: it fills the whole face, and the name reads on top of
+  // it in whichever ink the colour can carry. No number — a hue in degrees says
+  // nothing the colour does not say better.
   return <>
-    <span className="tweakers-move-dial-head">{label}</span>
     <span className="tweakers-move-color-swatch" aria-hidden="true"><span style={{ background: color }} /></span>
-    <span className="tweakers-move-color-reading">{Math.round(hue)}°</span>
+    <span className="tweakers-move-dial-head" data-ink={colorInk(color)}>{label}</span>
   </>;
+}
+
+/** Which ink a colour can carry: `dark` on a light colour, `light` on a dark one.
+ *  Rec. 709 luminance, the same rule the palette swatches use. */
+export function colorInk(hex: string): 'dark' | 'light' {
+  const rgb = parseHex(hex);
+  if (!rgb) return 'light';
+  const channel = (v: number) => {
+    const c = v / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = 0.2126 * channel(rgb.r) + 0.7152 * channel(rgb.g) + 0.0722 * channel(rgb.b);
+  // Alpha is the slot's checkerboard showing through: a see-through colour reads
+  // light, because the board behind it is light.
+  return luminance * (rgb.a ?? 1) > 0.42 ? 'dark' : 'light';
 }
 
 /**
@@ -1063,6 +1253,19 @@ export function MoveSlotMetronomeBody({ label, checked, swing }: {
         </svg>
       </span>
     </>
+  );
+}
+
+/** An option's picture, edge to edge under the slot's name: a host image
+ *  riding as a mask, so it takes the slot's colour and its states. */
+function MoveSlotPicture({ src }: { src: string }) {
+  const mask = `url(${JSON.stringify(src)})`;
+  return (
+    <span
+      className="tweakers-move-dial-picture"
+      aria-hidden="true"
+      style={{ maskImage: mask, WebkitMaskImage: mask }}
+    />
   );
 }
 
@@ -1440,17 +1643,24 @@ export const MOVE_SLOT_LIBRARY = {
   pan: { description: 'position between L, C and R references', component: MoveSlotNumericBody },
   'stereo-width': { description: 'stereo separation with a unity reference', component: MoveSlotNumericBody },
   pitch: { description: 'signed pitch ruler with a zero reference', component: MoveSlotNumericBody },
+  diaphragm: { description: 'a pitch stood upright: a mark on a vertical line, the slot’s sides drawn in toward it, tighter the further from zero', component: MoveSlotNumericBody },
+  gauge: { description: 'a speed: a needle on a graded dome, slowest to the left, fastest to the right', component: MoveSlotNumericBody },
+  streak: { description: 'a speed as its own number, speed lines trailing it — longer the faster it runs', component: MoveSlotNumericBody },
+  clock: { description: 'a rate as a clock: the rate as the headline, the beat it makes, the hand where the host says — frozen over at the minimum', component: MoveSlotNumericBody },
   trim: { description: 'one edge of a take — the kept part filled from the far end, the value beneath', component: MoveSlotNumericBody },
   offset: { description: 'a signed nudge — the room it can move in, a pin where it is now, a chevron for each way left', component: MoveSlotOffsetBody },
   'trim-span': { description: '2 slots: a take’s start and end on one line, a flag per edge', component: MoveSlotTrimSpanBody },
   gate: { description: '3 slots: threshold and release as bars, look-ahead as a line, the gate live on a grid between', component: MoveSlotGateBody },
+  grain: { description: '4 slots: a grain cloud — the lit grain at its length and shape, its copies stacked by density (or trailing by an offset), and a field of arrows for its direction', component: MoveSlotGrainBody },
   vector: { description: '3 slots: x, y and a depth z as one stage — the mark on a ruled floor, its height a stalk from its shadow, its distance its size', component: MoveSlotVectorBody },
   channel: { description: 'a slot per channel: icon and name in its tone over a fader filled to its level', component: MoveSlotChannelBody },
   multiband: { description: 'a slot per dial: amount as a bar, speed as a gauge, the bands as a live curve on a grid', component: MoveSlotMultibandBody },
   playback: { description: 'explicit playback traversal with a named mode', component: MoveSlotEnumBody },
+  lanes: { description: 'a choice between parallel voices as lanes running away — the chosen one lit, a silent one crossed out', component: MoveSlotLanesBody },
   default: { description: 'name centred, value on touch, fill bar', component: MoveSlotDefaultBody },
   value: { description: 'value-first: the value is the headline, the name a tag on top', component: MoveSlotDefaultBody },
   icon: { description: 'option picker showing the current option as a glyph', component: MoveSlotEnumBody },
+  picture: { description: 'option picker whose current option fills the slot as a picture, its name over it', component: MoveSlotEnumBody },
   curve: { description: 'option picker drawing the current option’s shape — curve selection', component: MoveSlotEnumBody },
   enum: { description: 'stepped option picker showing every option on a list screen', component: MoveSlotEnumBody },
   xy: { description: 'two axes in one gesture field, or a live shape preview', component: MoveSlotXYBody },

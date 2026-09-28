@@ -15,15 +15,15 @@ import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from '../theme';
-import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
+import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, filterChipValue, isColumnFilter, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody } from './move-slots';
+import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody, MoveSlotGlyph } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing } from '../angle-core';
 import { normalizeTransfer, sampleTransfer, type TransferValue } from '../transfer-core';
-import { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveTrimSpan, moveGateSpan, moveVectorAxes, moveMultibandSpan, moveMultibandRole, moveChannelPosition } from '../move-visual-core';
+import { moveNumericDrawing, movePlaybackMode, moveVisualReading, moveTrimSpan, moveGateSpan, moveVectorAxes, moveGrainSpan, moveLanes, moveMultibandSpan, moveMultibandRole, moveChannelPosition, type MoveGrainSpan } from '../move-visual-core';
 import {
   MOVE_TAP_SLOP,
   moveDialKey, moveRangeValue, moveFilterValue, moveXYValue, moveXYRest, moveNeedleValue,
@@ -40,10 +40,10 @@ import { MoveGateDisplay } from './MoveGateDisplay';
 import { MoveMultibandDisplay } from './MoveMultibandDisplay';
 import { MoveModRing } from './ModRing';
 import { MOVE_TRACK_COLORS } from '../move-palette';
-import { MoveSurfaceStore, moveScreenRowLabel, type MovePadCell, type MoveStepCell } from '../move-surface-store';
+import { MoveSurfaceStore, moveScreenRowLabel, moveScreenRowSearchText, type MovePadCell, type MoveStepCell } from '../move-surface-store';
 import { resolveAxis, pointFromValue, normalizeValue, type XYValue } from '../xy-pad-core';
 import { MoveVolumeDisplay, type MoveVolumeDisplayState } from '../move-volume';
-import { MoveColorStore, MOVE_COLOR_PALETTES, MOVE_GRADIENT_STOPS } from '../move-color';
+import { MoveColorStore, MOVE_GRADIENT_STOPS } from '../move-color';
 import { MoveSearchStore, moveSearchFilter, type MoveSearchTarget, type MoveSearchView } from '../move-search';
 import { MoveColorSlot, MoveColorDisplay, MoveOpacityPads, MoveColorSteps, MovePaletteScreen, copyHslOfHex, copyOklch } from './MoveColor';
 import { MoveFunctions } from '../move-functions';
@@ -51,6 +51,7 @@ import { MoveFunctionChips } from './MoveFunctionChips';
 import { MoveTimelineClock, MoveTimelineZoom } from './MoveTimeline';
 import { MoveTimelineStore } from '../move-timeline';
 import { MoveSettingsView } from '../move-settings';
+import { MoveTrackLabels, MOVE_PANEL_SETTINGS, moveTrackIcon, moveTrackLabelStyle } from '../move-track-labels';
 import { MovePresetStore, type MovePresetView } from '../move-presets';
 import { MoveAgentStore, MOVE_JOG_HOLD_EVENT, type MoveAgentView } from '../move-agent';
 import { ListScreen } from './ListScreen';
@@ -99,6 +100,14 @@ export interface MovePanelProps {
    * waveform zoom), not for another row of page controls.
    */
   headerStart?: React.ReactNode;
+  /**
+   * View-owned status placed at the far end of the header, after the function
+   * chips — where the instrument's own time indicator sits. A view whose app
+   * keeps the clock itself (an app transport rather than a timeline or a
+   * waveform) puts it here, so the reading is always the last thing on the row
+   * and every button stands to its left.
+   */
+  headerEnd?: React.ReactNode;
   /**
    * Where the attached-function chips sit (see `MoveFunctionChips`): every
    * function the app attaches renders as a chip that runs the same handler
@@ -149,7 +158,7 @@ const palettePickerOpen = () => MoveColorStore.isPickerOpen();
 
 /**
  * The list a search is running on, read as one shape whichever store owns
- * it: its labels in row order, the row the wheel rests on, and the two
+ * it: its labels in row order (with any words the rows are also found by), the row the wheel rests on, and the two
  * things the search does to it — rest the wheel on a row (the next match,
  * previewed exactly as a wheel turn is) and take a row (which ends the
  * search). Null when the list has gone from under the search.
@@ -165,7 +174,7 @@ function searchRows(view: MoveSearchView): SearchRows | null {
     const screen = MoveSurfaceStore.getState().screen;
     if (!screen) return null;
     return {
-      labels: screen.items.map(moveScreenRowLabel),
+      labels: screen.items.map(moveScreenRowSearchText),
       cursor: view.cursor,
       rest: (index) => MoveSearchStore.setCursor(index),
       take: (index) => { MoveSearchStore.close(); MoveSurfaceStore.selectScreen(index); },
@@ -184,7 +193,7 @@ function searchRows(view: MoveSearchView): SearchRows | null {
   }
   if (!palettePickerOpen()) return null;
   return {
-    labels: ['All colors', ...MOVE_COLOR_PALETTES.map((p) => p.name)],
+    labels: ['All colors', ...MoveColorStore.palettes().map((p) => p.name)],
     cursor: MoveColorStore.getPickerCursor(),
     rest: (index) => MoveColorStore.setPickerCursor(index),
     take: (index) => { MoveSearchStore.close(); MoveColorStore.choosePicker(index); },
@@ -365,7 +374,7 @@ export const MOVE_SETTINGS_EVENT = 'move-tweakers:settings';
  * are the eight the dials are holding, their pads with them, so all of them
  * can be reached without a single one shrinking to a chip.
  */
-export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport', scroll = false, focused = false, headerStart, settings, functionChips = 'clock' }: MovePanelProps) {
+export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport', scroll = false, focused = false, headerStart, headerEnd, settings, functionChips = 'clock' }: MovePanelProps) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState<PanelConfig[]>([]);
   const [track, setTrack] = useState(0);
@@ -474,6 +483,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     // start, not from the first time a sample happens to show: a room that
     // gains a page while you stand in it is a room you cannot trust.
     MoveWaveformStore.ensureSettings();
+    MoveTrackLabels.ensureSettings();
     setPanels(read());
     return TweakStore.subscribeGlobal(() => setPanels(read()));
   }, [read]);
@@ -487,11 +497,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const namedRooms = settingsKey === undefined
     ? []
     : TweakStore.selectPanels(JSON.parse(settingsKey) as string[]);
-  // The kit's own pages ride after the app's: the waveform's look, once a
-  // waveform has claimed the surface. An app with no room of its own still
-  // gets the door, because the page behind it is the kit's.
-  const waveRoom = TweakStore.getPanel(MOVE_WAVEFORM_PANEL);
-  const settingsRooms = waveRoom ? [...namedRooms, waveRoom] : namedRooms;
+  // The kit's own pages ride after the app's: the waveform's look, then the
+  // panel's own (how the track row names its pages). An app with no room of
+  // its own still gets the door, because the pages behind it are the kit's.
+  const kitRooms = [TweakStore.getPanel(MOVE_WAVEFORM_PANEL), TweakStore.getPanel(MOVE_PANEL_SETTINGS)]
+    .filter((p): p is PanelConfig => p !== undefined);
+  const settingsRooms = [...namedRooms, ...kitRooms];
   const roomIds = settingsRooms.map((p) => p.id);
   const settingsOpen = useSyncExternalStore(
     useCallback((cb) => MoveSettingsView.subscribe(cb), []),
@@ -505,6 +516,33 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const pages = scroll
     ? pagePanels.filter((p) => p.kind === undefined).slice(0, MOVE_TRACKS).map(buildMoveStrip)
     : buildMovePages(pagePanels);
+  // The track row's look. A picture on a row that shows — the page row, or
+  // the room's own tab row — makes the Panel page's choice live; with none
+  // there is nothing to choose, and names it is. One page is no row at all.
+  const trackIcons = [...(pages.length > 1 ? pages.map((pg) => pg.panel) : []), ...(settingsRooms.length > 1 ? settingsRooms : [])]
+    .some((panel) => moveTrackIcon(panel) !== undefined);
+  useEffect(() => MoveTrackLabels.setIconsAvailable(trackIcons), [trackIcons]);
+  const panelSettings = useSyncExternalStore(
+    useCallback((cb) => TweakStore.subscribe(MOVE_PANEL_SETTINGS, cb), []),
+    () => TweakStore.getValues(MOVE_PANEL_SETTINGS),
+    () => TweakStore.getValues(MOVE_PANEL_SETTINGS)
+  );
+  const trackLabelStyle = moveTrackLabelStyle(panelSettings, trackIcons);
+  // One face for every track button: the marker, then the page's picture
+  // and its name as the row's look asks. A picture alone still names its
+  // page to a screen reader and under the pointer.
+  const trackFace = (panel: PanelConfig, color: string) => {
+    const icon = trackLabelStyle === 'name' ? undefined : moveTrackIcon(panel);
+    return (
+      <>
+        <span className="tweakers-move-track-marker" style={{ background: color }} />
+        {icon && <MoveSlotGlyph name={icon} className="tweakers-move-track-icon" />}
+        {icon && trackLabelStyle === 'icon'
+          ? <span className="tweakers-move-track-label" data-hidden>{panel.name}</span>
+          : <span className="tweakers-move-track-label">{panel.name}</span>}
+      </>
+    );
+  };
   // An open modulator-settings page takes the surface over; the track
   // buttons put a regular page back (and close the settings with it).
   // The settings room stands in front of even that: while it is open the
@@ -790,7 +828,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       navigator.clipboard?.writeText(text).catch(() => {});
     }, { label: 'copy color', chip: false });
   }, [colorOpenPanel]);
-  const paletteScreen = colorMeta ? MoveColorStore.isPickerOpen() : false;
+  // The navigator stands on its own when the app owns the palettes: a palette is
+  // then an app-wide setting, opened from wherever the app puts it, with no colour
+  // editor up. The store decides; the panel just shows it.
+  const paletteScreen = MoveColorStore.isPickerOpen();
   useEffect(() => {
     if (!paletteScreen) return;
     return MoveFunctions.push('back', () => MoveColorStore.closePicker(), { label: 'back', chip: false });
@@ -949,6 +990,35 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       window.removeEventListener(MOVE_JOG_HOLD_EVENT, onHold);
       window.removeEventListener(MOVE_JOG_CLICK_EVENT, onJogClick, { capture: true });
     };
+  }, []);
+  // The computer keyboard's way in: `/` or ⌘F (Ctrl+F) asks for the same
+  // search a held Capture does. Only a list that takes it keeps the key from
+  // the page — with nothing to search, ⌘F is still the browser's find. A
+  // key typed into a field is the field's; a search already open keeps its
+  // field and just takes the focus back.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const find = (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'f';
+      const slash = e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey;
+      if (!find && !slash) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) {
+        if (find && t.classList.contains('tweakers-move-search-input')) e.preventDefault();
+        return;
+      }
+      if (MoveSearchStore.isOpen()) {
+        const field = document.querySelector<HTMLInputElement>('.tweakers-move-search-input');
+        if (!field) return;
+        e.preventDefault();
+        field.focus();
+        return;
+      }
+      const ask = new CustomEvent(MOVE_SEARCH_EVENT, { detail: { shift: false }, cancelable: true });
+      window.dispatchEvent(ask);
+      if (ask.defaultPrevented) e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
   // The wheel and its click, while a search runs. Registration order does
   // not decide who wins: the search takes every turn while it is open, and
@@ -1133,7 +1203,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // move-slot-core — shared with a MoveSlot placed on its own, so a face
   // drags the same wherever it is drawn. These bind them to this page.
   const dialPercent = (meta: ControlMeta) => moveDialPercent(meta, values[meta.path]);
-  const chipValue = (meta: ControlMeta) => moveChipValue(meta, values[meta.path]);
+  // A one-column filter's resonance chip reads its filter's pair.
+  const chipValue = (meta: ControlMeta) =>
+    moveChipValue(meta, meta.resonanceOf ? filterChipValue(meta, values[meta.resonanceOf]) : values[meta.path]);
   const dialReading = (meta: ControlMeta) => moveDialReading(meta, values[meta.path]);
   const rangeReading = (meta: ControlMeta) => moveRangeReading(meta, values[meta.path]);
   const write = (meta: ControlMeta, next: unknown) => TweakStore.updateValue(page.panel.id, meta.path, next as never);
@@ -1179,7 +1251,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       if (p && !TweakStore.isDisabled(page.panel.id, meta.path)) write(meta, moveTurnValue(meta, p, e, moveTurnExtent(e.currentTarget.getBoundingClientRect())));
     },
     onPointerUp: (e: React.PointerEvent<HTMLElement>) => {
-      if (endPress(meta.path) && e.shiftKey) resetValue(meta);
+      if (!endPress(meta.path)) return;
+      if (e.shiftKey) resetValue(meta);
+      else if (!TweakStore.isDisabled(page.panel.id, meta.path)) meta.onTap?.();
     },
     onPointerCancel: () => { endPress(meta.path); },
   });
@@ -1252,9 +1326,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     write(meta, moveRangeValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), rangeHandleRef, fineRef, down));
 
   // On the hardware the filter's left column's knob is cutoff and the right
-  // column's is resonance — two ordinary one-column dials to the bridge.
-  const filterFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, down: boolean) =>
-    write(meta, moveFilterValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), filterHandRef, fineRef, down));
+  // column's is resonance — two ordinary one-column dials to the bridge. A
+  // one-column filter's slot turns whichever hand its knob holds (`take`).
+  const filterFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta, down: boolean, take?: 'cutoff' | 'resonance') =>
+    write(meta, moveFilterValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), filterHandRef, fineRef, down, take));
 
   const chipLatched = (col: number, meta: ControlMeta) =>
     latched[col]?.path === meta.path || !!hwLatched[meta.path];
@@ -1310,7 +1385,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // Multi-slot instruments: one face across a dial per column, each column
   // keeping its knob and drag zone. `role` names the part a dial is drawn as.
   type FaceDial = { role: string; col: number; meta: ControlMeta; position: number; track?: string };
-  type Face = { kind: 'gate' | 'vector' | 'multiband' | 'channel'; col: number; span: number; dials: FaceDial[]; curve?: { meta: ControlMeta; position: number }[]; icon?: string; down?: boolean };
+  type Face = { kind: 'gate' | 'vector' | 'grain' | 'multiband' | 'channel'; col: number; span: number; dials: FaceDial[]; curve?: { meta: ControlMeta; position: number }[]; icon?: string; down?: boolean; grain?: MoveGrainSpan };
 
   // A gate's three dials side by side — threshold, look-ahead, release — draw
   // as one 3-slot control, all the page's own dials or all latched chips.
@@ -1338,6 +1413,24 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     return {
       kind: 'vector', col, span: 3, down: at.down,
       dials: (['x', 'y', 'z'] as const).map((axis, k) => ({ role: `axis-${axis}`, col: col + k, meta: metas[k]!, position: at[axis] })),
+    };
+  };
+
+  // A grain cloud's four dials side by side — length, shape, density or
+  // offset, direction — draw as one 4-slot face, on the gate's terms: all
+  // the page's own dials or all latched chips.
+  const grainAt = (col: number): Face | null => {
+    const cols = [col, col + 1, col + 2, col + 3];
+    const metas = cols.map((c) => dialAt(c));
+    if (metas.some((m) => !m) || cols.slice(1).some((c) => !visibleCols.includes(c))) return null;
+    const own = metas.map((m, k) => m === page.dials[col + k]);
+    if (own.some((o) => o !== own[0])) return null;
+    const at = moveGrainSpan(metas.map((m) => [m!, values[m!.path]]));
+    if (!at) return null;
+    const roles = ['length', 'shape', at.trail.role, 'direction'];
+    return {
+      kind: 'grain', col, span: 4, grain: at,
+      dials: cols.map((c, k) => ({ role: roles[k], col: c, meta: metas[k]!, position: at.positions[k] })),
     };
   };
 
@@ -1382,7 +1475,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     return { kind: 'channel', col, span: dials.length, dials };
   };
 
-  const faceAt = (col: number): Face | null => (stripMode ? null : gateAt(col) ?? vectorAt(col) ?? multibandAt(col) ?? channelAt(col));
+  const faceAt = (col: number): Face | null => (stripMode ? null : gateAt(col) ?? vectorAt(col) ?? grainAt(col) ?? multibandAt(col) ?? channelAt(col));
   /** A column another face already draws across. */
   const underFace = (col: number) => {
     for (let j = col - 1; j >= 0 && j >= col - MOVE_DIALS; j--) {
@@ -1396,7 +1489,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const pressChip = (e: React.PointerEvent<HTMLElement>, col: number, meta: ControlMeta) => {
     try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
     holdStart.current = Date.now();
-    armMod(meta.path);
+    armMod(meta.resonanceOf ?? meta.path);
     setHeld({ col, meta });
   };
 
@@ -1404,8 +1497,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     setHeld(null);
     if (Date.now() - holdStart.current >= TAP_MS) return;
     const wasLatched = chipLatched(col, meta);
-    setLatched((prev) => ({ ...prev, [col]: wasLatched ? undefined : meta }));
+    // One latch on the page, whatever its column: taking a chip lets every other
+    // latched chip go, so the eye never has to find which knobs are still borrowed.
+    const released = wasLatched ? [] : [
+      ...Object.values(latched).filter((m): m is ControlMeta => !!m && m.path !== meta.path).map((m) => m.path),
+      ...Object.keys(hwLatched).filter((path) => hwLatched[path] && path !== meta.path),
+    ];
+    setLatched((prev) => (wasLatched ? { ...prev, [col]: undefined } : { [col]: meta }));
     // Tell the hardware side; the kit relays it when the bridge is up.
+    for (const path of new Set(released)) {
+      window.dispatchEvent(new CustomEvent(MOVE_LATCH_EVENT, { detail: { pageId: page.panel.id, path, latched: false } }));
+    }
     window.dispatchEvent(new CustomEvent(MOVE_LATCH_EVENT, {
       detail: { pageId: page.panel.id, path: meta.path, latched: !wasLatched },
     }));
@@ -1498,7 +1600,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // business.) Nothing registered and nothing attached = no cluster, header
   // unchanged.
   const volumeReading = liveValue ?? volume?.value;
-  const headerCluster = (timelineClaimed || waveClaimed || volume || functionChips === 'clock') && (
+  const headerCluster = (timelineClaimed || waveClaimed || volume || headerEnd || functionChips === 'clock') && (
     <div className="tweakers-move-actions">
       {functionChips === 'clock' && <MoveFunctionChips />}
       {timelineClaimed ? (
@@ -1514,6 +1616,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
           <span className="tweakers-move-volume-value">{boldColons(volumeReading ?? volume.label ?? '')}</span>
         </div>
       )}
+      {headerEnd}
     </div>
   );
 
@@ -1572,6 +1675,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 timeline on the surface holds the wheel first, so its zoom
                 reads here instead. */}
             {timelineClaimed ? <MoveTimelineZoom /> : waveClaimed && <MoveAudioZoom />}
+            {headerStart && <div className="tweakers-move-header-start">{headerStart}</div>}
             <div className="tweakers-move-tracks-group">
               {/* The settings room's name plate: the marker blinks for as
                   long as the room is open — the same pulse the hardware's
@@ -1592,14 +1696,14 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           className="tweakers-move-track"
                           data-active={pg === page}
                           aria-selected={pg === page}
+                          title={trackLabelStyle === 'icon' ? pg.panel.name : undefined}
                           tabIndex={pg === page ? 0 : -1}
                           onClick={() => {
                             setRoomTrack(i);
                             window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: pg.panel.id } }));
                           }}
                         >
-                          <span className="tweakers-move-track-marker" style={{ background: MOVE_TRACK_COLORS[i] }} />
-                          <span className="tweakers-move-track-label">{pg.panel.name}</span>
+                          {trackFace(pg.panel, MOVE_TRACK_COLORS[i])}
                         </button>
                       ))}
                     </div>
@@ -1644,6 +1748,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       data-active={pg === page}
                       aria-selected={pg === page}
                       aria-controls={panelIdForTabs}
+                      title={trackLabelStyle === 'icon' ? pg.panel.name : undefined}
                       tabIndex={pg === page ? 0 : -1}
                       onClick={() => selectPage(i)}
                       onKeyDown={(event) => {
@@ -1661,14 +1766,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           ?.focus();
                       }}
                     >
-                      <span className="tweakers-move-track-marker" style={{ background: MOVE_TRACK_COLORS[i] }} />
-                      <span className="tweakers-move-track-label">{pg.panel.name}</span>
+                      {trackFace(pg.panel, MOVE_TRACK_COLORS[i])}
                     </button>
                   ))}
                 </div>
               )}
               {functionChips === 'tracks' && <MoveFunctionChips />}
-              {headerStart && <div className="tweakers-move-header-start">{headerStart}</div>}
             </div>
             </div>
             )}
@@ -1705,7 +1808,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
               the value means, exactly as it does for a wheel turn. */}
           {screen && (
             <div className="tweakers-move-wheel-screen" role="group" aria-label={screen.title ?? 'Wheel selection'} data-search={screenSearch ? true : undefined}>
-              {screenSearch && <MoveSearchBar view={screenSearch} />}
+              {screenSearch
+                ? <MoveSearchBar view={screenSearch} />
+                : <MoveSearchDoor onOpen={() => MoveSearchStore.open('screen', screen.index)} />}
               <ListScreen
                 items={searchedRows(
                   screen.items.map((row, index) => ({
@@ -1717,7 +1822,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       ...(row.tag ? { tag: row.tag } : {}),
                     }),
                   })),
-                  screenSearch
+                  screenSearch,
+                  screen.items.map(moveScreenRowSearchText)
                 )}
                 value={String(screenSearch ? screenSearch.cursor : screen.index)}
                 follow="center"
@@ -1739,7 +1845,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
           >
             {presetScreen && <MovePresetScreen view={presetScreen} search={presetSearch} />}
             {paletteScreen && (
-              <MovePaletteScreen kept={paletteSearch ? moveSearchFilter(['All colors', ...MOVE_COLOR_PALETTES.map((p) => p.name)], paletteSearch.query) : null}>
+              <MovePaletteScreen kept={paletteSearch ? moveSearchFilter(['All colors', ...MoveColorStore.palettes().map((p) => p.name)], paletteSearch.query) : null}>
                 {paletteSearch && <MoveSearchBar view={paletteSearch} />}
               </MovePaletteScreen>
             )}
@@ -1763,7 +1869,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   so the columns and their gestures stay exactly where they are. */}
               {!stripMode && !settingsPanel && !color && slotGroups(page, visibleCols).map(({ start, span, label }) => (
                 <div key={`group-${start}`} className="tweakers-move-slot-group" aria-hidden="true" data-labelled={label ? 'true' : undefined}
-                  style={{ '--move-group-start': start, '--move-group-span': span } as React.CSSProperties}>
+                  style={{ gridColumn: `${start + 1} / span ${span}`, gridRow: 1, '--move-group-span': span } as React.CSSProperties}>
                   {label && <span className="tweakers-move-slot-group-head">{label}</span>}
                   {Array.from({ length: span - 1 }, (_, k) => (
                     <i key={k} className="tweakers-move-slot-group-divider" style={{ '--move-group-divider-at': k + 1 } as React.CSSProperties} />
@@ -1778,7 +1884,13 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 if (isSpanContinuation(page, i)) return null;
                 if (!stripMode && visibleCols.includes(i - 1) && trimSpanAt(i - 1)) return null;
                 if (underFace(i)) return null;
-                const meta = dialSpan(page.dials[i]) > 1 ? page.dials[i] : dialAt(i);
+                // A one-column filter keeps its slot too: its own resonance
+                // chip takes the knob, not the slot — the picture stays, and
+                // the slot turns the hand the knob now holds.
+                const sub = dialAt(i);
+                const meta = dialSpan(page.dials[i]) > 1 || (isColumnFilter(page.dials[i]) && sub?.resonanceOf === page.dials[i].path)
+                  ? page.dials[i]
+                  : sub;
                 if (!meta) return <div key={`empty-${i}`} className="tweakers-move-dial" data-empty="true" />;
                 const disabled = TweakStore.isDisabled(page.panel.id, meta.path);
                 const active =
@@ -1792,8 +1904,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 // top and the value takes the slot. Plain 0..1 amounts keep
                 // the big name, since "40%" on its own says nothing.
                 // The kit's own room pages read the same way: the bar width
-                // says "2×" big, with its name as the tag.
-                const valueFirst = (focused || !!settingsPanel || page.panel.kind === 'kit') && !(meta.min === 0 && meta.max === 1);
+                // says "2×" big, with its name as the tag. An app asks for it
+                // per slider with `display: 'value'`, whatever the range — it
+                // knows its number says what it is.
+                const valueFirst = (meta.type === 'slider' && meta.display === 'value')
+                  || ((focused || !!settingsPanel || page.panel.kind === 'kit') && !(meta.min === 0 && meta.max === 1));
                 // The modulator's oscilloscope belongs to a place on the page,
                 // not to one control: the LFO's first slot shows the live wave
                 // whether it is holding a rate in Hz or a tempo division.
@@ -1853,19 +1968,25 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     resolveFilterAxis(meta.resonanceAxis, 'resonance')
                   );
                   const shape = filterShapePath(meta, values[meta.path]);
+                  // The hand a one-column filter's knob holds: its cutoff, or
+                  // its resonance while that chip is held or latched in.
+                  const take = sub && sub !== meta ? 'resonance' : 'cutoff';
+                  const column = isColumnFilter(meta);
                   return (
                     <div
                       key={meta.path}
                       className="tweakers-move-dial"
                       data-kind="filter"
+                      data-vertical={column || undefined}
                       data-active={active || undefined}
+                      data-latched={(column && take === 'resonance' && chipLatched(i, sub!)) || undefined}
                       data-disabled={meta.filterEnabled === false || undefined}
                       onPointerDown={(e) => {
                         try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
                         fineRef.current = null;
                         setDragPath(meta.path);
                         armMod(meta.path);
-                        filterFromPointer(e, meta, true);
+                        filterFromPointer(e, meta, true, take);
                       }}
                       onPointerMove={(e) => {
                         if (dragPath === meta.path) filterFromPointer(e, meta, false);
@@ -1874,7 +1995,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
                     >
                       <MoveModRing panelId={page.panel.id} path={meta.path} />
-                      <MoveSlotFilterBody meta={meta} value={fv} shape={shape} />
+                      <MoveSlotFilterBody meta={meta} value={fv} shape={shape} hand={column ? take : undefined} />
                     </div>
                   );
                 }
@@ -2139,12 +2260,14 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   // the value, so its name steps back to a tag at the top.
                   const shape = enumShapePath(meta, values[meta.path]);
                   const glyph = enumOptionIcon(option as never);
+                  const picture = enumOptionPicture(option as never);
                   const playback = movePlaybackMode(meta, values[meta.path]);
+                  const lanes = moveLanes(meta, values[meta.path]);
                   return (
                     <div
                       key={meta.path}
                       className="tweakers-move-dial"
-                      data-kind="enum"
+                      data-kind={lanes ? 'lanes' : 'enum'}
                       style={dialSpan(meta) > 1 ? { gridColumn: `span ${dialSpan(meta)}` } : undefined}
                       data-scope={scope ? true : undefined}
                       data-visual={playback ? 'playback' : undefined}
@@ -2170,16 +2293,22 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           for the value to replace. */}
                       {scope}
                       <MoveModRing panelId={page.panel.id} path={meta.path} />
-                      <MoveSlotEnumBody
-                        label={meta.label}
-                        optionLabel={optionLabel}
-                        options={options}
-                        activeIdx={activeIdx}
-                        shape={shape}
-                        glyph={glyph}
-                        playback={playback}
-                        scoped={!!scope}
-                      />
+                      {lanes ? (
+                        <MoveSlotLanesBody label={meta.label} optionLabel={optionLabel} count={options.length}
+                          chosen={lanes.chosen} silent={lanes.silent} solo={lanes.solo} />
+                      ) : (
+                        <MoveSlotEnumBody
+                          label={meta.label}
+                          optionLabel={optionLabel}
+                          options={options}
+                          activeIdx={activeIdx}
+                          shape={shape}
+                          glyph={glyph}
+                          picture={picture}
+                          playback={playback}
+                          scoped={!!scope}
+                        />
+                      )}
                     </div>
                   );
                 }
@@ -2353,10 +2482,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   const body = face.kind === 'channel' ? (
                     <MoveSlotChannelBody channels={dials.map((d) => {
                       const visual = d.meta.moveVisual;
-                      return { ...shown(d), ...(visual?.kind === 'channel' ? { icon: visual.icon, tone: visual.tone } : {}) };
+                      return {
+                        ...shown(d),
+                        ...(visual?.kind === 'channel' ? { icon: visual.icon, tone: visual.tone } : {}),
+                        off: TweakStore.isDisabled(page.panel.id, d.meta.path),
+                      };
                     })} />
                   ) : face.kind === 'vector' ? (
                     <MoveSlotVectorBody x={shown(dials[0])} y={shown(dials[1])} z={shown(dials[2])} down={face.down} />
+                  ) : face.kind === 'grain' ? (
+                    <MoveSlotGrainBody span={face.grain!} length={shown(dials[0])} shape={{ ...shown(dials[1]), value: enumOptionLabel(dials[1].meta.options?.[enumIndex(dials[1].meta, values[dials[1].meta.path])] as never) }}
+                      trail={shown(dials[2])} direction={{ ...shown(dials[3]), value: enumOptionLabel(dials[3].meta.options?.[enumIndex(dials[3].meta, values[dials[3].meta.path])] as never) }} />
                   ) : face.kind === 'gate' ? (
                     <MoveSlotGateBody threshold={shown(dials[0])} lookahead={shown(dials[1])} release={shown(dials[2])}>
                       <MoveGateDisplay panelId={page.panel.id} threshold={dials[0].position} />
@@ -2382,6 +2518,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       <div className="tweakers-move-face-zones">
                         {dials.map((d) => {
                           const off = TweakStore.isDisabled(page.panel.id, d.meta.path);
+                          // An option picker on a face steps as its own slot does.
+                          const grip = (m: ControlMeta) => (m.type === 'select' ? optionDrag(m) : dialDrag(m));
+                          const options = d.meta.type === 'select' ? d.meta.options ?? [] : null;
                           return (
                             <div
                               key={d.col}
@@ -2390,10 +2529,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                               role="slider"
                               tabIndex={off ? -1 : 0}
                               aria-label={d.meta.label}
-                              aria-valuemin={d.meta.min ?? 0}
-                              aria-valuemax={d.meta.max ?? 1}
-                              aria-valuenow={Number(values[d.meta.path])}
-                              aria-valuetext={moveVisualReading(d.meta, Number(values[d.meta.path]))}
+                              aria-valuemin={options ? 0 : d.meta.min ?? 0}
+                              aria-valuemax={options ? Math.max(0, options.length - 1) : d.meta.max ?? 1}
+                              aria-valuenow={options ? enumIndex(d.meta, values[d.meta.path]) : Number(values[d.meta.path])}
+                              aria-valuetext={options
+                                ? enumOptionLabel(options[enumIndex(d.meta, values[d.meta.path])] as never)
+                                : moveVisualReading(d.meta, Number(values[d.meta.path]))}
                               aria-orientation={d.role === 'lookahead' || d.role === 'axis-x' ? 'horizontal' : 'vertical'}
                               aria-disabled={off || undefined}
                               data-disabled={off || undefined}
@@ -2409,11 +2550,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                                   }
                                 }
                                 faceDrag.current = meta;
-                                dialDrag(meta).onPointerDown(p);
+                                grip(meta).onPointerDown(p);
                               }}
-                              onPointerMove={(p) => { if (faceDrag.current) dialDrag(faceDrag.current).onPointerMove(p); }}
-                              onPointerUp={(p) => { if (faceDrag.current) dialDrag(faceDrag.current).onPointerUp(p); faceDrag.current = null; }}
-                              onPointerCancel={() => { if (faceDrag.current) dialDrag(faceDrag.current).onPointerCancel(); faceDrag.current = null; }}
+                              onPointerMove={(p) => { if (faceDrag.current) grip(faceDrag.current).onPointerMove(p); }}
+                              onPointerUp={(p) => { if (faceDrag.current) grip(faceDrag.current).onPointerUp(p); faceDrag.current = null; }}
+                              onPointerCancel={() => { if (faceDrag.current) grip(faceDrag.current).onPointerCancel(); faceDrag.current = null; }}
                             >
                               <MoveModRing panelId={page.panel.id} path={d.meta.path} />
                             </div>
@@ -2861,7 +3002,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     // What a pad is comes from the control, not the row it
                     // sits in: a value chip lifted onto the top row is still
                     // a value chip.
-                    if (page.toggles[col] === meta) {
+                    if (page.toggles[col] === meta || (meta.type === 'toggle' && page.valueActions?.[col] === meta)) {
                       return (
                         <button
                           key={meta.path}
@@ -3295,8 +3436,10 @@ function MoveAudioZoom() {
   return (
     <div className="tweakers-move-wave-zoom">
       <span className="tweakers-move-wave-zoom-dot" />
+      {/* The factor alone: the dot beside it already says what it reads, and the
+          header has better uses for the width than the word "Zoom". */}
       <span className="tweakers-move-wave-zoom-label">
-        Zoom {parseFloat(MoveWaveformStore.getView().zoom.toFixed(1))}x
+        {parseFloat(MoveWaveformStore.getView().zoom.toFixed(1))}x
       </span>
     </div>
   );
@@ -3305,9 +3448,10 @@ function MoveAudioZoom() {
 /**
  * The clock every host's waveform gets, in the panel's volume corner: the
  * playhead's time, flanked by the host's transport state — play on the left,
- * loop on the right, lit when running — when it runs one. The time is
- * written straight to its span every frame at a fixed width, so the pill
- * never breathes.
+ * record beside it for a host that records, loop on the right, lit when
+ * running — when it runs one. Each state is a key: a click runs the handler
+ * the hardware key runs. The time is written straight to its span every
+ * frame at a fixed width, so the pill never breathes.
  */
 function MoveWaveClock() {
   useSyncExternalStore(
@@ -3316,6 +3460,7 @@ function MoveWaveClock() {
     () => 0
   );
   const transport = MoveWaveformStore.getTransport();
+  const records = transport?.recording !== undefined;
   const clockRef = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     let raf = requestAnimationFrame(function tick() {
@@ -3326,21 +3471,57 @@ function MoveWaveClock() {
     return () => cancelAnimationFrame(raf);
   }, []);
   return (
-    <div className="tweakers-move-volume tweakers-move-wave-time" data-transport={transport ? true : undefined}>
+    <div
+      className="tweakers-move-volume tweakers-move-wave-time"
+      data-transport={transport ? true : undefined}
+      data-record={records || undefined}
+    >
       {transport && (
-        <svg className="tweakers-move-wave-state" data-on={transport.playing || undefined} viewBox="0 0 24 24" aria-hidden="true">
+        <MoveWaveKey name="play" on={transport.playing} label={transport.playing ? 'Stop' : 'Play'}>
           <path d={ICON_PLAY} fill="currentColor" />
-        </svg>
+        </MoveWaveKey>
+      )}
+      {transport && records && (
+        <MoveWaveKey name="rec" on={!!transport.recording} label={transport.recording ? 'Stop recording' : 'Record'}>
+          <circle cx="12" cy="12" r="7" fill="currentColor" />
+        </MoveWaveKey>
       )}
       <span ref={clockRef} className="tweakers-move-volume-value">{MoveWaveformStore.clock()}</span>
       {transport && (
-        <svg className="tweakers-move-wave-state" data-on={transport.loopOn || undefined} viewBox="0 0 24 24" aria-hidden="true">
+        <MoveWaveKey name="loop" on={transport.loopOn} label={transport.loopOn ? 'Loop off' : 'Loop on'}>
           {ICON_LOOP.map((d) => (
             <path key={d} d={d} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
           ))}
-        </svg>
+        </MoveWaveKey>
       )}
     </div>
+  );
+}
+
+/**
+ * One transport key on the clock: its state glyph, lit while running, and a
+ * click that runs the hardware key's own handler — the screen and the Move
+ * never keep two versions of what Play does. The name says what a press
+ * will do now.
+ */
+function MoveWaveKey({ name, on, label, children }: {
+  name: 'play' | 'rec' | 'loop';
+  on: boolean;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className="tweakers-move-wave-key"
+      data-name={name}
+      aria-label={label}
+      onClick={() => MoveFunctions.run(name)}
+    >
+      <svg className="tweakers-move-wave-state" data-on={on || undefined} viewBox="0 0 24 24" aria-hidden="true">
+        {children}
+      </svg>
+    </button>
   );
 }
 
@@ -3509,7 +3690,9 @@ function MovePresetScreen({ view, search }: { view: MovePresetView; search: Move
         if (!search) MovePresetStore.scroll(e.deltaY > 0 ? 1 : -1);
       }}
     >
-      {search && <MoveSearchBar view={search} />}
+      {search
+        ? <MoveSearchBar view={search} />
+        : items.length > 0 && <MoveSearchDoor onOpen={() => MoveSearchStore.open('presets')} />}
       <ListScreen
         items={rows}
         value={view.chosen ?? view.cursor ?? undefined}
@@ -3525,11 +3708,27 @@ function MovePresetScreen({ view, search }: { view: MovePresetView; search: Move
 
 /** A list's rows narrowed to what the search keeps — or the one muted row
  *  that says nothing matched, so the screen never reads as empty. No search,
- *  the rows as they were. */
-function searchedRows<T extends { value: string; label: string }>(rows: T[], search: MoveSearchView | null): (T | { value: string; label: string; muted: true })[] {
+ *  the rows as they were. `hay` is what each row is searched by, when that
+ *  is more than its label. */
+function searchedRows<T extends { value: string; label: string }>(rows: T[], search: MoveSearchView | null, hay?: string[]): (T | { value: string; label: string; muted: true })[] {
   if (!search) return rows;
-  const kept = moveSearchFilter(rows.map((r) => r.label), search.query);
+  const kept = moveSearchFilter(hay ?? rows.map((r) => r.label), search.query);
   return kept.length ? kept.map((i) => rows[i]) : [{ value: '', label: 'No matches', muted: true }];
+}
+
+/**
+ * The way into a list's search from the computer: a small magnifier in the
+ * screen's top-right corner, across from where a back pill sits. The Move's
+ * way in is a held Capture; this is the same search, opened by a click.
+ */
+function MoveSearchDoor({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button type="button" className="tweakers-move-search-door" aria-label="Search the list" title="Search ( / )" onClick={onOpen}>
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d={ICON_SEARCH} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </button>
+  );
 }
 
 /**

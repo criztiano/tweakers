@@ -23,12 +23,12 @@ TweakStore.registerPanel('tone', 'Tone', {
   width: [0.5, 0, 1],
   punch: true,
   soft: false,
-}, undefined, { movePads: { punch: 0, soft: 0 } });
+}, undefined, { movePads: { punch: 0, soft: 0 }, icon: 'audio-lines' });
 TweakStore.registerPanel('space', 'Space', {
   size: [0.35, 0, 1],
   decay: [0.5, 0, 1],
   mix: [0.3, 0, 1],
-});
+}, undefined, { icon: 'waves' });
 
 // The colour system, all three faces on one page: the integrated gradient
 // editor in a big slot (tap it — the track row becomes its stops), two small
@@ -43,7 +43,7 @@ TweakStore.registerPanel('paint', 'Paint', {
   inkA: { type: 'color', default: '#632ad5' },
   inkB: { type: 'color', default: '#fccff7' },
   blend: { type: 'balance', a: 'inkA', b: 'inkB', default: 0.5 },
-});
+}, undefined, { icon: 'sparkles' });
 
 // The settings room: master controls behind the Set Overview button
 // (Shift + Step 1 on the hardware, the S key here). Named in MovePanel's

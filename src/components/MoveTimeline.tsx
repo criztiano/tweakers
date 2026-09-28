@@ -614,7 +614,7 @@ export function MoveTimelineZoom() {
     <div className="tweakers-move-wave-zoom">
       <span className="tweakers-move-wave-zoom-dot" />
       <span className="tweakers-move-wave-zoom-label">
-        Zoom {parseFloat(MoveTimelineStore.getZoom().toFixed(1))}x
+        {parseFloat(MoveTimelineStore.getZoom().toFixed(1))}x
       </span>
     </div>
   );

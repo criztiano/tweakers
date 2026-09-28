@@ -60,12 +60,19 @@ export interface MoveWaveformProps {
    * Loop keys for as long as it is mounted — Play runs the host's tape, Loop
    * arms its brackets — and the panel's clock wears both states. Without
    * it the keys stay the app's and the clock shows the time alone.
+   *
+   * A host that records adds `onRecord`: the waveform takes the Rec key too,
+   * and the clock wears a record key beside Play, red while `recording`.
+   * Every key on the clock is a button that runs the same handler as its
+   * hardware key, so a click and a press are one action.
    */
   transport?: {
     playing: boolean;
     loopOn: boolean;
     onPlay: () => void;
     onLoop: () => void;
+    recording?: boolean;
+    onRecord?: () => void;
   };
   /** The colour of the playhead, the loop band and the lit steps — the host's signature on the card. */
   accent?: string;
@@ -175,24 +182,31 @@ export function MoveWaveform({
 
   // The transport, when the host runs one: Play and Loop are its keys while
   // the card is up (pushed, so whatever the app had on them comes back), and
-  // the clock reads their state.
+  // the clock reads their state. Rec joins them only for a host that records.
   const transportRef = useRef(transport);
   transportRef.current = transport;
   const hasTransport = !!transport;
+  const hasRecord = !!transport?.onRecord;
   useEffect(() => {
     if (!productionEnabled || !hasTransport) return;
     const releases = [
       MoveFunctions.push('play', () => transportRef.current?.onPlay(), { label: 'Play', chip: false }),
       MoveFunctions.push('loop', () => transportRef.current?.onLoop(), { label: 'Loop', chip: false }),
+      ...(hasRecord
+        ? [MoveFunctions.push('rec', () => transportRef.current?.onRecord?.(), { label: 'Record', chip: false })]
+        : []),
     ];
     return () => releases.forEach((release) => release());
-  }, [productionEnabled, hasTransport]);
+  }, [productionEnabled, hasTransport, hasRecord]);
   const playing = transport?.playing ?? false;
   const loopOn = transport?.loopOn ?? false;
+  const recording = transport?.recording ?? false;
   useEffect(() => {
     if (!productionEnabled) return;
-    MoveWaveformStore.setTransport(hasTransport ? { playing, loopOn } : null);
-  }, [productionEnabled, hasTransport, playing, loopOn]);
+    MoveWaveformStore.setTransport(
+      hasTransport ? { playing, loopOn, ...(hasRecord ? { recording } : {}) } : null
+    );
+  }, [productionEnabled, hasTransport, hasRecord, playing, loopOn, recording]);
 
   // The step circles mirror the loop bar the hardware lights, in the card's
   // accent, for as long as the card is up; whatever the app had on the steps

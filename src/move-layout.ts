@@ -138,12 +138,56 @@ const noChip = (c: ControlMeta) =>
   isToggleDial(c) || c.type === 'color' || c.type === 'xy' || c.type === 'range' || c.type === 'filter' ||
   c.type === 'transfer' || c.type === 'gradient' || c.type === 'balance' || isEnumDial(c);
 
+/** A filter that stands in one column: its knob the cutoff, its resonance a
+ *  chip on the top pad row under it (`moveVertical`). */
+export const isColumnFilter = (c: ControlMeta | undefined): c is ControlMeta =>
+  c?.type === 'filter' && !!c.moveVertical;
+
 /**
  * How many dial columns a control claims. Filters give each knob its own
- * axis; a two-column select gives both knobs the same list.
+ * axis — unless one stands in a single column; a two-column select gives
+ * both knobs the same list.
  */
 export const dialSpan = (c: ControlMeta | undefined): number =>
-  c?.type === 'filter' || (c?.type === 'select' && c.moveSpan === 2 && !isMoveTabs(c)) ? 2 : 1;
+  (c?.type === 'filter' && !isColumnFilter(c)) || (c?.type === 'select' && c.moveSpan === 2 && !isMoveTabs(c)) ? 2 : 1;
+
+const resonanceChips = new WeakMap<ControlMeta, ControlMeta>();
+
+/**
+ * The resonance of a one-column filter, as the value chip it becomes on the
+ * top pad row: a bounded number named and ranged by the filter's `resonance`
+ * axis, at `<filter path>:resonance`. It exists on the Move page only — the
+ * store keeps the one `{ cutoff, resonance }` pair, `resonanceOf` points back
+ * at it, and editing the chip writes that whole pair. One chip per filter,
+ * so the page keeps the same chip from build to build.
+ */
+export function filterResonanceChip(filter: ControlMeta): ControlMeta {
+  let chip = resonanceChips.get(filter);
+  if (!chip) {
+    const ra = resolveFilterAxis(filter.resonanceAxis, 'resonance');
+    chip = {
+      type: 'slider',
+      path: `${filter.path}:resonance`,
+      label: ra.label,
+      min: ra.min,
+      max: ra.max,
+      ...(ra.step > 0 ? { step: ra.step } : {}),
+      ...(ra.formatValue ? { formatValue: ra.formatValue } : {}),
+      resonanceOf: filter.path,
+    };
+    resonanceChips.set(filter, chip);
+  }
+  return chip;
+}
+
+/** What a resonance chip reads: its filter's stored resonance, clamped into
+ *  the chip's range — the resonance minimum when the pair has none. */
+export function filterChipValue(chip: ControlMeta, filterValue: unknown): number {
+  const r = (filterValue as Partial<FilterValue> | null | undefined)?.resonance;
+  const min = chip.min ?? 0;
+  const max = chip.max ?? 1;
+  return typeof r === 'number' && Number.isFinite(r) ? Math.min(max, Math.max(min, r)) : min;
+}
 
 /** True when column i only continues the span-2 dial sitting at i-1. */
 export const isSpanContinuation = (page: MovePage, i: number): boolean =>
@@ -401,13 +445,22 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         if (first) topValues[at] = ref;
         else values[at] = ref;
       }
+      //    A one-column filter seats its resonance the same way: the chip up
+      //    top in its own column, before anything else asks for that cell.
+      for (let col = 0; col < dials.length; col++) {
+        if (isColumnFilter(dials[col])) topValues[col] = filterResonanceChip(dials[col]);
+      }
       const seated = (c: ControlMeta) => topValues.includes(c) || values.includes(c);
 
-      // 2. The switches take the top row — around the chips already there.
+      // 2. The switches take the top row — around the chips already there. A
+      //    switch the panel names in `moveValueRow`, with a column, waits for
+      //    3c: it rides the value row, leaving its top cell to a chip.
+      const lowered = (c: ControlMeta) =>
+        c.type === 'toggle' && !isToggleDial(c) && (panel.moveValueRow ?? []).includes(c.path) && padCols.get(c) != null;
       for (const c of controls) {
         const col = padCols.get(c) ?? null;
         if (isMoveTabs(c)) placeTabs(c, col);
-        else if (c.type === 'toggle' && !isToggleDial(c)) place(toggles, 'toggle', c, col);
+        else if (c.type === 'toggle' && !isToggleDial(c) && !lowered(c)) place(toggles, 'toggle', c, col);
       }
 
       // 3. A value chip the panel names in `moveTopRow` rides the top row in
@@ -418,8 +471,12 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
       const lift = panel.moveTopRow ?? [];
       const chipFits = (c: ControlMeta) =>
         isDial(c) && !noChip(c) && !dials.includes(c) && !balanceRefs.has(c) && !isPadColor(c);
+      // A colour chip rides the top row too, when the page asks for it: a colour
+      // belongs on the top or the value row (the balance's own colour already
+      // sits up there), so a page can put one right under its big slot.
+      const liftFits = (c: ControlMeta) => chipFits(c) || (isPadColor(c) && !balanceRefs.has(c));
       for (const c of controls) {
-        if (!lift.includes(c.path) || (c.type !== 'action' && !chipFits(c))) continue;
+        if (!lift.includes(c.path) || (c.type !== 'action' && !liftFits(c))) continue;
         const col = padCols.get(c) ?? null;
         if (col === null) {
           reportMoveLayoutIssue(
@@ -463,9 +520,17 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
       // 3c. An action the panel names in `moveValueRow` rides the value row in
       //     its movePads column, when no chip holds that cell — a button over
       //     the column's action pad. No column, or a taken cell, and it keeps
-      //     the action row.
+      //     the action row. A switch named there rides it the same way — the
+      //     chip that shapes a control above it, the switch below (a curve's
+      //     Bell over its Flip); with its cell taken it goes back up top.
       const raise = panel.moveValueRow ?? [];
       for (const c of controls) {
+        if (lowered(c)) {
+          const col = padCols.get(c)!;
+          if (cellAt(values, col) === undefined) valueActions[col] = c;
+          else place(toggles, 'toggle', c, col);
+          continue;
+        }
         if (!raise.includes(c.path) || c.type !== 'action' || topValues.includes(c)) continue;
         const col = padCols.get(c) ?? null;
         if (col === null) {
@@ -500,8 +565,11 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         // to the ordinary chip: the value row, leftmost free (or as named).
         else if (balanceRefs.has(c)) place(values, 'value', c, col);
         // The small colour selector: a swatch on the value row, in its named
-        // column — a chip like any other (tap latches, hold peeks).
-        else if (isPadColor(c)) place(values, 'value', c, col);
+        // column — a chip like any other (tap latches, hold peeks). A page can
+        // lift it to the top row with `moveTopRow`.
+        else if (isPadColor(c)) {
+          if (!topValues.includes(c)) place(values, 'value', c, col);
+        }
         // A control holding a dial slot never reaches the pads — the pad grid
         // must not mirror a dial. A movePads column on one is ignored, out
         // loud, so a page that still maps its dials to pads announces itself.
@@ -777,6 +845,9 @@ export const enumOptionLabel = (o: string | { value: string; label?: string }) =
 /** The option's glyph name, or null — a bare string option never has one. */
 export const enumOptionIcon = (o: string | { icon?: string }): string | null =>
   typeof o === 'string' ? null : (o.icon ?? null);
+/** The option's full-slot picture URL, or null. */
+export const enumOptionPicture = (o: string | { picture?: string }): string | null =>
+  typeof o === 'string' ? null : (o.picture ?? null);
 
 /** Enough points to read a bell or a bounce at slot width, and no more. */
 export const ENUM_SHAPE_SAMPLES = 64;

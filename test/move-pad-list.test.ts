@@ -140,3 +140,16 @@ it('takes the host\'s choice on re-attach, where a checked list keeps what was t
   const checked = setup();
   expect(checked.choice('page', 'extract')).toBeNull();
 });
+
+it('keeps its own name when the value reads elsewhere', () => {
+  const store = picker(vi.fn(), ['story']);
+  releases.push(store.attach('page', 'preset', {
+    label: 'Presets', single: true, keepLabel: true, selected: ['story'],
+    options: [{ value: 'story', label: 'Story' }, { value: 'square', label: 'Square' }],
+    onSubmit: vi.fn(),
+  }));
+  // the pad says what a press does; the choice still stands
+  expect(store.choice('page', 'preset')).toBeNull();
+  expect(store.selected('page', 'preset')).toEqual(['story']);
+  for (const release of releases.splice(0).reverse()) release();
+});

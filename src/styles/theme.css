@@ -385,6 +385,9 @@
      than a slot you can press, so it never reads as a control. */
   --move-slot-empty: rgba(222, 227, 201, 0.03);
   --move-chip: #41403e;
+  /* A big slot at rest sits a step quieter than the chip; the slot whose
+     dial is in the hand comes back up to the chip, so the eye finds it. */
+  --move-slot-rest: color-mix(in srgb, var(--move-chip) 60%, var(--move-bg));
   /* A drawn screen's grid (the gate, the cleaner, the band pad): the well
      it sits in, and the cells across it. */
   --move-face-well: var(--move-bg);
@@ -425,9 +428,6 @@
   --move-toggle-on: #34c759;
   --move-toggle-off: #ff2d55;
   --move-toggle-halo: 4px;
-  /* The slot's own surface, flattened — the punch-out reads as a gap in the
-     picture, not as a hole down to the panel. */
-  --move-toggle-halo-color: var(--move-chip);
   /* The metronome's body sits a step behind its arm, so the thing that moves
      is the brightest thing in the slot. */
   --move-metronome-body-opacity: 0.85;
@@ -437,13 +437,32 @@
      floor: its swing room already pads the left side. */
   --move-metronome-inset-left: 6px;
   --move-metronome-inset-bottom: 14px;
+  /* The grain cloud names each of its dials by a hue it wears in the
+     picture: the length's rule, the density's nearest copy — or, for
+     another voice, the offset's one copy. */
+  --move-grain-length: var(--move-blue);
+  --move-grain-density: var(--move-indigo);
+  --move-grain-offset: var(--move-emerald);
+  --move-grain-hero: var(--move-text);
+  /* A standing pitch's line and mark. */
+  --move-diaphragm: var(--move-orange);
+  /* A stopped clock goes to ice. */
+  --move-clock-ice: color-mix(in srgb, var(--move-blue) 45%, var(--move-text));
   --move-text: #dee3c9;
   --move-text-inverse: #31322f;
   --move-radius: 12px;
   --move-slot-height: 140px;
   --move-gap: 4px;
+  /* A group's name is inset this far from the edges of its container. */
+  --move-group-inset: 2px;
+  /* The band a labelled group's name owns along the top of its container —
+     the inset and the name's own head. The slots start under it, so a group
+     name and a slot name are never on the same line. */
+  --move-group-band: 20px;
   --move-wheel-width: 200px;
   --move-glyph-stroke: 1.25;
+  /* A full-slot option picture sits under the slot's name: this much of it. */
+  --move-picture-opacity: 0.55;
   --move-radius-small: 8px;
   --move-font-label: 'Geist Pixel', system-ui, -apple-system, sans-serif;
   /* The big readouts — a dial's value, the volume pill — run the line shape. */
@@ -499,7 +518,6 @@
   --move-chip: #2e2e30;
   --move-group-divider: #353333;
   --move-group-head: #1f1f21;
-  --move-toggle-halo-color: var(--move-chip);
   --move-text: #f0f0ee;
   --move-face-well: var(--move-bg);
   --move-face-cell: color-mix(in srgb, var(--move-text) 5%, var(--move-bg));
@@ -549,6 +567,17 @@
    happens to have positioned, usually out of sight above the page. */
 .tweakers-move[data-dock="flow"] {
   position: relative;
+}
+
+/* The page's column count is a registered number so a page change can ease
+   it (move-panel-motion's easeWidth): the widths measured from it move
+   through the fractions between two pages instead of snapping. MovePanel
+   always sets it on the panel's inside; the initial value is the full
+   eight-wide surface. */
+@property --move-surface-cols {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 8;
 }
 
 .tweakers-move-inner {
@@ -614,8 +643,11 @@
   max-width: 100%;
 }
 
+/* A host's own status leads the page names, on the same row — never a second line
+   under them. */
 .tweakers-move-header-start {
   min-width: 0;
+  flex: none;
 }
 
 .tweakers-move-track {
@@ -669,6 +701,30 @@
 
 .tweakers-move-track[data-active="true"]:hover .tweakers-move-track-label {
   opacity: 1;
+}
+
+/* A page's picture, beside its name or in its place: the label's size and
+   the label's dimming, so a picture and a word read as one voice. */
+.tweakers-move-track-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  opacity: 0.22;
+  transition: opacity var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-track[data-active="true"] .tweakers-move-track-icon { opacity: 1; }
+.tweakers-move-track:hover .tweakers-move-track-icon { opacity: 0.7; }
+.tweakers-move-track[data-active="true"]:hover .tweakers-move-track-icon { opacity: 1; }
+
+/* The picture alone on the row: the name stays for a screen reader. */
+.tweakers-move-track-label[data-hidden] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .tweakers-move-mods {
@@ -859,13 +915,15 @@
 
 .tweakers-move-chips {
   display: flex;
-  /* An app that attaches many functions grows a second chip line rather
-     than clipping — every attached function stays visible, like every
-     attached key stays lit. */
-  flex-wrap: wrap;
+  /* One line, always: a chip row that wraps breaks the header's line while
+     the room beside it stands empty (Cri's rule). The row claims its own
+     width, so the header cell it sits in cannot squeeze it; the page names
+     beside it give way instead — they already truncate. */
+  flex-wrap: nowrap;
+  flex: none;
   gap: 4px;
   align-items: center;
-  min-width: 0;
+  white-space: nowrap;
 }
 
 /* In the header cluster the chips hang off the right edge, so wrapped
@@ -1462,53 +1520,85 @@
   opacity: 0.6;
 }
 
+/* The slot's surface: quiet at rest, the full chip while its dial is touched
+   or dragged. Parts that mask the slot behind them read `--move-dial-surface`
+   so they follow it. */
 .tweakers-move-dial {
+  --move-dial-surface: var(--move-slot-rest);
+  /* The slot's own surface, flattened — the punch-out reads as a gap in the
+     picture, not as a hole down to the panel. */
+  --move-toggle-halo-color: var(--move-dial-surface);
   position: relative;
   height: 100%;
-  background: var(--move-chip);
+  background: var(--move-dial-surface);
   border-radius: var(--move-radius);
   cursor: pointer;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  transition: background-color var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-dial[data-active] {
+  --move-dial-surface: var(--move-chip);
 }
 
 /* Grouped slots (`moveSlotGroups`): the container carries the slot surface
    across its columns and the gaps between them, so the slots on it read as
    one; each gap gets a 2 × 48px rounded divider. It sits under the slots,
-   whose own surface is the same colour. */
+   whose own resting surface is the same colour — a touched slot lights up
+   on it alone. It is placed on the dial grid's own columns (its grid area is
+   its containing block), never measured from --move-slot-w: that token is a
+   share of whatever box reads it, and on a page of fewer than eight columns
+   a measured group came out narrower than its slots, header and all. */
 .tweakers-move-slot-group {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: calc(var(--move-group-start) * (var(--move-slot-w) + var(--move-gap)));
-  width: calc(var(--move-group-span) * var(--move-slot-w) + (var(--move-group-span) - 1) * var(--move-gap));
-  background: var(--move-chip);
+  left: 0;
+  right: 0;
+  background: var(--move-slot-rest);
   border-radius: var(--move-radius);
   pointer-events: none;
 }
 
 /* A labelled group's name, in a small header along its top: the dial list's
-   head, inset 2px from the top and the sides, its top corners following the
-   container's. It sits over the slots — the pointer passes through to them. */
+   head, inset from the top and the sides, its top corners following the
+   container's. Inset and head together are the band the name owns — the
+   slots below start clear of it, so a group's name and a slot's name tag
+   never share a line. */
 .tweakers-move-slot-group-head {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  right: 2px;
+  top: var(--move-group-inset);
+  left: var(--move-group-inset);
+  right: var(--move-group-inset);
   z-index: 1;
-  height: var(--move-head-h, 18px);
+  height: calc(var(--move-group-band) - var(--move-group-inset));
   padding: 0 8px;
-  border-radius: calc(var(--move-radius) - 2px) calc(var(--move-radius) - 2px) 0 0;
+  border-radius: calc(var(--move-radius) - var(--move-group-inset)) calc(var(--move-radius) - var(--move-group-inset)) 0 0;
   background: var(--move-group-head);
   color: var(--move-text);
   font-family: var(--move-font-label);
   font-size: 13px;
-  line-height: var(--move-head-h, 18px);
+  line-height: calc(var(--move-group-band) - var(--move-group-inset));
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* A row carrying a labelled group is that band taller, and every slot on it
+   stands at the bottom keeping its own height: the group's container grows
+   with the row, its name takes the new band, and no slot face changes size
+   or moves under the name. A row of unlabelled groups keeps its old height
+   exactly. */
+.tweakers-move-dials:has(> .tweakers-move-slot-group[data-labelled]) {
+  height: calc(var(--move-slot-height) + var(--move-group-band));
+  align-items: end;
+}
+
+.tweakers-move-dials:has(> .tweakers-move-slot-group[data-labelled]) > .tweakers-move-dial {
+  height: var(--move-slot-height);
 }
 
 .tweakers-move-slot-group-divider {
@@ -1522,6 +1612,12 @@
   border-radius: 1px;
   background: var(--move-group-divider);
   transform: translateY(-50%);
+}
+
+/* Under a name, the dividers centre on the slots rather than on the taller
+   container, so they stay on the line of the faces they separate. */
+.tweakers-move-slot-group[data-labelled] > .tweakers-move-slot-group-divider {
+  top: calc(50% + var(--move-group-band) / 2);
 }
 
 .tweakers-move-dial[data-empty="true"] {
@@ -1546,27 +1642,34 @@
   border-radius: var(--move-radius-small);
 }
 
+/* The colour fills its slot, edge to edge: the slot IS the swatch. The name reads
+   on top of it, in the ink the colour can carry. */
 .tweakers-move-color-swatch {
   position: absolute;
-  inset: var(--move-shape-top) var(--move-color-gap) var(--move-shape-top);
+  inset: 0;
+  border-radius: inherit;
 }
+
+.tweakers-move-dial[data-kind="color"] .tweakers-move-dial-head {
+  position: relative;
+  z-index: 1;
+}
+
+/* On a colour slot the colour is the ground: the name sits straight on it, with no
+   chip behind it, in whichever ink the colour can carry. */
+.tweakers-move-dial[data-kind="color"] .tweakers-move-dial-head {
+  background: none;
+}
+
+.tweakers-move-dial-head[data-ink="dark"] { color: var(--move-text-inverse, #1e1e1e); }
+.tweakers-move-dial-head[data-ink="light"] { color: var(--move-text); }
 
 .tweakers-move-color-swatch > span,
 .tweakers-move-color-preview > span { display: block; width: 100%; height: 100%; }
 
-.tweakers-move-color-reading {
-  position: absolute;
-  bottom: var(--move-color-gap);
-  left: var(--move-color-gap);
-  right: var(--move-color-gap);
-  font-size: var(--move-color-font);
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-
 .tweakers-move-dial[data-kind="color"][aria-expanded="true"] .tweakers-move-color-swatch,
 .tweakers-move-dial[data-kind="color"]:hover .tweakers-move-color-swatch {
-  box-shadow: 0 0 0 var(--move-color-stroke) var(--move-text);
+  box-shadow: inset 0 0 0 var(--move-color-stroke) var(--move-text);
 }
 
 .tweakers-move-color-display {
@@ -1876,7 +1979,7 @@
   max-width: calc(100% - 16px);
   padding: 1px 8px;
   border-radius: 999px;
-  background: var(--move-chip);
+  background: var(--move-dial-surface);
   font-family: var(--move-font-label);
   font-size: 13px;
   line-height: 16px;
@@ -1913,6 +2016,30 @@
   stroke-width: var(--move-glyph-stroke);
   color: var(--move-text);
   pointer-events: none;
+}
+
+/* An option's picture fills the slot edge to edge, under its name and
+   pagination. A host image rides as a mask, so it takes the slot's ink; held
+   back so the name over it still reads first. */
+.tweakers-move-dial-picture {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--move-text);
+  opacity: var(--move-picture-opacity);
+  mask-size: cover;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: cover;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  pointer-events: none;
+}
+
+/* Over a picture the option's name keeps a halo of the slot's own surface,
+   so it reads first whatever the picture draws behind it. */
+.tweakers-move-dial:has(> .tweakers-move-dial-picture) .tweakers-move-dial-option {
+  text-shadow: 0 0 2px var(--move-dial-surface), 0 0 5px var(--move-dial-surface), 0 0 9px var(--move-dial-surface);
 }
 
 .tweakers-move-dial-option {
@@ -1967,7 +2094,7 @@
 
 .tweakers-move-dial[data-shape] .tweakers-move-dial-label {
   z-index: 1;
-  text-shadow: 0 0 6px var(--move-chip), 0 0 6px var(--move-chip);
+  text-shadow: 0 0 6px var(--move-dial-surface), 0 0 6px var(--move-dial-surface);
 }
 
 .tweakers-move-dial-bar {
@@ -2018,6 +2145,11 @@
 
 .tweakers-move-dial[data-kind="filter"] {
   grid-column: span 2;
+}
+
+/* A filter standing in one column: one slot, its resonance a chip below. */
+.tweakers-move-dial[data-kind="filter"][data-vertical] {
+  grid-column: auto;
 }
 
 .tweakers-move-slot-display {
@@ -2203,6 +2335,8 @@
 .tweakers-move-filter-readout[data-side="cutoff"] { left: 0; }
 
 .tweakers-move-filter-readout[data-side="resonance"] { right: 0; }
+
+.tweakers-move-filter-readout[data-side="column"] { left: 0; width: 100%; }
 
 .tweakers-move-filter-readout .tweakers-move-dial-label {
   font-size: 13px;
@@ -2655,6 +2789,8 @@
   pointer-events: none;
 }
 
+/* The gauge's parts dress the standalone `gauge` slot too, so they stay
+   unscoped: only the placement above belongs to the multiband face. */
 .tweakers-move-multiband-gauge-dome,
 .tweakers-move-multiband-gauge-base,
 .tweakers-move-multiband-gauge-needle {
@@ -3004,7 +3140,7 @@
   border: 0;
   padding: 0;
   color: var(--move-text);
-  background: var(--move-slot);
+  background: var(--move-dial-surface);
   appearance: none;
 }
 
@@ -3341,10 +3477,13 @@
   box-shadow: var(--move-list-shadow);
 }
 
+/* The list screen covers its whole slot, so the head is the slot surface
+   that shows: quiet at rest, lit while the dial is in the hand. */
 .tweakers-move-dial-head {
   flex: 0 0 var(--move-head-h);
   padding: 0 8px;
-  background: var(--move-chip);
+  background: var(--move-dial-surface, var(--move-chip));
+  transition: background-color var(--move-duration-press) var(--move-ease-out);
   color: var(--move-text);
   font-family: var(--move-font-label);
   font-size: 13px;
@@ -3665,6 +3804,55 @@
 .tweakers-move-search-input::placeholder {
   color: inherit;
   opacity: 1;
+}
+
+/* The way into the search from the computer: a small magnifier pinned in
+   the list screen's top-right corner, 4px off both edges — across from
+   where a back pill sits. Hidden until the pointer is over the list, faint
+   until it is over the magnifier, so the list stays the thing you read.
+   (A screen with no hover — touch — keeps it faintly in sight.) */
+.tweakers-move-search-door {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--move-text);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.12s, background-color 0.12s;
+}
+
+.tweakers-move-wheel-screen:hover .tweakers-move-search-door,
+.tweakers-move-preset-screen:hover .tweakers-move-search-door {
+  opacity: 0.35;
+}
+
+@media (hover: none) {
+  .tweakers-move-search-door {
+    opacity: 0.35;
+  }
+}
+
+.tweakers-move-wheel-screen .tweakers-move-search-door:hover,
+.tweakers-move-preset-screen .tweakers-move-search-door:hover,
+.tweakers-move-wheel-screen .tweakers-move-search-door:focus-visible,
+.tweakers-move-preset-screen .tweakers-move-search-door:focus-visible {
+  opacity: 1;
+  background: #41403e;
+  outline: none;
+}
+
+.tweakers-move-search-door svg {
+  width: 11px;
+  height: 11px;
 }
 
 /* On the wheel screen the list is pinned to the screen's box; while a
@@ -4088,7 +4276,8 @@
 @media (prefers-reduced-motion: reduce) {
   .tweakers-move-pad,
   .tweakers-move-track,
-  .tweakers-move-track-label {
+  .tweakers-move-track-label,
+  .tweakers-move-track-icon {
     transition-duration: 0.01ms;
   }
 
@@ -4506,6 +4695,7 @@
 .tweakers-move {
     padding: 12px 12px 10px;
     --move-slot-height: 100px;
+    --move-group-band: 18px;
   }
 .tweakers-move-dial-label {
     font-size: 16px;
@@ -4672,6 +4862,12 @@
   justify-content: center;
 }
 
+/* A host that records puts one more key in the clock: the pill grows by
+   that key and its gap, and still holds the one width. */
+.tweakers-move-wave-time[data-record] {
+  width: calc(128px + 14px + 8px);
+}
+
 /* The transport's state, worn by the clock: play at its left, loop at its
    right — lit while running, ember while not. */
 .tweakers-move-wave-state {
@@ -4683,6 +4879,36 @@
 
 .tweakers-move-wave-state[data-on] {
   color: #dfe2cc;
+}
+
+/* A take in progress is the one state that reads red. */
+.tweakers-move-wave-key[data-name="rec"] .tweakers-move-wave-state[data-on] {
+  color: var(--move-red);
+}
+
+/* Each state on the clock is a key: nothing drawn but the glyph, and a hit
+   area the pill's full height that stops short of its neighbours. */
+.tweakers-move-wave-key {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+}
+
+.tweakers-move-wave-key::before {
+  content: '';
+  position: absolute;
+  inset: -7px -4px;
+}
+
+.tweakers-move-wave-key:focus-visible {
+  outline: var(--move-color-stroke) solid var(--move-text);
+  outline-offset: var(--move-color-stroke);
 }
 
 .tweakers-move-wave-time .tweakers-move-volume-value {
@@ -6029,4 +6255,401 @@
   .tweakers-move-pad[data-confirm]::before { animation: none; }
   .tweakers-move-pad-list-overlay .tweakers-list-screen-row,
   .tweakers-move-pad-list-overlay .tweakers-list-screen-label { transition: none; }
+}
+
+/* ---------------------------------------------------------------------------
+   The grain cloud: four slots, one picture. The first three columns hold
+   the stage — the lit grain, its copies behind it, the length's rule — and
+   the fourth the direction's field of arrows. Each name wears its dial's hue.
+   --------------------------------------------------------------------------- */
+
+/* The stage runs from the slot's own left edge to just past the third
+   column, and clips there: the slot's rounded edge on the left, a short fade
+   on the right so the far copies never run under the direction's arrows. */
+.tweakers-move-grain-stage {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: calc(var(--move-face-col-w) * 3 + var(--move-gap) * 2 + 12px);
+  overflow: hidden;
+  border-radius: var(--move-radius) 0 0 var(--move-radius);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 14px), transparent);
+  pointer-events: none;
+}
+
+/* The names read at a slot label's size, not a specimen's. */
+.tweakers-move-dial[data-kind="grain"] {
+  --move-face-name-size: var(--move-toggle-label-size);
+}
+
+/* The grains stand on the plot's bottom edge; the length's rule hangs 4px
+   under it. The plot is as tall as the other pictures in the row — the
+   standing pitch's track — so the cloud never reaches the names. */
+.tweakers-move-grain-plot {
+  position: absolute;
+  top: var(--move-shape-top);
+  bottom: 44px;
+  /* The first three columns, 12px in from each side: the stage is those
+     columns and 12px more, so the plot stops 24px short of its right edge.
+     (A column width read in here would measure the stage, not the face.) */
+  left: 12px;
+  right: 24px;
+}
+
+.tweakers-move-grain-plot > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.tweakers-move-grain-hero {
+  fill: var(--move-grain-hero);
+  stroke: var(--move-dial-surface);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+
+/* The copies behind the lit grain are the app's own ground, each outlined
+   in the slot's surface so its edge still reads against the next. */
+.tweakers-move-grain-copy {
+  fill: var(--move-bg);
+  stroke: var(--move-dial-surface);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  stroke-linejoin: round;
+}
+
+.tweakers-move-grain-copy[data-near] {
+  fill: color-mix(in srgb, var(--move-grain-density) 80%, var(--move-dial-surface));
+}
+
+.tweakers-move-grain-stage[data-trail="offset"] .tweakers-move-grain-copy[data-near] {
+  fill: color-mix(in srgb, var(--move-grain-offset) 80%, var(--move-dial-surface));
+}
+
+.tweakers-move-grain-copy[data-near][data-active] {
+  fill: var(--move-grain-density);
+}
+
+.tweakers-move-grain-stage[data-trail="offset"] .tweakers-move-grain-copy[data-near][data-active] {
+  fill: var(--move-grain-offset);
+}
+
+/* The other voice's copy is also outlined over the lit grain, so it still
+   reads where the two overlap. */
+.tweakers-move-grain-edge {
+  fill: none;
+  stroke: var(--move-grain-offset);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.8;
+}
+
+/* The length's rule: round dots between two solid ends, the dots drawn in
+   pixels so they stay round however wide the plot stretches. Touched, it
+   brightens and keeps its dots. */
+.tweakers-move-grain-length {
+  position: absolute;
+  top: calc(100% + 4px);
+  height: 6px;
+  opacity: 0.75;
+  background: radial-gradient(circle, var(--move-grain-length) 1px, transparent 1.4px) center / 6px 2px repeat-x;
+}
+
+.tweakers-move-grain-length[data-active] { opacity: 1; }
+
+.tweakers-move-grain-length > i {
+  position: absolute;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  border-radius: 1px;
+  background: var(--move-grain-length);
+}
+
+.tweakers-move-grain-length > i:first-child { left: -1px; }
+.tweakers-move-grain-length > i:last-child { right: -1px; }
+
+.tweakers-move-grain-arrows {
+  position: absolute;
+  top: 18px;
+  bottom: 30px;
+  right: 10px;
+  width: calc(var(--move-face-col-w) - 20px);
+  height: calc(100% - 48px);
+  pointer-events: none;
+}
+
+.tweakers-move-grain-arrow {
+  fill: none;
+  stroke: color-mix(in srgb, var(--move-text) 28%, var(--move-dial-surface));
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tweakers-move-grain-arrow[data-lead] {
+  stroke: var(--move-text);
+  stroke-width: 4;
+}
+
+.tweakers-move-grain-arrows[data-active] .tweakers-move-grain-arrow:not([data-lead]) {
+  stroke: color-mix(in srgb, var(--move-text) 45%, var(--move-dial-surface));
+}
+
+.tweakers-move-grain-name { display: contents; }
+.tweakers-move-grain-name[data-role="length"] .tweakers-move-face-name { color: var(--move-grain-length); }
+.tweakers-move-grain-name[data-role="density"] .tweakers-move-face-name { color: var(--move-grain-density); }
+.tweakers-move-grain-name[data-role="offset"] .tweakers-move-face-name { color: var(--move-grain-offset); }
+
+.tweakers-move-face-zone[data-role="length"],
+.tweakers-move-face-zone[data-role="shape"],
+.tweakers-move-face-zone[data-role="direction"] { cursor: pointer; }
+
+/* ---------------------------------------------------------------------------
+   Lanes: a choice between parallel voices, lanes running away from you.
+   --------------------------------------------------------------------------- */
+
+.tweakers-move-lanes {
+  position: absolute;
+  top: var(--move-shape-top);
+  left: 10px;
+  width: calc(100% - 20px);
+  height: calc(100% - var(--move-shape-top) - var(--move-shape-bottom));
+  overflow: visible;
+  pointer-events: none;
+}
+
+.tweakers-move-lane path:first-child {
+  fill: color-mix(in srgb, var(--move-text) 26%, var(--move-dial-surface));
+  transition: fill var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-lane[data-silent] path:first-child {
+  fill: color-mix(in srgb, var(--move-text) 12%, var(--move-dial-surface));
+}
+
+.tweakers-move-lane[data-chosen] path:first-child {
+  fill: var(--move-text);
+}
+
+.tweakers-move-lane[data-chosen][data-silent] path:first-child {
+  fill: color-mix(in srgb, var(--move-text) 55%, var(--move-dial-surface));
+}
+
+.tweakers-move-lane[data-solo] path:first-child {
+  fill: var(--move-emerald);
+}
+
+.tweakers-move-lane-cross {
+  fill: none;
+  stroke: var(--move-red);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+/* ---------------------------------------------------------------------------
+   The diaphragm: a pitch stood upright. The slot's own surface is drawn by
+   the face, pinched at the mark, so the dial's box steps out of the way.
+   --------------------------------------------------------------------------- */
+
+.tweakers-move-dial[data-visual="diaphragm"] {
+  background: transparent;
+}
+
+.tweakers-move-diaphragm-surface {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--move-radius);
+  background: var(--move-dial-surface);
+  transition: clip-path 90ms var(--move-ease-out), background-color var(--move-duration-press) var(--move-ease-out);
+  pointer-events: none;
+}
+
+.tweakers-move-diaphragm-line,
+.tweakers-move-diaphragm-lit {
+  position: absolute;
+  left: 50%;
+  width: 3px;
+  transform: translateX(-50%);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.tweakers-move-diaphragm-line {
+  background: color-mix(in srgb, var(--move-diaphragm) 30%, var(--move-dial-surface));
+}
+
+.tweakers-move-diaphragm-lit {
+  background: var(--move-diaphragm);
+  opacity: 0;
+}
+
+.tweakers-move-diaphragm-lit[data-offset] { opacity: 1; }
+
+.tweakers-move-diaphragm-zero {
+  position: absolute;
+  left: 50%;
+  width: 13px;
+  height: 2px;
+  transform: translate(-50%, -50%);
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--move-text) 45%, transparent);
+  pointer-events: none;
+}
+
+.tweakers-move-diaphragm-mark {
+  position: absolute;
+  left: 50%;
+  width: 13px;
+  height: 13px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--move-text);
+  box-shadow: 0 0 0 3px var(--move-dial-surface);
+  transition: top 90ms var(--move-ease-out);
+  pointer-events: none;
+}
+
+.tweakers-move-diaphragm-mark[data-offset] { background: var(--move-diaphragm); }
+
+/* ---------------------------------------------------------------------------
+   The streak: a speed as its own number, speed lines trailing behind it.
+   --------------------------------------------------------------------------- */
+
+.tweakers-move-streak {
+  position: absolute;
+  top: 28px;
+  bottom: 10px;
+  left: 6px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  pointer-events: none;
+}
+
+.tweakers-move-streak-lines {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 36px;
+  overflow: visible;
+}
+
+.tweakers-move-streak-lines line {
+  stroke: var(--move-text);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.tweakers-move-streak-number {
+  font-family: var(--move-font-value);
+  font-variation-settings: var(--move-font-value-shape);
+  font-size: 56px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--move-text);
+  white-space: nowrap;
+}
+
+.tweakers-move-streak-unit {
+  font-size: 0.55em;
+  margin-left: 1px;
+  opacity: var(--move-metronome-unit-opacity);
+}
+
+/* ---------------------------------------------------------------------------
+   The clock: a rate something runs at on its own. Laid out as the
+   metronome is — the reading top right, the picture bottom left — with the
+   beat it makes, or its name, bottom right. Stopped, it frosts over.
+   --------------------------------------------------------------------------- */
+
+.tweakers-move-clock-readout {
+  position: absolute;
+  top: var(--move-toggle-label-inset);
+  right: var(--move-toggle-label-inset);
+  display: flex;
+  align-items: baseline;
+  font-family: var(--move-font-value);
+  font-variation-settings: var(--move-font-value-shape);
+  font-size: 40px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--move-text);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.tweakers-move-clock-unit {
+  font-size: 0.6em;
+  margin-left: 1px;
+  opacity: var(--move-metronome-unit-opacity);
+}
+
+.tweakers-move-clock-readout[data-frozen] { color: var(--move-clock-ice); }
+
+.tweakers-move-clock-picture {
+  position: absolute;
+  left: var(--move-metronome-inset-left);
+  bottom: var(--move-metronome-inset-bottom);
+  pointer-events: none;
+}
+
+.tweakers-move-clock {
+  display: block;
+  width: calc(var(--move-toggle-icon-size) + 8px);
+  height: calc(var(--move-toggle-icon-size) + 8px);
+  overflow: visible;
+}
+
+.tweakers-move-clock-disc { fill: var(--move-text); transition: fill 240ms var(--move-ease-out); }
+.tweakers-move-clock-hand { stroke: var(--move-dial-surface); stroke-width: 3.2; stroke-linecap: round; }
+.tweakers-move-clock-pivot { fill: var(--move-dial-surface); }
+
+.tweakers-move-clock[data-frozen] .tweakers-move-clock-disc { fill: var(--move-clock-ice); }
+
+.tweakers-move-clock-ice path {
+  fill: none;
+  stroke: var(--move-clock-ice);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tweakers-move-clock-foot {
+  position: absolute;
+  right: var(--move-toggle-label-inset);
+  bottom: calc(var(--move-metronome-inset-bottom) + 2px);
+  font-family: var(--move-font-label);
+  font-size: var(--move-toggle-label-size);
+  line-height: 16px;
+  color: var(--move-text);
+  opacity: 0.7;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+/* The frost creeps in from the corners of a stopped clock's slot. */
+.tweakers-move-clock-frost {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--move-radius);
+  background:
+    radial-gradient(120% 90% at 0% 100%, color-mix(in srgb, var(--move-clock-ice) 22%, transparent), transparent 60%),
+    radial-gradient(80% 70% at 100% 0%, color-mix(in srgb, var(--move-clock-ice) 14%, transparent), transparent 65%);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--move-clock-ice) 35%, transparent);
+  pointer-events: none;
+}
+
+/* A channel whose control is switched off fades back, its fader and all. */
+.tweakers-move-channel[data-off] {
+  opacity: var(--move-visual-disabled-opacity);
 }

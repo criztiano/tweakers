@@ -1,4 +1,4 @@
-import { C as ControlMeta, M as MoveEdges, P as PanelConfig } from './TweakStore-D5iG_J-e.js';
+import { C as ControlMeta, M as MoveEdges, P as PanelConfig } from './TweakStore-DLFTmlfz.js';
 import { ModPageLayout } from './modulation-core.js';
 import { XYValue } from './xy-pad-core.js';
 import { RangeValue } from './range-slider-core.js';
@@ -89,11 +89,27 @@ declare function moveTabCell(row: (ControlMeta | undefined)[], i: number): MoveT
 declare const isToggleDial: (c: ControlMeta) => boolean;
 /** Everything the hardware turns: the controls that claim a dial slot. */
 declare const isMoveDial: (c: ControlMeta) => boolean;
+/** A filter that stands in one column: its knob the cutoff, its resonance a
+ *  chip on the top pad row under it (`moveVertical`). */
+declare const isColumnFilter: (c: ControlMeta | undefined) => c is ControlMeta;
 /**
  * How many dial columns a control claims. Filters give each knob its own
- * axis; a two-column select gives both knobs the same list.
+ * axis — unless one stands in a single column; a two-column select gives
+ * both knobs the same list.
  */
 declare const dialSpan: (c: ControlMeta | undefined) => number;
+/**
+ * The resonance of a one-column filter, as the value chip it becomes on the
+ * top pad row: a bounded number named and ranged by the filter's `resonance`
+ * axis, at `<filter path>:resonance`. It exists on the Move page only — the
+ * store keeps the one `{ cutoff, resonance }` pair, `resonanceOf` points back
+ * at it, and editing the chip writes that whole pair. One chip per filter,
+ * so the page keeps the same chip from build to build.
+ */
+declare function filterResonanceChip(filter: ControlMeta): ControlMeta;
+/** What a resonance chip reads: its filter's stored resonance, clamped into
+ *  the chip's range — the resonance minimum when the pair has none. */
+declare function filterChipValue(chip: ControlMeta, filterValue: unknown): number;
 /** True when column i only continues the span-2 dial sitting at i-1. */
 declare const isSpanContinuation: (page: MovePage, i: number) => boolean;
 /**
@@ -228,6 +244,10 @@ declare const enumOptionLabel: (o: string | {
 declare const enumOptionIcon: (o: string | {
     icon?: string;
 }) => string | null;
+/** The option's full-slot picture URL, or null. */
+declare const enumOptionPicture: (o: string | {
+    picture?: string;
+}) => string | null;
 /** Enough points to read a bell or a bounce at slot width, and no more. */
 declare const ENUM_SHAPE_SAMPLES = 64;
 /**
@@ -275,4 +295,4 @@ declare function dialOrigin(meta: ControlMeta): number;
 /** Axis positions 0..1 back to the control's real {x, y}, kit-identical. */
 declare function denormalizeXYDial(meta: ControlMeta, x01: number, y01: number): XYValue;
 
-export { ENUM_SHAPE_SAMPLES, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MoveBandCell, type MoveEdgesCell, type MoveLayoutIssueCode, type MovePage, type MoveTabCell, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, denormalizeXYDial, dialOrigin, dialSpan, enumIndex, enumOptionIcon, enumOptionLabel, enumOptionValue, enumShapePath, filterShapePath, isEnumDial, isMoveDial, isMoveTabs, isNamedTabs, isPadSpanContinuation, isSpanContinuation, isToggleDial, moveAppPadRow, moveBandCell, moveEdgesCell, movePadRows, moveTabCell, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeToggleDial, normalizeXYDial, padSpan, reportMoveLayoutIssue, setMoveLayoutReporter, slotGroups, visibleColumns };
+export { ENUM_SHAPE_SAMPLES, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MoveBandCell, type MoveEdgesCell, type MoveLayoutIssueCode, type MovePage, type MoveTabCell, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, denormalizeXYDial, dialOrigin, dialSpan, enumIndex, enumOptionIcon, enumOptionLabel, enumOptionPicture, enumOptionValue, enumShapePath, filterChipValue, filterResonanceChip, filterShapePath, isColumnFilter, isEnumDial, isMoveDial, isMoveTabs, isNamedTabs, isPadSpanContinuation, isSpanContinuation, isToggleDial, moveAppPadRow, moveBandCell, moveEdgesCell, movePadRows, moveTabCell, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeToggleDial, normalizeXYDial, padSpan, reportMoveLayoutIssue, setMoveLayoutReporter, slotGroups, visibleColumns };

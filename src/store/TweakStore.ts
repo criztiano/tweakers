@@ -136,9 +136,12 @@ export type SelectConfig = {
   moveVisual?: MoveSelectVisual;
   /**
    * An option may name an `icon` from `LUCIDE_ICONS` — the Move slot draws it
-   * instead of making you read the mode name off a controller.
+   * instead of making you read the mode name off a controller. An option may
+   * instead carry a `picture` (an image URL) that fills the whole slot, drawn
+   * as a mask in the slot's own colour — for choices that are a texture or a
+   * pattern, where the picture is the thing chosen.
    */
-  options: (string | { value: string; label: string; icon?: string })[];
+  options: (string | { value: string; label: string; icon?: string; picture?: string })[];
   default?: string;
   /** 'segmented' renders the options as an inline segmented control instead of a dropdown. Suits 2–4 short options. */
   display?: 'dropdown' | 'segmented';
@@ -239,6 +242,13 @@ export type FilterConfig = {
    * disabled module dims. Defaults to on.
    */
   enabled?: boolean;
+  /**
+   * Stand in one dial column instead of two. The slot draws the same
+   * response and its knob turns the cutoff; the resonance becomes a value
+   * chip on the top pad row under it — tap latches the knob to it, hold
+   * peeks. The value stays the same `{ cutoff, resonance }` pair.
+   */
+  moveVertical?: boolean;
 };
 
 /**
@@ -302,13 +312,26 @@ export type SliderConfig = {
    * parameters whose two ends are the same place (a heading, a sun position,
    * a tilt). It stays a slider everywhere else, so a hardware knob and a
    * preset see no difference; only the drawing changes.
+   *
+   * `value` keeps the track but puts the value first on the Move panel: the
+   * number is the headline at rest and the name a tag — for a value that
+   * already says what it is (250 ms, 120 BPM). Everywhere else it is an
+   * ordinary slider.
    */
-  display?: 'track' | 'dial';
+  display?: 'track' | 'dial' | 'value';
   /**
    * Past the end, come back around instead of stopping. Dial only; defaults
    * to true when the range covers a full turn (360, or -180..180).
    */
   wrap?: boolean;
+  /**
+   * A still press on the slot, on the Move panel, runs this — the slot's door
+   * to what its knob cannot do: load a file, open an editor. A drag still
+   * turns the value and Shift+press still resets it. Screen only (the browser
+   * gives a file chooser only to a real click), and a function, so it is
+   * invisible to the structure diff like `formatValue`.
+   */
+  onTap?: () => void;
 };
 
 /**
@@ -678,7 +701,7 @@ export type ControlMeta = {
   tab?: boolean;
   /** The synthetic segmented select driving `_tab` — it renders as the panel's tab bar, never as a row. */
   tabBar?: boolean;
-  options?: (string | { value: string; label: string; icon?: string })[];
+  options?: (string | { value: string; label: string; icon?: string; picture?: string })[];
   /** Toggle's own picture and state badges, from the explicit ToggleConfig form; an action's pad glyph. */
   icon?: string;
   onIcon?: string;
@@ -696,8 +719,8 @@ export type ControlMeta = {
   /** Select declared `moveTabs` — it lies across the small slots as a tabs
    *  strip instead of claiming a dial; `'named'` adds its leading name pad. */
   moveTabs?: boolean | 'named';
-  /** Select's rendering mode, or a slider's `dial` form. */
-  display?: 'dropdown' | 'segmented' | 'track' | 'dial';
+  /** Select's rendering mode, or a slider's `dial` / `value` form. */
+  display?: 'dropdown' | 'segmented' | 'track' | 'dial' | 'value';
   /** Dial slider: wrap past the ends instead of stopping. */
   wrap?: boolean;
   placeholder?: string;
@@ -712,6 +735,8 @@ export type ControlMeta = {
   unit?: string;
   /** Slider display formatter, from the explicit SliderConfig form. */
   formatValue?: (value: number) => string;
+  /** A still press on a slider's Move slot, from the explicit SliderConfig form. */
+  onTap?: () => void;
   /** Slider fill anchor, from the explicit SliderConfig form. */
   origin?: number;
   bipolar?: boolean;
@@ -737,6 +762,12 @@ export type ControlMeta = {
   response?: (cutoff01: number, resonance01: number) => (t: number) => number;
   /** Filter control declared `enabled: false` — the slot draws bypassed (dimmed). */
   filterEnabled?: boolean;
+  /** Filter control declared `moveVertical` — one dial column, its resonance a chip under it. */
+  moveVertical?: boolean;
+  /** The one-column filter whose resonance this chip carries (a path in the
+   *  same panel). The chip exists only on the Move page; its value is that
+   *  filter's `resonance`, and editing it writes the filter's whole pair. */
+  resonanceOf?: string;
   /** Curve preview's host-supplied sampler — swapped in place by syncCurveConfigs. */
   sample?: (t: number) => number;
   /** Curve preview's fixed y-range; absent = auto-fit per draw. */
@@ -760,6 +791,8 @@ export const TAB_PATH = '_tab';
 export type PanelConfig = {
   id: string;
   name: string;
+  /** The page's picture on the Move's track row, retained on the same terms as `hints`. */
+  icon?: string;
   controls: ControlMeta[];
   values: Record<string, TweakValue>;
   shortcuts: Record<string, ShortcutConfig>;
@@ -775,7 +808,7 @@ export type PanelConfig = {
   moveTopRow?: string[];
   /** Value chips sunk onto the action pad row, retained on the same terms as `hints`. */
   moveActionRow?: string[];
-  /** Actions raised onto the value pad row, retained on the same terms as `hints`. */
+  /** Actions and switches lowered onto the value pad row, retained on the same terms as `hints`. */
   moveValueRow?: string[];
   /** Big slots drawn as one container, retained on the same terms as `hints`. */
   moveSlotGroups?: MoveSlotGroup[];
@@ -900,6 +933,13 @@ export type TweakStorePanelOptions = {
    */
   labels?: Record<string, string>;
   /**
+   * The page's picture on the Move's track row — a name from the bundled
+   * lucide subset (`LUCIDE_ICONS`), drawn beside the page name. A picture
+   * reads at arm's length where a word does not; the settings room's Panel
+   * page says whether the row shows names, pictures, or both.
+   */
+  icon?: string;
+  /**
    * Which Move pad column a control sits in, by control path (0-7) — the
    * page's hand-authored hardware layout. Without it the surface packs pads
    * left to right, which is fine for a page whose pads happen to belong to
@@ -929,7 +969,8 @@ export type TweakStorePanelOptions = {
    * Actions, by control path, that sit on the value pad row in their
    * `movePads` column — so one column can stack two buttons (Extract over
    * Export). An action whose value cell is taken, or that names no column,
-   * keeps the action row.
+   * keeps the action row. A switch named here, with a column, rides the value
+   * row too and leaves its top cell to a `moveTopRow` chip.
    */
   moveValueRow?: string[];
   /**
@@ -1147,7 +1188,7 @@ class TweakStoreClass {
     // instead of resurrecting it.
     this.overlayPersistedValues(id, target, values, this.mapControlsByPath(controls));
 
-    this.panels.set(id, { id, name, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, moveTopRow: options.moveTopRow, moveActionRow: options.moveActionRow, moveValueRow: options.moveValueRow, moveSlotGroups: options.moveSlotGroups, moveBands: options.moveBands, moveEdges: options.moveEdges, module: '_enabled' in config ? true : undefined, kind: options.kind });
+    this.panels.set(id, { id, name, icon: options.icon, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, moveTopRow: options.moveTopRow, moveActionRow: options.moveActionRow, moveValueRow: options.moveValueRow, moveSlotGroups: options.moveSlotGroups, moveBands: options.moveBands, moveEdges: options.moveEdges, module: '_enabled' in config ? true : undefined, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -1163,6 +1204,7 @@ class TweakStoreClass {
     const hints = options.hints ?? existing.hints;
     const affordances = options.affordances ?? existing.affordances;
     const labels = options.labels ?? existing.labels;
+    const icon = options.icon ?? existing.icon;
     const movePads = options.movePads ?? existing.movePads;
     const moveTopRow = options.moveTopRow ?? existing.moveTopRow;
     const moveActionRow = options.moveActionRow ?? existing.moveActionRow;
@@ -1201,7 +1243,7 @@ class TweakStoreClass {
       }
     }
 
-    const nextPanel: PanelConfig = { id, name, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, moveTopRow, moveActionRow, moveValueRow, moveSlotGroups, moveBands, moveEdges, module: '_enabled' in config ? true : undefined, kind: options.kind ?? existing.kind };
+    const nextPanel: PanelConfig = { id, name, icon, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, moveTopRow, moveActionRow, moveValueRow, moveSlotGroups, moveBands, moveEdges, module: '_enabled' in config ? true : undefined, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
 
@@ -2098,6 +2140,7 @@ class TweakStoreClass {
           orientation: value.orientation,
           display: value.display,
           wrap: value.wrap,
+          onTap: value.onTap,
           shortcut,
         });
       } else if (this.isNumberConfig(value)) {
@@ -2150,7 +2193,7 @@ class TweakStoreClass {
       } else if (this.isFilterConfig(value)) {
         // No `shortcut`: a filter value is {cutoff,resonance}, which the
         // numeric-nudge shortcut path can't drive (the range precedent).
-        controls.push({ type: 'filter', path, label, cutoffAxis: value.cutoff, resonanceAxis: value.resonance, response: value.response, filterEnabled: value.enabled });
+        controls.push({ type: 'filter', path, label, cutoffAxis: value.cutoff, resonanceAxis: value.resonance, response: value.response, filterEnabled: value.enabled, moveVertical: value.moveVertical });
       } else if (this.isTextConfig(value)) {
         controls.push({ type: 'text', path, label, placeholder: value.placeholder });
       } else if (this.isTransferConfig(value)) {

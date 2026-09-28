@@ -16,6 +16,12 @@ export interface MovePadListConfig {
    * choice, and the closed pad names it.
    */
   single?: boolean;
+  /**
+   * The closed pad keeps its own name instead of naming the choice — for a picker
+   * whose value already reads somewhere beside it (a slot group's header, say),
+   * where naming it twice says the same thing twice and hides what a press does.
+   */
+  keepLabel?: boolean;
 }
 export interface MovePadListView {
   panelId: string;
@@ -45,10 +51,11 @@ export class MovePadListStoreClass {
   private notify() { this.version++; for (const listener of this.listeners) listener(); }
   has(panelId: string, path: string) { return this.attachments.has(this.key(panelId, path)); }
   selected(panelId: string, path: string) { return [...(this.attachments.get(this.key(panelId, path))?.selected ?? [])]; }
-  /** A single list's current choice — what its closed pad shows. Null for a checked list, or before anything is chosen. */
+  /** A single list's current choice — what its closed pad shows. Null for a checked
+   *  list, for a list that keeps its own name, or before anything is chosen. */
   choice(panelId: string, path: string): MovePadListOption | null {
     const attachment = this.attachments.get(this.key(panelId, path));
-    if (!attachment?.config.single) return null;
+    if (!attachment?.config.single || attachment.config.keepLabel) return null;
     return attachment.config.options.find(option => option.value === attachment.selected[0]) ?? null;
   }
   attach(panelId: string, path: string, config: MovePadListConfig) {
