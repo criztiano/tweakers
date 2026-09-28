@@ -13838,7 +13838,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     setHeld(null);
     if (Date.now() - holdStart.current >= TAP_MS) return;
     const wasLatched = chipLatched(col, meta);
-    setLatched((prev) => ({ ...prev, [col]: wasLatched ? void 0 : meta }));
+    const released = wasLatched ? [] : [
+      ...Object.values(latched).filter((m) => !!m && m.path !== meta.path).map((m) => m.path),
+      ...Object.keys(hwLatched).filter((path) => hwLatched[path] && path !== meta.path)
+    ];
+    setLatched((prev) => wasLatched ? { ...prev, [col]: void 0 } : { [col]: meta });
+    for (const path of new Set(released)) {
+      window.dispatchEvent(new CustomEvent(MOVE_LATCH_EVENT, { detail: { pageId: page.panel.id, path, latched: false } }));
+    }
     window.dispatchEvent(new CustomEvent(MOVE_LATCH_EVENT, {
       detail: { pageId: page.panel.id, path: meta.path, latched: !wasLatched }
     }));
