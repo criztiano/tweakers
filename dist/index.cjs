@@ -53,6 +53,7 @@ __export(index_exports, {
   ListScreen: () => ListScreen,
   MIN_STOPS: () => MIN_STOPS,
   MOD_COLORS: () => MOD_COLORS,
+  MOD_COLOR_NAMES: () => MOD_COLOR_NAMES,
   MOD_PAGE_DIALS: () => MOD_PAGE_DIALS,
   MOD_RING_CIRCUMFERENCE: () => MOD_RING_CIRCUMFERENCE,
   MOD_RING_RADIUS: () => MOD_RING_RADIUS,
@@ -6215,40 +6216,11 @@ function envelope(p, cols, n) {
 
 // src/modulation-core.ts
 var MOD_SLOTS = 16;
-var MOD_COLORS = [
-  "#ff5f45",
-  // 0  coral
-  "#ff8a2b",
-  // 1  orange
-  "#ffb61e",
-  // 2  amber
-  "#f4d942",
-  // 3  yellow
-  "#b8e03c",
-  // 4  lime
-  "#6fd435",
-  // 5  green
-  "#3bcf6d",
-  // 6  emerald
-  "#2ed3ab",
-  // 7  teal
-  "#33c6e8",
-  // 8  cyan
-  "#3d9bff",
-  // 9  azure
-  "#5f7bff",
-  // 10 blue
-  "#8a6bff",
-  // 11 violet
-  "#b45cff",
-  // 12 purple
-  "#e04ef0",
-  // 13 magenta
-  "#ff4fb0",
-  // 14 pink
-  "#ff4f6e"
-  // 15 rose
-];
+var MOD_COLOR_NAMES = (() => {
+  const wheel = ["red", "orange", "yellow", "lime", "emerald", "blue", "indigo", "pink"];
+  return Array.from({ length: MOD_SLOTS }, (_, i) => wheel[i * 3 % wheel.length]);
+})();
+var MOD_COLORS = MOD_COLOR_NAMES.map((name) => MOVE_PALETTE[name]);
 var modColor = (index) => MOD_COLORS[(index % MOD_SLOTS + MOD_SLOTS) % MOD_SLOTS];
 var MOD_PAGE_DIALS = 8;
 var isModDial = (c) => !c.chip && (c.scope || c.type === "toggle" && c.moveSlot || c.type === "select" || c.type === "slider" || c.type === "xy" || c.type === "range" || c.type === "number" && c.min != null && c.max != null);
@@ -17904,6 +17876,7 @@ var import_TweakStore20 = require("tweakers/store");
   ListScreen,
   MIN_STOPS,
   MOD_COLORS,
+  MOD_COLOR_NAMES,
   MOD_PAGE_DIALS,
   MOD_RING_CIRCUMFERENCE,
   MOD_RING_RADIUS,
