@@ -13340,11 +13340,9 @@ function readSignalTool(signals, editMap) {
       to: { type: "number", min: 0, optional: true, hint: "timeline seconds" },
       query: { type: "string", optional: true, hint: "optional \u2014 one or two plain words" }
     },
-    done: (params, result) => {
-      const label = signals.find((s) => s.id === params.signal)?.label.toLowerCase() ?? "signal";
-      const count = result.count;
-      return count === void 0 ? `Read the ${label}` : `Read the ${label} \u2014 ${count}`;
-    },
+    // What it read, not how many lines came back — a count means nothing to
+    // the person waiting; a finished read is only a beat on the way.
+    done: (params) => `Read the ${signals.find((s) => s.id === params.signal)?.label.toLowerCase() ?? "signal"}`,
     run: async (params, abort) => {
       const chosen = signals.find((s) => s.id === params.signal);
       const cost = readLive(chosen.cost);
@@ -16840,9 +16838,10 @@ function MoveAgentPrompt({ view }) {
     if (!thinking) inputRef.current?.select();
   }, [thinking]);
   const changed = view.phase !== "thinking" && (view.changed > 0 || view.acted > 0);
-  const count = (n, one, many) => n ? `${n} ${n === 1 ? one : many}` : "";
-  const did = [count(view.acted, "action", "actions"), count(view.changed, "value changed", "values changed"), count(view.skipped, "action skipped", "actions skipped")].filter(Boolean).join(", ");
-  const note = thinking ? "Turning the dials\u2026" : [did && `${did}.`, view.message].filter(Boolean).join(" ");
+  const skipped = view.skipped ? `${view.skipped} ${view.skipped === 1 ? "action" : "actions"} skipped.` : "";
+  const note = thinking ? view.steps.some((s) => s.state === "running") ? "" : "Turning the dials\u2026" : [view.message, skipped].filter(Boolean).join(" ");
+  const done = view.phase === "done" && changed && !note;
+  const steps = thinking ? view.steps : view.steps.filter((s) => s.state === "failed");
   return /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("div", { ref: float.ref, className: "tweakers-move-preset-save tweakers-move-agent", "data-phase": view.phase, "data-inside": float.inside || void 0, children: [
     /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
       "input",
@@ -16867,12 +16866,15 @@ function MoveAgentPrompt({ view }) {
         }
       }
     ),
-    view.steps.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("ul", { className: "tweakers-move-agent-steps", "aria-label": "What the agent did", children: view.steps.map((step, i) => /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("li", { className: "tweakers-move-agent-step", "data-state": step.state, children: [
+    steps.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("ul", { className: "tweakers-move-agent-steps", "aria-label": "What the agent is doing", children: steps.map((step, i) => /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("li", { className: "tweakers-move-agent-step", "data-state": step.state, children: [
       step.label,
       step.state === "failed" && " \u2014 failed"
     ] }, i)) }),
-    note && /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("p", { className: "tweakers-move-agent-note", role: "status", children: [
-      note,
+    (note || done) && /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("p", { className: "tweakers-move-agent-note", role: "status", "data-done": done || void 0, children: [
+      done ? /* @__PURE__ */ (0, import_jsx_runtime17.jsxs)("span", { className: "tweakers-move-agent-done", children: [
+        /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("svg", { className: "tweakers-move-agent-done-mark", viewBox: "0 0 16 16", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("path", { d: "M3 8.5l3.2 3.2L13 5", stroke: "currentColor", strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round", pathLength: "1" }) }),
+        "Done"
+      ] }, view.prompt) : note,
       changed && MoveAgentStore.canUndo() && /* @__PURE__ */ (0, import_jsx_runtime17.jsx)("button", { type: "button", className: "tweakers-move-agent-undo", onClick: () => void MoveAgentStore.undo(), children: "Undo" })
     ] })
   ] });

@@ -4004,6 +4004,45 @@
   .tweakers-move-agent-step[data-state="running"] { animation: none; }
 }
 
+/* A reply that did what was asked says one word. The mark draws itself and
+   the word settles in beside it — a small confirmation, over in a beat. */
+.tweakers-move-agent-note[data-done] {
+  color: var(--move-text);
+}
+
+.tweakers-move-agent-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  animation: tweakers-move-agent-settle 320ms var(--move-ease-out) both;
+}
+
+.tweakers-move-agent-done-mark {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.tweakers-move-agent-done-mark path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: tweakers-move-agent-draw 360ms var(--move-ease-out) 80ms forwards;
+}
+
+@keyframes tweakers-move-agent-settle {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes tweakers-move-agent-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-agent-done { animation: none; }
+  .tweakers-move-agent-done-mark path { animation: none; stroke-dashoffset: 0; }
+}
+
 .tweakers-move-agent[data-phase="error"] .tweakers-move-agent-note {
   color: #ff8a70;
 }
