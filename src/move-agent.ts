@@ -353,11 +353,9 @@ function readSignalTool(signals: MoveAgentSignal[], editMap?: () => MoveAgentSeg
       to: { type: 'number', min: 0, optional: true, hint: 'timeline seconds' },
       query: { type: 'string', optional: true, hint: 'optional — one or two plain words' },
     },
-    done: (params, result) => {
-      const label = signals.find((s) => s.id === params.signal)?.label.toLowerCase() ?? 'signal';
-      const count = (result as Partial<ReadSignalResult>).count;
-      return count === undefined ? `Read the ${label}` : `Read the ${label} — ${count}`;
-    },
+    // What it read, not how many lines came back — a count means nothing to
+    // the person waiting; a finished read is only a beat on the way.
+    done: (params) => `Read the ${signals.find((s) => s.id === params.signal)?.label.toLowerCase() ?? 'signal'}`,
     run: async (params, abort): Promise<ReadSignalResult> => {
       const chosen = signals.find((s) => s.id === params.signal)!;
       const cost = readLive(chosen.cost);

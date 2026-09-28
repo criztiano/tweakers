@@ -3829,9 +3829,11 @@ function MovePresetSaveInput({ suggested }: { suggested: string }) {
 /**
  * The agent's prompt, floating where the preset name does. Enter sends the
  * words, Escape closes. The field stays open after a reply — asking again
- * refines what just landed — and the reply sits under it with its undo.
- * When the agent reads or looks on the way, each step shows as it happens,
- * so a longer wait is never a silent one.
+ * refines what just landed. While it works, what it is reading or looking
+ * at shows as it happens, so a longer wait is never a silent one; the steps
+ * leave with the reply. A reply that simply did what was asked is one word,
+ * Done, with its undo — the agent writes a sentence only when there is
+ * something to know: it could not, it did something else, it had to choose.
  */
 function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -3839,9 +3841,11 @@ function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
   const thinking = view.phase === 'thinking';
   useEffect(() => { if (!thinking) inputRef.current?.select(); }, [thinking]);
   const changed = view.phase !== 'thinking' && (view.changed > 0 || view.acted > 0);
-  const count = (n: number, one: string, many: string) => (n ? `${n} ${n === 1 ? one : many}` : '');
-  const did = [count(view.acted, 'action', 'actions'), count(view.changed, 'value changed', 'values changed'), count(view.skipped, 'action skipped', 'actions skipped')].filter(Boolean).join(', ');
-  const note = thinking ? 'Turning the dials…' : [did && `${did}.`, view.message].filter(Boolean).join(' ');
+  const skipped = view.skipped ? `${view.skipped} ${view.skipped === 1 ? 'action' : 'actions'} skipped.` : '';
+  const note = thinking ? (view.steps.some((s) => s.state === 'running') ? '' : 'Turning the dials…')
+    : [view.message, skipped].filter(Boolean).join(' ');
+  const done = view.phase === 'done' && changed && !note;
+  const steps = thinking ? view.steps : view.steps.filter((s) => s.state === 'failed');
   return (
     <div ref={float.ref} className="tweakers-move-preset-save tweakers-move-agent" data-phase={view.phase} data-inside={float.inside || undefined}>
       <input
@@ -3861,18 +3865,25 @@ function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
           else if (e.key === 'z' && (e.metaKey || e.ctrlKey) && changed) { e.preventDefault(); void MoveAgentStore.undo(); }
         }}
       />
-      {view.steps.length > 0 && (
-        <ul className="tweakers-move-agent-steps" aria-label="What the agent did">
-          {view.steps.map((step, i) => (
+      {steps.length > 0 && (
+        <ul className="tweakers-move-agent-steps" aria-label="What the agent is doing">
+          {steps.map((step, i) => (
             <li key={i} className="tweakers-move-agent-step" data-state={step.state}>
               {step.label}{step.state === 'failed' && ' — failed'}
             </li>
           ))}
         </ul>
       )}
-      {note && (
-        <p className="tweakers-move-agent-note" role="status">
-          {note}
+      {(note || done) && (
+        <p className="tweakers-move-agent-note" role="status" data-done={done || undefined}>
+          {done ? (
+            <span className="tweakers-move-agent-done" key={view.prompt}>
+              <svg className="tweakers-move-agent-done-mark" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M3 8.5l3.2 3.2L13 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" pathLength="1" />
+              </svg>
+              Done
+            </span>
+          ) : note}
           {changed && MoveAgentStore.canUndo() && (
             <button type="button" className="tweakers-move-agent-undo" onClick={() => void MoveAgentStore.undo()}>Undo</button>
           )}

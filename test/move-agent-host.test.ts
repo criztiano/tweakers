@@ -203,9 +203,9 @@ describe('a step says what it found', () => {
       { id: 'shot:2', type: 'shot', source: 'a.mov', t0: 4, t1: 9, label: 'beach' },
       { id: 'shot:3', type: 'shot', source: 'a.mov', t0: 9, t1: 12, label: 'beach at night' },
     ] };
-    expect(await stepsOf([], { tool: 'read_signal', params: { signal: 'shots' } }, [shots])).toEqual(['Reading the shots…', 'Read the shots — 3']);
+    expect(await stepsOf([], { tool: 'read_signal', params: { signal: 'shots' } }, [shots])).toEqual(['Reading the shots…', 'Read the shots']);
     MoveAgentStore.close(); TweakStore.unregisterPanel(PANEL);
-    expect(await stepsOf([], { tool: 'read_signal', params: { signal: 'shots', query: 'beach' } }, [shots])).toEqual(['Reading the shots…', 'Read the shots — 2']);
+    expect(await stepsOf([], { tool: 'read_signal', params: { signal: 'shots', query: 'beach' } }, [shots])).toEqual(['Reading the shots…', 'Read the shots']);
   });
 });
 

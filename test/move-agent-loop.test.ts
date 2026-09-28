@@ -101,8 +101,8 @@ describe('the agent takes a few passes', () => {
     expect(looked).toEqual([{ around: { entry: 'shot:2', edge: 'end', of: SHOTS[1], source: 'a.mov', sourceTime: 30 }, n: 12 }]);
 
     expect(labels[0]).toEqual(['Reading the shots… · running']);
-    expect(labels[labels.length - 1]).toEqual(['Read the shots — 1 · done', 'Look at the frames · done']);
-    expect(labels).toContainEqual(['Read the shots — 1 · done', 'Looking at the frames… · running']);
+    expect(labels[labels.length - 1]).toEqual(['Read the shots · done', 'Look at the frames · done']);
+    expect(labels).toContainEqual(['Read the shots · done', 'Looking at the frames… · running']);
 
     expect(MoveAgentStore.getView()).toMatchObject({ phase: 'done', changed: 1, acted: 1, skipped: 0, message: 'Trimmed to the beach.' });
     expect(trims).toEqual([{ entry: 'shot:2', edge: 'end', of: SHOTS[1], source: 'a.mov', sourceTime: 30 }]);
