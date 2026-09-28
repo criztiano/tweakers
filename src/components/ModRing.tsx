@@ -110,7 +110,7 @@ export function ModRing({
   );
 }
 
-/** The step circle's face, on a 24px grid: the well, the value ring, and the dot inside it. */
+/** The step circle's face, on a 24px grid: the value ring on its track, and the dot inside it. */
 const DOT_RING_RADIUS = 10.5;
 const DOT_RING_CIRCUMFERENCE = 2 * Math.PI * DOT_RING_RADIUS;
 const DOT_RADIUS = 8;
@@ -126,8 +126,8 @@ const DOT_RADIUS = 8;
  * the bottom-right when it pushes down.
  *
  * While a modulator's page is open the row says whose page it is: that
- * slot's circle is `active`, the rest `inactive` — their colour drawn out to
- * grey, so the one lit circle is the one the page belongs to.
+ * slot's circle is `active`, the rest `inactive` — their colour traded for
+ * the palette's greys, so the one lit circle is the one the page belongs to.
  *
  * The arc is written straight to its dash attributes per frame, the ring's
  * own pattern, so the panel never re-renders for it. Under reduced motion
@@ -176,7 +176,10 @@ export function ModDot({ slot, state }: { slot: ModulationSlot; state?: 'active'
           </g>
         </mask>
       )}
-      <circle className="tweakers-move-mod-well" cx="12" cy="12" r="12" />
+      {/* Two dark grounds with a gap between: one under the dot, where its
+          mark is cut, and a line under the value ring. */}
+      <circle className="tweakers-move-mod-well" cx="12" cy="12" r={DOT_RADIUS} />
+      <circle className="tweakers-move-mod-track" cx="12" cy="12" r={DOT_RING_RADIUS} />
       <circle
         ref={arcRef}
         className="tweakers-mod-ring-arc tweakers-move-mod-arc"
