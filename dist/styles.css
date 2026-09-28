@@ -788,6 +788,7 @@
 
 .tweakers-move-mod-track {
   stroke: var(--move-screen);
+  stroke-linecap: round;
 }
 
 /* A modulation circle stands on its own grounds, with the panel showing in

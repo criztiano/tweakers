@@ -9946,6 +9946,7 @@ function ModRing({
 var DOT_RING_RADIUS = 10.5;
 var DOT_RING_CIRCUMFERENCE = 2 * Math.PI * DOT_RING_RADIUS;
 var DOT_RADIUS = 8;
+var DOT_TRACK = modRingArc(0, 1, DOT_RING_CIRCUMFERENCE);
 function ModDot({ slot, state: state4 }) {
   const arcRef = (0, import_react13.useRef)(null);
   const maskId = `tweakers-mod-dot-${(0, import_react13.useId)().replace(/:/g, "")}`;
@@ -9982,7 +9983,17 @@ function ModDot({ slot, state: state4 }) {
           ] })
         ] }),
         /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("circle", { className: "tweakers-move-mod-well", cx: "12", cy: "12", r: DOT_RADIUS }),
-        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("circle", { className: "tweakers-move-mod-track", cx: "12", cy: "12", r: DOT_RING_RADIUS }),
+        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
+          "circle",
+          {
+            className: "tweakers-move-mod-track",
+            cx: "12",
+            cy: "12",
+            r: DOT_RING_RADIUS,
+            strokeDasharray: `${DOT_TRACK.length.toFixed(2)} ${DOT_RING_CIRCUMFERENCE.toFixed(2)}`,
+            strokeDashoffset: DOT_TRACK.offset.toFixed(2)
+          }
+        ),
         /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
           "circle",
           {
