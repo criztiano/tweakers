@@ -9,10 +9,10 @@ let seq = 0;
 const registered: string[] = [];
 
 /** Register under a unique id so the singleton stays clean between tests. */
-const register = (name: string) => {
-  const id = `select-panels-${++seq}`;
+const register = (name: string, id = `select-panels-${++seq}`) => {
   TweakStore.registerPanel(id, name, { level: 0.5 });
   registered.push(id);
+  return id;
 };
 
 afterEach(() => {
@@ -44,6 +44,22 @@ describe('TweakStore.selectPanels', () => {
   it('leaves a gap for a name that has not registered yet', () => {
     register('stage 1');
     expect(names(['stage 1', 'stage 2'])).toEqual(['stage 1']);
+  });
+
+  // The bridge kit's `panels` takes an id or a name, and an app that names its
+  // pages by id (a page renamed after what is on it) hands the same list to
+  // the mirror and the agent: one rule for all three.
+  it('takes a panel by its id as well as by its name, in the order named', () => {
+    const global = register('global');
+    const stage = register('stage 1');
+    expect(names([stage, 'global'])).toEqual(['stage 1', 'global']);
+    expect(names(global)).toEqual(['global']);
+  });
+
+  it('reads a key as an id before it reads it as a name', () => {
+    register('drums', 'select-panels-bass');       // named like nothing else
+    register('select-panels-bass', 'select-panels-other');   // NAMED like the first one's id
+    expect(TweakStore.selectPanels('select-panels-bass').map((p) => p.id)).toEqual(['select-panels-bass']);
   });
 
   it('draws nothing when the filter is empty', () => {

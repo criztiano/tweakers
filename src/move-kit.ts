@@ -18,11 +18,14 @@
  * `moveKitOptions({ url, panels })`. A registry the app must keep for itself
  * — a sequencer that owns the step row, a raw client that owns the pads — is
  * declined by name with `null` (`moveKitOptions({ modulation: null })`), which
- * also tells the kit the gap is on purpose. Every registry is inert until the
+ * also tells the kit the gap is on purpose. `agent` stays on this side: it is
+ * the prompt behind the held wheel (`{ context }`, a line on what the app is),
+ * and it follows the bind's `url` and `panels` without being told. Every registry is inert until the
  * page uses it, so carrying one the app never touches costs nothing.
  */
 
 import { MovePadListStore } from './move-pad-list';
+import { MoveAgentStore, type MoveAgentOptions } from './move-agent';
 import { MoveColorStore } from './move-color';
 import { MoveFunctions } from './move-functions';
 import { MoveSurfaceStore } from './move-surface-store';
@@ -75,6 +78,12 @@ export type MoveKitOverrides = { [K in keyof MoveKitOptions]?: MoveKitOptions[K]
 /** Every registry the bridge kit reads, keyed by its `bindMove` option. */
 export function moveKitOptions<T extends MoveKitOverrides>(overrides?: T): Omit<MoveKitOptions, keyof T> & T {
   const app = overrides?.claims as Record<string, unknown> | null | undefined;
+  const { agent, ...rest } = (overrides ?? {}) as MoveKitOverrides & { agent?: MoveAgentOptions };
+  MoveAgentStore.configure({
+    ...(typeof rest.url === 'string' ? { url: `${rest.url.replace(/\/$/, '')}/agent` } : {}),
+    ...(rest.panels ? { panels: rest.panels as string | string[] } : {}),
+    ...agent,
+  });
   return {
     padList: MovePadListStore,
     functions: MoveFunctions,
@@ -85,7 +94,7 @@ export function moveKitOptions<T extends MoveKitOverrides>(overrides?: T): Omit<
     volume: MoveVolumeDisplay,
     transfer: { sample: sampleTransfer, move: movePoint },
     exploration: PresetExplorationStore,
-    ...overrides,
+    ...rest,
     claims: app === null ? null : liveClaims(app),
   } as Omit<MoveKitOptions, keyof T> & T;
 }

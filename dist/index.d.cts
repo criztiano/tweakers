@@ -950,6 +950,8 @@ declare const cloneDNA: <T>(value: T) => T;
 declare const newDNAId: () => string;
 declare function collectGenes(controls: ControlMeta[], group?: string): GeneParameter[];
 declare function geneBounds(p: GeneParameter): [number, number];
+/** A raw value fitted to its gene — clamped and stepped — or undefined when it cannot be one. */
+declare function fitGene(value: unknown, p: GeneParameter): unknown;
 /** Merge only enabled, compatible genes into a fresh live baseline. */
 declare function reconcileDNA(source: PresetDNA, baseline: PresetDNA, parameters: GeneParameter[]): PresetDNA;
 declare function seedDNA(baseline: PresetDNA, parameters: GeneParameter[], settings: GeneticsSettings, random?: () => number): PresetDNA;
@@ -2849,9 +2851,12 @@ declare class TweakStoreClass {
     /**
      * The settings panels a root should draw, given its optional `panels` filter.
      * `undefined` means every panel — the single-surface default. A list means
-     * exactly those names, in the order named, so two roots never fight over the
+     * exactly those panels, in the order named, so two roots never fight over the
      * same panel and a panel that has not registered yet leaves a gap that fills
-     * when it does.
+     * when it does. A panel is named by its id or by its name, the id first:
+     * the id is stable, the name is display copy an app may change — and it is
+     * what the bridge kit's own `panels` takes, so one list serves the bind,
+     * the panel mirror and the agent alike.
      */
     selectPanels(only?: string | string[]): PanelConfig[];
     getPanel(id: string): PanelConfig | undefined;
@@ -6866,7 +6871,9 @@ declare const ModulationStore: ModulationStoreClass;
  * `moveKitOptions({ url, panels })`. A registry the app must keep for itself
  * — a sequencer that owns the step row, a raw client that owns the pads — is
  * declined by name with `null` (`moveKitOptions({ modulation: null })`), which
- * also tells the kit the gap is on purpose. Every registry is inert until the
+ * also tells the kit the gap is on purpose. `agent` stays on this side: it is
+ * the prompt behind the held wheel (`{ context }`, a line on what the app is),
+ * and it follows the bind's `url` and `panels` without being told. Every registry is inert until the
  * page uses it, so carrying one the app never touches costs nothing.
  */
 
@@ -7229,6 +7236,472 @@ declare class MovePresetStoreClass {
 declare const MovePresetStore: MovePresetStoreClass;
 
 /**
+ * What the agent can know about media: the index, the edit, and the snap.
+ *
+ * A host that holds media describes it in two halves. **Signals** say what is
+ * in a source file — shots, words, bars, where the singer comes in — as
+ * entries in *source* seconds, which no edit can make wrong. The **edit map**
+ * says where the pieces of those sources sit on the timeline right now. What
+ * the agent reads is always the two multiplied, made fresh: an entry the edit
+ * removed is absent, one a cut runs through is clipped and marked `partial`,
+ * one the edit plays twice appears twice. Nothing is ever re-indexed.
+ *
+ * And the agent never writes a time for an edit. It names a **boundary** —
+ * the start of shot 14, the end of word 212 — and the kit computes the time
+ * from the entry, exactly, through the edit as it stands.
+ *
+ * Everything here is pure: entries and segments in, entries or text out. The
+ * loop that uses it lives in `move-agent`.
+ */
+
+/** One indexed fact about a source, in source seconds. `id` is stable. */
+interface MoveAgentEntry {
+    /** Stable and source-scoped: `shot:14`, `word:212`, `bar:17`, `vocal_in:2`. */
+    id: string;
+    /** Open: shot · word · phrase · bar · beat · onset · silence · section · event… */
+    type: string;
+    source: string;
+    t0: number;
+    /** Left out for a moment — a beat, an onset — rather than a span. */
+    t1?: number;
+    label?: string;
+    score?: number;
+}
+/** One piece of the edit: this much of a source, playing from `at` on the timeline. */
+interface MoveAgentSegment {
+    source: string;
+    srcIn: number;
+    srcOut: number;
+    /** Timeline seconds. */
+    at: number;
+    /** Playback speed, default 1: at 2 the piece takes half its source length. */
+    rate?: number;
+}
+/** An entry as the timeline has it. `t0`/`t1` stay the source's own. */
+interface MoveAgentProjectedEntry extends MoveAgentEntry {
+    at0: number;
+    at1?: number;
+    /** A segment edge runs through it: part of it is not in the edit. */
+    partial?: boolean;
+}
+interface MoveAgentSourceRange {
+    source: string;
+    t0: number;
+    t1: number;
+}
+/** What the model names in place of a time. */
+interface MoveAgentBoundaryRef {
+    entry: string;
+    edge: 'start' | 'end';
+}
+/** The same, resolved by the kit — what an action's `run` is handed. */
+interface MoveAgentBoundary extends MoveAgentBoundaryRef {
+    /** The entry the boundary is an edge of, whole — its `type`, its `label`, its own `t0`/`t1` — so a host never reads them out of the id. */
+    of: MoveAgentEntry;
+    source: string;
+    /** Source seconds: exact, and true under any edit. */
+    sourceTime: number;
+    /** Timeline seconds through the edit as it stands; absent when that moment
+     *  of the source is not in the edit now (first place, when it plays twice). */
+    time?: number;
+}
+/** An argument as `run` receives it: fitted, and a boundary already resolved. */
+type MoveAgentArg = MoveAgentParamValue | MoveAgentBoundary;
+type MoveAgentSignalState = 'ready' | 'missing' | 'computing' | 'unavailable';
+/**
+ * What a host knows only with a file open, handed over as the value or as a
+ * function that gives it. A function is read fresh — at every ask, or when the
+ * request is built — so the host never has to say it again when the file or
+ * the edit changes.
+ */
+type MoveAgentLive<T> = T | (() => T);
+/** A named producer of entries for a source, computed only when asked for. */
+interface MoveAgentSignal {
+    id: string;
+    label: string;
+    /** What questions it answers — how the agent picks the cheapest route. */
+    hint: string;
+    /** A short human hint: "about 20 s for this file". A function is read as each request is built. */
+    cost?: MoveAgentLive<string | undefined>;
+    /** Cannot be computed for a range: `read` is handed `undefined`. */
+    whole?: boolean;
+    state: () => MoveAgentSignalState;
+    /** Computes if missing. Entries come back in SOURCE seconds. */
+    read: (range: MoveAgentSourceRange[] | undefined, signal: AbortSignal) => Promise<MoveAgentEntry[]>;
+}
+interface MoveAgentToolResult {
+    text?: string;
+    /** JPEG/PNG data URLs. */
+    images?: {
+        name: string;
+        dataUrl: string;
+    }[];
+    /** Become known boundaries for this request. */
+    entries?: MoveAgentEntry[];
+}
+/** One way for the agent to perceive, offered by the host: look, listen, search. */
+interface MoveAgentTool {
+    id: string;
+    /** The name the model reads. Also the step's text, when `progress` and `done` are left out. */
+    label: string;
+    hint: string;
+    kind: 'read' | 'perceive';
+    /** A function is read as each request is built. */
+    cost?: MoveAgentLive<string | undefined>;
+    /** Shown while it runs: "Looking at the frames…". */
+    progress?: string;
+    /** Shown once it has run, with what it found: "Looked at 12 frames". Handed the fitted arguments and the result. */
+    done?: string | ((params: Record<string, MoveAgentArg>, result: MoveAgentToolResult) => string);
+    params?: Record<string, MoveAgentParam>;
+    run(params: Record<string, MoveAgentArg>, signal: AbortSignal): Promise<MoveAgentToolResult>;
+}
+/** The signal menu, as it rides in every request. */
+interface MoveAgentSignalInfo {
+    id: string;
+    label: string;
+    hint: string;
+    state: MoveAgentSignalState;
+    cost?: string;
+}
+interface MoveAgentToolCall {
+    tool: string;
+    params?: Record<string, unknown>;
+}
+interface MoveAgentPassResult {
+    tool: string;
+    text?: string;
+    images?: {
+        name: string;
+        dataUrl: string;
+    }[];
+    error?: string;
+}
+/** One model turn that asked to perceive, and what came back — in call order. */
+interface MoveAgentPass {
+    calls: MoveAgentToolCall[];
+    results: MoveAgentPassResult[];
+}
+/**
+ * Entries × edit map → what the timeline holds. A span a segment edge runs
+ * through is clipped and marked `partial`; an entry outside every segment is
+ * absent; a source range the edit plays twice gives its entries twice, told
+ * apart by `at0`. A moment belongs to the segment it starts in (`srcIn`
+ * inclusive, `srcOut` not), so two pieces cut from one spot share nothing.
+ * Sorted by timeline time.
+ */
+declare function projectEntries(entries: MoveAgentEntry[], segments: MoveAgentSegment[]): MoveAgentProjectedEntry[];
+/**
+ * The way back: a timeline range → the source ranges playing in it. An open
+ * end takes the edit to its edge, no range at all takes all of it. Ranges of
+ * one source that touch or overlap come back as one.
+ */
+declare function timelineToSource(range: {
+    from?: number;
+    to?: number;
+} | undefined, segments: MoveAgentSegment[]): MoveAgentSourceRange[];
+/** `MM:SS.mmm` — the one time format the agent ever reads. Minutes run past 59. */
+declare function formatAgentTime(seconds: number): string;
+/**
+ * Projected entries as the agent reads them, one to a line:
+ * `shot:14 | shot | 01:12.480–01:15.200 | beach, two people | partial`.
+ * Times are the timeline's. `query` is forgiving on purpose — the agent says
+ * "vocals in" of an entry labelled "vocals enter": an entry is kept when any
+ * word of the query that means something occurs in its label, id or type,
+ * those that hold every word first. A query that finds nothing says so on
+ * the first line and gives the whole list, so the agent can look for itself
+ * and "not here" is an answer, not a dead end. Past `limit` (default 120)
+ * the rest are counted, not listed: a wide read costs a line and asks for a
+ * narrower one.
+ */
+declare function formatEntries(projected: MoveAgentProjectedEntry[], options?: {
+    limit?: number;
+    query?: string;
+}): string;
+/**
+ * A named boundary → its time. The entry comes from what this request has
+ * seen; an id nobody has seen resolves to nothing, and is never guessed at.
+ * `sourceTime` is the entry's own edge. `time` is where that moment plays on
+ * the timeline — for a start, the segment it opens in; for an end, the one it
+ * closes in — and is left out when the edit does not hold it. `of` is the
+ * entry itself, so `run` knows what kind of thing it was handed. With no edit
+ * map (`segments` undefined) the timeline is the source, and the two agree.
+ * Ids are source-scoped, so when two sources share one, the entry the edit
+ * holds wins.
+ */
+declare function resolveBoundary(ref: MoveAgentBoundaryRef, known: MoveAgentEntry[], segments?: MoveAgentSegment[]): MoveAgentBoundary | undefined;
+
+/**
+ * Generative presetting: ask for a change in words, an agent turns the dials.
+ *
+ * Holding the Move's wheel down opens a prompt above the panel. The words go
+ * out with a description of every control the app has registered — label,
+ * range, options, where it stands now — and what comes back is a list of
+ * writes. Each write is fitted to its control (clamped, stepped, checked
+ * against the options) and committed through the store like a hand on a knob,
+ * so the host hears it the way it hears any edit. The values from before the
+ * ask are kept: one undo puts them all back.
+ *
+ * Values are what the store can say for itself. Two things it cannot, a host
+ * hands over on purpose. A `brief` — a page on the field: what its words mean
+ * on these controls, what never to do, a few recipes — makes the agent good
+ * in this app rather than merely correct. And `actions`, the app's verbs
+ * (split a clip, add a layer), with a `scene` that describes what they act on,
+ * let it edit and not only set. An action that returns a function has handed
+ * over its undo, and the one undo covers it too.
+ *
+ * Nothing here knows the app. The description is read off the store, so every
+ * project that registers panels gets the agent with no work of its own; a
+ * host adds only what words alone cannot carry — `context`, a line about what
+ * the app is — or swaps the transport with `ask`. By default the ask goes to
+ * the Move bridge (`/agent`), which asks through the machine's own Claude Code,
+ * on the Claude subscription logged in there; no API key lives anywhere.
+ *
+ * An app that holds media gives the agent senses as well. `signals` say what
+ * is in a source — words, shots, bars — and `tools` look or listen; with
+ * either, an ask may take a few passes: the reply is calls, the kit runs them
+ * and asks again with what came back, and the first reply without calls is
+ * the answer. Nothing lands until that answer, so however many passes it took
+ * it is still one change and one undo, and a cancel leaves nothing behind.
+ * The maths of it — the edit map, the projection, the boundaries an edit is
+ * named by — is in `move-agent-perception`.
+ */
+
+/** The held wheel, from the bridge kit: cancelable, like every overlay gesture. */
+declare const MOVE_JOG_HOLD_EVENT = "move-tweakers:jog-hold";
+/** One writable value, as the agent reads it. */
+interface MoveAgentControl {
+    /** `panelId::path`, or `panelId::path:component` for one axis of a pair. */
+    id: string;
+    panel: string;
+    label: string;
+    group?: string;
+    kind: 'number' | 'category' | 'color' | 'text';
+    min?: number;
+    max?: number;
+    step?: number;
+    unit?: string;
+    options?: (string | boolean)[];
+    hint?: string;
+    value: unknown;
+}
+interface MoveAgentWrite {
+    id: string;
+    value: number | string | boolean;
+}
+type MoveAgentParamValue = number | string | boolean;
+/** One argument of an action, described as plainly as a control is. */
+interface MoveAgentParam {
+    /** A `boundary` is an edge of an entry — the agent names it, `run` gets its time. */
+    type: 'number' | 'string' | 'boolean' | 'boundary';
+    hint?: string;
+    min?: number;
+    max?: number;
+    step?: number;
+    /** A string that must be one of these. A function is read as each request is built — the samples there are now. */
+    options?: MoveAgentLive<string[] | undefined>;
+    /** May be left out. */
+    optional?: boolean;
+}
+/** Whatever an action returns that is a function is its undo. */
+type MoveAgentActionResult = void | (() => void | Promise<void>);
+/** One verb of the app, offered to the agent on purpose. */
+interface MoveAgentAction {
+    id: string;
+    label: string;
+    /** What it does and when to reach for it — the agent reads this, not the code. */
+    hint?: string;
+    params?: Record<string, MoveAgentParam>;
+    run(params: Record<string, MoveAgentArg>): MoveAgentActionResult | Promise<MoveAgentActionResult>;
+}
+interface MoveAgentCall {
+    id: string;
+    params?: Record<string, MoveAgentParamValue | MoveAgentBoundaryRef>;
+}
+/** A param as it travels: its options and nothing to call. */
+type MoveAgentParamInfo = Omit<MoveAgentParam, 'options'> & {
+    options?: string[];
+};
+type MoveAgentActionInfo = Omit<MoveAgentAction, 'run' | 'params'> & {
+    params?: Record<string, MoveAgentParamInfo>;
+};
+type MoveAgentToolInfo = Omit<MoveAgentTool, 'run' | 'progress' | 'done' | 'cost' | 'params'> & {
+    cost?: string;
+    params?: Record<string, MoveAgentParamInfo>;
+};
+/** How one ask ended, for the host that opened something at `begin`. */
+interface MoveAgentOutcome {
+    changed: number;
+    acted: number;
+    skipped: number;
+    cancelled: boolean;
+    error?: string;
+}
+interface MoveAgentRequest {
+    prompt: string;
+    context?: string;
+    /** The page in front of the user — "this", "here" mean its controls. */
+    focus?: string;
+    /** The host's page on the field: vocabulary, limits, recipes. */
+    brief?: string;
+    /** What the actions act on — the clips, the layers — as the host tells it. */
+    scene?: unknown;
+    controls: MoveAgentControl[];
+    actions?: MoveAgentActionInfo[];
+    /** The ways to perceive on offer — only to a transport that can take passes. */
+    tools?: MoveAgentToolInfo[];
+    /** The signal menu: what could be read, its state and its cost. */
+    signals?: MoveAgentSignalInfo[];
+    /** The passes so far: what was called, and what came back. */
+    history?: MoveAgentPass[];
+    /** How many more times the reply may be calls. At 0 it must be the answer. */
+    passesLeft?: number;
+}
+/**
+ * Actions run first, in order; the writes land after them. A reply with
+ * `calls` is not the answer yet: it asks to perceive, and carries no edits.
+ */
+interface MoveAgentReply {
+    writes: MoveAgentWrite[];
+    actions?: MoveAgentCall[];
+    message?: string;
+    calls?: MoveAgentToolCall[];
+}
+type MoveAgentAsk = (request: MoveAgentRequest, signal: AbortSignal) => Promise<MoveAgentReply>;
+interface MoveAgentOptions {
+    /** The bridge's agent endpoint. */
+    url?: string;
+    /** The host's own transport, in place of the bridge. */
+    ask?: MoveAgentAsk | null;
+    /** What the app is, in a sentence or two — the one thing the store cannot say. */
+    context?: string;
+    /** A page on the field — what its words mean here, what never to do, a few recipes. */
+    brief?: string;
+    /** The app's verbs. Nothing is offered that is not listed here. A function is read at every ask. */
+    actions?: MoveAgentLive<MoveAgentAction[] | undefined>;
+    /** What the actions act on, read fresh at every ask. Keep it small and plain. */
+    scene?: () => unknown;
+    /** The panels the agent may touch — same selection the panel mirror takes. */
+    panels?: string | string[];
+    /** What is in the media, in SOURCE time. Nothing is computed until the agent asks. A function is read at every ask — the open file's menu. */
+    signals?: MoveAgentLive<MoveAgentSignal[] | undefined>;
+    /** The edit as it stands — which piece of which source plays where. Read fresh at every pass. */
+    editMap?: () => MoveAgentSegment[];
+    /** The host's own perception: look, listen, search. A function is read at every ask — eyes only while a picture is open. */
+    tools?: MoveAgentLive<MoveAgentTool[] | undefined>;
+    /** How many turns one ask may take, the answer included. Default 3. */
+    maxPasses?: number;
+    /** Called once before an answer with actions lands — the host's save point. */
+    checkpoint?: () => void | Promise<void>;
+    /**
+     * The edges of one ask. `begin` runs before anything is read or sent, and is
+     * awaited; `end` runs once for every `begin`, however the ask ended — landed,
+     * nothing to do, failed (`error`), or let go (`cancelled`).
+     */
+    onRequest?: {
+        begin?: (prompt: string) => void | Promise<void>;
+        end?: (outcome: MoveAgentOutcome) => void;
+    };
+}
+type MoveAgentPhase = 'prompt' | 'thinking' | 'done' | 'error';
+/** One thing the agent did to perceive, as the prompt shows it. */
+interface MoveAgentStep {
+    label: string;
+    state: 'running' | 'done' | 'failed';
+}
+interface MoveAgentView {
+    phase: MoveAgentPhase;
+    prompt: string;
+    message: string;
+    /** How many values the last ask moved. */
+    changed: number;
+    /** How many actions it ran. */
+    acted: number;
+    /** How many it asked for that could not run — no such verb, arguments that do not fit, a boundary nobody has seen. */
+    skipped: number;
+    /** What it read and looked at on the way, as it happens. */
+    steps: MoveAgentStep[];
+}
+/** The app's writable values, as the agent is told them. */
+declare function describeAgentControls(only?: string | string[]): MoveAgentControl[];
+/**
+ * How long an agent's number takes to arrive. A hand on a knob moves a value
+ * through every step between; the agent's writes land the same way, so a
+ * change reads as a turn and not a jump. Longer than the bridge's catch-up
+ * glide (120 ms, a lag hidden) — this one is a gesture, meant to be seen.
+ */
+declare const MOVE_AGENT_GLIDE_MS = 420;
+/**
+ * Commit an agent's writes. Unknown ids and values that fit no control are
+ * dropped, never guessed at. Numbers glide in; the rest lands. Returns the
+ * values from before, per panel — hand it to `restoreAgentWrites` to undo —
+ * and how many values moved.
+ */
+declare function applyAgentWrites(writes: MoveAgentWrite[], only?: string | string[]): {
+    before: Record<string, Record<string, TweakValue>>;
+    changed: number;
+};
+type ResolveBoundary = (ref: MoveAgentBoundaryRef) => MoveAgentBoundary | undefined;
+/**
+ * Run an agent's calls, in order, each awaited. A call that names no offered
+ * action or whose arguments do not fit is skipped, and counted; one that
+ * throws stops the rest, since a later step may lean on it. A boundary is
+ * resolved as its call comes up, not before — the step ahead of it may have
+ * moved the edit. Returns the undos handed back.
+ */
+declare function runAgentActions(calls: MoveAgentCall[], actions: MoveAgentAction[], resolve?: ResolveBoundary): Promise<{
+    ran: number;
+    skipped: number;
+    undos: (() => void | Promise<void>)[];
+    undoable: boolean;
+    error?: string;
+}>;
+/** Put values back the way they came: gliding, so an undo is a turn back and not a jump. */
+declare function restoreAgentWrites(before: Record<string, Record<string, TweakValue>>): void;
+declare class MoveAgentStoreClass {
+    private options;
+    private view;
+    private before;
+    private undos;
+    private focus;
+    private flight;
+    /** What the bridge said it can do, kept per url — and forgotten when it fails. */
+    private caps;
+    private version;
+    private listeners;
+    getView: () => MoveAgentView | null;
+    isOpen: () => boolean;
+    getVersion: () => number;
+    subscribe: (fn: () => void) => (() => void);
+    private set;
+    /** Merge in the host's options — `moveKitOptions` hands over `url` and `panels`. */
+    configure(options: MoveAgentOptions): void;
+    canUndo: () => boolean;
+    /** Open the prompt; `focus` is the page in front of the user. */
+    open(focus?: string): void;
+    /** Close — and let go of an ask still in the air, its tools with it. What landed stays. */
+    close(): void;
+    toggle(focus?: string): void;
+    ask(prompt: string): Promise<void>;
+    /**
+     * One pass of perceiving: every call at once, each abortable, each a step
+     * in the view. A call that fails does not fail the ask — the agent is told,
+     * and may try another way.
+     */
+    private perceive;
+    /**
+     * What the transport can take. A host's own `ask` is taken at its word; the
+     * bridge is asked once, and asked again only after it has failed — a bridge
+     * left running is often older than the page that loads the kit. No answer,
+     * or one without `passes`, means a single pass.
+     */
+    private capable;
+    /** Put back what the last ask did: the values, then its actions, last one first. */
+    undo(): Promise<void>;
+    private askBridge;
+}
+declare const MoveAgentStore: MoveAgentStoreClass;
+
+/**
  * Search, on whichever list the wheel is walking.
  *
  * Holding the Move's Capture key opens a search on the list that has the
@@ -7280,4 +7753,4 @@ declare const MoveSearchStore: MoveSearchStoreClass;
 declare function presetFlowerSeed(values: Record<string, unknown>): string;
 declare function presetFlowerSvg(values: Record<string, unknown>): string;
 
-export { ADSR_DEF, ADSR_STAGE_MAX, ANGLE_DEAD_ZONE_PX, AUDIO_DEF, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AudioModWindow, type AxisSpec, type BalanceConfig, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, type ChipOption, type ChipsConfig, type ColorConfig, type ColorFormat, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRANSFER, DEFAULT_TRIGGER_STEPS, type DriverDirection, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EasingConfig, type EnvStage, type ExplorationChild, type ExplorationSlot, type ExplorationState, type ExplorationTree, type ExplorationView, FILTER_DB_CEIL, FILTER_DB_FLOOR, type FileConfig, type FilterAxis, type FilterAxisConfig, type FilterConfig, type FilterResponse, type FilterShapeType, type FilterValue, type GalleryConfig, type GalleryItem, type GeneParameter, type GeneticsSettings, type GradientConfig, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenDetail, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_BAND_H, MOVE_BAND_W, MOVE_CHIP_BUTTONS, MOVE_COLOR_HUES, MOVE_COLOR_PALETTES, MOVE_COLOR_STEPS, MOVE_COLOR_WHEEL, MOVE_CONNECTION_ASK_EVENT, MOVE_CONNECTION_EVENT, MOVE_DECK_MAX, MOVE_DIALS, MOVE_FLOAT_SELECTOR, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_ICONS, MOVE_FUNCTION_MANIFEST, MOVE_GATE_GRID, MOVE_GAUGE, MOVE_GRADIENT_STOPS, MOVE_GRAIN, MOVE_JOG_CLICK_EVENT, MOVE_JOG_EVENT, MOVE_LATCH_EVENT, MOVE_MULTIBAND_GRID, MOVE_MUTE_EVENT, MOVE_NOTIFY_GAP, MOVE_NOTIFY_KINDS, MOVE_OPACITY_PADS, MOVE_OVERRIDE_EVENT, MOVE_PADS, MOVE_PAD_LIBRARY, MOVE_PAGE_EVENT, MOVE_PAGE_SELECT_EVENT, MOVE_PALETTE, MOVE_PANEL_SETTINGS, MOVE_SEARCH_EVENT, MOVE_SETTINGS_EVENT, MOVE_SLOT_LIBRARY, MOVE_SPECIAL_BUTTONS, MOVE_STAGE, MOVE_STEP_FUNCTIONS, MOVE_STRIP_EVENT, MOVE_TIMELINE_MAX_ZOOM, MOVE_TOUCH_EVENT, MOVE_TRACKS, MOVE_TRACK_COLORS, MOVE_TRACK_LABEL_STYLES, MOVE_VIEW_MOTIONS, MOVE_VIEW_PRESENTATION, MOVE_VIEW_WAIT, MOVE_VOLUME_EVENT, MOVE_VOLUME_TAP_EVENT, MOVE_WAVEFORM_DEMO_SECONDS, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_PANEL, MOVE_WAVEFORM_PIXEL_RANGE, MOVE_WAVEFORM_STEPS, MOVE_WAVE_FRAME, MOVE_WAVE_MAX_DISPLAY, MOVE_WAVE_MAX_HEIGHT, MOVE_WAVE_MAX_WIDTH, type ModControlMeta, type ModPageLayout, type ModPageSlot, ModRing, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, type MorphState, MoveActionButton, type MoveActionButtonProps, MoveActionDeck, type MoveActionDeckProps, type MoveBand, type MoveBandCell, type MoveChannelDial, type MoveColorPalette, MoveColorStore, type MoveColorView, MoveConnection, MoveConnectionDot, type MoveConnectionDotProps, type MoveConnectionState, type MoveDeckAction, type MoveDeckActionDress, type MoveDeckButton, type MoveEdges, type MoveEdgesCell, type MoveFaceDial, type MoveFunctionButton, type MoveFunctionChip, type MoveFunctionChipStyle, MoveFunctionChips, type MoveFunctionChipsProps, type MoveFunctionGlyph, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, type MoveGateColours, MoveGateDisplay, MoveGateMeter, type MoveGateReader, type MoveGateReading, type MoveGateRole, type MoveGrainPicture, type MoveGrainRole, type MoveGrainSpan, type MoveGrainVisual, type MoveKitOptions, type MoveKitOverrides, type MoveKitRegistry, type MoveMeter, type MoveMultibandColours, MoveMultibandDisplay, MoveMultibandMeter, type MoveMultibandReading, type MoveMultibandRole, MoveNotifications, type MoveNotificationsProps, type MoveNotifyKind, type MoveNotifyOptions, type MoveNumericDrawing, MovePadActionBody, MovePadAppBody, MovePadBandBody, type MovePadBandHand, type MovePadCell, MovePadColorBody, type MovePadEdgeHand, MovePadFadeBody, MovePadIconBody, MovePadIconLabelBody, type MovePadKind, MovePadListBody, type MovePadListConfig, type MovePadListOption, MovePadListStore, type MovePadListView, MovePadLoopBody, MovePadTabsBody, MovePadToggleBody, MovePadValueBody, MovePadWaveBody, type MovePage, type MovePaletteName, MovePanel, type MovePanelProps, type MovePlaybackMode, type MovePresetItem, type MovePresetPhase, type MovePresetSave, MovePresetStore, type MovePresetView, type MoveScreenList, type MoveScreenRow, type MoveScreenSearch, type MoveScreenWait, MoveSearchStore, type MoveSearchTarget, type MoveSearchView, type MoveSelectVisual, MoveSettingsView, type MoveSliderVisual, MoveSlot, MoveSlotChannelBody, MoveSlotClockBody, MoveSlotColorBody, MoveSlotDefaultBody, MoveSlotDialBody, MoveSlotDiaphragmBody, MoveSlotEnumBody, MoveSlotEnvBody, MoveSlotFilterBody, MoveSlotGateBody, MoveSlotGlyph, MoveSlotGrainBody, type MoveSlotGroup, type MoveSlotKind, MoveSlotLanesBody, MoveSlotMetronomeBody, MoveSlotMultibandBody, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing, type MoveSlotProps, MoveSlotRampBody, MoveSlotRangeBody, MoveSlotReadout, MoveSlotScopeBody, MoveSlotShape, MoveSlotStreakBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotTrimSpanBody, MoveSlotVectorBody, MoveSlotXYBody, type MoveStage, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, MoveTimeline, type MoveTimelineClaimOptions, MoveTimelineClock, type MoveTimelineProps, MoveTimelineStore, type MoveTimelineValues, MoveTimelineZoom, type MoveToggleVisual, type MoveTone, type MoveTrackLabelStyle, type MoveTrimSpanEdge, type MoveViewChange, type MoveViewChoreography, type MoveViewLayer, type MoveViewLoadOptions, type MoveViewMotion, MoveViewStage, type MoveViewStageProps, type MoveViewTask, type MoveViewTween, type MoveViewWait, MoveViews, type MoveViewsState, type MoveVisual, MoveVolumeDisplay, type MoveVolumeDisplayState, MoveWaveform, type MoveWaveformProps, MoveWaveformStore, type MoveWaveformStyle, type MoveWaveformTransport, type MoveWaveformVariant, type MoveWaveformView, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type OKLCH, type PanelConfig, type Point, type Preset, type PresetDNA, type PresetExplorationAdapter, PresetExplorationStore, type PresetItem, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SpringifyOptions, type SwatchConfig, type SwatchOption, TAB_PATH, TRANSFER_MAX_POINTS, TRANSFER_MIN_GAP, type TextConfig, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineMeta, TimelineStore, type TimelineTransport, type ToggleConfig, type TransferPoint, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakTheme, type TweakValue, type UseMoveTimelineOptions, WAVEFORM_BASE_BUCKET, WAVEFORM_MAX_ZOOM, WAVEFORM_MODES, WAVEFORM_SMOOTH_POINTS, type WaveformAsset, type WaveformLevel, type WaveformLoop, type WaveformMode, type WaveformRange, WaveformVisualization, type XYAxis, type XYConfig, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, angleFromPointer, applyDetentAxis, applyModulation, arcPath, audioModLevel, bearingToValue, breedDNA, buildModMovePage, buildMovePages, buildMoveStrip, buildSamplers, buildWaveformLevels, centerValue, chooseParents, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, clampStripOffset, cloneDNA, collectGenes, colorAtPosition, createMoveMeter, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultFilterResponse, defaultListItemParams, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, dialOrigin, dialSpan, displayHex, drawMoveGate, drawMoveMultiband, enumOptionIcon, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, fillRangePeaks, filterHand01, filterHandValue, filterResponsePath, filterShapePath, filterShapeResponse, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, followWindow, formatClock, formatHex, formatTimelineTick, geneBounds, getAudioModBuffer, getAudioModVersion, getAudioModWindow, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, insertPoint, invertY, isIdentityTransfer, isMoveDial, isMoveTabs, isNamedTabs, isOutsideSpan, isPadSpanContinuation, isSpanContinuation, isStripSlot, isToggleDial, lfoSyncedHz, listModTypes, loopFromStep, loopSteps, modColor, modKey, modPageLayout, modPageWidth, modRingArc, morphDNA, moveAppPadRow, moveBandCell, moveBandCuts, moveChannelPosition, moveEdgesCell, moveGateDemoReading, moveGateSpan, moveGaugeBearing, moveGrainGap, moveGrainPicture, moveGrainRole, moveGrainSpan, moveKitOptions, moveLanes, moveMultibandDemoReading, moveMultibandRole, moveMultibandSpan, moveNotify, moveNumericDrawing, movePadRows, movePlaybackMode, movePoint, moveScreenChecked, moveScreenRowLabel, moveScreenRowSearchText, moveSearchFilter, moveSearchMatch, moveSlotKind, moveStop, moveTabCell, moveTrimSpan, moveVectorAxes, moveVectorStage, moveViewChoreography, moveVisualReading, defaultStyle as moveWaveformDefaultStyle, defaultView as moveWaveformDefaultView, moveWaveformDemoSample, styleFromValues as moveWaveformStyleFromValues, moveWheelSlot, nearestHandle, nearestPoint, newDNAId, normToValue, normalizeAngle, normalizeCurveMarkers, normalizeDeck, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeFilterValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeToggleDial, normalizeTransfer, normalizeValue, normalizeXYDial, notifyDockBottom, nudge, nudgeAngle, oklchToRgb, opacityPercent, orderRange, packTimelineRows, padPosition, padSection, padSpan, pageStripOffset, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, presetFlowerSeed, presetFlowerSvg, rampCss, rangesDuration, readComposition, reconcileDNA, redistributeWeight, registerModType, removeDriver, removePoint, removeSegment, removeStop, resolveAxis, resolveFilterAxis, rgbToHsl, rgbToHsv, rgbToOklch, sampleTransfer, scrubBy, seedDNA, setAudioModBuffer, setAudioModWindowSource, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, slotGroups, snapAngle, snapToStep, splitSegment, springify, stepPosition, stepStripOffset, stripDialColumns, stripDialSlots, stripOffsets, stripSlotCount, stripSlotIndex, stripStarts, stripWindowPads, subscribeAudioMod, timelineClock, timelineRowHeight, timelineTicks, timelineWindow, toAudioBuffer, transferLut, triggerLevels, triggersCrossed, useMoveTimeline, valueFromPoint, valueToBearing, valueToNorm, valueToPercent, visibleColumns, visibleModControls, visibleWindow, waveformAsset, waveformAssetFromBuffer, zoomBy, zoomWindow };
+export { ADSR_DEF, ADSR_STAGE_MAX, ANGLE_DEAD_ZONE_PX, AUDIO_DEF, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AudioModWindow, type AxisSpec, type BalanceConfig, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, type ChipOption, type ChipsConfig, type ColorConfig, type ColorFormat, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRANSFER, DEFAULT_TRIGGER_STEPS, type DriverDirection, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EasingConfig, type EnvStage, type ExplorationChild, type ExplorationSlot, type ExplorationState, type ExplorationTree, type ExplorationView, FILTER_DB_CEIL, FILTER_DB_FLOOR, type FileConfig, type FilterAxis, type FilterAxisConfig, type FilterConfig, type FilterResponse, type FilterShapeType, type FilterValue, type GalleryConfig, type GalleryItem, type GeneParameter, type GeneticsSettings, type GradientConfig, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenDetail, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_AGENT_GLIDE_MS, MOVE_BAND_H, MOVE_BAND_W, MOVE_CHIP_BUTTONS, MOVE_COLOR_HUES, MOVE_COLOR_PALETTES, MOVE_COLOR_STEPS, MOVE_COLOR_WHEEL, MOVE_CONNECTION_ASK_EVENT, MOVE_CONNECTION_EVENT, MOVE_DECK_MAX, MOVE_DIALS, MOVE_FLOAT_SELECTOR, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_ICONS, MOVE_FUNCTION_MANIFEST, MOVE_GATE_GRID, MOVE_GAUGE, MOVE_GRADIENT_STOPS, MOVE_GRAIN, MOVE_JOG_CLICK_EVENT, MOVE_JOG_EVENT, MOVE_JOG_HOLD_EVENT, MOVE_LATCH_EVENT, MOVE_MULTIBAND_GRID, MOVE_MUTE_EVENT, MOVE_NOTIFY_GAP, MOVE_NOTIFY_KINDS, MOVE_OPACITY_PADS, MOVE_OVERRIDE_EVENT, MOVE_PADS, MOVE_PAD_LIBRARY, MOVE_PAGE_EVENT, MOVE_PAGE_SELECT_EVENT, MOVE_PALETTE, MOVE_PANEL_SETTINGS, MOVE_SEARCH_EVENT, MOVE_SETTINGS_EVENT, MOVE_SLOT_LIBRARY, MOVE_SPECIAL_BUTTONS, MOVE_STAGE, MOVE_STEP_FUNCTIONS, MOVE_STRIP_EVENT, MOVE_TIMELINE_MAX_ZOOM, MOVE_TOUCH_EVENT, MOVE_TRACKS, MOVE_TRACK_COLORS, MOVE_TRACK_LABEL_STYLES, MOVE_VIEW_MOTIONS, MOVE_VIEW_PRESENTATION, MOVE_VIEW_WAIT, MOVE_VOLUME_EVENT, MOVE_VOLUME_TAP_EVENT, MOVE_WAVEFORM_DEMO_SECONDS, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_PANEL, MOVE_WAVEFORM_PIXEL_RANGE, MOVE_WAVEFORM_STEPS, MOVE_WAVE_FRAME, MOVE_WAVE_MAX_DISPLAY, MOVE_WAVE_MAX_HEIGHT, MOVE_WAVE_MAX_WIDTH, type ModControlMeta, type ModPageLayout, type ModPageSlot, ModRing, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, type MorphState, MoveActionButton, type MoveActionButtonProps, MoveActionDeck, type MoveActionDeckProps, type MoveAgentAction, type MoveAgentActionInfo, type MoveAgentActionResult, type MoveAgentArg, type MoveAgentAsk, type MoveAgentBoundary, type MoveAgentBoundaryRef, type MoveAgentCall, type MoveAgentControl, type MoveAgentEntry, type MoveAgentLive, type MoveAgentOptions, type MoveAgentOutcome, type MoveAgentParam, type MoveAgentParamInfo, type MoveAgentParamValue, type MoveAgentPass, type MoveAgentPassResult, type MoveAgentPhase, type MoveAgentProjectedEntry, type MoveAgentReply, type MoveAgentRequest, type MoveAgentSegment, type MoveAgentSignal, type MoveAgentSignalInfo, type MoveAgentSignalState, type MoveAgentSourceRange, type MoveAgentStep, MoveAgentStore, type MoveAgentTool, type MoveAgentToolCall, type MoveAgentToolInfo, type MoveAgentToolResult, type MoveAgentView, type MoveAgentWrite, type MoveBand, type MoveBandCell, type MoveChannelDial, type MoveColorPalette, MoveColorStore, type MoveColorView, MoveConnection, MoveConnectionDot, type MoveConnectionDotProps, type MoveConnectionState, type MoveDeckAction, type MoveDeckActionDress, type MoveDeckButton, type MoveEdges, type MoveEdgesCell, type MoveFaceDial, type MoveFunctionButton, type MoveFunctionChip, type MoveFunctionChipStyle, MoveFunctionChips, type MoveFunctionChipsProps, type MoveFunctionGlyph, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, type MoveGateColours, MoveGateDisplay, MoveGateMeter, type MoveGateReader, type MoveGateReading, type MoveGateRole, type MoveGrainPicture, type MoveGrainRole, type MoveGrainSpan, type MoveGrainVisual, type MoveKitOptions, type MoveKitOverrides, type MoveKitRegistry, type MoveMeter, type MoveMultibandColours, MoveMultibandDisplay, MoveMultibandMeter, type MoveMultibandReading, type MoveMultibandRole, MoveNotifications, type MoveNotificationsProps, type MoveNotifyKind, type MoveNotifyOptions, type MoveNumericDrawing, MovePadActionBody, MovePadAppBody, MovePadBandBody, type MovePadBandHand, type MovePadCell, MovePadColorBody, type MovePadEdgeHand, MovePadFadeBody, MovePadIconBody, MovePadIconLabelBody, type MovePadKind, MovePadListBody, type MovePadListConfig, type MovePadListOption, MovePadListStore, type MovePadListView, MovePadLoopBody, MovePadTabsBody, MovePadToggleBody, MovePadValueBody, MovePadWaveBody, type MovePage, type MovePaletteName, MovePanel, type MovePanelProps, type MovePlaybackMode, type MovePresetItem, type MovePresetPhase, type MovePresetSave, MovePresetStore, type MovePresetView, type MoveScreenList, type MoveScreenRow, type MoveScreenSearch, type MoveScreenWait, MoveSearchStore, type MoveSearchTarget, type MoveSearchView, type MoveSelectVisual, MoveSettingsView, type MoveSliderVisual, MoveSlot, MoveSlotChannelBody, MoveSlotClockBody, MoveSlotColorBody, MoveSlotDefaultBody, MoveSlotDialBody, MoveSlotDiaphragmBody, MoveSlotEnumBody, MoveSlotEnvBody, MoveSlotFilterBody, MoveSlotGateBody, MoveSlotGlyph, MoveSlotGrainBody, type MoveSlotGroup, type MoveSlotKind, MoveSlotLanesBody, MoveSlotMetronomeBody, MoveSlotMultibandBody, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing, type MoveSlotProps, MoveSlotRampBody, MoveSlotRangeBody, MoveSlotReadout, MoveSlotScopeBody, MoveSlotShape, MoveSlotStreakBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotTrimSpanBody, MoveSlotVectorBody, MoveSlotXYBody, type MoveStage, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, MoveTimeline, type MoveTimelineClaimOptions, MoveTimelineClock, type MoveTimelineProps, MoveTimelineStore, type MoveTimelineValues, MoveTimelineZoom, type MoveToggleVisual, type MoveTone, type MoveTrackLabelStyle, type MoveTrimSpanEdge, type MoveViewChange, type MoveViewChoreography, type MoveViewLayer, type MoveViewLoadOptions, type MoveViewMotion, MoveViewStage, type MoveViewStageProps, type MoveViewTask, type MoveViewTween, type MoveViewWait, MoveViews, type MoveViewsState, type MoveVisual, MoveVolumeDisplay, type MoveVolumeDisplayState, MoveWaveform, type MoveWaveformProps, MoveWaveformStore, type MoveWaveformStyle, type MoveWaveformTransport, type MoveWaveformVariant, type MoveWaveformView, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type OKLCH, type PanelConfig, type Point, type Preset, type PresetDNA, type PresetExplorationAdapter, PresetExplorationStore, type PresetItem, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SpringifyOptions, type SwatchConfig, type SwatchOption, TAB_PATH, TRANSFER_MAX_POINTS, TRANSFER_MIN_GAP, type TextConfig, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineMeta, TimelineStore, type TimelineTransport, type ToggleConfig, type TransferPoint, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakTheme, type TweakValue, type UseMoveTimelineOptions, WAVEFORM_BASE_BUCKET, WAVEFORM_MAX_ZOOM, WAVEFORM_MODES, WAVEFORM_SMOOTH_POINTS, type WaveformAsset, type WaveformLevel, type WaveformLoop, type WaveformMode, type WaveformRange, WaveformVisualization, type XYAxis, type XYConfig, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, angleFromPointer, applyAgentWrites, applyDetentAxis, applyModulation, arcPath, audioModLevel, bearingToValue, breedDNA, buildModMovePage, buildMovePages, buildMoveStrip, buildSamplers, buildWaveformLevels, centerValue, chooseParents, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, clampStripOffset, cloneDNA, collectGenes, colorAtPosition, createMoveMeter, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultFilterResponse, defaultListItemParams, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, describeAgentControls, dialOrigin, dialSpan, displayHex, drawMoveGate, drawMoveMultiband, enumOptionIcon, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, fillRangePeaks, filterHand01, filterHandValue, filterResponsePath, filterShapePath, filterShapeResponse, fitGene, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, followWindow, formatAgentTime, formatClock, formatEntries, formatHex, formatTimelineTick, geneBounds, getAudioModBuffer, getAudioModVersion, getAudioModWindow, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, insertPoint, invertY, isIdentityTransfer, isMoveDial, isMoveTabs, isNamedTabs, isOutsideSpan, isPadSpanContinuation, isSpanContinuation, isStripSlot, isToggleDial, lfoSyncedHz, listModTypes, loopFromStep, loopSteps, modColor, modKey, modPageLayout, modPageWidth, modRingArc, morphDNA, moveAppPadRow, moveBandCell, moveBandCuts, moveChannelPosition, moveEdgesCell, moveGateDemoReading, moveGateSpan, moveGaugeBearing, moveGrainGap, moveGrainPicture, moveGrainRole, moveGrainSpan, moveKitOptions, moveLanes, moveMultibandDemoReading, moveMultibandRole, moveMultibandSpan, moveNotify, moveNumericDrawing, movePadRows, movePlaybackMode, movePoint, moveScreenChecked, moveScreenRowLabel, moveScreenRowSearchText, moveSearchFilter, moveSearchMatch, moveSlotKind, moveStop, moveTabCell, moveTrimSpan, moveVectorAxes, moveVectorStage, moveViewChoreography, moveVisualReading, defaultStyle as moveWaveformDefaultStyle, defaultView as moveWaveformDefaultView, moveWaveformDemoSample, styleFromValues as moveWaveformStyleFromValues, moveWheelSlot, nearestHandle, nearestPoint, newDNAId, normToValue, normalizeAngle, normalizeCurveMarkers, normalizeDeck, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeFilterValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeToggleDial, normalizeTransfer, normalizeValue, normalizeXYDial, notifyDockBottom, nudge, nudgeAngle, oklchToRgb, opacityPercent, orderRange, packTimelineRows, padPosition, padSection, padSpan, pageStripOffset, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, presetFlowerSeed, presetFlowerSvg, projectEntries, rampCss, rangesDuration, readComposition, reconcileDNA, redistributeWeight, registerModType, removeDriver, removePoint, removeSegment, removeStop, resolveAxis, resolveBoundary, resolveFilterAxis, restoreAgentWrites, rgbToHsl, rgbToHsv, rgbToOklch, runAgentActions, sampleTransfer, scrubBy, seedDNA, setAudioModBuffer, setAudioModWindowSource, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, slotGroups, snapAngle, snapToStep, splitSegment, springify, stepPosition, stepStripOffset, stripDialColumns, stripDialSlots, stripOffsets, stripSlotCount, stripSlotIndex, stripStarts, stripWindowPads, subscribeAudioMod, timelineClock, timelineRowHeight, timelineTicks, timelineToSource, timelineWindow, toAudioBuffer, transferLut, triggerLevels, triggersCrossed, useMoveTimeline, valueFromPoint, valueToBearing, valueToNorm, valueToPercent, visibleColumns, visibleModControls, visibleWindow, waveformAsset, waveformAssetFromBuffer, zoomBy, zoomWindow };

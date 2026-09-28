@@ -561,6 +561,14 @@
   z-index: 9990;
 }
 
+/* What floats above the panel — the preset's name, the agent's prompt — hangs
+   from the panel itself (`bottom: 100%`). A panel in the page's flow is the
+   box they hang from too: left static, they would hang from whatever the host
+   happens to have positioned, usually out of sight above the page. */
+.tweakers-move[data-dock="flow"] {
+  position: relative;
+}
+
 /* The page's column count is a registered number so a page change can ease
    it (move-panel-motion's easeWidth): the widths measured from it move
    through the fractions between two pages instead of snapping. MovePanel
@@ -3915,6 +3923,15 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
+/* No room above the panel (it is docked high in the page): the box sits
+   inside the panel's top instead, over the header, where it can be typed in.
+   `data-inside` is set from a measurement (`moveFloatSitsInside`). */
+.tweakers-move-preset-save[data-inside] {
+  top: 10px;
+  bottom: auto;
+  z-index: 5;
+}
+
 .tweakers-move-preset-save-input {
   width: 220px;
   padding: 6px 10px;
@@ -3927,6 +3944,118 @@
   font-size: 16px;
   line-height: 20px;
   text-align: center;
+}
+
+/* The agent's prompt: the same floating frame, wider — a sentence, not a
+   name — with the reply and its undo on a line beneath. */
+.tweakers-move-agent-input {
+  width: 340px;
+  text-align: left;
+}
+
+.tweakers-move-agent[data-phase="thinking"] .tweakers-move-agent-input {
+  opacity: 0.5;
+}
+
+.tweakers-move-agent-note {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 340px;
+  margin: 8px 0 0;
+  padding: 0 2px;
+  color: color-mix(in srgb, var(--move-text) 65%, transparent);
+  font-family: var(--move-font-label);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+/* What it read and looked at on the way: a quiet list between the field and
+   the reply. A finished step steps back; the one running breathes. */
+.tweakers-move-agent-steps {
+  width: 340px;
+  margin: 8px 0 0;
+  padding: 0 2px;
+  list-style: none;
+  font-family: var(--move-font-label);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.tweakers-move-agent-step {
+  color: color-mix(in srgb, var(--move-text) 40%, transparent);
+}
+
+.tweakers-move-agent-step[data-state="running"] {
+  color: color-mix(in srgb, var(--move-text) 65%, transparent);
+  animation: tweakers-move-agent-breathe var(--move-confirm-pulse-duration) ease-in-out infinite;
+}
+
+.tweakers-move-agent-steps + .tweakers-move-agent-note {
+  margin-top: 4px;
+}
+
+@keyframes tweakers-move-agent-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-agent-step[data-state="running"] { animation: none; }
+}
+
+/* A reply that did what was asked says one word. The mark draws itself and
+   the word settles in beside it — a small confirmation, over in a beat. */
+.tweakers-move-agent-note[data-done] {
+  color: var(--move-text);
+}
+
+.tweakers-move-agent-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  animation: tweakers-move-agent-settle 320ms var(--move-ease-out) both;
+}
+
+.tweakers-move-agent-done-mark {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.tweakers-move-agent-done-mark path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: tweakers-move-agent-draw 360ms var(--move-ease-out) 80ms forwards;
+}
+
+@keyframes tweakers-move-agent-settle {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes tweakers-move-agent-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-agent-done { animation: none; }
+  .tweakers-move-agent-done-mark path { animation: none; stroke-dashoffset: 0; }
+}
+
+.tweakers-move-agent[data-phase="error"] .tweakers-move-agent-note {
+  color: #ff8a70;
+}
+
+.tweakers-move-agent-undo {
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--move-text);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -5,9 +5,11 @@ import { ModulationStore } from '../src/store/ModulationStore';
 import { MoveFunctions } from '../src/move-functions';
 import { MovePresetStore } from '../src/move-presets';
 import { MoveSurfaceStore, type MoveScreenRow } from '../src/move-surface-store';
+import { MoveAgentStore } from '../src/move-agent';
 import { toAudioBuffer } from '../src/move-waveform';
 import { MoveVolumeDisplay } from '../src/move-volume';
 import { moveKitOptions } from '../src/move-kit';
+import { formatAgentTime, type MoveAgentBoundary, type MoveAgentEntry, type MoveAgentOptions, type MoveAgentSegment } from '../src';
 import { setAudioModBuffer } from '../src/modulation-core';
 import '../src/styles/theme.css';
 
@@ -183,7 +185,8 @@ MoveVolumeDisplay.set({
 // Keyboard stand-ins for the hardware. M = the Menu button (tap opens and
 // dismisses; Shift+M is the long press, the save input). Holding C is the
 // Mute button held — the compare, relayed raw like the kit does it.
-// Backspace = Back, Enter = jog click, arrows = wheel detents.
+// Backspace = Back, Enter = jog click, arrows = wheel detents. Shift+Enter is
+// the wheel held down — the agent's prompt — relayed like the kit does it.
 const muteEvent = (pressed: boolean, shift: boolean) =>
   !window.dispatchEvent(new CustomEvent('move-tweakers:mute', { detail: { pressed, shift }, cancelable: true }));
 window.addEventListener('keydown', (e) => {
@@ -194,6 +197,7 @@ window.addEventListener('keydown', (e) => {
   else if (e.key.toLowerCase() === 'l') MoveFunctions.run('loop', {});
   else if (e.key.toLowerCase() === 's') MoveFunctions.run('set_overview', { shift: true, step: 0 });
   else if (e.key === 'Backspace') MoveFunctions.run('back', {});
+  else if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); window.dispatchEvent(new CustomEvent('move-tweakers:jog-hold', { detail: { shift: false }, cancelable: true })); }
   else if (e.key === 'Enter') MovePresetStore.confirm();
   else if (e.key === 'ArrowDown') MovePresetStore.scroll(1);
   else if (e.key === 'ArrowUp') MovePresetStore.scroll(-1);
@@ -202,6 +206,86 @@ window.addEventListener('keyup', (e) => {
   if (e.target instanceof HTMLInputElement) return;
   if (e.key.toLowerCase() === 'c') muteEvent(false, e.shiftKey);
 });
+
+// A pretend media host, so the agent's senses can be tried with no editor
+// behind them. One 60-second source, indexed by hand in SOURCE time: shots,
+// bars, and where the singer comes in. The edit keeps two pieces of it —
+// 5–25 s, then 40–55 s — so shot:2 and shot:4 are cut through (`partial`),
+// shot:3 is gone, and everything after the join has moved. Hold the wheel
+// (Shift+Enter) and ask "what shots are here?", "look at the join", or "trim
+// to where the vocal comes in": the first read of the signal takes a second
+// and a half, the look draws its own frames, and the trim only logs.
+const SOURCE = 'demo.mov';
+const INDEX: MoveAgentEntry[] = [
+  { id: 'shot:1', type: 'shot', source: SOURCE, t0: 0, t1: 8, label: 'street, morning' },
+  { id: 'shot:2', type: 'shot', source: SOURCE, t0: 8, t1: 22, label: 'beach, two people' },
+  { id: 'shot:3', type: 'shot', source: SOURCE, t0: 22, t1: 41, label: 'interview, close' },
+  { id: 'shot:4', type: 'shot', source: SOURCE, t0: 41, t1: 60, label: 'beach, sunset' },
+  ...Array.from({ length: 30 }, (_, i): MoveAgentEntry => ({ id: `bar:${i + 1}`, type: 'bar', source: SOURCE, t0: i * 2 })),
+  { id: 'vocal_in:1', type: 'event', source: SOURCE, t0: 12.4, label: 'vocals enter' },
+  { id: 'vocal_in:2', type: 'event', source: SOURCE, t0: 44.2, label: 'vocals enter, second verse' },
+];
+const EDIT: MoveAgentSegment[] = [
+  { source: SOURCE, srcIn: 5, srcOut: 25, at: 0 },
+  { source: SOURCE, srcIn: 40, srcOut: 55, at: 20 },
+];
+let indexed = false;
+const pretendHost: MoveAgentOptions = {
+  context: 'A demo: tone and colour panels, and a pretend 35-second edit of one video with music.',
+  editMap: () => EDIT,
+  scene: () => ({
+    edit: EDIT.map((s) => `${s.source} ${s.srcIn}–${s.srcOut} s, at ${formatAgentTime(s.at)}`),
+    // Entries listed here are known boundaries from the start, with no read.
+    entries: INDEX.filter((e) => e.id === 'vocal_in:1'),
+  }),
+  signals: [{
+    id: 'structure', label: 'Structure', hint: 'Shots (with what is in them), bars, and where the vocal comes in.',
+    cost: 'about 2 s the first time',
+    state: () => (indexed ? 'ready' : 'missing'),
+    read: async (range, signal) => {
+      if (!indexed) await new Promise<void>((done, fail) => {
+        const timer = setTimeout(done, 1500);
+        signal.addEventListener('abort', () => { clearTimeout(timer); fail(new Error('aborted')); }, { once: true });
+      });
+      indexed = true;
+      return range ? INDEX.filter((e) => range.some((r) => e.source === r.source && (e.t1 ?? e.t0) >= r.t0 && e.t0 <= r.t1)) : INDEX;
+    },
+  }],
+  tools: [{
+    id: 'look', label: 'Look at the frames', kind: 'perceive', progress: 'Looking at the frames…',
+    hint: 'A contact sheet of a timeline range: six frames, each with its time drawn in. Only to check or refine what a signal already found.',
+    cost: 'a few seconds',
+    params: { from: { type: 'number', min: 0, max: 35, hint: 'timeline seconds' }, to: { type: 'number', min: 0, max: 35, hint: 'timeline seconds' } },
+    run: async ({ from, to }) => {
+      const a = Math.min(from as number, to as number), b = Math.max(from as number, to as number), tiles = 6;
+      const canvas = Object.assign(document.createElement('canvas'), { width: tiles * 160, height: 90 });
+      const ctx = canvas.getContext('2d')!;
+      const times = Array.from({ length: tiles }, (_, i) => a + ((b - a) * (i + 0.5)) / tiles);
+      times.forEach((t, i) => {
+        // A frame is its shot's colour: a cut shows as a change of colour.
+        const segment = EDIT.find((s) => t >= s.at && t < s.at + (s.srcOut - s.srcIn));
+        const src = segment ? segment.srcIn + (t - segment.at) : -1;
+        const shot = INDEX.findIndex((e) => e.type === 'shot' && src >= e.t0 && src < (e.t1 ?? e.t0));
+        ctx.fillStyle = shot < 0 ? '#111' : `hsl(${shot * 80 + 20} 55% 42%)`;
+        ctx.fillRect(i * 160, 0, 158, 90);
+        ctx.fillStyle = '#fff';
+        ctx.font = '14px monospace';
+        ctx.fillText(formatAgentTime(t), i * 160 + 8, 80);
+      });
+      return { text: `Six frames, left to right, at ${times.map(formatAgentTime).join(', ')}.`, images: [{ name: 'frames.jpg', dataUrl: canvas.toDataURL('image/jpeg', 0.8) }] };
+    },
+  }],
+  actions: [{
+    id: 'trim_to', label: 'Trim to', hint: 'End the edit at a boundary. Name the boundary; never a time.',
+    params: { at: { type: 'boundary', hint: 'an edge of an entry a signal or the scene has shown' } },
+    run: ({ at }) => {
+      const { entry, edge, sourceTime, time } = at as MoveAgentBoundary;
+      console.log(`[demo] trim to the ${edge} of ${entry}: source ${formatAgentTime(sourceTime)}, timeline ${time === undefined ? 'not in the edit' : formatAgentTime(time)}`);
+      return () => console.log(`[demo] trim to ${entry} undone`);
+    },
+  }],
+  checkpoint: () => console.log('[demo] checkpoint before the edit lands'),
+};
 
 // The hardware, when the bridge is up: knobs, track buttons, Menu, wheel.
 // No bridge (or no Move) is fine — the keyboard stand-ins above still work.
@@ -216,11 +300,12 @@ const bridge = (new URLSearchParams(location.search).get('bridge') || 'http://lo
   .replace(/\/+$/, '');
 // @ts-ignore — remote module, no types
 import(/* @vite-ignore */ `${bridge}/kit.js`)
-  .then((m) => m.bindMove(TweakStore, moveKitOptions({ url: bridge })))
-  .catch(() => {});
+  .then((m) => m.bindMove(TweakStore, moveKitOptions({ url: bridge, agent: pretendHost })))
+  // No bridge, no bind — the agent still follows `?bridge=`, for a bridge that serves no kit.
+  .catch(() => { moveKitOptions({ url: bridge, agent: pretendHost }); });
 
 // Debug handles for poking the live stores from the console.
-(window as any).__tweakers = { TweakStore, MovePresetStore, MoveFunctions };
+(window as any).__tweakers = { TweakStore, MovePresetStore, MoveFunctions, MoveAgentStore };
 
 createRoot(document.getElementById('root')!).render(
   <MovePanel productionEnabled theme="dark" settings={["Settings", "System"]} />

@@ -4,6 +4,7 @@ import { PresetExploration, PresetExplorationSlots } from './PresetExploration';
 import { PresetExplorationStore } from '../preset-exploration';
 import { useEffect, useLayoutEffect, useId, useRef, useState, useSyncExternalStore, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { moveFloatSitsInside } from '../move-float';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { ModulationStore } from '../store/ModulationStore';
 import { modColor, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, getAudioModBuffer, setAudioModBuffer, subscribeAudioMod, getAudioModVersion, setAudioModWindowSource, getAudioModWindow, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
@@ -52,6 +53,7 @@ import { MoveTimelineStore } from '../move-timeline';
 import { MoveSettingsView } from '../move-settings';
 import { MoveTrackLabels, MOVE_PANEL_SETTINGS, moveTrackIcon, moveTrackLabelStyle } from '../move-track-labels';
 import { MovePresetStore, type MovePresetView } from '../move-presets';
+import { MoveAgentStore, MOVE_JOG_HOLD_EVENT, type MoveAgentView } from '../move-agent';
 import { ListScreen } from './ListScreen';
 import { MovePanelMotion } from './MovePanelMotion';
 
@@ -468,15 +470,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // serialized rather than joined: panel names have spaces in them.
   const onlyKey = only === undefined ? undefined : JSON.stringify(Array.isArray(only) ? only : [only]);
   const read = useCallback(() => {
-    if (onlyKey === undefined) return TweakStore.selectPanels();
-    const requested = JSON.parse(onlyKey) as string[];
-    const registered = TweakStore.getPanels('panel');
     // App pages are addressed by stable panel id. Names remain display copy:
     // changing "snare" to "snare top" must not create a new hardware page.
-    // Name lookup stays as a compatibility path for existing integrations.
-    return requested
-      .map((key) => registered.find((panel) => panel.id === key || panel.name === key))
-      .filter((panel): panel is PanelConfig => panel !== undefined);
+    // Name lookup stays as a compatibility path for existing integrations —
+    // `selectPanels` takes either, the id first.
+    return TweakStore.selectPanels(onlyKey === undefined ? undefined : JSON.parse(onlyKey) as string[]);
   }, [onlyKey]);
 
   useEffect(() => {
@@ -498,9 +496,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const settingsKey = settings === undefined ? undefined : JSON.stringify(Array.isArray(settings) ? settings : [settings]);
   const namedRooms = settingsKey === undefined
     ? []
-    : (JSON.parse(settingsKey) as string[])
-        .map((key) => TweakStore.getPanels('panel').find((p) => p.id === key || p.name === key))
-        .filter((p): p is PanelConfig => p !== undefined);
+    : TweakStore.selectPanels(JSON.parse(settingsKey) as string[]);
   // The kit's own pages ride after the app's: the waveform's look, then the
   // panel's own (how the track row names its pages). An app with no room of
   // its own still gets the door, because the pages behind it are the kit's.
@@ -967,6 +963,33 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     };
     window.addEventListener(MOVE_SEARCH_EVENT, onSearch);
     return () => window.removeEventListener(MOVE_SEARCH_EVENT, onSearch);
+  }, []);
+  // The agent, behind a held wheel: the prompt opens above the panel, a
+  // second hold closes it. A click of the wheel while a reply is showing
+  // takes the change back — the one gesture that needs no keyboard.
+  useSyncExternalStore(MoveAgentStore.subscribe, MoveAgentStore.getVersion, () => 0);
+  const agent = MoveAgentStore.getView();
+  const agentFocus = useRef<string | undefined>(undefined);
+  agentFocus.current = pageId;
+  useEffect(() => {
+    const onHold = (e: Event) => {
+      if (e.defaultPrevented) return;
+      e.preventDefault();
+      MoveAgentStore.toggle(agentFocus.current);
+    };
+    const onJogClick = (e: Event) => {
+      const view = MoveAgentStore.getView();
+      if (!view || view.phase === 'thinking' || !(view.changed || view.acted) || !MoveAgentStore.canUndo()) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      void MoveAgentStore.undo();
+    };
+    window.addEventListener(MOVE_JOG_HOLD_EVENT, onHold);
+    window.addEventListener(MOVE_JOG_CLICK_EVENT, onJogClick, { capture: true });
+    return () => {
+      window.removeEventListener(MOVE_JOG_HOLD_EVENT, onHold);
+      window.removeEventListener(MOVE_JOG_CLICK_EVENT, onJogClick, { capture: true });
+    };
   }, []);
   // The computer keyboard's way in: `/` or ⌘F (Ctrl+F) asks for the same
   // search a held Capture does. Only a list that takes it keeps the key from
@@ -1610,6 +1633,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
         {!explorationOpen && colorMeta && <MoveColorDisplay panelId={page.panel.id} meta={colorMeta} anchor={panelRef} theme={theme} />}
         <PresetExploration />
         {presetSave && <MovePresetSaveInput suggested={presetSave.suggested} />}
+        {agent && !presetSave && <MoveAgentPrompt view={agent} />}
         {!explorationOpen && composition && modSettings && (
           <MoveCurveComposer
             index={modSettings.index}
@@ -3748,15 +3772,44 @@ function MoveSearchBar({ view }: { view: MoveSearchView }) {
 }
 
 /**
+ * A box floating above the panel — the preset's name, the agent's prompt —
+ * measured against the viewport: with no room above the panel it sits inside
+ * the panel's top (`data-inside`). Measured again when the box grows (the
+ * agent's steps), the panel resizes, or the page scrolls under a flow dock.
+ */
+function useMoveFloat() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [inside, setInside] = useState(false);
+  useLayoutEffect(() => {
+    const box = ref.current, panel = box?.parentElement;
+    if (!box || !panel) return;
+    const measure = () => setInside(moveFloatSitsInside(panel.getBoundingClientRect().top, box.offsetHeight));
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(box);
+    observer?.observe(panel);
+    window.addEventListener('resize', measure);
+    window.addEventListener('scroll', measure, true);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, true);
+    };
+  }, []);
+  return { ref, inside };
+}
+
+/**
  * The save-a-preset input, floating centred above the panel like the curve
  * composer does. Enter keeps the name, Escape — or clicking away — lets it
  * go. The suggested "Preset N" arrives selected, so typing replaces it.
  */
 function MovePresetSaveInput({ suggested }: { suggested: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const float = useMoveFloat();
   useEffect(() => { inputRef.current?.select(); }, []);
   return (
-    <div className="tweakers-move-preset-save">
+    <div ref={float.ref} className="tweakers-move-preset-save" data-inside={float.inside || undefined}>
       <input
         ref={inputRef}
         className="tweakers-move-preset-save-input"
@@ -3769,6 +3822,73 @@ function MovePresetSaveInput({ suggested }: { suggested: string }) {
         }}
         onBlur={() => MovePresetStore.cancelSave()}
       />
+    </div>
+  );
+}
+
+/**
+ * The agent's prompt, floating where the preset name does. Enter sends the
+ * words, Escape closes. The field stays open after a reply — asking again
+ * refines what just landed. While it works, what it is reading or looking
+ * at shows as it happens, so a longer wait is never a silent one; the steps
+ * leave with the reply. A reply that simply did what was asked is one word,
+ * Done, with its undo — the agent writes a sentence only when there is
+ * something to know: it could not, it did something else, it had to choose.
+ */
+function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const float = useMoveFloat();
+  const thinking = view.phase === 'thinking';
+  useEffect(() => { if (!thinking) inputRef.current?.select(); }, [thinking]);
+  const changed = view.phase !== 'thinking' && (view.changed > 0 || view.acted > 0);
+  const skipped = view.skipped ? `${view.skipped} ${view.skipped === 1 ? 'action' : 'actions'} skipped.` : '';
+  const note = thinking ? (view.steps.some((s) => s.state === 'running') ? '' : 'Turning the dials…')
+    : [view.message, skipped].filter(Boolean).join(' ');
+  const done = view.phase === 'done' && changed && !note;
+  const steps = thinking ? view.steps : view.steps.filter((s) => s.state === 'failed');
+  return (
+    <div ref={float.ref} className="tweakers-move-preset-save tweakers-move-agent" data-phase={view.phase} data-inside={float.inside || undefined}>
+      <input
+        ref={inputRef}
+        className="tweakers-move-preset-save-input tweakers-move-agent-input"
+        defaultValue={view.prompt}
+        placeholder="Ask for a change"
+        aria-label="Ask the agent for a change"
+        autoFocus
+        readOnly={thinking}
+        spellCheck={false}
+        autoComplete="off"
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === 'Enter') void MoveAgentStore.ask(e.currentTarget.value);
+          else if (e.key === 'Escape') MoveAgentStore.close();
+          else if (e.key === 'z' && (e.metaKey || e.ctrlKey) && changed) { e.preventDefault(); void MoveAgentStore.undo(); }
+        }}
+      />
+      {steps.length > 0 && (
+        <ul className="tweakers-move-agent-steps" aria-label="What the agent is doing">
+          {steps.map((step, i) => (
+            <li key={i} className="tweakers-move-agent-step" data-state={step.state}>
+              {step.label}{step.state === 'failed' && ' — failed'}
+            </li>
+          ))}
+        </ul>
+      )}
+      {(note || done) && (
+        <p className="tweakers-move-agent-note" role="status" data-done={done || undefined}>
+          {done ? (
+            <span className="tweakers-move-agent-done" key={view.prompt}>
+              <svg className="tweakers-move-agent-done-mark" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M3 8.5l3.2 3.2L13 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" pathLength="1" />
+              </svg>
+              Done
+            </span>
+          ) : note}
+          {changed && MoveAgentStore.canUndo() && (
+            <button type="button" className="tweakers-move-agent-undo" onClick={() => void MoveAgentStore.undo()}>Undo</button>
+          )}
+        </p>
+      )}
     </div>
   );
 }

@@ -247,6 +247,68 @@ them wholesale. The panel's theme is the design anchor for the whole window:
   by default).
 - Wire **presets** so the whole surface snapshots meaningfully.
 
+## The agent pass (the held wheel)
+
+The kit ships an agent: a held wheel opens a prompt, and Claude turns the
+dials (`docs/agent.md` has the API). It reads the store, so an integration
+has it the moment its panels are registered — there is nothing to build.
+What is left is making it *good* here. Do these in order; each is a decision
+to make and write down, not a box to tick.
+
+1. **Context.** `agent: { context }` — what the app makes and what a panel
+   stands for (a track? a clip? a layer?), in a sentence or two.
+2. **Read the panel as the agent does.** Call `describeAgentControls()` in
+   the console and read the list cold. Every label that needs the screen
+   next to it to make sense ("Amt", "A", "Mode 2") is a control the agent
+   will guess at. Fix the label or add a hint — the refinement pass's work,
+   now with a second reader. An empty list means the agent's `panels` match
+   nothing: name pages by **id** (names are display copy, and a page named
+   after what is on it changes) — the bind, the mirror and the agent all
+   take an id or a name, the id first. Held-open columns (`moveBlank`) are
+   never listed; do not write hints for them.
+3. **Evaluate a brief — always, and say what you decided.** Does this field
+   have words whose meaning on these controls is not obvious (warm, punchy,
+   filmic, tight, airy)? Limits a newcomer would break? Looks or sounds
+   people ask for by name? If any, write `agent: { brief }`: vocabulary,
+   limits, recipes, one page at most. Get the vocabulary from the person who
+   knows the field — ask Cri how *he* would say it, do not invent a glossary.
+   A generic utility panel may honestly need none; then say so.
+4. **Evaluate actions — always, and say what you decided.** Is the app's
+   real work setting values, or doing things (cutting, adding, arranging)?
+   If doing, pick the three to six verbs a user would say aloud, offer them
+   as `actions` with a `scene`, and return an undo from every `run` that
+   changes content. Prefer verbs that finish a job in one step: the agent
+   plans from one look at the scene and cannot see between steps. Never
+   fake a verb as a toggle to reach it, and leave out what has no way back.
+   **Anything that depends on the open file is a getter, not a value**:
+   `actions`, `signals`, `tools`, a param's `options` (the samples there are
+   now), a `cost`. The bind happens once, the file changes all day — never
+   call `MoveAgentStore.configure()` again to refresh them. To open and close
+   something around one ask (an undo group, a busy flag) use `onRequest`
+   (`begin`/`end`); `checkpoint` is only the save point before an edit lands.
+   An undo that cannot run throws a short sentence: the prompt shows it.
+5. **Evaluate perception — always, and say what you decided.** Does the app
+   hold media the agent must understand to do its work (video, audio, a long
+   document)? If not, say so and move on. If so, give it `signals` — what is
+   *in* each source, in SOURCE time, with stable ids — and an `editMap`, so
+   the kit projects them through the edit and no cut can make the index
+   wrong. Actions take a `boundary`, never a time: the agent names the edge
+   of an entry, the host gets the exact second. Index nothing until asked:
+   every signal is lazy, with an honest `state` and `cost`, cached per
+   source. Add a `look` or `listen` tool only for what no signal can answer,
+   and give it a `done` text that says what it found ("Looked at 12 frames")
+   — the step list is all the user sees of a long wait. A boundary arrives
+   with its entry (`at.of.type`, `at.of.label`): never parse an id.
+6. **Ask it five things a user of this app would say** — one nudge, one
+   whole new look, one that names a control, one that names a feeling, one
+   it cannot do; add one edit if it has actions. Watch what moves. A wrong
+   move is almost always a label, a missing line of brief, or a vague action
+   hint — fix those, never the kit's prompt.
+
+The agent sees values only of these kinds: sliders, numbers, toggles,
+selects, xy, range, filter, colour, text. Lists, gradients, curves and the
+timeline are invisible to it unless an action reaches them.
+
 ## Anti-patterns to catch in review
 
 - A curve, envelope, or easing edited through bare numeric sliders while a

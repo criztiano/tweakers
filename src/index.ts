@@ -418,6 +418,11 @@ export type { MoveColorView, MoveColorPalette } from './move-color';
 // bridge kit drives (scroll on wheel turns, confirm on jog click,
 // beginSave on Shift+Menu; a hold opens generative exploration).
 export { MovePresetStore } from './move-presets';
+// Generative presetting — a held wheel opens a prompt, an agent turns the dials.
+export { MoveAgentStore, describeAgentControls, applyAgentWrites, restoreAgentWrites, runAgentActions, MOVE_JOG_HOLD_EVENT, MOVE_AGENT_GLIDE_MS } from './move-agent';
+export type { MoveAgentControl, MoveAgentWrite, MoveAgentRequest, MoveAgentReply, MoveAgentAsk, MoveAgentOptions, MoveAgentView, MoveAgentPhase, MoveAgentAction, MoveAgentParam, MoveAgentParamValue, MoveAgentCall, MoveAgentActionResult, MoveAgentStep, MoveAgentOutcome, MoveAgentParamInfo, MoveAgentActionInfo, MoveAgentToolInfo } from './move-agent';
+export { projectEntries, timelineToSource, formatEntries, formatAgentTime, resolveBoundary } from './move-agent-perception';
+export type { MoveAgentEntry, MoveAgentSegment, MoveAgentProjectedEntry, MoveAgentSourceRange, MoveAgentBoundaryRef, MoveAgentBoundary, MoveAgentArg, MoveAgentSignal, MoveAgentSignalState, MoveAgentSignalInfo, MoveAgentTool, MoveAgentToolResult, MoveAgentToolCall, MoveAgentPass, MoveAgentPassResult, MoveAgentLive } from './move-agent-perception';
 export { MoveSearchStore, moveSearchMatch, moveSearchFilter } from './move-search';
 export type { MoveSearchTarget, MoveSearchView } from './move-search';
 export type { MovePresetItem, MovePresetView, MovePresetSave, MovePresetPhase } from './move-presets';
