@@ -408,7 +408,8 @@ function moveNumericDrawing(meta, value) {
     case "opacity": {
       const opaque = visual.opaqueValue ?? 1;
       if (!Number.isFinite(opaque) || opaque <= 0 || lo < 0 || hi > opaque) return null;
-      return { kind: "opacity", alpha: v / opaque };
+      const picture = typeof visual.picture === "string" && visual.picture ? visual.picture : void 0;
+      return { kind: "opacity", alpha: v / opaque, ...picture ? { picture } : {} };
     }
     case "blur":
       return lo >= 0 ? { kind: "blur", radius: v } : null;
@@ -1103,7 +1104,11 @@ function MoveSlotNumericBody({ label, value, drawing }) {
   return /* @__PURE__ */ jsxs(Fragment, { children: [
     /* @__PURE__ */ jsx("span", { className: "tweakers-move-dial-tag", children: label }),
     /* @__PURE__ */ jsxs("svg", { className: "tweakers-move-visual", viewBox: "0 0 100 60", "aria-hidden": "true", children: [
-      drawing.kind === "opacity" && /* @__PURE__ */ jsxs(Fragment, { children: [
+      drawing.kind === "opacity" && drawing.picture && /* @__PURE__ */ jsxs(Fragment, { children: [
+        /* @__PURE__ */ jsx("rect", { className: "tweakers-move-visual-guide", x: "0.5", y: "0.5", width: "99", height: "59", rx: "3" }),
+        /* @__PURE__ */ jsx("image", { href: drawing.picture, x: "0", y: "0", width: "100", height: "60", preserveAspectRatio: "xMidYMid meet", opacity: drawing.alpha })
+      ] }),
+      drawing.kind === "opacity" && !drawing.picture && /* @__PURE__ */ jsxs(Fragment, { children: [
         /* @__PURE__ */ jsx("circle", { className: "tweakers-move-visual-guide", cx: "40", cy: "30", r: "18" }),
         /* @__PURE__ */ jsx("circle", { className: "tweakers-move-visual-guide", cx: "60", cy: "30", r: "18" }),
         /* @__PURE__ */ jsx("circle", { className: "tweakers-move-visual-solid", cx: "60", cy: "30", r: "18", opacity: drawing.alpha })
@@ -13654,7 +13659,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       if (p && !TweakStore15.isDisabled(page.panel.id, meta.path)) write2(meta, moveTurnValue(meta, p, e, moveTurnExtent(e.currentTarget.getBoundingClientRect())));
     },
     onPointerUp: (e) => {
-      if (endPress(meta.path) && e.shiftKey) resetValue(meta);
+      if (!endPress(meta.path)) return;
+      if (e.shiftKey) resetValue(meta);
+      else if (!TweakStore15.isDisabled(page.panel.id, meta.path)) meta.onTap?.();
     },
     onPointerCancel: () => {
       endPress(meta.path);

@@ -1228,7 +1228,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       if (p && !TweakStore.isDisabled(page.panel.id, meta.path)) write(meta, moveTurnValue(meta, p, e, moveTurnExtent(e.currentTarget.getBoundingClientRect())));
     },
     onPointerUp: (e: React.PointerEvent<HTMLElement>) => {
-      if (endPress(meta.path) && e.shiftKey) resetValue(meta);
+      if (!endPress(meta.path)) return;
+      if (e.shiftKey) resetValue(meta);
+      else if (!TweakStore.isDisabled(page.panel.id, meta.path)) meta.onTap?.();
     },
     onPointerCancel: () => { endPress(meta.path); },
   });

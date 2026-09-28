@@ -967,9 +967,14 @@ interface MorphState {
 declare function morphDNA(children: ExplorationChild[], morph: MorphState, baseline: PresetDNA, parameters: GeneParameter[]): PresetDNA;
 
 /** Opt-in meanings for numeric Move faces. Values keep the host's units. */
-type MoveSliderVisual = {
+type MoveSliderVisual = 
+/** How much something shows. With `picture` (an image URL) the slot shows
+ *  that picture itself, in its own colours, at the value's opacity — the
+ *  thing being faded rather than two circles standing for it. */
+{
     kind: 'opacity';
     opaqueValue?: number;
+    picture?: string;
 } | {
     kind: 'blur';
 } | {
@@ -1148,6 +1153,7 @@ type MoveVisual = MoveSliderVisual | MoveSelectVisual | MoveToggleVisual;
 type MoveNumericDrawing = {
     kind: 'opacity';
     alpha: number;
+    picture?: string;
 } | {
     kind: 'blur';
     radius: number;
@@ -2176,6 +2182,14 @@ type SliderConfig = {
      * to true when the range covers a full turn (360, or -180..180).
      */
     wrap?: boolean;
+    /**
+     * A still press on the slot, on the Move panel, runs this — the slot's door
+     * to what its knob cannot do: load a file, open an editor. A drag still
+     * turns the value and Shift+press still resets it. Screen only (the browser
+     * gives a file chooser only to a real click), and a function, so it is
+     * invisible to the structure diff like `formatValue`.
+     */
+    onTap?: () => void;
 };
 /**
  * Scrub-anywhere numeric readout. Unlike a slider it has no track — drag the
@@ -2508,6 +2522,8 @@ type ControlMeta = {
     unit?: string;
     /** Slider display formatter, from the explicit SliderConfig form. */
     formatValue?: (value: number) => string;
+    /** A still press on a slider's Move slot, from the explicit SliderConfig form. */
+    onTap?: () => void;
     /** Slider fill anchor, from the explicit SliderConfig form. */
     origin?: number;
     bipolar?: boolean;

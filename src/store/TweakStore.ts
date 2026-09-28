@@ -324,6 +324,14 @@ export type SliderConfig = {
    * to true when the range covers a full turn (360, or -180..180).
    */
   wrap?: boolean;
+  /**
+   * A still press on the slot, on the Move panel, runs this — the slot's door
+   * to what its knob cannot do: load a file, open an editor. A drag still
+   * turns the value and Shift+press still resets it. Screen only (the browser
+   * gives a file chooser only to a real click), and a function, so it is
+   * invisible to the structure diff like `formatValue`.
+   */
+  onTap?: () => void;
 };
 
 /**
@@ -727,6 +735,8 @@ export type ControlMeta = {
   unit?: string;
   /** Slider display formatter, from the explicit SliderConfig form. */
   formatValue?: (value: number) => string;
+  /** A still press on a slider's Move slot, from the explicit SliderConfig form. */
+  onTap?: () => void;
   /** Slider fill anchor, from the explicit SliderConfig form. */
   origin?: number;
   bipolar?: boolean;
@@ -2127,6 +2137,7 @@ class TweakStoreClass {
           orientation: value.orientation,
           display: value.display,
           wrap: value.wrap,
+          onTap: value.onTap,
           shortcut,
         });
       } else if (this.isNumberConfig(value)) {
