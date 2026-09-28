@@ -12744,6 +12744,69 @@ function fit(entry, value) {
   if (typeof value !== "string") return void 0;
   return entry.control.kind === "color" ? COLOR.test(value.trim()) ? value.trim() : void 0 : value;
 }
+var MOVE_AGENT_GLIDE_MS = 420;
+var glides = /* @__PURE__ */ new Map();
+var glideFrame = null;
+var easeOut = (t) => 1 - (1 - t) * (1 - t) * (1 - t);
+function glideStep(now) {
+  glideFrame = null;
+  for (const [key, g] of glides) {
+    const [panelId, path, comp] = key.split("\0");
+    const live = TweakStore15.getPanel(panelId)?.values[path];
+    const seen = component(live, comp || void 0);
+    if (live === void 0 || seen !== g.wrote) {
+      glides.delete(key);
+      continue;
+    }
+    const t = Math.min(1, (now - g.t0) / MOVE_AGENT_GLIDE_MS);
+    const value = t >= 1 ? g.to : g.from + (g.to - g.from) * easeOut(t);
+    g.wrote = value;
+    TweakStore15.updateValues(panelId, { [path]: comp ? { ...live, [comp]: value } : value });
+    if (t >= 1) glides.delete(key);
+  }
+  if (glides.size) glideFrame = requestAnimationFrame(glideStep);
+}
+function glide(panelId, path, comp, from, to) {
+  const key = `${panelId}\0${path}\0${comp ?? ""}`;
+  const live = glides.get(key);
+  glides.set(key, { t0: performance.now(), from: live?.wrote ?? from, to, wrote: live?.wrote ?? from });
+  if (glideFrame === null) glideFrame = requestAnimationFrame(glideStep);
+}
+var canGlide = () => typeof requestAnimationFrame === "function" && typeof performance !== "undefined";
+function landValues(updates, glideNumbers) {
+  for (const [panelId, values] of Object.entries(updates)) {
+    if (!glideNumbers || !canGlide()) {
+      TweakStore15.updateValues(panelId, values);
+      continue;
+    }
+    const live = TweakStore15.getValues(panelId);
+    const now = {};
+    for (const [path, target] of Object.entries(values)) {
+      const from = live[path];
+      if (typeof target === "number" && typeof from === "number") {
+        glide(panelId, path, void 0, from, target);
+        continue;
+      }
+      if (target && typeof target === "object" && from && typeof from === "object" && !Array.isArray(target)) {
+        const rest = { ...from };
+        let landed = false;
+        for (const [comp, v] of Object.entries(target)) {
+          const f = from[comp];
+          if (typeof v === "number" && typeof f === "number") {
+            if (v !== f) glide(panelId, path, comp, f, v);
+          } else if (v !== f) {
+            rest[comp] = v;
+            landed = true;
+          }
+        }
+        if (landed) now[path] = rest;
+        continue;
+      }
+      now[path] = target;
+    }
+    if (Object.keys(now).length) TweakStore15.updateValues(panelId, now);
+  }
+}
 function applyAgentWrites(writes, only) {
   var _a, _b, _c, _d;
   const byId = new Map(entries(only).map((e) => [e.control.id, e]));
@@ -12762,7 +12825,7 @@ function applyAgentWrites(writes, only) {
     pending[entry.path] = entry.component ? { ...current, [entry.component]: value } : value;
     changed++;
   }
-  for (const [panelId, values] of Object.entries(updates)) TweakStore15.updateValues(panelId, values);
+  landValues(updates, true);
   return { before, changed };
 }
 function boundaryRef(value) {
@@ -12829,7 +12892,9 @@ async function runAgentActions(calls, actions, resolve) {
   return { ran, skipped, undos, undoable };
 }
 function restoreAgentWrites(before) {
-  for (const [panelId, values] of Object.entries(before)) if (TweakStore15.getPanel(panelId)) TweakStore15.updateValues(panelId, values);
+  const live = {};
+  for (const [panelId, values] of Object.entries(before)) if (TweakStore15.getPanel(panelId)) live[panelId] = values;
+  landValues(live, true);
 }
 var READ_SIGNAL = "read_signal";
 var DEFAULT_URL = "http://localhost:7787/agent";
@@ -18023,6 +18088,7 @@ export {
   MOD_SETTINGS_PANEL,
   MOD_SLOTS,
   MOD_TOUCH_GRACE_MS,
+  MOVE_AGENT_GLIDE_MS,
   MOVE_BAND_H,
   MOVE_BAND_W,
   MOVE_CHIP_BUTTONS,
