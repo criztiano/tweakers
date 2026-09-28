@@ -14,6 +14,7 @@ import {
 } from './curve-composer-core';
 import { mixToMono, fillPeaks, envelope } from './waveform-dsp';
 import type { ModGlyph } from './icons';
+import { MOVE_PALETTE, type MovePaletteName } from './move-palette';
 
 /**
  * The modulation layer's shared ground — types, palette, math, and the
@@ -44,27 +45,20 @@ import type { ModGlyph } from './icons';
 export const MOD_SLOTS = 16;
 
 /**
- * The modulation palette, one colour per slot — sixteen hues around the
- * wheel, tuned to sit with the Move's track colours on the dark panel.
+ * The modulation palette, one colour per slot — the Move's own hues, the
+ * set the hardware lights, so a slot is the same colour on the glass and on
+ * its step button. Not in wheel order: each slot sits three hues round the
+ * wheel from the one before it, so neighbours on the step row never read
+ * alike. The palette has eight hues and the row sixteen steps, so the second
+ * eight repeat the first; a slot's mark says which modulator it is.
+ * The move kit's step-light table (MOD_LED) follows this order.
  */
-export const MOD_COLORS = [
-  '#ff5f45', // 0  coral
-  '#ff8a2b', // 1  orange
-  '#ffb61e', // 2  amber
-  '#f4d942', // 3  yellow
-  '#b8e03c', // 4  lime
-  '#6fd435', // 5  green
-  '#3bcf6d', // 6  emerald
-  '#2ed3ab', // 7  teal
-  '#33c6e8', // 8  cyan
-  '#3d9bff', // 9  azure
-  '#5f7bff', // 10 blue
-  '#8a6bff', // 11 violet
-  '#b45cff', // 12 purple
-  '#e04ef0', // 13 magenta
-  '#ff4fb0', // 14 pink
-  '#ff4f6e', // 15 rose
-];
+export const MOD_COLOR_NAMES: readonly MovePaletteName[] = (() => {
+  const wheel: MovePaletteName[] = ['red', 'orange', 'yellow', 'lime', 'emerald', 'blue', 'indigo', 'pink'];
+  return Array.from({ length: MOD_SLOTS }, (_, i) => wheel[(i * 3) % wheel.length]);
+})();
+
+export const MOD_COLORS: string[] = MOD_COLOR_NAMES.map((name) => MOVE_PALETTE[name]);
 
 /** A slot's palette colour — the one constant identity it keeps. */
 export const modColor = (index: number) =>

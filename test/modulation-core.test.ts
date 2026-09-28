@@ -1,3 +1,4 @@
+import { MOVE_PALETTE } from '../src/move-palette';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   MOD_SLOTS,
@@ -28,6 +29,10 @@ describe('palette and keys', () => {
     expect(modColor(0)).toBe(MOD_COLORS[0]);
     expect(modColor(MOD_SLOTS + 3)).toBe(MOD_COLORS[3]);
     expect(modColor(-1)).toBe(MOD_COLORS[MOD_SLOTS - 1]);
+    // Every slot wears a Move hue, and no two neighbours on the row match.
+    const hues = Object.values(MOVE_PALETTE);
+    expect(MOD_COLORS.every((c) => hues.includes(c as never))).toBe(true);
+    MOD_COLORS.forEach((c, i) => expect(c).not.toBe(MOD_COLORS[(i + 1) % MOD_SLOTS]));
   });
 
   it('keys panel and path unambiguously', () => {

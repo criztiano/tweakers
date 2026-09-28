@@ -149,6 +149,7 @@ export type { ModulationSourceConfig, ModStepAction } from './store/ModulationSt
 export {
   MOD_SLOTS,
   MOD_COLORS,
+  MOD_COLOR_NAMES,
   MOD_SETTINGS_PANEL,
   modColor,
   modKey,
