@@ -87,6 +87,15 @@ describe('the step row circle (React)', () => {
     expect(Number(written.get('stroke-dashoffset'))).toBeCloseTo(modRingArc(0, 0.5, 2 * Math.PI * 10.5).offset, 1);
   });
 
+  it('lays its ring line over the whole sweep, wrapping past the circle\'s start', () => {
+    const track = mount(slot(0, 'lfo')).findByProps({ className: 'tweakers-move-mod-track' });
+    const [dash, gap] = String(track.props.strokeDasharray).split(' ').map(Number);
+    const c = 2 * Math.PI * 10.5;
+    expect(dash).toBeCloseTo(c * 0.75, 1);
+    // One dash per turn: the part past 3 o'clock wraps on instead of being cut.
+    expect(dash + gap).toBeCloseTo(c, 1);
+  });
+
   it('draws a plain dot for a type with no mark', () => {
     const root = mount(slot(2, 'sequencer'));
     expect(root.findAllByType('mask')).toHaveLength(0);

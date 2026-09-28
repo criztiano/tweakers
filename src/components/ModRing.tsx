@@ -30,6 +30,15 @@ import { MOD_GLYPHS } from '../icons';
  * motion it holds still at the modulation's full reach instead, which says
  * the same thing about depth without the movement.
  */
+/**
+ * An arc's dash pattern on a circle: the dash, then the rest of the way
+ * round, so the pattern repeats once per turn. An arc that runs past the
+ * circle's 3 o'clock start then wraps on to the top of the path instead of
+ * stopping short — the knob's sweep crosses that point on its right side.
+ */
+const ringDash = (length: number, circumference: number) =>
+  `${length.toFixed(2)} ${Math.max(0, circumference - length).toFixed(2)}`;
+
 export function ModRing({
   panelId,
   path,
@@ -52,7 +61,7 @@ export function ModRing({
     // control's span — the arc is the gap between them.
     const draw = (from: number, to: number) => {
       const { length, offset } = modRingArc(from, to);
-      el.setAttribute('stroke-dasharray', `${length.toFixed(2)} ${MOD_RING_CIRCUMFERENCE.toFixed(2)}`);
+      el.setAttribute('stroke-dasharray', ringDash(length, MOD_RING_CIRCUMFERENCE));
       el.setAttribute('stroke-dashoffset', offset.toFixed(2));
     };
 
@@ -152,7 +161,7 @@ export function ModDot({ slot, state }: { slot: ModulationSlot; state?: 'active'
       // a range picked on the page reads here on the next frame.
       const { from, to } = modRangeArc(modRange(slot), ModulationStore.getSignal(slot.index));
       const { length, offset } = modRingArc(from, to, DOT_RING_CIRCUMFERENCE);
-      el.setAttribute('stroke-dasharray', `${length.toFixed(2)} ${DOT_RING_CIRCUMFERENCE.toFixed(2)}`);
+      el.setAttribute('stroke-dasharray', ringDash(length, DOT_RING_CIRCUMFERENCE));
       el.setAttribute('stroke-dashoffset', offset.toFixed(2));
     });
   }, [slot]);
@@ -186,7 +195,7 @@ export function ModDot({ slot, state }: { slot: ModulationSlot; state?: 'active'
         cx="12"
         cy="12"
         r={DOT_RING_RADIUS}
-        strokeDasharray={`${DOT_TRACK.length.toFixed(2)} ${DOT_RING_CIRCUMFERENCE.toFixed(2)}`}
+        strokeDasharray={ringDash(DOT_TRACK.length, DOT_RING_CIRCUMFERENCE)}
         strokeDashoffset={DOT_TRACK.offset.toFixed(2)}
       />
       <circle
