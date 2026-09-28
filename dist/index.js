@@ -9416,6 +9416,7 @@ import { useEffect as useEffect12, useId, useRef as useRef12 } from "react";
 import { TweakStore as TweakStore9 } from "tweakers/store";
 import { ModulationStore } from "tweakers/modulation-store";
 import { jsx as jsx14, jsxs as jsxs10 } from "react/jsx-runtime";
+var ringDash = (length, circumference) => `${length.toFixed(2)} ${Math.max(0, circumference - length).toFixed(2)}`;
 function ModRing({
   panelId,
   path,
@@ -9429,7 +9430,7 @@ function ModRing({
     if (!el) return;
     const draw = (from, to) => {
       const { length, offset } = modRingArc(from, to);
-      el.setAttribute("stroke-dasharray", `${length.toFixed(2)} ${MOD_RING_CIRCUMFERENCE.toFixed(2)}`);
+      el.setAttribute("stroke-dasharray", ringDash(length, MOD_RING_CIRCUMFERENCE));
       el.setAttribute("stroke-dashoffset", offset.toFixed(2));
     };
     const bounds = ModulationStore.getBounds(panelId, path);
@@ -9497,7 +9498,7 @@ function ModDot({ slot, state: state4 }) {
       if (!el) return;
       const { from, to } = modRangeArc(modRange(slot), ModulationStore.getSignal(slot.index));
       const { length, offset } = modRingArc(from, to, DOT_RING_CIRCUMFERENCE);
-      el.setAttribute("stroke-dasharray", `${length.toFixed(2)} ${DOT_RING_CIRCUMFERENCE.toFixed(2)}`);
+      el.setAttribute("stroke-dasharray", ringDash(length, DOT_RING_CIRCUMFERENCE));
       el.setAttribute("stroke-dashoffset", offset.toFixed(2));
     });
   }, [slot]);
@@ -9526,7 +9527,7 @@ function ModDot({ slot, state: state4 }) {
             cx: "12",
             cy: "12",
             r: DOT_RING_RADIUS,
-            strokeDasharray: `${DOT_TRACK.length.toFixed(2)} ${DOT_RING_CIRCUMFERENCE.toFixed(2)}`,
+            strokeDasharray: ringDash(DOT_TRACK.length, DOT_RING_CIRCUMFERENCE),
             strokeDashoffset: DOT_TRACK.offset.toFixed(2)
           }
         ),

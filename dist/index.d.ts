@@ -6933,22 +6933,6 @@ type MoveKitOverrides = {
 /** Every registry the bridge kit reads, keyed by its `bindMove` option. */
 declare function moveKitOptions<T extends MoveKitOverrides>(overrides?: T): Omit<MoveKitOptions, keyof T> & T;
 
-/**
- * The modulation ring: a control wired to a slot wears a small dial in the
- * slot's palette colour, and an arc running from the control's own value to
- * where the modulation is holding it right now. The arc dances at the
- * modulator's rate — the value the app reads, shown where it is edited,
- * while the control itself keeps the base the user set.
- *
- * One ring for every surface the kit draws a control on — the dock's rows and
- * the Move panel's slots — so "this one is wired" reads the same wherever you
- * meet it. `className` is what each surface uses to place it.
- *
- * Drawn straight to the arc's dash attributes per frame, the MovePanel
- * circle's pattern, so the panel never re-renders for it. Under reduced
- * motion it holds still at the modulation's full reach instead, which says
- * the same thing about depth without the movement.
- */
 declare function ModRing({ panelId, path, assignment, className, }: {
     panelId: string;
     path: string;
