@@ -1573,14 +1573,23 @@ function MoveSlotNumericBody({ label, value, drawing }) {
       }
     );
   }
+  if (drawing.kind === "opacity" && drawing.picture) {
+    return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+      /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+        "span",
+        {
+          className: "tweakers-move-dial-photo",
+          "aria-hidden": "true",
+          style: { backgroundImage: `url(${JSON.stringify(drawing.picture)})`, opacity: drawing.alpha }
+        }
+      ),
+      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "tweakers-move-dial-option tweakers-move-visual-value", children: value })
+    ] });
+  }
   return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
     /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "tweakers-move-dial-tag", children: label }),
     /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("svg", { className: "tweakers-move-visual", viewBox: "0 0 100 60", "aria-hidden": "true", children: [
-      drawing.kind === "opacity" && drawing.picture && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("rect", { className: "tweakers-move-visual-guide", x: "0.5", y: "0.5", width: "99", height: "59", rx: "3" }),
-        /* @__PURE__ */ (0, import_jsx_runtime.jsx)("image", { href: drawing.picture, x: "0", y: "0", width: "100", height: "60", preserveAspectRatio: "xMidYMid meet", opacity: drawing.alpha })
-      ] }),
-      drawing.kind === "opacity" && !drawing.picture && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+      drawing.kind === "opacity" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
         /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { className: "tweakers-move-visual-guide", cx: "40", cy: "30", r: "18" }),
         /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { className: "tweakers-move-visual-guide", cx: "60", cy: "30", r: "18" }),
         /* @__PURE__ */ (0, import_jsx_runtime.jsx)("circle", { className: "tweakers-move-visual-solid", cx: "60", cy: "30", r: "18", opacity: drawing.alpha })
