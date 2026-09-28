@@ -780,19 +780,31 @@
   fill: var(--move-screen);
 }
 
+.tweakers-move-mod-track,
 .tweakers-move-mod-arc {
+  fill: none;
   stroke-width: 1;
 }
 
-/* A modulator's page is open: the circles that are not its own let their
-   colour go, so the one still lit says whose page this is. */
-.tweakers-move-mod-face[data-state='inactive'] {
-  filter: grayscale(1);
+.tweakers-move-mod-track {
+  stroke: var(--move-screen);
 }
 
-.tweakers-move-mod-face[data-state='inactive'] .tweakers-move-mod-dot,
+/* A modulation circle stands on its own grounds, with the panel showing in
+   the gap between dot and ring — no slot disc behind it. */
+.tweakers-move-mod:has(> .tweakers-move-mod-face) {
+  background: transparent;
+}
+
+/* A modulator's page is open: the circles that are not its own trade their
+   colour for the palette's greys, so the one still lit says whose page this
+   is. */
+.tweakers-move-mod-face[data-state='inactive'] .tweakers-move-mod-dot {
+  fill: var(--move-gray);
+}
+
 .tweakers-move-mod-face[data-state='inactive'] .tweakers-move-mod-arc {
-  opacity: 0.45;
+  stroke: var(--move-gray-light);
 }
 
 .tweakers-mod-ring.tweakers-move-dial-mod {

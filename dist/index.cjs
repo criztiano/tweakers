@@ -10009,7 +10009,8 @@ function ModDot({ slot, state: state4 }) {
             mark.circles?.map((c) => /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("circle", { ...c }, `${c.cx},${c.cy}`))
           ] })
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("circle", { className: "tweakers-move-mod-well", cx: "12", cy: "12", r: "12" }),
+        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("circle", { className: "tweakers-move-mod-well", cx: "12", cy: "12", r: DOT_RADIUS }),
+        /* @__PURE__ */ (0, import_jsx_runtime14.jsx)("circle", { className: "tweakers-move-mod-track", cx: "12", cy: "12", r: DOT_RING_RADIUS }),
         /* @__PURE__ */ (0, import_jsx_runtime14.jsx)(
           "circle",
           {

@@ -6960,8 +6960,8 @@ declare function ModRing({ panelId, path, assignment, className, }: {
  * the bottom-right when it pushes down.
  *
  * While a modulator's page is open the row says whose page it is: that
- * slot's circle is `active`, the rest `inactive` — their colour drawn out to
- * grey, so the one lit circle is the one the page belongs to.
+ * slot's circle is `active`, the rest `inactive` — their colour traded for
+ * the palette's greys, so the one lit circle is the one the page belongs to.
  *
  * The arc is written straight to its dash attributes per frame, the ring's
  * own pattern, so the panel never re-renders for it. Under reduced motion
