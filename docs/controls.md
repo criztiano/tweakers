@@ -70,7 +70,7 @@ these gestures; an app wires nothing.
   (`TweakStore.getDefault`); on a colour it restores the first colour.
 - **A cycling dial takes a click as its tap** — the curve modulator's clip
   moves to its next shape; its point follows the cursor once it travels.
-- **Menu** sits in the window's top-right corner: a click is a press (the
+- **Menu** sits in the window's top-left corner: a click is a press (the
   preset navigator, or the palettes while the colour editor is up), a held
   press the hold (exploration), Shift+click the Shift layer (save).
 - **Undo, Delete and Copy** are the computer's keys: ⌘Z / Ctrl+Z (⇧ for the

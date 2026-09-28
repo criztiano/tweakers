@@ -9,7 +9,7 @@ import { MoveFunctionGlyphIcon } from './MoveFunctionChips';
 export const MOVE_MENU_HOLD_MS = 450;
 
 /**
- * The Move's Menu button on screen, pinned to the window's top-right corner:
+ * The Move's Menu button on screen, pinned to the window's top-left corner:
  * a click is a press — the preset navigator, or the palettes while the
  * colour editor is up — a held press is the hold (exploration), and
  * Shift+click the Shift layer (save). It runs whatever Menu means right now,
