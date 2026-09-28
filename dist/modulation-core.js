@@ -348,7 +348,39 @@ function restoreModParams(def, saved) {
   }
   return params;
 }
-var visibleModControls = (def, params) => def.controls.filter((c) => !c.when || c.when(params));
+var visibleModControls = (def, params) => [
+  MOD_RANGE_CONTROL,
+  ...def.controls.filter((c) => !c.when || c.when(params))
+];
+var MOD_RANGE_CONTROL = {
+  type: "select",
+  path: "range",
+  label: "Range",
+  chip: true,
+  options: [
+    { value: "positive", label: "Positive", icon: "arrow-up" },
+    { value: "bipolar", label: "Bipolar", icon: "arrow-up-down" },
+    { value: "negative", label: "Negative", icon: "arrow-down" }
+  ]
+};
+var MOD_RANGES = ["positive", "bipolar", "negative"];
+function modRange(slot) {
+  const own = slot.params.range;
+  if (MOD_RANGES.includes(own)) return own;
+  const fallback = getModType(slot.type)?.defaults.range;
+  return MOD_RANGES.includes(fallback) ? fallback : "bipolar";
+}
+function rangeSignal(level, range) {
+  const l = clamp012(level);
+  return range === "positive" ? l : range === "negative" ? -l : l * 2 - 1;
+}
+var modReach = (range) => range === "bipolar" ? 0.5 : 1;
+function modRangeArc(range, signal) {
+  const s = clamp(signal, -1, 1);
+  if (range === "positive") return { from: 0, to: Math.max(0, s) };
+  if (range === "negative") return { from: 1 + Math.min(0, s), to: 1 };
+  return { from: 0.5, to: (s + 1) / 2 };
+}
 var registry = /* @__PURE__ */ new Map();
 function registerModType(def) {
   registry.set(def.type, def);
@@ -368,8 +400,8 @@ var modKey = (panelId, path) => `${panelId}\0${path}`;
 var clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 var clamp012 = (v) => clamp(Number(v) || 0, 0, 1);
 var clampSigned = (v) => clamp(Number(v) || 0, -1, 1);
-function applyModulation(base, signal, amount, min, max) {
-  const offset = clamp(signal, -1, 1) * clamp012(amount) * (max - min) / 2;
+function applyModulation(base, signal, amount, min, max, reach = 0.5) {
+  const offset = clamp(signal, -1, 1) * clamp012(amount) * (max - min) * reach;
   return clamp(base + offset, min, max);
 }
 var MOD_RING_RADIUS = 6;
@@ -422,7 +454,7 @@ var LFO_DEF = {
   type: "lfo",
   label: "LFO",
   glyph: () => "lfo",
-  defaults: { rate: 1, division: LFO_SYNC_DEFAULT, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false },
+  defaults: { rate: 1, division: LFO_SYNC_DEFAULT, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false, range: "bipolar" },
   controls: [
     /* One slot for how fast, wearing whichever control the moment calls for:
        free-running it is a rate in Hz, synced it is a division of the bar.
@@ -488,7 +520,7 @@ var SH_DEF = {
   type: "sh",
   label: "S&H",
   glyph: () => "sh",
-  defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0 },
+  defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0, range: "bipolar" },
   controls: [
     { type: "slider", path: "rate", label: "Rate", min: 0.1, max: 30, step: 0.01, unit: "Hz", scope: true },
     { type: "slider", path: "depth", label: "Depth", min: 0, max: 1, step: 0.01 },
@@ -611,12 +643,15 @@ var ADSR_DEF = {
   // Struck by the played keys (a trigger of 'keys'), the envelope wears the
   // keys; free or looping, its own shape.
   glyph: (params) => params.trigger === "keys" ? "keys" : "adsr",
+  // An envelope rises from rest and falls back to it: it lifts a control.
+  unipolar: () => true,
   defaults: {
     attack: 10,
     decay: 300,
     sustain: 0.6,
     release: 600,
     loop: false,
+    range: "positive",
     // The attack keeps its analog leap; decay and release start straight,
     // as the design draws them — every ramp bendable from its pad.
     attackCurve: 0.5,
@@ -745,7 +780,11 @@ var CURVE_DEF = {
   type: "curve",
   label: "Curve",
   glyph: () => "curve",
+  // Continuous, the pass reads -1..1; triggering, it is a pulse off rest.
+  unipolar: (params) => params.signal === "trigger",
   defaults: {
+    // The picture reads bottom to top, so the pass lifts a control from its value.
+    range: "positive",
     duration: 2,
     sync: false,
     division: LFO_SYNC_DEFAULT,
@@ -976,10 +1015,13 @@ var AUDIO_DEF = {
   type: "audio",
   label: "Audio",
   glyph: () => "audio",
+  // Loudness, 0..1: silence rests, a hit lifts.
+  unipolar: () => true,
   defaults: {
     speed: 1,
     depth: 1,
     smooth: 0,
+    range: "positive",
     playing: true,
     loopOn: true,
     loopStart: 0,
@@ -1015,7 +1057,7 @@ var AUDIO_DEF = {
         s.pos = params.loopOn ? s.pos % 1 : 1;
       }
     }
-    let v = audioModEnv === null ? 0 : (audioModLevel(s.pos) * 2 - 1) * clamp012(params.depth);
+    let v = audioModEnv === null ? 0 : audioModLevel(s.pos) * clamp012(params.depth);
     const smooth = clamp012(params.smooth);
     if (smooth > 0 && s.out !== null) {
       const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
@@ -1071,6 +1113,7 @@ export {
   LFO_SYNC_OPTIONS,
   MOD_COLORS,
   MOD_PAGE_DIALS,
+  MOD_RANGE_CONTROL,
   MOD_RING_CIRCUMFERENCE,
   MOD_RING_RADIUS,
   MOD_SETTINGS_PANEL,
@@ -1098,7 +1141,11 @@ export {
   modKey,
   modPageLayout,
   modPageWidth,
+  modRange,
+  modRangeArc,
+  modReach,
   modRingArc,
+  rangeSignal,
   registerModType,
   restoreModParams,
   setAudioModBuffer,

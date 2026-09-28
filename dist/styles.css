@@ -385,6 +385,9 @@
      than a slot you can press, so it never reads as a control. */
   --move-slot-empty: rgba(222, 227, 201, 0.03);
   --move-chip: #41403e;
+  /* The list and enum screens' dark grey — a drawn screen set into the
+     instrument (the modulation circles' well wears it too). */
+  --move-screen: #1e1e1e;
   /* A big slot at rest sits a step quieter than the chip; the slot whose
      dial is in the hand comes back up to the chip, so the eye finds it. */
   --move-slot-rest: color-mix(in srgb, var(--move-chip) 60%, var(--move-bg));
@@ -773,9 +776,23 @@
   overflow: visible;
 }
 
-.tweakers-move-mod-track,
+.tweakers-move-mod-well {
+  fill: var(--move-screen);
+}
+
 .tweakers-move-mod-arc {
-  stroke-width: 2;
+  stroke-width: 1;
+}
+
+/* A modulator's page is open: the circles that are not its own let their
+   colour go, so the one still lit says whose page this is. */
+.tweakers-move-mod-face[data-state='inactive'] {
+  filter: grayscale(1);
+}
+
+.tweakers-move-mod-face[data-state='inactive'] .tweakers-move-mod-dot,
+.tweakers-move-mod-face[data-state='inactive'] .tweakers-move-mod-arc {
+  opacity: 0.45;
 }
 
 .tweakers-mod-ring.tweakers-move-dial-mod {

@@ -72,6 +72,8 @@ declare class ModulationStoreClass {
     private pending;
     private states;
     private signals;
+    /** Each slot's level, 0..1 — its own shape, before the range turns it. */
+    private levels;
     private sources;
     private sourceValues;
     private metas;
@@ -205,8 +207,13 @@ declare class ModulationStoreClass {
     getSources(): string[];
     setTempo(bpm: number): void;
     getTempo(): number;
-    /** A slot's live signal, -1..1. */
+    /**
+     * A slot's live signal, -1..1, turned by its range: 0..1 for a slot that
+     * pushes up, -1..0 for one that pushes down, -1..1 for both ways.
+     */
     getSignal(index: number): number;
+    /** A slot's live level, 0..1 — the modulator's own shape, whichever way it pushes. */
+    getLevel(index: number): number;
     /** Where a slot sits in its cycle, 0..1 — a curve composer's playhead. */
     getSlotPhase(index: number): number;
     /** The modulation's contribution to one control, in the control's units. */

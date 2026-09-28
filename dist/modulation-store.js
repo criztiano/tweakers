@@ -324,7 +324,33 @@ function restoreModParams(def, saved) {
   }
   return params;
 }
-var visibleModControls = (def, params) => def.controls.filter((c) => !c.when || c.when(params));
+var visibleModControls = (def, params) => [
+  MOD_RANGE_CONTROL,
+  ...def.controls.filter((c) => !c.when || c.when(params))
+];
+var MOD_RANGE_CONTROL = {
+  type: "select",
+  path: "range",
+  label: "Range",
+  chip: true,
+  options: [
+    { value: "positive", label: "Positive", icon: "arrow-up" },
+    { value: "bipolar", label: "Bipolar", icon: "arrow-up-down" },
+    { value: "negative", label: "Negative", icon: "arrow-down" }
+  ]
+};
+var MOD_RANGES = ["positive", "bipolar", "negative"];
+function modRange(slot) {
+  const own = slot.params.range;
+  if (MOD_RANGES.includes(own)) return own;
+  const fallback = getModType(slot.type)?.defaults.range;
+  return MOD_RANGES.includes(fallback) ? fallback : "bipolar";
+}
+function rangeSignal(level, range) {
+  const l = clamp012(level);
+  return range === "positive" ? l : range === "negative" ? -l : l * 2 - 1;
+}
+var modReach = (range) => range === "bipolar" ? 0.5 : 1;
 var registry = /* @__PURE__ */ new Map();
 function registerModType(def) {
   registry.set(def.type, def);
@@ -336,8 +362,8 @@ var modKey = (panelId, path) => `${panelId}\0${path}`;
 var clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 var clamp012 = (v) => clamp(Number(v) || 0, 0, 1);
 var clampSigned = (v) => clamp(Number(v) || 0, -1, 1);
-function applyModulation(base, signal, amount, min, max) {
-  const offset = clamp(signal, -1, 1) * clamp012(amount) * (max - min) / 2;
+function applyModulation(base, signal, amount, min, max, reach = 0.5) {
+  const offset = clamp(signal, -1, 1) * clamp012(amount) * (max - min) * reach;
   return clamp(base + offset, min, max);
 }
 var MOD_RING_RADIUS = 6;
@@ -382,7 +408,7 @@ var LFO_DEF = {
   type: "lfo",
   label: "LFO",
   glyph: () => "lfo",
-  defaults: { rate: 1, division: LFO_SYNC_DEFAULT, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false },
+  defaults: { rate: 1, division: LFO_SYNC_DEFAULT, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false, range: "bipolar" },
   controls: [
     /* One slot for how fast, wearing whichever control the moment calls for:
        free-running it is a rate in Hz, synced it is a division of the bar.
@@ -448,7 +474,7 @@ var SH_DEF = {
   type: "sh",
   label: "S&H",
   glyph: () => "sh",
-  defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0 },
+  defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0, range: "bipolar" },
   controls: [
     { type: "slider", path: "rate", label: "Rate", min: 0.1, max: 30, step: 0.01, unit: "Hz", scope: true },
     { type: "slider", path: "depth", label: "Depth", min: 0, max: 1, step: 0.01 },
@@ -532,12 +558,15 @@ var ADSR_DEF = {
   // Struck by the played keys (a trigger of 'keys'), the envelope wears the
   // keys; free or looping, its own shape.
   glyph: (params) => params.trigger === "keys" ? "keys" : "adsr",
+  // An envelope rises from rest and falls back to it: it lifts a control.
+  unipolar: () => true,
   defaults: {
     attack: 10,
     decay: 300,
     sustain: 0.6,
     release: 600,
     loop: false,
+    range: "positive",
     // The attack keeps its analog leap; decay and release start straight,
     // as the design draws them — every ramp bendable from its pad.
     attackCurve: 0.5,
@@ -666,7 +695,11 @@ var CURVE_DEF = {
   type: "curve",
   label: "Curve",
   glyph: () => "curve",
+  // Continuous, the pass reads -1..1; triggering, it is a pulse off rest.
+  unipolar: (params) => params.signal === "trigger",
   defaults: {
+    // The picture reads bottom to top, so the pass lifts a control from its value.
+    range: "positive",
     duration: 2,
     sync: false,
     division: LFO_SYNC_DEFAULT,
@@ -864,10 +897,13 @@ var AUDIO_DEF = {
   type: "audio",
   label: "Audio",
   glyph: () => "audio",
+  // Loudness, 0..1: silence rests, a hit lifts.
+  unipolar: () => true,
   defaults: {
     speed: 1,
     depth: 1,
     smooth: 0,
+    range: "positive",
     playing: true,
     loopOn: true,
     loopStart: 0,
@@ -903,7 +939,7 @@ var AUDIO_DEF = {
         s.pos = params.loopOn ? s.pos % 1 : 1;
       }
     }
-    let v = audioModEnv === null ? 0 : (audioModLevel(s.pos) * 2 - 1) * clamp012(params.depth);
+    let v = audioModEnv === null ? 0 : audioModLevel(s.pos) * clamp012(params.depth);
     const smooth = clamp012(params.smooth);
     if (smooth > 0 && s.out !== null) {
       const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
@@ -962,6 +998,8 @@ var ModulationStoreClass = class {
     this.pending = [];
     this.states = /* @__PURE__ */ new Map();
     this.signals = Array(MOD_SLOTS).fill(0);
+    /** Each slot's level, 0..1 — its own shape, before the range turns it. */
+    this.levels = Array(MOD_SLOTS).fill(0);
     this.sources = /* @__PURE__ */ new Map();
     this.sourceValues = /* @__PURE__ */ new Map();
     this.metas = /* @__PURE__ */ new Map();
@@ -1102,6 +1140,7 @@ var ModulationStoreClass = class {
     this.slots[index] = null;
     this.states.delete(index);
     this.signals[index] = 0;
+    this.levels[index] = 0;
     for (const [key, a] of this.assignments) {
       if (a.slot === index) this.assignments.delete(key);
     }
@@ -1264,7 +1303,8 @@ var ModulationStoreClass = class {
     return {
       dials: [{ path: "type" }, ...layout.dials].slice(0, 8),
       toggles: [null, ...layout.toggles].slice(0, 8),
-      values: [null, ...layout.values].slice(0, 8)
+      // The range chip sits under the type picker on every page.
+      values: [{ path: "range" }, ...layout.values].slice(0, 8)
     };
   }
   /** The open page's curve, sampled 0..1, and its name — the preview dial. */
@@ -1313,7 +1353,8 @@ var ModulationStoreClass = class {
           options: c.options ?? [],
           moveVisual: c.moveVisual,
           preview: c.preview,
-          default: String(slot.params[c.path] ?? def.defaults[c.path] ?? "")
+          // The range falls back past a type that names no default of its own.
+          default: c.path === "range" ? modRange(slot) : String(slot.params[c.path] ?? def.defaults[c.path] ?? "")
         };
       } else if (c.type === "slider") {
         config[c.path] = {
@@ -1455,9 +1496,16 @@ var ModulationStoreClass = class {
     return this.bpm;
   }
   /* ── reading the modulated layer ──────────────────────────────────── */
-  /** A slot's live signal, -1..1. */
+  /**
+   * A slot's live signal, -1..1, turned by its range: 0..1 for a slot that
+   * pushes up, -1..0 for one that pushes down, -1..1 for both ways.
+   */
   getSignal(index) {
     return this.signals[index] ?? 0;
+  }
+  /** A slot's live level, 0..1 — the modulator's own shape, whichever way it pushes. */
+  getLevel(index) {
+    return this.levels[index] ?? 0;
   }
   /** Where a slot sits in its cycle, 0..1 — a curve composer's playhead. */
   getSlotPhase(index) {
@@ -1477,7 +1525,8 @@ var ModulationStoreClass = class {
     if (!meta) return 0;
     const base = Number(TweakStore.getValue(panelId, path));
     if (!Number.isFinite(base)) return 0;
-    return applyModulation(base, this.signals[a.slot], a.amount, meta.min, meta.max) - base;
+    const reach = slot.source ? modReach("bipolar") : modReach(modRange(slot));
+    return applyModulation(base, this.signals[a.slot], a.amount, meta.min, meta.max, reach) - base;
   }
   /**
    * A modulatable control's bounds, or null when it has none (or its panel
@@ -1542,6 +1591,7 @@ var ModulationStoreClass = class {
           }
         }
         this.signals[slot.index] = v;
+        this.levels[slot.index] = (v + 1) / 2;
         continue;
       }
       const def = getModType(slot.type);
@@ -1551,7 +1601,10 @@ var ModulationStoreClass = class {
         state = def.createState();
         this.states.set(slot.index, state);
       }
-      this.signals[slot.index] = clamp2(def.tick(state, slot.params, step, this.bpm), -1, 1);
+      const raw = def.tick(state, slot.params, step, this.bpm);
+      const level = def.unipolar?.(slot.params) ? clamp2(raw, 0, 1) : (clamp2(raw, -1, 1) + 1) / 2;
+      this.levels[slot.index] = level;
+      this.signals[slot.index] = rangeSignal(level, modRange(slot));
     }
     this.frameListeners.forEach((fn) => fn());
   }

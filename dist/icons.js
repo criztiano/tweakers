@@ -152,6 +152,9 @@ var LUCIDE_ICONS = {
   "arrow-right": ["M5 12h14", "m12 5 7 7-7 7"],
   "arrow-left": ["M19 12H5", "m12 19-7-7 7-7"],
   "arrow-left-right": ["M8 3 4 7l4 4", "M4 7h16", "m16 21 4-4-4-4", "M20 17H4"],
+  "arrow-up": ["m5 12 7-7 7 7", "M12 19V5"],
+  "arrow-down": ["M12 5v14", "m19 12-7 7-7-7"],
+  "arrow-up-down": ["m21 16-4 4-4-4", "M17 20V4", "m3 8 4-4 4 4", "M7 4v16"],
   "fold-horizontal": [
     "M2 12h6",
     "M22 12h-6",

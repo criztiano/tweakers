@@ -856,6 +856,9 @@ var LUCIDE_ICONS = {
   "arrow-right": ["M5 12h14", "m12 5 7 7-7 7"],
   "arrow-left": ["M19 12H5", "m12 19-7-7 7-7"],
   "arrow-left-right": ["M8 3 4 7l4 4", "M4 7h16", "m16 21 4-4-4-4", "M20 17H4"],
+  "arrow-up": ["m5 12 7-7 7 7", "M12 19V5"],
+  "arrow-down": ["M12 5v14", "m19 12-7 7-7-7"],
+  "arrow-up-down": ["m21 16-4 4-4-4", "M17 20V4", "m3 8 4-4 4 4", "M7 4v16"],
   "fold-horizontal": [
     "M2 12h6",
     "M22 12h-6",
@@ -5811,7 +5814,34 @@ function modPageLayout(controls, params = {}) {
   const pad = (row) => Array.from({ length: row.length }, (_, i) => row[i] ?? null);
   return { dials, toggles: pad(toggles), values: pad(values) };
 }
-var visibleModControls = (def, params) => def.controls.filter((c) => !c.when || c.when(params));
+var visibleModControls = (def, params) => [
+  MOD_RANGE_CONTROL,
+  ...def.controls.filter((c) => !c.when || c.when(params))
+];
+var MOD_RANGE_CONTROL = {
+  type: "select",
+  path: "range",
+  label: "Range",
+  chip: true,
+  options: [
+    { value: "positive", label: "Positive", icon: "arrow-up" },
+    { value: "bipolar", label: "Bipolar", icon: "arrow-up-down" },
+    { value: "negative", label: "Negative", icon: "arrow-down" }
+  ]
+};
+var MOD_RANGES = ["positive", "bipolar", "negative"];
+function modRange(slot) {
+  const own = slot.params.range;
+  if (MOD_RANGES.includes(own)) return own;
+  const fallback = getModType(slot.type)?.defaults.range;
+  return MOD_RANGES.includes(fallback) ? fallback : "bipolar";
+}
+function modRangeArc(range, signal) {
+  const s = clamp7(signal, -1, 1);
+  if (range === "positive") return { from: 0, to: Math.max(0, s) };
+  if (range === "negative") return { from: 1 + Math.min(0, s), to: 1 };
+  return { from: 0.5, to: (s + 1) / 2 };
+}
 var registry = /* @__PURE__ */ new Map();
 function registerModType(def) {
   registry.set(def.type, def);
@@ -5831,8 +5861,8 @@ var modKey = (panelId, path) => `${panelId}\0${path}`;
 var clamp7 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 var clamp014 = (v) => clamp7(Number(v) || 0, 0, 1);
 var clampSigned = (v) => clamp7(Number(v) || 0, -1, 1);
-function applyModulation(base, signal, amount, min, max) {
-  const offset = clamp7(signal, -1, 1) * clamp014(amount) * (max - min) / 2;
+function applyModulation(base, signal, amount, min, max, reach = 0.5) {
+  const offset = clamp7(signal, -1, 1) * clamp014(amount) * (max - min) * reach;
   return clamp7(base + offset, min, max);
 }
 var MOD_RING_RADIUS = 6;
@@ -5885,7 +5915,7 @@ var LFO_DEF = {
   type: "lfo",
   label: "LFO",
   glyph: () => "lfo",
-  defaults: { rate: 1, division: LFO_SYNC_DEFAULT, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false },
+  defaults: { rate: 1, division: LFO_SYNC_DEFAULT, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false, range: "bipolar" },
   controls: [
     /* One slot for how fast, wearing whichever control the moment calls for:
        free-running it is a rate in Hz, synced it is a division of the bar.
@@ -5951,7 +5981,7 @@ var SH_DEF = {
   type: "sh",
   label: "S&H",
   glyph: () => "sh",
-  defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0 },
+  defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0, range: "bipolar" },
   controls: [
     { type: "slider", path: "rate", label: "Rate", min: 0.1, max: 30, step: 0.01, unit: "Hz", scope: true },
     { type: "slider", path: "depth", label: "Depth", min: 0, max: 1, step: 0.01 },
@@ -6074,12 +6104,15 @@ var ADSR_DEF = {
   // Struck by the played keys (a trigger of 'keys'), the envelope wears the
   // keys; free or looping, its own shape.
   glyph: (params) => params.trigger === "keys" ? "keys" : "adsr",
+  // An envelope rises from rest and falls back to it: it lifts a control.
+  unipolar: () => true,
   defaults: {
     attack: 10,
     decay: 300,
     sustain: 0.6,
     release: 600,
     loop: false,
+    range: "positive",
     // The attack keeps its analog leap; decay and release start straight,
     // as the design draws them — every ramp bendable from its pad.
     attackCurve: 0.5,
@@ -6208,7 +6241,11 @@ var CURVE_DEF = {
   type: "curve",
   label: "Curve",
   glyph: () => "curve",
+  // Continuous, the pass reads -1..1; triggering, it is a pulse off rest.
+  unipolar: (params) => params.signal === "trigger",
   defaults: {
+    // The picture reads bottom to top, so the pass lifts a control from its value.
+    range: "positive",
     duration: 2,
     sync: false,
     division: LFO_SYNC_DEFAULT,
@@ -6439,10 +6476,13 @@ var AUDIO_DEF = {
   type: "audio",
   label: "Audio",
   glyph: () => "audio",
+  // Loudness, 0..1: silence rests, a hit lifts.
+  unipolar: () => true,
   defaults: {
     speed: 1,
     depth: 1,
     smooth: 0,
+    range: "positive",
     playing: true,
     loopOn: true,
     loopStart: 0,
@@ -6478,7 +6518,7 @@ var AUDIO_DEF = {
         s.pos = params.loopOn ? s.pos % 1 : 1;
       }
     }
-    let v = audioModEnv === null ? 0 : (audioModLevel(s.pos) * 2 - 1) * clamp014(params.depth);
+    let v = audioModEnv === null ? 0 : audioModLevel(s.pos) * clamp014(params.depth);
     const smooth = clamp014(params.smooth);
     if (smooth > 0 && s.out !== null) {
       const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
@@ -9427,8 +9467,15 @@ function ModRing({
     if (!span) return;
     const still = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (still) {
-      const reach = assignment.amount / 2;
-      const drawReach = () => draw(base01() - reach, base01() + reach);
+      const slot = ModulationStore.getSlot(assignment.slot);
+      const range = slot ? modRange(slot) : "bipolar";
+      const a = assignment.amount;
+      const drawReach = () => {
+        const b = base01();
+        if (range === "positive") draw(b, b + a);
+        else if (range === "negative") draw(b - a, b);
+        else draw(b - a / 2, b + a / 2);
+      };
       drawReach();
       return TweakStore9.subscribe(panelId, drawReach);
     }
@@ -9464,7 +9511,7 @@ function ModRing({
 var DOT_RING_RADIUS = 10.5;
 var DOT_RING_CIRCUMFERENCE = 2 * Math.PI * DOT_RING_RADIUS;
 var DOT_RADIUS = 8;
-function ModDot({ slot }) {
+function ModDot({ slot, state: state4 }) {
   const arcRef = useRef12(null);
   const maskId = `tweakers-mod-dot-${useId().replace(/:/g, "")}`;
   const color = modColor(slot.index);
@@ -9476,45 +9523,56 @@ function ModDot({ slot }) {
     return ModulationStore.subscribeFrames(() => {
       const el = arcRef.current;
       if (!el) return;
-      const { length, offset } = modRingArc(0.5, (ModulationStore.getSignal(slot.index) + 1) / 2, DOT_RING_CIRCUMFERENCE);
+      const { from, to } = modRangeArc(modRange(slot), ModulationStore.getSignal(slot.index));
+      const { length, offset } = modRingArc(from, to, DOT_RING_CIRCUMFERENCE);
       el.setAttribute("stroke-dasharray", `${length.toFixed(2)} ${DOT_RING_CIRCUMFERENCE.toFixed(2)}`);
       el.setAttribute("stroke-dashoffset", offset.toFixed(2));
     });
-  }, [slot.index]);
-  return /* @__PURE__ */ jsxs10("svg", { className: "tweakers-move-mod-face", viewBox: "0 0 24 24", "aria-hidden": "true", "data-glyph": glyph ?? void 0, children: [
-    mark && /* @__PURE__ */ jsxs10("mask", { id: maskId, children: [
-      /* @__PURE__ */ jsx14("circle", { cx: "12", cy: "12", r: DOT_RADIUS, fill: "white" }),
-      /* @__PURE__ */ jsx14("g", { fill: "none", stroke: "black", strokeWidth: "1.75", strokeLinecap: "round", strokeLinejoin: "round", children: mark.paths?.map((d) => /* @__PURE__ */ jsx14("path", { d }, d)) }),
-      /* @__PURE__ */ jsxs10("g", { fill: "black", children: [
-        mark.fills?.map((d) => /* @__PURE__ */ jsx14("path", { d }, d)),
-        mark.circles?.map((c) => /* @__PURE__ */ jsx14("circle", { ...c }, `${c.cx},${c.cy}`))
-      ] })
-    ] }),
-    /* @__PURE__ */ jsx14("circle", { className: "tweakers-mod-ring-track tweakers-move-mod-track", cx: "12", cy: "12", r: DOT_RING_RADIUS }),
-    /* @__PURE__ */ jsx14(
-      "circle",
-      {
-        ref: arcRef,
-        className: "tweakers-mod-ring-arc tweakers-move-mod-arc",
-        cx: "12",
-        cy: "12",
-        r: DOT_RING_RADIUS,
-        stroke: color,
-        strokeDasharray: `0 ${DOT_RING_CIRCUMFERENCE}`
-      }
-    ),
-    /* @__PURE__ */ jsx14(
-      "circle",
-      {
-        className: "tweakers-move-mod-dot",
-        cx: "12",
-        cy: "12",
-        r: DOT_RADIUS,
-        fill: color,
-        mask: mark ? `url(#${maskId})` : void 0
-      }
-    )
-  ] });
+  }, [slot]);
+  return /* @__PURE__ */ jsxs10(
+    "svg",
+    {
+      className: "tweakers-move-mod-face",
+      viewBox: "0 0 24 24",
+      "aria-hidden": "true",
+      "data-glyph": glyph ?? void 0,
+      "data-state": state4,
+      children: [
+        mark && /* @__PURE__ */ jsxs10("mask", { id: maskId, children: [
+          /* @__PURE__ */ jsx14("circle", { cx: "12", cy: "12", r: DOT_RADIUS, fill: "white" }),
+          /* @__PURE__ */ jsx14("g", { fill: "none", stroke: "black", strokeWidth: "1.75", strokeLinecap: "round", strokeLinejoin: "round", children: mark.paths?.map((d) => /* @__PURE__ */ jsx14("path", { d }, d)) }),
+          /* @__PURE__ */ jsxs10("g", { fill: "black", children: [
+            mark.fills?.map((d) => /* @__PURE__ */ jsx14("path", { d }, d)),
+            mark.circles?.map((c) => /* @__PURE__ */ jsx14("circle", { ...c }, `${c.cx},${c.cy}`))
+          ] })
+        ] }),
+        /* @__PURE__ */ jsx14("circle", { className: "tweakers-move-mod-well", cx: "12", cy: "12", r: "12" }),
+        /* @__PURE__ */ jsx14(
+          "circle",
+          {
+            ref: arcRef,
+            className: "tweakers-mod-ring-arc tweakers-move-mod-arc",
+            cx: "12",
+            cy: "12",
+            r: DOT_RING_RADIUS,
+            stroke: color,
+            strokeDasharray: `0 ${DOT_RING_CIRCUMFERENCE}`
+          }
+        ),
+        /* @__PURE__ */ jsx14(
+          "circle",
+          {
+            className: "tweakers-move-mod-dot",
+            cx: "12",
+            cy: "12",
+            r: DOT_RADIUS,
+            fill: color,
+            mask: mark ? `url(#${maskId})` : void 0
+          }
+        )
+      ]
+    }
+  );
 }
 function MoveModRing({ panelId, path, pad }) {
   const assignment = ModulationStore.getAssignment(panelId, path);
@@ -15796,10 +15854,10 @@ var SCOPE_SAMPLES = 120;
 function MoveScope({ index }) {
   const ref = useRef15(null);
   useEffect15(() => {
-    const now = (ModulationStore2.getSignal(index) + 1) / 2;
+    const now = ModulationStore2.getLevel(index);
     const pts = Array(SCOPE_SAMPLES).fill(now);
     let raf = requestAnimationFrame(function tick() {
-      pts.push((ModulationStore2.getSignal(index) + 1) / 2);
+      pts.push(ModulationStore2.getLevel(index));
       pts.shift();
       ref.current?.setAttribute("d", moveShapePath(pts));
       raf = requestAnimationFrame(tick);
@@ -15868,12 +15926,14 @@ function stepRuns(cells) {
 function MoveModCircle({ slot }) {
   const pressAt = useRef15(0);
   const name = getModType(slot.type)?.label ?? slot.type.toUpperCase();
+  const shown = ModulationStore2.getSettings();
   return /* @__PURE__ */ jsx17(
     "button",
     {
       type: "button",
       className: "tweakers-move-mod",
       title: `${name} \xB7 step ${slot.index + 1}`,
+      "aria-pressed": shown?.index === slot.index,
       onPointerDown: () => {
         pressAt.current = Date.now();
       },
@@ -15889,7 +15949,7 @@ function MoveModCircle({ slot }) {
         if (tapped && open2 && open2.index === slot.index) ModulationStore2.closeSettings();
         else ModulationStore2.openSettings(slot.index);
       },
-      children: /* @__PURE__ */ jsx17(ModDot, { slot })
+      children: /* @__PURE__ */ jsx17(ModDot, { slot, state: shown ? shown.index === slot.index ? "active" : "inactive" : void 0 })
     }
   );
 }
@@ -17631,6 +17691,7 @@ export {
   modKey,
   modPageLayout,
   modPageWidth,
+  modRange,
   modRingArc,
   morphDNA,
   moveAppPadRow,

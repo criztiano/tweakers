@@ -54,6 +54,13 @@ type ModulationParamValue = number | boolean | string | ModulationParamValue[] |
 };
 /** Modulator settings — JSON-safe, like TweakStore values. */
 type ModulationParams = Record<string, ModulationParamValue>;
+/**
+ * Which way a modulation pushes the controls it drives: up from the value the
+ * user set, down from it, or either side of it. Every slot carries one (the
+ * `range` param); each type picks the default its signal reads as — an LFO
+ * swings both ways, an envelope rises.
+ */
+type ModRange = 'positive' | 'bipolar' | 'negative';
 interface ModulationSlot {
     /** 0..15 — the Move step button that created it, and its palette index. */
     index: number;
@@ -157,6 +164,12 @@ interface ModTypeDef {
      * can play two roles: an envelope struck by the keys wears the keys.
      */
     glyph?(params: ModulationParams): ModGlyph;
+    /**
+     * The signal `tick` returns runs 0..1 (at rest at 0: an envelope, a
+     * pulse) rather than -1..1. The engine reads it as a level either way and
+     * shapes it by the slot's range. Absent means -1..1.
+     */
+    unipolar?(params: ModulationParams): boolean;
 }
 /** One control's place on the Move page, with the gestures it answers to. */
 interface ModPageSlot {
@@ -201,6 +214,31 @@ declare function modPageLayout(controls: ModControlMeta[], params?: ModulationPa
 declare function restoreModParams(def: ModTypeDef, saved: ModulationParams): ModulationParams;
 /** The controls a page actually shows — the mode-specific ones filtered out. */
 declare const visibleModControls: (def: ModTypeDef, params: ModulationParams) => ModControlMeta[];
+/**
+ * The range picker every modulator's page carries, as a chip under the type
+ * picker — the store places it there, beside the choice it belongs with.
+ */
+declare const MOD_RANGE_CONTROL: ModControlMeta;
+/** A slot's range — its own setting, else its type's default, else both ways. */
+declare function modRange(slot: ModulationSlot): ModRange;
+/**
+ * A modulator's level (0..1, its own shape bottom to top) as the signal the
+ * controls follow: 0..1 pushing up, -1..0 pushing down, -1..1 around the
+ * value. A both-ways range at full depth spans the control once, half each
+ * side; a one-way range spans it once in its direction — see `modReach`.
+ */
+declare function rangeSignal(level: number, range: ModRange): number;
+/** How far a signal of 1 moves a control at full depth, in spans. */
+declare const modReach: (range: ModRange) => number;
+/**
+ * Where a range's arc runs on a ring for a signal, 0..1 of the sweep: out
+ * from the bottom-left for a push up, back from the bottom-right for a
+ * push down, out from the top either way for both.
+ */
+declare function modRangeArc(range: ModRange, signal: number): {
+    from: number;
+    to: number;
+};
 /** Plug a modulator type in; registering a type again replaces it. */
 declare function registerModType(def: ModTypeDef): void;
 declare const getModType: (type: ModulationType) => ModTypeDef | undefined;
@@ -219,11 +257,12 @@ declare const MOD_SETTINGS_PANEL = "mod-settings";
 /** Assignment map key — panel and path, joined on a character paths can't hold. */
 declare const modKey: (panelId: string, path: string) => string;
 /**
- * A signal applied to a control: a bipolar sweep around the base value in
- * the control's own units, clamped to its bounds — the control keeps its
- * base, the modulation dances around it.
+ * A signal applied to a control: a sweep from the base value in the
+ * control's own units, clamped to its bounds — the control keeps its base,
+ * the modulation dances off it. `reach` is how many spans a signal of 1
+ * moves it at full amount: half for a both-ways range, one for a one-way.
  */
-declare function applyModulation(base: number, signal: number, amount: number, min: number, max: number): number;
+declare function applyModulation(base: number, signal: number, amount: number, min: number, max: number, reach?: number): number;
 /**
  * The ring a modulated control wears: a dial drawn as an SVG circle of this
  * radius, sweeping a knob's 270° from the bottom-left so a value sits at the
@@ -413,4 +452,4 @@ declare function audioModLevel(position: number): number;
  */
 declare const AUDIO_DEF: ModTypeDef;
 
-export { ADSR_DEF, ADSR_STAGE_MAX, AUDIO_DEF, type AudioModWindow, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EnvStage, LFO_DEF, LFO_SYNC_DEFAULT, LFO_SYNC_DIVISIONS, LFO_SYNC_OPTIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, audioModLevel, curveComposition, curveDuration, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, getAudioModBuffer, getAudioModVersion, getAudioModWindow, getModType, lfoDivisionBeats, lfoSyncedHz, listModTypes, modColor, modGlyph, modKey, modPageLayout, modPageWidth, modRingArc, registerModType, restoreModParams, setAudioModBuffer, setAudioModWindowSource, subscribeAudioMod, visibleModControls };
+export { ADSR_DEF, ADSR_STAGE_MAX, AUDIO_DEF, type AudioModWindow, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EnvStage, LFO_DEF, LFO_SYNC_DEFAULT, LFO_SYNC_DIVISIONS, LFO_SYNC_OPTIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RANGE_CONTROL, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModRange, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, audioModLevel, curveComposition, curveDuration, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, getAudioModBuffer, getAudioModVersion, getAudioModWindow, getModType, lfoDivisionBeats, lfoSyncedHz, listModTypes, modColor, modGlyph, modKey, modPageLayout, modPageWidth, modRange, modRangeArc, modReach, modRingArc, rangeSignal, registerModType, restoreModParams, setAudioModBuffer, setAudioModWindowSource, subscribeAudioMod, visibleModControls };
