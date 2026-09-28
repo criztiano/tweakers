@@ -337,6 +337,33 @@ describe('Move gradient, balance and small colour panel', () => {
     TweakStore.unregisterPanel(cid);
   });
 
+  it('latching a chip in one column lets a chip latched in another column go', () => {
+    const cid = `${id}-one-latch`;
+    const config: Record<string, unknown> = {};
+    for (let i = 0; i < 8; i++) config[`d${i}`] = [0.5, 0, 1];
+    config.extra = [0.2, 0, 1];
+    config.ink = { type: 'color', default: '#00ff00' };
+    TweakStore.registerPanel(cid, 'OneLatch', config as never, undefined, { movePads: { extra: 1, ink: 5 } });
+    act(() => { renderer = create(createElement(MovePanel, { panels: ['OneLatch'], dock: 'flow', productionEnabled: true })); });
+    const chip = (kind: string) => renderer!.root.findAll((n) => n.type === 'button' && n.props.className === 'tweakers-move-pad' && n.props['data-kind'] === kind)[0];
+    const tap = (kind: string) => {
+      act(() => chip(kind).props.onPointerDown({ pointerId: 1, currentTarget: { setPointerCapture: vi.fn() } }));
+      act(() => chip(kind).props.onPointerUp());
+    };
+    const latches: { path: string; latched: boolean }[] = [];
+    const listen = (e: Event) => latches.push((e as CustomEvent).detail);
+    window.addEventListener('move-tweakers:latch', listen);
+    tap('value');
+    expect(chip('value').props['data-latched']).toBe(true);
+    tap('color');
+    expect(chip('color').props['data-latched']).toBe(true);
+    expect(chip('value').props['data-latched']).toBeUndefined();
+    // the hardware hears the release before the new latch
+    expect(latches.map((l) => [l.path, l.latched])).toEqual([['extra', true], ['extra', false], ['ink', true]]);
+    window.removeEventListener('move-tweakers:latch', listen);
+    TweakStore.unregisterPanel(cid);
+  });
+
   it('the hardware latching a switch-row colour substitutes it on screen too', () => {
     mountGradient();
     act(() => window.dispatchEvent(new CustomEvent('move-tweakers:override', { detail: { pageId: gid, held: {}, latched: { colorA: true } } })));
