@@ -2036,9 +2036,22 @@
   pointer-events: none;
 }
 
+/* An opacity slot's picture: the host's image itself, in its own colours,
+   covering the slot edge to edge at the value's opacity. */
+.tweakers-move-dial-photo {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+
 /* Over a picture the option's name keeps a halo of the slot's own surface,
    so it reads first whatever the picture draws behind it. */
-.tweakers-move-dial:has(> .tweakers-move-dial-picture) .tweakers-move-dial-option {
+.tweakers-move-dial:has(> .tweakers-move-dial-picture) .tweakers-move-dial-option,
+.tweakers-move-dial:has(> .tweakers-move-dial-photo) .tweakers-move-dial-option {
   text-shadow: 0 0 2px var(--move-dial-surface), 0 0 5px var(--move-dial-surface), 0 0 9px var(--move-dial-surface);
 }
 

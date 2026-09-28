@@ -58,11 +58,13 @@ describe('MovePanel semantic interactions', () => {
   it('an opacity slot with a picture shows the picture at its opacity, and a still press runs onTap', () => {
     const onTap = vi.fn();
     mount({ opacity: { ...opacity, moveVisual: { kind: 'opacity', picture: 'blob:photo' }, onTap } });
-    const image = () => dial('Opacity').findByType('image');
-    expect(image().props.href).toBe('blob:photo');
-    expect(image().props.opacity).toBe(0.5);
+    const photo = () => dial('Opacity').findByProps({ className: 'tweakers-move-dial-photo' });
+    expect(photo().props.style.backgroundImage).toBe('url("blob:photo")');
+    expect(photo().props.style.opacity).toBe(0.5);
+    // the picture is the slot's face: no name tag over it, only the reading
+    expect(dial('Opacity').findAllByProps({ className: 'tweakers-move-dial-tag' })).toHaveLength(0);
     act(() => dial('Opacity').props.onKeyDown(keyEvent('End')));
-    expect(image().props.opacity).toBe(1);
+    expect(photo().props.style.opacity).toBe(1);
     // a still press is the slot's door; a drag only turns the value
     act(() => dial('Opacity').props.onPointerDown(at(0, 0)));
     act(() => dial('Opacity').props.onPointerUp(at(0, 0)));

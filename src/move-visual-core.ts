@@ -2,9 +2,10 @@ import type { ControlMeta } from './store/TweakStore';
 
 /** Opt-in meanings for numeric Move faces. Values keep the host's units. */
 export type MoveSliderVisual =
-  /** How much something shows. With `picture` (an image URL) the slot shows
-   *  that picture itself, in its own colours, at the value's opacity — the
-   *  thing being faded rather than two circles standing for it. */
+  /** How much something shows. With `picture` (an image URL) the picture
+   *  fills the slot edge to edge, in its own colours, at the value's opacity,
+   *  with only the reading over it — the thing being faded, not two circles
+   *  standing for it. */
   | { kind: 'opacity'; opaqueValue?: number; picture?: string }
   | { kind: 'blur' }
   | { kind: 'pan'; left?: number; center?: number; right?: number }
