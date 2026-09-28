@@ -219,6 +219,59 @@ agent: {
 `projectEntries`, `timelineToSource`, `formatEntries` and `resolveBoundary`
 are exported for a host that wants the same maths on its own side.
 
+## How a reply lands
+
+- **Numbers glide.** A value the agent sets arrives over `MOVE_AGENT_GLIDE_MS`
+  (420 ms, easing out), through the values between, on screen and on the
+  Move; an undo glides back. Switches, options, colours and text land at
+  once. A value a hand moves under the glide is left alone.
+- **A plain success says "Done".** The bridge asks the model to leave the
+  message empty when it simply did what was asked; the prompt then shows one
+  word with a mark that draws itself, and the undo. A sentence appears only
+  when there is something to know — it could not, it did less or other, it
+  had to choose. An error is the sentence in red.
+- **Steps show only while it works** ("Reading the words…", "Looking at the
+  frames…"); they leave with the reply. A failed step stays, marked.
+
+## Map — where everything lives
+
+Three repos share the agent. For a session picking this up cold:
+
+| Piece | Where |
+|---|---|
+| The store side: describe controls, fit and land writes (glide), actions and their undo, the multi-pass loop, the capability handshake, `read_signal` | tweakers `src/move-agent.ts` |
+| Source-time entries, the edit map, projection, boundary resolution, the line format | tweakers `src/move-agent-perception.ts` |
+| The prompt UI (field, steps, Done, undo) and the held-wheel / wheel-click wiring | tweakers `src/components/MovePanel.tsx` (`MoveAgentPrompt`), styles `.tweakers-move-agent*` in `src/styles/theme.css` |
+| The bind: `moveKitOptions({ agent })` → `MoveAgentStore.configure` | tweakers `src/move-kit.ts` |
+| Tests | tweakers `test/move-agent*.test.ts` (unit, fake transport — no model calls) |
+| The demo's pretend media host | tweakers `demo/main.tsx` (Shift+Enter stands in for the held wheel) |
+| The bridge: the held wheel → `move-tweakers:jog-hold`; `POST /agent`, `GET /agent/capabilities`; one bare `claude -p` turn per pass; image staging; the system prompt | move `kit/move-tweakers.js`, `app/server.mjs`, `app/agent.mjs`; wire in `PROTOCOL.md`; tests `test/agent.test.mjs` with `test/fixtures/fake-claude.mjs` |
+| A host's integration (the reference one) | primecut `web/src/agent/*` (index, scene, editMap, signals, look, actions, brief), `web/src/hooks/useAgentEditor.ts`, bound in `web/src/bridge/kit.ts` |
+| A host's media index (lazy signals, proxy, contact sheet) | primecut `server/src/perception/*`, routes in `server/src/routes/mediaIndex.ts`, types in `shared/mediaIndex.ts`, python workers in `server/python/` |
+| The design and its research; the contract the three builds share | tweakers `docs/research/agent-perception.md`, `agent-perception-contract.md` |
+| The integration checklist (the agent pass) | tweakers `skills/tweakers-integration/SKILL.md` |
+
+## How to extend it
+
+- **A new signal in a host** (say `sections`): one module in `server/src/perception/` that returns entries with stable ids in source time; register it in `signals.ts`; the web adapter (`web/src/agent/signals.ts`) builds the kit signal from the menu, so nothing else changes. Say in `hint` what questions it answers, in `cost` how long it takes.
+- **A new verb in a host**: one entry in `actions` — id, label, hint, typed params (`boundary` for a place), a `run` that finishes the job in one step and returns its undo. Prefer verbs a user says aloud; leave out what has no way back.
+- **A new perception tool**: a `MoveAgentTool` with `kind: 'perceive'`, a `progress` and a `done` text, returning `text`, `images` (JPEG/PNG data URLs, ≤ 8 a pass, ≤ 600 KB each) and `entries` the model may then name as boundaries.
+- **A new kind of value the agent should see**: extend `describeAgentControls` (and `fit`) in `src/move-agent.ts`; it builds on `collectGenes` from preset exploration.
+- **Changing what the model is told**: the system prompt lives in move `app/agent.mjs`. Keep it reasoning guidance, not rules in capitals; test with real asks on a private bridge.
+- **Changing feel** (glide, Done, steps): state the feel goal in the commit, and never rewrite a test to match a number you changed.
+
+## Testing it
+
+Unit tests never call the model. For a real run: a private bridge
+(`PORT=7799 MOVE_HOST=127.0.0.1 MOVE_ENGINE=local node app/server.mjs` in
+the move repo), the host app pointed at it (`?bridge=http://localhost:7799`,
+or the app's own way), and an automated browser — the kit refuses the live
+bridge from one on purpose. Every real ask spends the subscription; keep a
+run to a handful. Never restart the live bridge (launchd, port 7787) during
+a build; it drops every open app's link until its tab reloads. Test media for
+Primecut lives in `~/Downloads/primecut-agent-tests` (a 36 s file with three
+shots, two spoken lines and three silences; a song; a real clip).
+
 ## Where the model runs
 
 By default the ask goes to the Move bridge, `POST /agent` (move repo,
