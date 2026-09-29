@@ -10,7 +10,7 @@ import { ModulationStore } from '../store/ModulationStore';
 import { modColor, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, getAudioModBuffer, setAudioModBuffer, subscribeAudioMod, getAudioModVersion, setAudioModWindowSource, getAudioModWindow, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
 import { MoveWaveform } from './MoveWaveform';
 import { MoveWaveformStore, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_PANEL, visibleWindow, moveWaveformDemoSample } from '../move-waveform';
-import { ICON_PLAY, ICON_LOOP, ICON_SEARCH } from '../icons';
+import { ICON_CLOSE, ICON_PLAY, ICON_LOOP, ICON_SEARCH } from '../icons';
 import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
@@ -979,6 +979,14 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     };
     const onJogClick = (e: Event) => {
       const view = MoveAgentStore.getView();
+      // The hardware has no lone Shift: a shifted press is the prompt's Shift tap.
+      if (view && (e as CustomEvent<{ shift?: boolean }>).detail?.shift) {
+        if (!MoveAgentStore.hasShiftTap()) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        MoveAgentStore.shiftTap();
+        return;
+      }
       if (!view || view.phase === 'thinking' || !(view.changed || view.acted) || !MoveAgentStore.canUndo()) return;
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -1820,6 +1828,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       ...(row.detail ? { detail: row.detail } : {}),
                       ...(row.checked === undefined ? {} : { checked: row.checked }),
                       ...(row.tag ? { tag: row.tag } : {}),
+                      ...(row.icon ? { icon: row.icon } : {}),
                     }),
                   })),
                   screenSearch,
@@ -1828,6 +1837,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 value={String(screenSearch ? screenSearch.cursor : screen.index)}
                 follow="center"
                 back={screenSearch ? undefined : screen.back}
+                title={screenSearch || !screen.showTitle ? undefined : screen.title}
+                align={screen.align}
                 onBack={() => MoveFunctions.run('back')}
                 onSelect={(value) => {
                   if (!value) return;
@@ -3837,7 +3848,13 @@ function MovePresetSaveInput({ suggested }: { suggested: string }) {
  */
 function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  /** Shift went down and nothing else has yet — a capital letter clears it. */
+  const shiftAlone = useRef(false);
+  const [dropping, setDropping] = useState(false);
   const float = useMoveFloat();
+  const pictures = MoveAgentStore.acceptsAttachments();
+  const hasImage = (data: DataTransfer | null) => !!data && [...data.items].some((item) => item.kind === 'file' && item.type.startsWith('image/'));
   const thinking = view.phase === 'thinking';
   useEffect(() => { if (!thinking) inputRef.current?.select(); }, [thinking]);
   const changed = view.phase !== 'thinking' && (view.changed > 0 || view.acted > 0);
@@ -3847,24 +3864,73 @@ function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
   const done = view.phase === 'done' && changed && !note;
   const steps = thinking ? view.steps : view.steps.filter((s) => s.state === 'failed');
   return (
-    <div ref={float.ref} className="tweakers-move-preset-save tweakers-move-agent" data-phase={view.phase} data-inside={float.inside || undefined}>
-      <input
-        ref={inputRef}
-        className="tweakers-move-preset-save-input tweakers-move-agent-input"
-        defaultValue={view.prompt}
-        placeholder="Ask for a change"
-        aria-label="Ask the agent for a change"
-        autoFocus
-        readOnly={thinking}
-        spellCheck={false}
-        autoComplete="off"
-        onKeyDown={(e) => {
-          e.stopPropagation();
-          if (e.key === 'Enter') void MoveAgentStore.ask(e.currentTarget.value);
-          else if (e.key === 'Escape') MoveAgentStore.close();
-          else if (e.key === 'z' && (e.metaKey || e.ctrlKey) && changed) { e.preventDefault(); void MoveAgentStore.undo(); }
-        }}
-      />
+    <div
+      ref={float.ref}
+      className="tweakers-move-preset-save tweakers-move-agent"
+      data-phase={view.phase}
+      data-inside={float.inside || undefined}
+      data-dropping={dropping || undefined}
+      onDragOver={pictures ? (e) => { if (!hasImage(e.dataTransfer)) return; e.preventDefault(); setDropping(true); } : undefined}
+      onDragLeave={pictures ? (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false); } : undefined}
+      onDrop={pictures ? (e) => { if (!hasImage(e.dataTransfer)) return; e.preventDefault(); setDropping(false); MoveAgentStore.attach(e.dataTransfer.files); inputRef.current?.focus(); } : undefined}
+    >
+      {view.attachments.length > 0 && (
+        <ul className="tweakers-move-agent-attachments" aria-label="Pictures in the prompt">
+          {view.attachments.map((a) => (
+            <li key={a.id} className="tweakers-move-agent-attachment" title={a.name}>
+              <img src={a.url} alt={a.name} />
+              <button type="button" aria-label={`Remove ${a.name}`} onClick={() => { MoveAgentStore.detach(a.id); inputRef.current?.focus(); }}>
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d={ICON_CLOSE} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                </svg>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="tweakers-move-agent-field">
+        {pictures && (
+          <>
+            <button type="button" className="tweakers-move-agent-attach" aria-label="Add a picture" title="Add a picture — or drop or paste one"
+              disabled={thinking} onClick={() => fileRef.current?.click()}>
+              <MoveSlotGlyph name="image-plus" className="tweakers-move-agent-attach-icon" />
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" multiple hidden
+              onChange={(e) => { if (e.currentTarget.files) MoveAgentStore.attach(e.currentTarget.files); e.currentTarget.value = ''; inputRef.current?.focus(); }} />
+          </>
+        )}
+        <input
+          ref={inputRef}
+          className="tweakers-move-preset-save-input tweakers-move-agent-input"
+          defaultValue={view.prompt}
+          placeholder="Ask for a change"
+          aria-label="Ask the agent for a change"
+          autoFocus
+          readOnly={thinking}
+          spellCheck={false}
+          autoComplete="off"
+          onPaste={pictures ? (e) => {
+            const files = [...e.clipboardData.files].filter((f) => f.type.startsWith('image/'));
+            if (!files.length) return;
+            e.preventDefault();
+            MoveAgentStore.attach(files);
+          } : undefined}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            shiftAlone.current = e.key === 'Shift' && !e.repeat ? true : e.key === 'Shift' ? shiftAlone.current : false;
+            if (e.key === 'Enter') void MoveAgentStore.ask(e.currentTarget.value);
+            else if (e.key === 'Escape') MoveAgentStore.close();
+            else if (e.key === 'z' && (e.metaKey || e.ctrlKey) && changed) { e.preventDefault(); void MoveAgentStore.undo(); }
+          }}
+          onKeyUp={(e) => {
+            if (e.key !== 'Shift') return;
+            const tap = shiftAlone.current;
+            shiftAlone.current = false;
+            if (tap) MoveAgentStore.shiftTap();
+          }}
+          onBlur={() => { shiftAlone.current = false; }}
+        />
+      </div>
       {steps.length > 0 && (
         <ul className="tweakers-move-agent-steps" aria-label="What the agent is doing">
           {steps.map((step, i) => (

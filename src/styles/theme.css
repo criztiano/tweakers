@@ -3966,6 +3966,115 @@
   text-align: left;
 }
 
+/* The field's row: the + for a picture, then the words. */
+.tweakers-move-agent-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tweakers-move-agent-attach {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: var(--move-radius-small);
+  background: #1e1e1e;
+  color: var(--move-text);
+  opacity: 0.6;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+
+.tweakers-move-agent-attach:hover:not(:disabled),
+.tweakers-move-agent-attach:focus-visible {
+  opacity: 1;
+  outline: none;
+}
+
+.tweakers-move-agent-attach:disabled {
+  cursor: default;
+  opacity: 0.3;
+}
+
+.tweakers-move-agent-attach-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.tweakers-move-agent-attach ~ .tweakers-move-agent-input {
+  width: 302px;
+}
+
+/* A picture being dragged over the prompt: the frame says it will take it. */
+.tweakers-move-agent[data-dropping] {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), inset 0 0 0 2px color-mix(in srgb, var(--move-text) 50%, transparent);
+}
+
+/* The pictures in the prompt, as thumbnails above the words, in the order
+   they will be read. */
+.tweakers-move-agent-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 340px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.tweakers-move-agent-attachment {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--move-radius-small);
+  overflow: hidden;
+  background: #1e1e1e;
+}
+
+.tweakers-move-agent-attachment img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tweakers-move-agent-attachment button {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--move-text);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+
+.tweakers-move-agent-attachment:hover button,
+.tweakers-move-agent-attachment button:focus-visible {
+  opacity: 1;
+  outline: none;
+}
+
+@media (hover: none) {
+  .tweakers-move-agent-attachment button { opacity: 1; }
+}
+
+.tweakers-move-agent-attachment svg {
+  width: 10px;
+  height: 10px;
+}
+
 .tweakers-move-agent[data-phase="thinking"] .tweakers-move-agent-input {
   opacity: 0.5;
 }
@@ -5703,6 +5812,75 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The chevron alone: a round button, for a list whose heading says where
+   it is. */
+.tweakers-list-screen-back[data-bare] {
+  justify-content: center;
+  width: 24px;
+  padding: 0;
+}
+
+/* The list's heading, level with the back pill and centred on the screen.
+   Brighter than an unselected row, dimmer than the selected one: it names
+   the list without competing with the choice. */
+.tweakers-list-screen-title {
+  position: absolute;
+  top: 4px;
+  left: 32px;
+  right: 32px;
+  z-index: 1;
+  height: 24px;
+  font-family: var(--move-font-label);
+  font-size: 14px;
+  line-height: 24px;
+  color: #dee3c9;
+  opacity: 0.6;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+/* A named glyph dims with the label, not with a picture's lighter 40%. */
+.tweakers-list-screen-icon[data-glyph] {
+  border-radius: 0;
+  color: #dee3c9;
+  opacity: 0.22;
+}
+
+.tweakers-list-screen-row[data-selected] .tweakers-list-screen-icon[data-glyph],
+.tweakers-list-screen-row[data-checked="true"] .tweakers-list-screen-icon[data-glyph] {
+  opacity: 1;
+}
+
+/* Rows read from the left edge: icons make one column, names start beside
+   it, a tag keeps the right end. */
+.tweakers-list-screen[data-align="start"] .tweakers-list-screen-row {
+  padding: 2px 8px 2px 10px;
+  text-align: left;
+}
+
+.tweakers-list-screen[data-align="start"] .tweakers-list-screen-icon {
+  left: 10px;
+}
+
+.tweakers-list-screen[data-align="start"] .tweakers-list-screen-row[data-icon] .tweakers-list-screen-label {
+  padding: 0 0 0 calc(var(--move-list-icon-size, 16px) + 8px);
+}
+
+.tweakers-list-screen[data-align="start"] .tweakers-list-screen-row[data-tagged]::before {
+  display: none;
+}
+
+.tweakers-list-screen[data-align="start"] .tweakers-list-screen-row[data-tagged] .tweakers-list-screen-label {
+  flex: 1 1 auto;
+}
+
+.tweakers-list-screen[data-align="start"] .tweakers-list-screen-tag {
+  flex: 0 0 auto;
 }
 
 /* A tagged row that also wears a mark keeps its tag clear of it. */

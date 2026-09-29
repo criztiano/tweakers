@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { TweakStore } from '../src/store/TweakStore';
 import { MoveAgentStore, applyAgentWrites, describeAgentControls, restoreAgentWrites, runAgentActions, type MoveAgentAction } from '../src/move-agent';
+import { MoveFunctions } from '../src/move-functions';
 
 const PANEL = 'agent-test';
 const register = () => TweakStore.registerPanel(PANEL, 'Look', {
@@ -12,7 +13,7 @@ const register = () => TweakStore.registerPanel(PANEL, 'Look', {
   tint: { type: 'color', default: '#ff0000' },
 });
 
-afterEach(() => { MoveAgentStore.close(); MoveAgentStore.configure({ actions: undefined, scene: undefined, brief: undefined, ask: undefined }); TweakStore.unregisterPanel(PANEL); });
+afterEach(() => { MoveAgentStore.close(); MoveAgentStore.configure({ actions: undefined, scene: undefined, brief: undefined, ask: undefined, attachments: undefined, onShiftTap: undefined }); TweakStore.unregisterPanel(PANEL); });
 
 describe('the agent reads the store', () => {
   it('describes every writable value with its limits and where it stands', () => {
@@ -132,5 +133,45 @@ describe('the agent uses the app\'s verbs', () => {
     await MoveAgentStore.undo();
     expect(clips).toEqual(['intro', 'interview', 'beach']);
     expect(TweakStore.getValue(PANEL, 'blur')).toBe(4);
+  });
+});
+
+describe('the prompt as a place', () => {
+  it('holds the Back key while it is open, and gives it back on close', () => {
+    let hostBack = 0;
+    const off = MoveFunctions.attach('back', () => { hostBack++; });
+    MoveAgentStore.open();
+    MoveFunctions.run('back');
+    expect(MoveAgentStore.isOpen()).toBe(false);
+    MoveFunctions.run('back');
+    expect(hostBack).toBe(1);
+    off();
+  });
+
+  it('takes pictures only when the host asks for them, and hands them to the verbs', async () => {
+    register();
+    const picture = new File([new Uint8Array([1, 2, 3])], 'hat.png', { type: 'image/png' });
+    const text = new File(['no'], 'notes.txt', { type: 'text/plain' });
+    MoveAgentStore.open();
+    MoveAgentStore.attach([picture]);
+    expect(MoveAgentStore.getView()?.attachments).toHaveLength(0);
+    MoveAgentStore.close();
+
+    let got: File[] = [];
+    let named: unknown;
+    const edit: MoveAgentAction = { id: 'edit', label: 'Edit', run: (_params, { attachments }) => { got = attachments; } };
+    MoveAgentStore.configure({ panels: 'Look', attachments: true, actions: [edit], ask: async (request) => {
+      named = request.attachments;
+      return { writes: [], actions: [{ id: 'edit' }] };
+    } });
+    MoveAgentStore.open();
+    MoveAgentStore.attach([picture, text]);
+    expect(MoveAgentStore.getView()?.attachments.map((a) => a.name)).toEqual(['hat.png']);
+    await MoveAgentStore.ask('give her the hat');
+    expect(named).toEqual([{ name: 'hat.png', type: 'image/png' }]);
+    expect(got).toEqual([picture]);
+    const id = MoveAgentStore.getView()!.attachments[0].id;
+    MoveAgentStore.detach(id);
+    expect(MoveAgentStore.getView()?.attachments).toHaveLength(0);
   });
 });
