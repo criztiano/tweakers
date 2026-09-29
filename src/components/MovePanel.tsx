@@ -979,6 +979,14 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     };
     const onJogClick = (e: Event) => {
       const view = MoveAgentStore.getView();
+      // The hardware has no lone Shift: a shifted press is the prompt's Shift tap.
+      if (view && (e as CustomEvent<{ shift?: boolean }>).detail?.shift) {
+        if (!MoveAgentStore.hasShiftTap()) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        MoveAgentStore.shiftTap();
+        return;
+      }
       if (!view || view.phase === 'thinking' || !(view.changed || view.acted) || !MoveAgentStore.canUndo()) return;
       e.preventDefault();
       e.stopImmediatePropagation();

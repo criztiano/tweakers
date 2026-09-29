@@ -156,7 +156,8 @@ agent: {
 The agent reads only the pictures' names and order (`request.attachments`);
 the files go to the verbs it calls, as their second argument. They stay in
 the prompt for the next ask until removed, and leave when it closes. A
-Shift typed as part of a capital never counts as a tap. While the prompt is
+Shift typed as part of a capital never counts as a tap; on the Move, where
+Shift never arrives alone, Shift + wheel press is the tap. While the prompt is
 open it holds the Back key, so Back — hardware, chip or Escape — closes it.
 
 An undo that cannot run should throw a short sentence ("The sample was

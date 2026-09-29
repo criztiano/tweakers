@@ -14227,6 +14227,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     };
     const onJogClick = (e) => {
       const view = MoveAgentStore.getView();
+      if (view && e.detail?.shift) {
+        if (!MoveAgentStore.hasShiftTap()) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        MoveAgentStore.shiftTap();
+        return;
+      }
       if (!view || view.phase === "thinking" || !(view.changed || view.acted) || !MoveAgentStore.canUndo()) return;
       e.preventDefault();
       e.stopImmediatePropagation();
