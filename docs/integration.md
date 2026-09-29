@@ -97,7 +97,10 @@ holding Capture opens the search on the list in focus (`MoveSearchStore`),
 and so do the small magnifier in the list screen's top-right corner and the
 `/` or ⌘F keys on the computer; typing narrows it, the wheel walks what is
 left, taking a row or Back ends it. A wheel-list row may carry `keywords` —
-words the search also finds it by (an effect's tags), never drawn.
+words the search also finds it by (an effect's tags), never drawn — and an
+`icon` (a `LUCIDE_ICONS` name or an image URL). A list of actions reads best
+with `align: 'start'`, `showTitle: true` (its `title` drawn as a heading) and
+`back: true` (the chevron alone, since the heading says where you are).
 A host that reads the wheel events for its own list yields while
 `MoveSearchStore.isOpen()`, exactly as it yields to an open navigator.
 

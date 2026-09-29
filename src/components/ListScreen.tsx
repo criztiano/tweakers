@@ -1,5 +1,5 @@
 import { useEffect, useRef, type CSSProperties, type ReactElement } from 'react';
-import { ICON_CHECK, ICON_CHEVRON_LEFT, ICON_CHEVRON_RIGHT, ICON_ELLIPSIS } from '../icons';
+import { ICON_CHECK, ICON_CHEVRON_LEFT, ICON_CHEVRON_RIGHT, ICON_ELLIPSIS, LUCIDE_ICONS } from '../icons';
 
 /** Where a row goes when it is taken, drawn at its end. `page` is a chevron —
  * the list is replaced by the one this row leads to, so the same mark reads
@@ -29,8 +29,9 @@ export type ListScreenItem =
       detail?: ListScreenDetail;
       checked?: boolean;
       /** A small picture at the row's left end — an app's icon, a file
-       * kind — as an image URL. Pinned to the edge like the mark, so a
-       * centred name stays put. The hardware screen has no room for it. */
+       * kind — as an image URL, or a glyph by its `LUCIDE_ICONS` name, which
+       * is drawn in the row's own colour. Pinned to the edge like the mark,
+       * so a centred name stays put. The hardware screen has no room for it. */
       icon?: string;
     };
 
@@ -47,6 +48,13 @@ export interface ListScreenProps {
   onSelect?: (value: string) => void;
   /** 400px with left-aligned rows, instead of the 200px centered default. */
   wide?: boolean;
+  /** `start` reads the rows from the left edge at the default width — a list
+   * of actions with icons, where the icons make a column the eye runs down
+   * and a centred name would leave them adrift. */
+  align?: 'center' | 'start';
+  /** A heading drawn at the top of the screen, level with the back pill:
+   * what the list is. Without it the list names itself only to a reader. */
+  title?: string;
   /**
    * How the view follows the selection. `nearest` (the default) scrolls only
    * far enough to bring the row into view; `center` holds the selection in
@@ -61,8 +69,10 @@ export interface ListScreenProps {
    * on it. The Back key is the gesture; the pill says where it goes. The
    * pill is drawn beside the list, not in it, so it never scrolls: it pins
    * to the nearest positioned box, which on the Move panel is the screen.
+   * `true` wears the chevron alone — for a list whose heading already says
+   * where it is, so the parent's name would only be noise.
    */
-  back?: string;
+  back?: string | true;
   /** Called when the back pill is clicked. Without it the pill is only a sign. */
   onBack?: () => void;
   className?: string;
@@ -118,6 +128,18 @@ function ListScreenMark({ detail, checked }: { detail?: ListScreenDetail; checke
   );
 }
 
+/** A row's icon named from the bundled Lucide set: stroked in currentColor,
+ * so it dims and brightens with the row instead of keeping a picture's own
+ * colours. */
+function ListScreenGlyph({ name }: { name: string }) {
+  return (
+    <svg className="tweakers-list-screen-icon" data-glyph viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {LUCIDE_ICONS[name].map((d) => <path key={d} d={d} />)}
+    </svg>
+  );
+}
+
 /**
  * The Move's dark list screen (Figma node "list screen"): a column of
  * single-line rows on the display surface. Unselected rows sit dim at 22%
@@ -138,6 +160,8 @@ export function ListScreen({
   value,
   onSelect,
   wide,
+  align = 'center',
+  title,
   follow = 'nearest',
   back,
   onBack,
@@ -216,16 +240,18 @@ export function ListScreen({
       <button
           type="button"
           className="tweakers-list-screen-back"
-          aria-label={`Back to ${back}`}
+          aria-label={back === true ? 'Back' : `Back to ${back}`}
+          data-bare={back === true || undefined}
           disabled={!onBack}
           onClick={onBack}
         >
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path d={ICON_CHEVRON_LEFT} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          <span className="tweakers-list-screen-back-label">{back}</span>
+          {back !== true && <span className="tweakers-list-screen-back-label">{back}</span>}
         </button>
     )}
+    {title && <div className="tweakers-list-screen-title" aria-hidden="true">{title}</div>}
     <div
       ref={rootRef}
       className={rootClassName}
@@ -235,7 +261,8 @@ export function ListScreen({
       aria-label={label}
       aria-multiselectable={multiselect || undefined}
       onKeyDown={onKeyDown}
-      data-back={back ? true : undefined}
+      data-back={back || title ? true : undefined}
+      data-align={align === 'start' ? 'start' : undefined}
     >
       {items.map((item) => {
         const rowValue = itemValue(item);
@@ -262,7 +289,9 @@ export function ListScreen({
             onFocus={() => onFocusItem?.(rowValue)}
             onClick={() => onSelect?.(rowValue)}
           >
-            {icon && <img className="tweakers-list-screen-icon" src={icon} alt="" aria-hidden="true" />}
+            {icon && (LUCIDE_ICONS[icon]
+              ? <ListScreenGlyph name={icon} />
+              : <img className="tweakers-list-screen-icon" src={icon} alt="" aria-hidden="true" />)}
             <span className="tweakers-list-screen-label">{itemLabel(item)}</span>
             {tag && <span className="tweakers-list-screen-tag">{tag}</span>}
             {(detail || checked) && <ListScreenMark detail={detail} checked={checked} />}

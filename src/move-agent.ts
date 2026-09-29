@@ -34,6 +34,7 @@
  * named by — is in `move-agent-perception`.
  */
 
+import { MoveFunctions } from './move-functions';
 import { TweakStore } from './store/TweakStore';
 import type { ControlMeta, TweakValue } from './store/TweakStore';
 import { collectGenes, fitGene } from './preset-genetics';
@@ -76,6 +77,16 @@ export interface MoveAgentParam {
 }
 /** Whatever an action returns that is a function is its undo. */
 export type MoveAgentActionResult = void | (() => void | Promise<void>);
+/** A picture the user put in the prompt — dropped, pasted or chosen. */
+export interface MoveAgentAttachment {
+  id: string;
+  name: string;
+  file: File;
+  /** An object URL for the chip's thumbnail; revoked when the chip goes. */
+  url: string;
+}
+/** What an action gets besides its arguments: the ask's own pictures. */
+export interface MoveAgentRunContext { attachments: File[] }
 /** One verb of the app, offered to the agent on purpose. */
 export interface MoveAgentAction {
   id: string;
@@ -83,7 +94,7 @@ export interface MoveAgentAction {
   /** What it does and when to reach for it — the agent reads this, not the code. */
   hint?: string;
   params?: Record<string, MoveAgentParam>;
-  run(params: Record<string, MoveAgentArg>): MoveAgentActionResult | Promise<MoveAgentActionResult>;
+  run(params: Record<string, MoveAgentArg>, context: MoveAgentRunContext): MoveAgentActionResult | Promise<MoveAgentActionResult>;
 }
 export interface MoveAgentCall { id: string; params?: Record<string, MoveAgentParamValue | MoveAgentBoundaryRef> }
 /** A param as it travels: its options and nothing to call. */
@@ -111,6 +122,9 @@ export interface MoveAgentRequest {
   history?: MoveAgentPass[];
   /** How many more times the reply may be calls. At 0 it must be the answer. */
   passesLeft?: number;
+  /** The pictures in the prompt, in the order they were added — named, not
+   *  sent: the actions receive the files. */
+  attachments?: { name: string; type: string }[];
 }
 /**
  * Actions run first, in order; the writes land after them. A reply with
@@ -150,6 +164,12 @@ export interface MoveAgentOptions {
    * nothing to do, failed (`error`), or let go (`cancelled`).
    */
   onRequest?: { begin?: (prompt: string) => void | Promise<void>; end?: (outcome: MoveAgentOutcome) => void };
+  /** The prompt takes pictures: drop, paste, or its + button. They go to the
+   *  actions, never to the agent, which only reads their names. */
+  attachments?: boolean;
+  /** Shift pressed and let go on its own in the prompt — a capital letter
+   *  never counts. The host's door to settings it keeps beside the words. */
+  onShiftTap?: () => void;
 }
 
 export type MoveAgentPhase = 'prompt' | 'thinking' | 'done' | 'error';
@@ -167,6 +187,8 @@ export interface MoveAgentView {
   skipped: number;
   /** What it read and looked at on the way, as it happens. */
   steps: MoveAgentStep[];
+  /** The pictures in the prompt. They stay for the next ask until removed. */
+  attachments: MoveAgentAttachment[];
 }
 
 interface Entry { panelId: string; path: string; component?: string; gene?: GeneParameter; control: MoveAgentControl }
@@ -360,7 +382,7 @@ function fitParams(declared: Record<string, MoveAgentParam> | undefined, given: 
  * resolved as its call comes up, not before — the step ahead of it may have
  * moved the edit. Returns the undos handed back.
  */
-export async function runAgentActions(calls: MoveAgentCall[], actions: MoveAgentAction[], resolve?: ResolveBoundary): Promise<{ ran: number; skipped: number; undos: (() => void | Promise<void>)[]; undoable: boolean; error?: string }> {
+export async function runAgentActions(calls: MoveAgentCall[], actions: MoveAgentAction[], resolve?: ResolveBoundary, context: MoveAgentRunContext = { attachments: [] }): Promise<{ ran: number; skipped: number; undos: (() => void | Promise<void>)[]; undoable: boolean; error?: string }> {
   const undos: (() => void | Promise<void>)[] = [];
   let ran = 0, skipped = 0, undoable = true;
   for (const call of calls) {
@@ -368,7 +390,7 @@ export async function runAgentActions(calls: MoveAgentCall[], actions: MoveAgent
     const params = action && fitParams(action.params, call.params, resolve);
     if (!action || !params) { skipped++; continue; }
     try {
-      const undo = await action.run(params);
+      const undo = await action.run(params, context);
       ran++;
       if (typeof undo === 'function') undos.push(undo); else undoable = false;
     } catch (error) {
@@ -484,6 +506,8 @@ class MoveAgentStoreClass {
   /** What the bridge said it can do, kept per url — and forgotten when it fails. */
   private caps: { url: string; maxPasses?: number; images: boolean } | null = null;
   private version = 0;
+  private attachmentId = 0;
+  private releaseBack: (() => void) | null = null;
   private listeners = new Set<() => void>();
 
   getView = (): MoveAgentView | null => this.view;
@@ -499,17 +523,43 @@ class MoveAgentStoreClass {
   configure(options: MoveAgentOptions) { this.options = { ...this.options, ...options }; }
   canUndo = (): boolean => !!this.before || this.undos.length > 0;
 
-  /** Open the prompt; `focus` is the page in front of the user. */
+  /** Open the prompt; `focus` is the page in front of the user. The Back key
+   *  closes it while it stands, and goes back to whatever had it after. */
   open(focus?: string) {
     this.focus = focus;
-    if (!this.view) this.set({ phase: 'prompt', prompt: '', message: '', changed: 0, acted: 0, skipped: 0, steps: [] });
+    if (this.view) return;
+    this.releaseBack = MoveFunctions.push('back', () => this.close(), { label: 'Close', chip: false });
+    this.set({ phase: 'prompt', prompt: '', message: '', changed: 0, acted: 0, skipped: 0, steps: [], attachments: [] });
   }
 
   /** Close — and let go of an ask still in the air, its tools with it. What landed stays. */
   close() {
     this.flight?.abort();
     this.flight = null;
-    if (this.view) this.set(null);
+    this.releaseBack?.();
+    this.releaseBack = null;
+    if (!this.view) return;
+    for (const a of this.view.attachments) URL.revokeObjectURL(a.url);
+    this.set(null);
+  }
+
+  acceptsAttachments = (): boolean => this.options.attachments === true;
+  shiftTap(): void { this.options.onShiftTap?.(); }
+  hasShiftTap = (): boolean => !!this.options.onShiftTap;
+
+  /** Put pictures in the open prompt; anything that is not an image is left out. */
+  attach(files: Iterable<File>) {
+    if (!this.view || !this.acceptsAttachments()) return;
+    const added = [...files].filter((f) => f.type.startsWith('image/'))
+      .map((file): MoveAgentAttachment => ({ id: `a${++this.attachmentId}`, name: file.name || 'Pasted image', file, url: URL.createObjectURL(file) }));
+    if (added.length) this.set({ ...this.view, attachments: [...this.view.attachments, ...added] });
+  }
+
+  detach(id: string) {
+    const gone = this.view?.attachments.find((a) => a.id === id);
+    if (!this.view || !gone) return;
+    URL.revokeObjectURL(gone.url);
+    this.set({ ...this.view, attachments: this.view.attachments.filter((a) => a !== gone) });
   }
 
   toggle(focus?: string) { if (this.view) this.close(); else this.open(focus); }
@@ -517,7 +567,8 @@ class MoveAgentStoreClass {
   async ask(prompt: string): Promise<void> {
     const text = prompt.trim();
     if (!this.view || !text || this.view.phase === 'thinking') return;
-    const idle = { prompt: text, message: '', changed: 0, acted: 0, skipped: 0, steps: [] as MoveAgentStep[] };
+    const attachments = this.view.attachments;
+    const idle = { prompt: text, message: '', changed: 0, acted: 0, skipped: 0, steps: [] as MoveAgentStep[], attachments };
     const flight = (this.flight = new AbortController());
     this.set({ ...idle, phase: 'thinking' });
     let late = false;
@@ -555,6 +606,7 @@ class MoveAgentStoreClass {
         const passesLeft = maxPasses - pass;
         reply = await abortable((this.options.ask ?? this.askBridge)({
           prompt: text, context: this.options.context, brief: this.options.brief, focus, scene, controls,
+          ...(attachments.length ? { attachments: attachments.map((a) => ({ name: a.name, type: a.file.type })) } : {}),
           actions: actions.length ? actions.map(describeAction) : undefined,
           ...(tools.length ? {
             tools: tools.map(describeTool),
@@ -572,20 +624,20 @@ class MoveAgentStoreClass {
       clearTimeout(budget);
       if (flight.signal.aborted) { outcome.cancelled = true; return; }
       // Actions first: a verb may reshape what the values then land on.
-      const acted = await runAgentActions(calls, actions, resolve);
+      const acted = await runAgentActions(calls, actions, resolve, { attachments: attachments.map((a) => a.file) });
       const { before, changed } = applyAgentWrites(reply.writes ?? [], this.options.panels);
       if (changed || acted.ran) { this.before = changed ? before : null; this.undos = acted.undos; }
       Object.assign(outcome, { changed, acted: acted.ran, skipped: acted.skipped }, acted.error ? { error: acted.error } : {});
       const moved = changed > 0 || acted.ran > 0;
       const unanswered = !moved && !!reply.calls?.length && tools.length > 0;
       if (this.view) this.set({
-        phase: acted.error ? 'error' : 'done', prompt: text, changed, acted: acted.ran, skipped: acted.skipped, steps: this.view.steps,
+        phase: acted.error ? 'error' : 'done', prompt: text, changed, acted: acted.ran, skipped: acted.skipped, steps: this.view.steps, attachments: this.view.attachments,
         message: acted.error ?? (reply.message || (unanswered ? 'It kept looking and ran out of passes. Nothing changed.' : moved ? '' : 'Nothing changed.')),
       });
     } catch (error) {
       if (flight.signal.aborted && !late) { outcome.cancelled = true; return; }
       outcome.error = late ? 'That took too long, so it was stopped. Nothing changed.' : error instanceof Error ? error.message : 'The agent did not answer.';
-      if (this.view) this.set({ ...idle, steps: this.view.steps, phase: 'error', message: outcome.error });
+      if (this.view) this.set({ ...idle, steps: this.view.steps, attachments: this.view.attachments, phase: 'error', message: outcome.error });
     } finally {
       clearTimeout(budget);
       if (this.flight === flight) this.flight = null;

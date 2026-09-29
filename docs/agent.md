@@ -143,6 +143,22 @@ do, failed (`error` carries the note the user read) or let go (`cancelled`).
 `checkpoint` is not this: it runs only before an answer *with actions* lands
 — the host's save point — and a failure there lands nothing.
 
+### Pictures in the prompt, and the Shift tap
+
+```ts
+agent: {
+  attachments: true,                                    // drop, paste, or the prompt's + button
+  onShiftTap: () => showSettingsFor(currentVerb),       // Shift pressed and released alone
+}
+// a verb gets the files: run: (params, { attachments }) => edit(params.prompt, attachments)
+```
+
+The agent reads only the pictures' names and order (`request.attachments`);
+the files go to the verbs it calls, as their second argument. They stay in
+the prompt for the next ask until removed, and leave when it closes. A
+Shift typed as part of a capital never counts as a tap. While the prompt is
+open it holds the Back key, so Back — hardware, chip or Escape — closes it.
+
 An undo that cannot run should throw a short sentence ("The sample was
 changed by hand since."). The prompt shows the first one — `Could not undo:
 …` — and logs the rest with `console.warn`; "Some of it could not be undone."

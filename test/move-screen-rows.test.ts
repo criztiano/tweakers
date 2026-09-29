@@ -36,6 +36,22 @@ describe('the list a wheel is walking', () => {
     expect(renderToStaticMarkup(createElement(ListScreen, { items: ['Amen'] }))).not.toContain('tweakers-list-screen-back');
   });
 
+  it('can wear the chevron alone, a heading, and rows read from the left with glyphs', () => {
+    const html = renderToStaticMarkup(createElement(ListScreen, {
+      items: [{ value: '0', label: 'Upscale', icon: 'image-upscale', tag: '$0.08' }, { value: '1', label: 'Logo', icon: 'https://x.test/a.png' }],
+      value: '0', back: true, title: 'Edit Image', align: 'start', onBack: () => {},
+    }));
+    expect(html).toContain('data-bare="true"');
+    expect(html).toContain('aria-label="Back"');
+    expect(html).not.toContain('tweakers-list-screen-back-label');
+    expect(html).toContain('>Edit Image</div>');
+    expect(html).toContain('data-align="start"');
+    expect(html).toContain('data-glyph="true"');
+    expect(html).toContain('src="https://x.test/a.png"');
+    // a centred list keeps no alignment mark
+    expect(renderToStaticMarkup(createElement(ListScreen, { items: ['Amen'] }))).not.toContain('data-align');
+  });
+
   it('draws where a row leads, and what is switched on', () => {
     const html = renderToStaticMarkup(createElement(ListScreen, {
       items: rows.map((row, i) => ({
