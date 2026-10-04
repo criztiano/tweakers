@@ -1,11 +1,45 @@
 import { C as ControlMeta } from './TweakStore-Bk855TFI.js';
 import { CurveType, CurveComposition } from './curve-composer-core.js';
+import { ModGlyph } from './icons.js';
 import './gradient-core.js';
 import './color-core.js';
 import './xy-pad-core.js';
 import './transfer-core.js';
 import './filter-core.js';
 import './range-slider-core.js';
+
+/**
+ * The Move's colours, on screen.
+ *
+ * The hardware has one 128-entry LED palette and the index-to-colour map is
+ * not guessable — every colour the instrument lights was picked by eye on the
+ * device (see `HUE` in the move repo's surface engine, and its
+ * `scripts/palette.mjs`). These are the screen's answer to those colours, so a
+ * thing that is lime in the hand is the same lime on the glass.
+ *
+ * The hardware index each one matches is noted beside it. Keep the two lists
+ * in step: a colour added here without a hue on the device, or the other way
+ * round, is a colour the two surfaces cannot agree on.
+ *
+ * `purple` (hardware 101) and `rose` (hardware 1) have no screen counterpart
+ * yet — the reserved row rests at rose on the device.
+ */
+declare const MOVE_PALETTE: {
+    readonly red: "#fd3c57";
+    readonly orange: "#fd6b59";
+    readonly yellow: "#f2cf43";
+    readonly lime: "#a3f243";
+    readonly emerald: "#00ed95";
+    readonly blue: "#698eff";
+    readonly indigo: "#8660c3";
+    readonly pink: "#fe92d5";
+    readonly white: "#ffffff";
+    readonly grayLight: "#cac5cc";
+    readonly gray: "#555162";
+    readonly black: "#0e0e16";
+    readonly brown: "#856643";
+};
+type MovePaletteName = keyof typeof MOVE_PALETTE;
 
 /**
  * The modulation layer's shared ground — types, palette, math, and the
@@ -34,9 +68,15 @@ import './range-slider-core.js';
 /** One slot per Move sequencer step button. */
 declare const MOD_SLOTS = 16;
 /**
- * The modulation palette, one colour per slot — sixteen hues around the
- * wheel, tuned to sit with the Move's track colours on the dark panel.
+ * The modulation palette, one colour per slot — the Move's own hues, the
+ * set the hardware lights, so a slot is the same colour on the glass and on
+ * its step button. Not in wheel order: each slot sits three hues round the
+ * wheel from the one before it, so neighbours on the step row never read
+ * alike. The palette has eight hues and the row sixteen steps, so the second
+ * eight repeat the first; a slot's mark says which modulator it is.
+ * The move kit's step-light table (MOD_LED) follows this order.
  */
+declare const MOD_COLOR_NAMES: readonly MovePaletteName[];
 declare const MOD_COLORS: string[];
 /** A slot's palette colour — the one constant identity it keeps. */
 declare const modColor: (index: number) => string;
@@ -53,6 +93,13 @@ type ModulationParamValue = number | boolean | string | ModulationParamValue[] |
 };
 /** Modulator settings — JSON-safe, like TweakStore values. */
 type ModulationParams = Record<string, ModulationParamValue>;
+/**
+ * Which way a modulation pushes the controls it drives: up from the value the
+ * user set, down from it, or either side of it. Every slot carries one (the
+ * `range` param); each type picks the default its signal reads as — an LFO
+ * swings both ways, an envelope rises.
+ */
+type ModRange = 'positive' | 'bipolar' | 'negative';
 interface ModulationSlot {
     /** 0..15 — the Move step button that created it, and its palette index. */
     index: number;
@@ -150,6 +197,18 @@ interface ModTypeDef {
      * leave it out and the store ignores the call.
      */
     gate?(state: unknown, on: boolean): void;
+    /**
+     * The mark cut out of the slot's dot in the step row, so a row of circles
+     * says which modulator is which. A function of the params, because one type
+     * can play two roles: an envelope struck by the keys wears the keys.
+     */
+    glyph?(params: ModulationParams): ModGlyph;
+    /**
+     * The signal `tick` returns runs 0..1 (at rest at 0: an envelope, a
+     * pulse) rather than -1..1. The engine reads it as a level either way and
+     * shapes it by the slot's range. Absent means -1..1.
+     */
+    unipolar?(params: ModulationParams): boolean;
 }
 /** One control's place on the Move page, with the gestures it answers to. */
 interface ModPageSlot {
@@ -194,9 +253,36 @@ declare function modPageLayout(controls: ModControlMeta[], params?: ModulationPa
 declare function restoreModParams(def: ModTypeDef, saved: ModulationParams): ModulationParams;
 /** The controls a page actually shows — the mode-specific ones filtered out. */
 declare const visibleModControls: (def: ModTypeDef, params: ModulationParams) => ModControlMeta[];
+/**
+ * The range picker every modulator's page carries, as a chip under the type
+ * picker — the store places it there, beside the choice it belongs with.
+ */
+declare const MOD_RANGE_CONTROL: ModControlMeta;
+/** A slot's range — its own setting, else its type's default, else both ways. */
+declare function modRange(slot: ModulationSlot): ModRange;
+/**
+ * A modulator's level (0..1, its own shape bottom to top) as the signal the
+ * controls follow: 0..1 pushing up, -1..0 pushing down, -1..1 around the
+ * value. A both-ways range at full depth spans the control once, half each
+ * side; a one-way range spans it once in its direction — see `modReach`.
+ */
+declare function rangeSignal(level: number, range: ModRange): number;
+/** How far a signal of 1 moves a control at full depth, in spans. */
+declare const modReach: (range: ModRange) => number;
+/**
+ * Where a range's arc runs on a ring for a signal, 0..1 of the sweep: out
+ * from the bottom-left for a push up, back from the bottom-right for a
+ * push down, out from the top either way for both.
+ */
+declare function modRangeArc(range: ModRange, signal: number): {
+    from: number;
+    to: number;
+};
 /** Plug a modulator type in; registering a type again replaces it. */
 declare function registerModType(def: ModTypeDef): void;
 declare const getModType: (type: ModulationType) => ModTypeDef | undefined;
+/** The mark a slot's dot wears — null for a type that names none (a plain dot). */
+declare const modGlyph: (slot: ModulationSlot) => ModGlyph | null;
 /** The registered types, registration order — the settings page's type enum. */
 declare const listModTypes: () => ModTypeDef[];
 /**
@@ -210,11 +296,12 @@ declare const MOD_SETTINGS_PANEL = "mod-settings";
 /** Assignment map key — panel and path, joined on a character paths can't hold. */
 declare const modKey: (panelId: string, path: string) => string;
 /**
- * A signal applied to a control: a bipolar sweep around the base value in
- * the control's own units, clamped to its bounds — the control keeps its
- * base, the modulation dances around it.
+ * A signal applied to a control: a sweep from the base value in the
+ * control's own units, clamped to its bounds — the control keeps its base,
+ * the modulation dances off it. `reach` is how many spans a signal of 1
+ * moves it at full amount: half for a both-ways range, one for a one-way.
  */
-declare function applyModulation(base: number, signal: number, amount: number, min: number, max: number): number;
+declare function applyModulation(base: number, signal: number, amount: number, min: number, max: number, reach?: number): number;
 /**
  * The ring a modulated control wears: a dial drawn as an SVG circle of this
  * radius, sweeping a knob's 270° from the bottom-left so a value sits at the
@@ -227,9 +314,10 @@ declare const MOD_RING_CIRCUMFERENCE: number;
  * pattern that draws it: SVG lays a circle's path clockwise from 3 o'clock,
  * so a dash of `length` pushed to `offset` lands exactly on the arc.
  * Feed it base and modulated value and the ring shows where the modulation
- * is holding the control right now.
+ * is holding the control right now. A ring of another size passes its own
+ * circumference; the sweep is the same.
  */
-declare function modRingArc(from01: number, to01: number): {
+declare function modRingArc(from01: number, to01: number, circumference?: number): {
     length: number;
     offset: number;
 };
@@ -403,4 +491,4 @@ declare function audioModLevel(position: number): number;
  */
 declare const AUDIO_DEF: ModTypeDef;
 
-export { ADSR_DEF, ADSR_STAGE_MAX, AUDIO_DEF, type AudioModWindow, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EnvStage, LFO_DEF, LFO_SYNC_DEFAULT, LFO_SYNC_DIVISIONS, LFO_SYNC_OPTIONS, MOD_COLORS, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, audioModLevel, curveComposition, curveDuration, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, getAudioModBuffer, getAudioModVersion, getAudioModWindow, getModType, lfoDivisionBeats, lfoSyncedHz, listModTypes, modColor, modKey, modPageLayout, modPageWidth, modRingArc, registerModType, restoreModParams, setAudioModBuffer, setAudioModWindowSource, subscribeAudioMod, visibleModControls };
+export { ADSR_DEF, ADSR_STAGE_MAX, AUDIO_DEF, type AudioModWindow, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EnvStage, LFO_DEF, LFO_SYNC_DEFAULT, LFO_SYNC_DIVISIONS, LFO_SYNC_OPTIONS, MOD_COLORS, MOD_COLOR_NAMES, MOD_PAGE_DIALS, MOD_RANGE_CONTROL, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModRange, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, audioModLevel, curveComposition, curveDuration, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, getAudioModBuffer, getAudioModVersion, getAudioModWindow, getModType, lfoDivisionBeats, lfoSyncedHz, listModTypes, modColor, modGlyph, modKey, modPageLayout, modPageWidth, modRange, modRangeArc, modReach, modRingArc, rangeSignal, registerModType, restoreModParams, setAudioModBuffer, setAudioModWindowSource, subscribeAudioMod, visibleModControls };

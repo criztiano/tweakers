@@ -46,12 +46,13 @@ describe('the audio modulator', () => {
     expect(AUDIO_DEF.tick(state, AUDIO_DEF.defaults, 1 / 60, 120)).toBe(0);
   });
 
-  it('follows the sample: quiet half low, loud half high', () => {
+  it('follows the sample: quiet half at rest, loud half high', () => {
     setAudioModBuffer(halfLoudBuffer());
     const state = AUDIO_DEF.createState();
     const params = { ...AUDIO_DEF.defaults };
-    // A quarter second in: still in the silent half.
-    expect(tickTo(state, params, 0.25)).toBeCloseTo(-1, 1);
+    // A quarter second in: still in the silent half — loudness rests at 0,
+    // and the slot's range decides which way a hit pushes.
+    expect(tickTo(state, params, 0.25)).toBeCloseTo(0, 1);
     // Well past the middle: the loud half.
     expect(tickTo(state, params, 0.4)).toBeCloseTo(1, 1);
   });

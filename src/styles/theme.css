@@ -773,10 +773,34 @@
   border-radius: 50%;
 }
 
-@media (prefers-reduced-motion: reduce) {
-.tweakers-move-mod-dot {
-    transform: none !important;
-  }
+/* A modulation slot's face: its type's mark cut from the dot, and a ring
+   swinging with its live signal. The face fills the circle it sits in. */
+.tweakers-move-mod-face {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.tweakers-move-mod-arc {
+  fill: none;
+  stroke-width: 2;
+}
+
+/* A modulation circle is its dot and its ring alone, on the panel — no
+   slot disc behind it, the panel showing through the mark. */
+.tweakers-move-mod:has(> .tweakers-move-mod-face) {
+  background: transparent;
+}
+
+/* A modulator's page is open: the circles that are not its own trade their
+   colour for the palette's greys, so the one still lit says whose page this
+   is. */
+.tweakers-move-mod-face[data-state='inactive'] .tweakers-move-mod-dot {
+  fill: var(--move-gray);
+}
+
+.tweakers-move-mod-face[data-state='inactive'] .tweakers-move-mod-arc {
+  stroke: var(--move-gray-light);
 }
 
 .tweakers-mod-ring.tweakers-move-dial-mod {

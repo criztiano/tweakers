@@ -857,6 +857,9 @@ var LUCIDE_ICONS = {
   "arrow-right": ["M5 12h14", "m12 5 7 7-7 7"],
   "arrow-left": ["M19 12H5", "m12 19-7-7 7-7"],
   "arrow-left-right": ["M8 3 4 7l4 4", "M4 7h16", "m16 21 4-4-4-4", "M20 17H4"],
+  "arrow-up": ["m5 12 7-7 7 7", "M12 19V5"],
+  "arrow-down": ["M12 5v14", "m19 12-7 7-7-7"],
+  "arrow-up-down": ["m21 16-4 4-4-4", "M17 20V4", "m3 8 4-4 4 4", "M7 4v16"],
   "fold-horizontal": [
     "M2 12h6",
     "M22 12h-6",
@@ -1060,6 +1063,32 @@ var LUCIDE_ICONS = {
 };
 var ICON_BADGE_OFF = "M17.203 19.3594L4.6875 6.7969C3.6094 8.25 3 10.0781 3 12C3 16.9688 7.031 21 12 21C13.969 21 15.75 20.3906 17.203 19.3594ZM19.359 17.2031C20.391 15.75 21 13.9219 21 12C21 7.0312 16.969 3 12 3C10.078 3 8.25 3.6094 6.797 4.6875L19.359 17.2031ZM0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24C5.391 24 0 18.6094 0 12Z";
 var ICON_BADGE_ON = "M12 24C5.391 24 0 18.6094 0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24ZM17.531 6.8438C17.016 6.4688 16.313 6.5625 15.984 7.0781L10.359 14.7656L7.922 12.3281C7.5 11.9062 6.75 11.9062 6.328 12.3281C5.906 12.7969 5.906 13.5 6.328 13.9219L9.703 17.2969C9.937 17.5312 10.266 17.6719 10.594 17.625C10.922 17.625 11.203 17.4375 11.391 17.1562L17.766 8.3906C18.141 7.9219 18.047 7.2188 17.531 6.8438Z";
+var MOD_GLYPHS = {
+  lfo: { paths: ["M3.5 12C5.75 5.75 9.5 5.75 12 12C14.5 18.25 18.25 18.25 20.5 12"] },
+  sh: {
+    circles: [
+      { cx: "8.75", cy: "8.75", r: "1.4" },
+      { cx: "15.25", cy: "8.75", r: "1.4" },
+      { cx: "12", cy: "12", r: "1.4" },
+      { cx: "8.75", cy: "15.25", r: "1.4" },
+      { cx: "15.25", cy: "15.25", r: "1.4" }
+    ]
+  },
+  adsr: { paths: ["M3 18L8.75 7.5L12.25 12.75H15.5L21 18"] },
+  keys: {
+    fills: [
+      "M8.1 2H10.9V11.1A1.4 1.4 0 0 1 8.1 11.1Z",
+      "M13.1 2H15.9V11.1A1.4 1.4 0 0 1 13.1 11.1Z"
+    ],
+    paths: ["M9.5 12.5V22", "M14.5 12.5V22"]
+  },
+  curve: { paths: ["M2.5 16.25H5C8 16.25 8.25 8.25 12 8.25C15.75 8.25 16 16.25 19 16.25H21.5"] },
+  audio: {
+    circles: [{ cx: "8.75", cy: "15.5", r: "2.25" }, { cx: "15", cy: "14.25", r: "2.25" }],
+    fills: ["M9.875 8.1L17.875 6.5V8.5L9.875 10.1Z"],
+    paths: ["M10.75 15.5V9", "M17 14.25V7.5"]
+  }
+};
 
 // src/components/move-visuals.tsx
 import { Fragment, jsx, jsxs } from "react/jsx-runtime";
@@ -5196,7 +5225,7 @@ function XYSurface({ label, x, y, disabled, onChange }) {
 }
 
 // src/components/MovePanel.tsx
-import { useEffect as useEffect15, useLayoutEffect as useLayoutEffect4, useId, useRef as useRef15, useState as useState9, useSyncExternalStore as useSyncExternalStore5, useCallback as useCallback3 } from "react";
+import { useEffect as useEffect15, useLayoutEffect as useLayoutEffect4, useId as useId2, useRef as useRef15, useState as useState9, useSyncExternalStore as useSyncExternalStore5, useCallback as useCallback3 } from "react";
 import { createPortal as createPortal5 } from "react-dom";
 
 // src/move-float.ts
@@ -5829,40 +5858,11 @@ function envelope(p, cols, n) {
 
 // src/modulation-core.ts
 var MOD_SLOTS = 16;
-var MOD_COLORS = [
-  "#ff5f45",
-  // 0  coral
-  "#ff8a2b",
-  // 1  orange
-  "#ffb61e",
-  // 2  amber
-  "#f4d942",
-  // 3  yellow
-  "#b8e03c",
-  // 4  lime
-  "#6fd435",
-  // 5  green
-  "#3bcf6d",
-  // 6  emerald
-  "#2ed3ab",
-  // 7  teal
-  "#33c6e8",
-  // 8  cyan
-  "#3d9bff",
-  // 9  azure
-  "#5f7bff",
-  // 10 blue
-  "#8a6bff",
-  // 11 violet
-  "#b45cff",
-  // 12 purple
-  "#e04ef0",
-  // 13 magenta
-  "#ff4fb0",
-  // 14 pink
-  "#ff4f6e"
-  // 15 rose
-];
+var MOD_COLOR_NAMES = (() => {
+  const wheel = ["red", "orange", "yellow", "lime", "emerald", "blue", "indigo", "pink"];
+  return Array.from({ length: MOD_SLOTS }, (_, i) => wheel[i * 3 % wheel.length]);
+})();
+var MOD_COLORS = MOD_COLOR_NAMES.map((name) => MOVE_PALETTE[name]);
 var modColor = (index) => MOD_COLORS[(index % MOD_SLOTS + MOD_SLOTS) % MOD_SLOTS];
 var MOD_PAGE_DIALS = 8;
 var isModDial = (c) => !c.chip && (c.scope || c.type === "toggle" && c.moveSlot || c.type === "select" || c.type === "slider" || c.type === "xy" || c.type === "range" || c.type === "number" && c.min != null && c.max != null);
@@ -5890,12 +5890,40 @@ function modPageLayout(controls, params = {}) {
   const pad = (row) => Array.from({ length: row.length }, (_, i) => row[i] ?? null);
   return { dials, toggles: pad(toggles), values: pad(values) };
 }
-var visibleModControls = (def, params) => def.controls.filter((c) => !c.when || c.when(params));
+var visibleModControls = (def, params) => [
+  MOD_RANGE_CONTROL,
+  ...def.controls.filter((c) => !c.when || c.when(params))
+];
+var MOD_RANGE_CONTROL = {
+  type: "select",
+  path: "range",
+  label: "Range",
+  chip: true,
+  options: [
+    { value: "positive", label: "Positive", icon: "arrow-up" },
+    { value: "bipolar", label: "Bipolar", icon: "arrow-up-down" },
+    { value: "negative", label: "Negative", icon: "arrow-down" }
+  ]
+};
+var MOD_RANGES = ["positive", "bipolar", "negative"];
+function modRange(slot) {
+  const own = slot.params.range;
+  if (MOD_RANGES.includes(own)) return own;
+  const fallback = getModType(slot.type)?.defaults.range;
+  return MOD_RANGES.includes(fallback) ? fallback : "bipolar";
+}
+function modRangeArc(range, signal) {
+  const s = clamp7(signal, -1, 1);
+  if (range === "positive") return { from: 0, to: Math.max(0, s) };
+  if (range === "negative") return { from: 1 + Math.min(0, s), to: 1 };
+  return { from: 0.5, to: (s + 1) / 2 };
+}
 var registry = /* @__PURE__ */ new Map();
 function registerModType(def) {
   registry.set(def.type, def);
 }
 var getModType = (type) => registry.get(type);
+var modGlyph = (slot) => getModType(slot.type)?.glyph?.(slot.params) ?? null;
 var listModTypes = () => [...registry.values()];
 var modPageWidth = () => Math.min(
   MOD_PAGE_DIALS,
@@ -5909,20 +5937,20 @@ var modKey = (panelId, path) => `${panelId}\0${path}`;
 var clamp7 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 var clamp014 = (v) => clamp7(Number(v) || 0, 0, 1);
 var clampSigned = (v) => clamp7(Number(v) || 0, -1, 1);
-function applyModulation(base, signal, amount, min, max) {
-  const offset = clamp7(signal, -1, 1) * clamp014(amount) * (max - min) / 2;
+function applyModulation(base, signal, amount, min, max, reach = 0.5) {
+  const offset = clamp7(signal, -1, 1) * clamp014(amount) * (max - min) * reach;
   return clamp7(base + offset, min, max);
 }
 var MOD_RING_RADIUS = 6;
 var MOD_RING_CIRCUMFERENCE = 2 * Math.PI * MOD_RING_RADIUS;
 var RING_SWEEP_START = 135 / 360;
 var RING_SWEEP_LEN = 270 / 360;
-function modRingArc(from01, to01) {
+function modRingArc(from01, to01, circumference = MOD_RING_CIRCUMFERENCE) {
   const a = RING_SWEEP_START + clamp014(from01) * RING_SWEEP_LEN;
   const b = RING_SWEEP_START + clamp014(to01) * RING_SWEEP_LEN;
   return {
-    length: Math.abs(b - a) * MOD_RING_CIRCUMFERENCE,
-    offset: -Math.min(a, b) * MOD_RING_CIRCUMFERENCE
+    length: Math.abs(b - a) * circumference,
+    offset: -Math.min(a, b) * circumference
   };
 }
 var LFO_SYNC_DIVISIONS = [
@@ -5962,7 +5990,8 @@ function previewSlew(values, smooth) {
 var LFO_DEF = {
   type: "lfo",
   label: "LFO",
-  defaults: { rate: 1, division: LFO_SYNC_DEFAULT, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false },
+  glyph: () => "lfo",
+  defaults: { rate: 1, division: LFO_SYNC_DEFAULT, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false, range: "bipolar" },
   controls: [
     /* One slot for how fast, wearing whichever control the moment calls for:
        free-running it is a rate in Hz, synced it is a division of the bar.
@@ -6027,7 +6056,8 @@ registerModType(LFO_DEF);
 var SH_DEF = {
   type: "sh",
   label: "S&H",
-  defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0 },
+  glyph: () => "sh",
+  defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0, range: "bipolar" },
   controls: [
     { type: "slider", path: "rate", label: "Rate", min: 0.1, max: 30, step: 0.01, unit: "Hz", scope: true },
     { type: "slider", path: "depth", label: "Depth", min: 0, max: 1, step: 0.01 },
@@ -6147,12 +6177,18 @@ function adsrStageLength(stage, params) {
 var ADSR_DEF = {
   type: "adsr",
   label: "ADSR",
+  // Struck by the played keys (a trigger of 'keys'), the envelope wears the
+  // keys; free or looping, its own shape.
+  glyph: (params) => params.trigger === "keys" ? "keys" : "adsr",
+  // An envelope rises from rest and falls back to it: it lifts a control.
+  unipolar: () => true,
   defaults: {
     attack: 10,
     decay: 300,
     sustain: 0.6,
     release: 600,
     loop: false,
+    range: "positive",
     // The attack keeps its analog leap; decay and release start straight,
     // as the design draws them — every ramp bendable from its pad.
     attackCurve: 0.5,
@@ -6280,7 +6316,12 @@ function curveDuration(params, bpm) {
 var CURVE_DEF = {
   type: "curve",
   label: "Curve",
+  glyph: () => "curve",
+  // Continuous, the pass reads -1..1; triggering, it is a pulse off rest.
+  unipolar: (params) => params.signal === "trigger",
   defaults: {
+    // The picture reads bottom to top, so the pass lifts a control from its value.
+    range: "positive",
     duration: 2,
     sync: false,
     division: LFO_SYNC_DEFAULT,
@@ -6510,10 +6551,14 @@ function audioLoop(params) {
 var AUDIO_DEF = {
   type: "audio",
   label: "Audio",
+  glyph: () => "audio",
+  // Loudness, 0..1: silence rests, a hit lifts.
+  unipolar: () => true,
   defaults: {
     speed: 1,
     depth: 1,
     smooth: 0,
+    range: "positive",
     playing: true,
     loopOn: true,
     loopStart: 0,
@@ -6549,7 +6594,7 @@ var AUDIO_DEF = {
         s.pos = params.loopOn ? s.pos % 1 : 1;
       }
     }
-    let v = audioModEnv === null ? 0 : (audioModLevel(s.pos) * 2 - 1) * clamp014(params.depth);
+    let v = audioModEnv === null ? 0 : audioModLevel(s.pos) * clamp014(params.depth);
     const smooth = clamp014(params.smooth);
     if (smooth > 0 && s.out !== null) {
       const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
@@ -9472,10 +9517,11 @@ function MoveMultibandDisplay({ panelId, bands, reading }) {
 }
 
 // src/components/ModRing.tsx
-import { useEffect as useEffect12, useRef as useRef12 } from "react";
+import { useEffect as useEffect12, useId, useRef as useRef12 } from "react";
 import { TweakStore as TweakStore9 } from "tweakers/store";
 import { ModulationStore } from "tweakers/modulation-store";
 import { jsx as jsx14, jsxs as jsxs10 } from "react/jsx-runtime";
+var ringDash = (length, circumference) => `${length.toFixed(2)} ${Math.max(0, circumference - length).toFixed(2)}`;
 function ModRing({
   panelId,
   path,
@@ -9489,7 +9535,7 @@ function ModRing({
     if (!el) return;
     const draw = (from, to) => {
       const { length, offset } = modRingArc(from, to);
-      el.setAttribute("stroke-dasharray", `${length.toFixed(2)} ${MOD_RING_CIRCUMFERENCE.toFixed(2)}`);
+      el.setAttribute("stroke-dasharray", ringDash(length, MOD_RING_CIRCUMFERENCE));
       el.setAttribute("stroke-dashoffset", offset.toFixed(2));
     };
     const bounds = ModulationStore.getBounds(panelId, path);
@@ -9498,8 +9544,15 @@ function ModRing({
     if (!span) return;
     const still = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (still) {
-      const reach = assignment.amount / 2;
-      const drawReach = () => draw(base01() - reach, base01() + reach);
+      const slot = ModulationStore.getSlot(assignment.slot);
+      const range = slot ? modRange(slot) : "bipolar";
+      const a = assignment.amount;
+      const drawReach = () => {
+        const b = base01();
+        if (range === "positive") draw(b, b + a);
+        else if (range === "negative") draw(b - a, b);
+        else draw(b - a / 2, b + a / 2);
+      };
       drawReach();
       return TweakStore9.subscribe(panelId, drawReach);
     }
@@ -9526,6 +9579,71 @@ function ModRing({
             r: MOD_RING_RADIUS,
             stroke: color,
             strokeDasharray: `0 ${MOD_RING_CIRCUMFERENCE}`
+          }
+        )
+      ]
+    }
+  );
+}
+var DOT_RING_RADIUS = 10.5;
+var DOT_RING_CIRCUMFERENCE = 2 * Math.PI * DOT_RING_RADIUS;
+var DOT_RADIUS = 8;
+function ModDot({ slot, state: state4 }) {
+  const arcRef = useRef12(null);
+  const maskId = `tweakers-mod-dot-${useId().replace(/:/g, "")}`;
+  const color = modColor(slot.index);
+  const glyph = modGlyph(slot);
+  const mark = glyph ? MOD_GLYPHS[glyph] : null;
+  useEffect12(() => {
+    if (typeof window === "undefined") return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    return ModulationStore.subscribeFrames(() => {
+      const el = arcRef.current;
+      if (!el) return;
+      const { from, to } = modRangeArc(modRange(slot), ModulationStore.getSignal(slot.index));
+      const { length, offset } = modRingArc(from, to, DOT_RING_CIRCUMFERENCE);
+      el.setAttribute("stroke-dasharray", ringDash(length, DOT_RING_CIRCUMFERENCE));
+      el.setAttribute("stroke-dashoffset", offset.toFixed(2));
+    });
+  }, [slot]);
+  return /* @__PURE__ */ jsxs10(
+    "svg",
+    {
+      className: "tweakers-move-mod-face",
+      viewBox: "0 0 24 24",
+      "aria-hidden": "true",
+      "data-glyph": glyph ?? void 0,
+      "data-state": state4,
+      children: [
+        mark && /* @__PURE__ */ jsxs10("mask", { id: maskId, children: [
+          /* @__PURE__ */ jsx14("circle", { cx: "12", cy: "12", r: DOT_RADIUS, fill: "white" }),
+          /* @__PURE__ */ jsx14("g", { fill: "none", stroke: "black", strokeWidth: "1.75", strokeLinecap: "round", strokeLinejoin: "round", children: mark.paths?.map((d) => /* @__PURE__ */ jsx14("path", { d }, d)) }),
+          /* @__PURE__ */ jsxs10("g", { fill: "black", children: [
+            mark.fills?.map((d) => /* @__PURE__ */ jsx14("path", { d }, d)),
+            mark.circles?.map((c) => /* @__PURE__ */ jsx14("circle", { ...c }, `${c.cx},${c.cy}`))
+          ] })
+        ] }),
+        /* @__PURE__ */ jsx14(
+          "circle",
+          {
+            ref: arcRef,
+            className: "tweakers-mod-ring-arc tweakers-move-mod-arc",
+            cx: "12",
+            cy: "12",
+            r: DOT_RING_RADIUS,
+            stroke: color,
+            strokeDasharray: `0 ${DOT_RING_CIRCUMFERENCE}`
+          }
+        ),
+        /* @__PURE__ */ jsx14(
+          "circle",
+          {
+            className: "tweakers-move-mod-dot",
+            cx: "12",
+            cy: "12",
+            r: DOT_RADIUS,
+            fill: color,
+            mask: mark ? `url(#${maskId})` : void 0
           }
         )
       ]
@@ -13839,7 +13957,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const [latched, setLatched] = useState9({});
   const holdStart = useRef15(0);
   const [mounted, setMounted] = useState9(false);
-  const pageTabsId = useId();
+  const pageTabsId = useId2();
   const panelRef = useRef15(null);
   const [dotDrag, setDotDrag] = useState9(null);
   const fineRef = useRef15(null);
@@ -16669,10 +16787,10 @@ var SCOPE_SAMPLES = 120;
 function MoveScope({ index }) {
   const ref = useRef15(null);
   useEffect15(() => {
-    const now = (ModulationStore2.getSignal(index) + 1) / 2;
+    const now = ModulationStore2.getLevel(index);
     const pts = Array(SCOPE_SAMPLES).fill(now);
     let raf = requestAnimationFrame(function tick() {
-      pts.push((ModulationStore2.getSignal(index) + 1) / 2);
+      pts.push(ModulationStore2.getLevel(index));
       pts.shift();
       ref.current?.setAttribute("d", moveShapePath(pts));
       raf = requestAnimationFrame(tick);
@@ -16739,24 +16857,16 @@ function stepRuns(cells) {
   return runs;
 }
 function MoveModCircle({ slot }) {
-  const dotRef = useRef15(null);
   const pressAt = useRef15(0);
-  useEffect15(() => {
-    if (typeof window === "undefined") return;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    return ModulationStore2.subscribeFrames(() => {
-      const el = dotRef.current;
-      if (!el) return;
-      const level = (ModulationStore2.getSignal(slot.index) + 1) / 2;
-      el.style.transform = `scale(${(0.66 + 0.34 * level).toFixed(3)})`;
-    });
-  }, [slot.index]);
+  const name = getModType(slot.type)?.label ?? slot.type.toUpperCase();
+  const shown = ModulationStore2.getSettings();
   return /* @__PURE__ */ jsx17(
     "button",
     {
       type: "button",
       className: "tweakers-move-mod",
-      title: `${slot.type.toUpperCase()} \xB7 step ${slot.index + 1}`,
+      title: `${name} \xB7 step ${slot.index + 1}`,
+      "aria-pressed": shown?.index === slot.index,
       onPointerDown: () => {
         pressAt.current = Date.now();
       },
@@ -16772,14 +16882,7 @@ function MoveModCircle({ slot }) {
         if (tapped && open2 && open2.index === slot.index) ModulationStore2.closeSettings();
         else ModulationStore2.openSettings(slot.index);
       },
-      children: /* @__PURE__ */ jsx17(
-        "span",
-        {
-          ref: dotRef,
-          className: "tweakers-move-mod-dot",
-          style: { background: modColor(slot.index) }
-        }
-      )
+      children: /* @__PURE__ */ jsx17(ModDot, { slot, state: shown ? shown.index === slot.index ? "active" : "inactive" : void 0 })
     }
   );
 }
@@ -18083,7 +18186,7 @@ function MoveConnectionDot({ className }) {
 }
 
 // src/use-move-timeline.ts
-import { useCallback as useCallback5, useEffect as useEffect21, useId as useId2, useMemo as useMemo5, useRef as useRef20, useSyncExternalStore as useSyncExternalStore9 } from "react";
+import { useCallback as useCallback5, useEffect as useEffect21, useId as useId3, useMemo as useMemo5, useRef as useRef20, useSyncExternalStore as useSyncExternalStore9 } from "react";
 import { TweakStore as TweakStore18 } from "tweakers/store";
 
 // src/timeline/adapter.ts
@@ -18133,7 +18236,7 @@ function buildTimelineValues(staticClips, transport, timelineDuration, loopStart
 function useMoveTimeline(name, config, options) {
   const serialized = JSON.stringify(config);
   const parsed = useMemo5(() => parseTimelineConfig(config), [serialized]);
-  const instance = useId2();
+  const instance = useId3();
   const id = options?.id ?? `${name}-${instance}`;
   const optionsRef = useRef20(options);
   optionsRef.current = options;
@@ -18275,6 +18378,7 @@ export {
   ListScreen,
   MIN_STOPS,
   MOD_COLORS,
+  MOD_COLOR_NAMES,
   MOD_PAGE_DIALS,
   MOD_RING_CIRCUMFERENCE,
   MOD_RING_RADIUS,
@@ -18343,6 +18447,7 @@ export {
   MOVE_WAVE_MAX_DISPLAY,
   MOVE_WAVE_MAX_HEIGHT,
   MOVE_WAVE_MAX_WIDTH,
+  ModDot,
   ModRing,
   ModulationStore5 as ModulationStore,
   MoveActionButton,
@@ -18530,9 +18635,11 @@ export {
   loopFromStep,
   loopSteps,
   modColor,
+  modGlyph,
   modKey,
   modPageLayout,
   modPageWidth,
+  modRange,
   modRingArc,
   morphDNA,
   moveAppPadRow,

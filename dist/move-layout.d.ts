@@ -7,6 +7,7 @@ import './gradient-core.js';
 import './color-core.js';
 import './transfer-core.js';
 import './curve-composer-core.js';
+import './icons.js';
 
 /**
  * The Move's control surface, as the bridge kit maps it (move-tweakers v0):

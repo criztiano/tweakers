@@ -13,6 +13,8 @@ import {
   type DriverDirection,
 } from './curve-composer-core';
 import { mixToMono, fillPeaks, envelope } from './waveform-dsp';
+import type { ModGlyph } from './icons';
+import { MOVE_PALETTE, type MovePaletteName } from './move-palette';
 
 /**
  * The modulation layer's shared ground — types, palette, math, and the
@@ -43,27 +45,20 @@ import { mixToMono, fillPeaks, envelope } from './waveform-dsp';
 export const MOD_SLOTS = 16;
 
 /**
- * The modulation palette, one colour per slot — sixteen hues around the
- * wheel, tuned to sit with the Move's track colours on the dark panel.
+ * The modulation palette, one colour per slot — the Move's own hues, the
+ * set the hardware lights, so a slot is the same colour on the glass and on
+ * its step button. Not in wheel order: each slot sits three hues round the
+ * wheel from the one before it, so neighbours on the step row never read
+ * alike. The palette has eight hues and the row sixteen steps, so the second
+ * eight repeat the first; a slot's mark says which modulator it is.
+ * The move kit's step-light table (MOD_LED) follows this order.
  */
-export const MOD_COLORS = [
-  '#ff5f45', // 0  coral
-  '#ff8a2b', // 1  orange
-  '#ffb61e', // 2  amber
-  '#f4d942', // 3  yellow
-  '#b8e03c', // 4  lime
-  '#6fd435', // 5  green
-  '#3bcf6d', // 6  emerald
-  '#2ed3ab', // 7  teal
-  '#33c6e8', // 8  cyan
-  '#3d9bff', // 9  azure
-  '#5f7bff', // 10 blue
-  '#8a6bff', // 11 violet
-  '#b45cff', // 12 purple
-  '#e04ef0', // 13 magenta
-  '#ff4fb0', // 14 pink
-  '#ff4f6e', // 15 rose
-];
+export const MOD_COLOR_NAMES: readonly MovePaletteName[] = (() => {
+  const wheel: MovePaletteName[] = ['red', 'orange', 'yellow', 'lime', 'emerald', 'blue', 'indigo', 'pink'];
+  return Array.from({ length: MOD_SLOTS }, (_, i) => wheel[(i * 3) % wheel.length]);
+})();
+
+export const MOD_COLORS: string[] = MOD_COLOR_NAMES.map((name) => MOVE_PALETTE[name]);
 
 /** A slot's palette colour — the one constant identity it keeps. */
 export const modColor = (index: number) =>
@@ -88,6 +83,14 @@ export type ModulationParamValue =
 
 /** Modulator settings — JSON-safe, like TweakStore values. */
 export type ModulationParams = Record<string, ModulationParamValue>;
+
+/**
+ * Which way a modulation pushes the controls it drives: up from the value the
+ * user set, down from it, or either side of it. Every slot carries one (the
+ * `range` param); each type picks the default its signal reads as — an LFO
+ * swings both ways, an envelope rises.
+ */
+export type ModRange = 'positive' | 'bipolar' | 'negative';
 
 export interface ModulationSlot {
   /** 0..15 — the Move step button that created it, and its palette index. */
@@ -186,6 +189,18 @@ export interface ModTypeDef {
    * leave it out and the store ignores the call.
    */
   gate?(state: unknown, on: boolean): void;
+  /**
+   * The mark cut out of the slot's dot in the step row, so a row of circles
+   * says which modulator is which. A function of the params, because one type
+   * can play two roles: an envelope struck by the keys wears the keys.
+   */
+  glyph?(params: ModulationParams): ModGlyph;
+  /**
+   * The signal `tick` returns runs 0..1 (at rest at 0: an envelope, a
+   * pulse) rather than -1..1. The engine reads it as a level either way and
+   * shapes it by the slot's range. Absent means -1..1.
+   */
+  unipolar?(params: ModulationParams): boolean;
 }
 
 /* ── the settings page's layout ───────────────────────────────────────── */
@@ -276,8 +291,59 @@ export function restoreModParams(def: ModTypeDef, saved: ModulationParams): Modu
 }
 
 /** The controls a page actually shows — the mode-specific ones filtered out. */
-export const visibleModControls = (def: ModTypeDef, params: ModulationParams): ModControlMeta[] =>
-  def.controls.filter((c) => !c.when || c.when(params));
+export const visibleModControls = (def: ModTypeDef, params: ModulationParams): ModControlMeta[] => [
+  MOD_RANGE_CONTROL,
+  ...def.controls.filter((c) => !c.when || c.when(params)),
+];
+
+/**
+ * The range picker every modulator's page carries, as a chip under the type
+ * picker — the store places it there, beside the choice it belongs with.
+ */
+export const MOD_RANGE_CONTROL: ModControlMeta = {
+  type: 'select', path: 'range', label: 'Range', chip: true,
+  options: [
+    { value: 'positive', label: 'Positive', icon: 'arrow-up' },
+    { value: 'bipolar', label: 'Bipolar', icon: 'arrow-up-down' },
+    { value: 'negative', label: 'Negative', icon: 'arrow-down' },
+  ],
+};
+
+const MOD_RANGES: readonly ModRange[] = ['positive', 'bipolar', 'negative'];
+
+/** A slot's range — its own setting, else its type's default, else both ways. */
+export function modRange(slot: ModulationSlot): ModRange {
+  const own = slot.params.range;
+  if (MOD_RANGES.includes(own as ModRange)) return own as ModRange;
+  const fallback = getModType(slot.type)?.defaults.range;
+  return MOD_RANGES.includes(fallback as ModRange) ? (fallback as ModRange) : 'bipolar';
+}
+
+/**
+ * A modulator's level (0..1, its own shape bottom to top) as the signal the
+ * controls follow: 0..1 pushing up, -1..0 pushing down, -1..1 around the
+ * value. A both-ways range at full depth spans the control once, half each
+ * side; a one-way range spans it once in its direction — see `modReach`.
+ */
+export function rangeSignal(level: number, range: ModRange): number {
+  const l = clamp01(level);
+  return range === 'positive' ? l : range === 'negative' ? -l : l * 2 - 1;
+}
+
+/** How far a signal of 1 moves a control at full depth, in spans. */
+export const modReach = (range: ModRange): number => (range === 'bipolar' ? 0.5 : 1);
+
+/**
+ * Where a range's arc runs on a ring for a signal, 0..1 of the sweep: out
+ * from the bottom-left for a push up, back from the bottom-right for a
+ * push down, out from the top either way for both.
+ */
+export function modRangeArc(range: ModRange, signal: number): { from: number; to: number } {
+  const s = clamp(signal, -1, 1);
+  if (range === 'positive') return { from: 0, to: Math.max(0, s) };
+  if (range === 'negative') return { from: 1 + Math.min(0, s), to: 1 };
+  return { from: 0.5, to: (s + 1) / 2 };
+}
 
 const registry = new Map<ModulationType, ModTypeDef>();
 
@@ -287,6 +353,10 @@ export function registerModType(def: ModTypeDef): void {
 }
 
 export const getModType = (type: ModulationType): ModTypeDef | undefined => registry.get(type);
+
+/** The mark a slot's dot wears — null for a type that names none (a plain dot). */
+export const modGlyph = (slot: ModulationSlot): ModGlyph | null =>
+  getModType(slot.type)?.glyph?.(slot.params) ?? null;
 
 /** The registered types, registration order — the settings page's type enum. */
 export const listModTypes = (): ModTypeDef[] => [...registry.values()];
@@ -316,18 +386,20 @@ const clamp01 = (v: unknown) => clamp(Number(v) || 0, 0, 1);
 const clampSigned = (v: unknown) => clamp(Number(v) || 0, -1, 1);
 
 /**
- * A signal applied to a control: a bipolar sweep around the base value in
- * the control's own units, clamped to its bounds — the control keeps its
- * base, the modulation dances around it.
+ * A signal applied to a control: a sweep from the base value in the
+ * control's own units, clamped to its bounds — the control keeps its base,
+ * the modulation dances off it. `reach` is how many spans a signal of 1
+ * moves it at full amount: half for a both-ways range, one for a one-way.
  */
 export function applyModulation(
   base: number,
   signal: number,
   amount: number,
   min: number,
-  max: number
+  max: number,
+  reach = 0.5
 ): number {
-  const offset = clamp(signal, -1, 1) * clamp01(amount) * (max - min) / 2;
+  const offset = clamp(signal, -1, 1) * clamp01(amount) * (max - min) * reach;
   return clamp(base + offset, min, max);
 }
 
@@ -349,14 +421,19 @@ const RING_SWEEP_LEN = 270 / 360;
  * pattern that draws it: SVG lays a circle's path clockwise from 3 o'clock,
  * so a dash of `length` pushed to `offset` lands exactly on the arc.
  * Feed it base and modulated value and the ring shows where the modulation
- * is holding the control right now.
+ * is holding the control right now. A ring of another size passes its own
+ * circumference; the sweep is the same.
  */
-export function modRingArc(from01: number, to01: number): { length: number; offset: number } {
+export function modRingArc(
+  from01: number,
+  to01: number,
+  circumference = MOD_RING_CIRCUMFERENCE
+): { length: number; offset: number } {
   const a = RING_SWEEP_START + clamp01(from01) * RING_SWEEP_LEN;
   const b = RING_SWEEP_START + clamp01(to01) * RING_SWEEP_LEN;
   return {
-    length: Math.abs(b - a) * MOD_RING_CIRCUMFERENCE,
-    offset: -Math.min(a, b) * MOD_RING_CIRCUMFERENCE,
+    length: Math.abs(b - a) * circumference,
+    offset: -Math.min(a, b) * circumference,
   };
 }
 
@@ -439,7 +516,8 @@ function previewSlew(values: number[], smooth: number): number[] {
 export const LFO_DEF: ModTypeDef = {
   type: 'lfo',
   label: 'LFO',
-  defaults: { rate: 1, division: LFO_SYNC_DEFAULT, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false },
+  glyph: () => 'lfo',
+  defaults: { rate: 1, division: LFO_SYNC_DEFAULT, phase: 0, width: 0.5, jitter: 0, smooth: 0, sync: false, range: 'bipolar' },
   controls: [
     /* One slot for how fast, wearing whichever control the moment calls for:
        free-running it is a rate in Hz, synced it is a division of the bar.
@@ -529,7 +607,8 @@ interface ShState {
 export const SH_DEF: ModTypeDef = {
   type: 'sh',
   label: 'S&H',
-  defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0 },
+  glyph: () => 'sh',
+  defaults: { rate: 4, depth: 1, offset: 0, jitter: 0, smooth: 0, range: 'bipolar' },
   controls: [
     { type: 'slider', path: 'rate', label: 'Rate', min: 0.1, max: 30, step: 0.01, unit: 'Hz', scope: true },
     { type: 'slider', path: 'depth', label: 'Depth', min: 0, max: 1, step: 0.01 },
@@ -763,8 +842,13 @@ function adsrStageLength(stage: AdsrStage, params: ModulationParams): number {
 export const ADSR_DEF: ModTypeDef = {
   type: 'adsr',
   label: 'ADSR',
+  // Struck by the played keys (a trigger of 'keys'), the envelope wears the
+  // keys; free or looping, its own shape.
+  glyph: (params) => (params.trigger === 'keys' ? 'keys' : 'adsr'),
+  // An envelope rises from rest and falls back to it: it lifts a control.
+  unipolar: () => true,
   defaults: {
-    attack: 10, decay: 300, sustain: 0.6, release: 600, loop: false,
+    attack: 10, decay: 300, sustain: 0.6, release: 600, loop: false, range: 'positive',
     // The attack keeps its analog leap; decay and release start straight,
     // as the design draws them — every ramp bendable from its pad.
     attackCurve: 0.5, decayCurve: 0, releaseCurve: 0,
@@ -944,7 +1028,12 @@ interface CurveState {
 export const CURVE_DEF: ModTypeDef = {
   type: 'curve',
   label: 'Curve',
+  glyph: () => 'curve',
+  // Continuous, the pass reads -1..1; triggering, it is a pulse off rest.
+  unipolar: (params) => params.signal === 'trigger',
   defaults: {
+    // The picture reads bottom to top, so the pass lifts a control from its value.
+    range: 'positive',
     duration: 2, sync: false, division: LFO_SYNC_DEFAULT, signal: 'continuous', triggers: DEFAULT_TRIGGER_STEPS,
     direction: 'forward', flip: false, gap: 0, segments: 1, selected: 0,
     curvature: 0, steepness: 0, anticipate: 0, overshoot: 0,
@@ -1217,8 +1306,11 @@ function audioLoop(params: ModulationParams): { start: number; end: number } | n
 export const AUDIO_DEF: ModTypeDef = {
   type: 'audio',
   label: 'Audio',
+  glyph: () => 'audio',
+  // Loudness, 0..1: silence rests, a hit lifts.
+  unipolar: () => true,
   defaults: {
-    speed: 1, depth: 1, smooth: 0,
+    speed: 1, depth: 1, smooth: 0, range: 'positive',
     playing: true, loopOn: true, loopStart: 0, loopEnd: 1, position: 0,
   },
   controls: [
@@ -1250,7 +1342,7 @@ export const AUDIO_DEF: ModTypeDef = {
         s.pos = params.loopOn ? s.pos % 1 : 1;
       }
     }
-    let v = audioModEnv === null ? 0 : (audioModLevel(s.pos) * 2 - 1) * clamp01(params.depth);
+    let v = audioModEnv === null ? 0 : audioModLevel(s.pos) * clamp01(params.depth);
     const smooth = clamp01(params.smooth);
     if (smooth > 0 && s.out !== null) {
       // The LFO's one-pole slew, same feel: tau grows with the square.

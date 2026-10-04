@@ -6,6 +6,7 @@ export declare const ICON_ELLIPSIS: {
     cy: string;
 }[];
 export declare const ICON_CHECK = "M5 12.75L10 19L19 5";
+export declare const ICON_SEARCH = "M10.5 4.5C7.18629 4.5 4.5 7.18629 4.5 10.5C4.5 13.8137 7.18629 16.5 10.5 16.5C13.8137 16.5 16.5 13.8137 16.5 10.5C16.5 7.18629 13.8137 4.5 10.5 4.5ZM15 15L20 20";
 export declare const ICON_PAUSE: string[];
 export declare const ICON_PLAY = "M9.24394 2.36758C7.41419 1.18362 5 2.49701 5 4.67639V19.3238C5 21.5032 7.41419 22.8166 9.24394 21.6326L20.5624 14.3089C22.2371 13.2253 22.2372 10.775 20.5624 9.69129L9.24394 2.36758Z";
 export declare const ICON_REPLAY: string[];
@@ -49,8 +50,9 @@ export declare const ICON_MOVE_COPY: {
 /**
  * A function chip's glyph. `paths` are stroked, like the hardware's printed
  * marks; `fills` are the filled marks (the capture corners); `circles` are
- * filled circles (the enter dot, rec's core). All share one viewBox and the
- * size the chip draws them at.
+ * filled circles (the enter dot, rec's core); `text` is a letter mark set in
+ * Helvetica (mute's "M"). All share one viewBox and the size the chip draws
+ * them at.
  */
 export interface MoveFunctionGlyph {
     viewBox: string;
@@ -62,7 +64,10 @@ export interface MoveFunctionGlyph {
         cy: string;
         r: string;
     }[];
+    text?: string;
 }
+/** The letter marks' face — Helvetica, with the system stack behind it. */
+export declare const MOVE_GLYPH_TEXT_FONT = "Helvetica, 'Helvetica Neue', Arial, system-ui, sans-serif";
 /**
  * The canonical glyph per Move function button — every app shows the same
  * icon for the same hardware key, so the chips read like the instrument.
@@ -97,4 +102,14 @@ export declare const LUCIDE_ICONS: Record<string, string[]>;
  */
 export declare const ICON_BADGE_OFF = "M17.203 19.3594L4.6875 6.7969C3.6094 8.25 3 10.0781 3 12C3 16.9688 7.031 21 12 21C13.969 21 15.75 20.3906 17.203 19.3594ZM19.359 17.2031C20.391 15.75 21 13.9219 21 12C21 7.0312 16.969 3 12 3C10.078 3 8.25 3.6094 6.797 4.6875L19.359 17.2031ZM0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24C5.391 24 0 18.6094 0 12Z";
 export declare const ICON_BADGE_ON = "M12 24C5.391 24 0 18.6094 0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24ZM17.531 6.8438C17.016 6.4688 16.313 6.5625 15.984 7.0781L10.359 14.7656L7.922 12.3281C7.5 11.9062 6.75 11.9062 6.328 12.3281C5.906 12.7969 5.906 13.5 6.328 13.9219L9.703 17.2969C9.937 17.5312 10.266 17.6719 10.594 17.625C10.922 17.625 11.203 17.4375 11.391 17.1562L17.766 8.3906C18.141 7.9219 18.047 7.2188 17.531 6.8438Z";
+/**
+ * The modulator types, as the marks cut out of a modulation circle's dot:
+ * the wave an LFO runs, the die S&H throws, the envelope's rise and fall,
+ * the keys that strike it, a curve's arch, the note an audio slot plays.
+ * Drawn on a 24px grid around a 16px dot centred at 12,12 — `paths` are
+ * stroked with round ends, `fills` and `circles` are solid — and a mark may
+ * run off the dot's edge: the dot is the cut's boundary.
+ */
+export type ModGlyph = 'lfo' | 'sh' | 'adsr' | 'keys' | 'curve' | 'audio';
+export declare const MOD_GLYPHS: Record<ModGlyph, Omit<MoveFunctionGlyph, 'viewBox' | 'size' | 'text'>>;
 //# sourceMappingURL=icons.d.ts.map
