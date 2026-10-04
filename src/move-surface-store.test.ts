@@ -179,4 +179,18 @@ describe('app-owned steps', () => {
     release();
     MoveSurfaceStore.setSteps(null);
   });
+
+  it('hands releases to the app that reads holds, and says once they arrive at all', () => {
+    const heard: number[] = [];
+    const off = MoveSurfaceStore.onStepRelease(({ index }) => heard.push(index));
+    assert.equal(MoveSurfaceStore.stepReleases(), false);
+    MoveSurfaceStore.releaseStep(16);
+    assert.equal(MoveSurfaceStore.stepReleases(), false, 'a step off the row says nothing');
+    MoveSurfaceStore.releaseStep(5);
+    assert.deepEqual(heard, [5]);
+    assert.equal(MoveSurfaceStore.stepReleases(), true);
+    off();
+    MoveSurfaceStore.releaseStep(6);
+    assert.deepEqual(heard, [5]);
+  });
 });
