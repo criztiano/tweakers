@@ -129,6 +129,9 @@ export type { UseMoveTimelineOptions, MoveTimelineValues } from './use-move-time
 // is the transfer curve's at this root) and plainly on `tweakers/automation-core`.
 export * as Automation from './automation-core';
 export type { AutomationInterp, AutomationPoint, AutomationRange, AutomationLane, AutomationTimeline, AutomationSpan, AutomationCursor } from './automation-core';
+export { AutomationLanesStore } from './automation-store';
+export type { AutomationHost, AutomationClock, AutomationCommit, AutomationStoreOptions, AutomationEditMeta, AutomationSelection, AutomationView } from './automation-store';
+export { listenMoveTouch } from './move-automation';
 export type { MoveVolumeDisplayState } from './move-volume';
 export { ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, MOVE_FUNCTION_ICONS } from './icons';
 export type { ModGlyph } from './icons';

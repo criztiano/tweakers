@@ -214,7 +214,8 @@ export function simplify(
   return out;
 }
 
-/** Normalise a hand's samples: inside the span, in time order, one value per instant (the last). */
+/** Normalise a hand's samples: inside the span, in time order, and at most two
+ *  values per instant — where it was and where it went, a jump. */
 function cleanSamples(samples: readonly AutomationPoint[], from: number, to: number, range: AutomationRange): AutomationPoint[] {
   const sorted = samples
     .filter((s) => Number.isFinite(s.t) && Number.isFinite(s.v))
@@ -222,7 +223,8 @@ function cleanSamples(samples: readonly AutomationPoint[], from: number, to: num
     .sort((p, q) => p.t - q.t || p.i - q.i);
   const out: AutomationPoint[] = [];
   for (const s of sorted) {
-    if (out.length && out[out.length - 1].t === s.t) out[out.length - 1].v = s.v;
+    const n = out.length;
+    if (n >= 2 && out[n - 1].t === s.t && out[n - 2].t === s.t) out[n - 1].v = s.v;
     else out.push({ t: s.t, v: s.v });
   }
   return out;
