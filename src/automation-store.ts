@@ -188,6 +188,11 @@ export class AutomationLanesStore {
     this.notify();
   }
 
+  /** The host's clock, read through — the card's playhead polls it every frame. */
+  clock(): AutomationClock {
+    return this.host.clock();
+  }
+
   /** The id of the timeline in front, or null before the first `load`. */
   id(): string | null {
     return this.currentId;
@@ -439,7 +444,10 @@ export class AutomationLanesStore {
   /** One smoothing pass — over the selected stretch when the lane has one. */
   smooth(key: string, strong = false): boolean {
     const range = this.selection.key === key ? this.selection.range ?? undefined : undefined;
-    return this.editLane(key, (lane) => ({ ...lane, points: smoothLane(lane, strong ? SMOOTH_STRONG : SMOOTH_AMOUNT, range, this.tolerance) }));
+    const done = this.editLane(key, (lane) => ({ ...lane, points: smoothLane(lane, strong ? SMOOTH_STRONG : SMOOTH_AMOUNT, range, this.tolerance) }));
+    // The points were all redrawn: a selected one is no longer the one it was.
+    if (done && this.selection.key === key) this.select({ key, range });
+    return done;
   }
 
   /** Delete a lane: the control is its slider's again. */
