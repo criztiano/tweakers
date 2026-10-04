@@ -291,6 +291,7 @@ class MoveTimelineStoreClass {
     const transport = TimelineStore.getTransport(claim.id);
     this.recording = true;
     this.recordFrom = transport.time >= transport.duration ? 0 : transport.time;
+    MoveFunctions.setOn('rec', true);
     this.notify();
     claim.options.onRecord(true);
     if (!transport.playing) TimelineStore.play(claim.id);
@@ -361,6 +362,7 @@ class MoveTimelineStoreClass {
   private stopRecording(): void {
     if (!this.recording) return;
     this.recording = false;
+    MoveFunctions.setOn('rec', false);
     this.notify();
     this.front()?.options.onRecord?.(false);
   }
@@ -411,10 +413,12 @@ class MoveTimelineStoreClass {
     win?.addEventListener(JOG_EVENT, onJog);
     win?.addEventListener(JOG_CLICK_EVENT, onJogClick);
 
-    // The transport: the view follows the playhead, and a take ends when the
-    // transport stops under it.
+    // The transport: Play is lit while it rolls, the view follows the
+    // playhead, and a take ends when the transport stops under it.
+    MoveFunctions.setOn('play', TimelineStore.getTransport(id).playing);
     const offTransport = TimelineStore.subscribe(id, () => {
       const transport = TimelineStore.getTransport(id);
+      MoveFunctions.setOn('play', transport.playing);
       if (this.recording && !transport.playing) this.stopRecording();
       const start = followWindow(transport.time, transport.duration, this.zoom, this.start);
       if (start !== this.start) this.setView(this.zoom, start);
@@ -429,8 +433,10 @@ class MoveTimelineStoreClass {
       win?.removeEventListener(JOG_CLICK_EVENT, onJogClick);
       if (this.recording) {
         this.recording = false;
+        MoveFunctions.setOn('rec', false);
         claim.options.onRecord?.(false);
       }
+      MoveFunctions.setOn('play', false);
       for (const release of keys) release();
       if (MoveVolumeDisplay.get() === readout) MoveVolumeDisplay.clear();
     };

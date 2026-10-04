@@ -5577,7 +5577,8 @@
 }
 
 /* The timeline's clock in the panel's volume corner: Play, the time, Loop
-   and Rec — ember while off, lit while on, the take in the record red. */
+   and Rec — ember while off, lit while on: Play in emerald while it rolls,
+   the take in the record red. */
 .tweakers-move-timeline-clock {
   gap: 4px;
   padding: 0 4px;
@@ -5616,6 +5617,10 @@
 
 .tweakers-move-timeline-key[data-on] {
   color: var(--move-text);
+}
+
+.tweakers-move-timeline-key[data-name='play'][data-on] {
+  color: var(--move-emerald);
 }
 
 .tweakers-move-timeline-key[data-name='rec'][data-on] {

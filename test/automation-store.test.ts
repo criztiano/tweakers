@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createLane, laneByKey, valueAt, valueBefore, type AutomationTimeline } from '../src/automation-core';
 import { AutomationLanesStore, type AutomationCommit } from '../src/automation-store';
+import { MoveFunctions } from '../src/move-functions';
 
 // The store between a host's clock and its controls, run on a fake clock: a
 // pass of `duration` seconds that the test walks a frame at a time.
@@ -34,6 +35,18 @@ const flat = (key = 'in:chaos', base = 5): AutomationTimeline => ({ lanes: [crea
 const lane = (tl: AutomationTimeline, key = 'in:chaos') => laneByKey(tl, key)!;
 
 describe('a take', () => {
+  it('lights Rec for as long as it runs — ended or dropped', () => {
+    const { store } = rig();
+    store.load('a', { lanes: [] });
+    store.startTake();
+    expect(MoveFunctions.isOn('rec')).toBe(true);
+    store.endTake();
+    expect(MoveFunctions.isOn('rec')).toBe(false);
+    store.startTake();
+    store.cancelTake();
+    expect(MoveFunctions.isOn('rec')).toBe(false);
+  });
+
   it('rolls a stopped transport, and commits once across every timeline it wrote', () => {
     const { store, commits, play, run } = rig();
     store.load('a', { lanes: [] });

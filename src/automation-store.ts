@@ -224,6 +224,7 @@ export class AutomationLanesStore {
     this.takeStart = this.phase();
     this.lastPhase = this.takeStart;
     this.laps = 0;
+    MoveFunctions.setOn('rec', true);
     if (!this.host.clock().playing) this.host.play();
     this.notify();
   }
@@ -234,6 +235,7 @@ export class AutomationLanesStore {
     this.closeSpans(Math.max(this.phase(), 0));
     const written = this.working;
     this.recording = false;
+    MoveFunctions.setOn('rec', false);
     this.working = new Map();
     if (this.currentId !== null) this.current = written.get(this.currentId) ?? this.current;
     if (written.size) this.host.commit({ kind: 'take', timelines: written });
@@ -244,6 +246,7 @@ export class AutomationLanesStore {
   cancelTake(): void {
     if (!this.recording) return;
     this.recording = false;
+    MoveFunctions.setOn('rec', false);
     this.working = new Map();
     this.spans.clear();
     // A hand on a control the take had just given a lane has nothing to hold.
