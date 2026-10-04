@@ -392,7 +392,7 @@ function registerModType(def) {
 }
 var getModType = (type) => registry.get(type);
 var modGlyph = (slot) => getModType(slot.type)?.glyph?.(slot.params) ?? null;
-var listModTypes = () => [...registry.values()];
+var listModTypes = () => [...registry.values()].filter((def) => !def.lent);
 var modPageWidth = () => Math.min(
   MOD_PAGE_DIALS,
   1 + listModTypes().reduce(
@@ -1100,10 +1100,23 @@ var AUDIO_DEF = {
   }
 };
 registerModType(AUDIO_DEF);
+var AUTOMATION_DEF = {
+  type: "automation",
+  label: "Automation",
+  defaults: {},
+  controls: [],
+  glyph: () => "timeline",
+  lent: true,
+  createState: () => null,
+  tick: () => 1,
+  unipolar: () => true
+};
+registerModType(AUTOMATION_DEF);
 export {
   ADSR_DEF,
   ADSR_STAGE_MAX,
   AUDIO_DEF,
+  AUTOMATION_DEF,
   CURVE_DEF,
   CURVE_LABELS,
   CURVE_MAX_CLIPS,

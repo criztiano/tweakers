@@ -9,7 +9,9 @@
  * for the ruler.
  *
  * Between two points the value is a straight line (`linear`) or stays put
- * until the next one (`hold`). Two points at one `t` are a jump, and the
+ * until the next one (`hold`). A `color` lane carries a colour as one packed
+ * 24-bit RGB number (`packColor`), and blends between its points in OKLab —
+ * the straight line a reader sees as an even fade. Two points at one `t` are a jump, and the
  * curve takes the later one from that instant on (right-continuous). Before
  * the first point and after the last the curve stays at their values, so a
  * lane answers every `t`: a new lane starts flat at the control's value and
@@ -18,7 +20,9 @@
  * Everything here returns new objects and touches nothing else — the store
  * (`automation-store.ts`) holds state, the card draws it.
  */
-type AutomationInterp = 'linear' | 'hold';
+type AutomationInterp = 'linear' | 'hold' | 'color';
+/** A colour lane's whole range: every packed 24-bit RGB value. */
+declare const AUTOMATION_COLOR_MAX = 16777215;
 interface AutomationPoint {
     /** Phase of the pass, 0..1. */
     t: number;
@@ -58,11 +62,33 @@ declare const AUTOMATION_TOLERANCE = 0.004;
 /** How many steps a smoothing pass resamples a lane into. */
 declare const AUTOMATION_SMOOTH_SAMPLES = 240;
 declare const EMPTY_TIMELINE: AutomationTimeline;
+/** A colour as a colour lane carries it: `#rgb` or `#rrggbb` (alpha is
+ *  dropped) to one 24-bit number. Anything unreadable is black. */
+declare function packColor(hex: string): number;
+/** A colour lane's value as `#rrggbb`. */
+declare function unpackColor(v: number): string;
+/** The colour `t` of the way from `a` to `b`, blended in OKLab. */
+declare function mixColor(a: number, b: number, t: number): number;
+/**
+ * How far apart two colours look: their distance in OKLab, where black to
+ * white is 1 — so a colour lane's tolerance is a share of that, the way a
+ * number lane's is a share of its range.
+ */
+declare function colorDistance(a: number, b: number): number;
+/** A value as the lane can hold it: inside its range, and a whole packed
+ *  colour on a colour lane. */
+declare function fitValue(lane: AutomationRange & {
+    interp?: AutomationInterp;
+}, v: number): number;
 /** The lane's value at phase `t`. Pass a cursor to make a playing read cheap. */
 declare function valueAt(lane: Pick<AutomationLane, 'points' | 'interp' | 'min'>, t: number, cursor?: AutomationCursor): number;
 /** The value the curve arrives at `t` with — the one before a jump there. */
 declare function valueBefore(lane: Pick<AutomationLane, 'points' | 'interp' | 'min'>, t: number): number;
-/** A lane that holds `base` for the whole pass — what a control was before its first take. */
+/**
+ * A lane that holds `base` for the whole pass — what a control was before its
+ * first take. A colour lane always spans every packed colour, whatever range
+ * it is given.
+ */
 declare function createLane(key: string, label: string, min: number, max: number, base: number, interp?: AutomationInterp): AutomationLane;
 /**
  * Fewer points, the same curve: Ramer-Douglas-Peucker on the VERTICAL error —
@@ -70,7 +96,10 @@ declare function createLane(key: string, label: string, min: number, max: number
  * — because a lane is read at a time, never along its length. Endpoints stay,
  * and so does every jump (two points at one `t`): each run between them is
  * simplified on its own. A `hold` lane keeps a point only where the value
- * changes. Iterative, so a long take cannot overflow the stack.
+ * changes. A `color` lane measures the error as the OKLab distance from the
+ * blend the simplified curve would show (black to white is 1), so a fade
+ * keeps the points a reader could tell apart. Iterative, so a long take
+ * cannot overflow the stack.
  */
 declare function simplify(points: readonly AutomationPoint[], range: AutomationRange, tolerance?: number, interp?: AutomationInterp): AutomationPoint[];
 /**
@@ -78,7 +107,8 @@ declare function simplify(points: readonly AutomationPoint[], range: AutomationR
  * blur with a Gaussian whose width is `amount` × 5% of the pass, and simplify
  * again. Pressing it again smooths again. With a `span` only that stretch
  * changes, and the change fades in and out at its edges so no jump appears
- * where it meets the rest of the lane.
+ * where it meets the rest of the lane. A colour lane does not smooth — a
+ * blur of colours is a muddy one — and comes back as it was.
  */
 declare function smooth(lane: AutomationLane, amount: number, span?: {
     from: number;
@@ -134,4 +164,4 @@ declare function remapKeys(timeline: AutomationTimeline, map: (key: string) => s
  */
 declare function validateTimeline(raw: unknown): AutomationTimeline;
 
-export { AUTOMATION_SMOOTH_SAMPLES, AUTOMATION_TOLERANCE, type AutomationCursor, type AutomationInterp, type AutomationLane, type AutomationPoint, type AutomationRange, type AutomationSpan, type AutomationTimeline, EMPTY_TIMELINE, addPoint, clearRange, createLane, deletePoint, laneByKey, mergeSpan, movePoint, remapKeys, removeLane, sampleTimeline, simplify, smooth, splitAtWrap, upsertLane, validateTimeline, valueAt, valueBefore };
+export { AUTOMATION_COLOR_MAX, AUTOMATION_SMOOTH_SAMPLES, AUTOMATION_TOLERANCE, type AutomationCursor, type AutomationInterp, type AutomationLane, type AutomationPoint, type AutomationRange, type AutomationSpan, type AutomationTimeline, EMPTY_TIMELINE, addPoint, clearRange, colorDistance, createLane, deletePoint, fitValue, laneByKey, mergeSpan, mixColor, movePoint, packColor, remapKeys, removeLane, sampleTimeline, simplify, smooth, splitAtWrap, unpackColor, upsertLane, validateTimeline, valueAt, valueBefore };

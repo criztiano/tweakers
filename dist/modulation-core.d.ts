@@ -80,7 +80,7 @@ declare const MOD_COLOR_NAMES: readonly MovePaletteName[];
 declare const MOD_COLORS: string[];
 /** A slot's palette colour — the one constant identity it keeps. */
 declare const modColor: (index: number) => string;
-type ModulationType = 'lfo' | 'adsr' | 'envelope' | 'curve' | 'sh' | 'sequencer' | 'audio';
+type ModulationType = 'lfo' | 'adsr' | 'envelope' | 'curve' | 'sh' | 'sequencer' | 'audio' | 'automation';
 /** The envelope's four stages — the four columns of its picture. */
 type EnvStage = 'attack' | 'decay' | 'sustain' | 'release';
 /**
@@ -209,6 +209,30 @@ interface ModTypeDef {
      * shapes it by the slot's range. Absent means -1..1.
      */
     unipolar?(params: ModulationParams): boolean;
+    /**
+     * A modulator the kit runs for a host — automation lanes. It reaches a
+     * step only through `ModulationStore.lendSlot`, which hands it its page;
+     * it is never in the type picker, never saved with the slots (the host
+     * owns what it plays), and never takes a wire.
+     */
+    lent?: boolean;
+}
+/**
+ * The page a lent slot brings instead of the generated settings page — the
+ * same door (`openSettings`, the step tap, the track buttons closing it),
+ * a page of the lender's own. It registers its panel itself, under the id
+ * `open` is handed and with `kind: 'modulation'`, so the kit and the panel
+ * lay it out like any modulator's page; `layout` places its controls the
+ * way `getSettingsLayout` places a modulator's, and `tap` answers a knob
+ * tap on a dial the layout marks `cycle`.
+ */
+interface ModSlotPage {
+    open(panelId: string): void;
+    /** The page went away: let go of everything `open` took. The store
+     *  unregisters the panel after. */
+    close(): void;
+    layout(): ModPageLayout;
+    tap?(path: string): boolean;
 }
 /** One control's place on the Move page, with the gestures it answers to. */
 interface ModPageSlot {
@@ -283,7 +307,8 @@ declare function registerModType(def: ModTypeDef): void;
 declare const getModType: (type: ModulationType) => ModTypeDef | undefined;
 /** The mark a slot's dot wears — null for a type that names none (a plain dot). */
 declare const modGlyph: (slot: ModulationSlot) => ModGlyph | null;
-/** The registered types, registration order — the settings page's type enum. */
+/** The types a slot can be switched to, registration order — the settings
+ *  page's type enum. A lent type is the lender's, never a choice. */
 declare const listModTypes: () => ModTypeDef[];
 /**
  * Every settings page's width in dial slots: the type picker plus the
@@ -490,5 +515,12 @@ declare function audioModLevel(position: number): number;
  * loop pumps a filter the way it pumps the room.
  */
 declare const AUDIO_DEF: ModTypeDef;
+/**
+ * Automation lanes on the step row: no signal of its own (the lanes drive
+ * their controls directly), a steady full light, and the timeline's mark.
+ * Lent by `AutomationLanesStore.attachSlot`, which brings the timeline
+ * control mode as its page.
+ */
+declare const AUTOMATION_DEF: ModTypeDef;
 
-export { ADSR_DEF, ADSR_STAGE_MAX, AUDIO_DEF, type AudioModWindow, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EnvStage, LFO_DEF, LFO_SYNC_DEFAULT, LFO_SYNC_DIVISIONS, LFO_SYNC_OPTIONS, MOD_COLORS, MOD_COLOR_NAMES, MOD_PAGE_DIALS, MOD_RANGE_CONTROL, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModRange, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, audioModLevel, curveComposition, curveDuration, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, getAudioModBuffer, getAudioModVersion, getAudioModWindow, getModType, lfoDivisionBeats, lfoSyncedHz, listModTypes, modColor, modGlyph, modKey, modPageLayout, modPageWidth, modRange, modRangeArc, modReach, modRingArc, rangeSignal, registerModType, restoreModParams, setAudioModBuffer, setAudioModWindowSource, subscribeAudioMod, visibleModControls };
+export { ADSR_DEF, ADSR_STAGE_MAX, AUDIO_DEF, AUTOMATION_DEF, type AudioModWindow, CURVE_DEF, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MIN_DURATION, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EnvStage, LFO_DEF, LFO_SYNC_DEFAULT, LFO_SYNC_DIVISIONS, LFO_SYNC_OPTIONS, MOD_COLORS, MOD_COLOR_NAMES, MOD_PAGE_DIALS, MOD_RANGE_CONTROL, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, type ModControlMeta, type ModPageLayout, type ModPageSlot, type ModRange, type ModSlotPage, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationType, SH_DEF, applyModulation, audioModLevel, curveComposition, curveDuration, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, getAudioModBuffer, getAudioModVersion, getAudioModWindow, getModType, lfoDivisionBeats, lfoSyncedHz, listModTypes, modColor, modGlyph, modKey, modPageLayout, modPageWidth, modRange, modRangeArc, modReach, modRingArc, rangeSignal, registerModType, restoreModParams, setAudioModBuffer, setAudioModWindowSource, subscribeAudioMod, visibleModControls };
