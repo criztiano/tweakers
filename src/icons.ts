@@ -381,12 +381,13 @@ export const ICON_BADGE_ON =
 /**
  * The modulator types, as the marks cut out of a modulation circle's dot:
  * the wave an LFO runs, the die S&H throws, the envelope's rise and fall,
- * the keys that strike it, a curve's arch, the note an audio slot plays.
+ * the keys that strike it, a curve's arch, the note an audio slot plays,
+ * the lane and playhead automation runs on.
  * Drawn on a 24px grid around a 16px dot centred at 12,12 — `paths` are
  * stroked with round ends, `fills` and `circles` are solid — and a mark may
  * run off the dot's edge: the dot is the cut's boundary.
  */
-export type ModGlyph = 'lfo' | 'sh' | 'adsr' | 'keys' | 'curve' | 'audio';
+export type ModGlyph = 'lfo' | 'sh' | 'adsr' | 'keys' | 'curve' | 'audio' | 'timeline';
 
 export const MOD_GLYPHS: Record<ModGlyph, Omit<MoveFunctionGlyph, 'viewBox' | 'size' | 'text'>> = {
   lfo: { paths: ['M3.5 12C5.75 5.75 9.5 5.75 12 12C14.5 18.25 18.25 18.25 20.5 12'] },
@@ -411,4 +412,6 @@ export const MOD_GLYPHS: Record<ModGlyph, Omit<MoveFunctionGlyph, 'viewBox' | 's
     fills: ['M9.875 8.1L17.875 6.5V8.5L9.875 10.1Z'],
     paths: ['M10.75 15.5V9', 'M17 14.25V7.5'],
   },
+  /* automation: a lane's run with the playhead standing across it */
+  timeline: { paths: ['M3 16.5H9L14 8.5H21', 'M7 4.5V19.5'] },
 };

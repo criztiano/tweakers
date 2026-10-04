@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createLane, laneByKey, valueAt, valueBefore, type AutomationTimeline } from '../src/automation-core';
 import { AutomationLanesStore, type AutomationCommit } from '../src/automation-store';
+import { MoveFunctions } from '../src/move-functions';
 
 // The store between a host's clock and its controls, run on a fake clock: a
 // pass of `duration` seconds that the test walks a frame at a time.
@@ -34,6 +35,18 @@ const flat = (key = 'in:chaos', base = 5): AutomationTimeline => ({ lanes: [crea
 const lane = (tl: AutomationTimeline, key = 'in:chaos') => laneByKey(tl, key)!;
 
 describe('a take', () => {
+  it('lights Rec for as long as it runs — ended or dropped', () => {
+    const { store } = rig();
+    store.load('a', { lanes: [] });
+    store.startTake();
+    expect(MoveFunctions.isOn('rec')).toBe(true);
+    store.endTake();
+    expect(MoveFunctions.isOn('rec')).toBe(false);
+    store.startTake();
+    store.cancelTake();
+    expect(MoveFunctions.isOn('rec')).toBe(false);
+  });
+
   it('rolls a stopped transport, and commits once across every timeline it wrote', () => {
     const { store, commits, play, run } = rig();
     store.load('a', { lanes: [] });
@@ -207,5 +220,26 @@ describe('editing on the card', () => {
     expect(valueAt(out, 0.1)).toBe(0);
     expect(valueAt(out, 0.5)).toBeGreaterThan(1);
     expect(valueAt(out, 0.5)).toBeLessThan(9);
+  });
+});
+
+describe('a colour lane', () => {
+  it('records whole colours, plays them back blended, and refuses to smooth', () => {
+    const { store, commits, run } = rig();
+    store.load('a', { lanes: [] });
+    store.startTake();
+    run(0.2);
+    const meta = { label: 'Fill', min: 0, max: 1, before: 0xff0000, interp: 'color' as const };
+    run(0.4, () => store.edit('fill', 0x0000ff + 0.3, meta));
+    store.endTake();
+    const lane = laneByKey((commits[0] as Extract<AutomationCommit, { kind: 'take' }>).timelines.get('a')!, 'fill')!;
+    expect(lane.interp).toBe('color');
+    expect(lane.max).toBe(0xffffff);
+    expect(lane.points.every((p) => Number.isInteger(p.v))).toBe(true);
+    expect(valueAt(lane, 0.05)).toBe(0xff0000);
+    expect(valueAt(lane, 0.25)).toBe(0x0000ff);
+    expect(store.smooth('fill')).toBe(false);
+    expect(store.smooth('fill', 2)).toBe(false);
+    expect(commits).toHaveLength(1);
   });
 });

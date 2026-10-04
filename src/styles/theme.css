@@ -5577,7 +5577,8 @@
 }
 
 /* The timeline's clock in the panel's volume corner: Play, the time, Loop
-   and Rec — ember while off, lit while on, the take in the record red. */
+   and Rec — ember while off, lit while on: Play in emerald while it rolls,
+   the take in the record red. */
 .tweakers-move-timeline-clock {
   gap: 4px;
   padding: 0 4px;
@@ -5618,6 +5619,10 @@
   color: var(--move-text);
 }
 
+.tweakers-move-timeline-key[data-name='play'][data-on] {
+  color: var(--move-emerald);
+}
+
 .tweakers-move-timeline-key[data-name='rec'][data-on] {
   color: var(--move-red);
 }
@@ -5636,6 +5641,19 @@
    the record red while a take writes it. The bar under the rows reads the
    selection and carries Smooth, Clear and Delete lane.
    ------------------------------------------------------------------------ */
+
+/* Timeline control mode: the automation slot's page floats the card above
+   the panel, where the curve composer floats — the display its dials and
+   keys are working on. */
+.tweakers-move-automation-float {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(960px, calc(100vw - 48px));
+  border-radius: var(--move-radius);
+  box-shadow: var(--move-list-shadow);
+}
 
 .tweakers-move-automation {
   --move-automation-open: 72px;
@@ -5746,6 +5764,26 @@
 
 .tweakers-move-automation-lane[data-selected] .tweakers-move-automation-line {
   opacity: 1;
+}
+
+/* A colour lane: the colour over the pass, as a strip filling the plot.
+   Dimmed like a line until the lane is open. */
+.tweakers-move-automation-strip {
+  position: absolute;
+  inset: 0;
+  border-radius: 2px;
+  opacity: 0.75;
+  pointer-events: none;
+  transition: opacity var(--move-automation-motion);
+}
+
+.tweakers-move-automation-lane[data-selected] .tweakers-move-automation-strip {
+  opacity: 1;
+}
+
+/* A colour point wears its colour; the frame says which one is selected. */
+.tweakers-move-automation-point[data-color] {
+  border-width: 2px;
 }
 
 /* What a hand is writing right now, over the lane it will replace. */

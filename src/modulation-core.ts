@@ -64,7 +64,7 @@ export const MOD_COLORS: string[] = MOD_COLOR_NAMES.map((name) => MOVE_PALETTE[n
 export const modColor = (index: number) =>
   MOD_COLORS[((index % MOD_SLOTS) + MOD_SLOTS) % MOD_SLOTS];
 
-export type ModulationType = 'lfo' | 'adsr' | 'envelope' | 'curve' | 'sh' | 'sequencer' | 'audio';
+export type ModulationType = 'lfo' | 'adsr' | 'envelope' | 'curve' | 'sh' | 'sequencer' | 'audio' | 'automation';
 
 /** The envelope's four stages — the four columns of its picture. */
 export type EnvStage = 'attack' | 'decay' | 'sustain' | 'release';
@@ -201,6 +201,31 @@ export interface ModTypeDef {
    * shapes it by the slot's range. Absent means -1..1.
    */
   unipolar?(params: ModulationParams): boolean;
+  /**
+   * A modulator the kit runs for a host — automation lanes. It reaches a
+   * step only through `ModulationStore.lendSlot`, which hands it its page;
+   * it is never in the type picker, never saved with the slots (the host
+   * owns what it plays), and never takes a wire.
+   */
+  lent?: boolean;
+}
+
+/**
+ * The page a lent slot brings instead of the generated settings page — the
+ * same door (`openSettings`, the step tap, the track buttons closing it),
+ * a page of the lender's own. It registers its panel itself, under the id
+ * `open` is handed and with `kind: 'modulation'`, so the kit and the panel
+ * lay it out like any modulator's page; `layout` places its controls the
+ * way `getSettingsLayout` places a modulator's, and `tap` answers a knob
+ * tap on a dial the layout marks `cycle`.
+ */
+export interface ModSlotPage {
+  open(panelId: string): void;
+  /** The page went away: let go of everything `open` took. The store
+   *  unregisters the panel after. */
+  close(): void;
+  layout(): ModPageLayout;
+  tap?(path: string): boolean;
 }
 
 /* ── the settings page's layout ───────────────────────────────────────── */
@@ -358,8 +383,9 @@ export const getModType = (type: ModulationType): ModTypeDef | undefined => regi
 export const modGlyph = (slot: ModulationSlot): ModGlyph | null =>
   getModType(slot.type)?.glyph?.(slot.params) ?? null;
 
-/** The registered types, registration order — the settings page's type enum. */
-export const listModTypes = (): ModTypeDef[] => [...registry.values()];
+/** The types a slot can be switched to, registration order — the settings
+ *  page's type enum. A lent type is the lender's, never a choice. */
+export const listModTypes = (): ModTypeDef[] => [...registry.values()].filter((def) => !def.lent);
 
 /**
  * Every settings page's width in dial slots: the type picker plus the
@@ -1382,3 +1408,25 @@ export const AUDIO_DEF: ModTypeDef = {
 };
 
 registerModType(AUDIO_DEF);
+
+/* ── Automation — the slot a host's lanes hold on the step row ────────── */
+
+/**
+ * Automation lanes on the step row: no signal of its own (the lanes drive
+ * their controls directly), a steady full light, and the timeline's mark.
+ * Lent by `AutomationLanesStore.attachSlot`, which brings the timeline
+ * control mode as its page.
+ */
+export const AUTOMATION_DEF: ModTypeDef = {
+  type: 'automation',
+  label: 'Automation',
+  defaults: {},
+  controls: [],
+  glyph: () => 'timeline',
+  lent: true,
+  createState: () => null,
+  tick: () => 1,
+  unipolar: () => true,
+};
+
+registerModType(AUTOMATION_DEF);

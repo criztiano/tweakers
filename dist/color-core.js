@@ -149,6 +149,15 @@ function oklchToRgb(oklch) {
     a: clamp01(a)
   };
 }
+function oklabToRgb(L, A, B, a = 1) {
+  const lin = oklabToLinearRgb(L, A, B);
+  return {
+    r: byte(linearToSrgb(clamp01(lin.r)) * 255),
+    g: byte(linearToSrgb(clamp01(lin.g)) * 255),
+    b: byte(linearToSrgb(clamp01(lin.b)) * 255),
+    a: clamp01(a)
+  };
+}
 var ALPHA_CHANNEL = { key: "a", label: "A", min: 0, max: 100, step: 1, precision: 0 };
 var CHANNELS = {
   rgb: [
@@ -243,11 +252,13 @@ export {
   hsvToRgb,
   normalizeHex,
   normalizeHexEdit,
+  oklabToRgb,
   oklchToRgb,
   opacityPercent,
   parseHex,
   rgbToHsl,
   rgbToHsv,
+  rgbToOklab,
   rgbToOklch,
   rgbaToChannels,
   serializePalette

@@ -16,6 +16,7 @@ import {
   visibleModControls,
   type ModTypeDef,
   type ModPageLayout,
+  type ModSlotPage,
   type ModulationSlot,
   type ModulationType,
   type ModulationParams,
@@ -57,6 +58,11 @@ import {
  *
  * Slots and assignments persist to localStorage (fail-soft, like panel
  * values), so a prototype's modulation setup survives a reload.
+ *
+ * A slot can also be LENT (`lendSlot`): the kit runs a modulator there for a
+ * host — automation lanes — with a page of the lender's own. A lent slot is
+ * never saved (the host owns what it plays), takes no wire, and survives a
+ * hold on its step: only the lender hands it back.
  */
 
 /** A touched control stays armed for assignment this long. */
@@ -113,6 +119,8 @@ class ModulationStoreClass {
   private bpm = 120;
   private touched: { panelId: string; path: string; at: number; used: boolean } | null = null;
   private settingsIndex: number | null = null;
+  /** The lent slots' pages, by slot. */
+  private pages = new Map<number, ModSlotPage>();
   private settingsUnsub: (() => void) | null = null;
   /** The control set the open page was built from — see `shapeOf`. */
   private settingsShape = '';
@@ -129,7 +137,7 @@ class ModulationStoreClass {
       for (const slot of saved.slots ?? []) {
         const i = Math.round(Number(slot?.index));
         const def = slot?.type ? getModType(slot.type) : undefined;
-        if (i >= 0 && i < MOD_SLOTS && def && slot.params) {
+        if (i >= 0 && i < MOD_SLOTS && def && !def.lent && slot.params) {
           this.slots[i] = { ...slot, index: i, params: restoreModParams(def, slot.params) };
           TweakStore.noteMoveKitUse('modulation');
         }
@@ -202,7 +210,15 @@ class ModulationStoreClass {
       console.warn(`[tweakers] modulator type "${type}" is not registered`);
       return null;
     }
-    const slot: ModulationSlot = { index, type, params: freshParams(def) };
+    if (def.lent) {
+      console.warn(`[tweakers] "${type}" is lent by its host (lendSlot), never created on a step`);
+      return null;
+    }
+    return this.fill(index, def);
+  }
+
+  private fill(index: number, def: ModTypeDef): ModulationSlot {
+    const slot: ModulationSlot = { index, type: def.type, params: freshParams(def) };
     // a modulator lights and assigns from the step row only through the
     // kit's `modulation` option
     TweakStore.noteMoveKitUse('modulation');
@@ -240,7 +256,7 @@ class ModulationStoreClass {
   setSlotType(index: number, type: ModulationType): void {
     const slot = this.slots[index];
     const def = getModType(type);
-    if (!slot || !def) return;
+    if (!slot || !def || def.lent || this.pages.has(index)) return;
     slot.type = type;
     slot.params = freshParams(def);
     this.states.set(index, def.createState());
@@ -255,9 +271,48 @@ class ModulationStoreClass {
     this.changed();
   }
 
-  /** Remove a slot's modulation and every assignment wired to it. */
+  /**
+   * Remove a slot's modulation and every assignment wired to it. A lent slot
+   * stays: a hold on its step is not how it goes — its lender hands it back.
+   */
   removeSlot(index: number): void {
-    if (!this.slots[index]) return;
+    if (!this.slots[index] || this.pages.has(index)) return;
+    this.clearSlot(index);
+  }
+
+  /**
+   * Lend the first free step to a modulator the kit runs for a host (a
+   * `lent` type — automation lanes), with the page its step opens. Returns
+   * the slot's index, or null when every step is taken. The slot lights and
+   * opens like any other; it is never saved and never takes a wire.
+   */
+  lendSlot(type: ModulationType, page: ModSlotPage): number | null {
+    const def = getModType(type);
+    if (!def?.lent) {
+      console.warn(`[tweakers] only a lent modulator type can be lent a slot; "${type}" is not one`);
+      return null;
+    }
+    const index = this.slots.findIndex((slot) => slot === null);
+    if (index < 0) return null;
+    this.pages.set(index, page);
+    this.fill(index, def);
+    return index;
+  }
+
+  /** Hand a lent slot back: its page closes and the step is free again. */
+  returnSlot(index: number): void {
+    if (!this.pages.has(index)) return;
+    if (this.settingsIndex === index) this.closeSettings();
+    this.pages.delete(index);
+    this.clearSlot(index);
+  }
+
+  /** Whether a slot is lent — its modulator is a host's, not the shelf's. */
+  isLent(index: number): boolean {
+    return this.pages.has(index);
+  }
+
+  private clearSlot(index: number): void {
     if (this.settingsIndex === index) this.closeSettings();
     this.slots[index] = null;
     this.states.delete(index);
@@ -278,7 +333,7 @@ class ModulationStoreClass {
    * yet registered is accepted on trust and resolves when its panel appears.
    */
   assign(panelId: string, path: string, slot: number, amount = 0.5): boolean {
-    if (!this.slots[slot]) return false;
+    if (!this.slots[slot] || this.pages.has(slot)) return false;
     if (panelId === MOD_SETTINGS_PANEL) return false;   // a modulator can't modulate its own page
 
     if (TweakStore.getPanel(panelId) && !this.resolveMeta(panelId, path)) {
@@ -354,6 +409,8 @@ class ModulationStoreClass {
    * onto it. Returns what happened, for lights and readouts.
    */
   assignFromStep(index: number): { action: ModStepAction; slot: ModulationSlot | null } {
+    // A lent slot takes no wire: its step only opens its page.
+    if (this.pages.has(index)) return { action: 'none', slot: this.getSlot(index) };
     const t = this.touched;
     const armed = t && !t.used && Date.now() - t.at < MOD_TOUCH_GRACE_MS;
     if (!armed) return { action: 'none', slot: this.getSlot(index) };
@@ -414,6 +471,14 @@ class ModulationStoreClass {
     const def = slot && getModType(slot.type);
     if (!slot || !def) return null;
     this.closeSettings();
+    const page = this.pages.get(index);
+    if (page) {
+      // A lent slot's page is its lender's: it registers the panel itself.
+      this.settingsIndex = index;
+      page.open(MOD_SETTINGS_PANEL);
+      this.changed();
+      return MOD_SETTINGS_PANEL;
+    }
     this.settingsIndex = index;
     this.registerSettingsPanel(slot, def);
     this.settingsUnsub = TweakStore.subscribe(MOD_SETTINGS_PANEL, () => this.onSettingsChange());
@@ -423,10 +488,12 @@ class ModulationStoreClass {
 
   closeSettings(): void {
     if (this.settingsIndex === null) return;
+    const page = this.pages.get(this.settingsIndex);
     this.settingsUnsub?.();
     this.settingsUnsub = null;
     this.settingsIndex = null;
     this.settingsShape = '';
+    page?.close();
     TweakStore.unregisterPanel(MOD_SETTINGS_PANEL);
     this.changed();
   }
@@ -442,6 +509,8 @@ class ModulationStoreClass {
    * they never disagree about which knob a pad belongs to.
    */
   getSettingsLayout(): ModPageLayout | null {
+    const page = this.settingsIndex === null ? undefined : this.pages.get(this.settingsIndex);
+    if (page) return page.layout();
     const slot = this.settingsIndex === null ? null : this.slots[this.settingsIndex];
     const def = slot && getModType(slot.type);
     if (!slot || !def) return null;
@@ -481,6 +550,8 @@ class ModulationStoreClass {
 
   /** A knob tap on a page dial that cycles (the curve's clip vocabulary). */
   tapSettingsControl(path: string): boolean {
+    const page = this.settingsIndex === null ? undefined : this.pages.get(this.settingsIndex);
+    if (page) return page.tap?.(path) ?? false;
     const slot = this.settingsIndex === null ? null : this.slots[this.settingsIndex];
     const def = slot && getModType(slot.type);
     const cycle = def?.controls.find((c) => c.path === path)?.cycle;
@@ -791,14 +862,15 @@ class ModulationStoreClass {
     this.frameListeners.forEach((fn) => fn());
   }
 
-  /** Wipe every slot, assignment, and the persisted shelf. */
+  /** Wipe every slot, assignment, and the persisted shelf. A lent slot is
+   *  its lender's and stays. */
   clear(): void {
     this.closeSettings();
-    this.slots.fill(null);
+    this.slots = this.slots.map((slot, i) => (this.pages.has(i) ? slot : null));
     this.assignments.clear();
     this.pending = [];
-    this.states.clear();
-    this.signals.fill(0);
+    for (const i of [...this.states.keys()]) if (!this.pages.has(i)) this.states.delete(i);
+    this.signals = this.signals.map((v, i) => (this.pages.has(i) ? v : 0));
     this.touched = null;
     clearPersisted(PERSIST_TARGET);
     this.changed();
@@ -838,7 +910,8 @@ class ModulationStoreClass {
   private changed(): void {
     this.version++;
     savePersisted(PERSIST_TARGET, {
-      slots: this.getSlots(),
+      // A lent slot is its host's to bring back: it never reaches the shelf.
+      slots: this.getSlots().filter((slot) => !this.pages.has(slot.index)),
       // Every saved wire carries its panel's NAME when one is knowable — the
       // identity a reload re-binds by. Pending wires (their panel never
       // registered this session) ride along unchanged, so an unopened

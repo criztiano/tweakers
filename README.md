@@ -1,4 +1,4 @@
-# tweakers v1.3.0
+# tweakers v1.4.0
 
 Real-time parameter tweaking for React, Solid, Svelte, and Vue.
 
@@ -1336,7 +1336,7 @@ lanes.claimRec();
 <MoveAutomationLanes store={lanes} onSeek={seek} />
 ```
 
-A take overdubs: only what was moved is replaced, and each pass plays back what the last one wrote. A hand on a control wins while it holds, and outside a take it writes nothing. The card is the timeline's, with curves: click a lane to open it, drag its points, double-click to add or delete one, drag across to select a stretch, then Smooth, Clear or Delete lane. See [integration](docs/integration.md#automation-lanes-the-host-owns-the-clock) for the host's side.
+A take overdubs: only what was moved is replaced, and each pass plays back what the last one wrote. A hand on a control wins while it holds, and outside a take it writes nothing. The card is the timeline's, with curves: click a lane to open it, drag its points, double-click to add or delete one, drag across to select a stretch, then Smooth, Clear or Delete lane. Colours record too (`interp: 'color'`, blended in OKLab, drawn as a strip). `lanes.attachSlot({ onSeek })` puts the lanes on the step row: a slot that appears once a lane exists, whose step opens timeline control mode — the card over the panel, and the Move's knobs, keys and step row on the lanes. See [integration](docs/integration.md#automation-lanes-the-host-owns-the-clock) for the host's side.
 
 ### Function buttons
 

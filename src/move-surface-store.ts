@@ -140,6 +140,10 @@ const listeners = new Set<Listener>();
 const pressListeners = new Set<PressListener>();
 const screenSelectListeners = new Set<(index: number) => void>();
 const stepListeners = new Set<(step: { index: number; shift: boolean }) => void>();
+const stepReleaseListeners = new Set<(step: { index: number }) => void>();
+/** Whether a release has ever arrived — the bridge kit sends them from the
+ *  version that reads holds on the row; an older one sends presses alone. */
+let stepReleaseFeed = false;
 
 const emit = () => {
   for (const fn of listeners) fn();
@@ -276,6 +280,26 @@ export const MoveSurfaceStore = {
     if (!Number.isInteger(index) || index < 0 || index > 15) return;
     for (const fn of stepListeners) fn({ index, shift });
   },
+
+  /**
+   * A step let go, for the app that holds the row: a press without its
+   * release is a step still held, so a held step and a tapped one can make
+   * a gesture of two. Only a kit that sends them delivers releases — check
+   * `stepReleases()` before reading a press as a hold.
+   */
+  onStepRelease(fn: (step: { index: number }) => void): () => void {
+    stepReleaseListeners.add(fn);
+    return () => stepReleaseListeners.delete(fn);
+  },
+
+  releaseStep(index: number) {
+    if (!Number.isInteger(index) || index < 0 || index > 15) return;
+    stepReleaseFeed = true;
+    for (const fn of stepReleaseListeners) fn({ index });
+  },
+
+  /** Whether step releases arrive at all (see `onStepRelease`). */
+  stepReleases: (): boolean => stepReleaseFeed,
 
   /** Hand the whole surface back — the panel returns to its plain layout. */
   reset() {

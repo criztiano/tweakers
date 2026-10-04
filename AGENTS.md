@@ -109,8 +109,10 @@ The sixteen step buttons are the modulation row. They belong to
 
 - Do not claim the step row for app features, transport, presets, or
   navigation.
-- The one sanctioned exception already in the kit is the waveform's loop bar,
-  and it yields: it takes only the steps no modulation slot has claimed.
+- The sanctioned exceptions already in the kit: the waveform's loop bar,
+  which yields — it takes only the steps no modulation slot has claimed — and
+  timeline control mode, which is a modulation slot's own page (the automation
+  slot's) and borrows the row only while that page is open.
 - Never give modulation and an app sequencer simultaneous ownership of a step.
 - Modulator settings pages come from `modulation.getSettingsLayout()`. Do not
   re-derive that layout anywhere else.

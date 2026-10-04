@@ -624,8 +624,9 @@ export function MoveTimelineZoom() {
  * The timeline's clock, in the panel's volume corner while a timeline holds
  * the knob: the playhead's time with the transport around it — Play at its
  * left, Loop and (when the app records) Rec at its right. Each is lit while
- * on and runs exactly what its hardware key runs, so a click and a press are
- * one gesture. The time is written to its span every frame at a fixed
+ * on — Play emerald and Rec red, read from the keys' on-state as the Move
+ * lights them — and runs exactly what its hardware key runs, so a click and
+ * a press are one gesture. The time is written to its span every frame at a fixed
  * width, so the pill never breathes.
  */
 export function MoveTimelineClock() {
@@ -636,9 +637,13 @@ export function MoveTimelineClock() {
   );
   const id = MoveTimelineStore.activeId() ?? '';
   const subscribe = useCallback((cb: () => void) => TimelineStore.subscribe(id, cb), [id]);
-  const playing = useSyncExternalStore(subscribe, () => TimelineStore.getTransport(id).playing, () => false);
   const looping = useSyncExternalStore(subscribe, () => TimelineStore.isLooping(id), () => true);
-  const recording = MoveTimelineStore.isRecording();
+  // Play and Rec light from the keys' own on-state — whoever runs the
+  // transport or the take says so there, so the clock and the Move's keys
+  // can never disagree.
+  const subscribeKeys = useCallback((cb: () => void) => MoveFunctions.subscribe(cb), []);
+  const playing = useSyncExternalStore(subscribeKeys, () => MoveFunctions.isOn('play'), () => false);
+  const recording = useSyncExternalStore(subscribeKeys, () => MoveFunctions.isOn('rec'), () => false);
   const canRecord = MoveTimelineStore.canRecord();
 
   const clockRef = useRef<HTMLSpanElement>(null);
@@ -656,6 +661,7 @@ export function MoveTimelineClock() {
       <button
         type="button"
         className="tweakers-move-timeline-key"
+        data-name="play"
         data-on={playing || undefined}
         aria-label={playing ? 'Pause' : 'Play'}
         aria-pressed={playing}

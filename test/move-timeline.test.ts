@@ -222,6 +222,24 @@ describe('a timeline on the surface', () => {
     release();
   });
 
+  it('lights Play while the transport rolls and Rec while a take runs, and lets both go on release', () => {
+    const release = MoveTimelineStore.register(id, { onRecord: () => {} });
+    expect(MoveFunctions.isOn('play')).toBe(false);
+    MoveFunctions.run('play');
+    expect(MoveFunctions.isOn('play')).toBe(true);
+    MoveFunctions.run('rec');
+    expect(MoveFunctions.isOn('rec')).toBe(true);
+    expect(MoveFunctions.onList()).toEqual(['play', 'rec']);
+    MoveFunctions.run('rec');
+    expect(MoveFunctions.isOn('rec')).toBe(false);
+    MoveFunctions.run('rec');
+    release();
+    // The hands go back: nothing the timeline lit stays lit.
+    expect(MoveFunctions.isOn('play')).toBe(false);
+    expect(MoveFunctions.isOn('rec')).toBe(false);
+    TimelineStore.pause(id);
+  });
+
   it('gives the hands to the newest timeline, and back to the one underneath', () => {
     const other = 'surface-timeline-2';
     TimelineStore.register({ id: other, name: other, duration: 8, loop: false, loopStart: 0, clips: [] }, { autoplay: false });
@@ -237,6 +255,29 @@ describe('a timeline on the surface', () => {
     expect(MoveFunctions.list()).toContain('play');
     first();
     TimelineStore.unregister(other);
+  });
+
+  it('leaves the knob to a newer claim standing over it, and scrubs again once it goes', () => {
+    const release = MoveTimelineStore.register(id);
+    const volume = (delta: number) =>
+      window.dispatchEvent(new CustomEvent('move-tweakers:volume', { detail: { delta, shift: false }, cancelable: true }));
+    TimelineStore.seek(id, 2);
+    const releasePage = MoveVolumeDisplay.claim({ label: 'time', value: 'page' });
+    volume(4);
+    expect(TimelineStore.getTransport(id).time).toBe(2);
+    releasePage();
+    volume(4);
+    expect(TimelineStore.getTransport(id).time).toBeGreaterThan(2);
+    release();
+  });
+
+  it('claims the knob in the kit’s configure for any volume claim, not only a timeline', () => {
+    const options = moveKitOptions();
+    expect({ ...options.claims }.master).toBeUndefined();
+    const release = MoveVolumeDisplay.claim({ label: 'time', value: '0:00.0' });
+    expect({ ...options.claims }.master).toBe(true);
+    release();
+    expect({ ...options.claims }.master).toBeUndefined();
   });
 
   it('claims the volume knob in the kit’s configure while a timeline holds it', () => {

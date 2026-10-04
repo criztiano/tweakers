@@ -65,6 +65,12 @@ declare function rgbToHsv(rgba: RGBA): HSVA;
 declare function hsvToRgb(hsva: HSVA): RGBA;
 declare function rgbToHsl(rgba: RGBA): HSLA;
 declare function hslToRgb(hsla: HSLA): RGBA;
+/** An sRGB colour's OKLab coordinates — L 0–1, A and B roughly ±0.4. */
+declare function rgbToOklab(rgba: RGBA): {
+    L: number;
+    A: number;
+    B: number;
+};
 declare function rgbToOklch(rgba: RGBA): OKLCH;
 /**
  * Maps an out-of-gamut OKLCH into sRGB by binary-searching the chroma down,
@@ -72,6 +78,12 @@ declare function rgbToOklch(rgba: RGBA): OKLCH;
  */
 declare function clampOklchToSrgb(oklch: OKLCH): OKLCH;
 declare function oklchToRgb(oklch: OKLCH): RGBA;
+/**
+ * Back from OKLab to sRGB, each channel clipped into gamut. For points on a
+ * straight line between two sRGB colours — a blend — which stray outside
+ * the gamut by a hair at most, so clipping cannot shift the hue you see.
+ */
+declare function oklabToRgb(L: number, A: number, B: number, a?: number): RGBA;
 type ChannelSpec = {
     key: string;
     label: string;
@@ -95,4 +107,4 @@ declare function serializePalette(slots: PaletteSlots): string;
 /** Fail-soft: bad JSON, wrong shape, or non-hex entries become empty slots. */
 declare function deserializePalette(raw: string | null | undefined): PaletteSlots;
 
-export { COLOR_FORMATS, type ChannelSpec, type ColorFormat, HEX_COLOR_REGEX, type HSLA, type HSVA, LONG_PRESS_MS, type OKLCH, PALETTE_DRAG_CANCEL_PX, PALETTE_SIZE, PALETTE_STORAGE_KEY, type PaletteSlots, type RGBA, bareHex, channelsToRgba, clampOklchToSrgb, deserializePalette, displayHex, emptyPalette, formatHex, getChannels, hslToRgb, hsvToRgb, normalizeHex, normalizeHexEdit, oklchToRgb, opacityPercent, parseHex, rgbToHsl, rgbToHsv, rgbToOklch, rgbaToChannels, serializePalette };
+export { COLOR_FORMATS, type ChannelSpec, type ColorFormat, HEX_COLOR_REGEX, type HSLA, type HSVA, LONG_PRESS_MS, type OKLCH, PALETTE_DRAG_CANCEL_PX, PALETTE_SIZE, PALETTE_STORAGE_KEY, type PaletteSlots, type RGBA, bareHex, channelsToRgba, clampOklchToSrgb, deserializePalette, displayHex, emptyPalette, formatHex, getChannels, hslToRgb, hsvToRgb, normalizeHex, normalizeHexEdit, oklabToRgb, oklchToRgb, opacityPercent, parseHex, rgbToHsl, rgbToHsv, rgbToOklab, rgbToOklch, rgbaToChannels, serializePalette };

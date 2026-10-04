@@ -22,6 +22,10 @@
  * (Undo resets the page's dials, Delete clears the sequencer, Play runs it).
  * Shift never appears here — it rides along as a flag on every press — and
  * the four track buttons always switch pages.
+ *
+ * A key whose function is running says so: `setOn('play', true)` while the
+ * transport rolls, `setOn('rec', true)` while a take writes. The kit reads
+ * `onList()` and the Move lights those keys in their own colour.
  */
 
 import { MOVE_PALETTE, type MovePaletteName } from './move-palette';
@@ -173,6 +177,9 @@ class MoveFunctionsClass {
   private options = new Map<MoveFunctionButton, MoveFunctionOptions>();
   private listeners = new Set<() => void>();
   private runListeners = new Set<MoveFunctionRunListener>();
+  /** The keys whose function is running right now — Play while the
+   *  transport rolls, Rec while a take writes. */
+  private on = new Set<MoveFunctionButton>();
   /** One set per standing `suspend`: the attachments it put to sleep —
    *  attached, but not in the view that took the surface. Views stack (a
    *  wait over the settings room), so a button sleeps while any of them
@@ -293,6 +300,37 @@ class MoveFunctionsClass {
       else this.overlays.delete(name);
       this.notify();
     };
+  }
+
+  /**
+   * Say that a key's function is on — Play while the transport rolls, Rec
+   * while a take writes. Whoever runs that function says so, from the same
+   * code that starts and stops it, so the light can never disagree with the
+   * thing it lights. The Move lights an on key in its own colour (Play
+   * emerald, Rec red) and the panel's clock does the same; subscribers hear
+   * every change, so the kit can tell the hardware.
+   */
+  setOn(name: MoveFunctionButton, on: boolean): void {
+    if (!MOVE_FUNCTION_BUTTONS.includes(name)) return;
+    if (this.on.has(name) === on) return;
+    if (on) this.on.add(name);
+    else this.on.delete(name);
+    this.notify();
+  }
+
+  /** Whether a key's function is on right now, attached or not. */
+  isOn(name: MoveFunctionButton): boolean {
+    return this.on.has(name);
+  }
+
+  /**
+   * The keys to light as on, manifest order — what the kit sends the Move.
+   * Only the lit ones: a key with nothing attached is dark, and an on-state
+   * cannot light a key that does nothing.
+   */
+  onList(): MoveFunctionButton[] {
+    const lit = this.list();
+    return MOVE_FUNCTION_BUTTONS.filter((name) => this.on.has(name) && lit.includes(name));
   }
 
   /** The screen name an attachment carries, if any. */

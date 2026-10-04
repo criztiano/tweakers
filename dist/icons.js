@@ -382,7 +382,9 @@ var MOD_GLYPHS = {
     circles: [{ cx: "8.75", cy: "15.5", r: "2.25" }, { cx: "15", cy: "14.25", r: "2.25" }],
     fills: ["M9.875 8.1L17.875 6.5V8.5L9.875 10.1Z"],
     paths: ["M10.75 15.5V9", "M17 14.25V7.5"]
-  }
+  },
+  /* automation: a lane's run with the playhead standing across it */
+  timeline: { paths: ["M3 16.5H9L14 8.5H21", "M7 4.5V19.5"] }
 };
 export {
   ICON_ADD_PRESET,

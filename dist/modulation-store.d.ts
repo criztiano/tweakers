@@ -1,4 +1,4 @@
-import { ModulationSlot, ModulationType, ModulationParams, ModulationAssignment, ModPageLayout } from './modulation-core.js';
+import { ModulationSlot, ModulationType, ModulationParams, ModSlotPage, ModulationAssignment, ModPageLayout } from './modulation-core.js';
 import './TweakStore-Bk855TFI.js';
 import './gradient-core.js';
 import './color-core.js';
@@ -44,6 +44,11 @@ import './icons.js';
  *
  * Slots and assignments persist to localStorage (fail-soft, like panel
  * values), so a prototype's modulation setup survives a reload.
+ *
+ * A slot can also be LENT (`lendSlot`): the kit runs a modulator there for a
+ * host — automation lanes — with a page of the lender's own. A lent slot is
+ * never saved (the host owns what it plays), takes no wire, and survives a
+ * hold on its step: only the lender hands it back.
  */
 /** A touched control stays armed for assignment this long. */
 declare const MOD_TOUCH_GRACE_MS = 4000;
@@ -80,6 +85,8 @@ declare class ModulationStoreClass {
     private bpm;
     private touched;
     private settingsIndex;
+    /** The lent slots' pages, by slot. */
+    private pages;
     private settingsUnsub;
     /** The control set the open page was built from — see `shapeOf`. */
     private settingsShape;
@@ -100,6 +107,7 @@ declare class ModulationStoreClass {
     private rebindAssignments;
     /** Create a modulation in a step's slot; an occupied slot is returned as-is. */
     createSlot(index: number, type?: ModulationType): ModulationSlot | null;
+    private fill;
     getSlot(index: number): ModulationSlot | null;
     /** The occupied slots, index order — the track row's circles. */
     getSlots(): ModulationSlot[];
@@ -113,8 +121,23 @@ declare class ModulationStoreClass {
     setSlotType(index: number, type: ModulationType): void;
     /** Point a slot at an external source (null returns it to the engine). */
     setSlotSource(index: number, sourceId: string | null): void;
-    /** Remove a slot's modulation and every assignment wired to it. */
+    /**
+     * Remove a slot's modulation and every assignment wired to it. A lent slot
+     * stays: a hold on its step is not how it goes — its lender hands it back.
+     */
     removeSlot(index: number): void;
+    /**
+     * Lend the first free step to a modulator the kit runs for a host (a
+     * `lent` type — automation lanes), with the page its step opens. Returns
+     * the slot's index, or null when every step is taken. The slot lights and
+     * opens like any other; it is never saved and never takes a wire.
+     */
+    lendSlot(type: ModulationType, page: ModSlotPage): number | null;
+    /** Hand a lent slot back: its page closes and the step is free again. */
+    returnSlot(index: number): void;
+    /** Whether a slot is lent — its modulator is a host's, not the shelf's. */
+    isLent(index: number): boolean;
+    private clearSlot;
     /**
      * Wire a control to a slot. Only bounded numeric controls (slider, number
      * with min/max) can be modulated; anything else is refused. A control not
@@ -246,7 +269,8 @@ declare class ModulationStoreClass {
      * directly with their own clock.
      */
     tick(dt: number): void;
-    /** Wipe every slot, assignment, and the persisted shelf. */
+    /** Wipe every slot, assignment, and the persisted shelf. A lent slot is
+     *  its lender's and stays. */
     clear(): void;
     private ensureLoop;
     private loop;

@@ -297,3 +297,98 @@ describe('the envelope settings page', () => {
     ModulationStore.closeSettings();
   });
 });
+
+describe('a lent slot', () => {
+  const page = () => {
+    const calls: string[] = [];
+    return {
+      calls,
+      open: (panelId: string) => {
+        calls.push(`open:${panelId}`);
+        TweakStore.registerPanel(panelId, 'Automation', { lane: { type: 'select', options: ['a'], default: 'a' } }, undefined, { kind: 'modulation' });
+      },
+      close: () => calls.push('close'),
+      layout: () => ({ dials: [{ path: 'lane' }], toggles: [null], values: [null] }),
+      tap: (path: string) => (calls.push(`tap:${path}`), true),
+    };
+  };
+
+  it('takes the first free step, and hands it back only when its lender does', () => {
+    ModulationStore.createSlot(0);
+    const p = page();
+    const index = ModulationStore.lendSlot('automation', p);
+    expect(index).toBe(1);
+    expect(ModulationStore.getSlot(1)).toMatchObject({ index: 1, type: 'automation' });
+    expect(ModulationStore.isLent(1)).toBe(true);
+    // A hold on its step deletes nothing, and a type switch cannot take it.
+    ModulationStore.removeSlot(1);
+    ModulationStore.setSlotType(1, 'lfo');
+    expect(ModulationStore.getSlot(1)?.type).toBe('automation');
+    // Clearing the shelf leaves the host's slot standing.
+    ModulationStore.clear();
+    expect(ModulationStore.getSlots().map((s) => s.index)).toEqual([1]);
+    ModulationStore.returnSlot(1);
+    expect(ModulationStore.getSlot(1)).toBeNull();
+    expect(ModulationStore.isLent(1)).toBe(false);
+  });
+
+  it('is never in the type picker, and cannot be made on a step', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(ModulationStore.createSlot(2, 'automation')).toBeNull();
+    expect(ModulationStore.lendSlot('lfo', page())).toBeNull();
+    warn.mockRestore();
+    ModulationStore.createSlot(0);
+    ModulationStore.openSettings(0);
+    const picker = TweakStore.getPanel(MOD_SETTINGS_PANEL)!.controls.find((c) => c.path === 'type')!;
+    expect(picker.options?.map((o) => (typeof o === 'string' ? o : o.value))).not.toContain('automation');
+    ModulationStore.closeSettings();
+  });
+
+  it('takes no wire: a touch and a tap on its step only open its page', () => {
+    const id = freshId();
+    register(id, { speed: [50, 0, 100] as [number, number, number] });
+    const p = page();
+    const index = ModulationStore.lendSlot('automation', p)!;
+    ModulationStore.noteTouch(id, 'speed');
+    expect(ModulationStore.assignFromStep(index).action).toBe('none');
+    expect(ModulationStore.assign(id, 'speed', index)).toBe(false);
+    expect(ModulationStore.getAssignment(id, 'speed')).toBeUndefined();
+    ModulationStore.returnSlot(index);
+  });
+
+  it('opens its lender’s page through the usual door, and closes it when handed back', () => {
+    const p = page();
+    const index = ModulationStore.lendSlot('automation', p)!;
+    expect(ModulationStore.openSettings(index)).toBe(MOD_SETTINGS_PANEL);
+    expect(p.calls).toEqual([`open:${MOD_SETTINGS_PANEL}`]);
+    expect(ModulationStore.getSettings()).toEqual({ index, panelId: MOD_SETTINGS_PANEL });
+    expect(ModulationStore.getSettingsLayout()?.dials).toEqual([{ path: 'lane' }]);
+    expect(ModulationStore.tapSettingsControl('lane')).toBe(true);
+    ModulationStore.returnSlot(index);
+    expect(p.calls).toEqual([`open:${MOD_SETTINGS_PANEL}`, 'tap:lane', 'close']);
+    expect(ModulationStore.getSettings()).toBeNull();
+    expect(TweakStore.getPanel(MOD_SETTINGS_PANEL)).toBeUndefined();
+  });
+
+  it('never reaches the persisted shelf', () => {
+    const store = new Map<string, string>();
+    const g = globalThis as unknown as { window?: unknown };
+    g.window = {
+      localStorage: {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => store.set(k, v),
+        removeItem: (k: string) => store.delete(k),
+      },
+      requestAnimationFrame: () => 0,
+    };
+    try {
+      const index = ModulationStore.lendSlot('automation', page())!;
+      ModulationStore.createSlot(5);
+      const saved = JSON.parse([...store.values()].pop()!) as { slots: { index: number }[] };
+      expect(saved.slots.map((s) => s.index)).toEqual([5]);
+      ModulationStore.returnSlot(index);
+    } finally {
+      delete g.window;
+    }
+  });
+});

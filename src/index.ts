@@ -131,6 +131,7 @@ export * as Automation from './automation-core';
 export type { AutomationInterp, AutomationPoint, AutomationRange, AutomationLane, AutomationTimeline, AutomationSpan, AutomationCursor } from './automation-core';
 export { AutomationLanesStore } from './automation-store';
 export type { AutomationHost, AutomationClock, AutomationCommit, AutomationStoreOptions, AutomationEditMeta, AutomationSelection, AutomationView } from './automation-store';
+export type { AutomationSlotOptions, AutomationSlotHandle } from './automation-slot';
 export { listenMoveTouch } from './move-automation';
 export { MoveAutomationLanes } from './components/MoveAutomationLanes';
 export type { MoveAutomationLanesProps } from './components/MoveAutomationLanes';

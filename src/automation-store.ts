@@ -5,6 +5,7 @@ import {
   createLane,
   deletePoint as deleteLanePoint,
   EMPTY_TIMELINE,
+  fitValue,
   laneByKey,
   mergeSpan,
   movePoint as moveLanePoint,
@@ -18,6 +19,7 @@ import {
   type AutomationPoint,
   type AutomationTimeline,
 } from './automation-core';
+import { AutomationSlot, type AutomationSlotHandle, type AutomationSlotOptions } from './automation-slot';
 import { MoveFunctions } from './move-functions';
 import { MOVE_TIMELINE_MAX_ZOOM, timelineWindow, zoomWindow } from './move-timeline';
 
@@ -42,6 +44,8 @@ import { MOVE_TIMELINE_MAX_ZOOM, timelineWindow, zoomWindow } from './move-timel
  *   const values = lanes.sample();          // key → value, the hand's while it holds one
  *   // when a control moves:
  *   if (lanes.edit(key, value, { label, min, max, before })) return; // the lane took it
+ *
+ *   lanes.attachSlot({ onSeek: (t) => transport.seek(t) }); // a step for the lanes, and its mode
  *
  * Recording is overdub. A take replaces a lane only where its control was
  * moved, and keeps writing on every pass while it runs: what one pass wrote
@@ -94,6 +98,8 @@ export interface AutomationEditMeta {
   max: number;
   /** The control's value before this move — a new lane starts flat at it. */
   before: number;
+  /** `color` for a colour control: values are packed RGB (`packColor`), and
+   *  the lane spans every colour whatever `min`/`max` say. */
   interp?: AutomationInterp;
 }
 
@@ -157,6 +163,7 @@ export class AutomationLanesStore {
 
   private listeners = new Set<Listener>();
   private version = 0;
+  private slot: AutomationSlot | null = null;
 
   constructor(host: AutomationHost, options: AutomationStoreOptions = {}) {
     this.host = host;
@@ -224,6 +231,7 @@ export class AutomationLanesStore {
     this.takeStart = this.phase();
     this.lastPhase = this.takeStart;
     this.laps = 0;
+    MoveFunctions.setOn('rec', true);
     if (!this.host.clock().playing) this.host.play();
     this.notify();
   }
@@ -234,6 +242,7 @@ export class AutomationLanesStore {
     this.closeSpans(Math.max(this.phase(), 0));
     const written = this.working;
     this.recording = false;
+    MoveFunctions.setOn('rec', false);
     this.working = new Map();
     if (this.currentId !== null) this.current = written.get(this.currentId) ?? this.current;
     if (written.size) this.host.commit({ kind: 'take', timelines: written });
@@ -244,6 +253,7 @@ export class AutomationLanesStore {
   cancelTake(): void {
     if (!this.recording) return;
     this.recording = false;
+    MoveFunctions.setOn('rec', false);
     this.working = new Map();
     this.spans.clear();
     // A hand on a control the take had just given a lane has nothing to hold.
@@ -304,7 +314,7 @@ export class AutomationLanesStore {
     let lane = laneByKey(this.timeline(), key);
     if (!this.recording || this.currentId === null) {
       if (!lane) return false;
-      this.hands.set(key, { value: clamp(value, lane.min, lane.max), at: now });
+      this.hands.set(key, { value: fitValue(lane, value), at: now });
       return true;
     }
     if (!lane) {
@@ -312,7 +322,7 @@ export class AutomationLanesStore {
       this.write(upsertLane(this.timeline(), lane));
       this.notify();
     }
-    const v = clamp(value, lane.min, lane.max);
+    const v = fitValue(lane, value);
     const held = this.hands.get(key);
     const phase = this.phase();
     if (!this.spans.has(key)) {
@@ -375,6 +385,7 @@ export class AutomationLanesStore {
     }
     this.lastPhase = phase;
     if (changed) this.notify();
+    this.slot?.frame();
   }
 
   /**
@@ -441,10 +452,17 @@ export class AutomationLanesStore {
     return done;
   }
 
-  /** One smoothing pass — over the selected stretch when the lane has one. */
-  smooth(key: string, strong = false): boolean {
+  /**
+   * One smoothing pass — over the selected stretch when the lane has one.
+   * `strong` is the Shift press; a number is the amount itself (0–4, the
+   * width of the blur in twentieths of the pass). A colour lane refuses.
+   */
+  smooth(key: string, strong: boolean | number = false): boolean {
+    if (laneByKey(this.current, key)?.interp === 'color') return false;
+    const amount = typeof strong === 'number' ? strong : strong ? SMOOTH_STRONG : SMOOTH_AMOUNT;
+    if (!(amount > 0)) return false;
     const range = this.selection.key === key ? this.selection.range ?? undefined : undefined;
-    const done = this.editLane(key, (lane) => ({ ...lane, points: smoothLane(lane, strong ? SMOOTH_STRONG : SMOOTH_AMOUNT, range, this.tolerance) }));
+    const done = this.editLane(key, (lane) => ({ ...lane, points: smoothLane(lane, amount, range, this.tolerance) }));
     // The points were all redrawn: a selected one is no longer the one it was.
     if (done && this.selection.key === key) this.select({ key, range });
     return done;
@@ -519,6 +537,28 @@ export class AutomationLanesStore {
       ({ shift }) => (shift && this.recording ? this.cancelTake() : this.toggleTake()),
       { label: options.label ?? 'Record', chip: false }
     );
+  }
+
+  /**
+   * The lanes on the step row: a modulation slot that holds the first free
+   * step while lanes exist, and opens timeline control mode on its step —
+   * the card over the panel, the Move's knobs, keys and step row on the
+   * lanes (see `automation-slot.ts`). One slot per store: attaching again
+   * replaces it. The handle says where it is and lets the host say when
+   * lanes exist (`setPresent`), when it holds them in several timelines.
+   */
+  attachSlot(options: AutomationSlotOptions = {}): AutomationSlotHandle {
+    this.slot?.release();
+    const slot = new AutomationSlot(this, options, () => this.notify());
+    this.slot = slot;
+    const release = slot.handle.release;
+    return {
+      ...slot.handle,
+      release: () => {
+        release();
+        if (this.slot === slot) this.slot = null;
+      },
+    };
   }
 
   subscribe(fn: Listener): () => void {

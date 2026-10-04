@@ -289,4 +289,36 @@ describe('move functions', () => {
     detachMute();
     detachSample();
   });
+
+  it('keeps an on-state per key, notifies on each change, and lights only attached keys', () => {
+    let notes = 0;
+    const off = MoveFunctions.subscribe(() => notes++);
+    MoveFunctions.setOn('play', true);
+    assert.equal(MoveFunctions.isOn('play'), true);
+    assert.equal(notes, 1);
+    // Saying it again changes nothing, and says nothing.
+    MoveFunctions.setOn('play', true);
+    assert.equal(notes, 1);
+    // On but not attached: no light — a dark key cannot be on.
+    assert.deepEqual(MoveFunctions.onList(), []);
+    const detachPlay = MoveFunctions.attach('play', () => {});
+    const releaseRec = MoveFunctions.push('rec', () => {});
+    MoveFunctions.setOn('rec', true);
+    assert.deepEqual(MoveFunctions.onList(), ['play', 'rec']);
+    // A suspended key goes dark, on or not.
+    const end = MoveFunctions.suspend(['rec']);
+    assert.deepEqual(MoveFunctions.onList(), ['rec']);
+    end();
+    const before = notes;
+    MoveFunctions.setOn('play', false);
+    assert.equal(notes, before + 1);
+    assert.deepEqual(MoveFunctions.onList(), ['rec']);
+    // A name off the manifest is no key at all.
+    MoveFunctions.setOn('enter' as never, true);
+    assert.equal(MoveFunctions.isOn('enter' as never), false);
+    MoveFunctions.setOn('rec', false);
+    releaseRec();
+    detachPlay();
+    off();
+  });
 });

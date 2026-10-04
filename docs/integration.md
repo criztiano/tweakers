@@ -118,8 +118,19 @@ The volume knob, when no slot has borrowed it as a second hand, is the app's to
 give a meaning. Listen for `MOVE_VOLUME_EVENT` (`{ delta, shift }`, cancelable)
 and `MOVE_VOLUME_TAP_EVENT` (`{ shift }`) on `window`, consume what you take with
 `preventDefault`, and name what the knob edits with `MoveVolumeDisplay` — a
-claimed volume knob with no readout is a bug. A mounted waveform takes the knob
-first. Listen for the settings room with `MOVE_SETTINGS_EVENT` or
+claimed volume knob with no readout is a bug. Something that takes the knob
+for a while (a mode, a page) claims it with `MoveVolumeDisplay.claim(readout)`
+instead: the kit asks the Move for the knob while any claim stands, the newest
+claim is in front, and its release hands knob and pill back. A mounted
+waveform takes the knob first.
+
+**On-state.** A function key whose function is running says so —
+`MoveFunctions.setOn('play', running)` from the code that starts and stops
+the transport, `setOn('rec', taking)` from the one that runs a take. The kit
+reads `MoveFunctions.onList()` (attached keys only) and the Move lights Play
+emerald and Rec red while on; the panel's clock reads `isOn` the same way. A
+`MoveTimeline` and an `AutomationLanesStore` already say it for their own
+transport and take — a host that runs its own transport says Play itself. Listen for the settings room with `MOVE_SETTINGS_EVENT` or
 `MoveSettingsView.subscribe`, never by the raw event string.
 
 Hardware has four tracks and eight dial columns. `buildMovePages`, `dialSpan`,
@@ -324,6 +335,48 @@ const releaseTouch = listenMoveTouch(lanes, (pageId, path) => keyOf(pageId, path
   are fine) and read them back through `Automation.validateTimeline`, which
   never throws: a broken lane costs that lane. When a copy renames controls,
   `Automation.remapKeys` carries the lanes over.
+- **Colour lanes.** A colour control records like any other with
+  `interp: 'color'` in its `edit` meta and the colour packed as one number —
+  `Automation.packColor('#rrggbb')` in, `Automation.unpackColor(v)` out. The
+  lane spans every colour whatever `min`/`max` say, blends between points in
+  OKLab, simplifies by how far apart colours look, and refuses Smooth. The
+  card draws it as a gradient strip.
+
+#### The automation slot and timeline control mode
+
+```ts
+const slot = lanes.attachSlot({
+  present: projectHasLanes,            // omit to follow the timeline in front
+  onSeek: (time) => scene.seek(time),  // the volume knob and the step row move the clock
+});
+slot.setPresent(projectHasLanes);      // whenever that changes
+slot.release();                        // on teardown
+```
+
+While lanes exist the slot holds the first free step on the modulation row
+(a lent slot, `ModulationStore.lendSlot`: never saved, never wired, never
+deleted by a hold, never in the type picker), lit steady with the timeline
+mark, and keeps that step for as long as it is present. Its step opens
+**timeline control mode** — the slot's page: the lanes card floats over the
+panel, and the Move works it.
+
+| Hand | Does |
+| --- | --- |
+| Knob 1 · 2 · 3 · 4 | Lane (list) · the selected point's time · its value (a colour dial on a colour lane) · Smooth amount — press knob 4 to smooth the lane or the stretch |
+| Volume knob | Scrubs the host's clock through `onSeek`; Shift is fine |
+| Wheel · wheel press | Zooms around the playhead · shows the whole pass |
+| Up / down · left / right | Previous / next lane · previous / next point |
+| Delete · Shift + Delete · Copy | Deletes the point or clears the stretch · deletes the lane · adds a point at the playhead |
+| Step row | The shown window in sixteen slices: a tap jumps there and picks the nearest point; hold one and tap another to select that stretch (Shift + click on screen) |
+| Back · the slot's own step | Leaves |
+
+Play and Rec keep their transport meaning. The keys, the knob claim and the
+step row are pushed while the mode is open and handed back on close, so the
+host's own arrows (scenes, say) come back after. `slot.isOpen()` reads true
+meanwhile — a host that docks its own lanes card hides it then, since the
+mode floats one. A held step needs the bridge kit to send step releases
+(`MoveSurfaceStore.releaseStep`); an older kit sends presses only, and the
+hold gesture stays unavailable on the hardware until it does.
 
 ### Audio modulator
 

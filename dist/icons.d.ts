@@ -105,12 +105,13 @@ declare const ICON_BADGE_ON = "M12 24C5.391 24 0 18.6094 0 12C0 5.3906 5.391 0 1
 /**
  * The modulator types, as the marks cut out of a modulation circle's dot:
  * the wave an LFO runs, the die S&H throws, the envelope's rise and fall,
- * the keys that strike it, a curve's arch, the note an audio slot plays.
+ * the keys that strike it, a curve's arch, the note an audio slot plays,
+ * the lane and playhead automation runs on.
  * Drawn on a 24px grid around a 16px dot centred at 12,12 — `paths` are
  * stroked with round ends, `fills` and `circles` are solid — and a mark may
  * run off the dot's edge: the dot is the cut's boundary.
  */
-type ModGlyph = 'lfo' | 'sh' | 'adsr' | 'keys' | 'curve' | 'audio';
+type ModGlyph = 'lfo' | 'sh' | 'adsr' | 'keys' | 'curve' | 'audio' | 'timeline';
 declare const MOD_GLYPHS: Record<ModGlyph, Omit<MoveFunctionGlyph, 'viewBox' | 'size' | 'text'>>;
 
 export { ICON_ADD_PRESET, ICON_BADGE_OFF, ICON_BADGE_ON, ICON_CHECK, ICON_CHEVRON, ICON_CHEVRON_LEFT, ICON_CHEVRON_RIGHT, ICON_CLIPBOARD, ICON_CLOSE, ICON_ELLIPSIS, ICON_FILE, ICON_GRIP, ICON_LOOP, ICON_MOVE_CAPTURE, ICON_MOVE_COPY, ICON_MOVE_ENTER, ICON_MOVE_LOOP, ICON_PANEL, ICON_PAUSE, ICON_PENCIL, ICON_PLAY, ICON_PLUS, ICON_REPLAY, ICON_SEARCH, ICON_TIMELINE, ICON_TRASH, LUCIDE_ICONS, MOD_GLYPHS, MOVE_FUNCTION_ICONS, MOVE_GLYPH_TEXT_FONT, type ModGlyph, type MoveFunctionGlyph };
