@@ -25,6 +25,7 @@ import {
   MoveTimeline,
   useMoveTimeline,
   AutomationLanesStore,
+  Automation,
   MoveAutomationLanes,
   type AutomationTimeline,
 } from 'tweakers';
@@ -230,7 +231,7 @@ export function Library() {
       <Section
         id="automation"
         title="Automation lanes"
-        lede="Dial moves recorded over a pass the host clocks — here a fake four-second loop. Press Rec (or the Move’s Rec key) and move a slider while it plays: the move becomes a lane, and every pass plays it back. A second pass overdubs only where you move again. Outside a take a hand on an automated slider holds it without writing. Click a lane to open it: drag its points (Shift keeps their time), double-click to add or delete one, drag across it to select a stretch, then Smooth, Clear or Delete lane. One take is one undo."
+        lede="Dial moves recorded over a pass the host clocks — here a fake four-second loop. Press Rec (or the Move’s Rec key) and move a slider while it plays: the move becomes a lane, and every pass plays it back. A second pass overdubs only where you move again. A colour records too — its lane is a strip, blended in OKLab. Outside a take a hand on an automated slider holds it without writing. Click a lane to open it: drag its points (Shift keeps their time), double-click to add or delete one, drag across it to select a stretch, then Smooth, Clear or Delete lane. One take is one undo. Once a lane exists the automation slot takes the first free step on the panel’s row, lit steady with the timeline mark: tap it for timeline control mode — the card floats over the instrument, knob 1 picks the lane, 2 and 3 move the selected point, 4 smooths on its press; the volume knob scrubs, the wheel zooms; up/down walk lanes and left/right points; Delete, Shift + Delete and Copy edit; the step row is the window in sixteen slices (hold one and tap another for a stretch); Back or the slot’s own step leaves. Rec lights red while a take runs."
       >
         <AutomationPanel />
       </Section>
@@ -444,6 +445,8 @@ const AUTOMATED = [
   { key: 'slide', label: 'Slide', min: 0, max: 1, step: 0.001, base: 0.2 },
   { key: 'turn', label: 'Turn', min: 0, max: 360, step: 1, base: 0 },
 ] as const;
+/** A colour the example records — its lane is a strip, blended in OKLab. */
+const TINT = { key: 'tint', label: 'Tint', base: '#dfe2cc' } as const;
 const AUTOMATION_ID = 'library-pass';
 const AUTOMATION_PASS = 4;
 
@@ -456,7 +459,11 @@ function AutomationPanel() {
   const clock = useRef({ time: 0, duration: AUTOMATION_PASS, playing: false });
   const doc = useRef<AutomationTimeline>({ lanes: [] });
   const history = useRef<AutomationTimeline[]>([]);
-  const base = useRef<Record<string, number>>(Object.fromEntries(AUTOMATED.map((c) => [c.key, c.base])));
+  const base = useRef<Record<string, number>>({
+    ...Object.fromEntries(AUTOMATED.map((c) => [c.key, c.base])),
+    [TINT.key]: Automation.packColor(TINT.base),
+  });
+  const tintInput = useRef<HTMLInputElement | null>(null);
   const [, rerender] = useState(0);
   const [lanes] = useState(
     () =>
@@ -482,7 +489,18 @@ function AutomationPanel() {
 
   useEffect(() => {
     lanes.load(AUTOMATION_ID, doc.current);
-    return lanes.claimRec();
+    // The lanes on the step row: a slot appears once a lane exists, and its
+    // step opens timeline control mode — the knob scrubs this fake clock.
+    const slot = lanes.attachSlot({
+      onSeek: (time) => {
+        clock.current.time = time;
+      },
+    });
+    const releaseRec = lanes.claimRec();
+    return () => {
+      releaseRec();
+      slot.release();
+    };
   }, [lanes]);
 
   // The frame loop: the clock moves while it plays, the store ticks, and the
@@ -508,9 +526,12 @@ function AutomationPanel() {
         // An automated slider follows its lane, unless a hand is on it.
         if (input && lanes.has(control.key) && !lanes.isHeld(control.key)) input.value = String(value(control.key));
       }
+      const tint = Automation.unpackColor(value(TINT.key));
+      if (tintInput.current && lanes.has(TINT.key) && !lanes.isHeld(TINT.key)) tintInput.current.value = tint;
       if (square.current) {
         square.current.style.left = `calc(${value('slide')} * (100% - 96px) + 30px)`;
         square.current.style.transform = `rotate(${value('turn')}deg)`;
+        square.current.style.background = tint;
       }
       raf = requestAnimationFrame(frame);
     });
@@ -572,6 +593,21 @@ function AutomationPanel() {
               />
             </label>
           ))}
+          <label className="kit-preset-state" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {TINT.label}
+            <input
+              ref={tintInput}
+              type="color"
+              defaultValue={TINT.base}
+              onInput={(e) => {
+                const v = Automation.packColor(e.currentTarget.value);
+                // A colour control hands the lanes a packed colour and says so.
+                if (!lanes.edit(TINT.key, v, { label: TINT.label, min: 0, max: 0xffffff, before: base.current[TINT.key], interp: 'color' })) {
+                  base.current[TINT.key] = v;
+                }
+              }}
+            />
+          </label>
         </div>
       </div>
       <MoveAutomationLanes

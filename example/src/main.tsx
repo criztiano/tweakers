@@ -1,6 +1,6 @@
 import { StrictMode, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import { TweakStore, ModulationStore, MoveFunctions, MovePresetStore, PresetExplorationStore, moveKitOptions } from 'tweakers';
+import { TweakStore, ModulationStore, MoveFunctions, MovePresetStore, PresetExplorationStore, MoveSurfaceStore, MoveVolumeDisplay, moveKitOptions } from 'tweakers';
 import 'tweakers/styles.css';
 import { Library } from './Library';
 import FlowerPlayground from './FlowerPlayground';
@@ -13,7 +13,7 @@ else registerLibraryPanel();
 
 // Handles for poking the live stores from the console — a library is a place
 // to try things, and the stores are half of what there is to try.
-(window as unknown as Record<string, unknown>).__kit = { TweakStore, ModulationStore, MoveFunctions, MovePresetStore, PresetExplorationStore };
+(window as unknown as Record<string, unknown>).__kit = { TweakStore, ModulationStore, MoveFunctions, MovePresetStore, PresetExplorationStore, MoveSurfaceStore, MoveVolumeDisplay };
 
 /**
  * The hardware, when it is there. The bridge kit is served by the `move`
