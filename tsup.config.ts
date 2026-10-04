@@ -84,6 +84,7 @@ export default defineConfig([
       // Leaf modules the dialkit sidebar package consumes via `tweakers/<name>`.
       'affordance-core': 'src/affordance-core.ts',
       'analyser-core': 'src/analyser-core.ts',
+      'automation-core': 'src/automation-core.ts',
       'analyser-engine': 'src/analyser-engine.ts',
       'angle-core': 'src/angle-core.ts',
       'color-core': 'src/color-core.ts',
