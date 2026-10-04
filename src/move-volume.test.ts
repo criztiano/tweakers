@@ -39,4 +39,25 @@ describe('move volume display', () => {
     assert.equal(state?.getValue?.(), '0:00:07');
     MoveVolumeDisplay.clear();
   });
+
+  it('lets a claim hold the knob and the pill, and hands both back in any order', () => {
+    MoveVolumeDisplay.set({ label: 'gain', value: '-6.0 dB' });
+    assert.equal(MoveVolumeDisplay.claimsKnob(), false);
+    const timeline = { label: 'time', value: '0:01.0' };
+    const page = { label: 'time', value: '0:02.0' };
+    const releaseTimeline = MoveVolumeDisplay.claim(timeline);
+    const releasePage = MoveVolumeDisplay.claim(page);
+    assert.equal(MoveVolumeDisplay.claimsKnob(), true);
+    // The newest claim is in front; a plain set waits under it.
+    assert.equal(MoveVolumeDisplay.get(), page);
+    MoveVolumeDisplay.set({ label: 'gain', value: '0.0 dB' });
+    assert.equal(MoveVolumeDisplay.get(), page);
+    releaseTimeline();
+    assert.equal(MoveVolumeDisplay.get(), page);
+    releasePage();
+    releasePage();
+    assert.equal(MoveVolumeDisplay.claimsKnob(), false);
+    assert.deepEqual(MoveVolumeDisplay.get(), { label: 'gain', value: '0.0 dB' });
+    MoveVolumeDisplay.clear();
+  });
 });

@@ -51,7 +51,7 @@ export interface MoveKitOptions {
   /**
    * The hardware the page holds beyond its registries, forwarded in every
    * configure — live: `master` (the volume knob) reads true while a timeline
-   * holds it. An app's own `claims` ride inside, and its `master` still wins.
+   * or any `MoveVolumeDisplay.claim` holds it. An app's own `claims` ride inside, and its `master` still wins.
    */
   claims: Record<string, unknown>;
 }
@@ -66,7 +66,7 @@ function liveClaims(app?: Record<string, unknown> | null): Record<string, unknow
   const claims: Record<string, unknown> = { ...app };
   Object.defineProperty(claims, 'master', {
     enumerable: true,
-    get: () => (app?.master ? app.master : MoveTimelineStore.claimsKnob() || undefined),
+    get: () => (app?.master ? app.master : MoveTimelineStore.claimsKnob() || MoveVolumeDisplay.claimsKnob() || undefined),
   });
   return claims;
 }

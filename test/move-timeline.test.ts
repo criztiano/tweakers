@@ -257,6 +257,29 @@ describe('a timeline on the surface', () => {
     TimelineStore.unregister(other);
   });
 
+  it('leaves the knob to a newer claim standing over it, and scrubs again once it goes', () => {
+    const release = MoveTimelineStore.register(id);
+    const volume = (delta: number) =>
+      window.dispatchEvent(new CustomEvent('move-tweakers:volume', { detail: { delta, shift: false }, cancelable: true }));
+    TimelineStore.seek(id, 2);
+    const releasePage = MoveVolumeDisplay.claim({ label: 'time', value: 'page' });
+    volume(4);
+    expect(TimelineStore.getTransport(id).time).toBe(2);
+    releasePage();
+    volume(4);
+    expect(TimelineStore.getTransport(id).time).toBeGreaterThan(2);
+    release();
+  });
+
+  it('claims the knob in the kit’s configure for any volume claim, not only a timeline', () => {
+    const options = moveKitOptions();
+    expect({ ...options.claims }.master).toBeUndefined();
+    const release = MoveVolumeDisplay.claim({ label: 'time', value: '0:00.0' });
+    expect({ ...options.claims }.master).toBe(true);
+    release();
+    expect({ ...options.claims }.master).toBeUndefined();
+  });
+
   it('claims the volume knob in the kit’s configure while a timeline holds it', () => {
     const options = moveKitOptions();
     // The kit spreads the claims into each configure; the spread reads them live.

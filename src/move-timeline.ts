@@ -377,7 +377,7 @@ class MoveTimelineStoreClass {
       label: 'time',
       getValue: () => timelineReadout(TimelineStore.getTransport(id).time),
     };
-    MoveVolumeDisplay.set(readout);
+    const releaseKnob = MoveVolumeDisplay.claim(readout);
 
     // The keys. Pushed, so whatever the app had on them comes back; no chips,
     // because the clock already carries all three. Pushing after the claim is
@@ -390,7 +390,9 @@ class MoveTimelineStoreClass {
     ];
 
     const onVolume = (event: Event) => {
-      if (event.defaultPrevented) return;
+      // The knob is the newest claim's: a page standing over the timeline
+      // (an automation slot's control mode) scrubs in its place.
+      if (event.defaultPrevented || MoveVolumeDisplay.get() !== readout) return;
       event.preventDefault();
       const detail = (event as CustomEvent).detail ?? {};
       this.scrub(Number(detail.delta) || 0, !!detail.shift);
@@ -438,7 +440,7 @@ class MoveTimelineStoreClass {
       }
       MoveFunctions.setOn('play', false);
       for (const release of keys) release();
-      if (MoveVolumeDisplay.get() === readout) MoveVolumeDisplay.clear();
+      releaseKnob();
     };
     this.notify();
   }
