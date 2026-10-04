@@ -1,17 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import {
   addPoint,
+  AUTOMATION_COLOR_MAX,
+  AUTOMATION_TOLERANCE,
   clearRange,
+  colorDistance,
   createLane,
   deletePoint,
   mergeSpan,
+  mixColor,
   movePoint,
+  packColor,
   remapKeys,
   removeLane,
   sampleTimeline,
   simplify,
   smooth,
   splitAtWrap,
+  unpackColor,
   upsertLane,
   validateTimeline,
   valueAt,
@@ -197,5 +203,75 @@ describe('timelines', () => {
     expect(tl.lanes[0].points).toEqual([{ t: 0.2, v: 0.5 }, { t: 0.8, v: 1 }]);
     expect(tl.lanes[1]).toMatchObject({ label: 'in:c', min: -5, max: 5, interp: 'hold', points: [{ t: 0, v: 0 }] });
     expect(validateTimeline('nonsense')).toEqual({ lanes: [] });
+  });
+});
+
+describe('colour lanes', () => {
+  const RED = packColor('#ff0000');
+  const BLUE = packColor('#0000ff');
+  const colorLane = (points: AutomationPoint[]): AutomationLane => ({
+    key: 'fill',
+    label: 'Fill',
+    min: 0,
+    max: AUTOMATION_COLOR_MAX,
+    interp: 'color',
+    points,
+  });
+
+  it('packs and unpacks a colour as one 24-bit number', () => {
+    expect(packColor('#ff8000')).toBe(0xff8000);
+    expect(packColor('#f80')).toBe(0xff8800);
+    expect(packColor('#ff800080')).toBe(0xff8000);
+    expect(packColor('nonsense')).toBe(0);
+    expect(unpackColor(0xff8000)).toBe('#ff8000');
+    expect(unpackColor(-4)).toBe('#000000');
+  });
+
+  it('blends between points in OKLab, never through the muddy sRGB midpoint', () => {
+    const lane = colorLane([{ t: 0, v: RED }, { t: 1, v: BLUE }]);
+    expect(valueAt(lane, 0)).toBe(RED);
+    expect(valueAt(lane, 1)).toBe(BLUE);
+    const mid = valueAt(lane, 0.5);
+    expect(Number.isInteger(mid)).toBe(true);
+    // The sRGB average of red and blue is #800080; OKLab keeps it lighter.
+    expect(mid).not.toBe(0x800080);
+    expect(colorDistance(mid, mixColor(RED, BLUE, 0.5))).toBe(0);
+    const { r, b } = { r: (mid >> 16) & 255, b: mid & 255 };
+    expect(r).toBeGreaterThan(0x80);
+    expect(b).toBeGreaterThan(0x80);
+  });
+
+  it('a new colour lane spans every colour, whatever range it was handed', () => {
+    const lane = createLane('fill', 'Fill', 0, 1, RED, 'color');
+    expect(lane.min).toBe(0);
+    expect(lane.max).toBe(AUTOMATION_COLOR_MAX);
+    expect(lane.points[0].v).toBe(RED);
+  });
+
+  it('simplifies by how far apart the colours look, and keeps a fade it can see', () => {
+    // A straight OKLab fade sampled finely simplifies to its two ends…
+    const fade = Array.from({ length: 41 }, (_, i) => ({ t: i / 40, v: mixColor(RED, BLUE, i / 40) }));
+    expect(simplify(fade, colorLane([]), AUTOMATION_TOLERANCE, 'color')).toEqual([fade[0], fade[40]]);
+    // …while a detour through green in the middle stays.
+    const GREEN = packColor('#00ff00');
+    const detour = [{ t: 0, v: RED }, { t: 0.5, v: GREEN }, { t: 1, v: BLUE }];
+    expect(simplify(detour, colorLane([]), AUTOMATION_TOLERANCE, 'color')).toHaveLength(3);
+  });
+
+  it('refuses to smooth, and merges a hand’s colours as whole colours', () => {
+    const lane = colorLane([{ t: 0, v: RED }, { t: 1, v: RED }]);
+    expect(smooth(lane, 2)).toEqual(lane.points);
+    const merged = mergeSpan(lane, { from: 0.25, to: 0.5, samples: [{ t: 0.25, v: BLUE + 0.4 }, { t: 0.5, v: BLUE }] });
+    expect(valueAt(merged, 0.4)).toBe(BLUE);
+    expect(merged.points.every((p) => Number.isInteger(p.v))).toBe(true);
+    expect(valueAt(merged, 0.75)).toBe(RED);
+  });
+
+  it('reads back from a file as a colour lane', () => {
+    const tl = validateTimeline({ lanes: [{ key: 'fill', label: 'Fill', min: 3, max: 3, interp: 'color', points: [[0, RED], [1, 0x1ffffff]] }] });
+    expect(tl.lanes).toHaveLength(1);
+    expect(tl.lanes[0].interp).toBe('color');
+    expect(tl.lanes[0].max).toBe(AUTOMATION_COLOR_MAX);
+    expect(tl.lanes[0].points[1].v).toBe(AUTOMATION_COLOR_MAX);
   });
 });

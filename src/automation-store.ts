@@ -5,6 +5,7 @@ import {
   createLane,
   deletePoint as deleteLanePoint,
   EMPTY_TIMELINE,
+  fitValue,
   laneByKey,
   mergeSpan,
   movePoint as moveLanePoint,
@@ -94,6 +95,8 @@ export interface AutomationEditMeta {
   max: number;
   /** The control's value before this move — a new lane starts flat at it. */
   before: number;
+  /** `color` for a colour control: values are packed RGB (`packColor`), and
+   *  the lane spans every colour whatever `min`/`max` say. */
   interp?: AutomationInterp;
 }
 
@@ -307,7 +310,7 @@ export class AutomationLanesStore {
     let lane = laneByKey(this.timeline(), key);
     if (!this.recording || this.currentId === null) {
       if (!lane) return false;
-      this.hands.set(key, { value: clamp(value, lane.min, lane.max), at: now });
+      this.hands.set(key, { value: fitValue(lane, value), at: now });
       return true;
     }
     if (!lane) {
@@ -315,7 +318,7 @@ export class AutomationLanesStore {
       this.write(upsertLane(this.timeline(), lane));
       this.notify();
     }
-    const v = clamp(value, lane.min, lane.max);
+    const v = fitValue(lane, value);
     const held = this.hands.get(key);
     const phase = this.phase();
     if (!this.spans.has(key)) {
@@ -444,10 +447,17 @@ export class AutomationLanesStore {
     return done;
   }
 
-  /** One smoothing pass — over the selected stretch when the lane has one. */
-  smooth(key: string, strong = false): boolean {
+  /**
+   * One smoothing pass — over the selected stretch when the lane has one.
+   * `strong` is the Shift press; a number is the amount itself (0–4, the
+   * width of the blur in twentieths of the pass). A colour lane refuses.
+   */
+  smooth(key: string, strong: boolean | number = false): boolean {
+    if (laneByKey(this.current, key)?.interp === 'color') return false;
+    const amount = typeof strong === 'number' ? strong : strong ? SMOOTH_STRONG : SMOOTH_AMOUNT;
+    if (!(amount > 0)) return false;
     const range = this.selection.key === key ? this.selection.range ?? undefined : undefined;
-    const done = this.editLane(key, (lane) => ({ ...lane, points: smoothLane(lane, strong ? SMOOTH_STRONG : SMOOTH_AMOUNT, range, this.tolerance) }));
+    const done = this.editLane(key, (lane) => ({ ...lane, points: smoothLane(lane, amount, range, this.tolerance) }));
     // The points were all redrawn: a selected one is no longer the one it was.
     if (done && this.selection.key === key) this.select({ key, range });
     return done;

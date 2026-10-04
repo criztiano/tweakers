@@ -222,3 +222,24 @@ describe('editing on the card', () => {
     expect(valueAt(out, 0.5)).toBeLessThan(9);
   });
 });
+
+describe('a colour lane', () => {
+  it('records whole colours, plays them back blended, and refuses to smooth', () => {
+    const { store, commits, run } = rig();
+    store.load('a', { lanes: [] });
+    store.startTake();
+    run(0.2);
+    const meta = { label: 'Fill', min: 0, max: 1, before: 0xff0000, interp: 'color' as const };
+    run(0.4, () => store.edit('fill', 0x0000ff + 0.3, meta));
+    store.endTake();
+    const lane = laneByKey((commits[0] as Extract<AutomationCommit, { kind: 'take' }>).timelines.get('a')!, 'fill')!;
+    expect(lane.interp).toBe('color');
+    expect(lane.max).toBe(0xffffff);
+    expect(lane.points.every((p) => Number.isInteger(p.v))).toBe(true);
+    expect(valueAt(lane, 0.05)).toBe(0xff0000);
+    expect(valueAt(lane, 0.25)).toBe(0x0000ff);
+    expect(store.smooth('fill')).toBe(false);
+    expect(store.smooth('fill', 2)).toBe(false);
+    expect(commits).toHaveLength(1);
+  });
+});

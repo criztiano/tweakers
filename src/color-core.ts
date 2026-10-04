@@ -150,7 +150,8 @@ export function hslToRgb(hsla: HSLA): RGBA {
 const srgbToLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
 const linearToSrgb = (c: number) => (c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055);
 
-function rgbToOklab(rgba: RGBA): { L: number; A: number; B: number } {
+/** An sRGB colour's OKLab coordinates — L 0–1, A and B roughly ±0.4. */
+export function rgbToOklab(rgba: RGBA): { L: number; A: number; B: number } {
   const r = srgbToLinear(rgba.r / 255);
   const g = srgbToLinear(rgba.g / 255);
   const b = srgbToLinear(rgba.b / 255);
@@ -214,6 +215,21 @@ export function oklchToRgb(oklch: OKLCH): RGBA {
   const { l, c, h, a } = clampOklchToSrgb(oklch);
   const rad = (h * Math.PI) / 180;
   const lin = oklabToLinearRgb(l, c * Math.cos(rad), c * Math.sin(rad));
+  return {
+    r: byte(linearToSrgb(clamp01(lin.r)) * 255),
+    g: byte(linearToSrgb(clamp01(lin.g)) * 255),
+    b: byte(linearToSrgb(clamp01(lin.b)) * 255),
+    a: clamp01(a),
+  };
+}
+
+/**
+ * Back from OKLab to sRGB, each channel clipped into gamut. For points on a
+ * straight line between two sRGB colours — a blend — which stray outside
+ * the gamut by a hair at most, so clipping cannot shift the hue you see.
+ */
+export function oklabToRgb(L: number, A: number, B: number, a = 1): RGBA {
+  const lin = oklabToLinearRgb(L, A, B);
   return {
     r: byte(linearToSrgb(clamp01(lin.r)) * 255),
     g: byte(linearToSrgb(clamp01(lin.g)) * 255),

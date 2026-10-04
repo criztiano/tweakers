@@ -9,7 +9,9 @@
  * for the ruler.
  *
  * Between two points the value is a straight line (`linear`) or stays put
- * until the next one (`hold`). Two points at one `t` are a jump, and the
+ * until the next one (`hold`). A `color` lane carries a colour as one packed
+ * 24-bit RGB number (`packColor`), and blends between its points in OKLab —
+ * the straight line a reader sees as an even fade. Two points at one `t` are a jump, and the
  * curve takes the later one from that instant on (right-continuous). Before
  * the first point and after the last the curve stays at their values, so a
  * lane answers every `t`: a new lane starts flat at the control's value and
@@ -19,7 +21,12 @@
  * (`automation-store.ts`) holds state, the card draws it.
  */
 
-export type AutomationInterp = 'linear' | 'hold';
+import { oklabToRgb, rgbToOklab } from './color-core';
+
+export type AutomationInterp = 'linear' | 'hold' | 'color';
+
+/** A colour lane's whole range: every packed 24-bit RGB value. */
+export const AUTOMATION_COLOR_MAX = 0xffffff;
 
 export interface AutomationPoint {
   /** Phase of the pass, 0..1. */
@@ -73,6 +80,57 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 const clamp01 = (t: number) => clamp(t, 0, 1);
 const spanOf = (range: AutomationRange) => (range.max - range.min > 0 ? range.max - range.min : 1);
 
+// ── colour lanes ──
+
+/** A colour as a colour lane carries it: `#rgb` or `#rrggbb` (alpha is
+ *  dropped) to one 24-bit number. Anything unreadable is black. */
+export function packColor(hex: string): number {
+  const raw = typeof hex === 'string' ? hex.trim().replace(/^#/, '') : '';
+  const full = raw.length === 3 || raw.length === 4 ? raw.slice(0, 3).split('').map((c) => c + c).join('') : raw.slice(0, 6);
+  const n = /^[0-9a-f]{6}$/i.test(full) ? parseInt(full, 16) : 0;
+  return n;
+}
+
+/** A colour lane's value as `#rrggbb`. */
+export function unpackColor(v: number): string {
+  const n = Math.round(clamp(Number.isFinite(v) ? v : 0, 0, AUTOMATION_COLOR_MAX));
+  return `#${n.toString(16).padStart(6, '0')}`;
+}
+
+const rgbOf = (v: number) => {
+  const n = Math.round(clamp(Number.isFinite(v) ? v : 0, 0, AUTOMATION_COLOR_MAX));
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255, a: 1 };
+};
+
+/** The colour `t` of the way from `a` to `b`, blended in OKLab. */
+export function mixColor(a: number, b: number, t: number): number {
+  if (a === b || !(t > 0)) return Math.round(a);
+  if (t >= 1) return Math.round(b);
+  const p = rgbToOklab(rgbOf(a));
+  const q = rgbToOklab(rgbOf(b));
+  const c = oklabToRgb(p.L + (q.L - p.L) * t, p.A + (q.A - p.A) * t, p.B + (q.B - p.B) * t);
+  return (c.r << 16) | (c.g << 8) | c.b;
+}
+
+/**
+ * How far apart two colours look: their distance in OKLab, where black to
+ * white is 1 — so a colour lane's tolerance is a share of that, the way a
+ * number lane's is a share of its range.
+ */
+export function colorDistance(a: number, b: number): number {
+  if (a === b) return 0;
+  const p = rgbToOklab(rgbOf(a));
+  const q = rgbToOklab(rgbOf(b));
+  return Math.hypot(p.L - q.L, p.A - q.A, p.B - q.B);
+}
+
+/** A value as the lane can hold it: inside its range, and a whole packed
+ *  colour on a colour lane. */
+export function fitValue(lane: AutomationRange & { interp?: AutomationInterp }, v: number): number {
+  const inside = clamp(v, lane.min, lane.max);
+  return lane.interp === 'color' ? Math.round(inside) : inside;
+}
+
 /** The last index whose point is at or before `t` — the point the curve is
  *  leaving at `t`. -1 when `t` is before every point. */
 function pointAtOrBefore(points: readonly AutomationPoint[], t: number, cursor?: AutomationCursor): number {
@@ -107,6 +165,7 @@ function pointAtOrBefore(points: readonly AutomationPoint[], t: number, cursor?:
 /** The curve between two neighbours at `t`. */
 function between(a: AutomationPoint, b: AutomationPoint, t: number, interp: AutomationInterp): number {
   if (interp === 'hold' || b.t <= a.t) return a.v;
+  if (interp === 'color') return mixColor(a.v, b.v, (t - a.t) / (b.t - a.t));
   return a.v + ((b.v - a.v) * (t - a.t)) / (b.t - a.t);
 }
 
@@ -142,11 +201,16 @@ export function valueBefore(lane: Pick<AutomationLane, 'points' | 'interp' | 'mi
   return between(points[i], points[i + 1], t, lane.interp);
 }
 
-/** A lane that holds `base` for the whole pass — what a control was before its first take. */
+/**
+ * A lane that holds `base` for the whole pass — what a control was before its
+ * first take. A colour lane always spans every packed colour, whatever range
+ * it is given.
+ */
 export function createLane(key: string, label: string, min: number, max: number, base: number, interp: AutomationInterp = 'linear'): AutomationLane {
-  const lo = Math.min(min, max);
-  const hi = Math.max(min, max);
-  const v = clamp(Number.isFinite(base) ? base : lo, lo, hi);
+  const color = interp === 'color';
+  const lo = color ? 0 : Math.min(min, max);
+  const hi = color ? AUTOMATION_COLOR_MAX : Math.max(min, max);
+  const v = fitValue({ min: lo, max: hi, interp }, Number.isFinite(base) ? base : lo);
   return { key, label, min: lo, max: hi, interp, points: [{ t: 0, v }, { t: 1, v }] };
 }
 
@@ -156,7 +220,10 @@ export function createLane(key: string, label: string, min: number, max: number,
  * — because a lane is read at a time, never along its length. Endpoints stay,
  * and so does every jump (two points at one `t`): each run between them is
  * simplified on its own. A `hold` lane keeps a point only where the value
- * changes. Iterative, so a long take cannot overflow the stack.
+ * changes. A `color` lane measures the error as the OKLab distance from the
+ * blend the simplified curve would show (black to white is 1), so a fade
+ * keeps the points a reader could tell apart. Iterative, so a long take
+ * cannot overflow the stack.
  */
 export function simplify(
   points: readonly AutomationPoint[],
@@ -196,8 +263,10 @@ export function simplify(
     let worst = -1;
     let at = -1;
     for (let i = lo + 1; i < hi; i++) {
-      const expected = q.t > p.t ? p.v + ((q.v - p.v) * (points[i].t - p.t)) / (q.t - p.t) : p.v;
-      const error = Math.abs(points[i].v - expected) / span;
+      const share = q.t > p.t ? (points[i].t - p.t) / (q.t - p.t) : 0;
+      const error = interp === 'color'
+        ? colorDistance(points[i].v, mixColor(p.v, q.v, share))
+        : Math.abs(points[i].v - (p.v + (q.v - p.v) * share)) / span;
       if (error > worst) {
         worst = error;
         at = i;
@@ -216,10 +285,10 @@ export function simplify(
 
 /** Normalise a hand's samples: inside the span, in time order, and at most two
  *  values per instant — where it was and where it went, a jump. */
-function cleanSamples(samples: readonly AutomationPoint[], from: number, to: number, range: AutomationRange): AutomationPoint[] {
+function cleanSamples(samples: readonly AutomationPoint[], from: number, to: number, range: AutomationRange & { interp?: AutomationInterp }): AutomationPoint[] {
   const sorted = samples
     .filter((s) => Number.isFinite(s.t) && Number.isFinite(s.v))
-    .map((s, i) => ({ t: clamp(s.t, from, to), v: clamp(s.v, range.min, range.max), i }))
+    .map((s, i) => ({ t: clamp(s.t, from, to), v: fitValue(range, s.v), i }))
     .sort((p, q) => p.t - q.t || p.i - q.i);
   const out: AutomationPoint[] = [];
   for (const s of sorted) {
@@ -235,7 +304,8 @@ function cleanSamples(samples: readonly AutomationPoint[], from: number, to: num
  * blur with a Gaussian whose width is `amount` × 5% of the pass, and simplify
  * again. Pressing it again smooths again. With a `span` only that stretch
  * changes, and the change fades in and out at its edges so no jump appears
- * where it meets the rest of the lane.
+ * where it meets the rest of the lane. A colour lane does not smooth — a
+ * blur of colours is a muddy one — and comes back as it was.
  */
 export function smooth(
   lane: AutomationLane,
@@ -243,6 +313,7 @@ export function smooth(
   span?: { from: number; to: number },
   tolerance = AUTOMATION_TOLERANCE
 ): AutomationPoint[] {
+  if (lane.interp === 'color') return lane.points.map((p) => ({ ...p }));
   const sigma = clamp(amount, 0, 4) * 0.05;
   if (!(sigma > 0)) return simplify(lane.points, lane, tolerance, lane.interp);
   const from = span ? clamp01(Math.min(span.from, span.to)) : 0;
@@ -360,7 +431,7 @@ export function movePoint(lane: AutomationLane, index: number, t: number, v: num
   const current = points[index];
   const pinned = (index === 0 && current.t === 0) || (index === points.length - 1 && current.t === 1);
   const nextT = pinned ? current.t : clamp(Number.isFinite(t) ? t : current.t, prev ? prev.t : 0, next ? next.t : 1);
-  const nextV = clamp(Number.isFinite(v) ? v : current.v, lane.min, lane.max);
+  const nextV = fitValue(lane, Number.isFinite(v) ? v : current.v);
   if (nextT === current.t && nextV === current.v) return lane;
   const copy = points.map((p) => ({ ...p }));
   copy[index] = { t: nextT, v: nextV };
@@ -370,7 +441,7 @@ export function movePoint(lane: AutomationLane, index: number, t: number, v: num
 /** Add a point at `t` — on the curve unless a value is given. Returns the new lane and where the point landed. */
 export function addPoint(lane: AutomationLane, t: number, v?: number): { lane: AutomationLane; index: number } {
   const at = clamp01(Number.isFinite(t) ? t : 0);
-  const value = clamp(v !== undefined && Number.isFinite(v) ? v : valueAt(lane, at), lane.min, lane.max);
+  const value = fitValue(lane, v !== undefined && Number.isFinite(v) ? v : valueAt(lane, at));
   let index = lane.points.length;
   for (let i = 0; i < lane.points.length; i++) {
     if (lane.points[i].t > at) {
@@ -455,8 +526,10 @@ export function validateTimeline(raw: unknown): AutomationTimeline {
     const e = entry as Record<string, unknown>;
     const key = typeof e.key === 'string' ? e.key : '';
     if (!key || seen.has(key)) continue;
-    const a = Number(e.min);
-    const b = Number(e.max);
+    const interp: AutomationInterp = e.interp === 'hold' ? 'hold' : e.interp === 'color' ? 'color' : 'linear';
+    const color = interp === 'color';
+    const a = color ? 0 : Number(e.min);
+    const b = color ? AUTOMATION_COLOR_MAX : Number(e.max);
     if (!Number.isFinite(a) || !Number.isFinite(b) || a === b) continue;
     const min = Math.min(a, b);
     const max = Math.max(a, b);
@@ -464,7 +537,7 @@ export function validateTimeline(raw: unknown): AutomationTimeline {
     const points = rawPoints
       .map(readPoint)
       .filter((p): p is AutomationPoint => !!p)
-      .map((p, i) => ({ t: clamp01(p.t), v: clamp(p.v, min, max), i }))
+      .map((p, i) => ({ t: clamp01(p.t), v: fitValue({ min, max, interp }, p.v), i }))
       .sort((p, q) => p.t - q.t || p.i - q.i)
       .map(({ t, v }) => ({ t, v }));
     if (!points.length) continue;
@@ -474,7 +547,7 @@ export function validateTimeline(raw: unknown): AutomationTimeline {
       label: typeof e.label === 'string' && e.label ? e.label : key,
       min,
       max,
-      interp: e.interp === 'hold' ? 'hold' : 'linear',
+      interp,
       points,
     });
   }

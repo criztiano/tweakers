@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { splitAtWrap, type AutomationLane } from '../automation-core';
+import { splitAtWrap, unpackColor, type AutomationLane } from '../automation-core';
 import type { AutomationLanesStore } from '../automation-store';
 import { formatTimelineTick, timelineRowHeight, timelineTicks } from '../move-timeline';
 import { isDevDefault } from '../env';
@@ -157,7 +157,7 @@ export function MoveAutomationLanes({
             else delete el.dataset.writing;
           }
         }
-        if (row.live) {
+        if (row.live && lane.interp !== 'color') {
           const span = store.liveSpan(lane.key);
           const d = span && w.span > 0 ? curvePath(lane, span.samples, w.start, w.span) : '';
           if (row.live.getAttribute('d') !== d) row.live.setAttribute('d', d);
@@ -211,8 +211,10 @@ export function MoveAutomationLanes({
       d.moved = true;
     }
     if (d.kind === 'point') {
-      // Shift moves the value only — the point keeps its moment.
-      store.movePoint(d.key, d.index, e.shiftKey ? d.t : phaseAt(e.clientX), valueAtY(lane, e.clientY, e.currentTarget), { drag: true });
+      // Shift moves the value only — the point keeps its moment. A colour
+      // point has no height to drag: it moves along the pass only.
+      const v = lane.interp === 'color' ? lane.points[d.index]?.v ?? 0 : valueAtY(lane, e.clientY, e.currentTarget);
+      store.movePoint(d.key, d.index, e.shiftKey ? d.t : phaseAt(e.clientX), v, { drag: true });
     } else {
       store.select({ key: d.key, range: { from: d.from, to: phaseAt(e.clientX) } });
     }
@@ -229,7 +231,7 @@ export function MoveAutomationLanes({
     if (selection.key !== lane.key) return;
     const handle = (e.target as HTMLElement).closest<HTMLElement>('[data-point]');
     if (handle) store.deletePoint(lane.key, Number(handle.dataset.point));
-    else store.addPoint(lane.key, phaseAt(e.clientX), valueAtY(lane, e.clientY, e.currentTarget));
+    else store.addPoint(lane.key, phaseAt(e.clientX), lane.interp === 'color' ? undefined : valueAtY(lane, e.clientY, e.currentTarget));
   };
 
   // ── keys, on the card only ──
@@ -380,21 +382,33 @@ export function MoveAutomationLanes({
                       style={{ left: `${share(range.from) * 100}%`, width: `${(share(range.to) - share(range.from)) * 100}%` }}
                     />
                   )}
-                  <svg className="tweakers-move-automation-curve" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
-                    <path className="tweakers-move-automation-area" d={areaPath(lane, view.start, view.span)} />
-                    <path className="tweakers-move-automation-line" d={curvePath(lane, lane.points, view.start, view.span)} />
-                    <path ref={(el) => { row(rowRefs.current, lane.key).live = el; }} className="tweakers-move-automation-live" />
-                  </svg>
+                  {lane.interp === 'color' ? (
+                    // A colour over the pass is the colour itself: a strip,
+                    // blended as the lane blends.
+                    <div className="tweakers-move-automation-strip" style={{ background: colorStrip(lane, view.start, view.span) }} />
+                  ) : (
+                    <svg className="tweakers-move-automation-curve" viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
+                      <path className="tweakers-move-automation-area" d={areaPath(lane, view.start, view.span)} />
+                      <path className="tweakers-move-automation-line" d={curvePath(lane, lane.points, view.start, view.span)} />
+                      <path ref={(el) => { row(rowRefs.current, lane.key).live = el; }} className="tweakers-move-automation-live" />
+                    </svg>
+                  )}
                   {open && lane.points.map((p, i) => {
                     const x = share(p.t);
                     if (x < -0.02 || x > 1.02) return null;
+                    const color = lane.interp === 'color';
                     return (
                       <span
                         key={i}
                         className="tweakers-move-automation-point"
                         data-point={i}
+                        data-color={color || undefined}
                         data-selected={selection.point === i || undefined}
-                        style={{ left: `${x * 100}%`, top: `${(1 - norm(lane, p.v)) * 100}%` }}
+                        style={{
+                          left: `${x * 100}%`,
+                          top: color ? '50%' : `${(1 - norm(lane, p.v)) * 100}%`,
+                          ...(color ? { background: unpackColor(p.v) } : {}),
+                        }}
                       />
                     );
                   })}
@@ -418,7 +432,7 @@ export function MoveAutomationLanes({
           <button
             type="button"
             className="tweakers-move-automation-tool"
-            disabled={!editable}
+            disabled={!editable || selected?.interp === 'color'}
             title="Smooth the lane, or the selected stretch · Shift smooths harder"
             onClick={(e) => selected && store.smooth(selected.key, e.shiftKey)}
           >
@@ -495,6 +509,19 @@ function curvePath(lane: AutomationLane, points: readonly { t: number; v: number
   return d;
 }
 
+/**
+ * A colour lane as a CSS gradient across the window, blended in OKLab as the
+ * lane blends. A point outside the window still places its stop — off the
+ * strip's edge — so the colour at each edge is the lane's own there, and two
+ * points at one moment make the hard edge a jump is.
+ */
+function colorStrip(lane: AutomationLane, start: number, span: number): string {
+  if (!lane.points.length || !(span > 0)) return 'none';
+  if (lane.points.length === 1) return unpackColor(lane.points[0].v);
+  const stops = lane.points.map((p) => `${unpackColor(p.v)} ${fmt(((p.t - start) / span) * 100)}%`);
+  return `linear-gradient(in oklab to right, ${stops.join(', ')})`;
+}
+
 function areaPath(lane: AutomationLane, start: number, span: number): string {
   const line = curvePath(lane, lane.points, start, span);
   if (!line) return '';
@@ -507,6 +534,7 @@ function areaPath(lane: AutomationLane, start: number, span: number): string {
 function readout(lane: AutomationLane, selection: { point: number | null; range: { from: number; to: number } | null }, duration: number): string {
   const time = (t: number) => `${(t * duration).toFixed(2)}s`;
   const value = (v: number) => {
+    if (lane.interp === 'color') return unpackColor(v);
     const step = (lane.max - lane.min) / 1000;
     const decimals = step >= 1 ? 0 : step >= 0.1 ? 1 : step >= 0.01 ? 2 : 3;
     return v.toFixed(decimals);

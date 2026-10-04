@@ -5753,6 +5753,26 @@
   opacity: 1;
 }
 
+/* A colour lane: the colour over the pass, as a strip filling the plot.
+   Dimmed like a line until the lane is open. */
+.tweakers-move-automation-strip {
+  position: absolute;
+  inset: 0;
+  border-radius: 2px;
+  opacity: 0.75;
+  pointer-events: none;
+  transition: opacity var(--move-automation-motion);
+}
+
+.tweakers-move-automation-lane[data-selected] .tweakers-move-automation-strip {
+  opacity: 1;
+}
+
+/* A colour point wears its colour; the frame says which one is selected. */
+.tweakers-move-automation-point[data-color] {
+  border-width: 2px;
+}
+
 /* What a hand is writing right now, over the lane it will replace. */
 .tweakers-move-automation-live {
   stroke: var(--move-timeline-record);
