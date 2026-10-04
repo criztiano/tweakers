@@ -5642,6 +5642,19 @@
    selection and carries Smooth, Clear and Delete lane.
    ------------------------------------------------------------------------ */
 
+/* Timeline control mode: the automation slot's page floats the card above
+   the panel, where the curve composer floats — the display its dials and
+   keys are working on. */
+.tweakers-move-automation-float {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(960px, calc(100vw - 48px));
+  border-radius: var(--move-radius);
+  box-shadow: var(--move-list-shadow);
+}
+
 .tweakers-move-automation {
   --move-automation-open: 72px;
   --move-automation-plot-inset: 4px;

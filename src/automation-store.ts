@@ -19,6 +19,7 @@ import {
   type AutomationPoint,
   type AutomationTimeline,
 } from './automation-core';
+import { AutomationSlot, type AutomationSlotHandle, type AutomationSlotOptions } from './automation-slot';
 import { MoveFunctions } from './move-functions';
 import { MOVE_TIMELINE_MAX_ZOOM, timelineWindow, zoomWindow } from './move-timeline';
 
@@ -43,6 +44,8 @@ import { MOVE_TIMELINE_MAX_ZOOM, timelineWindow, zoomWindow } from './move-timel
  *   const values = lanes.sample();          // key → value, the hand's while it holds one
  *   // when a control moves:
  *   if (lanes.edit(key, value, { label, min, max, before })) return; // the lane took it
+ *
+ *   lanes.attachSlot({ onSeek: (t) => transport.seek(t) }); // a step for the lanes, and its mode
  *
  * Recording is overdub. A take replaces a lane only where its control was
  * moved, and keeps writing on every pass while it runs: what one pass wrote
@@ -160,6 +163,7 @@ export class AutomationLanesStore {
 
   private listeners = new Set<Listener>();
   private version = 0;
+  private slot: AutomationSlot | null = null;
 
   constructor(host: AutomationHost, options: AutomationStoreOptions = {}) {
     this.host = host;
@@ -381,6 +385,7 @@ export class AutomationLanesStore {
     }
     this.lastPhase = phase;
     if (changed) this.notify();
+    this.slot?.frame();
   }
 
   /**
@@ -532,6 +537,28 @@ export class AutomationLanesStore {
       ({ shift }) => (shift && this.recording ? this.cancelTake() : this.toggleTake()),
       { label: options.label ?? 'Record', chip: false }
     );
+  }
+
+  /**
+   * The lanes on the step row: a modulation slot that holds the first free
+   * step while lanes exist, and opens timeline control mode on its step —
+   * the card over the panel, the Move's knobs, keys and step row on the
+   * lanes (see `automation-slot.ts`). One slot per store: attaching again
+   * replaces it. The handle says where it is and lets the host say when
+   * lanes exist (`setPresent`), when it holds them in several timelines.
+   */
+  attachSlot(options: AutomationSlotOptions = {}): AutomationSlotHandle {
+    this.slot?.release();
+    const slot = new AutomationSlot(this, options, () => this.notify());
+    this.slot = slot;
+    const release = slot.handle.release;
+    return {
+      ...slot.handle,
+      release: () => {
+        release();
+        if (this.slot === slot) this.slot = null;
+      },
+    };
   }
 
   subscribe(fn: Listener): () => void {

@@ -49,6 +49,7 @@ import { MoveColorSlot, MoveColorDisplay, MoveOpacityPads, MoveColorSteps, MoveP
 import { MoveFunctions } from '../move-functions';
 import { MoveFunctionChips } from './MoveFunctionChips';
 import { MoveTimelineClock, MoveTimelineZoom } from './MoveTimeline';
+import { moveModOverlay } from './move-mod-overlays';
 import { MoveTimelineStore } from '../move-timeline';
 import { MoveSettingsView } from '../move-settings';
 import { MoveTrackLabels, MOVE_PANEL_SETTINGS, moveTrackIcon, moveTrackLabelStyle } from '../move-track-labels';
@@ -1071,6 +1072,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // An audio modulator's page floats its waveform the same way — the dial
   // draws the small sample, the page brings the full editor above the panel.
   const audioWave = modSlot?.type === 'audio' && modSettings ? modSettings.index : null;
+  // A page that brings its own display floats it from the overlay registry —
+  // automation's lanes card is one.
+  const ModOverlay = modSlot && modSettings ? moveModOverlay(modSlot.type) : undefined;
   // The Waveform room page floats the display it dresses: you set the look
   // on the wave itself, not on five blind switches.
   const roomWave = settingsOpen && page?.panel.id === MOVE_WAVEFORM_PANEL;
@@ -1561,7 +1565,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const visibleCols = stripMode
     ? page.dials.map((_, i) => i)
     : settingsPanel
-      ? Array.from({ length: modPageWidth() }, (_, i) => i)
+      // A lent slot's page is its lender's and never switches type: it is as
+      // wide as its own dials. Every other page is as wide as the widest type.
+      ? Array.from({ length: modSlot && ModulationStore.isLent(modSlot.index) ? page.dials.length : modPageWidth() }, (_, i) => i)
       : color
         ? Array.from({ length: MOVE_PADS }, (_, i) => i)
         : visibleColumns(page);
@@ -1637,7 +1643,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       />
       {/* While a composer floats above it the whole instrument comes forward,
           over the app's own panels — you are working in it. */}
-      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-settings={settingsOpen || undefined} data-move-motion-key={`${motionSurface}:${motionPage}|${pages.map((pg) => pg.panel.id).join(' ')}`} data-overlay={padListView || explorationOpen || composition || audioWave != null || roomWave || color || presetSave ? true : undefined}>
+      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-settings={settingsOpen || undefined} data-move-motion-key={`${motionSurface}:${motionPage}|${pages.map((pg) => pg.panel.id).join(' ')}`} data-overlay={padListView || explorationOpen || composition || audioWave != null || ModOverlay || roomWave || color || presetSave ? true : undefined}>
         {!explorationOpen && colorMeta && <MoveColorDisplay panelId={page.panel.id} meta={colorMeta} anchor={panelRef} theme={theme} />}
         <PresetExploration />
         {presetSave && <MovePresetSaveInput suggested={presetSave.suggested} />}
@@ -1652,6 +1658,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
           />
         )}
         {!explorationOpen && audioWave != null && <MoveAudioWave index={audioWave} theme={theme} />}
+        {!explorationOpen && ModOverlay && modSettings && <ModOverlay index={modSettings.index} theme={theme} />}
         {!explorationOpen && roomWave && <MoveRoomWave theme={theme} />}
         <div
           className="tweakers-move-inner"

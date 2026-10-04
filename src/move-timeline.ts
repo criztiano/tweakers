@@ -145,7 +145,7 @@ export function timelineClock(time: number): string {
 }
 
 /** What the knob names on the Move's screen: m:ss.s, as the waveform's readout. */
-function timelineReadout(time: number): string {
+export function timelineReadout(time: number): string {
   const t = Math.max(0, time);
   const minutes = Math.floor(t / 60);
   const seconds = t - minutes * 60;
