@@ -1,4 +1,4 @@
-# tweakers v1.2.0
+# tweakers v1.3.0
 
 Real-time parameter tweaking for React, Solid, Svelte, and Vue.
 
@@ -1315,6 +1315,28 @@ Three placements, one look — all of them on the hardware's own display surface
 **The look is the user's.** How the sample is drawn — the style, the bar width, the grid, the EQ bands, the centre line — lives on the kit's own **Waveform** page in the settings room (behind the Move's Set Overview button, Shift + Step 1), not in the app: the first waveform to claim the surface puts the page there (seeded with its `mode` / `pixelSize` / `grid` / `bands` / `baseline` props), it persists per machine, and every waveform on the surface follows it, on screen and from the hardware. Three styles: `smooth` (the simplified envelope), `pixelated` (one min/max bar per column) and `striped` — the pixelated bar, untouched, with a gap its own width after it. No sample is lost and no bar coarsens: the wave is simply twice as long, so the same zoom shows half of it, and the pads and the small screens frame what the card shows.
 
 While the audio modulator's floating editor is zoomed in, the small screens — the audio dial's face and the Move's own display — show the part the editor shows, framed on the playhead, rather than a whole-sample thumbnail.
+
+### Automation lanes
+
+Rec on the Move records dial moves as automation over a pass the app clocks — a scene, a loop — and plays them back every pass. The kit keeps no clock and no document: the app hands the store where the pass is, a way to roll its transport, and a place to commit.
+
+```tsx
+import { AutomationLanesStore, MoveAutomationLanes } from 'tweakers';
+
+const lanes = new AutomationLanesStore({
+  clock: () => ({ time, duration, playing }),
+  play: () => transport.start(),
+  commit: (change) => history.push(change), // a whole take, or one card edit — one undo each
+});
+lanes.claimRec();
+
+// each frame: lanes.tick(); const values = lanes.sample();
+// each control move: if (lanes.edit(key, value, { label, min, max, before })) return;
+
+<MoveAutomationLanes store={lanes} onSeek={seek} />
+```
+
+A take overdubs: only what was moved is replaced, and each pass plays back what the last one wrote. A hand on a control wins while it holds, and outside a take it writes nothing. The card is the timeline's, with curves: click a lane to open it, drag its points, double-click to add or delete one, drag across to select a stretch, then Smooth, Clear or Delete lane. See [integration](docs/integration.md#automation-lanes-the-host-owns-the-clock) for the host's side.
 
 ### Function buttons
 

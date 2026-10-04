@@ -24,6 +24,9 @@ import {
   stripOffsets,
   MoveTimeline,
   useMoveTimeline,
+  AutomationLanesStore,
+  MoveAutomationLanes,
+  type AutomationTimeline,
 } from 'tweakers';
 import { PANEL_ID, PANEL_NAME, INSTRUMENTS_NAME } from './panel';
 import { BIG_SLOTS, SMALL_SLOTS, SMALL_SLOT_STATES, MOD_FACES, type Specimen } from './specimens';
@@ -222,6 +225,14 @@ export function Library() {
         lede="Clips that animate values over time, on the waveform’s card. While it is up the timeline has the instrument: the volume knob scrubs, the wheel zooms around the playhead, Play and Loop run its transport, and the header’s clock becomes its own — Play, the time, Loop, each one clickable. Click the ruler to jump, drag it to loop, drag a bar or its edges to retime it. The full sample — a video driven by the timeline, with Rec laying down takes — is the demo’s timeline page."
       >
         <TimelinePanel />
+      </Section>
+
+      <Section
+        id="automation"
+        title="Automation lanes"
+        lede="Dial moves recorded over a pass the host clocks — here a fake four-second loop. Press Rec (or the Move’s Rec key) and move a slider while it plays: the move becomes a lane, and every pass plays it back. A second pass overdubs only where you move again. Outside a take a hand on an automated slider holds it without writing. Click a lane to open it: drag its points (Shift keeps their time), double-click to add or delete one, drag across it to select a stretch, then Smooth, Clear or Delete lane. One take is one undo."
+      >
+        <AutomationPanel />
       </Section>
 
       <Section
@@ -424,6 +435,154 @@ function TimelinePanel() {
         />
       </div>
       <MoveTimeline id={tl.id} variant="page" theme="dark" productionEnabled />
+    </div>
+  );
+}
+
+/** Two controls the automation example records — a key, a name, a range. */
+const AUTOMATED = [
+  { key: 'slide', label: 'Slide', min: 0, max: 1, step: 0.001, base: 0.2 },
+  { key: 'turn', label: 'Turn', min: 0, max: 360, step: 1, base: 0 },
+] as const;
+const AUTOMATION_ID = 'library-pass';
+const AUTOMATION_PASS = 4;
+
+/**
+ * Automation lanes, worked for real: a fake clock (a four-second pass on
+ * requestAnimationFrame), two sliders, and the store between them. The page
+ * plays the host — it owns the clock, the document and its undo.
+ */
+function AutomationPanel() {
+  const clock = useRef({ time: 0, duration: AUTOMATION_PASS, playing: false });
+  const doc = useRef<AutomationTimeline>({ lanes: [] });
+  const history = useRef<AutomationTimeline[]>([]);
+  const base = useRef<Record<string, number>>(Object.fromEntries(AUTOMATED.map((c) => [c.key, c.base])));
+  const [, rerender] = useState(0);
+  const [lanes] = useState(
+    () =>
+      new AutomationLanesStore({
+        clock: () => clock.current,
+        play: () => {
+          clock.current.playing = true;
+          rerender((n) => n + 1);
+        },
+        // One commit, one undo: a take (every timeline it wrote) or one card edit.
+        commit: (change) => {
+          history.current.push(doc.current);
+          doc.current = change.kind === 'take' ? change.timelines.get(AUTOMATION_ID) ?? doc.current : change.timeline;
+          rerender((n) => n + 1);
+        },
+      })
+  );
+  useSyncExternalStore(
+    useCallback((cb: () => void) => lanes.subscribe(cb), [lanes]),
+    () => lanes.getVersion(),
+    () => 0
+  );
+
+  useEffect(() => {
+    lanes.load(AUTOMATION_ID, doc.current);
+    return lanes.claimRec();
+  }, [lanes]);
+
+  // The frame loop: the clock moves while it plays, the store ticks, and the
+  // picture and the sliders follow what the lanes say.
+  const square = useRef<HTMLDivElement>(null);
+  const inputs = useRef<Record<string, HTMLInputElement | null>>({});
+  useEffect(() => {
+    let last = performance.now();
+    let raf = requestAnimationFrame(function frame(now) {
+      const c = clock.current;
+      if (c.playing) {
+        c.time += (now - last) / 1000;
+        if (c.time >= c.duration) {
+          c.time %= c.duration;
+          lanes.passWrapped();
+        }
+      }
+      last = now;
+      lanes.tick();
+      const value = (key: string) => lanes.valueFor(key) ?? base.current[key];
+      for (const control of AUTOMATED) {
+        const input = inputs.current[control.key];
+        // An automated slider follows its lane, unless a hand is on it.
+        if (input && lanes.has(control.key) && !lanes.isHeld(control.key)) input.value = String(value(control.key));
+      }
+      if (square.current) {
+        square.current.style.left = `calc(${value('slide')} * (100% - 96px) + 30px)`;
+        square.current.style.transform = `rotate(${value('turn')}deg)`;
+      }
+      raf = requestAnimationFrame(frame);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [lanes]);
+
+  const stop = () => {
+    // A take ends when the transport stops under it.
+    lanes.endTake();
+    clock.current.playing = false;
+    rerender((n) => n + 1);
+  };
+  const undo = () => {
+    const previous = history.current.pop();
+    if (!previous) return;
+    lanes.cancelTake();
+    doc.current = previous;
+    lanes.load(AUTOMATION_ID, previous);
+  };
+  const play = () => {
+    clock.current.playing = true;
+    rerender((n) => n + 1);
+  };
+  const playing = clock.current.playing;
+  const recording = lanes.isRecording();
+
+  return (
+    <div>
+      <div className="kit-presets">
+        <div style={{ position: 'relative', height: 96, borderRadius: 12, background: '#1e1e1e', overflow: 'hidden', marginBottom: 12 }}>
+          <div ref={square} style={{ position: 'absolute', top: 30, width: 36, height: 36, borderRadius: 6, background: '#dfe2cc' }} />
+        </div>
+        <div className="kit-preset-actions">
+          <button type="button" onClick={playing ? stop : play}>
+            {playing ? 'Stop' : 'Play'}
+          </button>
+          <button type="button" aria-pressed={recording} onClick={() => MoveFunctions.run('rec')}>
+            {recording ? 'End take' : 'Rec'}
+          </button>
+          <button type="button" disabled={!history.current.length} onClick={undo}>Undo</button>
+          {AUTOMATED.map((control) => (
+            <label key={control.key} className="kit-preset-state" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {control.label}
+              <input
+                ref={(el) => { inputs.current[control.key] = el; }}
+                type="range"
+                min={control.min}
+                max={control.max}
+                step={control.step}
+                defaultValue={control.base}
+                onInput={(e) => {
+                  const v = Number(e.currentTarget.value);
+                  // The lanes take the move while a take writes or a lane holds
+                  // the control; otherwise it is an ordinary edit.
+                  if (!lanes.edit(control.key, v, { label: control.label, min: control.min, max: control.max, before: base.current[control.key] })) {
+                    base.current[control.key] = v;
+                  }
+                }}
+              />
+            </label>
+          ))}
+        </div>
+      </div>
+      <MoveAutomationLanes
+        store={lanes}
+        variant="page"
+        theme="dark"
+        productionEnabled
+        onSeek={(time) => {
+          clock.current.time = time;
+        }}
+      />
     </div>
   );
 }

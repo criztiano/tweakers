@@ -5627,6 +5627,244 @@
   outline-offset: -1px;
 }
 
+/* ------------------------------------------------------------------------
+   Automation lanes (MoveAutomationLanes) — the timeline's card, carrying
+   curves: it wears `.tweakers-move-timeline` for the frame, the ruler, the
+   names and the playhead, and adds its own parts here. A lane is a value
+   over the pass; the open one grows to edit in, its points showing. A lane
+   a hand holds wears a mark by its name — the accent while it only holds,
+   the record red while a take writes it. The bar under the rows reads the
+   selection and carries Smooth, Clear and Delete lane.
+   ------------------------------------------------------------------------ */
+
+.tweakers-move-automation {
+  --move-automation-open: 72px;
+  --move-automation-plot-inset: 4px;
+  --move-automation-point: 8px;
+  --move-automation-motion: var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-automation:focus {
+  outline: none;
+}
+
+.tweakers-move-automation:focus-visible {
+  outline: 2px solid var(--move-timeline-accent);
+  outline-offset: 2px;
+}
+
+.tweakers-move-automation .tweakers-move-timeline-ruler:not([data-seek]) {
+  cursor: default;
+}
+
+.tweakers-move-automation-name {
+  position: relative;
+  cursor: pointer;
+  transition: height var(--move-automation-motion), opacity var(--move-automation-motion);
+}
+
+.tweakers-move-automation-name[data-selected] {
+  height: var(--move-automation-open);
+  opacity: 1;
+}
+
+/* The hand's mark: a dot after the name while a hand holds the lane. */
+.tweakers-move-automation-name[data-writing]::after {
+  content: '';
+  position: absolute;
+  top: calc(var(--move-timeline-row) / 2 - 3px);
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--move-timeline-accent);
+}
+
+.tweakers-move-automation[data-recording] .tweakers-move-automation-name[data-writing]::after {
+  background: var(--move-timeline-record);
+}
+
+.tweakers-move-automation-lanes {
+  cursor: default;
+}
+
+.tweakers-move-automation-lane {
+  cursor: pointer;
+  transition: height var(--move-automation-motion), background-color var(--move-automation-motion);
+}
+
+.tweakers-move-automation-lane[data-selected] {
+  height: var(--move-automation-open);
+  background: color-mix(in srgb, var(--move-timeline-ink) 10%, transparent);
+  cursor: crosshair;
+}
+
+.tweakers-move-automation-lane[data-writing] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--move-timeline-accent) 70%, transparent);
+}
+
+.tweakers-move-automation[data-recording] .tweakers-move-automation-lane[data-writing] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--move-timeline-record) 80%, transparent);
+}
+
+/* The curve's own box: inset so a stroke or a point on the range's edge
+   is never cut by the lane. */
+.tweakers-move-automation-plot {
+  position: absolute;
+  inset: var(--move-automation-plot-inset) 0;
+  touch-action: none;
+}
+
+.tweakers-move-automation-curve {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.tweakers-move-automation-line,
+.tweakers-move-automation-live {
+  fill: none;
+  stroke-width: 1.5px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.tweakers-move-automation-line {
+  stroke: var(--move-timeline-ink);
+  opacity: 0.6;
+  transition: opacity var(--move-automation-motion);
+}
+
+.tweakers-move-automation-area {
+  fill: var(--move-timeline-ink);
+  opacity: 0.08;
+}
+
+.tweakers-move-automation-lane[data-selected] .tweakers-move-automation-line {
+  opacity: 1;
+}
+
+/* What a hand is writing right now, over the lane it will replace. */
+.tweakers-move-automation-live {
+  stroke: var(--move-timeline-record);
+  stroke-width: 2px;
+}
+
+.tweakers-move-automation-range {
+  position: absolute;
+  top: calc(-1 * var(--move-automation-plot-inset));
+  bottom: calc(-1 * var(--move-automation-plot-inset));
+  background: color-mix(in srgb, var(--move-timeline-accent) 22%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--move-timeline-accent) 55%, transparent);
+  pointer-events: none;
+}
+
+.tweakers-move-automation-point {
+  position: absolute;
+  width: var(--move-automation-point);
+  height: var(--move-automation-point);
+  margin: calc(var(--move-automation-point) / -2) 0 0 calc(var(--move-automation-point) / -2);
+  box-sizing: border-box;
+  border: 1.5px solid var(--move-timeline-ink);
+  border-radius: 2px;
+  background: var(--move-timeline-display);
+  cursor: grab;
+  transition: background-color var(--move-automation-motion), border-color var(--move-automation-motion);
+}
+
+/* A point takes a finger wider than it draws. */
+.tweakers-move-automation-point::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+
+.tweakers-move-automation-point:hover {
+  background: var(--move-timeline-ink);
+}
+
+.tweakers-move-automation-point[data-selected] {
+  border-color: var(--move-timeline-accent);
+  background: var(--move-timeline-accent);
+}
+
+.tweakers-move-automation-empty {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: normal;
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* The bar under the rows: the selection's reading, then the three tools. */
+.tweakers-move-automation-bar {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 0 0 10px;
+}
+
+.tweakers-move-automation-readout {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: normal;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.6;
+}
+
+.tweakers-move-automation-tool {
+  appearance: none;
+  height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--move-timeline-ink) 8%, transparent);
+  color: var(--move-timeline-ink);
+  font: inherit;
+  font-size: 11px;
+  line-height: normal;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--move-automation-motion), opacity var(--move-automation-motion);
+}
+
+.tweakers-move-automation-tool:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--move-timeline-ink) 16%, transparent);
+}
+
+.tweakers-move-automation-tool:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.tweakers-move-automation-tool:focus-visible {
+  outline: 1px solid var(--move-timeline-ink);
+  outline-offset: -1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-automation-name,
+  .tweakers-move-automation-lane,
+  .tweakers-move-automation-line,
+  .tweakers-move-automation-point,
+  .tweakers-move-automation-tool {
+    transition: none;
+  }
+}
+
 .tweakers-list-screen,
 .tweakers-list-screen * {
   box-sizing: border-box;

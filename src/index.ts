@@ -124,6 +124,16 @@ export { MoveTimelineStore, MOVE_TIMELINE_MAX_ZOOM, timelineWindow, followWindow
 export type { MoveTimelineClaimOptions } from './move-timeline';
 export { useMoveTimeline } from './use-move-timeline';
 export type { UseMoveTimelineOptions, MoveTimelineValues } from './use-move-timeline';
+// Automation lanes — dial moves recorded over a host-clocked pass. The pure
+// lane maths rides as one namespace here (its names are generic: `movePoint`
+// is the transfer curve's at this root) and plainly on `tweakers/automation-core`.
+export * as Automation from './automation-core';
+export type { AutomationInterp, AutomationPoint, AutomationRange, AutomationLane, AutomationTimeline, AutomationSpan, AutomationCursor } from './automation-core';
+export { AutomationLanesStore } from './automation-store';
+export type { AutomationHost, AutomationClock, AutomationCommit, AutomationStoreOptions, AutomationEditMeta, AutomationSelection, AutomationView } from './automation-store';
+export { listenMoveTouch } from './move-automation';
+export { MoveAutomationLanes } from './components/MoveAutomationLanes';
+export type { MoveAutomationLanesProps } from './components/MoveAutomationLanes';
 export type { MoveVolumeDisplayState } from './move-volume';
 export { ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, MOVE_FUNCTION_ICONS } from './icons';
 export type { ModGlyph } from './icons';
