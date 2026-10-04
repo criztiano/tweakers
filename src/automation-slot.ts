@@ -447,7 +447,9 @@ export class AutomationSlot implements ModSlotPage {
     const w = this.store.getWindow();
     const sel = this.store.getSelection();
     const phase = this.phase();
-    const slice = (t: number) => (w.span > 0 ? Math.floor(((t - w.start) / w.span) * STEPS) : -1);
+    // A slice's own start lands a hair under its index in floating point:
+    // the nudge keeps it in its slice.
+    const slice = (t: number) => (w.span > 0 ? Math.floor(((t - w.start) / w.span) * STEPS + 1e-9) : -1);
     const lit = new Set<number>();
     if (sel.range) {
       for (let i = Math.max(0, slice(sel.range.from)); i <= Math.min(STEPS - 1, slice(sel.range.to - 1e-9)); i++) lit.add(i);

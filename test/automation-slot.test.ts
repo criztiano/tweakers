@@ -216,6 +216,19 @@ describe('timeline control mode', () => {
     expect(MoveSurfaceStore.getState().steps).toBeNull();
   });
 
+  it('lights exactly the slices a stretch covers, at any zoom', () => {
+    const { store, handle } = rig();
+    const index = handle.index()!;
+    handle.open();
+    store.zoomTo(1.5, 0.6);
+    MoveSurfaceStore.pressStep(2);
+    MoveSurfaceStore.pressStep(6);
+    MoveSurfaceStore.releaseStep(6);
+    MoveSurfaceStore.releaseStep(2);
+    const lit = MoveSurfaceStore.getState().steps!.filter((c) => c.lit && c.step !== index).map((c) => c.step);
+    expect(lit).toEqual([2, 3, 4, 5, 6].filter((s) => s !== index));
+  });
+
   it('closes, and frees its step, when it is let go', () => {
     const { handle } = rig();
     const index = handle.index()!;
