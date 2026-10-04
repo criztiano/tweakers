@@ -1043,12 +1043,14 @@ Mark an item `muted` when the row is information rather than a choice — a job 
 
 | Prop | Type | Default |
 |------|------|---------|
-| `items` | `(string \| { value: string; label?: string; tag?: string; muted?: boolean })[]` | Required |
+| `items` | `(string \| { value: string; label?: string; tag?: string; muted?: boolean; icon?: string })[]` — `icon` is a `LUCIDE_ICONS` name (drawn in the row's colour) or an image URL | Required |
 | `value` | `string` — the selected item's value | — |
 | `onSelect` | `(value: string) => void` | — |
 | `wide` | `boolean` — 400px with left-aligned rows, instead of the 200px centered default | `false` |
 | `follow` | `'nearest' \| 'center'` — how the view follows the selection: scroll it just into view, or hold it in the middle of the screen | `'nearest'` |
-| `back` | `string` — the level this list sits inside; worn as a back pill (chevron + name) at the top-left corner instead of a row. On the Move panel it comes from `MoveScreenList.back`, and a click on it is the Back key | — |
+| `back` | `string \| true` — the level this list sits inside; worn as a back pill (chevron + name) at the top-left corner instead of a row; `true` wears the chevron alone. On the Move panel it comes from `MoveScreenList.back`, and a click on it is the Back key | — |
+| `title` | `string` — a heading at the top, level with the back pill. On the Move panel: `MoveScreenList.title` with `showTitle: true` | — |
+| `align` | `'center' \| 'start'` — `start` reads the rows from the left at the default width: a list of actions with icons. On the Move panel: `MoveScreenList.align` | `'center'` |
 | `onBack` | `() => void` — runs when the pill is clicked; without it the pill is only a sign | — |
 | `className` | `string` | — |
 | `style` | `React.CSSProperties` | — |
@@ -1073,7 +1075,7 @@ import('http://localhost:7787/kit.js')
 <MovePanel />
 ```
 
-Panels become pages behind the track buttons (max 4), sliders and bounded numbers become the 8 dials, toggles become pads, and overflow bounded params become value chips (hold to peek, tap to latch).
+Panels become pages behind the track buttons (max 4), sliders and bounded numbers become the 8 dials, toggles become pads, and overflow bounded params become value chips (hold to peek, tap to latch — one latch per page: taking a chip lets any other go).
 
 The on-screen panel shows only occupied slots: a column renders only when it has a dial, a toggle pad, or a value chip. Visible columns keep their full 8-wide slot size and centre in the panel, with the header aligned to the first one — an app with two dials gets a tight two-column cluster, not six empty sockets. Hidden columns are skipped, never renumbered, so each on-screen column still matches its hardware knob; an empty page shows the header alone. The track row follows the same rule: only tracks that carry a page get a tick and a name, so a one-panel app shows one label instead of three blank coloured lines. Each page keeps its own track colour whichever tracks are missing.
 

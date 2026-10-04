@@ -7,7 +7,9 @@ around it.
 
 Read first, before designing any layout or writing any code:
 `skills/tweakers-integration/SKILL.md`, then `docs/design-language.md`,
-`docs/controls.md`, `docs/integration.md`. The Move wire contract lives in the
+`docs/controls.md`, `docs/integration.md`. Anything that touches the agent
+behind the held wheel — the prompt, its signals, actions or the bridge's
+turn — starts from `docs/agent.md`, which maps the three repos it spans. The Move wire contract lives in the
 move repo's `PROTOCOL.md` — read it too when your change crosses the wire.
 
 The example app (`example/src/Library.tsx`) is the live dictionary. Open it

@@ -12,7 +12,8 @@ function moveNumericDrawing(meta, value) {
     case "opacity": {
       const opaque = visual.opaqueValue ?? 1;
       if (!Number.isFinite(opaque) || opaque <= 0 || lo < 0 || hi > opaque) return null;
-      return { kind: "opacity", alpha: v / opaque };
+      const picture = typeof visual.picture === "string" && visual.picture ? visual.picture : void 0;
+      return { kind: "opacity", alpha: v / opaque, ...picture ? { picture } : {} };
     }
     case "blur":
       return lo >= 0 ? { kind: "blur", radius: v } : null;

@@ -85,6 +85,20 @@ export function MoveSlotNumericBody({ label, value, drawing }: {
       />
     );
   }
+  // A picture is its own name: it fills the slot edge to edge, in its own
+  // colours, at the value's opacity, and only the reading stays over it.
+  if (drawing.kind === 'opacity' && drawing.picture) {
+    return (
+      <>
+        <span
+          className="tweakers-move-dial-photo"
+          aria-hidden="true"
+          style={{ backgroundImage: `url(${JSON.stringify(drawing.picture)})`, opacity: drawing.alpha }}
+        />
+        <span className="tweakers-move-dial-option tweakers-move-visual-value">{value}</span>
+      </>
+    );
+  }
   return (
     <>
       <span className="tweakers-move-dial-tag">{label}</span>

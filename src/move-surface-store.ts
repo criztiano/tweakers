@@ -61,16 +61,25 @@ export type MoveScreenRow =
       /** Words a search on the list also finds the row by, never drawn — an
        *  effect's tags, a file's folder. */
       keywords?: string;
+      /** A glyph at the row's left end, by its `LUCIDE_ICONS` name, or an
+       *  image URL. The hardware screen has no room for it. */
+      icon?: string;
     };
 
 /** The app's list on the Move's own 128×64 screen. */
 export interface MoveScreenList {
+  /** What the list is. Read aloud always; drawn as the screen's heading only
+   *  with `showTitle`. */
   title?: string;
+  showTitle?: boolean;
   items: MoveScreenRow[];
   index: number;
   /** The level the list sits inside, by name — worn as a back pill at the
-   *  screen's corner rather than as a row. A click on it is the Back key. */
-  back?: string;
+   *  screen's corner rather than as a row. A click on it is the Back key.
+   *  `true` wears the chevron alone. */
+  back?: string | true;
+  /** `start` reads the rows from the left edge — for rows with icons. */
+  align?: 'center' | 'start';
 }
 
 /** A row's label, whichever form the host wrote it in. */

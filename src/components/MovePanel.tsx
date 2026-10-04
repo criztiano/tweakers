@@ -4,12 +4,13 @@ import { PresetExploration, PresetExplorationSlots } from './PresetExploration';
 import { PresetExplorationStore } from '../preset-exploration';
 import { useEffect, useLayoutEffect, useId, useRef, useState, useSyncExternalStore, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { moveFloatSitsInside } from '../move-float';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { ModulationStore } from '../store/ModulationStore';
 import { modColor, getModType, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, getAudioModBuffer, setAudioModBuffer, subscribeAudioMod, getAudioModVersion, setAudioModWindowSource, getAudioModWindow, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
 import { MoveWaveform } from './MoveWaveform';
 import { MoveWaveformStore, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_PANEL, visibleWindow, moveWaveformDemoSample } from '../move-waveform';
-import { ICON_PLAY, ICON_LOOP, ICON_SEARCH } from '../icons';
+import { ICON_CLOSE, ICON_PLAY, ICON_LOOP, ICON_SEARCH } from '../icons';
 import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
@@ -52,6 +53,7 @@ import { MoveTimelineStore } from '../move-timeline';
 import { MoveSettingsView } from '../move-settings';
 import { MoveTrackLabels, MOVE_PANEL_SETTINGS, moveTrackIcon, moveTrackLabelStyle } from '../move-track-labels';
 import { MovePresetStore, type MovePresetView } from '../move-presets';
+import { MoveAgentStore, MOVE_JOG_HOLD_EVENT, type MoveAgentView } from '../move-agent';
 import { ListScreen } from './ListScreen';
 import { MovePanelMotion } from './MovePanelMotion';
 
@@ -468,15 +470,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // serialized rather than joined: panel names have spaces in them.
   const onlyKey = only === undefined ? undefined : JSON.stringify(Array.isArray(only) ? only : [only]);
   const read = useCallback(() => {
-    if (onlyKey === undefined) return TweakStore.selectPanels();
-    const requested = JSON.parse(onlyKey) as string[];
-    const registered = TweakStore.getPanels('panel');
     // App pages are addressed by stable panel id. Names remain display copy:
     // changing "snare" to "snare top" must not create a new hardware page.
-    // Name lookup stays as a compatibility path for existing integrations.
-    return requested
-      .map((key) => registered.find((panel) => panel.id === key || panel.name === key))
-      .filter((panel): panel is PanelConfig => panel !== undefined);
+    // Name lookup stays as a compatibility path for existing integrations —
+    // `selectPanels` takes either, the id first.
+    return TweakStore.selectPanels(onlyKey === undefined ? undefined : JSON.parse(onlyKey) as string[]);
   }, [onlyKey]);
 
   useEffect(() => {
@@ -498,9 +496,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const settingsKey = settings === undefined ? undefined : JSON.stringify(Array.isArray(settings) ? settings : [settings]);
   const namedRooms = settingsKey === undefined
     ? []
-    : (JSON.parse(settingsKey) as string[])
-        .map((key) => TweakStore.getPanels('panel').find((p) => p.id === key || p.name === key))
-        .filter((p): p is PanelConfig => p !== undefined);
+    : TweakStore.selectPanels(JSON.parse(settingsKey) as string[]);
   // The kit's own pages ride after the app's: the waveform's look, then the
   // panel's own (how the track row names its pages). An app with no room of
   // its own still gets the door, because the pages behind it are the kit's.
@@ -968,6 +964,41 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     window.addEventListener(MOVE_SEARCH_EVENT, onSearch);
     return () => window.removeEventListener(MOVE_SEARCH_EVENT, onSearch);
   }, []);
+  // The agent, behind a held wheel: the prompt opens above the panel, a
+  // second hold closes it. A click of the wheel while a reply is showing
+  // takes the change back — the one gesture that needs no keyboard.
+  useSyncExternalStore(MoveAgentStore.subscribe, MoveAgentStore.getVersion, () => 0);
+  const agent = MoveAgentStore.getView();
+  const agentFocus = useRef<string | undefined>(undefined);
+  agentFocus.current = pageId;
+  useEffect(() => {
+    const onHold = (e: Event) => {
+      if (e.defaultPrevented) return;
+      e.preventDefault();
+      MoveAgentStore.toggle(agentFocus.current);
+    };
+    const onJogClick = (e: Event) => {
+      const view = MoveAgentStore.getView();
+      // The hardware has no lone Shift: a shifted press is the prompt's Shift tap.
+      if (view && (e as CustomEvent<{ shift?: boolean }>).detail?.shift) {
+        if (!MoveAgentStore.hasShiftTap()) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        MoveAgentStore.shiftTap();
+        return;
+      }
+      if (!view || view.phase === 'thinking' || !(view.changed || view.acted) || !MoveAgentStore.canUndo()) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      void MoveAgentStore.undo();
+    };
+    window.addEventListener(MOVE_JOG_HOLD_EVENT, onHold);
+    window.addEventListener(MOVE_JOG_CLICK_EVENT, onJogClick, { capture: true });
+    return () => {
+      window.removeEventListener(MOVE_JOG_HOLD_EVENT, onHold);
+      window.removeEventListener(MOVE_JOG_CLICK_EVENT, onJogClick, { capture: true });
+    };
+  }, []);
   // The computer keyboard's way in: `/` or ⌘F (Ctrl+F) asks for the same
   // search a held Capture does. Only a list that takes it keeps the key from
   // the page — with nothing to search, ⌘F is still the browser's find. A
@@ -1228,7 +1259,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       if (p && !TweakStore.isDisabled(page.panel.id, meta.path)) write(meta, moveTurnValue(meta, p, e, moveTurnExtent(e.currentTarget.getBoundingClientRect())));
     },
     onPointerUp: (e: React.PointerEvent<HTMLElement>) => {
-      if (endPress(meta.path) && e.shiftKey) resetValue(meta);
+      if (!endPress(meta.path)) return;
+      if (e.shiftKey) resetValue(meta);
+      else if (!TweakStore.isDisabled(page.panel.id, meta.path)) meta.onTap?.();
     },
     onPointerCancel: () => { endPress(meta.path); },
   });
@@ -1472,8 +1505,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     setHeld(null);
     if (Date.now() - holdStart.current >= TAP_MS) return;
     const wasLatched = chipLatched(col, meta);
-    setLatched((prev) => ({ ...prev, [col]: wasLatched ? undefined : meta }));
+    // One latch on the page, whatever its column: taking a chip lets every other
+    // latched chip go, so the eye never has to find which knobs are still borrowed.
+    const released = wasLatched ? [] : [
+      ...Object.values(latched).filter((m): m is ControlMeta => !!m && m.path !== meta.path).map((m) => m.path),
+      ...Object.keys(hwLatched).filter((path) => hwLatched[path] && path !== meta.path),
+    ];
+    setLatched((prev) => (wasLatched ? { ...prev, [col]: undefined } : { [col]: meta }));
     // Tell the hardware side; the kit relays it when the bridge is up.
+    for (const path of new Set(released)) {
+      window.dispatchEvent(new CustomEvent(MOVE_LATCH_EVENT, { detail: { pageId: page.panel.id, path, latched: false } }));
+    }
     window.dispatchEvent(new CustomEvent(MOVE_LATCH_EVENT, {
       detail: { pageId: page.panel.id, path: meta.path, latched: !wasLatched },
     }));
@@ -1599,6 +1641,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
         {!explorationOpen && colorMeta && <MoveColorDisplay panelId={page.panel.id} meta={colorMeta} anchor={panelRef} theme={theme} />}
         <PresetExploration />
         {presetSave && <MovePresetSaveInput suggested={presetSave.suggested} />}
+        {agent && !presetSave && <MoveAgentPrompt view={agent} />}
         {!explorationOpen && composition && modSettings && (
           <MoveCurveComposer
             index={modSettings.index}
@@ -1785,6 +1828,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       ...(row.detail ? { detail: row.detail } : {}),
                       ...(row.checked === undefined ? {} : { checked: row.checked }),
                       ...(row.tag ? { tag: row.tag } : {}),
+                      ...(row.icon ? { icon: row.icon } : {}),
                     }),
                   })),
                   screenSearch,
@@ -1793,6 +1837,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 value={String(screenSearch ? screenSearch.cursor : screen.index)}
                 follow="center"
                 back={screenSearch ? undefined : screen.back}
+                title={screenSearch || !screen.showTitle ? undefined : screen.title}
+                align={screen.align}
                 onBack={() => MoveFunctions.run('back')}
                 onSelect={(value) => {
                   if (!value) return;
@@ -3737,15 +3783,44 @@ function MoveSearchBar({ view }: { view: MoveSearchView }) {
 }
 
 /**
+ * A box floating above the panel — the preset's name, the agent's prompt —
+ * measured against the viewport: with no room above the panel it sits inside
+ * the panel's top (`data-inside`). Measured again when the box grows (the
+ * agent's steps), the panel resizes, or the page scrolls under a flow dock.
+ */
+function useMoveFloat() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [inside, setInside] = useState(false);
+  useLayoutEffect(() => {
+    const box = ref.current, panel = box?.parentElement;
+    if (!box || !panel) return;
+    const measure = () => setInside(moveFloatSitsInside(panel.getBoundingClientRect().top, box.offsetHeight));
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(box);
+    observer?.observe(panel);
+    window.addEventListener('resize', measure);
+    window.addEventListener('scroll', measure, true);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, true);
+    };
+  }, []);
+  return { ref, inside };
+}
+
+/**
  * The save-a-preset input, floating centred above the panel like the curve
  * composer does. Enter keeps the name, Escape — or clicking away — lets it
  * go. The suggested "Preset N" arrives selected, so typing replaces it.
  */
 function MovePresetSaveInput({ suggested }: { suggested: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const float = useMoveFloat();
   useEffect(() => { inputRef.current?.select(); }, []);
   return (
-    <div className="tweakers-move-preset-save">
+    <div ref={float.ref} className="tweakers-move-preset-save" data-inside={float.inside || undefined}>
       <input
         ref={inputRef}
         className="tweakers-move-preset-save-input"
@@ -3758,6 +3833,128 @@ function MovePresetSaveInput({ suggested }: { suggested: string }) {
         }}
         onBlur={() => MovePresetStore.cancelSave()}
       />
+    </div>
+  );
+}
+
+/**
+ * The agent's prompt, floating where the preset name does. Enter sends the
+ * words, Escape closes. The field stays open after a reply — asking again
+ * refines what just landed. While it works, what it is reading or looking
+ * at shows as it happens, so a longer wait is never a silent one; the steps
+ * leave with the reply. A reply that simply did what was asked is one word,
+ * Done, with its undo — the agent writes a sentence only when there is
+ * something to know: it could not, it did something else, it had to choose.
+ */
+function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  /** Shift went down and nothing else has yet — a capital letter clears it. */
+  const shiftAlone = useRef(false);
+  const [dropping, setDropping] = useState(false);
+  const float = useMoveFloat();
+  const pictures = MoveAgentStore.acceptsAttachments();
+  const hasImage = (data: DataTransfer | null) => !!data && [...data.items].some((item) => item.kind === 'file' && item.type.startsWith('image/'));
+  const thinking = view.phase === 'thinking';
+  useEffect(() => { if (!thinking) inputRef.current?.select(); }, [thinking]);
+  const changed = view.phase !== 'thinking' && (view.changed > 0 || view.acted > 0);
+  const skipped = view.skipped ? `${view.skipped} ${view.skipped === 1 ? 'action' : 'actions'} skipped.` : '';
+  const note = thinking ? (view.steps.some((s) => s.state === 'running') ? '' : 'Turning the dials…')
+    : [view.message, skipped].filter(Boolean).join(' ');
+  const done = view.phase === 'done' && changed && !note;
+  const steps = thinking ? view.steps : view.steps.filter((s) => s.state === 'failed');
+  return (
+    <div
+      ref={float.ref}
+      className="tweakers-move-preset-save tweakers-move-agent"
+      data-phase={view.phase}
+      data-inside={float.inside || undefined}
+      data-dropping={dropping || undefined}
+      onDragOver={pictures ? (e) => { if (!hasImage(e.dataTransfer)) return; e.preventDefault(); setDropping(true); } : undefined}
+      onDragLeave={pictures ? (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false); } : undefined}
+      onDrop={pictures ? (e) => { if (!hasImage(e.dataTransfer)) return; e.preventDefault(); setDropping(false); MoveAgentStore.attach(e.dataTransfer.files); inputRef.current?.focus(); } : undefined}
+    >
+      {view.attachments.length > 0 && (
+        <ul className="tweakers-move-agent-attachments" aria-label="Pictures in the prompt">
+          {view.attachments.map((a) => (
+            <li key={a.id} className="tweakers-move-agent-attachment" title={a.name}>
+              <img src={a.url} alt={a.name} />
+              <button type="button" aria-label={`Remove ${a.name}`} onClick={() => { MoveAgentStore.detach(a.id); inputRef.current?.focus(); }}>
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d={ICON_CLOSE} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                </svg>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="tweakers-move-agent-field">
+        {pictures && (
+          <>
+            <button type="button" className="tweakers-move-agent-attach" aria-label="Add a picture" title="Add a picture — or drop or paste one"
+              disabled={thinking} onClick={() => fileRef.current?.click()}>
+              <MoveSlotGlyph name="image-plus" className="tweakers-move-agent-attach-icon" />
+            </button>
+            <input ref={fileRef} type="file" accept="image/*" multiple hidden
+              onChange={(e) => { if (e.currentTarget.files) MoveAgentStore.attach(e.currentTarget.files); e.currentTarget.value = ''; inputRef.current?.focus(); }} />
+          </>
+        )}
+        <input
+          ref={inputRef}
+          className="tweakers-move-preset-save-input tweakers-move-agent-input"
+          defaultValue={view.prompt}
+          placeholder="Ask for a change"
+          aria-label="Ask the agent for a change"
+          autoFocus
+          readOnly={thinking}
+          spellCheck={false}
+          autoComplete="off"
+          onPaste={pictures ? (e) => {
+            const files = [...e.clipboardData.files].filter((f) => f.type.startsWith('image/'));
+            if (!files.length) return;
+            e.preventDefault();
+            MoveAgentStore.attach(files);
+          } : undefined}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            shiftAlone.current = e.key === 'Shift' && !e.repeat ? true : e.key === 'Shift' ? shiftAlone.current : false;
+            if (e.key === 'Enter') void MoveAgentStore.ask(e.currentTarget.value);
+            else if (e.key === 'Escape') MoveAgentStore.close();
+            else if (e.key === 'z' && (e.metaKey || e.ctrlKey) && changed) { e.preventDefault(); void MoveAgentStore.undo(); }
+          }}
+          onKeyUp={(e) => {
+            if (e.key !== 'Shift') return;
+            const tap = shiftAlone.current;
+            shiftAlone.current = false;
+            if (tap) MoveAgentStore.shiftTap();
+          }}
+          onBlur={() => { shiftAlone.current = false; }}
+        />
+      </div>
+      {steps.length > 0 && (
+        <ul className="tweakers-move-agent-steps" aria-label="What the agent is doing">
+          {steps.map((step, i) => (
+            <li key={i} className="tweakers-move-agent-step" data-state={step.state}>
+              {step.label}{step.state === 'failed' && ' — failed'}
+            </li>
+          ))}
+        </ul>
+      )}
+      {(note || done) && (
+        <p className="tweakers-move-agent-note" role="status" data-done={done || undefined}>
+          {done ? (
+            <span className="tweakers-move-agent-done" key={view.prompt}>
+              <svg className="tweakers-move-agent-done-mark" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M3 8.5l3.2 3.2L13 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" pathLength="1" />
+              </svg>
+              Done
+            </span>
+          ) : note}
+          {changed && MoveAgentStore.canUndo() && (
+            <button type="button" className="tweakers-move-agent-undo" onClick={() => void MoveAgentStore.undo()}>Undo</button>
+          )}
+        </p>
+      )}
     </div>
   );
 }

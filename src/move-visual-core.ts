@@ -2,7 +2,11 @@ import type { ControlMeta } from './store/TweakStore';
 
 /** Opt-in meanings for numeric Move faces. Values keep the host's units. */
 export type MoveSliderVisual =
-  | { kind: 'opacity'; opaqueValue?: number }
+  /** How much something shows. With `picture` (an image URL) the picture
+   *  fills the slot edge to edge, in its own colours, at the value's opacity,
+   *  with only the reading over it — the thing being faded, not two circles
+   *  standing for it. */
+  | { kind: 'opacity'; opaqueValue?: number; picture?: string }
   | { kind: 'blur' }
   | { kind: 'pan'; left?: number; center?: number; right?: number }
   | { kind: 'stereo-width'; mono?: number; unity?: number }
@@ -125,7 +129,7 @@ export type MoveToggleVisual = {
 export type MoveVisual = MoveSliderVisual | MoveSelectVisual | MoveToggleVisual;
 
 export type MoveNumericDrawing =
-  | { kind: 'opacity'; alpha: number }
+  | { kind: 'opacity'; alpha: number; picture?: string }
   | { kind: 'blur'; radius: number }
   | { kind: 'pan'; position: number }
   | { kind: 'stereo-width'; separation: number; unity: number | null }
@@ -171,7 +175,8 @@ export function moveNumericDrawing(meta: ControlMeta, value: unknown): MoveNumer
     case 'opacity': {
       const opaque = visual.opaqueValue ?? 1;
       if (!Number.isFinite(opaque) || opaque <= 0 || lo < 0 || hi > opaque) return null;
-      return { kind: 'opacity', alpha: v / opaque };
+      const picture = typeof visual.picture === 'string' && visual.picture ? visual.picture : undefined;
+      return { kind: 'opacity', alpha: v / opaque, ...(picture ? { picture } : {}) };
     }
     case 'blur':
       return lo >= 0 ? { kind: 'blur', radius: v } : null;

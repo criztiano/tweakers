@@ -571,15 +571,18 @@ var TweakStoreClass = class {
   /**
    * The settings panels a root should draw, given its optional `panels` filter.
    * `undefined` means every panel — the single-surface default. A list means
-   * exactly those names, in the order named, so two roots never fight over the
+   * exactly those panels, in the order named, so two roots never fight over the
    * same panel and a panel that has not registered yet leaves a gap that fills
-   * when it does.
+   * when it does. A panel is named by its id or by its name, the id first:
+   * the id is stable, the name is display copy an app may change — and it is
+   * what the bridge kit's own `panels` takes, so one list serves the bind,
+   * the panel mirror and the agent alike.
    */
   selectPanels(only) {
     const registered = this.getPanels("panel");
     if (only === void 0) return registered;
-    const names = typeof only === "string" ? [only] : only;
-    return names.map((name) => registered.find((panel) => panel.name === name)).filter((panel) => panel !== void 0);
+    const keys = typeof only === "string" ? [only] : only;
+    return keys.map((key) => registered.find((panel) => panel.id === key) ?? registered.find((panel) => panel.name === key)).filter((panel) => panel !== void 0);
   }
   getPanel(id) {
     return this.panels.get(id);
@@ -1110,6 +1113,7 @@ var TweakStoreClass = class {
           orientation: value.orientation,
           display: value.display,
           wrap: value.wrap,
+          onTap: value.onTap,
           shortcut
         });
       } else if (this.isNumberConfig(value)) {

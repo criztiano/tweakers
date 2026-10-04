@@ -17,9 +17,15 @@ interface GeneParameter {
 }
 
 /** Opt-in meanings for numeric Move faces. Values keep the host's units. */
-type MoveSliderVisual = {
+type MoveSliderVisual = 
+/** How much something shows. With `picture` (an image URL) the picture
+ *  fills the slot edge to edge, in its own colours, at the value's opacity,
+ *  with only the reading over it — the thing being faded, not two circles
+ *  standing for it. */
+{
     kind: 'opacity';
     opaqueValue?: number;
+    picture?: string;
 } | {
     kind: 'blur';
 } | {
@@ -574,6 +580,14 @@ type SliderConfig = {
      * to true when the range covers a full turn (360, or -180..180).
      */
     wrap?: boolean;
+    /**
+     * A still press on the slot, on the Move panel, runs this — the slot's door
+     * to what its knob cannot do: load a file, open an editor. A drag still
+     * turns the value and Shift+press still resets it. Screen only (the browser
+     * gives a file chooser only to a real click), and a function, so it is
+     * invisible to the structure diff like `formatValue`.
+     */
+    onTap?: () => void;
 };
 /**
  * Scrub-anywhere numeric readout. Unlike a slider it has no track — drag the
@@ -906,6 +920,8 @@ type ControlMeta = {
     unit?: string;
     /** Slider display formatter, from the explicit SliderConfig form. */
     formatValue?: (value: number) => string;
+    /** A still press on a slider's Move slot, from the explicit SliderConfig form. */
+    onTap?: () => void;
     /** Slider fill anchor, from the explicit SliderConfig form. */
     origin?: number;
     bipolar?: boolean;
@@ -1244,9 +1260,12 @@ declare class TweakStoreClass {
     /**
      * The settings panels a root should draw, given its optional `panels` filter.
      * `undefined` means every panel — the single-surface default. A list means
-     * exactly those names, in the order named, so two roots never fight over the
+     * exactly those panels, in the order named, so two roots never fight over the
      * same panel and a panel that has not registered yet leaves a gap that fills
-     * when it does.
+     * when it does. A panel is named by its id or by its name, the id first:
+     * the id is stable, the name is display copy an app may change — and it is
+     * what the bridge kit's own `panels` takes, so one list serves the bind,
+     * the panel mirror and the agent alike.
      */
     selectPanels(only?: string | string[]): PanelConfig[];
     getPanel(id: string): PanelConfig | undefined;

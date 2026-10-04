@@ -25,6 +25,8 @@ export function collectGenes(controls: ControlMeta[], group = ''): GeneParameter
   return controls.flatMap((c): GeneParameter[] => {
     if (c.type === 'folder') return collectGenes(c.children ?? [], group ? `${group} / ${c.label}` : c.label);
     if (c.tabBar || c.path === '_tab') return [];
+    // A held-open column is a seat, not a value: nothing to breed, nothing for the agent to write.
+    if (c.moveBlank) return [];
     const trouble = c.path.endsWith('_enabled') || /^(device on|bypass)$/i.test(c.label);
     const base = { id: c.path, path: c.path, label: c.label, group, trouble, enabled: !trouble };
     const number = (component: string | undefined, min: number, max: number, step?: number): GeneParameter[] =>
@@ -70,6 +72,12 @@ function numeric(value: number, p: GeneParameter) {
 }
 function valid(value: unknown, p: GeneParameter): boolean {
   return p.kind === 'number' ? typeof value === 'number' && Number.isFinite(value) : !!p.options?.includes(value as string | boolean);
+}
+/** A raw value fitted to its gene — clamped and stepped — or undefined when it cannot be one. */
+export function fitGene(value: unknown, p: GeneParameter): unknown {
+  if (p.kind === 'number') return typeof value === 'number' && Number.isFinite(value) ? numeric(value, p) : undefined;
+  if (p.options?.every(o => typeof o === 'boolean') && (value === 'true' || value === 'false')) return value === 'true';
+  return valid(value, p) ? value : undefined;
 }
 function randomGene(p: GeneParameter, random: () => number): unknown {
   return p.kind === 'number' ? numeric((p.low ?? p.min ?? 0) + random() * ((p.high ?? p.max ?? 1) - (p.low ?? p.min ?? 0)), p)

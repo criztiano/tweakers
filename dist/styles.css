@@ -564,6 +564,14 @@
   z-index: 9990;
 }
 
+/* What floats above the panel — the preset's name, the agent's prompt — hangs
+   from the panel itself (`bottom: 100%`). A panel in the page's flow is the
+   box they hang from too: left static, they would hang from whatever the host
+   happens to have positioned, usually out of sight above the page. */
+.tweakers-move[data-dock="flow"] {
+  position: relative;
+}
+
 /* The page's column count is a registered number so a page change can ease
    it (move-panel-motion's easeWidth): the widths measured from it move
    through the fractions between two pages instead of snapping. MovePanel
@@ -1368,12 +1376,12 @@
 /* End of the connection dot skin block. */
 
 /* The Menu button on screen: a round dark well pinned to the window's
-   top-right corner, the three-line mark in the panel's text colour. It lights
+   top-left corner, the three-line mark in the panel's text colour. It lights
    while what it opened — the presets, the palettes — is up. */
 .tweakers-move-menu {
   position: fixed;
   top: 16px;
-  right: 16px;
+  left: 16px;
   z-index: 10003;
   line-height: 0;
 }
@@ -2065,9 +2073,22 @@
   pointer-events: none;
 }
 
+/* An opacity slot's picture: the host's image itself, in its own colours,
+   covering the slot edge to edge at the value's opacity. */
+.tweakers-move-dial-photo {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+}
+
 /* Over a picture the option's name keeps a halo of the slot's own surface,
    so it reads first whatever the picture draws behind it. */
-.tweakers-move-dial:has(> .tweakers-move-dial-picture) .tweakers-move-dial-option {
+.tweakers-move-dial:has(> .tweakers-move-dial-picture) .tweakers-move-dial-option,
+.tweakers-move-dial:has(> .tweakers-move-dial-photo) .tweakers-move-dial-option {
   text-shadow: 0 0 2px var(--move-dial-surface), 0 0 5px var(--move-dial-surface), 0 0 9px var(--move-dial-surface);
 }
 
@@ -3952,6 +3973,15 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
+/* No room above the panel (it is docked high in the page): the box sits
+   inside the panel's top instead, over the header, where it can be typed in.
+   `data-inside` is set from a measurement (`moveFloatSitsInside`). */
+.tweakers-move-preset-save[data-inside] {
+  top: 10px;
+  bottom: auto;
+  z-index: 5;
+}
+
 .tweakers-move-preset-save-input {
   width: 220px;
   padding: 6px 10px;
@@ -3964,6 +3994,227 @@
   font-size: 16px;
   line-height: 20px;
   text-align: center;
+}
+
+/* The agent's prompt: the same floating frame, wider — a sentence, not a
+   name — with the reply and its undo on a line beneath. */
+.tweakers-move-agent-input {
+  width: 340px;
+  text-align: left;
+}
+
+/* The field's row: the + for a picture, then the words. */
+.tweakers-move-agent-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tweakers-move-agent-attach {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: var(--move-radius-small);
+  background: #1e1e1e;
+  color: var(--move-text);
+  opacity: 0.6;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+
+.tweakers-move-agent-attach:hover:not(:disabled),
+.tweakers-move-agent-attach:focus-visible {
+  opacity: 1;
+  outline: none;
+}
+
+.tweakers-move-agent-attach:disabled {
+  cursor: default;
+  opacity: 0.3;
+}
+
+.tweakers-move-agent-attach-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.tweakers-move-agent-attach ~ .tweakers-move-agent-input {
+  width: 302px;
+}
+
+/* A picture being dragged over the prompt: the frame says it will take it. */
+.tweakers-move-agent[data-dropping] {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), inset 0 0 0 2px color-mix(in srgb, var(--move-text) 50%, transparent);
+}
+
+/* The pictures in the prompt, as thumbnails above the words, in the order
+   they will be read. */
+.tweakers-move-agent-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 340px;
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.tweakers-move-agent-attachment {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--move-radius-small);
+  overflow: hidden;
+  background: #1e1e1e;
+}
+
+.tweakers-move-agent-attachment img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tweakers-move-agent-attachment button {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--move-text);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+
+.tweakers-move-agent-attachment:hover button,
+.tweakers-move-agent-attachment button:focus-visible {
+  opacity: 1;
+  outline: none;
+}
+
+@media (hover: none) {
+  .tweakers-move-agent-attachment button { opacity: 1; }
+}
+
+.tweakers-move-agent-attachment svg {
+  width: 10px;
+  height: 10px;
+}
+
+.tweakers-move-agent[data-phase="thinking"] .tweakers-move-agent-input {
+  opacity: 0.5;
+}
+
+.tweakers-move-agent-note {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 340px;
+  margin: 8px 0 0;
+  padding: 0 2px;
+  color: color-mix(in srgb, var(--move-text) 65%, transparent);
+  font-family: var(--move-font-label);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+/* What it read and looked at on the way: a quiet list between the field and
+   the reply. A finished step steps back; the one running breathes. */
+.tweakers-move-agent-steps {
+  width: 340px;
+  margin: 8px 0 0;
+  padding: 0 2px;
+  list-style: none;
+  font-family: var(--move-font-label);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.tweakers-move-agent-step {
+  color: color-mix(in srgb, var(--move-text) 40%, transparent);
+}
+
+.tweakers-move-agent-step[data-state="running"] {
+  color: color-mix(in srgb, var(--move-text) 65%, transparent);
+  animation: tweakers-move-agent-breathe var(--move-confirm-pulse-duration) ease-in-out infinite;
+}
+
+.tweakers-move-agent-steps + .tweakers-move-agent-note {
+  margin-top: 4px;
+}
+
+@keyframes tweakers-move-agent-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-agent-step[data-state="running"] { animation: none; }
+}
+
+/* A reply that did what was asked says one word. The mark draws itself and
+   the word settles in beside it — a small confirmation, over in a beat. */
+.tweakers-move-agent-note[data-done] {
+  color: var(--move-text);
+}
+
+.tweakers-move-agent-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  animation: tweakers-move-agent-settle 320ms var(--move-ease-out) both;
+}
+
+.tweakers-move-agent-done-mark {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.tweakers-move-agent-done-mark path {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: tweakers-move-agent-draw 360ms var(--move-ease-out) 80ms forwards;
+}
+
+@keyframes tweakers-move-agent-settle {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes tweakers-move-agent-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-agent-done { animation: none; }
+  .tweakers-move-agent-done-mark path { animation: none; stroke-dashoffset: 0; }
+}
+
+.tweakers-move-agent[data-phase="error"] .tweakers-move-agent-note {
+  color: #ff8a70;
+}
+
+.tweakers-move-agent-undo {
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--move-text);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -5598,6 +5849,75 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The chevron alone: a round button, for a list whose heading says where
+   it is. */
+.tweakers-list-screen-back[data-bare] {
+  justify-content: center;
+  width: 24px;
+  padding: 0;
+}
+
+/* The list's heading, level with the back pill and centred on the screen.
+   Brighter than an unselected row, dimmer than the selected one: it names
+   the list without competing with the choice. */
+.tweakers-list-screen-title {
+  position: absolute;
+  top: 4px;
+  left: 32px;
+  right: 32px;
+  z-index: 1;
+  height: 24px;
+  font-family: var(--move-font-label);
+  font-size: 14px;
+  line-height: 24px;
+  color: #dee3c9;
+  opacity: 0.6;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+/* A named glyph dims with the label, not with a picture's lighter 40%. */
+.tweakers-list-screen-icon[data-glyph] {
+  border-radius: 0;
+  color: #dee3c9;
+  opacity: 0.22;
+}
+
+.tweakers-list-screen-row[data-selected] .tweakers-list-screen-icon[data-glyph],
+.tweakers-list-screen-row[data-checked="true"] .tweakers-list-screen-icon[data-glyph] {
+  opacity: 1;
+}
+
+/* Rows read from the left edge: icons make one column, names start beside
+   it, a tag keeps the right end. */
+.tweakers-list-screen[data-align="start"] .tweakers-list-screen-row {
+  padding: 2px 8px 2px 10px;
+  text-align: left;
+}
+
+.tweakers-list-screen[data-align="start"] .tweakers-list-screen-icon {
+  left: 10px;
+}
+
+.tweakers-list-screen[data-align="start"] .tweakers-list-screen-row[data-icon] .tweakers-list-screen-label {
+  padding: 0 0 0 calc(var(--move-list-icon-size, 16px) + 8px);
+}
+
+.tweakers-list-screen[data-align="start"] .tweakers-list-screen-row[data-tagged]::before {
+  display: none;
+}
+
+.tweakers-list-screen[data-align="start"] .tweakers-list-screen-row[data-tagged] .tweakers-list-screen-label {
+  flex: 1 1 auto;
+}
+
+.tweakers-list-screen[data-align="start"] .tweakers-list-screen-tag {
+  flex: 0 0 auto;
 }
 
 /* A tagged row that also wears a mark keeps its tag clear of it. */

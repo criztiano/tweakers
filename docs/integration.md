@@ -97,7 +97,10 @@ holding Capture opens the search on the list in focus (`MoveSearchStore`),
 and so do the small magnifier in the list screen's top-right corner and the
 `/` or ⌘F keys on the computer; typing narrows it, the wheel walks what is
 left, taking a row or Back ends it. A wheel-list row may carry `keywords` —
-words the search also finds it by (an effect's tags), never drawn.
+words the search also finds it by (an effect's tags), never drawn — and an
+`icon` (a `LUCIDE_ICONS` name or an image URL). A list of actions reads best
+with `align: 'start'`, `showTitle: true` (its `title` drawn as a heading) and
+`back: true` (the chevron alone, since the heading says where you are).
 A host that reads the wheel events for its own list yields while
 `MoveSearchStore.isOpen()`, exactly as it yields to an open navigator.
 
@@ -175,6 +178,7 @@ it does not prove the build is current. The explicit build gate above does that.
 - Both directions of state sync verified after preset/undo.
 - Binding, function listeners, timers and subscriptions cleaned up.
 - Snapshot provenance, full vendor package and matching lockfile committed.
+- The agent: `context` set; `describeAgentControls()` read cold for labels that need a hint; a brief and actions each evaluated and the decision stated; every content-changing action returns its undo; five real asks tried ([the agent](agent.md)).
 
 ### Settings view (Set Overview)
 
