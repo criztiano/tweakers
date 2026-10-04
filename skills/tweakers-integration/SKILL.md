@@ -92,6 +92,7 @@ adjusted to what the inventory actually contains:
 | Audio or signal level | AudioLevelMeter / AnalyserVisualization |
 | Loaded sample or buffer | WaveformVisualization — interactive, in the main pane |
 | Ordered variable-length collection (layers, effects chain, voices) | List control with item types |
+| Dial moves recorded over the app's own loop or scene, played back each pass | `AutomationLanesStore` (host owns the clock; one commit per take) + `MoveAutomationLanes` card + `claimRec()` — see integration.md, "Automation lanes: the host owns the clock" |
 | One-shot commands (reset, randomize, load) | Action buttons |
 
 Only after the mapping is complete, look at what's left over. A leftover means

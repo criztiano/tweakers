@@ -1316,6 +1316,28 @@ Three placements, one look — all of them on the hardware's own display surface
 
 While the audio modulator's floating editor is zoomed in, the small screens — the audio dial's face and the Move's own display — show the part the editor shows, framed on the playhead, rather than a whole-sample thumbnail.
 
+### Automation lanes
+
+Rec on the Move records dial moves as automation over a pass the app clocks — a scene, a loop — and plays them back every pass. The kit keeps no clock and no document: the app hands the store where the pass is, a way to roll its transport, and a place to commit.
+
+```tsx
+import { AutomationLanesStore, MoveAutomationLanes } from 'tweakers';
+
+const lanes = new AutomationLanesStore({
+  clock: () => ({ time, duration, playing }),
+  play: () => transport.start(),
+  commit: (change) => history.push(change), // a whole take, or one card edit — one undo each
+});
+lanes.claimRec();
+
+// each frame: lanes.tick(); const values = lanes.sample();
+// each control move: if (lanes.edit(key, value, { label, min, max, before })) return;
+
+<MoveAutomationLanes store={lanes} onSeek={seek} />
+```
+
+A take overdubs: only what was moved is replaced, and each pass plays back what the last one wrote. A hand on a control wins while it holds, and outside a take it writes nothing. The card is the timeline's, with curves: click a lane to open it, drag its points, double-click to add or delete one, drag across to select a stretch, then Smooth, Clear or Delete lane. See [integration](docs/integration.md#automation-lanes-the-host-owns-the-clock) for the host's side.
+
 ### Function buttons
 
 The Move's named function buttons attach to your app's own actions through the function library. Names match the printed hardware labels, and the manifest (`MOVE_FUNCTION_MANIFEST`) splits them in two groups:

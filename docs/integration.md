@@ -273,6 +273,58 @@ dial. On the wire the gradient dial rides as a colour dial carrying `stops`,
 and the stop gestures are `color-stop` / `stop-position` — see the move
 repo's `PROTOCOL.md`.
 
+### Automation lanes: the host owns the clock
+
+Recording dial moves is the host's business in time and the kit's in
+everything else. `AutomationLanesStore` keeps no clock and no document: the
+host hands it three functions and stays the owner of both.
+
+```ts
+import { AutomationLanesStore, listenMoveTouch } from 'tweakers';
+
+const lanes = new AutomationLanesStore({
+  clock: () => ({ time: scene.time, duration: scene.length, playing: transport.running }),
+  play: () => transport.start(),
+  commit: (change) => history.transaction(() =>
+    change.kind === 'take'
+      ? change.timelines.forEach((tl, id) => scenes.setAutomation(id, tl))
+      : scenes.setAutomation(change.id, change.timeline)),
+});
+lanes.load(scene.id, scenes.automationOf(scene.id)); // scene entry, undo, open
+const releaseRec = lanes.claimRec();
+const releaseTouch = listenMoveTouch(lanes, (pageId, path) => keyOf(pageId, path));
+```
+
+- **The clock.** `clock()` is read, never driven. Call `tick()` once a frame
+  and read `sample()` (or `valueFor(key)`) after it; call `passWrapped()` when
+  the host loops or re-enters the pass (the store also notices the clock going
+  back). A host whose loop does not run while stopped ends the take itself
+  when the transport stops — `endTake()` — because no tick will see it.
+- **One take, one commit.** Nothing reaches the document while a take runs:
+  it writes into a working copy, across every timeline `load` brings in front,
+  and `endTake()` commits all of it once. Do not hold an undo gesture open for
+  the take's length — commit in one transaction when it ends. `cancelTake()`
+  (Shift + Rec, or the host's Undo while a take runs) commits nothing. Card
+  edits are refused during a take.
+- **Controls go through `edit` first.** A move on a control calls
+  `edit(key, value, { label, min, max, before })`; `true` means the lanes took
+  it and the host must not write it as an ordinary edit. A Move dial is a
+  relative encoder, so a host shows the automated value on its dial
+  (`TweakStore.updateValues`, skipping `isHeld` keys) — then a touch punches in
+  without a jump.
+- **The touch feed.** `listenMoveTouch` turns the kit's per-frame touch
+  stream into `touch(key, on)` changes, lets go of everything on a page change
+  and when the Move goes away. An on-screen panel never sends touch, so a
+  mouse falls back to `holdMs` after its last move.
+- **Rec.** `claimRec()` pushes the Rec key; the newest push wins. Do not also
+  mount a `MoveTimeline` with `onRecord`, or `MoveWaveform` with `onRecord`,
+  while the lanes hold Rec — two recorders on one key is one too many.
+- **Persistence.** Timelines are plain data (`{ lanes: [{ key, label, min,
+  max, interp, points: [{ t, v }] }] }`). Save them compactly (`[t, v]` pairs
+  are fine) and read them back through `Automation.validateTimeline`, which
+  never throws: a broken lane costs that lane. When a copy renames controls,
+  `Automation.remapKeys` carries the lanes over.
+
 ### Audio modulator
 
 The `audio` modulator type follows a sample's amplitude envelope at a play
