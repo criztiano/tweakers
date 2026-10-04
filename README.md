@@ -1,4 +1,4 @@
-# tweakers v1.2.0
+# tweakers v1.3.0
 
 Real-time parameter tweaking for React, Solid, Svelte, and Vue.
 
