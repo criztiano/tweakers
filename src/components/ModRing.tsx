@@ -119,12 +119,10 @@ export function ModRing({
   );
 }
 
-/** The step circle's face, on a 24px grid: the value ring on its track, and the dot inside it. */
+/** The step circle's face, on a 24px grid: the value ring, and the dot inside it. */
 const DOT_RING_RADIUS = 10.5;
 const DOT_RING_CIRCUMFERENCE = 2 * Math.PI * DOT_RING_RADIUS;
 const DOT_RADIUS = 8;
-/** The ring's line runs only the knob's sweep the value can reach, gap at the bottom. */
-const DOT_TRACK = modRingArc(0, 1, DOT_RING_CIRCUMFERENCE);
 
 /**
  * A modulation slot's face in the step row: a dot in the slot's colour with
@@ -187,17 +185,6 @@ export function ModDot({ slot, state }: { slot: ModulationSlot; state?: 'active'
           </g>
         </mask>
       )}
-      {/* Two dark grounds with a gap between: one under the dot, where its
-          mark is cut, and a line under the value ring's sweep. */}
-      <circle className="tweakers-move-mod-well" cx="12" cy="12" r={DOT_RADIUS} />
-      <circle
-        className="tweakers-move-mod-track"
-        cx="12"
-        cy="12"
-        r={DOT_RING_RADIUS}
-        strokeDasharray={ringDash(DOT_TRACK.length, DOT_RING_CIRCUMFERENCE)}
-        strokeDashoffset={DOT_TRACK.offset.toFixed(2)}
-      />
       <circle
         ref={arcRef}
         className="tweakers-mod-ring-arc tweakers-move-mod-arc"
