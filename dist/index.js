@@ -9588,7 +9588,6 @@ function ModRing({
 var DOT_RING_RADIUS = 10.5;
 var DOT_RING_CIRCUMFERENCE = 2 * Math.PI * DOT_RING_RADIUS;
 var DOT_RADIUS = 8;
-var DOT_TRACK = modRingArc(0, 1, DOT_RING_CIRCUMFERENCE);
 function ModDot({ slot, state: state4 }) {
   const arcRef = useRef12(null);
   const maskId = `tweakers-mod-dot-${useId().replace(/:/g, "")}`;
@@ -9624,18 +9623,6 @@ function ModDot({ slot, state: state4 }) {
             mark.circles?.map((c) => /* @__PURE__ */ jsx14("circle", { ...c }, `${c.cx},${c.cy}`))
           ] })
         ] }),
-        /* @__PURE__ */ jsx14("circle", { className: "tweakers-move-mod-well", cx: "12", cy: "12", r: DOT_RADIUS }),
-        /* @__PURE__ */ jsx14(
-          "circle",
-          {
-            className: "tweakers-move-mod-track",
-            cx: "12",
-            cy: "12",
-            r: DOT_RING_RADIUS,
-            strokeDasharray: ringDash(DOT_TRACK.length, DOT_RING_CIRCUMFERENCE),
-            strokeDashoffset: DOT_TRACK.offset.toFixed(2)
-          }
-        ),
         /* @__PURE__ */ jsx14(
           "circle",
           {

@@ -385,9 +385,6 @@
      than a slot you can press, so it never reads as a control. */
   --move-slot-empty: rgba(222, 227, 201, 0.03);
   --move-chip: #41403e;
-  /* The list and enum screens' dark grey — a drawn screen set into the
-     instrument (the modulation circles' well wears it too). */
-  --move-screen: #1e1e1e;
   /* A big slot at rest sits a step quieter than the chip; the slot whose
      dial is in the hand comes back up to the chip, so the eye finds it. */
   --move-slot-rest: color-mix(in srgb, var(--move-chip) 60%, var(--move-bg));
@@ -784,23 +781,13 @@
   overflow: visible;
 }
 
-.tweakers-move-mod-well {
-  fill: var(--move-screen);
-}
-
-.tweakers-move-mod-track,
 .tweakers-move-mod-arc {
   fill: none;
-  stroke-width: 1;
+  stroke-width: 2;
 }
 
-.tweakers-move-mod-track {
-  stroke: var(--move-screen);
-  stroke-linecap: round;
-}
-
-/* A modulation circle stands on its own grounds, with the panel showing in
-   the gap between dot and ring — no slot disc behind it. */
+/* A modulation circle is its dot and its ring alone, on the panel — no
+   slot disc behind it, the panel showing through the mark. */
 .tweakers-move-mod:has(> .tweakers-move-mod-face) {
   background: transparent;
 }
