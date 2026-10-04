@@ -879,7 +879,7 @@ interface MoveViewLoadOptions<T> {
  * when it can. Resolves once `update` has run.
  */
 type MoveViewRunner = (change: MoveViewChange, update: () => void) => Promise<void>;
-type Listener$7 = () => void;
+type Listener$8 = () => void;
 declare let timers: {
     setTimeout: (fn: () => void, ms: number) => number;
     clearTimeout: (id: ReturnType<typeof setTimeout> | undefined) => void;
@@ -887,7 +887,7 @@ declare let timers: {
 };
 declare const MoveViews: {
     getState: () => MoveViewsState;
-    subscribe(fn: Listener$7): () => void;
+    subscribe(fn: Listener$8): () => void;
     /**
      * Change the view now. `update` is the app's own state change — a
      * setState, a dispatch — and runs inside the transition; `motion` says
@@ -1716,7 +1716,7 @@ declare function removePoint(points: TransferPoint[], index: number): TransferPo
  * Move a point. The ends slide only in y; an interior point is held between
  * its neighbours so the curve can never fold back on itself.
  */
-declare function movePoint(points: TransferPoint[], index: number, x: number, y: number): TransferPoint[];
+declare function movePoint$1(points: TransferPoint[], index: number, x: number, y: number): TransferPoint[];
 /**
  * The point under the pointer, or -1. Distances are in the curve's own unit
  * square, so callers convert pixels with `tolerance = grabPx / boxPx`.
@@ -2622,7 +2622,7 @@ type PanelConfig = {
     module?: boolean;
     kind?: 'timeline' | 'modulation' | 'kit';
 };
-type Listener$6 = () => void;
+type Listener$7 = () => void;
 type ActionListener = (action: string) => void;
 /**
  * Non-value events emitted by controls (file picked, chip removed, list mutated).
@@ -2872,14 +2872,14 @@ declare class TweakStoreClass {
      */
     selectPanels(only?: string | string[]): PanelConfig[];
     getPanel(id: string): PanelConfig | undefined;
-    subscribe(panelId: string, listener: Listener$6): () => void;
+    subscribe(panelId: string, listener: Listener$7): () => void;
     /** A registry says the page uses it (see MoveKitRegistry). Silent: this is
      *  bookkeeping for the bridge kit, not a change anything should render. */
     noteMoveKitUse(registry: MoveKitRegistry): void;
     /** The Move-kit registries this page has put to use — what the bridge kit
      *  checks its binding against. */
     getMoveKitUses(): MoveKitRegistry[];
-    subscribeGlobal(listener: Listener$6): () => void;
+    subscribeGlobal(listener: Listener$7): () => void;
     subscribeActions(panelId: string, listener: ActionListener): () => void;
     triggerAction(panelId: string, path: string): void;
     subscribeEvents(panelId: string, listener: EventListener): () => void;
@@ -2899,7 +2899,7 @@ declare class TweakStoreClass {
     setDisabled(panelId: string, path: string, disabled: boolean): void;
     isDisabled(panelId: string, path: string): boolean;
     /** One channel for every app-pushed presentation change on a panel. */
-    subscribeControlState(panelId: string, listener: Listener$6): () => void;
+    subscribeControlState(panelId: string, listener: Listener$7): () => void;
     private notifyControlState;
     /**
      * Refresh curve rows' host-supplied presentation (sample function + markers)
@@ -5263,7 +5263,7 @@ declare function padSection(window: {
 }, index: number, pads?: number): WaveformLoop;
 /** Which steps light: the loop's span, or the lone anchor while one is pending. */
 declare function loopSteps(view: MoveWaveformView, steps?: number): number[];
-type Listener$5 = () => void;
+type Listener$6 = () => void;
 declare class MoveWaveformStoreClass {
     private view;
     /** Live claims — the app's display and the room's preview can both be up. */
@@ -5320,7 +5320,7 @@ declare class MoveWaveformStoreClass {
     getStyle(): MoveWaveformStyle;
     /** The settings page's values, a stable snapshot per change — for `useSyncExternalStore`. */
     getStyleSnapshot(): Record<string, TweakValue>;
-    subscribeStyle(fn: Listener$5): () => void;
+    subscribeStyle(fn: Listener$6): () => void;
     /**
      * Editor mode — the floating waveform is up and owns the whole surface:
      * every step is the loop bar (a slot's own step included), and the bottom
@@ -5373,7 +5373,7 @@ declare class MoveWaveformStoreClass {
     /** The steps the loop covers — what the hardware lights. While an app
      *  holds the row, its lit steps instead. */
     loopSteps(): number[];
-    subscribe(fn: Listener$5): () => void;
+    subscribe(fn: Listener$6): () => void;
     private notify;
 }
 declare const MoveWaveformStore: MoveWaveformStoreClass;
@@ -5658,13 +5658,13 @@ declare const MoveConnection: {
  * Which panel shows inside is `MovePanel`'s business — the `settings` prop
  * names it, exactly as `panels` names the pages.
  */
-type Listener$4 = () => void;
+type Listener$5 = () => void;
 declare const MoveSettingsView: {
     isOpen: () => boolean;
     open: () => void;
     close: () => void;
     toggle: () => void;
-    subscribe(fn: Listener$4): () => void;
+    subscribe(fn: Listener$5): () => void;
 };
 
 /**
@@ -5790,7 +5790,7 @@ interface MoveTimelineClaimOptions {
      */
     onRecord?: (recording: boolean) => void;
 }
-type Listener$3 = () => void;
+type Listener$4 = () => void;
 declare class MoveTimelineStoreClass {
     private claims;
     private zoom;
@@ -5838,7 +5838,7 @@ declare class MoveTimelineStoreClass {
     zoomTo(zoom: number, anchor: number): void;
     /** Slide the window to start at `start` seconds, keeping the zoom. */
     panTo(start: number): void;
-    subscribe(fn: Listener$3): () => void;
+    subscribe(fn: Listener$4): () => void;
     getVersion(): number;
     private front;
     private setView;
@@ -5935,7 +5935,7 @@ type TimelineTransport = {
      * timeline wraps. Reset by seek/replay so scrubbing stays deterministic. */
     wraps: number;
 };
-type Listener$2 = () => void;
+type Listener$3 = () => void;
 /** A user- or code-defined loop window `[start, end]` in seconds. Absent means
  * "loop the whole timeline" — the default for this preview tool. */
 type TimelineLoopRegion = {
@@ -5984,8 +5984,8 @@ declare class TimelineStoreClass {
     getTransport(id: string): TimelineTransport;
     getTimeline(id: string): TimelineMeta | undefined;
     getTimelines(): TimelineMeta[];
-    subscribe(id: string, listener: Listener$2): () => void;
-    subscribeGlobal(listener: Listener$2): () => void;
+    subscribe(id: string, listener: Listener$3): () => void;
+    subscribeGlobal(listener: Listener$3): () => void;
     private applyMeta;
     private ensureLoop;
     private tick;
@@ -6168,6 +6168,467 @@ type MoveTimelineValues<T extends TimelineConfig> = TweakTimelineValues<T> & {
  * grown): values on surviving paths are kept, and the playhead stays put.
  */
 declare function useMoveTimeline<T extends TimelineConfig>(name: string, config: T, options?: UseMoveTimelineOptions): MoveTimelineValues<T>;
+
+/**
+ * Automation lanes — the pure core.
+ *
+ * A lane is one control's value over one pass of the host's clock: a list of
+ * points on normalised time (`t` is a phase, 0 at the start of the pass, 1 at
+ * its end) and in the control's own units (`v` between the lane's `min` and
+ * `max`). Phase, not seconds, so a lane stretches with its pass when the host
+ * changes the length — the way a synced LFO does. The host's duration is only
+ * for the ruler.
+ *
+ * Between two points the value is a straight line (`linear`) or stays put
+ * until the next one (`hold`). Two points at one `t` are a jump, and the
+ * curve takes the later one from that instant on (right-continuous). Before
+ * the first point and after the last the curve stays at their values, so a
+ * lane answers every `t`: a new lane starts flat at the control's value and
+ * covers the whole pass from its first moment.
+ *
+ * Everything here returns new objects and touches nothing else — the store
+ * (`automation-store.ts`) holds state, the card draws it.
+ */
+type AutomationInterp = 'linear' | 'hold';
+interface AutomationPoint {
+    /** Phase of the pass, 0..1. */
+    t: number;
+    /** The value, in the control's own units. */
+    v: number;
+}
+interface AutomationRange {
+    min: number;
+    max: number;
+}
+interface AutomationLane extends AutomationRange {
+    /** The host's name for the control this lane drives. */
+    key: string;
+    /** What the card calls it. */
+    label: string;
+    interp: AutomationInterp;
+    /** Sorted by `t`. Never empty. */
+    points: readonly AutomationPoint[];
+}
+interface AutomationTimeline {
+    readonly lanes: readonly AutomationLane[];
+}
+/** A stretch of one control written by a hand: what replaces the lane between `from` and `to`. */
+interface AutomationSpan {
+    key: string;
+    from: number;
+    to: number;
+    samples: AutomationPoint[];
+}
+/** Where a playing read left off in a lane, so the next read starts there. */
+interface AutomationCursor {
+    index: number;
+}
+/** How far a simplified curve may stray from the drawn one: 0.4% of the
+ *  control's range — under a dial's step on any control the kit draws. */
+declare const AUTOMATION_TOLERANCE = 0.004;
+/** How many steps a smoothing pass resamples a lane into. */
+declare const AUTOMATION_SMOOTH_SAMPLES = 240;
+declare const EMPTY_TIMELINE: AutomationTimeline;
+/** The lane's value at phase `t`. Pass a cursor to make a playing read cheap. */
+declare function valueAt(lane: Pick<AutomationLane, 'points' | 'interp' | 'min'>, t: number, cursor?: AutomationCursor): number;
+/** The value the curve arrives at `t` with — the one before a jump there. */
+declare function valueBefore(lane: Pick<AutomationLane, 'points' | 'interp' | 'min'>, t: number): number;
+/** A lane that holds `base` for the whole pass — what a control was before its first take. */
+declare function createLane(key: string, label: string, min: number, max: number, base: number, interp?: AutomationInterp): AutomationLane;
+/**
+ * Fewer points, the same curve: Ramer-Douglas-Peucker on the VERTICAL error —
+ * how far the value strays at that moment, as a share of the control's range
+ * — because a lane is read at a time, never along its length. Endpoints stay,
+ * and so does every jump (two points at one `t`): each run between them is
+ * simplified on its own. A `hold` lane keeps a point only where the value
+ * changes. Iterative, so a long take cannot overflow the stack.
+ */
+declare function simplify(points: readonly AutomationPoint[], range: AutomationRange, tolerance?: number, interp?: AutomationInterp): AutomationPoint[];
+/**
+ * Smooth a lane's shape: resample it into `AUTOMATION_SMOOTH_SAMPLES` steps,
+ * blur with a Gaussian whose width is `amount` × 5% of the pass, and simplify
+ * again. Pressing it again smooths again. With a `span` only that stretch
+ * changes, and the change fades in and out at its edges so no jump appears
+ * where it meets the rest of the lane.
+ */
+declare function smooth(lane: AutomationLane, amount: number, span?: {
+    from: number;
+    to: number;
+}, tolerance?: number): AutomationPoint[];
+/**
+ * Overdub: a hand's span replaces the lane between `from` and `to`, and only
+ * there. The lane keeps its value up to `from` and from `to` on exactly —
+ * a point pins each edge at the old curve's value — so the written stretch
+ * meets the rest with a straight jump rather than a ramp across untouched
+ * time. The span's samples are simplified on the way in.
+ */
+declare function mergeSpan(lane: AutomationLane, span: Pick<AutomationSpan, 'from' | 'to' | 'samples'>, tolerance?: number): AutomationLane;
+/** A stretch of the pass that may run over its end, as one or two plain stretches. */
+declare function splitAtWrap(from: number, to: number): {
+    from: number;
+    to: number;
+}[];
+/**
+ * Clear a stretch: every point inside it goes, and the curve runs straight
+ * from where it entered to where it leaves — the edges stay where they were.
+ */
+declare function clearRange(lane: AutomationLane, from: number, to: number): AutomationLane;
+/**
+ * Move one point. It stays between its neighbours in time (it may meet them,
+ * which makes a jump) and inside the control's range in value. A point on
+ * either end of the pass keeps its time, so the lane keeps its reach.
+ */
+declare function movePoint(lane: AutomationLane, index: number, t: number, v: number): AutomationLane;
+/** Add a point at `t` — on the curve unless a value is given. Returns the new lane and where the point landed. */
+declare function addPoint(lane: AutomationLane, t: number, v?: number): {
+    lane: AutomationLane;
+    index: number;
+};
+/** Remove one point. A lane's last point stays — deleting the lane is a different act. */
+declare function deletePoint(lane: AutomationLane, index: number): AutomationLane;
+declare function laneByKey(timeline: AutomationTimeline, key: string): AutomationLane | undefined;
+/** Put a lane in: in place of the one with its key, else at the end. */
+declare function upsertLane(timeline: AutomationTimeline, lane: AutomationLane): AutomationTimeline;
+declare function removeLane(timeline: AutomationTimeline, key: string): AutomationTimeline;
+/** Every lane's value at phase `t`, by key. */
+declare function sampleTimeline(timeline: AutomationTimeline, t: number): Map<string, number>;
+/**
+ * Rename every lane's key — for a copy whose controls have new ids. A key
+ * mapped to null drops its lane; two lanes mapped to one key keep the first.
+ */
+declare function remapKeys(timeline: AutomationTimeline, map: (key: string) => string | null | undefined): AutomationTimeline;
+/**
+ * Read a timeline from anything — a saved file, a message — into one the
+ * store can play. Bad numbers go, points are sorted and clamped, a lane with
+ * no usable range, key or point goes, the first of two lanes on one key
+ * stays. Never throws: a broken lane costs that lane, not the timeline.
+ */
+declare function validateTimeline(raw: unknown): AutomationTimeline;
+
+declare const automationCore_AUTOMATION_SMOOTH_SAMPLES: typeof AUTOMATION_SMOOTH_SAMPLES;
+declare const automationCore_AUTOMATION_TOLERANCE: typeof AUTOMATION_TOLERANCE;
+type automationCore_AutomationCursor = AutomationCursor;
+type automationCore_AutomationInterp = AutomationInterp;
+type automationCore_AutomationLane = AutomationLane;
+type automationCore_AutomationPoint = AutomationPoint;
+type automationCore_AutomationRange = AutomationRange;
+type automationCore_AutomationSpan = AutomationSpan;
+type automationCore_AutomationTimeline = AutomationTimeline;
+declare const automationCore_EMPTY_TIMELINE: typeof EMPTY_TIMELINE;
+declare const automationCore_addPoint: typeof addPoint;
+declare const automationCore_clearRange: typeof clearRange;
+declare const automationCore_createLane: typeof createLane;
+declare const automationCore_deletePoint: typeof deletePoint;
+declare const automationCore_laneByKey: typeof laneByKey;
+declare const automationCore_mergeSpan: typeof mergeSpan;
+declare const automationCore_movePoint: typeof movePoint;
+declare const automationCore_remapKeys: typeof remapKeys;
+declare const automationCore_removeLane: typeof removeLane;
+declare const automationCore_sampleTimeline: typeof sampleTimeline;
+declare const automationCore_simplify: typeof simplify;
+declare const automationCore_smooth: typeof smooth;
+declare const automationCore_splitAtWrap: typeof splitAtWrap;
+declare const automationCore_upsertLane: typeof upsertLane;
+declare const automationCore_validateTimeline: typeof validateTimeline;
+declare const automationCore_valueAt: typeof valueAt;
+declare const automationCore_valueBefore: typeof valueBefore;
+declare namespace automationCore {
+  export { automationCore_AUTOMATION_SMOOTH_SAMPLES as AUTOMATION_SMOOTH_SAMPLES, automationCore_AUTOMATION_TOLERANCE as AUTOMATION_TOLERANCE, type automationCore_AutomationCursor as AutomationCursor, type automationCore_AutomationInterp as AutomationInterp, type automationCore_AutomationLane as AutomationLane, type automationCore_AutomationPoint as AutomationPoint, type automationCore_AutomationRange as AutomationRange, type automationCore_AutomationSpan as AutomationSpan, type automationCore_AutomationTimeline as AutomationTimeline, automationCore_EMPTY_TIMELINE as EMPTY_TIMELINE, automationCore_addPoint as addPoint, automationCore_clearRange as clearRange, automationCore_createLane as createLane, automationCore_deletePoint as deletePoint, automationCore_laneByKey as laneByKey, automationCore_mergeSpan as mergeSpan, automationCore_movePoint as movePoint, automationCore_remapKeys as remapKeys, automationCore_removeLane as removeLane, automationCore_sampleTimeline as sampleTimeline, automationCore_simplify as simplify, automationCore_smooth as smooth, automationCore_splitAtWrap as splitAtWrap, automationCore_upsertLane as upsertLane, automationCore_validateTimeline as validateTimeline, automationCore_valueAt as valueAt, automationCore_valueBefore as valueBefore };
+}
+
+/**
+ * Automation lanes — the store between a host's clock and its controls.
+ *
+ * The host owns time and the document: it says where the pass is, starts the
+ * transport when a take needs it, and receives every change as one commit it
+ * can put on its undo. This store owns everything in between — the take in
+ * progress, the hands on the controls, the working copy a take writes into,
+ * the card's selection and view — and never keeps a clock of its own.
+ *
+ *   const lanes = new AutomationLanesStore({
+ *     clock: () => ({ time: scene.time, duration: scene.length, playing: transport.running }),
+ *     play: () => transport.start(),
+ *     commit: (change) => history.transaction(() => save(change)),
+ *   });
+ *   lanes.claimRec();                       // the Move's Rec records takes
+ *   lanes.load(scene.id, scene.automation); // on entering a scene, after undo, on open
+ *   // every frame:
+ *   lanes.tick();
+ *   const values = lanes.sample();          // key → value, the hand's while it holds one
+ *   // when a control moves:
+ *   if (lanes.edit(key, value, { label, min, max, before })) return; // the lane took it
+ *
+ * Recording is overdub. A take replaces a lane only where its control was
+ * moved, and keeps writing on every pass while it runs: what one pass wrote
+ * plays back on the next. A control with no lane gets one at its first move,
+ * flat at its value before the take. When the take ends the whole of it —
+ * every timeline it wrote — is ONE commit.
+ *
+ * A hand wins. A touched control (`touch`, from the Move's capacitive knobs)
+ * holds its value under the finger, and so does one that is being moved; it
+ * goes back to its lane when the finger lifts, or `holdMs` after its last
+ * move when nothing says touch (a mouse). Outside a take that is all a hand
+ * does: it never writes.
+ */
+interface AutomationClock {
+    /** Where the pass is, in the host's seconds. */
+    time: number;
+    /** How long the pass is, in seconds. */
+    duration: number;
+    playing: boolean;
+}
+type AutomationCommit = {
+    kind: 'take';
+    timelines: ReadonlyMap<string, AutomationTimeline>;
+} | {
+    kind: 'edit';
+    id: string;
+    timeline: AutomationTimeline;
+    coalesce?: string;
+};
+interface AutomationHost {
+    clock(): AutomationClock;
+    /** Start the transport — a take started on a stopped clock rolls it. */
+    play(): void;
+    /** One undoable change: a whole take, or one edit made on the card. */
+    commit(change: AutomationCommit): void;
+}
+interface AutomationStoreOptions {
+    /** How long a control with no touch feed (a mouse) stays held after its last move. */
+    holdMs?: number;
+    /** A touch this recent when the first move comes starts the take's write at the touch. */
+    touchAuthorityMs?: number;
+    /** How far a written curve may stray from the hand, as a share of the range. */
+    tolerance?: number;
+    /** The wall clock, in ms — for tests. */
+    now?: () => number;
+}
+/** What the store needs to know about a control the first time it writes it. */
+interface AutomationEditMeta {
+    label: string;
+    min: number;
+    max: number;
+    /** The control's value before this move — a new lane starts flat at it. */
+    before: number;
+    interp?: AutomationInterp;
+}
+interface AutomationSelection {
+    key: string | null;
+    /** A point on the selected lane, by index. */
+    point: number | null;
+    /** A stretch of the selected lane, in phase. */
+    range: {
+        from: number;
+        to: number;
+    } | null;
+}
+interface AutomationView {
+    zoom: number;
+    /** The phase at the card's left edge. */
+    start: number;
+}
+type Listener$2 = () => void;
+declare class AutomationLanesStore {
+    private readonly host;
+    private readonly holdMs;
+    private readonly touchAuthorityMs;
+    private readonly tolerance;
+    private readonly now;
+    private currentId;
+    private current;
+    private recording;
+    /** The timelines this take has written, by id — committed as one on its end. */
+    private working;
+    private takeStart;
+    private laps;
+    private spans;
+    private lastPhase;
+    private touches;
+    private hands;
+    private metas;
+    private cursors;
+    private selection;
+    private view;
+    private listeners;
+    private version;
+    constructor(host: AutomationHost, options?: AutomationStoreOptions);
+    /**
+     * The timeline in front: on entering a scene, after an undo, on opening a
+     * file. A take keeps running across it — what it wrote into the timeline
+     * it leaves stays in the take, closed at the end of that pass, and a hand
+     * still on a control carries on writing here.
+     */
+    load(id: string, timeline: AutomationTimeline): void;
+    /** The host's clock, read through — the card's playhead polls it every frame. */
+    clock(): AutomationClock;
+    /** The id of the timeline in front, or null before the first `load`. */
+    id(): string | null;
+    /** The timeline in front — a take's working copy while it writes one. */
+    timeline(): AutomationTimeline;
+    /** Whether a control has a lane here. */
+    has(key: string): boolean;
+    isRecording(): boolean;
+    /** Start a take, rolling the transport if it stands still. */
+    startTake(): void;
+    /** End the take: close every stretch and hand the host what it wrote, as one commit. */
+    endTake(): void;
+    /** Drop the take: nothing it wrote reaches the document. */
+    cancelTake(): void;
+    toggleTake(): void;
+    /** Where the take started (phase) and how many times the pass has come round since. */
+    take(): {
+        from: number;
+        laps: number;
+    } | null;
+    /** The stretch a hand is writing right now, for the card to draw. */
+    liveSpan(key: string): {
+        from: number;
+        samples: readonly AutomationPoint[];
+    } | undefined;
+    /**
+     * A finger on a control, or off it. While it rests, a control with a lane
+     * holds its value under it. Call it again while it rests to say it still
+     * does (the Move's stream repeats it) — that changes nothing.
+     */
+    touch(key: string, on: boolean): void;
+    /**
+     * A control moved. Returns true when the store took the move — a take is
+     * writing it, or it has a lane its hand now holds — and the host must not
+     * apply it as an ordinary edit. False: not automation's business.
+     */
+    edit(key: string, value: number, meta: AutomationEditMeta): boolean;
+    /** Whether a hand holds this control right now — its lane is not playing. */
+    isHeld(key: string): boolean;
+    /**
+     * Once a frame, from the host's loop: lets go of hands that went quiet,
+     * extends the stretches being written, and notices the pass coming round
+     * (or a seek) when the host did not say so with `passWrapped`.
+     */
+    tick(time?: number): void;
+    /**
+     * The pass came round (the host looped or re-entered it). A take keeps
+     * going: what this pass wrote joins its lanes, so the next pass plays it,
+     * and a hand still holding a control writes on from the top.
+     */
+    passWrapped(): void;
+    /**
+     * Every lane's value now, by key — a hand's while it holds the control.
+     * Read once a frame; the host's playback reads this, not the lanes.
+     */
+    sample(time?: number): ReadonlyMap<string, number>;
+    /** One control's value now: its hand's, else its lane's; undefined with neither. */
+    valueFor(key: string, time?: number): number | undefined;
+    /** Move a point; a drag passes `drag` so its steps are one undo. */
+    movePoint(key: string, index: number, t: number, v: number, options?: {
+        drag?: boolean;
+    }): boolean;
+    /** Add a point at `t` (on the curve unless `v` is given); returns its index, or -1. */
+    addPoint(key: string, t: number, v?: number): number;
+    deletePoint(key: string, index: number): boolean;
+    /** Clear a stretch of a lane to a straight run across it. */
+    clearRange(key: string, from: number, to: number): boolean;
+    /** One smoothing pass — over the selected stretch when the lane has one. */
+    smooth(key: string, strong?: boolean): boolean;
+    /** Delete a lane: the control is its slider's again. */
+    deleteLane(key: string): boolean;
+    getSelection(): AutomationSelection;
+    select(next: {
+        key?: string | null;
+        point?: number | null;
+        range?: {
+            from: number;
+            to: number;
+        } | null;
+    }): void;
+    getView(): AutomationView;
+    /** The stretch of the pass on the card, in phase. */
+    getWindow(): {
+        start: number;
+        span: number;
+    };
+    /** Zoom around `anchor` (a phase) — the pointer for a pinch. */
+    zoomTo(zoom: number, anchor: number): void;
+    panTo(start: number): void;
+    resetView(): void;
+    /**
+     * The Move's Rec key records takes until the returned release: Rec starts
+     * and ends one, Shift + Rec drops the one running. Pushed, so whatever had
+     * Rec before gets it back on release; the newest claim on Rec wins, so do
+     * not put a `MoveTimeline` with `onRecord` up beside it. No knob, no wheel.
+     */
+    claimRec(options?: {
+        label?: string;
+    }): () => void;
+    subscribe(fn: Listener$2): () => void;
+    getVersion(): number;
+    /** The pass's phase at `time` (seconds), or now. */
+    private phase;
+    private read;
+    /** Put a timeline in front: into the take while one writes, else as the document's. */
+    private write;
+    private openSpan;
+    /** Close a hand's stretch at `phase` and lay it into its lane. */
+    private closeSpan;
+    private closeSpans;
+    /** The pass came round mid-take: close at its end, write on from its start. */
+    private wrap;
+    /** One edit on the card: the lane in front, changed and committed as one undo. */
+    private editLane;
+    private setView;
+    private notify;
+}
+
+/**
+ * The Move's capacitive knobs, fed to an automation store: a finger on a knob
+ * is a hand on the control under it, before any turn. The kit says touch on
+ * every state frame (`{ pageId, touched }`, by control path, for the page on
+ * the hardware); this keeps what it said last and passes on each change. A
+ * page change lets go of everything the old page held, and so does the Move
+ * going away — a finger the stream can no longer report must not hold a lane
+ * forever.
+ *
+ * `resolve` names a page's control in the store's keys, or null for a
+ * control automation does not drive. Returns the release.
+ */
+declare function listenMoveTouch(store: Pick<AutomationLanesStore, 'touch'>, resolve: (pageId: string, path: string) => string | null | undefined): () => void;
+
+interface MoveAutomationLanesProps {
+    /** The lanes to show and edit — the host's `AutomationLanesStore`. */
+    store: AutomationLanesStore;
+    /**
+     * `dock` floats above the Move panel, as wide as the window allows up to
+     * 960px — the timeline's place. `page` is a card wherever the app puts it.
+     */
+    variant?: 'dock' | 'page';
+    /** A click on the ruler: the host moves its clock to `time` seconds. */
+    onSeek?: (time: number) => void;
+    /** The playhead, the selection and a held lane's mark — the host's signature. */
+    accent?: string;
+    /** The card's name, in its corner. */
+    title?: string;
+    /** What the card says with no lane yet. */
+    emptyLabel?: string;
+    theme?: TweakTheme;
+    productionEnabled?: boolean;
+    className?: string;
+}
+/**
+ * Automation lanes, on the Move's surface — one row per recorded control, its
+ * value over the pass drawn as a curve on the timeline's card.
+ *
+ * The card draws and edits; it records nothing and claims nothing. The host
+ * clocks the store, the store's `claimRec` gives the Move's Rec key to takes,
+ * and the card follows: the playhead and a take's band move with the host's
+ * clock, and a lane a hand is holding wears a mark by its name.
+ *
+ * Click a lane to open it. On an open lane: drag a point (Shift keeps its
+ * time), double-click to add one or to delete the one under the pointer, drag
+ * across empty space to select a stretch; Smooth, Clear and Delete lane are
+ * on the bar under the rows, and Delete / Backspace clears the stretch or
+ * deletes the point. Click the ruler to jump. Pinch (or Ctrl + wheel) zooms
+ * around the pointer, a sideways scroll pans.
+ */
+declare function MoveAutomationLanes({ store, variant, onSeek, accent, title, emptyLabel, theme, productionEnabled, className, }: MoveAutomationLanesProps): react_jsx_runtime.JSX.Element | null;
 
 interface MoveColorView {
     panelId: string;
@@ -6957,7 +7418,7 @@ interface MoveKitOptions {
     /** The curve maths a knob needs to hold one of a transfer's points. */
     transfer: {
         sample: typeof sampleTransfer;
-        move: typeof movePoint;
+        move: typeof movePoint$1;
     };
     /** Preset exploration's 32 pads, behind a held Menu. */
     exploration: typeof PresetExplorationStore;
@@ -7863,4 +8324,4 @@ declare const MoveSearchStore: MoveSearchStoreClass;
 declare function presetFlowerSeed(values: Record<string, unknown>): string;
 declare function presetFlowerSvg(values: Record<string, unknown>): string;
 
-export { ADSR_DEF, ADSR_STAGE_MAX, ANGLE_DEAD_ZONE_PX, AUDIO_DEF, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AudioModWindow, type AxisSpec, type BalanceConfig, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, type ChipOption, type ChipsConfig, type ColorConfig, type ColorFormat, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRANSFER, DEFAULT_TRIGGER_STEPS, type DriverDirection, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EasingConfig, type EnvStage, type ExplorationChild, type ExplorationSlot, type ExplorationState, type ExplorationTree, type ExplorationView, FILTER_DB_CEIL, FILTER_DB_FLOOR, type FileConfig, type FilterAxis, type FilterAxisConfig, type FilterConfig, type FilterResponse, type FilterShapeType, type FilterValue, type GalleryConfig, type GalleryItem, type GeneParameter, type GeneticsSettings, type GradientConfig, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenDetail, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_COLOR_NAMES, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_AGENT_GLIDE_MS, MOVE_BAND_H, MOVE_BAND_W, MOVE_CHIP_BUTTONS, MOVE_COLOR_HUES, MOVE_COLOR_PALETTES, MOVE_COLOR_STEPS, MOVE_COLOR_WHEEL, MOVE_CONNECTION_ASK_EVENT, MOVE_CONNECTION_EVENT, MOVE_DECK_MAX, MOVE_DIALS, MOVE_FLOAT_SELECTOR, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_ICONS, MOVE_FUNCTION_MANIFEST, MOVE_GATE_GRID, MOVE_GAUGE, MOVE_GRADIENT_STOPS, MOVE_GRAIN, MOVE_JOG_CLICK_EVENT, MOVE_JOG_EVENT, MOVE_JOG_HOLD_EVENT, MOVE_LATCH_EVENT, MOVE_MULTIBAND_GRID, MOVE_MUTE_EVENT, MOVE_NOTIFY_GAP, MOVE_NOTIFY_KINDS, MOVE_OPACITY_PADS, MOVE_OVERRIDE_EVENT, MOVE_PADS, MOVE_PAD_LIBRARY, MOVE_PAGE_EVENT, MOVE_PAGE_SELECT_EVENT, MOVE_PALETTE, MOVE_PANEL_SETTINGS, MOVE_SEARCH_EVENT, MOVE_SETTINGS_EVENT, MOVE_SLOT_LIBRARY, MOVE_SPECIAL_BUTTONS, MOVE_STAGE, MOVE_STEP_FUNCTIONS, MOVE_STRIP_EVENT, MOVE_TIMELINE_MAX_ZOOM, MOVE_TOUCH_EVENT, MOVE_TRACKS, MOVE_TRACK_COLORS, MOVE_TRACK_LABEL_STYLES, MOVE_VIEW_MOTIONS, MOVE_VIEW_PRESENTATION, MOVE_VIEW_WAIT, MOVE_VOLUME_EVENT, MOVE_VOLUME_TAP_EVENT, MOVE_WAVEFORM_DEMO_SECONDS, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_PANEL, MOVE_WAVEFORM_PIXEL_RANGE, MOVE_WAVEFORM_STEPS, MOVE_WAVE_FRAME, MOVE_WAVE_MAX_DISPLAY, MOVE_WAVE_MAX_HEIGHT, MOVE_WAVE_MAX_WIDTH, type ModControlMeta, ModDot, type ModGlyph, type ModPageLayout, type ModPageSlot, type ModRange, ModRing, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, type MorphState, MoveActionButton, type MoveActionButtonProps, MoveActionDeck, type MoveActionDeckProps, type MoveAgentAction, type MoveAgentActionInfo, type MoveAgentActionResult, type MoveAgentArg, type MoveAgentAsk, type MoveAgentAttachment, type MoveAgentBoundary, type MoveAgentBoundaryRef, type MoveAgentCall, type MoveAgentControl, type MoveAgentEntry, type MoveAgentLive, type MoveAgentOptions, type MoveAgentOutcome, type MoveAgentParam, type MoveAgentParamInfo, type MoveAgentParamValue, type MoveAgentPass, type MoveAgentPassResult, type MoveAgentPhase, type MoveAgentProjectedEntry, type MoveAgentReply, type MoveAgentRequest, type MoveAgentRunContext, type MoveAgentSegment, type MoveAgentSignal, type MoveAgentSignalInfo, type MoveAgentSignalState, type MoveAgentSourceRange, type MoveAgentStep, MoveAgentStore, type MoveAgentTool, type MoveAgentToolCall, type MoveAgentToolInfo, type MoveAgentToolResult, type MoveAgentView, type MoveAgentWrite, type MoveBand, type MoveBandCell, type MoveChannelDial, type MoveColorPalette, MoveColorStore, type MoveColorView, MoveConnection, MoveConnectionDot, type MoveConnectionDotProps, type MoveConnectionState, type MoveDeckAction, type MoveDeckActionDress, type MoveDeckButton, type MoveEdges, type MoveEdgesCell, type MoveFaceDial, type MoveFunctionButton, type MoveFunctionChip, type MoveFunctionChipStyle, MoveFunctionChips, type MoveFunctionChipsProps, type MoveFunctionGlyph, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, type MoveGateColours, MoveGateDisplay, MoveGateMeter, type MoveGateReader, type MoveGateReading, type MoveGateRole, type MoveGrainPicture, type MoveGrainRole, type MoveGrainSpan, type MoveGrainVisual, type MoveKitOptions, type MoveKitOverrides, type MoveKitRegistry, type MoveMeter, type MoveMultibandColours, MoveMultibandDisplay, MoveMultibandMeter, type MoveMultibandReading, type MoveMultibandRole, MoveNotifications, type MoveNotificationsProps, type MoveNotifyKind, type MoveNotifyOptions, type MoveNumericDrawing, MovePadActionBody, MovePadAppBody, MovePadBandBody, type MovePadBandHand, type MovePadCell, MovePadColorBody, type MovePadEdgeHand, MovePadFadeBody, MovePadIconBody, MovePadIconLabelBody, type MovePadKind, MovePadListBody, type MovePadListConfig, type MovePadListOption, MovePadListStore, type MovePadListView, MovePadLoopBody, MovePadTabsBody, MovePadToggleBody, MovePadValueBody, MovePadWaveBody, type MovePage, type MovePaletteName, MovePanel, type MovePanelProps, type MovePlaybackMode, type MovePresetItem, type MovePresetPhase, type MovePresetSave, MovePresetStore, type MovePresetView, type MoveScreenList, type MoveScreenRow, type MoveScreenSearch, type MoveScreenWait, MoveSearchStore, type MoveSearchTarget, type MoveSearchView, type MoveSelectVisual, MoveSettingsView, type MoveSliderVisual, MoveSlot, MoveSlotChannelBody, MoveSlotClockBody, MoveSlotColorBody, MoveSlotDefaultBody, MoveSlotDialBody, MoveSlotDiaphragmBody, MoveSlotEnumBody, MoveSlotEnvBody, MoveSlotFilterBody, MoveSlotGateBody, MoveSlotGlyph, MoveSlotGrainBody, type MoveSlotGroup, type MoveSlotKind, MoveSlotLanesBody, MoveSlotMetronomeBody, MoveSlotMultibandBody, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing, type MoveSlotProps, MoveSlotRampBody, MoveSlotRangeBody, MoveSlotReadout, MoveSlotScopeBody, MoveSlotShape, MoveSlotStreakBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotTrimSpanBody, MoveSlotVectorBody, MoveSlotXYBody, type MoveStage, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, MoveTimeline, type MoveTimelineClaimOptions, MoveTimelineClock, type MoveTimelineProps, MoveTimelineStore, type MoveTimelineValues, MoveTimelineZoom, type MoveToggleVisual, type MoveTone, type MoveTrackLabelStyle, type MoveTrimSpanEdge, type MoveViewChange, type MoveViewChoreography, type MoveViewLayer, type MoveViewLoadOptions, type MoveViewMotion, MoveViewStage, type MoveViewStageProps, type MoveViewTask, type MoveViewTween, type MoveViewWait, MoveViews, type MoveViewsState, type MoveVisual, MoveVolumeDisplay, type MoveVolumeDisplayState, MoveWaveform, type MoveWaveformProps, MoveWaveformStore, type MoveWaveformStyle, type MoveWaveformTransport, type MoveWaveformVariant, type MoveWaveformView, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type OKLCH, type PanelConfig, type Point, type Preset, type PresetDNA, type PresetExplorationAdapter, PresetExplorationStore, type PresetItem, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SpringifyOptions, type SwatchConfig, type SwatchOption, TAB_PATH, TRANSFER_MAX_POINTS, TRANSFER_MIN_GAP, type TextConfig, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineMeta, TimelineStore, type TimelineTransport, type ToggleConfig, type TransferPoint, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakTheme, type TweakValue, type UseMoveTimelineOptions, WAVEFORM_BASE_BUCKET, WAVEFORM_MAX_ZOOM, WAVEFORM_MODES, WAVEFORM_SMOOTH_POINTS, type WaveformAsset, type WaveformLevel, type WaveformLoop, type WaveformMode, type WaveformRange, WaveformVisualization, type XYAxis, type XYConfig, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, angleFromPointer, applyAgentWrites, applyDetentAxis, applyModulation, arcPath, audioModLevel, bearingToValue, breedDNA, buildModMovePage, buildMovePages, buildMoveStrip, buildSamplers, buildWaveformLevels, centerValue, chooseParents, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, clampStripOffset, cloneDNA, collectGenes, colorAtPosition, createMoveMeter, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultFilterResponse, defaultListItemParams, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, describeAgentControls, dialOrigin, dialSpan, displayHex, drawMoveGate, drawMoveMultiband, enumOptionIcon, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, fillRangePeaks, filterHand01, filterHandValue, filterResponsePath, filterShapePath, filterShapeResponse, fitGene, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, followWindow, formatAgentTime, formatClock, formatEntries, formatHex, formatTimelineTick, geneBounds, getAudioModBuffer, getAudioModVersion, getAudioModWindow, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, insertPoint, invertY, isIdentityTransfer, isMoveDial, isMoveTabs, isNamedTabs, isOutsideSpan, isPadSpanContinuation, isSpanContinuation, isStripSlot, isToggleDial, lfoSyncedHz, listModTypes, loopFromStep, loopSteps, modColor, modGlyph, modKey, modPageLayout, modPageWidth, modRange, modRingArc, morphDNA, moveAppPadRow, moveBandCell, moveBandCuts, moveChannelPosition, moveEdgesCell, moveGateDemoReading, moveGateSpan, moveGaugeBearing, moveGrainGap, moveGrainPicture, moveGrainRole, moveGrainSpan, moveKitOptions, moveLanes, moveMultibandDemoReading, moveMultibandRole, moveMultibandSpan, moveNotify, moveNumericDrawing, movePadRows, movePlaybackMode, movePoint, moveScreenChecked, moveScreenRowLabel, moveScreenRowSearchText, moveSearchFilter, moveSearchMatch, moveSlotKind, moveStop, moveTabCell, moveTrimSpan, moveVectorAxes, moveVectorStage, moveViewChoreography, moveVisualReading, defaultStyle as moveWaveformDefaultStyle, defaultView as moveWaveformDefaultView, moveWaveformDemoSample, styleFromValues as moveWaveformStyleFromValues, moveWheelSlot, nearestHandle, nearestPoint, newDNAId, normToValue, normalizeAngle, normalizeCurveMarkers, normalizeDeck, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeFilterValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeToggleDial, normalizeTransfer, normalizeValue, normalizeXYDial, notifyDockBottom, nudge, nudgeAngle, oklchToRgb, opacityPercent, orderRange, packTimelineRows, padPosition, padSection, padSpan, pageStripOffset, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, presetFlowerSeed, presetFlowerSvg, projectEntries, rampCss, rangesDuration, readComposition, reconcileDNA, redistributeWeight, registerModType, removeDriver, removePoint, removeSegment, removeStop, resolveAxis, resolveBoundary, resolveFilterAxis, restoreAgentWrites, rgbToHsl, rgbToHsv, rgbToOklch, runAgentActions, sampleTransfer, scrubBy, seedDNA, setAudioModBuffer, setAudioModWindowSource, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, slotGroups, snapAngle, snapToStep, splitSegment, springify, stepPosition, stepStripOffset, stripDialColumns, stripDialSlots, stripOffsets, stripSlotCount, stripSlotIndex, stripStarts, stripWindowPads, subscribeAudioMod, timelineClock, timelineRowHeight, timelineTicks, timelineToSource, timelineWindow, toAudioBuffer, transferLut, triggerLevels, triggersCrossed, useMoveTimeline, valueFromPoint, valueToBearing, valueToNorm, valueToPercent, visibleColumns, visibleModControls, visibleWindow, waveformAsset, waveformAssetFromBuffer, zoomBy, zoomWindow };
+export { ADSR_DEF, ADSR_STAGE_MAX, ANGLE_DEAD_ZONE_PX, AUDIO_DEF, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AudioModWindow, automationCore as Automation, type AutomationClock, type AutomationCommit, type AutomationCursor, type AutomationEditMeta, type AutomationHost, type AutomationInterp, type AutomationLane, AutomationLanesStore, type AutomationPoint, type AutomationRange, type AutomationSelection, type AutomationSpan, type AutomationStoreOptions, type AutomationTimeline, type AutomationView, type AxisSpec, type BalanceConfig, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, type ChipOption, type ChipsConfig, type ColorConfig, type ColorFormat, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRANSFER, DEFAULT_TRIGGER_STEPS, type DriverDirection, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EasingConfig, type EnvStage, type ExplorationChild, type ExplorationSlot, type ExplorationState, type ExplorationTree, type ExplorationView, FILTER_DB_CEIL, FILTER_DB_FLOOR, type FileConfig, type FilterAxis, type FilterAxisConfig, type FilterConfig, type FilterResponse, type FilterShapeType, type FilterValue, type GalleryConfig, type GalleryItem, type GeneParameter, type GeneticsSettings, type GradientConfig, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenDetail, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_COLOR_NAMES, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_AGENT_GLIDE_MS, MOVE_BAND_H, MOVE_BAND_W, MOVE_CHIP_BUTTONS, MOVE_COLOR_HUES, MOVE_COLOR_PALETTES, MOVE_COLOR_STEPS, MOVE_COLOR_WHEEL, MOVE_CONNECTION_ASK_EVENT, MOVE_CONNECTION_EVENT, MOVE_DECK_MAX, MOVE_DIALS, MOVE_FLOAT_SELECTOR, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_ICONS, MOVE_FUNCTION_MANIFEST, MOVE_GATE_GRID, MOVE_GAUGE, MOVE_GRADIENT_STOPS, MOVE_GRAIN, MOVE_JOG_CLICK_EVENT, MOVE_JOG_EVENT, MOVE_JOG_HOLD_EVENT, MOVE_LATCH_EVENT, MOVE_MULTIBAND_GRID, MOVE_MUTE_EVENT, MOVE_NOTIFY_GAP, MOVE_NOTIFY_KINDS, MOVE_OPACITY_PADS, MOVE_OVERRIDE_EVENT, MOVE_PADS, MOVE_PAD_LIBRARY, MOVE_PAGE_EVENT, MOVE_PAGE_SELECT_EVENT, MOVE_PALETTE, MOVE_PANEL_SETTINGS, MOVE_SEARCH_EVENT, MOVE_SETTINGS_EVENT, MOVE_SLOT_LIBRARY, MOVE_SPECIAL_BUTTONS, MOVE_STAGE, MOVE_STEP_FUNCTIONS, MOVE_STRIP_EVENT, MOVE_TIMELINE_MAX_ZOOM, MOVE_TOUCH_EVENT, MOVE_TRACKS, MOVE_TRACK_COLORS, MOVE_TRACK_LABEL_STYLES, MOVE_VIEW_MOTIONS, MOVE_VIEW_PRESENTATION, MOVE_VIEW_WAIT, MOVE_VOLUME_EVENT, MOVE_VOLUME_TAP_EVENT, MOVE_WAVEFORM_DEMO_SECONDS, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_PANEL, MOVE_WAVEFORM_PIXEL_RANGE, MOVE_WAVEFORM_STEPS, MOVE_WAVE_FRAME, MOVE_WAVE_MAX_DISPLAY, MOVE_WAVE_MAX_HEIGHT, MOVE_WAVE_MAX_WIDTH, type ModControlMeta, ModDot, type ModGlyph, type ModPageLayout, type ModPageSlot, type ModRange, ModRing, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, type MorphState, MoveActionButton, type MoveActionButtonProps, MoveActionDeck, type MoveActionDeckProps, type MoveAgentAction, type MoveAgentActionInfo, type MoveAgentActionResult, type MoveAgentArg, type MoveAgentAsk, type MoveAgentAttachment, type MoveAgentBoundary, type MoveAgentBoundaryRef, type MoveAgentCall, type MoveAgentControl, type MoveAgentEntry, type MoveAgentLive, type MoveAgentOptions, type MoveAgentOutcome, type MoveAgentParam, type MoveAgentParamInfo, type MoveAgentParamValue, type MoveAgentPass, type MoveAgentPassResult, type MoveAgentPhase, type MoveAgentProjectedEntry, type MoveAgentReply, type MoveAgentRequest, type MoveAgentRunContext, type MoveAgentSegment, type MoveAgentSignal, type MoveAgentSignalInfo, type MoveAgentSignalState, type MoveAgentSourceRange, type MoveAgentStep, MoveAgentStore, type MoveAgentTool, type MoveAgentToolCall, type MoveAgentToolInfo, type MoveAgentToolResult, type MoveAgentView, type MoveAgentWrite, MoveAutomationLanes, type MoveAutomationLanesProps, type MoveBand, type MoveBandCell, type MoveChannelDial, type MoveColorPalette, MoveColorStore, type MoveColorView, MoveConnection, MoveConnectionDot, type MoveConnectionDotProps, type MoveConnectionState, type MoveDeckAction, type MoveDeckActionDress, type MoveDeckButton, type MoveEdges, type MoveEdgesCell, type MoveFaceDial, type MoveFunctionButton, type MoveFunctionChip, type MoveFunctionChipStyle, MoveFunctionChips, type MoveFunctionChipsProps, type MoveFunctionGlyph, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, type MoveGateColours, MoveGateDisplay, MoveGateMeter, type MoveGateReader, type MoveGateReading, type MoveGateRole, type MoveGrainPicture, type MoveGrainRole, type MoveGrainSpan, type MoveGrainVisual, type MoveKitOptions, type MoveKitOverrides, type MoveKitRegistry, type MoveMeter, type MoveMultibandColours, MoveMultibandDisplay, MoveMultibandMeter, type MoveMultibandReading, type MoveMultibandRole, MoveNotifications, type MoveNotificationsProps, type MoveNotifyKind, type MoveNotifyOptions, type MoveNumericDrawing, MovePadActionBody, MovePadAppBody, MovePadBandBody, type MovePadBandHand, type MovePadCell, MovePadColorBody, type MovePadEdgeHand, MovePadFadeBody, MovePadIconBody, MovePadIconLabelBody, type MovePadKind, MovePadListBody, type MovePadListConfig, type MovePadListOption, MovePadListStore, type MovePadListView, MovePadLoopBody, MovePadTabsBody, MovePadToggleBody, MovePadValueBody, MovePadWaveBody, type MovePage, type MovePaletteName, MovePanel, type MovePanelProps, type MovePlaybackMode, type MovePresetItem, type MovePresetPhase, type MovePresetSave, MovePresetStore, type MovePresetView, type MoveScreenList, type MoveScreenRow, type MoveScreenSearch, type MoveScreenWait, MoveSearchStore, type MoveSearchTarget, type MoveSearchView, type MoveSelectVisual, MoveSettingsView, type MoveSliderVisual, MoveSlot, MoveSlotChannelBody, MoveSlotClockBody, MoveSlotColorBody, MoveSlotDefaultBody, MoveSlotDialBody, MoveSlotDiaphragmBody, MoveSlotEnumBody, MoveSlotEnvBody, MoveSlotFilterBody, MoveSlotGateBody, MoveSlotGlyph, MoveSlotGrainBody, type MoveSlotGroup, type MoveSlotKind, MoveSlotLanesBody, MoveSlotMetronomeBody, MoveSlotMultibandBody, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing, type MoveSlotProps, MoveSlotRampBody, MoveSlotRangeBody, MoveSlotReadout, MoveSlotScopeBody, MoveSlotShape, MoveSlotStreakBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotTrimSpanBody, MoveSlotVectorBody, MoveSlotXYBody, type MoveStage, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, MoveTimeline, type MoveTimelineClaimOptions, MoveTimelineClock, type MoveTimelineProps, MoveTimelineStore, type MoveTimelineValues, MoveTimelineZoom, type MoveToggleVisual, type MoveTone, type MoveTrackLabelStyle, type MoveTrimSpanEdge, type MoveViewChange, type MoveViewChoreography, type MoveViewLayer, type MoveViewLoadOptions, type MoveViewMotion, MoveViewStage, type MoveViewStageProps, type MoveViewTask, type MoveViewTween, type MoveViewWait, MoveViews, type MoveViewsState, type MoveVisual, MoveVolumeDisplay, type MoveVolumeDisplayState, MoveWaveform, type MoveWaveformProps, MoveWaveformStore, type MoveWaveformStyle, type MoveWaveformTransport, type MoveWaveformVariant, type MoveWaveformView, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type OKLCH, type PanelConfig, type Point, type Preset, type PresetDNA, type PresetExplorationAdapter, PresetExplorationStore, type PresetItem, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SpringifyOptions, type SwatchConfig, type SwatchOption, TAB_PATH, TRANSFER_MAX_POINTS, TRANSFER_MIN_GAP, type TextConfig, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineMeta, TimelineStore, type TimelineTransport, type ToggleConfig, type TransferPoint, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakTheme, type TweakValue, type UseMoveTimelineOptions, WAVEFORM_BASE_BUCKET, WAVEFORM_MAX_ZOOM, WAVEFORM_MODES, WAVEFORM_SMOOTH_POINTS, type WaveformAsset, type WaveformLevel, type WaveformLoop, type WaveformMode, type WaveformRange, WaveformVisualization, type XYAxis, type XYConfig, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, angleFromPointer, applyAgentWrites, applyDetentAxis, applyModulation, arcPath, audioModLevel, bearingToValue, breedDNA, buildModMovePage, buildMovePages, buildMoveStrip, buildSamplers, buildWaveformLevels, centerValue, chooseParents, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, clampStripOffset, cloneDNA, collectGenes, colorAtPosition, createMoveMeter, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultFilterResponse, defaultListItemParams, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, describeAgentControls, dialOrigin, dialSpan, displayHex, drawMoveGate, drawMoveMultiband, enumOptionIcon, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, fillRangePeaks, filterHand01, filterHandValue, filterResponsePath, filterShapePath, filterShapeResponse, fitGene, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, followWindow, formatAgentTime, formatClock, formatEntries, formatHex, formatTimelineTick, geneBounds, getAudioModBuffer, getAudioModVersion, getAudioModWindow, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, insertPoint, invertY, isIdentityTransfer, isMoveDial, isMoveTabs, isNamedTabs, isOutsideSpan, isPadSpanContinuation, isSpanContinuation, isStripSlot, isToggleDial, lfoSyncedHz, listModTypes, listenMoveTouch, loopFromStep, loopSteps, modColor, modGlyph, modKey, modPageLayout, modPageWidth, modRange, modRingArc, morphDNA, moveAppPadRow, moveBandCell, moveBandCuts, moveChannelPosition, moveEdgesCell, moveGateDemoReading, moveGateSpan, moveGaugeBearing, moveGrainGap, moveGrainPicture, moveGrainRole, moveGrainSpan, moveKitOptions, moveLanes, moveMultibandDemoReading, moveMultibandRole, moveMultibandSpan, moveNotify, moveNumericDrawing, movePadRows, movePlaybackMode, movePoint$1 as movePoint, moveScreenChecked, moveScreenRowLabel, moveScreenRowSearchText, moveSearchFilter, moveSearchMatch, moveSlotKind, moveStop, moveTabCell, moveTrimSpan, moveVectorAxes, moveVectorStage, moveViewChoreography, moveVisualReading, defaultStyle as moveWaveformDefaultStyle, defaultView as moveWaveformDefaultView, moveWaveformDemoSample, styleFromValues as moveWaveformStyleFromValues, moveWheelSlot, nearestHandle, nearestPoint, newDNAId, normToValue, normalizeAngle, normalizeCurveMarkers, normalizeDeck, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeFilterValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeToggleDial, normalizeTransfer, normalizeValue, normalizeXYDial, notifyDockBottom, nudge, nudgeAngle, oklchToRgb, opacityPercent, orderRange, packTimelineRows, padPosition, padSection, padSpan, pageStripOffset, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, presetFlowerSeed, presetFlowerSvg, projectEntries, rampCss, rangesDuration, readComposition, reconcileDNA, redistributeWeight, registerModType, removeDriver, removePoint, removeSegment, removeStop, resolveAxis, resolveBoundary, resolveFilterAxis, restoreAgentWrites, rgbToHsl, rgbToHsv, rgbToOklch, runAgentActions, sampleTransfer, scrubBy, seedDNA, setAudioModBuffer, setAudioModWindowSource, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, slotGroups, snapAngle, snapToStep, splitSegment, springify, stepPosition, stepStripOffset, stripDialColumns, stripDialSlots, stripOffsets, stripSlotCount, stripSlotIndex, stripStarts, stripWindowPads, subscribeAudioMod, timelineClock, timelineRowHeight, timelineTicks, timelineToSource, timelineWindow, toAudioBuffer, transferLut, triggerLevels, triggersCrossed, useMoveTimeline, valueFromPoint, valueToBearing, valueToNorm, valueToPercent, visibleColumns, visibleModControls, visibleWindow, waveformAsset, waveformAssetFromBuffer, zoomBy, zoomWindow };

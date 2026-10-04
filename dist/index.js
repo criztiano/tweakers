@@ -1,4 +1,9 @@
 "use client";
+var __defProp = Object.defineProperty;
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
 
 // src/move-palette.ts
 var MOVE_PALETTE = {
@@ -1744,12 +1749,12 @@ var isEnumDial = (c) => c.type === "select" && Array.isArray(c.options) && c.opt
 var isMoveTabs = (c) => !!c.moveTabs && isEnumDial(c);
 var isNamedTabs = (c) => c.moveTabs === "named";
 var padSpan = (c) => c && isMoveTabs(c) ? c.options.length + (isNamedTabs(c) ? 1 : 0) : 1;
-var isPadSpanContinuation = (row, i) => i > 0 && row[i] !== void 0 && row[i] === row[i - 1];
-function moveTabCell(row, i) {
-  const meta = row[i];
+var isPadSpanContinuation = (row2, i) => i > 0 && row2[i] !== void 0 && row2[i] === row2[i - 1];
+function moveTabCell(row2, i) {
+  const meta = row2[i];
   if (!meta || !isMoveTabs(meta)) return null;
   let start = i;
-  while (start > 0 && row[start - 1] === meta) start--;
+  while (start > 0 && row2[start - 1] === meta) start--;
   const offset = i - start;
   if (isNamedTabs(meta) && offset === 0) {
     return { meta, head: true, option: null, label: meta.label };
@@ -1874,21 +1879,21 @@ function buildMovePages(panels) {
     const topValues = [];
     const valueActions = [];
     const topAt = (i) => toggles[i] ?? topValues[i];
-    const cellAt = (row, i) => row === toggles ? topAt(i) : row === values ? values[i] ?? valueActions[i] : row[i];
-    const place3 = (row, rowName, c, col) => {
-      if (col !== null && cellAt(row, col) === void 0) {
-        row[col] = c;
+    const cellAt = (row2, i) => row2 === toggles ? topAt(i) : row2 === values ? values[i] ?? valueActions[i] : row2[i];
+    const place3 = (row2, rowName, c, col) => {
+      if (col !== null && cellAt(row2, col) === void 0) {
+        row2[col] = c;
         return;
       }
       for (let i = 0; i < MOVE_PADS; i++) {
-        if (cellAt(row, i) === void 0) {
+        if (cellAt(row2, i) === void 0) {
           if (col !== null) {
             reportMoveLayoutIssue(
               "pad-column-taken",
-              `panel '${panel.id}': control '${c.path}': ${rowName} column ${col} already occupied by '${cellAt(row, col).path}' \u2014 moved to column ${i}`
+              `panel '${panel.id}': control '${c.path}': ${rowName} column ${col} already occupied by '${cellAt(row2, col).path}' \u2014 moved to column ${i}`
             );
           }
-          row[i] = c;
+          row2[i] = c;
           return;
         }
       }
@@ -2059,7 +2064,7 @@ function buildMovePages(panels) {
     for (const band of panel.moveBands ?? []) {
       const on = [band.high, band.low].filter((path) => rows.some((r) => r.some((m) => m?.path === path)));
       if (on.length < 2) continue;
-      const stacked = rows.some((r, row) => r.some((m, col) => m?.path === band.high && moveBandCell(page, rows, row, col)));
+      const stacked = rows.some((r, row2) => r.some((m, col) => m?.path === band.high && moveBandCell(page, rows, row2, col)));
       if (!stacked) {
         reportMoveLayoutIssue(
           "band-apart",
@@ -2070,7 +2075,7 @@ function buildMovePages(panels) {
     for (const edges of panel.moveEdges ?? []) {
       const on = [edges.start, edges.end].filter((path) => rows.some((r) => r.some((m) => m?.path === path)));
       if (on.length < 2) continue;
-      const paired = rows.some((r, row) => r.some((m, col) => m?.path === edges.start && moveEdgesCell(page, rows, row, col)));
+      const paired = rows.some((r, row2) => r.some((m, col) => m?.path === edges.start && moveEdgesCell(page, rows, row2, col)));
       if (!paired) {
         reportMoveLayoutIssue(
           "edges-apart",
@@ -2109,15 +2114,15 @@ function movePadRows(page, claimedRows) {
   if (claimedRows >= 2) return [top, values, [], []];
   return [top, values, actions, []];
 }
-function moveBandCell(page, rows, row, col) {
-  const meta = rows[row]?.[col];
+function moveBandCell(page, rows, row2, col) {
+  const meta = rows[row2]?.[col];
   if (!meta || !page.panel.moveBands?.length) return null;
   const chip = (m) => !!m && isDial(m) && !noChip(m) && !page.dials.includes(m);
   for (const band of page.panel.moveBands) {
     if (meta.path !== band.high && meta.path !== band.low) continue;
     const partner = meta.path === band.high ? band.low : band.high;
-    const below = rows[row + 1]?.[col];
-    const above = rows[row - 1]?.[col];
+    const below = rows[row2 + 1]?.[col];
+    const above = rows[row2 - 1]?.[col];
     const tail = above?.path === partner;
     const other = tail ? above : below?.path === partner ? below : void 0;
     if (!chip(meta) || !chip(other)) return null;
@@ -2128,22 +2133,22 @@ function moveBandCell(page, rows, row, col) {
   }
   return null;
 }
-function moveEdgesCell(page, rows, row, col) {
-  const meta = rows[row]?.[col];
+function moveEdgesCell(page, rows, row2, col) {
+  const meta = rows[row2]?.[col];
   if (!meta || !page.panel.moveEdges?.length) return null;
   const chip = (m) => !!m && isDial(m) && !noChip(m) && !page.dials.includes(m);
   for (const edges of page.panel.moveEdges) {
     if (meta.path !== edges.start && meta.path !== edges.end) continue;
     const tail = meta.path === edges.end;
-    const other = rows[row]?.[tail ? col - 1 : col + 1];
+    const other = rows[row2]?.[tail ? col - 1 : col + 1];
     if (other?.path !== (tail ? edges.start : edges.end) || !chip(meta) || !chip(other)) return null;
     return { kind: edges.kind, start: tail ? other : meta, end: tail ? meta : other, tail };
   }
   return null;
 }
-function moveAppPadRow(row, claimedRows) {
-  if (claimedRows >= 2) return row === 2 ? 1 : row === 3 ? 0 : null;
-  return claimedRows === 1 && row === 3 ? 0 : null;
+function moveAppPadRow(row2, claimedRows) {
+  if (claimedRows >= 2) return row2 === 2 ? 1 : row2 === 3 ? 0 : null;
+  return claimedRows === 1 && row2 === 3 ? 0 : null;
 }
 function slotGroups(page, cols = visibleColumns(page)) {
   const out = [];
@@ -2557,11 +2562,11 @@ function ListScreen({
     const sync = () => {
       const selected = root.querySelector("[data-selected]");
       if (selected) {
-        const row = selected.getBoundingClientRect();
+        const row2 = selected.getBoundingClientRect();
         const box = root.getBoundingClientRect();
-        const top = row.top - box.top + root.scrollTop;
-        const bottom = top + row.height;
-        const next = follow === "center" ? top - (root.clientHeight - row.height) / 2 : top < root.scrollTop ? top : bottom > root.scrollTop + root.clientHeight ? bottom - root.clientHeight : root.scrollTop;
+        const top = row2.top - box.top + root.scrollTop;
+        const bottom = top + row2.height;
+        const next = follow === "center" ? top - (root.clientHeight - row2.height) / 2 : top < root.scrollTop ? top : bottom > root.scrollTop + root.clientHeight ? bottom - root.clientHeight : root.scrollTop;
         root.scrollTop = Math.max(0, Math.min(next, root.scrollHeight - root.clientHeight));
       }
       syncEdges();
@@ -2584,7 +2589,7 @@ function ListScreen({
     if (!rows.length) return;
     const active = document.activeElement;
     const at2 = active ? rows.indexOf(active) : -1;
-    const fallback = rows.findIndex((row) => row.hasAttribute("data-selected"));
+    const fallback = rows.findIndex((row2) => row2.hasAttribute("data-selected"));
     const from = at2 !== -1 ? at2 : fallback;
     const next = rows[(from === -1 ? event.key === "ArrowDown" ? -1 : rows.length : from) + (event.key === "ArrowDown" ? 1 : -1)];
     if (!next) return;
@@ -2804,12 +2809,12 @@ function MoveSlotLanesBody({ label, optionLabel, count, chosen, silent, solo }) 
   const near = { y: 58, from: 4, to: 96 };
   const far = { y: 4, from: 34, to: 66 };
   const gap = 2.2;
-  const edge = (row, k) => row.from + (row.to - row.from) * k / n;
+  const edge = (row2, k) => row2.from + (row2.to - row2.from) * k / n;
   const r2 = (v) => Math.round(v * 100) / 100;
   return /* @__PURE__ */ jsxs3(Fragment3, { children: [
     /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-tag", children: label }),
     /* @__PURE__ */ jsx3("svg", { className: "tweakers-move-lanes", viewBox: "0 0 100 62", "aria-hidden": "true", children: Array.from({ length: n }, (_, k) => {
-      const g = (row) => gap * (row === near ? 1 : 0.45);
+      const g = (row2) => gap * (row2 === near ? 1 : 0.45);
       const d = `M${r2(edge(near, k) + g(near))} ${near.y}L${r2(edge(far, k) + g(far))} ${far.y}L${r2(edge(far, k + 1) - g(far))} ${far.y}L${r2(edge(near, k + 1) - g(near))} ${near.y}Z`;
       const cx = (edge(near, k) + edge(near, k + 1) + edge(far, k) + edge(far, k + 1)) / 4;
       return /* @__PURE__ */ jsxs3("g", { className: "tweakers-move-lane", "data-chosen": k === chosen || void 0, "data-silent": silent[k] || void 0, "data-solo": k === solo || void 0, children: [
@@ -2926,14 +2931,14 @@ function MoveSlotFilterBody({
 }) {
   const ca = resolveFilterAxis(meta.cutoffAxis, "cutoff");
   const ra = resolveFilterAxis(meta.resonanceAxis, "resonance");
-  const fmt = (v, f) => f ? f(v) : Math.abs(v) >= 100 ? Math.round(v).toString() : Number(v.toFixed(2)).toString();
+  const fmt2 = (v, f) => f ? f(v) : Math.abs(v) >= 100 ? Math.round(v).toString() : Number(v.toFixed(2)).toString();
   if (meta.moveVertical) {
     const axis = hand === "resonance" ? ra : ca;
     return /* @__PURE__ */ jsxs3(Fragment3, { children: [
       /* @__PURE__ */ jsx3("div", { className: "tweakers-move-filter-display", children: shape && /* @__PURE__ */ jsx3(MoveSlotShape, { d: shape, className: "tweakers-move-filter-shape" }) }),
       /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-filter-readout", "data-side": "column", "data-hand": hand, children: [
         /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-label", children: axis.label }),
-        /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-value", children: fmt(value[hand], axis.formatValue) })
+        /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-value", children: fmt2(value[hand], axis.formatValue) })
       ] })
     ] });
   }
@@ -2941,11 +2946,11 @@ function MoveSlotFilterBody({
     /* @__PURE__ */ jsx3("div", { className: "tweakers-move-filter-display", children: shape && /* @__PURE__ */ jsx3(MoveSlotShape, { d: shape, className: "tweakers-move-filter-shape" }) }),
     /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-filter-readout", "data-side": "cutoff", children: [
       /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-label", children: ca.label }),
-      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-value", children: fmt(value.cutoff, ca.formatValue) })
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-value", children: fmt2(value.cutoff, ca.formatValue) })
     ] }),
     /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-filter-readout", "data-side": "resonance", children: [
       /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-label", children: ra.label }),
-      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-value", children: fmt(value.resonance, ra.formatValue) })
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-value", children: fmt2(value.resonance, ra.formatValue) })
     ] })
   ] });
 }
@@ -4536,12 +4541,12 @@ function randomFor(seed) {
   };
 }
 var fixed = (n) => n.toFixed(2);
-function outline(points, smooth) {
+function outline(points, smooth2) {
   let path = `M${points[0].map(fixed).join(",")}`;
   for (let i = 0; i < points.length; i++) {
     const a = points[(i + points.length - 1) % points.length], b = points[i];
     const c = points[(i + 1) % points.length], d = points[(i + 2) % points.length];
-    path += `C${fixed(b[0] + (c[0] - a[0]) * smooth)},${fixed(b[1] + (c[1] - a[1]) * smooth)} ${fixed(c[0] - (d[0] - b[0]) * smooth)},${fixed(c[1] - (d[1] - b[1]) * smooth)} ${c.map(fixed).join(",")}`;
+    path += `C${fixed(b[0] + (c[0] - a[0]) * smooth2)},${fixed(b[1] + (c[1] - a[1]) * smooth2)} ${fixed(c[0] - (d[0] - b[0]) * smooth2)},${fixed(c[1] - (d[1] - b[1]) * smooth2)} ${c.map(fixed).join(",")}`;
   }
   return path + "Z";
 }
@@ -4581,15 +4586,15 @@ function flowerSvg(seed, input, options = {}) {
     bounds.maxY = Math.max(bounds.maxY, p[1]);
   }
   function addBlob(points, color) {
-    const smooth = 0.11 + roundness * 0.08;
+    const smooth2 = 0.11 + roundness * 0.08;
     for (let i = 0; i < points.length; i++) {
       const a = points[(i + points.length - 1) % points.length], b = points[i];
       const c = points[(i + 1) % points.length], d = points[(i + 2) % points.length];
       include(b);
-      include([b[0] + (c[0] - a[0]) * smooth, b[1] + (c[1] - a[1]) * smooth]);
-      include([c[0] - (d[0] - b[0]) * smooth, c[1] - (d[1] - b[1]) * smooth]);
+      include([b[0] + (c[0] - a[0]) * smooth2, b[1] + (c[1] - a[1]) * smooth2]);
+      include([c[0] - (d[0] - b[0]) * smooth2, c[1] - (d[1] - b[1]) * smooth2]);
     }
-    shapes.push(`<path d="${outline(points, smooth)}" fill="${color}"/>`);
+    shapes.push(`<path d="${outline(points, smooth2)}" fill="${color}"/>`);
   }
   if (pattern === "coral") {
     const branch = (origin, angle, reach, girth, depth, key) => {
@@ -5884,10 +5889,10 @@ function modPageLayout(controls, params = {}) {
       continue;
     }
     const col = Math.max(0, dials.length - 1);
-    const row = c.type === "toggle" && !toggles[col] ? toggles : values;
-    if (!row[col]) row[col] = slotOf(c);
+    const row2 = c.type === "toggle" && !toggles[col] ? toggles : values;
+    if (!row2[col]) row2[col] = slotOf(c);
   }
-  const pad = (row) => Array.from({ length: row.length }, (_, i) => row[i] ?? null);
+  const pad = (row2) => Array.from({ length: row2.length }, (_, i) => row2[i] ?? null);
   return { dials, toggles: pad(toggles), values: pad(values) };
 }
 var visibleModControls = (def, params) => [
@@ -5980,8 +5985,8 @@ var previewNoise = (i, salt = 0) => {
   const x = Math.sin((i + 1) * 12.9898 + salt * 78.233) * 43758.5453;
   return (x - Math.floor(x)) * 2 - 1;
 };
-function previewSlew(values, smooth) {
-  const s = clamp014(smooth);
+function previewSlew(values, smooth2) {
+  const s = clamp014(smooth2);
   if (s <= 0 || values.length < 2) return values;
   const k = 1 - Math.exp(-(1 / values.length) / (s * s * 0.4 + 1e-6));
   let out = values[0];
@@ -6020,9 +6025,9 @@ var LFO_DEF = {
     const ph = (s.phase + clamp014(params.phase)) % 1;
     const tri = ph < w ? ph / w : 1 - (ph - w) / (1 - w);
     let v = clamp7(tri * 2 - 1 + s.drift, -1, 1);
-    const smooth = clamp014(params.smooth);
-    if (smooth > 0 && s.out !== null) {
-      const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
+    const smooth2 = clamp014(params.smooth);
+    if (smooth2 > 0 && s.out !== null) {
+      const k = 1 - Math.exp(-dt / (smooth2 * smooth2 * 0.4 + 1e-6));
       v = s.out + (v - s.out) * k;
     }
     s.out = v;
@@ -6077,9 +6082,9 @@ var SH_DEF = {
     }
     const offset = clamp7(Number(params.offset) || 0, -1, 1);
     let v = clamp7(s.held * clamp014(params.depth) + offset, -1, 1);
-    const smooth = clamp014(params.smooth);
-    if (smooth > 0 && s.out !== null) {
-      const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
+    const smooth2 = clamp014(params.smooth);
+    if (smooth2 > 0 && s.out !== null) {
+      const k = 1 - Math.exp(-dt / (smooth2 * smooth2 * 0.4 + 1e-6));
       v = s.out + (v - s.out) * k;
     }
     s.out = v;
@@ -6595,9 +6600,9 @@ var AUDIO_DEF = {
       }
     }
     let v = audioModEnv === null ? 0 : audioModLevel(s.pos) * clamp014(params.depth);
-    const smooth = clamp014(params.smooth);
-    if (smooth > 0 && s.out !== null) {
-      const k = 1 - Math.exp(-dt / (smooth * smooth * 0.4 + 1e-6));
+    const smooth2 = clamp014(params.smooth);
+    if (smooth2 > 0 && s.out !== null) {
+      const k = 1 - Math.exp(-dt / (smooth2 * smooth2 * 0.4 + 1e-6));
       v = s.out + (v - s.out) * k;
     }
     s.out = v;
@@ -7409,9 +7414,9 @@ function WaveformVisualization({
 
 // src/move-surface-store.ts
 import { TweakStore as TweakStore5 } from "tweakers/store";
-var moveScreenRowLabel = (row) => typeof row === "string" ? row : row.label;
-var moveScreenRowSearchText = (row) => typeof row === "string" || !row.keywords ? moveScreenRowLabel(row) : `${row.label} ${row.keywords}`;
-var moveScreenChecked = (rows) => rows.flatMap((row, i) => typeof row !== "string" && row.checked ? [i] : []);
+var moveScreenRowLabel = (row2) => typeof row2 === "string" ? row2 : row2.label;
+var moveScreenRowSearchText = (row2) => typeof row2 === "string" || !row2.keywords ? moveScreenRowLabel(row2) : `${row2.label} ${row2.keywords}`;
+var moveScreenChecked = (rows) => rows.flatMap((row2, i) => typeof row2 !== "string" && row2.checked ? [i] : []);
 var EMPTY = { rows: 0, pads: [], padsLabel: null, steps: null, screen: null, search: null, wait: null };
 var state = EMPTY;
 var listeners = /* @__PURE__ */ new Set();
@@ -8538,8 +8543,8 @@ function buildMoveStrip(panel) {
       if (topAt(col) === void 0) toggles[col] = c;
       continue;
     }
-    const row = c.type === "action" ? actions : values;
-    if (row[col] === void 0) row[col] = c;
+    const row2 = c.type === "action" ? actions : values;
+    if (row2[col] === void 0) row2[col] = c;
   }
   return { panel, dials, toggles, values, actions, ...topValues.length ? { topValues } : {} };
 }
@@ -8590,12 +8595,12 @@ function stripDialSlots(page, offset, cols = MOVE_DIALS) {
   return stripDialColumns(page, offset, cols).map((col) => col < 0 ? void 0 : page.dials[col]);
 }
 function stripWindowPads(page, offset, cols = MOVE_DIALS) {
-  const row = (cells) => Array.from({ length: cols }, (_, i) => cells[offset + i]);
+  const row2 = (cells) => Array.from({ length: cols }, (_, i) => cells[offset + i]);
   const top = page.toggles.slice();
   page.topValues?.forEach((m, i) => {
     if (m && top[i] === void 0) top[i] = m;
   });
-  return { toggles: row(top), values: row(page.values), actions: row(page.actions) };
+  return { toggles: row2(top), values: row2(page.values), actions: row2(page.actions) };
 }
 var stripSlotCount = (page) => stripStarts(page).length;
 var stripSlotIndex = (page, offset) => stripStarts(page).filter((start) => start < offset).length;
@@ -9094,8 +9099,8 @@ function moveDialReading(meta, value) {
 }
 function moveRangeReading(meta, value) {
   const v = value ?? {};
-  const fmt = (n) => n == null || !Number.isFinite(n) ? "" : meta.formatValue ? meta.formatValue(n) : plainNumber(n);
-  return `${fmt(v.min)}\u2013${fmt(v.max)}`;
+  const fmt2 = (n) => n == null || !Number.isFinite(n) ? "" : meta.formatValue ? meta.formatValue(n) : plainNumber(n);
+  return `${fmt2(v.min)}\u2013${fmt2(v.max)}`;
 }
 function moveChipValue(meta, value) {
   if (isEnumDial(meta)) {
@@ -10508,15 +10513,15 @@ function MovePaletteScreen({ kept = null, children }) {
   const rows = [
     { name: "All colors", colors: null, index: 0 },
     ...MoveColorStore.palettes().map((p, i) => ({ name: p.name, colors: p.colors, index: i + 1 }))
-  ].filter((row) => !kept || kept.includes(row.index));
+  ].filter((row2) => !kept || kept.includes(row2.index));
   useEffect13(() => {
     const el = root.current;
     const selected = el?.querySelector("[data-selected]");
     if (!el || !selected) return;
-    const row = selected.getBoundingClientRect();
+    const row2 = selected.getBoundingClientRect();
     const box = el.getBoundingClientRect();
-    const top = row.top - box.top + el.scrollTop;
-    const bottom = top + row.height;
+    const top = row2.top - box.top + el.scrollTop;
+    const bottom = top + row2.height;
     const next = top < el.scrollTop ? top : bottom > el.scrollTop + el.clientHeight ? bottom - el.clientHeight : el.scrollTop;
     el.scrollTop = Math.max(0, Math.min(next, el.scrollHeight - el.clientHeight));
   }, [cursor]);
@@ -10536,21 +10541,21 @@ function MovePaletteScreen({ kept = null, children }) {
       children: [
         children,
         kept && !rows.length && /* @__PURE__ */ jsx15("span", { className: "tweakers-move-palette-empty", children: "No matches" }),
-        rows.map((row) => /* @__PURE__ */ jsxs11(
+        rows.map((row2) => /* @__PURE__ */ jsxs11(
           "button",
           {
             type: "button",
             role: "option",
             className: "tweakers-move-palette-row",
-            "aria-selected": row.index === cursor,
-            "data-selected": row.index === cursor || void 0,
-            onClick: () => MoveColorStore.choosePicker(row.index),
+            "aria-selected": row2.index === cursor,
+            "data-selected": row2.index === cursor || void 0,
+            onClick: () => MoveColorStore.choosePicker(row2.index),
             children: [
-              /* @__PURE__ */ jsx15("span", { className: "tweakers-move-palette-name", children: row.name }),
-              /* @__PURE__ */ jsx15("span", { className: "tweakers-move-palette-strip", "aria-hidden": "true", children: row.colors ? row.colors.map((hex, i) => /* @__PURE__ */ jsx15("span", { className: "tweakers-move-palette-color", style: { background: hex } }, i)) : /* @__PURE__ */ jsx15("span", { className: "tweakers-move-palette-color", "data-gradient": true }) })
+              /* @__PURE__ */ jsx15("span", { className: "tweakers-move-palette-name", children: row2.name }),
+              /* @__PURE__ */ jsx15("span", { className: "tweakers-move-palette-strip", "aria-hidden": "true", children: row2.colors ? row2.colors.map((hex, i) => /* @__PURE__ */ jsx15("span", { className: "tweakers-move-palette-color", style: { background: hex } }, i)) : /* @__PURE__ */ jsx15("span", { className: "tweakers-move-palette-color", "data-gradient": true }) })
             ]
           },
-          row.name
+          row2.name
         ))
       ]
     }
@@ -11951,10 +11956,10 @@ function packTimelineRows(spans) {
   const order = spans.map((_, i) => i).sort((a, b) => spans[a].at - spans[b].at || a - b);
   for (const i of order) {
     const { at: at2, end } = spans[i];
-    let row = rowEnds.findIndex((rowEnd) => rowEnd <= at2 + 1e-9);
-    if (row < 0) row = rowEnds.push(end) - 1;
-    else rowEnds[row] = end;
-    rows[i] = row;
+    let row2 = rowEnds.findIndex((rowEnd) => rowEnd <= at2 + 1e-9);
+    if (row2 < 0) row2 = rowEnds.push(end) - 1;
+    else rowEnds[row2] = end;
+    rows[i] = row2;
   }
   return rows;
 }
@@ -12141,11 +12146,11 @@ var MoveTimelineStoreClass = class {
   hold(claim) {
     this.letGo(claim);
     const { id } = claim;
-    const readout = {
+    const readout2 = {
       label: "time",
       getValue: () => timelineReadout(TimelineStore.getTransport(id).time)
     };
-    MoveVolumeDisplay.set(readout);
+    MoveVolumeDisplay.set(readout2);
     const keys = [
       MoveFunctions.push("play", () => this.togglePlay(), { label: "Play", chip: false }),
       MoveFunctions.push("loop", ({ shift }) => shift ? this.clearLoopRegion() : this.toggleLoop(), { label: "Loop", chip: false }),
@@ -12187,7 +12192,7 @@ var MoveTimelineStoreClass = class {
         claim.options.onRecord?.(false);
       }
       for (const release of keys) release();
-      if (MoveVolumeDisplay.get() === readout) MoveVolumeDisplay.clear();
+      if (MoveVolumeDisplay.get() === readout2) MoveVolumeDisplay.clear();
     };
     this.notify();
   }
@@ -12444,7 +12449,7 @@ function MoveTimeline({
             ]
           }
         ),
-        /* @__PURE__ */ jsx16("div", { className: "tweakers-move-timeline-names", children: rows.map((row) => /* @__PURE__ */ jsx16("div", { className: "tweakers-move-timeline-name", title: row.label, children: row.label }, row.key)) }),
+        /* @__PURE__ */ jsx16("div", { className: "tweakers-move-timeline-names", children: rows.map((row2) => /* @__PURE__ */ jsx16("div", { className: "tweakers-move-timeline-name", title: row2.label, children: row2.label }, row2.key)) }),
         /* @__PURE__ */ jsxs12(
           "div",
           {
@@ -12461,7 +12466,7 @@ function MoveTimeline({
                   style: { left: `${x(shownLoop.start)}px`, width: `${Math.max(1, (shownLoop.end - shownLoop.start) * pxPerSecond)}px` }
                 }
               ),
-              rows.map((row) => /* @__PURE__ */ jsx16("div", { className: "tweakers-move-timeline-lane", children: row.clips.map(({ meta: clip, stat }) => /* @__PURE__ */ jsx16(
+              rows.map((row2) => /* @__PURE__ */ jsx16("div", { className: "tweakers-move-timeline-lane", children: row2.clips.map(({ meta: clip, stat }) => /* @__PURE__ */ jsx16(
                 TimelineClipBar,
                 {
                   timelineId: id,
@@ -12477,7 +12482,7 @@ function MoveTimeline({
                   }
                 },
                 clip.key
-              )) }, row.key))
+              )) }, row2.key))
             ]
           }
         ),
@@ -12508,23 +12513,23 @@ function buildRows(clips, values, duration) {
     }
     layer.push(clip);
   }
-  return rows.flatMap((row) => {
-    if (!row.key.startsWith("layer:")) return [row];
-    const group = row.key.slice("layer:".length);
+  return rows.flatMap((row2) => {
+    if (!row2.key.startsWith("layer:")) return [row2];
+    const group = row2.key.slice("layer:".length);
     const members = (layers.get(group) ?? []).map((clip) => ({ meta: clip, stat: computeClipStaticFromValues(values, clip, duration) }));
     const packed = packTimelineRows(members.map(({ stat }) => ({ at: stat.at, end: stat.loop === "repeat" ? duration : stat.at + stat.duration })));
     const count = members.length ? Math.max(...packed) + 1 : 1;
     return Array.from({ length: count }, (_, i) => ({
-      key: `${row.key}:${i}`,
-      label: i === 0 ? row.label : "",
+      key: `${row2.key}:${i}`,
+      label: i === 0 ? row2.label : "",
       clips: members.filter((_2, m) => packed[m] === i)
     }));
   });
 }
 function refreshRows(rows, values, duration) {
-  return rows.map((row) => ({
-    ...row,
-    clips: row.clips.map(({ meta }) => ({ meta, stat: computeClipStaticFromValues(values, meta, duration) }))
+  return rows.map((row2) => ({
+    ...row2,
+    clips: row2.clips.map(({ meta }) => ({ meta, stat: computeClipStaticFromValues(values, meta, duration) }))
   }));
 }
 function TimelineClipBar({
@@ -14158,7 +14163,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     const { page: pg, offset: at2, on } = stripRef.current;
     if (!on || !pg) return;
     const pads = stripWindowPads(pg, at2);
-    const row = (cells) => cells.map((meta) => meta?.path ?? null);
+    const row2 = (cells) => cells.map((meta) => meta?.path ?? null);
     const switchRow = pads.toggles.map((meta, i) => {
       if (!meta) return null;
       const tab = moveTabCell(pg.toggles, at2 + i);
@@ -14173,7 +14178,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         paths: stripDialSlots(pg, at2).map((meta) => meta?.path ?? null),
         // The small slots under that window, in hardware columns — without
         // them the pads under a scrolling page stay dark and dead.
-        pads: { toggles: switchRow, values: row(pads.values), actions: row(pads.actions) }
+        pads: { toggles: switchRow, values: row2(pads.values), actions: row2(pads.actions) }
       }
     }));
   }, []);
@@ -14751,13 +14756,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   };
   const appRows = settingsOpen || explorationOpen ? 0 : surface.rows;
   const padRows = movePadRows(page, appRows);
-  const appRowAt = (row) => moveAppPadRow(row, appRows);
+  const appRowAt = (row2) => moveAppPadRow(row2, appRows);
   const padAt = (x, y) => surface.pads.find((p) => p.x === x && p.y === y);
-  const shownPadRows = Array.from({ length: PAD_ROWS }, (_, row) => row).filter((row) => appRowAt(row) !== null || (settingsPanel ? padRows.slice(row).some((r) => r.length > 0) : padRows[row].some(Boolean)));
-  const firstAppScreenRow = shownPadRows.find((row) => appRowAt(row) !== null) ?? -1;
+  const shownPadRows = Array.from({ length: PAD_ROWS }, (_, row2) => row2).filter((row2) => appRowAt(row2) !== null || (settingsPanel ? padRows.slice(row2).some((r) => r.length > 0) : padRows[row2].some(Boolean)));
+  const firstAppScreenRow = shownPadRows.find((row2) => appRowAt(row2) !== null) ?? -1;
   const visibleCols = stripMode ? page.dials.map((_, i) => i) : settingsPanel ? Array.from({ length: modPageWidth() }, (_, i) => i) : color ? Array.from({ length: MOVE_PADS }, (_, i) => i) : visibleColumns(page);
   const clusterCols = explorationOpen ? MOVE_DIALS : stripMode ? Math.min(MOVE_DIALS, visibleCols.length) || MOVE_DIALS : visibleCols.length;
-  const kitPadCols = Math.max(0, ...padRows.map((row) => row.length));
+  const kitPadCols = Math.max(0, ...padRows.map((row2) => row2.length));
   const appPadCols = Math.max(0, ...surface.pads.filter((cell) => !cell.empty).map((cell) => cell.x + 1));
   const padGridCols = shownPadRows.length === 0 ? 0 : appRows > 0 ? Math.min(MOVE_PADS, Math.max(1, clusterCols, appPadCols)) : Math.min(MOVE_PADS, Math.max(focused ? 1 : MIN_PAD_COLUMNS, clusterCols, kitPadCols));
   const surfaceCols = Math.max(clusterCols, padGridCols);
@@ -14916,14 +14921,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                       ListScreen,
                       {
                         items: searchedRows(
-                          screen.items.map((row, index) => ({
+                          screen.items.map((row2, index) => ({
                             value: String(index),
-                            label: moveScreenRowLabel(row),
-                            ...typeof row === "string" ? {} : {
-                              ...row.detail ? { detail: row.detail } : {},
-                              ...row.checked === void 0 ? {} : { checked: row.checked },
-                              ...row.tag ? { tag: row.tag } : {},
-                              ...row.icon ? { icon: row.icon } : {}
+                            label: moveScreenRowLabel(row2),
+                            ...typeof row2 === "string" ? {} : {
+                              ...row2.detail ? { detail: row2.detail } : {},
+                              ...row2.checked === void 0 ? {} : { checked: row2.checked },
+                              ...row2.tag ? { tag: row2.tag } : {},
+                              ...row2.icon ? { icon: row2.icon } : {}
                             }
                           })),
                           screenSearch,
@@ -15754,9 +15759,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   );
                                 })
                               ] }),
-                              color && colorMeta ? /* @__PURE__ */ jsx17(MoveOpacityPads, { color, disabled: TweakStore16.isDisabled(page.panel.id, colorMeta.path) }) : shownPadRows.map((row) => {
-                                if (appRowAt(row) !== null && !surface.pads.length) {
-                                  if (row > firstAppScreenRow) return null;
+                              color && colorMeta ? /* @__PURE__ */ jsx17(MoveOpacityPads, { color, disabled: TweakStore16.isDisabled(page.panel.id, colorMeta.path) }) : shownPadRows.map((row2) => {
+                                if (appRowAt(row2) !== null && !surface.pads.length) {
+                                  if (row2 > firstAppScreenRow) return null;
                                   return /* @__PURE__ */ jsx17(
                                     "div",
                                     {
@@ -15777,11 +15782,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   "div",
                                   {
                                     className: "tweakers-move-pads",
-                                    "data-pad-row": row,
+                                    "data-pad-row": row2,
                                     "data-pad-columns": stripMode ? page.dials.length : padGridCols,
                                     style: { "--move-pad-cols": stripMode ? page.dials.length : padGridCols },
                                     children: (stripMode ? visibleCols : Array.from({ length: padGridCols }, (_, i) => i)).map((col) => {
-                                      const appRow = appRowAt(row);
+                                      const appRow = appRowAt(row2);
                                       if (appRow !== null) {
                                         const cell = padAt(col, appRow);
                                         if (!cell || cell.empty) {
@@ -15811,9 +15816,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           `app-${col}`
                                         );
                                       }
-                                      const meta = padRows[row][col];
+                                      const meta = padRows[row2][col];
                                       if (meta && isMoveTabs(meta)) {
-                                        if (isPadSpanContinuation(padRows[row], col)) return null;
+                                        if (isPadSpanContinuation(padRows[row2], col)) return null;
                                         const span = padSpan(meta);
                                         const named = isNamedTabs(meta);
                                         const options = meta.options ?? [];
@@ -15856,7 +15861,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           meta.path
                                         );
                                       }
-                                      const bendStage = !meta && settingsPanel && padRows[row] === page.toggles && modSettings ? modLayout?.dials[col]?.stage : void 0;
+                                      const bendStage = !meta && settingsPanel && padRows[row2] === page.toggles && modSettings ? modLayout?.dials[col]?.stage : void 0;
                                       if (bendStage && ENV_BEND_STAGES.includes(bendStage)) {
                                         return /* @__PURE__ */ jsx17(
                                           "button",
@@ -15896,7 +15901,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           `bend-${bendStage}`
                                         );
                                       }
-                                      const waveStage = !meta && settingsPanel && padRows[row] === page.values && modSettings ? modLayout?.dials[col]?.stage : void 0;
+                                      const waveStage = !meta && settingsPanel && padRows[row2] === page.values && modSettings ? modLayout?.dials[col]?.stage : void 0;
                                       if (waveStage && ENV_WAVE_STAGES.includes(waveStage)) {
                                         const amount = Number(modSlot?.params[envWaveParam(waveStage)]) || 0;
                                         const flipped = !!modSlot?.params[envWaveFlipParam(waveStage)];
@@ -15942,7 +15947,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         );
                                       }
                                       if (!meta) return /* @__PURE__ */ jsx17("div", { className: "tweakers-move-pad", "data-empty": "true" }, `empty-${col}`);
-                                      const edges = stripMode ? null : moveEdgesCell(page, padRows, row, col);
+                                      const edges = stripMode ? null : moveEdgesCell(page, padRows, row2, col);
                                       if (edges?.tail) return null;
                                       if (edges) {
                                         const chipHeld = (m) => held !== null && held.meta.path === m.path || !!hwHeld[m.path];
@@ -16003,7 +16008,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           `edges-${col}`
                                         );
                                       }
-                                      const band = moveBandCell(page, padRows, row, col);
+                                      const band = moveBandCell(page, padRows, row2, col);
                                       if (band?.tail) return /* @__PURE__ */ jsx17("div", { className: "tweakers-move-band", "data-tail": true, "aria-hidden": "true" }, `band-${col}`);
                                       if (band) {
                                         const lower = band.upper === "high" ? band.low : band.high;
@@ -16089,7 +16094,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       );
                                     })
                                   },
-                                  row
+                                  row2
                                 );
                               })
                             ]
@@ -18309,6 +18314,1237 @@ function useMoveTimeline(name, config, options) {
   }, [statics.clips, transport, duration, region, play2, pause, replay, seek, id]);
 }
 
+// src/automation-core.ts
+var automation_core_exports = {};
+__export(automation_core_exports, {
+  AUTOMATION_SMOOTH_SAMPLES: () => AUTOMATION_SMOOTH_SAMPLES,
+  AUTOMATION_TOLERANCE: () => AUTOMATION_TOLERANCE,
+  EMPTY_TIMELINE: () => EMPTY_TIMELINE,
+  addPoint: () => addPoint,
+  clearRange: () => clearRange,
+  createLane: () => createLane,
+  deletePoint: () => deletePoint,
+  laneByKey: () => laneByKey,
+  mergeSpan: () => mergeSpan,
+  movePoint: () => movePoint2,
+  remapKeys: () => remapKeys,
+  removeLane: () => removeLane,
+  sampleTimeline: () => sampleTimeline,
+  simplify: () => simplify,
+  smooth: () => smooth,
+  splitAtWrap: () => splitAtWrap,
+  upsertLane: () => upsertLane,
+  validateTimeline: () => validateTimeline,
+  valueAt: () => valueAt,
+  valueBefore: () => valueBefore
+});
+var AUTOMATION_TOLERANCE = 4e-3;
+var AUTOMATION_SMOOTH_SAMPLES = 240;
+var EMPTY_TIMELINE = Object.freeze({ lanes: Object.freeze([]) });
+var clamp11 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+var clamp019 = (t) => clamp11(t, 0, 1);
+var spanOf = (range) => range.max - range.min > 0 ? range.max - range.min : 1;
+function pointAtOrBefore(points, t, cursor) {
+  const n = points.length;
+  let lo = 0;
+  let hi = n - 1;
+  if (cursor && cursor.index >= 0 && cursor.index < n && points[cursor.index].t <= t) {
+    let i = cursor.index;
+    for (let step = 0; step < 4 && i + 1 < n && points[i + 1].t <= t; step++) i++;
+    if (i + 1 >= n || points[i + 1].t > t) {
+      cursor.index = i;
+      return i;
+    }
+    lo = i;
+  }
+  let found = -1;
+  while (lo <= hi) {
+    const mid = lo + hi >> 1;
+    if (points[mid].t <= t) {
+      found = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  if (cursor) cursor.index = Math.max(0, found);
+  return found;
+}
+function between2(a, b, t, interp2) {
+  if (interp2 === "hold" || b.t <= a.t) return a.v;
+  return a.v + (b.v - a.v) * (t - a.t) / (b.t - a.t);
+}
+function valueAt(lane, t, cursor) {
+  const { points } = lane;
+  if (!points.length) return lane.min;
+  const i = pointAtOrBefore(points, t, cursor);
+  if (i < 0) return points[0].v;
+  if (i >= points.length - 1) return points[points.length - 1].v;
+  return between2(points[i], points[i + 1], t, lane.interp);
+}
+function valueBefore(lane, t) {
+  const { points } = lane;
+  if (!points.length) return lane.min;
+  let lo = 0;
+  let hi = points.length - 1;
+  let i = -1;
+  while (lo <= hi) {
+    const mid = lo + hi >> 1;
+    if (points[mid].t < t) {
+      i = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  if (i < 0) return points[0].v;
+  if (i >= points.length - 1) return points[points.length - 1].v;
+  return between2(points[i], points[i + 1], t, lane.interp);
+}
+function createLane(key, label, min, max, base, interp2 = "linear") {
+  const lo = Math.min(min, max);
+  const hi = Math.max(min, max);
+  const v = clamp11(Number.isFinite(base) ? base : lo, lo, hi);
+  return { key, label, min: lo, max: hi, interp: interp2, points: [{ t: 0, v }, { t: 1, v }] };
+}
+function simplify(points, range, tolerance = AUTOMATION_TOLERANCE, interp2 = "linear") {
+  const n = points.length;
+  if (n <= 2) return points.map((p) => ({ t: p.t, v: p.v }));
+  const span = spanOf(range);
+  const limit = Math.max(0, tolerance);
+  const keep = new Uint8Array(n);
+  keep[0] = 1;
+  keep[n - 1] = 1;
+  for (let i = 1; i < n; i++) {
+    if (points[i].t === points[i - 1].t) keep[i] = keep[i - 1] = 1;
+  }
+  if (interp2 === "hold") {
+    const out2 = [];
+    for (let i = 0; i < n; i++) {
+      const last = out2[out2.length - 1];
+      if (keep[i] || !last || Math.abs(points[i].v - last.v) / span > limit) out2.push({ t: points[i].t, v: points[i].v });
+    }
+    return out2;
+  }
+  const stack = [];
+  let a = 0;
+  for (let i = 1; i < n; i++) {
+    if (!keep[i]) continue;
+    if (i - a > 1) stack.push([a, i]);
+    a = i;
+  }
+  while (stack.length) {
+    const [lo, hi] = stack.pop();
+    const p = points[lo];
+    const q = points[hi];
+    let worst = -1;
+    let at2 = -1;
+    for (let i = lo + 1; i < hi; i++) {
+      const expected = q.t > p.t ? p.v + (q.v - p.v) * (points[i].t - p.t) / (q.t - p.t) : p.v;
+      const error = Math.abs(points[i].v - expected) / span;
+      if (error > worst) {
+        worst = error;
+        at2 = i;
+      }
+    }
+    if (worst > limit && at2 > 0) {
+      keep[at2] = 1;
+      if (at2 - lo > 1) stack.push([lo, at2]);
+      if (hi - at2 > 1) stack.push([at2, hi]);
+    }
+  }
+  const out = [];
+  for (let i = 0; i < n; i++) if (keep[i]) out.push({ t: points[i].t, v: points[i].v });
+  return out;
+}
+function cleanSamples(samples, from, to, range) {
+  const sorted = samples.filter((s) => Number.isFinite(s.t) && Number.isFinite(s.v)).map((s, i) => ({ t: clamp11(s.t, from, to), v: clamp11(s.v, range.min, range.max), i })).sort((p, q) => p.t - q.t || p.i - q.i);
+  const out = [];
+  for (const s of sorted) {
+    const n = out.length;
+    if (n >= 2 && out[n - 1].t === s.t && out[n - 2].t === s.t) out[n - 1].v = s.v;
+    else out.push({ t: s.t, v: s.v });
+  }
+  return out;
+}
+function smooth(lane, amount, span, tolerance = AUTOMATION_TOLERANCE) {
+  const sigma = clamp11(amount, 0, 4) * 0.05;
+  if (!(sigma > 0)) return simplify(lane.points, lane, tolerance, lane.interp);
+  const from = span ? clamp019(Math.min(span.from, span.to)) : 0;
+  const to = span ? clamp019(Math.max(span.from, span.to)) : 1;
+  if (!(to > from)) return lane.points.map((p) => ({ ...p }));
+  const n = AUTOMATION_SMOOTH_SAMPLES;
+  const step = sigma / 8;
+  const reach = 24;
+  const weights = [];
+  let total = 0;
+  for (let k = -reach; k <= reach; k++) {
+    const w = Math.exp(-((k * step) ** 2) / (2 * sigma * sigma));
+    weights.push(w);
+    total += w;
+  }
+  const fade = span ? Math.min(sigma * 2, (to - from) / 3) : 0;
+  const cursor = { index: 0 };
+  const samples = [];
+  for (let i = 0; i <= n; i++) {
+    const t = from + (to - from) * i / n;
+    let sum = 0;
+    for (let k = -reach; k <= reach; k++) {
+      sum += weights[k + reach] * valueAt(lane, clamp019(t + k * step));
+    }
+    let v = sum / total;
+    if (fade > 0) {
+      const edge = Math.min(t - from, to - t) / fade;
+      if (edge < 1) {
+        const mix = edge <= 0 ? 0 : 0.5 - 0.5 * Math.cos(Math.PI * edge);
+        const original = valueAt(lane, t, cursor);
+        v = original + (v - original) * mix;
+      }
+    }
+    samples.push({ t, v: clamp11(v, lane.min, lane.max) });
+  }
+  const smoothed = simplify(samples, lane, tolerance, lane.interp);
+  if (!span) return smoothed;
+  const before = lane.points.filter((p) => p.t < from);
+  const after = lane.points.filter((p) => p.t > to);
+  return [...before.map((p) => ({ ...p })), ...smoothed, ...after.map((p) => ({ ...p }))];
+}
+function mergeSpan(lane, span, tolerance = AUTOMATION_TOLERANCE) {
+  const from = clamp019(Math.min(span.from, span.to));
+  const to = clamp019(Math.max(span.from, span.to));
+  const samples = cleanSamples(span.samples, from, to, lane);
+  if (!samples.length || !(to - from > 1e-9)) return lane;
+  if (samples[0].t > from) samples.unshift({ t: from, v: samples[0].v });
+  if (samples[samples.length - 1].t < to) samples.push({ t: to, v: samples[samples.length - 1].v });
+  const written = simplify(samples, lane, tolerance, lane.interp);
+  const left = valueBefore(lane, from);
+  const right = valueAt(lane, to);
+  const points = [];
+  for (const p of lane.points) if (p.t < from) points.push({ ...p });
+  if (from > 0) points.push({ t: from, v: left });
+  points.push(...written);
+  if (to < 1) points.push({ t: to, v: right });
+  for (const p of lane.points) if (p.t > to) points.push({ ...p });
+  return { ...lane, points: dropRedundantJumps(points) };
+}
+function dropRedundantJumps(points) {
+  return points.filter((p, i) => !(i > 0 && p.t === points[i - 1].t && p.v === points[i - 1].v));
+}
+function splitAtWrap(from, to) {
+  const a = clamp019(from);
+  const b = clamp019(to);
+  if (a <= b) return [{ from: a, to: b }];
+  return [{ from: a, to: 1 }, { from: 0, to: b }];
+}
+function clearRange(lane, from, to) {
+  const a = clamp019(Math.min(from, to));
+  const b = clamp019(Math.max(from, to));
+  if (!(b > a)) return lane;
+  const left = valueBefore(lane, a);
+  const right = valueAt(lane, b);
+  const points = [];
+  for (const p of lane.points) if (p.t < a) points.push({ ...p });
+  points.push({ t: a, v: left });
+  points.push({ t: b, v: right });
+  for (const p of lane.points) if (p.t > b) points.push({ ...p });
+  return { ...lane, points: dropRedundantJumps(points) };
+}
+function movePoint2(lane, index, t, v) {
+  const { points } = lane;
+  if (index < 0 || index >= points.length) return lane;
+  const prev = points[index - 1];
+  const next = points[index + 1];
+  const current = points[index];
+  const pinned = index === 0 && current.t === 0 || index === points.length - 1 && current.t === 1;
+  const nextT = pinned ? current.t : clamp11(Number.isFinite(t) ? t : current.t, prev ? prev.t : 0, next ? next.t : 1);
+  const nextV = clamp11(Number.isFinite(v) ? v : current.v, lane.min, lane.max);
+  if (nextT === current.t && nextV === current.v) return lane;
+  const copy = points.map((p) => ({ ...p }));
+  copy[index] = { t: nextT, v: nextV };
+  return { ...lane, points: copy };
+}
+function addPoint(lane, t, v) {
+  const at2 = clamp019(Number.isFinite(t) ? t : 0);
+  const value = clamp11(v !== void 0 && Number.isFinite(v) ? v : valueAt(lane, at2), lane.min, lane.max);
+  let index = lane.points.length;
+  for (let i = 0; i < lane.points.length; i++) {
+    if (lane.points[i].t > at2) {
+      index = i;
+      break;
+    }
+  }
+  const points = lane.points.map((p) => ({ ...p }));
+  points.splice(index, 0, { t: at2, v: value });
+  return { lane: { ...lane, points }, index };
+}
+function deletePoint(lane, index) {
+  if (lane.points.length <= 1 || index < 0 || index >= lane.points.length) return lane;
+  return { ...lane, points: lane.points.filter((_, i) => i !== index).map((p) => ({ ...p })) };
+}
+function laneByKey(timeline, key) {
+  return timeline.lanes.find((lane) => lane.key === key);
+}
+function upsertLane(timeline, lane) {
+  const at2 = timeline.lanes.findIndex((l) => l.key === lane.key);
+  if (at2 < 0) return { lanes: [...timeline.lanes, lane] };
+  const lanes = timeline.lanes.slice();
+  lanes[at2] = lane;
+  return { lanes };
+}
+function removeLane(timeline, key) {
+  if (!timeline.lanes.some((l) => l.key === key)) return timeline;
+  return { lanes: timeline.lanes.filter((l) => l.key !== key) };
+}
+function sampleTimeline(timeline, t) {
+  const out = /* @__PURE__ */ new Map();
+  for (const lane of timeline.lanes) out.set(lane.key, valueAt(lane, t));
+  return out;
+}
+function remapKeys(timeline, map) {
+  const seen = /* @__PURE__ */ new Set();
+  const lanes = [];
+  for (const lane of timeline.lanes) {
+    const key = map(lane.key);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    lanes.push(key === lane.key ? lane : { ...lane, key });
+  }
+  return { lanes };
+}
+function readPoint(raw) {
+  const pair = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? [raw.t, raw.v] : null;
+  if (!pair) return null;
+  const t = Number(pair[0]);
+  const v = Number(pair[1]);
+  return Number.isFinite(t) && Number.isFinite(v) ? { t, v } : null;
+}
+function validateTimeline(raw) {
+  const list = raw && typeof raw === "object" ? raw.lanes : null;
+  if (!Array.isArray(list)) return { lanes: [] };
+  const seen = /* @__PURE__ */ new Set();
+  const lanes = [];
+  for (const entry of list) {
+    if (!entry || typeof entry !== "object") continue;
+    const e = entry;
+    const key = typeof e.key === "string" ? e.key : "";
+    if (!key || seen.has(key)) continue;
+    const a = Number(e.min);
+    const b = Number(e.max);
+    if (!Number.isFinite(a) || !Number.isFinite(b) || a === b) continue;
+    const min = Math.min(a, b);
+    const max = Math.max(a, b);
+    const rawPoints = Array.isArray(e.points) ? e.points : [];
+    const points = rawPoints.map(readPoint).filter((p) => !!p).map((p, i) => ({ t: clamp019(p.t), v: clamp11(p.v, min, max), i })).sort((p, q) => p.t - q.t || p.i - q.i).map(({ t, v }) => ({ t, v }));
+    if (!points.length) continue;
+    seen.add(key);
+    lanes.push({
+      key,
+      label: typeof e.label === "string" && e.label ? e.label : key,
+      min,
+      max,
+      interp: e.interp === "hold" ? "hold" : "linear",
+      points
+    });
+  }
+  return { lanes };
+}
+
+// src/automation-store.ts
+var clamp12 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+var NO_SELECTION = { key: null, point: null, range: null };
+var SMOOTH_AMOUNT = 1;
+var SMOOTH_STRONG = 3;
+var WRAP_JUMP = 0.5;
+var wallClock = () => typeof performance !== "undefined" ? performance.now() : Date.now();
+var AutomationLanesStore = class {
+  constructor(host, options = {}) {
+    this.currentId = null;
+    this.current = EMPTY_TIMELINE;
+    this.recording = false;
+    /** The timelines this take has written, by id — committed as one on its end. */
+    this.working = /* @__PURE__ */ new Map();
+    this.takeStart = 0;
+    this.laps = 0;
+    this.spans = /* @__PURE__ */ new Map();
+    this.lastPhase = 0;
+    this.touches = /* @__PURE__ */ new Map();
+    this.hands = /* @__PURE__ */ new Map();
+    this.metas = /* @__PURE__ */ new Map();
+    this.cursors = /* @__PURE__ */ new Map();
+    this.selection = NO_SELECTION;
+    this.view = { zoom: 1, start: 0 };
+    this.listeners = /* @__PURE__ */ new Set();
+    this.version = 0;
+    this.host = host;
+    this.holdMs = options.holdMs ?? 300;
+    this.touchAuthorityMs = options.touchAuthorityMs ?? 1500;
+    this.tolerance = options.tolerance ?? AUTOMATION_TOLERANCE;
+    this.now = options.now ?? wallClock;
+  }
+  // ── the document ──
+  /**
+   * The timeline in front: on entering a scene, after an undo, on opening a
+   * file. A take keeps running across it — what it wrote into the timeline
+   * it leaves stays in the take, closed at the end of that pass, and a hand
+   * still on a control carries on writing here.
+   */
+  load(id, timeline) {
+    const leaving = id !== this.currentId;
+    if (this.recording && leaving && this.currentId !== null) this.closeSpans(1);
+    this.currentId = id;
+    this.current = timeline;
+    this.cursors.clear();
+    if (this.recording && leaving) {
+      this.lastPhase = this.phase();
+      for (const key of [...this.hands.keys()]) if (this.isHeld(key)) this.openSpan(key, this.lastPhase);
+    }
+    if (this.selection.key && !laneByKey(this.timeline(), this.selection.key)) this.selection = NO_SELECTION;
+    this.notify();
+  }
+  /** The host's clock, read through — the card's playhead polls it every frame. */
+  clock() {
+    return this.host.clock();
+  }
+  /** The id of the timeline in front, or null before the first `load`. */
+  id() {
+    return this.currentId;
+  }
+  /** The timeline in front — a take's working copy while it writes one. */
+  timeline() {
+    if (this.recording && this.currentId !== null) return this.working.get(this.currentId) ?? this.current;
+    return this.current;
+  }
+  /** Whether a control has a lane here. */
+  has(key) {
+    return !!laneByKey(this.timeline(), key);
+  }
+  // ── the take ──
+  isRecording() {
+    return this.recording;
+  }
+  /** Start a take, rolling the transport if it stands still. */
+  startTake() {
+    if (this.recording) return;
+    this.recording = true;
+    this.working = /* @__PURE__ */ new Map();
+    this.spans.clear();
+    this.takeStart = this.phase();
+    this.lastPhase = this.takeStart;
+    this.laps = 0;
+    if (!this.host.clock().playing) this.host.play();
+    this.notify();
+  }
+  /** End the take: close every stretch and hand the host what it wrote, as one commit. */
+  endTake() {
+    if (!this.recording) return;
+    this.closeSpans(Math.max(this.phase(), 0));
+    const written = this.working;
+    this.recording = false;
+    this.working = /* @__PURE__ */ new Map();
+    if (this.currentId !== null) this.current = written.get(this.currentId) ?? this.current;
+    if (written.size) this.host.commit({ kind: "take", timelines: written });
+    this.notify();
+  }
+  /** Drop the take: nothing it wrote reaches the document. */
+  cancelTake() {
+    if (!this.recording) return;
+    this.recording = false;
+    this.working = /* @__PURE__ */ new Map();
+    this.spans.clear();
+    for (const key of [...this.hands.keys()]) if (!laneByKey(this.current, key)) this.hands.delete(key);
+    this.cursors.clear();
+    this.notify();
+  }
+  toggleTake() {
+    if (this.recording) this.endTake();
+    else this.startTake();
+  }
+  /** Where the take started (phase) and how many times the pass has come round since. */
+  take() {
+    return this.recording ? { from: this.takeStart, laps: this.laps } : null;
+  }
+  /** The stretch a hand is writing right now, for the card to draw. */
+  liveSpan(key) {
+    return this.spans.get(key);
+  }
+  // ── the hands ──
+  /**
+   * A finger on a control, or off it. While it rests, a control with a lane
+   * holds its value under it. Call it again while it rests to say it still
+   * does (the Move's stream repeats it) — that changes nothing.
+   */
+  touch(key, on) {
+    const now = this.now();
+    if (on) {
+      if (this.touches.has(key)) return;
+      const phase = this.phase();
+      this.touches.set(key, { at: now, phase });
+      const lane = laneByKey(this.timeline(), key);
+      if (lane && !this.hands.has(key)) this.hands.set(key, { value: valueAt(lane, phase), at: now });
+      return;
+    }
+    if (!this.touches.delete(key)) return;
+    this.hands.delete(key);
+    if (this.spans.has(key)) {
+      this.closeSpan(key, this.phase());
+      this.notify();
+    }
+  }
+  /**
+   * A control moved. Returns true when the store took the move — a take is
+   * writing it, or it has a lane its hand now holds — and the host must not
+   * apply it as an ordinary edit. False: not automation's business.
+   */
+  edit(key, value, meta) {
+    this.metas.set(key, meta);
+    const now = this.now();
+    let lane = laneByKey(this.timeline(), key);
+    if (!this.recording || this.currentId === null) {
+      if (!lane) return false;
+      this.hands.set(key, { value: clamp12(value, lane.min, lane.max), at: now });
+      return true;
+    }
+    if (!lane) {
+      lane = createLane(key, meta.label, meta.min, meta.max, meta.before, meta.interp);
+      this.write(upsertLane(this.timeline(), lane));
+      this.notify();
+    }
+    const v = clamp12(value, lane.min, lane.max);
+    const held = this.hands.get(key);
+    const phase = this.phase();
+    if (!this.spans.has(key)) {
+      const touch = this.touches.get(key);
+      const from = touch && now - touch.at <= this.touchAuthorityMs && touch.phase <= phase ? touch.phase : phase;
+      const before = held && this.isHeld(key) ? held.value : valueAt(lane, from);
+      const samples = [{ t: from, v: before }];
+      if (phase > from) samples.push({ t: phase, v: before });
+      this.spans.set(key, { from, samples });
+    }
+    this.spans.get(key).samples.push({ t: phase, v });
+    this.hands.set(key, { value: v, at: now });
+    return true;
+  }
+  /** Whether a hand holds this control right now — its lane is not playing. */
+  isHeld(key) {
+    if (this.touches.has(key)) return this.hands.has(key);
+    const hand = this.hands.get(key);
+    return !!hand && this.now() - hand.at < this.holdMs;
+  }
+  // ── the clock ──
+  /**
+   * Once a frame, from the host's loop: lets go of hands that went quiet,
+   * extends the stretches being written, and notices the pass coming round
+   * (or a seek) when the host did not say so with `passWrapped`.
+   */
+  tick(time) {
+    const phase = this.phase(time);
+    let changed = false;
+    if (this.recording && phase < this.lastPhase - 1e-6) {
+      if (this.lastPhase - phase > WRAP_JUMP) {
+        this.wrap();
+      } else {
+        this.closeSpans(this.lastPhase);
+        for (const key of [...this.hands.keys()]) if (this.isHeld(key)) this.openSpan(key, phase);
+      }
+      changed = true;
+    }
+    for (const key of [...this.hands.keys()]) {
+      if (this.isHeld(key)) continue;
+      this.hands.delete(key);
+      if (this.spans.has(key)) {
+        this.closeSpan(key, phase);
+        changed = true;
+      }
+    }
+    if (this.recording) {
+      for (const [key, span] of this.spans) {
+        const hand = this.hands.get(key);
+        const last = span.samples[span.samples.length - 1];
+        if (hand && phase > last.t) span.samples.push({ t: phase, v: hand.value });
+      }
+    }
+    this.lastPhase = phase;
+    if (changed) this.notify();
+  }
+  /**
+   * The pass came round (the host looped or re-entered it). A take keeps
+   * going: what this pass wrote joins its lanes, so the next pass plays it,
+   * and a hand still holding a control writes on from the top.
+   */
+  passWrapped() {
+    if (this.recording) {
+      this.wrap();
+      this.notify();
+    }
+    this.lastPhase = 0;
+  }
+  // ── reading ──
+  /**
+   * Every lane's value now, by key — a hand's while it holds the control.
+   * Read once a frame; the host's playback reads this, not the lanes.
+   */
+  sample(time) {
+    const phase = this.phase(time);
+    const out = /* @__PURE__ */ new Map();
+    for (const lane of this.timeline().lanes) out.set(lane.key, this.read(lane, phase));
+    return out;
+  }
+  /** One control's value now: its hand's, else its lane's; undefined with neither. */
+  valueFor(key, time) {
+    const lane = laneByKey(this.timeline(), key);
+    return lane ? this.read(lane, this.phase(time)) : void 0;
+  }
+  // ── editing on the card — each one undoable, each refused while a take writes ──
+  /** Move a point; a drag passes `drag` so its steps are one undo. */
+  movePoint(key, index, t, v, options = {}) {
+    return this.editLane(key, (lane) => movePoint2(lane, index, t, v), options.drag ? `auto:${key}:drag` : void 0);
+  }
+  /** Add a point at `t` (on the curve unless `v` is given); returns its index, or -1. */
+  addPoint(key, t, v) {
+    let at2 = -1;
+    this.editLane(key, (lane) => {
+      const added = addPoint(lane, t, v);
+      at2 = added.index;
+      return added.lane;
+    });
+    if (at2 >= 0) this.select({ key, point: at2 });
+    return at2;
+  }
+  deletePoint(key, index) {
+    const done = this.editLane(key, (lane) => deletePoint(lane, index));
+    if (done && this.selection.key === key) this.select({ key });
+    return done;
+  }
+  /** Clear a stretch of a lane to a straight run across it. */
+  clearRange(key, from, to) {
+    const done = this.editLane(key, (lane) => clearRange(lane, from, to));
+    if (done) this.select({ key });
+    return done;
+  }
+  /** One smoothing pass — over the selected stretch when the lane has one. */
+  smooth(key, strong = false) {
+    const range = this.selection.key === key ? this.selection.range ?? void 0 : void 0;
+    const done = this.editLane(key, (lane) => ({ ...lane, points: smooth(lane, strong ? SMOOTH_STRONG : SMOOTH_AMOUNT, range, this.tolerance) }));
+    if (done && this.selection.key === key) this.select({ key, range });
+    return done;
+  }
+  /** Delete a lane: the control is its slider's again. */
+  deleteLane(key) {
+    const done = this.editLane(key, () => null);
+    if (done) {
+      this.hands.delete(key);
+      if (this.selection.key === key) this.selection = NO_SELECTION;
+      this.notify();
+    }
+    return done;
+  }
+  // ── the card's own state ──
+  getSelection() {
+    return this.selection;
+  }
+  select(next) {
+    const key = next.key ?? null;
+    const lane = key ? laneByKey(this.timeline(), key) : void 0;
+    const point = lane && next.point != null && next.point >= 0 && next.point < lane.points.length ? next.point : null;
+    const range = lane && next.range && Math.abs(next.range.to - next.range.from) > 1e-6 ? { from: clamp12(Math.min(next.range.from, next.range.to), 0, 1), to: clamp12(Math.max(next.range.from, next.range.to), 0, 1) } : null;
+    const selection = lane ? { key, point, range } : NO_SELECTION;
+    const same = selection.key === this.selection.key && selection.point === this.selection.point && selection.range?.from === this.selection.range?.from && selection.range?.to === this.selection.range?.to;
+    if (same) return;
+    this.selection = selection;
+    this.notify();
+  }
+  getView() {
+    return this.view;
+  }
+  /** The stretch of the pass on the card, in phase. */
+  getWindow() {
+    return timelineWindow(1, this.view.zoom, this.view.start);
+  }
+  /** Zoom around `anchor` (a phase) — the pointer for a pinch. */
+  zoomTo(zoom, anchor) {
+    const next = zoomWindow(anchor, 1, this.view.zoom, this.view.start, zoom);
+    this.setView(next.zoom, next.start);
+  }
+  panTo(start) {
+    this.setView(this.view.zoom, start);
+  }
+  resetView() {
+    this.setView(1, 0);
+  }
+  // ── the hardware ──
+  /**
+   * The Move's Rec key records takes until the returned release: Rec starts
+   * and ends one, Shift + Rec drops the one running. Pushed, so whatever had
+   * Rec before gets it back on release; the newest claim on Rec wins, so do
+   * not put a `MoveTimeline` with `onRecord` up beside it. No knob, no wheel.
+   */
+  claimRec(options = {}) {
+    return MoveFunctions.push(
+      "rec",
+      ({ shift }) => shift && this.recording ? this.cancelTake() : this.toggleTake(),
+      { label: options.label ?? "Record", chip: false }
+    );
+  }
+  subscribe(fn) {
+    this.listeners.add(fn);
+    return () => {
+      this.listeners.delete(fn);
+    };
+  }
+  getVersion() {
+    return this.version;
+  }
+  // ── internals ──
+  /** The pass's phase at `time` (seconds), or now. */
+  phase(time) {
+    const clock = this.host.clock();
+    const t = time ?? clock.time;
+    return clock.duration > 0 && Number.isFinite(t) ? clamp12(t / clock.duration, 0, 1) : 0;
+  }
+  read(lane, phase) {
+    const hand = this.hands.get(lane.key);
+    if (hand && this.isHeld(lane.key)) return hand.value;
+    let cursor = this.cursors.get(lane.key);
+    if (!cursor) this.cursors.set(lane.key, cursor = { index: 0 });
+    return valueAt(lane, phase, cursor);
+  }
+  /** Put a timeline in front: into the take while one writes, else as the document's. */
+  write(timeline) {
+    if (this.currentId === null) return;
+    if (this.recording) this.working.set(this.currentId, timeline);
+    else this.current = timeline;
+  }
+  openSpan(key, phase) {
+    const hand = this.hands.get(key);
+    if (!hand || this.spans.has(key)) return;
+    if (!laneByKey(this.timeline(), key)) {
+      const meta = this.metas.get(key);
+      if (!meta) return;
+      this.write(upsertLane(this.timeline(), createLane(key, meta.label, meta.min, meta.max, meta.before, meta.interp)));
+    }
+    this.spans.set(key, { from: phase, samples: [{ t: phase, v: hand.value }] });
+  }
+  /** Close a hand's stretch at `phase` and lay it into its lane. */
+  closeSpan(key, phase) {
+    const span = this.spans.get(key);
+    this.spans.delete(key);
+    if (!span) return;
+    const lane = laneByKey(this.timeline(), key);
+    if (!lane) return;
+    const last = span.samples[span.samples.length - 1];
+    const to = Math.max(phase, last.t);
+    if (to > last.t) span.samples.push({ t: to, v: last.v });
+    this.write(upsertLane(this.timeline(), mergeSpan(lane, { from: span.from, to, samples: span.samples }, this.tolerance)));
+    this.cursors.delete(key);
+  }
+  closeSpans(phase) {
+    for (const key of [...this.spans.keys()]) this.closeSpan(key, phase);
+  }
+  /** The pass came round mid-take: close at its end, write on from its start. */
+  wrap() {
+    const writing = [...this.spans.keys()];
+    this.closeSpans(1);
+    this.laps += 1;
+    for (const key of writing) if (this.isHeld(key)) this.openSpan(key, 0);
+    this.lastPhase = 0;
+  }
+  /** One edit on the card: the lane in front, changed and committed as one undo. */
+  editLane(key, change, coalesce) {
+    if (this.recording || this.currentId === null) return false;
+    const lane = laneByKey(this.current, key);
+    if (!lane) return false;
+    const next = change(lane);
+    if (next === lane) return false;
+    const timeline = next ? upsertLane(this.current, next) : removeLane(this.current, key);
+    this.current = timeline;
+    this.cursors.delete(key);
+    this.host.commit({ kind: "edit", id: this.currentId, timeline, ...coalesce ? { coalesce } : {} });
+    this.notify();
+    return true;
+  }
+  setView(zoom, start) {
+    const nextZoom = clamp12(zoom, 1, MOVE_TIMELINE_MAX_ZOOM);
+    const nextStart = timelineWindow(1, nextZoom, start).start;
+    if (nextZoom === this.view.zoom && nextStart === this.view.start) return;
+    this.view = { zoom: nextZoom, start: nextStart };
+    this.notify();
+  }
+  notify() {
+    this.version += 1;
+    for (const fn of this.listeners) fn();
+  }
+};
+
+// src/move-automation.ts
+var TOUCH_EVENT = "move-tweakers:touch";
+function listenMoveTouch(store, resolve) {
+  if (typeof window === "undefined") return () => {
+  };
+  let page = null;
+  let held = /* @__PURE__ */ new Set();
+  const release = () => {
+    for (const key of held) store.touch(key, false);
+    held = /* @__PURE__ */ new Set();
+  };
+  const onTouch = (event) => {
+    const detail = event.detail;
+    const pageId = typeof detail?.pageId === "string" ? detail.pageId : null;
+    if (pageId !== page) {
+      release();
+      page = pageId;
+    }
+    if (!pageId) return;
+    const now = /* @__PURE__ */ new Set();
+    for (const [path, on] of Object.entries(detail?.touched ?? {})) {
+      if (!on) continue;
+      const key = resolve(pageId, path);
+      if (key) now.add(key);
+    }
+    for (const key of held) if (!now.has(key)) store.touch(key, false);
+    for (const key of now) if (!held.has(key)) store.touch(key, true);
+    held = now;
+  };
+  const onConnection = (event) => {
+    const d = event.detail;
+    if (!(d?.bridge && d.device && d.active)) {
+      release();
+      page = null;
+    }
+  };
+  window.addEventListener(TOUCH_EVENT, onTouch);
+  window.addEventListener(MOVE_CONNECTION_EVENT, onConnection);
+  return () => {
+    window.removeEventListener(TOUCH_EVENT, onTouch);
+    window.removeEventListener(MOVE_CONNECTION_EVENT, onConnection);
+    release();
+  };
+}
+
+// src/components/MoveAutomationLanes.tsx
+import { useCallback as useCallback6, useEffect as useEffect22, useLayoutEffect as useLayoutEffect6, useRef as useRef21, useState as useState15, useSyncExternalStore as useSyncExternalStore10 } from "react";
+import { createPortal as createPortal8 } from "react-dom";
+import { jsx as jsx24, jsxs as jsxs19 } from "react/jsx-runtime";
+var DOCK_GAP3 = 14;
+var DRAG_PX2 = 4;
+var LABEL_EDGE_PX2 = 28;
+var PINCH_GAIN2 = 0.01;
+function MoveAutomationLanes({
+  store,
+  variant = "dock",
+  onSeek,
+  accent,
+  title = "Automation",
+  emptyLabel,
+  theme = "system",
+  productionEnabled = isDevDefault,
+  className
+}) {
+  const [mounted, setMounted] = useState15(false);
+  useEffect22(() => setMounted(true), []);
+  useSyncExternalStore10(
+    useCallback6((cb) => store.subscribe(cb), [store]),
+    () => store.getVersion(),
+    () => 0
+  );
+  const lanes = store.timeline().lanes;
+  const selection = store.getSelection();
+  const recording = store.isRecording();
+  const view = store.getWindow();
+  const [duration, setDuration] = useState15(() => store.clock().duration);
+  const rulerRef = useRef21(null);
+  const [width, setWidth] = useState15(0);
+  useLayoutEffect6(() => {
+    const ruler = rulerRef.current;
+    if (!ruler) return;
+    const measure = () => setWidth(Math.round(ruler.getBoundingClientRect().width));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(ruler);
+    return () => ro.disconnect();
+  }, [mounted, productionEnabled]);
+  const share = (t) => view.span > 0 ? (t - view.start) / view.span : 0;
+  const phaseAt = (clientX) => {
+    const rect = rulerRef.current?.getBoundingClientRect();
+    if (!rect || rect.width <= 0) return 0;
+    return Math.min(1, Math.max(0, view.start + (clientX - rect.left) / rect.width * view.span));
+  };
+  const phaseAtRef = useRef21(phaseAt);
+  phaseAtRef.current = phaseAt;
+  const playheadRef = useRef21(null);
+  const takeRefs = useRef21([]);
+  const rowRefs = useRef21(/* @__PURE__ */ new Map());
+  const frame = useRef21({ view, width, lanes });
+  frame.current = { view, width, lanes };
+  const durationRef = useRef21(duration);
+  useEffect22(() => {
+    if (!productionEnabled) return;
+    let raf = requestAnimationFrame(function paint() {
+      const { view: w, width: px, lanes: shown } = frame.current;
+      const clock = store.clock();
+      if (clock.duration !== durationRef.current) {
+        durationRef.current = clock.duration;
+        setDuration(clock.duration);
+      }
+      const phase = clock.duration > 0 ? Math.min(1, Math.max(0, clock.time / clock.duration)) : 0;
+      const at2 = w.span > 0 ? (phase - w.start) / w.span * px : 0;
+      const head = playheadRef.current;
+      if (head) {
+        head.style.transform = `translateX(${at2}px)`;
+        head.style.visibility = w.span > 0 && px > 0 && at2 >= -1 && at2 <= px + 1 ? "visible" : "hidden";
+      }
+      const take = store.take();
+      const bands = take ? take.laps > 0 ? [{ from: 0, to: 1 }] : splitAtWrap(take.from, phase) : [];
+      takeRefs.current.forEach((el, i) => {
+        if (!el) return;
+        const band = bands[i];
+        if (!band || w.span <= 0) {
+          el.style.display = "none";
+          return;
+        }
+        const left = Math.max(0, (band.from - w.start) / w.span * px);
+        const right = Math.min(px, (band.to - w.start) / w.span * px);
+        el.style.display = right > left ? "block" : "none";
+        el.style.left = `${left}px`;
+        el.style.width = `${Math.max(0, right - left)}px`;
+      });
+      for (const lane of shown) {
+        const row2 = rowRefs.current.get(lane.key);
+        if (!row2) continue;
+        const held = store.isHeld(lane.key);
+        for (const el of [row2.name, row2.lane]) {
+          if (el && el.dataset.writing !== void 0 !== held) {
+            if (held) el.dataset.writing = "";
+            else delete el.dataset.writing;
+          }
+        }
+        if (row2.live) {
+          const span = store.liveSpan(lane.key);
+          const d = span && w.span > 0 ? curvePath2(lane, span.samples, w.start, w.span) : "";
+          if (row2.live.getAttribute("d") !== d) row2.live.setAttribute("d", d);
+        }
+      }
+      raf = requestAnimationFrame(paint);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [store, productionEnabled]);
+  const drag = useRef21(null);
+  const valueAtY = (lane, clientY, plot) => {
+    const rect = plot.getBoundingClientRect();
+    const share2 = rect.height > 0 ? 1 - (clientY - rect.top) / rect.height : 0.5;
+    return lane.min + Math.min(1, Math.max(0, share2)) * (lane.max - lane.min);
+  };
+  const onRulerDown = (e) => {
+    if (e.button !== 0 || !onSeek) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { kind: "seek" };
+    onSeek(phaseAt(e.clientX) * duration);
+  };
+  const onRulerMove = (e) => {
+    if (drag.current?.kind === "seek") onSeek?.(phaseAt(e.clientX) * duration);
+  };
+  const onPlotDown = (e, lane) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    cardRef.current?.focus({ preventScroll: true });
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const handle = e.target.closest("[data-point]");
+    if (handle && selection.key === lane.key) {
+      const index = Number(handle.dataset.point);
+      store.select({ key: lane.key, point: index });
+      drag.current = { kind: "point", key: lane.key, index, x: e.clientX, y: e.clientY, t: lane.points[index]?.t ?? 0, moved: false };
+      return;
+    }
+    drag.current = { kind: "range", key: lane.key, x: e.clientX, from: phaseAt(e.clientX), moved: false };
+  };
+  const onPlotMove = (e, lane) => {
+    const d = drag.current;
+    if (!d || d.kind === "seek") return;
+    if (!d.moved) {
+      if (Math.hypot(e.clientX - d.x, d.kind === "point" ? e.clientY - d.y : 0) <= DRAG_PX2) return;
+      d.moved = true;
+    }
+    if (d.kind === "point") {
+      store.movePoint(d.key, d.index, e.shiftKey ? d.t : phaseAt(e.clientX), valueAtY(lane, e.clientY, e.currentTarget), { drag: true });
+    } else {
+      store.select({ key: d.key, range: { from: d.from, to: phaseAt(e.clientX) } });
+    }
+  };
+  const onPlotUp = () => {
+    const d = drag.current;
+    drag.current = null;
+    if (d?.kind === "range" && !d.moved) store.select({ key: d.key });
+  };
+  const onPlotDoubleClick = (e, lane) => {
+    if (selection.key !== lane.key) return;
+    const handle = e.target.closest("[data-point]");
+    if (handle) store.deletePoint(lane.key, Number(handle.dataset.point));
+    else store.addPoint(lane.key, phaseAt(e.clientX), valueAtY(lane, e.clientY, e.currentTarget));
+  };
+  const cardRef = useRef21(null);
+  const onKeyDown = (e) => {
+    const key = selection.key;
+    if (e.key === "Escape" && key) {
+      e.stopPropagation();
+      store.select(selection.point !== null || selection.range ? { key } : {});
+      return;
+    }
+    if ((e.key === "Delete" || e.key === "Backspace") && key) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (selection.range) store.clearRange(key, selection.range.from, selection.range.to);
+      else if (selection.point !== null) store.deletePoint(key, selection.point);
+    }
+  };
+  const displayRef = useRef21(null);
+  useEffect22(() => {
+    const el = displayRef.current;
+    if (!el) return;
+    const onWheel = (e) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        store.zoomTo(store.getView().zoom * Math.exp(-e.deltaY * PINCH_GAIN2), phaseAtRef.current(e.clientX));
+        return;
+      }
+      const sideways = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.shiftKey ? e.deltaY : 0;
+      if (!sideways || store.getView().zoom <= 1) return;
+      e.preventDefault();
+      const w = store.getWindow();
+      const px = frame.current.width;
+      if (px > 0) store.panTo(w.start + sideways / px * w.span);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [store, mounted, productionEnabled]);
+  const [dockBottom, setDockBottom] = useState15(DOCK_GAP3);
+  useEffect22(() => {
+    if (variant !== "dock" || typeof window === "undefined") return;
+    const panel = () => document.querySelector(".tweakers-move-root .tweakers-move");
+    const measure = () => {
+      const h = panel()?.getBoundingClientRect().height ?? 0;
+      setDockBottom(h > 0 ? h + DOCK_GAP3 : DOCK_GAP3);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    const el = panel();
+    if (el) ro.observe(el);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [variant, mounted]);
+  if (!productionEnabled) return null;
+  const ticks = timelineTicks(view.start * duration, view.span * duration, width);
+  const tickX = (seconds) => duration > 0 ? share(seconds / duration) * width : 0;
+  const rowHeight = timelineRowHeight(Math.max(1, lanes.length));
+  const selected = selection.key ? lanes.find((l) => l.key === selection.key) : void 0;
+  const editable = !!selected && !recording;
+  const card = /* @__PURE__ */ jsx24(
+    "div",
+    {
+      ref: cardRef,
+      className: `tweakers-move-surface tweakers-move-timeline tweakers-move-automation${className ? ` ${className}` : ""}`,
+      "data-variant": variant,
+      "data-recording": recording || void 0,
+      "data-rows": rowHeight,
+      tabIndex: 0,
+      "aria-label": title,
+      onKeyDown,
+      style: {
+        ...accent ? { "--move-timeline-accent": accent } : {},
+        ...variant === "dock" ? { bottom: `${dockBottom}px` } : {}
+      },
+      children: /* @__PURE__ */ jsxs19("div", { ref: displayRef, className: "tweakers-move-timeline-display", children: [
+        /* @__PURE__ */ jsx24("div", { className: "tweakers-move-timeline-corner", children: /* @__PURE__ */ jsx24("span", { className: "tweakers-move-timeline-title", children: title }) }),
+        /* @__PURE__ */ jsxs19(
+          "div",
+          {
+            ref: rulerRef,
+            className: "tweakers-move-timeline-ruler",
+            "data-seek": onSeek ? true : void 0,
+            onPointerDown: onRulerDown,
+            onPointerMove: onRulerMove,
+            onPointerUp: () => drag.current = null,
+            onPointerCancel: () => drag.current = null,
+            title: onSeek ? "Click to jump" : void 0,
+            children: [
+              [0, 1].map((i) => /* @__PURE__ */ jsx24("div", { ref: (el) => {
+                takeRefs.current[i] = el;
+              }, className: "tweakers-move-timeline-take", style: { display: "none" } }, i)),
+              ticks.minor.map((t) => /* @__PURE__ */ jsx24("span", { className: "tweakers-move-timeline-tick", style: { left: `${tickX(t)}px` } }, `m${t}`)),
+              ticks.major.map((t) => /* @__PURE__ */ jsx24("span", { className: "tweakers-move-timeline-tick", "data-major": true, style: { left: `${tickX(t)}px` }, children: tickX(t) < width - LABEL_EDGE_PX2 && /* @__PURE__ */ jsx24("span", { className: "tweakers-move-timeline-tick-label", children: formatTimelineTick(t, ticks.step) }) }, `M${t}`))
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxs19("div", { className: "tweakers-move-timeline-names", children: [
+          lanes.map((lane) => /* @__PURE__ */ jsx24(
+            "div",
+            {
+              ref: (el) => {
+                row(rowRefs.current, lane.key).name = el;
+              },
+              className: "tweakers-move-timeline-name tweakers-move-automation-name",
+              "data-selected": lane.key === selection.key || void 0,
+              title: lane.label,
+              onPointerDown: () => store.select(lane.key === selection.key ? {} : { key: lane.key }),
+              children: lane.label
+            },
+            lane.key
+          )),
+          !lanes.length && /* @__PURE__ */ jsx24("div", { className: "tweakers-move-timeline-name", "aria-hidden": "true" })
+        ] }),
+        /* @__PURE__ */ jsxs19("div", { className: "tweakers-move-timeline-lanes tweakers-move-automation-lanes", children: [
+          lanes.map((lane) => {
+            const open2 = lane.key === selection.key;
+            const range = open2 && selection.range ? selection.range : null;
+            return /* @__PURE__ */ jsx24(
+              "div",
+              {
+                ref: (el) => {
+                  row(rowRefs.current, lane.key).lane = el;
+                },
+                className: "tweakers-move-timeline-lane tweakers-move-automation-lane",
+                "data-selected": open2 || void 0,
+                children: /* @__PURE__ */ jsxs19(
+                  "div",
+                  {
+                    className: "tweakers-move-automation-plot",
+                    onPointerDown: (e) => onPlotDown(e, lane),
+                    onPointerMove: (e) => onPlotMove(e, lane),
+                    onPointerUp: onPlotUp,
+                    onPointerCancel: onPlotUp,
+                    onDoubleClick: (e) => onPlotDoubleClick(e, lane),
+                    children: [
+                      range && /* @__PURE__ */ jsx24(
+                        "div",
+                        {
+                          className: "tweakers-move-automation-range",
+                          style: { left: `${share(range.from) * 100}%`, width: `${(share(range.to) - share(range.from)) * 100}%` }
+                        }
+                      ),
+                      /* @__PURE__ */ jsxs19("svg", { className: "tweakers-move-automation-curve", viewBox: "0 0 1 1", preserveAspectRatio: "none", "aria-hidden": "true", children: [
+                        /* @__PURE__ */ jsx24("path", { className: "tweakers-move-automation-area", d: areaPath(lane, view.start, view.span) }),
+                        /* @__PURE__ */ jsx24("path", { className: "tweakers-move-automation-line", d: curvePath2(lane, lane.points, view.start, view.span) }),
+                        /* @__PURE__ */ jsx24("path", { ref: (el) => {
+                          row(rowRefs.current, lane.key).live = el;
+                        }, className: "tweakers-move-automation-live" })
+                      ] }),
+                      open2 && lane.points.map((p, i) => {
+                        const x = share(p.t);
+                        if (x < -0.02 || x > 1.02) return null;
+                        return /* @__PURE__ */ jsx24(
+                          "span",
+                          {
+                            className: "tweakers-move-automation-point",
+                            "data-point": i,
+                            "data-selected": selection.point === i || void 0,
+                            style: { left: `${x * 100}%`, top: `${(1 - norm(lane, p.v)) * 100}%` }
+                          },
+                          i
+                        );
+                      })
+                    ]
+                  }
+                )
+              },
+              lane.key
+            );
+          }),
+          !lanes.length && /* @__PURE__ */ jsx24("div", { className: "tweakers-move-timeline-lane tweakers-move-automation-empty", children: emptyLabel ?? (recording ? "Turn a control to record" : "Record a take to draw a lane") })
+        ] }),
+        /* @__PURE__ */ jsx24("div", { className: "tweakers-move-timeline-heads", "aria-hidden": "true", children: /* @__PURE__ */ jsx24("div", { ref: playheadRef, className: "tweakers-move-timeline-playhead" }) }),
+        /* @__PURE__ */ jsxs19("div", { className: "tweakers-move-automation-bar", children: [
+          /* @__PURE__ */ jsx24("span", { className: "tweakers-move-automation-readout", children: selected ? readout(selected, selection, duration) : lanes.length ? "Click a lane to edit it" : "" }),
+          /* @__PURE__ */ jsx24(
+            "button",
+            {
+              type: "button",
+              className: "tweakers-move-automation-tool",
+              disabled: !editable,
+              title: "Smooth the lane, or the selected stretch \xB7 Shift smooths harder",
+              onClick: (e) => selected && store.smooth(selected.key, e.shiftKey),
+              children: "Smooth"
+            }
+          ),
+          /* @__PURE__ */ jsx24(
+            "button",
+            {
+              type: "button",
+              className: "tweakers-move-automation-tool",
+              disabled: !editable || !selection.range,
+              title: "Clear the selected stretch to a straight run",
+              onClick: () => selected && selection.range && store.clearRange(selected.key, selection.range.from, selection.range.to),
+              children: "Clear"
+            }
+          ),
+          /* @__PURE__ */ jsx24(
+            "button",
+            {
+              type: "button",
+              className: "tweakers-move-automation-tool",
+              disabled: !editable,
+              title: "Delete the lane \u2014 the control is its own again",
+              onClick: () => selected && store.deleteLane(selected.key),
+              children: "Delete lane"
+            }
+          )
+        ] })
+      ] })
+    }
+  );
+  if (variant !== "dock") return card;
+  if (!mounted || typeof document === "undefined") return null;
+  return createPortal8(
+    /* @__PURE__ */ jsx24("div", { className: "tweakers-root tweakers-move-root", "data-theme": theme, "data-timeline-dock": "true", children: card }),
+    document.body
+  );
+}
+function row(rows, key) {
+  let entry = rows.get(key);
+  if (!entry) rows.set(key, entry = { name: null, lane: null, live: null });
+  return entry;
+}
+var norm = (lane, v) => lane.max > lane.min ? (v - lane.min) / (lane.max - lane.min) : 0.5;
+var fmt = (n) => String(Number(n.toFixed(4)));
+function curvePath2(lane, points, start, span) {
+  if (!points.length || !(span > 0)) return "";
+  const x = (t) => fmt((t - start) / span);
+  const y = (v) => fmt(1 - norm(lane, v));
+  const first = points[0];
+  const last = points[points.length - 1];
+  const reach = points === lane.points;
+  let d = `M${x(reach ? Math.min(0, first.t) : first.t)} ${y(first.v)}`;
+  let prevY = y(first.v);
+  for (let i = reach ? 0 : 1; i < points.length; i++) {
+    const p = points[i];
+    if (lane.interp === "hold") d += `H${x(p.t)}`;
+    const py = y(p.v);
+    d += lane.interp === "hold" ? py !== prevY ? `V${py}` : "" : `L${x(p.t)} ${py}`;
+    prevY = py;
+  }
+  if (reach) d += `H${x(Math.max(1, last.t))}`;
+  return d;
+}
+function areaPath(lane, start, span) {
+  const line = curvePath2(lane, lane.points, start, span);
+  if (!line) return "";
+  const x0 = fmt((Math.min(0, lane.points[0].t) - start) / span);
+  return `${line}V1H${x0}Z`;
+}
+function readout(lane, selection, duration) {
+  const time = (t) => `${(t * duration).toFixed(2)}s`;
+  const value = (v) => {
+    const step = (lane.max - lane.min) / 1e3;
+    const decimals = step >= 1 ? 0 : step >= 0.1 ? 1 : step >= 0.01 ? 2 : 3;
+    return v.toFixed(decimals);
+  };
+  if (selection.range) return `${lane.label} \xB7 ${time(selection.range.from)} \u2013 ${time(selection.range.to)}`;
+  const point = selection.point !== null ? lane.points[selection.point] : void 0;
+  if (point) return `${lane.label} \xB7 ${time(point.t)} \xB7 ${value(point.v)}`;
+  return `${lane.label} \xB7 ${lane.points.length} point${lane.points.length === 1 ? "" : "s"}`;
+}
+
 // src/move-kit.ts
 import { ModulationStore as ModulationStore4 } from "tweakers/modulation-store";
 function liveClaims(app) {
@@ -18350,6 +19586,8 @@ export {
   ADSR_STAGE_MAX,
   ANGLE_DEAD_ZONE_PX,
   AUDIO_DEF,
+  automation_core_exports as Automation,
+  AutomationLanesStore,
   COLOR_FORMATS,
   CURVE_CYCLE,
   CURVE_DEF,
@@ -18453,6 +19691,7 @@ export {
   MoveActionButton,
   MoveActionDeck,
   MoveAgentStore,
+  MoveAutomationLanes,
   MoveColorStore,
   MoveConnection,
   MoveConnectionDot,
@@ -18632,6 +19871,7 @@ export {
   isToggleDial,
   lfoSyncedHz,
   listModTypes,
+  listenMoveTouch,
   loopFromStep,
   loopSteps,
   modColor,
