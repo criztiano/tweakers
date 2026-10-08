@@ -341,6 +341,7 @@ var TweakStoreClass = class {
     this.affordanceStatus = /* @__PURE__ */ new Map();
     this.disabledPaths = /* @__PURE__ */ new Map();
     this.controlStateListeners = /* @__PURE__ */ new Map();
+    this.listCursors = /* @__PURE__ */ new Map();
     this.presets = /* @__PURE__ */ new Map();
     this.activePreset = /* @__PURE__ */ new Map();
     // Host-owned preset providers. The serialized form (functions drop out of
@@ -460,6 +461,7 @@ var TweakStoreClass = class {
     if (this.controlStateListeners.get(id)?.size === 0) this.controlStateListeners.delete(id);
     this.affordanceStatus.delete(id);
     this.disabledPaths.delete(id);
+    this.listCursors.delete(id);
     this.snapshots.delete(id);
     this.baseValues.delete(id);
     this.defaults.delete(id);
@@ -728,6 +730,44 @@ var TweakStoreClass = class {
   }
   isDisabled(panelId, path) {
     return this.disabledPaths.get(panelId)?.has(path) ?? false;
+  }
+  /**
+   * Where a multiselect's cursor rests: the row its knob is on, which a knob
+   * tap (or a click) ticks. It is not the value — the value is what is ticked
+   * — so it lives beside it, one cursor per control that the screen and the
+   * Move both walk. Clamped to the control's rows; 0 until it moves.
+   */
+  getListCursor(panelId, path) {
+    const count = this.listRows(panelId, path);
+    const at = this.listCursors.get(panelId)?.get(path) ?? 0;
+    return Math.max(0, Math.min(count - 1, at));
+  }
+  /** Moves a multiselect's cursor, clamped to its rows. An unchanged row is
+   *  dropped without notifying; a move lands on the control-state channel. */
+  setListCursor(panelId, path, index) {
+    const count = this.listRows(panelId, path);
+    if (!count || !Number.isFinite(index)) return;
+    const next = Math.max(0, Math.min(count - 1, Math.round(index)));
+    if (next === this.getListCursor(panelId, path)) return;
+    let byPath = this.listCursors.get(panelId);
+    if (!byPath) {
+      byPath = /* @__PURE__ */ new Map();
+      this.listCursors.set(panelId, byPath);
+    }
+    byPath.set(path, next);
+    this.notifyControlState(panelId);
+  }
+  listRows(panelId, path) {
+    const find = (controls) => {
+      for (const c of controls) {
+        if (c.path === path && !c.children) return c;
+        const inner = c.children && find(c.children);
+        if (inner) return inner;
+      }
+      return void 0;
+    };
+    const panel = this.panels.get(panelId);
+    return panel && find(panel.controls)?.multiSelectOptions?.length || 0;
   }
   /** One channel for every app-pushed presentation change on a panel. */
   subscribeControlState(panelId, listener) {
@@ -1242,7 +1282,7 @@ var TweakStoreClass = class {
       } else if (this.isChipsConfig(value)) {
         controls.push({ type: "chips", path, label, chipOptions: value.options });
       } else if (this.isMultiSelectConfig(value)) {
-        controls.push({ type: "multiselect", path, label, multiSelectOptions: value.options });
+        controls.push({ type: "multiselect", path, label, multiSelectOptions: value.options.map((option) => typeof option === "string" ? { value: option, label: option } : option) });
       } else if (this.isListConfig(value)) {
         controls.push({ type: "list", path, label, itemTypes: value.itemTypes, addLabel: value.addLabel, maxItems: value.max });
       } else if (this.isCurveConfig(value)) {

@@ -849,10 +849,17 @@ type MultiSelectOption = {
     /** Tiny uppercase badge next to the label — e.g. 'local' / 'cloud'. */
     tag?: string;
 };
-/** Checkbox rows resolving to the checked values, in option order. */
+/**
+ * Checkbox rows resolving to the checked values, in option order. An option
+ * is a `{ value, label }` row or a plain string (its own value and label).
+ *
+ * On the Move it is a dial: one big slot drawing the checked list, the
+ * column's knob walking a cursor and a knob tap (a click on screen) ticking
+ * the row under it. A count of the ticked rows rides in the slot's head.
+ */
 type MultiSelectConfig = {
     type: 'multiselect';
-    options: MultiSelectOption[];
+    options: (string | MultiSelectOption)[];
     default?: string[];
 };
 type GalleryItem = {

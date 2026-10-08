@@ -703,10 +703,17 @@ type MultiSelectOption = {
     /** Tiny uppercase badge next to the label — e.g. 'local' / 'cloud'. */
     tag?: string;
 };
-/** Checkbox rows resolving to the checked values, in option order. */
+/**
+ * Checkbox rows resolving to the checked values, in option order. An option
+ * is a `{ value, label }` row or a plain string (its own value and label).
+ *
+ * On the Move it is a dial: one big slot drawing the checked list, the
+ * column's knob walking a cursor and a knob tap (a click on screen) ticking
+ * the row under it. A count of the ticked rows rides in the slot's head.
+ */
 type MultiSelectConfig = {
     type: 'multiselect';
-    options: MultiSelectOption[];
+    options: (string | MultiSelectOption)[];
     default?: string[];
 };
 type GalleryItem = {
@@ -1221,6 +1228,7 @@ declare class TweakStoreClass {
     private affordanceStatus;
     private disabledPaths;
     private controlStateListeners;
+    private listCursors;
     private presets;
     private activePreset;
     private presetProviders;
@@ -1295,6 +1303,17 @@ declare class TweakStoreClass {
      */
     setDisabled(panelId: string, path: string, disabled: boolean): void;
     isDisabled(panelId: string, path: string): boolean;
+    /**
+     * Where a multiselect's cursor rests: the row its knob is on, which a knob
+     * tap (or a click) ticks. It is not the value — the value is what is ticked
+     * — so it lives beside it, one cursor per control that the screen and the
+     * Move both walk. Clamped to the control's rows; 0 until it moves.
+     */
+    getListCursor(panelId: string, path: string): number;
+    /** Moves a multiselect's cursor, clamped to its rows. An unchanged row is
+     *  dropped without notifying; a move lands on the control-state channel. */
+    setListCursor(panelId: string, path: string, index: number): void;
+    private listRows;
     /** One channel for every app-pushed presentation change on a panel. */
     subscribeControlState(panelId: string, listener: Listener): () => void;
     private notifyControlState;

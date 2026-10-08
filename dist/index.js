@@ -1802,9 +1802,10 @@ function moveTabCell(row2, i) {
   };
 }
 var isToggleDial = (c) => c.type === "toggle" && c.moveSlot === true;
-var isMoveDial = (c) => isToggleDial(c) || c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || c.type === "balance" || isEnumDial(c) && !isMoveTabs(c) || c.type === "number" && c.min != null && c.max != null;
+var isMultiselectDial = (c) => c.type === "multiselect";
+var isMoveDial = (c) => isToggleDial(c) || isMultiselectDial(c) || c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || c.type === "balance" || isEnumDial(c) && !isMoveTabs(c) || c.type === "number" && c.min != null && c.max != null;
 var isDial = isMoveDial;
-var noChip = (c) => isToggleDial(c) || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || c.type === "balance" || isEnumDial(c);
+var noChip = (c) => isToggleDial(c) || isMultiselectDial(c) || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || c.type === "balance" || isEnumDial(c);
 var isColumnFilter = (c) => c?.type === "filter" && !!c.moveVertical;
 var dialSpan = (c) => c?.type === "filter" && !isColumnFilter(c) || c?.type === "select" && c.moveSpan === 2 && !isMoveTabs(c) ? 2 : 1;
 var resonanceChips = /* @__PURE__ */ new WeakMap();
@@ -2593,6 +2594,7 @@ function ListScreen({
   style
 }) {
   const rootRef = useRef2(null);
+  const checkedKey = items.map((item) => itemChecked(item) ? 1 : 0).join("");
   useEffect2(() => {
     const root = rootRef.current;
     if (!root) return;
@@ -2621,7 +2623,7 @@ function ListScreen({
       observer?.disconnect();
       root.removeEventListener("scroll", syncEdges);
     };
-  }, [value, follow, items.length]);
+  }, [value, follow, items.length, checkedKey]);
   const rootClassName = ["tweakers-list-screen", className].filter(Boolean).join(" ");
   const onKeyDown = (event) => {
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
@@ -2712,6 +2714,7 @@ import { Fragment as Fragment3, jsx as jsx3, jsxs as jsxs3 } from "react/jsx-run
 function moveSlotKind(meta, opts = {}) {
   if (meta.type === "color") return "color";
   if (meta.type === "filter") return "filter";
+  if (meta.type === "multiselect") return "multiselect";
   if (opts.stage) return "env";
   if (meta.type === "toggle" && meta.moveVisual?.kind === "metronome") return "metronome";
   if (meta.type === "toggle") return meta.icon ? "toggle-icon" : "toggle";
@@ -2842,6 +2845,33 @@ function MoveSlotEnumBody({
             follow: "center"
           }
         )
+      ]
+    }
+  );
+}
+function MoveSlotMultiselectBody({ label, options, checked, cursor }) {
+  const ticked = new Set(checked);
+  const count = options.filter((o) => ticked.has(o.value)).length;
+  return /* @__PURE__ */ jsxs3(
+    "div",
+    {
+      className: "tweakers-move-dial-screen",
+      "data-grow": options.length > MOVE_LIST_ROWS || void 0,
+      style: { "--move-list-count": Math.max(1, options.length) },
+      children: [
+        /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-head", "data-badge": "true", children: label }),
+        /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-count", "data-zero": count === 0 || void 0, "aria-label": `${count} chosen`, children: count }),
+        options.length ? /* @__PURE__ */ jsx3(
+          ListScreen,
+          {
+            className: "tweakers-move-dial-list",
+            label,
+            multiselect: true,
+            follow: "center",
+            items: options.map((o) => ({ value: o.value, label: o.label, tag: o.tag, checked: ticked.has(o.value) })),
+            value: options[Math.max(0, Math.min(options.length - 1, cursor))]?.value
+          }
+        ) : /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-empty", children: "Nothing to choose" })
       ]
     }
   );
@@ -3675,6 +3705,7 @@ var MOVE_SLOT_LIBRARY = {
   picture: { description: "option picker whose current option fills the slot as a picture, its name over it", component: MoveSlotEnumBody },
   curve: { description: "option picker drawing the current option\u2019s shape \u2014 curve selection", component: MoveSlotEnumBody },
   enum: { description: "stepped option picker showing every option on a list screen", component: MoveSlotEnumBody },
+  multiselect: { description: "a checked list: the knob walks the cursor, a tap ticks the row under it, a badge in the head counts the ticks", component: MoveSlotMultiselectBody },
   xy: { description: "two axes in one gesture field, or a live shape preview", component: MoveSlotXYBody },
   range: { description: "two handles on one bar; volume knob is the second hand", component: MoveSlotRangeBody },
   filter: { description: "2 slots: cutoff + resonance as one response picture", component: MoveSlotFilterBody },
@@ -9182,6 +9213,50 @@ function moveOptionStep(meta, value, p, e) {
 function moveNextOption(meta, value) {
   const count = (meta.options ?? []).length;
   return count ? optionValue(meta, (enumIndex(meta, value) + 1) % count) : void 0;
+}
+function moveListWalk(p, e, count) {
+  return Math.max(0, Math.min(count - 1, p.v + Math.trunc((e.clientY - p.ay) / MOVE_LIST_ROW_TRAVEL)));
+}
+function moveListRowAt(rows, view, e) {
+  const inside = (r) => e.clientX >= r.left && e.clientX < r.left + r.width && e.clientY >= r.top && e.clientY < r.top + r.height;
+  return view && !inside(view) ? -1 : rows.findIndex(inside);
+}
+function moveListRowIn(slot, e) {
+  const list = slot.querySelector(".tweakers-list-screen");
+  return moveListRowAt(
+    Array.from(slot.querySelectorAll(".tweakers-list-screen-row"), (row2) => row2.getBoundingClientRect()),
+    list ? list.getBoundingClientRect() : null,
+    e
+  );
+}
+var moveMultiselectOptions = (meta) => meta.multiSelectOptions ?? [];
+function moveMultiselectChecked(meta, value) {
+  const offered = new Set(moveMultiselectOptions(meta).map((o) => o.value));
+  return Array.isArray(value) ? value.filter((v) => typeof v === "string" && offered.has(v)) : [];
+}
+function moveMultiselectToggle(meta, value, option) {
+  const checked = new Set(moveMultiselectChecked(meta, value));
+  if (checked.has(option)) checked.delete(option);
+  else checked.add(option);
+  return moveMultiselectOptions(meta).map((o) => o.value).filter((v) => checked.has(v));
+}
+function moveListAria(label, options, checked, cursor) {
+  const row2 = options[cursor];
+  return {
+    role: "slider",
+    "aria-label": label,
+    "aria-valuemin": 0,
+    "aria-valuemax": Math.max(0, options.length - 1),
+    "aria-valuenow": cursor,
+    "aria-valuetext": row2 ? `${row2.label}, ${checked.includes(row2.value) ? "chosen" : "not chosen"} (${checked.length} chosen)` : "Nothing to choose",
+    "aria-orientation": "vertical"
+  };
+}
+function moveListKey(cursor, count, e) {
+  if (e.altKey || e.ctrlKey || e.metaKey || !count) return null;
+  if (e.key === "Enter" || e.key === " ") return "toggle";
+  const at2 = e.key === "ArrowDown" || e.key === "ArrowRight" ? cursor + 1 : e.key === "ArrowUp" || e.key === "ArrowLeft" ? cursor - 1 : e.key === "Home" ? 0 : e.key === "End" ? count - 1 : null;
+  return at2 === null ? null : { cursor: Math.max(0, Math.min(count - 1, at2)) };
 }
 var moveDialPercent = (meta, value) => Math.round(normalizeDial(meta, value) * 100);
 var plainNumber = (n) => Math.abs(n) >= 100 ? Math.round(n).toString() : Number(n.toFixed(2)).toString();
@@ -15352,6 +15427,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const [dragPath, setDragPath] = useState10(null);
   const [bendHeld, setBendHeld] = useState10(null);
   const bendRef = useRef16(null);
+  const listRowRef = useRef16(-1);
   const [waveHeld, setWaveHeld] = useState10(null);
   const waveRef = useRef16(null);
   const [handTouch, setHandTouch] = useState10({});
@@ -15990,6 +16066,49 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       endPress(meta.path);
     }
   });
+  const listCursor = (meta) => TweakStore17.getListCursor(page.panel.id, meta.path);
+  const setListCursor = (meta, index) => TweakStore17.setListCursor(page.panel.id, meta.path, index);
+  const tickRow = (meta, index) => {
+    const option = moveMultiselectOptions(meta)[index];
+    if (!option || TweakStore17.isDisabled(page.panel.id, meta.path)) return;
+    setListCursor(meta, index);
+    write2(meta, moveMultiselectToggle(meta, values[meta.path], option.value));
+  };
+  const listDrag = (meta) => ({
+    onPointerDown: (e) => {
+      if (e.button > 0 || TweakStore17.isDisabled(page.panel.id, meta.path)) return;
+      listRowRef.current = moveListRowIn(e.currentTarget, e);
+      beginPress(e, meta.path, listCursor(meta));
+    },
+    onPointerMove: (e) => {
+      const p = movePressTravel(pressRef, meta.path, e, () => listCursor(meta));
+      if (p && !TweakStore17.isDisabled(page.panel.id, meta.path)) setListCursor(meta, moveListWalk(p, e, moveMultiselectOptions(meta).length));
+    },
+    onPointerUp: (e) => {
+      if (!endPress(meta.path) || TweakStore17.isDisabled(page.panel.id, meta.path)) return;
+      if (e.shiftKey) return resetValue(meta);
+      tickRow(meta, listRowRef.current >= 0 ? listRowRef.current : listCursor(meta));
+    },
+    onPointerCancel: () => {
+      endPress(meta.path);
+    },
+    // The panel's own wheel (the strip, a navigator, a search) answers
+    // first and keeps what it took; otherwise a notch walks the list a row.
+    onWheel: (e) => {
+      if (e.defaultPrevented || !e.deltaY || TweakStore17.isDisabled(page.panel.id, meta.path)) return;
+      e.stopPropagation();
+      setListCursor(meta, listCursor(meta) + Math.sign(e.deltaY));
+    },
+    onKeyDown: (e) => {
+      if (TweakStore17.isDisabled(page.panel.id, meta.path)) return;
+      const next = moveListKey(listCursor(meta), moveMultiselectOptions(meta).length, e);
+      if (!next) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (next === "toggle") tickRow(meta, listCursor(meta));
+      else setListCursor(meta, next.cursor);
+    }
+  });
   const xyFromPointer = (e, meta) => write2(meta, moveXYValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), fineRef));
   const transferFromPointer = (e, meta, down) => {
     const next = moveTransferValue(values[meta.path], e, e.currentTarget.getBoundingClientRect(), curvePoint[meta.path] ?? 0, down);
@@ -16429,7 +16548,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         onPointerMove: (event) => {
                                           const p = movePressTravel(pressRef, listPath, event, () => MovePadListStore.getView()?.cursor ?? 0);
                                           if (!p) return;
-                                          const want = Math.max(0, Math.min(padListView.options.length - 1, p.v + Math.trunc((event.clientY - p.ay) / MOVE_LIST_ROW_TRAVEL)));
+                                          const want = moveListWalk(p, event, padListView.options.length);
                                           if (want !== padListView.cursor) MovePadListStore.setCursor(want);
                                         },
                                         onPointerUp: () => {
@@ -16772,6 +16891,26 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           /* @__PURE__ */ jsx19(MoveModRing, { panelId: page.panel.id, path: meta.path }),
                                           /* @__PURE__ */ jsx19(MoveSlotRangeBody, { label: meta.label, value: rangeReading(meta), lo: pos.lo, hi: pos.hi })
                                         ]
+                                      },
+                                      meta.path
+                                    );
+                                  }
+                                  if (meta.type === "multiselect") {
+                                    const options = moveMultiselectOptions(meta);
+                                    const checked = moveMultiselectChecked(meta, values[meta.path]);
+                                    const cursor = listCursor(meta);
+                                    return /* @__PURE__ */ jsx19(
+                                      "div",
+                                      {
+                                        className: "tweakers-move-dial",
+                                        "data-kind": "multiselect",
+                                        ...moveListAria(meta.label, options, checked, cursor),
+                                        tabIndex: disabled ? -1 : 0,
+                                        "aria-disabled": disabled || void 0,
+                                        "data-disabled": disabled || void 0,
+                                        "data-active": active || void 0,
+                                        ...listDrag(meta),
+                                        children: /* @__PURE__ */ jsx19(MoveSlotMultiselectBody, { label: meta.label, options, checked, cursor })
                                       },
                                       meta.path
                                     );
@@ -18341,12 +18480,20 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
     () => 0
   );
   useSyncExternalStore7(MoveColorStore.subscribe, MoveColorStore.getVersion, () => 0);
+  const pathKey = Array.isArray(path) ? path.join("\0") : path;
+  useSyncExternalStore7(
+    useCallback5((cb) => panelId ? TweakStore18.subscribeControlState(panelId, cb) : () => {
+    }, [panelId]),
+    () => panelId ? pathKey.split("\0").map((p) => TweakStore18.getListCursor(panelId, p)).join(",") : "",
+    () => ""
+  );
   const fine = useRef17(null);
   const rangeHandle = useRef17("min");
   const filterHand = useRef17("cutoff");
   const faceDrag = useRef17(null);
   const press = useRef17(null);
   const tap = useRef17(null);
+  const listRow = useRef17(-1);
   const [dragPath, setDragPath] = useState11(null);
   const [heldPoint, setHeldPoint] = useState11(0);
   const [heldStop, setHeldStop] = useState11(0);
@@ -18640,6 +18787,62 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
             }
           ) : /* @__PURE__ */ jsx20(MoveSlotToggleBody, { label: meta.label, checked, icon: meta.icon, onIcon: meta.onIcon, offIcon: meta.offIcon })
         ]
+      }
+    );
+  }
+  if (meta.type === "multiselect") {
+    const options = moveMultiselectOptions(meta);
+    const checked = moveMultiselectChecked(meta, value);
+    const cursor = TweakStore18.getListCursor(panelId, meta.path);
+    const tick = (index) => {
+      const option = options[index];
+      if (!option || off(meta)) return;
+      TweakStore18.setListCursor(panelId, meta.path, index);
+      write2(meta, moveMultiselectToggle(meta, values[meta.path], option.value));
+    };
+    return /* @__PURE__ */ jsx20(
+      "div",
+      {
+        className: cls,
+        style,
+        "data-kind": "multiselect",
+        "data-active": active || void 0,
+        ...moveListAria(meta.label, options, checked, cursor),
+        tabIndex: off(meta) ? -1 : 0,
+        "aria-disabled": off(meta) || void 0,
+        "data-disabled": off(meta) || void 0,
+        onPointerDown: (e) => {
+          if (e.button > 0 || off(meta)) return;
+          listRow.current = moveListRowIn(e.currentTarget, e);
+          begin(e, meta, TweakStore18.getListCursor(panelId, meta.path));
+        },
+        onPointerMove: (e) => {
+          const p = movePressTravel(press, meta.path, e, () => TweakStore18.getListCursor(panelId, meta.path));
+          if (p && !off(meta)) TweakStore18.setListCursor(panelId, meta.path, moveListWalk(p, e, options.length));
+        },
+        onPointerUp: (e) => {
+          if (!end(meta) || off(meta)) return;
+          if (e.shiftKey) return reset(meta);
+          tick(listRow.current >= 0 ? listRow.current : cursor);
+        },
+        onPointerCancel: () => {
+          end(meta);
+        },
+        onWheel: (e) => {
+          if (e.defaultPrevented || !e.deltaY || off(meta)) return;
+          e.stopPropagation();
+          TweakStore18.setListCursor(panelId, meta.path, cursor + Math.sign(e.deltaY));
+        },
+        onKeyDown: (e) => {
+          if (off(meta)) return;
+          const next = moveListKey(cursor, options.length, e);
+          if (!next) return;
+          e.preventDefault();
+          e.stopPropagation();
+          if (next === "toggle") tick(cursor);
+          else TweakStore18.setListCursor(panelId, meta.path, next.cursor);
+        },
+        children: /* @__PURE__ */ jsx20(MoveSlotMultiselectBody, { label: meta.label, options, checked, cursor })
       }
     );
   }
@@ -20414,6 +20617,7 @@ export {
   MoveSlotLanesBody,
   MoveSlotMetronomeBody,
   MoveSlotMultibandBody,
+  MoveSlotMultiselectBody,
   MoveSlotNumericBody,
   MoveSlotOffsetBody,
   MoveSlotPlaybackDrawing,

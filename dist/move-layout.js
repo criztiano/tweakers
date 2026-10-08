@@ -191,9 +191,10 @@ function moveTabCell(row, i) {
   };
 }
 var isToggleDial = (c) => c.type === "toggle" && c.moveSlot === true;
-var isMoveDial = (c) => isToggleDial(c) || c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || c.type === "balance" || isEnumDial(c) && !isMoveTabs(c) || c.type === "number" && c.min != null && c.max != null;
+var isMultiselectDial = (c) => c.type === "multiselect";
+var isMoveDial = (c) => isToggleDial(c) || isMultiselectDial(c) || c.type === "slider" || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || c.type === "balance" || isEnumDial(c) && !isMoveTabs(c) || c.type === "number" && c.min != null && c.max != null;
 var isDial = isMoveDial;
-var noChip = (c) => isToggleDial(c) || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || c.type === "balance" || isEnumDial(c);
+var noChip = (c) => isToggleDial(c) || isMultiselectDial(c) || c.type === "color" || c.type === "xy" || c.type === "range" || c.type === "filter" || c.type === "transfer" || c.type === "gradient" || c.type === "balance" || isEnumDial(c);
 var isColumnFilter = (c) => c?.type === "filter" && !!c.moveVertical;
 var dialSpan = (c) => c?.type === "filter" && !isColumnFilter(c) || c?.type === "select" && c.moveSpan === 2 && !isMoveTabs(c) ? 2 : 1;
 var resonanceChips = /* @__PURE__ */ new WeakMap();
@@ -755,6 +756,7 @@ export {
   isEnumDial,
   isMoveDial,
   isMoveTabs,
+  isMultiselectDial,
   isNamedTabs,
   isPadSpanContinuation,
   isSpanContinuation,
