@@ -3986,7 +3986,8 @@ function MovePadToggleBody({ label }) {
     /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-pad-title", children: label })
   ] });
 }
-function MovePadIconBody({ icon }) {
+function MovePadIconBody({ icon, caption }) {
+  if (caption) return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MovePadIconLabelBody, { icon, label: caption });
   return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotIcon, { icon, className: "tweakers-move-pad-icon" });
 }
 function MovePadValueBody({ label, value, unit, children }) {
@@ -4150,7 +4151,7 @@ function MovePadListBody({ view, onCursor, onToggle }) {
 }
 var MOVE_PAD_LIBRARY = {
   toggle: { description: "a switch; the pad inverts when it is on", component: MovePadToggleBody },
-  icon: { description: "a switch drawn as its picture alone \u2014 no name, the pad inverts when it is on", component: MovePadIconBody },
+  icon: { description: "a switch drawn as its picture in place of its name \u2014 alone, or with a caption beside it for the value in force; the pad inverts when it is on", component: MovePadIconBody },
   value: { description: "a value the dial above can borrow \u2014 hold to peek, tap to latch", component: MovePadValueBody },
   list: { description: "a checked list above a small pad; its dial walks, Sample selects, a second pad press runs \u2014 or, single, a picker: Sample takes the row and the pad names it", component: MovePadListBody },
   action: { description: "a button: a press runs the app\u2019s action", component: MovePadActionBody },
@@ -18077,18 +18078,19 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         ] }) }, `band-${col}`);
                                       }
                                       if (page.toggles[col] === meta || meta.type === "toggle" && page.valueActions?.[col] === meta) {
+                                        const caption = meta.icon ? meta.toggleCaption?.[values[meta.path] ? "on" : "off"] : void 0;
                                         return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                                           "button",
                                           {
                                             className: "tweakers-move-pad",
                                             "data-kind": meta.icon ? "icon" : "toggle",
                                             "data-on": !!values[meta.path],
-                                            "aria-label": meta.icon ? meta.label : void 0,
+                                            "aria-label": meta.icon ? caption ? `${meta.label}: ${caption}` : meta.label : void 0,
                                             title: meta.icon ? meta.label : void 0,
                                             ...meta.moveHold ? holdPad(page.panel.id, meta.path) : {
                                               onClick: () => import_TweakStore19.TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path])
                                             },
-                                            children: meta.icon ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(MovePadIconBody, { icon: meta.icon }) : /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(MovePadToggleBody, { label: meta.label })
+                                            children: meta.icon ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(MovePadIconBody, { icon: meta.icon, caption }) : /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(MovePadToggleBody, { label: meta.label })
                                           },
                                           meta.path
                                         );

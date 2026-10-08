@@ -1120,6 +1120,18 @@ A column has three small rows. `moveTopRow` lifts a value chip onto the switch r
 
 A switch that should only be on while a finger holds it — a solo, a preview — says `moveHold: true`. Its pad turns the value on at the press and off at the release, on the screen and on the hardware, so nothing stays latched by accident.
 
+On a pad, a switch with an `icon` is drawn as the picture alone, with no name — the whole pad inverting says it is on. Give it a `caption` and the picture stands in for the name while the words beside it say the value in force. One string reads the same in both states; `{ off, on }` turns the words with the press:
+
+```js
+useTweakers('Step', {
+  // The pad reads [brain] High when on, [brain] Minimal when off.
+  thinking: { type: 'toggle', default: false, label: 'Thinking', icon: 'brain',
+              caption: { off: 'Minimal', on: 'High' } },
+}, { movePads: { thinking: 1 } });
+```
+
+The name still travels: it is the pad's hint, and the screen reader hears it before the words ("Thinking: High"). A `caption` with no `icon` draws nothing — a named switch already says what it is. The hardware lights the pad by its state, as for every switch.
+
 `icon` is a glyph from the bundled lucide subset or the URL of an asset the app owns (drawn as a mask, so it takes the slot's colour and states). The slot then reads as that picture with a badge on its corner — a check while the switch is on, a ban while it is off — and its name underneath: what the switch is about, and whether it is doing it. `onIcon` / `offIcon` put the app's own pair of badges there instead. A switch with no picture keeps the plain face: the indicator bar, the name centred, the whole slot inverting when it is on. Naming a column for a bounded number makes it a chip wherever it was declared, so it stops competing for a dial slot — a page can spend all 8 dials on the controls it wants big, whatever else it carries. Controls with no column keep packing left around the named ones, and a column already spoken for falls back to packing rather than dropping the control.
 
 Actions reach the pads **only** through `movePads` — every app has buttons, and none of them expect a hardware pad. Two-handed dials (`xy`, `range`) and enums can't be chips, so a column on one of those is ignored and it keeps its dial slot.
@@ -1300,7 +1312,7 @@ A filter can also stand in one column. `moveVertical: true` draws the same respo
 
 ### The small slots
 
-The pad row under the dials has its own dictionary, `MOVE_PAD_LIBRARY`, on the same terms — pure bodies, gestures left with the panel: `toggle` (a switch), `value` (a value the dial above can borrow — hold to peek, tap to latch), `action` (a button), `app` (a cell the host paints itself through `MoveSurfaceStore`) and `bend` (hold and drag to bend the envelope ramp above it). The library app draws each of them, and their states.
+The pad row under the dials has its own dictionary, `MOVE_PAD_LIBRARY`, on the same terms — pure bodies, gestures left with the panel: `toggle` (a switch), `icon` (a switch drawn as its picture, with an optional caption for the value in force), `value` (a value the dial above can borrow — hold to peek, tap to latch), `action` (a button), `app` (a cell the host paints itself through `MoveSurfaceStore`) and `bend` (hold and drag to bend the envelope ramp above it). The library app draws each of them, and their states.
 
 ### Waveform
 

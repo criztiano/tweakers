@@ -1998,6 +1998,17 @@ type ToggleConfig = {
      * badge, the pad inverting when it is on.
      */
     icon?: string;
+    /**
+     * Words beside the picture on the pad — the value in force, where the
+     * picture already names the switch: a brain, then "High". One string for
+     * both states, or one per state (`{ off: 'Minimal', on: 'High' }`), so the
+     * words turn with the press. Only a pad with an `icon` wears it; the name
+     * still goes to the screen reader and the pointer's hint.
+     */
+    caption?: string | {
+        off: string;
+        on: string;
+    };
     /** The app's own state badges, in place of the kit's check and ban. */
     onIcon?: string;
     offIcon?: string;
@@ -2539,6 +2550,11 @@ type ControlMeta = {
     icon?: string;
     onIcon?: string;
     offIcon?: string;
+    /** Toggle declared `caption` — the words beside its pad's picture, per state. */
+    toggleCaption?: {
+        off: string;
+        on: string;
+    };
     /** Toggle declared `moveSlot` — it claims a dial slot rather than a pad. */
     moveSlot?: boolean;
     /** Toggle declared `moveBlank` — its column is held open and drawn empty. */
@@ -4747,9 +4763,12 @@ declare function MovePadToggleBody({ label }: {
 }): react_jsx_runtime.JSX.Element;
 /** A switch drawn as its picture alone: a pad is too narrow for a name and
  *  a badge, and the whole pad inverting already says it is on. The name
- *  stays on the pad for the screen reader, not the eye. */
-declare function MovePadIconBody({ icon }: {
+ *  stays on the pad for the screen reader, not the eye. With a `caption` the
+ *  picture stands in for the name and the words beside it say the value in
+ *  force — a brain, then "High" — in the `icon-label` button's layout. */
+declare function MovePadIconBody({ icon, caption }: {
     icon: string;
+    caption?: string;
 }): react_jsx_runtime.JSX.Element;
 /** A value chip: the name, and the real value in bold with its unit
  *  trailing. Hold it to peek at it in the dial above; tap to latch it in. */
@@ -4879,7 +4898,7 @@ declare const MOVE_PAD_LIBRARY: {
         readonly component: typeof MovePadToggleBody;
     };
     readonly icon: {
-        readonly description: "a switch drawn as its picture alone — no name, the pad inverts when it is on";
+        readonly description: "a switch drawn as its picture in place of its name — alone, or with a caption beside it for the value in force; the pad inverts when it is on";
         readonly component: typeof MovePadIconBody;
     };
     readonly value: {

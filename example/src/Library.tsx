@@ -172,8 +172,8 @@ export function Library() {
         lede="The pad row under the dials — on the instrument above, too: Sync and Drive ride under Amount, Glide under Bias, Reset under Shape, and they travel with their slots when the wheel moves them. Hold a value chip to peek at it in the dial above; tap to latch it in."
       >
         <ul className="kit-cards">
-          {SMALL_SLOTS.map((item) => (
-            <Card key={item.kind} item={item} onShow={show} />
+          {SMALL_SLOTS.map((item, i) => (
+            <Card key={`${item.kind}:${i}`} item={item} onShow={show} />
           ))}
         </ul>
         <h3 className="kit-sub">and their states</h3>

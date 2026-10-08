@@ -99,6 +99,14 @@ export type ToggleConfig = {
    * badge, the pad inverting when it is on.
    */
   icon?: string;
+  /**
+   * Words beside the picture on the pad — the value in force, where the
+   * picture already names the switch: a brain, then "High". One string for
+   * both states, or one per state (`{ off: 'Minimal', on: 'High' }`), so the
+   * words turn with the press. Only a pad with an `icon` wears it; the name
+   * still goes to the screen reader and the pointer's hint.
+   */
+  caption?: string | { off: string; on: string };
   /** The app's own state badges, in place of the kit's check and ban. */
   onIcon?: string;
   offIcon?: string;
@@ -713,6 +721,8 @@ export type ControlMeta = {
   icon?: string;
   onIcon?: string;
   offIcon?: string;
+  /** Toggle declared `caption` — the words beside its pad's picture, per state. */
+  toggleCaption?: { off: string; on: string };
   /** Toggle declared `moveSlot` — it claims a dial slot rather than a pad. */
   moveSlot?: boolean;
   /** Toggle declared `moveBlank` — its column is held open and drawn empty. */
@@ -2215,6 +2225,7 @@ class TweakStoreClass {
           icon: value.icon,
           onIcon: value.onIcon,
           offIcon: value.offIcon,
+          toggleCaption: typeof value.caption === 'string' ? { off: value.caption, on: value.caption } : value.caption,
           moveSlot: value.moveSlot,
           moveBlank: value.moveBlank,
           moveHold: value.moveHold,

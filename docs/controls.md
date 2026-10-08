@@ -143,7 +143,7 @@ which run two pads along one row.
 | --- | --- | --- | --- |
 | `toggle` | A switch under its dial | `toggle` with a `movePads` column; `MovePadToggleBody` | 1 pad |
 | `hold` | A switch that is on only while held — a solo, a preview | `toggle` with `moveHold` and a `movePads` column; `MovePadToggleBody` | 1 pad |
-| `icon` | A switch a picture says better than a name — a solo's headphones | `toggle` with `icon` (a `LUCIDE_ICONS` name or an asset URL) and a `movePads` column, `moveHold` optional; `MovePadIconBody` | 1 pad; the name stays as its accessible label |
+| `icon` | A switch a picture says better than a name — a solo's headphones; with a caption, a switch whose picture names it and whose words say the value in force — Thinking's brain, then High | `toggle` with `icon` (a `LUCIDE_ICONS` name or an asset URL) and a `movePads` column, `moveHold` optional; `caption` optional — one string, or `{ off, on }` so the words turn with the press; `MovePadIconBody` (`caption` draws the `icon-label` layout) | 1 pad; the name stays as its accessible label (`Name: caption` when captioned) and its hint |
 | `value` | A bounded number the dial above can borrow | Bounded `slider` / `number`; `MovePadValueBody` | 1 pad |
 | `action` | A button the page wants on the surface | `action` with a `movePads` column; `MovePadActionBody` | 1 pad |
 | `icon-label` | A button a picture helps find — Export's download, Clear's cross | `action` with `icon` (a `LUCIDE_ICONS` name or an asset URL) and a `movePads` column; `MovePadIconLabelBody` | 1 pad; the name gives way before the picture |

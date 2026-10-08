@@ -1178,6 +1178,7 @@ var TweakStoreClass = class {
           icon: value.icon,
           onIcon: value.onIcon,
           offIcon: value.offIcon,
+          toggleCaption: typeof value.caption === "string" ? { off: value.caption, on: value.caption } : value.caption,
           moveSlot: value.moveSlot,
           moveBlank: value.moveBlank,
           moveHold: value.moveHold,

@@ -1388,8 +1388,11 @@ export function MovePadToggleBody({ label }: { label: string }) {
 
 /** A switch drawn as its picture alone: a pad is too narrow for a name and
  *  a badge, and the whole pad inverting already says it is on. The name
- *  stays on the pad for the screen reader, not the eye. */
-export function MovePadIconBody({ icon }: { icon: string }) {
+ *  stays on the pad for the screen reader, not the eye. With a `caption` the
+ *  picture stands in for the name and the words beside it say the value in
+ *  force — a brain, then "High" — in the `icon-label` button's layout. */
+export function MovePadIconBody({ icon, caption }: { icon: string; caption?: string }) {
+  if (caption) return <MovePadIconLabelBody icon={icon} label={caption} />;
   return <MoveSlotIcon icon={icon} className="tweakers-move-pad-icon" />;
 }
 
@@ -1671,7 +1674,7 @@ export function MovePadListBody({ view, onCursor, onToggle }: {
 /** The small slot dictionary — every pad face the kit knows. */
 export const MOVE_PAD_LIBRARY = {
   toggle: { description: 'a switch; the pad inverts when it is on', component: MovePadToggleBody },
-  icon: { description: 'a switch drawn as its picture alone — no name, the pad inverts when it is on', component: MovePadIconBody },
+  icon: { description: 'a switch drawn as its picture in place of its name — alone, or with a caption beside it for the value in force; the pad inverts when it is on', component: MovePadIconBody },
   value: { description: 'a value the dial above can borrow — hold to peek, tap to latch', component: MovePadValueBody },
   list: { description: 'a checked list above a small pad; its dial walks, Sample selects, a second pad press runs — or, single, a picker: Sample takes the row and the pad names it', component: MovePadListBody },
   action: { description: 'a button: a press runs the app’s action', component: MovePadActionBody },

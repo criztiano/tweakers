@@ -3097,20 +3097,23 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     // sits in: a value chip lifted onto the top row is still
                     // a value chip.
                     if (page.toggles[col] === meta || (meta.type === 'toggle' && page.valueActions?.[col] === meta)) {
+                      // A captioned picture says its value to the eye; the
+                      // screen reader hears the name, then the same words.
+                      const caption = meta.icon ? meta.toggleCaption?.[values[meta.path] ? 'on' : 'off'] : undefined;
                       return (
                         <button
                           key={meta.path}
                           className="tweakers-move-pad"
                           data-kind={meta.icon ? 'icon' : 'toggle'}
                           data-on={!!values[meta.path]}
-                          aria-label={meta.icon ? meta.label : undefined}
+                          aria-label={meta.icon ? (caption ? `${meta.label}: ${caption}` : meta.label) : undefined}
                           title={meta.icon ? meta.label : undefined}
                           {...(meta.moveHold ? holdPad(page.panel.id, meta.path) : {
                             onClick: () => TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path]),
                           })}
                         >
                           {meta.icon
-                            ? <MovePadIconBody icon={meta.icon} />
+                            ? <MovePadIconBody icon={meta.icon} caption={caption} />
                             : <MovePadToggleBody label={meta.label} />}
                         </button>
                       );
