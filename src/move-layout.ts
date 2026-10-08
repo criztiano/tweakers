@@ -122,9 +122,16 @@ export function moveTabCell(row: (ControlMeta | undefined)[], i: number): MoveTa
 /** A switch the page is about: it claims a dial slot rather than a pad. */
 export const isToggleDial = (c: ControlMeta) => c.type === 'toggle' && c.moveSlot === true;
 
+/**
+ * A multiselect is a dial: its slot draws the checked list, its knob walks the
+ * cursor and a tap ticks the row under it. It claims its column even with no
+ * rows yet — a list still loading must not shift the page under a hand.
+ */
+export const isMultiselectDial = (c: ControlMeta) => c.type === 'multiselect';
+
 /** Everything the hardware turns: the controls that claim a dial slot. */
 export const isMoveDial = (c: ControlMeta) =>
-  isToggleDial(c) ||
+  isToggleDial(c) || isMultiselectDial(c) ||
   c.type === 'slider' || c.type === 'color' || c.type === 'xy' || c.type === 'range' ||
   c.type === 'filter' || c.type === 'transfer' || c.type === 'gradient' || c.type === 'balance' ||
   (isEnumDial(c) && !isMoveTabs(c)) ||
@@ -133,9 +140,10 @@ export const isMoveDial = (c: ControlMeta) =>
 const isDial = isMoveDial;
 
 /** Two-handed dials and enums need a slot of their own, never a value chip.
- *  A balance keeps its slot too: the blend it stands between IS the control. */
+ *  A balance keeps its slot too: the blend it stands between IS the control,
+ *  and so does a multiselect: a pad has no room for a list. */
 const noChip = (c: ControlMeta) =>
-  isToggleDial(c) || c.type === 'color' || c.type === 'xy' || c.type === 'range' || c.type === 'filter' ||
+  isToggleDial(c) || isMultiselectDial(c) || c.type === 'color' || c.type === 'xy' || c.type === 'range' || c.type === 'filter' ||
   c.type === 'transfer' || c.type === 'gradient' || c.type === 'balance' || isEnumDial(c);
 
 /** A filter that stands in one column: its knob the cutoff, its resonance a

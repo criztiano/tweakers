@@ -298,6 +298,99 @@ export function moveNextOption(meta: ControlMeta, value: unknown) {
   return count ? optionValue(meta, (enumIndex(meta, value) + 1) % count) : undefined;
 }
 
+/* ── the list a dial walks: the multiselect ────────────────────── */
+
+/**
+ * A list's drag walks it the way it reads: down is the next row, up the one
+ * before, a row's height of travel per step, from the row the press began
+ * on (`p.v`). Clamped to the list; a press alone keeps the cursor.
+ */
+export function moveListWalk(p: MovePress, e: MoveSlotPointer, count: number) {
+  return Math.max(0, Math.min(count - 1, p.v + Math.trunc((e.clientY - p.ay) / MOVE_LIST_ROW_TRAVEL)));
+}
+
+/**
+ * Which of a list's drawn rows a still press landed on, from their boxes in
+ * list order — -1 off every row (the head, the badge, the gap under the run).
+ * `view` is the list's visible box: a row scrolled out of it sits behind the
+ * head, and a press there is on the head. The list draws under the slot's
+ * own pointer handling, so the slot asks where the press was rather than
+ * waiting for a row's click.
+ */
+export function moveListRowAt(rows: readonly MoveSlotBox[], view: MoveSlotBox | null, e: MoveSlotPointer) {
+  const inside = (r: MoveSlotBox) =>
+    e.clientX >= r.left && e.clientX < r.left + r.width && e.clientY >= r.top && e.clientY < r.top + r.height;
+  return view && !inside(view) ? -1 : rows.findIndex(inside);
+}
+
+/** {@link moveListRowAt} for a slot element: its rows and its list's box. */
+export function moveListRowIn(slot: Element, e: MoveSlotPointer) {
+  const list = slot.querySelector('.tweakers-list-screen');
+  return moveListRowAt(
+    Array.from(slot.querySelectorAll('.tweakers-list-screen-row'), (row) => row.getBoundingClientRect()),
+    list ? list.getBoundingClientRect() : null,
+    e,
+  );
+}
+
+/** A multiselect's rows, as the store normalized them. */
+export const moveMultiselectOptions = (meta: ControlMeta) => meta.multiSelectOptions ?? [];
+
+/** What a multiselect has ticked: the stored values its rows still offer. */
+export function moveMultiselectChecked(meta: ControlMeta, value: unknown): string[] {
+  const offered = new Set(moveMultiselectOptions(meta).map((o) => o.value));
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string' && offered.has(v)) : [];
+}
+
+/**
+ * The value once the row `option` is ticked or unticked: the checked values,
+ * always in option order — the order the config's rows read in, whichever
+ * order they were ticked.
+ */
+export function moveMultiselectToggle(meta: ControlMeta, value: unknown, option: string): string[] {
+  const checked = new Set(moveMultiselectChecked(meta, value));
+  if (checked.has(option)) checked.delete(option);
+  else checked.add(option);
+  return moveMultiselectOptions(meta).map((o) => o.value).filter((v) => checked.has(v));
+}
+
+/**
+ * A list slot read aloud the way its knob reads in the hand: a stepped
+ * control on the cursor row, saying whether that row is ticked and how many
+ * are, so a walk down the list is heard row by row.
+ */
+export function moveListAria(label: string, options: readonly { value: string; label: string }[], checked: readonly string[], cursor: number) {
+  const row = options[cursor];
+  return {
+    role: 'slider' as const,
+    'aria-label': label,
+    'aria-valuemin': 0,
+    'aria-valuemax': Math.max(0, options.length - 1),
+    'aria-valuenow': cursor,
+    'aria-valuetext': row ? `${row.label}, ${checked.includes(row.value) ? 'chosen' : 'not chosen'} (${checked.length} chosen)` : 'Nothing to choose',
+    'aria-orientation': 'vertical' as const,
+  };
+}
+
+/**
+ * A focused list slot's keys: the arrows walk the cursor (down and right
+ * are the next row), Home and End go to the ends, Enter and Space tick the
+ * row under it. Null for anything else, and for any chord.
+ */
+export function moveListKey(
+  cursor: number, count: number,
+  e: { key: string; altKey: boolean; ctrlKey: boolean; metaKey: boolean },
+): { cursor: number } | 'toggle' | null {
+  if (e.altKey || e.ctrlKey || e.metaKey || !count) return null;
+  if (e.key === 'Enter' || e.key === ' ') return 'toggle';
+  const at = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? cursor + 1
+    : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? cursor - 1
+    : e.key === 'Home' ? 0
+    : e.key === 'End' ? count - 1
+    : null;
+  return at === null ? null : { cursor: Math.max(0, Math.min(count - 1, at)) };
+}
+
 /* ── what a slot reads out ─────────────────────────────────────── */
 
 /** The dial's position, 0–100 — the same normalized number the Move works in. */

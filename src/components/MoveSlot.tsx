@@ -21,10 +21,11 @@ import {
   moveFilterValue, moveXYValue, moveXYRest, moveNeedleValue, moveTransferValue, moveRampStop, moveRampValue,
   moveDialPercent, moveDialReading, moveRangeReading, moveChipValue, moveXYGrid,
   moveShapePath, movePressStart, movePressTravel, movePressEnd, moveTurnValue, moveTurnExtent, moveOptionStep,
-  moveNextOption, type MoveFaceRole, type MoveFineAnchor, type MovePress,
+  moveNextOption, moveListWalk, moveListRowIn, moveListKey, moveListAria, moveMultiselectOptions,
+  moveMultiselectChecked, moveMultiselectToggle, type MoveFaceRole, type MoveFineAnchor, type MovePress,
 } from '../move-slot-core';
 import {
-  moveSlotKind, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotXYBody, MoveSlotRangeBody, MoveSlotFilterBody,
+  moveSlotKind, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotMultiselectBody, MoveSlotXYBody, MoveSlotRangeBody, MoveSlotFilterBody,
   MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody,
   MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody,
 } from './move-slots';
@@ -110,6 +111,13 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
     () => 0,
   );
   useSyncExternalStore(MoveColorStore.subscribe, MoveColorStore.getVersion, () => 0);
+  // A multiselect's cursor rides the same channel; the knob walks it too.
+  const pathKey = Array.isArray(path) ? path.join('\u0000') : path;
+  useSyncExternalStore(
+    useCallback((cb) => (panelId ? TweakStore.subscribeControlState(panelId, cb) : () => {}), [panelId]),
+    () => (panelId ? pathKey.split('\u0000').map((p) => TweakStore.getListCursor(panelId, p)).join(',') : ''),
+    () => '',
+  );
 
   // The gesture state a drag keeps between events.
   const fine = useRef<MoveFineAnchor | null>(null);
@@ -118,6 +126,7 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
   const faceDrag = useRef<ControlMeta | null>(null);
   const press = useRef<MovePress | null>(null);
   const tap = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const listRow = useRef(-1);
   const [dragPath, setDragPath] = useState<string | null>(null);
   const [heldPoint, setHeldPoint] = useState(0);
   const [heldStop, setHeldStop] = useState(0);
@@ -387,6 +396,58 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
           <MoveSlotToggleBody label={meta.label} checked={checked} icon={meta.icon} onIcon={meta.onIcon} offIcon={meta.offIcon} />
         )}
       </button>
+    );
+  }
+
+  // A multiselect is its list: a drag or the wheel walks the cursor, a still
+  // click ticks the row it landed on (the cursor row from the head), a still
+  // Shift+click puts the default set back — the instrument's own rules.
+  if (meta.type === 'multiselect') {
+    const options = moveMultiselectOptions(meta);
+    const checked = moveMultiselectChecked(meta, value);
+    const cursor = TweakStore.getListCursor(panelId, meta.path);
+    const tick = (index: number) => {
+      const option = options[index];
+      if (!option || off(meta)) return;
+      TweakStore.setListCursor(panelId, meta.path, index);
+      write(meta, moveMultiselectToggle(meta, values[meta.path], option.value));
+    };
+    return (
+      <div className={cls} style={style} data-kind="multiselect" data-active={active || undefined}
+        {...moveListAria(meta.label, options, checked, cursor)}
+        tabIndex={off(meta) ? -1 : 0} aria-disabled={off(meta) || undefined} data-disabled={off(meta) || undefined}
+        onPointerDown={(e) => {
+          if (e.button > 0 || off(meta)) return;
+          // read where the press went down: a touch grows a long list's screen
+          listRow.current = moveListRowIn(e.currentTarget, e);
+          begin(e, meta, TweakStore.getListCursor(panelId, meta.path));
+        }}
+        onPointerMove={(e) => {
+          const p = movePressTravel(press, meta.path, e, () => TweakStore.getListCursor(panelId, meta.path));
+          if (p && !off(meta)) TweakStore.setListCursor(panelId, meta.path, moveListWalk(p, e, options.length));
+        }}
+        onPointerUp={(e) => {
+          if (!end(meta) || off(meta)) return;
+          if (e.shiftKey) return reset(meta);
+          tick(listRow.current >= 0 ? listRow.current : cursor);
+        }}
+        onPointerCancel={() => { end(meta); }}
+        onWheel={(e) => {
+          if (e.defaultPrevented || !e.deltaY || off(meta)) return;
+          e.stopPropagation();
+          TweakStore.setListCursor(panelId, meta.path, cursor + Math.sign(e.deltaY));
+        }}
+        onKeyDown={(e) => {
+          if (off(meta)) return;
+          const next = moveListKey(cursor, options.length, e);
+          if (!next) return;
+          e.preventDefault();
+          e.stopPropagation();
+          if (next === 'toggle') tick(cursor);
+          else TweakStore.setListCursor(panelId, meta.path, next.cursor);
+        }}>
+        <MoveSlotMultiselectBody label={meta.label} options={options} checked={checked} cursor={cursor} />
+      </div>
     );
   }
 

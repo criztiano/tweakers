@@ -21,6 +21,7 @@ outside the instrument — a card, an inspector, a dictionary — use `MoveSlot`
 | `default` | Bounded continuous quantity; signed values use `bipolar` / `origin` | Slider tuple, `slider`, bounded `number`; `MoveSlotDefaultBody` | 1 dial |
 | `value` | A value that is the headline, including a substituted value chip | A slider asks for it with `display: 'value'`, whatever its range (`{ type: 'slider', …, unit: ' ms', display: 'value' }`); the panel also selects it for a focused panel, the settings room and a substituted chip. The value large at rest, the name a tag; `MoveSlotDefaultBody`. Elsewhere — the sidebar, a pad chip — the slider is unchanged | 1 dial |
 | `enum` | A stepped choice | `select.options`, optional `moveSpan: 2` for a wider list; `MoveSlotEnumBody` | 1 dial by default; 2 adjacent dials with `moveSpan: 2`, either knob selects |
+| `multiselect` | Several choices from one list — the models a run fans out over | `{ type: 'multiselect', options, default: [] }`, options as `{ value, label, tag?, hint? }` or plain strings; the value is a `string[]` in option order. `MoveSlotMultiselectBody`: the enum's list screen with a tick on each chosen row, the cursor row lit and centred, and a badge in the head's right corner counting the ticks — the list screen's back pill (pill radius, label face, the list's ink) on the screen's dark ground, shown at zero too, dimmed. The cursor is `TweakStore.getListCursor` / `setListCursor`, shared by screen and knob | 1 dial, never a chip; it holds its column with no rows. The knob steps the cursor like an enum, a knob tap ticks the cursor row, Shift+tap does nothing; while the knob is touched the Move's screen draws the list (name and count, cursor bar, a square per ticked row) |
 | `icon` | A choice recognized by its picture | Select option `icon`; `MoveSlotEnumBody` | 1 dial |
 | `picture` | A choice that is a pattern or texture you pick by seeing it | Select option `picture` (an image URL, drawn as a mask in the slot's ink); `MoveSlotEnumBody` | 1 dial; the picture fills the slot under the name and pagination |
 | `curve` | A choice whose value is a shape | Select `preview(option)` sampler; `MoveSlotEnumBody` | 1 dial |
@@ -62,7 +63,9 @@ these gestures; an app wires nothing.
   the first after the last; a drag steps through them, right or down being
   the next. No part of the slot means a particular option.
 - **A list walks up and down.** The pad list's dial follows the list's own
-  axis: down is the next row.
+  axis: down is the next row. A multiselect slot walks the same way, and a
+  still click ticks the row it landed on (the cursor row from the head);
+  the mouse wheel walks it a row a notch while the panel's own wheel is idle.
 - **A colour takes both hands.** Across turns the hue (the knob), up and down
   the luminosity (the volume knob) — up is lighter. A still click opens the
   editor.

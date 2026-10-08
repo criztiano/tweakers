@@ -454,10 +454,17 @@ export type MultiSelectOption = {
   tag?: string;
 };
 
-/** Checkbox rows resolving to the checked values, in option order. */
+/**
+ * Checkbox rows resolving to the checked values, in option order. An option
+ * is a `{ value, label }` row or a plain string (its own value and label).
+ *
+ * On the Move it is a dial: one big slot drawing the checked list, the
+ * column's knob walking a cursor and a knob tap (a click on screen) ticking
+ * the row under it. A count of the ticked rows rides in the slot's head.
+ */
 export type MultiSelectConfig = {
   type: 'multiselect';
-  options: MultiSelectOption[];
+  options: (string | MultiSelectOption)[];
   default?: string[];
 };
 
@@ -1130,6 +1137,7 @@ class TweakStoreClass {
   private affordanceStatus: Map<string, Map<string, AffordanceStatus>> = new Map();
   private disabledPaths: Map<string, Set<string>> = new Map();
   private controlStateListeners: Map<string, Set<Listener>> = new Map();
+  private listCursors: Map<string, Map<string, number>> = new Map();
   private presets: Map<string, Preset[]> = new Map();
   private activePreset: Map<string, string | null> = new Map();
   // Host-owned preset providers. The serialized form (functions drop out of
@@ -1281,6 +1289,7 @@ class TweakStoreClass {
     if (this.controlStateListeners.get(id)?.size === 0) this.controlStateListeners.delete(id);
     this.affordanceStatus.delete(id);
     this.disabledPaths.delete(id);
+    this.listCursors.delete(id);
     this.snapshots.delete(id);
     this.baseValues.delete(id);
     this.defaults.delete(id);
@@ -1616,6 +1625,47 @@ class TweakStoreClass {
 
   isDisabled(panelId: string, path: string): boolean {
     return this.disabledPaths.get(panelId)?.has(path) ?? false;
+  }
+
+  /**
+   * Where a multiselect's cursor rests: the row its knob is on, which a knob
+   * tap (or a click) ticks. It is not the value — the value is what is ticked
+   * — so it lives beside it, one cursor per control that the screen and the
+   * Move both walk. Clamped to the control's rows; 0 until it moves.
+   */
+  getListCursor(panelId: string, path: string): number {
+    const count = this.listRows(panelId, path);
+    const at = this.listCursors.get(panelId)?.get(path) ?? 0;
+    return Math.max(0, Math.min(count - 1, at));
+  }
+
+  /** Moves a multiselect's cursor, clamped to its rows. An unchanged row is
+   *  dropped without notifying; a move lands on the control-state channel. */
+  setListCursor(panelId: string, path: string, index: number): void {
+    const count = this.listRows(panelId, path);
+    if (!count || !Number.isFinite(index)) return;
+    const next = Math.max(0, Math.min(count - 1, Math.round(index)));
+    if (next === this.getListCursor(panelId, path)) return;
+    let byPath = this.listCursors.get(panelId);
+    if (!byPath) {
+      byPath = new Map();
+      this.listCursors.set(panelId, byPath);
+    }
+    byPath.set(path, next);
+    this.notifyControlState(panelId);
+  }
+
+  private listRows(panelId: string, path: string): number {
+    const find = (controls: ControlMeta[]): ControlMeta | undefined => {
+      for (const c of controls) {
+        if (c.path === path && !c.children) return c;
+        const inner = c.children && find(c.children);
+        if (inner) return inner;
+      }
+      return undefined;
+    };
+    const panel = this.panels.get(panelId);
+    return (panel && find(panel.controls)?.multiSelectOptions?.length) || 0;
   }
 
   /** One channel for every app-pushed presentation change on a panel. */
@@ -2217,7 +2267,8 @@ class TweakStoreClass {
       } else if (this.isChipsConfig(value)) {
         controls.push({ type: 'chips', path, label, chipOptions: value.options });
       } else if (this.isMultiSelectConfig(value)) {
-        controls.push({ type: 'multiselect', path, label, multiSelectOptions: value.options });
+        controls.push({ type: 'multiselect', path, label, multiSelectOptions: value.options.map((option) =>
+          typeof option === 'string' ? { value: option, label: option } : option) });
       } else if (this.isListConfig(value)) {
         controls.push({ type: 'list', path, label, itemTypes: value.itemTypes, addLabel: value.addLabel, maxItems: value.max });
       } else if (this.isCurveConfig(value)) {

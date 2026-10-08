@@ -71,6 +71,19 @@ export const CONFIG = {
       { value: 'other', label: 'Other instruments' },
     ],
   },
+  /* ── picking several: a checked list on one dial ─────────────── */
+  models: {
+    type: 'multiselect', default: ['flux', 'recraft'],
+    options: [
+      { value: 'flux', label: 'Flux' },
+      { value: 'sdxl', label: 'SDXL' },
+      { value: 'recraft', label: 'Recraft' },
+      { value: 'ideogram', label: 'Ideogram' },
+      { value: 'imagen', label: 'Imagen' },
+      'Kolors',
+      'Sana',
+    ],
+  },
   shape: {
     type: 'select', default: 'bell',
     options: [

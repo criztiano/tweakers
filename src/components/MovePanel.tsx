@@ -18,7 +18,7 @@ import type { TweakTheme } from '../theme';
 import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, filterChipValue, isColumnFilter, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody, MoveSlotGlyph } from './move-slots';
+import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotMultiselectBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody, MoveSlotGlyph } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing } from '../angle-core';
@@ -31,8 +31,9 @@ import {
   moveRangeReading, moveChipValue, moveXYGrid, moveShapePath,
 } from '../move-slot-core';
 import {
-  MOVE_LIST_ROW_TRAVEL, movePressStart, movePressTravel, movePressEnd, moveTurnValue, moveTurnExtent,
-  moveOptionStep, moveNextOption, type MovePress,
+  movePressStart, movePressTravel, movePressEnd, moveTurnValue, moveTurnExtent,
+  moveOptionStep, moveNextOption, moveListWalk, moveListRowIn, moveListKey, moveMultiselectOptions,
+  moveMultiselectChecked, moveMultiselectToggle, moveListAria, type MovePress,
 } from '../move-slot-core';
 import { attachMoveKeys } from '../move-keys';
 import { MoveMenuButton } from './MoveMenuButton';
@@ -384,6 +385,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // — the envelope's hold-to-curve gesture. The ref anchors the drag.
   const [bendHeld, setBendHeld] = useState<EnvStage | null>(null);
   const bendRef = useRef<{ y: number; curve: number } | null>(null);
+  // The list row a multiselect's press went down on (-1: none).
+  const listRowRef = useRef(-1);
   // A held wave pad: the same vertical drag, one row down, lifting the
   // stage's own sine into it. `moved` is what tells a drag from a tap —
   // a tap flips the sine over instead of setting an amount.
@@ -1292,6 +1295,56 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     onPointerCancel: () => { endPress(meta.path); },
   });
 
+  // A multiselect's slot is its list: a drag walks the cursor the way the
+  // list reads (down is the next row), the wheel walks it a row a notch
+  // (unless the panel's wheel is running a strip or a navigator), a
+  // still click ticks the row it landed on — the cursor row when it landed
+  // on the head — and a still Shift+click puts the default set back. The
+  // column's knob walks the same cursor and its tap ticks the same row.
+  const listCursor = (meta: ControlMeta) => TweakStore.getListCursor(page.panel.id, meta.path);
+  const setListCursor = (meta: ControlMeta, index: number) => TweakStore.setListCursor(page.panel.id, meta.path, index);
+  const tickRow = (meta: ControlMeta, index: number) => {
+    const option = moveMultiselectOptions(meta)[index];
+    if (!option || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+    setListCursor(meta, index);
+    write(meta, moveMultiselectToggle(meta, values[meta.path], option.value));
+  };
+  // The row is read where the press went down: a touch grows a long list's
+  // screen, so by the release the rows have moved out from under it.
+  const listDrag = (meta: ControlMeta) => ({
+    onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
+      if (e.button > 0 || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      listRowRef.current = moveListRowIn(e.currentTarget, e);
+      beginPress(e, meta.path, listCursor(meta));
+    },
+    onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
+      const p = movePressTravel(pressRef, meta.path, e, () => listCursor(meta));
+      if (p && !TweakStore.isDisabled(page.panel.id, meta.path)) setListCursor(meta, moveListWalk(p, e, moveMultiselectOptions(meta).length));
+    },
+    onPointerUp: (e: React.PointerEvent<HTMLElement>) => {
+      if (!endPress(meta.path) || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      if (e.shiftKey) return resetValue(meta);
+      tickRow(meta, listRowRef.current >= 0 ? listRowRef.current : listCursor(meta));
+    },
+    onPointerCancel: () => { endPress(meta.path); },
+    // The panel's own wheel (the strip, a navigator, a search) answers
+    // first and keeps what it took; otherwise a notch walks the list a row.
+    onWheel: (e: React.WheelEvent<HTMLElement>) => {
+      if (e.defaultPrevented || !e.deltaY || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      e.stopPropagation();
+      setListCursor(meta, listCursor(meta) + Math.sign(e.deltaY));
+    },
+    onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => {
+      if (TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      const next = moveListKey(listCursor(meta), moveMultiselectOptions(meta).length, e);
+      if (!next) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (next === 'toggle') tickRow(meta, listCursor(meta));
+      else setListCursor(meta, next.cursor);
+    },
+  });
+
   const xyFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) =>
     write(meta, moveXYValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), fineRef));
 
@@ -1966,7 +2019,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     onPointerMove={event => {
                       const p = movePressTravel(pressRef, listPath, event, () => MovePadListStore.getView()?.cursor ?? 0);
                       if (!p) return;
-                      const want = Math.max(0, Math.min(padListView.options.length - 1, p.v + Math.trunc((event.clientY - p.ay) / MOVE_LIST_ROW_TRAVEL)));
+                      const want = moveListWalk(p, event, padListView.options.length);
                       if (want !== padListView.cursor) MovePadListStore.setCursor(want);
                     }}
                     onPointerUp={() => { endPress(listPath); }}
@@ -2260,6 +2313,29 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     >
                       <MoveModRing panelId={page.panel.id} path={meta.path} />
                       <MoveSlotRangeBody label={meta.label} value={rangeReading(meta)} lo={pos.lo} hi={pos.hi} />
+                    </div>
+                  );
+                }
+                // A multiselect is its list: every row, the chosen ones
+                // ticked, the cursor row lit and held in the middle, and the
+                // count of ticks in the head's badge.
+                if (meta.type === 'multiselect') {
+                  const options = moveMultiselectOptions(meta);
+                  const checked = moveMultiselectChecked(meta, values[meta.path]);
+                  const cursor = listCursor(meta);
+                  return (
+                    <div
+                      key={meta.path}
+                      className="tweakers-move-dial"
+                      data-kind="multiselect"
+                      {...moveListAria(meta.label, options, checked, cursor)}
+                      tabIndex={disabled ? -1 : 0}
+                      aria-disabled={disabled || undefined}
+                      data-disabled={disabled || undefined}
+                      data-active={active || undefined}
+                      {...listDrag(meta)}
+                    >
+                      <MoveSlotMultiselectBody label={meta.label} options={options} checked={checked} cursor={cursor} />
                     </div>
                   );
                 }

@@ -3531,6 +3531,53 @@
   text-overflow: ellipsis;
 }
 
+/* A multiselect's head carries its count badge in the right corner: the
+   name keeps the badge's width clear on both sides, so it stays centred. */
+.tweakers-move-dial-head[data-badge] {
+  padding: 0 calc(var(--move-head-h) + 8px);
+}
+
+/* The count badge: the list screen's back pill — pill radius, label face,
+   the screen's ink — scaled into the head and carrying a number. The pill
+   is the chip on the screen's dark ground; up here the ground is the slot,
+   which comes up to the chip itself in the hand, so the badge takes the
+   screen's ground instead and reads as a piece of the list it counts, at
+   rest and lit alike. */
+.tweakers-move-dial-count {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  z-index: 1;
+  box-sizing: border-box;
+  min-width: calc(var(--move-head-h) - 4px);
+  height: calc(var(--move-head-h) - 4px);
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--move-display, #1e1e1e);
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: calc(var(--move-head-h) - 4px);
+  text-align: center;
+  pointer-events: none;
+}
+
+/* Nothing chosen: the number stays, dimmed — still read, never hidden. */
+.tweakers-move-dial-count[data-zero] {
+  color: color-mix(in srgb, var(--move-text) 45%, transparent);
+}
+
+/* A list with no rows yet (still loading, or nothing offered) says so. */
+.tweakers-move-dial-empty {
+  margin: auto;
+  padding: 0 8px;
+  color: color-mix(in srgb, var(--move-text) 45%, transparent);
+  font-family: var(--move-font-label);
+  font-size: 12px;
+  text-align: center;
+}
+
 .tweakers-list-screen.tweakers-move-dial-list {
   /* The component declares its own row metrics on this very element, so
      they have to be handed back to the screen's — which is the one place

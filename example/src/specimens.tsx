@@ -147,6 +147,12 @@ export const BIG_SLOTS: Specimen[] = [
     note: 'select with moveSpan: 2',
     live: { path: 'result' },
   },
+  {
+    kind: 'multiselect', path: 'models',
+    description: MOVE_SLOT_LIBRARY.multiselect.description,
+    note: 'A `multiselect` — `{ type: \'multiselect\', options, default: [] }`, options as `{ value, label }` rows or plain strings. Drag or scroll over it to walk the cursor, click a row to tick it; on the Move the knob walks and a knob tap ticks. The value is the ticked values, in option order.',
+    live: { path: 'models' },
+  },
   { kind: 'curve', path: 'shape', description: MOVE_SLOT_LIBRARY.curve.description, live: { path: 'shape' } },
   { kind: 'toggle', path: 'hold', description: MOVE_SLOT_LIBRARY.toggle.description, live: { path: 'hold' } },
   {

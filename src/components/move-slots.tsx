@@ -40,6 +40,10 @@ import { ListScreen } from './ListScreen';
  *   select's `preview` sampler) — the curve-selection slot.
  * - `enum`    — a plain stepped option picker: every option on the Move's
  *   own list screen, which is the whole slot; a touch grows it to the run.
+ * - `multiselect` — the same list screen with a tick on every chosen row:
+ *   the knob walks a cursor, a tap ticks the row under it, and a count of
+ *   the ticked rows rides in the head as a badge cut like the list screen's
+ *   back pill.
  * - `xy`      — a 2D pad filling the slot; on the hardware the column's
  *   knob turns X and the volume knob turns Y while touched.
  * - `range`   — two handles on one bar; column knob = low end, volume
@@ -112,6 +116,7 @@ export type MoveSlotKind =
   | 'icon'
   | 'curve'
   | 'enum'
+  | 'multiselect'
   | 'xy'
   | 'range'
   | 'filter'
@@ -153,6 +158,7 @@ export function moveSlotKind(
 ): MoveSlotKind {
   if (meta.type === 'color') return 'color';
   if (meta.type === 'filter') return 'filter';
+  if (meta.type === 'multiselect') return 'multiselect';
   if (opts.stage) return 'env';
   if (meta.type === 'toggle' && meta.moveVisual?.kind === 'metronome') return 'metronome';
   if (meta.type === 'toggle') return meta.icon ? 'toggle-icon' : 'toggle';
@@ -360,6 +366,56 @@ export function MoveSlotEnumBody({
         value={selected ? enumOptionValue(selected as never) : undefined}
         follow="center"
       />
+    </div>
+  );
+}
+
+/**
+ * A choice of several: the enum's list screen, every chosen row ticked. Two
+ * questions get two marks, as on every kit list — the cursor rides the
+ * highlight (where the knob is), the tick says what is chosen — so a set can
+ * be built up row by row without losing the place in it. The cursor row is
+ * held in the middle, the run passing behind it, and a touch grows the screen
+ * to the whole run like the enum's.
+ *
+ * The head keeps the control's name, and a badge in its right corner counts
+ * the ticked rows: the list screen's back pill — the same pill, face and
+ * radius — carrying a number instead of a way out. It stays up at zero, so
+ * the head never reflows under a hand unticking the last row, and "0" says
+ * the set is empty as plainly as "3" says it is not.
+ */
+export function MoveSlotMultiselectBody({ label, options, checked, cursor }: {
+  label: string;
+  options: { value: string; label: string; tag?: string }[];
+  /** The ticked values. */
+  checked: readonly string[];
+  /** The row the knob is on. */
+  cursor: number;
+}) {
+  const ticked = new Set(checked);
+  const count = options.filter((o) => ticked.has(o.value)).length;
+  return (
+    <div
+      className="tweakers-move-dial-screen"
+      data-grow={options.length > MOVE_LIST_ROWS || undefined}
+      style={{ '--move-list-count': Math.max(1, options.length) } as CSSProperties}
+    >
+      <span className="tweakers-move-dial-head" data-badge="true">{label}</span>
+      <span className="tweakers-move-dial-count" data-zero={count === 0 || undefined} aria-label={`${count} chosen`}>
+        {count}
+      </span>
+      {options.length ? (
+        <ListScreen
+          className="tweakers-move-dial-list"
+          label={label}
+          multiselect
+          follow="center"
+          items={options.map((o) => ({ value: o.value, label: o.label, tag: o.tag, checked: ticked.has(o.value) }))}
+          value={options[Math.max(0, Math.min(options.length - 1, cursor))]?.value}
+        />
+      ) : (
+        <span className="tweakers-move-dial-empty">Nothing to choose</span>
+      )}
     </div>
   );
 }
@@ -1663,6 +1719,7 @@ export const MOVE_SLOT_LIBRARY = {
   picture: { description: 'option picker whose current option fills the slot as a picture, its name over it', component: MoveSlotEnumBody },
   curve: { description: 'option picker drawing the current option’s shape — curve selection', component: MoveSlotEnumBody },
   enum: { description: 'stepped option picker showing every option on a list screen', component: MoveSlotEnumBody },
+  multiselect: { description: 'a checked list: the knob walks the cursor, a tap ticks the row under it, a badge in the head counts the ticks', component: MoveSlotMultiselectBody },
   xy: { description: 'two axes in one gesture field, or a live shape preview', component: MoveSlotXYBody },
   range: { description: 'two handles on one bar; volume knob is the second hand', component: MoveSlotRangeBody },
   filter: { description: '2 slots: cutoff + resonance as one response picture', component: MoveSlotFilterBody },

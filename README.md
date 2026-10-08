@@ -1124,6 +1124,27 @@ A switch that should only be on while a finger holds it — a solo, a preview �
 
 Actions reach the pads **only** through `movePads` — every app has buttons, and none of them expect a hardware pad. Two-handed dials (`xy`, `range`) and enums can't be chips, so a column on one of those is ignored and it keeps its dial slot.
 
+### Choosing several: the multiselect dial
+
+A `multiselect` is a dial. Its big slot is a checked list — every row, a tick on each chosen one, the cursor row lit and held in the middle — and a badge in the head counts the ticks, cut like the list screen's back pill:
+
+```js
+useTweakers('Step', {
+  models: {
+    type: 'multiselect',
+    options: [{ value: 'flux', label: 'Flux' }, { value: 'sdxl', label: 'SDXL' }, 'Recraft'],
+    default: ['flux'],
+  },
+});
+```
+
+Options are `{ value, label, tag?, hint? }` rows or plain strings (their own value and label). The value is a `string[]` of the ticked values, always in option order; subscribe and diff it like any value. It takes one column, packs like any dial, and is never a value chip — past the eighth column it is dropped with a layout warning. It keeps its column with no rows yet, so a list that loads late does not shift the page.
+
+- **Screen:** a drag over the slot walks the cursor (down is the next row), the mouse wheel walks it a row a notch when the panel's own wheel is idle (no scrolling strip, navigator or search), a click ticks the row it lands on — the cursor row from the head — and Shift+click puts the default set back. Arrows walk a focused slot; Enter or Space ticks.
+- **Move:** the column's knob steps the cursor like an enum dial, and a knob tap ticks the row under it. While the knob is touched the Move's screen shows the list itself — its name and count as the title, the cursor bar, a square on each ticked row. Shift+tap does nothing.
+- **The cursor** is the store's, not the value: `TweakStore.getListCursor(panelId, path)` / `setListCursor(panelId, path, index)`, on the control-state channel, so the screen and the knob walk one cursor.
+- The badge stays up at zero, dimmed. The list has no Capture-hold search: search belongs to the list the big wheel walks.
+
 ### Tabs across the pads
 
 The mode a page is in does not want a knob. `moveTabs` lays a select across the small slots instead — one pad per option, side by side in the switch row, the current one lit — so the mode can be read without turning anything and reached where the hand already is. It is the pad grid's first multi-slot control, the filter's small sibling.
