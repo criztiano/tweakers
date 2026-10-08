@@ -373,6 +373,7 @@ coneAngle:  { type: 'slider', default: 24, min: 0, max: 90, display: 'dial', wra
 | Prop | Type | Description |
 |------|------|-------------|
 | `display` | `'track' \| 'dial' \| 'value'` | `dial` draws a needle in place of the track. `value` keeps the track, and on the Move panel shows the value first — the number the headline, the name a tag. Default `track`. |
+| `track` | `boolean` | `false` drops the bar under the Move slot's readout — `{ display: 'value', track: false }` is the number alone, centred, for a count or a seed whose place in its range says nothing. Default `true`. |
 | `wrap` | `boolean` | Past the end, come back around instead of stopping. Defaults to true when the range covers a full turn (360, or −180..180). |
 
 The needle follows the pointer directly — a compass gesture, not a fader one —
@@ -497,6 +498,22 @@ shape: {
 ```
 
 If `default` is omitted, the first option is selected.
+
+On the Move panel a select is a stepped dial. Two `display` values give it a
+different face; it steps the same way (click, drag, wheel, the column's knob)
+and is an ordinary enum dial to the hardware:
+
+```tsx
+// the chosen option's name as the headline, the control's name a tag — no list
+quality: { type: 'select', display: 'value', options: ['Draft', 'Fine', 'Final'] },
+// a frame in the chosen proportion, as large as fits, the ratio written inside
+frame: { type: 'select', display: 'aspect', options: ['1:1', '4:3', '3:4', '16:9', '9:16'] },
+```
+
+`aspect` options are "W:H" strings, or `{ value, label }` rows whose value is a
+W:H — the label is what the frame says. An option that is not a W:H keeps the
+ordinary list face. Neither face draws the pagination cells unless the select
+asks with `track: true`.
 
 **Returns:** `string` (the selected option's value)
 

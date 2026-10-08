@@ -15,10 +15,10 @@ import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from '../theme';
-import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, filterChipValue, isColumnFilter, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
+import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, filterChipValue, isColumnFilter, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumShapePath, enumIndex, enumAspect, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotMultiselectBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody, MoveSlotGlyph } from './move-slots';
+import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotAspectBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody, MoveSlotGlyph } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing } from '../angle-core';
@@ -2357,11 +2357,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   const picture = enumOptionPicture(option as never);
                   const playback = movePlaybackMode(meta, values[meta.path]);
                   const lanes = moveLanes(meta, values[meta.path]);
+                  // The app's own ask for the face: a frame in the chosen
+                  // proportion, or the chosen name as the headline.
+                  const face = moveSlotKind(meta, { enum: true, value: values[meta.path], shape, glyph, picture });
+                  const aspect = face === 'aspect' ? enumAspect(meta, values[meta.path]) : null;
+                  const named = face === 'value';
                   return (
                     <div
                       key={meta.path}
                       className="tweakers-move-dial"
-                      data-kind={lanes ? 'lanes' : 'enum'}
+                      data-kind={lanes ? 'lanes' : aspect ? 'aspect' : named ? 'value' : 'enum'}
+                      data-sub={named || undefined}
                       style={dialSpan(meta) > 1 ? { gridColumn: `span ${dialSpan(meta)}` } : undefined}
                       data-scope={scope ? true : undefined}
                       data-visual={playback ? 'playback' : undefined}
@@ -2386,10 +2392,19 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           with the name out of the way there is nothing left
                           for the value to replace. */}
                       {scope}
+                      {named && <span className="tweakers-move-dial-sub">{meta.label}</span>}
                       <MoveModRing panelId={page.panel.id} path={meta.path} />
                       {lanes ? (
                         <MoveSlotLanesBody label={meta.label} optionLabel={optionLabel} count={options.length}
                           chosen={lanes.chosen} silent={lanes.silent} solo={lanes.solo} />
+                      ) : aspect ? (
+                        <MoveSlotAspectBody label={meta.label} w={aspect.w} h={aspect.h} text={aspect.text}
+                          options={options} activeIdx={activeIdx} track={meta.track === true} />
+                      ) : named ? (
+                        <>
+                          <MoveSlotDefaultBody label={meta.label} value={optionLabel} pct={0} originPct={null} track={false} />
+                          {meta.track === true && <MoveSlotEnumCells options={options} activeIdx={activeIdx} />}
+                        </>
                       ) : (
                         <MoveSlotEnumBody
                           label={meta.label}
@@ -2766,6 +2781,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       pct={pct}
                       originPct={originPct}
                       atOrigin={atOrigin}
+                      track={meta.track !== false}
                     />}
 
                   </div>

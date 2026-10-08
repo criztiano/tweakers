@@ -139,8 +139,26 @@ export const BIG_SLOTS: Specimen[] = [
     note: 'A slider asks for it with `display: \'value\'` — whatever its range: Decay, on the strip below. It is also the face a chip wears when a dial borrows it, and every named value on a modulator’s page. This one is Glide, the chip under Bias.',
     live: { path: 'glide', valueFirst: true },
   },
+  {
+    kind: 'value-bare', path: 'copies',
+    description: 'The value face with no bar under it — for a count, a seed or a size, where how far along its range it sits says nothing.',
+    note: '`display: \'value\', track: false` on a slider. Everything else — the turn, the knob — is the value face’s own.',
+    live: { path: 'copies' },
+  },
+  {
+    kind: 'value-select', path: 'quality',
+    description: 'The value face for a choice: the chosen option’s name is the headline, the control’s name a tag. No list, no cells.',
+    note: '`{ type: \'select\', display: \'value\', options }`. A click or drag steps it, the knob steps it on the Move, like any option picker. `track: true` puts the pagination cells back under it.',
+    live: { path: 'quality' },
+  },
   { kind: 'icon', path: 'direction', description: MOVE_SLOT_LIBRARY.icon.description, live: { path: 'direction' } },
   { kind: 'enum', path: 'scale', description: MOVE_SLOT_LIBRARY.enum.description, live: { path: 'scale' } },
+  {
+    kind: 'aspect', path: 'frame',
+    description: MOVE_SLOT_LIBRARY.aspect.description,
+    note: '`{ type: \'select\', display: \'aspect\', options: [\'1:1\', \'4:3\', \'3:4\', \'16:9\', \'9:16\'] }` — options as "W:H" strings, or `{ value, label }` rows whose value is a W:H (the label is written in the frame). Step it and the frame eases to the next proportion. An option that is not a W:H wears the list face instead.',
+    live: { path: 'frame' },
+  },
   {
     kind: 'enum-wide', span: 2, path: 'result',
     description: 'The same list across two dial columns, with room for longer names. Either knob selects a result.',

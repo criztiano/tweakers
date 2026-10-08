@@ -662,6 +662,19 @@ function enumShapePath(meta, value) {
   const d = segments.map((seg) => seg.map((pt, i) => `${i ? "L" : "M"} ${(pt.t * 100).toFixed(2)} ${((1 - fill(pt.v)) * 100).toFixed(2)}`).join(" ")).join(" ");
   return d || null;
 }
+function parseAspect(text) {
+  const m = typeof text === "string" ? /^\s*(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)\s*$/.exec(text) : null;
+  if (!m) return null;
+  const w = Number(m[1]);
+  const h = Number(m[2]);
+  return w > 0 && h > 0 ? { w, h } : null;
+}
+function enumAspect(meta, value) {
+  if (meta.type !== "select" || meta.display !== "aspect" || !isEnumDial(meta)) return null;
+  const option = meta.options[enumIndex(meta, value)];
+  const ratio = option === void 0 ? null : parseAspect(enumOptionValue(option));
+  return ratio ? { ...ratio, text: enumOptionLabel(option) } : null;
+}
 function enumIndex(meta, value) {
   const i = (meta.options ?? []).findIndex((o) => enumOptionValue(o) === value);
   return Math.max(0, i);
@@ -743,6 +756,7 @@ export {
   denormalizeXYDial,
   dialOrigin,
   dialSpan,
+  enumAspect,
   enumIndex,
   enumOptionIcon,
   enumOptionLabel,
@@ -773,6 +787,7 @@ export {
   normalizeToggleDial,
   normalizeXYDial,
   padSpan,
+  parseAspect,
   reportMoveLayoutIssue,
   setMoveLayoutReporter,
   slotGroups,

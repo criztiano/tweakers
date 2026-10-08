@@ -1190,6 +1190,7 @@ var TweakStoreClass = class {
           bipolar: value.bipolar,
           orientation: value.orientation,
           display: value.display,
+          track: value.track,
           wrap: value.wrap,
           onTap: value.onTap,
           shortcut
@@ -1230,7 +1231,7 @@ var TweakStoreClass = class {
       } else if (this.isActionConfig(value)) {
         controls.push({ type: "action", path, label: value.label || label, caption: value.caption, icon: value.icon });
       } else if (this.isSelectConfig(value)) {
-        controls.push({ type: "select", path, label, options: value.options, display: value.display, preview: value.preview, moveVisual: value.moveVisual, moveTabs: value.moveTabs, moveSpan: value.moveSpan });
+        controls.push({ type: "select", path, label, options: value.options, display: value.display, track: value.track, preview: value.preview, moveVisual: value.moveVisual, moveTabs: value.moveTabs, moveSpan: value.moveSpan });
       } else if (this.isColorConfig(value)) {
         controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {

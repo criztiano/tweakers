@@ -416,8 +416,27 @@ type SelectConfig = {
         picture?: string;
     })[];
     default?: string;
-    /** 'segmented' renders the options as an inline segmented control instead of a dropdown. Suits 2–4 short options. */
-    display?: 'dropdown' | 'segmented';
+    /**
+     * 'segmented' renders the options as an inline segmented control instead of a dropdown. Suits 2–4 short options.
+     *
+     * On the Move panel, two faces of the stepped dial:
+     * - `aspect` — every option's value is a proportion, "W:H" ("16:9", "3:4"):
+     *   the slot draws a frame in the chosen proportion, as large as fits,
+     *   with the ratio written inside it. A value that is not a W:H keeps the
+     *   ordinary enum face.
+     * - `value` — the chosen option's name is the headline and the control's
+     *   name a tag on top, the way a slider's `display: 'value'` reads: no list.
+     *
+     * Either one is still an enum dial: a click or drag steps it, the column's
+     * knob steps it on the Move. Elsewhere it is an ordinary dropdown.
+     */
+    display?: 'dropdown' | 'segmented' | 'aspect' | 'value';
+    /**
+     * The `aspect` and `value` faces only: draw the pagination cells under the
+     * face, one per option, the chosen one lit. Off by default — the face
+     * already says which option it is.
+     */
+    track?: boolean;
     /**
      * Take the small slots instead of a dial: the options lie side by side in
      * the Move's switch row, one pad each, the current one lit. For the mode a
@@ -586,6 +605,13 @@ type SliderConfig = {
      * ordinary slider.
      */
     display?: 'track' | 'dial' | 'value';
+    /**
+     * `false` drops the fill bar under the slot's readout on the Move panel —
+     * for a `display: 'value'` number whose position in its range says nothing
+     * (a count, a seed, a size). Everything else, the turn included, is
+     * unchanged. Defaults to true.
+     */
+    track?: boolean;
     /**
      * Past the end, come back around instead of stopping. Dial only; defaults
      * to true when the range covers a full turn (360, or -180..180).
@@ -927,8 +953,11 @@ type ControlMeta = {
     /** Select declared `moveTabs` — it lies across the small slots as a tabs
      *  strip instead of claiming a dial; `'named'` adds its leading name pad. */
     moveTabs?: boolean | 'named';
-    /** Select's rendering mode, or a slider's `dial` / `value` form. */
-    display?: 'dropdown' | 'segmented' | 'track' | 'dial' | 'value';
+    /** Select's rendering mode or Move face, or a slider's `dial` / `value` form. */
+    display?: 'dropdown' | 'segmented' | 'aspect' | 'value' | 'track' | 'dial';
+    /** The bar under a Move slot's readout: a slider's fill (default on), a
+     *  select face's pagination cells (default off). */
+    track?: boolean;
     /** Dial slider: wrap past the ends instead of stopping. */
     wrap?: boolean;
     placeholder?: string;

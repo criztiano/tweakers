@@ -2129,6 +2129,81 @@
   opacity: 1;
 }
 
+/* An aspect picker's canvas: the band under the tag, down to the slot's
+   foot (or to the pagination cells, when the select asks for them). The
+   frame is the largest box of the chosen W:H inside it, centred — the
+   container units do the fitting, so it follows the slot at any size. */
+.tweakers-move-dial-aspect {
+  position: absolute;
+  top: var(--move-shape-top);
+  left: 10px;
+  right: 10px;
+  bottom: var(--move-indicator-bottom);
+  container-type: size;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.tweakers-move-dial-aspect[data-track] {
+  bottom: calc(var(--move-indicator-bottom) + var(--move-indicator-height) + var(--move-option-gap));
+}
+
+.tweakers-move-dial-aspect-frame {
+  box-sizing: border-box;
+  width: min(100cqw, 100cqh * var(--move-aspect, 1));
+  height: min(100cqh, 100cqw / var(--move-aspect, 1));
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 2px solid color-mix(in srgb, var(--move-text) 50%, transparent);
+  border-radius: var(--move-radius-small);
+  transition:
+    width var(--move-duration-press) var(--move-ease-out),
+    height var(--move-duration-press) var(--move-ease-out),
+    border-color 0.12s;
+}
+
+.tweakers-move-dial:hover .tweakers-move-dial-aspect-frame,
+.tweakers-move-dial[data-active] .tweakers-move-dial-aspect-frame {
+  border-color: var(--move-text);
+}
+
+.tweakers-move-dial-aspect-text {
+  max-width: 100%;
+  padding: 0 4px;
+  box-sizing: border-box;
+  font-family: var(--move-font-label);
+  font-size: 15px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-dial-aspect-frame {
+    transition: none;
+  }
+}
+
+/* A select's value face heads with a word, not a number: a longer name
+   steps down a size, and the longest wraps to a second line. */
+.tweakers-move-dial[data-kind="value"] .tweakers-move-dial-value[data-length="medium"] {
+  font-size: 24px;
+}
+
+.tweakers-move-dial[data-kind="value"] .tweakers-move-dial-value[data-length="long"] {
+  font-size: 20px;
+  white-space: normal;
+  line-height: 1.1;
+}
+
+/* A readout with no bar under it stands in the middle of the slot. */
+.tweakers-move-dial-readout[data-bare] {
+  bottom: 10px;
+}
+
 .tweakers-move-dial[data-shape] .tweakers-move-dial-label {
   z-index: 1;
   text-shadow: 0 0 6px var(--move-dial-surface), 0 0 6px var(--move-dial-surface);

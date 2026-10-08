@@ -9,7 +9,7 @@ import { resolveAxis, pointFromValue, normalizeValue, type XYValue } from '../xy
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
 import { valueToBearing } from '../angle-core';
 import {
-  normalizeDial, normalizeRangeDial, dialOrigin, isEnumDial, enumIndex, enumOptionLabel, enumOptionIcon, enumOptionPicture,
+  normalizeDial, normalizeRangeDial, dialOrigin, isEnumDial, enumIndex, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumAspect,
   enumShapePath, filterShapePath,
 } from '../move-layout';
 import {
@@ -25,7 +25,7 @@ import {
   moveMultiselectChecked, moveMultiselectToggle, type MoveFaceRole, type MoveFineAnchor, type MovePress,
 } from '../move-slot-core';
 import {
-  moveSlotKind, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotMultiselectBody, MoveSlotXYBody, MoveSlotRangeBody, MoveSlotFilterBody,
+  moveSlotKind, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotAspectBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotXYBody, MoveSlotRangeBody, MoveSlotFilterBody,
   MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody,
   MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody,
 } from './move-slots';
@@ -586,18 +586,34 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
     const shape = enumShapePath(meta, value);
     const playback = movePlaybackMode(meta, value);
     const lanes = moveLanes(meta, value);
+    const glyph = enumOptionIcon(option as never);
+    const picture = enumOptionPicture(option as never);
+    // The app's own ask for the face: a frame in the chosen proportion, or
+    // the chosen name as the headline.
+    const face = moveSlotKind(meta, { enum: true, value, shape, glyph, picture });
+    const aspect = face === 'aspect' ? enumAspect(meta, value) : null;
+    const named = face === 'value';
     return (
-      <div className={cls} style={style} data-kind={lanes ? 'lanes' : 'enum'} data-visual={playback ? 'playback' : undefined}
+      <div className={cls} style={style} data-kind={lanes ? 'lanes' : aspect ? 'aspect' : named ? 'value' : 'enum'}
+        data-sub={named || undefined} data-visual={playback ? 'playback' : undefined}
         data-shape={shape ? true : undefined} data-active={active || undefined}
         {...slider(meta)} aria-valuemin={0} aria-valuemax={Math.max(0, options.length - 1)} aria-valuenow={activeIdx} aria-valuetext={optionLabel}
         {...step(meta)}>
+        {named && <span className="tweakers-move-dial-sub">{meta.label}</span>}
         <MoveModRing panelId={panelId} path={meta.path} />
         {lanes ? (
           <MoveSlotLanesBody label={meta.label} optionLabel={optionLabel} count={options.length} chosen={lanes.chosen} silent={lanes.silent} solo={lanes.solo} />
+        ) : aspect ? (
+          <MoveSlotAspectBody label={meta.label} w={aspect.w} h={aspect.h} text={aspect.text}
+            options={options} activeIdx={activeIdx} track={meta.track === true} />
+        ) : named ? (
+          <>
+            <MoveSlotDefaultBody label={meta.label} value={optionLabel} pct={0} originPct={null} track={false} />
+            {meta.track === true && <MoveSlotEnumCells options={options} activeIdx={activeIdx} />}
+          </>
         ) : (
           <MoveSlotEnumBody label={meta.label} optionLabel={optionLabel} options={options} activeIdx={activeIdx}
-            shape={shape} glyph={enumOptionIcon(option as never)} picture={enumOptionPicture(option as never)}
-            playback={playback} />
+            shape={shape} glyph={glyph} picture={picture} playback={playback} />
         )}
       </div>
     );
@@ -627,6 +643,7 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
           pct={moveDialPercent(meta, value)}
           originPct={originPct}
           atOrigin={originPct != null && Math.abs(normalizeDial(meta, value) - origin01) < 1e-6}
+          track={meta.track !== false}
         />
       )}
     </div>
