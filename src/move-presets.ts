@@ -1,4 +1,5 @@
 import { TweakStore, type TweakValue } from './store/TweakStore';
+import { moveWheelRows } from './move-wheel';
 
 /** A row of the preset screen — one shape for built-in and provider presets. */
 export interface MovePresetItem { id: string; label: string }
@@ -144,7 +145,7 @@ class MovePresetStoreClass {
     if (!view || view.phase === 'closing' || view.chosen) return;
     const items = this.items(view.panelId);
     if (!items.length) return;
-    const step = Math.round(delta) || Math.sign(delta);
+    const step = moveWheelRows(delta);
     const index = items.findIndex((i) => i.id === view.cursor);
     const next = Math.max(0, Math.min(items.length - 1, (index < 0 ? 0 : index) + step));
     if (items[next].id === view.cursor && !view.comparing) return;

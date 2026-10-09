@@ -1,6 +1,7 @@
 import { formatHex, hslToRgb, parseHex, rgbToHsl, type HSLA } from './color-core';
 import { setStopColor, type GradientValue } from './gradient-core';
 import { TweakStore } from './store/TweakStore';
+import { moveWheelRows } from './move-wheel';
 
 export interface MoveColorView { panelId: string; path: string }
 
@@ -370,7 +371,7 @@ class MoveColorStoreClass {
   /** Walk the navigator's cursor by wheel detents. */
   movePickerCursor(delta: number) {
     if (!this.isPickerOpen() || !delta) return;
-    const step = Math.round(delta) || Math.sign(delta);
+    const step = moveWheelRows(delta);
     const next = Math.max(0, Math.min(this.palettes().length, this.pickerCursor + step));
     if (next === this.pickerCursor) return;
     this.pickerCursor = next;

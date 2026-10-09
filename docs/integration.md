@@ -102,7 +102,10 @@ words the search also finds it by (an effect's tags), never drawn — and an
 with `align: 'start'`, `showTitle: true` (its `title` drawn as a heading) and
 `back: true` (the chevron alone, since the heading says where you are).
 A host that reads the wheel events for its own list yields while
-`MoveSearchStore.isOpen()`, exactly as it yields to an open navigator.
+`MoveSearchStore.isOpen()`, exactly as it yields to an open navigator, and
+walks its cursor by `moveWheelRows(detail.delta)`, never by the raw delta:
+an ordinary turn lands two or three counts at once, and the kit's own lists
+take such a burst as one row so a steady hand never skips one.
 
 A page whose top pad row is free can seat value chips there, directly under
 the dial each pairs with: name them in the panel's `moveTopRow` (control

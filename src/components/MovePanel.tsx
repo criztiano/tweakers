@@ -52,6 +52,7 @@ import { resolveAxis, pointFromValue, normalizeValue, type XYValue } from '../xy
 import { MoveVolumeDisplay, type MoveVolumeDisplayState } from '../move-volume';
 import { MoveColorStore, MOVE_GRADIENT_STOPS } from '../move-color';
 import { MoveSearchStore, moveSearchFilter, type MoveSearchTarget, type MoveSearchView } from '../move-search';
+import { moveWheelRows } from '../move-wheel';
 import { MoveColorSlot, MoveColorDisplay, MoveOpacityPads, MoveColorSteps, MovePaletteScreen, copyHslOfHex, copyOklch } from './MoveColor';
 import { MoveFunctions } from '../move-functions';
 import { MoveFunctionChips } from './MoveFunctionChips';
@@ -1088,7 +1089,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       const view = MoveSearchStore.getView();
       if (!view) return;
       e.preventDefault();
-      searchStep(view, Math.round(Number((e as CustomEvent).detail?.delta) || 0));
+      searchStep(view, moveWheelRows(Number((e as CustomEvent).detail?.delta) || 0));
     };
     const onJogClick = (e: Event) => {
       const view = MoveSearchStore.getView();
