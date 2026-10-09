@@ -5350,6 +5350,7 @@ function XYSurface({ label, x, y, disabled, onChange }) {
 
 // src/components/MovePanel.tsx
 import { useEffect as useEffect16, useLayoutEffect as useLayoutEffect5, useId as useId2, useRef as useRef16, useState as useState10, useSyncExternalStore as useSyncExternalStore6, useCallback as useCallback4 } from "react";
+import { AnimatePresence as AnimatePresence2, motion as motion2, useReducedMotion as useReducedMotion2 } from "motion/react";
 import { createPortal as createPortal6 } from "react-dom";
 
 // src/move-float.ts
@@ -14789,6 +14790,9 @@ var MoveAgentStoreClass = class {
     }, BUDGET_MS);
     const { onRequest } = this.options;
     const outcome = { changed: 0, acted: 0, skipped: 0, cancelled: false };
+    let early = Promise.resolve();
+    let earlyRan = 0, earlySkipped = 0, earlyUndos = [];
+    let earlyError;
     try {
       await abortable(onRequest?.begin?.(text), flight.signal);
       const controls = describeAgentControls(this.options.panels);
@@ -14810,6 +14814,30 @@ ${e.id}`);
         }
       };
       const resolve = (ref) => resolveBoundary(ref, known, editMap?.());
+      const context = { attachments: attachments.map((a) => a.file) };
+      const stream = {
+        say: (said) => {
+          if (this.flight !== flight || flight.signal.aborted || !this.view) return;
+          this.set({ ...this.view, message: said });
+        },
+        act: (call) => early = early.then(async () => {
+          if (this.flight !== flight || flight.signal.aborted || earlyError) return;
+          if (!earlyRan && this.options.checkpoint) await this.options.checkpoint();
+          const ran2 = await runAgentActions([call], actions, resolve, context);
+          earlyRan += ran2.ran;
+          earlySkipped += ran2.skipped;
+          earlyError = ran2.error;
+          if (ran2.ran) {
+            if (earlyRan === ran2.ran) {
+              this.before = null;
+              this.undos = [];
+            }
+            earlyUndos = [...earlyUndos, ...ran2.undos];
+            this.undos = earlyUndos;
+            if (this.view) this.set({ ...this.view, acted: earlyRan });
+          }
+        })
+      };
       const history = [];
       let reply;
       for (let pass = 1; ; pass++) {
@@ -14831,22 +14859,24 @@ ${e.id}`);
             history: history.length ? history : void 0,
             passesLeft
           } : {}
-        }, flight.signal), flight.signal);
+        }, flight.signal, stream), flight.signal);
         if (!tools.length || !reply.calls?.length || passesLeft <= 0) break;
         history.push(await this.perceive(reply.calls, tools, signals, resolve, learn, caps?.images !== false, flight.signal));
       }
-      const calls = reply.actions ?? [];
-      if (calls.length && this.options.checkpoint) await abortable(this.options.checkpoint(), flight.signal);
+      await abortable(early, flight.signal);
+      const calls = earlyError ? [] : reply.actions ?? [];
+      if (calls.length && !earlyRan && this.options.checkpoint) await abortable(this.options.checkpoint(), flight.signal);
       clearTimeout(budget);
       if (flight.signal.aborted) {
         outcome.cancelled = true;
         return;
       }
-      const acted = await runAgentActions(calls, actions, resolve, { attachments: attachments.map((a) => a.file) });
+      const ran = await runAgentActions(calls, actions, resolve, context);
+      const acted = { ran: earlyRan + ran.ran, skipped: earlySkipped + ran.skipped, error: earlyError ?? ran.error };
       const { before, changed } = applyAgentWrites(reply.writes ?? [], this.options.panels);
       if (changed || acted.ran) {
         this.before = changed ? before : null;
-        this.undos = acted.undos;
+        this.undos = [...earlyUndos, ...ran.undos];
       }
       Object.assign(outcome, { changed, acted: acted.ran, skipped: acted.skipped }, acted.error ? { error: acted.error } : {});
       const moved = changed > 0 || acted.ran > 0;
@@ -14859,15 +14889,16 @@ ${e.id}`);
         skipped: acted.skipped,
         steps: this.view.steps,
         attachments: this.view.attachments,
-        message: acted.error ?? (reply.message || (unanswered ? "It kept looking and ran out of passes. Nothing changed." : moved ? "" : "Nothing changed."))
+        message: acted.error ?? (reply.message || this.view.message || (unanswered ? "It kept looking and ran out of passes. Nothing changed." : moved ? "" : "Nothing changed."))
       });
     } catch (error) {
+      Object.assign(outcome, { acted: earlyRan, skipped: earlySkipped });
       if (flight.signal.aborted && !late) {
         outcome.cancelled = true;
         return;
       }
       outcome.error = late ? "That took too long, so it was stopped. Nothing changed." : error instanceof Error ? error.message : "The agent did not answer.";
-      if (this.view) this.set({ ...idle, steps: this.view.steps, attachments: this.view.attachments, phase: "error", message: outcome.error });
+      if (this.view) this.set({ ...idle, acted: earlyRan, steps: this.view.steps, attachments: this.view.attachments, phase: "error", message: outcome.error });
     } finally {
       clearTimeout(budget);
       if (this.flight === flight) this.flight = null;
@@ -16372,7 +16403,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       !explorationOpen && colorMeta && /* @__PURE__ */ jsx19(MoveColorDisplay, { panelId: page.panel.id, meta: colorMeta, anchor: panelRef, theme }),
       /* @__PURE__ */ jsx19(PresetExploration, {}),
       presetSave && /* @__PURE__ */ jsx19(MovePresetSaveInput, { suggested: presetSave.suggested }),
-      agent && !presetSave && /* @__PURE__ */ jsx19(MoveAgentPrompt, { view: agent }),
+      /* @__PURE__ */ jsx19(AnimatePresence2, { children: agent && !presetSave && /* @__PURE__ */ jsx19(MoveAgentPrompt, { view: agent }, "agent") }),
       !explorationOpen && composition && modSettings && /* @__PURE__ */ jsx19(
         MoveCurveComposer,
         {
@@ -18271,26 +18302,42 @@ function MoveAgentPrompt({ view }) {
   const fileRef = useRef16(null);
   const shiftAlone = useRef16(false);
   const [dropping, setDropping] = useState10(false);
+  const [draft, setDraft] = useState10("");
   const float = useMoveFloat();
+  const body = useMeasuredHeight();
+  const still = useReducedMotion2();
   const pictures = MoveAgentStore.acceptsAttachments();
   const hasImage = (data) => !!data && [...data.items].some((item) => item.kind === "file" && item.type.startsWith("image/"));
   const thinking = view.phase === "thinking";
   useEffect16(() => {
-    if (!thinking) inputRef.current?.select();
-  }, [thinking]);
+    if (view.phase === "error") setDraft((now) => now || view.prompt);
+  }, [view.phase, view.prompt]);
+  useMoveFieldHeight(inputRef, draft);
   const changed = view.phase !== "thinking" && (view.changed > 0 || view.acted > 0);
   const skipped = view.skipped ? `${view.skipped} ${view.skipped === 1 ? "action" : "actions"} skipped.` : "";
-  const note = thinking ? view.steps.some((s) => s.state === "running") ? "" : "Turning the dials\u2026" : [view.message, skipped].filter(Boolean).join(" ");
-  const done = view.phase === "done" && changed && !note;
+  const said = thinking ? view.message : [view.message, skipped].filter(Boolean).join(" ");
+  const done = view.phase === "done" && changed && !said;
   const steps = thinking ? view.steps : view.steps.filter((s) => s.state === "failed");
-  return /* @__PURE__ */ jsxs14(
-    "div",
+  const send = () => {
+    const text = draft.trim();
+    if (!text) return;
+    setDraft("");
+    void MoveAgentStore.ask(text);
+  };
+  const ease = still ? { duration: 0 } : { duration: 0.26, ease: AGENT_EASE };
+  return /* @__PURE__ */ jsx19(
+    motion2.div,
     {
       ref: float.ref,
       className: "tweakers-move-preset-save tweakers-move-agent",
       "data-phase": view.phase,
       "data-inside": float.inside || void 0,
       "data-dropping": dropping || void 0,
+      "aria-busy": thinking || void 0,
+      initial: still ? false : { opacity: 0, y: 8, scale: 0.98 },
+      animate: { opacity: 1, y: 0, scale: 1 },
+      exit: still ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.98 },
+      transition: still ? { duration: 0 } : { duration: 0.22, ease: AGENT_EASE },
       onDragOver: pictures ? (e) => {
         if (!hasImage(e.dataTransfer)) return;
         e.preventDefault();
@@ -18306,98 +18353,187 @@ function MoveAgentPrompt({ view }) {
         MoveAgentStore.attach(e.dataTransfer.files);
         inputRef.current?.focus();
       } : void 0,
-      children: [
-        view.attachments.length > 0 && /* @__PURE__ */ jsx19("ul", { className: "tweakers-move-agent-attachments", "aria-label": "Pictures in the prompt", children: view.attachments.map((a) => /* @__PURE__ */ jsxs14("li", { className: "tweakers-move-agent-attachment", title: a.name, children: [
-          /* @__PURE__ */ jsx19("img", { src: a.url, alt: a.name }),
-          /* @__PURE__ */ jsx19("button", { type: "button", "aria-label": `Remove ${a.name}`, onClick: () => {
-            MoveAgentStore.detach(a.id);
-            inputRef.current?.focus();
-          }, children: /* @__PURE__ */ jsx19("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ jsx19("path", { d: ICON_CLOSE, stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round" }) }) })
-        ] }, a.id)) }),
-        /* @__PURE__ */ jsxs14("div", { className: "tweakers-move-agent-field", children: [
-          pictures && /* @__PURE__ */ jsxs14(Fragment8, { children: [
-            /* @__PURE__ */ jsx19(
-              "button",
+      children: /* @__PURE__ */ jsx19(
+        motion2.div,
+        {
+          className: "tweakers-move-agent-frame",
+          initial: false,
+          animate: { height: body.height },
+          transition: still ? { duration: 0 } : { type: "spring", duration: 0.42, bounce: 0 },
+          children: /* @__PURE__ */ jsxs14("div", { ref: body.ref, className: "tweakers-move-agent-body", children: [
+            /* @__PURE__ */ jsx19(AnimatePresence2, { initial: false, mode: "popLayout", children: (said || done) && /* @__PURE__ */ jsxs14(
+              motion2.div,
               {
-                type: "button",
-                className: "tweakers-move-agent-attach",
-                "aria-label": "Add a picture",
-                title: "Add a picture \u2014 or drop or paste one",
-                disabled: thinking,
-                onClick: () => fileRef.current?.click(),
-                children: /* @__PURE__ */ jsx19(MoveSlotGlyph, { name: "image-plus", className: "tweakers-move-agent-attach-icon" })
-              }
-            ),
-            /* @__PURE__ */ jsx19(
-              "input",
+                className: "tweakers-move-agent-reply",
+                role: "status",
+                "data-done": done || void 0,
+                initial: still ? { opacity: 0 } : { opacity: 0, y: 6, filter: "blur(4px)" },
+                animate: { opacity: 1, y: 0, filter: "blur(0px)" },
+                exit: still ? { opacity: 0 } : { opacity: 0, y: -4, filter: "blur(2px)" },
+                transition: { ...ease, delay: still ? 0 : 0.06 },
+                children: [
+                  done ? /* @__PURE__ */ jsxs14("span", { className: "tweakers-move-agent-done", children: [
+                    /* @__PURE__ */ jsx19("svg", { className: "tweakers-move-agent-done-mark", viewBox: "0 0 16 16", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ jsx19("path", { d: "M3 8.5l3.2 3.2L13 5", stroke: "currentColor", strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round", pathLength: "1" }) }),
+                    "Done"
+                  ] }) : /* @__PURE__ */ jsx19("p", { className: "tweakers-move-agent-said", children: said }),
+                  changed && MoveAgentStore.canUndo() && /* @__PURE__ */ jsx19("button", { type: "button", className: "tweakers-move-agent-undo", onClick: () => void MoveAgentStore.undo(), children: "Undo" })
+                ]
+              },
+              "reply"
+            ) }),
+            steps.length > 0 && /* @__PURE__ */ jsx19("ul", { className: "tweakers-move-agent-steps", "aria-label": "What the agent is doing", children: steps.map((step, i) => /* @__PURE__ */ jsxs14("li", { className: "tweakers-move-agent-step", "data-state": step.state, children: [
+              step.label,
+              step.state === "failed" && " \u2014 failed"
+            ] }, i)) }),
+            view.attachments.length > 0 && /* @__PURE__ */ jsx19("ul", { className: "tweakers-move-agent-attachments", "aria-label": "Pictures in the prompt", children: view.attachments.map((a) => /* @__PURE__ */ jsxs14("li", { className: "tweakers-move-agent-attachment", title: a.name, children: [
+              /* @__PURE__ */ jsx19("img", { src: a.url, alt: a.name }),
+              /* @__PURE__ */ jsx19("button", { type: "button", "aria-label": `Remove ${a.name}`, disabled: thinking, onClick: () => {
+                MoveAgentStore.detach(a.id);
+                inputRef.current?.focus();
+              }, children: /* @__PURE__ */ jsx19("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ jsx19("path", { d: ICON_CLOSE, stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round" }) }) })
+            ] }, a.id)) }),
+            /* @__PURE__ */ jsx19(AnimatePresence2, { initial: false, mode: "popLayout", children: thinking ? /* @__PURE__ */ jsxs14(
+              motion2.div,
               {
-                ref: fileRef,
-                type: "file",
-                accept: "image/*",
-                multiple: true,
-                hidden: true,
-                onChange: (e) => {
-                  if (e.currentTarget.files) MoveAgentStore.attach(e.currentTarget.files);
-                  e.currentTarget.value = "";
-                  inputRef.current?.focus();
-                }
-              }
-            )
-          ] }),
-          /* @__PURE__ */ jsx19(
-            "input",
-            {
-              ref: inputRef,
-              className: "tweakers-move-preset-save-input tweakers-move-agent-input",
-              defaultValue: view.prompt,
-              placeholder: "Ask for a change",
-              "aria-label": "Ask the agent for a change",
-              autoFocus: true,
-              readOnly: thinking,
-              spellCheck: false,
-              autoComplete: "off",
-              onPaste: pictures ? (e) => {
-                const files = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
-                if (!files.length) return;
-                e.preventDefault();
-                MoveAgentStore.attach(files);
-              } : void 0,
-              onKeyDown: (e) => {
-                e.stopPropagation();
-                shiftAlone.current = e.key === "Shift" && !e.repeat ? true : e.key === "Shift" ? shiftAlone.current : false;
-                if (e.key === "Enter") void MoveAgentStore.ask(e.currentTarget.value);
-                else if (e.key === "Escape") MoveAgentStore.close();
-                else if (e.key === "z" && (e.metaKey || e.ctrlKey) && changed) {
-                  e.preventDefault();
-                  void MoveAgentStore.undo();
-                }
+                className: "tweakers-move-agent-wait",
+                "data-quiet": view.message ? true : void 0,
+                role: "status",
+                "aria-label": "The agent is working",
+                initial: { opacity: 0 },
+                animate: { opacity: 1 },
+                exit: { opacity: 0 },
+                transition: ease,
+                children: [
+                  /* @__PURE__ */ jsx19(MoveAgentLoader, {}),
+                  /* @__PURE__ */ jsx19(AnimatePresence2, { initial: false, children: !view.message && /* @__PURE__ */ jsx19(
+                    motion2.p,
+                    {
+                      className: "tweakers-move-agent-sent",
+                      exit: still ? { opacity: 0 } : { opacity: 0, filter: "blur(2px)" },
+                      transition: { duration: still ? 0 : 0.16 },
+                      children: view.prompt
+                    },
+                    "sent"
+                  ) })
+                ]
               },
-              onKeyUp: (e) => {
-                if (e.key !== "Shift") return;
-                const tap = shiftAlone.current;
-                shiftAlone.current = false;
-                if (tap) MoveAgentStore.shiftTap();
+              "wait"
+            ) : /* @__PURE__ */ jsxs14(
+              motion2.div,
+              {
+                className: "tweakers-move-agent-field",
+                initial: still ? { opacity: 0 } : { opacity: 0, y: 6 },
+                animate: { opacity: 1, y: 0 },
+                exit: { opacity: 0 },
+                transition: { ...ease, delay: still || !said ? 0 : 0.18 },
+                children: [
+                  pictures && /* @__PURE__ */ jsxs14(Fragment8, { children: [
+                    /* @__PURE__ */ jsx19(
+                      "button",
+                      {
+                        type: "button",
+                        className: "tweakers-move-agent-attach",
+                        "aria-label": "Add a picture",
+                        title: "Add a picture \u2014 or drop or paste one",
+                        onClick: () => fileRef.current?.click(),
+                        children: /* @__PURE__ */ jsx19(MoveSlotGlyph, { name: "image-plus", className: "tweakers-move-agent-attach-icon" })
+                      }
+                    ),
+                    /* @__PURE__ */ jsx19(
+                      "input",
+                      {
+                        ref: fileRef,
+                        type: "file",
+                        accept: "image/*",
+                        multiple: true,
+                        hidden: true,
+                        onChange: (e) => {
+                          if (e.currentTarget.files) MoveAgentStore.attach(e.currentTarget.files);
+                          e.currentTarget.value = "";
+                          inputRef.current?.focus();
+                        }
+                      }
+                    )
+                  ] }),
+                  /* @__PURE__ */ jsx19(
+                    "textarea",
+                    {
+                      ref: inputRef,
+                      className: "tweakers-move-preset-save-input tweakers-move-agent-input",
+                      value: draft,
+                      rows: 1,
+                      placeholder: said ? "Reply" : "Ask for a change",
+                      "aria-label": said ? "Reply to the agent" : "Ask the agent for a change",
+                      autoFocus: true,
+                      spellCheck: false,
+                      autoComplete: "off",
+                      onChange: (e) => setDraft(e.currentTarget.value),
+                      onPaste: pictures ? (e) => {
+                        const files = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
+                        if (!files.length) return;
+                        e.preventDefault();
+                        MoveAgentStore.attach(files);
+                      } : void 0,
+                      onKeyDown: (e) => {
+                        e.stopPropagation();
+                        shiftAlone.current = e.key === "Shift" && !e.repeat ? true : e.key === "Shift" ? shiftAlone.current : false;
+                        if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                          e.preventDefault();
+                          send();
+                        } else if (e.key === "Escape") MoveAgentStore.close();
+                        else if (e.key === "z" && (e.metaKey || e.ctrlKey) && changed && !draft) {
+                          e.preventDefault();
+                          void MoveAgentStore.undo();
+                        }
+                      },
+                      onKeyUp: (e) => {
+                        if (e.key !== "Shift") return;
+                        const tap = shiftAlone.current;
+                        shiftAlone.current = false;
+                        if (tap) MoveAgentStore.shiftTap();
+                      },
+                      onBlur: () => {
+                        shiftAlone.current = false;
+                      }
+                    }
+                  )
+                ]
               },
-              onBlur: () => {
-                shiftAlone.current = false;
-              }
-            }
-          )
-        ] }),
-        steps.length > 0 && /* @__PURE__ */ jsx19("ul", { className: "tweakers-move-agent-steps", "aria-label": "What the agent is doing", children: steps.map((step, i) => /* @__PURE__ */ jsxs14("li", { className: "tweakers-move-agent-step", "data-state": step.state, children: [
-          step.label,
-          step.state === "failed" && " \u2014 failed"
-        ] }, i)) }),
-        (note || done) && /* @__PURE__ */ jsxs14("p", { className: "tweakers-move-agent-note", role: "status", "data-done": done || void 0, children: [
-          done ? /* @__PURE__ */ jsxs14("span", { className: "tweakers-move-agent-done", children: [
-            /* @__PURE__ */ jsx19("svg", { className: "tweakers-move-agent-done-mark", viewBox: "0 0 16 16", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ jsx19("path", { d: "M3 8.5l3.2 3.2L13 5", stroke: "currentColor", strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round", pathLength: "1" }) }),
-            "Done"
-          ] }, view.prompt) : note,
-          changed && MoveAgentStore.canUndo() && /* @__PURE__ */ jsx19("button", { type: "button", className: "tweakers-move-agent-undo", onClick: () => void MoveAgentStore.undo(), children: "Undo" })
-        ] })
-      ]
+              "field"
+            ) })
+          ] })
+        }
+      )
     }
   );
+}
+var AGENT_EASE = [0.2, 0, 0, 1];
+function useMeasuredHeight() {
+  const ref = useRef16(null);
+  const [height, setHeight] = useState10("auto");
+  useLayoutEffect5(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => setHeight(el.offsetHeight));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return { ref, height };
+}
+function useMoveFieldHeight(ref, value) {
+  useLayoutEffect5(() => {
+    const field = ref.current;
+    if (!field || typeof CSS === "undefined" || CSS.supports("field-sizing", "content")) return;
+    field.style.height = "auto";
+    field.style.height = `${field.scrollHeight}px`;
+  }, [ref, value]);
+}
+var AGENT_LOADER_DOTS = Array.from({ length: 25 }, (_, i) => {
+  const along = Math.floor(i / 5) + (4 - i % 5);
+  return { path: along / 8, parity: along % 2 };
+});
+function MoveAgentLoader() {
+  return /* @__PURE__ */ jsx19("span", { className: "tweakers-move-agent-loader", "aria-hidden": "true", children: AGENT_LOADER_DOTS.map((dot, i) => /* @__PURE__ */ jsx19("span", { style: { "--dot-path": dot.path, "--dot-parity": dot.parity } }, i)) });
 }
 var SCOPE_SAMPLES = 120;
 function MoveScope({ index }) {
@@ -19576,9 +19712,9 @@ var MoveViews = {
    * setState, a dispatch — and runs inside the transition; `motion` says
    * which way it goes. A wait still running is let go first.
    */
-  go(update, motion2 = "swap") {
+  go(update, motion3 = "swap") {
     const was = letGo();
-    return runner(motion2, () => settle2(was, update));
+    return runner(motion3, () => settle2(was, update));
   },
   /**
    * Change the view once work lands. The view goes inert and its keys dark
