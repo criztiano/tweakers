@@ -131,7 +131,18 @@ export interface MoveAgentRequest {
  * `calls` is not the answer yet: it asks to perceive, and carries no edits.
  */
 export interface MoveAgentReply { writes: MoveAgentWrite[]; actions?: MoveAgentCall[]; message?: string; calls?: MoveAgentToolCall[] }
-export type MoveAgentAsk = (request: MoveAgentRequest, signal: AbortSignal) => Promise<MoveAgentReply>;
+/**
+ * The answer while it is still being written, for a transport that streams.
+ * `say` puts the words so far in the prompt, so the reply reads as it comes;
+ * `act` runs one action now, ahead of the answer — an option lands the moment
+ * it is written rather than with the rest. What `act` ran stays, whatever
+ * happens to the ask after it, and its undo joins the ask's one undo.
+ */
+export interface MoveAgentStream {
+  say(text: string): void;
+  act(call: MoveAgentCall): Promise<void>;
+}
+export type MoveAgentAsk = (request: MoveAgentRequest, signal: AbortSignal, stream: MoveAgentStream) => Promise<MoveAgentReply>;
 
 export interface MoveAgentOptions {
   /** The bridge's agent endpoint. */
@@ -178,6 +189,7 @@ export interface MoveAgentStep { label: string; state: 'running' | 'done' | 'fai
 export interface MoveAgentView {
   phase: MoveAgentPhase;
   prompt: string;
+  /** The reply. While thinking, the words a streaming transport has said so far. */
   message: string;
   /** How many values the last ask moved. */
   changed: number;
@@ -575,6 +587,10 @@ class MoveAgentStoreClass {
     const budget = setTimeout(() => { late = true; flight.abort(); }, BUDGET_MS);
     const { onRequest } = this.options;
     const outcome: MoveAgentOutcome = { changed: 0, acted: 0, skipped: 0, cancelled: false };
+    // What a streaming transport runs ahead of the answer (`MoveAgentStream.act`).
+    let early: Promise<void> = Promise.resolve();
+    let earlyRan = 0, earlySkipped = 0, earlyUndos: (() => void | Promise<void>)[] = [];
+    let earlyError: string | undefined;
     try {
       await abortable(onRequest?.begin?.(text), flight.signal);
       // What depends on the open file is read now, once, for the whole ask.
@@ -598,6 +614,30 @@ class MoveAgentStoreClass {
         }
       };
       const resolve = (ref: MoveAgentBoundaryRef) => resolveBoundary(ref, known, editMap?.());
+      const context = { attachments: attachments.map((a) => a.file) };
+      // What a streaming transport runs ahead of the answer: one at a time,
+      // in the order it was written, and kept — with its undo — come what may.
+      const stream: MoveAgentStream = {
+        say: (said) => {
+          if (this.flight !== flight || flight.signal.aborted || !this.view) return;
+          this.set({ ...this.view, message: said });
+        },
+        act: (call) => (early = early.then(async () => {
+          if (this.flight !== flight || flight.signal.aborted || earlyError) return;
+          if (!earlyRan && this.options.checkpoint) await this.options.checkpoint();
+          const ran = await runAgentActions([call], actions, resolve, context);
+          earlyRan += ran.ran;
+          earlySkipped += ran.skipped;
+          earlyError = ran.error;
+          if (ran.ran) {
+            // The new ask's undo takes over from the last one at its first landing.
+            if (earlyRan === ran.ran) { this.before = null; this.undos = []; }
+            earlyUndos = [...earlyUndos, ...ran.undos];
+            this.undos = earlyUndos;
+            if (this.view) this.set({ ...this.view, acted: earlyRan });
+          }
+        })),
+      };
       const history: MoveAgentPass[] = [];
       let reply: MoveAgentReply;
       for (let pass = 1; ; pass++) {
@@ -614,30 +654,35 @@ class MoveAgentStoreClass {
             history: history.length ? history : undefined,
             passesLeft,
           } : {}),
-        }, flight.signal), flight.signal);
+        }, flight.signal, stream), flight.signal);
         if (!tools.length || !reply.calls?.length || passesLeft <= 0) break;
         history.push(await this.perceive(reply.calls, tools, signals, resolve, learn, caps?.images !== false, flight.signal));
       }
+      // What ran ahead of the answer finishes before the answer lands.
+      await abortable(early, flight.signal);
       // The answer. From here it lands whole: the budget and a cancel are behind it.
-      const calls = reply.actions ?? [];
-      if (calls.length && this.options.checkpoint) await abortable(this.options.checkpoint(), flight.signal);
+      const calls = earlyError ? [] : reply.actions ?? [];
+      if (calls.length && !earlyRan && this.options.checkpoint) await abortable(this.options.checkpoint(), flight.signal);
       clearTimeout(budget);
       if (flight.signal.aborted) { outcome.cancelled = true; return; }
       // Actions first: a verb may reshape what the values then land on.
-      const acted = await runAgentActions(calls, actions, resolve, { attachments: attachments.map((a) => a.file) });
+      const ran = await runAgentActions(calls, actions, resolve, context);
+      const acted = { ran: earlyRan + ran.ran, skipped: earlySkipped + ran.skipped, error: earlyError ?? ran.error };
       const { before, changed } = applyAgentWrites(reply.writes ?? [], this.options.panels);
-      if (changed || acted.ran) { this.before = changed ? before : null; this.undos = acted.undos; }
+      if (changed || acted.ran) { this.before = changed ? before : null; this.undos = [...earlyUndos, ...ran.undos]; }
       Object.assign(outcome, { changed, acted: acted.ran, skipped: acted.skipped }, acted.error ? { error: acted.error } : {});
       const moved = changed > 0 || acted.ran > 0;
       const unanswered = !moved && !!reply.calls?.length && tools.length > 0;
       if (this.view) this.set({
         phase: acted.error ? 'error' : 'done', prompt: text, changed, acted: acted.ran, skipped: acted.skipped, steps: this.view.steps, attachments: this.view.attachments,
-        message: acted.error ?? (reply.message || (unanswered ? 'It kept looking and ran out of passes. Nothing changed.' : moved ? '' : 'Nothing changed.')),
+        message: acted.error ?? (reply.message || this.view.message || (unanswered ? 'It kept looking and ran out of passes. Nothing changed.' : moved ? '' : 'Nothing changed.')),
       });
     } catch (error) {
+      // What ran early has landed, however the ask ends.
+      Object.assign(outcome, { acted: earlyRan, skipped: earlySkipped });
       if (flight.signal.aborted && !late) { outcome.cancelled = true; return; }
       outcome.error = late ? 'That took too long, so it was stopped. Nothing changed.' : error instanceof Error ? error.message : 'The agent did not answer.';
-      if (this.view) this.set({ ...idle, steps: this.view.steps, attachments: this.view.attachments, phase: 'error', message: outcome.error });
+      if (this.view) this.set({ ...idle, acted: earlyRan, steps: this.view.steps, attachments: this.view.attachments, phase: 'error', message: outcome.error });
     } finally {
       clearTimeout(budget);
       if (this.flight === flight) this.flight = null;
