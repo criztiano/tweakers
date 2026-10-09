@@ -190,7 +190,7 @@ MoveVolumeDisplay.set({
 const muteEvent = (pressed: boolean, shift: boolean) =>
   !window.dispatchEvent(new CustomEvent('move-tweakers:mute', { detail: { pressed, shift }, cancelable: true }));
 window.addEventListener('keydown', (e) => {
-  if (e.repeat || e.target instanceof HTMLInputElement) return;
+  if (e.repeat || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
   if (e.key.toLowerCase() === 'm') MoveFunctions.run('menu', { shift: e.shiftKey, hold: e.shiftKey });
   else if (e.key.toLowerCase() === 'c') muteEvent(true, e.shiftKey);
   else if (e.key === ' ') { e.preventDefault(); MoveFunctions.run('play', {}); }
@@ -203,7 +203,7 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === 'ArrowUp') MovePresetStore.scroll(-1);
 });
 window.addEventListener('keyup', (e) => {
-  if (e.target instanceof HTMLInputElement) return;
+  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
   if (e.key.toLowerCase() === 'c') muteEvent(false, e.shiftKey);
 });
 

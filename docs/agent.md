@@ -1,13 +1,13 @@
 # The agent (generative presetting)
 
-Hold the Move's wheel down. A prompt opens above the panel. Say what you want
+Hold the Move's wheel down. A prompt opens above the panel, at its right edge. Say what you want
 — "warmer and wider", "a harsher look", "reset the delay to something subtle"
 — and an agent turns the dials.
 
 | Gesture | Result |
 | --- | --- |
 | Hold the wheel | Opens the prompt. A second hold closes it. |
-| Enter | Sends the words. The field stays open, so the next ask refines the last. |
+| Enter | Sends the words. They wait in the box under the working dots; the reply takes their place and an empty box opens under it, so the next ask refines the last. Shift+Enter starts a new line; the field grows with what is typed. |
 | Click the wheel on a reply, `Cmd+Z`, or **Undo** | Puts back every value the last ask moved. |
 | Esc | Closes. What landed stays. |
 
@@ -46,6 +46,18 @@ named after what is on it changes under the bind.
 the actions, below, are what make the agent good at *this* app. A host with
 its own model or server passes `agent: { ask }`, a function from
 `MoveAgentRequest` to `MoveAgentReply`.
+
+### A reply that streams
+
+`ask` gets a third argument, a `MoveAgentStream`, for a transport whose model
+writes as it goes. `stream.say(text)` puts the words so far in the prompt, so
+the reply reads as it comes. `stream.act(call)` runs one action now, before
+the answer is whole — the option the model has just finished writing lands
+while it writes the next. Calls run one at a time, in order; the first one
+runs `checkpoint`. What `act` ran stays even if the ask is then let go or
+fails, and its undo joins the ask's one undo. When the answer comes, its own
+`actions` run after them, and its `message` (if any) replaces what was said.
+A transport that does not stream ignores the argument and nothing changes.
 
 ## The brief: good here, not just correct
 
@@ -247,6 +259,10 @@ are exported for a host that wants the same maths on its own side.
   word with a mark that draws itself, and the undo. A sentence appears only
   when there is something to know — it could not, it did less or other, it
   had to choose. An error is the sentence in red.
+- **It reads as a conversation.** The sent words wait under a five-by-five
+  dot wave while it works; when the reply comes they leave, the reply eases
+  in above, and a fresh box opens under it a beat later. The box eases to
+  every new height. A failed ask hands its words back to the box.
 - **Steps show only while it works** ("Reading the words…", "Looking at the
   frames…"); they leave with the reply. A failed step stays, marked.
 
@@ -258,7 +274,7 @@ Three repos share the agent. For a session picking this up cold:
 |---|---|
 | The store side: describe controls, fit and land writes (glide), actions and their undo, the multi-pass loop, the capability handshake, `read_signal` | tweakers `src/move-agent.ts` |
 | Source-time entries, the edit map, projection, boundary resolution, the line format | tweakers `src/move-agent-perception.ts` |
-| The prompt UI (field, steps, Done, undo) and the held-wheel / wheel-click wiring | tweakers `src/components/MovePanel.tsx` (`MoveAgentPrompt`), styles `.tweakers-move-agent*` in `src/styles/theme.css` |
+| The prompt UI (reply, field, dot loader, steps, Done, undo) and the held-wheel / wheel-click wiring | tweakers `src/components/MovePanel.tsx` (`MoveAgentPrompt`), styles `.tweakers-move-agent*` in `src/styles/theme.css`; every state one click away in `demo/agent-lab.html` |
 | The bind: `moveKitOptions({ agent })` → `MoveAgentStore.configure` | tweakers `src/move-kit.ts` |
 | Tests | tweakers `test/move-agent*.test.ts` (unit, fake transport — no model calls) |
 | The demo's pretend media host | tweakers `demo/main.tsx` (Shift+Enter stands in for the held wheel) |

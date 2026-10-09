@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>tweakers — agent prompt lab</title>
+    <style>
+      body { margin: 0; min-height: 100vh; background: #302e2e; color: #dee3c9; font-family: system-ui, sans-serif; }
+      .lab { position: fixed; top: 0; left: 0; bottom: 0; width: 260px; padding: 64px 16px 20px; box-sizing: border-box; overflow-y: auto; border-right: 1px solid #3c3a3a; }
+      .lab h1 { font-size: 14px; margin: 0 0 16px; }
+      .lab h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.5; margin: 18px 0 6px; font-weight: 600; }
+      .lab button { display: block; width: 100%; margin: 0 0 4px; padding: 7px 10px; border: 0; border-radius: 6px; background: #3a3838; color: inherit; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+      .lab button:hover { background: #474444; }
+      .lab ol { margin: 6px 0 0; padding-left: 20px; font-size: 12px; line-height: 1.6; opacity: 0.75; }
+      .stage { margin-left: 260px; min-height: 100vh; display: flex; flex-direction: column; justify-content: flex-end; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./agent-lab.tsx"></script>
+  </body>
+</html>
