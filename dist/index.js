@@ -5350,7 +5350,7 @@ function XYSurface({ label, x, y, disabled, onChange }) {
 
 // src/components/MovePanel.tsx
 import { useEffect as useEffect16, useLayoutEffect as useLayoutEffect5, useId as useId2, useRef as useRef16, useState as useState10, useSyncExternalStore as useSyncExternalStore6, useCallback as useCallback4 } from "react";
-import { AnimatePresence as AnimatePresence2, motion as motion2, useReducedMotion as useReducedMotion2 } from "motion/react";
+import { AnimatePresence as AnimatePresence2, animate as animate2, motion as motion2, useReducedMotion as useReducedMotion2 } from "motion/react";
 import { createPortal as createPortal6 } from "react-dom";
 
 // src/move-float.ts
@@ -18304,13 +18304,13 @@ function MoveAgentPrompt({ view }) {
   const [dropping, setDropping] = useState10(false);
   const [draft, setDraft] = useState10("");
   const float = useMoveFloat();
-  const body = useMeasuredHeight();
-  const still = useReducedMotion2();
+  const still = !!useReducedMotion2();
   const pictures = MoveAgentStore.acceptsAttachments();
   const hasImage = (data) => !!data && [...data.items].some((item) => item.kind === "file" && item.type.startsWith("image/"));
   const thinking = view.phase === "thinking";
   useEffect16(() => {
     if (view.phase === "error") setDraft((now) => now || view.prompt);
+    else if (view.phase === "thinking") setDraft("");
   }, [view.phase, view.prompt]);
   useMoveFieldHeight(inputRef, draft);
   const changed = view.phase !== "thinking" && (view.changed > 0 || view.acted > 0);
@@ -18318,13 +18318,25 @@ function MoveAgentPrompt({ view }) {
   const said = thinking ? view.message : [view.message, skipped].filter(Boolean).join(" ");
   const done = view.phase === "done" && changed && !said;
   const steps = thinking ? view.steps : view.steps.filter((s) => s.state === "failed");
+  const echoing = thinking && !view.message;
+  const [echoShown, setEchoShown] = useState10(echoing);
+  const echoingNow = useRef16(echoing);
+  echoingNow.current = echoing;
+  useLayoutEffect5(() => {
+    if (echoing) setEchoShown(true);
+  }, [echoing]);
+  const echoGone = () => {
+    if (!echoingNow.current) setEchoShown(false);
+  };
+  const replying = (!!said || done) && !echoShown;
+  const shape = `${view.phase}|${replying}|${echoShown}|${done}|${steps.length}|${view.attachments.length}`;
+  const frame = useAgentFrame(shape, thinking, thinking && replying, thinking && !replying, still);
   const send = () => {
     const text = draft.trim();
     if (!text) return;
     setDraft("");
     void MoveAgentStore.ask(text);
   };
-  const ease = still ? { duration: 0 } : { duration: 0.26, ease: AGENT_EASE };
   return /* @__PURE__ */ jsx19(
     motion2.div,
     {
@@ -18334,10 +18346,10 @@ function MoveAgentPrompt({ view }) {
       "data-inside": float.inside || void 0,
       "data-dropping": dropping || void 0,
       "aria-busy": thinking || void 0,
-      initial: still ? false : { opacity: 0, y: 8, scale: 0.98 },
+      initial: still ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.97 },
       animate: { opacity: 1, y: 0, scale: 1 },
-      exit: still ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.98 },
-      transition: still ? { duration: 0 } : { duration: 0.22, ease: AGENT_EASE },
+      exit: still ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.98, transition: { duration: 0.16, ease: AGENT_EASE_IN } },
+      transition: { duration: still ? 0.12 : 0.32, ease: AGENT_EASE_SMOOTH },
       onDragOver: pictures ? (e) => {
         if (!hasImage(e.dataTransfer)) return;
         e.preventDefault();
@@ -18353,172 +18365,231 @@ function MoveAgentPrompt({ view }) {
         MoveAgentStore.attach(e.dataTransfer.files);
         inputRef.current?.focus();
       } : void 0,
-      children: /* @__PURE__ */ jsx19(
-        motion2.div,
-        {
-          className: "tweakers-move-agent-frame",
-          initial: false,
-          animate: { height: body.height },
-          transition: still ? { duration: 0 } : { type: "spring", duration: 0.42, bounce: 0 },
-          children: /* @__PURE__ */ jsxs14("div", { ref: body.ref, className: "tweakers-move-agent-body", children: [
-            /* @__PURE__ */ jsx19(AnimatePresence2, { initial: false, mode: "popLayout", children: (said || done) && /* @__PURE__ */ jsxs14(
-              motion2.div,
-              {
-                className: "tweakers-move-agent-reply",
-                role: "status",
-                "data-done": done || void 0,
-                initial: still ? { opacity: 0 } : { opacity: 0, y: 6, filter: "blur(4px)" },
-                animate: { opacity: 1, y: 0, filter: "blur(0px)" },
-                exit: still ? { opacity: 0 } : { opacity: 0, y: -4, filter: "blur(2px)" },
-                transition: { ...ease, delay: still ? 0 : 0.06 },
-                children: [
-                  done ? /* @__PURE__ */ jsxs14("span", { className: "tweakers-move-agent-done", children: [
-                    /* @__PURE__ */ jsx19("svg", { className: "tweakers-move-agent-done-mark", viewBox: "0 0 16 16", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ jsx19("path", { d: "M3 8.5l3.2 3.2L13 5", stroke: "currentColor", strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round", pathLength: "1" }) }),
-                    "Done"
-                  ] }) : /* @__PURE__ */ jsx19("p", { className: "tweakers-move-agent-said", children: said }),
-                  changed && MoveAgentStore.canUndo() && /* @__PURE__ */ jsx19("button", { type: "button", className: "tweakers-move-agent-undo", onClick: () => void MoveAgentStore.undo(), children: "Undo" })
-                ]
-              },
-              "reply"
-            ) }),
-            steps.length > 0 && /* @__PURE__ */ jsx19("ul", { className: "tweakers-move-agent-steps", "aria-label": "What the agent is doing", children: steps.map((step, i) => /* @__PURE__ */ jsxs14("li", { className: "tweakers-move-agent-step", "data-state": step.state, children: [
-              step.label,
-              step.state === "failed" && " \u2014 failed"
-            ] }, i)) }),
-            view.attachments.length > 0 && /* @__PURE__ */ jsx19("ul", { className: "tweakers-move-agent-attachments", "aria-label": "Pictures in the prompt", children: view.attachments.map((a) => /* @__PURE__ */ jsxs14("li", { className: "tweakers-move-agent-attachment", title: a.name, children: [
-              /* @__PURE__ */ jsx19("img", { src: a.url, alt: a.name }),
-              /* @__PURE__ */ jsx19("button", { type: "button", "aria-label": `Remove ${a.name}`, disabled: thinking, onClick: () => {
-                MoveAgentStore.detach(a.id);
-                inputRef.current?.focus();
-              }, children: /* @__PURE__ */ jsx19("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ jsx19("path", { d: ICON_CLOSE, stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round" }) }) })
-            ] }, a.id)) }),
-            /* @__PURE__ */ jsx19(AnimatePresence2, { initial: false, mode: "popLayout", children: thinking ? /* @__PURE__ */ jsxs14(
-              motion2.div,
-              {
-                className: "tweakers-move-agent-wait",
-                "data-quiet": view.message ? true : void 0,
-                role: "status",
-                "aria-label": "The agent is working",
-                initial: { opacity: 0 },
-                animate: { opacity: 1 },
-                exit: { opacity: 0 },
-                transition: ease,
-                children: [
-                  /* @__PURE__ */ jsx19(MoveAgentLoader, {}),
-                  /* @__PURE__ */ jsx19(AnimatePresence2, { initial: false, children: !view.message && /* @__PURE__ */ jsx19(
-                    motion2.p,
-                    {
-                      className: "tweakers-move-agent-sent",
-                      exit: still ? { opacity: 0 } : { opacity: 0, filter: "blur(2px)" },
-                      transition: { duration: still ? 0 : 0.16 },
-                      children: view.prompt
-                    },
-                    "sent"
-                  ) })
-                ]
-              },
-              "wait"
-            ) : /* @__PURE__ */ jsxs14(
-              motion2.div,
-              {
-                className: "tweakers-move-agent-field",
-                initial: still ? { opacity: 0 } : { opacity: 0, y: 6 },
-                animate: { opacity: 1, y: 0 },
-                exit: { opacity: 0 },
-                transition: { ...ease, delay: still || !said ? 0 : 0.18 },
-                children: [
-                  pictures && /* @__PURE__ */ jsxs14(Fragment8, { children: [
-                    /* @__PURE__ */ jsx19(
-                      "button",
-                      {
-                        type: "button",
-                        className: "tweakers-move-agent-attach",
-                        "aria-label": "Add a picture",
-                        title: "Add a picture \u2014 or drop or paste one",
-                        onClick: () => fileRef.current?.click(),
-                        children: /* @__PURE__ */ jsx19(MoveSlotGlyph, { name: "image-plus", className: "tweakers-move-agent-attach-icon" })
-                      }
-                    ),
-                    /* @__PURE__ */ jsx19(
-                      "input",
-                      {
-                        ref: fileRef,
-                        type: "file",
-                        accept: "image/*",
-                        multiple: true,
-                        hidden: true,
-                        onChange: (e) => {
-                          if (e.currentTarget.files) MoveAgentStore.attach(e.currentTarget.files);
-                          e.currentTarget.value = "";
-                          inputRef.current?.focus();
-                        }
-                      }
-                    )
-                  ] }),
-                  /* @__PURE__ */ jsx19(
-                    "textarea",
-                    {
-                      ref: inputRef,
-                      className: "tweakers-move-preset-save-input tweakers-move-agent-input",
-                      value: draft,
-                      rows: 1,
-                      placeholder: said ? "Reply" : "Ask for a change",
-                      "aria-label": said ? "Reply to the agent" : "Ask the agent for a change",
-                      autoFocus: true,
-                      spellCheck: false,
-                      autoComplete: "off",
-                      onChange: (e) => setDraft(e.currentTarget.value),
-                      onPaste: pictures ? (e) => {
-                        const files = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
-                        if (!files.length) return;
-                        e.preventDefault();
-                        MoveAgentStore.attach(files);
-                      } : void 0,
-                      onKeyDown: (e) => {
-                        e.stopPropagation();
-                        shiftAlone.current = e.key === "Shift" && !e.repeat ? true : e.key === "Shift" ? shiftAlone.current : false;
-                        if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                          e.preventDefault();
-                          send();
-                        } else if (e.key === "Escape") MoveAgentStore.close();
-                        else if (e.key === "z" && (e.metaKey || e.ctrlKey) && changed && !draft) {
-                          e.preventDefault();
-                          void MoveAgentStore.undo();
-                        }
-                      },
-                      onKeyUp: (e) => {
-                        if (e.key !== "Shift") return;
-                        const tap = shiftAlone.current;
-                        shiftAlone.current = false;
-                        if (tap) MoveAgentStore.shiftTap();
-                      },
-                      onBlur: () => {
-                        shiftAlone.current = false;
-                      }
+      children: /* @__PURE__ */ jsx19("div", { ref: frame.outer, className: "tweakers-move-agent-frame", children: /* @__PURE__ */ jsxs14("div", { ref: frame.inner, className: "tweakers-move-agent-body", children: [
+        /* @__PURE__ */ jsx19(AnimatePresence2, { initial: false, children: replying && /* @__PURE__ */ jsxs14(
+          motion2.div,
+          {
+            className: "tweakers-move-agent-reply",
+            role: "status",
+            "data-done": done || void 0,
+            initial: { opacity: 0 },
+            animate: { opacity: 1, y: 0 },
+            exit: { opacity: 0, y: still ? 0 : -6, transition: { duration: 0.18, ease: AGENT_EASE_IN } },
+            transition: { duration: 0.2, ease: AGENT_EASE_OUT },
+            children: [
+              done ? /* @__PURE__ */ jsxs14("span", { className: "tweakers-move-agent-done", children: [
+                /* @__PURE__ */ jsx19("svg", { className: "tweakers-move-agent-done-mark", viewBox: "0 0 16 16", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ jsx19("path", { d: "M3 8.5l3.2 3.2L13 5", stroke: "currentColor", strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round", pathLength: "1" }) }),
+                "Done"
+              ] }) : /* @__PURE__ */ jsx19(MoveAgentWords, { text: said }),
+              changed && MoveAgentStore.canUndo() && /* @__PURE__ */ jsx19(
+                motion2.button,
+                {
+                  type: "button",
+                  className: "tweakers-move-agent-undo",
+                  initial: { opacity: 0 },
+                  animate: { opacity: 1 },
+                  transition: { duration: 0.24, ease: AGENT_EASE_OUT, delay: still ? 0 : 0.2 },
+                  onClick: () => void MoveAgentStore.undo(),
+                  children: "Undo"
+                }
+              )
+            ]
+          },
+          "reply"
+        ) }),
+        steps.length > 0 && /* @__PURE__ */ jsx19("ul", { className: "tweakers-move-agent-steps", "aria-label": "What the agent is doing", children: steps.map((step, i) => /* @__PURE__ */ jsxs14("li", { className: "tweakers-move-agent-step", "data-state": step.state, children: [
+          step.label,
+          step.state === "failed" && " \u2014 failed"
+        ] }, i)) }),
+        view.attachments.length > 0 && /* @__PURE__ */ jsx19("ul", { className: "tweakers-move-agent-attachments", "aria-label": "Pictures in the prompt", children: view.attachments.map((a) => /* @__PURE__ */ jsxs14("li", { className: "tweakers-move-agent-attachment", title: a.name, children: [
+          /* @__PURE__ */ jsx19("img", { src: a.url, alt: a.name }),
+          /* @__PURE__ */ jsx19("button", { type: "button", "aria-label": `Remove ${a.name}`, disabled: thinking, onClick: () => {
+            MoveAgentStore.detach(a.id);
+            inputRef.current?.focus();
+          }, children: /* @__PURE__ */ jsx19("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ jsx19("path", { d: ICON_CLOSE, stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round" }) }) })
+        ] }, a.id)) }),
+        /* @__PURE__ */ jsx19("div", { className: "tweakers-move-agent-slot", children: /* @__PURE__ */ jsx19(AnimatePresence2, { initial: false, onExitComplete: echoGone, children: thinking ? /* @__PURE__ */ jsxs14(
+          motion2.div,
+          {
+            className: "tweakers-move-agent-wait",
+            "data-quiet": view.message ? true : void 0,
+            role: "status",
+            "aria-label": "The agent is working",
+            initial: { opacity: 0 },
+            animate: { opacity: 1 },
+            exit: { opacity: 0, transition: { duration: 0.14, ease: AGENT_EASE_IN } },
+            transition: { duration: 0.18, ease: AGENT_EASE_OUT },
+            children: [
+              /* @__PURE__ */ jsx19(MoveAgentLoader, {}),
+              /* @__PURE__ */ jsx19(AnimatePresence2, { initial: false, onExitComplete: echoGone, children: !view.message && /* @__PURE__ */ jsx19(
+                motion2.p,
+                {
+                  className: "tweakers-move-agent-sent",
+                  exit: { opacity: 0, transition: { duration: 0.14, ease: AGENT_EASE_IN } },
+                  children: view.prompt
+                },
+                "sent"
+              ) })
+            ]
+          },
+          "wait"
+        ) : !echoShown && /* @__PURE__ */ jsxs14(
+          motion2.div,
+          {
+            className: "tweakers-move-agent-field",
+            initial: { opacity: 0, y: still ? 0 : 4 },
+            animate: { opacity: 1, y: 0 },
+            exit: { opacity: 0, transition: { duration: 0.12, ease: AGENT_EASE_IN } },
+            transition: { duration: 0.26, ease: AGENT_EASE_OUT, delay: still ? 0 : 0.08 },
+            children: [
+              pictures && /* @__PURE__ */ jsxs14(Fragment8, { children: [
+                /* @__PURE__ */ jsx19(
+                  "button",
+                  {
+                    type: "button",
+                    className: "tweakers-move-agent-attach",
+                    "aria-label": "Add a picture",
+                    title: "Add a picture \u2014 or drop or paste one",
+                    onClick: () => fileRef.current?.click(),
+                    children: /* @__PURE__ */ jsx19(MoveSlotGlyph, { name: "image-plus", className: "tweakers-move-agent-attach-icon" })
+                  }
+                ),
+                /* @__PURE__ */ jsx19(
+                  "input",
+                  {
+                    ref: fileRef,
+                    type: "file",
+                    accept: "image/*",
+                    multiple: true,
+                    hidden: true,
+                    onChange: (e) => {
+                      if (e.currentTarget.files) MoveAgentStore.attach(e.currentTarget.files);
+                      e.currentTarget.value = "";
+                      inputRef.current?.focus();
                     }
-                  )
-                ]
-              },
-              "field"
-            ) })
-          ] })
-        }
-      )
+                  }
+                )
+              ] }),
+              /* @__PURE__ */ jsx19(
+                "textarea",
+                {
+                  ref: inputRef,
+                  className: "tweakers-move-preset-save-input tweakers-move-agent-input",
+                  value: draft,
+                  rows: 1,
+                  placeholder: said ? "Reply" : "Ask for a change",
+                  "aria-label": said ? "Reply to the agent" : "Ask the agent for a change",
+                  autoFocus: true,
+                  spellCheck: false,
+                  autoComplete: "off",
+                  onChange: (e) => {
+                    frame.typed();
+                    setDraft(e.currentTarget.value);
+                  },
+                  onPaste: pictures ? (e) => {
+                    const files = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
+                    if (!files.length) return;
+                    e.preventDefault();
+                    MoveAgentStore.attach(files);
+                  } : void 0,
+                  onKeyDown: (e) => {
+                    e.stopPropagation();
+                    shiftAlone.current = e.key === "Shift" && !e.repeat ? true : e.key === "Shift" ? shiftAlone.current : false;
+                    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+                      e.preventDefault();
+                      send();
+                    } else if (e.key === "Escape") MoveAgentStore.close();
+                    else if (e.key === "z" && (e.metaKey || e.ctrlKey) && changed && !draft) {
+                      e.preventDefault();
+                      void MoveAgentStore.undo();
+                    }
+                  },
+                  onKeyUp: (e) => {
+                    if (e.key !== "Shift") return;
+                    const tap = shiftAlone.current;
+                    shiftAlone.current = false;
+                    if (tap) MoveAgentStore.shiftTap();
+                  },
+                  onBlur: () => {
+                    shiftAlone.current = false;
+                  }
+                }
+              )
+            ]
+          },
+          "field"
+        ) }) })
+      ] }) })
     }
   );
 }
-var AGENT_EASE = [0.2, 0, 0, 1];
-function useMeasuredHeight() {
-  const ref = useRef16(null);
-  const [height, setHeight] = useState10("auto");
+var AGENT_EASE_OUT = [0.2, 0, 0, 1];
+var AGENT_EASE_SMOOTH = [0.22, 1, 0.36, 1];
+var AGENT_EASE_IN = [0.4, 0, 1, 1];
+var AGENT_HEIGHT_SPRING = { type: "spring", visualDuration: 0.38, bounce: 0 };
+var AGENT_TURN_MS = 700;
+var AGENT_KEYSTROKE_MS = 100;
+function useAgentFrame(shape, live, holding, clearing, still) {
+  const outer = useRef16(null);
+  const inner = useRef16(null);
+  const changedAt = useRef16(0);
+  const typedAt = useRef16(-Infinity);
+  const state4 = useRef16({ live, holding, clearing, still });
+  state4.current = { live, holding, clearing, still };
   useLayoutEffect5(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => setHeight(el.offsetHeight));
-    observer.observe(el);
-    return () => observer.disconnect();
+    changedAt.current = performance.now();
+  }, [shape]);
+  const settle3 = useRef16(null);
+  useLayoutEffect5(() => {
+    const box = outer.current, body = inner.current;
+    if (!box || !body) return;
+    let easing = null;
+    let held = body.offsetHeight;
+    box.style.height = `${held}px`;
+    if (typeof ResizeObserver === "undefined") {
+      box.style.height = "";
+      return;
+    }
+    const follow = () => {
+      const to = body.offsetHeight;
+      if (to === held || state4.current.holding && to < held) return;
+      const fresh = performance.now() - changedAt.current < AGENT_TURN_MS;
+      if (state4.current.clearing && fresh && to > held) return;
+      const turning = state4.current.live || fresh;
+      held = to;
+      const typed = performance.now() - typedAt.current < AGENT_KEYSTROKE_MS;
+      if (state4.current.still || typed || !turning) {
+        easing?.stop();
+        easing = null;
+        box.style.height = `${to}px`;
+        return;
+      }
+      easing = animate2(box, { height: to }, AGENT_HEIGHT_SPRING);
+    };
+    settle3.current = follow;
+    const observer = new ResizeObserver(follow);
+    observer.observe(body);
+    return () => {
+      observer.disconnect();
+      easing?.stop();
+      settle3.current = null;
+    };
   }, []);
-  return { ref, height };
+  useLayoutEffect5(() => {
+    settle3.current?.();
+  }, [holding, shape]);
+  return { outer, inner, typed: () => {
+    typedAt.current = performance.now();
+  } };
+}
+function MoveAgentWords({ text }) {
+  const shown = useRef16(0);
+  const parts = text.split(/(\s+)/);
+  const from = shown.current;
+  useEffect16(() => {
+    shown.current = parts.length;
+  });
+  return /* @__PURE__ */ jsx19("p", { className: "tweakers-move-agent-said", children: parts.map((part, i) => /^\s*$/.test(part) ? part : /* @__PURE__ */ jsx19("span", { className: "tweakers-move-agent-word", style: { "--word": Math.min(24, Math.max(0, i - from) / 2) }, children: part }, i)) });
 }
 function useMoveFieldHeight(ref, value) {
   useLayoutEffect5(() => {
