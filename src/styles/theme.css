@@ -487,6 +487,9 @@
   --move-color-disabled-opacity: 0.45;
   --move-duration-press: 150ms;
   --move-ease-out: cubic-bezier(0.2, 0, 0, 1);
+  /* Reveals and moves that should settle long and soft; exits that clear the way. */
+  --move-ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+  --move-ease-in: cubic-bezier(0.4, 0, 1, 1);
   --move-header-control-height: 28px;
   --move-list-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   /* The agent's prompt box. A host that keeps its own content clear of the
@@ -4129,18 +4132,47 @@
   transform-origin: top right;
 }
 
-/* The frame eases to the height of what is in it; the body is what is measured. */
+/* The frame holds the height of what is in it (set from the body, which is
+   what is measured). The body stands on the frame's floor, the panel side,
+   so a turn grows and shrinks at the far edge and the field stays put. */
 .tweakers-move-agent-frame {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
   overflow: hidden;
-  /* room for the focus ring the frame would otherwise clip */
-  margin: -3px;
-  padding: 3px;
+  /* Room for the focus ring the frame would otherwise clip — and, along the
+     far edge, the box's own padding, where the words rise through a soft
+     fade as the box opens instead of meeting a hard cut. At rest nothing is
+     in that band. */
+  margin: -10px -3px -3px;
+  padding: 10px 3px 3px;
+  box-sizing: content-box;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 10px);
+  mask-image: linear-gradient(to bottom, transparent, #000 10px);
+}
+
+/* Inside the panel the box hangs from its top instead, and fades at its foot. */
+.tweakers-move-agent[data-inside] .tweakers-move-agent-frame {
+  justify-content: flex-start;
+  margin: -3px -3px -10px;
+  padding: 3px 3px 10px;
+  -webkit-mask-image: linear-gradient(to top, transparent, #000 10px);
+  mask-image: linear-gradient(to top, transparent, #000 10px);
 }
 
 .tweakers-move-agent-body {
-  position: relative;
+  flex: none;
   display: flex;
   flex-direction: column;
+}
+
+/* The waiting dots and the field share one place and cross in it. */
+.tweakers-move-agent-slot {
+  display: grid;
+}
+
+.tweakers-move-agent-slot > * {
+  grid-area: 1 / 1;
 }
 
 /* The field's row: the + for a picture, then the words. */
@@ -4287,6 +4319,21 @@
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* Each word of the reply comes up out of a soft blur as it arrives. */
+.tweakers-move-agent-word {
+  animation: tweakers-move-agent-word 420ms var(--move-ease-smooth) both;
+  animation-delay: calc(var(--word, 0) * 22ms);
+}
+
+@keyframes tweakers-move-agent-word {
+  from { opacity: 0; filter: blur(4px); }
+  to { opacity: 1; filter: blur(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-agent-word { animation: none; }
 }
 
 /* While it works: the dots, and the words just sent waiting beside them,
