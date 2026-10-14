@@ -836,6 +836,9 @@ interface MoveViewWait {
     title: string;
     /** What it is happening to — a file name, a source. */
     detail?: string;
+    /** How far the work has come, 0 to 1, when it can tell: the lights fill
+     *  instead of sweeping and the title reads the percentage. */
+    progress?: number;
     /** Back abandons it, and the wait shows a way out. */
     cancelable: boolean;
 }
@@ -849,8 +852,9 @@ interface MoveViewsState {
 interface MoveViewTask {
     /** Aborted when the wait is cancelled or superseded — pass it to fetch. */
     signal: AbortSignal;
-    /** Change what the wait says as the work moves on ("Saving" → "Opening"). */
-    say(title: string, detail?: string): void;
+    /** Change what the wait says as the work moves on ("Saving" → "Opening"),
+     *  and how far it has come (0 to 1) when it can tell. */
+    say(title: string, detail?: string, progress?: number): void;
 }
 interface MoveViewLoadOptions<T> {
     title: string;

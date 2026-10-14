@@ -17388,6 +17388,9 @@ import { useEffect as useEffect18, useLayoutEffect as useLayoutEffect5, useRef a
 
 // src/move-views.ts
 import { flushSync } from "react-dom";
+function moveViewWaitTitle(wait) {
+  return wait.progress === void 0 ? wait.title : `${wait.title} ${Math.floor(wait.progress * 100)}%`;
+}
 var MOVE_VIEW_STAGE_NAME = "tweakers-move-view";
 var MOVE_VIEW_PANEL_NAME = "tweakers-move-view-panel";
 var MOVE_VIEW_CHANGE_ATTR = "data-tweakers-move-view";
@@ -17609,7 +17612,7 @@ var MoveViews = {
         if (running !== task) return;
         if (task.shownAt === null) task.shownAt = timers.now();
         setState({ busy: true, wait: task.wait });
-        MoveSurfaceStore.setWait({ title: task.wait.title, ...task.wait.detail ? { detail: task.wait.detail } : {} });
+        MoveSurfaceStore.setWait({ title: moveViewWaitTitle(task.wait), ...task.wait.detail ? { detail: task.wait.detail } : {} });
       };
       if (task.shownAt !== null) show();
       else {
@@ -17619,9 +17622,14 @@ var MoveViews = {
           void runner("wait", show);
         }, MOVE_VIEW_WAIT.delay);
       }
-      const say = (title, detail) => {
+      const say = (title, detail, progress) => {
         if (running !== task) return;
-        task.wait = { title, cancelable: task.wait.cancelable, ...detail ? { detail } : {} };
+        task.wait = {
+          title,
+          cancelable: task.wait.cancelable,
+          ...detail ? { detail } : {},
+          ...progress !== void 0 && Number.isFinite(progress) ? { progress: Math.min(1, Math.max(0, progress)) } : {}
+        };
         if (task.shownAt !== null) show();
       };
       const finish = (landed) => {
@@ -17692,12 +17700,28 @@ var MoveViews = {
 import { jsx as jsx21, jsxs as jsxs17 } from "react/jsx-runtime";
 var LIGHTS = Array.from({ length: 8 }, (_, i) => i);
 function MoveViewWaitScreen({ wait }) {
+  const { progress } = wait;
   return (
     // wears the instrument tokens itself: it stands outside whatever view
     // carried them
     /* @__PURE__ */ jsxs17("div", { className: "tweakers-move-surface tweakers-move-view-wait", role: "status", "aria-live": "polite", children: [
-      /* @__PURE__ */ jsx21("span", { className: "tweakers-move-view-wait-title", children: wait.title }),
-      /* @__PURE__ */ jsx21("span", { className: "tweakers-move-view-wait-lights", "aria-hidden": "true", children: LIGHTS.map((i) => /* @__PURE__ */ jsx21("span", { className: "tweakers-move-view-wait-light", style: { "--i": i } }, i)) }),
+      /* @__PURE__ */ jsx21("span", { className: "tweakers-move-view-wait-title", children: moveViewWaitTitle(wait) }),
+      /* @__PURE__ */ jsx21(
+        "span",
+        {
+          className: "tweakers-move-view-wait-lights",
+          "data-progress": progress === void 0 ? void 0 : true,
+          ...progress === void 0 ? { "aria-hidden": true } : { role: "progressbar", "aria-label": wait.title, "aria-valuemin": 0, "aria-valuemax": 100, "aria-valuenow": Math.floor(progress * 100) },
+          children: LIGHTS.map((i) => /* @__PURE__ */ jsx21(
+            "span",
+            {
+              className: "tweakers-move-view-wait-light",
+              style: { "--i": i, ...progress === void 0 ? {} : { "--lit": Math.min(1, Math.max(0, progress * LIGHTS.length - i)) } }
+            },
+            i
+          ))
+        }
+      ),
       wait.detail && /* @__PURE__ */ jsx21("span", { className: "tweakers-move-view-wait-detail", children: wait.detail }),
       wait.cancelable && /* @__PURE__ */ jsxs17("button", { type: "button", className: "tweakers-move-view-wait-cancel", onClick: () => MoveViews.cancel(), children: [
         /* @__PURE__ */ jsx21("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ jsx21("path", { d: ICON_CHEVRON_LEFT, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" }) }),
