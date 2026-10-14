@@ -61,6 +61,9 @@ export interface MoveViewWait {
   title: string;
   /** What it is happening to — a file name, a source. */
   detail?: string;
+  /** How far the work has come, 0 to 1, when it can tell: the lights fill
+   *  instead of sweeping and the title reads the percentage. */
+  progress?: number;
   /** Back abandons it, and the wait shows a way out. */
   cancelable: boolean;
 }
@@ -76,8 +79,9 @@ export interface MoveViewsState {
 export interface MoveViewTask {
   /** Aborted when the wait is cancelled or superseded — pass it to fetch. */
   signal: AbortSignal;
-  /** Change what the wait says as the work moves on ("Saving" → "Opening"). */
-  say(title: string, detail?: string): void;
+  /** Change what the wait says as the work moves on ("Saving" → "Opening"),
+   *  and how far it has come (0 to 1) when it can tell. */
+  say(title: string, detail?: string, progress?: number): void;
 }
 
 export interface MoveViewLoadOptions<T> {
@@ -97,6 +101,13 @@ export interface MoveViewLoadOptions<T> {
  * when it can. Resolves once `update` has run.
  */
 export type MoveViewRunner = (change: MoveViewChange, update: () => void) => Promise<void>;
+
+/** The wait's title as a reader sees it: with its percentage when the work
+ *  can tell how far it has come ("Importing 42%"). The Move's screen shows
+ *  the same words. */
+export function moveViewWaitTitle(wait: Pick<MoveViewWait, 'title' | 'progress'>): string {
+  return wait.progress === undefined ? wait.title : `${wait.title} ${Math.floor(wait.progress * 100)}%`;
+}
 
 /** The view-transition name the stage wears while a change runs. */
 export const MOVE_VIEW_STAGE_NAME = 'tweakers-move-view';
@@ -438,7 +449,7 @@ export const MoveViews = {
         if (running !== task) return;
         if (task.shownAt === null) task.shownAt = timers.now();
         setState({ busy: true, wait: task.wait });
-        MoveSurfaceStore.setWait({ title: task.wait.title, ...(task.wait.detail ? { detail: task.wait.detail } : {}) });
+        MoveSurfaceStore.setWait({ title: moveViewWaitTitle(task.wait), ...(task.wait.detail ? { detail: task.wait.detail } : {}) });
       };
       if (task.shownAt !== null) show();
       else {
@@ -449,9 +460,14 @@ export const MoveViews = {
         }, MOVE_VIEW_WAIT.delay);
       }
 
-      const say = (title: string, detail?: string) => {
+      const say = (title: string, detail?: string, progress?: number) => {
         if (running !== task) return;
-        task.wait = { title, cancelable: task.wait.cancelable, ...(detail ? { detail } : {}) };
+        task.wait = {
+          title,
+          cancelable: task.wait.cancelable,
+          ...(detail ? { detail } : {}),
+          ...(progress !== undefined && Number.isFinite(progress) ? { progress: Math.min(1, Math.max(0, progress)) } : {}),
+        };
         if (task.shownAt !== null) show();
       };
 
