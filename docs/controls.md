@@ -278,6 +278,36 @@ config can answer, the kit answers.
 | `ModDot` / `modGlyph` | A modulation slot's circle in the step row: the slot's colour with its type's mark cut out of it — a wave for the LFO, a die for S&H, the envelope's rise and fall for the ADSR (keys when the played keys strike it), an arch for the curve, a note for audio — and a ring that swings with the slot's live signal. While a modulator's page is open (`state`), its circle stays lit and the others go grey. A type names its mark through `ModTypeDef.glyph(params)`; `modGlyph(slot)` reads it, and a type that names none draws a plain dot. |
 | `ModRange` / `modRange` | Which way a slot pushes its controls: `positive` (up from the value, a whole span at full depth), `negative` (down), or `bipolar` (half a span each side). Every slot carries it as its `range` param, picked from a chip under the type picker on its page; each type sets a default (`bipolar` for LFO and S&H, `positive` for ADSR, curve and audio). A type whose signal rests at 0 says so with `ModTypeDef.unipolar(params)`. `ModulationStore.getLevel(slot)` reads the modulator's own shape, 0..1, before the range turns it. |
 
+### Layers on a canvas
+
+An app that lets layers — pictures, shapes, text — be placed on a canvas uses
+the kit's layer parts, so a layer moves under the same hand in every app. All
+three are framework-free.
+
+- **`layer-transform-core`** — `LayerTransform` (x, y, depth `z`, scale,
+  stretch, rotation, flips), `layerModelMatrix` (a column-major `Mat4` a GPU
+  uploads as is; `canvasMatrix` gives a 2D canvas or a server the same plane),
+  and the maths a canvas gesture needs: `projectPoint` / `unprojectPoint`,
+  `translateInParent`, `bakeTransform`, `reanchorTransform`. The transform is
+  non-destructive: the app keeps the layer's own geometry and draws through it.
+- **`SelectTool`** (`layer-select-core`) — click to select, drag inside the
+  marching-ants frame to move (Shift: one axis), drag a corner to scale from the
+  opposite corner (Shift or Cmd: stretch), Alt + drag or a drag just outside a
+  corner to turn (Shift: 15° steps). The app answers through `LayerSelection`
+  (`selected`, `select`, `layerAt`, `frameOf`, `pivotOf`, `parentModelFor`,
+  `setLayerTransform`; `placementOf` / `setPlacement` for a layer placed by its
+  own box) and the host (`canvasPoint`, `overlayPoint`, `projection`, `surface`,
+  `repaint`, `onEdited`); it calls `begin` / `move` / `end` from the pointer and
+  `paint(ctx)` on its 2D overlay. `strokeAnts`, `drawHandle` and
+  `insideScreenQuad` draw and hit another frame the same way.
+- **The Layer page** (`layer-controls`) — `layerPlacementControls` (X, Y and
+  Depth: three dials, the `vector` face), `layerOpacityControl` (the `opacity` +
+  `picture` face), `layerShapeControls` (Scale and Rotation chips, Flip H and
+  Flip V switches, seated by `LAYER_PADS`) and `LAYER_HINTS`. Each control is a
+  config without `default` plus `read` / `write`, for the app's own bindings.
+  Dials 0–2 are the stage and dial 3 the opacity; the other four are the
+  layer kind's own. The big wheel's list of layers is `layerListScreen`.
+
 ## General controls and artifacts
 
 These are React exports from `tweakers`. Config syntax is in the README and
