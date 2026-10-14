@@ -63,11 +63,18 @@ these gestures; an app wires nothing.
   changes nothing. Shift mid-drag is fine (0.1×).
 - **An option slot steps.** A click moves it on to the next option, round to
   the first after the last; a drag steps through them, right or down being
-  the next. No part of the slot means a particular option.
+  the next. A picture face has no part that means a particular option; a
+  list face does — a click on a row takes that row.
 - **A list walks up and down.** The pad list's dial follows the list's own
   axis: down is the next row. A multiselect slot walks the same way, and a
   still click ticks the row it landed on (the cursor row from the head);
   the mouse wheel walks it a row a notch while the panel's own wheel is idle.
+- **Hover is a hand on the knob.** A pointer resting on a list slot — a
+  select's list, a multiselect, folders — opens a long list to its whole run,
+  as a touched knob does, and the row under it lights halfway to the chosen
+  one, saying what a click takes. A finger on glass has no hover: a tap
+  opens and picks as before. Every kit list row (`ListScreen`) wears the
+  same hover.
 - **A colour takes both hands.** Across turns the hue (the knob), up and down
   the luminosity (the volume knob) — up is lighter. A still click opens the
   editor.
