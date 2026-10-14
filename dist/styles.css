@@ -2129,6 +2129,83 @@
   opacity: 1;
 }
 
+/* An aspect picker's canvas: the band under the tag, down to the slot's
+   foot (or to the pagination cells, when the select asks for them). The
+   frame is the largest box of the chosen W:H inside it, centred — the
+   container units do the fitting, so it follows the slot at any size. */
+.tweakers-move-dial-aspect {
+  position: absolute;
+  /* 4px of air on every side, so the frame never meets the slot's edge or
+     the name tag above it. */
+  top: calc(var(--move-shape-top) + 4px);
+  left: 14px;
+  right: 14px;
+  bottom: calc(var(--move-indicator-bottom) + 4px);
+  container-type: size;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.tweakers-move-dial-aspect[data-track] {
+  bottom: calc(var(--move-indicator-bottom) + var(--move-indicator-height) + var(--move-option-gap) + 4px);
+}
+
+.tweakers-move-dial-aspect-frame {
+  box-sizing: border-box;
+  width: min(100cqw, 100cqh * var(--move-aspect, 1));
+  height: min(100cqh, 100cqw / var(--move-aspect, 1));
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 2px solid color-mix(in srgb, var(--move-text) 50%, transparent);
+  border-radius: var(--move-radius-small);
+  transition:
+    width var(--move-duration-press) var(--move-ease-out),
+    height var(--move-duration-press) var(--move-ease-out),
+    border-color 0.12s;
+}
+
+.tweakers-move-dial:hover .tweakers-move-dial-aspect-frame,
+.tweakers-move-dial[data-active] .tweakers-move-dial-aspect-frame {
+  border-color: var(--move-text);
+}
+
+.tweakers-move-dial-aspect-text {
+  max-width: 100%;
+  padding: 0 4px;
+  box-sizing: border-box;
+  font-family: var(--move-font-label);
+  font-size: 15px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-dial-aspect-frame {
+    transition: none;
+  }
+}
+
+/* A select's value face heads with a word, not a number: a longer name
+   steps down a size, and the longest wraps to a second line. */
+.tweakers-move-dial[data-kind="value"] .tweakers-move-dial-value[data-length="medium"] {
+  font-size: 24px;
+}
+
+.tweakers-move-dial[data-kind="value"] .tweakers-move-dial-value[data-length="long"] {
+  font-size: 20px;
+  white-space: normal;
+  line-height: 1.1;
+}
+
+/* A readout with no bar under it stands in the middle of the slot. */
+.tweakers-move-dial-readout[data-bare] {
+  bottom: 10px;
+}
+
 .tweakers-move-dial[data-shape] .tweakers-move-dial-label {
   z-index: 1;
   text-shadow: 0 0 6px var(--move-dial-surface), 0 0 6px var(--move-dial-surface);
@@ -3529,6 +3606,73 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* A multiselect's head carries its count badge in the right corner: the
+   name keeps the badge's width clear on both sides, so it stays centred. */
+.tweakers-move-dial-head[data-badge] {
+  padding: 0 calc(var(--move-head-h) + 8px);
+}
+
+/* The count badge: the list screen's back pill — pill radius, label face,
+   the screen's ink — scaled into the head and carrying a number. The pill
+   is the chip on the screen's dark ground; up here the ground is the slot,
+   which comes up to the chip itself in the hand, so the badge takes the
+   screen's ground instead and reads as a piece of the list it counts, at
+   rest and lit alike. */
+.tweakers-move-dial-count {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  z-index: 1;
+  box-sizing: border-box;
+  min-width: calc(var(--move-head-h) - 4px);
+  height: calc(var(--move-head-h) - 4px);
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--move-display, #1e1e1e);
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: calc(var(--move-head-h) - 4px);
+  text-align: center;
+  pointer-events: none;
+}
+
+/* Nothing chosen: the number stays, dimmed — still read, never hidden. */
+.tweakers-move-dial-count[data-zero] {
+  color: color-mix(in srgb, var(--move-text) 45%, transparent);
+}
+
+/* A list with no rows yet (still loading, or nothing offered) says so. */
+.tweakers-move-dial-empty {
+  margin: auto;
+  padding: 0 8px;
+  color: color-mix(in srgb, var(--move-text) 45%, transparent);
+  font-family: var(--move-font-label);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* Inside a folder the dial's list wears the way up as its first row: the
+   back pill, pinned under the head at a row's height and inset, the rows
+   following it from the top. The slot reads the press, so the pill takes
+   no pointer of its own. */
+.tweakers-move-dial-screen > .tweakers-list-screen-back {
+  top: calc(var(--move-head-h) + var(--move-list-pad));
+  left: 4px;
+  max-width: calc(100% - 8px);
+  height: var(--move-list-row);
+  padding: 0 8px 0 3px;
+  font-size: 13px;
+  line-height: var(--move-list-row);
+  pointer-events: none;
+}
+
+.tweakers-list-screen.tweakers-move-dial-list[data-back] {
+  justify-content: flex-start;
+  padding-top: calc(var(--move-list-pad) + var(--move-list-row) + var(--move-list-gap));
 }
 
 .tweakers-list-screen.tweakers-move-dial-list {
@@ -6120,6 +6264,14 @@
   justify-content: center;
   width: 24px;
   padding: 0;
+}
+
+/* The cursor on the way out: a list walked by a knob reaches the pill too,
+   and the pill lights the way the selected row's name does — the ink
+   becomes its ground. */
+.tweakers-list-screen-back[data-selected] {
+  background: #dee3c9;
+  color: #1e1e1e;
 }
 
 /* The list's heading, level with the back pill and centred on the screen.

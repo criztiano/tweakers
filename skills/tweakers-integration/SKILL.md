@@ -83,6 +83,8 @@ adjusted to what the inventory actually contains:
 | Windowed range (start/end, low/high) | RangeSlider |
 | On/off | Toggle (a checkbox, not a two-tab switch) — but see Module below when the toggle governs a whole group |
 | One-of-N mode | Select (or SegmentedControl for 2–4 options that deserve to be always visible) |
+| One-of-many, grouped (effect families, a model per provider) | Select with folders (`{ label, options }` among its options) — on the Move one level at a time: folders open on a tap, the back pill goes up, the value is always an option. Never a second select that picks the group |
+| Several-of-N set (models to fan out over, stems to keep) | `multiselect` (`{ type: 'multiselect', options, default: [] }`) — on the Move a dial of its own: a checked list in the big slot, a count badge in its head, the knob walking a cursor and a tap ticking the row. Never a pad that opens a list, never a column of toggles |
 | Two coupled numbers (position, tilt, vector) | XYPad — only when the two axes are one physical gesture in the user's head (a point, a direction). Two parameters that merely both affect the same curve are NOT a pair; give them their own sliders and show the curve instead |
 | Any curve or shape parameter (easing, envelope, transfer curve, probability distribution) | CurveComposer / EasingVisualization / SpringVisualization — the visual editor, never a row of numeric sliders |
 | Parameters that *indirectly* shape a curve (a shape enum plus width/offset/amount modifiers) | Keep the individual controls, and add a live curve-preview row sampling the resulting curve — the user must SEE what the combination produces |

@@ -15,10 +15,10 @@ import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from '../theme';
-import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, filterChipValue, isColumnFilter, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumShapePath, enumIndex, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
+import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, filterChipValue, isColumnFilter, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumShapePath, enumIndex, enumAspect, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody, MoveSlotGlyph } from './move-slots';
+import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotAspectBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody, MoveSlotGlyph } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing } from '../angle-core';
@@ -31,8 +31,10 @@ import {
   moveRangeReading, moveChipValue, moveXYGrid, moveShapePath,
 } from '../move-slot-core';
 import {
-  MOVE_LIST_ROW_TRAVEL, movePressStart, movePressTravel, movePressEnd, moveTurnValue, moveTurnExtent,
-  moveOptionStep, moveNextOption, type MovePress,
+  movePressStart, movePressTravel, movePressEnd, moveTurnValue, moveTurnExtent,
+  moveOptionStep, moveNextOption, moveListWalk, moveListRowIn, moveListKey, moveMultiselectOptions,
+  moveMultiselectChecked, moveMultiselectToggle, moveListAria, moveListBackIn, moveSelectAria, moveSelectClick,
+  moveSelectFromWalk, moveSelectWalkCount, moveSelectWalkIndex, type MovePress,
 } from '../move-slot-core';
 import { attachMoveKeys } from '../move-keys';
 import { MoveMenuButton } from './MoveMenuButton';
@@ -384,6 +386,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // — the envelope's hold-to-curve gesture. The ref anchors the drag.
   const [bendHeld, setBendHeld] = useState<EnvStage | null>(null);
   const bendRef = useRef<{ y: number; curve: number } | null>(null);
+  // The list row a multiselect's press went down on (-1: none).
+  const listRowRef = useRef(-1);
+  // Whether a folder list's press went down on its back pill.
+  const listBackRef = useRef(false);
   // A held wave pad: the same vertical drag, one row down, lifting the
   // stage's own sine into it. `moved` is what tells a drag from a tap —
   // a tap flips the sine over instead of setting an amount.
@@ -1292,6 +1298,108 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     onPointerCancel: () => { endPress(meta.path); },
   });
 
+  // A multiselect's slot is its list: a drag walks the cursor the way the
+  // list reads (down is the next row), the wheel walks it a row a notch
+  // (unless the panel's wheel is running a strip or a navigator), a
+  // still click ticks the row it landed on — the cursor row when it landed
+  // on the head — and a still Shift+click puts the default set back. The
+  // column's knob walks the same cursor and its tap ticks the same row.
+  const listCursor = (meta: ControlMeta) => TweakStore.getListCursor(page.panel.id, meta.path);
+  const setListCursor = (meta: ControlMeta, index: number) => TweakStore.setListCursor(page.panel.id, meta.path, index);
+  const tickRow = (meta: ControlMeta, index: number) => {
+    const option = moveMultiselectOptions(meta)[index];
+    if (!option || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+    setListCursor(meta, index);
+    write(meta, moveMultiselectToggle(meta, values[meta.path], option.value));
+  };
+  // The row is read where the press went down: a touch grows a long list's
+  // screen, so by the release the rows have moved out from under it.
+  const listDrag = (meta: ControlMeta) => ({
+    onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
+      if (e.button > 0 || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      listRowRef.current = moveListRowIn(e.currentTarget, e);
+      beginPress(e, meta.path, listCursor(meta));
+    },
+    onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
+      const p = movePressTravel(pressRef, meta.path, e, () => listCursor(meta));
+      if (p && !TweakStore.isDisabled(page.panel.id, meta.path)) setListCursor(meta, moveListWalk(p, e, moveMultiselectOptions(meta).length));
+    },
+    onPointerUp: (e: React.PointerEvent<HTMLElement>) => {
+      if (!endPress(meta.path) || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      if (e.shiftKey) return resetValue(meta);
+      tickRow(meta, listRowRef.current >= 0 ? listRowRef.current : listCursor(meta));
+    },
+    onPointerCancel: () => { endPress(meta.path); },
+    // The panel's own wheel (the strip, a navigator, a search) answers
+    // first and keeps what it took; otherwise a notch walks the list a row.
+    onWheel: (e: React.WheelEvent<HTMLElement>) => {
+      if (e.defaultPrevented || !e.deltaY || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      e.stopPropagation();
+      setListCursor(meta, listCursor(meta) + Math.sign(e.deltaY));
+    },
+    onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => {
+      if (TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      const next = moveListKey(listCursor(meta), moveMultiselectOptions(meta).length, e);
+      if (!next) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (next === 'toggle') tickRow(meta, listCursor(meta));
+      else setListCursor(meta, next.cursor);
+    },
+  });
+
+  // A select with folders walks one level as a list: a drag, the wheel and
+  // the arrows walk the cursor — up past the first row onto the back pill
+  // inside a folder — and an option the cursor lands on is selected. A still
+  // click is a tap where it landed (moveSelectClick): a row takes the cursor
+  // and a folder opens, the pill goes up, the head taps the cursor's row.
+  // Enter and Space tap; a still Shift+click puts the default back. The
+  // column's knob walks the same cursor and its tap is the same tap.
+  const selectLevelOf = (meta: ControlMeta) => TweakStore.getSelectLevel(page.panel.id, meta.path);
+  const folderDrag = (meta: ControlMeta) => ({
+    onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
+      const level = selectLevelOf(meta);
+      if (e.button > 0 || !level || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      listRowRef.current = moveListRowIn(e.currentTarget, e);
+      listBackRef.current = moveListBackIn(e.currentTarget, e);
+      beginPress(e, meta.path, moveSelectWalkIndex(level));
+    },
+    onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
+      const level = selectLevelOf(meta);
+      if (!level) return;
+      const p = movePressTravel(pressRef, meta.path, e, () => moveSelectWalkIndex(level));
+      if (p && !TweakStore.isDisabled(page.panel.id, meta.path)) {
+        TweakStore.setSelectCursor(page.panel.id, meta.path, moveSelectFromWalk(level, moveListWalk(p, e, moveSelectWalkCount(level))));
+      }
+    },
+    onPointerUp: (e: React.PointerEvent<HTMLElement>) => {
+      if (!endPress(meta.path) || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      if (e.shiftKey) return resetValue(meta);
+      const level = selectLevelOf(meta);
+      if (!level) return;
+      const click = moveSelectClick(level, listRowRef.current, listBackRef.current);
+      if (click.cursor !== undefined) TweakStore.setSelectCursor(page.panel.id, meta.path, click.cursor);
+      if (click.tap) TweakStore.tapSelect(page.panel.id, meta.path);
+    },
+    onPointerCancel: () => { endPress(meta.path); },
+    onWheel: (e: React.WheelEvent<HTMLElement>) => {
+      const level = selectLevelOf(meta);
+      if (e.defaultPrevented || !e.deltaY || !level || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      e.stopPropagation();
+      TweakStore.setSelectCursor(page.panel.id, meta.path, level.cursor + Math.sign(e.deltaY));
+    },
+    onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => {
+      const level = selectLevelOf(meta);
+      if (!level || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      const next = moveListKey(moveSelectWalkIndex(level), moveSelectWalkCount(level), e);
+      if (!next) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (next === 'toggle') TweakStore.tapSelect(page.panel.id, meta.path);
+      else TweakStore.setSelectCursor(page.panel.id, meta.path, moveSelectFromWalk(level, next.cursor));
+    },
+  });
+
   const xyFromPointer = (e: React.PointerEvent<HTMLElement>, meta: ControlMeta) =>
     write(meta, moveXYValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), fineRef));
 
@@ -1966,7 +2074,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     onPointerMove={event => {
                       const p = movePressTravel(pressRef, listPath, event, () => MovePadListStore.getView()?.cursor ?? 0);
                       if (!p) return;
-                      const want = Math.max(0, Math.min(padListView.options.length - 1, p.v + Math.trunc((event.clientY - p.ay) / MOVE_LIST_ROW_TRAVEL)));
+                      const want = moveListWalk(p, event, padListView.options.length);
                       if (want !== padListView.cursor) MovePadListStore.setCursor(want);
                     }}
                     onPointerUp={() => { endPress(listPath); }}
@@ -2263,6 +2371,55 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     </div>
                   );
                 }
+                // A multiselect is its list: every row, the chosen ones
+                // ticked, the cursor row lit and held in the middle, and the
+                // count of ticks in the head's badge.
+                if (meta.type === 'multiselect') {
+                  const options = moveMultiselectOptions(meta);
+                  const checked = moveMultiselectChecked(meta, values[meta.path]);
+                  const cursor = listCursor(meta);
+                  return (
+                    <div
+                      key={meta.path}
+                      className="tweakers-move-dial"
+                      data-kind="multiselect"
+                      {...moveListAria(meta.label, options, checked, cursor)}
+                      tabIndex={disabled ? -1 : 0}
+                      aria-disabled={disabled || undefined}
+                      data-disabled={disabled || undefined}
+                      data-active={active || undefined}
+                      {...listDrag(meta)}
+                    >
+                      <MoveSlotMultiselectBody label={meta.label} options={options} checked={checked} cursor={cursor} />
+                    </div>
+                  );
+                }
+                // A select with folders is its list, one level at a time: the
+                // folder rows open, the back pill goes up, and the cursor —
+                // the knob's, the drag's, the wheel's — rides the highlight.
+                const level = meta.type === 'select' && meta.optionTree && isEnumDial(meta)
+                  ? TweakStore.getSelectLevel(page.panel.id, meta.path) : null;
+                if (level) {
+                  const activeIdx = enumIndex(meta, values[meta.path]);
+                  return (
+                    <div
+                      key={meta.path}
+                      className="tweakers-move-dial"
+                      data-kind="folders"
+                      style={dialSpan(meta) > 1 ? { gridColumn: `span ${dialSpan(meta)}` } : undefined}
+                      {...moveSelectAria(meta.label, level, values[meta.path])}
+                      tabIndex={disabled ? -1 : 0}
+                      aria-disabled={disabled || undefined}
+                      data-disabled={disabled || undefined}
+                      data-active={active || undefined}
+                      {...folderDrag(meta)}
+                    >
+                      <MoveModRing panelId={page.panel.id} path={meta.path} />
+                      <MoveSlotEnumBody label={meta.label} optionLabel={enumOptionLabel(meta.options?.[activeIdx] as never)}
+                        options={meta.options ?? []} activeIdx={activeIdx} shape={null} glyph={null} level={level} />
+                    </div>
+                  );
+                }
                 // A select with options is a stepped enum dial: the bar splits
                 // into one cell per option, the active cell filled, and the
                 // slot shows the option — as a picture where there is one, and
@@ -2281,11 +2438,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   const picture = enumOptionPicture(option as never);
                   const playback = movePlaybackMode(meta, values[meta.path]);
                   const lanes = moveLanes(meta, values[meta.path]);
+                  // The app's own ask for the face: a frame in the chosen
+                  // proportion, or the chosen name as the headline.
+                  const face = moveSlotKind(meta, { enum: true, value: values[meta.path], shape, glyph, picture });
+                  const aspect = face === 'aspect' ? enumAspect(meta, values[meta.path]) : null;
+                  const named = face === 'value';
                   return (
                     <div
                       key={meta.path}
                       className="tweakers-move-dial"
-                      data-kind={lanes ? 'lanes' : 'enum'}
+                      data-kind={lanes ? 'lanes' : aspect ? 'aspect' : named ? 'value' : 'enum'}
+                      data-sub={named || undefined}
                       style={dialSpan(meta) > 1 ? { gridColumn: `span ${dialSpan(meta)}` } : undefined}
                       data-scope={scope ? true : undefined}
                       data-visual={playback ? 'playback' : undefined}
@@ -2310,10 +2473,19 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           with the name out of the way there is nothing left
                           for the value to replace. */}
                       {scope}
+                      {named && <span className="tweakers-move-dial-sub">{meta.label}</span>}
                       <MoveModRing panelId={page.panel.id} path={meta.path} />
                       {lanes ? (
                         <MoveSlotLanesBody label={meta.label} optionLabel={optionLabel} count={options.length}
                           chosen={lanes.chosen} silent={lanes.silent} solo={lanes.solo} />
+                      ) : aspect ? (
+                        <MoveSlotAspectBody label={meta.label} w={aspect.w} h={aspect.h} text={aspect.text}
+                          options={options} activeIdx={activeIdx} track={meta.track === true} />
+                      ) : named ? (
+                        <>
+                          <MoveSlotDefaultBody label={meta.label} value={optionLabel} pct={0} originPct={null} track={false} />
+                          {meta.track === true && <MoveSlotEnumCells options={options} activeIdx={activeIdx} />}
+                        </>
                       ) : (
                         <MoveSlotEnumBody
                           label={meta.label}
@@ -2690,6 +2862,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       pct={pct}
                       originPct={originPct}
                       atOrigin={atOrigin}
+                      track={meta.track !== false}
                     />}
 
                   </div>
@@ -3021,20 +3194,23 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     // sits in: a value chip lifted onto the top row is still
                     // a value chip.
                     if (page.toggles[col] === meta || (meta.type === 'toggle' && page.valueActions?.[col] === meta)) {
+                      // A captioned picture says its value to the eye; the
+                      // screen reader hears the name, then the same words.
+                      const caption = meta.icon ? meta.toggleCaption?.[values[meta.path] ? 'on' : 'off'] : undefined;
                       return (
                         <button
                           key={meta.path}
                           className="tweakers-move-pad"
                           data-kind={meta.icon ? 'icon' : 'toggle'}
                           data-on={!!values[meta.path]}
-                          aria-label={meta.icon ? meta.label : undefined}
+                          aria-label={meta.icon ? (caption ? `${meta.label}: ${caption}` : meta.label) : undefined}
                           title={meta.icon ? meta.label : undefined}
                           {...(meta.moveHold ? holdPad(page.panel.id, meta.path) : {
                             onClick: () => TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path]),
                           })}
                         >
                           {meta.icon
-                            ? <MovePadIconBody icon={meta.icon} />
+                            ? <MovePadIconBody icon={meta.icon} caption={caption} />
                             : <MovePadToggleBody label={meta.label} />}
                         </button>
                       );

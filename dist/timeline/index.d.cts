@@ -226,6 +226,37 @@ type XYValue = {
     y: number;
 };
 
+/**
+ * A select whose options come in folders, on its own so node can test it
+ * without React. A folder is a row with no value of its own: it names a run
+ * of options, which may hold folders too. The control's value is always a
+ * leaf — an option with a value — and leaf values are unique across the
+ * whole tree, so a value alone says where in the tree it sits.
+ *
+ * The Move's slot shows one level at a time. Where the list is open — the
+ * folder and the row the cursor is on — is the kit's own state, never the
+ * value: turning walks the open level's rows, landing on a leaf selects it,
+ * landing on a folder only moves the cursor, and a tap opens the folder
+ * under the cursor (or, on the back row, goes up). Every rule lives here, so
+ * the panel, a standalone slot and the hardware bridge agree.
+ */
+/** An option with a value: a plain string (its own value and label), or a
+ *  value with a display label, an icon or a picture. */
+type SelectLeaf = string | {
+    value: string;
+    label: string;
+    icon?: string;
+    picture?: string;
+};
+/** A run of options under one name. It has no value of its own; it opens. */
+type SelectFolder = {
+    label: string;
+    options: SelectOption[];
+    icon?: string;
+};
+/** One row a select offers: an option, or a folder of them. */
+type SelectOption = SelectLeaf | SelectFolder;
+
 type TransferPoint = {
     x: number;
     y: number;
@@ -330,6 +361,17 @@ type ToggleConfig = {
      * badge, the pad inverting when it is on.
      */
     icon?: string;
+    /**
+     * Words beside the picture on the pad — the value in force, where the
+     * picture already names the switch: a brain, then "High". One string for
+     * both states, or one per state (`{ off: 'Minimal', on: 'High' }`), so the
+     * words turn with the press. Only a pad with an `icon` wears it; the name
+     * still goes to the screen reader and the pointer's hint.
+     */
+    caption?: string | {
+        off: string;
+        on: string;
+    };
     /** The app's own state badges, in place of the kit's check and ban. */
     onIcon?: string;
     offIcon?: string;
@@ -370,16 +412,39 @@ type SelectConfig = {
      * instead carry a `picture` (an image URL) that fills the whole slot, drawn
      * as a mask in the slot's own colour — for choices that are a texture or a
      * pattern, where the picture is the thing chosen.
+     *
+     * An option may instead be a folder — `{ label, options, icon? }`, with no
+     * value of its own — holding options and folders of its own. The value is
+     * always an option's (leaf values are unique across the whole tree), and
+     * `default` names one. On the Move the slot shows one level at a time: the
+     * knob walks the open level, landing on an option selects it, landing on a
+     * folder only moves the cursor, and a tap opens the folder under it — or,
+     * on the back pill naming the level above, goes up. Everywhere else (the
+     * sidebar, a tabs strip) the options read flat, in order.
      */
-    options: (string | {
-        value: string;
-        label: string;
-        icon?: string;
-        picture?: string;
-    })[];
+    options: SelectOption[];
     default?: string;
-    /** 'segmented' renders the options as an inline segmented control instead of a dropdown. Suits 2–4 short options. */
-    display?: 'dropdown' | 'segmented';
+    /**
+     * 'segmented' renders the options as an inline segmented control instead of a dropdown. Suits 2–4 short options.
+     *
+     * On the Move panel, two faces of the stepped dial:
+     * - `aspect` — every option's value is a proportion, "W:H" ("16:9", "3:4"):
+     *   the slot draws a frame in the chosen proportion, as large as fits,
+     *   with the ratio written inside it. A value that is not a W:H keeps the
+     *   ordinary enum face.
+     * - `value` — the chosen option's name is the headline and the control's
+     *   name a tag on top, the way a slider's `display: 'value'` reads: no list.
+     *
+     * Either one is still an enum dial: a click or drag steps it, the column's
+     * knob steps it on the Move. Elsewhere it is an ordinary dropdown.
+     */
+    display?: 'dropdown' | 'segmented' | 'aspect' | 'value';
+    /**
+     * The `aspect` and `value` faces only: draw the pagination cells under the
+     * face, one per option, the chosen one lit. Off by default — the face
+     * already says which option it is.
+     */
+    track?: boolean;
     /**
      * Take the small slots instead of a dial: the options lie side by side in
      * the Move's switch row, one pad each, the current one lit. For the mode a
@@ -549,6 +614,13 @@ type SliderConfig = {
      */
     display?: 'track' | 'dial' | 'value';
     /**
+     * `false` drops the fill bar under the slot's readout on the Move panel —
+     * for a `display: 'value'` number whose position in its range says nothing
+     * (a count, a seed, a size). Everything else, the turn included, is
+     * unchanged. Defaults to true.
+     */
+    track?: boolean;
+    /**
      * Past the end, come back around instead of stopping. Dial only; defaults
      * to true when the range covers a full turn (360, or -180..180).
      */
@@ -676,10 +748,17 @@ type MultiSelectOption = {
     /** Tiny uppercase badge next to the label — e.g. 'local' / 'cloud'. */
     tag?: string;
 };
-/** Checkbox rows resolving to the checked values, in option order. */
+/**
+ * Checkbox rows resolving to the checked values, in option order. An option
+ * is a `{ value, label }` row or a plain string (its own value and label).
+ *
+ * On the Move it is a dial: one big slot drawing the checked list, the
+ * column's knob walking a cursor and a knob tap (a click on screen) ticking
+ * the row under it. A count of the ticked rows rides in the slot's head.
+ */
 type MultiSelectConfig = {
     type: 'multiselect';
-    options: MultiSelectOption[];
+    options: (string | MultiSelectOption)[];
     default?: string[];
 };
 type GalleryItem = {

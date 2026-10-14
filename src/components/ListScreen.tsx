@@ -75,6 +75,10 @@ export interface ListScreenProps {
   back?: string | true;
   /** Called when the back pill is clicked. Without it the pill is only a sign. */
   onBack?: () => void;
+  /** The cursor is on the back pill, not on a row: the pill lights the way a
+   * selected row does, so a list walked by a knob can reach the way out.
+   * Give no `value` then — the cursor is in one place. */
+  backSelected?: boolean;
   className?: string;
   style?: CSSProperties;
 }
@@ -165,10 +169,16 @@ export function ListScreen({
   follow = 'nearest',
   back,
   onBack,
+  backSelected,
   className,
   style,
 }: ListScreenProps): ReactElement {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  // What is ticked, as one key: a tick re-follows the selection too. A tap on
+  // a Move slot grows its screen and shrinks it again within a frame — the
+  // grown screen scrolls to the top, and the size it comes back to is the
+  // size it had, so nothing else would bring the selection back to centre.
+  const checkedKey = items.map((item) => (itemChecked(item) ? 1 : 0)).join('');
 
   useEffect(() => {
     const root = rootRef.current;
@@ -211,7 +221,7 @@ export function ListScreen({
       observer?.disconnect();
       root.removeEventListener('scroll', syncEdges);
     };
-  }, [value, follow, items.length]);
+  }, [value, follow, items.length, checkedKey]);
 
   const rootClassName = ['tweakers-list-screen', className].filter(Boolean).join(' ');
 
@@ -242,6 +252,7 @@ export function ListScreen({
           className="tweakers-list-screen-back"
           aria-label={back === true ? 'Back' : `Back to ${back}`}
           data-bare={back === true || undefined}
+          data-selected={backSelected || undefined}
           disabled={!onBack}
           onClick={onBack}
         >

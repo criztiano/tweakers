@@ -1,4 +1,4 @@
-import { C as ControlMeta, M as MoveEdges, P as PanelConfig } from './TweakStore-Bk855TFI.js';
+import { C as ControlMeta, M as MoveEdges, P as PanelConfig } from './TweakStore-BvyevWAU.js';
 import { ModPageLayout } from './modulation-core.js';
 import { XYValue } from './xy-pad-core.js';
 import { RangeValue } from './range-slider-core.js';
@@ -88,6 +88,12 @@ type MoveTabCell = {
 declare function moveTabCell(row: (ControlMeta | undefined)[], i: number): MoveTabCell | null;
 /** A switch the page is about: it claims a dial slot rather than a pad. */
 declare const isToggleDial: (c: ControlMeta) => boolean;
+/**
+ * A multiselect is a dial: its slot draws the checked list, its knob walks the
+ * cursor and a tap ticks the row under it. It claims its column even with no
+ * rows yet — a list still loading must not shift the page under a hand.
+ */
+declare const isMultiselectDial: (c: ControlMeta) => boolean;
 /** Everything the hardware turns: the controls that claim a dial slot. */
 declare const isMoveDial: (c: ControlMeta) => boolean;
 /** A filter that stands in one column: its knob the cutoff, its resonance a
@@ -261,6 +267,24 @@ declare const ENUM_SHAPE_SAMPLES = 64;
  * question has one answer both surfaces can be tested against.
  */
 declare function enumShapePath(meta: ControlMeta, value: unknown): string | null;
+/** A proportion written "W:H" — "16:9", "4:3", "1.85:1" — as its two sides,
+ *  or null for anything else (a zero or negative side included). */
+declare function parseAspect(text: unknown): {
+    w: number;
+    h: number;
+} | null;
+/**
+ * The frame an aspect select (`display: 'aspect'`) draws for its current
+ * option: the option's proportion and the words written inside the frame
+ * (its label, which for a plain "16:9" option is the ratio itself). Null for
+ * any other select, and for an option whose value is not a W:H — that one
+ * keeps the ordinary enum face.
+ */
+declare function enumAspect(meta: ControlMeta, value: unknown): {
+    w: number;
+    h: number;
+    text: string;
+} | null;
 declare function enumIndex(meta: ControlMeta, value: unknown): number;
 /** A range dial's two ends, each 0..1 — the two numbers on the wire. */
 declare function normalizeRangeDial(meta: ControlMeta, value: unknown): {
@@ -296,4 +320,4 @@ declare function dialOrigin(meta: ControlMeta): number;
 /** Axis positions 0..1 back to the control's real {x, y}, kit-identical. */
 declare function denormalizeXYDial(meta: ControlMeta, x01: number, y01: number): XYValue;
 
-export { ENUM_SHAPE_SAMPLES, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MoveBandCell, type MoveEdgesCell, type MoveLayoutIssueCode, type MovePage, type MoveTabCell, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, denormalizeXYDial, dialOrigin, dialSpan, enumIndex, enumOptionIcon, enumOptionLabel, enumOptionPicture, enumOptionValue, enumShapePath, filterChipValue, filterResonanceChip, filterShapePath, isColumnFilter, isEnumDial, isMoveDial, isMoveTabs, isNamedTabs, isPadSpanContinuation, isSpanContinuation, isToggleDial, moveAppPadRow, moveBandCell, moveEdgesCell, movePadRows, moveTabCell, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeToggleDial, normalizeXYDial, padSpan, reportMoveLayoutIssue, setMoveLayoutReporter, slotGroups, visibleColumns };
+export { ENUM_SHAPE_SAMPLES, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MoveBandCell, type MoveEdgesCell, type MoveLayoutIssueCode, type MovePage, type MoveTabCell, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, denormalizeXYDial, dialOrigin, dialSpan, enumAspect, enumIndex, enumOptionIcon, enumOptionLabel, enumOptionPicture, enumOptionValue, enumShapePath, filterChipValue, filterResonanceChip, filterShapePath, isColumnFilter, isEnumDial, isMoveDial, isMoveTabs, isMultiselectDial, isNamedTabs, isPadSpanContinuation, isSpanContinuation, isToggleDial, moveAppPadRow, moveBandCell, moveEdgesCell, movePadRows, moveTabCell, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeToggleDial, normalizeXYDial, padSpan, parseAspect, reportMoveLayoutIssue, setMoveLayoutReporter, slotGroups, visibleColumns };

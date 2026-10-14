@@ -122,9 +122,16 @@ export function moveTabCell(row: (ControlMeta | undefined)[], i: number): MoveTa
 /** A switch the page is about: it claims a dial slot rather than a pad. */
 export const isToggleDial = (c: ControlMeta) => c.type === 'toggle' && c.moveSlot === true;
 
+/**
+ * A multiselect is a dial: its slot draws the checked list, its knob walks the
+ * cursor and a tap ticks the row under it. It claims its column even with no
+ * rows yet — a list still loading must not shift the page under a hand.
+ */
+export const isMultiselectDial = (c: ControlMeta) => c.type === 'multiselect';
+
 /** Everything the hardware turns: the controls that claim a dial slot. */
 export const isMoveDial = (c: ControlMeta) =>
-  isToggleDial(c) ||
+  isToggleDial(c) || isMultiselectDial(c) ||
   c.type === 'slider' || c.type === 'color' || c.type === 'xy' || c.type === 'range' ||
   c.type === 'filter' || c.type === 'transfer' || c.type === 'gradient' || c.type === 'balance' ||
   (isEnumDial(c) && !isMoveTabs(c)) ||
@@ -133,9 +140,10 @@ export const isMoveDial = (c: ControlMeta) =>
 const isDial = isMoveDial;
 
 /** Two-handed dials and enums need a slot of their own, never a value chip.
- *  A balance keeps its slot too: the blend it stands between IS the control. */
+ *  A balance keeps its slot too: the blend it stands between IS the control,
+ *  and so does a multiselect: a pad has no room for a list. */
 const noChip = (c: ControlMeta) =>
-  isToggleDial(c) || c.type === 'color' || c.type === 'xy' || c.type === 'range' || c.type === 'filter' ||
+  isToggleDial(c) || isMultiselectDial(c) || c.type === 'color' || c.type === 'xy' || c.type === 'range' || c.type === 'filter' ||
   c.type === 'transfer' || c.type === 'gradient' || c.type === 'balance' || isEnumDial(c);
 
 /** A filter that stands in one column: its knob the cutoff, its resonance a
@@ -897,6 +905,30 @@ export function enumShapePath(meta: ControlMeta, value: unknown): string | null 
     .join(' ');
   return d || null;
 }
+/** A proportion written "W:H" — "16:9", "4:3", "1.85:1" — as its two sides,
+ *  or null for anything else (a zero or negative side included). */
+export function parseAspect(text: unknown): { w: number; h: number } | null {
+  const m = typeof text === 'string' ? /^\s*(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)\s*$/.exec(text) : null;
+  if (!m) return null;
+  const w = Number(m[1]);
+  const h = Number(m[2]);
+  return w > 0 && h > 0 ? { w, h } : null;
+}
+
+/**
+ * The frame an aspect select (`display: 'aspect'`) draws for its current
+ * option: the option's proportion and the words written inside the frame
+ * (its label, which for a plain "16:9" option is the ratio itself). Null for
+ * any other select, and for an option whose value is not a W:H — that one
+ * keeps the ordinary enum face.
+ */
+export function enumAspect(meta: ControlMeta, value: unknown): { w: number; h: number; text: string } | null {
+  if (meta.type !== 'select' || meta.display !== 'aspect' || !isEnumDial(meta)) return null;
+  const option = meta.options![enumIndex(meta, value)];
+  const ratio = option === undefined ? null : parseAspect(enumOptionValue(option as never));
+  return ratio ? { ...ratio, text: enumOptionLabel(option as never) } : null;
+}
+
 export function enumIndex(meta: ControlMeta, value: unknown): number {
   const i = (meta.options ?? []).findIndex((o) => enumOptionValue(o as never) === value);
   return Math.max(0, i);

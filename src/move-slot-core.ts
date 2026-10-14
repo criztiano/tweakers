@@ -1,4 +1,4 @@
-import type { ControlMeta } from './store/TweakStore';
+import type { ControlMeta, SelectLevel } from './store/TweakStore';
 import {
   normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial,
   normalizeFilterDial, denormalizeFilterDial, dialOrigin, isEnumDial, enumIndex, enumOptionLabel,
@@ -296,6 +296,161 @@ export function moveOptionStep(meta: ControlMeta, value: unknown, p: MovePress, 
 export function moveNextOption(meta: ControlMeta, value: unknown) {
   const count = (meta.options ?? []).length;
   return count ? optionValue(meta, (enumIndex(meta, value) + 1) % count) : undefined;
+}
+
+/* ── the list a dial walks: the multiselect ────────────────────── */
+
+/**
+ * A list's drag walks it the way it reads: down is the next row, up the one
+ * before, a row's height of travel per step, from the row the press began
+ * on (`p.v`). Clamped to the list; a press alone keeps the cursor.
+ */
+export function moveListWalk(p: MovePress, e: MoveSlotPointer, count: number) {
+  return Math.max(0, Math.min(count - 1, p.v + Math.trunc((e.clientY - p.ay) / MOVE_LIST_ROW_TRAVEL)));
+}
+
+/**
+ * Which of a list's drawn rows a still press landed on, from their boxes in
+ * list order — -1 off every row (the head, the badge, the gap under the run).
+ * `view` is the list's visible box: a row scrolled out of it sits behind the
+ * head, and a press there is on the head. The list draws under the slot's
+ * own pointer handling, so the slot asks where the press was rather than
+ * waiting for a row's click.
+ */
+export function moveListRowAt(rows: readonly MoveSlotBox[], view: MoveSlotBox | null, e: MoveSlotPointer) {
+  const inside = (r: MoveSlotBox) =>
+    e.clientX >= r.left && e.clientX < r.left + r.width && e.clientY >= r.top && e.clientY < r.top + r.height;
+  return view && !inside(view) ? -1 : rows.findIndex(inside);
+}
+
+/** {@link moveListRowAt} for a slot element: its rows and its list's box. */
+export function moveListRowIn(slot: Element, e: MoveSlotPointer) {
+  const list = slot.querySelector('.tweakers-list-screen');
+  return moveListRowAt(
+    Array.from(slot.querySelectorAll('.tweakers-list-screen-row'), (row) => row.getBoundingClientRect()),
+    list ? list.getBoundingClientRect() : null,
+    e,
+  );
+}
+
+/** A multiselect's rows, as the store normalized them. */
+export const moveMultiselectOptions = (meta: ControlMeta) => meta.multiSelectOptions ?? [];
+
+/** What a multiselect has ticked: the stored values its rows still offer. */
+export function moveMultiselectChecked(meta: ControlMeta, value: unknown): string[] {
+  const offered = new Set(moveMultiselectOptions(meta).map((o) => o.value));
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string' && offered.has(v)) : [];
+}
+
+/**
+ * The value once the row `option` is ticked or unticked: the checked values,
+ * always in option order — the order the config's rows read in, whichever
+ * order they were ticked.
+ */
+export function moveMultiselectToggle(meta: ControlMeta, value: unknown, option: string): string[] {
+  const checked = new Set(moveMultiselectChecked(meta, value));
+  if (checked.has(option)) checked.delete(option);
+  else checked.add(option);
+  return moveMultiselectOptions(meta).map((o) => o.value).filter((v) => checked.has(v));
+}
+
+/**
+ * A list slot read aloud the way its knob reads in the hand: a stepped
+ * control on the cursor row, saying whether that row is ticked and how many
+ * are, so a walk down the list is heard row by row.
+ */
+export function moveListAria(label: string, options: readonly { value: string; label: string }[], checked: readonly string[], cursor: number) {
+  const row = options[cursor];
+  return {
+    role: 'slider' as const,
+    'aria-label': label,
+    'aria-valuemin': 0,
+    'aria-valuemax': Math.max(0, options.length - 1),
+    'aria-valuenow': cursor,
+    'aria-valuetext': row ? `${row.label}, ${checked.includes(row.value) ? 'chosen' : 'not chosen'} (${checked.length} chosen)` : 'Nothing to choose',
+    'aria-orientation': 'vertical' as const,
+  };
+}
+
+/**
+ * A focused list slot's keys: the arrows walk the cursor (down and right
+ * are the next row), Home and End go to the ends, Enter and Space tick the
+ * row under it. Null for anything else, and for any chord.
+ */
+export function moveListKey(
+  cursor: number, count: number,
+  e: { key: string; altKey: boolean; ctrlKey: boolean; metaKey: boolean },
+): { cursor: number } | 'toggle' | null {
+  if (e.altKey || e.ctrlKey || e.metaKey || !count) return null;
+  if (e.key === 'Enter' || e.key === ' ') return 'toggle';
+  const at = e.key === 'ArrowDown' || e.key === 'ArrowRight' ? cursor + 1
+    : e.key === 'ArrowUp' || e.key === 'ArrowLeft' ? cursor - 1
+    : e.key === 'Home' ? 0
+    : e.key === 'End' ? count - 1
+    : null;
+  return at === null ? null : { cursor: Math.max(0, Math.min(count - 1, at)) };
+}
+
+/* ── the list a dial walks: a select with folders ──────────────── */
+
+/**
+ * A select with folders walks its open level as one list with the back
+ * pill on top: inside a folder the pill is row 0 of the walk and the
+ * level's rows follow, so a drag, the wheel or the arrows run up past the
+ * first row onto the pill. At the top there is no pill and the walk is the
+ * rows alone.
+ */
+export const moveSelectWalkCount = (level: SelectLevel) => level.rows.length + (level.back !== null ? 1 : 0);
+/** The level's cursor as a row of that walk. */
+export const moveSelectWalkIndex = (level: SelectLevel) => level.cursor + (level.back !== null ? 1 : 0);
+/** A row of the walk as the level's cursor (-1, the back pill). */
+export const moveSelectFromWalk = (level: SelectLevel, index: number) => index - (level.back !== null ? 1 : 0);
+
+/** Whether a still press landed on a list's back pill. */
+export function moveListBackAt(back: MoveSlotBox | null, e: MoveSlotPointer) {
+  return !!back && e.clientX >= back.left && e.clientX < back.left + back.width &&
+    e.clientY >= back.top && e.clientY < back.top + back.height;
+}
+
+/** {@link moveListBackAt} for a slot element. */
+export function moveListBackIn(slot: Element, e: MoveSlotPointer) {
+  const back = slot.querySelector('.tweakers-list-screen-back');
+  return moveListBackAt(back ? back.getBoundingClientRect() : null, e);
+}
+
+/**
+ * A still click on a select with folders is a tap where it landed: on the
+ * back pill it goes up; on a row it puts the cursor there — which selects an
+ * option — and opens a folder; anywhere else (the head) it taps the row the
+ * cursor is on. `row` is the level row the press landed on (-1 for none).
+ */
+export function moveSelectClick(level: SelectLevel, row: number, onBack: boolean): { cursor?: number; tap: boolean } {
+  if (onBack && level.back !== null) return { cursor: -1, tap: true };
+  const hit = level.rows[row];
+  if (hit) return { cursor: row, tap: hit.folder };
+  return { tap: true };
+}
+
+/**
+ * A select with folders read aloud the way its knob reads in the hand: a
+ * stepped control on the cursor row, saying what that row is — the way back,
+ * a folder, or an option, and whether that option is the one chosen.
+ */
+export function moveSelectAria(label: string, level: SelectLevel, value: unknown) {
+  const row = level.rows[level.cursor];
+  const text = level.cursor < 0 && level.back !== null ? `Back to ${level.back}`
+    : !row ? 'Nothing to choose'
+    : row.folder ? `${row.label}, folder`
+    : `${row.label}${row.value === value ? ', chosen' : ''}${level.back !== null ? ` (in ${level.title})` : ''}`;
+  return {
+    role: 'slider' as const,
+    'aria-label': label,
+    'aria-valuemin': 0,
+    'aria-valuemax': Math.max(0, moveSelectWalkCount(level) - 1),
+    'aria-valuenow': moveSelectWalkIndex(level),
+    'aria-valuetext': text,
+    'aria-orientation': 'vertical' as const,
+  };
 }
 
 /* ── what a slot reads out ─────────────────────────────────────── */

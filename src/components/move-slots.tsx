@@ -4,9 +4,9 @@ import type { CSSProperties, ReactNode } from 'react';
 import { moveBandCuts, moveGrainPicture, moveLanes, moveNumericDrawing, movePlaybackMode, MOVE_GRAIN, type MoveGrainSpan, moveVectorStage, MOVE_BAND_H, MOVE_BAND_W, MOVE_STAGE, type MovePlaybackMode, type MoveTone } from '../move-visual-core';
 import { MoveGauge, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing } from './move-visuals';
 export { MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotDiaphragmBody, MoveSlotStreakBody, MoveSlotClockBody, MoveSlotPlaybackDrawing, MOVE_GAUGE, moveGaugeBearing } from './move-visuals';
-import type { ControlMeta } from '../store/TweakStore';
+import type { ControlMeta, SelectLevel } from '../store/TweakStore';
 import { ICON_BADGE_OFF, ICON_BADGE_ON, LUCIDE_ICONS } from '../icons';
-import { enumOptionIcon, enumOptionLabel, enumOptionValue } from '../move-layout';
+import { enumAspect, enumOptionIcon, enumOptionLabel, enumOptionValue } from '../move-layout';
 import { arcPath } from '../angle-core';
 import { parseHex } from '../color-core';
 import { resolveFilterAxis, type FilterValue } from '../filter-core';
@@ -30,7 +30,12 @@ import { ListScreen } from './ListScreen';
  *   headline, the name shrinks to a tag on top. For dials whose value
  *   already says what it is (two seconds, three clips) — a slider asks for
  *   it with `display: 'value'` — and for a value chip substituted into the
- *   slot.
+ *   slot. A select asks for it too (`display: 'value'`): the chosen
+ *   option's name is the headline, with no list under it. `track: false`
+ *   drops a slider's bar; a select's face has none unless `track: true`.
+ * - `aspect`  — an option picker whose options are proportions ("16:9"):
+ *   a frame in the chosen proportion, as large as the slot holds, the
+ *   ratio written inside it — the shape is read before the number.
  * - `icon`    — an option picker whose current option shows as a glyph:
  *   at arm's length you read a picture, not a word.
  * - `picture` — an option picker whose current option fills the slot as a
@@ -40,6 +45,15 @@ import { ListScreen } from './ListScreen';
  *   select's `preview` sampler) — the curve-selection slot.
  * - `enum`    — a plain stepped option picker: every option on the Move's
  *   own list screen, which is the whole slot; a touch grows it to the run.
+ * - `folders` — the enum's list screen for a select whose options come in
+ *   folders: one level at a time, folder rows wearing the page chevron, the
+ *   level above a back pill. The knob walks the level (an option it lands on
+ *   is selected; a folder only takes the cursor), a tap opens the folder
+ *   under it or, on the pill, goes up.
+ * - `multiselect` — the same list screen with a tick on every chosen row:
+ *   the knob walks a cursor, a tap ticks the row under it, and a count of
+ *   the ticked rows rides in the head as a badge cut like the list screen's
+ *   back pill.
  * - `xy`      — a 2D pad filling the slot; on the hardware the column's
  *   knob turns X and the volume knob turns Y while touched.
  * - `range`   — two handles on one bar; column knob = low end, volume
@@ -112,6 +126,9 @@ export type MoveSlotKind =
   | 'icon'
   | 'curve'
   | 'enum'
+  | 'folders'
+  | 'aspect'
+  | 'multiselect'
   | 'xy'
   | 'range'
   | 'filter'
@@ -153,6 +170,7 @@ export function moveSlotKind(
 ): MoveSlotKind {
   if (meta.type === 'color') return 'color';
   if (meta.type === 'filter') return 'filter';
+  if (meta.type === 'multiselect') return 'multiselect';
   if (opts.stage) return 'env';
   if (meta.type === 'toggle' && meta.moveVisual?.kind === 'metronome') return 'metronome';
   if (meta.type === 'toggle') return meta.icon ? 'toggle-icon' : 'toggle';
@@ -167,6 +185,11 @@ export function moveSlotKind(
   if (moveLanes(meta, opts.value)) return 'lanes';
   if (movePlaybackMode(meta, opts.value)) return 'playback';
   if (opts.enum) {
+    // Folders are a list's to walk: a select that has them is always one.
+    if (meta.type === 'select' && meta.optionTree) return 'folders';
+    // The app's own ask for the face wins over a glyph or a picture.
+    if (enumAspect(meta, opts.value)) return 'aspect';
+    if (meta.type === 'select' && meta.display === 'value') return 'value';
     if (opts.shape) return 'curve';
     if (opts.picture) return 'picture';
     if (opts.glyph) return 'icon';
@@ -210,14 +233,22 @@ export function splitReadoutUnit(value: string): { num: string; unit: string | n
 }
 
 /** The slot's centred name, and the value that takes its place on touch. */
-export function MoveSlotReadout({ label, value }: { label: string; value: ReactNode }) {
+export function MoveSlotReadout({ label, value, bare }: {
+  label: string;
+  value: ReactNode;
+  /** No bar under it: the readout stands in the middle of the slot. */
+  bare?: boolean;
+}) {
   const split = typeof value === 'string' ? splitReadoutUnit(value) : null;
   return (
-    <div className="tweakers-move-dial-readout">
+    <div className="tweakers-move-dial-readout" data-bare={bare || undefined}>
       <span className="tweakers-move-dial-label" data-long={label.length > 9 || undefined}>
         {label}
       </span>
-      <span className="tweakers-move-dial-value">
+      <span className="tweakers-move-dial-value"
+        // How long a word stands as the headline, for a face that heads with
+        // words (a select's chosen name): the stylesheet sizes it to fit.
+        data-length={typeof value === 'string' && !split?.unit && value.length > 5 ? (value.length > 8 ? 'long' : 'medium') : undefined}>
         {split?.unit ? (
           <>
             <span className="tweakers-move-dial-number">{split.num}</span>
@@ -242,7 +273,7 @@ export function MoveSlotShape({ d, className = 'tweakers-move-dial-shape' }: { d
  *  bipolar dial parked exactly on its origin states the zero outright
  *  (the marker) instead of leaving a stub to read against a tick. */
 export function MoveSlotDefaultBody({
-  label, value, pct, originPct, atOrigin,
+  label, value, pct, originPct, atOrigin, track = true,
 }: {
   label: string;
   value: ReactNode;
@@ -252,11 +283,13 @@ export function MoveSlotDefaultBody({
   originPct: number | null;
   /** Parked on the origin exactly — the dial's zero. */
   atOrigin?: boolean;
+  /** Draw the fill bar. `false` leaves the readout alone in the slot. */
+  track?: boolean;
 }) {
   return (
     <>
-      <MoveSlotReadout label={label} value={value} />
-      <div className="tweakers-move-dial-bar">
+      <MoveSlotReadout label={label} value={value} bare={!track} />
+      {track && <div className="tweakers-move-dial-bar">
         <div
           className="tweakers-move-dial-fill"
           data-zero={atOrigin || undefined}
@@ -267,7 +300,7 @@ export function MoveSlotDefaultBody({
         {atOrigin && (
           <span className="tweakers-move-dial-zero" style={{ left: `calc(2px + (100% - 4px) * ${(originPct ?? 0) / 100})` }} />
         )}
-      </div>
+      </div>}
     </>
   );
 }
@@ -297,9 +330,17 @@ export const MOVE_LIST_ROWS = 5;
  *
  *  A slot the page has put its oscilloscope in already has a picture — the
  *  live wave — so it keeps the named option and drops the list, which the
- *  wave would be running behind. */
+ *  wave would be running behind.
+ *
+ *  A select whose options come in folders shows one `level` at a time: the
+ *  head names the level (the control at the top, the folder inside one), a
+ *  folder row wears the list screen's page chevron, and inside a folder the
+ *  level above is the list screen's back pill, pinned over the first row.
+ *  The cursor rides the highlight — on a row, or on the pill — and a folder
+ *  holding the value reads bright, so the way to the choice shows from the
+ *  top. */
 export function MoveSlotEnumBody({
-  label, optionLabel, options, activeIdx, shape, glyph, picture = null, playback, scoped,
+  label, optionLabel, options, activeIdx, shape, glyph, picture = null, playback, scoped, level,
 }: {
   label: string;
   optionLabel: string;
@@ -312,8 +353,40 @@ export function MoveSlotEnumBody({
   playback?: MovePlaybackMode | null;
   /** The slot draws the modulator's live signal behind this face. */
   scoped?: boolean;
+  /** The open level of a select with folders; it takes the list's place. */
+  level?: SelectLevel | null;
 }) {
   const selected = options[activeIdx];
+
+  if (level) {
+    const count = level.rows.length + (level.back !== null ? 1 : 0);
+    // A folder has no value, so its row is keyed by where it stands.
+    const key = (i: number) => (level.rows[i]?.folder ? `\u0000folder:${i}` : level.rows[i]?.value);
+    return (
+      <div
+        className="tweakers-move-dial-screen"
+        data-grow={count > MOVE_LIST_ROWS || undefined}
+        style={{ '--move-list-count': Math.max(1, count) } as CSSProperties}
+      >
+        <span className="tweakers-move-dial-head">{level.title}</span>
+        <ListScreen
+          className="tweakers-move-dial-list"
+          label={label}
+          follow="center"
+          back={level.back ?? undefined}
+          backSelected={level.back !== null && level.cursor < 0}
+          items={level.rows.map((row, i) => ({
+            value: key(i)!,
+            label: row.label,
+            ...(row.folder ? { detail: 'page' as const } : {}),
+            ...(row.holds ? { checked: true } : {}),
+            ...(row.icon ? { icon: row.icon } : {}),
+          }))}
+          value={level.cursor >= 0 ? key(level.cursor) : undefined}
+        />
+      </div>
+    );
+  }
 
   // A picture names one option at a time, so it keeps the pagination cells
   // to say where that one sits. A list has the whole run on it already.
@@ -326,17 +399,7 @@ export function MoveSlotEnumBody({
         {!playback && shape && <MoveSlotShape d={shape} />}
         {!playback && !picture && glyph && <MoveSlotGlyph name={glyph} className="tweakers-move-dial-icon" />}
         <span className="tweakers-move-dial-option">{optionLabel}</span>
-        <div className="tweakers-move-dial-bar">
-          <div className="tweakers-move-dial-enum">
-            {options.map((opt, j) => (
-              <span
-                key={enumOptionValue(opt as never)}
-                className="tweakers-move-dial-enum-cell"
-                data-on={j === activeIdx || undefined}
-              />
-            ))}
-          </div>
-        </div>
+        <MoveSlotEnumCells options={options} activeIdx={activeIdx} />
       </>
     );
   }
@@ -360,6 +423,113 @@ export function MoveSlotEnumBody({
         value={selected ? enumOptionValue(selected as never) : undefined}
         follow="center"
       />
+    </div>
+  );
+}
+
+/** The pagination cells under an option face: one per option, the chosen
+ *  one lit — where the named option sits in the run. */
+export function MoveSlotEnumCells({ options, activeIdx }: {
+  options: NonNullable<ControlMeta['options']>;
+  activeIdx: number;
+}) {
+  return (
+    <div className="tweakers-move-dial-bar">
+      <div className="tweakers-move-dial-enum">
+        {options.map((opt, j) => (
+          <span
+            key={enumOptionValue(opt as never)}
+            className="tweakers-move-dial-enum-cell"
+            data-on={j === activeIdx || undefined}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A choice of proportions (`display: 'aspect'`): the slot is a small canvas,
+ * and the chosen option draws as a frame in its proportion — as large as the
+ * slot holds, centred — with the ratio written inside. The control's name is
+ * the tag on top, as on every picture face. Stepping the options eases the
+ * frame from one proportion to the next; with reduced motion it snaps.
+ *
+ * The fitting is the stylesheet's: the frame's box is the largest W:H box
+ * inside the drawing band, so it follows the slot whatever size it is drawn.
+ */
+export function MoveSlotAspectBody({ label, w, h, text, options, activeIdx, track = false }: {
+  label: string;
+  /** The proportion's two sides; only their ratio matters. */
+  w: number;
+  h: number;
+  /** What the frame says — the option's label, the ratio for a plain option. */
+  text: string;
+  options?: NonNullable<ControlMeta['options']>;
+  activeIdx?: number;
+  /** Draw the pagination cells under the frame. */
+  track?: boolean;
+}) {
+  const cells = track && options && activeIdx !== undefined;
+  return (
+    <>
+      <span className="tweakers-move-dial-tag">{label}</span>
+      <div className="tweakers-move-dial-aspect" data-track={cells || undefined}>
+        <div className="tweakers-move-dial-aspect-frame" style={{ '--move-aspect': w / h } as CSSProperties}>
+          <span className="tweakers-move-dial-aspect-text">{text}</span>
+        </div>
+      </div>
+      {cells && <MoveSlotEnumCells options={options} activeIdx={activeIdx} />}
+    </>
+  );
+}
+
+/**
+ * A choice of several: the enum's list screen, every chosen row ticked. Two
+ * questions get two marks, as on every kit list — the cursor rides the
+ * highlight (where the knob is), the tick says what is chosen — so a set can
+ * be built up row by row without losing the place in it. The cursor row is
+ * held in the middle, the run passing behind it, and a touch grows the screen
+ * to the whole run like the enum's.
+ *
+ * The head keeps the control's name, and a badge in its right corner counts
+ * the ticked rows: the list screen's back pill — the same pill, face and
+ * radius — carrying a number instead of a way out. It stays up at zero, so
+ * the head never reflows under a hand unticking the last row, and "0" says
+ * the set is empty as plainly as "3" says it is not.
+ */
+export function MoveSlotMultiselectBody({ label, options, checked, cursor }: {
+  label: string;
+  options: { value: string; label: string; tag?: string }[];
+  /** The ticked values. */
+  checked: readonly string[];
+  /** The row the knob is on. */
+  cursor: number;
+}) {
+  const ticked = new Set(checked);
+  const count = options.filter((o) => ticked.has(o.value)).length;
+  return (
+    <div
+      className="tweakers-move-dial-screen"
+      data-grow={options.length > MOVE_LIST_ROWS || undefined}
+      style={{ '--move-list-count': Math.max(1, options.length) } as CSSProperties}
+    >
+      <span className="tweakers-move-dial-head" data-badge="true">{label}</span>
+      <span className="tweakers-move-dial-count" data-zero={count === 0 || undefined} aria-label={`${count} chosen`}>
+        {count}
+      </span>
+      {options.length ? (
+        <ListScreen
+          className="tweakers-move-dial-list"
+          label={label}
+          multiselect
+          follow="center"
+          items={options.map((o) => ({ value: o.value, label: o.label, tag: o.tag, checked: ticked.has(o.value) }))}
+          value={options[Math.max(0, Math.min(options.length - 1, cursor))]?.value}
+        />
+      ) : (
+        <span className="tweakers-move-dial-empty">Nothing to choose</span>
+      )}
     </div>
   );
 }
@@ -1332,8 +1502,11 @@ export function MovePadToggleBody({ label }: { label: string }) {
 
 /** A switch drawn as its picture alone: a pad is too narrow for a name and
  *  a badge, and the whole pad inverting already says it is on. The name
- *  stays on the pad for the screen reader, not the eye. */
-export function MovePadIconBody({ icon }: { icon: string }) {
+ *  stays on the pad for the screen reader, not the eye. With a `caption` the
+ *  picture stands in for the name and the words beside it say the value in
+ *  force — a brain, then "High" — in the `icon-label` button's layout. */
+export function MovePadIconBody({ icon, caption }: { icon: string; caption?: string }) {
+  if (caption) return <MovePadIconLabelBody icon={icon} label={caption} />;
   return <MoveSlotIcon icon={icon} className="tweakers-move-pad-icon" />;
 }
 
@@ -1615,7 +1788,7 @@ export function MovePadListBody({ view, onCursor, onToggle }: {
 /** The small slot dictionary — every pad face the kit knows. */
 export const MOVE_PAD_LIBRARY = {
   toggle: { description: 'a switch; the pad inverts when it is on', component: MovePadToggleBody },
-  icon: { description: 'a switch drawn as its picture alone — no name, the pad inverts when it is on', component: MovePadIconBody },
+  icon: { description: 'a switch drawn as its picture in place of its name — alone, or with a caption beside it for the value in force; the pad inverts when it is on', component: MovePadIconBody },
   value: { description: 'a value the dial above can borrow — hold to peek, tap to latch', component: MovePadValueBody },
   list: { description: 'a checked list above a small pad; its dial walks, Sample selects, a second pad press runs — or, single, a picker: Sample takes the row and the pad names it', component: MovePadListBody },
   action: { description: 'a button: a press runs the app’s action', component: MovePadActionBody },
@@ -1658,11 +1831,14 @@ export const MOVE_SLOT_LIBRARY = {
   playback: { description: 'explicit playback traversal with a named mode', component: MoveSlotEnumBody },
   lanes: { description: 'a choice between parallel voices as lanes running away — the chosen one lit, a silent one crossed out', component: MoveSlotLanesBody },
   default: { description: 'name centred, value on touch, fill bar', component: MoveSlotDefaultBody },
-  value: { description: 'value-first: the value is the headline, the name a tag on top', component: MoveSlotDefaultBody },
+  value: { description: 'value-first: the value (or a select’s chosen option) is the headline, the name a tag on top', component: MoveSlotDefaultBody },
   icon: { description: 'option picker showing the current option as a glyph', component: MoveSlotEnumBody },
   picture: { description: 'option picker whose current option fills the slot as a picture, its name over it', component: MoveSlotEnumBody },
   curve: { description: 'option picker drawing the current option’s shape — curve selection', component: MoveSlotEnumBody },
   enum: { description: 'stepped option picker showing every option on a list screen', component: MoveSlotEnumBody },
+  folders: { description: 'option picker whose options come in folders: one level on the list screen, a tap opens a folder, the back pill goes up', component: MoveSlotEnumBody },
+  aspect: { description: 'option picker of proportions: a frame in the chosen W:H, as large as fits, the ratio inside', component: MoveSlotAspectBody },
+  multiselect: { description: 'a checked list: the knob walks the cursor, a tap ticks the row under it, a badge in the head counts the ticks', component: MoveSlotMultiselectBody },
   xy: { description: 'two axes in one gesture field, or a live shape preview', component: MoveSlotXYBody },
   range: { description: 'two handles on one bar; volume knob is the second hand', component: MoveSlotRangeBody },
   filter: { description: '2 slots: cutoff + resonance as one response picture', component: MoveSlotFilterBody },

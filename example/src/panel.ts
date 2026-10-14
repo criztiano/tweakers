@@ -71,6 +71,36 @@ export const CONFIG = {
       { value: 'other', label: 'Other instruments' },
     ],
   },
+  /* ── picking several: a checked list on one dial ─────────────── */
+  models: {
+    type: 'multiselect', default: ['flux', 'recraft'],
+    options: [
+      { value: 'flux', label: 'Flux' },
+      { value: 'sdxl', label: 'SDXL' },
+      { value: 'recraft', label: 'Recraft' },
+      { value: 'ideogram', label: 'Ideogram' },
+      { value: 'imagen', label: 'Imagen' },
+      'Kolors',
+      'Sana',
+    ],
+  },
+  /* ── picking one of many, grouped: folders open on a tap ─────── */
+  effect: {
+    type: 'select', default: 'gaussian',
+    options: [
+      { value: 'none', label: 'None' },
+      {
+        label: 'Blur',
+        options: [
+          { value: 'gaussian', label: 'Gaussian' },
+          { value: 'box', label: 'Box' },
+          { label: 'Motion', options: [{ value: 'linear', label: 'Linear' }, { value: 'radial', label: 'Radial' }] },
+        ],
+      },
+      { label: 'Noise', options: [{ value: 'grain', label: 'Grain' }, { value: 'static', label: 'Static' }] },
+      { value: 'sharpen', label: 'Sharpen' },
+    ],
+  },
   shape: {
     type: 'select', default: 'bell',
     options: [
@@ -140,6 +170,19 @@ export const CONFIG = {
   /* ── a number that says what it is: the value the headline, the name a
         tag — asked for with `display: 'value'` ───────────────────── */
   decay: { type: 'slider', default: 250, min: 0, max: 2000, step: 1, unit: ' ms', display: 'value' },
+  /* the same, with no bar: a count whose place in its range says nothing */
+  copies: { type: 'slider', default: 4, min: 1, max: 16, step: 1, display: 'value', track: false },
+  /* a choice read as its name alone — no list, no cells */
+  quality: {
+    type: 'select', default: 'draft', display: 'value',
+    options: [
+      { value: 'draft', label: 'Draft' },
+      { value: 'balanced', label: 'Balanced' },
+      { value: 'best', label: 'Best quality' },
+    ],
+  },
+  /* a choice of proportions, drawn as the frame it makes */
+  frame: { type: 'select', default: '16:9', display: 'aspect', options: ['1:1', '4:3', '3:4', '16:9', '9:16'] },
 
   /* ── values a bar cannot say: a bearing, a colour, a shape ────── */
   heading: { type: 'slider', default: 270, min: 0, max: 360, step: 1, display: 'dial' },
