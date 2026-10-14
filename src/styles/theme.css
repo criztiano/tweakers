@@ -1175,6 +1175,13 @@
   animation-delay: calc((var(--i) - 8) * var(--move-view-sweep-step));
 }
 
+/* Work that can tell how far it has come: the lights fill instead, each from
+   dim to lit as the work crosses its eighth. */
+.tweakers-move-view-wait-lights[data-progress] .tweakers-move-view-wait-light {
+  animation: none;
+  opacity: calc(0.12 + 0.88 * var(--lit, 0));
+}
+
 @keyframes tweakers-move-view-sweep {
   0% { opacity: 1; }
   12.5% { opacity: 0.5; }

@@ -705,7 +705,11 @@ function ViewsPanel() {
                 label: 'Import from a link',
                 onPress: () =>
                   void MoveViews.load(async ({ signal, say }) => {
-                    await pretendWork(2200, signal);
+                    // a download can tell how far it has come: the lights fill
+                    for (let step = 1; step <= 10; step++) {
+                      await pretendWork(220, signal);
+                      say('Downloading', 'field-recording.mov', step / 10);
+                    }
                     say('Opening', 'field-recording.mov');
                     await pretendWork(1200, signal);
                   }, {
