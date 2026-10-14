@@ -245,6 +245,69 @@ type XYValue = {
     y: number;
 };
 
+/**
+ * A select whose options come in folders, on its own so node can test it
+ * without React. A folder is a row with no value of its own: it names a run
+ * of options, which may hold folders too. The control's value is always a
+ * leaf — an option with a value — and leaf values are unique across the
+ * whole tree, so a value alone says where in the tree it sits.
+ *
+ * The Move's slot shows one level at a time. Where the list is open — the
+ * folder and the row the cursor is on — is the kit's own state, never the
+ * value: turning walks the open level's rows, landing on a leaf selects it,
+ * landing on a folder only moves the cursor, and a tap opens the folder
+ * under the cursor (or, on the back row, goes up). Every rule lives here, so
+ * the panel, a standalone slot and the hardware bridge agree.
+ */
+/** An option with a value: a plain string (its own value and label), or a
+ *  value with a display label, an icon or a picture. */
+type SelectLeaf = string | {
+    value: string;
+    label: string;
+    icon?: string;
+    picture?: string;
+};
+/** A run of options under one name. It has no value of its own; it opens. */
+type SelectFolder = {
+    label: string;
+    options: SelectOption[];
+    icon?: string;
+};
+/** One row a select offers: an option, or a folder of them. */
+type SelectOption = SelectLeaf | SelectFolder;
+/**
+ * Where a select's list is open: `open` is the folder path from the top —
+ * each entry an index into the level above — and `cursor` the row the knob
+ * is on in that level. `-1` is the back row, the way up, which only a level
+ * inside a folder has.
+ */
+type SelectPlace = {
+    open: number[];
+    cursor: number;
+};
+/** A row of the open level, ready to draw. */
+type SelectLevelRow = {
+    label: string;
+    /** A leaf's value; a folder has none. */
+    value?: string;
+    folder: boolean;
+    icon?: string;
+    picture?: string;
+    /** A folder holding the current value, somewhere inside it. */
+    holds?: boolean;
+};
+/** The open level: what the list shows and where its cursor is. */
+type SelectLevel = {
+    open: number[];
+    rows: SelectLevelRow[];
+    /** What the open level is: the control's name at the top, the folder's inside one. */
+    title: string;
+    /** The level above, by name — the control's own name one level in — or
+     *  null at the top, where there is nowhere to go back to. */
+    back: string | null;
+    cursor: number;
+};
+
 type TransferPoint = {
     x: number;
     y: number;
@@ -408,13 +471,17 @@ type SelectConfig = {
      * instead carry a `picture` (an image URL) that fills the whole slot, drawn
      * as a mask in the slot's own colour — for choices that are a texture or a
      * pattern, where the picture is the thing chosen.
+     *
+     * An option may instead be a folder — `{ label, options, icon? }`, with no
+     * value of its own — holding options and folders of its own. The value is
+     * always an option's (leaf values are unique across the whole tree), and
+     * `default` names one. On the Move the slot shows one level at a time: the
+     * knob walks the open level, landing on an option selects it, landing on a
+     * folder only moves the cursor, and a tap opens the folder under it — or,
+     * on the back pill naming the level above, goes up. Everywhere else (the
+     * sidebar, a tabs strip) the options read flat, in order.
      */
-    options: (string | {
-        value: string;
-        label: string;
-        icon?: string;
-        picture?: string;
-    })[];
+    options: SelectOption[];
     default?: string;
     /**
      * 'segmented' renders the options as an inline segmented control instead of a dropdown. Suits 2–4 short options.
@@ -925,12 +992,15 @@ type ControlMeta = {
     tab?: boolean;
     /** The synthetic segmented select driving `_tab` — it renders as the panel's tab bar, never as a row. */
     tabBar?: boolean;
+    /** A select's choices, flat: a select with folders lists its leaves here, in reading order. */
     options?: (string | {
         value: string;
         label: string;
         icon?: string;
         picture?: string;
     })[];
+    /** A select's options as declared, folders and all — set only when it has folders. */
+    optionTree?: SelectOption[];
     /** Toggle's own picture and state badges, from the explicit ToggleConfig form; an action's pad glyph. */
     icon?: string;
     onIcon?: string;
@@ -1274,6 +1344,7 @@ declare class TweakStoreClass {
     private disabledPaths;
     private controlStateListeners;
     private listCursors;
+    private selectPlaces;
     private presets;
     private activePreset;
     private presetProviders;
@@ -1359,6 +1430,34 @@ declare class TweakStoreClass {
      *  dropped without notifying; a move lands on the control-state channel. */
     setListCursor(panelId: string, path: string, index: number): void;
     private listRows;
+    /**
+     * Where a select with folders is open on the Move: the level its list
+     * shows, its rows, and the row the cursor is on (-1 is the back pill).
+     * It is not the value, so it lives beside it — one place per control that
+     * the screen and the Move both walk. It follows the value: once the value
+     * changes from anywhere (a turn, undo, a preset, the app), the level opens
+     * on the folder holding it, the cursor on it. Null for any other control.
+     */
+    getSelectLevel(panelId: string, path: string): SelectLevel | null;
+    /**
+     * Walks a select's cursor to row `cursor` of its open level (-1, the back
+     * pill, inside a folder). Landing on an option selects it — the value is
+     * written as any turn writes it; landing on a folder or the back pill only
+     * moves the cursor.
+     */
+    setSelectCursor(panelId: string, path: string, cursor: number): void;
+    /**
+     * A tap on a select with folders — a knob tap, a click: on a folder it
+     * opens it (the cursor on the way to the value when the value is inside,
+     * else on the back pill); on the back pill it goes up, the cursor on the
+     * folder it left. On an option it does nothing: it is already selected.
+     */
+    tapSelect(panelId: string, path: string): void;
+    private selectWithFolders;
+    /** The stored place while the value is the one it was made for; once the
+     *  value has moved on, the place the value puts the list in. */
+    private selectPlace;
+    private placeSelect;
     /** One channel for every app-pushed presentation change on a panel. */
     subscribeControlState(panelId: string, listener: Listener): () => void;
     private notifyControlState;
@@ -1529,4 +1628,4 @@ declare function defaultListItemParams(schema: Record<string, ListItemField>): R
 declare function normalizeListItems(config: ListConfig): ListItemValue[];
 declare const TweakStore: TweakStoreClass;
 
-export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type BalanceConfig, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type CurveConfig, type EasingConfig, type FileConfig, type FilterConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type MoveBand, type MoveEdges, type MoveKitRegistry, type MovePlaybackMode, type MoveSelectVisual, type MoveSliderVisual, type MoveSlotGroup, type MoveToggleVisual, type MoveVisual, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type PanelConfig, type Preset, type PresetExplorationAdapter, type PresetItem, type PresetProvider, type PresetProviderPreset, type RangeConfig, type RangeValue, type ReservedKey, type ResolvedValues, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SwatchConfig, type SwatchOption, TAB_PATH, type TextConfig, type ToggleConfig, type TransferConfig, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakStorePanelOptions, type TweakValue, type TweakersPersistOptions, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, groupListFields, hintDomId, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveTweakValues };
+export { type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type BalanceConfig, type ChipOption, type ChipsConfig, type ColorConfig, type ControlMeta, type CurveConfig, type EasingConfig, type FileConfig, type FilterConfig, type GalleryConfig, type GalleryItem, type GradientConfig, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, type MoveBand, type MoveEdges, type MoveKitRegistry, type MovePlaybackMode, type MoveSelectVisual, type MoveSliderVisual, type MoveSlotGroup, type MoveToggleVisual, type MoveVisual, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type PanelConfig, type Preset, type PresetExplorationAdapter, type PresetItem, type PresetProvider, type PresetProviderPreset, type RangeConfig, type RangeValue, type ReservedKey, type ResolvedValues, type SelectConfig, type SelectFolder, type SelectLeaf, type SelectLevel, type SelectLevelRow, type SelectOption, type SelectPlace, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SwatchConfig, type SwatchOption, TAB_PATH, type TextConfig, type ToggleConfig, type TransferConfig, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakStorePanelOptions, type TweakValue, type TweakersPersistOptions, type XYAxis, type XYConfig, type XYValue, defaultListItemParams, formatLabel, groupListFields, hintDomId, inferStep, isEasingConfigValue, isHexColor, isSpringConfigValue, normalizeListItems, parseListItemSchema, resolveTweakValues };

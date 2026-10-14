@@ -3090,6 +3090,7 @@ function ListScreen({
   follow = "nearest",
   back,
   onBack,
+  backSelected,
   className,
   style
 }) {
@@ -3148,6 +3149,7 @@ function ListScreen({
         className: "tweakers-list-screen-back",
         "aria-label": back === true ? "Back" : `Back to ${back}`,
         "data-bare": back === true || void 0,
+        "data-selected": backSelected || void 0,
         disabled: !onBack,
         onClick: onBack,
         children: [
@@ -3229,6 +3231,7 @@ function moveSlotKind(meta, opts = {}) {
   if (moveLanes(meta, opts.value)) return "lanes";
   if (movePlaybackMode(meta, opts.value)) return "playback";
   if (opts.enum) {
+    if (meta.type === "select" && meta.optionTree) return "folders";
     if (enumAspect(meta, opts.value)) return "aspect";
     if (meta.type === "select" && meta.display === "value") return "value";
     if (opts.shape) return "curve";
@@ -3314,9 +3317,43 @@ function MoveSlotEnumBody({
   glyph,
   picture = null,
   playback,
-  scoped
+  scoped,
+  level
 }) {
   const selected = options[activeIdx];
+  if (level) {
+    const count = level.rows.length + (level.back !== null ? 1 : 0);
+    const key = (i) => level.rows[i]?.folder ? `\0folder:${i}` : level.rows[i]?.value;
+    return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(
+      "div",
+      {
+        className: "tweakers-move-dial-screen",
+        "data-grow": count > MOVE_LIST_ROWS || void 0,
+        style: { "--move-list-count": Math.max(1, count) },
+        children: [
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-head", children: level.title }),
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+            ListScreen,
+            {
+              className: "tweakers-move-dial-list",
+              label,
+              follow: "center",
+              back: level.back ?? void 0,
+              backSelected: level.back !== null && level.cursor < 0,
+              items: level.rows.map((row2, i) => ({
+                value: key(i),
+                label: row2.label,
+                ...row2.folder ? { detail: "page" } : {},
+                ...row2.holds ? { checked: true } : {},
+                ...row2.icon ? { icon: row2.icon } : {}
+              })),
+              value: level.cursor >= 0 ? key(level.cursor) : void 0
+            }
+          )
+        ]
+      }
+    );
+  }
   if (playback || shape || glyph || picture || scoped) {
     return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
       !playback && picture && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotPicture, { src: picture }),
@@ -4227,6 +4264,7 @@ var MOVE_SLOT_LIBRARY = {
   picture: { description: "option picker whose current option fills the slot as a picture, its name over it", component: MoveSlotEnumBody },
   curve: { description: "option picker drawing the current option\u2019s shape \u2014 curve selection", component: MoveSlotEnumBody },
   enum: { description: "stepped option picker showing every option on a list screen", component: MoveSlotEnumBody },
+  folders: { description: "option picker whose options come in folders: one level on the list screen, a tap opens a folder, the back pill goes up", component: MoveSlotEnumBody },
   aspect: { description: "option picker of proportions: a frame in the chosen W:H, as large as fits, the ratio inside", component: MoveSlotAspectBody },
   multiselect: { description: "a checked list: the knob walks the cursor, a tap ticks the row under it, a badge in the head counts the ticks", component: MoveSlotMultiselectBody },
   xy: { description: "two axes in one gesture field, or a live shape preview", component: MoveSlotXYBody },
@@ -9781,6 +9819,35 @@ function moveListKey(cursor, count, e) {
   if (e.key === "Enter" || e.key === " ") return "toggle";
   const at2 = e.key === "ArrowDown" || e.key === "ArrowRight" ? cursor + 1 : e.key === "ArrowUp" || e.key === "ArrowLeft" ? cursor - 1 : e.key === "Home" ? 0 : e.key === "End" ? count - 1 : null;
   return at2 === null ? null : { cursor: Math.max(0, Math.min(count - 1, at2)) };
+}
+var moveSelectWalkCount = (level) => level.rows.length + (level.back !== null ? 1 : 0);
+var moveSelectWalkIndex = (level) => level.cursor + (level.back !== null ? 1 : 0);
+var moveSelectFromWalk = (level, index) => index - (level.back !== null ? 1 : 0);
+function moveListBackAt(back, e) {
+  return !!back && e.clientX >= back.left && e.clientX < back.left + back.width && e.clientY >= back.top && e.clientY < back.top + back.height;
+}
+function moveListBackIn(slot, e) {
+  const back = slot.querySelector(".tweakers-list-screen-back");
+  return moveListBackAt(back ? back.getBoundingClientRect() : null, e);
+}
+function moveSelectClick(level, row2, onBack) {
+  if (onBack && level.back !== null) return { cursor: -1, tap: true };
+  const hit = level.rows[row2];
+  if (hit) return { cursor: row2, tap: hit.folder };
+  return { tap: true };
+}
+function moveSelectAria(label, level, value) {
+  const row2 = level.rows[level.cursor];
+  const text = level.cursor < 0 && level.back !== null ? `Back to ${level.back}` : !row2 ? "Nothing to choose" : row2.folder ? `${row2.label}, folder` : `${row2.label}${row2.value === value ? ", chosen" : ""}${level.back !== null ? ` (in ${level.title})` : ""}`;
+  return {
+    role: "slider",
+    "aria-label": label,
+    "aria-valuemin": 0,
+    "aria-valuemax": Math.max(0, moveSelectWalkCount(level) - 1),
+    "aria-valuenow": moveSelectWalkIndex(level),
+    "aria-valuetext": text,
+    "aria-orientation": "vertical"
+  };
 }
 var moveDialPercent = (meta, value) => Math.round(normalizeDial(meta, value) * 100);
 var plainNumber = (n) => Math.abs(n) >= 100 ? Math.round(n).toString() : Number(n.toFixed(2)).toString();
@@ -15952,6 +16019,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const [bendHeld, setBendHeld] = (0, import_react18.useState)(null);
   const bendRef = (0, import_react18.useRef)(null);
   const listRowRef = (0, import_react18.useRef)(-1);
+  const listBackRef = (0, import_react18.useRef)(false);
   const [waveHeld, setWaveHeld] = (0, import_react18.useState)(null);
   const waveRef = (0, import_react18.useRef)(null);
   const [handTouch, setHandTouch] = (0, import_react18.useState)({});
@@ -16631,6 +16699,52 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       e.stopPropagation();
       if (next === "toggle") tickRow(meta, listCursor(meta));
       else setListCursor(meta, next.cursor);
+    }
+  });
+  const selectLevelOf = (meta) => import_TweakStore19.TweakStore.getSelectLevel(page.panel.id, meta.path);
+  const folderDrag = (meta) => ({
+    onPointerDown: (e) => {
+      const level = selectLevelOf(meta);
+      if (e.button > 0 || !level || import_TweakStore19.TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      listRowRef.current = moveListRowIn(e.currentTarget, e);
+      listBackRef.current = moveListBackIn(e.currentTarget, e);
+      beginPress(e, meta.path, moveSelectWalkIndex(level));
+    },
+    onPointerMove: (e) => {
+      const level = selectLevelOf(meta);
+      if (!level) return;
+      const p = movePressTravel(pressRef, meta.path, e, () => moveSelectWalkIndex(level));
+      if (p && !import_TweakStore19.TweakStore.isDisabled(page.panel.id, meta.path)) {
+        import_TweakStore19.TweakStore.setSelectCursor(page.panel.id, meta.path, moveSelectFromWalk(level, moveListWalk(p, e, moveSelectWalkCount(level))));
+      }
+    },
+    onPointerUp: (e) => {
+      if (!endPress(meta.path) || import_TweakStore19.TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      if (e.shiftKey) return resetValue(meta);
+      const level = selectLevelOf(meta);
+      if (!level) return;
+      const click = moveSelectClick(level, listRowRef.current, listBackRef.current);
+      if (click.cursor !== void 0) import_TweakStore19.TweakStore.setSelectCursor(page.panel.id, meta.path, click.cursor);
+      if (click.tap) import_TweakStore19.TweakStore.tapSelect(page.panel.id, meta.path);
+    },
+    onPointerCancel: () => {
+      endPress(meta.path);
+    },
+    onWheel: (e) => {
+      const level = selectLevelOf(meta);
+      if (e.defaultPrevented || !e.deltaY || !level || import_TweakStore19.TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      e.stopPropagation();
+      import_TweakStore19.TweakStore.setSelectCursor(page.panel.id, meta.path, level.cursor + Math.sign(e.deltaY));
+    },
+    onKeyDown: (e) => {
+      const level = selectLevelOf(meta);
+      if (!level || import_TweakStore19.TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      const next = moveListKey(moveSelectWalkIndex(level), moveSelectWalkCount(level), e);
+      if (!next) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (next === "toggle") import_TweakStore19.TweakStore.tapSelect(page.panel.id, meta.path);
+      else import_TweakStore19.TweakStore.setSelectCursor(page.panel.id, meta.path, moveSelectFromWalk(level, next.cursor));
     }
   });
   const xyFromPointer = (e, meta) => write2(meta, moveXYValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), fineRef));
@@ -17435,6 +17549,40 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         "data-active": active || void 0,
                                         ...listDrag(meta),
                                         children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(MoveSlotMultiselectBody, { label: meta.label, options, checked, cursor })
+                                      },
+                                      meta.path
+                                    );
+                                  }
+                                  const level = meta.type === "select" && meta.optionTree && isEnumDial(meta) ? import_TweakStore19.TweakStore.getSelectLevel(page.panel.id, meta.path) : null;
+                                  if (level) {
+                                    const activeIdx = enumIndex(meta, values[meta.path]);
+                                    return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
+                                      "div",
+                                      {
+                                        className: "tweakers-move-dial",
+                                        "data-kind": "folders",
+                                        style: dialSpan(meta) > 1 ? { gridColumn: `span ${dialSpan(meta)}` } : void 0,
+                                        ...moveSelectAria(meta.label, level, values[meta.path]),
+                                        tabIndex: disabled ? -1 : 0,
+                                        "aria-disabled": disabled || void 0,
+                                        "data-disabled": disabled || void 0,
+                                        "data-active": active || void 0,
+                                        ...folderDrag(meta),
+                                        children: [
+                                          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(MoveModRing, { panelId: page.panel.id, path: meta.path }),
+                                          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+                                            MoveSlotEnumBody,
+                                            {
+                                              label: meta.label,
+                                              optionLabel: enumOptionLabel(meta.options?.[activeIdx]),
+                                              options: meta.options ?? [],
+                                              activeIdx,
+                                              shape: null,
+                                              glyph: null,
+                                              level
+                                            }
+                                          )
+                                        ]
                                       },
                                       meta.path
                                     );
@@ -19029,7 +19177,10 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
   (0, import_react19.useSyncExternalStore)(
     (0, import_react19.useCallback)((cb) => panelId ? import_TweakStore20.TweakStore.subscribeControlState(panelId, cb) : () => {
     }, [panelId]),
-    () => panelId ? pathKey.split("\0").map((p) => import_TweakStore20.TweakStore.getListCursor(panelId, p)).join(",") : "",
+    () => panelId ? pathKey.split("\0").map((p) => {
+      const level2 = import_TweakStore20.TweakStore.getSelectLevel(panelId, p);
+      return `${import_TweakStore20.TweakStore.getListCursor(panelId, p)}${level2 ? `/${level2.open.join(".")}:${level2.cursor}` : ""}`;
+    }).join(",") : "",
     () => ""
   );
   const fine = (0, import_react19.useRef)(null);
@@ -19039,6 +19190,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
   const press = (0, import_react19.useRef)(null);
   const tap = (0, import_react19.useRef)(null);
   const listRow = (0, import_react19.useRef)(-1);
+  const listBack = (0, import_react19.useRef)(false);
   const [dragPath, setDragPath] = (0, import_react19.useState)(null);
   const [heldPoint, setHeldPoint] = (0, import_react19.useState)(0);
   const [heldStop, setHeldStop] = (0, import_react19.useState)(0);
@@ -19594,6 +19746,75 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
         children: [
           /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MoveModRing, { panelId, path: meta.path }),
           /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MoveSlotRangeBody, { label: meta.label, value: moveRangeReading(meta, value), lo: pos.lo, hi: pos.hi })
+        ]
+      }
+    );
+  }
+  const level = meta.type === "select" && meta.optionTree && isEnumDial(meta) ? import_TweakStore20.TweakStore.getSelectLevel(panelId, meta.path) : null;
+  if (level) {
+    const activeIdx = enumIndex(meta, value);
+    const levelNow = () => import_TweakStore20.TweakStore.getSelectLevel(panelId, meta.path) ?? level;
+    return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
+      "div",
+      {
+        className: cls,
+        style,
+        "data-kind": "folders",
+        "data-active": active || void 0,
+        ...moveSelectAria(meta.label, level, value),
+        tabIndex: off(meta) ? -1 : 0,
+        "aria-disabled": off(meta) || void 0,
+        "data-disabled": off(meta) || void 0,
+        onPointerDown: (e) => {
+          if (e.button > 0 || off(meta)) return;
+          listRow.current = moveListRowIn(e.currentTarget, e);
+          listBack.current = moveListBackIn(e.currentTarget, e);
+          begin(e, meta, moveSelectWalkIndex(levelNow()));
+        },
+        onPointerMove: (e) => {
+          const now = levelNow();
+          const p = movePressTravel(press, meta.path, e, () => moveSelectWalkIndex(now));
+          if (p && !off(meta)) import_TweakStore20.TweakStore.setSelectCursor(panelId, meta.path, moveSelectFromWalk(now, moveListWalk(p, e, moveSelectWalkCount(now))));
+        },
+        onPointerUp: (e) => {
+          if (!end(meta) || off(meta)) return;
+          if (e.shiftKey) return reset(meta);
+          const click = moveSelectClick(levelNow(), listRow.current, listBack.current);
+          if (click.cursor !== void 0) import_TweakStore20.TweakStore.setSelectCursor(panelId, meta.path, click.cursor);
+          if (click.tap) import_TweakStore20.TweakStore.tapSelect(panelId, meta.path);
+        },
+        onPointerCancel: () => {
+          end(meta);
+        },
+        onWheel: (e) => {
+          if (e.defaultPrevented || !e.deltaY || off(meta)) return;
+          e.stopPropagation();
+          import_TweakStore20.TweakStore.setSelectCursor(panelId, meta.path, levelNow().cursor + Math.sign(e.deltaY));
+        },
+        onKeyDown: (e) => {
+          if (off(meta)) return;
+          const now = levelNow();
+          const next = moveListKey(moveSelectWalkIndex(now), moveSelectWalkCount(now), e);
+          if (!next) return;
+          e.preventDefault();
+          e.stopPropagation();
+          if (next === "toggle") import_TweakStore20.TweakStore.tapSelect(panelId, meta.path);
+          else import_TweakStore20.TweakStore.setSelectCursor(panelId, meta.path, moveSelectFromWalk(now, next.cursor));
+        },
+        children: [
+          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MoveModRing, { panelId, path: meta.path }),
+          /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+            MoveSlotEnumBody,
+            {
+              label: meta.label,
+              optionLabel: enumOptionLabel(meta.options?.[activeIdx]),
+              options: meta.options ?? [],
+              activeIdx,
+              shape: null,
+              glyph: null,
+              level
+            }
+          )
         ]
       }
     );
