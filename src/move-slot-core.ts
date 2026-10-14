@@ -298,6 +298,16 @@ export function moveNextOption(meta: ControlMeta, value: unknown) {
   return count ? optionValue(meta, (enumIndex(meta, value) + 1) % count) : undefined;
 }
 
+/**
+ * A still click on an option slot: on a row of its list it takes that row,
+ * the way a pointed-at choice should; anywhere else — the head, a picture
+ * face with no list — it moves on ({@link moveNextOption}).
+ */
+export function moveOptionClick(meta: ControlMeta, value: unknown, row: number) {
+  const picked = row >= 0 ? optionValue(meta, row) : undefined;
+  return picked ?? moveNextOption(meta, value);
+}
+
 /* ── the list a dial walks: the multiselect ────────────────────── */
 
 /**
@@ -331,6 +341,17 @@ export function moveListRowIn(slot: Element, e: MoveSlotPointer) {
     list ? list.getBoundingClientRect() : null,
     e,
   );
+}
+
+/**
+ * The row a passing pointer is over wears `data-hover` — the list draws
+ * under the slot's own pointer handling, so its rows never see the pointer
+ * themselves. Only a hovering pointer: a press walks the cursor instead,
+ * and a finger on glass has no hover to show. `null` clears it.
+ */
+export function moveListHover(slot: Element, e: (MoveSlotPointer & { buttons: number; pointerType: string }) | null) {
+  const at = e && e.buttons === 0 && e.pointerType !== 'touch' ? moveListRowIn(slot, e) : -1;
+  slot.querySelectorAll('.tweakers-list-screen-row').forEach((row, i) => row.toggleAttribute('data-hover', i === at));
 }
 
 /** A multiselect's rows, as the store normalized them. */
