@@ -189,6 +189,34 @@ describe('MoveViews.load', () => {
     expect(MoveViews.getState().wait?.title).toBe('Opening');
     expect(MoveSurfaceStore.getState().wait).toEqual({ title: 'Opening', detail: 'take.wav' });
   });
+
+  it('tells how far the work has come when the work can say', async () => {
+    const half = deferred<void>();
+    void MoveViews.load(async ({ say }) => {
+      await half.promise;
+      say('Importing', 'clip.mp4', 0.426);
+      return new Promise<void>(() => {});
+    }, { title: 'Importing' });
+    await vi.advanceTimersByTimeAsync(MOVE_VIEW_WAIT.delay);
+    expect(MoveViews.getState().wait?.progress).toBeUndefined();
+    half.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(MoveViews.getState().wait?.progress).toBe(0.426);
+    expect(MoveSurfaceStore.getState().wait).toEqual({ title: 'Importing 42%', detail: 'clip.mp4' });
+  });
+
+  it('keeps a progress inside 0 to 1', async () => {
+    const said = deferred<void>();
+    void MoveViews.load(async ({ say }) => {
+      await said.promise;
+      say('Importing', undefined, 1.7);
+      return new Promise<void>(() => {});
+    }, { title: 'Importing' });
+    await vi.advanceTimersByTimeAsync(MOVE_VIEW_WAIT.delay);
+    said.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(MoveViews.getState().wait?.progress).toBe(1);
+  });
 });
 
 describe('the hand during a wait', () => {
