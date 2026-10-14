@@ -22,7 +22,8 @@ import {
   moveDialPercent, moveDialReading, moveRangeReading, moveChipValue, moveXYGrid,
   moveShapePath, movePressStart, movePressTravel, movePressEnd, moveTurnValue, moveTurnExtent, moveOptionStep,
   moveNextOption, moveListWalk, moveListRowIn, moveListKey, moveListAria, moveMultiselectOptions,
-  moveMultiselectChecked, moveMultiselectToggle, type MoveFaceRole, type MoveFineAnchor, type MovePress,
+  moveMultiselectChecked, moveMultiselectToggle, moveListBackIn, moveSelectAria, moveSelectClick, moveSelectFromWalk,
+  moveSelectWalkCount, moveSelectWalkIndex, type MoveFaceRole, type MoveFineAnchor, type MovePress,
 } from '../move-slot-core';
 import {
   moveSlotKind, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotAspectBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotXYBody, MoveSlotRangeBody, MoveSlotFilterBody,
@@ -111,11 +112,15 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
     () => 0,
   );
   useSyncExternalStore(MoveColorStore.subscribe, MoveColorStore.getVersion, () => 0);
-  // A multiselect's cursor rides the same channel; the knob walks it too.
+  // A multiselect's cursor rides the same channel, and so does where a
+  // select with folders is open; the knob walks them too.
   const pathKey = Array.isArray(path) ? path.join('\u0000') : path;
   useSyncExternalStore(
     useCallback((cb) => (panelId ? TweakStore.subscribeControlState(panelId, cb) : () => {}), [panelId]),
-    () => (panelId ? pathKey.split('\u0000').map((p) => TweakStore.getListCursor(panelId, p)).join(',') : ''),
+    () => (panelId ? pathKey.split('\u0000').map((p) => {
+      const level = TweakStore.getSelectLevel(panelId, p);
+      return `${TweakStore.getListCursor(panelId, p)}${level ? `/${level.open.join('.')}:${level.cursor}` : ''}`;
+    }).join(',') : ''),
     () => '',
   );
 
@@ -127,6 +132,7 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
   const press = useRef<MovePress | null>(null);
   const tap = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   const listRow = useRef(-1);
+  const listBack = useRef(false);
   const [dragPath, setDragPath] = useState<string | null>(null);
   const [heldPoint, setHeldPoint] = useState(0);
   const [heldStop, setHeldStop] = useState(0);
@@ -574,6 +580,59 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
         {...drag(meta, (e, down) => write(meta, moveRangeValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), rangeHandle, fine, down)))}>
         <MoveModRing panelId={panelId} path={meta.path} />
         <MoveSlotRangeBody label={meta.label} value={moveRangeReading(meta, value)} lo={pos.lo} hi={pos.hi} />
+      </div>
+    );
+  }
+
+  // A select with folders is its list, one level at a time: a drag, the
+  // wheel and the arrows walk the cursor (onto the back pill above the first
+  // row, inside a folder), an option it lands on is selected, and a still
+  // click is a tap where it landed — the instrument's own rules.
+  const level = meta.type === 'select' && meta.optionTree && isEnumDial(meta) ? TweakStore.getSelectLevel(panelId, meta.path) : null;
+  if (level) {
+    const activeIdx = enumIndex(meta, value);
+    const levelNow = () => TweakStore.getSelectLevel(panelId, meta.path) ?? level;
+    return (
+      <div className={cls} style={style} data-kind="folders" data-active={active || undefined}
+        {...moveSelectAria(meta.label, level, value)}
+        tabIndex={off(meta) ? -1 : 0} aria-disabled={off(meta) || undefined} data-disabled={off(meta) || undefined}
+        onPointerDown={(e) => {
+          if (e.button > 0 || off(meta)) return;
+          listRow.current = moveListRowIn(e.currentTarget, e);
+          listBack.current = moveListBackIn(e.currentTarget, e);
+          begin(e, meta, moveSelectWalkIndex(levelNow()));
+        }}
+        onPointerMove={(e) => {
+          const now = levelNow();
+          const p = movePressTravel(press, meta.path, e, () => moveSelectWalkIndex(now));
+          if (p && !off(meta)) TweakStore.setSelectCursor(panelId, meta.path, moveSelectFromWalk(now, moveListWalk(p, e, moveSelectWalkCount(now))));
+        }}
+        onPointerUp={(e) => {
+          if (!end(meta) || off(meta)) return;
+          if (e.shiftKey) return reset(meta);
+          const click = moveSelectClick(levelNow(), listRow.current, listBack.current);
+          if (click.cursor !== undefined) TweakStore.setSelectCursor(panelId, meta.path, click.cursor);
+          if (click.tap) TweakStore.tapSelect(panelId, meta.path);
+        }}
+        onPointerCancel={() => { end(meta); }}
+        onWheel={(e) => {
+          if (e.defaultPrevented || !e.deltaY || off(meta)) return;
+          e.stopPropagation();
+          TweakStore.setSelectCursor(panelId, meta.path, levelNow().cursor + Math.sign(e.deltaY));
+        }}
+        onKeyDown={(e) => {
+          if (off(meta)) return;
+          const now = levelNow();
+          const next = moveListKey(moveSelectWalkIndex(now), moveSelectWalkCount(now), e);
+          if (!next) return;
+          e.preventDefault();
+          e.stopPropagation();
+          if (next === 'toggle') TweakStore.tapSelect(panelId, meta.path);
+          else TweakStore.setSelectCursor(panelId, meta.path, moveSelectFromWalk(now, next.cursor));
+        }}>
+        <MoveModRing panelId={panelId} path={meta.path} />
+        <MoveSlotEnumBody label={meta.label} optionLabel={enumOptionLabel(meta.options?.[activeIdx] as never)}
+          options={meta.options ?? []} activeIdx={activeIdx} shape={null} glyph={null} level={level} />
       </div>
     );
   }

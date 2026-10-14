@@ -33,7 +33,8 @@ import {
 import {
   movePressStart, movePressTravel, movePressEnd, moveTurnValue, moveTurnExtent,
   moveOptionStep, moveNextOption, moveListWalk, moveListRowIn, moveListKey, moveMultiselectOptions,
-  moveMultiselectChecked, moveMultiselectToggle, moveListAria, type MovePress,
+  moveMultiselectChecked, moveMultiselectToggle, moveListAria, moveListBackIn, moveSelectAria, moveSelectClick,
+  moveSelectFromWalk, moveSelectWalkCount, moveSelectWalkIndex, type MovePress,
 } from '../move-slot-core';
 import { attachMoveKeys } from '../move-keys';
 import { MoveMenuButton } from './MoveMenuButton';
@@ -387,6 +388,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   const bendRef = useRef<{ y: number; curve: number } | null>(null);
   // The list row a multiselect's press went down on (-1: none).
   const listRowRef = useRef(-1);
+  // Whether a folder list's press went down on its back pill.
+  const listBackRef = useRef(false);
   // A held wave pad: the same vertical drag, one row down, lifting the
   // stage's own sine into it. `moved` is what tells a drag from a tap —
   // a tap flips the sine over instead of setting an amount.
@@ -1342,6 +1345,58 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       e.stopPropagation();
       if (next === 'toggle') tickRow(meta, listCursor(meta));
       else setListCursor(meta, next.cursor);
+    },
+  });
+
+  // A select with folders walks one level as a list: a drag, the wheel and
+  // the arrows walk the cursor — up past the first row onto the back pill
+  // inside a folder — and an option the cursor lands on is selected. A still
+  // click is a tap where it landed (moveSelectClick): a row takes the cursor
+  // and a folder opens, the pill goes up, the head taps the cursor's row.
+  // Enter and Space tap; a still Shift+click puts the default back. The
+  // column's knob walks the same cursor and its tap is the same tap.
+  const selectLevelOf = (meta: ControlMeta) => TweakStore.getSelectLevel(page.panel.id, meta.path);
+  const folderDrag = (meta: ControlMeta) => ({
+    onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
+      const level = selectLevelOf(meta);
+      if (e.button > 0 || !level || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      listRowRef.current = moveListRowIn(e.currentTarget, e);
+      listBackRef.current = moveListBackIn(e.currentTarget, e);
+      beginPress(e, meta.path, moveSelectWalkIndex(level));
+    },
+    onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
+      const level = selectLevelOf(meta);
+      if (!level) return;
+      const p = movePressTravel(pressRef, meta.path, e, () => moveSelectWalkIndex(level));
+      if (p && !TweakStore.isDisabled(page.panel.id, meta.path)) {
+        TweakStore.setSelectCursor(page.panel.id, meta.path, moveSelectFromWalk(level, moveListWalk(p, e, moveSelectWalkCount(level))));
+      }
+    },
+    onPointerUp: (e: React.PointerEvent<HTMLElement>) => {
+      if (!endPress(meta.path) || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      if (e.shiftKey) return resetValue(meta);
+      const level = selectLevelOf(meta);
+      if (!level) return;
+      const click = moveSelectClick(level, listRowRef.current, listBackRef.current);
+      if (click.cursor !== undefined) TweakStore.setSelectCursor(page.panel.id, meta.path, click.cursor);
+      if (click.tap) TweakStore.tapSelect(page.panel.id, meta.path);
+    },
+    onPointerCancel: () => { endPress(meta.path); },
+    onWheel: (e: React.WheelEvent<HTMLElement>) => {
+      const level = selectLevelOf(meta);
+      if (e.defaultPrevented || !e.deltaY || !level || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      e.stopPropagation();
+      TweakStore.setSelectCursor(page.panel.id, meta.path, level.cursor + Math.sign(e.deltaY));
+    },
+    onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => {
+      const level = selectLevelOf(meta);
+      if (!level || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      const next = moveListKey(moveSelectWalkIndex(level), moveSelectWalkCount(level), e);
+      if (!next) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (next === 'toggle') TweakStore.tapSelect(page.panel.id, meta.path);
+      else TweakStore.setSelectCursor(page.panel.id, meta.path, moveSelectFromWalk(level, next.cursor));
     },
   });
 
@@ -2336,6 +2391,32 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       {...listDrag(meta)}
                     >
                       <MoveSlotMultiselectBody label={meta.label} options={options} checked={checked} cursor={cursor} />
+                    </div>
+                  );
+                }
+                // A select with folders is its list, one level at a time: the
+                // folder rows open, the back pill goes up, and the cursor —
+                // the knob's, the drag's, the wheel's — rides the highlight.
+                const level = meta.type === 'select' && meta.optionTree && isEnumDial(meta)
+                  ? TweakStore.getSelectLevel(page.panel.id, meta.path) : null;
+                if (level) {
+                  const activeIdx = enumIndex(meta, values[meta.path]);
+                  return (
+                    <div
+                      key={meta.path}
+                      className="tweakers-move-dial"
+                      data-kind="folders"
+                      style={dialSpan(meta) > 1 ? { gridColumn: `span ${dialSpan(meta)}` } : undefined}
+                      {...moveSelectAria(meta.label, level, values[meta.path])}
+                      tabIndex={disabled ? -1 : 0}
+                      aria-disabled={disabled || undefined}
+                      data-disabled={disabled || undefined}
+                      data-active={active || undefined}
+                      {...folderDrag(meta)}
+                    >
+                      <MoveModRing panelId={page.panel.id} path={meta.path} />
+                      <MoveSlotEnumBody label={meta.label} optionLabel={enumOptionLabel(meta.options?.[activeIdx] as never)}
+                        options={meta.options ?? []} activeIdx={activeIdx} shape={null} glyph={null} level={level} />
                     </div>
                   );
                 }

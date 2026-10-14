@@ -1174,6 +1174,32 @@ Options are `{ value, label, tag?, hint? }` rows or plain strings (their own val
 - **The cursor** is the store's, not the value: `TweakStore.getListCursor(panelId, path)` / `setListCursor(panelId, path, index)`, on the control-state channel, so the screen and the knob walk one cursor.
 - The badge stays up at zero, dimmed. The list has no Capture-hold search: search belongs to the list the big wheel walks.
 
+### Options in folders
+
+A select's options may come in folders. A folder is `{ label, options, icon? }` — a name and a run of options (and folders) under it, with no value of its own:
+
+```js
+useTweakers('Step', {
+  type: {
+    type: 'select',
+    default: 'gaussian',
+    options: [
+      'none',
+      { label: 'Blur', options: [{ value: 'gaussian', label: 'Gaussian' }, 'box', { label: 'Motion', options: ['linear', 'radial'] }] },
+      { label: 'Noise', options: ['grain', 'static'] },
+    ],
+  },
+});
+```
+
+The value is always an option's value — never a folder — and option values are unique across the whole tree. `default` names any option, however deep; with none, the first option in reading order. Everywhere but the Move dial (the sidebar dropdown, a `moveTabs` strip, presets, the agent) the options read flat, in order: `ControlMeta.options` is that flat run, and `optionTree` keeps the folders.
+
+- **The slot** shows one level at a time on the enum's list screen. The head names the level — the control at the top, the folder inside one; a folder row wears the list screen's page chevron, and a folder holding the current value reads bright. Inside a folder the level above is the list screen's back pill, pinned over the first row and named for it (`‹ Type` one level in).
+- **Turning** — the column's knob, a drag over the slot (down is the next row), the wheel, the arrows on a focused slot — walks the open level. Landing on an option selects it at once, as any select does; landing on a folder only moves the cursor. Inside a folder, up past the first row is the back pill, lit.
+- **A tap opens** — a knob tap on the Move, a click on screen, Enter or Space. On a folder it opens it, the cursor on the way to the value when the value is inside, else on the back pill; on the back pill it goes up, the cursor on the folder it left; on an option it does nothing new. A click lands where it is aimed: a row takes the cursor (and a folder opens), the pill goes up, the head taps the cursor's row. Shift+click puts the default back.
+- **Where it is open** is the store's, not the value: `TweakStore.getSelectLevel(panelId, path)` (the level, its rows, the cursor; `-1` is the back pill), `setSelectCursor(panelId, path, cursor)` and `tapSelect(panelId, path)`, on the control-state channel — the screen and the knob walk one cursor. When the value changes from anywhere (undo, a preset, the app), the level follows the folder holding it.
+- **On the Move's screen** the open level is the enum's labels: a folder reads `Blur >`, and inside a folder the first row is the way up, `< Type`. Every readout away from the list (a chip, the touched value, the screen reader's) still names the chosen option.
+
 ### Tabs across the pads
 
 The mode a page is in does not want a knob. `moveTabs` lays a select across the small slots instead — one pad per option, side by side in the switch row, the current one lit — so the mode can be read without turning anything and reached where the hand already is. It is the pad grid's first multi-slot control, the filter's small sibling.

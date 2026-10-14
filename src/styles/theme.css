@@ -3655,6 +3655,26 @@
   text-align: center;
 }
 
+/* Inside a folder the dial's list wears the way up as its first row: the
+   back pill, pinned under the head at a row's height and inset, the rows
+   following it from the top. The slot reads the press, so the pill takes
+   no pointer of its own. */
+.tweakers-move-dial-screen > .tweakers-list-screen-back {
+  top: calc(var(--move-head-h) + var(--move-list-pad));
+  left: 4px;
+  max-width: calc(100% - 8px);
+  height: var(--move-list-row);
+  padding: 0 8px 0 3px;
+  font-size: 13px;
+  line-height: var(--move-list-row);
+  pointer-events: none;
+}
+
+.tweakers-list-screen.tweakers-move-dial-list[data-back] {
+  justify-content: flex-start;
+  padding-top: calc(var(--move-list-pad) + var(--move-list-row) + var(--move-list-gap));
+}
+
 .tweakers-list-screen.tweakers-move-dial-list {
   /* The component declares its own row metrics on this very element, so
      they have to be handed back to the screen's — which is the one place
@@ -6244,6 +6264,14 @@
   justify-content: center;
   width: 24px;
   padding: 0;
+}
+
+/* The cursor on the way out: a list walked by a knob reaches the pill too,
+   and the pill lights the way the selected row's name does — the ink
+   becomes its ground. */
+.tweakers-list-screen-back[data-selected] {
+  background: #dee3c9;
+  color: #1e1e1e;
 }
 
 /* The list's heading, level with the back pill and centred on the screen.

@@ -84,6 +84,23 @@ export const CONFIG = {
       'Sana',
     ],
   },
+  /* ── picking one of many, grouped: folders open on a tap ─────── */
+  effect: {
+    type: 'select', default: 'gaussian',
+    options: [
+      { value: 'none', label: 'None' },
+      {
+        label: 'Blur',
+        options: [
+          { value: 'gaussian', label: 'Gaussian' },
+          { value: 'box', label: 'Box' },
+          { label: 'Motion', options: [{ value: 'linear', label: 'Linear' }, { value: 'radial', label: 'Radial' }] },
+        ],
+      },
+      { label: 'Noise', options: [{ value: 'grain', label: 'Grain' }, { value: 'static', label: 'Static' }] },
+      { value: 'sharpen', label: 'Sharpen' },
+    ],
+  },
   shape: {
     type: 'select', default: 'bell',
     options: [

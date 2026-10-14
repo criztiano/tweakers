@@ -1,4 +1,4 @@
-import type { ControlMeta } from './store/TweakStore';
+import type { ControlMeta, SelectLevel } from './store/TweakStore';
 import {
   normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial,
   normalizeFilterDial, denormalizeFilterDial, dialOrigin, isEnumDial, enumIndex, enumOptionLabel,
@@ -389,6 +389,68 @@ export function moveListKey(
     : e.key === 'End' ? count - 1
     : null;
   return at === null ? null : { cursor: Math.max(0, Math.min(count - 1, at)) };
+}
+
+/* ── the list a dial walks: a select with folders ──────────────── */
+
+/**
+ * A select with folders walks its open level as one list with the back
+ * pill on top: inside a folder the pill is row 0 of the walk and the
+ * level's rows follow, so a drag, the wheel or the arrows run up past the
+ * first row onto the pill. At the top there is no pill and the walk is the
+ * rows alone.
+ */
+export const moveSelectWalkCount = (level: SelectLevel) => level.rows.length + (level.back !== null ? 1 : 0);
+/** The level's cursor as a row of that walk. */
+export const moveSelectWalkIndex = (level: SelectLevel) => level.cursor + (level.back !== null ? 1 : 0);
+/** A row of the walk as the level's cursor (-1, the back pill). */
+export const moveSelectFromWalk = (level: SelectLevel, index: number) => index - (level.back !== null ? 1 : 0);
+
+/** Whether a still press landed on a list's back pill. */
+export function moveListBackAt(back: MoveSlotBox | null, e: MoveSlotPointer) {
+  return !!back && e.clientX >= back.left && e.clientX < back.left + back.width &&
+    e.clientY >= back.top && e.clientY < back.top + back.height;
+}
+
+/** {@link moveListBackAt} for a slot element. */
+export function moveListBackIn(slot: Element, e: MoveSlotPointer) {
+  const back = slot.querySelector('.tweakers-list-screen-back');
+  return moveListBackAt(back ? back.getBoundingClientRect() : null, e);
+}
+
+/**
+ * A still click on a select with folders is a tap where it landed: on the
+ * back pill it goes up; on a row it puts the cursor there — which selects an
+ * option — and opens a folder; anywhere else (the head) it taps the row the
+ * cursor is on. `row` is the level row the press landed on (-1 for none).
+ */
+export function moveSelectClick(level: SelectLevel, row: number, onBack: boolean): { cursor?: number; tap: boolean } {
+  if (onBack && level.back !== null) return { cursor: -1, tap: true };
+  const hit = level.rows[row];
+  if (hit) return { cursor: row, tap: hit.folder };
+  return { tap: true };
+}
+
+/**
+ * A select with folders read aloud the way its knob reads in the hand: a
+ * stepped control on the cursor row, saying what that row is — the way back,
+ * a folder, or an option, and whether that option is the one chosen.
+ */
+export function moveSelectAria(label: string, level: SelectLevel, value: unknown) {
+  const row = level.rows[level.cursor];
+  const text = level.cursor < 0 && level.back !== null ? `Back to ${level.back}`
+    : !row ? 'Nothing to choose'
+    : row.folder ? `${row.label}, folder`
+    : `${row.label}${row.value === value ? ', chosen' : ''}${level.back !== null ? ` (in ${level.title})` : ''}`;
+  return {
+    role: 'slider' as const,
+    'aria-label': label,
+    'aria-valuemin': 0,
+    'aria-valuemax': Math.max(0, moveSelectWalkCount(level) - 1),
+    'aria-valuenow': moveSelectWalkIndex(level),
+    'aria-valuetext': text,
+    'aria-orientation': 'vertical' as const,
+  };
 }
 
 /* ── what a slot reads out ─────────────────────────────────────── */
