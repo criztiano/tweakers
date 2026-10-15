@@ -32,7 +32,7 @@ import {
 } from '../move-slot-core';
 import {
   movePressStart, movePressTravel, movePressEnd, moveTurnValue, moveTurnExtent,
-  moveOptionStep, moveNextOption, moveListWalk, moveListRowIn, moveListKey, moveMultiselectOptions,
+  moveOptionStep, moveOptionClick, moveListHover, moveListWalk, moveListRowIn, moveListKey, moveMultiselectOptions,
   moveMultiselectChecked, moveMultiselectToggle, moveListAria, moveListBackIn, moveSelectAria, moveSelectClick,
   moveSelectFromWalk, moveSelectWalkCount, moveSelectWalkIndex, type MovePress,
 } from '../move-slot-core';
@@ -1275,14 +1275,17 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     },
     onPointerCancel: () => { endPress(meta.path); },
   });
-  // An option slot has no hot spots: a click moves it on, a drag steps it
+  // An option slot has no hot spots but its list: a click on a row takes
+  // that row, a click anywhere else moves it on, a drag steps it
   // (moveOptionStep), a still Shift+click puts it back to its default.
   const optionDrag = (meta: ControlMeta) => ({
     onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
       if (e.button > 0 || TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      listRowRef.current = moveListRowIn(e.currentTarget, e);
       beginPress(e, meta.path, enumIndex(meta, values[meta.path]));
     },
     onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
+      moveListHover(e.currentTarget, e);
       const p = movePressTravel(pressRef, meta.path, e, () => enumIndex(meta, values[meta.path]));
       const next = p && !TweakStore.isDisabled(page.panel.id, meta.path) ? moveOptionStep(meta, values[meta.path], p, e) : undefined;
       if (next !== undefined) write(meta, next);
@@ -1291,11 +1294,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       if (!endPress(meta.path) || TweakStore.isDisabled(page.panel.id, meta.path)) return;
       if (e.shiftKey) resetValue(meta);
       else {
-        const next = moveNextOption(meta, values[meta.path]);
+        const next = moveOptionClick(meta, values[meta.path], listRowRef.current);
         if (next !== undefined) write(meta, next);
       }
     },
     onPointerCancel: () => { endPress(meta.path); },
+    onPointerLeave: (e: React.PointerEvent<HTMLElement>) => moveListHover(e.currentTarget, null),
   });
 
   // A multiselect's slot is its list: a drag walks the cursor the way the
@@ -1321,6 +1325,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       beginPress(e, meta.path, listCursor(meta));
     },
     onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
+      moveListHover(e.currentTarget, e);
       const p = movePressTravel(pressRef, meta.path, e, () => listCursor(meta));
       if (p && !TweakStore.isDisabled(page.panel.id, meta.path)) setListCursor(meta, moveListWalk(p, e, moveMultiselectOptions(meta).length));
     },
@@ -1330,6 +1335,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       tickRow(meta, listRowRef.current >= 0 ? listRowRef.current : listCursor(meta));
     },
     onPointerCancel: () => { endPress(meta.path); },
+    onPointerLeave: (e: React.PointerEvent<HTMLElement>) => moveListHover(e.currentTarget, null),
     // The panel's own wheel (the strip, a navigator, a search) answers
     // first and keeps what it took; otherwise a notch walks the list a row.
     onWheel: (e: React.WheelEvent<HTMLElement>) => {
@@ -1365,6 +1371,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       beginPress(e, meta.path, moveSelectWalkIndex(level));
     },
     onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
+      moveListHover(e.currentTarget, e);
       const level = selectLevelOf(meta);
       if (!level) return;
       const p = movePressTravel(pressRef, meta.path, e, () => moveSelectWalkIndex(level));
@@ -1382,6 +1389,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       if (click.tap) TweakStore.tapSelect(page.panel.id, meta.path);
     },
     onPointerCancel: () => { endPress(meta.path); },
+    onPointerLeave: (e: React.PointerEvent<HTMLElement>) => moveListHover(e.currentTarget, null),
     onWheel: (e: React.WheelEvent<HTMLElement>) => {
       const level = selectLevelOf(meta);
       if (e.defaultPrevented || !e.deltaY || !level || TweakStore.isDisabled(page.panel.id, meta.path)) return;

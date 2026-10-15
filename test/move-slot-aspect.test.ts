@@ -175,7 +175,7 @@ describe('still an enum dial', () => {
     TweakStore.registerPanel(id, 'Faces', CONFIG);
     act(() => { renderer = create(createElement(MoveSlot, { panel: 'Faces', path: 'frame' })); });
     const slot = slotIn(renderer!.root, 'Frame');
-    const target = { setPointerCapture() {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }) };
+    const target = { setPointerCapture() {}, querySelector: () => null, querySelectorAll: () => [], getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 100 }) };
     act(() => {
       slot.props.onPointerDown({ button: 0, clientX: 10, clientY: 10, pointerId: 1, currentTarget: target });
     });

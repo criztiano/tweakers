@@ -4,7 +4,7 @@ import {
   moveDialKey, moveRangeValue, moveFilterValue, moveXYValue,
   moveXYRest, moveNeedleValue, moveTransferValue, moveRampStop, moveRampValue, moveDialReading,
   moveRangeReading, moveChipValue, moveXYGrid, moveShapePath, movePressStart, movePressTravel, movePressEnd,
-  moveTurnValue, moveTurnExtent, moveOptionStep, moveNextOption, type MoveFineAnchor, type MovePress,
+  moveTurnValue, moveTurnExtent, moveOptionStep, moveNextOption, moveOptionClick, moveListHover, type MoveFineAnchor, type MovePress,
 } from '../src/move-slot-core';
 
 const slider = (extra: Partial<ControlMeta> = {}): ControlMeta =>
@@ -43,6 +43,40 @@ describe('a slot read by the pointer', () => {
     expect(moveOptionStep(select, 'a', p, at(60, 130))).toBe('c');      // down is the next too
     expect(moveNextOption(select, 'b')).toBe('c');
     expect(moveNextOption(select, 'c')).toBe('a');
+  });
+
+  it('takes the row a click lands on, and moves on from anywhere else', () => {
+    const select = { type: 'select', path: 's', label: 'S', options: ['a', 'b', 'c'] } as ControlMeta;
+    expect(moveOptionClick(select, 'a', 2)).toBe('c');
+    expect(moveOptionClick(select, 'b', -1)).toBe('c');                // the head
+    expect(moveOptionClick(select, 'c', 7)).toBe('a');                 // no such row
+  });
+
+  it('marks the row a hovering pointer is over, and only a hovering one', () => {
+    const rowAt = (top: number) => {
+      const attrs = new Set<string>();
+      return {
+        attrs,
+        getBoundingClientRect: () => ({ left: 0, top, width: 100, height: 20 }),
+        toggleAttribute: (name: string, on: boolean) => { if (on) attrs.add(name); else attrs.delete(name); },
+      };
+    };
+    const rows = [rowAt(20), rowAt(40), rowAt(60)];
+    const slot = {
+      querySelector: () => ({ getBoundingClientRect: () => ({ left: 0, top: 20, width: 100, height: 60 }) }),
+      querySelectorAll: () => rows,
+    } as unknown as Element;
+    const hovered = () => rows.map((r) => r.attrs.has('data-hover'));
+    const over = (y: number, buttons = 0, pointerType = 'mouse') => ({ ...at(50, y), buttons, pointerType });
+    moveListHover(slot, over(45));
+    expect(hovered()).toEqual([false, true, false]);
+    moveListHover(slot, over(65, 1));                                   // a press walks, it does not hover
+    expect(hovered()).toEqual([false, false, false]);
+    moveListHover(slot, over(25, 0, 'touch'));                          // a finger has no hover
+    expect(hovered()).toEqual([false, false, false]);
+    moveListHover(slot, over(25));
+    moveListHover(slot, null);                                          // the pointer left
+    expect(hovered()).toEqual([false, false, false]);
   });
 
   it('lets a range drag keep the handle it took, and never cross the other', () => {

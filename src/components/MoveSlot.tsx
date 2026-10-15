@@ -21,7 +21,7 @@ import {
   moveFilterValue, moveXYValue, moveXYRest, moveNeedleValue, moveTransferValue, moveRampStop, moveRampValue,
   moveDialPercent, moveDialReading, moveRangeReading, moveChipValue, moveXYGrid,
   moveShapePath, movePressStart, movePressTravel, movePressEnd, moveTurnValue, moveTurnExtent, moveOptionStep,
-  moveNextOption, moveListWalk, moveListRowIn, moveListKey, moveListAria, moveMultiselectOptions,
+  moveOptionClick, moveListHover, moveListWalk, moveListRowIn, moveListKey, moveListAria, moveMultiselectOptions,
   moveMultiselectChecked, moveMultiselectToggle, moveListBackIn, moveSelectAria, moveSelectClick, moveSelectFromWalk,
   moveSelectWalkCount, moveSelectWalkIndex, type MoveFaceRole, type MoveFineAnchor, type MovePress,
 } from '../move-slot-core';
@@ -198,19 +198,23 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
   });
   const step = (meta: ControlMeta) => ({
     onPointerDown: (e: ReactPointerEvent<HTMLElement>) => {
-      if (e.button <= 0 && !off(meta)) begin(e, meta, enumIndex(meta, values![meta.path]));
+      if (e.button > 0 || off(meta)) return;
+      listRow.current = moveListRowIn(e.currentTarget, e);
+      begin(e, meta, enumIndex(meta, values![meta.path]));
     },
     onPointerMove: (e: ReactPointerEvent<HTMLElement>) => {
+      moveListHover(e.currentTarget, e);
       const p = movePressTravel(press, meta.path, e, () => enumIndex(meta, values![meta.path]));
       const next = p && !off(meta) ? moveOptionStep(meta, values![meta.path], p, e) : undefined;
       if (next !== undefined) write(meta, next);
     },
     onPointerUp: (e: ReactPointerEvent<HTMLElement>) => {
       if (!end(meta) || off(meta)) return;
-      const next = e.shiftKey ? TweakStore.getDefault(panelId!, meta.path) : moveNextOption(meta, values![meta.path]);
+      const next = e.shiftKey ? TweakStore.getDefault(panelId!, meta.path) : moveOptionClick(meta, values![meta.path], listRow.current);
       if (next !== undefined) write(meta, next);
     },
     onPointerCancel: () => { end(meta); },
+    onPointerLeave: (e: ReactPointerEvent<HTMLElement>) => moveListHover(e.currentTarget, null),
   });
 
   const keys = (meta: ControlMeta) => (e: ReactKeyboardEvent<HTMLElement>) => {
@@ -429,6 +433,7 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
           begin(e, meta, TweakStore.getListCursor(panelId, meta.path));
         }}
         onPointerMove={(e) => {
+          moveListHover(e.currentTarget, e);
           const p = movePressTravel(press, meta.path, e, () => TweakStore.getListCursor(panelId, meta.path));
           if (p && !off(meta)) TweakStore.setListCursor(panelId, meta.path, moveListWalk(p, e, options.length));
         }}
@@ -438,6 +443,7 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
           tick(listRow.current >= 0 ? listRow.current : cursor);
         }}
         onPointerCancel={() => { end(meta); }}
+        onPointerLeave={(e) => moveListHover(e.currentTarget, null)}
         onWheel={(e) => {
           if (e.defaultPrevented || !e.deltaY || off(meta)) return;
           e.stopPropagation();
@@ -603,6 +609,7 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
           begin(e, meta, moveSelectWalkIndex(levelNow()));
         }}
         onPointerMove={(e) => {
+          moveListHover(e.currentTarget, e);
           const now = levelNow();
           const p = movePressTravel(press, meta.path, e, () => moveSelectWalkIndex(now));
           if (p && !off(meta)) TweakStore.setSelectCursor(panelId, meta.path, moveSelectFromWalk(now, moveListWalk(p, e, moveSelectWalkCount(now))));
@@ -615,6 +622,7 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
           if (click.tap) TweakStore.tapSelect(panelId, meta.path);
         }}
         onPointerCancel={() => { end(meta); }}
+        onPointerLeave={(e) => moveListHover(e.currentTarget, null)}
         onWheel={(e) => {
           if (e.defaultPrevented || !e.deltaY || off(meta)) return;
           e.stopPropagation();

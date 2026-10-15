@@ -9812,6 +9812,10 @@ function moveNextOption(meta, value) {
   const count = (meta.options ?? []).length;
   return count ? optionValue(meta, (enumIndex(meta, value) + 1) % count) : void 0;
 }
+function moveOptionClick(meta, value, row2) {
+  const picked = row2 >= 0 ? optionValue(meta, row2) : void 0;
+  return picked ?? moveNextOption(meta, value);
+}
 function moveListWalk(p, e, count) {
   return Math.max(0, Math.min(count - 1, p.v + Math.trunc((e.clientY - p.ay) / MOVE_LIST_ROW_TRAVEL)));
 }
@@ -9826,6 +9830,10 @@ function moveListRowIn(slot, e) {
     list ? list.getBoundingClientRect() : null,
     e
   );
+}
+function moveListHover(slot, e) {
+  const at2 = e && e.buttons === 0 && e.pointerType !== "touch" ? moveListRowIn(slot, e) : -1;
+  slot.querySelectorAll(".tweakers-list-screen-row").forEach((row2, i) => row2.toggleAttribute("data-hover", i === at2));
 }
 var moveMultiselectOptions = (meta) => meta.multiSelectOptions ?? [];
 function moveMultiselectChecked(meta, value) {
@@ -16675,9 +16683,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const optionDrag = (meta) => ({
     onPointerDown: (e) => {
       if (e.button > 0 || import_TweakStore19.TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      listRowRef.current = moveListRowIn(e.currentTarget, e);
       beginPress(e, meta.path, enumIndex(meta, values[meta.path]));
     },
     onPointerMove: (e) => {
+      moveListHover(e.currentTarget, e);
       const p = movePressTravel(pressRef, meta.path, e, () => enumIndex(meta, values[meta.path]));
       const next = p && !import_TweakStore19.TweakStore.isDisabled(page.panel.id, meta.path) ? moveOptionStep(meta, values[meta.path], p, e) : void 0;
       if (next !== void 0) write2(meta, next);
@@ -16686,13 +16696,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       if (!endPress(meta.path) || import_TweakStore19.TweakStore.isDisabled(page.panel.id, meta.path)) return;
       if (e.shiftKey) resetValue(meta);
       else {
-        const next = moveNextOption(meta, values[meta.path]);
+        const next = moveOptionClick(meta, values[meta.path], listRowRef.current);
         if (next !== void 0) write2(meta, next);
       }
     },
     onPointerCancel: () => {
       endPress(meta.path);
-    }
+    },
+    onPointerLeave: (e) => moveListHover(e.currentTarget, null)
   });
   const listCursor = (meta) => import_TweakStore19.TweakStore.getListCursor(page.panel.id, meta.path);
   const setListCursor = (meta, index) => import_TweakStore19.TweakStore.setListCursor(page.panel.id, meta.path, index);
@@ -16709,6 +16720,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       beginPress(e, meta.path, listCursor(meta));
     },
     onPointerMove: (e) => {
+      moveListHover(e.currentTarget, e);
       const p = movePressTravel(pressRef, meta.path, e, () => listCursor(meta));
       if (p && !import_TweakStore19.TweakStore.isDisabled(page.panel.id, meta.path)) setListCursor(meta, moveListWalk(p, e, moveMultiselectOptions(meta).length));
     },
@@ -16720,6 +16732,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     onPointerCancel: () => {
       endPress(meta.path);
     },
+    onPointerLeave: (e) => moveListHover(e.currentTarget, null),
     // The panel's own wheel (the strip, a navigator, a search) answers
     // first and keeps what it took; otherwise a notch walks the list a row.
     onWheel: (e) => {
@@ -16747,6 +16760,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       beginPress(e, meta.path, moveSelectWalkIndex(level));
     },
     onPointerMove: (e) => {
+      moveListHover(e.currentTarget, e);
       const level = selectLevelOf(meta);
       if (!level) return;
       const p = movePressTravel(pressRef, meta.path, e, () => moveSelectWalkIndex(level));
@@ -16766,6 +16780,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     onPointerCancel: () => {
       endPress(meta.path);
     },
+    onPointerLeave: (e) => moveListHover(e.currentTarget, null),
     onWheel: (e) => {
       const level = selectLevelOf(meta);
       if (e.defaultPrevented || !e.deltaY || !level || import_TweakStore19.TweakStore.isDisabled(page.panel.id, meta.path)) return;
@@ -19302,21 +19317,25 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
   });
   const step = (meta2) => ({
     onPointerDown: (e) => {
-      if (e.button <= 0 && !off(meta2)) begin(e, meta2, enumIndex(meta2, values[meta2.path]));
+      if (e.button > 0 || off(meta2)) return;
+      listRow.current = moveListRowIn(e.currentTarget, e);
+      begin(e, meta2, enumIndex(meta2, values[meta2.path]));
     },
     onPointerMove: (e) => {
+      moveListHover(e.currentTarget, e);
       const p = movePressTravel(press, meta2.path, e, () => enumIndex(meta2, values[meta2.path]));
       const next = p && !off(meta2) ? moveOptionStep(meta2, values[meta2.path], p, e) : void 0;
       if (next !== void 0) write2(meta2, next);
     },
     onPointerUp: (e) => {
       if (!end(meta2) || off(meta2)) return;
-      const next = e.shiftKey ? import_TweakStore20.TweakStore.getDefault(panelId, meta2.path) : moveNextOption(meta2, values[meta2.path]);
+      const next = e.shiftKey ? import_TweakStore20.TweakStore.getDefault(panelId, meta2.path) : moveOptionClick(meta2, values[meta2.path], listRow.current);
       if (next !== void 0) write2(meta2, next);
     },
     onPointerCancel: () => {
       end(meta2);
-    }
+    },
+    onPointerLeave: (e) => moveListHover(e.currentTarget, null)
   });
   const keys = (meta2) => (e) => {
     if (off(meta2)) return;
@@ -19550,6 +19569,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
           begin(e, meta, import_TweakStore20.TweakStore.getListCursor(panelId, meta.path));
         },
         onPointerMove: (e) => {
+          moveListHover(e.currentTarget, e);
           const p = movePressTravel(press, meta.path, e, () => import_TweakStore20.TweakStore.getListCursor(panelId, meta.path));
           if (p && !off(meta)) import_TweakStore20.TweakStore.setListCursor(panelId, meta.path, moveListWalk(p, e, options.length));
         },
@@ -19561,6 +19581,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
         onPointerCancel: () => {
           end(meta);
         },
+        onPointerLeave: (e) => moveListHover(e.currentTarget, null),
         onWheel: (e) => {
           if (e.defaultPrevented || !e.deltaY || off(meta)) return;
           e.stopPropagation();
@@ -19808,6 +19829,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
           begin(e, meta, moveSelectWalkIndex(levelNow()));
         },
         onPointerMove: (e) => {
+          moveListHover(e.currentTarget, e);
           const now = levelNow();
           const p = movePressTravel(press, meta.path, e, () => moveSelectWalkIndex(now));
           if (p && !off(meta)) import_TweakStore20.TweakStore.setSelectCursor(panelId, meta.path, moveSelectFromWalk(now, moveListWalk(p, e, moveSelectWalkCount(now))));
@@ -19822,6 +19844,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
         onPointerCancel: () => {
           end(meta);
         },
+        onPointerLeave: (e) => moveListHover(e.currentTarget, null),
         onWheel: (e) => {
           if (e.defaultPrevented || !e.deltaY || off(meta)) return;
           e.stopPropagation();

@@ -3598,6 +3598,18 @@
   box-shadow: var(--move-list-shadow);
 }
 
+/* The cursor over a slot is a hand on its knob: a long list opens to the
+   whole run, so every row can be seen and pointed at. Only for a pointer
+   that hovers — a tap on glass must not leave the list standing open. */
+@media (hover: hover) {
+  .tweakers-move-dial:not([data-disabled]):hover .tweakers-move-dial-screen[data-grow] {
+    top: auto;
+    height: min(var(--move-screen-full), 50vh);
+    z-index: 6;
+    box-shadow: var(--move-list-shadow);
+  }
+}
+
 /* The list screen covers its whole slot, so the head is the slot surface
    that shows: quiet at rest, lit while the dial is in the hand. */
 .tweakers-move-dial-head {
@@ -6383,6 +6395,21 @@
 
 .tweakers-list-screen-row[data-selected] {
   background: rgba(222, 227, 201, 0.1);
+}
+
+/* The row under the pointer rises halfway to the chosen one: it says what a
+   click takes, without reading as chosen. A dial's list hears the pointer
+   through its slot, which marks the row with data-hover. */
+@media (hover: hover) {
+  .tweakers-list-screen-row:not(:disabled):not([data-selected]):hover,
+  .tweakers-list-screen-row[data-hover]:not([data-selected]) {
+    background: rgba(222, 227, 201, 0.05);
+  }
+
+  .tweakers-list-screen-row:not(:disabled):not([data-selected]):not([data-checked="true"]):hover .tweakers-list-screen-label,
+  .tweakers-list-screen-row[data-hover]:not([data-selected]):not([data-checked="true"]) .tweakers-list-screen-label {
+    opacity: 0.6;
+  }
 }
 
 .tweakers-list-screen-row[data-selected] .tweakers-list-screen-label {
