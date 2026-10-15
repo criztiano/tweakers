@@ -1590,12 +1590,12 @@ function plotCurve(sample, options = {}) {
   if (explicit && Number.isFinite(explicit[0]) && Number.isFinite(explicit[1]) && explicit[0] < explicit[1]) {
     domain = [explicit[0], explicit[1]];
   } else {
-    const finite2 = ys.filter((y) => Number.isFinite(y));
-    if (finite2.length === 0) {
+    const finite3 = ys.filter((y) => Number.isFinite(y));
+    if (finite3.length === 0) {
       domain = [0, 1];
     } else {
-      let lo2 = Math.min(...finite2);
-      let hi2 = Math.max(...finite2);
+      let lo2 = Math.min(...finite3);
+      let hi2 = Math.max(...finite3);
       if (lo2 === hi2) {
         lo2 -= 0.5;
         hi2 += 0.5;
@@ -2837,7 +2837,7 @@ function MoveSlotEnumBody({
   options,
   activeIdx,
   shape,
-  glyph,
+  glyph: glyph2,
   picture = null,
   playback,
   scoped,
@@ -2877,13 +2877,13 @@ function MoveSlotEnumBody({
       }
     );
   }
-  if (playback || shape || glyph || picture || scoped) {
+  if (playback || shape || glyph2 || picture || scoped) {
     return /* @__PURE__ */ jsxs3(Fragment3, { children: [
       !playback && picture && /* @__PURE__ */ jsx3(MoveSlotPicture, { src: picture }),
       /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-tag", children: label }),
       playback && /* @__PURE__ */ jsx3(MoveSlotPlaybackDrawing, { mode: playback }),
       !playback && shape && /* @__PURE__ */ jsx3(MoveSlotShape, { d: shape }),
-      !playback && !picture && glyph && /* @__PURE__ */ jsx3(MoveSlotGlyph, { name: glyph, className: "tweakers-move-dial-icon" }),
+      !playback && !picture && glyph2 && /* @__PURE__ */ jsx3(MoveSlotGlyph, { name: glyph2, className: "tweakers-move-dial-icon" }),
       /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-option", children: optionLabel }),
       /* @__PURE__ */ jsx3(MoveSlotEnumCells, { options, activeIdx })
     ] });
@@ -3624,13 +3624,13 @@ function MovePadTabsBody({ name, options, activeIdx }) {
   return /* @__PURE__ */ jsxs3(Fragment3, { children: [
     name != null && /* @__PURE__ */ jsx3("span", { className: "tweakers-move-tabs-head", children: name }),
     /* @__PURE__ */ jsx3("div", { className: "tweakers-move-tabs-run", children: options.map((opt, i) => {
-      const glyph = enumOptionIcon(opt);
+      const glyph2 = enumOptionIcon(opt);
       return /* @__PURE__ */ jsx3(
         "span",
         {
           className: "tweakers-move-tab",
           "data-on": i === activeIdx || void 0,
-          children: glyph ? /* @__PURE__ */ jsx3(MoveSlotGlyph, { name: glyph, className: "tweakers-move-tab-icon" }) : /* @__PURE__ */ jsx3("span", { className: "tweakers-move-tab-title", children: enumOptionLabel(opt) })
+          children: glyph2 ? /* @__PURE__ */ jsx3(MoveSlotGlyph, { name: glyph2, className: "tweakers-move-tab-icon" }) : /* @__PURE__ */ jsx3("span", { className: "tweakers-move-tab-title", children: enumOptionLabel(opt) })
         },
         enumOptionValue(opt)
       );
@@ -9458,12 +9458,12 @@ import { createPortal as createPortal2 } from "react-dom";
 import { useEffect as useEffect9, useRef as useRef9, useState as useState5 } from "react";
 import { jsx as jsx9, jsxs as jsxs9 } from "react/jsx-runtime";
 var PRESS_FLASH_MS = 160;
-function MoveFunctionGlyphIcon({ glyph, className = "tweakers-move-chip-icon" }) {
-  return /* @__PURE__ */ jsxs9("svg", { className, width: glyph.size, height: glyph.size, viewBox: glyph.viewBox, fill: "none", children: [
-    glyph.paths?.map((d) => /* @__PURE__ */ jsx9("path", { d, stroke: "currentColor", strokeWidth: "1.5", strokeLinecap: "round", strokeLinejoin: "round" }, d)),
-    glyph.fills?.map((d) => /* @__PURE__ */ jsx9("path", { d, fill: "currentColor" }, d)),
-    glyph.circles?.map((c) => /* @__PURE__ */ jsx9("circle", { ...c, fill: "currentColor" }, `${c.cx},${c.cy}`)),
-    glyph.text && // A letter mark (mute's "M"): Helvetica, centred on the same grid
+function MoveFunctionGlyphIcon({ glyph: glyph2, className = "tweakers-move-chip-icon" }) {
+  return /* @__PURE__ */ jsxs9("svg", { className, width: glyph2.size, height: glyph2.size, viewBox: glyph2.viewBox, fill: "none", children: [
+    glyph2.paths?.map((d) => /* @__PURE__ */ jsx9("path", { d, stroke: "currentColor", strokeWidth: "1.5", strokeLinecap: "round", strokeLinejoin: "round" }, d)),
+    glyph2.fills?.map((d) => /* @__PURE__ */ jsx9("path", { d, fill: "currentColor" }, d)),
+    glyph2.circles?.map((c) => /* @__PURE__ */ jsx9("circle", { ...c, fill: "currentColor" }, `${c.cx},${c.cy}`)),
+    glyph2.text && // A letter mark (mute's "M"): Helvetica, centred on the same grid
     // the drawn marks share, weighted to read like their 1.5px stroke.
     /* @__PURE__ */ jsx9(
       "text",
@@ -9476,7 +9476,7 @@ function MoveFunctionGlyphIcon({ glyph, className = "tweakers-move-chip-icon" })
         fontSize: "12",
         fontWeight: "bold",
         fill: "currentColor",
-        children: glyph.text
+        children: glyph2.text
       }
     )
   ] });
@@ -9891,8 +9891,8 @@ function ModDot({ slot, state: state4 }) {
   const arcRef = useRef12(null);
   const maskId = `tweakers-mod-dot-${useId().replace(/:/g, "")}`;
   const color = modColor(slot.index);
-  const glyph = modGlyph(slot);
-  const mark = glyph ? MOD_GLYPHS[glyph] : null;
+  const glyph2 = modGlyph(slot);
+  const mark = glyph2 ? MOD_GLYPHS[glyph2] : null;
   useEffect12(() => {
     if (typeof window === "undefined") return;
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
@@ -9911,7 +9911,7 @@ function ModDot({ slot, state: state4 }) {
       className: "tweakers-move-mod-face",
       viewBox: "0 0 24 24",
       "aria-hidden": "true",
-      "data-glyph": glyph ?? void 0,
+      "data-glyph": glyph2 ?? void 0,
       "data-state": state4,
       children: [
         mark && /* @__PURE__ */ jsxs10("mask", { id: maskId, children: [
@@ -17130,11 +17130,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     const option = options[activeIdx];
                                     const optionLabel = enumOptionLabel(option);
                                     const shape = enumShapePath(meta, values[meta.path]);
-                                    const glyph = enumOptionIcon(option);
+                                    const glyph2 = enumOptionIcon(option);
                                     const picture = enumOptionPicture(option);
                                     const playback = movePlaybackMode(meta, values[meta.path]);
                                     const lanes = moveLanes(meta, values[meta.path]);
-                                    const face2 = moveSlotKind(meta, { enum: true, value: values[meta.path], shape, glyph, picture });
+                                    const face2 = moveSlotKind(meta, { enum: true, value: values[meta.path], shape, glyph: glyph2, picture });
                                     const aspect = face2 === "aspect" ? enumAspect(meta, values[meta.path]) : null;
                                     const named = face2 === "value";
                                     return /* @__PURE__ */ jsxs14(
@@ -17196,7 +17196,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                               options,
                                               activeIdx,
                                               shape,
-                                              glyph,
+                                              glyph: glyph2,
                                               picture,
                                               playback,
                                               scoped: !!scope
@@ -19372,9 +19372,9 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
     const shape = enumShapePath(meta, value);
     const playback = movePlaybackMode(meta, value);
     const lanes = moveLanes(meta, value);
-    const glyph = enumOptionIcon(option);
+    const glyph2 = enumOptionIcon(option);
     const picture = enumOptionPicture(option);
-    const face2 = moveSlotKind(meta, { enum: true, value, shape, glyph, picture });
+    const face2 = moveSlotKind(meta, { enum: true, value, shape, glyph: glyph2, picture });
     const aspect = face2 === "aspect" ? enumAspect(meta, value) : null;
     const named = face2 === "value";
     return /* @__PURE__ */ jsxs15(
@@ -19418,7 +19418,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
               options,
               activeIdx,
               shape,
-              glyph,
+              glyph: glyph2,
               picture,
               playback
             }
@@ -20818,11 +20818,762 @@ function moveKitOptions(overrides) {
 
 // src/index.ts
 import { ModulationStore as ModulationStore6, MOD_TOUCH_GRACE_MS } from "tweakers/modulation-store";
+
+// src/layer-transform-core.ts
+function identity() {
+  const m = new Float32Array(16);
+  m[0] = 1;
+  m[5] = 1;
+  m[10] = 1;
+  m[15] = 1;
+  return m;
+}
+function multiply(a, b) {
+  const out = new Float32Array(16);
+  for (let col = 0; col < 4; col++) {
+    for (let row2 = 0; row2 < 4; row2++) {
+      let sum = 0;
+      for (let k = 0; k < 4; k++) sum += a[k * 4 + row2] * b[col * 4 + k];
+      out[col * 4 + row2] = sum;
+    }
+  }
+  return out;
+}
+function canvasMatrix(model) {
+  return [model[0], model[1], model[4], model[5], model[12], model[13]];
+}
+var IDENTITY_TRANSFORM = {
+  x: 0,
+  y: 0,
+  z: 0,
+  scale: 1,
+  stretchX: 1,
+  stretchY: 1,
+  rotation: 0,
+  flipX: false,
+  flipY: false
+};
+var ORIGIN_ANCHOR = { x: 0, y: 0 };
+function clampLayerTransform(raw) {
+  const d = IDENTITY_TRANSFORM;
+  return {
+    // Deliberately unbounded beyond a sanity range: placing a layer partly
+    // off-canvas is a legitimate composition, and the canvas can be resized.
+    x: clamp13(finite2(raw.x, d.x), -2e4, 2e4),
+    y: clamp13(finite2(raw.y, d.y), -2e4, 2e4),
+    z: clamp13(finite2(raw.z, d.z), -2e4, 2e4),
+    scale: clamp13(finite2(raw.scale, d.scale), 0.05, 8),
+    stretchX: clamp13(finite2(raw.stretchX, d.stretchX), 0.02, 50),
+    stretchY: clamp13(finite2(raw.stretchY, d.stretchY), 0.02, 50),
+    rotation: wrapAngle2(finite2(raw.rotation, d.rotation)),
+    flipX: raw.flipX === true,
+    flipY: raw.flipY === true
+  };
+}
+function isIdentityTransform(t) {
+  return t.x === 0 && t.y === 0 && t.z === 0 && t.scale === 1 && t.stretchX === 1 && t.stretchY === 1 && t.rotation === 0 && !t.flipX && !t.flipY;
+}
+function sameTransform(a, b) {
+  return a.x === b.x && a.y === b.y && a.z === b.z && a.scale === b.scale && a.stretchX === b.stretchX && a.stretchY === b.stretchY && a.rotation === b.rotation && a.flipX === b.flipX && a.flipY === b.flipY;
+}
+function depthScale(z, canvasWidth, canvasHeight) {
+  if (z === 0) return 1;
+  const focal = Math.max(1, Math.max(canvasWidth, canvasHeight));
+  return focal / Math.max(focal + z, focal * 0.05);
+}
+function layerModelMatrix(t, anchor, canvasWidth, canvasHeight) {
+  const cos = Math.cos(t.rotation);
+  const sin = Math.sin(t.rotation);
+  const sx = t.scale * t.stretchX * (t.flipX ? -1 : 1);
+  const sy = t.scale * t.stretchY * (t.flipY ? -1 : 1);
+  const m = identity();
+  m[0] = cos * sx;
+  m[1] = sin * sx;
+  m[4] = -sin * sy;
+  m[5] = cos * sy;
+  m[12] = anchor.x - (m[0] * anchor.x + m[4] * anchor.y) + t.x;
+  m[13] = anchor.y - (m[1] * anchor.x + m[5] * anchor.y) + t.y;
+  m[10] = t.scale;
+  if (t.z === 0) return m;
+  const k = depthScale(t.z, canvasWidth, canvasHeight);
+  const cx = canvasWidth / 2;
+  const cy = canvasHeight / 2;
+  const cue = identity();
+  cue[0] = k;
+  cue[5] = k;
+  cue[10] = k;
+  cue[12] = cx - cx * k;
+  cue[13] = cy - cy * k;
+  return multiply(cue, m);
+}
+function composeModel(parent, child2) {
+  return multiply(parent, child2);
+}
+function unprojectPoint(model, x, y) {
+  const a = model[0];
+  const b = model[1];
+  const c = model[4];
+  const d = model[5];
+  const det = a * d - b * c;
+  if (!Number.isFinite(det) || Math.abs(det) < 1e-9) return { x, y };
+  const dx = x - model[12];
+  const dy = y - model[13];
+  return { x: (d * dx - c * dy) / det, y: (a * dy - b * dx) / det };
+}
+function projectPoint(model, x, y) {
+  return {
+    x: model[0] * x + model[4] * y + model[12],
+    y: model[1] * x + model[5] * y + model[13]
+  };
+}
+function bakeTransform(model, anchor, z, canvasWidth, canvasHeight, stretch = { x: 1, y: 1 }) {
+  let rest = model;
+  if (z !== 0) {
+    const k = depthScale(z, canvasWidth, canvasHeight);
+    const cx = canvasWidth / 2;
+    const cy = canvasHeight / 2;
+    const uncue = identity();
+    uncue[0] = 1 / k;
+    uncue[5] = 1 / k;
+    uncue[10] = 1 / k;
+    uncue[12] = cx - cx / k;
+    uncue[13] = cy - cy / k;
+    rest = multiply(uncue, model);
+  }
+  if (stretch.x !== 1 || stretch.y !== 1) {
+    const unstretch = identity();
+    unstretch[0] = 1 / stretch.x;
+    unstretch[5] = 1 / stretch.y;
+    unstretch[12] = anchor.x - anchor.x / stretch.x;
+    unstretch[13] = anchor.y - anchor.y / stretch.y;
+    rest = multiply(rest, unstretch);
+  }
+  const a = rest[0];
+  const b = rest[1];
+  const c = rest[4];
+  const d = rest[5];
+  const det = a * d - b * c;
+  const flipX = det < 0;
+  const scale = Math.sqrt(Math.abs(det));
+  const rotation = flipX ? Math.atan2(-b, -a) : Math.atan2(b, a);
+  return clampLayerTransform({
+    x: rest[12] - anchor.x + (a * anchor.x + c * anchor.y),
+    y: rest[13] - anchor.y + (b * anchor.x + d * anchor.y),
+    z,
+    scale,
+    stretchX: stretch.x,
+    stretchY: stretch.y,
+    rotation,
+    flipX,
+    flipY: false
+  });
+}
+function reanchorTransform(t, from, to) {
+  const m = layerModelMatrix({ ...t, z: 0 }, ORIGIN_ANCHOR, 1, 1);
+  const dx = from.x - to.x;
+  const dy = from.y - to.y;
+  return clampLayerTransform({ ...t, x: t.x + dx - (m[0] * dx + m[4] * dy), y: t.y + dy - (m[1] * dx + m[5] * dy) });
+}
+function invertModel(model) {
+  const a = model[0];
+  const b = model[1];
+  const c = model[4];
+  const d = model[5];
+  const det = a * d - b * c;
+  const out = identity();
+  if (!Number.isFinite(det) || Math.abs(det) < 1e-12) return out;
+  out[0] = d / det;
+  out[1] = -b / det;
+  out[4] = -c / det;
+  out[5] = a / det;
+  out[10] = model[10] !== 0 ? 1 / model[10] : 1;
+  out[12] = -(out[0] * model[12] + out[4] * model[13]);
+  out[13] = -(out[1] * model[12] + out[5] * model[13]);
+  return out;
+}
+function translateInParent(t, parent, dx, dy) {
+  if (!parent) return { ...t, x: t.x + dx, y: t.y + dy };
+  const a = parent[0];
+  const b = parent[1];
+  const c = parent[4];
+  const d = parent[5];
+  const det = a * d - b * c;
+  if (!Number.isFinite(det) || Math.abs(det) < 1e-9) return { ...t, x: t.x + dx, y: t.y + dy };
+  return { ...t, x: t.x + (d * dx - c * dy) / det, y: t.y + (a * dy - b * dx) / det };
+}
+function assertTransformRoundTrip() {
+  let worst = 0;
+  let bakeWorst = 0;
+  let cases = 0;
+  const canvasW = 1080;
+  const canvasH = 1920;
+  const anchors = [ORIGIN_ANCHOR, { x: 540, y: 960 }, { x: -200, y: 1500 }];
+  const transforms = [];
+  for (const rotation of [0, 0.7, -2.4, Math.PI]) {
+    for (const scale of [0.05, 1, 3.5]) {
+      for (const z of [0, 600, -600]) {
+        for (const flipX of [false, true]) {
+          for (const flipY of [false, true]) {
+            for (const [stretchX, stretchY] of [
+              [1, 1],
+              [2.5, 0.4]
+            ]) {
+              transforms.push({ x: 120, y: -75, z, scale, stretchX, stretchY, rotation, flipX, flipY });
+            }
+          }
+        }
+      }
+    }
+  }
+  const probes = [
+    [0, 0],
+    [540, 960],
+    [1079, 1919],
+    [-300, 2400]
+  ];
+  for (const t of transforms) {
+    for (const anchor of anchors) {
+      const model = layerModelMatrix(t, anchor, canvasW, canvasH);
+      for (const [x, y] of probes) {
+        const there = projectPoint(model, x, y);
+        const back = unprojectPoint(model, there.x, there.y);
+        worst = Math.max(worst, Math.abs(back.x - x), Math.abs(back.y - y));
+        cases++;
+      }
+      const outer = layerModelMatrix({ ...t, rotation: -t.rotation, scale: 1 / t.scale }, anchors[1], canvasW, canvasH);
+      const composed = composeModel(outer, model);
+      for (const [x, y] of probes) {
+        const there = projectPoint(composed, x, y);
+        const back = unprojectPoint(composed, there.x, there.y);
+        worst = Math.max(worst, Math.abs(back.x - x), Math.abs(back.y - y));
+        cases++;
+      }
+      const reanchored = layerModelMatrix(reanchorTransform(t, anchor, anchors[2]), anchors[2], canvasW, canvasH);
+      for (const [x, y] of probes) {
+        const want = projectPoint(model, x, y);
+        const got = projectPoint(reanchored, x, y);
+        bakeWorst = Math.max(bakeWorst, Math.abs(got.x - want.x), Math.abs(got.y - want.y));
+        cases++;
+      }
+      const group = layerModelMatrix(
+        {
+          x: -80,
+          y: 40,
+          z: 300,
+          scale: 1.5,
+          stretchX: 1,
+          stretchY: 1,
+          rotation: -t.rotation * 0.5,
+          flipX: !t.flipX,
+          flipY: false
+        },
+        anchors[1],
+        canvasW,
+        canvasH
+      );
+      const inGroup = composeModel(group, model);
+      const baked = bakeTransform(inGroup, anchor, t.z, canvasW, canvasH, { x: t.stretchX, y: t.stretchY });
+      const s = Math.sqrt(Math.abs(inGroup[0] * inGroup[5] - inGroup[1] * inGroup[4])) / depthScale(t.z, canvasW, canvasH);
+      if (s >= 0.05 && s <= 8) {
+        const rebuilt = layerModelMatrix(baked, anchor, canvasW, canvasH);
+        for (const [x, y] of probes) {
+          const want = projectPoint(inGroup, x, y);
+          const got = projectPoint(rebuilt, x, y);
+          bakeWorst = Math.max(bakeWorst, Math.abs(got.x - want.x), Math.abs(got.y - want.y));
+          cases++;
+        }
+      }
+    }
+  }
+  if (worst > 1e-6) throw new Error(`layer transform round-trip drifted ${worst} over ${cases} cases`);
+  if (bakeWorst > 0.01) throw new Error(`baking a composed placement moved a point ${bakeWorst}px`);
+  return { worst, bakeWorst, cases };
+}
+function finite2(value, fallback) {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+function clamp13(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+function wrapAngle2(angle) {
+  const twoPi = Math.PI * 2;
+  let wrapped = angle % twoPi;
+  if (wrapped <= -Math.PI) wrapped += twoPi;
+  if (wrapped > Math.PI) wrapped -= twoPi;
+  return wrapped;
+}
+
+// src/layer-select-core.ts
+var IDENTITY_PROJECTION = { scale: 1, offsetX: 0, offsetY: 0 };
+function projectX(p, x) {
+  return p.offsetX + x * p.scale;
+}
+function projectY(p, y) {
+  return p.offsetY + y * p.scale;
+}
+function unprojectX(p, screenX) {
+  return p.scale > 0 ? (screenX - p.offsetX) / p.scale : 0;
+}
+function unprojectY(p, screenY) {
+  return p.scale > 0 ? (screenY - p.offsetY) / p.scale : 0;
+}
+var HANDLE = 8;
+var HANDLE_HIT = 9;
+var ROTATE_HIT = 26;
+var ANTS_DASH = [5, 4];
+var ANTS_PERIOD = ANTS_DASH[0] + ANTS_DASH[1];
+var ANTS_FPS = 16;
+var SNAP = Math.PI / 12;
+var ROTATE_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.3-5.7" stroke="#000" stroke-width="4"/><path d="M20 4v4h-4" stroke="#000" stroke-width="4"/><path d="M20 12a8 8 0 1 1-2.3-5.7" stroke="#fff" stroke-width="2"/><path d="M20 4v4h-4" stroke="#fff" stroke-width="2"/></svg>'
+)}") 12 12, crosshair`;
+var SelectTool = class {
+  constructor(host) {
+    this.drag = null;
+    this.pending = null;
+    this.frame = 0;
+    this.antsPhase = 0;
+    this.antsTimer = 0;
+    /** Whether the last paint drew a frame — the ants run only while one is up. */
+    this.framed = false;
+    this.host = host;
+  }
+  get dragging() {
+    return this.drag !== null;
+  }
+  /** Pointer down with the Select tool. Always consumes the event. */
+  begin(event) {
+    const session = this.host.layers();
+    if (!session) return true;
+    const pt = this.host.canvasPoint(event);
+    const selected = session.selected();
+    const frame = selected ? session.frameOf(selected) : null;
+    let target = null;
+    let gesture = "move";
+    let corner = -1;
+    if (selected && frame) {
+      const hit = this.hitFrame(frame, event);
+      if (hit) {
+        target = selected;
+        gesture = event.altKey ? "rotate" : hit.gesture;
+        corner = hit.corner;
+      }
+    }
+    if (!target) {
+      target = session.layerAt(pt.x, pt.y);
+      if (!target) return true;
+      if (target.id !== selected?.id) session.select(target.id);
+    }
+    const targetFrame = session.frameOf(target);
+    const pivot = session.pivotOf(target);
+    const placement = session.placementOf?.(target) ?? null;
+    const parent = placement ? null : session.parentModelFor(target);
+    this.drag = {
+      layerId: target.id,
+      gesture,
+      from: pt,
+      origin: target.transform,
+      clip: placement ? { ...placement } : null,
+      parent,
+      pivot,
+      fixed: corner >= 0 && targetFrame ? targetFrame[(corner + 2) % 4] : pivot,
+      handed: parent && parent[0] * parent[5] - parent[1] * parent[4] < 0 ? -1 : 1,
+      frame: targetFrame
+    };
+    try {
+      this.host.surface().setPointerCapture(event.pointerId);
+    } catch {
+    }
+    this.setCursor(gesture === "move" ? "move" : gesture === "rotate" ? ROTATE_CURSOR : this.scaleCursor(corner));
+    this.host.repaint();
+    return true;
+  }
+  /** Pointer move with the Select tool: drives a drag, or sets the hover cursor. */
+  move(event) {
+    if (!this.drag) {
+      this.hover(event);
+      return;
+    }
+    this.pending = {
+      point: this.host.canvasPoint(event),
+      shift: event.shiftKey,
+      free: event.shiftKey || event.metaKey
+    };
+    if (this.frame === 0) {
+      this.frame = requestAnimationFrame(() => {
+        this.frame = 0;
+        this.flush();
+      });
+    }
+  }
+  end(event) {
+    if (!this.drag) return;
+    if (this.frame !== 0) cancelAnimationFrame(this.frame);
+    this.frame = 0;
+    this.pending = {
+      point: this.host.canvasPoint(event),
+      shift: event.shiftKey,
+      free: event.shiftKey || event.metaKey
+    };
+    this.flush();
+    this.drag = null;
+    try {
+      this.host.surface().releasePointerCapture(event.pointerId);
+    } catch {
+    }
+    this.hover(event);
+    this.host.onEdited();
+    this.host.repaint();
+  }
+  cancel() {
+    if (this.frame !== 0) cancelAnimationFrame(this.frame);
+    this.frame = 0;
+    this.drag = null;
+    this.pending = null;
+    this.setCursor("");
+  }
+  /** Paint the selection: the frame as marching ants, and a handle on each corner. */
+  paint(ctx) {
+    const session = this.host.layers();
+    const layer = session?.selected();
+    const frame = layer && session ? session.frameOf(layer) : null;
+    this.framed = frame !== null;
+    if (!frame) {
+      this.stopAnts();
+      return;
+    }
+    const proj = this.host.projection();
+    const c = frame.map((p) => ({ x: projectX(proj, p.x), y: projectY(proj, p.y) }));
+    ctx.save();
+    const path = new Path2D();
+    c.forEach((p, i) => i === 0 ? path.moveTo(p.x, p.y) : path.lineTo(p.x, p.y));
+    path.closePath();
+    strokeAnts(ctx, path, this.antsPhase);
+    for (const p of c) drawHandle(ctx, p);
+    ctx.restore();
+    this.startAnts();
+  }
+  /** Another tool took the canvas: no frame, no ants, no cursor of ours. */
+  hide() {
+    this.cancel();
+    this.framed = false;
+    this.stopAnts();
+  }
+  dispose() {
+    this.hide();
+  }
+  // --- the gesture ---------------------------------------------------------------
+  flush() {
+    const drag = this.drag;
+    const next = this.pending;
+    const session = this.host.layers();
+    this.pending = null;
+    if (!drag || !next || !session) return;
+    const { point, shift, free } = next;
+    if (drag.gesture === "move") {
+      let dx = point.x - drag.from.x;
+      let dy = point.y - drag.from.y;
+      if (shift) {
+        if (Math.abs(dx) >= Math.abs(dy)) dy = 0;
+        else dx = 0;
+      }
+      if (drag.clip) session.setPlacement?.(drag.layerId, { x: drag.clip.x + dx, y: drag.clip.y + dy });
+      else {
+        const moved2 = translateInParent(drag.origin, drag.parent, dx, dy);
+        session.setLayerTransform(drag.layerId, { x: moved2.x, y: moved2.y });
+      }
+      return;
+    }
+    if (drag.gesture === "rotate") {
+      const grab = Math.atan2(drag.from.y - drag.pivot.y, drag.from.x - drag.pivot.x);
+      const now = Math.atan2(point.y - drag.pivot.y, point.x - drag.pivot.x);
+      const base = drag.clip ? drag.clip.rotation : drag.origin.rotation;
+      let rotation = base + drag.handed * (now - grab);
+      if (shift) rotation = Math.round(rotation / SNAP) * SNAP;
+      if (drag.clip) session.setPlacement?.(drag.layerId, { rotation });
+      else session.setLayerTransform(drag.layerId, { rotation });
+      return;
+    }
+    if (free && !drag.clip && drag.frame) {
+      this.stretch(drag, point);
+      return;
+    }
+    const still = drag.fixed;
+    const grabbed = Math.hypot(drag.from.x - still.x, drag.from.y - still.y);
+    if (grabbed < 1e-3) return;
+    const k = Math.max(0.02, Math.hypot(point.x - still.x, point.y - still.y) / grabbed);
+    const shiftX = (still.x - drag.pivot.x) * (1 - k);
+    const shiftY = (still.y - drag.pivot.y) * (1 - k);
+    const restStretch = { stretchX: drag.origin.stretchX, stretchY: drag.origin.stretchY };
+    if (drag.clip) {
+      session.setPlacement?.(drag.layerId, {
+        width: drag.clip.width * k,
+        x: drag.clip.x + shiftX,
+        y: drag.clip.y + shiftY
+      });
+      return;
+    }
+    const moved = translateInParent(drag.origin, drag.parent, shiftX, shiftY);
+    session.setLayerTransform(drag.layerId, { scale: drag.origin.scale * k, ...restStretch, x: moved.x, y: moved.y });
+  }
+  /**
+   * Stretch each side on its own, the opposite corner still. Worked in the frame's
+   * own basis (its edges at grab, U across and V down): the pointer and the grabbed
+   * corner, both measured from the still corner in U/V, give one ratio per axis.
+   * The stretch acts about the pivot, so the pivot then moves to put the still
+   * corner back — the same correction as a plain scale, per axis.
+   */
+  stretch(drag, point) {
+    const session = this.host.layers();
+    const f = drag.frame;
+    if (!session || !f) return;
+    const U = { x: f[1].x - f[0].x, y: f[1].y - f[0].y };
+    const V = { x: f[3].x - f[0].x, y: f[3].y - f[0].y };
+    const det = U.x * V.y - U.y * V.x;
+    if (Math.abs(det) < 1e-6) return;
+    const inBasis = (dx, dy) => ({ u: (dx * V.y - dy * V.x) / det, v: (U.x * dy - U.y * dx) / det });
+    const O = drag.fixed;
+    const grab = inBasis(drag.from.x - O.x, drag.from.y - O.y);
+    const now = inBasis(point.x - O.x, point.y - O.y);
+    if (Math.abs(grab.u) < 1e-6 || Math.abs(grab.v) < 1e-6) return;
+    const kx = Math.max(0.02, now.u / grab.u);
+    const ky = Math.max(0.02, now.v / grab.v);
+    const w = inBasis(O.x - drag.pivot.x, O.y - drag.pivot.y);
+    const shiftX = O.x - drag.pivot.x - (w.u * kx * U.x + w.v * ky * V.x);
+    const shiftY = O.y - drag.pivot.y - (w.u * kx * U.y + w.v * ky * V.y);
+    const moved = translateInParent(drag.origin, drag.parent, shiftX, shiftY);
+    session.setLayerTransform(drag.layerId, {
+      scale: drag.origin.scale,
+      stretchX: drag.origin.stretchX * kx,
+      stretchY: drag.origin.stretchY * ky,
+      x: moved.x,
+      y: moved.y
+    });
+  }
+  /** Which part of the selection frame the pointer is on, in screen px. */
+  hitFrame(frame, event) {
+    const proj = this.host.projection();
+    const c = frame.map((p) => ({ x: projectX(proj, p.x), y: projectY(proj, p.y) }));
+    const { x: sx, y: sy } = this.host.overlayPoint(event);
+    for (let i = 0; i < 4; i++) {
+      if (Math.hypot(sx - c[i].x, sy - c[i].y) <= HANDLE_HIT) return { gesture: "scale", corner: i };
+    }
+    if (insideScreenQuad(c, sx, sy)) return { gesture: "move", corner: -1 };
+    for (let i = 0; i < 4; i++) {
+      if (Math.hypot(sx - c[i].x, sy - c[i].y) <= ROTATE_HIT) return { gesture: "rotate", corner: i };
+    }
+    return null;
+  }
+  hover(event) {
+    const session = this.host.layers();
+    const layer = session?.selected();
+    const frame = layer && session ? session.frameOf(layer) : null;
+    const hit = frame ? this.hitFrame(frame, event) : null;
+    if (!hit) {
+      const pt = this.host.canvasPoint(event);
+      this.setCursor(session?.layerAt(pt.x, pt.y) ? "pointer" : "");
+      return;
+    }
+    const gesture = event.altKey ? "rotate" : hit.gesture;
+    this.setCursor(gesture === "move" ? "move" : gesture === "rotate" ? ROTATE_CURSOR : this.scaleCursor(hit.corner));
+  }
+  /** The diagonal a corner resizes along, read from where it sits on screen, so a
+   *  turned or flipped frame still shows the right arrow. */
+  scaleCursor(corner) {
+    const session = this.host.layers();
+    const layer = session?.selected();
+    const frame = layer && session ? session.frameOf(layer) : null;
+    if (!frame || corner < 0) return "nwse-resize";
+    const a = frame[corner];
+    const b = frame[(corner + 2) % 4];
+    return (a.x - b.x) * (a.y - b.y) >= 0 ? "nwse-resize" : "nesw-resize";
+  }
+  setCursor(cursor) {
+    const surface = this.host.surface();
+    if (surface.style.cursor !== cursor) surface.style.cursor = cursor;
+  }
+  // --- the marching ants -----------------------------------------------------------
+  startAnts() {
+    if (this.antsTimer !== 0) return;
+    this.antsTimer = window.setInterval(() => {
+      if (!this.framed) {
+        this.stopAnts();
+        return;
+      }
+      if (document.hidden) return;
+      this.antsPhase = (this.antsPhase + 1) % ANTS_PERIOD;
+      this.host.repaint();
+    }, 1e3 / ANTS_FPS);
+  }
+  stopAnts() {
+    if (this.antsTimer === 0) return;
+    window.clearInterval(this.antsTimer);
+    this.antsTimer = 0;
+  }
+};
+function strokeAnts(ctx, path, phase) {
+  ctx.lineWidth = 1;
+  ctx.setLineDash([]);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+  ctx.stroke(path);
+  ctx.setLineDash(ANTS_DASH);
+  ctx.lineDashOffset = -phase;
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.95)";
+  ctx.stroke(path);
+  ctx.setLineDash([]);
+}
+function drawHandle(ctx, p) {
+  ctx.fillStyle = "#ffffff";
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.8)";
+  ctx.fillRect(p.x - HANDLE / 2, p.y - HANDLE / 2, HANDLE, HANDLE);
+  ctx.strokeRect(p.x - HANDLE / 2 + 0.5, p.y - HANDLE / 2 + 0.5, HANDLE - 1, HANDLE - 1);
+}
+function insideScreenQuad(c, x, y) {
+  let sign = 0;
+  for (let i = 0; i < 4; i++) {
+    const a = c[i];
+    const b = c[(i + 1) % 4];
+    const cross = (b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x);
+    if (cross === 0) continue;
+    const s = Math.sign(cross);
+    if (sign === 0) sign = s;
+    else if (s !== sign) return false;
+  }
+  return true;
+}
+
+// src/layer-controls.ts
+function glyph(paths) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+var ICON_FLIP_H = glyph(
+  '<path d="m3 7 5 5-5 5V7"/><path d="m21 7-5 5 5 5V7"/><path d="M12 20v2M12 14v2M12 8v2M12 2v2"/>'
+);
+var ICON_FLIP_V = glyph(
+  '<path d="m17 3-5 5-5-5h10"/><path d="m17 21-5-5-5 5h10"/><path d="M4 12H2M10 12H8M16 12h-2M22 12h-2"/>'
+);
+function layerPlacementControls(access) {
+  const { width, height } = access.canvas;
+  const focal = Math.max(width, height);
+  return {
+    x: {
+      config: {
+        type: "slider",
+        min: Math.round(-width / 2),
+        max: Math.round(width * 1.5),
+        step: 1,
+        unit: " px",
+        moveVisual: { kind: "axis", axis: "x" },
+        label: "X"
+      },
+      read: () => Math.round(access.pivot().x + access.transform().x),
+      write: (v) => access.setTransform({ x: Number(v) - access.pivot().x })
+    },
+    y: {
+      config: {
+        type: "slider",
+        min: Math.round(-height / 2),
+        max: Math.round(height * 1.5),
+        step: 1,
+        unit: " px",
+        moveVisual: { kind: "axis", axis: "y", down: true },
+        label: "Y"
+      },
+      read: () => Math.round(access.pivot().y + access.transform().y),
+      write: (v) => access.setTransform({ y: Number(v) - access.pivot().y })
+    },
+    z: {
+      config: {
+        type: "slider",
+        min: Math.round(-focal * 0.75),
+        max: Math.round(focal * 2),
+        step: 1,
+        bipolar: true,
+        moveVisual: { kind: "axis", axis: "z" },
+        label: "Depth",
+        formatValue: (v) => `${depthScale(v, width, height).toFixed(2)}\xD7`
+      },
+      read: () => Math.round(access.transform().z),
+      write: (v) => access.setTransform({ z: Number(v) })
+    }
+  };
+}
+function layerShapeControls(access) {
+  return {
+    scale: {
+      config: { type: "slider", min: 0.05, max: 8, step: 0.01, origin: 1, unit: "\xD7" },
+      read: () => access.transform().scale,
+      write: (v) => access.setTransform({ scale: Number(v) })
+    },
+    rotation: {
+      config: { type: "slider", min: -180, max: 180, step: 1, display: "dial", wrap: true, unit: "\xB0" },
+      read: () => Math.round(access.transform().rotation * 180 / Math.PI),
+      write: (v) => access.setTransform({ rotation: Number(v) * Math.PI / 180 })
+    },
+    flipX: {
+      config: { type: "toggle", label: "Flip H", icon: ICON_FLIP_H },
+      read: () => access.transform().flipX,
+      write: (v) => access.setTransform({ flipX: Boolean(v) })
+    },
+    flipY: {
+      config: { type: "toggle", label: "Flip V", icon: ICON_FLIP_V },
+      read: () => access.transform().flipY,
+      write: (v) => access.setTransform({ flipY: Boolean(v) })
+    }
+  };
+}
+function layerOpacityControl(options) {
+  return {
+    config: {
+      type: "slider",
+      min: 0,
+      max: 1,
+      step: 0.01,
+      label: "Opacity",
+      moveVisual: { kind: "opacity", ...options.picture ? { picture: options.picture } : {} },
+      ...options.onTap ? { onTap: options.onTap } : {}
+    },
+    read: () => options.read(),
+    write: (v) => options.write(Number(v))
+  };
+}
+var LAYER_PADS = {
+  flipX: 0,
+  scale: 0,
+  flipY: 1,
+  rotation: 1
+};
+var LAYER_HINTS = {
+  x: "Where the layer's centre sits, across the canvas.",
+  y: "Where the layer's centre sits, down the canvas.",
+  z: "Depth. Far layers shrink toward the centre, near ones grow. It does not change which layer is in front \u2014 the list order does.",
+  scale: "Size, about the layer's centre. 1\xD7 is as drawn.",
+  rotation: "Turn, about the layer's centre.",
+  opacity: "How strongly the layer shows."
+};
+function layerListScreen(rows, index) {
+  return {
+    title: "Layers",
+    items: rows.map((row2) => ({
+      label: row2.label,
+      ...row2.tag ? { tag: row2.tag } : {},
+      checked: row2.visible,
+      ...row2.keywords ? { keywords: row2.keywords } : {}
+    })),
+    index,
+    back: true
+  };
+}
+
+// src/index.ts
 import { TweakStore as TweakStore20, TAB_PATH, parseListItemSchema, groupListFields, defaultListItemParams, normalizeListItems, hintDomId } from "tweakers/store";
 export {
   ADSR_DEF,
   ADSR_STAGE_MAX,
   ANGLE_DEAD_ZONE_PX,
+  ANTS_FPS,
+  ANTS_PERIOD,
   AUDIO_DEF,
   automation_core_exports as Automation,
   AutomationLanesStore,
@@ -20847,8 +21598,15 @@ export {
   ENV_WAVE_STAGES,
   FILTER_DB_CEIL,
   FILTER_DB_FLOOR,
+  HANDLE_HIT,
+  ICON_FLIP_H,
+  ICON_FLIP_V,
   ICON_MOVE_CAPTURE,
   ICON_MOVE_ENTER,
+  IDENTITY_PROJECTION,
+  IDENTITY_TRANSFORM,
+  LAYER_HINTS,
+  LAYER_PADS,
   LFO_DEF,
   LFO_SYNC_DIVISIONS,
   ListScreen,
@@ -21000,8 +21758,10 @@ export {
   MoveVolumeDisplay,
   MoveWaveform,
   MoveWaveformStore,
+  ORIGIN_ANCHOR,
   PresetExplorationStore,
   SH_DEF,
+  SelectTool,
   TAB_PATH,
   TRANSFER_MAX_POINTS,
   TRANSFER_MIN_GAP,
@@ -21021,7 +21781,9 @@ export {
   applyDetentAxis,
   applyModulation,
   arcPath,
+  assertTransformRoundTrip,
   audioModLevel,
+  bakeTransform,
   bearingToValue,
   breedDNA,
   buildModMovePage,
@@ -21029,16 +21791,19 @@ export {
   buildMoveStrip,
   buildSamplers,
   buildWaveformLevels,
+  canvasMatrix,
   centerValue,
   chooseParents,
   clamp2 as clamp,
   clampCurveHeight,
+  clampLayerTransform,
   clampOklchToSrgb,
   clampRange,
   clampStripOffset,
   cloneDNA,
   collectGenes,
   colorAtPosition,
+  composeModel,
   createMoveMeter,
   curveComposition,
   curveDuration,
@@ -21053,10 +21818,12 @@ export {
   denormalizeFilterDial,
   denormalizeRangeDial,
   denormalizeToggleDial,
+  depthScale,
   describeAgentControls,
   dialOrigin,
   dialSpan,
   displayHex,
+  drawHandle,
   drawMoveGate,
   drawMoveMultiband,
   enumOptionIcon,
@@ -21099,8 +21866,11 @@ export {
   hslToRgb,
   hsvToRgb,
   insertPoint,
+  insideScreenQuad,
+  invertModel,
   invertY,
   isIdentityTransfer,
+  isIdentityTransform,
   isMoveDial,
   isMoveTabs,
   isNamedTabs,
@@ -21109,6 +21879,11 @@ export {
   isSpanContinuation,
   isStripSlot,
   isToggleDial,
+  layerListScreen,
+  layerModelMatrix,
+  layerOpacityControl,
+  layerPlacementControls,
+  layerShapeControls,
   lfoSyncedHz,
   listModTypes,
   listenMoveTouch,
@@ -21201,9 +21976,13 @@ export {
   presetFlowerSeed,
   presetFlowerSvg,
   projectEntries,
+  projectPoint,
+  projectX,
+  projectY,
   rampCss,
   rangesDuration,
   readComposition,
+  reanchorTransform,
   reconcileDNA,
   redistributeWeight,
   registerModType,
@@ -21219,6 +21998,7 @@ export {
   rgbToHsv,
   rgbToOklch,
   runAgentActions,
+  sameTransform,
   sampleTransfer,
   scrubBy,
   seedDNA,
@@ -21256,6 +22036,7 @@ export {
   stripSlotIndex,
   stripStarts,
   stripWindowPads,
+  strokeAnts,
   subscribeAudioMod,
   timelineClock,
   timelineRowHeight,
@@ -21264,8 +22045,12 @@ export {
   timelineWindow,
   toAudioBuffer,
   transferLut,
+  translateInParent,
   triggerLevels,
   triggersCrossed,
+  unprojectPoint,
+  unprojectX,
+  unprojectY,
   useMoveTimeline,
   valueFromPoint,
   valueToBearing,
