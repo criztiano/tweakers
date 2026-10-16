@@ -5080,7 +5080,7 @@ declare const MOVE_PAD_LIBRARY: {
         readonly component: typeof MovePadIconBody;
     };
     readonly value: {
-        readonly description: "a value the dial above can borrow — hold to peek, tap to latch";
+        readonly description: "a value the dial above can borrow — hold to peek, tap to latch; the cursor drags it in place";
         readonly component: typeof MovePadValueBody;
     };
     readonly list: {

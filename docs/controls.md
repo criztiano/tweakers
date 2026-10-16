@@ -69,6 +69,13 @@ these gestures; an app wires nothing.
   axis: down is the next row. A multiselect slot walks the same way, and a
   still click ticks the row it landed on (the cursor row from the head);
   the mouse wheel walks it a row a notch while the panel's own wheel is idle.
+- **A number chip scrubs where it sits.** On the Move a pad cannot turn, so
+  a value chip lends its number to the knob above it. The cursor can turn
+  it, so a drag on a value chip, or on either half of a band, turns that
+  number in place, from where it is, the chip's width for the whole range
+  (Shift creeps at 0.1×). The drag never latches the chip. A still click
+  keeps the Move's gesture: a tap latches and a hold peeks. A colour chip
+  and a filter's resonance chip keep the Move's gesture only.
 - **Hover is a hand on the knob.** A pointer resting on a list slot — a
   select's list, a multiselect, folders — opens a long list to its whole run,
   as a touched knob does, and the row under it lights halfway to the chosen

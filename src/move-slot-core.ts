@@ -308,6 +308,18 @@ export function moveOptionClick(meta: ControlMeta, value: unknown, row: number) 
   return picked ?? moveNextOption(meta, value);
 }
 
+/* ── the chip: a small slot under the cursor ─────────────────────── */
+
+/**
+ * Whether a chip turns under the cursor itself. On the Move a chip only
+ * lends its value to the knob above it — tap latches, hold peeks — because
+ * a pad cannot turn. The cursor can, so a chip that holds a plain number
+ * scrubs in place. A colour opens its editor instead, and a filter's
+ * resonance chip writes through its filter, so both keep the Move's
+ * gesture only.
+ */
+export const moveChipScrubs = (meta: ControlMeta) => meta.type === 'slider' && !meta.resonanceOf;
+
 /* ── the list a dial walks: the multiselect ────────────────────── */
 
 /**

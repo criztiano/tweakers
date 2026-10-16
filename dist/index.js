@@ -3747,7 +3747,7 @@ function MovePadListBody({ view, onCursor, onToggle }) {
 var MOVE_PAD_LIBRARY = {
   toggle: { description: "a switch; the pad inverts when it is on", component: MovePadToggleBody },
   icon: { description: "a switch drawn as its picture in place of its name \u2014 alone, or with a caption beside it for the value in force; the pad inverts when it is on", component: MovePadIconBody },
-  value: { description: "a value the dial above can borrow \u2014 hold to peek, tap to latch", component: MovePadValueBody },
+  value: { description: "a value the dial above can borrow \u2014 hold to peek, tap to latch; the cursor drags it in place", component: MovePadValueBody },
   list: { description: "a checked list above a small pad; its dial walks, Sample selects, a second pad press runs \u2014 or, single, a picker: Sample takes the row and the pad names it", component: MovePadListBody },
   action: { description: "a button: a press runs the app\u2019s action", component: MovePadActionBody },
   "icon-label": { description: "a button wearing its picture beside its name \u2014 a press runs the app\u2019s action", component: MovePadIconLabelBody },
@@ -9303,6 +9303,7 @@ function moveOptionClick(meta, value, row2) {
   const picked = row2 >= 0 ? optionValue(meta, row2) : void 0;
   return picked ?? moveNextOption(meta, value);
 }
+var moveChipScrubs = (meta) => meta.type === "slider" && !meta.resonanceOf;
 function moveListWalk(p, e, count) {
   return Math.max(0, Math.min(count - 1, p.v + Math.trunc((e.clientY - p.ay) / MOVE_LIST_ROW_TRAVEL)));
 }
@@ -16484,6 +16485,31 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       detail: { pageId: page.panel.id, path: meta.path, latched: !wasLatched }
     }));
   };
+  const chipGesture = (col, meta) => {
+    const scrubs = moveChipScrubs(meta);
+    const off = () => TweakStore17.isDisabled(page.panel.id, meta.path);
+    return {
+      onPointerDown: (e) => {
+        if (e.button > 0) return;
+        pressChip(e, col, meta);
+        if (scrubs && !off()) pressRef.current = movePressStart(meta.path, e, normalizeDial(meta, values[meta.path]));
+      },
+      onPointerMove: (e) => {
+        const p = scrubs ? movePressTravel(pressRef, meta.path, e, () => normalizeDial(meta, values[meta.path])) : null;
+        if (p && !off()) write2(meta, moveTurnValue(meta, p, e, moveTurnExtent(e.currentTarget.getBoundingClientRect())));
+      },
+      onPointerUp: () => {
+        const scrubbed = pressRef.current?.path === meta.path && pressRef.current.moved;
+        movePressEnd(pressRef, meta.path);
+        if (scrubbed) setHeld(null);
+        else releaseChip(col, meta);
+      },
+      onPointerCancel: () => {
+        movePressEnd(pressRef, meta.path);
+        setHeld(null);
+      }
+    };
+  };
   const appRows = settingsOpen || explorationOpen ? 0 : surface.rows;
   const padRows = movePadRows(page, appRows);
   const appRowAt = (row2) => moveAppPadRow(row2, appRows);
@@ -17841,9 +17867,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                               "aria-label": m.label,
                                               "data-held": chipHeld(m) || void 0,
                                               "data-latched": chipLatched(col, m) || void 0,
-                                              onPointerDown: (e) => pressChip(e, col, m),
-                                              onPointerUp: () => releaseChip(col, m),
-                                              onPointerCancel: () => setHeld(null),
+                                              ...chipGesture(col, m),
                                               children: /* @__PURE__ */ jsx19(MoveModRing, { panelId: page.panel.id, path: m.path, pad: true })
                                             },
                                             m.path
@@ -17888,12 +17912,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         {
                                           className: "tweakers-move-pad",
                                           "data-kind": isColor ? "color" : "value",
+                                          "data-scrub": moveChipScrubs(meta) || void 0,
                                           "data-held": held !== null && held.meta.path === meta.path || hwHeld[meta.path] || void 0,
                                           "data-latched": chipLatched(col, meta) || void 0,
                                           "aria-label": isColor ? meta.label : void 0,
-                                          onPointerDown: (e) => pressChip(e, col, meta),
-                                          onPointerUp: () => releaseChip(col, meta),
-                                          onPointerCancel: () => setHeld(null),
+                                          ...chipGesture(col, meta),
                                           children: isColor ? /* @__PURE__ */ jsx19(MovePadColorBody, { label: meta.label, color: String(values[meta.path]) }) : /* @__PURE__ */ jsx19(MovePadValueBody, { label: meta.label, value: value.num, unit: value.unit, children: /* @__PURE__ */ jsx19(MoveModRing, { panelId: page.panel.id, path: meta.path, pad: true }) })
                                         },
                                         meta.path
