@@ -33,7 +33,7 @@ import {
 } from '../move-slot-core';
 import {
   movePressStart, movePressTravel, movePressEnd, moveTurnValue, moveTurnExtent,
-  moveOptionStep, moveOptionClick, moveListHover, moveListWalk, moveListRowIn, moveListKey, moveMultiselectOptions,
+  moveOptionStep, moveOptionClick, moveChipScrubs, moveListHover, moveListWalk, moveListRowIn, moveListKey, moveMultiselectOptions,
   moveMultiselectChecked, moveMultiselectToggle, moveListAria, moveListBackIn, moveSelectAria, moveSelectClick,
   moveSelectFromWalk, moveSelectWalkCount, moveSelectWalkIndex, type MovePress,
 } from '../move-slot-core';
@@ -1642,6 +1642,33 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     }));
   };
 
+  // A chip under the cursor. The cursor can turn what a pad cannot: a drag
+  // on a number scrubs it in place, turned as its big slot turns — from
+  // where it is, the chip's own width for the whole range — and only a still
+  // press keeps the Move's gesture: tap latches, hold peeks.
+  const chipGesture = (col: number, meta: ControlMeta) => {
+    const scrubs = moveChipScrubs(meta);
+    const off = () => TweakStore.isDisabled(page.panel.id, meta.path);
+    return {
+      onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
+        if (e.button > 0) return;
+        pressChip(e, col, meta);
+        if (scrubs && !off()) pressRef.current = movePressStart(meta.path, e, normalizeDial(meta, values[meta.path]));
+      },
+      onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
+        const p = scrubs ? movePressTravel(pressRef, meta.path, e, () => normalizeDial(meta, values[meta.path])) : null;
+        if (p && !off()) write(meta, moveTurnValue(meta, p, e, moveTurnExtent(e.currentTarget.getBoundingClientRect())));
+      },
+      onPointerUp: () => {
+        const scrubbed = pressRef.current?.path === meta.path && pressRef.current.moved;
+        movePressEnd(pressRef, meta.path);
+        if (scrubbed) setHeld(null);
+        else releaseChip(col, meta);
+      },
+      onPointerCancel: () => { movePressEnd(pressRef, meta.path); setHeld(null); },
+    };
+  };
+
   // The claimed pad rows, on the same terms as the wheel screen above: the
   // settings room hides them with it.
   const appRows = (settingsOpen || explorationOpen) ? 0 : surface.rows;
@@ -3188,9 +3215,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                                 aria-label={m.label}
                                 data-held={chipHeld(m) || undefined}
                                 data-latched={chipLatched(col, m) || undefined}
-                                onPointerDown={(e) => pressChip(e, col, m)}
-                                onPointerUp={() => releaseChip(col, m)}
-                                onPointerCancel={() => setHeld(null)}
+                                {...chipGesture(col, m)}
                               >
                                 <MoveModRing panelId={page.panel.id} path={m.path} pad />
                               </button>
@@ -3255,12 +3280,11 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                         key={meta.path}
                         className="tweakers-move-pad"
                         data-kind={isColor ? 'color' : 'value'}
+                        data-scrub={moveChipScrubs(meta) || undefined}
                         data-held={(held !== null && held.meta.path === meta.path) || hwHeld[meta.path] || undefined}
                         data-latched={chipLatched(col, meta) || undefined}
                         aria-label={isColor ? meta.label : undefined}
-                        onPointerDown={(e) => pressChip(e, col, meta)}
-                        onPointerUp={() => releaseChip(col, meta)}
-                        onPointerCancel={() => setHeld(null)}
+                        {...chipGesture(col, meta)}
                       >
                         {isColor
                           ? <MovePadColorBody label={meta.label} color={String(values[meta.path])} />

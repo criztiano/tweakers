@@ -1789,7 +1789,7 @@ export function MovePadListBody({ view, onCursor, onToggle }: {
 export const MOVE_PAD_LIBRARY = {
   toggle: { description: 'a switch; the pad inverts when it is on', component: MovePadToggleBody },
   icon: { description: 'a switch drawn as its picture in place of its name — alone, or with a caption beside it for the value in force; the pad inverts when it is on', component: MovePadIconBody },
-  value: { description: 'a value the dial above can borrow — hold to peek, tap to latch', component: MovePadValueBody },
+  value: { description: 'a value the dial above can borrow — hold to peek, tap to latch; the cursor drags it in place', component: MovePadValueBody },
   list: { description: 'a checked list above a small pad; its dial walks, Sample selects, a second pad press runs — or, single, a picker: Sample takes the row and the pad names it', component: MovePadListBody },
   action: { description: 'a button: a press runs the app’s action', component: MovePadActionBody },
   'icon-label': { description: 'a button wearing its picture beside its name — a press runs the app’s action', component: MovePadIconLabelBody },
