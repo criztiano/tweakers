@@ -12,7 +12,7 @@ afterEach(() => {
   MoveAgentStore.close();
   MoveAgentStore.configure({
     url: undefined, ask: undefined, actions: undefined, scene: undefined, brief: undefined, context: undefined,
-    signals: undefined, editMap: undefined, tools: undefined, maxPasses: undefined, checkpoint: undefined,
+    signals: undefined, editMap: undefined, tools: undefined, maxPasses: undefined, timeoutMs: undefined, checkpoint: undefined,
   });
   TweakStore.unregisterPanel(PANEL);
 });
@@ -200,6 +200,21 @@ describe('the agent takes a few passes', () => {
     expect(asked).toHaveLength(1);
     expect(MoveAgentStore.getView()).toMatchObject({ phase: 'error', message: 'That took too long, so it was stopped. Nothing changed.' });
     expect(TweakStore.getValue(PANEL, 'blur')).toBe(4);
+  });
+
+  it('waits as long as the host says — with no limit at all on 0', async () => {
+    vi.useFakeTimers();
+    register();
+    let finish!: () => void;
+    const ask = vi.fn(() => new Promise<MoveAgentReply>((done) => { finish = () => done({ writes: [{ id: `${PANEL}::blur`, value: 9 }] }); }));
+    MoveAgentStore.configure({ panels: 'Look', ask, timeoutMs: 0 });
+    MoveAgentStore.open();
+    const asking = MoveAgentStore.ask('look');
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(MoveAgentStore.getView()).toMatchObject({ phase: 'thinking' });
+    finish();
+    await asking;
+    expect(TweakStore.getValue(PANEL, 'blur')).toBe(9);
   });
 
   it('lands nothing when the checkpoint fails', async () => {

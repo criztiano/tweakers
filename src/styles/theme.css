@@ -380,6 +380,8 @@
      wheel-screen list lives inside this budget and never widens the panel
      beyond it. */
   --move-cluster-max: 1180px;
+  /* The whole panel's cap: the cluster plus the panel's side padding. */
+  --move-panel-max: calc(var(--move-cluster-max) + 2 * 48px);
   --move-slot: rgba(222, 227, 201, 0.1);
   /* A column held open by a page that has nothing for it to do — fainter
      than a slot you can press, so it never reads as a control. */
@@ -485,8 +487,14 @@
   --move-color-disabled-opacity: 0.45;
   --move-duration-press: 150ms;
   --move-ease-out: cubic-bezier(0.2, 0, 0, 1);
+  /* Reveals and moves that should settle long and soft; exits that clear the way. */
+  --move-ease-smooth: cubic-bezier(0.22, 1, 0.36, 1);
+  --move-ease-in: cubic-bezier(0.4, 0, 1, 1);
   --move-header-control-height: 28px;
   --move-list-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  /* The agent's prompt box. A host that keeps its own content clear of the
+     box (it floats at the panel's right edge) reads its width here. */
+  --move-agent-width: 364px;
 }
 
 .tweakers-move {
@@ -499,7 +507,7 @@
      list beside them shares that budget rather than widening the panel. A
      host that hands the panel a wider stage gets it centred at this width,
      not stretched across the page. */
-  max-width: calc(var(--move-cluster-max) + 2 * 48px);
+  max-width: var(--move-panel-max);
   margin-inline: auto;
   background: var(--move-bg);
   color: var(--move-text);
@@ -4147,17 +4155,82 @@
 }
 
 /* The agent's prompt: the same floating frame, wider — a sentence, not a
-   name — with the reply and its undo on a line beneath. */
-.tweakers-move-agent-input {
-  width: 340px;
-  text-align: left;
+   name — and set at the panel's right edge, not its middle, so the work on
+   the screen above stays in view. It reads top to bottom as one turn: the
+   reply, what it did on the way, then the box to answer in. */
+.tweakers-move-agent {
+  left: auto;
+  right: 0;
+  transform: none;
+  transform-origin: bottom right;
+  width: var(--move-agent-width);
+  box-sizing: border-box;
+}
+
+.tweakers-move-agent[data-inside] {
+  transform-origin: top right;
+}
+
+/* The frame holds the height of what is in it (set from the body, which is
+   what is measured). The body stands on the frame's floor, the panel side,
+   so a turn grows and shrinks at the far edge and the field stays put. */
+.tweakers-move-agent-frame {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+  /* Room for the focus ring the frame would otherwise clip — and, along the
+     far edge, the box's own padding, where the words rise through a soft
+     fade as the box opens instead of meeting a hard cut. At rest nothing is
+     in that band. */
+  margin: -10px -3px -3px;
+  padding: 10px 3px 3px;
+  box-sizing: content-box;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 10px);
+  mask-image: linear-gradient(to bottom, transparent, #000 10px);
+}
+
+/* Inside the panel the box hangs from its top instead, and fades at its foot. */
+.tweakers-move-agent[data-inside] .tweakers-move-agent-frame {
+  justify-content: flex-start;
+  margin: -3px -3px -10px;
+  padding: 3px 3px 10px;
+  -webkit-mask-image: linear-gradient(to top, transparent, #000 10px);
+  mask-image: linear-gradient(to top, transparent, #000 10px);
+}
+
+.tweakers-move-agent-body {
+  flex: none;
+  display: flex;
+  flex-direction: column;
 }
 
 /* The field's row: the + for a picture, then the words. */
 .tweakers-move-agent-field {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 6px;
+}
+
+/* The words grow downward with what is typed — a line at a time, up to a
+   third of the screen — and scroll only past that. */
+.tweakers-move-agent-input {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  min-height: 32px;
+  max-height: min(240px, 33vh);
+  box-sizing: border-box;
+  field-sizing: content;
+  resize: none;
+  overflow-y: auto;
+  text-align: left;
+  scrollbar-width: thin;
+}
+
+.tweakers-move-agent-input::placeholder {
+  color: color-mix(in srgb, var(--move-text) 38%, transparent);
 }
 
 .tweakers-move-agent-attach {
@@ -4192,22 +4265,17 @@
   height: 16px;
 }
 
-.tweakers-move-agent-attach ~ .tweakers-move-agent-input {
-  width: 302px;
-}
-
 /* A picture being dragged over the prompt: the frame says it will take it. */
 .tweakers-move-agent[data-dropping] {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), inset 0 0 0 2px color-mix(in srgb, var(--move-text) 50%, transparent);
 }
 
-/* The pictures in the prompt, as thumbnails above the words, in the order
-   they will be read. */
+/* The pictures in the prompt, as thumbnails just above the words, in the
+   order they will be read. */
 .tweakers-move-agent-attachments {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  width: 340px;
   margin: 0 0 8px;
   padding: 0;
   list-style: none;
@@ -4247,14 +4315,14 @@
   transition: opacity 0.12s;
 }
 
-.tweakers-move-agent-attachment:hover button,
+.tweakers-move-agent-attachment:hover button:not(:disabled),
 .tweakers-move-agent-attachment button:focus-visible {
   opacity: 1;
   outline: none;
 }
 
 @media (hover: none) {
-  .tweakers-move-agent-attachment button { opacity: 1; }
+  .tweakers-move-agent-attachment button:not(:disabled) { opacity: 1; }
 }
 
 .tweakers-move-agent-attachment svg {
@@ -4262,28 +4330,99 @@
   height: 10px;
 }
 
-.tweakers-move-agent[data-phase="thinking"] .tweakers-move-agent-input {
-  opacity: 0.5;
-}
-
-.tweakers-move-agent-note {
+/* The reply, above the box: the agent's words at reading size, its undo
+   on the line beneath. */
+.tweakers-move-agent-reply {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
-  width: 340px;
-  margin: 8px 0 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 10px;
   padding: 0 2px;
-  color: color-mix(in srgb, var(--move-text) 65%, transparent);
+  color: color-mix(in srgb, var(--move-text) 92%, transparent);
   font-family: var(--move-font-label);
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 17px;
+  line-height: 24px;
 }
 
-/* What it read and looked at on the way: a quiet list between the field and
-   the reply. A finished step steps back; the one running breathes. */
+.tweakers-move-agent-said {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Each word of the reply comes up out of a soft blur as it arrives. */
+.tweakers-move-agent-word {
+  animation: tweakers-move-agent-word 420ms var(--move-ease-smooth) both;
+  animation-delay: calc(var(--word, 0) * 22ms);
+}
+
+@keyframes tweakers-move-agent-word {
+  from { opacity: 0; filter: blur(4px); }
+  to { opacity: 1; filter: blur(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-agent-word { animation: none; }
+}
+
+/* The words just sent, held in the field while the agent works: quieter,
+   and not to be typed in until the reply is whole. */
+.tweakers-move-agent-input[data-sent] {
+  color: color-mix(in srgb, var(--move-text) 45%, transparent);
+}
+
+.tweakers-move-agent-input:read-only {
+  cursor: default;
+}
+
+/* The working dots, on their own line under the field. */
+.tweakers-move-agent-working {
+  display: flex;
+  align-items: center;
+  height: 14px;
+  padding: 10px 2px 0;
+}
+
+/* The working mark: a five-by-five dot screen with a wave of light sweeping
+   it corner to corner, two passes half a beat apart. */
+.tweakers-move-agent-loader {
+  --dot-size: 2.8px;
+  --dot-cycle: 1400ms;
+  display: grid;
+  grid-template-columns: repeat(5, var(--dot-size));
+  grid-template-rows: repeat(5, var(--dot-size));
+  gap: 1.5px;
+  flex: none;
+  color: var(--move-text);
+}
+
+.tweakers-move-agent-loader > span {
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.12;
+  animation: tweakers-move-agent-sweep var(--dot-cycle) linear infinite;
+  animation-delay: calc((var(--dot-path) * 0.2 + var(--dot-parity) * 0.5) * var(--dot-cycle) - var(--dot-cycle));
+  will-change: opacity;
+}
+
+@keyframes tweakers-move-agent-sweep {
+  0%, 100% { opacity: 0.1; }
+  14% { opacity: 1; }
+  30% { opacity: 0.14; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-agent-loader > span {
+    animation: none;
+    opacity: calc(0.88 - var(--dot-parity) * 0.7);
+  }
+}
+
+/* What it read and looked at on the way: a quiet list above the box. A
+   finished step steps back; the one running breathes. */
 .tweakers-move-agent-steps {
-  width: 340px;
-  margin: 8px 0 0;
+  margin: 0 0 8px;
   padding: 0 2px;
   list-style: none;
   font-family: var(--move-font-label);
@@ -4300,10 +4439,6 @@
   animation: tweakers-move-agent-breathe var(--move-confirm-pulse-duration) ease-in-out infinite;
 }
 
-.tweakers-move-agent-steps + .tweakers-move-agent-note {
-  margin-top: 4px;
-}
-
 @keyframes tweakers-move-agent-breathe {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
@@ -4313,9 +4448,9 @@
   .tweakers-move-agent-step[data-state="running"] { animation: none; }
 }
 
-/* A reply that did what was asked says one word. The mark draws itself and
-   the word settles in beside it — a small confirmation, over in a beat. */
-.tweakers-move-agent-note[data-done] {
+/* A reply that did what was asked says one word. The mark draws itself
+   beside it — a small confirmation, over in a beat. */
+.tweakers-move-agent-reply[data-done] {
   color: var(--move-text);
 }
 
@@ -4323,7 +4458,6 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  animation: tweakers-move-agent-settle 320ms var(--move-ease-out) both;
 }
 
 .tweakers-move-agent-done-mark {
@@ -4335,12 +4469,7 @@
 .tweakers-move-agent-done-mark path {
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  animation: tweakers-move-agent-draw 360ms var(--move-ease-out) 80ms forwards;
-}
-
-@keyframes tweakers-move-agent-settle {
-  from { opacity: 0; transform: translateY(3px); }
-  to { opacity: 1; transform: none; }
+  animation: tweakers-move-agent-draw 360ms var(--move-ease-out) 120ms forwards;
 }
 
 @keyframes tweakers-move-agent-draw {
@@ -4348,23 +4477,29 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .tweakers-move-agent-done { animation: none; }
   .tweakers-move-agent-done-mark path { animation: none; stroke-dashoffset: 0; }
 }
 
-.tweakers-move-agent[data-phase="error"] .tweakers-move-agent-note {
+.tweakers-move-agent[data-phase="error"] .tweakers-move-agent-reply {
   color: #ff8a70;
 }
 
 .tweakers-move-agent-undo {
-  margin-left: auto;
   padding: 0;
   border: none;
   background: none;
-  color: var(--move-text);
+  color: color-mix(in srgb, var(--move-text) 65%, transparent);
   font: inherit;
+  font-size: 12px;
+  line-height: 16px;
   text-decoration: underline;
   cursor: pointer;
+  transition: color var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-agent-undo:hover,
+.tweakers-move-agent-undo:focus-visible {
+  color: var(--move-text);
 }
 
 @media (prefers-reduced-motion: reduce) {

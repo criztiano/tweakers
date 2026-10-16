@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TweakStore } from '../src/store/TweakStore';
 import { collectGenes } from '../src/preset-genetics';
-import { MoveAgentStore, applyAgentWrites, describeAgentControls, restoreAgentWrites, MOVE_AGENT_GLIDE_MS, type MoveAgentAction, type MoveAgentOutcome, type MoveAgentReply, type MoveAgentRequest } from '../src/move-agent';
+import { MoveAgentStore, applyAgentWrites, describeAgentControls, restoreAgentWrites, MOVE_AGENT_GLIDE_MS, type MoveAgentAction, type MoveAgentOutcome, type MoveAgentReply, type MoveAgentRequest, type MoveAgentStream } from '../src/move-agent';
 import type { MoveAgentEntry, MoveAgentSignal, MoveAgentTool } from '../src/move-agent-perception';
 
 // What the first real host (a sampling editor) needed and the kit did not
@@ -283,5 +283,123 @@ describe('an agent write glides in', () => {
     expect(mid).toBeLessThan(18); expect(mid).toBeGreaterThan(2);
     tick(MOVE_AGENT_GLIDE_MS);
     expect(TweakStore.getValue(PANEL, 'blur')).toBe(2);
+  });
+});
+
+describe('a reply that streams', () => {
+  const list = () => {
+    const landed: string[] = [];
+    const add: MoveAgentAction = {
+      id: 'add', label: 'Add', params: { name: { type: 'string' } },
+      run: ({ name }) => { landed.push(String(name)); return () => { landed.splice(landed.indexOf(String(name)), 1); }; },
+    };
+    return { landed, add };
+  };
+
+  it('shows its words as they come, and the answer has the last word', async () => {
+    register();
+    let release!: () => void;
+    const held = new Promise<void>((done) => { release = done; });
+    MoveAgentStore.configure({
+      panels: [PANEL],
+      ask: async (_request, _signal, stream) => {
+        stream.say('Three takes');
+        await held;
+        return { writes: [], message: 'Three takes, each a different light.' };
+      },
+    });
+    MoveAgentStore.open();
+    const asking = MoveAgentStore.ask('a beach');
+    await vi.waitFor(() => expect(MoveAgentStore.getView()?.message).toBe('Three takes'));
+    expect(MoveAgentStore.getView()?.phase).toBe('thinking');
+    release();
+    await asking;
+    expect(MoveAgentStore.getView()).toMatchObject({ phase: 'done', message: 'Three takes, each a different light.' });
+  });
+
+  it('lands an action the moment it is written, and the one undo takes it back with the rest', async () => {
+    register();
+    const { landed, add } = list();
+    const ends: MoveAgentOutcome[] = [];
+    let release!: () => void;
+    const held = new Promise<void>((done) => { release = done; });
+    MoveAgentStore.configure({
+      panels: [PANEL], actions: [add], onRequest: { end: (o) => ends.push(o) },
+      ask: async (_request, _signal, stream) => {
+        await stream.act({ id: 'add', params: { name: 'one' } });
+        await stream.act({ id: 'add', params: { name: 'two' } });
+        await held;
+        return { writes: [], actions: [{ id: 'add', params: { name: 'three' } }] };
+      },
+    });
+    MoveAgentStore.open();
+    const asking = MoveAgentStore.ask('three things');
+    await vi.waitFor(() => expect(landed).toEqual(['one', 'two']));
+    expect(MoveAgentStore.getView()).toMatchObject({ phase: 'thinking', acted: 2 });
+    release();
+    await asking;
+    expect(landed).toEqual(['one', 'two', 'three']);
+    expect(ends[0]).toMatchObject({ acted: 3, cancelled: false });
+    await MoveAgentStore.undo();
+    expect(landed).toEqual([]);
+  });
+
+  it('keeps what landed when the ask is let go, and its undo still works', async () => {
+    register();
+    const { landed, add } = list();
+    const ends: MoveAgentOutcome[] = [];
+    MoveAgentStore.configure({
+      panels: [PANEL], actions: [add], onRequest: { end: (o) => ends.push(o) },
+      ask: async (_request, signal, stream) => {
+        await stream.act({ id: 'add', params: { name: 'one' } });
+        return new Promise<MoveAgentReply>((_done, fail) => signal.addEventListener('abort', () => fail(new Error('aborted'))));
+      },
+    });
+    MoveAgentStore.open();
+    const asking = MoveAgentStore.ask('more');
+    await vi.waitFor(() => expect(landed).toEqual(['one']));
+    MoveAgentStore.close();
+    await asking;
+    expect(landed).toEqual(['one']);
+    expect(ends[0]).toMatchObject({ acted: 1, cancelled: true });
+    expect(MoveAgentStore.canUndo()).toBe(true);
+    await MoveAgentStore.undo();
+    expect(landed).toEqual([]);
+  });
+
+  it('ignores what a let-go ask still tries to say or do', async () => {
+    register();
+    const { landed, add } = list();
+    let late!: MoveAgentStream;
+    MoveAgentStore.configure({
+      panels: [PANEL], actions: [add],
+      ask: async (_request, signal, stream) => {
+        late = stream;
+        return new Promise<MoveAgentReply>((_done, fail) => signal.addEventListener('abort', () => fail(new Error('aborted'))));
+      },
+    });
+    MoveAgentStore.open();
+    const asking = MoveAgentStore.ask('more');
+    await vi.waitFor(() => expect(late).toBeDefined());
+    MoveAgentStore.close();
+    await asking;
+    MoveAgentStore.open();
+    late.say('too late');
+    await late.act({ id: 'add', params: { name: 'ghost' } });
+    expect(MoveAgentStore.getView()?.message).toBe('');
+    expect(landed).toEqual([]);
+  });
+});
+
+describe('a streamed reply with no last word', () => {
+  it('keeps what it said', async () => {
+    register();
+    MoveAgentStore.configure({
+      panels: [PANEL],
+      ask: async (_request, _signal, stream) => { stream.say('Morning or dusk?'); return { writes: [] }; },
+    });
+    MoveAgentStore.open();
+    await MoveAgentStore.ask('a beach');
+    expect(MoveAgentStore.getView()).toMatchObject({ phase: 'done', message: 'Morning or dusk?' });
   });
 });

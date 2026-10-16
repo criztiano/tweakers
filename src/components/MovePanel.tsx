@@ -3,6 +3,7 @@ import { MovePadList } from './MovePadList';
 import { PresetExploration, PresetExplorationSlots } from './PresetExploration';
 import { PresetExplorationStore } from '../preset-exploration';
 import { useEffect, useLayoutEffect, useId, useRef, useState, useSyncExternalStore, useCallback } from 'react';
+import { AnimatePresence, animate, motion, useReducedMotion } from 'motion/react';
 import { createPortal } from 'react-dom';
 import { moveFloatSitsInside } from '../move-float';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
@@ -1763,7 +1764,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
         {!explorationOpen && colorMeta && <MoveColorDisplay panelId={page.panel.id} meta={colorMeta} anchor={panelRef} theme={theme} />}
         <PresetExploration />
         {presetSave && <MovePresetSaveInput suggested={presetSave.suggested} />}
-        {agent && !presetSave && <MoveAgentPrompt view={agent} />}
+        <AnimatePresence>{agent && !presetSave && <MoveAgentPrompt key="agent" view={agent} />}</AnimatePresence>
         {!explorationOpen && composition && modSettings && (
           <MoveCurveComposer
             index={modSettings.index}
@@ -4029,124 +4030,332 @@ function MovePresetSaveInput({ suggested }: { suggested: string }) {
 }
 
 /**
- * The agent's prompt, floating where the preset name does. Enter sends the
- * words, Escape closes. The field stays open after a reply — asking again
- * refines what just landed. While it works, what it is reading or looking
- * at shows as it happens, so a longer wait is never a silent one; the steps
- * leave with the reply. A reply that simply did what was asked is one word,
- * Done, with its undo — the agent writes a sentence only when there is
- * something to know: it could not, it did something else, it had to choose.
+ * The agent's prompt, floating at the panel's right edge so the work in the
+ * middle of the screen stays in view. It reads as a conversation, one turn at
+ * a time: Enter sends the words and they wait in the box, under the dots,
+ * while the agent works; when it answers they leave, its reply takes their
+ * place, and an empty box opens under the reply for the next turn. A reply
+ * that streams is read as it comes. What the agent reads or looks at on the
+ * way shows as it happens, so a longer wait is never a silent one. A reply
+ * that simply did what was asked is one word, Done, with its undo. The field
+ * grows with what is typed; Shift+Enter starts a new line, Escape closes.
  */
 function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   /** Shift went down and nothing else has yet — a capital letter clears it. */
   const shiftAlone = useRef(false);
   const [dropping, setDropping] = useState(false);
+  const [draft, setDraft] = useState('');
   const float = useMoveFloat();
+  const still = !!useReducedMotion();
   const pictures = MoveAgentStore.acceptsAttachments();
   const hasImage = (data: DataTransfer | null) => !!data && [...data.items].some((item) => item.kind === 'file' && item.type.startsWith('image/'));
   const thinking = view.phase === 'thinking';
-  useEffect(() => { if (!thinking) inputRef.current?.select(); }, [thinking]);
+  // A failed ask gives its words back, so they can be sent again; any ask
+  // starts the next turn with an empty field.
+  useEffect(() => {
+    if (view.phase === 'error') setDraft((now) => now || view.prompt);
+    else if (view.phase === 'thinking') setDraft('');
+  }, [view.phase, view.prompt]);
+  useMoveFieldHeight(inputRef, draft);
   const changed = view.phase !== 'thinking' && (view.changed > 0 || view.acted > 0);
   const skipped = view.skipped ? `${view.skipped} ${view.skipped === 1 ? 'action' : 'actions'} skipped.` : '';
-  const note = thinking ? (view.steps.some((s) => s.state === 'running') ? '' : 'Turning the dials…')
-    : [view.message, skipped].filter(Boolean).join(' ');
-  const done = view.phase === 'done' && changed && !note;
+  const said = thinking ? view.message : [view.message, skipped].filter(Boolean).join(' ');
+  const done = view.phase === 'done' && changed && !said;
   const steps = thinking ? view.steps : view.steps.filter((s) => s.state === 'failed');
+  const replying = !!said || done;
+  // The words just sent stay in the field, quieter, until the reply starts.
+  const echoing = thinking && !view.message;
+  // The last reply leaves before the working dots come in, so clearing a turn
+  // is one move of the box, not a rise and a fall.
+  const [leaving, setLeaving] = useState(false);
+  const wasReplying = useRef(replying);
+  useLayoutEffect(() => {
+    if (wasReplying.current && !replying) setLeaving(true);
+    wasReplying.current = replying;
+  }, [replying]);
+  // Known in the very render the reply goes, before the effect records it.
+  const working = thinking && !leaving && !(wasReplying.current && !replying);
+  // The Move's own Undo key already takes the answer back: no second one here.
+  const keyUndo = useSyncExternalStore((fn) => MoveFunctions.subscribe(fn), () => MoveFunctions.list().includes('undo'), () => false);
+  // What the turn is made of. When it changes the box eases to its new
+  // height; when only the words in the field do, it follows them at once.
+  const shape = `${view.phase}|${replying}|${echoing}|${working}|${steps.length}|${view.attachments.length}`;
+  // While a reply is written out the box only grows. Once the host puts other
+  // words in its place — a progress line after a long message — it may shrink
+  // to them again, for the rest of the turn.
+  const lastSaid = useRef(said);
+  const replaced = useRef(false);
+  if (!thinking) replaced.current = false;
+  else if (lastSaid.current && !said.startsWith(lastSaid.current)) replaced.current = true;
+  lastSaid.current = said;
+  const frame = useAgentFrame(shape, thinking, thinking && replying && !replaced.current, still);
+  const send = () => {
+    const text = draft.trim();
+    if (!text || thinking) return;
+    setDraft('');
+    void MoveAgentStore.ask(text);
+  };
   return (
-    <div
+    <motion.div
       ref={float.ref}
       className="tweakers-move-preset-save tweakers-move-agent"
       data-phase={view.phase}
       data-inside={float.inside || undefined}
       data-dropping={dropping || undefined}
+      aria-busy={thinking || undefined}
+      initial={still ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={still ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.98, transition: { duration: 0.16, ease: AGENT_EASE_IN } }}
+      transition={{ duration: still ? 0.12 : 0.32, ease: AGENT_EASE_SMOOTH }}
       onDragOver={pictures ? (e) => { if (!hasImage(e.dataTransfer)) return; e.preventDefault(); setDropping(true); } : undefined}
       onDragLeave={pictures ? (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false); } : undefined}
       onDrop={pictures ? (e) => { if (!hasImage(e.dataTransfer)) return; e.preventDefault(); setDropping(false); MoveAgentStore.attach(e.dataTransfer.files); inputRef.current?.focus(); } : undefined}
     >
-      {view.attachments.length > 0 && (
-        <ul className="tweakers-move-agent-attachments" aria-label="Pictures in the prompt">
-          {view.attachments.map((a) => (
-            <li key={a.id} className="tweakers-move-agent-attachment" title={a.name}>
-              <img src={a.url} alt={a.name} />
-              <button type="button" aria-label={`Remove ${a.name}`} onClick={() => { MoveAgentStore.detach(a.id); inputRef.current?.focus(); }}>
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d={ICON_CLOSE} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                </svg>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="tweakers-move-agent-field">
-        {pictures && (
-          <>
-            <button type="button" className="tweakers-move-agent-attach" aria-label="Add a picture" title="Add a picture — or drop or paste one"
-              disabled={thinking} onClick={() => fileRef.current?.click()}>
-              <MoveSlotGlyph name="image-plus" className="tweakers-move-agent-attach-icon" />
-            </button>
-            <input ref={fileRef} type="file" accept="image/*" multiple hidden
-              onChange={(e) => { if (e.currentTarget.files) MoveAgentStore.attach(e.currentTarget.files); e.currentTarget.value = ''; inputRef.current?.focus(); }} />
-          </>
-        )}
-        <input
-          ref={inputRef}
-          className="tweakers-move-preset-save-input tweakers-move-agent-input"
-          defaultValue={view.prompt}
-          placeholder="Ask for a change"
-          aria-label="Ask the agent for a change"
-          autoFocus
-          readOnly={thinking}
-          spellCheck={false}
-          autoComplete="off"
-          onPaste={pictures ? (e) => {
-            const files = [...e.clipboardData.files].filter((f) => f.type.startsWith('image/'));
-            if (!files.length) return;
-            e.preventDefault();
-            MoveAgentStore.attach(files);
-          } : undefined}
-          onKeyDown={(e) => {
-            e.stopPropagation();
-            shiftAlone.current = e.key === 'Shift' && !e.repeat ? true : e.key === 'Shift' ? shiftAlone.current : false;
-            if (e.key === 'Enter') void MoveAgentStore.ask(e.currentTarget.value);
-            else if (e.key === 'Escape') MoveAgentStore.close();
-            else if (e.key === 'z' && (e.metaKey || e.ctrlKey) && changed) { e.preventDefault(); void MoveAgentStore.undo(); }
-          }}
-          onKeyUp={(e) => {
-            if (e.key !== 'Shift') return;
-            const tap = shiftAlone.current;
-            shiftAlone.current = false;
-            if (tap) MoveAgentStore.shiftTap();
-          }}
-          onBlur={() => { shiftAlone.current = false; }}
-        />
-      </div>
-      {steps.length > 0 && (
-        <ul className="tweakers-move-agent-steps" aria-label="What the agent is doing">
-          {steps.map((step, i) => (
-            <li key={i} className="tweakers-move-agent-step" data-state={step.state}>
-              {step.label}{step.state === 'failed' && ' — failed'}
-            </li>
-          ))}
-        </ul>
-      )}
-      {(note || done) && (
-        <p className="tweakers-move-agent-note" role="status" data-done={done || undefined}>
-          {done ? (
-            <span className="tweakers-move-agent-done" key={view.prompt}>
-              <svg className="tweakers-move-agent-done-mark" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M3 8.5l3.2 3.2L13 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" pathLength="1" />
-              </svg>
-              Done
-            </span>
-          ) : note}
-          {changed && MoveAgentStore.canUndo() && (
-            <button type="button" className="tweakers-move-agent-undo" onClick={() => void MoveAgentStore.undo()}>Undo</button>
+      <div ref={frame.outer} className="tweakers-move-agent-frame">
+        <div ref={frame.inner} className="tweakers-move-agent-body">
+          <AnimatePresence initial={false} onExitComplete={() => setLeaving(false)}>
+            {replying && (
+              <motion.div
+                key="reply"
+                className="tweakers-move-agent-reply"
+                role="status"
+                data-done={done || undefined}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: still ? 0 : -6, transition: { duration: 0.18, ease: AGENT_EASE_IN } }}
+                transition={{ duration: 0.2, ease: AGENT_EASE_OUT }}
+              >
+                {done ? (
+                  <span className="tweakers-move-agent-done">
+                    <svg className="tweakers-move-agent-done-mark" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M3 8.5l3.2 3.2L13 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" pathLength="1" />
+                    </svg>
+                    Done
+                  </span>
+                ) : <MoveAgentWords text={said} />}
+                {changed && !keyUndo && MoveAgentStore.canUndo() && (
+                  <motion.button
+                    type="button"
+                    className="tweakers-move-agent-undo"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.24, ease: AGENT_EASE_OUT, delay: still ? 0 : 0.2 }}
+                    onClick={() => void MoveAgentStore.undo()}
+                  >Undo</motion.button>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {steps.length > 0 && (
+            <ul className="tweakers-move-agent-steps" aria-label="What the agent is doing">
+              {steps.map((step, i) => (
+                <li key={i} className="tweakers-move-agent-step" data-state={step.state}>
+                  {step.label}{step.state === 'failed' && ' — failed'}
+                </li>
+              ))}
+            </ul>
           )}
-        </p>
-      )}
-    </div>
+          {view.attachments.length > 0 && (
+            <ul className="tweakers-move-agent-attachments" aria-label="Pictures in the prompt">
+              {view.attachments.map((a) => (
+                <li key={a.id} className="tweakers-move-agent-attachment" title={a.name}>
+                  <img src={a.url} alt={a.name} />
+                  <button type="button" aria-label={`Remove ${a.name}`} disabled={thinking} onClick={() => { MoveAgentStore.detach(a.id); inputRef.current?.focus(); }}>
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d={ICON_CLOSE} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+            <div className="tweakers-move-agent-field">
+              {pictures && (
+                <>
+                  <button type="button" className="tweakers-move-agent-attach" aria-label="Add a picture" title="Add a picture — or drop or paste one"
+                    disabled={thinking} onClick={() => fileRef.current?.click()}>
+                    <MoveSlotGlyph name="image-plus" className="tweakers-move-agent-attach-icon" />
+                  </button>
+                  <input ref={fileRef} type="file" accept="image/*" multiple hidden
+                    onChange={(e) => { if (e.currentTarget.files) MoveAgentStore.attach(e.currentTarget.files); e.currentTarget.value = ''; inputRef.current?.focus(); }} />
+                </>
+              )}
+              <textarea
+                ref={inputRef}
+                className="tweakers-move-preset-save-input tweakers-move-agent-input"
+                value={echoing ? view.prompt : draft}
+                rows={1}
+                readOnly={thinking}
+                data-sent={echoing || undefined}
+                placeholder={thinking ? '' : said ? 'Reply' : 'Ask for a change'}
+                aria-label={said ? 'Reply to the agent' : 'Ask the agent for a change'}
+                autoFocus
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(e) => { frame.typed(); setDraft(e.currentTarget.value); }}
+                onPaste={pictures ? (e) => {
+                  const files = [...e.clipboardData.files].filter((f) => f.type.startsWith('image/'));
+                  if (!files.length) return;
+                  e.preventDefault();
+                  MoveAgentStore.attach(files);
+                } : undefined}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  shiftAlone.current = e.key === 'Shift' && !e.repeat ? true : e.key === 'Shift' ? shiftAlone.current : false;
+                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); }
+                  else if (e.key === 'Escape') MoveAgentStore.close();
+                  else if (e.key === 'z' && (e.metaKey || e.ctrlKey) && changed && !draft) { e.preventDefault(); void MoveAgentStore.undo(); }
+                }}
+                onKeyUp={(e) => {
+                  if (e.key !== 'Shift') return;
+                  const tap = shiftAlone.current;
+                  shiftAlone.current = false;
+                  if (tap) MoveAgentStore.shiftTap();
+                }}
+                onBlur={() => { shiftAlone.current = false; }}
+              />
+            </div>
+          {/* Under the field while the agent works: the dots, on a line of their own. */}
+          <AnimatePresence initial={false}>
+            {working && (
+              <motion.div
+                key="working"
+                className="tweakers-move-agent-working"
+                role="status"
+                aria-label="The agent is working"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0, transition: { duration: 0.16, ease: AGENT_EASE_IN } }}
+                transition={{ duration: 0.24, ease: AGENT_EASE_OUT }}
+              >
+                <MoveAgentLoader />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/** The kit's curves (`--move-ease-out`, `--move-ease-smooth`, `--move-ease-in`), for motion. */
+const AGENT_EASE_OUT = [0.2, 0, 0, 1] as const;
+const AGENT_EASE_SMOOTH = [0.22, 1, 0.36, 1] as const;
+const AGENT_EASE_IN = [0.4, 0, 1, 1] as const;
+/** The box's height: a spring with no bounce, so a change mid-flight carries on from where it is. */
+const AGENT_HEIGHT_SPRING = { type: 'spring', visualDuration: 0.38, bounce: 0 } as const;
+/** How long after the turn changes shape its height still eases rather than follows. */
+const AGENT_TURN_MS = 700;
+/** How long a resize still counts as the keystroke's own. */
+const AGENT_KEYSTROKE_MS = 100;
+
+/**
+ * The box's height, kept by hand. The content stands on the box's floor —
+ * the panel side — so a turn grows and shrinks at the far edge and the field
+ * never moves under the eye. Measured as the content resizes, in the same
+ * frame: while the turn is changing shape (`shape`), and while a reply is
+ * still being written (`live`), the height eases there on one spring that
+ * retargets as it goes; while that reply is on screen (`holding`) it only
+ * grows, and settles once the reply is whole. A keystroke (`typed`) always wins: the field growing
+ * under the hand is followed at once, so the frame and the field never part.
+ */
+function useAgentFrame(shape: string, live: boolean, holding: boolean, still: boolean) {
+  const outer = useRef<HTMLDivElement>(null);
+  const inner = useRef<HTMLDivElement>(null);
+  const changedAt = useRef(0);
+  /** When a keystroke last changed the field: whatever size that makes, the frame takes at once. */
+  const typedAt = useRef(-Infinity);
+  const state = useRef({ live, holding, still });
+  state.current = { live, holding, still };
+  useLayoutEffect(() => { changedAt.current = performance.now(); }, [shape]);
+  const settle = useRef<(() => void) | null>(null);
+  useLayoutEffect(() => {
+    const box = outer.current, body = inner.current;
+    if (!box || !body) return;
+    let easing: ReturnType<typeof animate> | null = null;
+    let held = body.offsetHeight;
+    box.style.height = `${held}px`;
+    if (typeof ResizeObserver === 'undefined') { box.style.height = ''; return; }
+    const follow = () => {
+      const to = body.offsetHeight;
+      // While a reply is being written the box only grows: the sent words
+      // leaving must not dip it just before the reply's lines lift it again.
+      if (to === held || (state.current.holding && to < held)) return;
+      const turning = state.current.live || performance.now() - changedAt.current < AGENT_TURN_MS;
+      held = to;
+      // The frame after a keystroke is where its new size shows.
+      const typed = performance.now() - typedAt.current < AGENT_KEYSTROKE_MS;
+      if (state.current.still || typed || !turning) {
+        easing?.stop();
+        easing = null;
+        box.style.height = `${to}px`;
+        return;
+      }
+      easing = animate(box, { height: to }, AGENT_HEIGHT_SPRING);
+    };
+    settle.current = follow;
+    const observer = new ResizeObserver(follow);
+    observer.observe(body);
+    return () => { observer.disconnect(); easing?.stop(); settle.current = null; };
+  }, []);
+  // The reply is whole, or the turn changed shape: whatever the box held, it now fits.
+  useLayoutEffect(() => { settle.current?.(); }, [holding, shape]);
+  return { outer, inner, typed: () => { typedAt.current = performance.now(); } };
+}
+
+/**
+ * The reply's words. Each one fades in as it arrives — a reply that streams
+ * writes itself out, one that comes whole runs in quickly from its first
+ * word — and a word already shown never moves again.
+ */
+function MoveAgentWords({ text }: { text: string }) {
+  const shown = useRef(0);
+  const parts = text.split(/(\s+)/);
+  const from = shown.current;
+  useEffect(() => { shown.current = parts.length; });
+  return (
+    <p className="tweakers-move-agent-said">
+      {parts.map((part, i) => (/^\s*$/.test(part) ? part : (
+        <span key={i} className="tweakers-move-agent-word" style={{ '--word': Math.min(24, Math.max(0, i - from) / 2) } as React.CSSProperties}>{part}</span>
+      )))}
+    </p>
+  );
+}
+
+/**
+ * The field grows with its words (CSS `field-sizing: content`, up to its
+ * max-height). Where the browser cannot size a field to its content yet,
+ * the same is done here from the scroll height.
+ */
+function useMoveFieldHeight(ref: { current: HTMLTextAreaElement | null }, value: string) {
+  useLayoutEffect(() => {
+    const field = ref.current;
+    if (!field || typeof CSS === 'undefined' || CSS.supports('field-sizing', 'content')) return;
+    field.style.height = 'auto';
+    field.style.height = `${field.scrollHeight}px`;
+  }, [ref, value]);
+}
+
+/** Each dot's place on the wave: how far along the diagonal it sits (0–1), and which of the two passes it rides. */
+const AGENT_LOADER_DOTS = Array.from({ length: 25 }, (_, i) => {
+  const along = Math.floor(i / 5) + (4 - (i % 5));
+  return { path: along / 8, parity: along % 2 };
+});
+
+/**
+ * The working mark: five by five dots, the Move's own screen in miniature,
+ * with a wave of light sweeping them corner to corner — two passes, a half
+ * beat apart. Pure CSS; it stands still for reduced motion.
+ */
+function MoveAgentLoader() {
+  return (
+    <span className="tweakers-move-agent-loader" aria-hidden="true">
+      {AGENT_LOADER_DOTS.map((dot, i) => (
+        <span key={i} style={{ '--dot-path': dot.path, '--dot-parity': dot.parity } as React.CSSProperties} />
+      ))}
+    </span>
   );
 }
 
