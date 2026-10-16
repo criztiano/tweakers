@@ -25,6 +25,7 @@ outside the instrument — a card, an inspector, a dictionary — use `MoveSlot`
 | `multiselect` | Several choices from one list — the models a run fans out over | `{ type: 'multiselect', options, default: [] }`, options as `{ value, label, tag?, hint? }` or plain strings; the value is a `string[]` in option order. `MoveSlotMultiselectBody`: the enum's list screen with a tick on each chosen row, the cursor row lit and centred, and a badge in the head's right corner counting the ticks — the list screen's back pill (pill radius, label face, the list's ink) on the screen's dark ground, shown at zero too, dimmed. The cursor is `TweakStore.getListCursor` / `setListCursor`, shared by screen and knob | 1 dial, never a chip; it holds its column with no rows. The knob steps the cursor like an enum, a knob tap ticks the cursor row, Shift+tap does nothing; while the knob is touched the Move's screen draws the list (name and count, cursor bar, a square per ticked row) |
 | `icon` | A choice recognized by its picture | Select option `icon`; `MoveSlotEnumBody` | 1 dial |
 | `picture` | A choice that is a pattern or texture you pick by seeing it | Select option `picture` (an image URL, drawn as a mask in the slot's ink); `MoveSlotEnumBody` | 1 dial; the picture fills the slot under the name and pagination |
+| `folders` | A choice among many, grouped — effect families, models by provider | `select.options` with folders (`{ label, options, icon? }`, nesting allowed; the value is always an option, unique across the tree); `MoveSlotEnumBody` with the open `level` from `TweakStore.getSelectLevel` | 1 dial (2 with `moveSpan: 2`): the knob walks the open level — an option it lands on is selected, a folder only takes the cursor, up past the first row is the back pill — and a knob tap (a click on screen) opens the folder or goes up. On the wire the open level's rows as an enum (`Blur >`, `< Type`) with `cycle: true` |
 | `curve` | A choice whose value is a shape | Select `preview(option)` sampler; `MoveSlotEnumBody` | 1 dial |
 | `toggle` | A switch the page is about | `toggle` config with `moveSlot`; `MoveSlotToggleBody` | 1 dial |
 | `toggle-icon` | The same switch as a picture, badged with a check or a ban | `toggle` config with `moveSlot` + `icon` (glyph name or asset URL; optional `onIcon` / `offIcon`); `MoveSlotToggleBody` | 1 dial |
@@ -62,11 +63,18 @@ these gestures; an app wires nothing.
   changes nothing. Shift mid-drag is fine (0.1×).
 - **An option slot steps.** A click moves it on to the next option, round to
   the first after the last; a drag steps through them, right or down being
-  the next. No part of the slot means a particular option.
+  the next. A picture face has no part that means a particular option; a
+  list face does — a click on a row takes that row.
 - **A list walks up and down.** The pad list's dial follows the list's own
   axis: down is the next row. A multiselect slot walks the same way, and a
   still click ticks the row it landed on (the cursor row from the head);
   the mouse wheel walks it a row a notch while the panel's own wheel is idle.
+- **Hover is a hand on the knob.** A pointer resting on a list slot — a
+  select's list, a multiselect, folders — opens a long list to its whole run,
+  as a touched knob does, and the row under it lights halfway to the chosen
+  one, saying what a click takes. A finger on glass has no hover: a tap
+  opens and picks as before. Every kit list row (`ListScreen`) wears the
+  same hover.
 - **A colour takes both hands.** Across turns the hue (the knob), up and down
   the luminosity (the volume knob) — up is lighter. A still click opens the
   editor.
@@ -258,7 +266,7 @@ config can answer, the kit answers.
 | `movePads` option | Place toggles, numeric value chips, explicitly mapped actions and tabs strips under their related dial columns |
 | `MoveActionButton` / `MoveFunctions` | Hardware-named action pills and one shared action registry. `setOn(name, on)` / `isOn` / `onList()` carry whether a key's function is running (Play while the transport rolls, Rec while a take writes): the Move lights on keys in their own colour (Play emerald, Rec red), and `MoveTimelineClock` reads the same state |
 | `MoveActionDeck` | A view's whole surface when it has nothing to set yet — a start screen, a "what now" page: up to four buttons in the page's middle, one per chip key (`sample`, `capture`, `loop`, `mute`), in the chip voice (`variant: 'highlight'` for the pale key look, an `icon` of its own or the key's glyph) and attached to the key through `MoveFunctions`, so a click and a press run one handler and both flash the button. A disabled action leaves its key dark; the deck is the chip, so its attachments show no header chip. One of three: a view shows the deck, the list screen, or a panel — never two. `normalizeDeck` is the rule (order kept, first action per key wins, a fifth is dropped, every drop warned). |
-| `MoveViewStage` / `MoveViews` | Views and the changes between them. Wrap what the app renders for where it is now in one `MoveViewStage`; change view with `MoveViews.go(update, motion)` — `update` is the app's own setState or dispatch, `motion` names the change: `forward` / `back` (along the way, and out again), `open` / `close` (into a workspace, and out), `swap` (a sibling). Every change plays one zoom-through: the leaving view grows to 105% as it fades out, the arriving view grows from 95% as it fades in, both on exact expo in-out over a second, crossing additively so the light never dips (`MOVE_VIEW_PRESENTATION`); the control panel moves as its own layer on its 350 ms zoom-through — in, out, or one panel into another — and holds still when the same panel stands on both sides. The change is the browser's view transition: the new view is live at once (its keys light, its list reaches the Move) while only the pictures move. A change never cuts one that is playing — in the curve's quiet first 384 ms it takes the arriving view's place unseen, later it plays once the first has landed, every change asked for meanwhile joining it. Work that changes view goes through `MoveViews.load(work, { title, detail, arrive, motion, cancelable })`: the view goes inert and every key dark at once (and dark it stays, whatever the view behind attaches meanwhile; the computer's keys reach only Escape, which is Back), a wait (title, an eight-light sweep, the detail) comes up only if the work outlasts `MOVE_VIEW_WAIT.delay` — work that lands while it is still out of sight takes its place unseen, and once in sight it holds until it has arrived plus `MOVE_VIEW_WAIT.hold` — and stands on the Move's screen too; `arrive(value)` makes the change, a failure hands the view back and rejects, `cancelable` lights Back to abandon it, `say(title, detail)` re-words it as the work moves on, and the newest `load` or `go` supersedes a running wait (its promise resolves `undefined`). Choreography is `moveViewChoreography`; reduced motion keeps a 180 ms crossfade and no zoom. |
+| `MoveViewStage` / `MoveViews` | Views and the changes between them. Wrap what the app renders for where it is now in one `MoveViewStage`; change view with `MoveViews.go(update, motion)` — `update` is the app's own setState or dispatch, `motion` names the change: `forward` / `back` (along the way, and out again), `open` / `close` (into a workspace, and out), `swap` (a sibling). Every change plays one zoom-through: the leaving view grows to 105% as it fades out, the arriving view grows from 95% as it fades in, both on exact expo in-out over a second, crossing additively so the light never dips (`MOVE_VIEW_PRESENTATION`); the control panel moves as its own layer on its 350 ms zoom-through — in, out, or one panel into another — and holds still when the same panel stands on both sides. The change is the browser's view transition: the new view is live at once (its keys light, its list reaches the Move) while only the pictures move. A change never cuts one that is playing — in the curve's quiet first 384 ms it takes the arriving view's place unseen, later it plays once the first has landed, every change asked for meanwhile joining it. Work that changes view goes through `MoveViews.load(work, { title, detail, arrive, motion, cancelable })`: the view goes inert and every key dark at once (and dark it stays, whatever the view behind attaches meanwhile; the computer's keys reach only Escape, which is Back), a wait (title, an eight-light sweep, the detail) comes up only if the work outlasts `MOVE_VIEW_WAIT.delay` — work that lands while it is still out of sight takes its place unseen, and once in sight it holds until it has arrived plus `MOVE_VIEW_WAIT.hold` — and stands on the Move's screen too; `arrive(value)` makes the change, a failure hands the view back and rejects, `cancelable` lights Back to abandon it, `say(title, detail, progress)` re-words it as the work moves on — with a `progress` from 0 to 1 the eight lights fill instead of sweeping and the title reads its percentage ("Importing 42%"), on the Move's screen too — and the newest `load` or `go` supersedes a running wait (its promise resolves `undefined`). Choreography is `moveViewChoreography`; reduced motion keeps a 180 ms crossfade and no zoom. |
 | `MoveColorStore.lockPalette` / `setPalettes` | An app-wide palette: every colour control held to its colours, open editor or not, on screen and on the hardware, and the app's own palettes listed in the instrument's palette navigator. See the colour section above. |
 | `icon` option / Panel page | A page's picture on the track row: `registerPanel(id, name, config, shortcuts, { icon: 'waves' })`, a name from `LUCIDE_ICONS` (an unknown name draws nothing). It stands between the track marker and the name, at the name's size and dimming. Once any page on the row wears one, the kit's own **Panel** page in the settings room (`MOVE_PANEL_SETTINGS`, kind `'kit'`, persisted per machine) chooses how the row reads — `Name`, `Icon + name` (default), `Icon` (the name stays for screen readers and the pointer). With no picture on the row the choice is greyed out and the row shows names. |
 | `headerStart` / `headerEnd` | A view's own readings in the panel header: `headerStart` leads the page names on the same row (where the timeline's and the waveform's zoom read — the factor alone, `1.5x`), `headerEnd` closes the row after the function chips (where a clock reads). Neither takes a second line. |
@@ -276,6 +284,36 @@ config can answer, the kit answers.
 | `ModulationStore` | LFO, sample-and-hold, ADSR and curve modulation; settings layouts and assignments |
 | `ModDot` / `modGlyph` | A modulation slot's circle in the step row: the slot's colour with its type's mark cut out of it — a wave for the LFO, a die for S&H, the envelope's rise and fall for the ADSR (keys when the played keys strike it), an arch for the curve, a note for audio — and a ring that swings with the slot's live signal. While a modulator's page is open (`state`), its circle stays lit and the others go grey. A type names its mark through `ModTypeDef.glyph(params)`; `modGlyph(slot)` reads it, and a type that names none draws a plain dot. |
 | `ModRange` / `modRange` | Which way a slot pushes its controls: `positive` (up from the value, a whole span at full depth), `negative` (down), or `bipolar` (half a span each side). Every slot carries it as its `range` param, picked from a chip under the type picker on its page; each type sets a default (`bipolar` for LFO and S&H, `positive` for ADSR, curve and audio). A type whose signal rests at 0 says so with `ModTypeDef.unipolar(params)`. `ModulationStore.getLevel(slot)` reads the modulator's own shape, 0..1, before the range turns it. |
+
+### Layers on a canvas
+
+An app that lets layers — pictures, shapes, text — be placed on a canvas uses
+the kit's layer parts, so a layer moves under the same hand in every app. All
+three are framework-free.
+
+- **`layer-transform-core`** — `LayerTransform` (x, y, depth `z`, scale,
+  stretch, rotation, flips), `layerModelMatrix` (a column-major `Mat4` a GPU
+  uploads as is; `canvasMatrix` gives a 2D canvas or a server the same plane),
+  and the maths a canvas gesture needs: `projectPoint` / `unprojectPoint`,
+  `translateInParent`, `bakeTransform`, `reanchorTransform`. The transform is
+  non-destructive: the app keeps the layer's own geometry and draws through it.
+- **`SelectTool`** (`layer-select-core`) — click to select, drag inside the
+  marching-ants frame to move (Shift: one axis), drag a corner to scale from the
+  opposite corner (Shift or Cmd: stretch), Alt + drag or a drag just outside a
+  corner to turn (Shift: 15° steps). The app answers through `LayerSelection`
+  (`selected`, `select`, `layerAt`, `frameOf`, `pivotOf`, `parentModelFor`,
+  `setLayerTransform`; `placementOf` / `setPlacement` for a layer placed by its
+  own box) and the host (`canvasPoint`, `overlayPoint`, `projection`, `surface`,
+  `repaint`, `onEdited`); it calls `begin` / `move` / `end` from the pointer and
+  `paint(ctx)` on its 2D overlay. `strokeAnts`, `drawHandle` and
+  `insideScreenQuad` draw and hit another frame the same way.
+- **The Layer page** (`layer-controls`) — `layerPlacementControls` (X, Y and
+  Depth: three dials, the `vector` face), `layerOpacityControl` (the `opacity` +
+  `picture` face), `layerShapeControls` (Scale and Rotation chips, Flip H and
+  Flip V switches, seated by `LAYER_PADS`) and `LAYER_HINTS`. Each control is a
+  config without `default` plus `read` / `write`, for the app's own bindings.
+  Dials 0–2 are the stage and dial 3 the opacity; the other four are the
+  layer kind's own. The big wheel's list of layers is `layerListScreen`.
 
 ## General controls and artifacts
 

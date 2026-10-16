@@ -237,6 +237,53 @@ export type {
 // Shared cores and visualizations the Move surface builds on
 export { sampleTransfer, transferLut, normalizeTransfer, insertPoint, removePoint, movePoint, nearestPoint, isIdentityTransfer, DEFAULT_TRANSFER, TRANSFER_MIN_GAP, TRANSFER_MAX_POINTS } from './transfer-core';
 export type { TransferPoint, TransferValue } from './transfer-core';
+// Layers on a canvas: the placement maths, the select tool's hand, and the Layer
+// page's shared controls — one experience in every app that places layers.
+export {
+  IDENTITY_TRANSFORM,
+  ORIGIN_ANCHOR,
+  clampLayerTransform,
+  isIdentityTransform,
+  sameTransform,
+  depthScale,
+  layerModelMatrix,
+  composeModel,
+  projectPoint,
+  unprojectPoint,
+  bakeTransform,
+  reanchorTransform,
+  invertModel,
+  translateInParent,
+  canvasMatrix,
+  assertTransformRoundTrip,
+} from './layer-transform-core';
+export type { LayerTransform, LayerAnchor, Mat4 } from './layer-transform-core';
+export {
+  SelectTool,
+  strokeAnts,
+  drawHandle,
+  insideScreenQuad,
+  projectX,
+  projectY,
+  unprojectX,
+  unprojectY,
+  IDENTITY_PROJECTION,
+  HANDLE_HIT,
+  ANTS_PERIOD,
+  ANTS_FPS,
+} from './layer-select-core';
+export type { SelectToolHost, LayerSelection, SelectableLayer, LayerPlacement, ViewProjection } from './layer-select-core';
+export {
+  layerPlacementControls,
+  layerShapeControls,
+  layerOpacityControl,
+  layerListScreen,
+  LAYER_PADS,
+  LAYER_HINTS,
+  ICON_FLIP_H,
+  ICON_FLIP_V,
+} from './layer-controls';
+export type { LayerControl, LayerControlAccess, LayerListRow } from './layer-controls';
 export { snapAngle, normalizeAngle, valueToBearing, bearingToValue, angleFromPointer, nudgeAngle, arcPath, ANGLE_DEAD_ZONE_PX } from './angle-core';
 export { WaveformVisualization } from './components/WaveformVisualization';
 export type { WaveformMode, WaveformLoop } from './components/WaveformVisualization';
@@ -376,6 +423,12 @@ export type {
   TransitionConfig,
   ActionConfig,
   SelectConfig,
+  SelectOption,
+  SelectFolder,
+  SelectLeaf,
+  SelectLevel,
+  SelectLevelRow,
+  SelectPlace,
   ToggleConfig,
   MoveSlotGroup,
   MoveBand,

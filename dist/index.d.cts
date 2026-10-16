@@ -872,6 +872,9 @@ interface MoveViewWait {
     title: string;
     /** What it is happening to — a file name, a source. */
     detail?: string;
+    /** How far the work has come, 0 to 1, when it can tell: the lights fill
+     *  instead of sweeping and the title reads the percentage. */
+    progress?: number;
     /** Back abandons it, and the wait shows a way out. */
     cancelable: boolean;
 }
@@ -885,8 +888,9 @@ interface MoveViewsState {
 interface MoveViewTask {
     /** Aborted when the wait is cancelled or superseded — pass it to fetch. */
     signal: AbortSignal;
-    /** Change what the wait says as the work moves on ("Saving" → "Opening"). */
-    say(title: string, detail?: string): void;
+    /** Change what the wait says as the work moves on ("Saving" → "Opening"),
+     *  and how far it has come (0 to 1) when it can tell. */
+    say(title: string, detail?: string, progress?: number): void;
 }
 interface MoveViewLoadOptions<T> {
     title: string;
@@ -1625,7 +1629,7 @@ type AxisSpec = {
  * Screen-normalized position: each component in [0,1]. y=0 is the TOP, y=1 is the
  * BOTTOM, so it drops straight into CSS `left: x*100%` / `top: y*100%`.
  */
-type Point = {
+type Point$1 = {
     x: number;
     y: number;
 };
@@ -1670,12 +1674,12 @@ declare function invertY(n: number): number;
  * Corner contract: {x:0,y:1} (bottom-left) → {x:xMin, y:yMin};
  *                  {x:1,y:0} (top-right)   → {x:xMax, y:yMax}.
  */
-declare function valueFromPoint(point: Point, xAxis: AxisSpec, yAxis: AxisSpec, snap?: boolean): XYValue;
+declare function valueFromPoint(point: Point$1, xAxis: AxisSpec, yAxis: AxisSpec, snap?: boolean): XYValue;
 /**
  * Cartesian value → screen point (inverse of `valueFromPoint`, for CSS positioning).
  * y is inverted so a value at yMax yields point.y=0 (the top of the pad).
  */
-declare function pointFromValue(value: XYValue, xAxis: AxisSpec, yAxis: AxisSpec): Point;
+declare function pointFromValue(value: XYValue, xAxis: AxisSpec, yAxis: AxisSpec): Point$1;
 /**
  * Escapable centre detent for one axis. While the pointer is within `XY_DETENT_PX` of the
  * origin position, the value sticks to `axis.origin`; move further and the live `value`
@@ -1702,6 +1706,69 @@ declare function centerValue(xAxis: AxisSpec, yAxis: AxisSpec): XYValue;
  * is never mutated.
  */
 declare function normalizeValue(value: Partial<XYValue> | undefined, xAxis: AxisSpec, yAxis: AxisSpec, snap?: boolean): XYValue;
+
+/**
+ * A select whose options come in folders, on its own so node can test it
+ * without React. A folder is a row with no value of its own: it names a run
+ * of options, which may hold folders too. The control's value is always a
+ * leaf — an option with a value — and leaf values are unique across the
+ * whole tree, so a value alone says where in the tree it sits.
+ *
+ * The Move's slot shows one level at a time. Where the list is open — the
+ * folder and the row the cursor is on — is the kit's own state, never the
+ * value: turning walks the open level's rows, landing on a leaf selects it,
+ * landing on a folder only moves the cursor, and a tap opens the folder
+ * under the cursor (or, on the back row, goes up). Every rule lives here, so
+ * the panel, a standalone slot and the hardware bridge agree.
+ */
+/** An option with a value: a plain string (its own value and label), or a
+ *  value with a display label, an icon or a picture. */
+type SelectLeaf = string | {
+    value: string;
+    label: string;
+    icon?: string;
+    picture?: string;
+};
+/** A run of options under one name. It has no value of its own; it opens. */
+type SelectFolder = {
+    label: string;
+    options: SelectOption[];
+    icon?: string;
+};
+/** One row a select offers: an option, or a folder of them. */
+type SelectOption = SelectLeaf | SelectFolder;
+/**
+ * Where a select's list is open: `open` is the folder path from the top —
+ * each entry an index into the level above — and `cursor` the row the knob
+ * is on in that level. `-1` is the back row, the way up, which only a level
+ * inside a folder has.
+ */
+type SelectPlace = {
+    open: number[];
+    cursor: number;
+};
+/** A row of the open level, ready to draw. */
+type SelectLevelRow = {
+    label: string;
+    /** A leaf's value; a folder has none. */
+    value?: string;
+    folder: boolean;
+    icon?: string;
+    picture?: string;
+    /** A folder holding the current value, somewhere inside it. */
+    holds?: boolean;
+};
+/** The open level: what the list shows and where its cursor is. */
+type SelectLevel = {
+    open: number[];
+    rows: SelectLevelRow[];
+    /** What the open level is: the control's name at the top, the folder's inside one. */
+    title: string;
+    /** The level above, by name — the control's own name one level in — or
+     *  null at the top, where there is nowhere to go back to. */
+    back: string | null;
+    cursor: number;
+};
 
 type TransferPoint = {
     x: number;
@@ -2049,13 +2116,17 @@ type SelectConfig = {
      * instead carry a `picture` (an image URL) that fills the whole slot, drawn
      * as a mask in the slot's own colour — for choices that are a texture or a
      * pattern, where the picture is the thing chosen.
+     *
+     * An option may instead be a folder — `{ label, options, icon? }`, with no
+     * value of its own — holding options and folders of its own. The value is
+     * always an option's (leaf values are unique across the whole tree), and
+     * `default` names one. On the Move the slot shows one level at a time: the
+     * knob walks the open level, landing on an option selects it, landing on a
+     * folder only moves the cursor, and a tap opens the folder under it — or,
+     * on the back pill naming the level above, goes up. Everywhere else (the
+     * sidebar, a tabs strip) the options read flat, in order.
      */
-    options: (string | {
-        value: string;
-        label: string;
-        icon?: string;
-        picture?: string;
-    })[];
+    options: SelectOption[];
     default?: string;
     /**
      * 'segmented' renders the options as an inline segmented control instead of a dropdown. Suits 2–4 short options.
@@ -2566,12 +2637,15 @@ type ControlMeta = {
     tab?: boolean;
     /** The synthetic segmented select driving `_tab` — it renders as the panel's tab bar, never as a row. */
     tabBar?: boolean;
+    /** A select's choices, flat: a select with folders lists its leaves here, in reading order. */
     options?: (string | {
         value: string;
         label: string;
         icon?: string;
         picture?: string;
     })[];
+    /** A select's options as declared, folders and all — set only when it has folders. */
+    optionTree?: SelectOption[];
     /** Toggle's own picture and state badges, from the explicit ToggleConfig form; an action's pad glyph. */
     icon?: string;
     onIcon?: string;
@@ -2902,6 +2976,7 @@ declare class TweakStoreClass {
     private disabledPaths;
     private controlStateListeners;
     private listCursors;
+    private selectPlaces;
     private presets;
     private activePreset;
     private presetProviders;
@@ -2987,6 +3062,34 @@ declare class TweakStoreClass {
      *  dropped without notifying; a move lands on the control-state channel. */
     setListCursor(panelId: string, path: string, index: number): void;
     private listRows;
+    /**
+     * Where a select with folders is open on the Move: the level its list
+     * shows, its rows, and the row the cursor is on (-1 is the back pill).
+     * It is not the value, so it lives beside it — one place per control that
+     * the screen and the Move both walk. It follows the value: once the value
+     * changes from anywhere (a turn, undo, a preset, the app), the level opens
+     * on the folder holding it, the cursor on it. Null for any other control.
+     */
+    getSelectLevel(panelId: string, path: string): SelectLevel | null;
+    /**
+     * Walks a select's cursor to row `cursor` of its open level (-1, the back
+     * pill, inside a folder). Landing on an option selects it — the value is
+     * written as any turn writes it; landing on a folder or the back pill only
+     * moves the cursor.
+     */
+    setSelectCursor(panelId: string, path: string, cursor: number): void;
+    /**
+     * A tap on a select with folders — a knob tap, a click: on a folder it
+     * opens it (the cursor on the way to the value when the value is inside,
+     * else on the back pill); on the back pill it goes up, the cursor on the
+     * folder it left. On an option it does nothing: it is already selected.
+     */
+    tapSelect(panelId: string, path: string): void;
+    private selectWithFolders;
+    /** The stored place while the value is the one it was made for; once the
+     *  value has moved on, the place the value puts the list in. */
+    private selectPlace;
+    private placeSelect;
     /** One channel for every app-pushed presentation change on a panel. */
     subscribeControlState(panelId: string, listener: Listener$7): () => void;
     private notifyControlState;
@@ -4295,6 +4398,11 @@ declare function MoveSlotClockBody({ label, value, rate, frozen, tempo, hand }: 
  *   select's `preview` sampler) — the curve-selection slot.
  * - `enum`    — a plain stepped option picker: every option on the Move's
  *   own list screen, which is the whole slot; a touch grows it to the run.
+ * - `folders` — the enum's list screen for a select whose options come in
+ *   folders: one level at a time, folder rows wearing the page chevron, the
+ *   level above a back pill. The knob walks the level (an option it lands on
+ *   is selected; a folder only takes the cursor), a tap opens the folder
+ *   under it or, on the pill, goes up.
  * - `multiselect` — the same list screen with a tick on every chosen row:
  *   the knob walks a cursor, a tap ticks the row under it, and a count of
  *   the ticked rows rides in the head as a badge cut like the list screen's
@@ -4365,7 +4473,7 @@ declare function MoveSlotClockBody({ label, value, rate, frozen, tempo, hand }: 
  * small caption where its own single slot's label would have been — so the
  * hardware's one-knob-per-column rule still holds under the shared picture.
  */
-type MoveSlotKind = 'default' | 'value' | 'icon' | 'curve' | 'enum' | 'aspect' | 'multiselect' | 'xy' | 'range' | 'filter' | 'color' | 'transfer' | 'ramp' | 'balance' | 'dial' | 'opacity' | 'blur' | 'pan' | 'stereo-width' | 'pitch' | 'diaphragm' | 'gauge' | 'streak' | 'clock' | 'trim' | 'offset' | 'trim-span' | 'gate' | 'vector' | 'multiband' | 'channel' | 'playback' | 'lanes' | 'grain' | 'env' | 'scope' | 'toggle' | 'toggle-icon' | 'metronome' | 'picture';
+type MoveSlotKind = 'default' | 'value' | 'icon' | 'curve' | 'enum' | 'folders' | 'aspect' | 'multiselect' | 'xy' | 'range' | 'filter' | 'color' | 'transfer' | 'ramp' | 'balance' | 'dial' | 'opacity' | 'blur' | 'pan' | 'stereo-width' | 'pitch' | 'diaphragm' | 'gauge' | 'streak' | 'clock' | 'trim' | 'offset' | 'trim-span' | 'gate' | 'vector' | 'multiband' | 'channel' | 'playback' | 'lanes' | 'grain' | 'env' | 'scope' | 'toggle' | 'toggle-icon' | 'metronome' | 'picture';
 /** Which face a control wears in its slot, from its meta and moment. */
 declare function moveSlotKind(meta: ControlMeta, opts?: {
     enum?: boolean;
@@ -4429,8 +4537,16 @@ declare function MoveSlotDefaultBody({ label, value, pct, originPct, atOrigin, t
  *
  *  A slot the page has put its oscilloscope in already has a picture — the
  *  live wave — so it keeps the named option and drops the list, which the
- *  wave would be running behind. */
-declare function MoveSlotEnumBody({ label, optionLabel, options, activeIdx, shape, glyph, picture, playback, scoped, }: {
+ *  wave would be running behind.
+ *
+ *  A select whose options come in folders shows one `level` at a time: the
+ *  head names the level (the control at the top, the folder inside one), a
+ *  folder row wears the list screen's page chevron, and inside a folder the
+ *  level above is the list screen's back pill, pinned over the first row.
+ *  The cursor rides the highlight — on a row, or on the pill — and a folder
+ *  holding the value reads bright, so the way to the choice shows from the
+ *  top. */
+declare function MoveSlotEnumBody({ label, optionLabel, options, activeIdx, shape, glyph, picture, playback, scoped, level, }: {
     label: string;
     optionLabel: string;
     options: NonNullable<ControlMeta['options']>;
@@ -4442,6 +4558,8 @@ declare function MoveSlotEnumBody({ label, optionLabel, options, activeIdx, shap
     playback?: MovePlaybackMode | null;
     /** The slot draws the modulator's live signal behind this face. */
     scoped?: boolean;
+    /** The open level of a select with folders; it takes the list's place. */
+    level?: SelectLevel | null;
 }): react_jsx_runtime.JSX.Element;
 /**
  * A choice of proportions (`display: 'aspect'`): the slot is a small canvas,
@@ -5119,6 +5237,10 @@ declare const MOVE_SLOT_LIBRARY: {
     };
     readonly enum: {
         readonly description: "stepped option picker showing every option on a list screen";
+        readonly component: typeof MoveSlotEnumBody;
+    };
+    readonly folders: {
+        readonly description: "option picker whose options come in folders: one level on the list screen, a tap opens a folder, the back pill goes up";
         readonly component: typeof MoveSlotEnumBody;
     };
     readonly aspect: {
@@ -7174,6 +7296,10 @@ interface ListScreenProps {
     back?: string | true;
     /** Called when the back pill is clicked. Without it the pill is only a sign. */
     onBack?: () => void;
+    /** The cursor is on the back pill, not on a row: the pill lights the way a
+     * selected row does, so a list walked by a knob can reach the way out.
+     * Give no `value` then — the cursor is in one place. */
+    backSelected?: boolean;
     className?: string;
     style?: CSSProperties;
 }
@@ -7188,7 +7314,7 @@ interface ListScreenProps {
  * presentational: the host owns the selection state and any wheel or
  * arrow-key stepping.
  */
-declare function ListScreen({ items, label, disabled, multiselect, onFocusItem, value, onSelect, wide, align, title, follow, back, onBack, className, style, }: ListScreenProps): ReactElement;
+declare function ListScreen({ items, label, disabled, multiselect, onFocusItem, value, onSelect, wide, align, title, follow, back, onBack, backSelected, className, style, }: ListScreenProps): ReactElement;
 
 /**
  * What an app puts on the Move that its parameters cannot describe.
@@ -7822,6 +7948,333 @@ declare function ModDot({ slot, state }: {
     slot: ModulationSlot;
     state?: 'active' | 'inactive';
 }): react_jsx_runtime.JSX.Element;
+
+/** Column-major 4×4, as WGSL's mat4x4f. */
+type Mat4 = Float32Array;
+/** The plane part of a layer model, in `CanvasRenderingContext2D.setTransform`
+ *  order (a, b, c, d, e, f) — how a 2D canvas, or a server compositing the same
+ *  layers, draws exactly what a GPU renderer does. */
+declare function canvasMatrix(model: Mat4): [number, number, number, number, number, number];
+interface LayerTransform {
+    /** Translation in canvas pixels, FROM the layer's own anchor. */
+    readonly x: number;
+    readonly y: number;
+    /**
+     * Depth, in canvas pixels along the view axis: a perspective CUE. The layer is
+     * scaled about the canvas centre by `focal / (focal + z)`, so a far layer shrinks
+     * toward the centre and a near one grows past the frame.
+     *
+     * The same for a 3D body as for a flat layer, deliberately. The camera is
+     * orthographic, so a bare z translation would move a body without changing a
+     * single pixel; the cue is what makes a far body look far. It scales the body's
+     * depth along with its width and height, so its proportions hold.
+     *
+     * It CANNOT change which layer is in front. Painter order is the layer array,
+     * and every overlay node is drawn with a cleared-and-discarded depth buffer, so
+     * depth never provides cross-object ordering. Z is a depth cue, never a sort key.
+     */
+    readonly z: number;
+    /** The layer's size, the same along both of its axes. */
+    readonly scale: number;
+    /** An uneven stretch along the layer's OWN axes, on top of `scale` (1 = none) —
+     *  what the select tool's Shift/Cmd corner drag sets. */
+    readonly stretchX: number;
+    readonly stretchY: number;
+    /** Radians about Z, through the anchor. The panel exposes degrees. */
+    readonly rotation: number;
+    readonly flipX: boolean;
+    readonly flipY: boolean;
+}
+declare const IDENTITY_TRANSFORM: LayerTransform;
+/** The point a layer's content is organised around, in canvas pixels. Rotation,
+ *  scale and flip act about it; x/y translate FROM it. */
+interface LayerAnchor {
+    readonly x: number;
+    readonly y: number;
+}
+declare const ORIGIN_ANCHOR: LayerAnchor;
+/** Every field in range: a sane offset, a scale from a twentieth to eight times,
+ *  a stretch, and the turn wrapped to (-PI, PI]. */
+declare function clampLayerTransform(raw: Partial<LayerTransform>): LayerTransform;
+declare function isIdentityTransform(t: LayerTransform): boolean;
+declare function sameTransform(a: LayerTransform, b: LayerTransform): boolean;
+/**
+ * The depth cue's scale factor.
+ *
+ * Clamped on the near side because `focal + z` is singular at `z = -focal`: a
+ * layer dragged to exactly the eye would divide by zero and paint a NaN quad. The
+ * floor caps the magnification at 20x, well past anything readable.
+ */
+declare function depthScale(z: number, canvasWidth: number, canvasHeight: number): number;
+/**
+ * model = Depth(z) · T(x, y) · T(anchor) · Rz · S(scale, flips) · T(-anchor)
+ *
+ * Depth is outermost: it scales the already-placed layer about the canvas centre,
+ * so pushing a layer back pulls it toward the vanishing point from wherever it sits.
+ *
+ * Because x/y translate FROM the anchor and rotation/scale act ABOUT it, the fixed
+ * point of the rotation after translation is `anchor + (x, y)`: where the layer
+ * sits, and what it spins about.
+ *
+ * Column-major Float32Array(16), matching Mat4.ts and WGSL's mat4x4f.
+ */
+declare function layerModelMatrix(t: LayerTransform, anchor: LayerAnchor, canvasWidth: number, canvasHeight: number): Mat4;
+/** Compose a child's model onto its parent's. Parent applies LAST, so the child's
+ *  own placement happens inside the parent's frame — the Photoshop reading of a
+ *  group transform. */
+declare function composeModel(parent: Mat4, child: Mat4): Mat4;
+/** Inverse of a layer model for a 2D point — hit-testing and canvas gestures.
+ *
+ *  Only the x/y block is inverted: every path that produces one of these matrices
+ *  leaves the plane affine (the depth cue is a uniform scale about a fixed point),
+ *  and a 2D pick has no use for z. */
+declare function unprojectPoint(model: Mat4, x: number, y: number): {
+    x: number;
+    y: number;
+};
+/** Forward-transform a 2D point by a layer model — the selection frame's corners. */
+declare function projectPoint(model: Mat4, x: number, y: number): {
+    x: number;
+    y: number;
+};
+/**
+ * The transform that, with `anchor`, draws a layer exactly where `model` does —
+ * keeping `z` as the layer's own depth.
+ *
+ * What ungrouping and re-parenting need: a child leaving a moved group, or joining
+ * one, must not jump. Its new own-transform is solved from where it is drawn now.
+ * Always solvable, because every placement here is a similarity (uniform scale,
+ * rotation, flips, translation) and similarities compose into similarities. A
+ * mirror comes back as flipX alone: flipX+flipY is a half-turn, so the pair is
+ * never needed to express one.
+ *
+ * A layer's own `stretch` is not a similarity, so it is taken off the inside first
+ * and handed back unchanged: exact whenever the change of frame is itself a
+ * similarity. Moving a stretched layer into a turned AND stretched group would need
+ * a skew, which a transform cannot hold — that case lands as the nearest fit.
+ */
+declare function bakeTransform(model: Mat4, anchor: LayerAnchor, z: number, canvasWidth: number, canvasHeight: number, stretch?: {
+    readonly x: number;
+    readonly y: number;
+}): LayerTransform;
+/**
+ * The same placement about another pivot. Rotation, scale, stretch and flips act
+ * about the anchor, so a layer whose anchor moves — new content with another box, or
+ * a group standing in for a layer — keeps every field but the offset, which is solved
+ * so every point is drawn where it was: t' = t + d - L·d, with d = from - to and L the
+ * transform's linear part. Exact for any transform, stretch included; the depth cue
+ * sits outside and is unchanged.
+ */
+declare function reanchorTransform(t: LayerTransform, from: LayerAnchor, to: LayerAnchor): LayerTransform;
+/** Inverse of a similarity model — the frame a re-parented layer has to leave. */
+declare function invertModel(model: Mat4): Mat4;
+/** Translate `by` screen-space canvas pixels, expressed in the layer's own frame.
+ *  Dragging a layer inside a rotated group has to move it the way the pointer
+ *  moved, not the way its local axes point. */
+declare function translateInParent(t: LayerTransform, parent: Mat4 | null, dx: number, dy: number): LayerTransform;
+/** Proof that project and unproject are inverses across the whole parameter space,
+ *  including flips, depth and a two-deep group composition.
+ *
+ *  A transform that is subtly wrong shows up as geometry landing in the wrong place
+ *  under the cursor — expensive to spot by eye, trivial to catch here. Run by this
+ *  repo's tests, and callable from an app's own self-checks. */
+declare function assertTransformRoundTrip(): {
+    worst: number;
+    bakeWorst: number;
+    cases: number;
+};
+
+/** Canvas pixels -> overlay CSS pixels: the one mapping the overlay draws with, so
+ *  the frame can never disagree with the picture under it. */
+interface ViewProjection {
+    readonly scale: number;
+    readonly offsetX: number;
+    readonly offsetY: number;
+}
+declare const IDENTITY_PROJECTION: ViewProjection;
+declare function projectX(p: ViewProjection, x: number): number;
+declare function projectY(p: ViewProjection, y: number): number;
+declare function unprojectX(p: ViewProjection, screenX: number): number;
+declare function unprojectY(p: ViewProjection, screenY: number): number;
+/** A layer as the tool sees it: who it is and where it is placed. */
+interface SelectableLayer {
+    readonly id: string;
+    readonly transform: LayerTransform;
+}
+/** A layer placed by its own box rather than a transform — a video clip: its
+ *  top-left corner, its width (the height follows its aspect) and its turn. */
+interface LayerPlacement {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly rotation: number;
+}
+/** The app's layers, as the select tool reads and writes them. Points are canvas px. */
+interface LayerSelection<L extends SelectableLayer = SelectableLayer> {
+    selected(): L | null;
+    select(id: string): void;
+    /** The frontmost layer drawn under a point, or null. */
+    layerAt(x: number, y: number): L | null;
+    /** The layer's four drawn corners, clockwise from its own top-left, or null. */
+    frameOf(layer: L): readonly {
+        x: number;
+        y: number;
+    }[] | null;
+    /** The point it turns and scales about. */
+    pivotOf(layer: L): {
+        x: number;
+        y: number;
+    };
+    /** The frame its parent group puts it in, or null at the top level. */
+    parentModelFor(layer: L): Mat4 | null;
+    setLayerTransform(id: string, patch: Partial<LayerTransform>): void;
+    /** A layer placed by its own box, or null for one placed by its transform. */
+    placementOf?(layer: L): LayerPlacement | null;
+    setPlacement?(id: string, patch: Partial<LayerPlacement>): void;
+}
+interface SelectToolHost<L extends SelectableLayer = SelectableLayer> {
+    layers(): LayerSelection<L> | null;
+    /** A pointer position in canvas px, unclamped (a layer may sit off the canvas). */
+    canvasPoint(event: PointerEvent): {
+        x: number;
+        y: number;
+    };
+    /** Canvas px to overlay CSS px. */
+    projection(): ViewProjection;
+    /** A pointer position in overlay CSS px — the space `projection` maps into. */
+    overlayPoint(event: PointerEvent): {
+        x: number;
+        y: number;
+    };
+    /** The element that takes pointer capture and wears the cursor. */
+    surface(): HTMLElement;
+    /** Paint the 2D overlay again. */
+    repaint(): void;
+    /** A gesture has ended: the panel should read the new placement. */
+    onEdited(): void;
+}
+type Point = {
+    x: number;
+    y: number;
+};
+declare const HANDLE_HIT = 9;
+declare const ANTS_PERIOD: number;
+declare const ANTS_FPS = 16;
+declare class SelectTool<L extends SelectableLayer = SelectableLayer> {
+    private readonly host;
+    private drag;
+    private pending;
+    private frame;
+    private antsPhase;
+    private antsTimer;
+    /** Whether the last paint drew a frame — the ants run only while one is up. */
+    private framed;
+    constructor(host: SelectToolHost<L>);
+    get dragging(): boolean;
+    /** Pointer down with the Select tool. Always consumes the event. */
+    begin(event: PointerEvent): boolean;
+    /** Pointer move with the Select tool: drives a drag, or sets the hover cursor. */
+    move(event: PointerEvent): void;
+    end(event: PointerEvent): void;
+    cancel(): void;
+    /** Paint the selection: the frame as marching ants, and a handle on each corner. */
+    paint(ctx: CanvasRenderingContext2D): void;
+    /** Another tool took the canvas: no frame, no ants, no cursor of ours. */
+    hide(): void;
+    dispose(): void;
+    private flush;
+    /**
+     * Stretch each side on its own, the opposite corner still. Worked in the frame's
+     * own basis (its edges at grab, U across and V down): the pointer and the grabbed
+     * corner, both measured from the still corner in U/V, give one ratio per axis.
+     * The stretch acts about the pivot, so the pivot then moves to put the still
+     * corner back — the same correction as a plain scale, per axis.
+     */
+    private stretch;
+    /** Which part of the selection frame the pointer is on, in screen px. */
+    private hitFrame;
+    private hover;
+    /** The diagonal a corner resizes along, read from where it sits on screen, so a
+     *  turned or flipped frame still shows the right arrow. */
+    private scaleCursor;
+    private setCursor;
+    private startAnts;
+    private stopAnts;
+}
+/** The selection frame's line: white under black dashes, readable on any picture. */
+declare function strokeAnts(ctx: CanvasRenderingContext2D, path: Path2D, phase: number): void;
+declare function drawHandle(ctx: CanvasRenderingContext2D, p: Point): void;
+declare function insideScreenQuad(c: readonly Point[], x: number, y: number): boolean;
+
+/** One control: a tweakers config entry and the two directions it talks in. */
+interface LayerControl {
+    readonly config: Record<string, unknown>;
+    read(): number | boolean;
+    write(value: unknown): void;
+}
+/** What the controls need from the app about the selected layer. */
+interface LayerControlAccess {
+    /** The canvas the layer is placed on, in px. */
+    readonly canvas: {
+        readonly width: number;
+        readonly height: number;
+    };
+    transform(): LayerTransform;
+    /** The point the layer is organised around, canvas px. X and Y read as where it
+     *  SITS — this plus its offset — while the stored transform stays an offset. */
+    pivot(): {
+        readonly x: number;
+        readonly y: number;
+    };
+    setTransform(patch: Partial<LayerTransform>): void;
+}
+/** Mirror left-right: two arrowheads facing a dashed axis. */
+declare const ICON_FLIP_H: string;
+/** Mirror top-bottom. */
+declare const ICON_FLIP_V: string;
+/**
+ * X, Y and Depth as one stage (the `vector` face): three dials side by side.
+ * X and Y run half a canvas past each edge — a layer partly off the canvas is a
+ * real composition. Depth runs from 4× near to a third far, either side of the
+ * picture plane, and reads as the size it makes.
+ */
+declare function layerPlacementControls(access: LayerControlAccess): Record<'x' | 'y' | 'z', LayerControl>;
+/**
+ * Scale and Rotation as value chips, Flip H and Flip V as switches. Degrees round
+ * a circle — -179 and 179 are neighbours — so Rotation is a needle, not a bar.
+ * Two flip switches rather than one with Shift: a pad carries no Shift on the
+ * hardware, and a lit switch says the layer IS flipped.
+ */
+declare function layerShapeControls(access: Pick<LayerControlAccess, 'transform' | 'setTransform'>): Record<'scale' | 'rotation' | 'flipX' | 'flipY', LayerControl>;
+/**
+ * How strongly a picture layer shows, on the `opacity` + `picture` face: the
+ * picture fills the slot at the layer's opacity. With `onTap`, a still press on
+ * the slot is the picture's door (load another).
+ */
+declare function layerOpacityControl(options: {
+    read(): number;
+    write(value: number): void;
+    /** The layer's picture, as an image URL. */
+    picture?: string;
+    onTap?: () => void;
+}): LayerControl;
+/** Where the shared small controls sit: each under the dial it belongs to. */
+declare const LAYER_PADS: Readonly<Record<'flipX' | 'scale' | 'flipY' | 'rotation', number>>;
+declare const LAYER_HINTS: Readonly<Record<'x' | 'y' | 'z' | 'scale' | 'rotation' | 'opacity', string>>;
+/** One row of the layer list. */
+interface LayerListRow {
+    readonly label: string;
+    /** What kind of layer it is, in a word ("Picture", "Text"). */
+    readonly tag?: string;
+    readonly visible: boolean;
+    /** More words a search on the list finds the row by. */
+    readonly keywords?: string;
+}
+/**
+ * The list of layers the big wheel walks, frontmost first. Checked = showing, so
+ * the list says which layers Mute has put away. Back closes it.
+ */
+declare function layerListScreen(rows: readonly LayerListRow[], index: number): MoveScreenList;
 
 /** Half the pointer travel, in pixels from the centre, below which a drag is ignored. */
 declare const ANGLE_DEAD_ZONE_PX = 4;
@@ -8693,4 +9146,4 @@ declare const MoveSearchStore: MoveSearchStoreClass;
 declare function presetFlowerSeed(values: Record<string, unknown>): string;
 declare function presetFlowerSvg(values: Record<string, unknown>): string;
 
-export { ADSR_DEF, ADSR_STAGE_MAX, ANGLE_DEAD_ZONE_PX, AUDIO_DEF, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AudioModWindow, automationCore as Automation, type AutomationClock, type AutomationCommit, type AutomationCursor, type AutomationEditMeta, type AutomationHost, type AutomationInterp, type AutomationLane, AutomationLanesStore, type AutomationPoint, type AutomationRange, type AutomationSelection, type AutomationSlotHandle, type AutomationSlotOptions, type AutomationSpan, type AutomationStoreOptions, type AutomationTimeline, type AutomationView, type AxisSpec, type BalanceConfig, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, type ChipOption, type ChipsConfig, type ColorConfig, type ColorFormat, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRANSFER, DEFAULT_TRIGGER_STEPS, type DriverDirection, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EasingConfig, type EnvStage, type ExplorationChild, type ExplorationSlot, type ExplorationState, type ExplorationTree, type ExplorationView, FILTER_DB_CEIL, FILTER_DB_FLOOR, type FileConfig, type FilterAxis, type FilterAxisConfig, type FilterConfig, type FilterResponse, type FilterShapeType, type FilterValue, type GalleryConfig, type GalleryItem, type GeneParameter, type GeneticsSettings, type GradientConfig, type GradientStop, type GradientTransform, type GradientType, type GradientValue, type HSLA, type HSVA, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, LFO_DEF, LFO_SYNC_DIVISIONS, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenDetail, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_COLOR_NAMES, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_AGENT_GLIDE_MS, MOVE_BAND_H, MOVE_BAND_W, MOVE_CHIP_BUTTONS, MOVE_COLOR_HUES, MOVE_COLOR_PALETTES, MOVE_COLOR_STEPS, MOVE_COLOR_WHEEL, MOVE_CONNECTION_ASK_EVENT, MOVE_CONNECTION_EVENT, MOVE_DECK_MAX, MOVE_DIALS, MOVE_FLOAT_SELECTOR, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_ICONS, MOVE_FUNCTION_MANIFEST, MOVE_GATE_GRID, MOVE_GAUGE, MOVE_GRADIENT_STOPS, MOVE_GRAIN, MOVE_JOG_CLICK_EVENT, MOVE_JOG_EVENT, MOVE_JOG_HOLD_EVENT, MOVE_LATCH_EVENT, MOVE_MULTIBAND_GRID, MOVE_MUTE_EVENT, MOVE_NOTIFY_GAP, MOVE_NOTIFY_KINDS, MOVE_OPACITY_PADS, MOVE_OVERRIDE_EVENT, MOVE_PADS, MOVE_PAD_LIBRARY, MOVE_PAGE_EVENT, MOVE_PAGE_SELECT_EVENT, MOVE_PALETTE, MOVE_PANEL_SETTINGS, MOVE_SEARCH_EVENT, MOVE_SETTINGS_EVENT, MOVE_SLOT_LIBRARY, MOVE_SPECIAL_BUTTONS, MOVE_STAGE, MOVE_STEP_FUNCTIONS, MOVE_STRIP_EVENT, MOVE_TIMELINE_MAX_ZOOM, MOVE_TOUCH_EVENT, MOVE_TRACKS, MOVE_TRACK_COLORS, MOVE_TRACK_LABEL_STYLES, MOVE_VIEW_MOTIONS, MOVE_VIEW_PRESENTATION, MOVE_VIEW_WAIT, MOVE_VOLUME_EVENT, MOVE_VOLUME_TAP_EVENT, MOVE_WAVEFORM_DEMO_SECONDS, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_PANEL, MOVE_WAVEFORM_PIXEL_RANGE, MOVE_WAVEFORM_STEPS, MOVE_WAVE_FRAME, MOVE_WAVE_MAX_DISPLAY, MOVE_WAVE_MAX_HEIGHT, MOVE_WAVE_MAX_WIDTH, type ModControlMeta, ModDot, type ModGlyph, type ModPageLayout, type ModPageSlot, type ModRange, ModRing, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, type MorphState, MoveActionButton, type MoveActionButtonProps, MoveActionDeck, type MoveActionDeckProps, type MoveAgentAction, type MoveAgentActionInfo, type MoveAgentActionResult, type MoveAgentArg, type MoveAgentAsk, type MoveAgentAttachment, type MoveAgentBoundary, type MoveAgentBoundaryRef, type MoveAgentCall, type MoveAgentControl, type MoveAgentEntry, type MoveAgentLive, type MoveAgentOptions, type MoveAgentOutcome, type MoveAgentParam, type MoveAgentParamInfo, type MoveAgentParamValue, type MoveAgentPass, type MoveAgentPassResult, type MoveAgentPhase, type MoveAgentProjectedEntry, type MoveAgentReply, type MoveAgentRequest, type MoveAgentRunContext, type MoveAgentSegment, type MoveAgentSignal, type MoveAgentSignalInfo, type MoveAgentSignalState, type MoveAgentSourceRange, type MoveAgentStep, MoveAgentStore, type MoveAgentStream, type MoveAgentTool, type MoveAgentToolCall, type MoveAgentToolInfo, type MoveAgentToolResult, type MoveAgentView, type MoveAgentWrite, MoveAutomationLanes, type MoveAutomationLanesProps, type MoveBand, type MoveBandCell, type MoveChannelDial, type MoveColorPalette, MoveColorStore, type MoveColorView, MoveConnection, MoveConnectionDot, type MoveConnectionDotProps, type MoveConnectionState, type MoveDeckAction, type MoveDeckActionDress, type MoveDeckButton, type MoveEdges, type MoveEdgesCell, type MoveFaceDial, type MoveFunctionButton, type MoveFunctionChip, type MoveFunctionChipStyle, MoveFunctionChips, type MoveFunctionChipsProps, type MoveFunctionGlyph, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, type MoveGateColours, MoveGateDisplay, MoveGateMeter, type MoveGateReader, type MoveGateReading, type MoveGateRole, type MoveGrainPicture, type MoveGrainRole, type MoveGrainSpan, type MoveGrainVisual, type MoveKitOptions, type MoveKitOverrides, type MoveKitRegistry, type MoveMeter, type MoveMultibandColours, MoveMultibandDisplay, MoveMultibandMeter, type MoveMultibandReading, type MoveMultibandRole, MoveNotifications, type MoveNotificationsProps, type MoveNotifyKind, type MoveNotifyOptions, type MoveNumericDrawing, MovePadActionBody, MovePadAppBody, MovePadBandBody, type MovePadBandHand, type MovePadCell, MovePadColorBody, type MovePadEdgeHand, MovePadFadeBody, MovePadIconBody, MovePadIconLabelBody, type MovePadKind, MovePadListBody, type MovePadListConfig, type MovePadListOption, MovePadListStore, type MovePadListView, MovePadLoopBody, MovePadTabsBody, MovePadToggleBody, MovePadValueBody, MovePadWaveBody, type MovePage, type MovePaletteName, MovePanel, type MovePanelProps, type MovePlaybackMode, type MovePresetItem, type MovePresetPhase, type MovePresetSave, MovePresetStore, type MovePresetView, type MoveScreenList, type MoveScreenRow, type MoveScreenSearch, type MoveScreenWait, MoveSearchStore, type MoveSearchTarget, type MoveSearchView, type MoveSelectVisual, MoveSettingsView, type MoveSliderVisual, MoveSlot, MoveSlotAspectBody, MoveSlotChannelBody, MoveSlotClockBody, MoveSlotColorBody, MoveSlotDefaultBody, MoveSlotDialBody, MoveSlotDiaphragmBody, MoveSlotEnumBody, MoveSlotEnvBody, MoveSlotFilterBody, MoveSlotGateBody, MoveSlotGlyph, MoveSlotGrainBody, type MoveSlotGroup, type MoveSlotKind, MoveSlotLanesBody, MoveSlotMetronomeBody, MoveSlotMultibandBody, MoveSlotMultiselectBody, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing, type MoveSlotProps, MoveSlotRampBody, MoveSlotRangeBody, MoveSlotReadout, MoveSlotScopeBody, MoveSlotShape, MoveSlotStreakBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotTrimSpanBody, MoveSlotVectorBody, MoveSlotXYBody, type MoveStage, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, MoveTimeline, type MoveTimelineClaimOptions, MoveTimelineClock, type MoveTimelineProps, MoveTimelineStore, type MoveTimelineValues, MoveTimelineZoom, type MoveToggleVisual, type MoveTone, type MoveTrackLabelStyle, type MoveTrimSpanEdge, type MoveViewChange, type MoveViewChoreography, type MoveViewLayer, type MoveViewLoadOptions, type MoveViewMotion, MoveViewStage, type MoveViewStageProps, type MoveViewTask, type MoveViewTween, type MoveViewWait, MoveViews, type MoveViewsState, type MoveVisual, MoveVolumeDisplay, type MoveVolumeDisplayState, MoveWaveform, type MoveWaveformProps, MoveWaveformStore, type MoveWaveformStyle, type MoveWaveformTransport, type MoveWaveformVariant, type MoveWaveformView, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type OKLCH, type PanelConfig, type Point, type Preset, type PresetDNA, type PresetExplorationAdapter, PresetExplorationStore, type PresetItem, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, type SelectConfig, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SpringifyOptions, type SwatchConfig, type SwatchOption, TAB_PATH, TRANSFER_MAX_POINTS, TRANSFER_MIN_GAP, type TextConfig, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineMeta, TimelineStore, type TimelineTransport, type ToggleConfig, type TransferPoint, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakTheme, type TweakValue, type UseMoveTimelineOptions, WAVEFORM_BASE_BUCKET, WAVEFORM_MAX_ZOOM, WAVEFORM_MODES, WAVEFORM_SMOOTH_POINTS, type WaveformAsset, type WaveformLevel, type WaveformLoop, type WaveformMode, type WaveformRange, WaveformVisualization, type XYAxis, type XYConfig, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, angleFromPointer, applyAgentWrites, applyDetentAxis, applyModulation, arcPath, audioModLevel, bearingToValue, breedDNA, buildModMovePage, buildMovePages, buildMoveStrip, buildSamplers, buildWaveformLevels, centerValue, chooseParents, clamp, clampCurveHeight, clampOklchToSrgb, clampRange, clampStripOffset, cloneDNA, collectGenes, colorAtPosition, createMoveMeter, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultFilterResponse, defaultListItemParams, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, describeAgentControls, dialOrigin, dialSpan, displayHex, drawMoveGate, drawMoveMultiband, enumOptionIcon, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, fillRangePeaks, filterHand01, filterHandValue, filterResponsePath, filterShapePath, filterShapeResponse, fitGene, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, followWindow, formatAgentTime, formatClock, formatEntries, formatHex, formatTimelineTick, geneBounds, getAudioModBuffer, getAudioModVersion, getAudioModWindow, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, insertPoint, invertY, isIdentityTransfer, isMoveDial, isMoveTabs, isNamedTabs, isOutsideSpan, isPadSpanContinuation, isSpanContinuation, isStripSlot, isToggleDial, lfoSyncedHz, listModTypes, listenMoveTouch, loopFromStep, loopSteps, modColor, modGlyph, modKey, modPageLayout, modPageWidth, modRange, modRingArc, morphDNA, moveAppPadRow, moveBandCell, moveBandCuts, moveChannelPosition, moveEdgesCell, moveGateDemoReading, moveGateSpan, moveGaugeBearing, moveGrainGap, moveGrainPicture, moveGrainRole, moveGrainSpan, moveKitOptions, moveLanes, moveMultibandDemoReading, moveMultibandRole, moveMultibandSpan, moveNotify, moveNumericDrawing, movePadRows, movePlaybackMode, movePoint$1 as movePoint, moveScreenChecked, moveScreenRowLabel, moveScreenRowSearchText, moveSearchFilter, moveSearchMatch, moveSlotKind, moveStop, moveTabCell, moveTrimSpan, moveVectorAxes, moveVectorStage, moveViewChoreography, moveVisualReading, defaultStyle as moveWaveformDefaultStyle, defaultView as moveWaveformDefaultView, moveWaveformDemoSample, styleFromValues as moveWaveformStyleFromValues, moveWheelSlot, nearestHandle, nearestPoint, newDNAId, normToValue, normalizeAngle, normalizeCurveMarkers, normalizeDeck, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeFilterValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeToggleDial, normalizeTransfer, normalizeValue, normalizeXYDial, notifyDockBottom, nudge, nudgeAngle, oklchToRgb, opacityPercent, orderRange, packTimelineRows, padPosition, padSection, padSpan, pageStripOffset, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, presetFlowerSeed, presetFlowerSvg, projectEntries, rampCss, rangesDuration, readComposition, reconcileDNA, redistributeWeight, registerModType, removeDriver, removePoint, removeSegment, removeStop, resolveAxis, resolveBoundary, resolveFilterAxis, restoreAgentWrites, rgbToHsl, rgbToHsv, rgbToOklch, runAgentActions, sampleTransfer, scrubBy, seedDNA, setAudioModBuffer, setAudioModWindowSource, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, slotGroups, snapAngle, snapToStep, splitSegment, springify, stepPosition, stepStripOffset, stripDialColumns, stripDialSlots, stripOffsets, stripSlotCount, stripSlotIndex, stripStarts, stripWindowPads, subscribeAudioMod, timelineClock, timelineRowHeight, timelineTicks, timelineToSource, timelineWindow, toAudioBuffer, transferLut, triggerLevels, triggersCrossed, useMoveTimeline, valueFromPoint, valueToBearing, valueToNorm, valueToPercent, visibleColumns, visibleModControls, visibleWindow, waveformAsset, waveformAssetFromBuffer, zoomBy, zoomWindow };
+export { ADSR_DEF, ADSR_STAGE_MAX, ANGLE_DEAD_ZONE_PX, ANTS_FPS, ANTS_PERIOD, AUDIO_DEF, type ActionConfig, type AffordanceConfig, type AffordanceContext, type AffordanceStatus, type AnalyserConfig, type AudioModWindow, automationCore as Automation, type AutomationClock, type AutomationCommit, type AutomationCursor, type AutomationEditMeta, type AutomationHost, type AutomationInterp, type AutomationLane, AutomationLanesStore, type AutomationPoint, type AutomationRange, type AutomationSelection, type AutomationSlotHandle, type AutomationSlotOptions, type AutomationSpan, type AutomationStoreOptions, type AutomationTimeline, type AutomationView, type AxisSpec, type BalanceConfig, COLOR_FORMATS, CURVE_CYCLE, CURVE_DEF, CURVE_DEFAULT_HEIGHT, CURVE_FIT_PADDING, CURVE_LABELS, CURVE_MAX_CLIPS, CURVE_MAX_DURATION, CURVE_MAX_HEIGHT, CURVE_MIN_DURATION, CURVE_MIN_HEIGHT, CURVE_SAMPLE_COUNT, type ChipOption, type ChipsConfig, type ColorConfig, type ColorFormat, type CompositionRead, type CompositionSamplers, type ControlMeta, CurveComposer, type CurveComposition, type CurveConfig, type CurveDriver, type CurvePlot, type CurvePoint, type CurveSegment, type CurveType, DEFAULT_GRADIENT, DEFAULT_TRANSFER, DEFAULT_TRIGGER_STEPS, type DriverDirection, ENV_BEND_STAGES, ENV_SUSTAIN_WAVE_BEATS, ENV_WAVE_STAGES, type EasingConfig, type EnvStage, type ExplorationChild, type ExplorationSlot, type ExplorationState, type ExplorationTree, type ExplorationView, FILTER_DB_CEIL, FILTER_DB_FLOOR, type FileConfig, type FilterAxis, type FilterAxisConfig, type FilterConfig, type FilterResponse, type FilterShapeType, type FilterValue, type GalleryConfig, type GalleryItem, type GeneParameter, type GeneticsSettings, type GradientConfig, type GradientStop, type GradientTransform, type GradientType, type GradientValue, HANDLE_HIT, type HSLA, type HSVA, ICON_FLIP_H, ICON_FLIP_V, ICON_MOVE_CAPTURE, ICON_MOVE_ENTER, IDENTITY_PROJECTION, IDENTITY_TRANSFORM, LAYER_HINTS, LAYER_PADS, LFO_DEF, LFO_SYNC_DIVISIONS, type LayerAnchor, type LayerControl, type LayerControlAccess, type LayerListRow, type LayerPlacement, type LayerSelection, type LayerTransform, type ListConfig, type ListField, type ListFieldGroup, type ListFieldKind, type ListItemField, type ListItemType, type ListItemValue, ListScreen, type ListScreenDetail, type ListScreenItem, type ListScreenProps, MIN_STOPS, MOD_COLORS, MOD_COLOR_NAMES, MOD_PAGE_DIALS, MOD_RING_CIRCUMFERENCE, MOD_RING_RADIUS, MOD_SETTINGS_PANEL, MOD_SLOTS, MOD_TOUCH_GRACE_MS, MOVE_AGENT_GLIDE_MS, MOVE_BAND_H, MOVE_BAND_W, MOVE_CHIP_BUTTONS, MOVE_COLOR_HUES, MOVE_COLOR_PALETTES, MOVE_COLOR_STEPS, MOVE_COLOR_WHEEL, MOVE_CONNECTION_ASK_EVENT, MOVE_CONNECTION_EVENT, MOVE_DECK_MAX, MOVE_DIALS, MOVE_FLOAT_SELECTOR, MOVE_FUNCTION_BUTTONS, MOVE_FUNCTION_ICONS, MOVE_FUNCTION_MANIFEST, MOVE_GATE_GRID, MOVE_GAUGE, MOVE_GRADIENT_STOPS, MOVE_GRAIN, MOVE_JOG_CLICK_EVENT, MOVE_JOG_EVENT, MOVE_JOG_HOLD_EVENT, MOVE_LATCH_EVENT, MOVE_MULTIBAND_GRID, MOVE_MUTE_EVENT, MOVE_NOTIFY_GAP, MOVE_NOTIFY_KINDS, MOVE_OPACITY_PADS, MOVE_OVERRIDE_EVENT, MOVE_PADS, MOVE_PAD_LIBRARY, MOVE_PAGE_EVENT, MOVE_PAGE_SELECT_EVENT, MOVE_PALETTE, MOVE_PANEL_SETTINGS, MOVE_SEARCH_EVENT, MOVE_SETTINGS_EVENT, MOVE_SLOT_LIBRARY, MOVE_SPECIAL_BUTTONS, MOVE_STAGE, MOVE_STEP_FUNCTIONS, MOVE_STRIP_EVENT, MOVE_TIMELINE_MAX_ZOOM, MOVE_TOUCH_EVENT, MOVE_TRACKS, MOVE_TRACK_COLORS, MOVE_TRACK_LABEL_STYLES, MOVE_VIEW_MOTIONS, MOVE_VIEW_PRESENTATION, MOVE_VIEW_WAIT, MOVE_VOLUME_EVENT, MOVE_VOLUME_TAP_EVENT, MOVE_WAVEFORM_DEMO_SECONDS, MOVE_WAVEFORM_PADS, MOVE_WAVEFORM_PANEL, MOVE_WAVEFORM_PIXEL_RANGE, MOVE_WAVEFORM_STEPS, MOVE_WAVE_FRAME, MOVE_WAVE_MAX_DISPLAY, MOVE_WAVE_MAX_HEIGHT, MOVE_WAVE_MAX_WIDTH, type Mat4, type ModControlMeta, ModDot, type ModGlyph, type ModPageLayout, type ModPageSlot, type ModRange, ModRing, type ModStepAction, type ModTypeDef, type ModulationAssignment, type ModulationParamValue, type ModulationParams, type ModulationSlot, type ModulationSourceConfig, ModulationStore, type ModulationType, type MorphState, MoveActionButton, type MoveActionButtonProps, MoveActionDeck, type MoveActionDeckProps, type MoveAgentAction, type MoveAgentActionInfo, type MoveAgentActionResult, type MoveAgentArg, type MoveAgentAsk, type MoveAgentAttachment, type MoveAgentBoundary, type MoveAgentBoundaryRef, type MoveAgentCall, type MoveAgentControl, type MoveAgentEntry, type MoveAgentLive, type MoveAgentOptions, type MoveAgentOutcome, type MoveAgentParam, type MoveAgentParamInfo, type MoveAgentParamValue, type MoveAgentPass, type MoveAgentPassResult, type MoveAgentPhase, type MoveAgentProjectedEntry, type MoveAgentReply, type MoveAgentRequest, type MoveAgentRunContext, type MoveAgentSegment, type MoveAgentSignal, type MoveAgentSignalInfo, type MoveAgentSignalState, type MoveAgentSourceRange, type MoveAgentStep, MoveAgentStore, type MoveAgentStream, type MoveAgentTool, type MoveAgentToolCall, type MoveAgentToolInfo, type MoveAgentToolResult, type MoveAgentView, type MoveAgentWrite, MoveAutomationLanes, type MoveAutomationLanesProps, type MoveBand, type MoveBandCell, type MoveChannelDial, type MoveColorPalette, MoveColorStore, type MoveColorView, MoveConnection, MoveConnectionDot, type MoveConnectionDotProps, type MoveConnectionState, type MoveDeckAction, type MoveDeckActionDress, type MoveDeckButton, type MoveEdges, type MoveEdgesCell, type MoveFaceDial, type MoveFunctionButton, type MoveFunctionChip, type MoveFunctionChipStyle, MoveFunctionChips, type MoveFunctionChipsProps, type MoveFunctionGlyph, type MoveFunctionHandler, type MoveFunctionOptions, type MoveFunctionPress, type MoveFunctionRunListener, MoveFunctions, type MoveGateColours, MoveGateDisplay, MoveGateMeter, type MoveGateReader, type MoveGateReading, type MoveGateRole, type MoveGrainPicture, type MoveGrainRole, type MoveGrainSpan, type MoveGrainVisual, type MoveKitOptions, type MoveKitOverrides, type MoveKitRegistry, type MoveMeter, type MoveMultibandColours, MoveMultibandDisplay, MoveMultibandMeter, type MoveMultibandReading, type MoveMultibandRole, MoveNotifications, type MoveNotificationsProps, type MoveNotifyKind, type MoveNotifyOptions, type MoveNumericDrawing, MovePadActionBody, MovePadAppBody, MovePadBandBody, type MovePadBandHand, type MovePadCell, MovePadColorBody, type MovePadEdgeHand, MovePadFadeBody, MovePadIconBody, MovePadIconLabelBody, type MovePadKind, MovePadListBody, type MovePadListConfig, type MovePadListOption, MovePadListStore, type MovePadListView, MovePadLoopBody, MovePadTabsBody, MovePadToggleBody, MovePadValueBody, MovePadWaveBody, type MovePage, type MovePaletteName, MovePanel, type MovePanelProps, type MovePlaybackMode, type MovePresetItem, type MovePresetPhase, type MovePresetSave, MovePresetStore, type MovePresetView, type MoveScreenList, type MoveScreenRow, type MoveScreenSearch, type MoveScreenWait, MoveSearchStore, type MoveSearchTarget, type MoveSearchView, type MoveSelectVisual, MoveSettingsView, type MoveSliderVisual, MoveSlot, MoveSlotAspectBody, MoveSlotChannelBody, MoveSlotClockBody, MoveSlotColorBody, MoveSlotDefaultBody, MoveSlotDialBody, MoveSlotDiaphragmBody, MoveSlotEnumBody, MoveSlotEnvBody, MoveSlotFilterBody, MoveSlotGateBody, MoveSlotGlyph, MoveSlotGrainBody, type MoveSlotGroup, type MoveSlotKind, MoveSlotLanesBody, MoveSlotMetronomeBody, MoveSlotMultibandBody, MoveSlotMultiselectBody, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing, type MoveSlotProps, MoveSlotRampBody, MoveSlotRangeBody, MoveSlotReadout, MoveSlotScopeBody, MoveSlotShape, MoveSlotStreakBody, MoveSlotToggleBody, MoveSlotTransferBody, MoveSlotTrimSpanBody, MoveSlotVectorBody, MoveSlotXYBody, type MoveStage, type MoveStepCell, type MoveSurfaceState, MoveSurfaceStore, MoveTimeline, type MoveTimelineClaimOptions, MoveTimelineClock, type MoveTimelineProps, MoveTimelineStore, type MoveTimelineValues, MoveTimelineZoom, type MoveToggleVisual, type MoveTone, type MoveTrackLabelStyle, type MoveTrimSpanEdge, type MoveViewChange, type MoveViewChoreography, type MoveViewLayer, type MoveViewLoadOptions, type MoveViewMotion, MoveViewStage, type MoveViewStageProps, type MoveViewTask, type MoveViewTween, type MoveViewWait, MoveViews, type MoveViewsState, type MoveVisual, MoveVolumeDisplay, type MoveVolumeDisplayState, MoveWaveform, type MoveWaveformProps, MoveWaveformStore, type MoveWaveformStyle, type MoveWaveformTransport, type MoveWaveformVariant, type MoveWaveformView, type MultiSelectConfig, type MultiSelectOption, type NumberConfig, type OKLCH, ORIGIN_ANCHOR, type PanelConfig, type Point$1 as Point, type Preset, type PresetDNA, type PresetExplorationAdapter, PresetExplorationStore, type PresetItem, type PresetProvider, type PresetProviderPreset, type RGBA, type RangeConfig, type RangeValue, type ResolvedValues, SH_DEF, type Sampler, type SelectConfig, type SelectFolder, type SelectLeaf, type SelectLevel, type SelectLevelRow, type SelectOption, type SelectPlace, SelectTool, type SelectToolHost, type SelectableLayer, type ShortcutConfig, type ShortcutInteraction, type ShortcutMode, type SliderConfig, type SpringConfig, type SpringifyOptions, type SwatchConfig, type SwatchOption, TAB_PATH, TRANSFER_MAX_POINTS, TRANSFER_MIN_GAP, type TextConfig, type TimelineClipMeta, type TimelineClipTrackMeta, type TimelineMeta, TimelineStore, type TimelineTransport, type ToggleConfig, type TransferPoint, type TransferValue, type TransitionConfig, type TweakConfig, type TweakEvent, TweakStore, type TweakTheme, type TweakValue, type UseMoveTimelineOptions, type ViewProjection, WAVEFORM_BASE_BUCKET, WAVEFORM_MAX_ZOOM, WAVEFORM_MODES, WAVEFORM_SMOOTH_POINTS, type WaveformAsset, type WaveformLevel, type WaveformLoop, type WaveformMode, type WaveformRange, WaveformVisualization, type XYAxis, type XYConfig, type XYValue, XY_DEFAULT_STEP, XY_DETENT_PX, addDriver, addStop, angleFromPointer, applyAgentWrites, applyDetentAxis, applyModulation, arcPath, assertTransformRoundTrip, audioModLevel, bakeTransform, bearingToValue, breedDNA, buildModMovePage, buildMovePages, buildMoveStrip, buildSamplers, buildWaveformLevels, canvasMatrix, centerValue, chooseParents, clamp, clampCurveHeight, clampLayerTransform, clampOklchToSrgb, clampRange, clampStripOffset, cloneDNA, collectGenes, colorAtPosition, composeModel, createMoveMeter, curveComposition, curveDuration, curvePathData, curveY, cycleDriverType, cycleSegmentType, defaultComposition, defaultFilterResponse, defaultListItemParams, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, depthScale, describeAgentControls, dialOrigin, dialSpan, displayHex, drawHandle, drawMoveGate, drawMoveMultiband, enumOptionIcon, envCurveParam, envStageWave, envWaveFlipParam, envWaveParam, envelopeJoints, envelopePoints, fillRangePeaks, filterHand01, filterHandValue, filterResponsePath, filterShapePath, filterShapeResponse, fitGene, flipDriver, flipDriverX, flipDriverY, flipSegment, flipSegmentX, flipSegmentY, followWindow, formatAgentTime, formatClock, formatEntries, formatHex, formatTimelineTick, geneBounds, getAudioModBuffer, getAudioModVersion, getAudioModWindow, getModType, gradientFillBox, gradientToCss, gradientToTransform, groupListFields, handleLeftStyles, hintDomId, hslToRgb, hsvToRgb, insertPoint, insideScreenQuad, invertModel, invertY, isIdentityTransfer, isIdentityTransform, isMoveDial, isMoveTabs, isNamedTabs, isOutsideSpan, isPadSpanContinuation, isSpanContinuation, isStripSlot, isToggleDial, layerListScreen, layerModelMatrix, layerOpacityControl, layerPlacementControls, layerShapeControls, lfoSyncedHz, listModTypes, listenMoveTouch, loopFromStep, loopSteps, modColor, modGlyph, modKey, modPageLayout, modPageWidth, modRange, modRingArc, morphDNA, moveAppPadRow, moveBandCell, moveBandCuts, moveChannelPosition, moveEdgesCell, moveGateDemoReading, moveGateSpan, moveGaugeBearing, moveGrainGap, moveGrainPicture, moveGrainRole, moveGrainSpan, moveKitOptions, moveLanes, moveMultibandDemoReading, moveMultibandRole, moveMultibandSpan, moveNotify, moveNumericDrawing, movePadRows, movePlaybackMode, movePoint$1 as movePoint, moveScreenChecked, moveScreenRowLabel, moveScreenRowSearchText, moveSearchFilter, moveSearchMatch, moveSlotKind, moveStop, moveTabCell, moveTrimSpan, moveVectorAxes, moveVectorStage, moveViewChoreography, moveVisualReading, defaultStyle as moveWaveformDefaultStyle, defaultView as moveWaveformDefaultView, moveWaveformDemoSample, styleFromValues as moveWaveformStyleFromValues, moveWheelSlot, nearestHandle, nearestPoint, newDNAId, normToValue, normalizeAngle, normalizeCurveMarkers, normalizeDeck, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeFilterValue, normalizeGradient, normalizeHex, normalizeListItems, normalizeRangeDial, normalizeToggleDial, normalizeTransfer, normalizeValue, normalizeXYDial, notifyDockBottom, nudge, nudgeAngle, oklchToRgb, opacityPercent, orderRange, packTimelineRows, padPosition, padSection, padSpan, pageStripOffset, parseHex, parseListItemSchema, percentToValue, pickDragTarget, plotCurve, pointFromValue, presetFlowerSeed, presetFlowerSvg, projectEntries, projectPoint, projectX, projectY, rampCss, rangesDuration, readComposition, reanchorTransform, reconcileDNA, redistributeWeight, registerModType, removeDriver, removePoint, removeSegment, removeStop, resolveAxis, resolveBoundary, resolveFilterAxis, restoreAgentWrites, rgbToHsl, rgbToHsv, rgbToOklch, runAgentActions, sameTransform, sampleTransfer, scrubBy, seedDNA, setAudioModBuffer, setAudioModWindowSource, setDriverAnticipate, setDriverCurvature, setDriverOvershoot, setDriverSteepness, setGradientAngle, setGradientCenter, setGradientRotation, setGradientScale, setGradientSquash, setGradientType, setHigh, setLow, setSegmentAnticipate, setSegmentCurvature, setSegmentOvershoot, setSegmentSteepness, setStopColor, shiftSpan, slotGroups, snapAngle, snapToStep, splitSegment, springify, stepPosition, stepStripOffset, stripDialColumns, stripDialSlots, stripOffsets, stripSlotCount, stripSlotIndex, stripStarts, stripWindowPads, strokeAnts, subscribeAudioMod, timelineClock, timelineRowHeight, timelineTicks, timelineToSource, timelineWindow, toAudioBuffer, transferLut, translateInParent, triggerLevels, triggersCrossed, unprojectPoint, unprojectX, unprojectY, useMoveTimeline, valueFromPoint, valueToBearing, valueToNorm, valueToPercent, visibleColumns, visibleModControls, visibleWindow, waveformAsset, waveformAssetFromBuffer, zoomBy, zoomWindow };

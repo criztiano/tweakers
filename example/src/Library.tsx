@@ -28,6 +28,21 @@ import {
   Automation,
   MoveAutomationLanes,
   type AutomationTimeline,
+  SelectTool,
+  IDENTITY_TRANSFORM,
+  LAYER_HINTS,
+  LAYER_PADS,
+  canvasMatrix,
+  layerModelMatrix,
+  layerOpacityControl,
+  layerPlacementControls,
+  layerShapeControls,
+  projectPoint,
+  unprojectPoint,
+  type LayerControl,
+  type LayerSelection,
+  type LayerTransform,
+  type TweakConfig,
 } from 'tweakers';
 import { PANEL_ID, PANEL_NAME, INSTRUMENTS_NAME } from './panel';
 import { BIG_SLOTS, SMALL_SLOTS, SMALL_SLOT_STATES, MOD_FACES, type Specimen } from './specimens';
@@ -237,6 +252,14 @@ export function Library() {
       </Section>
 
       <Section
+        id="layers"
+        title="Layers on a canvas"
+        lede="Two layers, placed the way every app that places layers places them. Click one to select it, then drag inside its frame to move it (Shift: one axis), drag a corner to scale it from the opposite corner (Shift or Cmd: stretch each side), drag just outside a corner — or Alt + drag — to turn it (Shift: 15° steps). The dials under it are the Layer page's shared controls: X, Y and Depth as one stage, Opacity, then Scale and Rotation. Turn either and both move."
+      >
+        <LayersPanel />
+      </Section>
+
+      <Section
         id="notify"
         title="Notifications"
         lede="What the app has to say, standing where the floating displays stand: centred over the instrument, one gap above whatever is already up there. The newest card is in front and the run behind it peeks out under it — rest the pointer on the stack to fan the whole set open. Hold a modulation circle to bring a modulator’s curve up first, then fire one: the stack rises over the display rather than burying it, and settles back when the display goes."
@@ -436,6 +459,171 @@ function TimelinePanel() {
         />
       </div>
       <MoveTimeline id={tl.id} variant="page" theme="dark" productionEnabled />
+    </div>
+  );
+}
+
+/** The layer example: two squares, the select tool on them, and the Layer
+ *  page's controls for the selected one, in a panel of its own. */
+const LAYERS_PANEL = 'library-layers';
+const LAYER_CANVAS = { width: 480, height: 270 };
+const LAYER_SIZE = 120;
+type ExampleLayer = { id: string; color: string; transform: LayerTransform; opacity: number; rest: { x: number; y: number } };
+
+function LayersPanel() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const layers = useRef<ExampleLayer[]>([
+    { id: 'front', color: '#dfe2cc', transform: IDENTITY_TRANSFORM, opacity: 1, rest: { x: 270, y: 110 } },
+    { id: 'back', color: '#7c8bff', transform: { ...IDENTITY_TRANSFORM, rotation: -0.3 }, opacity: 0.8, rest: { x: 110, y: 50 } },
+  ]);
+  const selected = useRef('front');
+
+  useEffect(() => {
+    const canvas = canvasRef.current!;
+    const ctx = canvas.getContext('2d')!;
+    const model = (layer: ExampleLayer) =>
+      layerModelMatrix(layer.transform, { x: layer.rest.x + LAYER_SIZE / 2, y: layer.rest.y + LAYER_SIZE / 2 }, LAYER_CANVAS.width, LAYER_CANVAS.height);
+    const find = (id: string) => layers.current.find((layer) => layer.id === id)!;
+    const current = () => find(selected.current);
+    const projection = () => {
+      const scale = canvas.clientWidth / LAYER_CANVAS.width;
+      return { scale, offsetX: 0, offsetY: 0 };
+    };
+    const session: LayerSelection<ExampleLayer> = {
+      selected: () => current(),
+      select: (id) => {
+        selected.current = id;
+        register();
+      },
+      layerAt: (x, y) =>
+        layers.current.find((layer) => {
+          const p = unprojectPoint(model(layer), x, y);
+          return p.x >= layer.rest.x && p.x <= layer.rest.x + LAYER_SIZE && p.y >= layer.rest.y && p.y <= layer.rest.y + LAYER_SIZE;
+        }) ?? null,
+      frameOf: (layer) => {
+        const m = model(layer);
+        const { x, y } = layer.rest;
+        return [
+          projectPoint(m, x, y),
+          projectPoint(m, x + LAYER_SIZE, y),
+          projectPoint(m, x + LAYER_SIZE, y + LAYER_SIZE),
+          projectPoint(m, x, y + LAYER_SIZE),
+        ];
+      },
+      pivotOf: (layer) => projectPoint(model(layer), layer.rest.x + LAYER_SIZE / 2, layer.rest.y + LAYER_SIZE / 2),
+      parentModelFor: () => null,
+      setLayerTransform: (id, patch) => {
+        const layer = find(id);
+        layer.transform = { ...layer.transform, ...patch };
+        paint();
+      },
+    };
+    const toCanvas = (e: PointerEvent) => {
+      const box = canvas.getBoundingClientRect();
+      const p = projection();
+      return { x: (e.clientX - box.left) / p.scale, y: (e.clientY - box.top) / p.scale };
+    };
+    const tool = new SelectTool<ExampleLayer>({
+      layers: () => session,
+      canvasPoint: toCanvas,
+      overlayPoint: (e) => {
+        const box = canvas.getBoundingClientRect();
+        return { x: e.clientX - box.left, y: e.clientY - box.top };
+      },
+      projection,
+      surface: () => canvas,
+      repaint: () => paint(),
+      onEdited: () => TweakStore.updateValues(LAYERS_PANEL, readAll()),
+    });
+
+    // The panel: the Layer page's shared controls for the selected layer.
+    const controls = (): Record<string, LayerControl> => {
+      const access = {
+        canvas: LAYER_CANVAS,
+        transform: () => current().transform,
+        pivot: () => ({ x: current().rest.x + LAYER_SIZE / 2, y: current().rest.y + LAYER_SIZE / 2 }),
+        setTransform: (patch: Partial<LayerTransform>) => session.setLayerTransform(selected.current, patch),
+      };
+      return {
+        ...layerPlacementControls(access),
+        opacity: layerOpacityControl({
+          read: () => current().opacity,
+          write: (v) => {
+            current().opacity = v;
+            paint();
+          },
+        }),
+        ...layerShapeControls(access),
+      };
+    };
+    const readAll = () => Object.fromEntries(Object.entries(controls()).map(([key, c]) => [key, c.read()]));
+    function register() {
+      const config = Object.fromEntries(
+        Object.entries(controls()).map(([key, c]) => [key, { ...c.config, default: c.read() }]),
+      ) as TweakConfig;
+      TweakStore.registerPanel(LAYERS_PANEL, 'Layers', config, undefined, { movePads: LAYER_PADS, hints: LAYER_HINTS } as never);
+      TweakStore.updateValues(LAYERS_PANEL, readAll());
+      paint();
+    }
+    // A slot turned: write what moved, and only that.
+    const off = TweakStore.subscribe(LAYERS_PANEL, () => {
+      const values = TweakStore.getValues(LAYERS_PANEL);
+      for (const [key, c] of Object.entries(controls())) {
+        if (key in values && values[key] !== c.read()) c.write(values[key]);
+      }
+    });
+
+    function paint() {
+      const dpr = window.devicePixelRatio || 1;
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      if (canvas.width !== Math.round(width * dpr)) canvas.width = Math.round(width * dpr);
+      if (canvas.height !== Math.round(height * dpr)) canvas.height = Math.round(height * dpr);
+      const p = projection();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, width, height);
+      for (const layer of [...layers.current].reverse()) {
+        ctx.save();
+        ctx.scale(p.scale, p.scale);
+        ctx.transform(...canvasMatrix(model(layer)));
+        ctx.globalAlpha = layer.opacity;
+        ctx.fillStyle = layer.color;
+        ctx.fillRect(layer.rest.x, layer.rest.y, LAYER_SIZE, LAYER_SIZE);
+        ctx.restore();
+      }
+      tool.paint(ctx);
+    }
+
+    const down = (e: PointerEvent) => tool.begin(e);
+    const move = (e: PointerEvent) => tool.move(e);
+    const up = (e: PointerEvent) => tool.end(e);
+    canvas.addEventListener('pointerdown', down);
+    canvas.addEventListener('pointermove', move);
+    canvas.addEventListener('pointerup', up);
+    register();
+    return () => {
+      off();
+      tool.dispose();
+      canvas.removeEventListener('pointerdown', down);
+      canvas.removeEventListener('pointermove', move);
+      canvas.removeEventListener('pointerup', up);
+    };
+  }, []);
+
+  return (
+    <div className="kit-presets">
+      <canvas
+        ref={canvasRef}
+        style={{ display: 'block', width: '100%', aspectRatio: `${LAYER_CANVAS.width} / ${LAYER_CANVAS.height}`, borderRadius: 12, background: '#1e1e1e', touchAction: 'none', marginBottom: 12 }}
+      />
+      <div className="kit-tile kit-tile-free">
+        <div className="tweakers-move" style={{ display: 'flex', gap: 4 }}>
+          <MoveSlot panel={LAYERS_PANEL} path={['x', 'y', 'z']} style={{ width: 'calc(3 * var(--kit-slot-w) + 8px)' }} />
+          <MoveSlot panel={LAYERS_PANEL} path="opacity" style={{ width: 'var(--kit-slot-w)' }} />
+          <MoveSlot panel={LAYERS_PANEL} path="scale" valueFirst style={{ width: 'var(--kit-slot-w)' }} />
+          <MoveSlot panel={LAYERS_PANEL} path="rotation" style={{ width: 'var(--kit-slot-w)' }} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -705,7 +893,11 @@ function ViewsPanel() {
                 label: 'Import from a link',
                 onPress: () =>
                   void MoveViews.load(async ({ signal, say }) => {
-                    await pretendWork(2200, signal);
+                    // a download can tell how far it has come: the lights fill
+                    for (let step = 1; step <= 10; step++) {
+                      await pretendWork(220, signal);
+                      say('Downloading', 'field-recording.mov', step / 10);
+                    }
                     say('Opening', 'field-recording.mov');
                     await pretendWork(1200, signal);
                   }, {

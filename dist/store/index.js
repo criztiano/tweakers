@@ -127,6 +127,85 @@ function clampRange(v, min, max) {
   return orderRange({ min: clamp3(v.min, min, max), max: clamp3(v.max, min, max) });
 }
 
+// src/select-tree-core.ts
+var isSelectFolder = (option) => typeof option === "object" && option !== null && !("value" in option) && Array.isArray(option.options);
+var selectHasFolders = (options) => options.some(isSelectFolder);
+var selectLeafValue = (leaf) => typeof leaf === "string" ? leaf : leaf.value;
+var selectLeafLabel = (leaf) => typeof leaf === "string" ? leaf : leaf.label ?? leaf.value;
+function selectLeaves(options) {
+  return options.flatMap((option) => isSelectFolder(option) ? selectLeaves(option.options) : [option]);
+}
+function selectLevelOptions(options, open) {
+  let level = options;
+  for (const i of open) {
+    const folder = level[i];
+    if (!isSelectFolder(folder)) return null;
+    level = folder.options;
+  }
+  return level;
+}
+function selectPathOf(options, value) {
+  for (let i = 0; i < options.length; i++) {
+    const option = options[i];
+    if (isSelectFolder(option)) {
+      const inner = selectPathOf(option.options, value);
+      if (inner) return [i, ...inner];
+    } else if (selectLeafValue(option) === value) return [i];
+  }
+  return null;
+}
+function selectPlaceOf(options, value) {
+  const path = selectPathOf(options, value);
+  return path ? { open: path.slice(0, -1), cursor: path[path.length - 1] } : { open: [], cursor: 0 };
+}
+function selectFitPlace(options, place) {
+  const level = selectLevelOptions(options, place.open);
+  const open = level ? [...place.open] : [];
+  const rows = (level ?? options).length;
+  const low = open.length ? -1 : 0;
+  const cursor = Number.isFinite(place.cursor) ? Math.round(place.cursor) : 0;
+  return { open, cursor: Math.max(low, Math.min(Math.max(low, rows - 1), cursor)) };
+}
+function selectLevel(options, label, place, value) {
+  const fit = selectFitPlace(options, place);
+  const level = selectLevelOptions(options, fit.open) ?? options;
+  const path = selectPathOf(options, value);
+  const holds = path && fit.open.every((i, k) => path[k] === i) ? path[fit.open.length] : -1;
+  const name = (open) => {
+    const parent = selectLevelOptions(options, open.slice(0, -1));
+    const folder = parent?.[open[open.length - 1]];
+    return isSelectFolder(folder) ? folder.label : label;
+  };
+  return {
+    open: fit.open,
+    rows: level.map((option, i) => isSelectFolder(option) ? { label: option.label, folder: true, icon: option.icon, ...i === holds ? { holds: true } : {} } : {
+      label: selectLeafLabel(option),
+      value: selectLeafValue(option),
+      folder: false,
+      ...typeof option !== "string" && option.icon ? { icon: option.icon } : {},
+      ...typeof option !== "string" && option.picture ? { picture: option.picture } : {}
+    }),
+    title: fit.open.length ? name(fit.open) : label,
+    back: fit.open.length ? name(fit.open.slice(0, -1)) : null,
+    cursor: fit.cursor
+  };
+}
+function selectWalk(options, place, to) {
+  const next = selectFitPlace(options, { open: place.open, cursor: to });
+  const row = selectLevelOptions(options, next.open)?.[next.cursor];
+  return row === void 0 || isSelectFolder(row) ? { place: next } : { place: next, value: selectLeafValue(row) };
+}
+function selectTap(options, place, value) {
+  const fit = selectFitPlace(options, place);
+  if (fit.cursor < 0) return { open: fit.open.slice(0, -1), cursor: fit.open[fit.open.length - 1] ?? 0 };
+  const row = selectLevelOptions(options, fit.open)?.[fit.cursor];
+  if (!isSelectFolder(row)) return fit;
+  const open = [...fit.open, fit.cursor];
+  const path = selectPathOf(options, value);
+  const inside = path && open.every((i, k) => path[k] === i) && path.length > open.length;
+  return { open, cursor: inside ? path[open.length] : -1 };
+}
+
 // src/transfer-core.ts
 var DEFAULT_TRANSFER = { points: [{ x: 0, y: 0 }, { x: 1, y: 1 }] };
 var TRANSFER_MIN_GAP = 0.02;
@@ -275,7 +354,8 @@ function resolveConfigValues(config, flatValues, prefix) {
       result[key] = flatValues[path] ?? configValue;
     } else if (resolveValueHasType(configValue, "select") && Array.isArray(configValue.options)) {
       const select = configValue;
-      const defaultValue = select.default ?? (typeof select.options[0] === "string" ? select.options[0] : select.options[0]?.value);
+      const first = selectLeaves(select.options)[0];
+      const defaultValue = select.default ?? (typeof first === "string" ? first : first?.value);
       result[key] = flatValues[path] ?? defaultValue;
     } else if (resolveValueHasType(configValue, "color")) {
       result[key] = flatValues[path] ?? configValue.default ?? "#000000";
@@ -304,6 +384,7 @@ var TweakStoreClass = class {
     this.disabledPaths = /* @__PURE__ */ new Map();
     this.controlStateListeners = /* @__PURE__ */ new Map();
     this.listCursors = /* @__PURE__ */ new Map();
+    this.selectPlaces = /* @__PURE__ */ new Map();
     this.presets = /* @__PURE__ */ new Map();
     this.activePreset = /* @__PURE__ */ new Map();
     // Host-owned preset providers. The serialized form (functions drop out of
@@ -424,6 +505,7 @@ var TweakStoreClass = class {
     this.affordanceStatus.delete(id);
     this.disabledPaths.delete(id);
     this.listCursors.delete(id);
+    this.selectPlaces.delete(id);
     this.snapshots.delete(id);
     this.baseValues.delete(id);
     this.defaults.delete(id);
@@ -730,6 +812,74 @@ var TweakStoreClass = class {
     };
     const panel = this.panels.get(panelId);
     return panel && find(panel.controls)?.multiSelectOptions?.length || 0;
+  }
+  /**
+   * Where a select with folders is open on the Move: the level its list
+   * shows, its rows, and the row the cursor is on (-1 is the back pill).
+   * It is not the value, so it lives beside it — one place per control that
+   * the screen and the Move both walk. It follows the value: once the value
+   * changes from anywhere (a turn, undo, a preset, the app), the level opens
+   * on the folder holding it, the cursor on it. Null for any other control.
+   */
+  getSelectLevel(panelId, path) {
+    const meta = this.selectWithFolders(panelId, path);
+    if (!meta) return null;
+    return selectLevel(meta.optionTree, meta.label, this.selectPlace(panelId, meta), this.getValue(panelId, path));
+  }
+  /**
+   * Walks a select's cursor to row `cursor` of its open level (-1, the back
+   * pill, inside a folder). Landing on an option selects it — the value is
+   * written as any turn writes it; landing on a folder or the back pill only
+   * moves the cursor.
+   */
+  setSelectCursor(panelId, path, cursor) {
+    const meta = this.selectWithFolders(panelId, path);
+    if (!meta || !Number.isFinite(cursor)) return;
+    const step = selectWalk(meta.optionTree, this.selectPlace(panelId, meta), cursor);
+    if (step.value !== void 0 && step.value !== this.getValue(panelId, path)) this.updateValue(panelId, path, step.value);
+    this.placeSelect(panelId, meta, step.place);
+  }
+  /**
+   * A tap on a select with folders — a knob tap, a click: on a folder it
+   * opens it (the cursor on the way to the value when the value is inside,
+   * else on the back pill); on the back pill it goes up, the cursor on the
+   * folder it left. On an option it does nothing: it is already selected.
+   */
+  tapSelect(panelId, path) {
+    const meta = this.selectWithFolders(panelId, path);
+    if (!meta) return;
+    this.placeSelect(panelId, meta, selectTap(meta.optionTree, this.selectPlace(panelId, meta), this.getValue(panelId, path)));
+  }
+  selectWithFolders(panelId, path) {
+    const find = (controls) => {
+      for (const c of controls) {
+        if (c.path === path && !c.children) return c;
+        const inner = c.children && find(c.children);
+        if (inner) return inner;
+      }
+      return void 0;
+    };
+    const panel = this.panels.get(panelId);
+    const meta = panel && find(panel.controls);
+    return meta?.type === "select" && meta.optionTree ? meta : void 0;
+  }
+  /** The stored place while the value is the one it was made for; once the
+   *  value has moved on, the place the value puts the list in. */
+  selectPlace(panelId, meta) {
+    const value = this.getValue(panelId, meta.path);
+    const kept = this.selectPlaces.get(panelId)?.get(meta.path);
+    return kept && kept.value === value ? selectFitPlace(meta.optionTree, kept.place) : selectPlaceOf(meta.optionTree, value);
+  }
+  placeSelect(panelId, meta, place) {
+    const was = this.selectPlace(panelId, meta);
+    const next = selectFitPlace(meta.optionTree, place);
+    let byPath = this.selectPlaces.get(panelId);
+    if (!byPath) {
+      byPath = /* @__PURE__ */ new Map();
+      this.selectPlaces.set(panelId, byPath);
+    }
+    byPath.set(meta.path, { place: next, value: this.getValue(panelId, meta.path) });
+    if (was.cursor !== next.cursor || was.open.join() !== next.open.join()) this.notifyControlState(panelId);
   }
   /** One channel for every app-pushed presentation change on a panel. */
   subscribeControlState(panelId, listener) {
@@ -1193,7 +1343,7 @@ var TweakStoreClass = class {
       } else if (this.isActionConfig(value)) {
         controls.push({ type: "action", path, label: value.label || label, caption: value.caption, icon: value.icon });
       } else if (this.isSelectConfig(value)) {
-        controls.push({ type: "select", path, label, options: value.options, display: value.display, track: value.track, preview: value.preview, moveVisual: value.moveVisual, moveTabs: value.moveTabs, moveSpan: value.moveSpan });
+        controls.push({ type: "select", path, label, options: selectLeaves(value.options), ...selectHasFolders(value.options) ? { optionTree: value.options } : {}, display: value.display, track: value.track, preview: value.preview, moveVisual: value.moveVisual, moveTabs: value.moveTabs, moveSpan: value.moveSpan });
       } else if (this.isColorConfig(value)) {
         controls.push({ type: "color", path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {
@@ -1350,8 +1500,8 @@ var TweakStoreClass = class {
       } else if (this.isActionConfig(value)) {
         values[path] = value;
       } else if (this.isSelectConfig(value)) {
-        const firstOption = value.options[0];
-        const firstValue = typeof firstOption === "string" ? firstOption : firstOption.value;
+        const firstOption = selectLeaves(value.options)[0];
+        const firstValue = typeof firstOption === "string" ? firstOption : firstOption?.value ?? "";
         values[path] = value.default ?? firstValue;
       } else if (this.isColorConfig(value)) {
         values[path] = value.default ?? "#000000";
@@ -1714,9 +1864,10 @@ function parseListItemSchema(schema, hints, groups) {
       fields.push({ key, label, hint, group, kind: "toggle", defaultValue: def });
     } else if (listHasType(def, "select") && Array.isArray(def.options)) {
       const select = def;
-      const first = select.options[0];
+      const leaves = selectLeaves(select.options);
+      const first = leaves[0];
       const firstValue = typeof first === "string" ? first : first?.value ?? "";
-      fields.push({ key, label, hint, group, kind: "select", options: select.options, defaultValue: select.default ?? firstValue });
+      fields.push({ key, label, hint, group, kind: "select", options: leaves, defaultValue: select.default ?? firstValue });
     } else if (listHasType(def, "color")) {
       const color = def;
       fields.push({ key, label, hint, group, kind: "color", palette: color.palette, defaultValue: color.default ?? "#000000" });

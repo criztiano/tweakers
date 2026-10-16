@@ -171,6 +171,12 @@ export const BIG_SLOTS: Specimen[] = [
     note: 'A `multiselect` — `{ type: \'multiselect\', options, default: [] }`, options as `{ value, label }` rows or plain strings. Drag or scroll over it to walk the cursor, click a row to tick it; on the Move the knob walks and a knob tap ticks. The value is the ticked values, in option order.',
     live: { path: 'models' },
   },
+  {
+    kind: 'folders', path: 'effect',
+    description: MOVE_SLOT_LIBRARY.folders.description,
+    note: 'A `select` whose options include folders — `{ label, options }`, nesting allowed; the value is always an option. Drag or scroll to walk the level (an option you land on is chosen), click a folder to open it, click the back pill to go up. On the Move the knob walks and a knob tap opens or goes up.',
+    live: { path: 'effect' },
+  },
   { kind: 'curve', path: 'shape', description: MOVE_SLOT_LIBRARY.curve.description, live: { path: 'shape' } },
   { kind: 'toggle', path: 'hold', description: MOVE_SLOT_LIBRARY.toggle.description, live: { path: 'hold' } },
   {

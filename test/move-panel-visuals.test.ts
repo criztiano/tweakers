@@ -26,11 +26,11 @@ const dial = (label: string) => renderer!.root.findByProps({ role: 'slider', 'ar
 const keyEvent = (key: string, shiftKey = false) => ({ key, shiftKey, preventDefault: vi.fn(), stopPropagation: vi.fn() });
 const pointer = (clientX: number, shiftKey = false) => ({
   clientX, clientY: 0, pointerId: 1, shiftKey,
-  currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }) },
+  currentTarget: { setPointerCapture: vi.fn(), querySelector: () => null, querySelectorAll: () => [], getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }) },
 });
 // A press at (x, y), then the pointer's travel to (x + dx, y + dy): a slot
 // turns from where it is — right or up raises — and a press alone moves nothing.
-const target = { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }), closest: () => null };
+const target = { setPointerCapture: vi.fn(), querySelector: () => null, querySelectorAll: () => [], getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }), closest: () => null };
 const at = (clientX: number, clientY: number, extra: object = {}) => ({ clientX, clientY, pointerId: 1, shiftKey: false, button: 0, currentTarget: target, ...extra });
 function drag(slot: { props: Record<string, (e: unknown) => void> }, dx: number, dy: number, from = at(0, 0)) {
   act(() => slot.props.onPointerDown(from));

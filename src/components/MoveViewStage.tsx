@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import { ICON_CHEVRON_LEFT } from '../icons';
-import { MoveViews, type MoveViewWait } from '../move-views';
+import { MoveViews, moveViewWaitTitle, type MoveViewWait } from '../move-views';
 
 export interface MoveViewStageProps {
   /** The view on show — whatever the app renders for where it is now. */
@@ -15,17 +15,30 @@ const LIGHTS = Array.from({ length: 8 }, (_, i) => i);
 /**
  * A wait, standing where the view was: what is happening, a sweep of eight
  * lights running under it, and what it is happening to. The sweep steps like
- * LEDs rather than gliding — the same light the hardware can make.
+ * LEDs rather than gliding — the same light the hardware can make. Work that
+ * can tell how far it has come fills the lights instead, left to right, the
+ * one it is on lit as far as it has got.
  */
 function MoveViewWaitScreen({ wait }: { wait: MoveViewWait }) {
+  const { progress } = wait;
   return (
     // wears the instrument tokens itself: it stands outside whatever view
     // carried them
     <div className="tweakers-move-surface tweakers-move-view-wait" role="status" aria-live="polite">
-      <span className="tweakers-move-view-wait-title">{wait.title}</span>
-      <span className="tweakers-move-view-wait-lights" aria-hidden="true">
+      <span className="tweakers-move-view-wait-title">{moveViewWaitTitle(wait)}</span>
+      <span
+        className="tweakers-move-view-wait-lights"
+        data-progress={progress === undefined ? undefined : true}
+        {...(progress === undefined
+          ? { 'aria-hidden': true }
+          : { role: 'progressbar', 'aria-label': wait.title, 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': Math.floor(progress * 100) })}
+      >
         {LIGHTS.map((i) => (
-          <span key={i} className="tweakers-move-view-wait-light" style={{ '--i': i } as CSSProperties} />
+          <span
+            key={i}
+            className="tweakers-move-view-wait-light"
+            style={{ '--i': i, ...(progress === undefined ? {} : { '--lit': Math.min(1, Math.max(0, progress * LIGHTS.length - i)) }) } as CSSProperties}
+          />
         ))}
       </span>
       {wait.detail && <span className="tweakers-move-view-wait-detail">{wait.detail}</span>}

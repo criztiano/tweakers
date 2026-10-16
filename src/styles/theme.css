@@ -1183,6 +1183,13 @@
   animation-delay: calc((var(--i) - 8) * var(--move-view-sweep-step));
 }
 
+/* Work that can tell how far it has come: the lights fill instead, each from
+   dim to lit as the work crosses its eighth. */
+.tweakers-move-view-wait-lights[data-progress] .tweakers-move-view-wait-light {
+  animation: none;
+  opacity: calc(0.12 + 0.88 * var(--lit, 0));
+}
+
 @keyframes tweakers-move-view-sweep {
   0% { opacity: 1; }
   12.5% { opacity: 0.5; }
@@ -3599,6 +3606,18 @@
   box-shadow: var(--move-list-shadow);
 }
 
+/* The cursor over a slot is a hand on its knob: a long list opens to the
+   whole run, so every row can be seen and pointed at. Only for a pointer
+   that hovers — a tap on glass must not leave the list standing open. */
+@media (hover: hover) {
+  .tweakers-move-dial:not([data-disabled]):hover .tweakers-move-dial-screen[data-grow] {
+    top: auto;
+    height: min(var(--move-screen-full), 50vh);
+    z-index: 6;
+    box-shadow: var(--move-list-shadow);
+  }
+}
+
 /* The list screen covers its whole slot, so the head is the slot surface
    that shows: quiet at rest, lit while the dial is in the hand. */
 .tweakers-move-dial-head {
@@ -3661,6 +3680,26 @@
   font-family: var(--move-font-label);
   font-size: 12px;
   text-align: center;
+}
+
+/* Inside a folder the dial's list wears the way up as its first row: the
+   back pill, pinned under the head at a row's height and inset, the rows
+   following it from the top. The slot reads the press, so the pill takes
+   no pointer of its own. */
+.tweakers-move-dial-screen > .tweakers-list-screen-back {
+  top: calc(var(--move-head-h) + var(--move-list-pad));
+  left: 4px;
+  max-width: calc(100% - 8px);
+  height: var(--move-list-row);
+  padding: 0 8px 0 3px;
+  font-size: 13px;
+  line-height: var(--move-list-row);
+  pointer-events: none;
+}
+
+.tweakers-list-screen.tweakers-move-dial-list[data-back] {
+  justify-content: flex-start;
+  padding-top: calc(var(--move-list-pad) + var(--move-list-row) + var(--move-list-gap));
 }
 
 .tweakers-list-screen.tweakers-move-dial-list {
@@ -6381,6 +6420,14 @@
   padding: 0;
 }
 
+/* The cursor on the way out: a list walked by a knob reaches the pill too,
+   and the pill lights the way the selected row's name does — the ink
+   becomes its ground. */
+.tweakers-list-screen-back[data-selected] {
+  background: #dee3c9;
+  color: #1e1e1e;
+}
+
 /* The list's heading, level with the back pill and centred on the screen.
    Brighter than an unselected row, dimmer than the selected one: it names
    the list without competing with the choice. */
@@ -6483,6 +6530,21 @@
 
 .tweakers-list-screen-row[data-selected] {
   background: rgba(222, 227, 201, 0.1);
+}
+
+/* The row under the pointer rises halfway to the chosen one: it says what a
+   click takes, without reading as chosen. A dial's list hears the pointer
+   through its slot, which marks the row with data-hover. */
+@media (hover: hover) {
+  .tweakers-list-screen-row:not(:disabled):not([data-selected]):hover,
+  .tweakers-list-screen-row[data-hover]:not([data-selected]) {
+    background: rgba(222, 227, 201, 0.05);
+  }
+
+  .tweakers-list-screen-row:not(:disabled):not([data-selected]):not([data-checked="true"]):hover .tweakers-list-screen-label,
+  .tweakers-list-screen-row[data-hover]:not([data-selected]):not([data-checked="true"]) .tweakers-list-screen-label {
+    opacity: 0.6;
+  }
 }
 
 .tweakers-list-screen-row[data-selected] .tweakers-list-screen-label {

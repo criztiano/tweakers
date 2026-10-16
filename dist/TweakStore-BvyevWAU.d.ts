@@ -424,6 +424,37 @@ declare function moveBandCuts(low: number, high: number): {
 };
 
 /**
+ * A select whose options come in folders, on its own so node can test it
+ * without React. A folder is a row with no value of its own: it names a run
+ * of options, which may hold folders too. The control's value is always a
+ * leaf — an option with a value — and leaf values are unique across the
+ * whole tree, so a value alone says where in the tree it sits.
+ *
+ * The Move's slot shows one level at a time. Where the list is open — the
+ * folder and the row the cursor is on — is the kit's own state, never the
+ * value: turning walks the open level's rows, landing on a leaf selects it,
+ * landing on a folder only moves the cursor, and a tap opens the folder
+ * under the cursor (or, on the back row, goes up). Every rule lives here, so
+ * the panel, a standalone slot and the hardware bridge agree.
+ */
+/** An option with a value: a plain string (its own value and label), or a
+ *  value with a display label, an icon or a picture. */
+type SelectLeaf = string | {
+    value: string;
+    label: string;
+    icon?: string;
+    picture?: string;
+};
+/** A run of options under one name. It has no value of its own; it opens. */
+type SelectFolder = {
+    label: string;
+    options: SelectOption[];
+    icon?: string;
+};
+/** One row a select offers: an option, or a folder of them. */
+type SelectOption = SelectLeaf | SelectFolder;
+
+/**
  * One axis of an XY pad control. Partial — every field falls back through
  * `resolveAxis` (min 0, max 1, step 0.01). `origin`/`bipolar` mirror the
  * Slider's names/semantics, resolved independently per axis.
@@ -554,13 +585,17 @@ type SelectConfig = {
      * instead carry a `picture` (an image URL) that fills the whole slot, drawn
      * as a mask in the slot's own colour — for choices that are a texture or a
      * pattern, where the picture is the thing chosen.
+     *
+     * An option may instead be a folder — `{ label, options, icon? }`, with no
+     * value of its own — holding options and folders of its own. The value is
+     * always an option's (leaf values are unique across the whole tree), and
+     * `default` names one. On the Move the slot shows one level at a time: the
+     * knob walks the open level, landing on an option selects it, landing on a
+     * folder only moves the cursor, and a tap opens the folder under it — or,
+     * on the back pill naming the level above, goes up. Everywhere else (the
+     * sidebar, a tabs strip) the options read flat, in order.
      */
-    options: (string | {
-        value: string;
-        label: string;
-        icon?: string;
-        picture?: string;
-    })[];
+    options: SelectOption[];
     default?: string;
     /**
      * 'segmented' renders the options as an inline segmented control instead of a dropdown. Suits 2–4 short options.
@@ -1048,12 +1083,15 @@ type ControlMeta = {
     tab?: boolean;
     /** The synthetic segmented select driving `_tab` — it renders as the panel's tab bar, never as a row. */
     tabBar?: boolean;
+    /** A select's choices, flat: a select with folders lists its leaves here, in reading order. */
     options?: (string | {
         value: string;
         label: string;
         icon?: string;
         picture?: string;
     })[];
+    /** A select's options as declared, folders and all — set only when it has folders. */
+    optionTree?: SelectOption[];
     /** Toggle's own picture and state badges, from the explicit ToggleConfig form; an action's pad glyph. */
     icon?: string;
     onIcon?: string;

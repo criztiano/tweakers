@@ -24,7 +24,7 @@ function mount(config: TweakConfig, path: string | string[], props: Record<strin
 /** A pointer at `clientX` on a slot 120 wide at the page's origin. */
 const pointer = (clientX: number, clientY = 70, shiftKey = false) => ({
   clientX, clientY, pointerId: 1, shiftKey, button: 0,
-  currentTarget: { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }) },
+  currentTarget: { setPointerCapture: vi.fn(), querySelector: () => null, querySelectorAll: () => [], getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }) },
 });
 const key = (k: string) => ({ key: k, shiftKey: false, altKey: false, ctrlKey: false, metaKey: false, preventDefault: vi.fn(), stopPropagation: vi.fn() });
 const root = () => renderer!.root.findByProps({ className: 'tweakers-move-dial' });

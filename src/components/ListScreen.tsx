@@ -75,6 +75,10 @@ export interface ListScreenProps {
   back?: string | true;
   /** Called when the back pill is clicked. Without it the pill is only a sign. */
   onBack?: () => void;
+  /** The cursor is on the back pill, not on a row: the pill lights the way a
+   * selected row does, so a list walked by a knob can reach the way out.
+   * Give no `value` then — the cursor is in one place. */
+  backSelected?: boolean;
   className?: string;
   style?: CSSProperties;
 }
@@ -165,6 +169,7 @@ export function ListScreen({
   follow = 'nearest',
   back,
   onBack,
+  backSelected,
   className,
   style,
 }: ListScreenProps): ReactElement {
@@ -247,6 +252,7 @@ export function ListScreen({
           className="tweakers-list-screen-back"
           aria-label={back === true ? 'Back' : `Back to ${back}`}
           data-bare={back === true || undefined}
+          data-selected={backSelected || undefined}
           disabled={!onBack}
           onClick={onBack}
         >

@@ -19,7 +19,13 @@ else registerLibraryPanel();
  * The hardware, when it is there. The bridge kit is served by the `move`
  * repo's app server; with nothing on the port the import fails and the page
  * stays a screen-only library.
+ *
+ * `?bridge=http://localhost:7799` points the library at another bridge — a
+ * private local-engine one on a spare port, which is how this page is
+ * checked in a browser nobody is sitting at: the live bridge is the hand's.
  */
+const BRIDGE = (new URLSearchParams(location.search).get('bridge') || 'http://localhost:7787').replace(/\/+$/, '');
+
 function MoveBridge() {
   useEffect(() => {
     let cancelled = false;
@@ -27,14 +33,14 @@ function MoveBridge() {
     // @ts-ignore — remote module, no types. The query is a cache-buster: the
     // kit is a file on the bridge's disk, edited while this page is open, and
     // a browser will happily keep the module record it already has.
-    import(/* @vite-ignore */ `http://localhost:7787/kit.js?v=${Date.now()}`)
+    import(/* @vite-ignore */ `${BRIDGE}/kit.js?v=${Date.now()}`)
       .then((m) => {
         if (cancelled) return;
         // Every registry the kit reads, in one piece — the kit warns when the
         // page needs one a bind lacks, so none is ever listed by hand. The
         // hardware mirrors the instrument on screen and nothing else: the
         // dictionary's instruments page stays on the screen.
-        unbind = m.bindMove(TweakStore, moveKitOptions({ panels: [PANEL_NAME] }));
+        unbind = m.bindMove(TweakStore, moveKitOptions({ url: BRIDGE, panels: [PANEL_NAME] }));
       })
       .catch((error) => { if (!cancelled) console.warn('Move bridge could not connect', error); });
     return () => { cancelled = true; unbind?.(); };

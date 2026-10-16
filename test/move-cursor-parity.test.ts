@@ -35,7 +35,7 @@ function mount(config: TweakConfig, options?: Parameters<typeof TweakStore.regis
   act(() => { renderer = create(createElement(MovePanel, { panels: 'Parity', dock: 'flow', productionEnabled: true })); });
 }
 const values = () => TweakStore.getValues(id);
-const target = { setPointerCapture: vi.fn(), getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }) };
+const target = { setPointerCapture: vi.fn(), querySelector: () => null, querySelectorAll: () => [], getBoundingClientRect: () => ({ left: 0, top: 0, width: 120, height: 140 }) };
 const at = (clientX: number, clientY: number, shiftKey = false) => ({ clientX, clientY, shiftKey, button: 0, pointerId: 1, currentTarget: target });
 type Slot = { props: Record<string, (e?: unknown) => void> };
 const press = (slot: Slot, shiftKey = false) => {

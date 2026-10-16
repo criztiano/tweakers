@@ -4,7 +4,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { moveBandCuts, moveGrainPicture, moveLanes, moveNumericDrawing, movePlaybackMode, MOVE_GRAIN, type MoveGrainSpan, moveVectorStage, MOVE_BAND_H, MOVE_BAND_W, MOVE_STAGE, type MovePlaybackMode, type MoveTone } from '../move-visual-core';
 import { MoveGauge, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing } from './move-visuals';
 export { MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotDiaphragmBody, MoveSlotStreakBody, MoveSlotClockBody, MoveSlotPlaybackDrawing, MOVE_GAUGE, moveGaugeBearing } from './move-visuals';
-import type { ControlMeta } from '../store/TweakStore';
+import type { ControlMeta, SelectLevel } from '../store/TweakStore';
 import { ICON_BADGE_OFF, ICON_BADGE_ON, LUCIDE_ICONS } from '../icons';
 import { enumAspect, enumOptionIcon, enumOptionLabel, enumOptionValue } from '../move-layout';
 import { arcPath } from '../angle-core';
@@ -45,6 +45,11 @@ import { ListScreen } from './ListScreen';
  *   select's `preview` sampler) — the curve-selection slot.
  * - `enum`    — a plain stepped option picker: every option on the Move's
  *   own list screen, which is the whole slot; a touch grows it to the run.
+ * - `folders` — the enum's list screen for a select whose options come in
+ *   folders: one level at a time, folder rows wearing the page chevron, the
+ *   level above a back pill. The knob walks the level (an option it lands on
+ *   is selected; a folder only takes the cursor), a tap opens the folder
+ *   under it or, on the pill, goes up.
  * - `multiselect` — the same list screen with a tick on every chosen row:
  *   the knob walks a cursor, a tap ticks the row under it, and a count of
  *   the ticked rows rides in the head as a badge cut like the list screen's
@@ -121,6 +126,7 @@ export type MoveSlotKind =
   | 'icon'
   | 'curve'
   | 'enum'
+  | 'folders'
   | 'aspect'
   | 'multiselect'
   | 'xy'
@@ -179,6 +185,8 @@ export function moveSlotKind(
   if (moveLanes(meta, opts.value)) return 'lanes';
   if (movePlaybackMode(meta, opts.value)) return 'playback';
   if (opts.enum) {
+    // Folders are a list's to walk: a select that has them is always one.
+    if (meta.type === 'select' && meta.optionTree) return 'folders';
     // The app's own ask for the face wins over a glyph or a picture.
     if (enumAspect(meta, opts.value)) return 'aspect';
     if (meta.type === 'select' && meta.display === 'value') return 'value';
@@ -322,9 +330,17 @@ export const MOVE_LIST_ROWS = 5;
  *
  *  A slot the page has put its oscilloscope in already has a picture — the
  *  live wave — so it keeps the named option and drops the list, which the
- *  wave would be running behind. */
+ *  wave would be running behind.
+ *
+ *  A select whose options come in folders shows one `level` at a time: the
+ *  head names the level (the control at the top, the folder inside one), a
+ *  folder row wears the list screen's page chevron, and inside a folder the
+ *  level above is the list screen's back pill, pinned over the first row.
+ *  The cursor rides the highlight — on a row, or on the pill — and a folder
+ *  holding the value reads bright, so the way to the choice shows from the
+ *  top. */
 export function MoveSlotEnumBody({
-  label, optionLabel, options, activeIdx, shape, glyph, picture = null, playback, scoped,
+  label, optionLabel, options, activeIdx, shape, glyph, picture = null, playback, scoped, level,
 }: {
   label: string;
   optionLabel: string;
@@ -337,8 +353,40 @@ export function MoveSlotEnumBody({
   playback?: MovePlaybackMode | null;
   /** The slot draws the modulator's live signal behind this face. */
   scoped?: boolean;
+  /** The open level of a select with folders; it takes the list's place. */
+  level?: SelectLevel | null;
 }) {
   const selected = options[activeIdx];
+
+  if (level) {
+    const count = level.rows.length + (level.back !== null ? 1 : 0);
+    // A folder has no value, so its row is keyed by where it stands.
+    const key = (i: number) => (level.rows[i]?.folder ? `\u0000folder:${i}` : level.rows[i]?.value);
+    return (
+      <div
+        className="tweakers-move-dial-screen"
+        data-grow={count > MOVE_LIST_ROWS || undefined}
+        style={{ '--move-list-count': Math.max(1, count) } as CSSProperties}
+      >
+        <span className="tweakers-move-dial-head">{level.title}</span>
+        <ListScreen
+          className="tweakers-move-dial-list"
+          label={label}
+          follow="center"
+          back={level.back ?? undefined}
+          backSelected={level.back !== null && level.cursor < 0}
+          items={level.rows.map((row, i) => ({
+            value: key(i)!,
+            label: row.label,
+            ...(row.folder ? { detail: 'page' as const } : {}),
+            ...(row.holds ? { checked: true } : {}),
+            ...(row.icon ? { icon: row.icon } : {}),
+          }))}
+          value={level.cursor >= 0 ? key(level.cursor) : undefined}
+        />
+      </div>
+    );
+  }
 
   // A picture names one option at a time, so it keeps the pagination cells
   // to say where that one sits. A list has the whole run on it already.
@@ -1788,6 +1836,7 @@ export const MOVE_SLOT_LIBRARY = {
   picture: { description: 'option picker whose current option fills the slot as a picture, its name over it', component: MoveSlotEnumBody },
   curve: { description: 'option picker drawing the current option’s shape — curve selection', component: MoveSlotEnumBody },
   enum: { description: 'stepped option picker showing every option on a list screen', component: MoveSlotEnumBody },
+  folders: { description: 'option picker whose options come in folders: one level on the list screen, a tap opens a folder, the back pill goes up', component: MoveSlotEnumBody },
   aspect: { description: 'option picker of proportions: a frame in the chosen W:H, as large as fits, the ratio inside', component: MoveSlotAspectBody },
   multiselect: { description: 'a checked list: the knob walks the cursor, a tap ticks the row under it, a badge in the head counts the ticks', component: MoveSlotMultiselectBody },
   xy: { description: 'two axes in one gesture field, or a live shape preview', component: MoveSlotXYBody },
