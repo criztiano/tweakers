@@ -18595,36 +18595,7 @@ function MoveAgentPrompt({ view }) {
           step.label,
           step.state === "failed" && " \u2014 failed"
         ] }, i)) }),
-        /* @__PURE__ */ jsxs14("div", { className: "tweakers-move-agent-field", children: [
-          pictures && /* @__PURE__ */ jsxs14(Fragment8, { children: [
-            /* @__PURE__ */ jsx19(
-              "button",
-              {
-                type: "button",
-                className: "tweakers-move-agent-attach",
-                "aria-label": "Add a picture",
-                title: "Add a picture \u2014 or drop or paste one",
-                disabled: thinking,
-                onClick: () => fileRef.current?.click(),
-                children: /* @__PURE__ */ jsx19(MoveSlotGlyph, { name: "image-plus", className: "tweakers-move-agent-attach-icon" })
-              }
-            ),
-            /* @__PURE__ */ jsx19(
-              "input",
-              {
-                ref: fileRef,
-                type: "file",
-                accept: "image/*",
-                multiple: true,
-                hidden: true,
-                onChange: (e) => {
-                  if (e.currentTarget.files) MoveAgentStore.attach(e.currentTarget.files);
-                  e.currentTarget.value = "";
-                  inputRef.current?.focus();
-                }
-              }
-            )
-          ] }),
+        /* @__PURE__ */ jsxs14("div", { className: "tweakers-move-agent-field", "data-pictures": pictures || void 0, children: [
           /* @__PURE__ */ jsx19(
             "textarea",
             {
@@ -18671,7 +18642,36 @@ function MoveAgentPrompt({ view }) {
                 shiftAlone.current = false;
               }
             }
-          )
+          ),
+          pictures && /* @__PURE__ */ jsxs14(Fragment8, { children: [
+            /* @__PURE__ */ jsx19(
+              "button",
+              {
+                type: "button",
+                className: "tweakers-move-agent-attach",
+                "aria-label": "Add a picture",
+                title: "Add a picture \u2014 or drop or paste one",
+                disabled: thinking,
+                onClick: () => fileRef.current?.click(),
+                children: /* @__PURE__ */ jsx19(MoveSlotGlyph, { name: "image-plus", className: "tweakers-move-agent-attach-icon" })
+              }
+            ),
+            /* @__PURE__ */ jsx19(
+              "input",
+              {
+                ref: fileRef,
+                type: "file",
+                accept: "image/*",
+                multiple: true,
+                hidden: true,
+                onChange: (e) => {
+                  if (e.currentTarget.files) MoveAgentStore.attach(e.currentTarget.files);
+                  e.currentTarget.value = "";
+                  inputRef.current?.focus();
+                }
+              }
+            )
+          ] })
         ] }),
         view.attachments.length > 0 && /* @__PURE__ */ jsx19("ul", { className: "tweakers-move-agent-attachments", "aria-label": "Pictures in the prompt", children: view.attachments.map((a) => /* @__PURE__ */ jsxs14("li", { className: "tweakers-move-agent-attachment", title: a.name, children: [
           /* @__PURE__ */ jsx19("img", { src: a.url, alt: a.name }),

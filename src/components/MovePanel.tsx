@@ -4189,17 +4189,7 @@ function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
               ))}
             </ul>
           )}
-            <div className="tweakers-move-agent-field">
-              {pictures && (
-                <>
-                  <button type="button" className="tweakers-move-agent-attach" aria-label="Add a picture" title="Add a picture — or drop or paste one"
-                    disabled={thinking} onClick={() => fileRef.current?.click()}>
-                    <MoveSlotGlyph name="image-plus" className="tweakers-move-agent-attach-icon" />
-                  </button>
-                  <input ref={fileRef} type="file" accept="image/*" multiple hidden
-                    onChange={(e) => { if (e.currentTarget.files) MoveAgentStore.attach(e.currentTarget.files); e.currentTarget.value = ''; inputRef.current?.focus(); }} />
-                </>
-              )}
+            <div className="tweakers-move-agent-field" data-pictures={pictures || undefined}>
               <textarea
                 ref={inputRef}
                 className="tweakers-move-preset-save-input tweakers-move-agent-input"
@@ -4234,6 +4224,17 @@ function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
                 }}
                 onBlur={() => { shiftAlone.current = false; }}
               />
+              {/* A picture, from the field's top-right corner: a glyph, no plate. */}
+              {pictures && (
+                <>
+                  <button type="button" className="tweakers-move-agent-attach" aria-label="Add a picture" title="Add a picture — or drop or paste one"
+                    disabled={thinking} onClick={() => fileRef.current?.click()}>
+                    <MoveSlotGlyph name="image-plus" className="tweakers-move-agent-attach-icon" />
+                  </button>
+                  <input ref={fileRef} type="file" accept="image/*" multiple hidden
+                    onChange={(e) => { if (e.currentTarget.files) MoveAgentStore.attach(e.currentTarget.files); e.currentTarget.value = ''; inputRef.current?.focus(); }} />
+                </>
+              )}
             </div>
           {/* The pictures, along the field's foot: one strip, shared evenly, each cropped to fill. */}
           {view.attachments.length > 0 && (

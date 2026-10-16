@@ -4205,11 +4205,15 @@
   flex-direction: column;
 }
 
-/* The field's row: the + for a picture, then the words. */
+/* The field, full width, with the picture button tucked in its top-right
+   corner; the words keep clear of it. */
 .tweakers-move-agent-field {
+  position: relative;
   display: flex;
-  align-items: flex-end;
-  gap: 6px;
+}
+
+.tweakers-move-agent-field[data-pictures] .tweakers-move-agent-input {
+  padding-right: 32px;
 }
 
 /* The words grow downward with what is typed — a line at a time, up to a
@@ -4234,19 +4238,28 @@
 }
 
 .tweakers-move-agent-attach {
+  position: absolute;
+  top: 5px;
+  right: 5px;
   display: grid;
   place-items: center;
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+  width: 22px;
+  height: 22px;
   padding: 0;
   border: none;
   border-radius: var(--move-radius-small);
-  background: #1e1e1e;
+  background: none;
   color: var(--move-text);
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: pointer;
-  transition: opacity 0.12s;
+  transition: opacity var(--move-duration-press) var(--move-ease-out);
+}
+
+/* A hand-sized target round the small glyph. */
+.tweakers-move-agent-attach::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
 }
 
 .tweakers-move-agent-attach:hover:not(:disabled),
@@ -4255,14 +4268,18 @@
   outline: none;
 }
 
+.tweakers-move-agent-attach:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--move-text) 40%, transparent);
+}
+
 .tweakers-move-agent-attach:disabled {
   cursor: default;
-  opacity: 0.3;
+  opacity: 0.2;
 }
 
 .tweakers-move-agent-attach-icon {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
 }
 
 /* A picture being dragged over the prompt: the frame says it will take it. */
