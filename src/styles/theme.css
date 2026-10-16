@@ -4166,15 +4166,6 @@
   flex-direction: column;
 }
 
-/* The waiting dots and the field share one place and cross in it. */
-.tweakers-move-agent-slot {
-  display: grid;
-}
-
-.tweakers-move-agent-slot > * {
-  grid-area: 1 / 1;
-}
-
 /* The field's row: the + for a picture, then the words. */
 .tweakers-move-agent-field {
   display: flex;
@@ -4309,10 +4300,10 @@
   gap: 6px;
   margin: 0 0 10px;
   padding: 0 2px;
-  color: color-mix(in srgb, var(--move-text) 88%, transparent);
+  color: color-mix(in srgb, var(--move-text) 92%, transparent);
   font-family: var(--move-font-label);
-  font-size: 14px;
-  line-height: 20px;
+  font-size: 17px;
+  line-height: 24px;
 }
 
 .tweakers-move-agent-said {
@@ -4336,39 +4327,22 @@
   .tweakers-move-agent-word { animation: none; }
 }
 
-/* While it works: the dots, and the words just sent waiting beside them,
-   quieter — until the reply arrives and takes their place. */
-.tweakers-move-agent-wait {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  min-height: 32px;
-  padding: 6px 10px;
-  border-radius: var(--move-radius-small);
-  background: #1e1e1e;
-  box-sizing: border-box;
-  transition: background-color 240ms var(--move-ease-out);
-}
-
-/* The reply has started: the dots stay on alone, under the words, until it is whole. */
-.tweakers-move-agent-wait[data-quiet] {
-  background-color: transparent;
-}
-
-.tweakers-move-agent-sent {
-  flex: 1;
-  min-width: 0;
-  margin: 0;
+/* The words just sent, held in the field while the agent works: quieter,
+   and not to be typed in until the reply is whole. */
+.tweakers-move-agent-input[data-sent] {
   color: color-mix(in srgb, var(--move-text) 45%, transparent);
-  font-family: var(--move-font-label);
-  font-size: 16px;
-  line-height: 20px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  overflow: hidden;
+}
+
+.tweakers-move-agent-input:read-only {
+  cursor: default;
+}
+
+/* The working dots, on their own line under the field. */
+.tweakers-move-agent-working {
+  display: flex;
+  align-items: center;
+  height: 14px;
+  padding: 10px 2px 0;
 }
 
 /* The working mark: a five-by-five dot screen with a wave of light sweeping
