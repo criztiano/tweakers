@@ -19119,7 +19119,7 @@ function MoveAgentPrompt({ view }) {
               rows: 1,
               readOnly: thinking,
               "data-sent": echoing || void 0,
-              placeholder: thinking ? "" : said ? "Reply" : "Ask for a change",
+              placeholder: thinking ? "" : said ? "\u2026" : "Ask for a change",
               "aria-label": said ? "Reply to the agent" : "Ask the agent for a change",
               autoFocus: true,
               spellCheck: false,

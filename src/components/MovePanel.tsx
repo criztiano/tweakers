@@ -4197,7 +4197,7 @@ function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
                 rows={1}
                 readOnly={thinking}
                 data-sent={echoing || undefined}
-                placeholder={thinking ? '' : said ? 'Reply' : 'Ask for a change'}
+                placeholder={thinking ? '' : said ? '…' : 'Ask for a change'}
                 aria-label={said ? 'Reply to the agent' : 'Ask the agent for a change'}
                 autoFocus
                 spellCheck={false}
