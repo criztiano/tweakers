@@ -4056,10 +4056,11 @@ function MovePresetSaveInput({ suggested }: { suggested: string }) {
 /**
  * The agent's prompt, floating at the panel's right edge so the work in the
  * middle of the screen stays in view. It reads as a conversation, one turn at
- * a time: Enter sends the words and they wait in the box, under the dots,
- * while the agent works; when it answers they leave, its reply takes their
- * place, and an empty box opens under the reply for the next turn. A reply
- * that streams is read as it comes. What the agent reads or looks at on the
+ * a time: Enter sends the words and they wait in the field, quieter, while
+ * the dots stand above it where the reply will be; the reply's first words
+ * take the dots' place and the field empties for the next turn. A reply that
+ * streams is read as it comes, the dots riding at its end until it is whole.
+ * Pictures sit in a strip along the field's foot, like a note's. What the agent reads or looks at on the
  * way shows as it happens, so a longer wait is never a silent one. A reply
  * that simply did what was asked is one word, Done, with its undo. The field
  * grows with what is typed; Shift+Enter starts a new line, Escape closes.
@@ -4140,7 +4141,7 @@ function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
       <div ref={frame.outer} className="tweakers-move-agent-frame">
         <div ref={frame.inner} className="tweakers-move-agent-body">
           <AnimatePresence initial={false} onExitComplete={() => setLeaving(false)}>
-            {replying && (
+            {(replying || working) && (
               <motion.div
                 key="reply"
                 className="tweakers-move-agent-reply"
@@ -4158,7 +4159,14 @@ function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
                     </svg>
                     Done
                   </span>
-                ) : <MoveAgentWords text={said} />}
+                ) : said ? (
+                  <MoveAgentWords text={said} working={thinking} />
+                ) : (
+                  // Where the reply will be: the dots, until its first words take their place.
+                  <span className="tweakers-move-agent-thinking" role="img" aria-label="The agent is working">
+                    <MoveAgentLoader />
+                  </span>
+                )}
                 {changed && !keyUndo && MoveAgentStore.canUndo() && (
                   <motion.button
                     type="button"
@@ -4181,31 +4189,7 @@ function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
               ))}
             </ul>
           )}
-          {view.attachments.length > 0 && (
-            <ul className="tweakers-move-agent-attachments" aria-label="Pictures in the prompt">
-              {view.attachments.map((a) => (
-                <li key={a.id} className="tweakers-move-agent-attachment" title={a.name}>
-                  <img src={a.url} alt={a.name} />
-                  <button type="button" aria-label={`Remove ${a.name}`} disabled={thinking} onClick={() => { MoveAgentStore.detach(a.id); inputRef.current?.focus(); }}>
-                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d={ICON_CLOSE} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                    </svg>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-            <div className="tweakers-move-agent-field">
-              {pictures && (
-                <>
-                  <button type="button" className="tweakers-move-agent-attach" aria-label="Add a picture" title="Add a picture — or drop or paste one"
-                    disabled={thinking} onClick={() => fileRef.current?.click()}>
-                    <MoveSlotGlyph name="image-plus" className="tweakers-move-agent-attach-icon" />
-                  </button>
-                  <input ref={fileRef} type="file" accept="image/*" multiple hidden
-                    onChange={(e) => { if (e.currentTarget.files) MoveAgentStore.attach(e.currentTarget.files); e.currentTarget.value = ''; inputRef.current?.focus(); }} />
-                </>
-              )}
+            <div className="tweakers-move-agent-field" data-pictures={pictures || undefined}>
               <textarea
                 ref={inputRef}
                 className="tweakers-move-preset-save-input tweakers-move-agent-input"
@@ -4213,7 +4197,7 @@ function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
                 rows={1}
                 readOnly={thinking}
                 data-sent={echoing || undefined}
-                placeholder={thinking ? '' : said ? 'Reply' : 'Ask for a change'}
+                placeholder={thinking ? '' : said ? '…' : 'Ask for a change'}
                 aria-label={said ? 'Reply to the agent' : 'Ask the agent for a change'}
                 autoFocus
                 spellCheck={false}
@@ -4240,24 +4224,33 @@ function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
                 }}
                 onBlur={() => { shiftAlone.current = false; }}
               />
+              {/* A picture, from the field's top-right corner: a glyph, no plate. */}
+              {pictures && (
+                <>
+                  <button type="button" className="tweakers-move-agent-attach" aria-label="Add a picture" title="Add a picture — or drop or paste one"
+                    disabled={thinking} onClick={() => fileRef.current?.click()}>
+                    <MoveSlotGlyph name="image-plus" className="tweakers-move-agent-attach-icon" />
+                  </button>
+                  <input ref={fileRef} type="file" accept="image/*" multiple hidden
+                    onChange={(e) => { if (e.currentTarget.files) MoveAgentStore.attach(e.currentTarget.files); e.currentTarget.value = ''; inputRef.current?.focus(); }} />
+                </>
+              )}
             </div>
-          {/* Under the field while the agent works: the dots, on a line of their own. */}
-          <AnimatePresence initial={false}>
-            {working && (
-              <motion.div
-                key="working"
-                className="tweakers-move-agent-working"
-                role="status"
-                aria-label="The agent is working"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0, transition: { duration: 0.16, ease: AGENT_EASE_IN } }}
-                transition={{ duration: 0.24, ease: AGENT_EASE_OUT }}
-              >
-                <MoveAgentLoader />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {/* The pictures, along the field's foot: one strip, shared evenly, each cropped to fill. */}
+          {view.attachments.length > 0 && (
+            <ul className="tweakers-move-agent-attachments" aria-label="Pictures in the prompt">
+              {view.attachments.map((a) => (
+                <li key={a.id} className="tweakers-move-agent-attachment" title={a.name}>
+                  <img src={a.url} alt={a.name} />
+                  <button type="button" aria-label={`Remove ${a.name}`} disabled={thinking} onClick={() => { MoveAgentStore.detach(a.id); inputRef.current?.focus(); }}>
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d={ICON_CLOSE} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                    </svg>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
     </motion.div>
@@ -4334,7 +4327,7 @@ function useAgentFrame(shape: string, live: boolean, holding: boolean, still: bo
  * writes itself out, one that comes whole runs in quickly from its first
  * word — and a word already shown never moves again.
  */
-function MoveAgentWords({ text }: { text: string }) {
+function MoveAgentWords({ text, working }: { text: string; working?: boolean }) {
   const shown = useRef(0);
   const parts = text.split(/(\s+)/);
   const from = shown.current;
@@ -4344,6 +4337,8 @@ function MoveAgentWords({ text }: { text: string }) {
       {parts.map((part, i) => (/^\s*$/.test(part) ? part : (
         <span key={i} className="tweakers-move-agent-word" style={{ '--word': Math.min(24, Math.max(0, i - from) / 2) } as React.CSSProperties}>{part}</span>
       )))}
+      {/* Still at work after its words (the options still landing): the dots ride at their end. */}
+      {working && <span className="tweakers-move-agent-trail"><MoveAgentLoader /></span>}
     </p>
   );
 }
