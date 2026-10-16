@@ -4082,7 +4082,15 @@ function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
   // What the turn is made of. When it changes the box eases to its new
   // height; when only the words in the field do, it follows them at once.
   const shape = `${view.phase}|${replying}|${echoing}|${working}|${steps.length}|${view.attachments.length}`;
-  const frame = useAgentFrame(shape, thinking, thinking && replying, still);
+  // While a reply is written out the box only grows. Once the host puts other
+  // words in its place — a progress line after a long message — it may shrink
+  // to them again, for the rest of the turn.
+  const lastSaid = useRef(said);
+  const replaced = useRef(false);
+  if (!thinking) replaced.current = false;
+  else if (lastSaid.current && !said.startsWith(lastSaid.current)) replaced.current = true;
+  lastSaid.current = said;
+  const frame = useAgentFrame(shape, thinking, thinking && replying && !replaced.current, still);
   const send = () => {
     const text = draft.trim();
     if (!text || thinking) return;

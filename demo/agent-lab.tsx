@@ -85,6 +85,20 @@ const SCENARIOS: Record<string, { label: string; ask: string; run: Scenario }> =
       return { writes: [{ id: 'tone::drive', value: 0.1 }, { id: 'tone::air', value: 0.8 }] };
     },
   },
+  job: {
+    label: 'A job: a long plan, then progress', ask: 'run all eight styles on my pictures',
+    run: async (out, signal) => {
+      await wait(900, signal);
+      await stream('Eight runs, one per style: flat line icons, watercolour, pencil, paper cut-out, ink wash, clay, pixel art and a woodcut, each on the three pictures, two models apiece. They wait for you to press Play.', out, signal);
+      await wait(1800, signal);
+      for (let i = 1; i <= 3; i++) {
+        out.say(`Running ${i} of 8: Style S${i}…`);
+        await wait(1600, signal);
+      }
+      await stream('Done: kept eleven of the sixteen, the watercolours best.', out, signal);
+      return { writes: [] };
+    },
+  },
   error: {
     label: 'Delivery failure', ask: 'brighter',
     run: async (_out, signal) => {

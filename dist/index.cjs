@@ -19007,7 +19007,12 @@ function MoveAgentPrompt({ view }) {
   const working = thinking && !leaving && !(wasReplying.current && !replying);
   const keyUndo = (0, import_react18.useSyncExternalStore)((fn) => MoveFunctions.subscribe(fn), () => MoveFunctions.list().includes("undo"), () => false);
   const shape = `${view.phase}|${replying}|${echoing}|${working}|${steps.length}|${view.attachments.length}`;
-  const frame = useAgentFrame(shape, thinking, thinking && replying, still);
+  const lastSaid = (0, import_react18.useRef)(said);
+  const replaced = (0, import_react18.useRef)(false);
+  if (!thinking) replaced.current = false;
+  else if (lastSaid.current && !said.startsWith(lastSaid.current)) replaced.current = true;
+  lastSaid.current = said;
+  const frame = useAgentFrame(shape, thinking, thinking && replying && !replaced.current, still);
   const send = () => {
     const text = draft.trim();
     if (!text || thinking) return;

@@ -18493,7 +18493,12 @@ function MoveAgentPrompt({ view }) {
   const working = thinking && !leaving && !(wasReplying.current && !replying);
   const keyUndo = useSyncExternalStore6((fn) => MoveFunctions.subscribe(fn), () => MoveFunctions.list().includes("undo"), () => false);
   const shape = `${view.phase}|${replying}|${echoing}|${working}|${steps.length}|${view.attachments.length}`;
-  const frame = useAgentFrame(shape, thinking, thinking && replying, still);
+  const lastSaid = useRef16(said);
+  const replaced = useRef16(false);
+  if (!thinking) replaced.current = false;
+  else if (lastSaid.current && !said.startsWith(lastSaid.current)) replaced.current = true;
+  lastSaid.current = said;
+  const frame = useAgentFrame(shape, thinking, thinking && replying && !replaced.current, still);
   const send = () => {
     const text = draft.trim();
     if (!text || thinking) return;
