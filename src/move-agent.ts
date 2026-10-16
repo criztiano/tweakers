@@ -167,6 +167,12 @@ export interface MoveAgentOptions {
   tools?: MoveAgentLive<MoveAgentTool[] | undefined>;
   /** How many turns one ask may take, the answer included. Default 3. */
   maxPasses?: number;
+  /**
+   * How long one ask may take, every pass in it, before it is stopped with
+   * nothing landed. Default 120 000 ms; 0 for no limit — for a host whose
+   * verbs wait on the person or run long work, and which stops them itself.
+   */
+  timeoutMs?: number;
   /** Called once before an answer with actions lands — the host's save point. */
   checkpoint?: () => void | Promise<void>;
   /**
@@ -422,7 +428,7 @@ export function restoreAgentWrites(before: Record<string, Record<string, TweakVa
 /** The kit's own tool, offered whenever the host gave signals. */
 const READ_SIGNAL = 'read_signal';
 const DEFAULT_URL = 'http://localhost:7787/agent';
-/** One ask, every pass and tool in it: past this it is stopped, with nothing landed. */
+/** One ask, every pass and tool in it: past this it is stopped, with nothing landed (`timeoutMs`). */
 const BUDGET_MS = 120_000;
 /** What the bridge takes in one pass; past it the request is refused whole, so the kit trims first. */
 const MAX_IMAGES = 8, MAX_IMAGE_BYTES = 600_000, IMAGE = /^data:image\/(jpeg|png);base64,/;
@@ -584,7 +590,8 @@ class MoveAgentStoreClass {
     const flight = (this.flight = new AbortController());
     this.set({ ...idle, phase: 'thinking' });
     let late = false;
-    const budget = setTimeout(() => { late = true; flight.abort(); }, BUDGET_MS);
+    const limit = this.options.timeoutMs ?? BUDGET_MS;
+    const budget = limit > 0 ? setTimeout(() => { late = true; flight.abort(); }, limit) : undefined;
     const { onRequest } = this.options;
     const outcome: MoveAgentOutcome = { changed: 0, acted: 0, skipped: 0, cancelled: false };
     // What a streaming transport runs ahead of the answer (`MoveAgentStream.act`).

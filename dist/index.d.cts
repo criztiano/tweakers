@@ -8965,6 +8965,12 @@ interface MoveAgentOptions {
     tools?: MoveAgentLive<MoveAgentTool[] | undefined>;
     /** How many turns one ask may take, the answer included. Default 3. */
     maxPasses?: number;
+    /**
+     * How long one ask may take, every pass in it, before it is stopped with
+     * nothing landed. Default 120 000 ms; 0 for no limit — for a host whose
+     * verbs wait on the person or run long work, and which stops them itself.
+     */
+    timeoutMs?: number;
     /** Called once before an answer with actions lands — the host's save point. */
     checkpoint?: () => void | Promise<void>;
     /**

@@ -239,7 +239,7 @@ agent: {
   the arguments and the result: "Looked at 12 frames"); `label` stays the
   name the model reads, and the step's text when neither is given. The kit's
   own read says how many entries it gave: "Read the shots — 14" — and asks
-  again — three passes and 120 seconds at most (`maxPasses`). Nothing lands
+  again — three passes and 120 seconds at most (`maxPasses`, `timeoutMs`). Nothing lands
   until the answer, so it is still one undo, and Esc mid-way leaves nothing.
 - Images are JPEG or PNG data URLs, 8 a pass, 600 KB each; the kit leaves out
   the rest and tells the agent. A bridge too old for passes gets none of

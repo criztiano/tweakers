@@ -15373,10 +15373,11 @@ var MoveAgentStoreClass = class {
     const flight = this.flight = new AbortController();
     this.set({ ...idle, phase: "thinking" });
     let late = false;
-    const budget = setTimeout(() => {
+    const limit = this.options.timeoutMs ?? BUDGET_MS;
+    const budget = limit > 0 ? setTimeout(() => {
       late = true;
       flight.abort();
-    }, BUDGET_MS);
+    }, limit) : void 0;
     const { onRequest } = this.options;
     const outcome = { changed: 0, acted: 0, skipped: 0, cancelled: false };
     let early = Promise.resolve();
