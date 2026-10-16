@@ -4270,24 +4270,35 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), inset 0 0 0 2px color-mix(in srgb, var(--move-text) 50%, transparent);
 }
 
-/* The pictures in the prompt, as thumbnails just above the words, in the
-   order they will be read. */
+/* The pictures in the prompt, along the field's foot like a note's: one
+   strip 48px tall, shared evenly between however many there are, each
+   cropped to fill its share, so nothing stretches. */
 .tweakers-move-agent-attachments {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0 0 8px;
+  gap: 4px;
+  height: 48px;
+  margin: 8px 0 0;
   padding: 0;
   list-style: none;
 }
 
 .tweakers-move-agent-attachment {
   position: relative;
-  width: 44px;
-  height: 44px;
-  border-radius: var(--move-radius-small);
+  flex: 1 1 0;
+  min-width: 0;
+  border-radius: 6px;
   overflow: hidden;
-  background: #1e1e1e;
+  background: color-mix(in srgb, var(--move-text) 6%, transparent);
+}
+
+/* A dark picture has no edge of its own against the box. */
+.tweakers-move-agent-attachment::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--move-text) 8%, transparent);
+  pointer-events: none;
 }
 
 .tweakers-move-agent-attachment img {
@@ -4299,20 +4310,21 @@
 
 .tweakers-move-agent-attachment button {
   position: absolute;
-  top: 2px;
-  right: 2px;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
   display: grid;
   place-items: center;
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   padding: 0;
   border: none;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.7);
+  background: color-mix(in srgb, var(--move-bg) 80%, transparent);
   color: var(--move-text);
   opacity: 0;
   cursor: pointer;
-  transition: opacity 0.12s;
+  transition: opacity var(--move-duration-press) var(--move-ease-out);
 }
 
 .tweakers-move-agent-attachment:hover button:not(:disabled),
@@ -4326,8 +4338,8 @@
 }
 
 .tweakers-move-agent-attachment svg {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
 }
 
 /* The reply, above the box: the agent's words at reading size, its undo
@@ -4376,12 +4388,25 @@
   cursor: default;
 }
 
-/* The working dots, on their own line under the field. */
-.tweakers-move-agent-working {
+/* The dots where the reply will be, at its line's height, until its first
+   words take their place. */
+.tweakers-move-agent-thinking {
   display: flex;
   align-items: center;
-  height: 14px;
-  padding: 10px 2px 0;
+  height: 24px;
+}
+
+/* The dots riding at the end of a reply still being written: a size down,
+   centred on the line. */
+.tweakers-move-agent-trail {
+  display: inline-flex;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.tweakers-move-agent-trail .tweakers-move-agent-loader {
+  --dot-size: 2.2px;
+  gap: 1.2px;
 }
 
 /* The working mark: a five-by-five dot screen with a wave of light sweeping

@@ -19071,7 +19071,7 @@ function MoveAgentPrompt({ view }) {
         inputRef.current?.focus();
       } : void 0,
       children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("div", { ref: frame.outer, className: "tweakers-move-agent-frame", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { ref: frame.inner, className: "tweakers-move-agent-body", children: [
-        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(import_react19.AnimatePresence, { initial: false, onExitComplete: () => setLeaving(false), children: replying && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
+        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(import_react19.AnimatePresence, { initial: false, onExitComplete: () => setLeaving(false), children: (replying || working) && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(
           import_react19.motion.div,
           {
             className: "tweakers-move-agent-reply",
@@ -19085,7 +19085,10 @@ function MoveAgentPrompt({ view }) {
               done ? /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("span", { className: "tweakers-move-agent-done", children: [
                 /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("svg", { className: "tweakers-move-agent-done-mark", viewBox: "0 0 16 16", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("path", { d: "M3 8.5l3.2 3.2L13 5", stroke: "currentColor", strokeWidth: "1.8", strokeLinecap: "round", strokeLinejoin: "round", pathLength: "1" }) }),
                 "Done"
-              ] }) : /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(MoveAgentWords, { text: said }),
+              ] }) : said ? /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(MoveAgentWords, { text: said, working: thinking }) : (
+                // Where the reply will be: the dots, until its first words take their place.
+                /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "tweakers-move-agent-thinking", role: "img", "aria-label": "The agent is working", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(MoveAgentLoader, {}) })
+              ),
               changed && !keyUndo && MoveAgentStore.canUndo() && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
                 import_react19.motion.button,
                 {
@@ -19106,13 +19109,6 @@ function MoveAgentPrompt({ view }) {
           step.label,
           step.state === "failed" && " \u2014 failed"
         ] }, i)) }),
-        view.attachments.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("ul", { className: "tweakers-move-agent-attachments", "aria-label": "Pictures in the prompt", children: view.attachments.map((a) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("li", { className: "tweakers-move-agent-attachment", title: a.name, children: [
-          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("img", { src: a.url, alt: a.name }),
-          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("button", { type: "button", "aria-label": `Remove ${a.name}`, disabled: thinking, onClick: () => {
-            MoveAgentStore.detach(a.id);
-            inputRef.current?.focus();
-          }, children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("path", { d: ICON_CLOSE, stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round" }) }) })
-        ] }, a.id)) }),
         /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "tweakers-move-agent-field", children: [
           pictures && /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)(import_jsx_runtime19.Fragment, { children: [
             /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
@@ -19191,20 +19187,13 @@ function MoveAgentPrompt({ view }) {
             }
           )
         ] }),
-        /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(import_react19.AnimatePresence, { initial: false, children: working && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
-          import_react19.motion.div,
-          {
-            className: "tweakers-move-agent-working",
-            role: "status",
-            "aria-label": "The agent is working",
-            initial: { opacity: 0 },
-            animate: { opacity: 1 },
-            exit: { opacity: 0, transition: { duration: 0.16, ease: AGENT_EASE_IN } },
-            transition: { duration: 0.24, ease: AGENT_EASE_OUT },
-            children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(MoveAgentLoader, {})
-          },
-          "working"
-        ) })
+        view.attachments.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("ul", { className: "tweakers-move-agent-attachments", "aria-label": "Pictures in the prompt", children: view.attachments.map((a) => /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("li", { className: "tweakers-move-agent-attachment", title: a.name, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("img", { src: a.url, alt: a.name }),
+          /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("button", { type: "button", "aria-label": `Remove ${a.name}`, disabled: thinking, onClick: () => {
+            MoveAgentStore.detach(a.id);
+            inputRef.current?.focus();
+          }, children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("path", { d: ICON_CLOSE, stroke: "currentColor", strokeWidth: "2.5", strokeLinecap: "round" }) }) })
+        ] }, a.id)) })
       ] }) })
     }
   );
@@ -19266,14 +19255,17 @@ function useAgentFrame(shape, live, holding, still) {
     typedAt.current = performance.now();
   } };
 }
-function MoveAgentWords({ text }) {
+function MoveAgentWords({ text, working }) {
   const shown = (0, import_react18.useRef)(0);
   const parts = text.split(/(\s+)/);
   const from = shown.current;
   (0, import_react18.useEffect)(() => {
     shown.current = parts.length;
   });
-  return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("p", { className: "tweakers-move-agent-said", children: parts.map((part, i) => /^\s*$/.test(part) ? part : /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "tweakers-move-agent-word", style: { "--word": Math.min(24, Math.max(0, i - from) / 2) }, children: part }, i)) });
+  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("p", { className: "tweakers-move-agent-said", children: [
+    parts.map((part, i) => /^\s*$/.test(part) ? part : /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "tweakers-move-agent-word", style: { "--word": Math.min(24, Math.max(0, i - from) / 2) }, children: part }, i)),
+    working && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "tweakers-move-agent-trail", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(MoveAgentLoader, {}) })
+  ] });
 }
 function useMoveFieldHeight(ref, value) {
   (0, import_react18.useLayoutEffect)(() => {
