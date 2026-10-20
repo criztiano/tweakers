@@ -429,7 +429,7 @@ var MovePadListStore = new MovePadListStoreClass();
 import { useEffect as useEffect4, useRef as useRef4 } from "react";
 
 // src/components/move-slots.tsx
-import { useEffect as useEffect3, useRef as useRef3 } from "react";
+import { useEffect as useEffect3, useLayoutEffect, useRef as useRef3 } from "react";
 
 // src/move-visual-core.ts
 var clamp01 = (value) => Math.max(0, Math.min(1, value));
@@ -2407,13 +2407,142 @@ function arcPath(from, to, radius, cx = 0, cy = 0) {
   return `M ${point(from)} A ${radius} ${radius} 0 ${Math.abs(delta) > 180 ? 1 : 0} ${delta > 0 ? 1 : 0} ${point(to)}`;
 }
 
+// src/transition-math.ts
+import { isEasingConfigValue, isSpringConfigValue } from "tweakers/store";
+function round2(value) {
+  return Math.round(value * 100) / 100;
+}
+function clamp4(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+function isTransitionConfig(value) {
+  return isSpringConfigValue(value) || isEasingConfigValue(value);
+}
+function isPhysicsSpring(transition) {
+  return transition.type === "spring" && (transition.stiffness !== void 0 || transition.damping !== void 0 || transition.mass !== void 0);
+}
+function springParams(spring) {
+  if (isPhysicsSpring(spring)) {
+    return { stiffness: spring.stiffness ?? 200, damping: spring.damping ?? 25, mass: spring.mass ?? 1 };
+  }
+  const visualDuration = Math.max(0.05, spring.visualDuration ?? 0.3);
+  const bounce = spring.bounce ?? 0.3;
+  const root = 2 * Math.PI / (visualDuration * 1.2);
+  const stiffness = root * root;
+  const damping = 2 * Math.min(1, Math.max(0.05, 1 - bounce)) * Math.sqrt(stiffness);
+  return { stiffness, damping, mass: 1 };
+}
+function springProgress(t, { stiffness, damping, mass }) {
+  if (t <= 0) return 0;
+  const w0 = Math.sqrt(stiffness / mass);
+  const zeta = damping / (2 * Math.sqrt(stiffness * mass));
+  if (zeta < 0.9999) {
+    const wd2 = w0 * Math.sqrt(1 - zeta * zeta);
+    return 1 - Math.exp(-zeta * w0 * t) * (Math.cos(wd2 * t) + zeta * w0 / wd2 * Math.sin(wd2 * t));
+  }
+  if (zeta < 1.0001) {
+    return 1 - Math.exp(-w0 * t) * (1 + w0 * t);
+  }
+  const wd = w0 * Math.sqrt(zeta * zeta - 1);
+  const r1 = -zeta * w0 + wd;
+  const r2 = -zeta * w0 - wd;
+  return 1 + (r2 * Math.exp(r1 * t) - r1 * Math.exp(r2 * t)) / (r1 - r2);
+}
+function springSettleDuration(params) {
+  const w0 = Math.sqrt(params.stiffness / params.mass);
+  const zeta = params.damping / (2 * Math.sqrt(params.stiffness * params.mass));
+  const decay = zeta >= 1 ? zeta * w0 - w0 * Math.sqrt(Math.max(0, zeta * zeta - 1)) : zeta * w0;
+  const duration = Math.log(200) / Math.max(decay, 1e-6);
+  return round2(clamp4(duration, 0.05, 10));
+}
+function cubicBezierProgress(p, [x1, y1, x2, y2]) {
+  if (p <= 0) return 0;
+  if (p >= 1) return 1;
+  const sampleX = (t2) => bezierAxis(t2, x1, x2);
+  const sampleY = (t2) => bezierAxis(t2, y1, y2);
+  let t = p;
+  for (let i = 0; i < 8; i++) {
+    const x = sampleX(t) - p;
+    if (Math.abs(x) < 1e-5) return sampleY(t);
+    const dx = bezierAxisDerivative(t, x1, x2);
+    if (Math.abs(dx) < 1e-6) break;
+    t -= x / dx;
+  }
+  let lo = 0;
+  let hi = 1;
+  t = p;
+  while (hi - lo > 1e-5) {
+    if (sampleX(t) < p) lo = t;
+    else hi = t;
+    t = (lo + hi) / 2;
+  }
+  return sampleY(t);
+}
+function bezierAxis(t, a1, a2) {
+  return (1 - 3 * a2 + 3 * a1) * t * t * t + (3 * a2 - 6 * a1) * t * t + 3 * a1 * t;
+}
+function bezierAxisDerivative(t, a1, a2) {
+  return 3 * (1 - 3 * a2 + 3 * a1) * t * t + 2 * (3 * a2 - 6 * a1) * t + 3 * a1;
+}
+function resolveClipTransition(raw, clipDuration) {
+  const safeDuration = Math.max(0.05, clipDuration);
+  if (raw.type === "easing") {
+    return {
+      transition: { ...raw, duration: safeDuration },
+      duration: safeDuration,
+      isPhysics: false
+    };
+  }
+  if (isPhysicsSpring(raw)) {
+    return {
+      transition: raw,
+      duration: springSettleDuration(springParams(raw)),
+      isPhysics: true
+    };
+  }
+  return {
+    transition: { type: "spring", bounce: raw.bounce ?? 0.2, visualDuration: safeDuration },
+    duration: safeDuration,
+    isPhysics: false
+  };
+}
+
+// src/move-lively.ts
+var LIVELY_PRESS = { type: "spring", visualDuration: 0.15, bounce: 0.15 };
+var LIVELY_UI = { type: "spring", visualDuration: 0.28, bounce: 0.15 };
+var LIVELY_SURFACE = { type: "spring", visualDuration: 0.36, bounce: 0.08 };
+var LIVELY_EXIT = { type: "tween", duration: 0.12, ease: [0.4, 0, 1, 1] };
+var LIVELY_PRESS_SCALE = 0.97;
+var LIVELY_STAGGER = 0.035;
+var LIVELY_STAGGER_MAX = 0.2;
+function livelyStagger(index, count) {
+  if (count <= 1 || index <= 0) return 0;
+  const step = Math.min(LIVELY_STAGGER, LIVELY_STAGGER_MAX / (count - 1));
+  return Math.min(index, count - 1) * step;
+}
+var LIVELY_CSS = {
+  press: {
+    duration: "300ms",
+    easing: "linear(0, 0.3505, 0.7432, 0.9336, 0.9951, 1.0062, 1.0045, 1.0019, 1.0005, 1)"
+  },
+  ui: {
+    duration: "550ms",
+    easing: "linear(0, 0.1298, 0.3693, 0.5949, 0.7654, 0.8784, 0.9458, 0.9819, 0.9988, 1.0052, 1.0063, 1.0053, 1.0037, 1.0024, 1.0014, 1.0007, 1, 1)"
+  },
+  surface: {
+    duration: "550ms",
+    easing: "linear(0, 0.0832, 0.2515, 0.4312, 0.5896, 0.7159, 0.8104, 0.8777, 0.9238, 0.9543, 0.9738, 0.9858, 0.9929, 0.9969, 0.9991, 1.0001, 1, 1)"
+  },
+  exit: { duration: "120ms", easing: "cubic-bezier(0.4, 0, 1, 1)" }
+};
+
 // src/color-core.ts
 var COLOR_FORMATS = ["hex", "rgb", "hsl", "oklch"];
 var LONG_PRESS_MS = 500;
 var HEX_COLOR_REGEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{4}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$/;
-var clamp4 = (n, min, max) => Math.min(max, Math.max(min, n));
-var clamp012 = (n) => clamp4(n, 0, 1);
-var byte = (n) => clamp4(Math.round(n), 0, 255);
+var clamp5 = (n, min, max) => Math.min(max, Math.max(min, n));
+var clamp012 = (n) => clamp5(n, 0, 1);
+var byte = (n) => clamp5(Math.round(n), 0, 255);
 function parseHex(input) {
   if (typeof input !== "string") return null;
   let s = input.trim();
@@ -3038,22 +3167,77 @@ function MoveSlotRampBody({ label, value, css, stop, stops }) {
     /* @__PURE__ */ jsx3(MoveSlotDisplayFoot, { label, value })
   ] });
 }
-function MoveSlotDialBody({ label, value, bearing, origin }) {
+var NEEDLE_R = 8.5;
+var NEEDLE_SPRING = springParams(LIVELY_UI);
+var NEEDLE_REST = 0.05;
+function needleTip(bearing) {
   const rad = (bearing - 90) * Math.PI / 180;
+  return { x2: (NEEDLE_R * Math.cos(rad)).toFixed(3), y2: (NEEDLE_R * Math.sin(rad)).toFixed(3) };
+}
+function foldBearing(deg) {
+  return (deg % 360 + 360) % 360;
+}
+function MoveSlotDialBody({ label, value, bearing, origin, follow = false }) {
+  const hand = useRef3(null);
+  const sweep = useRef3(null);
+  const needle = useRef3({ at: bearing, speed: 0, to: bearing, origin, frame: 0 });
+  useLayoutEffect(() => {
+    const n = needle.current;
+    n.origin = origin;
+    const draw = (deg) => {
+      const tip2 = needleTip(deg);
+      hand.current?.setAttribute("x2", tip2.x2);
+      hand.current?.setAttribute("y2", tip2.y2);
+      sweep.current?.setAttribute("d", arcPath(n.origin, foldBearing(deg), NEEDLE_R));
+    };
+    const still = !follow || typeof window === "undefined" || typeof window.requestAnimationFrame !== "function" || !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const to = n.at + ((bearing - n.at) % 360 + 540) % 360 - 180;
+    if (still || Math.abs(to - n.at) < NEEDLE_REST) {
+      const moving = n.frame !== 0 || n.at !== bearing;
+      if (n.frame) window.cancelAnimationFrame(n.frame);
+      n.frame = 0;
+      n.at = n.to = bearing;
+      n.speed = 0;
+      if (moving) draw(bearing);
+      return;
+    }
+    n.to = to;
+    draw(n.at);
+    if (n.frame) return;
+    const { stiffness, damping, mass } = NEEDLE_SPRING;
+    let last = performance.now();
+    const tick = (now) => {
+      let dt = Math.min(0.05, Math.max(0, (now - last) / 1e3));
+      last = now;
+      while (dt > 0) {
+        const step = Math.min(dt, 1 / 240);
+        n.speed += (-stiffness * (n.at - n.to) - damping * n.speed) / mass * step;
+        n.at += n.speed * step;
+        dt -= step;
+      }
+      if (Math.abs(n.at - n.to) < NEEDLE_REST && Math.abs(n.speed) < NEEDLE_REST) {
+        n.at = n.to = foldBearing(n.to);
+        n.speed = 0;
+        n.frame = 0;
+        draw(n.at);
+        return;
+      }
+      draw(n.at);
+      n.frame = window.requestAnimationFrame(tick);
+    };
+    n.frame = window.requestAnimationFrame(tick);
+  }, [bearing, origin, follow]);
+  useEffect3(() => () => {
+    const n = needle.current;
+    if (n.frame) window.cancelAnimationFrame(n.frame);
+    n.frame = 0;
+  }, []);
+  const tip = needleTip(bearing);
   return /* @__PURE__ */ jsxs3(Fragment3, { children: [
     /* @__PURE__ */ jsx3(MoveSlotDisplay, { children: /* @__PURE__ */ jsxs3("svg", { className: "tweakers-move-slot-needle", viewBox: "-12 -12 24 24", "aria-hidden": "true", children: [
-      /* @__PURE__ */ jsx3("circle", { className: "tweakers-move-needle-face", cx: "0", cy: "0", r: "8.5" }),
-      /* @__PURE__ */ jsx3("path", { className: "tweakers-move-needle-sweep", d: arcPath(origin, bearing, 8.5) }),
-      /* @__PURE__ */ jsx3(
-        "line",
-        {
-          className: "tweakers-move-needle-hand",
-          x1: "0",
-          y1: "0",
-          x2: (8.5 * Math.cos(rad)).toFixed(3),
-          y2: (8.5 * Math.sin(rad)).toFixed(3)
-        }
-      )
+      /* @__PURE__ */ jsx3("circle", { className: "tweakers-move-needle-face", cx: "0", cy: "0", r: NEEDLE_R }),
+      /* @__PURE__ */ jsx3("path", { ref: sweep, className: "tweakers-move-needle-sweep", d: arcPath(origin, bearing, NEEDLE_R) }),
+      /* @__PURE__ */ jsx3("line", { ref: hand, className: "tweakers-move-needle-hand", x1: "0", y1: "0", x2: tip.x2, y2: tip.y2 })
     ] }) }),
     /* @__PURE__ */ jsx3(MoveSlotDisplayFoot, { label, value })
   ] });
@@ -3878,7 +4062,7 @@ function MovePadList({ panelId, path, label, icon, view, disabled }) {
 }
 
 // src/components/PresetExploration.tsx
-import { useEffect as useEffect5, useMemo, useLayoutEffect, useRef as useRef5, useState, useSyncExternalStore } from "react";
+import { useEffect as useEffect5, useMemo, useLayoutEffect as useLayoutEffect2, useRef as useRef5, useState, useSyncExternalStore } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 // src/preset-exploration.ts
@@ -3886,7 +4070,7 @@ import { TweakStore as TweakStore3 } from "tweakers/store";
 
 // src/preset-genetics.ts
 var cloneDNA = (value) => structuredClone(value);
-var clamp5 = (v, min = 0, max = 1) => Math.max(min, Math.min(max, v));
+var clamp6 = (v, min = 0, max = 1) => Math.max(min, Math.min(max, v));
 var newDNAId = () => `dna-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 11)}`;
 function collectGenes(controls, group = "") {
   return controls.flatMap((c) => {
@@ -3942,8 +4126,8 @@ function geneBounds(p) {
 }
 function numeric(value, p) {
   const [lo, hi] = geneBounds(p);
-  const clipped = clamp5(value, lo, hi);
-  return p.step && p.step > 0 ? clamp5((p.min ?? 0) + Math.round((clipped - (p.min ?? 0)) / p.step) * p.step, lo, hi) : clipped;
+  const clipped = clamp6(value, lo, hi);
+  return p.step && p.step > 0 ? clamp6((p.min ?? 0) + Math.round((clipped - (p.min ?? 0)) / p.step) * p.step, lo, hi) : clipped;
 }
 function valid(value, p) {
   return p.kind === "number" ? typeof value === "number" && Number.isFinite(value) : !!p.options?.includes(value);
@@ -4010,7 +4194,7 @@ function breedDNA(a, b, baseline, parameters, settings2, random = Math.random) {
       const neighbor = adjacent[Math.floor(random() * adjacent.length)];
       if (!neighbor) continue;
       const value = read(inherited, neighbor);
-      write(result, p, p.kind === "number" ? numeric((p.low ?? p.min ?? 0) + clamp5((value - neighbor.min) / (neighbor.max - neighbor.min)) * ((p.high ?? p.max ?? 1) - (p.low ?? p.min ?? 0)), p) : value);
+      write(result, p, p.kind === "number" ? numeric((p.low ?? p.min ?? 0) + clamp6((value - neighbor.min) / (neighbor.max - neighbor.min)) * ((p.high ?? p.max ?? 1) - (p.low ?? p.min ?? 0)), p) : value);
     }
   }
   return repairRanges(result, parameters);
@@ -4018,8 +4202,8 @@ function breedDNA(a, b, baseline, parameters, settings2, random = Math.random) {
 function chooseParents(pool, random = Math.random) {
   if (pool.length < 2) throw new Error("Mark at least two parents in the breeding window.");
   const pick = (list) => {
-    let ticket = random() * list.reduce((n, p) => n + clamp5(p.rating, 1, 5), 0);
-    return list.find((p) => (ticket -= clamp5(p.rating, 1, 5)) < 0) ?? list[list.length - 1];
+    let ticket = random() * list.reduce((n, p) => n + clamp6(p.rating, 1, 5), 0);
+    return list.find((p) => (ticket -= clamp6(p.rating, 1, 5)) < 0) ?? list[list.length - 1];
   };
   const a = pick(pool);
   return [a, pick(pool.filter((p) => p.id !== a.id))];
@@ -4203,8 +4387,8 @@ var ExplorationStore = class {
         if (old) {
           p.enabled = old.enabled;
           if (p.kind === "number") {
-            p.low = clamp5(old.low ?? p.min, p.min, p.max);
-            p.high = clamp5(old.high ?? p.max, p.low, p.max);
+            p.low = clamp6(old.low ?? p.min, p.min, p.max);
+            p.high = clamp6(old.high ?? p.max, p.low, p.max);
           }
         }
       }
@@ -4304,8 +4488,8 @@ var ExplorationStore = class {
       if (old) {
         p.enabled = old.enabled;
         if (p.kind === "number") {
-          p.low = clamp5(old.low ?? p.min, p.min, p.max);
-          p.high = clamp5(old.high ?? p.max, p.low, p.max);
+          p.low = clamp6(old.low ?? p.min, p.min, p.max);
+          p.high = clamp6(old.high ?? p.max, p.low, p.max);
           try {
             geneBounds(p);
           } catch {
@@ -4336,7 +4520,7 @@ var ExplorationStore = class {
   }
   setGeneration(index) {
     if (!this.state) return;
-    this.state.generation = clamp5(Math.round(index), 0, this.currentTree().generations.length - 1);
+    this.state.generation = clamp6(Math.round(index), 0, this.currentTree().generations.length - 1);
     this.notify();
   }
   selectTree(id) {
@@ -4375,13 +4559,13 @@ var ExplorationStore = class {
   jog(delta) {
     if (!this.ready()) return;
     if (this.state.view === "parameters") {
-      this.parameterIndex = clamp5(this.parameterIndex + Math.sign(delta), 0, this.state.parameters.length - 1);
+      this.parameterIndex = clamp6(this.parameterIndex + Math.sign(delta), 0, this.state.parameters.length - 1);
       this.notify(false);
       return;
     }
     const children = this.currentTree().generations[this.state.generation].children;
     const index = children.findIndex((c2) => c2.id === this.state.activeId);
-    const c = children[clamp5(index + Math.sign(delta), 0, children.length - 1)];
+    const c = children[clamp6(index + Math.sign(delta), 0, children.length - 1)];
     if (c) this.select(c.id);
   }
   toggleParent() {
@@ -4396,7 +4580,7 @@ var ExplorationStore = class {
     if (!this.ready()) return;
     const c = this.active();
     if (c) {
-      c.rating = clamp5(Math.round(rating), 1, 5);
+      c.rating = clamp6(Math.round(rating), 1, 5);
       this.notify();
     }
   }
@@ -4408,9 +4592,9 @@ var ExplorationStore = class {
     if (!Number.isFinite(s.spread)) s.spread = 0;
     if (!Number.isFinite(s.seedCount)) s.seedCount = 1;
     if (!Number.isFinite(s.breedWindow)) s.breedWindow = 0;
-    s.mutation = clamp5(s.mutation);
-    s.spread = clamp5(s.spread);
-    s.seedCount = clamp5(Math.round(s.seedCount), 1, 32);
+    s.mutation = clamp6(s.mutation);
+    s.spread = clamp6(s.spread);
+    s.seedCount = clamp6(Math.round(s.seedCount), 1, 32);
     s.breedWindow = Math.max(0, Math.round(s.breedWindow));
     this.notify();
   }
@@ -4563,8 +4747,8 @@ var ExplorationStore = class {
     const candidate = { ...p };
     if (typeof patch2.enabled === "boolean") candidate.enabled = patch2.enabled;
     if (p.kind === "number") {
-      candidate.low = clamp5(patch2.low ?? p.low ?? p.min, p.min, p.max);
-      candidate.high = clamp5(patch2.high ?? p.high ?? p.max, candidate.low, p.max);
+      candidate.low = clamp6(patch2.low ?? p.low ?? p.min, p.min, p.max);
+      candidate.high = clamp6(patch2.high ?? p.high ?? p.max, candidate.low, p.max);
       try {
         const [lo, hi] = geneBounds(candidate);
         const other = this.state.parameters.find((q) => q.path === p.path && q.id !== p.id && ["min", "max"].includes(q.component ?? ""));
@@ -4599,8 +4783,8 @@ var ExplorationStore = class {
     if (!this.ready()) return;
     const s = this.state;
     Object.assign(s.morph, patch2);
-    for (const key of ["ax", "ay", "bx", "by", "blend"]) s.morph[key] = Number.isFinite(s.morph[key]) ? clamp5(s.morph[key]) : 0.5;
-    s.morph.corner = clamp5(Math.round(s.morph.corner), 0, 7);
+    for (const key of ["ax", "ay", "bx", "by", "blend"]) s.morph[key] = Number.isFinite(s.morph[key]) ? clamp6(s.morph[key]) : 0.5;
+    s.morph.corner = clamp6(Math.round(s.morph.corner), 0, 7);
     this.preview(morphDNA(this.allChildren(), s.morph, this.baseline(), s.parameters));
     this.notify();
   }
@@ -4626,7 +4810,7 @@ var ExplorationStore = class {
     if (!this.ready()) return;
     const s = this.state, slot = this.slots()[index];
     if (!slot || !Number.isFinite(value)) return;
-    value = clamp5(value, slot.min, slot.max);
+    value = clamp6(value, slot.min, slot.max);
     if (slot.step === 1) value = Math.round(value);
     if (s.view === "morph") {
       const key = ["ax", "ay", "bx", "by", "blend", "corner"][index];
@@ -4901,8 +5085,8 @@ function presetFlowerSvg(values) {
 import { TweakStore as TweakStore4 } from "tweakers/store";
 import { Fragment as Fragment4, jsx as jsx5, jsxs as jsxs5 } from "react/jsx-runtime";
 var SHELL_MOTION = { duration: 0.15, ease: [0.2, 0, 0, 1] };
-var clamp6 = (value) => Math.max(0, Math.min(1, value));
-var useBrowserLayoutEffect = typeof window === "undefined" ? useEffect5 : useLayoutEffect;
+var clamp7 = (value) => Math.max(0, Math.min(1, value));
+var useBrowserLayoutEffect = typeof window === "undefined" ? useEffect5 : useLayoutEffect2;
 function PresetArtwork({ values }) {
   const seed = presetFlowerSeed(values);
   const src = useMemo(() => `data:image/svg+xml,${encodeURIComponent(flowerSvg(seed, DEFAULT_FLOWER_SETTINGS, { background: false }))}`, [seed]);
@@ -5341,7 +5525,7 @@ function XYSurface({ label, x, y, disabled, onChange }) {
   const pointer = useRef5(null);
   const update = (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
-    onChange(clamp6((event.clientX - rect.left) / Math.max(1, rect.width)), clamp6((event.clientY - rect.top) / Math.max(1, rect.height)));
+    onChange(clamp7((event.clientX - rect.left) / Math.max(1, rect.width)), clamp7((event.clientY - rect.top) / Math.max(1, rect.height)));
   };
   return /* @__PURE__ */ jsxs5("div", { role: "group", "aria-label": `Morph quadrant ${label}`, children: [
     /* @__PURE__ */ jsxs5(
@@ -5390,7 +5574,7 @@ function XYSurface({ label, x, y, disabled, onChange }) {
 }
 
 // src/components/MovePanel.tsx
-import { useEffect as useEffect17, useLayoutEffect as useLayoutEffect5, useId as useId2, useRef as useRef16, useState as useState11, useSyncExternalStore as useSyncExternalStore7, useCallback as useCallback4 } from "react";
+import { useEffect as useEffect17, useLayoutEffect as useLayoutEffect6, useId as useId2, useRef as useRef16, useState as useState11, useSyncExternalStore as useSyncExternalStore7, useCallback as useCallback4 } from "react";
 import { AnimatePresence as AnimatePresence2, animate as animate2, motion as motion2, useReducedMotion as useReducedMotion2 } from "motion/react";
 import { createPortal as createPortal7 } from "react-dom";
 
@@ -5446,7 +5630,7 @@ function deriveEase(type, curvature, steepness = 0, overshoot = 0, anticipate = 
   y1 -= clamp013(anticipate) * BACK_MAX;
   return [x1, y1, x2, y2];
 }
-function bezierAxis(p1, p2, s) {
+function bezierAxis2(p1, p2, s) {
   const u = 1 - s;
   return 3 * u * u * s * p1 + 3 * u * s * s * p2 + s * s * s;
 }
@@ -5458,13 +5642,13 @@ function bezierY(ease, x) {
   const tx = clamp013(x);
   let s = tx;
   for (let i = 0; i < 6; i++) {
-    const xs = bezierAxis(ease[0], ease[2], s) - tx;
+    const xs = bezierAxis2(ease[0], ease[2], s) - tx;
     if (Math.abs(xs) < 1e-5) break;
     const d = bezierAxisDeriv(ease[0], ease[2], s);
     if (Math.abs(d) < 1e-6) break;
     s = clamp013(s - xs / d);
   }
-  return bezierAxis(ease[1], ease[3], s);
+  return bezierAxis2(ease[1], ease[3], s);
 }
 var SPRING_SAMPLES = 72;
 function sampleSpringTargets(sample, steps) {
@@ -6079,7 +6263,7 @@ function modRange(slot) {
   return MOD_RANGES.includes(fallback) ? fallback : "bipolar";
 }
 function modRangeArc(range, signal) {
-  const s = clamp7(signal, -1, 1);
+  const s = clamp8(signal, -1, 1);
   if (range === "positive") return { from: 0, to: Math.max(0, s) };
   if (range === "negative") return { from: 1 + Math.min(0, s), to: 1 };
   return { from: 0.5, to: (s + 1) / 2 };
@@ -6100,12 +6284,12 @@ var modPageWidth = () => Math.min(
 );
 var MOD_SETTINGS_PANEL = "mod-settings";
 var modKey = (panelId, path) => `${panelId}\0${path}`;
-var clamp7 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-var clamp014 = (v) => clamp7(Number(v) || 0, 0, 1);
-var clampSigned = (v) => clamp7(Number(v) || 0, -1, 1);
+var clamp8 = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+var clamp014 = (v) => clamp8(Number(v) || 0, 0, 1);
+var clampSigned = (v) => clamp8(Number(v) || 0, -1, 1);
 function applyModulation(base, signal, amount, min, max, reach = 0.5) {
-  const offset = clamp7(signal, -1, 1) * clamp014(amount) * (max - min) * reach;
-  return clamp7(base + offset, min, max);
+  const offset = clamp8(signal, -1, 1) * clamp014(amount) * (max - min) * reach;
+  return clamp8(base + offset, min, max);
 }
 var MOD_RING_RADIUS = 6;
 var MOD_RING_CIRCUMFERENCE = 2 * Math.PI * MOD_RING_RADIUS;
@@ -6137,7 +6321,7 @@ function lfoDivisionBeats(division) {
   if (typeof division !== "number" || !Number.isFinite(division)) {
     return LFO_SYNC_DIVISIONS.find((d) => d.label === LFO_SYNC_DEFAULT).beats;
   }
-  return LFO_SYNC_DIVISIONS[clamp7(Math.round(division), 0, LFO_SYNC_DIVISIONS.length - 1)].beats;
+  return LFO_SYNC_DIVISIONS[clamp8(Math.round(division), 0, LFO_SYNC_DIVISIONS.length - 1)].beats;
 }
 function lfoSyncedHz(division, bpm) {
   return (Number(bpm) || 120) / 60 / lfoDivisionBeats(division);
@@ -6182,10 +6366,10 @@ var LFO_DEF = {
       s.drift = 0;
       s.driftTarget = 0;
     } else s.drift += (s.driftTarget - s.drift) * Math.min(1, dt * hz * 4);
-    const w = clamp7(Number(params.width) || 0, 0.01, 0.99);
+    const w = clamp8(Number(params.width) || 0, 0.01, 0.99);
     const ph = (s.phase + clamp014(params.phase)) % 1;
     const tri = ph < w ? ph / w : 1 - (ph - w) / (1 - w);
-    let v = clamp7(tri * 2 - 1 + s.drift, -1, 1);
+    let v = clamp8(tri * 2 - 1 + s.drift, -1, 1);
     const smooth2 = clamp014(params.smooth);
     if (smooth2 > 0 && s.out !== null) {
       const k = 1 - Math.exp(-dt / (smooth2 * smooth2 * 0.4 + 1e-6));
@@ -6202,14 +6386,14 @@ var LFO_DEF = {
    */
   preview(params, count) {
     const n = Math.max(2, count);
-    const w = clamp7(Number(params.width) || 0, 0.01, 0.99);
+    const w = clamp8(Number(params.width) || 0, 0.01, 0.99);
     const jitter = clamp014(params.jitter);
     const wobble = Math.max(2, Math.round(n / 8));
     const raw = Array.from({ length: n }, (_, i) => {
       const ph = (i / (n - 1) * 2 + clamp014(params.phase)) % 1;
       const tri = ph < w ? ph / w : 1 - (ph - w) / (1 - w);
       const drift = previewNoise(Math.floor(i / wobble)) * jitter * 0.5;
-      return clamp7(tri * 2 - 1 + drift, -1, 1);
+      return clamp8(tri * 2 - 1 + drift, -1, 1);
     });
     const shape = clamp014(params.smooth) > 0.55 ? "Sine" : w <= 0.25 ? "Saw" : w >= 0.75 ? "Ramp" : "Tri";
     return {
@@ -6241,8 +6425,8 @@ var SH_DEF = {
       const len = 1 / hz * (1 + (Math.random() * 2 - 1) * clamp014(params.jitter) * 0.9);
       s.wait = Math.max(5e-3, len);
     }
-    const offset = clamp7(Number(params.offset) || 0, -1, 1);
-    let v = clamp7(s.held * clamp014(params.depth) + offset, -1, 1);
+    const offset = clamp8(Number(params.offset) || 0, -1, 1);
+    let v = clamp8(s.held * clamp014(params.depth) + offset, -1, 1);
     const smooth2 = clamp014(params.smooth);
     if (smooth2 > 0 && s.out !== null) {
       const k = 1 - Math.exp(-dt / (smooth2 * smooth2 * 0.4 + 1e-6));
@@ -6260,7 +6444,7 @@ var SH_DEF = {
   preview(params, count) {
     const n = Math.max(2, count);
     const depth = clamp014(params.depth);
-    const offset = clamp7(Number(params.offset) || 0, -1, 1);
+    const offset = clamp8(Number(params.offset) || 0, -1, 1);
     const jitter = clamp014(params.jitter);
     const steps = 8;
     const lens = Array.from({ length: steps }, (_, i) => 1 + previewNoise(i, 1) * jitter * 0.9);
@@ -6271,7 +6455,7 @@ var SH_DEF = {
     const raw = Array.from({ length: n }, (_, i) => {
       const t = i / (n - 1);
       const step = edges.findIndex((e) => t <= e);
-      return clamp7(previewNoise(step < 0 ? steps - 1 : step) * depth + offset, -1, 1);
+      return clamp8(previewNoise(step < 0 ? steps - 1 : step) * depth + offset, -1, 1);
     });
     return {
       points: previewSlew(raw, clamp014(params.smooth)).map((v) => (v + 1) / 2),
@@ -6296,7 +6480,7 @@ function envStageWave(stage, phase, level, params) {
   return params[envWaveFlipParam(stage)] ? level + (1 - level) * w : level * (1 - w);
 }
 var adsrShape = (p, curve) => {
-  const c = clamp7(Number(curve) || 0, -1, 1);
+  const c = clamp8(Number(curve) || 0, -1, 1);
   return 1 - Math.pow(1 - p, Math.pow(4, c));
 };
 function envelopePoints(params, count) {
@@ -6464,7 +6648,7 @@ function readClips(params) {
   return list.length ? list.slice(0, CURVE_MAX_CLIPS) : [newClip()];
 }
 var writeClips = (list) => list;
-var selectedClip = (params, count) => clamp7(Math.round(Number(params.selected) || 0), 0, Math.max(0, count - 1));
+var selectedClip = (params, count) => clamp8(Math.round(Number(params.selected) || 0), 0, Math.max(0, count - 1));
 function curveComposition(params) {
   const i = DIRECTIONS.indexOf(params.direction);
   return {
@@ -6475,7 +6659,7 @@ function curveComposition(params) {
   };
 }
 function curveDuration(params, bpm) {
-  if (!params.sync) return clamp7(Number(params.duration) || 0, CURVE_MIN_DURATION, CURVE_MAX_DURATION);
+  if (!params.sync) return clamp8(Number(params.duration) || 0, CURVE_MIN_DURATION, CURVE_MAX_DURATION);
   const beat = 60 / (Number(bpm) || 120);
   return Math.max(CURVE_MIN_DURATION, lfoDivisionBeats(params.division) * beat);
 }
@@ -6603,7 +6787,7 @@ var CURVE_DEF = {
     const changed = (key) => key in patch2 && patch2[key] !== current[key];
     let list = "clips" in patch2 ? readClips(patch2) : readClips(current);
     if (!("clips" in patch2) && changed("segments")) {
-      const want = clamp7(Math.round(Number(patch2.segments) || 1), 1, CURVE_MAX_CLIPS);
+      const want = clamp8(Math.round(Number(patch2.segments) || 1), 1, CURVE_MAX_CLIPS);
       while (list.length > want) list.pop();
       while (list.length < want) list.push(newClip());
       list = list.map((c) => ({ ...c, weight: 1 }));
@@ -6749,7 +6933,7 @@ var AUDIO_DEF = {
       s.pos = seek;
     }
     if (params.playing) {
-      const speed = clamp7(Number(params.speed) || 1, 0.05, 16);
+      const speed = clamp8(Number(params.speed) || 1, 0.05, 16);
       s.pos += dt * speed / audioModDuration;
       const loop = params.loopOn ? audioLoop(params) : null;
       if (loop) {
@@ -8837,7 +9021,7 @@ var clampPct = (n) => Math.min(100, Math.max(0, n));
 var clampScale = (n) => Math.min(200, Math.max(10, n));
 var clampSquash = (n) => Math.min(200, Math.max(1, n));
 var wrapAngle = (a) => (a % 360 + 360) % 360;
-var round2 = (n, p) => {
+var round3 = (n, p) => {
   const f = 10 ** p;
   return Math.round(n * f) / f;
 };
@@ -8848,7 +9032,7 @@ var cloneDefault = () => ({
   stops: cloneDefaultStops()
 });
 var sortedStops = (stops) => [...stops].sort((a, b) => a.position - b.position);
-var stopString = (stops) => sortedStops(stops).map((s) => `${s.color} ${round2(clamp016(s.position) * 100, 2)}%`).join(", ");
+var stopString = (stops) => sortedStops(stops).map((s) => `${s.color} ${round3(clamp016(s.position) * 100, 2)}%`).join(", ");
 var normColor = (color) => {
   const rgba = parseHex(color);
   return rgba ? formatHex(rgba, true) : "#000000ff";
@@ -8858,9 +9042,9 @@ function rampCss(stops) {
 }
 function gradientToCss(value) {
   const stopStr = stopString(value.stops);
-  const angle = round2(wrapAngle(value.angle), 2);
-  const cx = round2(clampPct(value.centerX ?? 50), 2);
-  const cy = round2(clampPct(value.centerY ?? 50), 2);
+  const angle = round3(wrapAngle(value.angle), 2);
+  const cx = round3(clampPct(value.centerX ?? 50), 2);
+  const cy = round3(clampPct(value.centerY ?? 50), 2);
   switch (value.type) {
     case "radial": {
       const rx = clampScale(value.scale ?? 100);
@@ -8868,7 +9052,7 @@ function gradientToCss(value) {
       if (rx === 100 && ry === 100) {
         return `radial-gradient(circle at ${cx}% ${cy}%, ${stopStr})`;
       }
-      return `radial-gradient(${round2(rx, 2)}% ${round2(ry, 2)}% at ${cx}% ${cy}%, ${stopStr})`;
+      return `radial-gradient(${round3(rx, 2)}% ${round3(ry, 2)}% at ${cx}% ${cy}%, ${stopStr})`;
     }
     case "conic":
       return `conic-gradient(from ${angle}deg at ${cx}% ${cy}%, ${stopStr})`;
@@ -8878,15 +9062,15 @@ function gradientToCss(value) {
   }
 }
 function gradientToTransform(value) {
-  const cx = round2(clampPct(value.centerX ?? 50), 2);
-  const cy = round2(clampPct(value.centerY ?? 50), 2);
+  const cx = round3(clampPct(value.centerX ?? 50), 2);
+  const cy = round3(clampPct(value.centerY ?? 50), 2);
   const rotation = wrapAngle(value.rotation ?? 0);
   const rx = clampScale(value.scale ?? 100);
   const ry = value.squash === void 0 ? rx : clampSquash(value.squash);
   if (value.type !== "radial" || rotation === 0 || rx === ry) {
     return { transform: "none", transformOrigin: "50% 50%" };
   }
-  return { transform: `rotate(${round2(rotation, 2)}deg)`, transformOrigin: `${cx}% ${cy}%` };
+  return { transform: `rotate(${round3(rotation, 2)}deg)`, transformOrigin: `${cx}% ${cy}%` };
 }
 function gradientFillBox(value, boxW, boxH) {
   if (value.type !== "radial" || boxW <= 0 || boxH <= 0) {
@@ -8904,16 +9088,16 @@ function gradientFillBox(value, boxW, boxH) {
   const cyPx = clampPct(value.centerY ?? 50) / 100 * boxH;
   const scaleX = clampScale(value.scale ?? 100) / 100;
   const scaleY = (value.squash === void 0 ? clampScale(value.scale ?? 100) : clampSquash(value.squash)) / 100;
-  const rx = round2(scaleX * boxW, 2);
-  const ry = round2(scaleY * boxH, 2);
-  const side = round2(2 * Math.hypot(boxW, boxH), 2);
+  const rx = round3(scaleX * boxW, 2);
+  const ry = round3(scaleY * boxH, 2);
+  const side = round3(2 * Math.hypot(boxW, boxH), 2);
   const rotation = wrapAngle(value.rotation ?? 0);
   return {
     background: `radial-gradient(${rx}px ${ry}px at 50% 50%, ${stopString(value.stops)})`,
-    transform: rotation === 0 ? "none" : `rotate(${round2(rotation, 2)}deg)`,
+    transform: rotation === 0 ? "none" : `rotate(${round3(rotation, 2)}deg)`,
     transformOrigin: "50% 50%",
-    left: round2(cxPx - side / 2, 2),
-    top: round2(cyPx - side / 2, 2),
+    left: round3(cxPx - side / 2, 2),
+    top: round3(cyPx - side / 2, 2),
     width: side,
     height: side
   };
@@ -10916,7 +11100,7 @@ var MOVE_COLOR_WHEEL = [4, 18, 45, 78, 95, 120, 141, 158, 186, 204, 233, 244, 25
 var MOVE_COLOR_HUES = MOVE_COLOR_WHEEL.length;
 var MOVE_COLOR_STEPS = 16;
 var MOVE_OPACITY_PADS = 8;
-var clamp8 = (n) => Math.max(0, Math.min(1, n));
+var clamp9 = (n) => Math.max(0, Math.min(1, n));
 var hue = (n) => (n % 360 + 360) % 360;
 var moveWheelSlot = (h) => {
   const target = hue(h);
@@ -11099,9 +11283,9 @@ var MoveColorStoreClass = class {
     if (!TweakStore11.getPanel(panelId) || TweakStore11.isDisabled(panelId, path) || Object.values(patch2).some((n) => !Number.isFinite(n))) return;
     const color = { ...this.readStop(panelId, path, stop), ...patch2 };
     color.h = hue(color.h);
-    color.s = clamp8(color.s);
-    color.l = clamp8(color.l);
-    color.a = clamp8(color.a);
+    color.s = clamp9(color.s);
+    color.l = clamp9(color.l);
+    color.a = clamp9(color.a);
     const palette = this.lockFor(panelId, path);
     const snapped = palette ? paletteHsl(palette)[paletteAt(palette, color.h)] : null;
     const painted = snapped ? { ...color, h: snapped.h, s: snapped.s, l: snapped.l } : color;
@@ -11317,7 +11501,7 @@ var MoveSearchStoreClass = class {
 var MoveSearchStore = new MoveSearchStoreClass();
 
 // src/components/MoveColor.tsx
-import { useEffect as useEffect14, useLayoutEffect as useLayoutEffect2, useRef as useRef13, useState as useState8 } from "react";
+import { useEffect as useEffect14, useLayoutEffect as useLayoutEffect3, useRef as useRef13, useState as useState8 } from "react";
 import { createPortal as createPortal4 } from "react-dom";
 import { TweakStore as TweakStore12 } from "tweakers/store";
 import { Fragment as Fragment6, jsx as jsx16, jsxs as jsxs11 } from "react/jsx-runtime";
@@ -11562,7 +11746,7 @@ function MoveColorDisplay({ panelId, meta, anchor, theme }) {
     }
     MoveColorStore.close();
   };
-  useLayoutEffect2(() => {
+  useLayoutEffect3(() => {
     const place3 = () => {
       if (!anchor.current || !display.current) return;
       const rect = anchor.current.getBoundingClientRect();
@@ -11711,7 +11895,7 @@ function MovePaletteScreen({ kept = null, children }) {
 }
 
 // src/components/MoveTimeline.tsx
-import { useCallback as useCallback2, useEffect as useEffect15, useLayoutEffect as useLayoutEffect3, useMemo as useMemo3, useRef as useRef14, useState as useState9, useSyncExternalStore as useSyncExternalStore5 } from "react";
+import { useCallback as useCallback2, useEffect as useEffect15, useLayoutEffect as useLayoutEffect4, useMemo as useMemo3, useRef as useRef14, useState as useState9, useSyncExternalStore as useSyncExternalStore5 } from "react";
 import { createPortal as createPortal5 } from "react-dom";
 import { formatLabel as formatLabel2, TweakStore as TweakStore14 } from "tweakers/store";
 
@@ -12055,108 +12239,6 @@ var TimelineStore = /* @__PURE__ */ new TimelineStoreClass();
 
 // src/timeline-core.ts
 import { formatLabel, inferStep, isHexColor, resolveTweakValues } from "tweakers/store";
-
-// src/transition-math.ts
-import { isEasingConfigValue, isSpringConfigValue } from "tweakers/store";
-function round22(value) {
-  return Math.round(value * 100) / 100;
-}
-function clamp9(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-function isTransitionConfig(value) {
-  return isSpringConfigValue(value) || isEasingConfigValue(value);
-}
-function isPhysicsSpring(transition) {
-  return transition.type === "spring" && (transition.stiffness !== void 0 || transition.damping !== void 0 || transition.mass !== void 0);
-}
-function springParams(spring) {
-  if (isPhysicsSpring(spring)) {
-    return { stiffness: spring.stiffness ?? 200, damping: spring.damping ?? 25, mass: spring.mass ?? 1 };
-  }
-  const visualDuration = Math.max(0.05, spring.visualDuration ?? 0.3);
-  const bounce = spring.bounce ?? 0.3;
-  const root = 2 * Math.PI / (visualDuration * 1.2);
-  const stiffness = root * root;
-  const damping = 2 * Math.min(1, Math.max(0.05, 1 - bounce)) * Math.sqrt(stiffness);
-  return { stiffness, damping, mass: 1 };
-}
-function springProgress(t, { stiffness, damping, mass }) {
-  if (t <= 0) return 0;
-  const w0 = Math.sqrt(stiffness / mass);
-  const zeta = damping / (2 * Math.sqrt(stiffness * mass));
-  if (zeta < 0.9999) {
-    const wd2 = w0 * Math.sqrt(1 - zeta * zeta);
-    return 1 - Math.exp(-zeta * w0 * t) * (Math.cos(wd2 * t) + zeta * w0 / wd2 * Math.sin(wd2 * t));
-  }
-  if (zeta < 1.0001) {
-    return 1 - Math.exp(-w0 * t) * (1 + w0 * t);
-  }
-  const wd = w0 * Math.sqrt(zeta * zeta - 1);
-  const r1 = -zeta * w0 + wd;
-  const r2 = -zeta * w0 - wd;
-  return 1 + (r2 * Math.exp(r1 * t) - r1 * Math.exp(r2 * t)) / (r1 - r2);
-}
-function springSettleDuration(params) {
-  const w0 = Math.sqrt(params.stiffness / params.mass);
-  const zeta = params.damping / (2 * Math.sqrt(params.stiffness * params.mass));
-  const decay = zeta >= 1 ? zeta * w0 - w0 * Math.sqrt(Math.max(0, zeta * zeta - 1)) : zeta * w0;
-  const duration = Math.log(200) / Math.max(decay, 1e-6);
-  return round22(clamp9(duration, 0.05, 10));
-}
-function cubicBezierProgress(p, [x1, y1, x2, y2]) {
-  if (p <= 0) return 0;
-  if (p >= 1) return 1;
-  const sampleX = (t2) => bezierAxis2(t2, x1, x2);
-  const sampleY = (t2) => bezierAxis2(t2, y1, y2);
-  let t = p;
-  for (let i = 0; i < 8; i++) {
-    const x = sampleX(t) - p;
-    if (Math.abs(x) < 1e-5) return sampleY(t);
-    const dx = bezierAxisDerivative(t, x1, x2);
-    if (Math.abs(dx) < 1e-6) break;
-    t -= x / dx;
-  }
-  let lo = 0;
-  let hi = 1;
-  t = p;
-  while (hi - lo > 1e-5) {
-    if (sampleX(t) < p) lo = t;
-    else hi = t;
-    t = (lo + hi) / 2;
-  }
-  return sampleY(t);
-}
-function bezierAxis2(t, a1, a2) {
-  return (1 - 3 * a2 + 3 * a1) * t * t * t + (3 * a2 - 6 * a1) * t * t + 3 * a1 * t;
-}
-function bezierAxisDerivative(t, a1, a2) {
-  return 3 * (1 - 3 * a2 + 3 * a1) * t * t + 2 * (3 * a2 - 6 * a1) * t + 3 * a1;
-}
-function resolveClipTransition(raw, clipDuration) {
-  const safeDuration = Math.max(0.05, clipDuration);
-  if (raw.type === "easing") {
-    return {
-      transition: { ...raw, duration: safeDuration },
-      duration: safeDuration,
-      isPhysics: false
-    };
-  }
-  if (isPhysicsSpring(raw)) {
-    return {
-      transition: raw,
-      duration: springSettleDuration(springParams(raw)),
-      isPhysics: true
-    };
-  }
-  return {
-    transition: { type: "spring", bounce: raw.bounce ?? 0.2, visualDuration: safeDuration },
-    duration: safeDuration,
-    isPhysics: false
-  };
-}
-
-// src/timeline-core.ts
 var CLIP_VALUE_STEP = 0.01;
 var TIMELINE_MIN_CLIP_DURATION = 0.05;
 var DEFAULT_STEP_DURATION = 0.3;
@@ -12479,7 +12561,7 @@ function sampleCurve(curve, elapsed) {
     return springProgress(elapsed, curve.spring);
   }
   if (curve.ease) {
-    return cubicBezierProgress(clamp9(curve.duration > 0 ? elapsed / curve.duration : 1, 0, 1), curve.ease);
+    return cubicBezierProgress(clamp4(curve.duration > 0 ? elapsed / curve.duration : 1, 0, 1), curve.ease);
   }
   return curve.duration > 0 ? Math.min(1, elapsed / curve.duration) : 1;
 }
@@ -12713,7 +12795,7 @@ function computeClipState(clip, time, cycleTime = time) {
   const phaseElapsed = looping ? cycleTime - clip.at : elapsed;
   const fold = (e) => looping ? e % total : e;
   const basePos = started ? fold(Math.max(0, phaseElapsed)) : 0;
-  const progress = total > 0 ? clamp9(basePos / total, 0, 1) : started ? 1 : 0;
+  const progress = total > 0 ? clamp4(basePos / total, 0, 1) : started ? 1 : 0;
   let current;
   let stepIndex = 0;
   if (clip.tracks.length && clip.props?.length) {
@@ -12793,7 +12875,7 @@ function mixHexColors(a, b, p) {
   const ca = parseHex2(a);
   const cb = parseHex2(b);
   if (!ca || !cb) return null;
-  const t = clamp9(p, 0, 1);
+  const t = clamp4(p, 0, 1);
   const mixed = ca.map((v, i) => Math.round(v + (cb[i] - v) * t));
   const hex = (n) => n.toString(16).padStart(2, "0");
   const rgb = `#${hex(mixed[0])}${hex(mixed[1])}${hex(mixed[2])}`;
@@ -12803,17 +12885,17 @@ function transitionToCss(transition) {
   if (!transition) return void 0;
   if (transition.type === "easing") {
     return {
-      transitionDuration: `${round22(transition.duration)}s`,
-      transitionTimingFunction: `cubic-bezier(${transition.ease.map((v) => round22(v)).join(", ")})`
+      transitionDuration: `${round2(transition.duration)}s`,
+      transitionTimingFunction: `cubic-bezier(${transition.ease.map((v) => round2(v)).join(", ")})`
     };
   }
   const params = springParams(transition);
   const dampingRatio = params.damping / (2 * Math.sqrt(params.stiffness * params.mass));
   const duration = transition.visualDuration ?? springSettleDuration(params);
-  const bounce = transition.bounce ?? Math.max(0, round22(1 - dampingRatio));
+  const bounce = transition.bounce ?? Math.max(0, round2(1 - dampingRatio));
   return {
-    transitionDuration: `${round22(duration)}s`,
-    transitionTimingFunction: bounce > 0.05 ? `cubic-bezier(0.34, ${round22(1.2 + bounce)}, 0.64, 1)` : "cubic-bezier(0.25, 0.6, 0.35, 1)"
+    transitionDuration: `${round2(duration)}s`,
+    transitionTimingFunction: bounce > 0.05 ? `cubic-bezier(0.34, ${round2(1.2 + bounce)}, 0.64, 1)` : "cubic-bezier(0.25, 0.6, 0.35, 1)"
   };
 }
 function unflattenClipValues(values, clipKey) {
@@ -12838,18 +12920,18 @@ function cloneTimelineValue(value) {
   );
 }
 function clampClipMove(at2, duration, timelineDuration) {
-  return clamp9(round22(at2), 0, Math.max(0, timelineDuration - duration));
+  return clamp4(round2(at2), 0, Math.max(0, timelineDuration - duration));
 }
 function clampClipResizeEnd(duration, at2, timelineDuration) {
-  return clamp9(round22(duration), TIMELINE_MIN_CLIP_DURATION, timelineDuration - at2);
+  return clamp4(round2(duration), TIMELINE_MIN_CLIP_DURATION, timelineDuration - at2);
 }
 function clampClipResizeStart(newAt, at2, duration) {
-  const clampedAt = clamp9(round22(newAt), 0, at2 + duration - TIMELINE_MIN_CLIP_DURATION);
-  return { at: clampedAt, duration: round22(at2 + duration - clampedAt) };
+  const clampedAt = clamp4(round2(newAt), 0, at2 + duration - TIMELINE_MIN_CLIP_DURATION);
+  return { at: clampedAt, duration: round2(at2 + duration - clampedAt) };
 }
 function clampStepResize(duration, at2, otherStepsTotal, timelineDuration) {
   const max = Math.max(TIMELINE_MIN_CLIP_DURATION, timelineDuration - at2 - otherStepsTotal);
-  return clamp9(round22(duration), TIMELINE_MIN_CLIP_DURATION, max);
+  return clamp4(round2(duration), TIMELINE_MIN_CLIP_DURATION, max);
 }
 function formatClock(time, tenths = false) {
   const safe = Math.max(0, time);
@@ -12859,7 +12941,7 @@ function formatClock(time, tenths = false) {
   return `${String(minutes).padStart(2, "0")}:${secondsText}`;
 }
 function formatSeconds(value) {
-  return `${round22(value)}s`;
+  return `${round2(value)}s`;
 }
 
 // src/move-presets.ts
@@ -13414,7 +13496,7 @@ function MoveTimeline({
   const view = inFront ? MoveTimelineStore.getWindow() : timelineWindow(duration, 1, 0);
   const rulerRef = useRef14(null);
   const [width, setWidth] = useState9(0);
-  useLayoutEffect3(() => {
+  useLayoutEffect4(() => {
     const ruler = rulerRef.current;
     if (!ruler) return;
     const measure = () => setWidth(Math.round(ruler.getBoundingClientRect().width));
@@ -14729,7 +14811,7 @@ var AutomationSlot = class {
 };
 
 // src/components/MoveAutomationLanes.tsx
-import { useCallback as useCallback3, useEffect as useEffect16, useLayoutEffect as useLayoutEffect4, useRef as useRef15, useState as useState10, useSyncExternalStore as useSyncExternalStore6 } from "react";
+import { useCallback as useCallback3, useEffect as useEffect16, useLayoutEffect as useLayoutEffect5, useRef as useRef15, useState as useState10, useSyncExternalStore as useSyncExternalStore6 } from "react";
 import { createPortal as createPortal6 } from "react-dom";
 import { jsx as jsx18, jsxs as jsxs13 } from "react/jsx-runtime";
 var DOCK_GAP3 = 14;
@@ -14761,7 +14843,7 @@ function MoveAutomationLanes({
   const [duration, setDuration] = useState10(() => store.clock().duration);
   const rulerRef = useRef15(null);
   const [width, setWidth] = useState10(0);
-  useLayoutEffect4(() => {
+  useLayoutEffect5(() => {
     const ruler = rulerRef.current;
     if (!ruler) return;
     const measure = () => setWidth(Math.round(ruler.getBoundingClientRect().width));
@@ -15859,7 +15941,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       MoveSettingsView.close();
     };
   }, [roomKey]);
-  useLayoutEffect5(() => {
+  useLayoutEffect6(() => {
     if (!settingsOpen) return;
     const wake = MoveFunctions.suspend(["set_overview"]);
     const releaseBack = MoveFunctions.push("back", () => MoveSettingsView.close(), { label: "Close", chip: false });
@@ -18610,7 +18692,7 @@ function useMoveFloat() {
   const ref = useRef16(null);
   const [inside, setInside] = useState11(false);
   const [room, setRoom] = useState11(0);
-  useLayoutEffect5(() => {
+  useLayoutEffect6(() => {
     const box = ref.current, panel = box?.parentElement;
     if (!box || !panel) return;
     const measure = () => {
@@ -18670,7 +18752,7 @@ function MoveAgentPrompt({ view }) {
   const echoing = thinking && !view.message;
   const [leaving, setLeaving] = useState11(false);
   const wasReplying = useRef16(replying);
-  useLayoutEffect5(() => {
+  useLayoutEffect6(() => {
     if (wasReplying.current && !replying) setLeaving(true);
     wasReplying.current = replying;
   }, [replying]);
@@ -19032,7 +19114,7 @@ function MoveAgentField({ view, inputRef, value, sent, placeholder, label, onDra
 }
 function useSheetFloor(anchor, open2) {
   const [floor, setFloor] = useState11(0);
-  useLayoutEffect5(() => {
+  useLayoutEffect6(() => {
     const panel = anchor.current;
     if (!open2 || !panel || typeof window === "undefined") return;
     const measure = () => {
@@ -19061,7 +19143,7 @@ function useStickToBottom(shape) {
     const box = outer.current;
     if (box) box.scrollTop = box.scrollHeight;
   };
-  useLayoutEffect5(() => {
+  useLayoutEffect6(() => {
     const body = inner.current;
     if (!body || typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(() => {
@@ -19070,7 +19152,7 @@ function useStickToBottom(shape) {
     observer.observe(body);
     return () => observer.disconnect();
   }, []);
-  useLayoutEffect5(() => {
+  useLayoutEffect6(() => {
     if (stuck.current) end();
   }, [shape]);
   return {
@@ -19099,11 +19181,11 @@ function useAgentFrame(shape, live, holding, still) {
   const typedAt = useRef16(-Infinity);
   const state4 = useRef16({ live, holding, still });
   state4.current = { live, holding, still };
-  useLayoutEffect5(() => {
+  useLayoutEffect6(() => {
     changedAt.current = performance.now();
   }, [shape]);
   const settle3 = useRef16(null);
-  useLayoutEffect5(() => {
+  useLayoutEffect6(() => {
     const box = outer.current, body = inner.current;
     if (!box || !body) return;
     let easing = null;
@@ -19136,7 +19218,7 @@ function useAgentFrame(shape, live, holding, still) {
       settle3.current = null;
     };
   }, []);
-  useLayoutEffect5(() => {
+  useLayoutEffect6(() => {
     settle3.current?.();
   }, [holding, shape]);
   return { outer, inner, typed: () => {
@@ -19151,7 +19233,7 @@ function MoveAgentWords({ text, working }) {
   useEffect17(() => {
     shown.current = parts.length;
   });
-  useLayoutEffect5(() => {
+  useLayoutEffect6(() => {
     const words = ref.current;
     if (working && words) words.scrollTop = words.scrollHeight;
   }, [text, working]);
@@ -19161,7 +19243,7 @@ function MoveAgentWords({ text, working }) {
   ] });
 }
 function useMoveFieldHeight(ref, value) {
-  useLayoutEffect5(() => {
+  useLayoutEffect6(() => {
     const field = ref.current;
     if (!field || typeof CSS === "undefined" || CSS.supports("field-sizing", "content")) return;
     field.style.height = "auto";
@@ -19819,7 +19901,8 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
               label: meta.label,
               value: `${Number(v.toFixed(2))}${meta.unit ?? (Math.abs(max - min) >= 180 ? "\xB0" : "")}`,
               bearing: valueToBearing(v, min, max),
-              origin: valueToBearing(meta.origin ?? min, min, max)
+              origin: valueToBearing(meta.origin ?? min, min, max),
+              follow: !active
             }
           )
         ]
@@ -20239,7 +20322,7 @@ function MoveActionDeck({ actions, className }) {
 }
 
 // src/components/MoveViewStage.tsx
-import { useEffect as useEffect20, useLayoutEffect as useLayoutEffect6, useRef as useRef20, useSyncExternalStore as useSyncExternalStore9 } from "react";
+import { useEffect as useEffect20, useLayoutEffect as useLayoutEffect7, useRef as useRef20, useSyncExternalStore as useSyncExternalStore9 } from "react";
 
 // src/move-views.ts
 import { flushSync } from "react-dom";
@@ -20589,7 +20672,7 @@ function MoveViewStage({ children, className, style }) {
   const { busy, wait } = useSyncExternalStore9(MoveViews.subscribe, MoveViews.getState, MoveViews.getState);
   const content = useRef20(null);
   useEffect20(() => MoveViews.mountStage(), []);
-  useLayoutEffect6(() => {
+  useLayoutEffect7(() => {
     if (content.current) content.current.inert = busy;
   }, [busy]);
   return /* @__PURE__ */ jsx24(
@@ -22222,6 +22305,14 @@ export {
   LAYER_PADS,
   LFO_DEF,
   LFO_SYNC_DIVISIONS,
+  LIVELY_CSS,
+  LIVELY_EXIT,
+  LIVELY_PRESS,
+  LIVELY_PRESS_SCALE,
+  LIVELY_STAGGER,
+  LIVELY_STAGGER_MAX,
+  LIVELY_SURFACE,
+  LIVELY_UI,
   ListScreen,
   MIN_STOPS,
   MOD_COLORS,
@@ -22500,6 +22591,7 @@ export {
   lfoSyncedHz,
   listModTypes,
   listenMoveTouch,
+  livelyStagger,
   loopFromStep,
   loopSteps,
   modColor,

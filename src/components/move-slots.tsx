@@ -1,5 +1,5 @@
 import type { MovePadListView } from '../move-pad-list';
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { moveBandCuts, moveGrainPicture, moveLanes, moveNumericDrawing, movePlaybackMode, MOVE_GRAIN, type MoveGrainSpan, moveVectorStage, MOVE_BAND_H, MOVE_BAND_W, MOVE_STAGE, type MovePlaybackMode, type MoveTone } from '../move-visual-core';
 import { MoveGauge, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing } from './move-visuals';
@@ -8,6 +8,8 @@ import type { ControlMeta, SelectLevel } from '../store/TweakStore';
 import { ICON_BADGE_OFF, ICON_BADGE_ON, LUCIDE_ICONS } from '../icons';
 import { enumAspect, enumOptionIcon, enumOptionLabel, enumOptionValue } from '../move-layout';
 import { arcPath } from '../angle-core';
+import { springParams } from '../transition-math';
+import { LIVELY_UI } from '../move-lively';
 import { parseHex } from '../color-core';
 import { resolveFilterAxis, type FilterValue } from '../filter-core';
 import { ListScreen } from './ListScreen';
@@ -709,31 +711,118 @@ export function MoveSlotRampBody({ label, value, css, stop, stops }: {
   );
 }
 
+/** The needle's reach, in the drawing's units. */
+const NEEDLE_R = 8.5;
+/** The ui spring, as the stiffness and damping the needle integrates. */
+const NEEDLE_SPRING = springParams(LIVELY_UI);
+/** Close enough to rest, in degrees and degrees a second. */
+const NEEDLE_REST = 0.05;
+
+function needleTip(bearing: number): { x2: string; y2: string } {
+  const rad = ((bearing - 90) * Math.PI) / 180;
+  return { x2: (NEEDLE_R * Math.cos(rad)).toFixed(3), y2: (NEEDLE_R * Math.sin(rad)).toFixed(3) };
+}
+
+/** A bearing folded into 0..360, the range `arcPath` draws. */
+function foldBearing(deg: number): number {
+  return ((deg % 360) + 360) % 360;
+}
+
 /**
  * The dial slot — a needle, for the values whose two ends are the same place.
  * A bar would put 359° and 1° as far apart as a slot can show them.
+ *
+ * In the hand (`follow` off) the needle is the value, 1:1, every frame. A
+ * change from anywhere else — a preset, an agent, automation — has the needle
+ * follow on the ui spring, the short way round. The spring runs on the
+ * elements straight, never through a render; a reader who asked for less
+ * motion gets the needle jumping to the value.
  */
-export function MoveSlotDialBody({ label, value, bearing, origin }: {
+export function MoveSlotDialBody({ label, value, bearing, origin, follow = false }: {
   label: string;
   value: ReactNode;
   /** Compass bearing in degrees, 0 = up, clockwise. */
   bearing: number;
   /** The bearing the sweep grows out of. */
   origin: number;
+  /** Ease to a new bearing rather than jump — off while the dial is in the hand. */
+  follow?: boolean;
 }) {
-  const rad = ((bearing - 90) * Math.PI) / 180;
+  const hand = useRef<SVGLineElement>(null);
+  const sweep = useRef<SVGPathElement>(null);
+  // Where the needle is drawn (unwrapped), how fast it moves, where it heads.
+  const needle = useRef({ at: bearing, speed: 0, to: bearing, origin, frame: 0 });
+
+  useLayoutEffect(() => {
+    const n = needle.current;
+    n.origin = origin;
+    const draw = (deg: number) => {
+      const tip = needleTip(deg);
+      hand.current?.setAttribute('x2', tip.x2);
+      hand.current?.setAttribute('y2', tip.y2);
+      sweep.current?.setAttribute('d', arcPath(n.origin, foldBearing(deg), NEEDLE_R));
+    };
+    const still = !follow
+      || typeof window === 'undefined'
+      || typeof window.requestAnimationFrame !== 'function'
+      || !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    // The short way round from where the needle is drawn now.
+    const to = n.at + ((((bearing - n.at) % 360) + 540) % 360) - 180;
+    if (still || Math.abs(to - n.at) < NEEDLE_REST) {
+      // Stand the needle on the value. A spring cut short (a hand taking the
+      // dial mid-glide) left it somewhere the render does not know about.
+      const moving = n.frame !== 0 || n.at !== bearing;
+      if (n.frame) window.cancelAnimationFrame(n.frame);
+      n.frame = 0;
+      n.at = n.to = bearing;
+      n.speed = 0;
+      if (moving) draw(bearing);
+      return;
+    }
+    n.to = to;
+    // The render drew the destination; put the needle back where it is
+    // before the frame paints, and let the spring carry it.
+    draw(n.at);
+    if (n.frame) return;
+    const { stiffness, damping, mass } = NEEDLE_SPRING;
+    let last = performance.now();
+    const tick = (now: number) => {
+      // A dropped frame is not a reason to fling the needle.
+      let dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+      last = now;
+      while (dt > 0) {
+        const step = Math.min(dt, 1 / 240);
+        n.speed += ((-stiffness * (n.at - n.to) - damping * n.speed) / mass) * step;
+        n.at += n.speed * step;
+        dt -= step;
+      }
+      if (Math.abs(n.at - n.to) < NEEDLE_REST && Math.abs(n.speed) < NEEDLE_REST) {
+        n.at = n.to = foldBearing(n.to);
+        n.speed = 0;
+        n.frame = 0;
+        draw(n.at);
+        return;
+      }
+      draw(n.at);
+      n.frame = window.requestAnimationFrame(tick);
+    };
+    n.frame = window.requestAnimationFrame(tick);
+  }, [bearing, origin, follow]);
+
+  useEffect(() => () => {
+    const n = needle.current;
+    if (n.frame) window.cancelAnimationFrame(n.frame);
+    n.frame = 0;
+  }, []);
+
+  const tip = needleTip(bearing);
   return (
     <>
       <MoveSlotDisplay>
         <svg className="tweakers-move-slot-needle" viewBox="-12 -12 24 24" aria-hidden="true">
-          <circle className="tweakers-move-needle-face" cx="0" cy="0" r="8.5" />
-          <path className="tweakers-move-needle-sweep" d={arcPath(origin, bearing, 8.5)} />
-          <line
-            className="tweakers-move-needle-hand"
-            x1="0" y1="0"
-            x2={(8.5 * Math.cos(rad)).toFixed(3)}
-            y2={(8.5 * Math.sin(rad)).toFixed(3)}
-          />
+          <circle className="tweakers-move-needle-face" cx="0" cy="0" r={NEEDLE_R} />
+          <path ref={sweep} className="tweakers-move-needle-sweep" d={arcPath(origin, bearing, NEEDLE_R)} />
+          <line ref={hand} className="tweakers-move-needle-hand" x1="0" y1="0" x2={tip.x2} y2={tip.y2} />
         </svg>
       </MoveSlotDisplay>
       <MoveSlotDisplayFoot label={label} value={value} />

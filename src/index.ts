@@ -506,3 +506,8 @@ export { presetFlowerSeed, presetFlowerSvg } from './preset-flower';
 export { MovePadListStore } from './move-pad-list';
 export type { MovePadListConfig, MovePadListOption, MovePadListView } from './move-pad-list';
 export { MovePadListBody } from './components/move-slots';
+
+// Lively — the kit's motion language: the springs and exit as Motion
+// transitions, and the same springs as CSS (`--move-spring-*` in styles.css).
+export { LIVELY_PRESS, LIVELY_UI, LIVELY_SURFACE, LIVELY_EXIT, LIVELY_PRESS_SCALE, LIVELY_STAGGER, LIVELY_STAGGER_MAX, LIVELY_CSS, livelyStagger } from './move-lively';
+export type { LivelySpring, LivelyTween, LivelyCss } from './move-lively';

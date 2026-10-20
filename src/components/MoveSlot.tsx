@@ -537,7 +537,8 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
         <MoveModRing panelId={panelId} path={meta.path} />
         <MoveSlotDialBody label={meta.label}
           value={`${Number(v.toFixed(2))}${meta.unit ?? (Math.abs(max - min) >= 180 ? '°' : '')}`}
-          bearing={valueToBearing(v, min, max)} origin={valueToBearing(meta.origin ?? min, min, max)} />
+          bearing={valueToBearing(v, min, max)} origin={valueToBearing(meta.origin ?? min, min, max)}
+          follow={!active} />
       </div>
     );
   }

@@ -99,6 +99,7 @@ export default defineConfig([
       'layer-select-core': 'src/layer-select-core.ts',
       'layer-transform-core': 'src/layer-transform-core.ts',
       'move-layout': 'src/move-layout.ts',
+      'move-lively': 'src/move-lively.ts',
       'move-strip': 'src/move-strip.ts',
       'move-visual-core': 'src/move-visual-core.ts',
       'range-slider-core': 'src/range-slider-core.ts',
