@@ -60,11 +60,12 @@ export const MOVE_FUNCTION_MANIFEST = [
      step buttons, in step order (`step` is the index). Four steps carry no
      print and are named by position. Holding Shift on the hardware lights
      the label icon under each one the app carries; a press arrives with
-     `step` set. `host` marks the two schwung keeps for itself (Settings on
-     Shift+Step 2, Tools on Shift+Step 13): attachable, never delivered. */
+     `step` set. `host` marks the three schwung keeps for itself (Settings on
+     Shift+Step 2, Scenes on Shift+Step 3 since schwung 1.6, Tools on
+     Shift+Step 13): attachable, never delivered. */
   { name: 'set_overview', step: 0 },
   { name: 'setup', step: 1, host: true },
-  { name: 'workflow', step: 2 },
+  { name: 'workflow', step: 2, host: true },
   { name: 'step4', step: 3 },
   { name: 'tempo', step: 4 },
   { name: 'metronome', step: 5 },
