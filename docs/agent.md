@@ -9,6 +9,7 @@ Hold the Move's wheel down. A prompt opens above the panel, at its right edge. S
 | Hold the wheel | Opens the prompt. A second hold closes it. |
 | Enter | Sends the words. They wait in the box under the working dots; the reply takes their place and an empty box opens under it, so the next ask refines the last. Shift+Enter starts a new line; the field grows with what is typed. |
 | Click the wheel on a reply, `Cmd+Z`, or **Undo** | Puts back every value the last ask moved. |
+| Click the wheel while it asks | Presses its `go` button (see *Asking before it acts*). |
 | Esc | Closes. What landed stays. |
 
 ## Every integration has it already
@@ -58,6 +59,66 @@ runs `checkpoint`. What `act` ran stays even if the ask is then let go or
 fails, and its undo joins the ask's one undo. When the answer comes, its own
 `actions` run after them, and its `message` (if any) replaces what was said.
 A transport that does not stream ignores the argument and nothing changes.
+
+## Asking before it acts, and work that takes a while
+
+A verb that spends money, or cannot be taken back, asks the person first —
+with buttons, never by making them type "yes". A host transport asks through
+the stream and waits for the press:
+
+```ts
+const ask: MoveAgentAsk = async (request, signal, stream) => {
+  const pricing = stream.step('Pricing the run…');
+  const plan = await priceTheRun();
+  pricing('done', 'Priced the run');
+  const pressed = await stream.choose(
+    [{ id: 'run', label: `Run · ${plan.price}`, tone: 'go' }, { id: 'cancel', label: 'Cancel', tone: 'quiet' }],
+    `${plan.count} pictures on ${plan.models} models.`,
+  );
+  if (pressed !== 'run') return { writes: [], message: 'Nothing was run.' };
+  const running = stream.step(`Running ${plan.count} pictures…`);
+  await run(plan, signal);
+  running('done', `Ran ${plan.count} pictures`);
+  return { writes: [] };
+};
+```
+
+- **`choose(choices, message?)`** puts the buttons under the reply, with
+  `message` as the question, and resolves with the id pressed — or `null`
+  when the ask is let go (Back, Escape, the prompt closing). `go` is lime and
+  is what the wheel's press takes; Back answers `null` and leaves the prompt
+  open. The ask's time budget stops while it waits. The question and the
+  answer stay in the turn as a step ("12 pictures. — Run · $0.24").
+- **`step(label)`** is a line under the reply for long work the host does
+  itself; call what it returns to finish it, with new words if they say
+  more. A step left running when the ask ends is kept as failed.
+- A host whose verbs run long sets `timeoutMs: 0` and stops them itself.
+
+## The sheet: a long session
+
+The box is for one change at a time. For a session — a job delegated in
+words, looked at, refined — the same prompt opens as a **sheet** at the
+screen's right side, with the whole conversation in it: every ask, what came
+back, every step on the way, the pictures sent. The field is pinned at its
+foot; the thread follows what is new while the end is in view and stays put
+while the person reads back. Its foot stands on the panel's top edge, so it
+never covers the instrument, and it is not modal — the page beside it takes
+the pointer and the keys. Swipe it right, Escape or Back closes it.
+
+| Way in | Result |
+| --- | --- |
+| The box's corner glyph (four arrows) | The box becomes the sheet, the ask in the air and the pictures with it. |
+| The sheet's corner glyph | Back to the box. |
+| `MoveAgentStore.openSheet(focus?)` | The host's own way in — a key, a menu. |
+
+The thread is the kit's (`MoveAgentStore.getThread()`, every finished ask as
+a `MoveAgentTurn`) and outlives the prompt closing. The model's side of the
+conversation is the host's; give `onNewChat` and the sheet offers New chat,
+which clears both. While the sheet is open the kit sets
+`--tweakers-agent-sheet-inset` on the document root — the room it takes from
+the right edge — so a host can keep its work clear of it
+(`padding-right: var(--tweakers-agent-sheet-inset, 0)`). The sheet is Base
+UI's drawer with Coss UI's right-side motion, in the kit's own tokens.
 
 ## The brief: good here, not just correct
 
@@ -274,7 +335,7 @@ Three repos share the agent. For a session picking this up cold:
 |---|---|
 | The store side: describe controls, fit and land writes (glide), actions and their undo, the multi-pass loop, the capability handshake, `read_signal` | tweakers `src/move-agent.ts` |
 | Source-time entries, the edit map, projection, boundary resolution, the line format | tweakers `src/move-agent-perception.ts` |
-| The prompt UI (reply, field, dot loader, steps, Done, undo) and the held-wheel / wheel-click wiring | tweakers `src/components/MovePanel.tsx` (`MoveAgentPrompt`), styles `.tweakers-move-agent*` in `src/styles/theme.css`; every state one click away in `demo/agent-lab.html` |
+| The prompt UI (reply, field, dot loader, steps, Done, undo, choices) and the sheet, and the held-wheel / wheel-click wiring | tweakers `src/components/MovePanel.tsx` (`MoveAgentPrompt`, `MoveAgentSheet`, the shared `MoveAgentField`), styles `.tweakers-move-agent*` in `src/styles/theme.css`; every state one click away in `demo/agent-lab.html` |
 | The bind: `moveKitOptions({ agent })` → `MoveAgentStore.configure` | tweakers `src/move-kit.ts` |
 | Tests | tweakers `test/move-agent*.test.ts` (unit, fake transport — no model calls) |
 | The demo's pretend media host | tweakers `demo/main.tsx` (Shift+Enter stands in for the held wheel) |

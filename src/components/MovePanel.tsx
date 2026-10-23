@@ -57,7 +57,8 @@ import { MoveTimelineStore } from '../move-timeline';
 import { MoveSettingsView } from '../move-settings';
 import { MoveTrackLabels, MOVE_PANEL_SETTINGS, moveTrackIcon, moveTrackLabelStyle } from '../move-track-labels';
 import { MovePresetStore, type MovePresetView } from '../move-presets';
-import { MoveAgentStore, MOVE_JOG_HOLD_EVENT, type MoveAgentView } from '../move-agent';
+import { MoveAgentStore, MOVE_JOG_HOLD_EVENT, type MoveAgentChoice, type MoveAgentStep, type MoveAgentTurn, type MoveAgentView } from '../move-agent';
+import { Drawer } from '@base-ui/react/drawer';
 import { ListScreen } from './ListScreen';
 import { MovePanelMotion } from './MovePanelMotion';
 
@@ -995,6 +996,13 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
         MoveAgentStore.shiftTap();
         return;
       }
+      // While the ask waits on a press, the wheel's press is its go button.
+      if (view?.choices?.length) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        MoveAgentStore.chooseGo();
+        return;
+      }
       if (!view || view.phase === 'thinking' || !(view.changed || view.acted) || !MoveAgentStore.canUndo()) return;
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -1791,7 +1799,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
         {!explorationOpen && colorMeta && <MoveColorDisplay panelId={page.panel.id} meta={colorMeta} anchor={panelRef} theme={theme} />}
         <PresetExploration />
         {presetSave && <MovePresetSaveInput suggested={presetSave.suggested} />}
-        <AnimatePresence>{agent && !presetSave && <MoveAgentPrompt key="agent" view={agent} />}</AnimatePresence>
+        <AnimatePresence>{agent && !agent.sheet && !presetSave && <MoveAgentPrompt key="agent" view={agent} />}</AnimatePresence>
+        <MoveAgentSheet view={agent} anchor={panelRef} />
         {!explorationOpen && composition && modSettings && (
           <MoveCurveComposer
             index={modSettings.index}
@@ -4067,23 +4076,11 @@ function MovePresetSaveInput({ suggested }: { suggested: string }) {
  */
 function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-  /** Shift went down and nothing else has yet — a capital letter clears it. */
-  const shiftAlone = useRef(false);
-  const [dropping, setDropping] = useState(false);
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useAgentDraft(view);
   const float = useMoveFloat();
   const still = !!useReducedMotion();
-  const pictures = MoveAgentStore.acceptsAttachments();
-  const hasImage = (data: DataTransfer | null) => !!data && [...data.items].some((item) => item.kind === 'file' && item.type.startsWith('image/'));
+  const drop = useAgentDrop(inputRef);
   const thinking = view.phase === 'thinking';
-  // A failed ask gives its words back, so they can be sent again; any ask
-  // starts the next turn with an empty field.
-  useEffect(() => {
-    if (view.phase === 'error') setDraft((now) => now || view.prompt);
-    else if (view.phase === 'thinking') setDraft('');
-  }, [view.phase, view.prompt]);
-  useMoveFieldHeight(inputRef, draft);
   const changed = view.phase !== 'thinking' && (view.changed > 0 || view.acted > 0);
   const skipped = view.skipped ? `${view.skipped} ${view.skipped === 1 ? 'action' : 'actions'} skipped.` : '';
   const said = thinking ? view.message : [view.message, skipped].filter(Boolean).join(' ');
@@ -4102,11 +4099,11 @@ function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
   }, [replying]);
   // Known in the very render the reply goes, before the effect records it.
   const working = thinking && !leaving && !(wasReplying.current && !replying);
-  // The Move's own Undo key already takes the answer back: no second one here.
-  const keyUndo = useSyncExternalStore((fn) => MoveFunctions.subscribe(fn), () => MoveFunctions.list().includes('undo'), () => false);
+  const keyUndo = useAgentKeyUndo();
+  const choices = view.choices ?? [];
   // What the turn is made of. When it changes the box eases to its new
   // height; when only the words in the field do, it follows them at once.
-  const shape = `${view.phase}|${replying}|${echoing}|${working}|${steps.length}|${view.attachments.length}`;
+  const shape = `${view.phase}|${replying}|${echoing}|${working}|${steps.length}|${view.attachments.length}|${choices.length}`;
   // While a reply is written out the box only grows. Once the host puts other
   // words in its place — a progress line after a long message — it may shrink
   // to them again, for the rest of the turn.
@@ -4116,27 +4113,19 @@ function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
   else if (lastSaid.current && !said.startsWith(lastSaid.current)) replaced.current = true;
   lastSaid.current = said;
   const frame = useAgentFrame(shape, thinking, thinking && replying && !replaced.current, still);
-  const send = () => {
-    const text = draft.trim();
-    if (!text || thinking) return;
-    setDraft('');
-    void MoveAgentStore.ask(text);
-  };
   return (
     <motion.div
       ref={float.ref}
       className="tweakers-move-preset-save tweakers-move-agent"
       data-phase={view.phase}
       data-inside={float.inside || undefined}
-      data-dropping={dropping || undefined}
+      data-dropping={drop.dropping || undefined}
       aria-busy={thinking || undefined}
       initial={still ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={still ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.98, transition: { duration: 0.16, ease: AGENT_EASE_IN } }}
       transition={{ duration: still ? 0.12 : 0.32, ease: AGENT_EASE_SMOOTH }}
-      onDragOver={pictures ? (e) => { if (!hasImage(e.dataTransfer)) return; e.preventDefault(); setDropping(true); } : undefined}
-      onDragLeave={pictures ? (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false); } : undefined}
-      onDrop={pictures ? (e) => { if (!hasImage(e.dataTransfer)) return; e.preventDefault(); setDropping(false); MoveAgentStore.attach(e.dataTransfer.files); inputRef.current?.focus(); } : undefined}
+      {...drop.props}
     >
       <div ref={frame.outer} className="tweakers-move-agent-frame">
         <div ref={frame.inner} className="tweakers-move-agent-body">
@@ -4152,109 +4141,417 @@ function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
                 exit={{ opacity: 0, y: still ? 0 : -6, transition: { duration: 0.18, ease: AGENT_EASE_IN } }}
                 transition={{ duration: 0.2, ease: AGENT_EASE_OUT }}
               >
-                {done ? (
-                  <span className="tweakers-move-agent-done">
-                    <svg className="tweakers-move-agent-done-mark" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                      <path d="M3 8.5l3.2 3.2L13 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" pathLength="1" />
-                    </svg>
-                    Done
-                  </span>
-                ) : said ? (
-                  <MoveAgentWords text={said} working={thinking} />
+                {done ? <MoveAgentDone /> : said ? (
+                  <MoveAgentWords text={said} working={thinking && !choices.length} />
                 ) : (
                   // Where the reply will be: the dots, until its first words take their place.
                   <span className="tweakers-move-agent-thinking" role="img" aria-label="The agent is working">
                     <MoveAgentLoader />
                   </span>
                 )}
-                {changed && !keyUndo && MoveAgentStore.canUndo() && (
-                  <motion.button
-                    type="button"
-                    className="tweakers-move-agent-undo"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.24, ease: AGENT_EASE_OUT, delay: still ? 0 : 0.2 }}
-                    onClick={() => void MoveAgentStore.undo()}
-                  >Undo</motion.button>
-                )}
+                {choices.length > 0 && <MoveAgentChoices choices={choices} />}
+                {changed && !keyUndo && MoveAgentStore.canUndo() && <MoveAgentUndo still={still} />}
               </motion.div>
             )}
           </AnimatePresence>
-          {steps.length > 0 && (
-            <ul className="tweakers-move-agent-steps" aria-label="What the agent is doing">
-              {steps.map((step, i) => (
-                <li key={i} className="tweakers-move-agent-step" data-state={step.state}>
-                  {step.label}{step.state === 'failed' && ' — failed'}
-                </li>
-              ))}
-            </ul>
-          )}
-            <div className="tweakers-move-agent-field" data-pictures={pictures || undefined}>
-              <textarea
-                ref={inputRef}
-                className="tweakers-move-preset-save-input tweakers-move-agent-input"
-                value={echoing ? view.prompt : draft}
-                rows={1}
-                readOnly={thinking}
-                data-sent={echoing || undefined}
-                placeholder={thinking ? '' : said ? '…' : 'Ask for a change'}
-                aria-label={said ? 'Reply to the agent' : 'Ask the agent for a change'}
-                autoFocus
-                spellCheck={false}
-                autoComplete="off"
-                onChange={(e) => { frame.typed(); setDraft(e.currentTarget.value); }}
-                onPaste={pictures ? (e) => {
-                  const files = [...e.clipboardData.files].filter((f) => f.type.startsWith('image/'));
-                  if (!files.length) return;
-                  e.preventDefault();
-                  MoveAgentStore.attach(files);
-                } : undefined}
-                onKeyDown={(e) => {
-                  e.stopPropagation();
-                  shiftAlone.current = e.key === 'Shift' && !e.repeat ? true : e.key === 'Shift' ? shiftAlone.current : false;
-                  if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); }
-                  else if (e.key === 'Escape') MoveAgentStore.close();
-                  else if (e.key === 'z' && (e.metaKey || e.ctrlKey) && changed && !draft) { e.preventDefault(); void MoveAgentStore.undo(); }
-                }}
-                onKeyUp={(e) => {
-                  if (e.key !== 'Shift') return;
-                  const tap = shiftAlone.current;
-                  shiftAlone.current = false;
-                  if (tap) MoveAgentStore.shiftTap();
-                }}
-                onBlur={() => { shiftAlone.current = false; }}
-              />
-              {/* A picture, from the field's top-right corner: a glyph, no plate. */}
-              {pictures && (
-                <>
-                  <button type="button" className="tweakers-move-agent-attach" aria-label="Add a picture" title="Add a picture — or drop or paste one"
-                    disabled={thinking} onClick={() => fileRef.current?.click()}>
-                    <MoveSlotGlyph name="image-plus" className="tweakers-move-agent-attach-icon" />
-                  </button>
-                  <input ref={fileRef} type="file" accept="image/*" multiple hidden
-                    onChange={(e) => { if (e.currentTarget.files) MoveAgentStore.attach(e.currentTarget.files); e.currentTarget.value = ''; inputRef.current?.focus(); }} />
-                </>
-              )}
-            </div>
-          {/* The pictures, along the field's foot: one strip, shared evenly, each cropped to fill. */}
-          {view.attachments.length > 0 && (
-            <ul className="tweakers-move-agent-attachments" aria-label="Pictures in the prompt">
-              {view.attachments.map((a) => (
-                <li key={a.id} className="tweakers-move-agent-attachment" title={a.name}>
-                  <img src={a.url} alt={a.name} />
-                  <button type="button" aria-label={`Remove ${a.name}`} disabled={thinking} onClick={() => { MoveAgentStore.detach(a.id); inputRef.current?.focus(); }}>
-                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d={ICON_CLOSE} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                    </svg>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+          {steps.length > 0 && <MoveAgentSteps steps={steps} />}
+          <MoveAgentField
+            view={view}
+            inputRef={inputRef}
+            value={echoing ? view.prompt : draft}
+            sent={echoing}
+            placeholder={thinking ? '' : said ? '…' : 'Ask for a change'}
+            label={said ? 'Reply to the agent' : 'Ask the agent for a change'}
+            onDraft={(text) => { frame.typed(); setDraft(text); }}
+            onExpand={() => MoveAgentStore.openSheet()}
+          />
         </div>
       </div>
     </motion.div>
   );
+}
+
+/**
+ * The prompt as a sheet at the screen's right side, for a long session: the
+ * whole conversation in one column that scrolls — every ask with what came
+ * back and what was done on the way — and the field pinned at its foot. It is
+ * the same prompt as the box, one click away either way, with the same field,
+ * the same pictures and the same buttons. It never blocks the page: the work
+ * beside it stays in reach of the hand, the mouse and the Move. Swipe it to
+ * the right, Escape or Back closes it. Base UI's drawer carries it, with
+ * Coss UI's right-side motion.
+ */
+function MoveAgentSheet({ view, anchor }: { view: MoveAgentView | null; anchor: React.RefObject<HTMLElement | null> }) {
+  const open = !!view?.sheet;
+  // The last view stays drawn while the sheet slides away.
+  const last = useRef(view);
+  if (view) last.current = view;
+  const shown = view ?? last.current;
+  const bottom = useSheetFloor(anchor, open);
+  // The host may make room for it: the sheet's width, from the screen's right edge.
+  useEffect(() => {
+    if (!open || typeof document === 'undefined') return;
+    const root = document.documentElement;
+    root.style.setProperty('--tweakers-agent-sheet-inset', 'var(--tweakers-agent-sheet-width, calc(400px + 24px))');
+    return () => { root.style.removeProperty('--tweakers-agent-sheet-inset'); };
+  }, [open]);
+  return (
+    <Drawer.Root
+      open={open}
+      modal={false}
+      disablePointerDismissal
+      swipeDirection="right"
+      onOpenChange={(next) => { if (!next) MoveAgentStore.close(); }}
+    >
+      <Drawer.Portal>
+        <Drawer.Viewport className="tweakers-move-agent-sheet-viewport" style={{ '--move-agent-sheet-floor': `${bottom}px` } as React.CSSProperties}>
+          <Drawer.Popup className="tweakers-move-surface tweakers-move-agent-sheet" data-phase={shown?.phase} initialFocus={false}>
+            {shown && <MoveAgentSheetBody view={shown} />}
+          </Drawer.Popup>
+        </Drawer.Viewport>
+      </Drawer.Portal>
+    </Drawer.Root>
+  );
+}
+
+function MoveAgentSheetBody({ view }: { view: MoveAgentView }) {
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [draft, setDraft] = useAgentDraft(view);
+  const still = !!useReducedMotion();
+  const drop = useAgentDrop(inputRef);
+  const thread = MoveAgentStore.getThread();
+  const thinking = view.phase === 'thinking';
+  const keyUndo = useAgentKeyUndo();
+  const scroll = useStickToBottom(`${thread.length}|${view.phase}|${view.message.length}|${view.steps.length}|${view.choices?.length ?? 0}`);
+  const lastId = thread.length ? thread[thread.length - 1].id : -1;
+  useEffect(() => { inputRef.current?.focus(); }, []);
+  return (
+    <div className="tweakers-move-agent-sheet-inner" data-dropping={drop.dropping || undefined} {...drop.props}>
+      <header className="tweakers-move-agent-sheet-head">
+        <Drawer.Title className="tweakers-move-agent-sheet-title">Agent</Drawer.Title>
+        {MoveAgentStore.hasNewChat() && thread.length > 0 && (
+          <button type="button" className="tweakers-move-agent-sheet-new" disabled={thinking} onClick={() => { MoveAgentStore.newChat(); inputRef.current?.focus(); }}>New chat</button>
+        )}
+        <button type="button" className="tweakers-move-agent-sheet-icon" aria-label="Make it small" title="Make it small" onClick={() => MoveAgentStore.setSheet(false)}>
+          <MoveSlotGlyph name="shrink" className="tweakers-move-agent-attach-icon" />
+        </button>
+        <button type="button" className="tweakers-move-agent-sheet-icon" aria-label="Close" title="Close" onClick={() => MoveAgentStore.close()}>
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="tweakers-move-agent-attach-icon">
+            <path d={ICON_CLOSE} stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </button>
+      </header>
+      <div ref={scroll.outer} className="tweakers-move-agent-sheet-scroll" onScroll={scroll.onScroll}>
+        <ol ref={scroll.inner} className="tweakers-move-agent-thread" aria-label="The conversation">
+          {thread.map((turn) => (
+            <MoveAgentThreadTurn key={turn.id} turn={turn} undo={turn.id === lastId && !thinking && !keyUndo && MoveAgentStore.canUndo()} still={still} />
+          ))}
+          {thinking && (
+            <li className="tweakers-move-agent-turn" aria-busy="true">
+              <MoveAgentAsked prompt={view.prompt} pictures={view.attachments} />
+              <div className="tweakers-move-agent-reply" role="status">
+                {view.message ? <MoveAgentWords text={view.message} working={!view.choices?.length} /> : (
+                  <span className="tweakers-move-agent-thinking" role="img" aria-label="The agent is working"><MoveAgentLoader /></span>
+                )}
+                {view.choices && view.choices.length > 0 && <MoveAgentChoices choices={view.choices} />}
+              </div>
+              {view.steps.length > 0 && <MoveAgentSteps steps={view.steps} />}
+            </li>
+          )}
+        </ol>
+      </div>
+      <footer className="tweakers-move-agent-sheet-foot">
+        <MoveAgentField
+          view={view}
+          inputRef={inputRef}
+          value={draft}
+          sent={false}
+          placeholder={thinking ? '' : thread.length ? '…' : 'Ask for anything'}
+          label="Ask the agent"
+          onDraft={setDraft}
+          onSend={() => scroll.pin()}
+        />
+      </footer>
+    </div>
+  );
+}
+
+/** One finished ask in the sheet: the words sent, then the answer, what was done on the way, and its note. */
+function MoveAgentThreadTurn({ turn, undo, still }: { turn: MoveAgentTurn; undo: boolean; still: boolean }) {
+  const moved = turn.changed > 0 || turn.acted > 0;
+  const skipped = turn.skipped ? `${turn.skipped} ${turn.skipped === 1 ? 'action' : 'actions'} skipped.` : '';
+  const said = [turn.message, skipped].filter(Boolean).join(' ');
+  return (
+    <li className="tweakers-move-agent-turn" data-phase={turn.phase}>
+      <MoveAgentAsked prompt={turn.prompt} pictures={turn.pictures} />
+      <div className="tweakers-move-agent-reply" data-done={(!said && moved) || undefined}>
+        {said ? <p className="tweakers-move-agent-said">{said}</p> : moved ? <MoveAgentDone /> : <p className="tweakers-move-agent-said">Nothing changed.</p>}
+        {turn.steps.length > 0 && <MoveAgentSteps steps={turn.steps} />}
+        {turn.note && <p className="tweakers-move-agent-note">{turn.note}</p>}
+        {undo && moved && <MoveAgentUndo still={still} />}
+      </div>
+    </li>
+  );
+}
+
+/** The words sent, set apart from the answer — the person's side of the turn. */
+function MoveAgentAsked({ prompt, pictures }: { prompt: string; pictures: readonly { id: string; name: string; url: string }[] }) {
+  return (
+    <div className="tweakers-move-agent-asked">
+      {pictures.length > 0 && (
+        <ul className="tweakers-move-agent-attachments" aria-label="Pictures sent">
+          {pictures.map((a) => <li key={a.id} className="tweakers-move-agent-attachment" title={a.name}><img src={a.url} alt={a.name} /></li>)}
+        </ul>
+      )}
+      <p className="tweakers-move-agent-asked-words">{prompt}</p>
+    </div>
+  );
+}
+
+/**
+ * The buttons an ask waits on: the agent asks before it spends, and the
+ * person answers with a press, never by typing. `go` is lime — the colour
+ * of an armed run — and the wheel's press; Back is the quiet one's.
+ */
+function MoveAgentChoices({ choices }: { choices: MoveAgentChoice[] }) {
+  return (
+    <div className="tweakers-move-agent-choices" role="group" aria-label="Choose">
+      {choices.map((c) => (
+        <button key={c.id} type="button" className="tweakers-move-agent-choice" data-tone={c.tone} onClick={() => MoveAgentStore.choose(c.id)}>{c.label}</button>
+      ))}
+    </div>
+  );
+}
+
+function MoveAgentDone() {
+  return (
+    <span className="tweakers-move-agent-done">
+      <svg className="tweakers-move-agent-done-mark" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <path d="M3 8.5l3.2 3.2L13 5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" pathLength="1" />
+      </svg>
+      Done
+    </span>
+  );
+}
+
+function MoveAgentUndo({ still }: { still: boolean }) {
+  return (
+    <motion.button
+      type="button"
+      className="tweakers-move-agent-undo"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.24, ease: AGENT_EASE_OUT, delay: still ? 0 : 0.2 }}
+      onClick={() => void MoveAgentStore.undo()}
+    >Undo</motion.button>
+  );
+}
+
+function MoveAgentSteps({ steps }: { steps: MoveAgentStep[] }) {
+  return (
+    <ul className="tweakers-move-agent-steps" aria-label="What the agent is doing">
+      {steps.map((step, i) => (
+        <li key={i} className="tweakers-move-agent-step" data-state={step.state}>
+          {step.label}{step.state === 'failed' && ' — failed'}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The Move's own Undo key already takes the answer back: no second one on screen. */
+function useAgentKeyUndo() {
+  return useSyncExternalStore((fn) => MoveFunctions.subscribe(fn), () => MoveFunctions.list().includes('undo'), () => false);
+}
+
+/** What is typed for the next ask. A failed ask gives its words back, so they can be sent again; any ask starts the next turn empty. */
+function useAgentDraft(view: MoveAgentView) {
+  const [draft, setDraft] = useState('');
+  useEffect(() => {
+    if (view.phase === 'error') setDraft((now) => now || view.prompt);
+    else if (view.phase === 'thinking') setDraft('');
+  }, [view.phase, view.prompt]);
+  return [draft, setDraft] as const;
+}
+
+/** A picture dragged onto the prompt: the frame says it will take it, and a drop puts it in. */
+function useAgentDrop(inputRef: React.RefObject<HTMLTextAreaElement>) {
+  const [dropping, setDropping] = useState(false);
+  const pictures = MoveAgentStore.acceptsAttachments();
+  const hasImage = (data: DataTransfer | null) => !!data && [...data.items].some((item) => item.kind === 'file' && item.type.startsWith('image/'));
+  const props: { onDragOver?: React.DragEventHandler<HTMLDivElement>; onDragLeave?: React.DragEventHandler<HTMLDivElement>; onDrop?: React.DragEventHandler<HTMLDivElement> } = pictures ? {
+    onDragOver: (e) => { if (!hasImage(e.dataTransfer)) return; e.preventDefault(); setDropping(true); },
+    onDragLeave: (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false); },
+    onDrop: (e) => { if (!hasImage(e.dataTransfer)) return; e.preventDefault(); setDropping(false); MoveAgentStore.attach(e.dataTransfer.files); inputRef.current?.focus(); },
+  } : {};
+  return { dropping, props };
+}
+
+/**
+ * The field the prompt is typed in — the box's and the sheet's, one field.
+ * It grows with what is typed; Enter sends, Shift+Enter starts a new line,
+ * Escape closes. The picture button sits in its top-right corner, and the
+ * box's way to the sheet beside it; the pictures run along its foot.
+ */
+function MoveAgentField({ view, inputRef, value, sent, placeholder, label, onDraft, onExpand, onSend }: {
+  view: MoveAgentView;
+  inputRef: React.RefObject<HTMLTextAreaElement>;
+  value: string;
+  sent: boolean;
+  placeholder: string;
+  label: string;
+  onDraft: (text: string) => void;
+  onExpand?: () => void;
+  onSend?: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  /** Shift went down and nothing else has yet — a capital letter clears it. */
+  const shiftAlone = useRef(false);
+  const pictures = MoveAgentStore.acceptsAttachments();
+  const thinking = view.phase === 'thinking';
+  const changed = !thinking && (view.changed > 0 || view.acted > 0);
+  useMoveFieldHeight(inputRef, value);
+  const send = () => {
+    const text = value.trim();
+    if (!text || thinking) return;
+    onDraft('');
+    onSend?.();
+    void MoveAgentStore.ask(text);
+  };
+  return (
+    <>
+      <div className="tweakers-move-agent-field" data-pictures={pictures || undefined} data-expand={onExpand ? true : undefined}>
+        <textarea
+          ref={inputRef}
+          className="tweakers-move-preset-save-input tweakers-move-agent-input"
+          value={value}
+          rows={1}
+          readOnly={thinking}
+          data-sent={sent || undefined}
+          placeholder={placeholder}
+          aria-label={label}
+          autoFocus
+          spellCheck={false}
+          autoComplete="off"
+          onChange={(e) => onDraft(e.currentTarget.value)}
+          onPaste={pictures ? (e) => {
+            const files = [...e.clipboardData.files].filter((f) => f.type.startsWith('image/'));
+            if (!files.length) return;
+            e.preventDefault();
+            MoveAgentStore.attach(files);
+          } : undefined}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            shiftAlone.current = e.key === 'Shift' && !e.repeat ? true : e.key === 'Shift' ? shiftAlone.current : false;
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); }
+            else if (e.key === 'Escape') MoveAgentStore.close();
+            else if (e.key === 'z' && (e.metaKey || e.ctrlKey) && changed && !value) { e.preventDefault(); void MoveAgentStore.undo(); }
+          }}
+          onKeyUp={(e) => {
+            if (e.key !== 'Shift') return;
+            const tap = shiftAlone.current;
+            shiftAlone.current = false;
+            if (tap) MoveAgentStore.shiftTap();
+          }}
+          onBlur={() => { shiftAlone.current = false; }}
+        />
+        <div className="tweakers-move-agent-corner">
+          {/* The whole conversation, at the screen's side: a glyph, no plate. */}
+          {onExpand && (
+            <button type="button" className="tweakers-move-agent-attach" aria-label="Open the conversation" title="Open the conversation" onClick={onExpand}>
+              <MoveSlotGlyph name="expand" className="tweakers-move-agent-attach-icon" />
+            </button>
+          )}
+          {/* A picture, from the field's top-right corner: a glyph, no plate. */}
+          {pictures && (
+            <>
+              <button type="button" className="tweakers-move-agent-attach" aria-label="Add a picture" title="Add a picture — or drop or paste one"
+                disabled={thinking} onClick={() => fileRef.current?.click()}>
+                <MoveSlotGlyph name="image-plus" className="tweakers-move-agent-attach-icon" />
+              </button>
+              <input ref={fileRef} type="file" accept="image/*" multiple hidden
+                onChange={(e) => { if (e.currentTarget.files) MoveAgentStore.attach(e.currentTarget.files); e.currentTarget.value = ''; inputRef.current?.focus(); }} />
+            </>
+          )}
+        </div>
+      </div>
+      {/* The pictures, along the field's foot: one strip, shared evenly, each cropped to fill. */}
+      {view.attachments.length > 0 && (
+        <ul className="tweakers-move-agent-attachments" aria-label="Pictures in the prompt">
+          {view.attachments.map((a) => (
+            <li key={a.id} className="tweakers-move-agent-attachment" title={a.name}>
+              <img src={a.url} alt={a.name} />
+              <button type="button" aria-label={`Remove ${a.name}`} disabled={thinking} onClick={() => { MoveAgentStore.detach(a.id); inputRef.current?.focus(); }}>
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d={ICON_CLOSE} stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                </svg>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+/**
+ * Where the sheet's foot stands: on the panel's top edge, so the sheet never
+ * covers the instrument it speaks for — or the screen's foot when the panel is
+ * docked high, or there is no room above it.
+ */
+function useSheetFloor(anchor: React.RefObject<HTMLElement | null>, open: boolean) {
+  const [floor, setFloor] = useState(0);
+  useLayoutEffect(() => {
+    const panel = anchor.current;
+    if (!open || !panel || typeof window === 'undefined') return;
+    const measure = () => {
+      const top = panel.getBoundingClientRect().top;
+      setFloor(top > window.innerHeight * 0.4 ? Math.max(0, Math.round(window.innerHeight - top)) : 0);
+    };
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    observer?.observe(panel);
+    window.addEventListener('resize', measure);
+    window.addEventListener('scroll', measure, true);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+      window.removeEventListener('scroll', measure, true);
+    };
+  }, [anchor, open]);
+  return floor;
+}
+
+/** How near the end, in px, still counts as reading the end. */
+const STICK_SLACK = 32;
+
+/**
+ * The conversation follows what is new — a reply written out, a step, a turn
+ * — while the person reads the end of it. Scrolled up to read something
+ * earlier, it stays where they are; sending pins it to the end again.
+ */
+function useStickToBottom(shape: string) {
+  const outer = useRef<HTMLDivElement>(null);
+  const inner = useRef<HTMLOListElement>(null);
+  const stuck = useRef(true);
+  const end = () => { const box = outer.current; if (box) box.scrollTop = box.scrollHeight; };
+  useLayoutEffect(() => {
+    const body = inner.current;
+    if (!body || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => { if (stuck.current) end(); });
+    observer.observe(body);
+    return () => observer.disconnect();
+  }, []);
+  useLayoutEffect(() => { if (stuck.current) end(); }, [shape]);
+  return {
+    outer,
+    inner,
+    onScroll: () => {
+      const box = outer.current;
+      if (box) stuck.current = box.scrollHeight - box.scrollTop - box.clientHeight <= STICK_SLACK;
+    },
+    pin: () => { stuck.current = true; end(); },
+  };
 }
 
 /** The kit's curves (`--move-ease-out`, `--move-ease-smooth`, `--move-ease-in`), for motion. */
