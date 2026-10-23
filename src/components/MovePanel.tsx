@@ -39,6 +39,7 @@ import {
 } from '../move-slot-core';
 import { attachMoveKeys } from '../move-keys';
 import { MoveMenuButton } from './MoveMenuButton';
+import { MoveAgentButton } from './MoveAgentButton';
 import { MoveGateDisplay } from './MoveGateDisplay';
 import { MoveMultibandDisplay } from './MoveMultibandDisplay';
 import { MoveModRing, ModDot } from './ModRing';
@@ -1781,6 +1782,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 
   const content = (
     <div className="tweakers-root tweakers-move-root" data-theme={theme} data-dock={dock}>
+      <MoveAgentButton theme={theme} />
       <MoveMenuButton
         theme={theme}
         open={!!presetScreen || paletteScreen}

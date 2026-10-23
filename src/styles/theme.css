@@ -1377,6 +1377,26 @@
 
 /* End of the connection dot skin block. */
 
+/* The agent's button, the Menu button's twin in the top-right corner. */
+.tweakers-move-agent-corner-button {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 10003;
+  line-height: 0;
+}
+
+/* A hand-sized target round the 32px well. */
+.tweakers-move-agent-corner-button .tweakers-move-menu-button {
+  position: relative;
+}
+
+.tweakers-move-agent-corner-button .tweakers-move-menu-button::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}
+
 /* The Menu button on screen: a round dark well pinned to the window's
    top-left corner, the three-line mark in the panel's text colour. It lights
    while what it opened — the presets, the palettes — is up. */

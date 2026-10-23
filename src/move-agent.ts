@@ -209,6 +209,12 @@ export interface MoveAgentOptions {
    * it here. With none given, New chat is not offered.
    */
   onNewChat?: () => void;
+  /**
+   * A button for the agent in the window's top-right corner, opposite Menu:
+   * it opens the conversation as the sheet from any page. For a host whose
+   * keys mean other things on most pages, so the agent needs a door of its own.
+   */
+  button?: boolean;
 }
 
 export type MoveAgentPhase = 'prompt' | 'thinking' | 'done' | 'error';
@@ -628,6 +634,7 @@ class MoveAgentStoreClass {
   }
 
   hasNewChat = (): boolean => !!this.options.onNewChat;
+  hasButton = (): boolean => this.options.button === true;
 
   /**
    * Put a conversation the host kept back in the thread — after a reload, so

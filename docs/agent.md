@@ -111,6 +111,7 @@ the pointer and the keys. Swipe it right, Escape or Back closes it.
 | The box's corner glyph (four arrows) | The box becomes the sheet, the ask in the air and the pictures with it. |
 | The sheet's corner glyph | Back to the box. |
 | `MoveAgentStore.openSheet(focus?)` | The host's own way in — a key, a menu. |
+| The agent's corner button (`button: true`) | A round button in the window's top-right corner, opposite Menu, on every page: opens the sheet, or closes the open box. For a host whose keys mean other things on most pages. |
 
 The thread is the kit's (`MoveAgentStore.getThread()`, every finished ask as
 a `MoveAgentTurn`) and outlives the prompt closing. The model's side of the

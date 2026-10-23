@@ -9015,6 +9015,12 @@ interface MoveAgentOptions {
      * it here. With none given, New chat is not offered.
      */
     onNewChat?: () => void;
+    /**
+     * A button for the agent in the window's top-right corner, opposite Menu:
+     * it opens the conversation as the sheet from any page. For a host whose
+     * keys mean other things on most pages, so the agent needs a door of its own.
+     */
+    button?: boolean;
 }
 type MoveAgentPhase = 'prompt' | 'thinking' | 'done' | 'error';
 /** One thing the agent did to perceive, as the prompt shows it. */
@@ -9140,6 +9146,7 @@ declare class MoveAgentStoreClass {
     /** Close — and let go of an ask still in the air, its tools with it. What landed stays. */
     close(): void;
     hasNewChat: () => boolean;
+    hasButton: () => boolean;
     /**
      * Put a conversation the host kept back in the thread — after a reload, so
      * the sheet shows the session the model still remembers. Only into an
