@@ -9,7 +9,6 @@ Hold the Move's wheel down. A prompt opens above the panel, at its right edge. S
 | Hold the wheel | Opens the prompt. A second hold closes it. |
 | Enter | Sends the words. They wait in the box under the working dots; the reply takes their place and an empty box opens under it, so the next ask refines the last. Shift+Enter starts a new line; the field grows with what is typed. |
 | Click the wheel on a reply, `Cmd+Z`, or **Undo** | Puts back every value the last ask moved. |
-| Click the wheel while it asks | Presses its `go` button (see *Asking before it acts*). |
 | Esc | Closes. What landed stays. |
 
 ## Every integration has it already
@@ -85,9 +84,11 @@ const ask: MoveAgentAsk = async (request, signal, stream) => {
 
 - **`choose(choices, message?)`** puts the buttons under the reply, with
   `message` as the question, and resolves with the id pressed — or `null`
-  when the ask is let go (Back, Escape, the prompt closing). `go` is lime and
-  is what the wheel's press takes; Back answers `null` and leaves the prompt
-  open. The ask's time budget stops while it waits. The question and the
+  when the ask is let go (Back, Escape, the prompt closing). `go` is lime;
+  Back answers `null` and leaves the prompt open. No key of the kit's presses
+  a button — a wheel pressed out of habit must never approve a spend. A host
+  binds `MoveAgentStore.chooseGo()` to a key that already means the action
+  (Play, for a run). The ask's time budget stops while it waits. The question and the
   answer stay in the turn as a step ("12 pictures. — Run · $0.24").
 - **`step(label)`** is a line under the reply for long work the host does
   itself; call what it returns to finish it, with new words if they say

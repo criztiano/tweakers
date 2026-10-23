@@ -8956,7 +8956,7 @@ interface MoveAgentStream {
      */
     step(label: string): (state?: 'done' | 'failed', label?: string) => void;
 }
-/** One button of `MoveAgentStream.choose`. `go` is the one the wheel's press takes; `quiet` steps back. */
+/** One button of `MoveAgentStream.choose`. `go` is the action — lime, and what `chooseGo` presses; `quiet` steps back. */
 interface MoveAgentChoice {
     id: string;
     label: string;
@@ -9146,7 +9146,12 @@ declare class MoveAgentStoreClass {
     isChoosing: () => boolean;
     /** Press one of the buttons the ask waits on. */
     choose(id: string): void;
-    /** The wheel's press while the ask waits: the `go` button, or the first. */
+    /**
+     * Press the `go` button the ask waits on, if it has one — for a host that
+     * binds it to a key of its own meaning (Play, for a run). The kit binds it
+     * to nothing: a press made out of habit (the wheel, to look at a picture)
+     * must never answer a question about spending.
+     */
     chooseGo(): void;
     acceptsAttachments: () => boolean;
     shiftTap(): void;

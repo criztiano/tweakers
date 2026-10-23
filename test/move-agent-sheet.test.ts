@@ -110,6 +110,17 @@ describe('asking the person', () => {
     expect(MoveAgentStore.getThread()[0].steps).toEqual([{ label: 'Twelve pictures. — Run · $0.24', state: 'done' }]);
   });
 
+  it('presses only a go button for the host: with none, nothing is pressed', async () => {
+    register();
+    const h = held();
+    MoveAgentStore.open(PANEL);
+    void MoveAgentStore.ask('run it');
+    await h.started;
+    void h.stream().choose([{ id: 'run', label: 'Run' }, { id: 'cancel', label: 'Cancel', tone: 'quiet' }]);
+    MoveAgentStore.chooseGo();
+    expect(MoveAgentStore.isChoosing()).toBe(true);
+  });
+
   it('takes Back as no, and leaves the prompt open', async () => {
     register();
     const h = held();

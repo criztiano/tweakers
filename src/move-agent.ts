@@ -156,7 +156,7 @@ export interface MoveAgentStream {
    */
   step(label: string): (state?: 'done' | 'failed', label?: string) => void;
 }
-/** One button of `MoveAgentStream.choose`. `go` is the one the wheel's press takes; `quiet` steps back. */
+/** One button of `MoveAgentStream.choose`. `go` is the action — lime, and what `chooseGo` presses; `quiet` steps back. */
 export interface MoveAgentChoice { id: string; label: string; tone?: 'go' | 'quiet' }
 export type MoveAgentAsk = (request: MoveAgentRequest, signal: AbortSignal, stream: MoveAgentStream) => Promise<MoveAgentReply>;
 
@@ -651,10 +651,15 @@ class MoveAgentStoreClass {
     if (this.view?.choices?.some((c) => c.id === id)) this.waiting?.(id);
   }
 
-  /** The wheel's press while the ask waits: the `go` button, or the first. */
+  /**
+   * Press the `go` button the ask waits on, if it has one — for a host that
+   * binds it to a key of its own meaning (Play, for a run). The kit binds it
+   * to nothing: a press made out of habit (the wheel, to look at a picture)
+   * must never answer a question about spending.
+   */
   chooseGo() {
-    const choices = this.view?.choices;
-    if (choices?.length) this.choose((choices.find((c) => c.tone === 'go') ?? choices[0]).id);
+    const go = this.view?.choices?.find((c) => c.tone === 'go');
+    if (go) this.choose(go.id);
   }
 
   acceptsAttachments = (): boolean => this.options.attachments === true;

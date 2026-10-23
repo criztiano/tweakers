@@ -996,13 +996,6 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
         MoveAgentStore.shiftTap();
         return;
       }
-      // While the ask waits on a press, the wheel's press is its go button.
-      if (view?.choices?.length) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        MoveAgentStore.chooseGo();
-        return;
-      }
       if (!view || view.phase === 'thinking' || !(view.changed || view.acted) || !MoveAgentStore.canUndo()) return;
       e.preventDefault();
       e.stopImmediatePropagation();
@@ -4311,7 +4304,7 @@ function MoveAgentAsked({ prompt, pictures }: { prompt: string; pictures: readon
 /**
  * The buttons an ask waits on: the agent asks before it spends, and the
  * person answers with a press, never by typing. `go` is lime — the colour
- * of an armed run — and the wheel's press; Back is the quiet one's.
+ * of an armed run; Back is the quiet one's. No kit key presses one.
  */
 function MoveAgentChoices({ choices }: { choices: MoveAgentChoice[] }) {
   return (

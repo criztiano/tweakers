@@ -14877,10 +14877,15 @@ var MoveAgentStoreClass = class {
   choose(id) {
     if (this.view?.choices?.some((c) => c.id === id)) this.waiting?.(id);
   }
-  /** The wheel's press while the ask waits: the `go` button, or the first. */
+  /**
+   * Press the `go` button the ask waits on, if it has one — for a host that
+   * binds it to a key of its own meaning (Play, for a run). The kit binds it
+   * to nothing: a press made out of habit (the wheel, to look at a picture)
+   * must never answer a question about spending.
+   */
   chooseGo() {
-    const choices = this.view?.choices;
-    if (choices?.length) this.choose((choices.find((c) => c.tone === "go") ?? choices[0]).id);
+    const go = this.view?.choices?.find((c) => c.tone === "go");
+    if (go) this.choose(go.id);
   }
   shiftTap() {
     this.options.onShiftTap?.();
@@ -16104,12 +16109,6 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         e.preventDefault();
         e.stopImmediatePropagation();
         MoveAgentStore.shiftTap();
-        return;
-      }
-      if (view?.choices?.length) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        MoveAgentStore.chooseGo();
         return;
       }
       if (!view || view.phase === "thinking" || !(view.changed || view.acted) || !MoveAgentStore.canUndo()) return;
