@@ -99,6 +99,29 @@ const SCENARIOS: Record<string, { label: string; ask: string; run: Scenario }> =
       return { writes: [] };
     },
   },
+  spend: {
+    label: 'Asks before it spends: Run or Cancel', ask: 'run the four takes on the cheap models',
+    run: async (out, signal) => {
+      const pricing = out.step('Pricing the run…');
+      await wait(900, signal);
+      pricing('done', 'Priced the run');
+      const pressed = await out.choose([{ id: 'run', label: 'Run · $0.04', tone: 'go' }, { id: 'cancel', label: 'Cancel', tone: 'quiet' }], 'Eight pictures on two draft models.');
+      if (pressed !== 'run') return { writes: [], message: 'Nothing was run.' };
+      const running = out.step('Running 8 pictures…');
+      await wait(2600, signal);
+      running('done', 'Ran 8 pictures');
+      await stream('All eight are in the grid. The two at dusk read best; the aerial one lost the figures.', out, signal);
+      return { writes: [] };
+    },
+  },
+  essay: {
+    label: 'A very long reply', ask: 'tell me everything about the grid',
+    run: async (out, signal) => {
+      await wait(600, signal);
+      await stream(Array.from({ length: 14 }, (_, i) => `Paragraph ${i + 1}: the grid holds every take side by side, so a look across a row compares the models and a look down a column compares the prompts.`).join('\n\n'), out, signal);
+      return { writes: [] };
+    },
+  },
   error: {
     label: 'Delivery failure', ask: 'brighter',
     run: async (_out, signal) => {
@@ -121,12 +144,14 @@ MoveAgentStore.configure({
   }],
   // What is typed plays the scenario last chosen.
   ask: (_request, signal, out) => scenario(out, signal),
+  timeoutMs: 0,
+  onNewChat: () => setOptions([]),
 });
 
 function play(key: keyof typeof SCENARIOS) {
   const s = SCENARIOS[key];
   scenario = s.run;
-  MoveAgentStore.open('tone');
+  if (!MoveAgentStore.isOpen()) MoveAgentStore.open('tone');
   void MoveAgentStore.ask(s.ask);
 }
 
@@ -138,6 +163,7 @@ function Lab() {
         <h1>Agent prompt lab</h1>
         <h2>Open</h2>
         <button type="button" onClick={() => { MoveAgentStore.close(); MoveAgentStore.open('tone'); }}>New conversation</button>
+        <button type="button" onClick={() => MoveAgentStore.openSheet('tone')}>Open the sheet</button>
         <button type="button" onClick={() => MoveAgentStore.close()}>Close</button>
         <h2>Ask</h2>
         {Object.entries(SCENARIOS).map(([key, s]) => (

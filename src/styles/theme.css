@@ -1377,6 +1377,26 @@
 
 /* End of the connection dot skin block. */
 
+/* The agent's button, the Menu button's twin in the top-right corner. */
+.tweakers-move-agent-corner-button {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 10003;
+  line-height: 0;
+}
+
+/* A hand-sized target round the 32px well. */
+.tweakers-move-agent-corner-button .tweakers-move-menu-button {
+  position: relative;
+}
+
+.tweakers-move-agent-corner-button .tweakers-move-menu-button::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+}
+
 /* The Menu button on screen: a round dark well pinned to the window's
    top-left corner, the three-line mark in the panel's text colour. It lights
    while what it opened — the presets, the palettes — is up. */
@@ -4237,10 +4257,25 @@
   color: color-mix(in srgb, var(--move-text) 38%, transparent);
 }
 
-.tweakers-move-agent-attach {
+.tweakers-move-agent-corner {
   position: absolute;
   top: 5px;
   right: 5px;
+  display: flex;
+  gap: 6px;
+}
+
+/* The box's way to the sheet, beside the picture button: the words keep clear of both. */
+.tweakers-move-agent-field[data-pictures][data-expand] .tweakers-move-agent-input {
+  padding-right: 60px;
+}
+
+.tweakers-move-agent-field[data-expand]:not([data-pictures]) .tweakers-move-agent-input {
+  padding-right: 32px;
+}
+
+.tweakers-move-agent-attach {
+  position: relative;
   display: grid;
   place-items: center;
   width: 22px;
@@ -4378,6 +4413,17 @@
   margin: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* In the box, a long reply never makes it taller than the room above the
+   panel (`--move-agent-room`, measured), where it would have to move into
+   the panel: the words scroll in place, under a soft edge, and the field
+   stays where it was. The sheet is the place for reading at length. */
+.tweakers-move-agent .tweakers-move-agent-said {
+  max-height: max(72px, min(45vh, calc(var(--move-agent-room, 70vh) - 150px)));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
 }
 
 /* Each word of the reply comes up out of a soft blur as it arrives. */
@@ -4542,6 +4588,275 @@
 .tweakers-move-agent-undo:hover,
 .tweakers-move-agent-undo:focus-visible {
   color: var(--move-text);
+}
+
+/* The buttons an ask waits on, under its question: the agent asks before it
+   spends, and the answer is a press. Go is lime — an armed run's colour. */
+.tweakers-move-agent-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.tweakers-move-agent-choice {
+  height: 32px;
+  padding: 0 14px;
+  border: none;
+  border-radius: var(--move-radius-small);
+  background: var(--move-chip);
+  color: var(--move-text);
+  font-family: var(--move-font-label);
+  font-size: 15px;
+  line-height: normal;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform var(--move-duration-press) var(--move-ease-out),
+    filter var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-agent-choice[data-tone="go"] {
+  background: var(--move-lime);
+  color: var(--move-bg);
+}
+
+.tweakers-move-agent-choice[data-tone="quiet"] {
+  background: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--move-text) 22%, transparent);
+}
+
+.tweakers-move-agent-choice:hover { filter: brightness(1.08); }
+.tweakers-move-agent-choice:active { transform: scale(0.97); }
+
+.tweakers-move-agent-choice:focus-visible {
+  outline: var(--move-color-stroke) solid var(--move-text);
+  outline-offset: var(--move-color-stroke);
+}
+
+/* The sheet: the whole conversation at the screen's right side, standing on
+   the panel's top edge (`--move-agent-sheet-floor`) so it never covers the
+   instrument. It is not modal: the page around it takes the pointer. The
+   motion is Coss UI's right-side drawer — in from beyond the edge on one
+   long ease, following the hand while it is swiped away. */
+.tweakers-move-agent-sheet-viewport {
+  position: fixed;
+  inset: 0 0 var(--move-agent-sheet-floor, 0px) 0;
+  z-index: 9989;
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px;
+  pointer-events: none;
+}
+
+.tweakers-move-agent-sheet {
+  --move-agent-sheet-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: var(--tweakers-agent-sheet-width, 400px);
+  max-width: calc(100vw - 48px);
+  height: 100%;
+  min-height: 0;
+  border-radius: var(--move-radius);
+  background: var(--move-bg);
+  color: var(--move-text);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  outline: none;
+  pointer-events: auto;
+  transform: translateX(var(--drawer-swipe-movement-x, 0px));
+  transition: transform 450ms var(--move-agent-sheet-ease), box-shadow 450ms var(--move-agent-sheet-ease);
+  will-change: transform;
+}
+
+.tweakers-move-agent-sheet[data-starting-style],
+.tweakers-move-agent-sheet[data-ending-style] {
+  transform: translateX(calc(100% + 12px));
+  box-shadow: none;
+}
+
+/* A swipe let go: the faster the throw, the quicker it leaves. */
+.tweakers-move-agent-sheet[data-ending-style] {
+  transition-duration: calc(var(--drawer-swipe-strength, 1) * 400ms);
+}
+
+.tweakers-move-agent-sheet[data-swiping] {
+  user-select: none;
+  transition-duration: 0ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-agent-sheet {
+    transition: opacity 160ms var(--move-ease-out);
+  }
+  .tweakers-move-agent-sheet[data-starting-style],
+  .tweakers-move-agent-sheet[data-ending-style] {
+    transform: none;
+    opacity: 0;
+  }
+}
+
+.tweakers-move-agent-sheet-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  border-radius: inherit;
+}
+
+.tweakers-move-agent-sheet-inner[data-dropping] {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--move-text) 50%, transparent);
+}
+
+.tweakers-move-agent-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 10px 6px 18px;
+}
+
+.tweakers-move-agent-sheet-title {
+  flex: 1;
+  margin: 0;
+  font-family: var(--move-font-label);
+  font-size: 13px;
+  font-weight: normal;
+  line-height: 16px;
+  color: color-mix(in srgb, var(--move-text) 50%, transparent);
+}
+
+.tweakers-move-agent-sheet-new {
+  height: 28px;
+  margin-right: 4px;
+  padding: 0 8px;
+  border: none;
+  border-radius: var(--move-radius-small);
+  background: none;
+  color: color-mix(in srgb, var(--move-text) 65%, transparent);
+  font-family: var(--move-font-label);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-agent-sheet-new:hover:not(:disabled),
+.tweakers-move-agent-sheet-new:focus-visible {
+  color: var(--move-text);
+  outline: none;
+}
+
+.tweakers-move-agent-sheet-new[data-asking] {
+  background: color-mix(in srgb, #ff8a70 16%, transparent);
+  color: #ff8a70;
+}
+
+.tweakers-move-agent-sheet-new:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.tweakers-move-agent-sheet-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--move-radius-small);
+  background: none;
+  color: var(--move-text);
+  opacity: 0.5;
+  cursor: pointer;
+  transition: opacity var(--move-duration-press) var(--move-ease-out);
+}
+
+.tweakers-move-agent-sheet-icon:hover,
+.tweakers-move-agent-sheet-icon:focus-visible {
+  opacity: 1;
+  outline: none;
+}
+
+/* The conversation scrolls; the field stays at the foot. Its top edge fades,
+   so words pass under the head rather than meeting a cut. */
+.tweakers-move-agent-sheet-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px 18px 0;
+  scrollbar-width: thin;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 12px);
+  mask-image: linear-gradient(to bottom, transparent, #000 12px);
+}
+
+.tweakers-move-agent-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin: 0;
+  padding: 0 0 16px;
+  list-style: none;
+}
+
+.tweakers-move-agent-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* The person's side of a turn: their words on a quiet plate, to the right. */
+.tweakers-move-agent-asked {
+  align-self: flex-end;
+  max-width: 85%;
+  padding: 8px 12px;
+  border-radius: var(--move-radius);
+  background: color-mix(in srgb, var(--move-text) 7%, transparent);
+}
+
+.tweakers-move-agent-asked .tweakers-move-agent-attachments {
+  height: 64px;
+  margin: 0 0 8px;
+}
+
+.tweakers-move-agent-asked-words {
+  margin: 0;
+  font-family: var(--move-font-label);
+  font-size: 15px;
+  line-height: 22px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* In the sheet the answers are read in a run, at the conversation's size. */
+.tweakers-move-agent-sheet .tweakers-move-agent-reply {
+  max-width: 68ch;
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.tweakers-move-agent-sheet .tweakers-move-agent-thinking {
+  height: 22px;
+}
+
+.tweakers-move-agent-sheet .tweakers-move-agent-steps {
+  margin: 0;
+}
+
+.tweakers-move-agent-turn[data-phase="error"] .tweakers-move-agent-said {
+  color: #ff8a70;
+}
+
+.tweakers-move-agent-note {
+  margin: 0;
+  font-family: var(--move-font-label);
+  font-size: 12px;
+  line-height: 16px;
+  color: color-mix(in srgb, var(--move-text) 50%, transparent);
+}
+
+.tweakers-move-agent-sheet-foot {
+  padding: 10px 12px 12px;
+  border-top: 1px solid color-mix(in srgb, var(--move-text) 8%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {

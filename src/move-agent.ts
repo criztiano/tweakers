@@ -141,7 +141,23 @@ export interface MoveAgentReply { writes: MoveAgentWrite[]; actions?: MoveAgentC
 export interface MoveAgentStream {
   say(text: string): void;
   act(call: MoveAgentCall): Promise<void>;
+  /**
+   * Ask the person, with buttons under the reply, and wait for the press —
+   * the way a verb that spends or cannot be taken back asks first. Resolves
+   * with the chosen id, or null when the ask is let go (Back, Escape, the
+   * prompt closing). `message` is the question, put in the reply. The ask's
+   * time budget stops while it waits; the person takes the time they need.
+   */
+  choose(choices: MoveAgentChoice[], message?: string): Promise<string | null>;
+  /**
+   * A line under the reply for long work the host does itself ("Running 12
+   * pictures…"). Call what it returns to finish it — done, or failed — with
+   * new words if the finished line says more ("Ran 12 pictures").
+   */
+  step(label: string): (state?: 'done' | 'failed', label?: string) => void;
 }
+/** One button of `MoveAgentStream.choose`. `go` is the action — lime, and what `chooseGo` presses; `quiet` steps back. */
+export interface MoveAgentChoice { id: string; label: string; tone?: 'go' | 'quiet' }
 export type MoveAgentAsk = (request: MoveAgentRequest, signal: AbortSignal, stream: MoveAgentStream) => Promise<MoveAgentReply>;
 
 export interface MoveAgentOptions {
@@ -187,11 +203,41 @@ export interface MoveAgentOptions {
   /** Shift pressed and let go on its own in the prompt — a capital letter
    *  never counts. The host's door to settings it keeps beside the words. */
   onShiftTap?: () => void;
+  /**
+   * The conversation starts again: the sheet's New chat. The kit forgets its
+   * thread; a host that keeps the model's side of the conversation forgets
+   * it here. With none given, New chat is not offered.
+   */
+  onNewChat?: () => void;
+  /**
+   * A button for the agent in the window's top-right corner, opposite Menu:
+   * it opens the conversation as the sheet from any page. For a host whose
+   * keys mean other things on most pages, so the agent needs a door of its own.
+   */
+  button?: boolean;
 }
 
 export type MoveAgentPhase = 'prompt' | 'thinking' | 'done' | 'error';
 /** One thing the agent did to perceive, as the prompt shows it. */
 export interface MoveAgentStep { label: string; state: 'running' | 'done' | 'failed' }
+/**
+ * One finished ask, as the sheet's thread shows it: the words sent and their
+ * pictures, what came back, and every step on the way — the box shows only
+ * the turn in front of it; the sheet shows them all.
+ */
+export interface MoveAgentTurn {
+  id: number;
+  prompt: string;
+  pictures: { id: string; name: string; url: string }[];
+  phase: 'done' | 'error';
+  message: string;
+  changed: number;
+  acted: number;
+  skipped: number;
+  steps: MoveAgentStep[];
+  /** Said after the turn: "Undone.", or why it could not be. */
+  note?: string;
+}
 export interface MoveAgentView {
   phase: MoveAgentPhase;
   prompt: string;
@@ -207,6 +253,10 @@ export interface MoveAgentView {
   steps: MoveAgentStep[];
   /** The pictures in the prompt. They stay for the next ask until removed. */
   attachments: MoveAgentAttachment[];
+  /** The prompt stands as the sheet at the screen's side, the whole conversation in it, rather than the box. */
+  sheet: boolean;
+  /** Buttons the ask waits on (`MoveAgentStream.choose`); their question is the message. */
+  choices?: MoveAgentChoice[];
 }
 
 interface Entry { panelId: string; path: string; component?: string; gene?: GeneParameter; control: MoveAgentControl }
@@ -527,8 +577,16 @@ class MoveAgentStoreClass {
   private attachmentId = 0;
   private releaseBack: (() => void) | null = null;
   private listeners = new Set<() => void>();
+  /** Every finished ask, oldest first — the sheet's conversation. It outlives the prompt closing. */
+  private thread: MoveAgentTurn[] = [];
+  private turnId = 0;
+  /** The picture urls the thread still shows: closing the prompt or removing a picture leaves them alone. */
+  private held = new Set<string>();
+  /** The press an ask waits on (`MoveAgentStream.choose`). */
+  private waiting: ((id: string | null) => void) | null = null;
 
   getView = (): MoveAgentView | null => this.view;
+  getThread = (): readonly MoveAgentTurn[] => this.thread;
   isOpen = (): boolean => !!this.view;
   getVersion = (): number => this.version;
   subscribe = (fn: () => void): (() => void) => {
@@ -543,12 +601,26 @@ class MoveAgentStoreClass {
 
   /** Open the prompt; `focus` is the page in front of the user. The Back key
    *  closes it while it stands, and goes back to whatever had it after. */
-  open(focus?: string) {
+  open(focus?: string, sheet = false) {
     this.focus = focus;
     if (this.view) return;
     this.releaseBack = MoveFunctions.push('back', () => this.close(), { label: 'Close', chip: false });
-    this.set({ phase: 'prompt', prompt: '', message: '', changed: 0, acted: 0, skipped: 0, steps: [], attachments: [] });
+    this.set({ phase: 'prompt', prompt: '', message: '', changed: 0, acted: 0, skipped: 0, steps: [], attachments: [], sheet });
   }
+
+  /** Open the prompt as the sheet — or turn the open box into it, the ask in the air and the pictures with it. */
+  openSheet(focus?: string) {
+    if (!this.view) { this.open(focus, true); return; }
+    if (focus !== undefined) this.focus = focus;
+    this.setSheet(true);
+  }
+
+  /** The sheet, or back to the box; the same prompt either way. */
+  setSheet(sheet: boolean) {
+    if (this.view && this.view.sheet !== sheet) this.set({ ...this.view, sheet });
+  }
+
+  isSheet = (): boolean => !!this.view?.sheet;
 
   /** Close — and let go of an ask still in the air, its tools with it. What landed stays. */
   close() {
@@ -557,8 +629,56 @@ class MoveAgentStoreClass {
     this.releaseBack?.();
     this.releaseBack = null;
     if (!this.view) return;
-    for (const a of this.view.attachments) URL.revokeObjectURL(a.url);
+    for (const a of this.view.attachments) if (!this.held.has(a.url)) URL.revokeObjectURL(a.url);
     this.set(null);
+  }
+
+  hasNewChat = (): boolean => !!this.options.onNewChat;
+  hasButton = (): boolean => this.options.button === true;
+
+  /**
+   * Put a conversation the host kept back in the thread — after a reload, so
+   * the sheet shows the session the model still remembers. Only into an
+   * empty thread, with no ask in the air. Pictures need urls that outlive
+   * the page (the kit's own are gone with it); give none rather than dead ones.
+   */
+  restoreThread(turns: readonly Omit<MoveAgentTurn, 'id'>[]) {
+    if (this.thread.length || this.flight || !turns.length) return;
+    this.thread = turns.map((turn) => ({ ...turn, id: ++this.turnId }));
+    this.set(this.view);
+  }
+
+  /** Start the conversation again: the thread goes, and the host forgets its side. Not while an ask is in the air. */
+  newChat() {
+    if (this.view?.phase === 'thinking') return;
+    const showing = new Set(this.view?.attachments.map((a) => a.url));
+    for (const url of this.held) if (!showing.has(url)) URL.revokeObjectURL(url);
+    this.held.clear();
+    this.thread = [];
+    this.before = null;
+    this.undos = [];
+    this.options.onNewChat?.();
+    if (this.view) this.set({ ...this.view, phase: 'prompt', prompt: '', message: '', changed: 0, acted: 0, skipped: 0, steps: [] });
+    else this.set(null);
+  }
+
+  /** The buttons the ask is waiting on, if any. */
+  isChoosing = (): boolean => !!this.waiting;
+
+  /** Press one of the buttons the ask waits on. */
+  choose(id: string) {
+    if (this.view?.choices?.some((c) => c.id === id)) this.waiting?.(id);
+  }
+
+  /**
+   * Press the `go` button the ask waits on, if it has one — for a host that
+   * binds it to a key of its own meaning (Play, for a run). The kit binds it
+   * to nothing: a press made out of habit (the wheel, to look at a picture)
+   * must never answer a question about spending.
+   */
+  chooseGo() {
+    const go = this.view?.choices?.find((c) => c.tone === 'go');
+    if (go) this.choose(go.id);
   }
 
   acceptsAttachments = (): boolean => this.options.attachments === true;
@@ -576,7 +696,7 @@ class MoveAgentStoreClass {
   detach(id: string) {
     const gone = this.view?.attachments.find((a) => a.id === id);
     if (!this.view || !gone) return;
-    URL.revokeObjectURL(gone.url);
+    if (!this.held.has(gone.url)) URL.revokeObjectURL(gone.url);
     this.set({ ...this.view, attachments: this.view.attachments.filter((a) => a !== gone) });
   }
 
@@ -588,10 +708,12 @@ class MoveAgentStoreClass {
     const attachments = this.view.attachments;
     const idle = { prompt: text, message: '', changed: 0, acted: 0, skipped: 0, steps: [] as MoveAgentStep[], attachments };
     const flight = (this.flight = new AbortController());
-    this.set({ ...idle, phase: 'thinking' });
+    this.set({ ...idle, sheet: this.view.sheet, phase: 'thinking' });
     let late = false;
     const limit = this.options.timeoutMs ?? BUDGET_MS;
-    const budget = limit > 0 ? setTimeout(() => { late = true; flight.abort(); }, limit) : undefined;
+    // The budget runs while the agent works, and stops while it waits on a press.
+    const arm = () => (limit > 0 ? setTimeout(() => { late = true; flight.abort(); }, limit) : undefined);
+    let budget = arm();
     const { onRequest } = this.options;
     const outcome: MoveAgentOutcome = { changed: 0, acted: 0, skipped: 0, cancelled: false };
     // What a streaming transport runs ahead of the answer (`MoveAgentStream.act`).
@@ -628,6 +750,40 @@ class MoveAgentStoreClass {
         say: (said) => {
           if (this.flight !== flight || flight.signal.aborted || !this.view) return;
           this.set({ ...this.view, message: said });
+        },
+        choose: (choices, message) => new Promise<string | null>((resolve) => {
+          if (this.flight !== flight || flight.signal.aborted || !this.view || !choices.length || this.waiting) { resolve(null); return; }
+          clearTimeout(budget);
+          // Back, while the buttons stand, answers them — it steps back from the
+          // choice and leaves the prompt open; a second Back closes it.
+          const releaseBack = MoveFunctions.push('back', () => finish(null), { label: 'Cancel', chip: false });
+          const question = message ?? this.view.message;
+          const finish = (id: string | null) => {
+            if (this.waiting !== finish) return;
+            this.waiting = null;
+            releaseBack();
+            flight.signal.removeEventListener('abort', onAbort);
+            if (!flight.signal.aborted) budget = arm();
+            // The question and the answer stay in the turn, as one of its steps.
+            const picked = id === null ? 'Cancelled' : choices.find((c) => c.id === id)?.label ?? id;
+            if (this.view && this.flight === flight) this.set({ ...this.view, choices: undefined, steps: [...this.view.steps, { label: question ? `${question} — ${picked}` : picked, state: 'done' }] });
+            resolve(id);
+          };
+          const onAbort = () => finish(null);
+          flight.signal.addEventListener('abort', onAbort, { once: true });
+          this.waiting = finish;
+          this.set({ ...this.view, choices, message: question });
+        }),
+        step: (label) => {
+          if (this.flight !== flight || !this.view) return () => {};
+          const at = this.view.steps.length;
+          this.set({ ...this.view, steps: [...this.view.steps, { label, state: 'running' }] });
+          return (state = 'done', said) => {
+            if (this.flight !== flight || !this.view?.steps[at]) return;
+            const steps = [...this.view.steps];
+            steps[at] = { label: said ?? label, state };
+            this.set({ ...this.view, steps });
+          };
         },
         act: (call) => (early = early.then(async () => {
           if (this.flight !== flight || flight.signal.aborted || earlyError) return;
@@ -681,7 +837,7 @@ class MoveAgentStoreClass {
       const moved = changed > 0 || acted.ran > 0;
       const unanswered = !moved && !!reply.calls?.length && tools.length > 0;
       if (this.view) this.set({
-        phase: acted.error ? 'error' : 'done', prompt: text, changed, acted: acted.ran, skipped: acted.skipped, steps: this.view.steps, attachments: this.view.attachments,
+        phase: acted.error ? 'error' : 'done', prompt: text, changed, acted: acted.ran, skipped: acted.skipped, steps: this.view.steps, attachments: this.view.attachments, sheet: this.view.sheet,
         message: acted.error ?? (reply.message || this.view.message || (unanswered ? 'It kept looking and ran out of passes. Nothing changed.' : moved ? '' : 'Nothing changed.')),
       });
     } catch (error) {
@@ -689,13 +845,34 @@ class MoveAgentStoreClass {
       Object.assign(outcome, { acted: earlyRan, skipped: earlySkipped });
       if (flight.signal.aborted && !late) { outcome.cancelled = true; return; }
       outcome.error = late ? 'That took too long, so it was stopped. Nothing changed.' : error instanceof Error ? error.message : 'The agent did not answer.';
-      if (this.view) this.set({ ...idle, acted: earlyRan, steps: this.view.steps, attachments: this.view.attachments, phase: 'error', message: outcome.error });
+      if (this.view) this.set({ ...idle, acted: earlyRan, steps: this.view.steps, attachments: this.view.attachments, sheet: this.view.sheet, phase: 'error', message: outcome.error });
     } finally {
       clearTimeout(budget);
+      this.waiting?.(null);
       if (this.flight === flight) this.flight = null;
+      this.archive(text, attachments, outcome);
       // The host's own end must not break the ask it closes.
       try { onRequest?.end?.(outcome); } catch (error) { console.warn('tweakers agent: onRequest.end failed', error); }
     }
+  }
+
+  /**
+   * Keep the ask that just ended in the thread, however it ended. A running
+   * step left over (a host that never finished it) is kept as failed, so the
+   * thread never shows work still going.
+   */
+  private archive(prompt: string, attachments: MoveAgentAttachment[], outcome: MoveAgentOutcome) {
+    const view = this.view?.prompt === prompt ? this.view : null;
+    for (const a of attachments) this.held.add(a.url);
+    const said = view?.message ?? '';
+    this.thread = [...this.thread, {
+      id: ++this.turnId, prompt, pictures: attachments.map(({ id, name, url }) => ({ id, name, url })),
+      phase: outcome.error && !outcome.cancelled ? 'error' : 'done',
+      message: outcome.cancelled ? (said ? `${said} (Stopped.)` : 'Stopped.') : said || (outcome.error ?? ''),
+      changed: outcome.changed, acted: outcome.acted, skipped: outcome.skipped,
+      steps: (view?.steps ?? []).map((s) => (s.state === 'running' ? { ...s, state: 'failed' as const } : s)),
+    }];
+    this.set(this.view);
   }
 
   /**
@@ -791,6 +968,9 @@ class MoveAgentStoreClass {
     for (const error of failures.slice(1)) console.warn('tweakers agent: an undo failed', error);
     const reason = failures[0] instanceof Error ? failures[0].message.trim() : typeof failures[0] === 'string' ? failures[0].trim() : '';
     const message = !failures.length ? 'Undone.' : reason ? `Could not undo: ${reason}` : 'Some of it could not be undone.';
+    // The thread's last turn carries the note, so the sheet says it was taken back.
+    const last = this.thread[this.thread.length - 1];
+    if (last) this.thread = [...this.thread.slice(0, -1), { ...last, note: message }];
     if (this.view) this.set({ ...this.view, phase: 'prompt', message, changed: 0, acted: 0, skipped: 0, steps: [] });
   }
 
