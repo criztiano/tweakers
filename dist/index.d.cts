@@ -9140,6 +9140,13 @@ declare class MoveAgentStoreClass {
     /** Close — and let go of an ask still in the air, its tools with it. What landed stays. */
     close(): void;
     hasNewChat: () => boolean;
+    /**
+     * Put a conversation the host kept back in the thread — after a reload, so
+     * the sheet shows the session the model still remembers. Only into an
+     * empty thread, with no ask in the air. Pictures need urls that outlive
+     * the page (the kit's own are gone with it); give none rather than dead ones.
+     */
+    restoreThread(turns: readonly Omit<MoveAgentTurn, 'id'>[]): void;
     /** Start the conversation again: the thread goes, and the host forgets its side. Not while an ask is in the air. */
     newChat(): void;
     /** The buttons the ask is waiting on, if any. */

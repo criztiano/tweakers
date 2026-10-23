@@ -4395,6 +4395,17 @@
   overflow-wrap: anywhere;
 }
 
+/* In the box, a long reply never makes it taller than the room above the
+   panel (`--move-agent-room`, measured), where it would have to move into
+   the panel: the words scroll in place, under a soft edge, and the field
+   stays where it was. The sheet is the place for reading at length. */
+.tweakers-move-agent .tweakers-move-agent-said {
+  max-height: max(72px, min(45vh, calc(var(--move-agent-room, 70vh) - 150px)));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
 /* Each word of the reply comes up out of a soft blur as it arrives. */
 .tweakers-move-agent-word {
   animation: tweakers-move-agent-word 420ms var(--move-ease-smooth) both;
@@ -4711,6 +4722,11 @@
 .tweakers-move-agent-sheet-new:focus-visible {
   color: var(--move-text);
   outline: none;
+}
+
+.tweakers-move-agent-sheet-new[data-asking] {
+  background: color-mix(in srgb, #ff8a70 16%, transparent);
+  color: #ff8a70;
 }
 
 .tweakers-move-agent-sheet-new:disabled {

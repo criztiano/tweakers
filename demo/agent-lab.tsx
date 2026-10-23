@@ -114,6 +114,14 @@ const SCENARIOS: Record<string, { label: string; ask: string; run: Scenario }> =
       return { writes: [] };
     },
   },
+  essay: {
+    label: 'A very long reply', ask: 'tell me everything about the grid',
+    run: async (out, signal) => {
+      await wait(600, signal);
+      await stream(Array.from({ length: 14 }, (_, i) => `Paragraph ${i + 1}: the grid holds every take side by side, so a look across a row compares the models and a look down a column compares the prompts.`).join('\n\n'), out, signal);
+      return { writes: [] };
+    },
+  },
   error: {
     label: 'Delivery failure', ask: 'brighter',
     run: async (_out, signal) => {

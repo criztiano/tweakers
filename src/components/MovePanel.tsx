@@ -5,7 +5,7 @@ import { PresetExplorationStore } from '../preset-exploration';
 import { useEffect, useLayoutEffect, useId, useRef, useState, useSyncExternalStore, useCallback } from 'react';
 import { AnimatePresence, animate, motion, useReducedMotion } from 'motion/react';
 import { createPortal } from 'react-dom';
-import { moveFloatSitsInside } from '../move-float';
+import { moveFloatSitsInside, MOVE_FLOAT_GAP } from '../move-float';
 import { TweakStore, PanelConfig, ControlMeta } from '../store/TweakStore';
 import { ModulationStore } from '../store/ModulationStore';
 import { modColor, getModType, curveComposition, envelopePoints, envelopeJoints, envCurveParam, ENV_BEND_STAGES, envWaveParam, envWaveFlipParam, ENV_WAVE_STAGES, modPageWidth, MOD_SETTINGS_PANEL, getAudioModBuffer, setAudioModBuffer, subscribeAudioMod, getAudioModVersion, setAudioModWindowSource, getAudioModWindow, type EnvStage, type ModulationSlot, type ModulationParams } from '../modulation-core';
@@ -4009,10 +4009,16 @@ function MoveSearchBar({ view }: { view: MoveSearchView }) {
 function useMoveFloat() {
   const ref = useRef<HTMLDivElement>(null);
   const [inside, setInside] = useState(false);
+  /** The height free above the panel, in px — what a box that grows may take before it would have to move. */
+  const [room, setRoom] = useState(0);
   useLayoutEffect(() => {
     const box = ref.current, panel = box?.parentElement;
     if (!box || !panel) return;
-    const measure = () => setInside(moveFloatSitsInside(panel.getBoundingClientRect().top, box.offsetHeight));
+    const measure = () => {
+      const top = panel.getBoundingClientRect().top;
+      setRoom(Math.max(0, Math.round(top - MOVE_FLOAT_GAP * 2)));
+      setInside(moveFloatSitsInside(top, box.offsetHeight));
+    };
     measure();
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
     observer?.observe(box);
@@ -4025,7 +4031,7 @@ function useMoveFloat() {
       window.removeEventListener('scroll', measure, true);
     };
   }, []);
-  return { ref, inside };
+  return { ref, inside, room };
 }
 
 /**
@@ -4114,6 +4120,7 @@ function MoveAgentPrompt({ view }: { view: MoveAgentView }) {
       data-inside={float.inside || undefined}
       data-dropping={drop.dropping || undefined}
       aria-busy={thinking || undefined}
+      style={float.room ? { '--move-agent-room': `${float.room}px` } as React.CSSProperties : undefined}
       initial={still ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={still ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.98, transition: { duration: 0.16, ease: AGENT_EASE_IN } }}
@@ -4222,9 +4229,7 @@ function MoveAgentSheetBody({ view }: { view: MoveAgentView }) {
     <div className="tweakers-move-agent-sheet-inner" data-dropping={drop.dropping || undefined} {...drop.props}>
       <header className="tweakers-move-agent-sheet-head">
         <Drawer.Title className="tweakers-move-agent-sheet-title">Agent</Drawer.Title>
-        {MoveAgentStore.hasNewChat() && thread.length > 0 && (
-          <button type="button" className="tweakers-move-agent-sheet-new" disabled={thinking} onClick={() => { MoveAgentStore.newChat(); inputRef.current?.focus(); }}>New chat</button>
-        )}
+        {MoveAgentStore.hasNewChat() && thread.length > 0 && <MoveAgentNewChat disabled={thinking} onDone={() => inputRef.current?.focus()} />}
         <button type="button" className="tweakers-move-agent-sheet-icon" aria-label="Make it small" title="Make it small" onClick={() => MoveAgentStore.setSheet(false)}>
           <MoveSlotGlyph name="shrink" className="tweakers-move-agent-attach-icon" />
         </button>
@@ -4266,6 +4271,35 @@ function MoveAgentSheetBody({ view }: { view: MoveAgentView }) {
         />
       </footer>
     </div>
+  );
+}
+
+/** How long New chat waits for its second press. */
+const NEW_CHAT_CONFIRM_MS = 3000;
+
+/**
+ * New chat forgets the conversation, the model's side with it, and there is
+ * no way back — so it takes two presses, the kit's rule for a step that
+ * cannot be undone: the first asks, the second clears. Left alone, it lets
+ * the question go.
+ */
+function MoveAgentNewChat({ disabled, onDone }: { disabled: boolean; onDone: () => void }) {
+  const [asking, setAsking] = useState(false);
+  useEffect(() => {
+    if (!asking) return;
+    const timer = setTimeout(() => setAsking(false), NEW_CHAT_CONFIRM_MS);
+    return () => clearTimeout(timer);
+  }, [asking]);
+  return (
+    <button type="button" className="tweakers-move-agent-sheet-new" data-asking={asking || undefined} disabled={disabled}
+      onClick={() => {
+        if (!asking) { setAsking(true); return; }
+        setAsking(false);
+        MoveAgentStore.newChat();
+        onDone();
+      }}
+      onBlur={() => setAsking(false)}
+    >{asking ? 'Clear the chat?' : 'New chat'}</button>
   );
 }
 
@@ -4619,11 +4653,14 @@ function useAgentFrame(shape: string, live: boolean, holding: boolean, still: bo
  */
 function MoveAgentWords({ text, working }: { text: string; working?: boolean }) {
   const shown = useRef(0);
+  const ref = useRef<HTMLParagraphElement>(null);
   const parts = text.split(/(\s+)/);
   const from = shown.current;
   useEffect(() => { shown.current = parts.length; });
+  // A reply longer than the box holds scrolls in it; while it is written the end stays in view.
+  useLayoutEffect(() => { const words = ref.current; if (working && words) words.scrollTop = words.scrollHeight; }, [text, working]);
   return (
-    <p className="tweakers-move-agent-said">
+    <p ref={ref} className="tweakers-move-agent-said">
       {parts.map((part, i) => (/^\s*$/.test(part) ? part : (
         <span key={i} className="tweakers-move-agent-word" style={{ '--word': Math.min(24, Math.max(0, i - from) / 2) } as React.CSSProperties}>{part}</span>
       )))}

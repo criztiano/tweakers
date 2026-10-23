@@ -15374,6 +15374,17 @@ var MoveAgentStoreClass = class {
     for (const a of this.view.attachments) if (!this.held.has(a.url)) URL.revokeObjectURL(a.url);
     this.set(null);
   }
+  /**
+   * Put a conversation the host kept back in the thread — after a reload, so
+   * the sheet shows the session the model still remembers. Only into an
+   * empty thread, with no ask in the air. Pictures need urls that outlive
+   * the page (the kit's own are gone with it); give none rather than dead ones.
+   */
+  restoreThread(turns) {
+    if (this.thread.length || this.flight || !turns.length) return;
+    this.thread = turns.map((turn) => ({ ...turn, id: ++this.turnId }));
+    this.set(this.view);
+  }
   /** Start the conversation again: the thread goes, and the host forgets its side. Not while an ask is in the air. */
   newChat() {
     if (this.view?.phase === "thinking") return;
@@ -19079,10 +19090,15 @@ function MoveSearchBar({ view }) {
 function useMoveFloat() {
   const ref = (0, import_react18.useRef)(null);
   const [inside, setInside] = (0, import_react18.useState)(false);
+  const [room, setRoom] = (0, import_react18.useState)(0);
   (0, import_react18.useLayoutEffect)(() => {
     const box = ref.current, panel = box?.parentElement;
     if (!box || !panel) return;
-    const measure = () => setInside(moveFloatSitsInside(panel.getBoundingClientRect().top, box.offsetHeight));
+    const measure = () => {
+      const top = panel.getBoundingClientRect().top;
+      setRoom(Math.max(0, Math.round(top - MOVE_FLOAT_GAP * 2)));
+      setInside(moveFloatSitsInside(top, box.offsetHeight));
+    };
     measure();
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
     observer?.observe(box);
@@ -19095,7 +19111,7 @@ function useMoveFloat() {
       window.removeEventListener("scroll", measure, true);
     };
   }, []);
-  return { ref, inside };
+  return { ref, inside, room };
 }
 function MovePresetSaveInput({ suggested }) {
   const inputRef = (0, import_react18.useRef)(null);
@@ -19158,6 +19174,7 @@ function MoveAgentPrompt({ view }) {
       "data-inside": float.inside || void 0,
       "data-dropping": drop.dropping || void 0,
       "aria-busy": thinking || void 0,
+      style: float.room ? { "--move-agent-room": `${float.room}px` } : void 0,
       initial: still ? { opacity: 0 } : { opacity: 0, y: 10, scale: 0.97 },
       animate: { opacity: 1, y: 0, scale: 1 },
       exit: still ? { opacity: 0 } : { opacity: 0, y: 6, scale: 0.98, transition: { duration: 0.16, ease: AGENT_EASE_IN } },
@@ -19250,10 +19267,7 @@ function MoveAgentSheetBody({ view }) {
   return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("div", { className: "tweakers-move-agent-sheet-inner", "data-dropping": drop.dropping || void 0, ...drop.props, children: [
     /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("header", { className: "tweakers-move-agent-sheet-head", children: [
       /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(import_drawer.Drawer.Title, { className: "tweakers-move-agent-sheet-title", children: "Agent" }),
-      MoveAgentStore.hasNewChat() && thread.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("button", { type: "button", className: "tweakers-move-agent-sheet-new", disabled: thinking, onClick: () => {
-        MoveAgentStore.newChat();
-        inputRef.current?.focus();
-      }, children: "New chat" }),
+      MoveAgentStore.hasNewChat() && thread.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(MoveAgentNewChat, { disabled: thinking, onDone: () => inputRef.current?.focus() }),
       /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("button", { type: "button", className: "tweakers-move-agent-sheet-icon", "aria-label": "Make it small", title: "Make it small", onClick: () => MoveAgentStore.setSheet(false), children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(MoveSlotGlyph, { name: "shrink", className: "tweakers-move-agent-attach-icon" }) }),
       /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("button", { type: "button", className: "tweakers-move-agent-sheet-icon", "aria-label": "Close", title: "Close", onClick: () => MoveAgentStore.close(), children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("svg", { viewBox: "0 0 24 24", fill: "none", "aria-hidden": "true", className: "tweakers-move-agent-attach-icon", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("path", { d: ICON_CLOSE, stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round" }) }) })
     ] }),
@@ -19282,6 +19296,35 @@ function MoveAgentSheetBody({ view }) {
       }
     ) })
   ] });
+}
+var NEW_CHAT_CONFIRM_MS = 3e3;
+function MoveAgentNewChat({ disabled, onDone }) {
+  const [asking, setAsking] = (0, import_react18.useState)(false);
+  (0, import_react18.useEffect)(() => {
+    if (!asking) return;
+    const timer = setTimeout(() => setAsking(false), NEW_CHAT_CONFIRM_MS);
+    return () => clearTimeout(timer);
+  }, [asking]);
+  return /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(
+    "button",
+    {
+      type: "button",
+      className: "tweakers-move-agent-sheet-new",
+      "data-asking": asking || void 0,
+      disabled,
+      onClick: () => {
+        if (!asking) {
+          setAsking(true);
+          return;
+        }
+        setAsking(false);
+        MoveAgentStore.newChat();
+        onDone();
+      },
+      onBlur: () => setAsking(false),
+      children: asking ? "Clear the chat?" : "New chat"
+    }
+  );
 }
 function MoveAgentThreadTurn({ turn, undo, still }) {
   const moved = turn.changed > 0 || turn.acted > 0;
@@ -19583,12 +19626,17 @@ function useAgentFrame(shape, live, holding, still) {
 }
 function MoveAgentWords({ text, working }) {
   const shown = (0, import_react18.useRef)(0);
+  const ref = (0, import_react18.useRef)(null);
   const parts = text.split(/(\s+)/);
   const from = shown.current;
   (0, import_react18.useEffect)(() => {
     shown.current = parts.length;
   });
-  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("p", { className: "tweakers-move-agent-said", children: [
+  (0, import_react18.useLayoutEffect)(() => {
+    const words = ref.current;
+    if (working && words) words.scrollTop = words.scrollHeight;
+  }, [text, working]);
+  return /* @__PURE__ */ (0, import_jsx_runtime19.jsxs)("p", { ref, className: "tweakers-move-agent-said", children: [
     parts.map((part, i) => /^\s*$/.test(part) ? part : /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "tweakers-move-agent-word", style: { "--word": Math.min(24, Math.max(0, i - from) / 2) }, children: part }, i)),
     working && /* @__PURE__ */ (0, import_jsx_runtime19.jsx)("span", { className: "tweakers-move-agent-trail", children: /* @__PURE__ */ (0, import_jsx_runtime19.jsx)(MoveAgentLoader, {}) })
   ] });

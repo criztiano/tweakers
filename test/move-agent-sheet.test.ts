@@ -70,6 +70,17 @@ describe('the thread', () => {
   });
 });
 
+describe('a thread the host kept', () => {
+  it('comes back into an empty thread, and never over one in use', async () => {
+    register();
+    const kept = { prompt: 'one', pictures: [], phase: 'done' as const, message: 'ok', changed: 0, acted: 1, skipped: 0, steps: [{ label: 'Ran 2 pictures', state: 'done' as const }] };
+    MoveAgentStore.restoreThread([kept]);
+    expect(MoveAgentStore.getThread().map((t) => t.prompt)).toEqual(['one']);
+    MoveAgentStore.restoreThread([{ ...kept, prompt: 'two' }]);
+    expect(MoveAgentStore.getThread().map((t) => t.prompt)).toEqual(['one']);
+  });
+});
+
 describe('the sheet', () => {
   it('is the same prompt: the box turns into it with the ask in the air, and back', async () => {
     register();

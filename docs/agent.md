@@ -115,7 +115,10 @@ the pointer and the keys. Swipe it right, Escape or Back closes it.
 The thread is the kit's (`MoveAgentStore.getThread()`, every finished ask as
 a `MoveAgentTurn`) and outlives the prompt closing. The model's side of the
 conversation is the host's; give `onNewChat` and the sheet offers New chat,
-which clears both. While the sheet is open the kit sets
+which clears both — on a second press, since nothing brings it back. A host
+that keeps its conversation across a reload hands it back with
+`MoveAgentStore.restoreThread(turns)`, so the sheet shows what the model
+still remembers. While the sheet is open the kit sets
 `--tweakers-agent-sheet-inset` on the document root — the room it takes from
 the right edge — so a host can keep its work clear of it
 (`padding-right: var(--tweakers-agent-sheet-inset, 0)`). The sheet is Base

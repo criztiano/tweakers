@@ -629,6 +629,18 @@ class MoveAgentStoreClass {
 
   hasNewChat = (): boolean => !!this.options.onNewChat;
 
+  /**
+   * Put a conversation the host kept back in the thread — after a reload, so
+   * the sheet shows the session the model still remembers. Only into an
+   * empty thread, with no ask in the air. Pictures need urls that outlive
+   * the page (the kit's own are gone with it); give none rather than dead ones.
+   */
+  restoreThread(turns: readonly Omit<MoveAgentTurn, 'id'>[]) {
+    if (this.thread.length || this.flight || !turns.length) return;
+    this.thread = turns.map((turn) => ({ ...turn, id: ++this.turnId }));
+    this.set(this.view);
+  }
+
   /** Start the conversation again: the thread goes, and the host forgets its side. Not while an ask is in the air. */
   newChat() {
     if (this.view?.phase === 'thinking') return;
