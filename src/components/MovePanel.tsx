@@ -1717,6 +1717,16 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       : color
         ? Array.from({ length: MOVE_PADS }, (_, i) => i)
         : visibleColumns(page);
+  // Grouped slots are drawn on the page's own dials only. The columns under a
+  // group's name are marked: those slots stand below the name's band, and
+  // every other slot on the row takes the row's whole height.
+  const drawGroups = !stripMode && !settingsPanel && !color;
+  const namedCols = new Set(drawGroups
+    ? slotGroups(page, visibleCols).filter((g) => g.label).flatMap(({ start, span }) => Array.from({ length: span }, (_, k) => start + k))
+    : []);
+  const underName = (i: number, node: React.ReactNode) => (namedCols.has(i) && node
+    ? <div key={`named-${i}`} className="tweakers-move-slot-named">{node}</div>
+    : node);
   // The cluster the header and the grid share is never wider than the dials:
   // a strip of forty slots still shows eight.
   const clusterCols = explorationOpen ? MOVE_DIALS : stripMode
@@ -2030,10 +2040,13 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 : undefined}
             >
             <div className="tweakers-move-dials" data-scroll={stripMode || undefined}>
+              {/* A slot under a group's name stands below the name's band;
+                  every other slot on the row takes the row's full height, so
+                  the tops line up. The mark is a box that lays nothing out. */}
               {/* Grouped slots: one container behind the slots that read as one
                   thing, a short divider between each — drawn under the slots,
                   so the columns and their gestures stay exactly where they are. */}
-              {!stripMode && !settingsPanel && !color && slotGroups(page, visibleCols).map(({ start, span, label }) => (
+              {drawGroups && slotGroups(page, visibleCols).map(({ start, span, label }) => (
                 <div key={`group-${start}`} className="tweakers-move-slot-group" aria-hidden="true" data-labelled={label ? 'true' : undefined}
                   style={{ gridColumn: `${start + 1} / span ${span}`, gridRow: 1, '--move-group-span': span } as React.CSSProperties}>
                   {label && <span className="tweakers-move-slot-group-head">{label}</span>}
@@ -2042,7 +2055,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   ))}
                 </div>
               ))}
-              {visibleCols.map((i) => {
+              {visibleCols.map((i) => underName(i, (() => {
                 // A 2-slot dial's second column renders nothing of its own —
                 // the base column's slot spans across it. And a 2-slot dial
                 // keeps its slot against chip substitution: a chip landing in
@@ -2907,7 +2920,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
 
                   </div>
                 );
-              })}
+              })()))}
             </div>
 
             {/* Trailing empty pad rows collapse: a row shows only if it, or any
@@ -3007,6 +3020,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                             name={named ? meta.label : null}
                             options={options}
                             activeIdx={active}
+                            labels={!!meta.moveTabsLabels}
                           />
                           <div className="tweakers-move-tab-zones" role="tablist" aria-label={meta.label}>
                             {options.map((opt, i) => (
@@ -3026,7 +3040,6 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                               </button>
                             ))}
                           </div>
-                            labels={!!meta.moveTabsLabels}
                         </div>
                       );
                     }

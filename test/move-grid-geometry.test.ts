@@ -41,9 +41,10 @@ describe('the dial cluster and the pad grid, measured', () => {
 
   it('gives a labelled group its own band, so a group name never lies on a slot name', () => {
     // The name sits in a band of its own along the top of the container. The
-    // row carrying it is that band taller, and its slots stand at the bottom
-    // keeping their own height — the faces do not move under the name and do
-    // not change size.
+    // row carrying it is that band taller; the slots under a name stand at the
+    // bottom keeping their own height — the faces do not move under the name
+    // and do not change size — and every other slot takes the whole row, its
+    // top level with the groups'.
     // Inset and head together are the band: the head fills what the inset
     // leaves, so the band is exactly what the slots have to clear.
     const head = block('.tweakers-move-slot-group-head');
@@ -52,9 +53,12 @@ describe('the dial cluster and the pad grid, measured', () => {
     expect(head).toMatch(/line-height:\s*calc\(var\(--move-group-band\) - var\(--move-group-inset\)\)/);
     const row = block('.tweakers-move-dials:has(> .tweakers-move-slot-group[data-labelled])');
     expect(row).toMatch(/height:\s*calc\(var\(--move-slot-height\) \+ var\(--move-group-band\)\)/);
-    expect(row).toMatch(/align-items:\s*end/);
     expect(block('.tweakers-move-dials:has(> .tweakers-move-slot-group[data-labelled]) > .tweakers-move-dial'))
-      .toMatch(/height:\s*var\(--move-slot-height\)/);
+      .toMatch(/height:\s*100%/);
+    expect(block('.tweakers-move-slot-named')).toMatch(/display:\s*contents/);
+    const named = block('.tweakers-move-slot-named > .tweakers-move-dial');
+    expect(named).toMatch(/align-self:\s*end/);
+    expect(named).toMatch(/height:\s*var\(--move-slot-height\)/);
     // The dividers follow the slots down, not the taller container.
     expect(block('.tweakers-move-slot-group[data-labelled] > .tweakers-move-slot-group-divider'))
       .toMatch(/top:\s*calc\(50% \+ var\(--move-group-band\) \/ 2\)/);
