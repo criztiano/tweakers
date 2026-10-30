@@ -160,6 +160,12 @@ export const BIG_SLOTS: Specimen[] = [
     live: { path: 'frame' },
   },
   {
+    kind: 'arrows', path: 'wind',
+    description: MOVE_SLOT_LIBRARY.arrows.description,
+    note: '`{ type: \'select\', display: \'arrows\', options: [\'up\', \'right\', \'down\', \'left\'] }` — two to four options, each naming a different direction (or north, east, south, west), as plain strings or `{ value, label }` rows; the label is what the Move’s screen and a screen reader say. Only the options get an arrow. Click an arrow to take it, click anywhere else, drag or scroll to step; on the Move the knob steps. An option that is not a direction wears the list face instead.',
+    live: { path: 'wind' },
+  },
+  {
     kind: 'enum-wide', span: 2, path: 'result',
     description: 'The same list across two dial columns, with room for longer names. Either knob selects a result.',
     note: 'select with moveSpan: 2',

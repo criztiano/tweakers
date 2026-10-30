@@ -940,6 +940,43 @@ export function enumAspect(meta: ControlMeta, value: unknown): { w: number; h: n
   return ratio ? { ...ratio, text: enumOptionLabel(option as never) } : null;
 }
 
+/** One of the four ways an arrows select (`display: 'arrows'`) can point. */
+export type MoveArrowDirection = 'up' | 'right' | 'down' | 'left';
+/** The four ways in the order the face draws them: clockwise from the top. */
+export const MOVE_ARROW_DIRECTIONS: readonly MoveArrowDirection[] = ['up', 'right', 'down', 'left'];
+const ARROW_WORDS: Record<string, MoveArrowDirection> = {
+  up: 'up', north: 'up', right: 'right', east: 'right', down: 'down', south: 'down', left: 'left', west: 'left',
+};
+
+/** A direction written as a word — up, right, down, left, or the compass's
+ *  north, east, south, west, in any case — or null for anything else. */
+export function parseArrow(text: unknown): MoveArrowDirection | null {
+  return typeof text === 'string' ? ARROW_WORDS[text.trim().toLowerCase()] ?? null : null;
+}
+
+/**
+ * The arrows an arrows select (`display: 'arrows'`) draws: one per option,
+ * clockwise from the top, each with the option it picks, and which one is
+ * chosen now. Two to four options, each naming a
+ * different direction by its value; anything else — an option that is no
+ * direction, two naming the same one — is null, and the select keeps the
+ * ordinary enum face.
+ */
+export function enumArrows(meta: ControlMeta, value: unknown): {
+  arrows: { dir: MoveArrowDirection; index: number }[];
+  chosen: MoveArrowDirection;
+} | null {
+  if (meta.type !== 'select' || meta.display !== 'arrows' || !isEnumDial(meta)) return null;
+  const options = meta.options!;
+  if (options.length < 2 || options.length > MOVE_ARROW_DIRECTIONS.length) return null;
+  const dirs = options.map((o) => parseArrow(enumOptionValue(o as never)));
+  if (dirs.some((d) => d === null) || new Set(dirs).size !== dirs.length) return null;
+  return {
+    arrows: MOVE_ARROW_DIRECTIONS.filter((d) => dirs.includes(d)).map((dir) => ({ dir, index: dirs.indexOf(dir) })),
+    chosen: dirs[enumIndex(meta, value)]!,
+  };
+}
+
 export function enumIndex(meta: ControlMeta, value: unknown): number {
   const i = (meta.options ?? []).findIndex((o) => enumOptionValue(o as never) === value);
   return Math.max(0, i);

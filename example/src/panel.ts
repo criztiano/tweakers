@@ -222,6 +222,16 @@ export const CONFIG = {
   },
   /* a choice of proportions, drawn as the frame it makes */
   frame: { type: 'select', default: '16:9', display: 'aspect', options: ['1:1', '4:3', '3:4', '16:9', '9:16'] },
+  /* a choice of directions, drawn as the arrows it points — tap one */
+  wind: {
+    type: 'select', default: 'right', display: 'arrows',
+    options: [
+      { value: 'up', label: 'From below' },
+      { value: 'right', label: 'From the left' },
+      { value: 'down', label: 'From above' },
+      { value: 'left', label: 'From the right' },
+    ],
+  },
 
   /* ── values a bar cannot say: a bearing, a colour, a shape ────── */
   heading: { type: 'slider', default: 270, min: 0, max: 360, step: 1, display: 'dial' },

@@ -6,7 +6,7 @@ import { MoveGauge, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDra
 export { MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotDiaphragmBody, MoveSlotStreakBody, MoveSlotClockBody, MoveSlotPlaybackDrawing, MOVE_GAUGE, moveGaugeBearing } from './move-visuals';
 import type { ControlMeta, SelectLevel } from '../store/TweakStore';
 import { ICON_BADGE_OFF, ICON_BADGE_ON, LUCIDE_ICONS } from '../icons';
-import { enumAspect, enumOptionGroup, enumOptionIcon, enumOptionLabel, enumOptionValue } from '../move-layout';
+import { enumArrows, enumAspect, enumOptionGroup, enumOptionIcon, enumOptionLabel, enumOptionValue, type MoveArrowDirection } from '../move-layout';
 import { arcPath } from '../angle-core';
 import { springParams } from '../transition-math';
 import { LIVELY_UI } from '../move-lively';
@@ -38,6 +38,9 @@ import { ListScreen } from './ListScreen';
  * - `aspect`  — an option picker whose options are proportions ("16:9"):
  *   a frame in the chosen proportion, as large as the slot holds, the
  *   ratio written inside it — the shape is read before the number.
+ * - `arrows`  — an option picker whose options are directions (up, right,
+ *   down, left): a plate with an arrow for each, the chosen one lit — the
+ *   way is read before the word. A tap on an arrow takes it.
  * - `icon`    — an option picker whose current option shows as a glyph:
  *   at arm's length you read a picture, not a word.
  * - `picture` — an option picker whose current option fills the slot as a
@@ -135,6 +138,7 @@ export type MoveSlotKind =
   | 'enum'
   | 'folders'
   | 'aspect'
+  | 'arrows'
   | 'multiselect'
   | 'xy'
   | 'range'
@@ -196,6 +200,7 @@ export function moveSlotKind(
     if (meta.type === 'select' && meta.optionTree) return 'folders';
     // The app's own ask for the face wins over a glyph or a picture.
     if (enumAspect(meta, opts.value)) return 'aspect';
+    if (enumArrows(meta, opts.value)) return 'arrows';
     if (meta.type === 'select' && meta.display === 'value') return 'value';
     // Every option's shape at once — only when there are shapes to draw;
     // without a `preview` the grid has nothing to show, so the list stays.
@@ -655,6 +660,55 @@ export function MoveSlotAspectBody({ label, w, h, text, options, activeIdx, trac
         </div>
       </div>
       {cells && <MoveSlotEnumCells options={options} activeIdx={activeIdx} />}
+    </>
+  );
+}
+
+/** The up arrow on the plate's 24-unit square, in its middle across; the
+ *  others are this one turned about the centre, so all four sit at one
+ *  distance from it. The stroke rounds its corners. */
+const MOVE_ARROW_PATH = 'M12 3.5 L14.5 5.75 L9.5 5.75 Z';
+/** How far each arrow is turned from the up one, in degrees. */
+const MOVE_ARROW_TURN: Record<MoveArrowDirection, number> = { up: 0, right: 90, down: 180, left: 270 };
+
+/**
+ * A choice of directions (`display: 'arrows'`): a plate in the middle of the
+ * slot, a rounded arrow on it for each direction that is an option — at its
+ * own side, pointing out — and the chosen one lit in the slot's ink, the
+ * others pressed into the plate. Only the options are drawn: a picker of
+ * left and right has two arrows and two empty sides. The control's name is
+ * the tag on top, as on every picture face.
+ *
+ * Nothing moves but the light: a step lights the next arrow at once. The
+ * arrows are drawing only; a press on the plate is read by the slot, which
+ * takes the arrow in the quarter it landed in (move-slot-core).
+ */
+export function MoveSlotArrowsBody({ label, directions, chosen }: {
+  label: string;
+  /** The directions that are options, in any order. */
+  directions: readonly MoveArrowDirection[];
+  /** The one chosen now. */
+  chosen: MoveArrowDirection | null;
+}) {
+  return (
+    <>
+      <span className="tweakers-move-dial-tag">{label}</span>
+      <div className="tweakers-move-dial-arrows">
+        <div className="tweakers-move-dial-arrows-plate">
+          <svg className="tweakers-move-dial-arrows-marks" viewBox="0 0 24 24" aria-hidden="true">
+            {directions.map((dir) => (
+              <path
+                key={dir}
+                className="tweakers-move-dial-arrow"
+                data-dir={dir}
+                data-on={dir === chosen || undefined}
+                d={MOVE_ARROW_PATH}
+                transform={MOVE_ARROW_TURN[dir] ? `rotate(${MOVE_ARROW_TURN[dir]} 12 12)` : undefined}
+              />
+            ))}
+          </svg>
+        </div>
+      </div>
     </>
   );
 }
@@ -2137,6 +2191,7 @@ export const MOVE_SLOT_LIBRARY = {
   enum: { description: 'stepped option picker showing every option on a list screen', component: MoveSlotEnumBody },
   folders: { description: 'option picker whose options come in folders: one level on the list screen, a tap opens a folder, the back pill goes up', component: MoveSlotEnumBody },
   aspect: { description: 'option picker of proportions: a frame in the chosen W:H, as large as fits, the ratio inside', component: MoveSlotAspectBody },
+  arrows: { description: 'option picker of directions: an arrow on a plate for each, the chosen one lit — tap an arrow to take it', component: MoveSlotArrowsBody },
   multiselect: { description: 'a checked list: the knob walks the cursor, a tap ticks the row under it, a badge in the head counts the ticks', component: MoveSlotMultiselectBody },
   xy: { description: 'two axes in one gesture field, or a live shape preview', component: MoveSlotXYBody },
   range: { description: 'two handles on one bar; volume knob is the second hand', component: MoveSlotRangeBody },

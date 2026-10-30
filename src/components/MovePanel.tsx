@@ -16,10 +16,10 @@ import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from '../theme';
-import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, filterChipValue, isColumnFilter, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumShapePath, enumIndex, enumAspect, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
+import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, filterChipValue, isColumnFilter, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumShapePath, enumIndex, enumAspect, enumArrows, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotCurveGridBody, MoveSlotAspectBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody, MoveSlotGlyph } from './move-slots';
+import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotCurveGridBody, MoveSlotAspectBody, MoveSlotArrowsBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody, MoveSlotGlyph } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing } from '../angle-core';
@@ -33,7 +33,7 @@ import {
 } from '../move-slot-core';
 import {
   movePressStart, movePressTravel, movePressEnd, moveTurnValue, moveTurnExtent,
-  moveOptionStep, moveOptionClick, moveChipScrubs, moveListHover, moveListWalk, moveListRowIn, moveListKey, moveMultiselectOptions,
+  moveOptionStep, moveOptionClick, moveChipScrubs, moveListHover, moveListWalk, moveListRowIn, moveOptionRowIn, moveListKey, moveMultiselectOptions,
   moveMultiselectChecked, moveMultiselectToggle, moveListAria, moveListBackIn, moveSelectAria, moveSelectClick,
   moveSelectFromWalk, moveSelectWalkCount, moveSelectWalkIndex, type MovePress,
 } from '../move-slot-core';
@@ -1281,13 +1281,14 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     },
     onPointerCancel: () => { endPress(meta.path); },
   });
-  // An option slot has no hot spots but its list: a click on a row takes
-  // that row, a click anywhere else moves it on, a drag steps it
-  // (moveOptionStep), a still Shift+click puts it back to its default.
+  // An option slot has no hot spots but its list (or its arrows): a click on
+  // a row takes that row, a click on an arrow its direction, a click
+  // anywhere else moves it on, a drag steps it (moveOptionStep), a still
+  // Shift+click puts it back to its default.
   const optionDrag = (meta: ControlMeta) => ({
     onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
       if (e.button > 0 || TweakStore.isDisabled(page.panel.id, meta.path)) return;
-      listRowRef.current = moveListRowIn(e.currentTarget, e);
+      listRowRef.current = moveOptionRowIn(e.currentTarget, meta, values[meta.path], e);
       beginPress(e, meta.path, enumIndex(meta, values[meta.path]));
     },
     onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
@@ -2501,6 +2502,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   // proportion, or the chosen name as the headline.
                   const face = moveSlotKind(meta, { enum: true, value: values[meta.path], shape, glyph, picture });
                   const aspect = face === 'aspect' ? enumAspect(meta, values[meta.path]) : null;
+                  const arrows = face === 'arrows' ? enumArrows(meta, values[meta.path]) : null;
                   const named = face === 'value';
                   // Every option's shape as a tile — unless the page has put
                   // its oscilloscope here, which keeps the one-curve face.
@@ -2509,7 +2511,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     <div
                       key={meta.path}
                       className="tweakers-move-dial"
-                      data-kind={lanes ? 'lanes' : aspect ? 'aspect' : named ? 'value' : grid ? 'curve-grid' : 'enum'}
+                      data-kind={lanes ? 'lanes' : aspect ? 'aspect' : arrows ? 'arrows' : named ? 'value' : grid ? 'curve-grid' : 'enum'}
                       data-sub={named || undefined}
                       style={dialSpan(meta) > 1 ? { gridColumn: `span ${dialSpan(meta)}` } : undefined}
                       data-scope={scope ? true : undefined}
@@ -2543,6 +2545,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       ) : aspect ? (
                         <MoveSlotAspectBody label={meta.label} w={aspect.w} h={aspect.h} text={aspect.text}
                           options={options} activeIdx={activeIdx} track={meta.track === true} />
+                      ) : arrows ? (
+                        <MoveSlotArrowsBody label={meta.label} directions={arrows.arrows.map((a) => a.dir)} chosen={arrows.chosen} />
                       ) : named ? (
                         <>
                           <MoveSlotDefaultBody label={meta.label} value={optionLabel} pct={0} originPct={null} track={false} />

@@ -9,7 +9,7 @@ import { resolveAxis, pointFromValue, normalizeValue, type XYValue } from '../xy
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
 import { valueToBearing } from '../angle-core';
 import {
-  normalizeDial, normalizeRangeDial, dialOrigin, isEnumDial, enumIndex, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumAspect,
+  normalizeDial, normalizeRangeDial, dialOrigin, isEnumDial, enumIndex, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumAspect, enumArrows,
   enumShapePath, filterShapePath,
 } from '../move-layout';
 import {
@@ -21,12 +21,12 @@ import {
   moveFilterValue, moveXYValue, moveXYRest, moveNeedleValue, moveTransferValue, moveRampStop, moveRampValue,
   moveDialPercent, moveDialReading, moveRangeReading, moveChipValue, moveXYGrid,
   moveShapePath, movePressStart, movePressTravel, movePressEnd, moveTurnValue, moveTurnExtent, moveOptionStep,
-  moveOptionClick, moveListHover, moveListWalk, moveListRowIn, moveListKey, moveListAria, moveMultiselectOptions,
+  moveOptionClick, moveListHover, moveListWalk, moveListRowIn, moveOptionRowIn, moveListKey, moveListAria, moveMultiselectOptions,
   moveMultiselectChecked, moveMultiselectToggle, moveListBackIn, moveSelectAria, moveSelectClick, moveSelectFromWalk,
   moveSelectWalkCount, moveSelectWalkIndex, type MoveFaceRole, type MoveFineAnchor, type MovePress,
 } from '../move-slot-core';
 import {
-  moveSlotKind, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotCurveGridBody, MoveSlotAspectBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotXYBody, MoveSlotRangeBody, MoveSlotFilterBody,
+  moveSlotKind, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotCurveGridBody, MoveSlotAspectBody, MoveSlotArrowsBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotXYBody, MoveSlotRangeBody, MoveSlotFilterBody,
   MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody,
   MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody,
 } from './move-slots';
@@ -199,7 +199,7 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
   const step = (meta: ControlMeta) => ({
     onPointerDown: (e: ReactPointerEvent<HTMLElement>) => {
       if (e.button > 0 || off(meta)) return;
-      listRow.current = moveListRowIn(e.currentTarget, e);
+      listRow.current = moveOptionRowIn(e.currentTarget, meta, values![meta.path], e);
       begin(e, meta, enumIndex(meta, values![meta.path]));
     },
     onPointerMove: (e: ReactPointerEvent<HTMLElement>) => {
@@ -660,10 +660,11 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
     // the chosen name as the headline.
     const face = moveSlotKind(meta, { enum: true, value, shape, glyph, picture });
     const aspect = face === 'aspect' ? enumAspect(meta, value) : null;
+    const arrows = face === 'arrows' ? enumArrows(meta, value) : null;
     const named = face === 'value';
     const grid = face === 'curve-grid';
     return (
-      <div className={cls} style={style} data-kind={lanes ? 'lanes' : aspect ? 'aspect' : named ? 'value' : grid ? 'curve-grid' : 'enum'}
+      <div className={cls} style={style} data-kind={lanes ? 'lanes' : aspect ? 'aspect' : arrows ? 'arrows' : named ? 'value' : grid ? 'curve-grid' : 'enum'}
         data-sub={named || undefined} data-visual={playback ? 'playback' : undefined}
         data-shape={shape && !grid ? true : undefined} data-active={active || undefined}
         {...slider(meta)} aria-valuemin={0} aria-valuemax={Math.max(0, options.length - 1)} aria-valuenow={activeIdx} aria-valuetext={optionLabel}
@@ -675,6 +676,8 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
         ) : aspect ? (
           <MoveSlotAspectBody label={meta.label} w={aspect.w} h={aspect.h} text={aspect.text}
             options={options} activeIdx={activeIdx} track={meta.track === true} />
+        ) : arrows ? (
+          <MoveSlotArrowsBody label={meta.label} directions={arrows.arrows.map((a) => a.dir)} chosen={arrows.chosen} />
         ) : named ? (
           <>
             <MoveSlotDefaultBody label={meta.label} value={optionLabel} pct={0} originPct={null} track={false} />
