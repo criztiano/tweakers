@@ -2300,6 +2300,31 @@ function enumAspect(meta, value) {
   const ratio = option === void 0 ? null : parseAspect(enumOptionValue(option));
   return ratio ? { ...ratio, text: enumOptionLabel(option) } : null;
 }
+var MOVE_ARROW_DIRECTIONS = ["up", "right", "down", "left"];
+var ARROW_WORDS = {
+  up: "up",
+  north: "up",
+  right: "right",
+  east: "right",
+  down: "down",
+  south: "down",
+  left: "left",
+  west: "left"
+};
+function parseArrow(text) {
+  return typeof text === "string" ? ARROW_WORDS[text.trim().toLowerCase()] ?? null : null;
+}
+function enumArrows(meta, value) {
+  if (meta.type !== "select" || meta.display !== "arrows" || !isEnumDial(meta)) return null;
+  const options = meta.options;
+  if (options.length < 2 || options.length > MOVE_ARROW_DIRECTIONS.length) return null;
+  const dirs = options.map((o) => parseArrow(enumOptionValue(o)));
+  if (dirs.some((d) => d === null) || new Set(dirs).size !== dirs.length) return null;
+  return {
+    arrows: MOVE_ARROW_DIRECTIONS.filter((d) => dirs.includes(d)).map((dir) => ({ dir, index: dirs.indexOf(dir) })),
+    chosen: dirs[enumIndex(meta, value)]
+  };
+}
 function enumIndex(meta, value) {
   const i = (meta.options ?? []).findIndex((o) => enumOptionValue(o) === value);
   return Math.max(0, i);
@@ -2892,6 +2917,7 @@ function moveSlotKind(meta, opts = {}) {
   if (opts.enum) {
     if (meta.type === "select" && meta.optionTree) return "folders";
     if (enumAspect(meta, opts.value)) return "aspect";
+    if (enumArrows(meta, opts.value)) return "arrows";
     if (meta.type === "select" && meta.display === "value") return "value";
     if (meta.type === "select" && meta.display === "grid" && meta.preview) return "curve-grid";
     if (opts.shape) return "curve";
@@ -3168,6 +3194,24 @@ function MoveSlotAspectBody({ label, w, h, text, options, activeIdx, track = fal
     cells && /* @__PURE__ */ jsx3(MoveSlotEnumCells, { options, activeIdx })
   ] });
 }
+var MOVE_ARROW_PATH = "M12 3.5 L14.5 5.75 L9.5 5.75 Z";
+var MOVE_ARROW_TURN = { up: 0, right: 90, down: 180, left: 270 };
+function MoveSlotArrowsBody({ label, directions, chosen }) {
+  return /* @__PURE__ */ jsxs3(Fragment4, { children: [
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-tag", children: label }),
+    /* @__PURE__ */ jsx3("div", { className: "tweakers-move-dial-arrows", children: /* @__PURE__ */ jsx3("div", { className: "tweakers-move-dial-arrows-plate", children: /* @__PURE__ */ jsx3("svg", { className: "tweakers-move-dial-arrows-marks", viewBox: "0 0 24 24", "aria-hidden": "true", children: directions.map((dir) => /* @__PURE__ */ jsx3(
+      "path",
+      {
+        className: "tweakers-move-dial-arrow",
+        "data-dir": dir,
+        "data-on": dir === chosen || void 0,
+        d: MOVE_ARROW_PATH,
+        transform: MOVE_ARROW_TURN[dir] ? `rotate(${MOVE_ARROW_TURN[dir]} 12 12)` : void 0
+      },
+      dir
+    )) }) }) })
+  ] });
+}
 function MoveSlotMultiselectBody({ label, options, checked, cursor }) {
   const ticked = new Set(checked);
   const count = options.filter((o) => ticked.has(o.value)).length;
@@ -3274,6 +3318,23 @@ function MoveSlotRampBody({ label, value, css, stop, stops }) {
   ] });
 }
 var NEEDLE_R = 8.5;
+var DIAL_TICK_STEP = 30;
+var DIAL_TICK_IN = 9.5;
+var DIAL_TICK_MINOR = 10.25;
+var DIAL_TICK_MAJOR = 11;
+function dialTicks(major) {
+  let d = "";
+  for (let deg = 0; deg < 360; deg += DIAL_TICK_STEP) {
+    if (deg % 90 === 0 !== major) continue;
+    const rad = (deg - 90) * Math.PI / 180;
+    const out = major ? DIAL_TICK_MAJOR : DIAL_TICK_MINOR;
+    const at2 = (r) => `${(r * Math.cos(rad)).toFixed(3)} ${(r * Math.sin(rad)).toFixed(3)}`;
+    d += `M${at2(DIAL_TICK_IN)} L${at2(out)} `;
+  }
+  return d.trim();
+}
+var DIAL_TICKS_MINOR = dialTicks(false);
+var DIAL_TICKS_MAJOR = dialTicks(true);
 var NEEDLE_SPRING = springParams(LIVELY_UI);
 var NEEDLE_REST = 0.05;
 function needleTip(bearing) {
@@ -3341,6 +3402,8 @@ function MoveSlotDialBody({ label, value, bearing, origin, follow = false }) {
   const tip = needleTip(bearing);
   return /* @__PURE__ */ jsxs3(Fragment4, { children: [
     /* @__PURE__ */ jsx3(MoveSlotDisplay, { children: /* @__PURE__ */ jsxs3("svg", { className: "tweakers-move-slot-needle", viewBox: "-12 -12 24 24", "aria-hidden": "true", children: [
+      /* @__PURE__ */ jsx3("path", { className: "tweakers-move-needle-tick", d: DIAL_TICKS_MINOR }),
+      /* @__PURE__ */ jsx3("path", { className: "tweakers-move-needle-tick", "data-major": true, d: DIAL_TICKS_MAJOR }),
       /* @__PURE__ */ jsx3("circle", { className: "tweakers-move-needle-face", cx: "0", cy: "0", r: NEEDLE_R }),
       /* @__PURE__ */ jsx3("path", { ref: sweep, className: "tweakers-move-needle-sweep", d: arcPath(origin, bearing, NEEDLE_R) }),
       /* @__PURE__ */ jsx3("line", { ref: hand, className: "tweakers-move-needle-hand", x1: "0", y1: "0", x2: tip.x2, y2: tip.y2 })
@@ -4086,6 +4149,7 @@ var MOVE_SLOT_LIBRARY = {
   enum: { description: "stepped option picker showing every option on a list screen", component: MoveSlotEnumBody },
   folders: { description: "option picker whose options come in folders: one level on the list screen, a tap opens a folder, the back pill goes up", component: MoveSlotEnumBody },
   aspect: { description: "option picker of proportions: a frame in the chosen W:H, as large as fits, the ratio inside", component: MoveSlotAspectBody },
+  arrows: { description: "option picker of directions: an arrow on a plate for each, the chosen one lit \u2014 tap an arrow to take it", component: MoveSlotArrowsBody },
   multiselect: { description: "a checked list: the knob walks the cursor, a tap ticks the row under it, a badge in the head counts the ticks", component: MoveSlotMultiselectBody },
   xy: { description: "two axes in one gesture field, or a live shape preview", component: MoveSlotXYBody },
   range: { description: "two handles on one bar; volume knob is the second hand", component: MoveSlotRangeBody },
@@ -9618,9 +9682,36 @@ function moveListRowIn(slot, e) {
     e
   );
 }
+var MOVE_ARROWS_PLATE_SELECTOR = ".tweakers-move-dial-arrows-plate";
+function moveArrowDirAt(box, e) {
+  const x = e.clientX - box.left;
+  const y = e.clientY - box.top;
+  if (x < 0 || y < 0 || x >= box.width || y >= box.height) return null;
+  const dx = x - box.width / 2;
+  const dy = y - box.height / 2;
+  if (dx === 0 && dy === 0) return null;
+  return Math.abs(dx) > Math.abs(dy) ? dx > 0 ? "right" : "left" : dy > 0 ? "down" : "up";
+}
+function moveArrowAt(arrows, box, e) {
+  const dir = moveArrowDirAt(box, e);
+  return arrows.find((a) => a.dir === dir)?.index ?? -1;
+}
+function moveOptionRowIn(slot, meta, value, e) {
+  const arrows = enumArrows(meta, value);
+  const plate = arrows ? slot.querySelector(MOVE_ARROWS_PLATE_SELECTOR) : null;
+  return arrows && plate ? moveArrowAt(arrows.arrows, plate.getBoundingClientRect(), e) : moveListRowIn(slot, e);
+}
 function moveListHover(slot, e) {
-  const at2 = e && e.buttons === 0 && e.pointerType !== "touch" ? moveListRowIn(slot, e) : -1;
-  slot.querySelectorAll(MOVE_LIST_ROWS_SELECTOR).forEach((row2, i) => row2.toggleAttribute("data-hover", i === at2));
+  const hovers = !!e && e.buttons === 0 && e.pointerType !== "touch";
+  const rows = slot.querySelectorAll(MOVE_LIST_ROWS_SELECTOR);
+  const plate = rows.length ? null : slot.querySelector(MOVE_ARROWS_PLATE_SELECTOR);
+  if (plate) {
+    const dir = hovers ? moveArrowDirAt(plate.getBoundingClientRect(), e) : null;
+    plate.querySelectorAll("[data-dir]").forEach((arrow) => arrow.toggleAttribute("data-hover", arrow.getAttribute("data-dir") === dir));
+    return;
+  }
+  const at2 = hovers ? moveListRowIn(slot, e) : -1;
+  rows.forEach((row2, i) => row2.toggleAttribute("data-hover", i === at2));
 }
 var moveMultiselectOptions = (meta) => meta.multiSelectOptions ?? [];
 function moveMultiselectChecked(meta, value) {
@@ -16560,7 +16651,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const optionDrag = (meta) => ({
     onPointerDown: (e) => {
       if (e.button > 0 || TweakStore17.isDisabled(page.panel.id, meta.path)) return;
-      listRowRef.current = moveListRowIn(e.currentTarget, e);
+      listRowRef.current = moveOptionRowIn(e.currentTarget, meta, values[meta.path], e);
       beginPress(e, meta.path, enumIndex(meta, values[meta.path]));
     },
     onPointerMove: (e) => {
@@ -17557,13 +17648,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     const lanes = moveLanes(meta, values[meta.path]);
                                     const face2 = moveSlotKind(meta, { enum: true, value: values[meta.path], shape, glyph: glyph2, picture });
                                     const aspect = face2 === "aspect" ? enumAspect(meta, values[meta.path]) : null;
+                                    const arrows = face2 === "arrows" ? enumArrows(meta, values[meta.path]) : null;
                                     const named = face2 === "value";
                                     const grid = face2 === "curve-grid" && !scope;
                                     return /* @__PURE__ */ jsxs14(
                                       "div",
                                       {
                                         className: "tweakers-move-dial",
-                                        "data-kind": lanes ? "lanes" : aspect ? "aspect" : named ? "value" : grid ? "curve-grid" : "enum",
+                                        "data-kind": lanes ? "lanes" : aspect ? "aspect" : arrows ? "arrows" : named ? "value" : grid ? "curve-grid" : "enum",
                                         "data-sub": named || void 0,
                                         style: dialSpan(meta) > 1 ? { gridColumn: `span ${dialSpan(meta)}` } : void 0,
                                         "data-scope": scope ? true : void 0,
@@ -17607,7 +17699,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                               activeIdx,
                                               track: meta.track === true
                                             }
-                                          ) : named ? /* @__PURE__ */ jsxs14(Fragment9, { children: [
+                                          ) : arrows ? /* @__PURE__ */ jsx20(MoveSlotArrowsBody, { label: meta.label, directions: arrows.arrows.map((a) => a.dir), chosen: arrows.chosen }) : named ? /* @__PURE__ */ jsxs14(Fragment9, { children: [
                                             /* @__PURE__ */ jsx20(MoveSlotDefaultBody, { label: meta.label, value: optionLabel, pct: 0, originPct: null, track: false }),
                                             meta.track === true && /* @__PURE__ */ jsx20(MoveSlotEnumCells, { options, activeIdx })
                                           ] }) : grid ? /* @__PURE__ */ jsx20(
@@ -19625,7 +19717,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
   const step = (meta2) => ({
     onPointerDown: (e) => {
       if (e.button > 0 || off(meta2)) return;
-      listRow.current = moveListRowIn(e.currentTarget, e);
+      listRow.current = moveOptionRowIn(e.currentTarget, meta2, values[meta2.path], e);
       begin(e, meta2, enumIndex(meta2, values[meta2.path]));
     },
     onPointerMove: (e) => {
@@ -20198,6 +20290,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
     const picture = enumOptionPicture(option);
     const face2 = moveSlotKind(meta, { enum: true, value, shape, glyph: glyph2, picture });
     const aspect = face2 === "aspect" ? enumAspect(meta, value) : null;
+    const arrows = face2 === "arrows" ? enumArrows(meta, value) : null;
     const named = face2 === "value";
     const grid = face2 === "curve-grid";
     return /* @__PURE__ */ jsxs15(
@@ -20205,7 +20298,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
       {
         className: cls,
         style,
-        "data-kind": lanes ? "lanes" : aspect ? "aspect" : named ? "value" : grid ? "curve-grid" : "enum",
+        "data-kind": lanes ? "lanes" : aspect ? "aspect" : arrows ? "arrows" : named ? "value" : grid ? "curve-grid" : "enum",
         "data-sub": named || void 0,
         "data-visual": playback ? "playback" : void 0,
         "data-shape": shape && !grid ? true : void 0,
@@ -20230,7 +20323,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
               activeIdx,
               track: meta.track === true
             }
-          ) : named ? /* @__PURE__ */ jsxs15(Fragment10, { children: [
+          ) : arrows ? /* @__PURE__ */ jsx21(MoveSlotArrowsBody, { label: meta.label, directions: arrows.arrows.map((a) => a.dir), chosen: arrows.chosen }) : named ? /* @__PURE__ */ jsxs15(Fragment10, { children: [
             /* @__PURE__ */ jsx21(MoveSlotDefaultBody, { label: meta.label, value: optionLabel, pct: 0, originPct: null, track: false }),
             meta.track === true && /* @__PURE__ */ jsx21(MoveSlotEnumCells, { options, activeIdx })
           ] }) : grid ? /* @__PURE__ */ jsx21(
@@ -22557,6 +22650,7 @@ export {
   MoveSearchStore,
   MoveSettingsView,
   MoveSlot,
+  MoveSlotArrowsBody,
   MoveSlotAspectBody,
   MoveSlotChannelBody,
   MoveSlotClockBody,
@@ -22667,6 +22761,7 @@ export {
   drawHandle,
   drawMoveGate,
   drawMoveMultiband,
+  enumArrows,
   enumOptionIcon,
   envCurveParam,
   envStageWave,
