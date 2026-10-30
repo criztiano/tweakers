@@ -220,15 +220,17 @@ describe('the dial face', () => {
   const ticks = (html: string) => Array.from(html.matchAll(/<path class="tweakers-move-needle-tick"( data-major="true")?( data-lit="true")? d="([^"]*)"/g))
     .map(([, major, lit, d]) => ({ major: !!major, lit: !!lit, count: d.match(/M/g)?.length ?? 0 }));
 
-  it('is only marks: a tick every 5°, the needle, no circle and no well', () => {
+  it('is only marks: a tick every 5°, the needle a mark in the ring, no circle and no well', () => {
     const html = dial(90, 0);
     const [fine, major] = ticks(html);
     expect(fine).toEqual({ major: false, lit: false, count: 60 });
     expect(major).toEqual({ major: true, lit: false, count: 12 });
     expect(html).not.toContain('<circle');
     expect(html).toContain('data-bare="true"');
-    // the needle keeps its own line, drawn over the ring
+    // the needle is a mark in the ring, not a hand from the centre, drawn over the ticks
     expect(html.indexOf('tweakers-move-needle-hand')).toBeGreaterThan(html.lastIndexOf('tweakers-move-needle-tick'));
+    expect(html).not.toMatch(/needle-hand" x1="0" y1="0"/);
+    expect(html).toMatch(/needle-hand" x1="7\.800" y1="0\.000" x2="11\.000" y2="0\.000"/);
   });
 
   it('lights the ticks the needle has swept from its origin, and none on the origin', () => {

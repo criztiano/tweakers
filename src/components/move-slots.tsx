@@ -941,14 +941,12 @@ export function MoveSlotRampBody({ label, value, css, stop, stops }: {
   );
 }
 
-/** The needle's reach, in the drawing's units — short of the longest tick. */
-const NEEDLE_R = 7.75;
 /** The graded ring: a tick every 5°, longer and heavier every 30°, longest
  *  on the four compass points. All end on the ring's outer edge; where each
  *  starts, in the drawing's units. */
 const DIAL_TICK_STEP = 5;
 const DIAL_TICK_OUT = 11;
-const DIAL_TICK_IN = { fine: 10.1, major: 9.4, compass: 8.6 };
+const DIAL_TICK_IN = { fine: 9.6, major: 8.6, compass: 7.8 };
 
 /**
  * The ring's ticks of one weight as one path — the fine ones, or the major
@@ -969,8 +967,8 @@ function dialTicks(major: boolean, lo = 0, hi = 360): string {
 const DIAL_TICKS_FINE = dialTicks(false);
 const DIAL_TICKS_MAJOR = dialTicks(true);
 
-/** The ticks between the origin and the needle, lit — the sweep, told in
- *  the ring's own marks. None while the needle stands on the origin. */
+/** The ticks between the origin and the value, lit — the sweep, told in
+ *  the ring's own marks. None while the value stands on the origin. */
 function dialSweep(origin: number, bearing: number, major: boolean): string {
   if (Math.abs(bearing - origin) < 0.01) return '';
   return dialTicks(major, Math.min(origin, bearing), Math.max(origin, bearing));
@@ -980,9 +978,14 @@ const NEEDLE_SPRING = springParams(LIVELY_UI);
 /** Close enough to rest, in degrees and degrees a second. */
 const NEEDLE_REST = 0.05;
 
-function needleTip(bearing: number): { x2: string; y2: string } {
+/** The needle: one bright mark across the ring, as long as a compass tick,
+ *  standing on the exact bearing rather than the nearest tick. */
+function needleEnds(bearing: number): { x1: string; y1: string; x2: string; y2: string } {
   const rad = ((bearing - 90) * Math.PI) / 180;
-  return { x2: (NEEDLE_R * Math.cos(rad)).toFixed(3), y2: (NEEDLE_R * Math.sin(rad)).toFixed(3) };
+  const at = (r: number) => [(r * Math.cos(rad)).toFixed(3), (r * Math.sin(rad)).toFixed(3)];
+  const [x1, y1] = at(DIAL_TICK_IN.compass);
+  const [x2, y2] = at(DIAL_TICK_OUT);
+  return { x1, y1, x2, y2 };
 }
 
 /** A bearing folded into 0..360, the range the lit ticks are read in. */
@@ -993,10 +996,11 @@ function foldBearing(deg: number): number {
 /**
  * The dial slot — a needle, for the values whose two ends are the same place.
  * A bar would put 359° and 1° as far apart as a slot can show them. The face
- * is only marks: a graded ring — a tick every 5°, longer every 30°, longest
- * on the compass points — and the needle inside it, on the slot itself with
- * no well behind. The ticks from the origin to the needle are lit, so the
- * ring tells how far the value has turned as well as where it points.
+ * is only marks, on the slot itself with no well behind: a graded ring — a
+ * tick every 5°, longer every 30°, longest on the compass points — whose
+ * needle is one bright mark in the ring itself, on the value's bearing. The
+ * ticks from the origin to the needle are lit, so the ring tells how far the
+ * value has turned as well as where it points.
  *
  * In the hand (`follow` off) the needle is the value, 1:1, every frame. A
  * change from anywhere else — a preset, an agent, automation — has the needle
@@ -1024,9 +1028,8 @@ export function MoveSlotDialBody({ label, value, bearing, origin, follow = false
     const n = needle.current;
     n.origin = origin;
     const draw = (deg: number) => {
-      const tip = needleTip(deg);
-      hand.current?.setAttribute('x2', tip.x2);
-      hand.current?.setAttribute('y2', tip.y2);
+      const ends = needleEnds(deg);
+      for (const [k, v] of Object.entries(ends)) hand.current?.setAttribute(k, v);
       sweepFine.current?.setAttribute('d', dialSweep(n.origin, foldBearing(deg), false));
       sweepMajor.current?.setAttribute('d', dialSweep(n.origin, foldBearing(deg), true));
     };
@@ -1083,7 +1086,7 @@ export function MoveSlotDialBody({ label, value, bearing, origin, follow = false
     n.frame = 0;
   }, []);
 
-  const tip = needleTip(bearing);
+  const ends = needleEnds(bearing);
   return (
     <>
       <MoveSlotDisplay bare>
@@ -1092,7 +1095,7 @@ export function MoveSlotDialBody({ label, value, bearing, origin, follow = false
           <path className="tweakers-move-needle-tick" data-major d={DIAL_TICKS_MAJOR} />
           <path ref={sweepFine} className="tweakers-move-needle-tick" data-lit d={dialSweep(origin, bearing, false)} />
           <path ref={sweepMajor} className="tweakers-move-needle-tick" data-major data-lit d={dialSweep(origin, bearing, true)} />
-          <line ref={hand} className="tweakers-move-needle-hand" x1="0" y1="0" x2={tip.x2} y2={tip.y2} />
+          <line ref={hand} className="tweakers-move-needle-hand" {...ends} />
         </svg>
       </MoveSlotDisplay>
       <MoveSlotDisplayFoot label={label} value={value} />
