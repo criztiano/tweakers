@@ -104,6 +104,19 @@ describe('the curve grid (React)', () => {
     assert.equal(slot.tiles()[4].props['data-selected'], true);
   });
 
+  it('lays the resting dots on the curve, so both its ends sit on a dot', () => {
+    const slot = render(3); // back: an anticipation, so its ends are not the corners
+    const d = slot.tilePaths()[3];
+    const nums = d.match(/-?\d+(?:\.\d+)?/g)!.map(Number);
+    const [x0, y0, x1, y1] = [nums[0], nums[1], nums.at(-2)!, nums.at(-1)!];
+    const dots = slot.rest()[0].findAll((n) => n.type === 'circle')
+      .map((c) => [parseFloat(c.props.cx), parseFloat(c.props.cy)]);
+    const near = (x: number, y: number) => dots.some(([cx, cy]) => Math.abs(cx - x) < 0.02 && Math.abs(cy - y) < 0.02);
+    assert.ok(y0 < 100, 'the dip lifts the start off the floor');
+    assert.ok(near(x0, y0), 'a dot under the start');
+    assert.ok(near(x1, y1), 'a dot under the end');
+  });
+
   it('rests on the chosen curve alone, on its tile', () => {
     const slot = render(3);
     const rest = slot.rest();
