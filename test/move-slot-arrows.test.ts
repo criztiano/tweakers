@@ -215,16 +215,26 @@ describe('still an enum dial', () => {
 });
 
 describe('the dial face', () => {
-  it('stands a graded ring round the needle: twelve ticks, the four compass points longer', () => {
-    const html = renderToStaticMarkup(createElement(MoveSlotDialBody, { label: 'Heading', value: '90°', bearing: 90, origin: 0 }));
-    const ticks = Array.from(html.matchAll(/<path class="tweakers-move-needle-tick"( data-major="true")? d="([^"]+)"/g));
-    expect(ticks).toHaveLength(2);
-    const [minor, major] = ticks;
-    expect(minor[1]).toBeUndefined();
-    expect(minor[2].match(/M/g)).toHaveLength(8);
-    expect(major[1]).toBeDefined();
-    expect(major[2].match(/M/g)).toHaveLength(4);
+  const dial = (bearing: number, origin: number) =>
+    renderToStaticMarkup(createElement(MoveSlotDialBody, { label: 'Heading', value: `${bearing}°`, bearing, origin }));
+  const ticks = (html: string) => Array.from(html.matchAll(/<path class="tweakers-move-needle-tick"( data-major="true")?( data-lit="true")? d="([^"]*)"/g))
+    .map(([, major, lit, d]) => ({ major: !!major, lit: !!lit, count: d.match(/M/g)?.length ?? 0 }));
+
+  it('is only marks: a tick every 5°, the needle, no circle and no well', () => {
+    const html = dial(90, 0);
+    const [fine, major] = ticks(html);
+    expect(fine).toEqual({ major: false, lit: false, count: 60 });
+    expect(major).toEqual({ major: true, lit: false, count: 12 });
+    expect(html).not.toContain('<circle');
+    expect(html).toContain('data-bare="true"');
     // the needle keeps its own line, drawn over the ring
-    expect(html.indexOf('tweakers-move-needle-hand')).toBeGreaterThan(html.indexOf('tweakers-move-needle-tick'));
+    expect(html.indexOf('tweakers-move-needle-hand')).toBeGreaterThan(html.lastIndexOf('tweakers-move-needle-tick'));
+  });
+
+  it('lights the ticks the needle has swept from its origin, and none on the origin', () => {
+    const lit = ticks(dial(90, 0)).filter((t) => t.lit);
+    // 0..90 both ends taken: 0, 30, 60, 90 major, the fifteen between fine
+    expect(lit).toEqual([{ major: false, lit: true, count: 15 }, { major: true, lit: true, count: 4 }]);
+    expect(ticks(dial(45, 45)).filter((t) => t.lit).map((t) => t.count)).toEqual([0, 0]);
   });
 });

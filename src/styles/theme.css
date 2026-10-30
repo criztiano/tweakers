@@ -2430,6 +2430,10 @@
   overflow: hidden;
   pointer-events: none;
 }
+/* A face made only of marks stands on the slot itself. */
+.tweakers-move-slot-display[data-bare] {
+  background: none;
+}
 
 .tweakers-move-slot-foot {
   position: absolute;
@@ -2523,13 +2527,6 @@
   overflow: visible;
 }
 
-.tweakers-move-needle-face {
-  fill: none;
-  stroke: var(--move-text);
-  stroke-width: 1;
-  stroke-opacity: 0.25;
-  vector-effect: non-scaling-stroke;
-}
 
 /* The graded ring round the face: quieter than the needle and its sweep,
    the compass points a step stronger than the rest. */
@@ -2547,15 +2544,11 @@
   stroke-width: 1.5;
   stroke-opacity: 0.5;
 }
-
-.tweakers-move-needle-sweep {
-  fill: none;
-  stroke: var(--move-text);
-  stroke-width: 3;
-  stroke-opacity: 0.45;
-  stroke-linecap: round;
-  vector-effect: non-scaling-stroke;
+/* The ticks the needle has swept from its origin. */
+.tweakers-move-needle-tick[data-lit] {
+  stroke-opacity: 0.9;
 }
+
 
 .tweakers-move-needle-hand {
   stroke: var(--move-text);
