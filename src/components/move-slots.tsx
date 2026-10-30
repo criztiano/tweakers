@@ -1,5 +1,5 @@
 import type { MovePadListView } from '../move-pad-list';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { moveBandCuts, moveGrainPicture, moveLanes, moveNumericDrawing, movePlaybackMode, MOVE_GRAIN, type MoveGrainSpan, moveVectorStage, MOVE_BAND_H, MOVE_BAND_W, MOVE_STAGE, type MovePlaybackMode, type MoveTone } from '../move-visual-core';
 import { MoveGauge, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing } from './move-visuals';
@@ -45,10 +45,10 @@ import { ListScreen } from './ListScreen';
  *   seeing it, the name and position over it.
  * - `curve`   — an option picker whose current option draws its shape (the
  *   select's `preview` sampler) — the curve-selection slot.
- * - `curve-grid` — the same shapes, every one at once: the enum's list
- *   screen laid out as a grid of small tiles, each drawing its option's
- *   curve, the chosen one lit (`display: 'grid'` with a `preview`). It
- *   follows, grows and takes a press exactly as the list does.
+ * - `curve-grid` — the chosen shape alone, as large as the slot holds; in
+ *   the hand a pop-up opens over the neighbouring slots with every option's
+ *   curve as a tile, five across, the chosen one lit (`display: 'grid'`
+ *   with a `preview`). It takes a press exactly as the list does.
  * - `enum`    — a plain stepped option picker: every option on the Move's
  *   own list screen, which is the whole slot; a touch grows it to the run.
  * - `folders` — the enum's list screen for a select whose options come in
@@ -459,20 +459,17 @@ export function MoveSlotEnumCells({ options, activeIdx }: {
 }
 
 /**
- * Every option's shape at once (`display: 'grid'` with a `preview`): the
- * enum's list screen, laid out as tiles. The head keeps the control's name;
- * under it each option is a small square drawing its curve edge to edge, in
- * option order, and the chosen tile is lit the way the list lights its
- * chosen row. Nothing about the choice changes — the knob, a drag and the
- * wheel step the options in order, and a still press on a tile takes it, as
- * a press on a row does (the slot reads the press; the tiles take none).
- *
- * As many tiles stand across as the slot's width gives room for at the
- * stylesheet's smallest tile, so the grid's height is the layout's to know:
- * the screen asks it, after layout, whether the whole run is taller than the
- * room under the head, and only then grows on touch — to the whole grid,
- * capped like the list. At rest the row holding the choice is brought to the
- * middle, as the list holds its chosen row.
+ * A curve choice whose every option can be seen at once (`display: 'grid'`
+ * with a `preview`). At rest the slot is the chosen curve alone, as large as
+ * the slot holds, under the control's name. In the hand — touched, or under
+ * a hovering pointer — a pop-up opens over the slot and its neighbours: every
+ * option's curve as a tile, MOVE_GRID_COLUMNS across, in option order, the
+ * chosen one lit. Nothing about the choice changes — the knob, a drag and the
+ * wheel step the options in order, and a still press on a tile takes it, as a
+ * press on a list row does (the slot reads the press; the pop-up passes it
+ * on). The pop-up stands on the slot's foot, centred on it, and is kept
+ * inside the window; when it is taller than its cap it scrolls, holding the
+ * chosen row in the middle.
  */
 export function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }: {
   label: string;
@@ -482,15 +479,15 @@ export function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }: {
    *  that tile empty. */
   shapes: readonly (string | null)[];
 }) {
-  const screenRef = useRef<HTMLDivElement | null>(null);
-  const headRef = useRef<HTMLSpanElement | null>(null);
+  const popRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
-  const [grow, setGrow] = useState(false);
 
   useLayoutEffect(() => {
-    const screen = screenRef.current;
+    const pop = popRef.current;
     const grid = gridRef.current;
-    if (!screen || !grid) return;
+    const slot = pop?.parentElement;
+    if (!pop || !grid || !slot) return;
+    const win = typeof window === 'undefined' ? null : window;
     // The list's edges: a side hiding tiles dissolves, an end stays crisp.
     const syncEdges = () => {
       const end = grid.scrollHeight - grid.clientHeight;
@@ -498,52 +495,65 @@ export function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }: {
       grid.toggleAttribute?.('data-over-bottom', grid.scrollTop < end - 1);
     };
     const sync = () => {
-      // The whole run against the room it has at rest — the slot under the
-      // head. Neither moves while the screen grows (a tile's size follows the
-      // width alone), so the answer cannot flip under a hand.
-      const slot = screen.parentElement;
-      if (slot) setGrow(grid.scrollHeight > slot.clientHeight - (headRef.current?.offsetHeight ?? 0) + 1);
+      // Centred on the slot, then pulled back inside the window.
+      const at = slot.getBoundingClientRect();
+      const width = pop.offsetWidth;
+      const room = win ? win.innerWidth : Infinity;
+      const left = Math.max(MOVE_GRID_MARGIN, Math.min(at.left + (at.width - width) / 2, room - MOVE_GRID_MARGIN - width));
+      pop.style.left = `${Math.round(left - at.left)}px`;
       const tile = grid.querySelector?.<HTMLElement>('[data-selected]');
       if (tile) {
-        const at = tile.getBoundingClientRect();
-        const top = at.top - grid.getBoundingClientRect().top + grid.scrollTop;
-        // Scroll only this screen, never the page behind the panel.
-        grid.scrollTop = Math.max(0, Math.min(top - (grid.clientHeight - at.height) / 2, grid.scrollHeight - grid.clientHeight));
+        const box = tile.getBoundingClientRect();
+        const top = box.top - grid.getBoundingClientRect().top + grid.scrollTop;
+        // Scroll only this pop-up, never the page behind the panel.
+        grid.scrollTop = Math.max(0, Math.min(top - (grid.clientHeight - box.height) / 2, grid.scrollHeight - grid.clientHeight));
       }
       syncEdges();
     };
     sync();
     grid.addEventListener?.('scroll', syncEdges, { passive: true });
-    // Growing or shrinking moves the middle, and a resized slot the room.
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(sync);
-    observer?.observe(grid);
-    if (screen.parentElement) observer?.observe(screen.parentElement);
+    observer?.observe(slot);
+    observer?.observe(pop);
+    win?.addEventListener?.('resize', sync);
     return () => {
       observer?.disconnect();
       grid.removeEventListener?.('scroll', syncEdges);
+      win?.removeEventListener?.('resize', sync);
     };
   }, [activeIdx, options.length]);
 
+  const chosen = shapes[activeIdx] ?? null;
   return (
-    <div ref={screenRef} className="tweakers-move-dial-screen" data-layout="grid" data-grow={grow || undefined}>
-      <span ref={headRef} className="tweakers-move-dial-head">{label}</span>
-      <div ref={gridRef} className="tweakers-move-dial-grid" role="listbox" aria-label={label}>
-        {options.map((opt, i) => (
-          <span
-            key={enumOptionValue(opt as never)}
-            className="tweakers-move-dial-tile"
-            role="option"
-            aria-label={enumOptionLabel(opt as never)}
-            aria-selected={i === activeIdx}
-            data-selected={i === activeIdx || undefined}
-          >
-            {shapes[i] && <MoveSlotShape d={shapes[i]!} className="tweakers-move-dial-tile-shape" />}
-          </span>
-        ))}
+    <>
+      <span className="tweakers-move-dial-tag">{label}</span>
+      {chosen && <MoveSlotShape d={chosen} className="tweakers-move-dial-shape tweakers-move-dial-shape-full" />}
+      <div ref={popRef} className="tweakers-move-dial-pop" style={{ '--move-grid-columns': MOVE_GRID_COLUMNS } as CSSProperties}>
+        <span className="tweakers-move-dial-head">{label}</span>
+        <div ref={gridRef} className="tweakers-move-dial-grid" role="listbox" aria-label={label}>
+          {options.map((opt, i) => (
+            <span
+              key={enumOptionValue(opt as never)}
+              className="tweakers-move-dial-tile"
+              role="option"
+              title={enumOptionLabel(opt as never)}
+              aria-label={enumOptionLabel(opt as never)}
+              aria-selected={i === activeIdx}
+              data-selected={i === activeIdx || undefined}
+            >
+              {shapes[i] && <MoveSlotShape d={shapes[i]!} className="tweakers-move-dial-tile-shape" />}
+            </span>
+          ))}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
+
+/** Tiles across the curve grid's pop-up. */
+export const MOVE_GRID_COLUMNS = 5;
+/** The least room the pop-up keeps from the window's sides, px. */
+const MOVE_GRID_MARGIN = 8;
 
 /**
  * A choice of proportions (`display: 'aspect'`): the slot is a small canvas,

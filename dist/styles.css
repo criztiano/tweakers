@@ -3710,41 +3710,70 @@
   }
 }
 
-/* A grid screen (`curve-grid`) grows the same way, to the whole grid — but
-   its rows are the layout's (as many tiles stand across as the width holds),
-   so the grown height is the content's own, under the same cap. */
-.tweakers-move-dial[data-active] .tweakers-move-dial-screen[data-grow][data-layout="grid"] {
-  height: auto;
-  max-height: 50vh;
+/* The curve grid (`curve-grid`) at rest: the chosen curve alone, down to the
+   slot's foot — no name, no cells, the shape is the reading. */
+.tweakers-move-dial-shape.tweakers-move-dial-shape-full {
+  height: calc(100% - var(--move-shape-top) - 14px);
+}
+
+/* In the hand, its pop-up: every curve as a tile, standing on the slot's
+   foot and opening upward over the neighbouring slots. Laid out while
+   hidden, so it is placed before it shows; the script centres it on the
+   slot and keeps it inside the window. It takes the pointer only while
+   open, so the hover holds across it, and passes the press to the slot. */
+.tweakers-move-dial-pop {
+  --move-tile-size: 72px;
+  --move-tile-gap: 6px;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  width: calc(var(--move-grid-columns, 5) * var(--move-tile-size) + (var(--move-grid-columns, 5) + 1) * var(--move-tile-gap));
+  max-height: 80vh;
+  background: var(--move-display, #1e1e1e);
+  border-radius: var(--move-radius);
+  box-shadow: var(--move-list-shadow);
+  overflow: hidden;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s, visibility 0s 0.12s;
+}
+
+.tweakers-move-dial[data-active] .tweakers-move-dial-pop {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.12s;
 }
 
 @media (hover: hover) {
-  .tweakers-move-dial:not([data-disabled]):hover .tweakers-move-dial-screen[data-grow][data-layout="grid"] {
-    height: auto;
-    max-height: 50vh;
+  .tweakers-move-dial:not([data-disabled]):hover .tweakers-move-dial-pop {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    transition: opacity 0.12s;
   }
 }
 
-/* The grid of curves: the list screen's rows as square tiles. The smallest
-   tile is the one number here — the width decides how many stand across
-   (three in a full-size slot). The slot reads the press, as on the list. */
+.tweakers-move-dial-pop > .tweakers-move-dial-head {
+  background: var(--move-chip);
+}
+
 .tweakers-move-dial-grid {
-  --move-tile-min: 32px;
-  --move-tile-gap: 4px;
   --move-list-fade-top: 0px;
   --move-list-fade-bottom: 0px;
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(var(--move-tile-min), 1fr));
+  grid-template-columns: repeat(var(--move-grid-columns, 5), var(--move-tile-size));
+  grid-auto-rows: var(--move-tile-size);
   gap: var(--move-tile-gap);
-  /* Centred while the tiles fit, from the top once they overflow. */
-  align-content: center;
-  align-content: safe center;
   padding: var(--move-tile-gap);
   overflow-y: auto;
   scrollbar-width: none;
-  pointer-events: none;
   -webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
@@ -3773,17 +3802,17 @@
   --move-list-fade-bottom: 14px;
 }
 
-/* A tile: a dark square a step off the screen, a faint dotted grid, the
-   curve in the screen's ink — dim like an unchosen row, full when chosen. */
+/* A tile: a dark square a step off the pop-up, a faint dotted grid, the
+   curve in the screen's ink — clear on every tile, full when chosen. */
 .tweakers-move-dial-tile {
   position: relative;
-  aspect-ratio: 1;
   border-radius: var(--move-radius-small);
   background-color: color-mix(in srgb, var(--move-text) 4%, transparent);
-  background-image: radial-gradient(circle, color-mix(in srgb, var(--move-text) 22%, transparent) 0.75px, transparent 1px);
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--move-text) 10%, transparent) 0.75px, transparent 1px);
   background-size: 25% 25%;
   background-position: 12.5% 12.5%;
   color: var(--move-text);
+  pointer-events: none;
   transition: background-color 0.12s;
 }
 
@@ -3802,16 +3831,17 @@
 .tweakers-move-dial-tile-shape path {
   fill: none;
   stroke: currentColor;
-  stroke-width: var(--move-visual-stroke);
+  stroke-width: 2.5;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
-  opacity: 0.22;
+  opacity: 0.7;
   transition: opacity 0.12s;
 }
 
 .tweakers-move-dial-tile[data-selected] {
-  background-color: color-mix(in srgb, var(--move-text) 10%, transparent);
+  background-color: color-mix(in srgb, var(--move-text) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--move-text) 45%, transparent);
 }
 
 .tweakers-move-dial-tile[data-selected] .tweakers-move-dial-tile-shape path {
@@ -3821,16 +3851,12 @@
 /* The tile under the pointer rises halfway, as the list's row does. */
 @media (hover: hover) {
   .tweakers-move-dial-tile[data-hover]:not([data-selected]) {
-    background-color: color-mix(in srgb, var(--move-text) 7%, transparent);
+    background-color: color-mix(in srgb, var(--move-text) 8%, transparent);
   }
 
   .tweakers-move-dial-tile[data-hover]:not([data-selected]) .tweakers-move-dial-tile-shape path {
-    opacity: 0.6;
+    opacity: 1;
   }
-}
-
-.tweakers-move-dial[data-active] .tweakers-move-dial-tile[data-selected] .tweakers-move-dial-tile-shape {
-  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--move-text) 70%, transparent));
 }
 
 /* The list screen covers its whole slot, so the head is the slot surface

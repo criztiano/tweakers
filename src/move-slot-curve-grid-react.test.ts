@@ -7,9 +7,10 @@ import { MOVE_SLOT_LIBRARY, MoveSlotCurveGridBody, moveSlotKind } from './compon
 import { enumShapePath } from './move-layout';
 import type { ControlMeta } from './store/TweakStore';
 
-// `display: 'grid'` with a `preview`: the list screen laid out as tiles, one
-// curve per option, the chosen one lit. Without a preview there is nothing
-// to draw, so the select keeps its ordinary face.
+// `display: 'grid'` with a `preview`: the chosen curve alone at rest, and a
+// pop-up of tiles in the hand, one curve per option, the chosen one lit.
+// Without a preview there is nothing to draw, so the select keeps its
+// ordinary face.
 
 const SHAPES: Record<string, (t: number) => number> = {
   linear: (t) => t,
@@ -23,12 +24,12 @@ const select = (extra: Partial<ControlMeta> = {}): ControlMeta =>
   ({ type: 'select', path: 'ease', label: 'Easing', options: OPTIONS, ...extra } as ControlMeta);
 const preview = (v: string) => SHAPES[v] ?? null;
 
-/** Fake layout: the slot, its head, and a grid whose whole run is `content`
- *  tall — the numbers the screen asks for once it is laid out. */
-function render(activeIdx: number, content: number) {
+/** Fake layout: the slot the pop-up is centred on, in a 1000px window. */
+function render(activeIdx: number, slotLeft = 400) {
   const meta = select({ display: 'grid', preview });
   const shapes = OPTIONS.map((o) => enumShapePath(meta, o.value));
-  const slot = { clientHeight: 140 };
+  const slot = { getBoundingClientRect: () => ({ left: slotLeft, width: 100, top: 0, height: 140 }) };
+  const pop = { parentElement: slot, offsetWidth: 396, style: {} as Record<string, string> };
   let renderer!: ReactTestRenderer;
   act(() => {
     renderer = create(
@@ -36,12 +37,11 @@ function render(activeIdx: number, content: number) {
       {
         createNodeMock: (el) => {
           const cls = el.props.className;
-          if (cls === 'tweakers-move-dial-screen') return { parentElement: slot };
-          if (cls === 'tweakers-move-dial-head') return { offsetHeight: 18 };
+          if (cls === 'tweakers-move-dial-pop') return pop;
           if (cls === 'tweakers-move-dial-grid') {
             return {
-              scrollHeight: content, clientHeight: Math.min(content, 122), scrollTop: 0,
-              querySelector: () => null, getBoundingClientRect: () => ({ top: 0, height: 122 }),
+              scrollHeight: 200, clientHeight: 200, scrollTop: 0,
+              querySelector: () => null, getBoundingClientRect: () => ({ top: 0, height: 200 }),
             };
           }
           return null;
@@ -52,10 +52,11 @@ function render(activeIdx: number, content: number) {
   const byClass = (className: string): ReactTestInstance[] =>
     renderer.root.findAll((n) => typeof n.type === 'string' && n.props.className === className);
   return {
-    screen: () => byClass('tweakers-move-dial-screen')[0],
+    pop,
+    rest: () => byClass('tweakers-move-dial-shape tweakers-move-dial-shape-full'),
     head: () => byClass('tweakers-move-dial-head')[0],
     tiles: () => byClass('tweakers-move-dial-tile'),
-    paths: () => renderer.root.findAll((n) => n.type === 'path').map((n) => n.props.d),
+    tilePaths: () => byClass('tweakers-move-dial-tile-shape').map((n) => n.findByType('path').props.d),
   };
 }
 
@@ -72,14 +73,14 @@ describe('the curve grid (React)', () => {
   });
 
   it('draws one tile per option, each its own curve, the chosen one lit', () => {
-    const slot = render(3, 122);
+    const slot = render(3);
     assert.equal(slot.head().props.children, 'Easing');
     const tiles = slot.tiles();
     assert.equal(tiles.length, OPTIONS.length);
     assert.deepEqual(tiles.map((t) => t.props['aria-label']), OPTIONS.map((o) => o.label));
     assert.deepEqual(tiles.map((t) => t.props['data-selected']), [undefined, undefined, undefined, true, undefined]);
     assert.equal(tiles[3].props['aria-selected'], true);
-    const paths = slot.paths();
+    const paths = slot.tilePaths();
     assert.equal(paths.length, OPTIONS.length);
     assert.equal(new Set(paths).size, OPTIONS.length);
   });
@@ -92,9 +93,26 @@ describe('the curve grid (React)', () => {
     }
   });
 
-  it('grows on touch only when the tiles run past the room under the head', () => {
-    // 140 slot − 18 head = 122 at rest.
-    assert.equal(render(0, 122).screen().props['data-grow'], undefined);
-    assert.equal(render(0, 300).screen().props['data-grow'], true);
+  it('rests on the chosen curve alone', () => {
+    const slot = render(3);
+    const rest = slot.rest();
+    assert.equal(rest.length, 1);
+    assert.equal(rest[0].findByType('path').props.d, slot.tilePaths()[3]);
+  });
+
+  it('centres the pop-up on its slot, inside the window', () => {
+    const innerWidth = globalThis.window?.innerWidth;
+    (globalThis as { window?: unknown }).window ??= { innerWidth: 1000 } as unknown;
+    try {
+      const w = (globalThis.window as { innerWidth: number }).innerWidth;
+      // Room either side: centred, (100 − 396) / 2 off the slot's left.
+      assert.equal(render(0, 400).pop.style.left, '-148px');
+      // At the window's left edge: pulled in to the 8px margin.
+      assert.equal(render(0, 20).pop.style.left, '-12px');
+      // At the right edge: pulled back inside.
+      assert.equal(render(0, w - 60).pop.style.left, `${Math.round(w - 8 - 396 - (w - 60))}px`);
+    } finally {
+      if (innerWidth === undefined) delete (globalThis as { window?: unknown }).window;
+    }
   });
 });

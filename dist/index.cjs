@@ -99,6 +99,7 @@ __export(index_exports, {
   MOVE_GAUGE: () => MOVE_GAUGE,
   MOVE_GRADIENT_STOPS: () => MOVE_GRADIENT_STOPS,
   MOVE_GRAIN: () => MOVE_GRAIN,
+  MOVE_GRID_COLUMNS: () => MOVE_GRID_COLUMNS,
   MOVE_JOG_CLICK_EVENT: () => MOVE_JOG_CLICK_EVENT,
   MOVE_JOG_EVENT: () => MOVE_JOG_EVENT,
   MOVE_JOG_HOLD_EVENT: () => MOVE_JOG_HOLD_EVENT,
@@ -3582,56 +3583,69 @@ function MoveSlotEnumCells({ options, activeIdx }) {
   )) }) });
 }
 function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }) {
-  const screenRef = (0, import_react3.useRef)(null);
-  const headRef = (0, import_react3.useRef)(null);
+  const popRef = (0, import_react3.useRef)(null);
   const gridRef = (0, import_react3.useRef)(null);
-  const [grow, setGrow] = (0, import_react3.useState)(false);
   (0, import_react3.useLayoutEffect)(() => {
-    const screen = screenRef.current;
+    const pop = popRef.current;
     const grid = gridRef.current;
-    if (!screen || !grid) return;
+    const slot = pop?.parentElement;
+    if (!pop || !grid || !slot) return;
+    const win = typeof window === "undefined" ? null : window;
     const syncEdges = () => {
       const end = grid.scrollHeight - grid.clientHeight;
       grid.toggleAttribute?.("data-over-top", grid.scrollTop > 1);
       grid.toggleAttribute?.("data-over-bottom", grid.scrollTop < end - 1);
     };
     const sync = () => {
-      const slot = screen.parentElement;
-      if (slot) setGrow(grid.scrollHeight > slot.clientHeight - (headRef.current?.offsetHeight ?? 0) + 1);
+      const at2 = slot.getBoundingClientRect();
+      const width = pop.offsetWidth;
+      const room = win ? win.innerWidth : Infinity;
+      const left = Math.max(MOVE_GRID_MARGIN, Math.min(at2.left + (at2.width - width) / 2, room - MOVE_GRID_MARGIN - width));
+      pop.style.left = `${Math.round(left - at2.left)}px`;
       const tile = grid.querySelector?.("[data-selected]");
       if (tile) {
-        const at2 = tile.getBoundingClientRect();
-        const top = at2.top - grid.getBoundingClientRect().top + grid.scrollTop;
-        grid.scrollTop = Math.max(0, Math.min(top - (grid.clientHeight - at2.height) / 2, grid.scrollHeight - grid.clientHeight));
+        const box = tile.getBoundingClientRect();
+        const top = box.top - grid.getBoundingClientRect().top + grid.scrollTop;
+        grid.scrollTop = Math.max(0, Math.min(top - (grid.clientHeight - box.height) / 2, grid.scrollHeight - grid.clientHeight));
       }
       syncEdges();
     };
     sync();
     grid.addEventListener?.("scroll", syncEdges, { passive: true });
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(sync);
-    observer?.observe(grid);
-    if (screen.parentElement) observer?.observe(screen.parentElement);
+    observer?.observe(slot);
+    observer?.observe(pop);
+    win?.addEventListener?.("resize", sync);
     return () => {
       observer?.disconnect();
       grid.removeEventListener?.("scroll", syncEdges);
+      win?.removeEventListener?.("resize", sync);
     };
   }, [activeIdx, options.length]);
-  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { ref: screenRef, className: "tweakers-move-dial-screen", "data-layout": "grid", "data-grow": grow || void 0, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { ref: headRef, className: "tweakers-move-dial-head", children: label }),
-    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { ref: gridRef, className: "tweakers-move-dial-grid", role: "listbox", "aria-label": label, children: options.map((opt, i) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-      "span",
-      {
-        className: "tweakers-move-dial-tile",
-        role: "option",
-        "aria-label": enumOptionLabel(opt),
-        "aria-selected": i === activeIdx,
-        "data-selected": i === activeIdx || void 0,
-        children: shapes[i] && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotShape, { d: shapes[i], className: "tweakers-move-dial-tile-shape" })
-      },
-      enumOptionValue(opt)
-    )) })
+  const chosen = shapes[activeIdx] ?? null;
+  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-tag", children: label }),
+    chosen && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotShape, { d: chosen, className: "tweakers-move-dial-shape tweakers-move-dial-shape-full" }),
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { ref: popRef, className: "tweakers-move-dial-pop", style: { "--move-grid-columns": MOVE_GRID_COLUMNS }, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-head", children: label }),
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { ref: gridRef, className: "tweakers-move-dial-grid", role: "listbox", "aria-label": label, children: options.map((opt, i) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+        "span",
+        {
+          className: "tweakers-move-dial-tile",
+          role: "option",
+          title: enumOptionLabel(opt),
+          "aria-label": enumOptionLabel(opt),
+          "aria-selected": i === activeIdx,
+          "data-selected": i === activeIdx || void 0,
+          children: shapes[i] && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotShape, { d: shapes[i], className: "tweakers-move-dial-tile-shape" })
+        },
+        enumOptionValue(opt)
+      )) })
+    ] })
   ] });
 }
+var MOVE_GRID_COLUMNS = 5;
+var MOVE_GRID_MARGIN = 8;
 function MoveSlotAspectBody({ label, w, h, text, options, activeIdx, track = false }) {
   const cells = track && options && activeIdx !== void 0;
   return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
@@ -22952,6 +22966,7 @@ var import_TweakStore22 = require("tweakers/store");
   MOVE_GAUGE,
   MOVE_GRADIENT_STOPS,
   MOVE_GRAIN,
+  MOVE_GRID_COLUMNS,
   MOVE_JOG_CLICK_EVENT,
   MOVE_JOG_EVENT,
   MOVE_JOG_HOLD_EVENT,
