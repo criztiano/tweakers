@@ -861,6 +861,9 @@ export const enumOptionLabel = (o: string | { value: string; label?: string }) =
 /** The option's glyph name, or null — a bare string option never has one. */
 export const enumOptionIcon = (o: string | { icon?: string }): string | null =>
   typeof o === 'string' ? null : (o.icon ?? null);
+/** The family the option is drawn under, or null — a bare string has none. */
+export const enumOptionGroup = (o: string | { group?: string }): string | null =>
+  typeof o === 'string' ? null : (o.group ?? null);
 /** The option's full-slot picture URL, or null. */
 export const enumOptionPicture = (o: string | { picture?: string }): string | null =>
   typeof o === 'string' ? null : (o.picture ?? null);

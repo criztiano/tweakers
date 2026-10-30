@@ -3710,6 +3710,188 @@
   }
 }
 
+/* The curve grid (`curve-grid`) at rest: the chosen curve alone on its
+   tile — the dotted ground and all — filling the slot. No name, no cells:
+   the shape is the reading. */
+.tweakers-move-dial-tile.tweakers-move-dial-rest {
+  position: absolute;
+  inset: 6px;
+  height: auto;
+}
+
+.tweakers-move-dial-rest .tweakers-move-dial-tile-shape path {
+  opacity: 1;
+}
+
+/* In the hand, its pop-up: every curve as a tile, standing on the slot's
+   foot and opening upward over the neighbouring slots. Laid out while
+   hidden, so it is placed before it shows; the script centres it on the
+   slot and keeps it inside the window. It takes the pointer only while
+   open, so the hover holds across it, and passes the press to the slot. */
+.tweakers-move-dial-pop {
+  --move-tile-size: 72px;
+  --move-tile-gap: 6px;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  width: calc(var(--move-grid-columns, 4) * var(--move-tile-size) + (var(--move-grid-columns, 4) + 1) * var(--move-tile-gap));
+  max-height: 80vh;
+  background: var(--move-display, #1e1e1e);
+  border-radius: var(--move-radius);
+  box-shadow: var(--move-list-shadow);
+  overflow: hidden;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s, visibility 0s 0.12s;
+}
+
+.tweakers-move-dial[data-active] .tweakers-move-dial-pop {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 0.12s;
+}
+
+@media (hover: hover) {
+  .tweakers-move-dial:not([data-disabled]):hover .tweakers-move-dial-pop {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    transition: opacity 0.12s;
+  }
+}
+
+/* A tile was clicked: folded away until the pointer leaves the slot. */
+.tweakers-move-dial[data-active] .tweakers-move-dial-pop[data-closed],
+.tweakers-move-dial:not([data-disabled]):hover .tweakers-move-dial-pop[data-closed] {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s, visibility 0s 0.12s;
+}
+
+.tweakers-move-dial-grid {
+  --move-list-fade-top: 0px;
+  --move-list-fade-bottom: 0px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--move-grid-columns, 4), var(--move-tile-size));
+  grid-auto-rows: auto;
+  gap: var(--move-tile-gap);
+  padding: var(--move-tile-gap);
+  overflow-y: auto;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--move-list-fade-top),
+    #000 calc(100% - var(--move-list-fade-bottom)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--move-list-fade-top),
+    #000 calc(100% - var(--move-list-fade-bottom)),
+    transparent 100%
+  );
+}
+
+.tweakers-move-dial-grid::-webkit-scrollbar {
+  display: none;
+}
+
+.tweakers-move-dial-grid[data-over-top] {
+  --move-list-fade-top: 14px;
+}
+
+.tweakers-move-dial-grid[data-over-bottom] {
+  --move-list-fade-bottom: 14px;
+}
+
+/* A family's name over its first row. The space above it is the gap
+   between families — twice the tiles' own, so the runs read apart. */
+.tweakers-move-dial-grid-group {
+  grid-column: 1 / -1;
+  align-self: end;
+  margin-top: calc(var(--move-tile-gap) * 2);
+  padding: 0 2px;
+  color: color-mix(in srgb, var(--move-text) 60%, transparent);
+  font-family: var(--move-font-label);
+  font-size: 11px;
+  line-height: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tweakers-move-dial-grid-group[data-first] {
+  margin-top: 0;
+}
+
+/* A tile: a dark square a step off the pop-up, a faint dotted grid, the
+   curve in the screen's ink — clear on every tile, full when chosen. */
+.tweakers-move-dial-tile {
+  position: relative;
+  height: var(--move-tile-size);
+  border-radius: var(--move-radius-small);
+  background-color: color-mix(in srgb, var(--move-text) 4%, transparent);
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--move-text) 10%, transparent) 0.75px, transparent 1px);
+  background-size: 25% 25%;
+  background-position: 12.5% 12.5%;
+  color: var(--move-text);
+  pointer-events: none;
+  transition: background-color 0.12s;
+}
+
+.tweakers-move-dial-tile-shape {
+  position: absolute;
+  /* Air inside the tile, so a stroke at an edge — an overshoot's peak, an
+     anticipation's dip — is never cut. */
+  top: 14%;
+  left: 14%;
+  width: 72%;
+  height: 72%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.tweakers-move-dial-tile-shape path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.7;
+  transition: opacity 0.12s;
+}
+
+.tweakers-move-dial-tile[data-selected] {
+  background-color: color-mix(in srgb, var(--move-text) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--move-text) 45%, transparent);
+}
+
+.tweakers-move-dial-tile[data-selected] .tweakers-move-dial-tile-shape path {
+  opacity: 1;
+}
+
+/* The tile under the pointer rises halfway, as the list's row does. */
+@media (hover: hover) {
+  .tweakers-move-dial-tile[data-hover]:not([data-selected]) {
+    background-color: color-mix(in srgb, var(--move-text) 8%, transparent);
+  }
+
+  .tweakers-move-dial-tile[data-hover]:not([data-selected]) .tweakers-move-dial-tile-shape path {
+    opacity: 1;
+  }
+}
+
 /* The list screen covers its whole slot, so the head is the slot surface
    that shows: quiet at rest, lit while the dial is in the hand. */
 .tweakers-move-dial-head {

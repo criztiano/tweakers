@@ -99,6 +99,7 @@ __export(index_exports, {
   MOVE_GAUGE: () => MOVE_GAUGE,
   MOVE_GRADIENT_STOPS: () => MOVE_GRADIENT_STOPS,
   MOVE_GRAIN: () => MOVE_GRAIN,
+  MOVE_GRID_COLUMNS: () => MOVE_GRID_COLUMNS,
   MOVE_JOG_CLICK_EVENT: () => MOVE_JOG_CLICK_EVENT,
   MOVE_JOG_EVENT: () => MOVE_JOG_EVENT,
   MOVE_JOG_HOLD_EVENT: () => MOVE_JOG_HOLD_EVENT,
@@ -181,6 +182,7 @@ __export(index_exports, {
   MoveSlotChannelBody: () => MoveSlotChannelBody,
   MoveSlotClockBody: () => MoveSlotClockBody,
   MoveSlotColorBody: () => MoveSlotColorBody,
+  MoveSlotCurveGridBody: () => MoveSlotCurveGridBody,
   MoveSlotDefaultBody: () => MoveSlotDefaultBody,
   MoveSlotDialBody: () => MoveSlotDialBody,
   MoveSlotDiaphragmBody: () => MoveSlotDiaphragmBody,
@@ -2782,6 +2784,7 @@ function normalizeXYDial(meta, value) {
 var enumOptionValue = (o) => typeof o === "string" ? o : o.value;
 var enumOptionLabel = (o) => typeof o === "string" ? o : o.label ?? o.value;
 var enumOptionIcon = (o) => typeof o === "string" ? null : o.icon ?? null;
+var enumOptionGroup = (o) => typeof o === "string" ? null : o.group ?? null;
 var enumOptionPicture = (o) => typeof o === "string" ? null : o.picture ?? null;
 var ENUM_SHAPE_SAMPLES = 64;
 function enumShapePath(meta, value) {
@@ -3414,6 +3417,7 @@ function moveSlotKind(meta, opts = {}) {
     if (meta.type === "select" && meta.optionTree) return "folders";
     if (enumAspect(meta, opts.value)) return "aspect";
     if (meta.type === "select" && meta.display === "value") return "value";
+    if (meta.type === "select" && meta.display === "grid" && meta.preview) return "curve-grid";
     if (opts.shape) return "curve";
     if (opts.picture) return "picture";
     if (opts.glyph) return "icon";
@@ -3579,6 +3583,82 @@ function MoveSlotEnumCells({ options, activeIdx }) {
     enumOptionValue(opt)
   )) }) });
 }
+function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }) {
+  const popRef = (0, import_react3.useRef)(null);
+  const gridRef = (0, import_react3.useRef)(null);
+  (0, import_react3.useLayoutEffect)(() => {
+    const pop = popRef.current;
+    const grid = gridRef.current;
+    const slot = pop?.parentElement;
+    if (!pop || !grid || !slot) return;
+    const win = typeof window === "undefined" ? null : window;
+    const syncEdges = () => {
+      const end = grid.scrollHeight - grid.clientHeight;
+      grid.toggleAttribute?.("data-over-top", grid.scrollTop > 1);
+      grid.toggleAttribute?.("data-over-bottom", grid.scrollTop < end - 1);
+    };
+    const sync = () => {
+      const at2 = slot.getBoundingClientRect();
+      const width = pop.offsetWidth;
+      const room = win ? win.innerWidth : Infinity;
+      const left = Math.max(MOVE_GRID_MARGIN, Math.min(at2.left + (at2.width - width) / 2, room - MOVE_GRID_MARGIN - width));
+      pop.style.left = `${Math.round(left - at2.left)}px`;
+      const tile = grid.querySelector?.("[data-selected]");
+      if (tile) {
+        const box = tile.getBoundingClientRect();
+        const top = box.top - grid.getBoundingClientRect().top + grid.scrollTop;
+        grid.scrollTop = Math.max(0, Math.min(top - (grid.clientHeight - box.height) / 2, grid.scrollHeight - grid.clientHeight));
+      }
+      syncEdges();
+    };
+    sync();
+    const pick = (e) => {
+      if (getComputedStyle(pop).visibility !== "visible") return;
+      const hit = Array.from(grid.querySelectorAll(".tweakers-move-dial-tile"), (tile) => tile.getBoundingClientRect()).some((r) => e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom);
+      if (hit) pop.setAttribute("data-closed", "");
+    };
+    const reopen = () => pop.removeAttribute("data-closed");
+    slot.addEventListener?.("pointerup", pick);
+    slot.addEventListener?.("pointerleave", reopen);
+    grid.addEventListener?.("scroll", syncEdges, { passive: true });
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(sync);
+    observer?.observe(slot);
+    observer?.observe(pop);
+    win?.addEventListener?.("resize", sync);
+    return () => {
+      observer?.disconnect();
+      slot.removeEventListener?.("pointerup", pick);
+      slot.removeEventListener?.("pointerleave", reopen);
+      grid.removeEventListener?.("scroll", syncEdges);
+      win?.removeEventListener?.("resize", sync);
+    };
+  }, [activeIdx, options.length]);
+  const chosen = shapes[activeIdx] ?? null;
+  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-tile tweakers-move-dial-rest", "aria-hidden": "true", children: chosen && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotShape, { d: chosen, className: "tweakers-move-dial-tile-shape" }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { ref: popRef, className: "tweakers-move-dial-pop", style: { "--move-grid-columns": MOVE_GRID_COLUMNS }, children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { ref: gridRef, className: "tweakers-move-dial-grid", role: "listbox", "aria-label": label, children: options.map((opt, i) => {
+      const group = enumOptionGroup(opt);
+      const heads = group !== null && group !== (i > 0 ? enumOptionGroup(options[i - 1]) : null);
+      return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_react3.Fragment, { children: [
+        heads && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-grid-group", "data-first": i === 0 || void 0, children: group }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+          "span",
+          {
+            className: "tweakers-move-dial-tile",
+            role: "option",
+            title: enumOptionLabel(opt),
+            "aria-label": enumOptionLabel(opt),
+            "aria-selected": i === activeIdx,
+            "data-selected": i === activeIdx || void 0,
+            children: shapes[i] && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotShape, { d: shapes[i], className: "tweakers-move-dial-tile-shape" })
+          }
+        )
+      ] }, enumOptionValue(opt));
+    }) }) })
+  ] });
+}
+var MOVE_GRID_COLUMNS = 4;
+var MOVE_GRID_MARGIN = 8;
 function MoveSlotAspectBody({ label, w, h, text, options, activeIdx, track = false }) {
   const cells = track && options && activeIdx !== void 0;
   return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
@@ -4501,6 +4581,7 @@ var MOVE_SLOT_LIBRARY = {
   icon: { description: "option picker showing the current option as a glyph", component: MoveSlotEnumBody },
   picture: { description: "option picker whose current option fills the slot as a picture, its name over it", component: MoveSlotEnumBody },
   curve: { description: "option picker drawing the current option\u2019s shape \u2014 curve selection", component: MoveSlotEnumBody },
+  "curve-grid": { description: "option picker drawing every option\u2019s shape as a grid of tiles, the chosen one lit \u2014 the list screen as curves", component: MoveSlotCurveGridBody },
   enum: { description: "stepped option picker showing every option on a list screen", component: MoveSlotEnumBody },
   folders: { description: "option picker whose options come in folders: one level on the list screen, a tap opens a folder, the back pill goes up", component: MoveSlotEnumBody },
   aspect: { description: "option picker of proportions: a frame in the chosen W:H, as large as fits, the ratio inside", component: MoveSlotAspectBody },
@@ -10027,17 +10108,19 @@ function moveListRowAt(rows, view, e) {
   const inside = (r) => e.clientX >= r.left && e.clientX < r.left + r.width && e.clientY >= r.top && e.clientY < r.top + r.height;
   return view && !inside(view) ? -1 : rows.findIndex(inside);
 }
+var MOVE_LIST_ROWS_SELECTOR = ".tweakers-list-screen-row, .tweakers-move-dial-tile";
+var MOVE_LIST_VIEW_SELECTOR = ".tweakers-list-screen, .tweakers-move-dial-grid";
 function moveListRowIn(slot, e) {
-  const list = slot.querySelector(".tweakers-list-screen");
+  const list = slot.querySelector(MOVE_LIST_VIEW_SELECTOR);
   return moveListRowAt(
-    Array.from(slot.querySelectorAll(".tweakers-list-screen-row"), (row2) => row2.getBoundingClientRect()),
+    Array.from(slot.querySelectorAll(MOVE_LIST_ROWS_SELECTOR), (row2) => row2.getBoundingClientRect()),
     list ? list.getBoundingClientRect() : null,
     e
   );
 }
 function moveListHover(slot, e) {
   const at2 = e && e.buttons === 0 && e.pointerType !== "touch" ? moveListRowIn(slot, e) : -1;
-  slot.querySelectorAll(".tweakers-list-screen-row").forEach((row2, i) => row2.toggleAttribute("data-hover", i === at2));
+  slot.querySelectorAll(MOVE_LIST_ROWS_SELECTOR).forEach((row2, i) => row2.toggleAttribute("data-hover", i === at2));
 }
 var moveMultiselectOptions = (meta) => meta.multiSelectOptions ?? [];
 function moveMultiselectChecked(meta, value) {
@@ -17975,11 +18058,12 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     const face2 = moveSlotKind(meta, { enum: true, value: values[meta.path], shape, glyph: glyph2, picture });
                                     const aspect = face2 === "aspect" ? enumAspect(meta, values[meta.path]) : null;
                                     const named = face2 === "value";
+                                    const grid = face2 === "curve-grid" && !scope;
                                     return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
                                       "div",
                                       {
                                         className: "tweakers-move-dial",
-                                        "data-kind": lanes ? "lanes" : aspect ? "aspect" : named ? "value" : "enum",
+                                        "data-kind": lanes ? "lanes" : aspect ? "aspect" : named ? "value" : grid ? "curve-grid" : "enum",
                                         "data-sub": named || void 0,
                                         style: dialSpan(meta) > 1 ? { gridColumn: `span ${dialSpan(meta)}` } : void 0,
                                         "data-scope": scope ? true : void 0,
@@ -17995,7 +18079,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         "aria-disabled": disabled || void 0,
                                         "data-disabled": disabled || void 0,
                                         onKeyDown: (e) => dialFromKeyboard(e, meta),
-                                        "data-shape": shape ? true : void 0,
+                                        "data-shape": shape && !grid ? true : void 0,
                                         "data-active": active || void 0,
                                         ...optionDrag(meta),
                                         children: [
@@ -18026,7 +18110,15 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           ) : named ? /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(import_jsx_runtime20.Fragment, { children: [
                                             /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MoveSlotDefaultBody, { label: meta.label, value: optionLabel, pct: 0, originPct: null, track: false }),
                                             meta.track === true && /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MoveSlotEnumCells, { options, activeIdx })
-                                          ] }) : /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+                                          ] }) : grid ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
+                                            MoveSlotCurveGridBody,
+                                            {
+                                              label: meta.label,
+                                              options,
+                                              activeIdx,
+                                              shapes: options.map((o) => enumShapePath(meta, enumOptionValue(o)))
+                                            }
+                                          ) : /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
                                             MoveSlotEnumBody,
                                             {
                                               label: meta.label,
@@ -20607,15 +20699,16 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
     const face2 = moveSlotKind(meta, { enum: true, value, shape, glyph: glyph2, picture });
     const aspect = face2 === "aspect" ? enumAspect(meta, value) : null;
     const named = face2 === "value";
+    const grid = face2 === "curve-grid";
     return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
       "div",
       {
         className: cls,
         style,
-        "data-kind": lanes ? "lanes" : aspect ? "aspect" : named ? "value" : "enum",
+        "data-kind": lanes ? "lanes" : aspect ? "aspect" : named ? "value" : grid ? "curve-grid" : "enum",
         "data-sub": named || void 0,
         "data-visual": playback ? "playback" : void 0,
-        "data-shape": shape ? true : void 0,
+        "data-shape": shape && !grid ? true : void 0,
         "data-active": active || void 0,
         ...slider(meta),
         "aria-valuemin": 0,
@@ -20640,7 +20733,15 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
           ) : named ? /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(import_jsx_runtime21.Fragment, { children: [
             /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(MoveSlotDefaultBody, { label: meta.label, value: optionLabel, pct: 0, originPct: null, track: false }),
             meta.track === true && /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(MoveSlotEnumCells, { options, activeIdx })
-          ] }) : /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+          ] }) : grid ? /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
+            MoveSlotCurveGridBody,
+            {
+              label: meta.label,
+              options,
+              activeIdx,
+              shapes: options.map((o) => enumShapePath(meta, enumOptionValue(o)))
+            }
+          ) : /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
             MoveSlotEnumBody,
             {
               label: meta.label,
@@ -22878,6 +22979,7 @@ var import_TweakStore22 = require("tweakers/store");
   MOVE_GAUGE,
   MOVE_GRADIENT_STOPS,
   MOVE_GRAIN,
+  MOVE_GRID_COLUMNS,
   MOVE_JOG_CLICK_EVENT,
   MOVE_JOG_EVENT,
   MOVE_JOG_HOLD_EVENT,
@@ -22960,6 +23062,7 @@ var import_TweakStore22 = require("tweakers/store");
   MoveSlotChannelBody,
   MoveSlotClockBody,
   MoveSlotColorBody,
+  MoveSlotCurveGridBody,
   MoveSlotDefaultBody,
   MoveSlotDialBody,
   MoveSlotDiaphragmBody,

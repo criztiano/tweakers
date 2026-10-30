@@ -345,11 +345,18 @@ export function moveListRowAt(rows: readonly MoveSlotBox[], view: MoveSlotBox | 
   return view && !inside(view) ? -1 : rows.findIndex(inside);
 }
 
+/** What a slot's screen draws its choices as: the list's rows, or a grid's
+ *  tiles (`curve-grid`) — read in option order either way, so a press on a
+ *  tile takes its option exactly as a press on a row does. */
+const MOVE_LIST_ROWS_SELECTOR = '.tweakers-list-screen-row, .tweakers-move-dial-tile';
+/** The visible box those rows or tiles scroll inside. */
+const MOVE_LIST_VIEW_SELECTOR = '.tweakers-list-screen, .tweakers-move-dial-grid';
+
 /** {@link moveListRowAt} for a slot element: its rows and its list's box. */
 export function moveListRowIn(slot: Element, e: MoveSlotPointer) {
-  const list = slot.querySelector('.tweakers-list-screen');
+  const list = slot.querySelector(MOVE_LIST_VIEW_SELECTOR);
   return moveListRowAt(
-    Array.from(slot.querySelectorAll('.tweakers-list-screen-row'), (row) => row.getBoundingClientRect()),
+    Array.from(slot.querySelectorAll(MOVE_LIST_ROWS_SELECTOR), (row) => row.getBoundingClientRect()),
     list ? list.getBoundingClientRect() : null,
     e,
   );
@@ -363,7 +370,7 @@ export function moveListRowIn(slot: Element, e: MoveSlotPointer) {
  */
 export function moveListHover(slot: Element, e: (MoveSlotPointer & { buttons: number; pointerType: string }) | null) {
   const at = e && e.buttons === 0 && e.pointerType !== 'touch' ? moveListRowIn(slot, e) : -1;
-  slot.querySelectorAll('.tweakers-list-screen-row').forEach((row, i) => row.toggleAttribute('data-hover', i === at));
+  slot.querySelectorAll(MOVE_LIST_ROWS_SELECTOR).forEach((row, i) => row.toggleAttribute('data-hover', i === at));
 }
 
 /** A multiselect's rows, as the store normalized them. */
