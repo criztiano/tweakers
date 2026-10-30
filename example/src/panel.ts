@@ -147,7 +147,8 @@ export const CONFIG = {
   /* the same shapes all at once: a grid of curves, the chosen one lit */
   easing: {
     type: 'select', default: 'back-out', display: 'grid',
-    options: Object.keys(EASINGS).map((value) => ({ value, label: easingLabel(value) })),
+    // Each family under its own name in the grid.
+    options: Object.keys(EASINGS).map((value) => ({ value, label: easingLabel(value), group: easingLabel(value.split('-')[0]) })),
     preview: (name: string) => EASINGS[name] ?? null,
   },
 

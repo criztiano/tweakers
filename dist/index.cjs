@@ -2784,6 +2784,7 @@ function normalizeXYDial(meta, value) {
 var enumOptionValue = (o) => typeof o === "string" ? o : o.value;
 var enumOptionLabel = (o) => typeof o === "string" ? o : o.label ?? o.value;
 var enumOptionIcon = (o) => typeof o === "string" ? null : o.icon ?? null;
+var enumOptionGroup = (o) => typeof o === "string" ? null : o.group ?? null;
 var enumOptionPicture = (o) => typeof o === "string" ? null : o.picture ?? null;
 var ENUM_SHAPE_SAMPLES = 64;
 function enumShapePath(meta, value) {
@@ -3628,19 +3629,25 @@ function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }) {
     chosen && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotShape, { d: chosen, className: "tweakers-move-dial-shape tweakers-move-dial-shape-full" }),
     /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { ref: popRef, className: "tweakers-move-dial-pop", style: { "--move-grid-columns": MOVE_GRID_COLUMNS }, children: [
       /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-head", children: label }),
-      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { ref: gridRef, className: "tweakers-move-dial-grid", role: "listbox", "aria-label": label, children: options.map((opt, i) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-        "span",
-        {
-          className: "tweakers-move-dial-tile",
-          role: "option",
-          title: enumOptionLabel(opt),
-          "aria-label": enumOptionLabel(opt),
-          "aria-selected": i === activeIdx,
-          "data-selected": i === activeIdx || void 0,
-          children: shapes[i] && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotShape, { d: shapes[i], className: "tweakers-move-dial-tile-shape" })
-        },
-        enumOptionValue(opt)
-      )) })
+      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { ref: gridRef, className: "tweakers-move-dial-grid", role: "listbox", "aria-label": label, children: options.map((opt, i) => {
+        const group = enumOptionGroup(opt);
+        const heads = group !== null && group !== (i > 0 ? enumOptionGroup(options[i - 1]) : null);
+        return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_react3.Fragment, { children: [
+          heads && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-grid-group", "data-first": i === 0 || void 0, children: group }),
+          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+            "span",
+            {
+              className: "tweakers-move-dial-tile",
+              role: "option",
+              title: enumOptionLabel(opt),
+              "aria-label": enumOptionLabel(opt),
+              "aria-selected": i === activeIdx,
+              "data-selected": i === activeIdx || void 0,
+              children: shapes[i] && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotShape, { d: shapes[i], className: "tweakers-move-dial-tile-shape" })
+            }
+          )
+        ] }, enumOptionValue(opt));
+      }) })
     ] })
   ] });
 }

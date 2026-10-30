@@ -764,7 +764,7 @@ export type ControlMeta = {
   /** The synthetic segmented select driving `_tab` — it renders as the panel's tab bar, never as a row. */
   tabBar?: boolean;
   /** A select's choices, flat: a select with folders lists its leaves here, in reading order. */
-  options?: (string | { value: string; label: string; icon?: string; picture?: string })[];
+  options?: (string | { value: string; label: string; icon?: string; picture?: string; group?: string })[];
   /** A select's options as declared, folders and all — set only when it has folders. */
   optionTree?: SelectOption[];
   /** Toggle's own picture and state badges, from the explicit ToggleConfig form; an action's pad glyph. */

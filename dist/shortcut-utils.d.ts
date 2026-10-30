@@ -1,4 +1,4 @@
-import { C as ControlMeta, S as ShortcutConfig } from './TweakStore-D3eO9IH4.js';
+import { C as ControlMeta, S as ShortcutConfig } from './TweakStore-ChzZDfFF.js';
 import './gradient-core.js';
 import './color-core.js';
 import './xy-pad-core.js';

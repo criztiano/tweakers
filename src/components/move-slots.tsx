@@ -1,12 +1,12 @@
 import type { MovePadListView } from '../move-pad-list';
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { moveBandCuts, moveGrainPicture, moveLanes, moveNumericDrawing, movePlaybackMode, MOVE_GRAIN, type MoveGrainSpan, moveVectorStage, MOVE_BAND_H, MOVE_BAND_W, MOVE_STAGE, type MovePlaybackMode, type MoveTone } from '../move-visual-core';
 import { MoveGauge, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing } from './move-visuals';
 export { MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotDiaphragmBody, MoveSlotStreakBody, MoveSlotClockBody, MoveSlotPlaybackDrawing, MOVE_GAUGE, moveGaugeBearing } from './move-visuals';
 import type { ControlMeta, SelectLevel } from '../store/TweakStore';
 import { ICON_BADGE_OFF, ICON_BADGE_ON, LUCIDE_ICONS } from '../icons';
-import { enumAspect, enumOptionIcon, enumOptionLabel, enumOptionValue } from '../move-layout';
+import { enumAspect, enumOptionGroup, enumOptionIcon, enumOptionLabel, enumOptionValue } from '../move-layout';
 import { arcPath } from '../angle-core';
 import { springParams } from '../transition-math';
 import { LIVELY_UI } from '../move-lively';
@@ -464,7 +464,8 @@ export function MoveSlotEnumCells({ options, activeIdx }: {
  * the slot holds, under the control's name. In the hand — touched, or under
  * a hovering pointer — a pop-up opens over the slot and its neighbours: every
  * option's curve as a tile, MOVE_GRID_COLUMNS across, in option order, the
- * chosen one lit. Nothing about the choice changes — the knob, a drag and the
+ * chosen one lit; options that name a `group` start a row of their own
+ * under that name. Nothing about the choice changes — the knob, a drag and the
  * wheel step the options in order, and a still press on a tile takes it, as a
  * press on a list row does (the slot reads the press; the pop-up passes it
  * on). The pop-up stands on the slot's foot, centred on it, and is kept
@@ -531,19 +532,26 @@ export function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }: {
       <div ref={popRef} className="tweakers-move-dial-pop" style={{ '--move-grid-columns': MOVE_GRID_COLUMNS } as CSSProperties}>
         <span className="tweakers-move-dial-head">{label}</span>
         <div ref={gridRef} className="tweakers-move-dial-grid" role="listbox" aria-label={label}>
-          {options.map((opt, i) => (
-            <span
-              key={enumOptionValue(opt as never)}
-              className="tweakers-move-dial-tile"
-              role="option"
-              title={enumOptionLabel(opt as never)}
-              aria-label={enumOptionLabel(opt as never)}
-              aria-selected={i === activeIdx}
-              data-selected={i === activeIdx || undefined}
-            >
-              {shapes[i] && <MoveSlotShape d={shapes[i]!} className="tweakers-move-dial-tile-shape" />}
-            </span>
-          ))}
+          {options.map((opt, i) => {
+            // A new family starts on a row of its own, under its name.
+            const group = enumOptionGroup(opt as never);
+            const heads = group !== null && group !== (i > 0 ? enumOptionGroup(options[i - 1] as never) : null);
+            return (
+              <Fragment key={enumOptionValue(opt as never)}>
+                {heads && <span className="tweakers-move-dial-grid-group" data-first={i === 0 || undefined}>{group}</span>}
+                <span
+                  className="tweakers-move-dial-tile"
+                  role="option"
+                  title={enumOptionLabel(opt as never)}
+                  aria-label={enumOptionLabel(opt as never)}
+                  aria-selected={i === activeIdx}
+                  data-selected={i === activeIdx || undefined}
+                >
+                  {shapes[i] && <MoveSlotShape d={shapes[i]!} className="tweakers-move-dial-tile-shape" />}
+                </span>
+              </Fragment>
+            );
+          })}
         </div>
       </div>
     </>

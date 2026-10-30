@@ -19,7 +19,7 @@ const SHAPES: Record<string, (t: number) => number> = {
   back: (t) => t * t * (2.7 * t - 1.7),
   elastic: (t) => 1 - Math.cos(t * Math.PI * 4.5) * (1 - t) ** 2,
 };
-const OPTIONS = Object.keys(SHAPES).map((value) => ({ value, label: value }));
+const OPTIONS = Object.keys(SHAPES).map((value, i) => ({ value, label: value, group: i < 3 ? 'Plain' : 'Springs' }));
 const select = (extra: Partial<ControlMeta> = {}): ControlMeta =>
   ({ type: 'select', path: 'ease', label: 'Easing', options: OPTIONS, ...extra } as ControlMeta);
 const preview = (v: string) => SHAPES[v] ?? null;
@@ -56,6 +56,7 @@ function render(activeIdx: number, slotLeft = 400) {
     rest: () => byClass('tweakers-move-dial-shape tweakers-move-dial-shape-full'),
     head: () => byClass('tweakers-move-dial-head')[0],
     tiles: () => byClass('tweakers-move-dial-tile'),
+    groups: () => byClass('tweakers-move-dial-grid-group'),
     tilePaths: () => byClass('tweakers-move-dial-tile-shape').map((n) => n.findByType('path').props.d),
   };
 }
@@ -91,6 +92,13 @@ describe('the curve grid (React)', () => {
       const ys = [...enumShapePath(meta, name)!.matchAll(/[ML] [\d.-]+ ([\d.-]+)/g)].map((m) => Number(m[1]));
       assert.ok(Math.min(...ys) >= 0 && Math.max(...ys) <= 100, name);
     }
+  });
+
+  it('heads each family once, without counting it as a tile', () => {
+    const slot = render(4);
+    assert.deepEqual(slot.groups().map((g) => g.props.children), ['Plain', 'Springs']);
+    assert.equal(slot.tiles().length, OPTIONS.length);
+    assert.equal(slot.tiles()[4].props['data-selected'], true);
   });
 
   it('rests on the chosen curve alone', () => {

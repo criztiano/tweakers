@@ -15,7 +15,12 @@
 
 /** An option with a value: a plain string (its own value and label), or a
  *  value with a display label, an icon or a picture. */
-export type SelectLeaf = string | { value: string; label: string; icon?: string; picture?: string };
+export type SelectLeaf = string | {
+  value: string; label: string; icon?: string; picture?: string;
+  /** The family this option belongs to. A curve grid heads each run of
+   *  options sharing one; it groups the drawing only, never the walk. */
+  group?: string;
+};
 
 /** A run of options under one name. It has no value of its own; it opens. */
 export type SelectFolder = { label: string; options: SelectOption[]; icon?: string };

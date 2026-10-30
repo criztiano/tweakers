@@ -1666,6 +1666,9 @@ type SelectLeaf = string | {
     label: string;
     icon?: string;
     picture?: string;
+    /** The family this option belongs to. A curve grid heads each run of
+     *  options sharing one; it groups the drawing only, never the walk. */
+    group?: string;
 };
 /** A run of options under one name. It has no value of its own; it opens. */
 type SelectFolder = {
@@ -2591,6 +2594,7 @@ type ControlMeta = {
         label: string;
         icon?: string;
         picture?: string;
+        group?: string;
     })[];
     /** A select's options as declared, folders and all — set only when it has folders. */
     optionTree?: SelectOption[];
@@ -4524,7 +4528,8 @@ declare function MoveSlotEnumBody({ label, optionLabel, options, activeIdx, shap
  * the slot holds, under the control's name. In the hand — touched, or under
  * a hovering pointer — a pop-up opens over the slot and its neighbours: every
  * option's curve as a tile, MOVE_GRID_COLUMNS across, in option order, the
- * chosen one lit. Nothing about the choice changes — the knob, a drag and the
+ * chosen one lit; options that name a `group` start a row of their own
+ * under that name. Nothing about the choice changes — the knob, a drag and the
  * wheel step the options in order, and a still press on a tile takes it, as a
  * press on a list row does (the slot reads the press; the pop-up passes it
  * on). The pop-up stands on the slot's foot, centred on it, and is kept

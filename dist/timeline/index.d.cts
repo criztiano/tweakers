@@ -247,6 +247,9 @@ type SelectLeaf = string | {
     label: string;
     icon?: string;
     picture?: string;
+    /** The family this option belongs to. A curve grid heads each run of
+     *  options sharing one; it groups the drawing only, never the walk. */
+    group?: string;
 };
 /** A run of options under one name. It has no value of its own; it opens. */
 type SelectFolder = {

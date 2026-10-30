@@ -3769,7 +3769,7 @@
   min-height: 0;
   display: grid;
   grid-template-columns: repeat(var(--move-grid-columns, 5), var(--move-tile-size));
-  grid-auto-rows: var(--move-tile-size);
+  grid-auto-rows: auto;
   gap: var(--move-tile-gap);
   padding: var(--move-tile-gap);
   overflow-y: auto;
@@ -3802,10 +3802,31 @@
   --move-list-fade-bottom: 14px;
 }
 
+/* A family's name over its first row. The space above it is the gap
+   between families — twice the tiles' own, so the runs read apart. */
+.tweakers-move-dial-grid-group {
+  grid-column: 1 / -1;
+  align-self: end;
+  margin-top: calc(var(--move-tile-gap) * 2);
+  padding: 0 2px;
+  color: color-mix(in srgb, var(--move-text) 60%, transparent);
+  font-family: var(--move-font-label);
+  font-size: 11px;
+  line-height: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tweakers-move-dial-grid-group[data-first] {
+  margin-top: 0;
+}
+
 /* A tile: a dark square a step off the pop-up, a faint dotted grid, the
    curve in the screen's ink — clear on every tile, full when chosen. */
 .tweakers-move-dial-tile {
   position: relative;
+  height: var(--move-tile-size);
   border-radius: var(--move-radius-small);
   background-color: color-mix(in srgb, var(--move-text) 4%, transparent);
   background-image: radial-gradient(circle, color-mix(in srgb, var(--move-text) 10%, transparent) 0.75px, transparent 1px);
