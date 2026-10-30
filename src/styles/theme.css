@@ -5571,6 +5571,22 @@
   gap: 4px;
 }
 
+/* The picture beside its name, as on an icon-label pad: the pair centred as
+   one, the name giving way first when the pad runs narrow. */
+.tweakers-move-tab-icon-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tweakers-move-tab-icon-label .tweakers-move-tab-icon {
+  width: 16px;
+  height: 16px;
+}
+
 /* No press treatment of its own: the tab lights the instant it is chosen,
    and that IS the answer to the press. */
 .tweakers-move-tab-zone {

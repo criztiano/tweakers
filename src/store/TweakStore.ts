@@ -193,6 +193,12 @@ export type SelectConfig = {
    */
   moveTabs?: boolean | 'named';
   /**
+   * A tabs strip only: an option that carries an `icon` keeps its name
+   * beside the picture, instead of the picture standing alone — for modes
+   * the glyph alone would not name.
+   */
+  moveTabsLabels?: boolean;
+  /**
    * The shape an option stands for: `t` in [0,1] → y, auto-fitted and drawn
    * in the Move slot in place of the option's name, which moves to a small
    * tag at the top. Return `null` for options that have no shape.
@@ -776,6 +782,8 @@ export type ControlMeta = {
   /** Select declared `moveTabs` — it lies across the small slots as a tabs
    *  strip instead of claiming a dial; `'named'` adds its leading name pad. */
   moveTabs?: boolean | 'named';
+  /** Tabs strip whose glyphed options keep their names beside the glyph. */
+  moveTabsLabels?: boolean;
   /** Select's rendering mode or Move face, or a slider's `dial` / `value` form. */
   display?: 'dropdown' | 'segmented' | 'aspect' | 'value' | 'track' | 'dial';
   /** The bar under a Move slot's readout: a slider's fill (default on), a
@@ -2364,7 +2372,7 @@ class TweakStoreClass {
       } else if (this.isSelectConfig(value)) {
         // `options` is always the flat run of choices — every reader of a
         // select's options sees values; only the Move slot reads the folders.
-        controls.push({ type: 'select', path, label, options: selectLeaves(value.options), ...(selectHasFolders(value.options) ? { optionTree: value.options } : {}), display: value.display, track: value.track, preview: value.preview, moveVisual: value.moveVisual, moveTabs: value.moveTabs, moveSpan: value.moveSpan });
+        controls.push({ type: 'select', path, label, options: selectLeaves(value.options), ...(selectHasFolders(value.options) ? { optionTree: value.options } : {}), display: value.display, track: value.track, preview: value.preview, moveVisual: value.moveVisual, moveTabs: value.moveTabs, moveTabsLabels: value.moveTabsLabels, moveSpan: value.moveSpan });
       } else if (this.isColorConfig(value)) {
         controls.push({ type: 'color', path, label, alpha: value.alpha, palette: value.palette });
       } else if (this.isGradientConfig(value)) {

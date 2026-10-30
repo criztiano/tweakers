@@ -3026,6 +3026,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                               </button>
                             ))}
                           </div>
+                            labels={!!meta.moveTabsLabels}
                         </div>
                       );
                     }

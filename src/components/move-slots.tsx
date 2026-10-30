@@ -1679,11 +1679,13 @@ export function MovePadColorBody({ label, color }: { label: string; color: strin
  * the select's own name, set against the run it names; that pad is a head,
  * not a choice — nothing selects it, and on the hardware it stays dark.
  */
-export function MovePadTabsBody({ name, options, activeIdx }: {
+export function MovePadTabsBody({ name, options, activeIdx, labels = false }: {
   /** The leading name pad's text, or null when every pad is an option. */
   name?: string | null;
   options: NonNullable<ControlMeta['options']>;
   activeIdx: number;
+  /** A glyphed option keeps its name beside the glyph (`moveTabsLabels`). */
+  labels?: boolean;
 }) {
   return (
     <>
@@ -1701,9 +1703,16 @@ export function MovePadTabsBody({ name, options, activeIdx }: {
               className="tweakers-move-tab"
               data-on={i === activeIdx || undefined}
             >
-              {glyph
-                ? <MoveSlotGlyph name={glyph} className="tweakers-move-tab-icon" />
-                : <span className="tweakers-move-tab-title">{enumOptionLabel(opt as never)}</span>}
+              {glyph && labels
+                ? (
+                  <span className="tweakers-move-tab-icon-label">
+                    <MoveSlotGlyph name={glyph} className="tweakers-move-tab-icon" />
+                    <span className="tweakers-move-tab-title">{enumOptionLabel(opt as never)}</span>
+                  </span>
+                )
+                : glyph
+                  ? <MoveSlotGlyph name={glyph} className="tweakers-move-tab-icon" />
+                  : <span className="tweakers-move-tab-title">{enumOptionLabel(opt as never)}</span>}
             </span>
           );
         })}
