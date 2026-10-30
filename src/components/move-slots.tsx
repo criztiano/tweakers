@@ -886,6 +886,28 @@ export function MoveSlotRampBody({ label, value, css, stop, stops }: {
 
 /** The needle's reach, in the drawing's units. */
 const NEEDLE_R = 8.5;
+/** The graded ring round the face: a tick every 30°, the four on the
+ *  compass points longer. Where the ticks start and end, in the drawing's
+ *  units — clear of the sweep, inside the drawing's edge. */
+const DIAL_TICK_STEP = 30;
+const DIAL_TICK_IN = 9.5;
+const DIAL_TICK_MINOR = 10.25;
+const DIAL_TICK_MAJOR = 11;
+
+/** The ring's ticks as one path each — the minor ones, then the major. */
+function dialTicks(major: boolean): string {
+  let d = '';
+  for (let deg = 0; deg < 360; deg += DIAL_TICK_STEP) {
+    if ((deg % 90 === 0) !== major) continue;
+    const rad = ((deg - 90) * Math.PI) / 180;
+    const out = major ? DIAL_TICK_MAJOR : DIAL_TICK_MINOR;
+    const at = (r: number) => `${(r * Math.cos(rad)).toFixed(3)} ${(r * Math.sin(rad)).toFixed(3)}`;
+    d += `M${at(DIAL_TICK_IN)} L${at(out)} `;
+  }
+  return d.trim();
+}
+const DIAL_TICKS_MINOR = dialTicks(false);
+const DIAL_TICKS_MAJOR = dialTicks(true);
 /** The ui spring, as the stiffness and damping the needle integrates. */
 const NEEDLE_SPRING = springParams(LIVELY_UI);
 /** Close enough to rest, in degrees and degrees a second. */
@@ -903,7 +925,10 @@ function foldBearing(deg: number): number {
 
 /**
  * The dial slot — a needle, for the values whose two ends are the same place.
- * A bar would put 359° and 1° as far apart as a slot can show them.
+ * A bar would put 359° and 1° as far apart as a slot can show them. A graded
+ * ring stands round the face, a tick every 30° and the four compass points
+ * longer, so a bearing can be read at a glance; it is quieter than the needle
+ * and the sweep, and it never moves.
  *
  * In the hand (`follow` off) the needle is the value, 1:1, every frame. A
  * change from anywhere else — a preset, an agent, automation — has the needle
@@ -993,6 +1018,8 @@ export function MoveSlotDialBody({ label, value, bearing, origin, follow = false
     <>
       <MoveSlotDisplay>
         <svg className="tweakers-move-slot-needle" viewBox="-12 -12 24 24" aria-hidden="true">
+          <path className="tweakers-move-needle-tick" d={DIAL_TICKS_MINOR} />
+          <path className="tweakers-move-needle-tick" data-major d={DIAL_TICKS_MAJOR} />
           <circle className="tweakers-move-needle-face" cx="0" cy="0" r={NEEDLE_R} />
           <path ref={sweep} className="tweakers-move-needle-sweep" d={arcPath(origin, bearing, NEEDLE_R)} />
           <line ref={hand} className="tweakers-move-needle-hand" x1="0" y1="0" x2={tip.x2} y2={tip.y2} />
