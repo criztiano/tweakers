@@ -3651,7 +3651,7 @@ function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }) {
     ] })
   ] });
 }
-var MOVE_GRID_COLUMNS = 5;
+var MOVE_GRID_COLUMNS = 4;
 var MOVE_GRID_MARGIN = 8;
 function MoveSlotAspectBody({ label, w, h, text, options, activeIdx, track = false }) {
   const cells = track && options && activeIdx !== void 0;

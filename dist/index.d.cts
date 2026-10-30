@@ -4355,7 +4355,7 @@ declare function MoveSlotClockBody({ label, value, rate, frozen, tempo, hand }: 
  *   select's `preview` sampler) — the curve-selection slot.
  * - `curve-grid` — the chosen shape alone, as large as the slot holds; in
  *   the hand a pop-up opens over the neighbouring slots with every option's
- *   curve as a tile, five across, the chosen one lit (`display: 'grid'`
+ *   curve as a tile, four across, the chosen one lit (`display: 'grid'`
  *   with a `preview`). It takes a press exactly as the list does.
  * - `enum`    — a plain stepped option picker: every option on the Move's
  *   own list screen, which is the whole slot; a touch grows it to the run.
@@ -4545,7 +4545,7 @@ declare function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }: {
     shapes: readonly (string | null)[];
 }): react_jsx_runtime.JSX.Element;
 /** Tiles across the curve grid's pop-up. */
-declare const MOVE_GRID_COLUMNS = 5;
+declare const MOVE_GRID_COLUMNS = 4;
 /**
  * A choice of proportions (`display: 'aspect'`): the slot is a small canvas,
  * and the chosen option draws as a frame in its proportion — as large as the

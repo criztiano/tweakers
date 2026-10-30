@@ -47,7 +47,7 @@ import { ListScreen } from './ListScreen';
  *   select's `preview` sampler) — the curve-selection slot.
  * - `curve-grid` — the chosen shape alone, as large as the slot holds; in
  *   the hand a pop-up opens over the neighbouring slots with every option's
- *   curve as a tile, five across, the chosen one lit (`display: 'grid'`
+ *   curve as a tile, four across, the chosen one lit (`display: 'grid'`
  *   with a `preview`). It takes a press exactly as the list does.
  * - `enum`    — a plain stepped option picker: every option on the Move's
  *   own list screen, which is the whole slot; a touch grows it to the run.
@@ -559,7 +559,7 @@ export function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }: {
 }
 
 /** Tiles across the curve grid's pop-up. */
-export const MOVE_GRID_COLUMNS = 5;
+export const MOVE_GRID_COLUMNS = 4;
 /** The least room the pop-up keeps from the window's sides, px. */
 const MOVE_GRID_MARGIN = 8;
 

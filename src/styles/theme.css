@@ -3730,7 +3730,7 @@
   z-index: 6;
   display: flex;
   flex-direction: column;
-  width: calc(var(--move-grid-columns, 5) * var(--move-tile-size) + (var(--move-grid-columns, 5) + 1) * var(--move-tile-gap));
+  width: calc(var(--move-grid-columns, 4) * var(--move-tile-size) + (var(--move-grid-columns, 4) + 1) * var(--move-tile-gap));
   max-height: 80vh;
   background: var(--move-display, #1e1e1e);
   border-radius: var(--move-radius);
@@ -3768,7 +3768,7 @@
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(var(--move-grid-columns, 5), var(--move-tile-size));
+  grid-template-columns: repeat(var(--move-grid-columns, 4), var(--move-tile-size));
   grid-auto-rows: auto;
   gap: var(--move-tile-gap);
   padding: var(--move-tile-gap);
