@@ -28,7 +28,7 @@ import {
 import {
   moveSlotKind, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotCurveGridBody, MoveSlotAspectBody, MoveSlotArrowsBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotXYBody, MoveSlotRangeBody, MoveSlotFilterBody,
   MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody,
-  MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotScopeBody, MoveSlotShape,
+  MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotScopeBody, MoveSlotShape, MoveSlotCurveDots,
 } from './move-slots';
 import { MoveColorSlot } from './MoveColor';
 import { MoveModRing } from './ModRing';
@@ -701,7 +701,10 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
     return (
       <div className={cls} style={style} data-kind="scope" data-active={active || undefined} {...slider(meta)} {...turn(meta)}>
         <MoveModRing panelId={panelId} path={meta.path} />
-        <MoveSlotScopeBody label={meta.label} value={moveDialReading(meta, value)} pct={moveDialPercent(meta, value)}>
+        <MoveSlotScopeBody label={meta.label} value={moveDialReading(meta, value)} pct={moveDialPercent(meta, value)} named={false}
+          originPct={dialOrigin(meta) > 0 ? dialOrigin(meta) * 100 : null}
+          atOrigin={dialOrigin(meta) > 0 && Math.abs(normalizeDial(meta, value) - dialOrigin(meta)) < 1e-6}>
+          <MoveSlotCurveDots d={sliderShape} className="tweakers-move-scope-wave tweakers-move-dial-dots" />
           <MoveSlotShape d={sliderShape} className="tweakers-move-scope-wave" />
         </MoveSlotScopeBody>
       </div>

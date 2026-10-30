@@ -19,7 +19,7 @@ import type { TweakTheme } from '../theme';
 import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, filterChipValue, isColumnFilter, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumShapePath, sliderShapePath, enumIndex, enumAspect, enumArrows, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotCurveGridBody, MoveSlotAspectBody, MoveSlotArrowsBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotShape, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody, MoveSlotGlyph } from './move-slots';
+import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotCurveGridBody, MoveSlotAspectBody, MoveSlotArrowsBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotShape, MoveSlotCurveDots, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody, MoveSlotGlyph } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing } from '../angle-core';
@@ -2117,7 +2117,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   : waveSlot && modSettings
                   ? <MoveWavePreview index={modSettings.index} />
                   : sliderShape
-                  ? <MoveSlotShape d={sliderShape} className="tweakers-move-scope-wave" />
+                  ? <>
+                      <MoveSlotCurveDots d={sliderShape} className="tweakers-move-scope-wave tweakers-move-dial-dots" />
+                      <MoveSlotShape d={sliderShape} className="tweakers-move-scope-wave" />
+                    </>
                   : null;
                 if (padListView?.panelId === page.panel.id && (page.actions[i] ?? page.valueActions?.[i])?.path === padListView.path) {
                   // The list reads downward, so the drag walks it that way:
@@ -2656,6 +2659,13 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                         label={meta.label}
                         value={chipValue(meta).num + (meta.unit ? ` ${meta.unit}` : '')}
                         pct={dialPercent(meta)}
+                        // A drawn shape says what it is: no name over it,
+                        // and a bipolar value fills from its zero.
+                        {...(sliderShape ? {
+                          named: false,
+                          originPct: dialOrigin(meta) > 0 ? dialOrigin(meta) * 100 : null,
+                          atOrigin: dialOrigin(meta) > 0 && Math.abs(normalizeDial(meta, values[meta.path]) - dialOrigin(meta)) < 1e-6,
+                        } : {})}
                       >
                         {scope}
                       </MoveSlotScopeBody>

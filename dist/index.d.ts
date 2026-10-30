@@ -4924,11 +4924,18 @@ declare function MoveSlotEnvBody({ points, stages, joints, }: {
  * dial's own readout floats over it and the fill bar keeps the bottom.
  * The control stays a control — you turn the wave you're watching.
  */
-declare function MoveSlotScopeBody({ label, value, pct, children, }: {
+declare function MoveSlotScopeBody({ label, value, pct, originPct, atOrigin, named, children, }: {
     label: string;
     value: ReactNode;
     /** Fill extent, 0–100. */
     pct: number;
+    /** Bipolar/origin anchor position, 0–100 — null for a plain fill. */
+    originPct?: number | null;
+    /** Parked on the origin exactly — the dial's zero. */
+    atOrigin?: boolean;
+    /** `false`: the picture says what the slot is, so no name stands over it
+     *  (the value still shows in the hand). */
+    named?: boolean;
     /** The live wave — an svg the host keeps ticking. */
     children: ReactNode;
 }): react_jsx_runtime.JSX.Element;
