@@ -442,6 +442,8 @@
      it sits in, and the cells across it. */
   --move-face-well: var(--move-bg);
   --move-face-cell: color-mix(in srgb, var(--move-text) 5%, var(--move-bg));
+  /* The arrows face's plate, the arrows pressed into it in the ground's ink. */
+  --move-arrows-plate: #61605a;
   --move-group-divider: #353333;
   --move-group-head: #2f2d2c;
   /* The Move's colours on screen — the same set the hardware lights, matched
@@ -2289,9 +2291,8 @@
 /* An arrows picker's canvas (`arrows`): the aspect canvas's band, and in it
    a square plate, as large as fits, centred, its corners the slot's own
    radius. On the plate an arrow per direction that is an option, pressed
-   into it in the ground's ink; the chosen one lit in the slot's ink. Both
-   inks hold 3:1 against the plate, so the unlit arrows read as well as the
-   lit one. The light moves at once — a knob spun through the options never
+   into it in the ground's ink; the chosen one lit in the slot's ink. The
+   light moves at once — a knob spun through the options never
    leaves a trail — so there is no motion to reduce. */
 .tweakers-move-dial-arrows {
   position: absolute;
@@ -2309,7 +2310,7 @@
   width: min(100cqw, 100cqh);
   aspect-ratio: 1;
   border-radius: var(--move-radius);
-  background: color-mix(in srgb, var(--move-text) 42%, var(--move-bg));
+  background: var(--move-arrows-plate);
 }
 
 .tweakers-move-dial-arrows-marks {
