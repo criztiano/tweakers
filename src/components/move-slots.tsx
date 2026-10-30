@@ -460,15 +460,17 @@ export function MoveSlotEnumCells({ options, activeIdx }: {
 
 /**
  * A curve choice whose every option can be seen at once (`display: 'grid'`
- * with a `preview`). At rest the slot is the chosen curve alone, as large as
- * the slot holds, under the control's name. In the hand — touched, or under
+ * with a `preview`). At rest the slot is the chosen curve alone on its tile,
+ * as large as the slot holds — the curve says what the control is, so no
+ * name is drawn. In the hand — touched, or under
  * a hovering pointer — a pop-up opens over the slot and its neighbours: every
  * option's curve as a tile, MOVE_GRID_COLUMNS across, in option order, the
  * chosen one lit; options that name a `group` start a row of their own
  * under that name. Nothing about the choice changes — the knob, a drag and the
  * wheel step the options in order, and a still press on a tile takes it, as a
  * press on a list row does (the slot reads the press; the pop-up passes it
- * on). The pop-up stands on the slot's foot, centred on it, and is kept
+ * on) and the pop-up folds away until the pointer leaves the slot. The
+ * pop-up stands on the slot's foot, centred on it, and is kept
  * inside the window; when it is taller than its cap it scrolls, holding the
  * chosen row in the middle.
  */
@@ -512,6 +514,17 @@ export function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }: {
       syncEdges();
     };
     sync();
+    // A click on a tile is the choice made: the pop-up folds away, and opens
+    // again once the pointer has left the slot. The knob never folds it.
+    const pick = (e: PointerEvent) => {
+      if (getComputedStyle(pop).visibility !== 'visible') return;
+      const hit = Array.from(grid.querySelectorAll('.tweakers-move-dial-tile'), (tile) => tile.getBoundingClientRect())
+        .some((r) => e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom);
+      if (hit) pop.setAttribute('data-closed', '');
+    };
+    const reopen = () => pop.removeAttribute('data-closed');
+    slot.addEventListener?.('pointerup', pick);
+    slot.addEventListener?.('pointerleave', reopen);
     grid.addEventListener?.('scroll', syncEdges, { passive: true });
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(sync);
     observer?.observe(slot);
@@ -519,6 +532,8 @@ export function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }: {
     win?.addEventListener?.('resize', sync);
     return () => {
       observer?.disconnect();
+      slot.removeEventListener?.('pointerup', pick);
+      slot.removeEventListener?.('pointerleave', reopen);
       grid.removeEventListener?.('scroll', syncEdges);
       win?.removeEventListener?.('resize', sync);
     };
@@ -527,10 +542,10 @@ export function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }: {
   const chosen = shapes[activeIdx] ?? null;
   return (
     <>
-      <span className="tweakers-move-dial-tag">{label}</span>
-      {chosen && <MoveSlotShape d={chosen} className="tweakers-move-dial-shape tweakers-move-dial-shape-full" />}
+      <span className="tweakers-move-dial-tile tweakers-move-dial-rest" aria-hidden="true">
+        {chosen && <MoveSlotShape d={chosen} className="tweakers-move-dial-tile-shape" />}
+      </span>
       <div ref={popRef} className="tweakers-move-dial-pop" style={{ '--move-grid-columns': MOVE_GRID_COLUMNS } as CSSProperties}>
-        <span className="tweakers-move-dial-head">{label}</span>
         <div ref={gridRef} className="tweakers-move-dial-grid" role="listbox" aria-label={label}>
           {options.map((opt, i) => {
             // A new family starts on a row of its own, under its name.

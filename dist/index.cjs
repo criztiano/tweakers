@@ -3612,6 +3612,14 @@ function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }) {
       syncEdges();
     };
     sync();
+    const pick = (e) => {
+      if (getComputedStyle(pop).visibility !== "visible") return;
+      const hit = Array.from(grid.querySelectorAll(".tweakers-move-dial-tile"), (tile) => tile.getBoundingClientRect()).some((r) => e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom);
+      if (hit) pop.setAttribute("data-closed", "");
+    };
+    const reopen = () => pop.removeAttribute("data-closed");
+    slot.addEventListener?.("pointerup", pick);
+    slot.addEventListener?.("pointerleave", reopen);
     grid.addEventListener?.("scroll", syncEdges, { passive: true });
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(sync);
     observer?.observe(slot);
@@ -3619,36 +3627,34 @@ function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }) {
     win?.addEventListener?.("resize", sync);
     return () => {
       observer?.disconnect();
+      slot.removeEventListener?.("pointerup", pick);
+      slot.removeEventListener?.("pointerleave", reopen);
       grid.removeEventListener?.("scroll", syncEdges);
       win?.removeEventListener?.("resize", sync);
     };
   }, [activeIdx, options.length]);
   const chosen = shapes[activeIdx] ?? null;
   return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
-    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-tag", children: label }),
-    chosen && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotShape, { d: chosen, className: "tweakers-move-dial-shape tweakers-move-dial-shape-full" }),
-    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { ref: popRef, className: "tweakers-move-dial-pop", style: { "--move-grid-columns": MOVE_GRID_COLUMNS }, children: [
-      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-head", children: label }),
-      /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { ref: gridRef, className: "tweakers-move-dial-grid", role: "listbox", "aria-label": label, children: options.map((opt, i) => {
-        const group = enumOptionGroup(opt);
-        const heads = group !== null && group !== (i > 0 ? enumOptionGroup(options[i - 1]) : null);
-        return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_react3.Fragment, { children: [
-          heads && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-grid-group", "data-first": i === 0 || void 0, children: group }),
-          /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
-            "span",
-            {
-              className: "tweakers-move-dial-tile",
-              role: "option",
-              title: enumOptionLabel(opt),
-              "aria-label": enumOptionLabel(opt),
-              "aria-selected": i === activeIdx,
-              "data-selected": i === activeIdx || void 0,
-              children: shapes[i] && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotShape, { d: shapes[i], className: "tweakers-move-dial-tile-shape" })
-            }
-          )
-        ] }, enumOptionValue(opt));
-      }) })
-    ] })
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-tile tweakers-move-dial-rest", "aria-hidden": "true", children: chosen && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotShape, { d: chosen, className: "tweakers-move-dial-tile-shape" }) }),
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { ref: popRef, className: "tweakers-move-dial-pop", style: { "--move-grid-columns": MOVE_GRID_COLUMNS }, children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { ref: gridRef, className: "tweakers-move-dial-grid", role: "listbox", "aria-label": label, children: options.map((opt, i) => {
+      const group = enumOptionGroup(opt);
+      const heads = group !== null && group !== (i > 0 ? enumOptionGroup(options[i - 1]) : null);
+      return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_react3.Fragment, { children: [
+        heads && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-dial-grid-group", "data-first": i === 0 || void 0, children: group }),
+        /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(
+          "span",
+          {
+            className: "tweakers-move-dial-tile",
+            role: "option",
+            title: enumOptionLabel(opt),
+            "aria-label": enumOptionLabel(opt),
+            "aria-selected": i === activeIdx,
+            "data-selected": i === activeIdx || void 0,
+            children: shapes[i] && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotShape, { d: shapes[i], className: "tweakers-move-dial-tile-shape" })
+          }
+        )
+      ] }, enumOptionValue(opt));
+    }) }) })
   ] });
 }
 var MOVE_GRID_COLUMNS = 4;

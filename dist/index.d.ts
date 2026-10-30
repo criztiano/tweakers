@@ -4524,15 +4524,17 @@ declare function MoveSlotEnumBody({ label, optionLabel, options, activeIdx, shap
 }): react_jsx_runtime.JSX.Element;
 /**
  * A curve choice whose every option can be seen at once (`display: 'grid'`
- * with a `preview`). At rest the slot is the chosen curve alone, as large as
- * the slot holds, under the control's name. In the hand — touched, or under
+ * with a `preview`). At rest the slot is the chosen curve alone on its tile,
+ * as large as the slot holds — the curve says what the control is, so no
+ * name is drawn. In the hand — touched, or under
  * a hovering pointer — a pop-up opens over the slot and its neighbours: every
  * option's curve as a tile, MOVE_GRID_COLUMNS across, in option order, the
  * chosen one lit; options that name a `group` start a row of their own
  * under that name. Nothing about the choice changes — the knob, a drag and the
  * wheel step the options in order, and a still press on a tile takes it, as a
  * press on a list row does (the slot reads the press; the pop-up passes it
- * on). The pop-up stands on the slot's foot, centred on it, and is kept
+ * on) and the pop-up folds away until the pointer leaves the slot. The
+ * pop-up stands on the slot's foot, centred on it, and is kept
  * inside the window; when it is taller than its cap it scrolls, holding the
  * chosen row in the middle.
  */

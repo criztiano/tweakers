@@ -3710,10 +3710,17 @@
   }
 }
 
-/* The curve grid (`curve-grid`) at rest: the chosen curve alone, down to the
-   slot's foot — no name, no cells, the shape is the reading. */
-.tweakers-move-dial-shape.tweakers-move-dial-shape-full {
-  height: calc(100% - var(--move-shape-top) - 14px);
+/* The curve grid (`curve-grid`) at rest: the chosen curve alone on its
+   tile — the dotted ground and all — filling the slot. No name, no cells:
+   the shape is the reading. */
+.tweakers-move-dial-tile.tweakers-move-dial-rest {
+  position: absolute;
+  inset: 6px;
+  height: auto;
+}
+
+.tweakers-move-dial-rest .tweakers-move-dial-tile-shape path {
+  opacity: 1;
 }
 
 /* In the hand, its pop-up: every curve as a tile, standing on the slot's
@@ -3758,8 +3765,13 @@
   }
 }
 
-.tweakers-move-dial-pop > .tweakers-move-dial-head {
-  background: var(--move-chip);
+/* A tile was clicked: folded away until the pointer leaves the slot. */
+.tweakers-move-dial[data-active] .tweakers-move-dial-pop[data-closed],
+.tweakers-move-dial:not([data-disabled]):hover .tweakers-move-dial-pop[data-closed] {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s, visibility 0s 0.12s;
 }
 
 .tweakers-move-dial-grid {

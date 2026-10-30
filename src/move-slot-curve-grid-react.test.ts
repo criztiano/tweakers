@@ -53,11 +53,12 @@ function render(activeIdx: number, slotLeft = 400) {
     renderer.root.findAll((n) => typeof n.type === 'string' && n.props.className === className);
   return {
     pop,
-    rest: () => byClass('tweakers-move-dial-shape tweakers-move-dial-shape-full'),
-    head: () => byClass('tweakers-move-dial-head')[0],
+    rest: () => byClass('tweakers-move-dial-tile tweakers-move-dial-rest'),
+    heads: () => byClass('tweakers-move-dial-head'),
+    grid: () => byClass('tweakers-move-dial-grid')[0],
     tiles: () => byClass('tweakers-move-dial-tile'),
     groups: () => byClass('tweakers-move-dial-grid-group'),
-    tilePaths: () => byClass('tweakers-move-dial-tile-shape').map((n) => n.findByType('path').props.d),
+    tilePaths: () => byClass('tweakers-move-dial-tile').map((n) => n.findByType('path').props.d),
   };
 }
 
@@ -75,7 +76,9 @@ describe('the curve grid (React)', () => {
 
   it('draws one tile per option, each its own curve, the chosen one lit', () => {
     const slot = render(3);
-    assert.equal(slot.head().props.children, 'Easing');
+    // The curves say what the control is: no name is drawn, the list keeps it.
+    assert.equal(slot.heads().length, 0);
+    assert.equal(slot.grid().props['aria-label'], 'Easing');
     const tiles = slot.tiles();
     assert.equal(tiles.length, OPTIONS.length);
     assert.deepEqual(tiles.map((t) => t.props['aria-label']), OPTIONS.map((o) => o.label));
@@ -101,7 +104,7 @@ describe('the curve grid (React)', () => {
     assert.equal(slot.tiles()[4].props['data-selected'], true);
   });
 
-  it('rests on the chosen curve alone', () => {
+  it('rests on the chosen curve alone, on its tile', () => {
     const slot = render(3);
     const rest = slot.rest();
     assert.equal(rest.length, 1);
