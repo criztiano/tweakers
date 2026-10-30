@@ -36,7 +36,8 @@ interface MovePage {
      *  at column i on both surfaces, pairing it with the dial in that column. */
     values: ControlMeta[];
     /** Action pads — the row under the values (y=1 on the device).
-     *  Placed by hand only, through the panel's `movePads` map. */
+     *  Placed by hand only, through the panel's `movePads` map — and a tabs
+     *  strip the panel names in `moveActionRow`, its run across the cells. */
     actions: ControlMeta[];
     /** Chips riding the top pad row (y=3), sharing it with the switches: a
      *  balance's first colour, and each `moveTopRow` chip in its named column

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { PanelConfig, ControlMeta } from '../src/store/TweakStore';
 import {
   buildMovePages,
+  movePadRows,
   setMoveLayoutReporter,
   padSpan,
   moveTabCell,
@@ -111,6 +112,87 @@ describe('a tabs strip on the small slots', () => {
     const [page] = buildMovePages([panel([plain])]);
     expect(page.dials[0]?.path).toBe('mode');
     expect(page.toggles).toEqual([]);
+  });
+});
+
+describe('a tabs strip on the action row', () => {
+  const action = (path: string): ControlMeta => ({ type: 'action', path, label: path });
+  const sunk = (controls: ControlMeta[], movePads: Record<string, number>, moveActionRow = ['dir']): PanelConfig => ({
+    ...panel(controls, movePads),
+    moveActionRow,
+  });
+
+  it('lays its run on the action row when the panel names it in moveActionRow', () => {
+    const issues = capture();
+    // The switch row is full of other strips; the In / Out strip goes below.
+    const [page] = buildMovePages([sunk(
+      [tabs('a', ['1', '2', '3', '4']), tabs('b', ['1', '2', '3', '4']), tabs('dir', ['In', 'Out'])],
+      { a: 0, b: 4, dir: 0 }
+    )]);
+    expect(page.toggles.map((p) => p?.path)).toEqual(['a', 'a', 'a', 'a', 'b', 'b', 'b', 'b']);
+    expect(page.actions.slice(0, 2).map((p) => p?.path)).toEqual(['dir', 'dir']);
+    const [, , actions] = movePadRows(page, 0);
+    expect(moveTabCell(actions, 0)).toMatchObject({ head: false, option: 'In' });
+    expect(moveTabCell(actions, 1)).toMatchObject({ head: false, option: 'Out' });
+    expect(issues).toEqual([]);
+  });
+
+  it('stays on the switch row without moveActionRow', () => {
+    const [page] = buildMovePages([panel([tabs('dir', ['In', 'Out'])], { dir: 0 })]);
+    expect(page.toggles.slice(0, 2).map((p) => p?.path)).toEqual(['dir', 'dir']);
+    expect(page.actions).toEqual([]);
+  });
+
+  it('lets the buttons named into its cells pack around it', () => {
+    const issues = capture();
+    const [page] = buildMovePages([sunk(
+      [tabs('dir', ['In', 'Out']), action('play'), action('stop')],
+      { dir: 0, play: 0, stop: 3 }
+    )]);
+    expect(page.actions.slice(0, 4).map((p) => p?.path)).toEqual(['dir', 'dir', 'play', 'stop']);
+    expect(issues).toContainEqual({
+      code: 'pad-column-taken',
+      message: "panel 'p': control 'play': action column 0 already occupied by 'dir' — moved to column 2",
+    });
+  });
+
+  it('moves a broken run whole, and says so when no run is left', () => {
+    const issues = capture();
+    const switches = Array.from({ length: MOVE_PADS }, (_, i) => toggle(`t${i}`));
+    const [moved] = buildMovePages([sunk(
+      [...switches, tabs('dir', ['In', 'Out', 'Hold'])],
+      { dir: 6 }
+    )]);
+    // Columns 6..8 run off the grid: the strip falls back to the leftmost run,
+    // and the full switch row above never comes into it.
+    expect(moved.actions.slice(0, 3).map((p) => p?.path)).toEqual(['dir', 'dir', 'dir']);
+    expect(moved.toggles.every((p) => p?.type === 'toggle')).toBe(true);
+    expect(issues).toContainEqual({
+      code: 'pad-column-taken',
+      message: "panel 'p': control 'dir': tabs column 6 has no run of 3 free pads — moved to column 0",
+    });
+
+    const wide = Array.from({ length: MOVE_PADS - 1 }, (_, i) => `o${i}`);
+    const [none] = buildMovePages([sunk([tabs('a', wide), tabs('dir', ['In', 'Out'])], {}, ['a', 'dir'])]);
+    expect(none.actions.filter((p) => p?.path === 'dir')).toHaveLength(0);
+    expect(issues).toContainEqual({
+      code: 'tabs-no-room',
+      message: "panel 'p': control 'dir': the action row has no run of 2 free pads — dropped",
+    });
+  });
+
+  it('keeps a value chip sunk into one of its cells on the value row', () => {
+    const issues = capture();
+    const dials = Array.from({ length: 8 }, (_, i): ControlMeta => ({ type: 'slider', path: `d${i}`, label: `d${i}`, min: 0, max: 1 }));
+    const low: ControlMeta = { type: 'slider', path: 'low', label: 'low', min: 0, max: 1 };
+    const [page] = buildMovePages([sunk([...dials, tabs('dir', ['In', 'Out']), low], { dir: 0, low: 1 }, ['dir', 'low'])]);
+    expect(page.actions.slice(0, 2).map((p) => p?.path)).toEqual(['dir', 'dir']);
+    expect(page.actionValues).toBeUndefined();
+    expect(page.values.some((p) => p?.path === 'low')).toBe(true);
+    expect(issues).toContainEqual({
+      code: 'action-row-taken',
+      message: "panel 'p': control 'low': action-row column 1 holds 'dir' — the chip keeps the value row",
+    });
   });
 });
 

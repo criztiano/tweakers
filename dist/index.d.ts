@@ -2906,7 +2906,9 @@ type TweakStorePanelOptions = {
      * Value chips, by control path, that sit on the action pad row in their
      * `movePads` column — a column's third small slot, so one column can carry a
      * switch and two chips (a take's Solo, high cut and low cut). A chip whose
-     * action cell is taken, or that names no column, keeps the value row.
+     * action cell is taken, or that names no column, keeps the value row. A
+     * `moveTabs` select named here lays its run on the action row instead of
+     * the switch row, by the same run rules.
      */
     moveActionRow?: string[];
     /**
@@ -3936,7 +3938,8 @@ interface MovePage {
      *  at column i on both surfaces, pairing it with the dial in that column. */
     values: ControlMeta[];
     /** Action pads — the row under the values (y=1 on the device).
-     *  Placed by hand only, through the panel's `movePads` map. */
+     *  Placed by hand only, through the panel's `movePads` map — and a tabs
+     *  strip the panel names in `moveActionRow`, its run across the cells. */
     actions: ControlMeta[];
     /** Chips riding the top pad row (y=3), sharing it with the switches: a
      *  balance's first colour, and each `moveTopRow` chip in its named column
