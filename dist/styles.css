@@ -424,8 +424,12 @@
      wheel-screen list lives inside this budget and never widens the panel
      beyond it. */
   --move-cluster-max: 1180px;
+  /* How far the controls sit from the panel's left, right and bottom
+     edges. Hosts dock the panel flush with the window, so this is also the
+     controls' distance from the window's edges. */
+  --move-panel-pad: 40px;
   /* The whole panel's cap: the cluster plus the panel's side padding. */
-  --move-panel-max: calc(var(--move-cluster-max) + 2 * 48px);
+  --move-panel-max: calc(var(--move-cluster-max) + 2 * var(--move-panel-pad));
   --move-slot: rgba(222, 227, 201, 0.1);
   /* A column held open by a page that has nothing for it to do — fainter
      than a slot you can press, so it never reads as a control. */
@@ -545,7 +549,7 @@
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  padding: 16px 48px 14px;
+  padding: 16px var(--move-panel-pad) var(--move-panel-pad);
   /* The panel is never wider than its own 8-slot cluster (plus this box's
      padding) — the cap is measured on the slots alone, and a wheel-screen
      list beside them shares that budget rather than widening the panel. A
