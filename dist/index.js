@@ -3111,7 +3111,10 @@ function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }) {
   }, [activeIdx, options.length]);
   const chosen = shapes[activeIdx] ?? null;
   return /* @__PURE__ */ jsxs3(Fragment4, { children: [
-    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-tile tweakers-move-dial-rest", "aria-hidden": "true", children: chosen && /* @__PURE__ */ jsx3(MoveSlotShape, { d: chosen, className: "tweakers-move-dial-tile-shape" }) }),
+    /* @__PURE__ */ jsxs3("span", { className: "tweakers-move-dial-tile tweakers-move-dial-rest", "aria-hidden": "true", children: [
+      chosen && /* @__PURE__ */ jsx3(MoveSlotCurveDots, { d: chosen }),
+      chosen && /* @__PURE__ */ jsx3(MoveSlotShape, { d: chosen, className: "tweakers-move-dial-tile-shape" })
+    ] }),
     /* @__PURE__ */ jsx3("div", { ref: popRef, className: "tweakers-move-dial-pop", style: { "--move-grid-columns": MOVE_GRID_COLUMNS }, children: /* @__PURE__ */ jsx3("div", { ref: gridRef, className: "tweakers-move-dial-grid", role: "listbox", "aria-label": label, children: options.map((opt, i) => {
       const group = enumOptionGroup(opt);
       const heads = group !== null && group !== (i > 0 ? enumOptionGroup(options[i - 1]) : null);
@@ -3132,6 +3135,28 @@ function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }) {
       ] }, enumOptionValue(opt));
     }) }) })
   ] });
+}
+var MOVE_CURVE_DOT_CELLS = 8;
+function curveEnds(d) {
+  const nums = d.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
+  if (nums.length < 4) return null;
+  return { x0: nums[0], y0: nums[1], x1: nums[nums.length - 2], y1: nums[nums.length - 1] };
+}
+function MoveSlotCurveDots({ d }) {
+  const ends = curveEnds(d);
+  if (!ends) return null;
+  const n = MOVE_CURVE_DOT_CELLS;
+  const dx = (ends.x1 - ends.x0) / n || 100 / n;
+  const rise = (ends.y0 - ends.y1) / n;
+  const dy = Math.abs(rise) > 0.5 ? Math.abs(rise) : 100 / n;
+  const run = (from, step) => {
+    const at2 = [];
+    for (let v = from - Math.ceil((from + 40) / step) * step; v <= 140; v += step) at2.push(v);
+    return at2;
+  };
+  const xs = run(ends.x0, dx);
+  const ys = run(ends.y1, dy);
+  return /* @__PURE__ */ jsx3("svg", { className: "tweakers-move-dial-tile-shape tweakers-move-dial-dots", "aria-hidden": "true", children: ys.flatMap((y) => xs.map((x) => /* @__PURE__ */ jsx3("circle", { cx: `${x.toFixed(2)}%`, cy: `${y.toFixed(2)}%`, r: 1 }, `${x.toFixed(2)}:${y.toFixed(2)}`))) });
 }
 var MOVE_GRID_COLUMNS = 4;
 var MOVE_GRID_MARGIN = 8;

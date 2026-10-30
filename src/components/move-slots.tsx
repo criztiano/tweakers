@@ -543,6 +543,7 @@ export function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }: {
   return (
     <>
       <span className="tweakers-move-dial-tile tweakers-move-dial-rest" aria-hidden="true">
+        {chosen && <MoveSlotCurveDots d={chosen} />}
         {chosen && <MoveSlotShape d={chosen} className="tweakers-move-dial-tile-shape" />}
       </span>
       <div ref={popRef} className="tweakers-move-dial-pop" style={{ '--move-grid-columns': MOVE_GRID_COLUMNS } as CSSProperties}>
@@ -570,6 +571,50 @@ export function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }: {
         </div>
       </div>
     </>
+  );
+}
+
+/** Grid cells between a curve's start and its end, on each axis. */
+export const MOVE_CURVE_DOT_CELLS = 8;
+
+/** Where a shape path starts and ends, in its 0–100 box — or null. */
+function curveEnds(d: string): { x0: number; y0: number; x1: number; y1: number } | null {
+  const nums = d.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
+  if (nums.length < 4) return null;
+  return { x0: nums[0], y0: nums[1], x1: nums[nums.length - 2], y1: nums[nums.length - 1] };
+}
+
+/**
+ * The dotted ground under a curve, laid on the curve itself: the columns
+ * divide its start to its end, the rows its start height to its end height,
+ * MOVE_CURVE_DOT_CELLS apart — so both ends always sit on a dot, an
+ * overshoot's or an anticipation's too (their ends are not the box's
+ * corners). The pattern runs on past them to the tile's edges. Dots are
+ * placed in percent of the shape's own box, so they stay round however the
+ * box is stretched.
+ */
+function MoveSlotCurveDots({ d }: { d: string }) {
+  const ends = curveEnds(d);
+  if (!ends) return null;
+  const n = MOVE_CURVE_DOT_CELLS;
+  const dx = (ends.x1 - ends.x0) / n || 100 / n;
+  const rise = (ends.y0 - ends.y1) / n;
+  // A shape that ends where it starts has no rise to divide: square cells.
+  const dy = Math.abs(rise) > 0.5 ? Math.abs(rise) : 100 / n;
+  const run = (from: number, step: number) => {
+    const at: number[] = [];
+    // The box sits inside the tile's margin: run past it on both sides.
+    for (let v = from - Math.ceil((from + 40) / step) * step; v <= 140; v += step) at.push(v);
+    return at;
+  };
+  const xs = run(ends.x0, dx);
+  const ys = run(ends.y1, dy);
+  return (
+    <svg className="tweakers-move-dial-tile-shape tweakers-move-dial-dots" aria-hidden="true">
+      {ys.flatMap((y) => xs.map((x) => (
+        <circle key={`${x.toFixed(2)}:${y.toFixed(2)}`} cx={`${x.toFixed(2)}%`} cy={`${y.toFixed(2)}%`} r={1} />
+      )))}
+    </svg>
   );
 }
 

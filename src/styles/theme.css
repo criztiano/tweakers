@@ -3717,6 +3717,15 @@
   position: absolute;
   inset: 6px;
   height: auto;
+  overflow: hidden;
+  /* The screen's dark ground; its dots are drawn on the curve instead
+     (MoveSlotCurveDots), so its ends always land on one. */
+  background-color: var(--move-display, #1e1e1e);
+  background-image: none;
+}
+
+.tweakers-move-dial-dots circle {
+  fill: color-mix(in srgb, var(--move-text) 22%, transparent);
 }
 
 .tweakers-move-dial-rest .tweakers-move-dial-tile-shape path {
