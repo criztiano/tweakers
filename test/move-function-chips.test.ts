@@ -88,6 +88,14 @@ describe('MoveFunctionChips', () => {
     expect(presses).toEqual([{ name: 'loop', shift: false, hold: false }]);
   });
 
+  it('runs the Shift layer on Shift+click, as Shift+tap does on the key', () => {
+    const presses: MoveFunctionPress[] = [];
+    attach('loop', (press) => presses.push(press), { label: 'Random image' });
+    mount();
+    act(() => chips()[0].props.onClick({ shiftKey: true }));
+    expect(presses).toEqual([{ name: 'loop', shift: true, hold: false }]);
+  });
+
   it('dresses in the slot voice by default, highlight or palette colour on request', () => {
     attach('capture', () => {}, { label: 'Load video' });
     attach('loop', () => {}, { label: 'Random image', chip: { variant: 'highlight' } });
