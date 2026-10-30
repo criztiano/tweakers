@@ -380,6 +380,9 @@ export const MOVE_SETTINGS_EVENT = 'move-tweakers:settings';
  * are the eight the dials are holding, their pads with them, so all of them
  * can be reached without a single one shrinking to a chip.
  */
+/** Columns 0 … the last of `cols`, gaps included. */
+const throughLast = (cols: number[]) => (cols.length ? Array.from({ length: cols[cols.length - 1]! + 1 }, (_, i) => i) : cols);
+
 export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, panels: only, dock = 'viewport', scroll = false, focused = false, headerStart, headerEnd, settings, functionChips = 'clock' }: MovePanelProps) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = useState<PanelConfig[]>([]);
@@ -1716,7 +1719,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       ? Array.from({ length: modSlot && ModulationStore.isLent(modSlot.index) ? page.dials.length : modPageWidth() }, (_, i) => i)
       : color
         ? Array.from({ length: MOVE_PADS }, (_, i) => i)
-        : visibleColumns(page);
+        // Every column up to the last one the page reaches: a column empty in
+        // the middle still holds its place, or every slot after it would sit
+        // over the wrong pads.
+        : throughLast(visibleColumns(page));
   // Grouped slots are drawn on the page's own dials only. The columns under a
   // group's name are marked: those slots stand below the name's band, and
   // every other slot on the row takes the row's whole height.
