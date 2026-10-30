@@ -2430,10 +2430,6 @@
   overflow: hidden;
   pointer-events: none;
 }
-/* A face made only of marks stands on the slot itself. */
-.tweakers-move-slot-display[data-bare] {
-  background: none;
-}
 
 .tweakers-move-slot-foot {
   position: absolute;
@@ -2547,6 +2543,36 @@
 /* The ticks the needle has swept from its origin. */
 .tweakers-move-needle-tick[data-lit] {
   stroke-opacity: 0.9;
+}
+/* The dial's ring: the band under the tag, as the aspect frame's, and in it
+   a square face as large as fits — the ring round it, the value large in
+   its middle in the big readouts' line face, sized to the ring. */
+.tweakers-move-dial-ring {
+  position: absolute;
+  top: var(--move-shape-top);
+  left: 8px;
+  right: 8px;
+  bottom: var(--move-indicator-bottom);
+  container-type: size;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.tweakers-move-dial-ring-face {
+  position: relative;
+  width: min(100cqw, 100cqh);
+  aspect-ratio: 1;
+  container-type: inline-size;
+  display: grid;
+  place-items: center;
+}
+.tweakers-move-dial-ring-value {
+  font-family: var(--move-font-value);
+  font-variation-settings: var(--move-font-value-shape);
+  font-size: 22cqw;
+  line-height: 1;
+  color: var(--move-text);
+  white-space: nowrap;
 }
 
 

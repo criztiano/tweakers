@@ -857,12 +857,8 @@ export function MoveSlotXYBody({ label, value, position, gridN, shape = null }: 
  * label under it. A big centred name over a faint line — the first cut of
  * this — read as neither.
  */
-function MoveSlotDisplay({ children, bare }: {
-  children: ReactNode;
-  /** No well behind it: the drawing stands on the slot itself. */
-  bare?: boolean;
-}) {
-  return <div className="tweakers-move-slot-display" data-bare={bare || undefined}>{children}</div>;
+function MoveSlotDisplay({ children }: { children: ReactNode }) {
+  return <div className="tweakers-move-slot-display">{children}</div>;
 }
 
 function MoveSlotDisplayFoot({ label, value }: { label: string; value: ReactNode }) {
@@ -946,7 +942,7 @@ export function MoveSlotRampBody({ label, value, css, stop, stops }: {
  *  starts, in the drawing's units. */
 const DIAL_TICK_STEP = 5;
 const DIAL_TICK_OUT = 11;
-const DIAL_TICK_IN = { fine: 9.6, major: 8.6, compass: 7.8 };
+const DIAL_TICK_IN = { fine: 9.6, major: 9.0, compass: 8.4 };
 
 /**
  * The ring's ticks of one weight as one path — the fine ones, or the major
@@ -998,9 +994,11 @@ function foldBearing(deg: number): number {
  * A bar would put 359° and 1° as far apart as a slot can show them. The face
  * is only marks, on the slot itself with no well behind: a graded ring — a
  * tick every 5°, longer every 30°, longest on the compass points — whose
- * needle is one bright mark in the ring itself, on the value's bearing. The
- * ticks from the origin to the needle are lit, so the ring tells how far the
- * value has turned as well as where it points.
+ * needle is one bright mark in the ring itself, on the value's bearing, and
+ * the value large in its middle, in the big readouts' line face. The name is
+ * the tag on top, as on every picture face. The ticks from the origin to the
+ * needle are lit, so the ring tells how far the value has turned as well as
+ * where it points.
  *
  * In the hand (`follow` off) the needle is the value, 1:1, every frame. A
  * change from anywhere else — a preset, an agent, automation — has the needle
@@ -1089,16 +1087,19 @@ export function MoveSlotDialBody({ label, value, bearing, origin, follow = false
   const ends = needleEnds(bearing);
   return (
     <>
-      <MoveSlotDisplay bare>
-        <svg className="tweakers-move-slot-needle" viewBox="-12 -12 24 24" aria-hidden="true">
-          <path className="tweakers-move-needle-tick" d={DIAL_TICKS_FINE} />
-          <path className="tweakers-move-needle-tick" data-major d={DIAL_TICKS_MAJOR} />
-          <path ref={sweepFine} className="tweakers-move-needle-tick" data-lit d={dialSweep(origin, bearing, false)} />
-          <path ref={sweepMajor} className="tweakers-move-needle-tick" data-major data-lit d={dialSweep(origin, bearing, true)} />
-          <line ref={hand} className="tweakers-move-needle-hand" {...ends} />
-        </svg>
-      </MoveSlotDisplay>
-      <MoveSlotDisplayFoot label={label} value={value} />
+      <span className="tweakers-move-dial-tag">{label}</span>
+      <div className="tweakers-move-dial-ring">
+        <div className="tweakers-move-dial-ring-face">
+          <svg className="tweakers-move-slot-needle" viewBox="-12 -12 24 24" aria-hidden="true">
+            <path className="tweakers-move-needle-tick" d={DIAL_TICKS_FINE} />
+            <path className="tweakers-move-needle-tick" data-major d={DIAL_TICKS_MAJOR} />
+            <path ref={sweepFine} className="tweakers-move-needle-tick" data-lit d={dialSweep(origin, bearing, false)} />
+            <path ref={sweepMajor} className="tweakers-move-needle-tick" data-major data-lit d={dialSweep(origin, bearing, true)} />
+            <line ref={hand} className="tweakers-move-needle-hand" {...ends} />
+          </svg>
+          <span className="tweakers-move-dial-ring-value">{value}</span>
+        </div>
+      </div>
     </>
   );
 }
