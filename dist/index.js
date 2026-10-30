@@ -1949,7 +1949,10 @@ function buildMovePages(panels) {
         `panel '${panel.id}': control '${c.path}': the ${rowName} row's ${MOVE_PADS} pads are all taken \u2014 dropped`
       );
     };
+    const sunk = (c) => (panel.moveActionRow ?? []).includes(c.path);
     const placeTabs = (c, col) => {
+      const row2 = sunk(c) ? actions : toggles;
+      const rowName = row2 === actions ? "action" : "toggle";
       const span = padSpan(c);
       if (span > MOVE_PADS) {
         reportMoveLayoutIssue(
@@ -1958,7 +1961,7 @@ function buildMovePages(panels) {
         );
         return;
       }
-      const fits = (start2) => start2 >= 0 && start2 + span <= MOVE_PADS && Array.from({ length: span }, (_, k) => topAt(start2 + k)).every((p) => p === void 0);
+      const fits = (start2) => start2 >= 0 && start2 + span <= MOVE_PADS && Array.from({ length: span }, (_, k) => cellAt(row2, start2 + k)).every((p) => p === void 0);
       let start = col !== null && fits(col) ? col : -1;
       if (start < 0) {
         for (let i = 0; i + span <= MOVE_PADS; i++) {
@@ -1977,11 +1980,11 @@ function buildMovePages(panels) {
       if (start < 0) {
         reportMoveLayoutIssue(
           "tabs-no-room",
-          `panel '${panel.id}': control '${c.path}': the toggle row has no run of ${span} free pads \u2014 dropped`
+          `panel '${panel.id}': control '${c.path}': the ${rowName} row has no run of ${span} free pads \u2014 dropped`
         );
         return;
       }
-      for (let k = 0; k < span; k++) toggles[start + k] = c;
+      for (let k = 0; k < span; k++) row2[start + k] = c;
     };
     for (const [ref, bal] of balanceRefs) {
       const at2 = dials.indexOf(bal);
@@ -2037,10 +2040,10 @@ function buildMovePages(panels) {
           "action-row-no-column",
           `panel '${panel.id}': control '${c.path}' is named in moveActionRow but has no movePads column \u2014 the chip keeps the value row`
         );
-      } else if (actionValues[col] !== void 0) {
+      } else if ((actions[col] ?? actionValues[col]) !== void 0) {
         reportMoveLayoutIssue(
           "action-row-taken",
-          `panel '${panel.id}': control '${c.path}': action-row column ${col} holds '${actionValues[col].path}' \u2014 the chip keeps the value row`
+          `panel '${panel.id}': control '${c.path}': action-row column ${col} holds '${(actions[col] ?? actionValues[col]).path}' \u2014 the chip keeps the value row`
         );
       } else {
         actionValues[col] = c;

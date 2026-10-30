@@ -1022,7 +1022,9 @@ export type TweakStorePanelOptions = {
    * Value chips, by control path, that sit on the action pad row in their
    * `movePads` column — a column's third small slot, so one column can carry a
    * switch and two chips (a take's Solo, high cut and low cut). A chip whose
-   * action cell is taken, or that names no column, keeps the value row.
+   * action cell is taken, or that names no column, keeps the value row. A
+   * `moveTabs` select named here lays its run on the action row instead of
+   * the switch row, by the same run rules.
    */
   moveActionRow?: string[];
   /**

@@ -33,7 +33,8 @@ export interface MovePage {
    *  at column i on both surfaces, pairing it with the dial in that column. */
   values: ControlMeta[];
   /** Action pads — the row under the values (y=1 on the device).
-   *  Placed by hand only, through the panel's `movePads` map. */
+   *  Placed by hand only, through the panel's `movePads` map — and a tabs
+   *  strip the panel names in `moveActionRow`, its run across the cells. */
   actions: ControlMeta[];
   /** Chips riding the top pad row (y=3), sharing it with the switches: a
    *  balance's first colour, and each `moveTopRow` chip in its named column
@@ -397,8 +398,13 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
       // fit there falls back to the leftmost one that does, the same courtesy
       // a single pad gets; a strip with nowhere to sit is said out loud rather
       // than quietly shortened, because a mode picker missing two of its modes
-      // is a worse lie than a mode picker that is missing.
+      // is a worse lie than a mode picker that is missing. A strip the panel
+      // names in `moveActionRow` takes the action row instead, by the same
+      // rules — its own buttons then pack around it.
+      const sunk = (c: ControlMeta) => (panel.moveActionRow ?? []).includes(c.path);
       const placeTabs = (c: ControlMeta, col: number | null) => {
+        const row = sunk(c) ? actions : toggles;
+        const rowName = row === actions ? 'action' : 'toggle';
         const span = padSpan(c);
         if (span > MOVE_PADS) {
           reportMoveLayoutIssue(
@@ -409,7 +415,7 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         }
         const fits = (start: number) =>
           start >= 0 && start + span <= MOVE_PADS &&
-          Array.from({ length: span }, (_, k) => topAt(start + k)).every((p) => p === undefined);
+          Array.from({ length: span }, (_, k) => cellAt(row, start + k)).every((p) => p === undefined);
         let start = col !== null && fits(col) ? col : -1;
         if (start < 0) {
           for (let i = 0; i + span <= MOVE_PADS; i++) {
@@ -425,11 +431,11 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         if (start < 0) {
           reportMoveLayoutIssue(
             'tabs-no-room',
-            `panel '${panel.id}': control '${c.path}': the toggle row has no run of ${span} free pads — dropped`
+            `panel '${panel.id}': control '${c.path}': the ${rowName} row has no run of ${span} free pads — dropped`
           );
           return;
         }
-        for (let k = 0; k < span; k++) toggles[start + k] = c;
+        for (let k = 0; k < span; k++) row[start + k] = c;
       };
 
       // The column group, in the order the kit seats it (move's
@@ -462,7 +468,9 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
 
       // 2. The switches take the top row — around the chips already there. A
       //    switch the panel names in `moveValueRow`, with a column, waits for
-      //    3c: it rides the value row, leaving its top cell to a chip.
+      //    3c: it rides the value row, leaving its top cell to a chip. A tabs
+      //    strip named in `moveActionRow` seats its run on the action row now,
+      //    before any chip or button asks for a cell there.
       const lowered = (c: ControlMeta) =>
         c.type === 'toggle' && !isToggleDial(c) && (panel.moveValueRow ?? []).includes(c.path) && padCols.get(c) != null;
       for (const c of controls) {
@@ -515,10 +523,10 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
             'action-row-no-column',
             `panel '${panel.id}': control '${c.path}' is named in moveActionRow but has no movePads column — the chip keeps the value row`
           );
-        } else if (actionValues[col] !== undefined) {
+        } else if ((actions[col] ?? actionValues[col]) !== undefined) {
           reportMoveLayoutIssue(
             'action-row-taken',
-            `panel '${panel.id}': control '${c.path}': action-row column ${col} holds '${actionValues[col].path}' — the chip keeps the value row`
+            `panel '${panel.id}': control '${c.path}': action-row column ${col} holds '${(actions[col] ?? actionValues[col]).path}' — the chip keeps the value row`
           );
         } else {
           actionValues[col] = c;
