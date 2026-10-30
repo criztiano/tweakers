@@ -19,7 +19,7 @@ import type { TweakTheme } from '../theme';
 import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, filterChipValue, isColumnFilter, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumShapePath, enumIndex, enumAspect, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotAspectBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody, MoveSlotGlyph } from './move-slots';
+import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotCurveGridBody, MoveSlotAspectBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody, MoveSlotGlyph } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing } from '../angle-core';
@@ -2502,11 +2502,14 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   const face = moveSlotKind(meta, { enum: true, value: values[meta.path], shape, glyph, picture });
                   const aspect = face === 'aspect' ? enumAspect(meta, values[meta.path]) : null;
                   const named = face === 'value';
+                  // Every option's shape as a tile — unless the page has put
+                  // its oscilloscope here, which keeps the one-curve face.
+                  const grid = face === 'curve-grid' && !scope;
                   return (
                     <div
                       key={meta.path}
                       className="tweakers-move-dial"
-                      data-kind={lanes ? 'lanes' : aspect ? 'aspect' : named ? 'value' : 'enum'}
+                      data-kind={lanes ? 'lanes' : aspect ? 'aspect' : named ? 'value' : grid ? 'curve-grid' : 'enum'}
                       data-sub={named || undefined}
                       style={dialSpan(meta) > 1 ? { gridColumn: `span ${dialSpan(meta)}` } : undefined}
                       data-scope={scope ? true : undefined}
@@ -2522,7 +2525,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       aria-disabled={disabled || undefined}
                       data-disabled={disabled || undefined}
                       onKeyDown={(e) => dialFromKeyboard(e, meta)}
-                      data-shape={shape ? true : undefined}
+                      data-shape={shape && !grid ? true : undefined}
                       data-active={active || undefined}
                       {...optionDrag(meta)}
                     >
@@ -2545,6 +2548,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           <MoveSlotDefaultBody label={meta.label} value={optionLabel} pct={0} originPct={null} track={false} />
                           {meta.track === true && <MoveSlotEnumCells options={options} activeIdx={activeIdx} />}
                         </>
+                      ) : grid ? (
+                        <MoveSlotCurveGridBody label={meta.label} options={options} activeIdx={activeIdx}
+                          shapes={options.map((o) => enumShapePath(meta, enumOptionValue(o as never)))} />
                       ) : (
                         <MoveSlotEnumBody
                           label={meta.label}

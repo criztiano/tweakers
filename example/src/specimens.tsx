@@ -178,6 +178,12 @@ export const BIG_SLOTS: Specimen[] = [
     live: { path: 'effect' },
   },
   { kind: 'curve', path: 'shape', description: MOVE_SLOT_LIBRARY.curve.description, live: { path: 'shape' } },
+  {
+    kind: 'curve-grid', path: 'easing',
+    description: MOVE_SLOT_LIBRARY['curve-grid'].description,
+    note: '`{ type: \'select\', display: \'grid\', options, preview }` — the curve picker’s `preview`, every option at once. As many tiles stand across as the slot is wide; touch or hover it and a long run grows to the whole grid. Click a tile to take it, drag or scroll to step; on the Move the knob steps the options in order. Without a `preview` it is the ordinary list.',
+    live: { path: 'easing' },
+  },
   { kind: 'toggle', path: 'hold', description: MOVE_SLOT_LIBRARY.toggle.description, live: { path: 'hold' } },
   {
     kind: 'toggle-icon', path: 'loop',

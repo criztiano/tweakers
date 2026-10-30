@@ -9,7 +9,7 @@ import { resolveAxis, pointFromValue, normalizeValue, type XYValue } from '../xy
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
 import { valueToBearing } from '../angle-core';
 import {
-  normalizeDial, normalizeRangeDial, dialOrigin, isEnumDial, enumIndex, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumAspect,
+  normalizeDial, normalizeRangeDial, dialOrigin, isEnumDial, enumIndex, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumAspect,
   enumShapePath, filterShapePath,
 } from '../move-layout';
 import {
@@ -26,7 +26,7 @@ import {
   moveSelectWalkCount, moveSelectWalkIndex, type MoveFaceRole, type MoveFineAnchor, type MovePress,
 } from '../move-slot-core';
 import {
-  moveSlotKind, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotAspectBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotXYBody, MoveSlotRangeBody, MoveSlotFilterBody,
+  moveSlotKind, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotCurveGridBody, MoveSlotAspectBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotXYBody, MoveSlotRangeBody, MoveSlotFilterBody,
   MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody,
   MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody,
 } from './move-slots';
@@ -661,10 +661,11 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
     const face = moveSlotKind(meta, { enum: true, value, shape, glyph, picture });
     const aspect = face === 'aspect' ? enumAspect(meta, value) : null;
     const named = face === 'value';
+    const grid = face === 'curve-grid';
     return (
-      <div className={cls} style={style} data-kind={lanes ? 'lanes' : aspect ? 'aspect' : named ? 'value' : 'enum'}
+      <div className={cls} style={style} data-kind={lanes ? 'lanes' : aspect ? 'aspect' : named ? 'value' : grid ? 'curve-grid' : 'enum'}
         data-sub={named || undefined} data-visual={playback ? 'playback' : undefined}
-        data-shape={shape ? true : undefined} data-active={active || undefined}
+        data-shape={shape && !grid ? true : undefined} data-active={active || undefined}
         {...slider(meta)} aria-valuemin={0} aria-valuemax={Math.max(0, options.length - 1)} aria-valuenow={activeIdx} aria-valuetext={optionLabel}
         {...step(meta)}>
         {named && <span className="tweakers-move-dial-sub">{meta.label}</span>}
@@ -679,6 +680,9 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
             <MoveSlotDefaultBody label={meta.label} value={optionLabel} pct={0} originPct={null} track={false} />
             {meta.track === true && <MoveSlotEnumCells options={options} activeIdx={activeIdx} />}
           </>
+        ) : grid ? (
+          <MoveSlotCurveGridBody label={meta.label} options={options} activeIdx={activeIdx}
+            shapes={options.map((o) => enumShapePath(meta, enumOptionValue(o as never)))} />
         ) : (
           <MoveSlotEnumBody label={meta.label} optionLabel={optionLabel} options={options} activeIdx={activeIdx}
             shape={shape} glyph={glyph} picture={picture} playback={playback} />

@@ -1,5 +1,5 @@
 import type { MovePadListView } from '../move-pad-list';
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { moveBandCuts, moveGrainPicture, moveLanes, moveNumericDrawing, movePlaybackMode, MOVE_GRAIN, type MoveGrainSpan, moveVectorStage, MOVE_BAND_H, MOVE_BAND_W, MOVE_STAGE, type MovePlaybackMode, type MoveTone } from '../move-visual-core';
 import { MoveGauge, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing } from './move-visuals';
@@ -45,6 +45,10 @@ import { ListScreen } from './ListScreen';
  *   seeing it, the name and position over it.
  * - `curve`   — an option picker whose current option draws its shape (the
  *   select's `preview` sampler) — the curve-selection slot.
+ * - `curve-grid` — the same shapes, every one at once: the enum's list
+ *   screen laid out as a grid of small tiles, each drawing its option's
+ *   curve, the chosen one lit (`display: 'grid'` with a `preview`). It
+ *   follows, grows and takes a press exactly as the list does.
  * - `enum`    — a plain stepped option picker: every option on the Move's
  *   own list screen, which is the whole slot; a touch grows it to the run.
  * - `folders` — the enum's list screen for a select whose options come in
@@ -127,6 +131,7 @@ export type MoveSlotKind =
   | 'value'
   | 'icon'
   | 'curve'
+  | 'curve-grid'
   | 'enum'
   | 'folders'
   | 'aspect'
@@ -192,6 +197,9 @@ export function moveSlotKind(
     // The app's own ask for the face wins over a glyph or a picture.
     if (enumAspect(meta, opts.value)) return 'aspect';
     if (meta.type === 'select' && meta.display === 'value') return 'value';
+    // Every option's shape at once — only when there are shapes to draw;
+    // without a `preview` the grid has nothing to show, so the list stays.
+    if (meta.type === 'select' && meta.display === 'grid' && meta.preview) return 'curve-grid';
     if (opts.shape) return 'curve';
     if (opts.picture) return 'picture';
     if (opts.glyph) return 'icon';
@@ -444,6 +452,93 @@ export function MoveSlotEnumCells({ options, activeIdx }: {
             className="tweakers-move-dial-enum-cell"
             data-on={j === activeIdx || undefined}
           />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Every option's shape at once (`display: 'grid'` with a `preview`): the
+ * enum's list screen, laid out as tiles. The head keeps the control's name;
+ * under it each option is a small square drawing its curve edge to edge, in
+ * option order, and the chosen tile is lit the way the list lights its
+ * chosen row. Nothing about the choice changes — the knob, a drag and the
+ * wheel step the options in order, and a still press on a tile takes it, as
+ * a press on a row does (the slot reads the press; the tiles take none).
+ *
+ * As many tiles stand across as the slot's width gives room for at the
+ * stylesheet's smallest tile, so the grid's height is the layout's to know:
+ * the screen asks it, after layout, whether the whole run is taller than the
+ * room under the head, and only then grows on touch — to the whole grid,
+ * capped like the list. At rest the row holding the choice is brought to the
+ * middle, as the list holds its chosen row.
+ */
+export function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }: {
+  label: string;
+  options: NonNullable<ControlMeta['options']>;
+  activeIdx: number;
+  /** Each option's shape (`enumShapePath`), in option order; null leaves
+   *  that tile empty. */
+  shapes: readonly (string | null)[];
+}) {
+  const screenRef = useRef<HTMLDivElement | null>(null);
+  const headRef = useRef<HTMLSpanElement | null>(null);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const [grow, setGrow] = useState(false);
+
+  useLayoutEffect(() => {
+    const screen = screenRef.current;
+    const grid = gridRef.current;
+    if (!screen || !grid) return;
+    // The list's edges: a side hiding tiles dissolves, an end stays crisp.
+    const syncEdges = () => {
+      const end = grid.scrollHeight - grid.clientHeight;
+      grid.toggleAttribute?.('data-over-top', grid.scrollTop > 1);
+      grid.toggleAttribute?.('data-over-bottom', grid.scrollTop < end - 1);
+    };
+    const sync = () => {
+      // The whole run against the room it has at rest — the slot under the
+      // head. Neither moves while the screen grows (a tile's size follows the
+      // width alone), so the answer cannot flip under a hand.
+      const slot = screen.parentElement;
+      if (slot) setGrow(grid.scrollHeight > slot.clientHeight - (headRef.current?.offsetHeight ?? 0) + 1);
+      const tile = grid.querySelector?.<HTMLElement>('[data-selected]');
+      if (tile) {
+        const at = tile.getBoundingClientRect();
+        const top = at.top - grid.getBoundingClientRect().top + grid.scrollTop;
+        // Scroll only this screen, never the page behind the panel.
+        grid.scrollTop = Math.max(0, Math.min(top - (grid.clientHeight - at.height) / 2, grid.scrollHeight - grid.clientHeight));
+      }
+      syncEdges();
+    };
+    sync();
+    grid.addEventListener?.('scroll', syncEdges, { passive: true });
+    // Growing or shrinking moves the middle, and a resized slot the room.
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(sync);
+    observer?.observe(grid);
+    if (screen.parentElement) observer?.observe(screen.parentElement);
+    return () => {
+      observer?.disconnect();
+      grid.removeEventListener?.('scroll', syncEdges);
+    };
+  }, [activeIdx, options.length]);
+
+  return (
+    <div ref={screenRef} className="tweakers-move-dial-screen" data-layout="grid" data-grow={grow || undefined}>
+      <span ref={headRef} className="tweakers-move-dial-head">{label}</span>
+      <div ref={gridRef} className="tweakers-move-dial-grid" role="listbox" aria-label={label}>
+        {options.map((opt, i) => (
+          <span
+            key={enumOptionValue(opt as never)}
+            className="tweakers-move-dial-tile"
+            role="option"
+            aria-label={enumOptionLabel(opt as never)}
+            aria-selected={i === activeIdx}
+            data-selected={i === activeIdx || undefined}
+          >
+            {shapes[i] && <MoveSlotShape d={shapes[i]!} className="tweakers-move-dial-tile-shape" />}
+          </span>
         ))}
       </div>
     </div>
@@ -1933,6 +2028,7 @@ export const MOVE_SLOT_LIBRARY = {
   icon: { description: 'option picker showing the current option as a glyph', component: MoveSlotEnumBody },
   picture: { description: 'option picker whose current option fills the slot as a picture, its name over it', component: MoveSlotEnumBody },
   curve: { description: 'option picker drawing the current option’s shape — curve selection', component: MoveSlotEnumBody },
+  'curve-grid': { description: 'option picker drawing every option’s shape as a grid of tiles, the chosen one lit — the list screen as curves', component: MoveSlotCurveGridBody },
   enum: { description: 'stepped option picker showing every option on a list screen', component: MoveSlotEnumBody },
   folders: { description: 'option picker whose options come in folders: one level on the list screen, a tap opens a folder, the back pill goes up', component: MoveSlotEnumBody },
   aspect: { description: 'option picker of proportions: a frame in the chosen W:H, as large as fits, the ratio inside', component: MoveSlotAspectBody },

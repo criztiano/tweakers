@@ -23,6 +23,37 @@ const SHAPES: Record<string, (t: number) => number> = {
   bounce: (t) => Math.abs(Math.sin(t * Math.PI * 2)) * (1 - t),
 };
 
+/**
+ * The easing presets the curve grid draws: linear and eight families, each
+ * in, out and in-out — the run an animation tool offers, overshoots and all.
+ * Every family is written as its ease-in; out and in-out are made from it.
+ */
+const bounceOut = (t: number) => {
+  const n = 7.5625, d = 2.75;
+  if (t < 1 / d) return n * t * t;
+  if (t < 2 / d) return n * (t -= 1.5 / d) * t + 0.75;
+  if (t < 2.5 / d) return n * (t -= 2.25 / d) * t + 0.9375;
+  return n * (t -= 2.625 / d) * t + 0.984375;
+};
+const EASE_IN: Record<string, (t: number) => number> = {
+  quad: (t) => t * t,
+  cubic: (t) => t ** 3,
+  quart: (t) => t ** 4,
+  expo: (t) => (t === 0 ? 0 : 2 ** (10 * t - 10)),
+  sine: (t) => 1 - Math.cos((t * Math.PI) / 2),
+  circ: (t) => 1 - Math.sqrt(1 - t * t),
+  back: (t) => 2.70158 * t ** 3 - 1.70158 * t * t,
+  elastic: (t) => (t === 0 || t === 1 ? t : -(2 ** (10 * t - 10)) * Math.sin((t * 10 - 10.75) * ((2 * Math.PI) / 3))),
+  bounce: (t) => 1 - bounceOut(1 - t),
+};
+const EASINGS: Record<string, (t: number) => number> = { linear: (t) => t };
+for (const [family, easeIn] of Object.entries(EASE_IN)) {
+  EASINGS[`${family}-in`] = easeIn;
+  EASINGS[`${family}-out`] = (t) => 1 - easeIn(1 - t);
+  EASINGS[`${family}-in-out`] = (t) => (t < 0.5 ? easeIn(2 * t) / 2 : 1 - easeIn(2 - 2 * t) / 2);
+}
+const easingLabel = (id: string) => id.replace(/(^|-)(\w)/g, (_, dash: string, c: string) => (dash ? ' ' : '') + c.toUpperCase());
+
 /** The texture picker's pictures — any image URL; here tiny SVGs, as masks. */
 const svg = (body: string) =>
   `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 140">${body}</svg>`)}`;
@@ -111,6 +142,13 @@ export const CONFIG = {
       { value: 'bounce', label: 'Bounce' },
     ],
     preview: (name: string) => SHAPES[name] ?? null,
+  },
+
+  /* the same shapes all at once: a grid of curves, the chosen one lit */
+  easing: {
+    type: 'select', default: 'back-out', display: 'grid',
+    options: Object.keys(EASINGS).map((value) => ({ value, label: easingLabel(value) })),
+    preview: (name: string) => EASINGS[name] ?? null,
   },
 
   /* a choice that is a pattern: each option's picture fills the slot */
