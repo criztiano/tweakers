@@ -10308,7 +10308,7 @@ function MoveFunctionChipButton({ chip, disabled }) {
       "data-color": chip.color,
       "data-pressed": pressed || void 0,
       style: chip.color ? { background: MOVE_PALETTE[chip.color] } : void 0,
-      onClick: () => MoveFunctions.run(chip.name, { shift: false }),
+      onClick: (e) => MoveFunctions.run(chip.name, { shift: !!e?.shiftKey }),
       children: [
         /* @__PURE__ */ (0, import_jsx_runtime9.jsx)(MoveFunctionGlyphIcon, { glyph: MOVE_FUNCTION_ICONS[chip.name] }),
         chip.label

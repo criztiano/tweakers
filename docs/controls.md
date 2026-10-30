@@ -87,7 +87,8 @@ these gestures; an app wires nothing.
   the luminosity (the volume knob) — up is lighter. A still click opens the
   editor.
 - **Shift+click is Shift+tap.** On a dial it puts the declared default back
-  (`TweakStore.getDefault`); on a colour it restores the first colour.
+  (`TweakStore.getDefault`); on a colour it restores the first colour; on a
+  header function chip it runs the key's Shift layer (`shift: true`).
 - **A cycling dial takes a click as its tap** — the curve modulator's clip
   moves to its next shape; its point follows the cursor once it travels.
 - **Menu** sits in the window's top-left corner: a click is a press (the

@@ -72,7 +72,8 @@ export function MoveFunctionChipButton({ chip, disabled }: { chip: MoveFunctionC
       // A colour is only ever a kit palette name — chips() has already
       // checked it against MOVE_PALETTE, so this lookup never invents a hue.
       style={chip.color ? { background: MOVE_PALETTE[chip.color] } : undefined}
-      onClick={() => MoveFunctions.run(chip.name, { shift: false })}
+      // Shift+click is the Shift layer, as Shift+tap is on the hardware key.
+      onClick={(e) => MoveFunctions.run(chip.name, { shift: !!e?.shiftKey })}
     >
       <MoveFunctionGlyphIcon glyph={MOVE_FUNCTION_ICONS[chip.name]} />
       {chip.label}
