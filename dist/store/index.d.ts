@@ -493,11 +493,15 @@ type SelectConfig = {
      *   ordinary enum face.
      * - `value` — the chosen option's name is the headline and the control's
      *   name a tag on top, the way a slider's `display: 'value'` reads: no list.
+     * - `grid` — with a `preview`: every option's shape as a small tile, the
+     *   chosen one lit — the list screen laid out as a grid of curves, for a
+     *   run of shapes picked by seeing them side by side (easing presets).
+     *   Without a `preview` it keeps the ordinary face.
      *
-     * Either one is still an enum dial: a click or drag steps it, the column's
+     * Each one is still an enum dial: a click or drag steps it, the column's
      * knob steps it on the Move. Elsewhere it is an ordinary dropdown.
      */
-    display?: 'dropdown' | 'segmented' | 'aspect' | 'value';
+    display?: 'dropdown' | 'segmented' | 'aspect' | 'value' | 'grid';
     /**
      * The `aspect` and `value` faces only: draw the pagination cells under the
      * face, one per option, the chosen one lit. Off by default — the face
@@ -1032,7 +1036,7 @@ type ControlMeta = {
     /** Tabs strip whose glyphed options keep their names beside the glyph. */
     moveTabsLabels?: boolean;
     /** Select's rendering mode or Move face, or a slider's `dial` / `value` form. */
-    display?: 'dropdown' | 'segmented' | 'aspect' | 'value' | 'track' | 'dial';
+    display?: 'dropdown' | 'segmented' | 'aspect' | 'value' | 'grid' | 'track' | 'dial';
     /** The bar under a Move slot's readout: a slider's fill (default on), a
      *  select face's pagination cells (default off). */
     track?: boolean;

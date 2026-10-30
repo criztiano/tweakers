@@ -3710,6 +3710,129 @@
   }
 }
 
+/* A grid screen (`curve-grid`) grows the same way, to the whole grid — but
+   its rows are the layout's (as many tiles stand across as the width holds),
+   so the grown height is the content's own, under the same cap. */
+.tweakers-move-dial[data-active] .tweakers-move-dial-screen[data-grow][data-layout="grid"] {
+  height: auto;
+  max-height: 50vh;
+}
+
+@media (hover: hover) {
+  .tweakers-move-dial:not([data-disabled]):hover .tweakers-move-dial-screen[data-grow][data-layout="grid"] {
+    height: auto;
+    max-height: 50vh;
+  }
+}
+
+/* The grid of curves: the list screen's rows as square tiles. The smallest
+   tile is the one number here — the width decides how many stand across
+   (three in a full-size slot). The slot reads the press, as on the list. */
+.tweakers-move-dial-grid {
+  --move-tile-min: 32px;
+  --move-tile-gap: 4px;
+  --move-list-fade-top: 0px;
+  --move-list-fade-bottom: 0px;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--move-tile-min), 1fr));
+  gap: var(--move-tile-gap);
+  /* Centred while the tiles fit, from the top once they overflow. */
+  align-content: center;
+  align-content: safe center;
+  padding: var(--move-tile-gap);
+  overflow-y: auto;
+  scrollbar-width: none;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--move-list-fade-top),
+    #000 calc(100% - var(--move-list-fade-bottom)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--move-list-fade-top),
+    #000 calc(100% - var(--move-list-fade-bottom)),
+    transparent 100%
+  );
+}
+
+.tweakers-move-dial-grid::-webkit-scrollbar {
+  display: none;
+}
+
+.tweakers-move-dial-grid[data-over-top] {
+  --move-list-fade-top: 14px;
+}
+
+.tweakers-move-dial-grid[data-over-bottom] {
+  --move-list-fade-bottom: 14px;
+}
+
+/* A tile: a dark square a step off the screen, a faint dotted grid, the
+   curve in the screen's ink — dim like an unchosen row, full when chosen. */
+.tweakers-move-dial-tile {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--move-radius-small);
+  background-color: color-mix(in srgb, var(--move-text) 4%, transparent);
+  background-image: radial-gradient(circle, color-mix(in srgb, var(--move-text) 22%, transparent) 0.75px, transparent 1px);
+  background-size: 25% 25%;
+  background-position: 12.5% 12.5%;
+  color: var(--move-text);
+  transition: background-color 0.12s;
+}
+
+.tweakers-move-dial-tile-shape {
+  position: absolute;
+  /* Air inside the tile, so a stroke at an edge — an overshoot's peak, an
+     anticipation's dip — is never cut. */
+  top: 14%;
+  left: 14%;
+  width: 72%;
+  height: 72%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.tweakers-move-dial-tile-shape path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--move-visual-stroke);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.22;
+  transition: opacity 0.12s;
+}
+
+.tweakers-move-dial-tile[data-selected] {
+  background-color: color-mix(in srgb, var(--move-text) 10%, transparent);
+}
+
+.tweakers-move-dial-tile[data-selected] .tweakers-move-dial-tile-shape path {
+  opacity: 1;
+}
+
+/* The tile under the pointer rises halfway, as the list's row does. */
+@media (hover: hover) {
+  .tweakers-move-dial-tile[data-hover]:not([data-selected]) {
+    background-color: color-mix(in srgb, var(--move-text) 7%, transparent);
+  }
+
+  .tweakers-move-dial-tile[data-hover]:not([data-selected]) .tweakers-move-dial-tile-shape path {
+    opacity: 0.6;
+  }
+}
+
+.tweakers-move-dial[data-active] .tweakers-move-dial-tile[data-selected] .tweakers-move-dial-tile-shape {
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--move-text) 70%, transparent));
+}
+
 /* The list screen covers its whole slot, so the head is the slot surface
    that shows: quiet at rest, lit while the dial is in the hand. */
 .tweakers-move-dial-head {
