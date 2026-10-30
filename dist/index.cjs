@@ -2813,6 +2813,21 @@ function enumShapePath(meta, value) {
   const d = segments.map((seg) => seg.map((pt, i) => `${i ? "L" : "M"} ${(pt.t * 100).toFixed(2)} ${((1 - fill(pt.v)) * 100).toFixed(2)}`).join(" ")).join(" ");
   return d || null;
 }
+function sliderShapePath(meta, value) {
+  if (meta.type !== "slider" || !meta.shape) return null;
+  let sample;
+  try {
+    sample = meta.shape(Number(value));
+  } catch {
+    return null;
+  }
+  if (typeof sample !== "function") return null;
+  const [lo, hi] = meta.shapeDomain && meta.shapeDomain[0] < meta.shapeDomain[1] ? meta.shapeDomain : [-1, 1];
+  const held = (t) => Math.min(hi, Math.max(lo, sample(t)));
+  const segments = plotCurve(held, { count: ENUM_SHAPE_SAMPLES * 2, domain: [lo, hi] }).segments;
+  const d = segments.map((seg) => seg.map((pt, i) => `${i ? "L" : "M"} ${(pt.t * 100).toFixed(2)} ${((1 - pt.v) * 100).toFixed(2)}`).join(" ")).join(" ");
+  return d || null;
+}
 function parseAspect(text) {
   const m = typeof text === "string" ? /^\s*(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)\s*$/.exec(text) : null;
   if (!m) return null;
@@ -17731,7 +17746,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   const valueFirst = meta.type === "slider" && meta.display === "value" || (focused || !!settingsPanel || page.panel.kind === "kit") && !(meta.min === 0 && meta.max === 1);
                                   const scopeSlot = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.scope : void 0;
                                   const waveSlot = settingsPanel && meta.type !== "xy" ? modLayout?.dials.find((d) => d.path === meta.path)?.preview : void 0;
-                                  const scope = scopeSlot && modSettings ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MoveScope, { index: modSettings.index }) : waveSlot && modSettings ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MoveWavePreview, { index: modSettings.index }) : null;
+                                  const sliderShape = sliderShapePath(meta, values[meta.path]);
+                                  const scope = scopeSlot && modSettings ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MoveScope, { index: modSettings.index }) : waveSlot && modSettings ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MoveWavePreview, { index: modSettings.index }) : sliderShape ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MoveSlotShape, { d: sliderShape, className: "tweakers-move-scope-wave" }) : null;
                                   if (padListView?.panelId === page.panel.id && (page.actions[i] ?? page.valueActions?.[i])?.path === padListView.path) {
                                     const listPath = `${padListView.panelId}:${padListView.path}`;
                                     return /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
@@ -18310,6 +18326,15 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         className: "tweakers-move-dial",
                                         "data-kind": "scope",
                                         "data-active": active || void 0,
+                                        role: "slider",
+                                        tabIndex: disabled ? -1 : 0,
+                                        "aria-label": meta.label,
+                                        "aria-valuemin": meta.min ?? 0,
+                                        "aria-valuemax": meta.max ?? 1,
+                                        "aria-valuenow": Number(values[meta.path]),
+                                        "aria-disabled": disabled || void 0,
+                                        "data-disabled": disabled || void 0,
+                                        onKeyDown: (e) => dialFromKeyboard(e, meta),
                                         ...dialDrag(meta),
                                         children: [
                                           /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MoveModRing, { panelId: page.panel.id, path: meta.path }),
@@ -20877,6 +20902,13 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
         ]
       }
     );
+  }
+  const sliderShape = sliderShapePath(meta, value);
+  if (sliderShape) {
+    return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)("div", { className: cls, style, "data-kind": "scope", "data-active": active || void 0, ...slider(meta), ...turn(meta), children: [
+      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(MoveModRing, { panelId, path: meta.path }),
+      /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(MoveSlotScopeBody, { label: meta.label, value: moveDialReading(meta, value), pct: moveDialPercent(meta, value), children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(MoveSlotShape, { d: sliderShape, className: "tweakers-move-scope-wave" }) })
+    ] });
   }
   const drawing = moveNumericDrawing(meta, value);
   const origin01 = dialOrigin(meta);

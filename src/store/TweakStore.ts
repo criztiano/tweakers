@@ -392,6 +392,18 @@ export type SliderConfig = {
    * invisible to the structure diff like `formatValue`.
    */
   onTap?: () => void;
+  /**
+   * The shape the value makes, drawn in the slot behind its readout on the
+   * Move panel — the scope slot's face, for a value you read as a picture
+   * (a bend's wave, a swing's arc): you turn the shape you are watching.
+   * Given the value, a sampler of t in [0,1]; it may close over the app's
+   * other controls, so it is a function, invisible to the structure diff,
+   * and refreshed through `syncCurveConfigs` like a curve row's `sample`.
+   */
+  shape?: (value: number) => ((t: number) => number) | null | undefined;
+  /** The y-range the shape is drawn in — fixed, so a bigger value draws a
+   *  bigger shape. Default [-1, 1]. */
+  shapeDomain?: [number, number];
 };
 
 /**
@@ -786,6 +798,10 @@ export type ControlMeta = {
   moveHold?: boolean;
   /** Select's per-option shape sampler — swapped in place by syncCurveConfigs. */
   preview?: (value: string) => ((t: number) => number) | null | undefined;
+  /** Slider's drawn shape for its value — swapped in place by syncCurveConfigs. */
+  shape?: (value: number) => ((t: number) => number) | null | undefined;
+  /** Slider shape's fixed y-range. */
+  shapeDomain?: [number, number];
   /** Select dial width in hardware columns; defaults to one. */
   moveSpan?: 1 | 2;
   /** Select declared `moveTabs` — it lies across the small slots as a tabs
@@ -1906,6 +1922,14 @@ class TweakStoreClass {
             control.response = value.response;
             changed = true;
           }
+        } else if (this.isSliderConfig(value) && value.shape) {
+          // A slider's shape closes over the app's other controls exactly as
+          // a curve row's sample does, so it goes stale the same way.
+          const control = this.findControlByPath(panel.controls, path);
+          if (control?.type === 'slider' && control.shape !== value.shape) {
+            control.shape = value.shape;
+            changed = true;
+          }
         } else if (this.isSelectConfig(value) && value.preview) {
           // A select's preview closes over the app's other controls exactly
           // as a curve row's sample does, so it goes stale the same way.
@@ -2341,6 +2365,8 @@ class TweakStoreClass {
           track: value.track,
           wrap: value.wrap,
           onTap: value.onTap,
+          shape: value.shape,
+          shapeDomain: value.shapeDomain,
           shortcut,
         });
       } else if (this.isNumberConfig(value)) {

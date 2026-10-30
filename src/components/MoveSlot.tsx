@@ -10,7 +10,7 @@ import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
 import { valueToBearing } from '../angle-core';
 import {
   normalizeDial, normalizeRangeDial, dialOrigin, isEnumDial, enumIndex, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumAspect, enumArrows,
-  enumShapePath, filterShapePath,
+  enumShapePath, filterShapePath, sliderShapePath,
 } from '../move-layout';
 import {
   moveNumericDrawing, movePlaybackMode, moveVisualReading, moveTrimSpan, moveGateSpan, moveVectorAxes, moveMultibandSpan,
@@ -28,7 +28,7 @@ import {
 import {
   moveSlotKind, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotCurveGridBody, MoveSlotAspectBody, MoveSlotArrowsBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotXYBody, MoveSlotRangeBody, MoveSlotFilterBody,
   MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody,
-  MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody,
+  MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotScopeBody, MoveSlotShape,
 } from './move-slots';
 import { MoveColorSlot } from './MoveColor';
 import { MoveModRing } from './ModRing';
@@ -690,6 +690,20 @@ export function MoveSlot({ panel, path, valueFirst = false, className, style }: 
           <MoveSlotEnumBody label={meta.label} optionLabel={optionLabel} options={options} activeIdx={activeIdx}
             shape={shape} glyph={glyph} picture={picture} playback={playback} />
         )}
+      </div>
+    );
+  }
+
+  // A slider that draws the shape its value makes: that shape fills the
+  // slot behind its readout, as the scope slot wears its wave.
+  const sliderShape = sliderShapePath(meta, value);
+  if (sliderShape) {
+    return (
+      <div className={cls} style={style} data-kind="scope" data-active={active || undefined} {...slider(meta)} {...turn(meta)}>
+        <MoveModRing panelId={panelId} path={meta.path} />
+        <MoveSlotScopeBody label={meta.label} value={moveDialReading(meta, value)} pct={moveDialPercent(meta, value)}>
+          <MoveSlotShape d={sliderShape} className="tweakers-move-scope-wave" />
+        </MoveSlotScopeBody>
       </div>
     );
   }

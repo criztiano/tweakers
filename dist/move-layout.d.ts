@@ -1,4 +1,4 @@
-import { C as ControlMeta, M as MoveEdges, P as PanelConfig } from './TweakStore-DomsHY9V.js';
+import { C as ControlMeta, M as MoveEdges, P as PanelConfig } from './TweakStore-2gTztyWr.js';
 import { ModPageLayout } from './modulation-core.js';
 import { XYValue } from './xy-pad-core.js';
 import { RangeValue } from './range-slider-core.js';
@@ -272,6 +272,14 @@ declare const ENUM_SHAPE_SAMPLES = 64;
  * question has one answer both surfaces can be tested against.
  */
 declare function enumShapePath(meta: ControlMeta, value: unknown): string | null;
+/**
+ * The shape a slider's value makes (its `shape`), as an SVG path filling a
+ * 100×100 box, y down — or null when the slider has none. Drawn in the
+ * slider's fixed `shapeDomain` (default −1..1), never refitted, so the
+ * value's size reads as the drawing's size; past the domain it is held at
+ * the edge.
+ */
+declare function sliderShapePath(meta: ControlMeta, value: unknown): string | null;
 /** A proportion written "W:H" — "16:9", "4:3", "1.85:1" — as its two sides,
  *  or null for anything else (a zero or negative side included). */
 declare function parseAspect(text: unknown): {
@@ -347,4 +355,4 @@ declare function dialOrigin(meta: ControlMeta): number;
 /** Axis positions 0..1 back to the control's real {x, y}, kit-identical. */
 declare function denormalizeXYDial(meta: ControlMeta, x01: number, y01: number): XYValue;
 
-export { ENUM_SHAPE_SAMPLES, MOVE_ARROW_DIRECTIONS, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MoveArrowDirection, type MoveBandCell, type MoveEdgesCell, type MoveLayoutIssueCode, type MovePage, type MoveTabCell, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, denormalizeXYDial, dialOrigin, dialSpan, enumArrows, enumAspect, enumIndex, enumOptionGroup, enumOptionIcon, enumOptionLabel, enumOptionPicture, enumOptionValue, enumShapePath, filterChipValue, filterResonanceChip, filterShapePath, isColumnFilter, isEnumDial, isMoveDial, isMoveTabs, isMultiselectDial, isNamedTabs, isPadSpanContinuation, isSpanContinuation, isToggleDial, moveAppPadRow, moveBandCell, moveEdgesCell, movePadRows, moveTabCell, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeToggleDial, normalizeXYDial, padSpan, parseArrow, parseAspect, reportMoveLayoutIssue, setMoveLayoutReporter, slotGroups, visibleColumns };
+export { ENUM_SHAPE_SAMPLES, MOVE_ARROW_DIRECTIONS, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MoveArrowDirection, type MoveBandCell, type MoveEdgesCell, type MoveLayoutIssueCode, type MovePage, type MoveTabCell, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, denormalizeXYDial, dialOrigin, dialSpan, enumArrows, enumAspect, enumIndex, enumOptionGroup, enumOptionIcon, enumOptionLabel, enumOptionPicture, enumOptionValue, enumShapePath, filterChipValue, filterResonanceChip, filterShapePath, isColumnFilter, isEnumDial, isMoveDial, isMoveTabs, isMultiselectDial, isNamedTabs, isPadSpanContinuation, isSpanContinuation, isToggleDial, moveAppPadRow, moveBandCell, moveEdgesCell, movePadRows, moveTabCell, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeToggleDial, normalizeXYDial, padSpan, parseArrow, parseAspect, reportMoveLayoutIssue, setMoveLayoutReporter, sliderShapePath, slotGroups, visibleColumns };
