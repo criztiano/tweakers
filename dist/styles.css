@@ -1691,17 +1691,27 @@
   text-overflow: ellipsis;
 }
 
-/* A row carrying a labelled group is that band taller, and every slot on it
-   stands at the bottom keeping its own height: the group's container grows
-   with the row, its name takes the new band, and no slot face changes size
-   or moves under the name. A row of unlabelled groups keeps its old height
+/* A row carrying a labelled group is that band taller. A slot under a name
+   stands at the bottom keeping its own height — the group's container grows
+   with the row and its name takes the new band, so no face moves under the
+   name. Every other slot on the row takes the whole height, its top level
+   with the groups' tops. A row of unlabelled groups keeps its old height
    exactly. */
 .tweakers-move-dials:has(> .tweakers-move-slot-group[data-labelled]) {
   height: calc(var(--move-slot-height) + var(--move-group-band));
-  align-items: end;
 }
 
 .tweakers-move-dials:has(> .tweakers-move-slot-group[data-labelled]) > .tweakers-move-dial {
+  height: 100%;
+}
+
+/* The mark on a slot under a group's name lays nothing out of its own. */
+.tweakers-move-slot-named {
+  display: contents;
+}
+
+.tweakers-move-slot-named > .tweakers-move-dial {
+  align-self: end;
   height: var(--move-slot-height);
 }
 
@@ -5559,6 +5569,22 @@
   width: 18px;
   height: 18px;
   flex: none;
+}
+
+/* The picture beside its name, as on an icon-label pad: the pair centred as
+   one, the name giving way first when the pad runs narrow. */
+.tweakers-move-tab-icon-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.tweakers-move-tab-icon-label .tweakers-move-tab-icon {
+  width: 16px;
+  height: 16px;
 }
 
 /* The real controls, over the drawing: one button per option, on the column

@@ -4332,7 +4332,7 @@ function MovePadColorBody({ label, color }) {
     /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-pad-swatch", "aria-hidden": "true", children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { style: { background: color } }) })
   ] });
 }
-function MovePadTabsBody({ name, options, activeIdx }) {
+function MovePadTabsBody({ name, options, activeIdx, labels = false }) {
   return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
     name != null && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-tabs-head", children: name }),
     /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "tweakers-move-tabs-run", children: options.map((opt, i) => {
@@ -4342,7 +4342,10 @@ function MovePadTabsBody({ name, options, activeIdx }) {
         {
           className: "tweakers-move-tab",
           "data-on": i === activeIdx || void 0,
-          children: glyph2 ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotGlyph, { name: glyph2, className: "tweakers-move-tab-icon" }) : /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-tab-title", children: enumOptionLabel(opt) })
+          children: glyph2 && labels ? /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("span", { className: "tweakers-move-tab-icon-label", children: [
+            /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotGlyph, { name: glyph2, className: "tweakers-move-tab-icon" }),
+            /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-tab-title", children: enumOptionLabel(opt) })
+          ] }) : glyph2 ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotGlyph, { name: glyph2, className: "tweakers-move-tab-icon" }) : /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-tab-title", children: enumOptionLabel(opt) })
         },
         enumOptionValue(opt)
       );
@@ -16345,6 +16348,7 @@ var MOVE_MUTE_EVENT = "move-tweakers:mute";
 var MOVE_SEARCH_EVENT = "move-tweakers:search";
 var MOVE_STRIP_EVENT = "move-tweakers:strip";
 var MOVE_SETTINGS_EVENT = "move-tweakers:settings";
+var throughLast = (cols) => cols.length ? Array.from({ length: cols[cols.length - 1] + 1 }, (_, i) => i) : cols;
 function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels: only, dock = "viewport", scroll = false, focused = false, headerStart, headerEnd, settings: settings2, functionChips = "clock" }) {
   if (!productionEnabled) return null;
   const [panels, setPanels] = (0, import_react19.useState)([]);
@@ -17287,7 +17291,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const padAt = (x, y) => surface.pads.find((p) => p.x === x && p.y === y);
   const shownPadRows = Array.from({ length: PAD_ROWS }, (_, row2) => row2).filter((row2) => appRowAt(row2) !== null || (settingsPanel ? padRows.slice(row2).some((r) => r.length > 0) : padRows[row2].some(Boolean)));
   const firstAppScreenRow = shownPadRows.find((row2) => appRowAt(row2) !== null) ?? -1;
-  const visibleCols = stripMode ? page.dials.map((_, i) => i) : settingsPanel ? Array.from({ length: modSlot && import_ModulationStore3.ModulationStore.isLent(modSlot.index) ? page.dials.length : modPageWidth() }, (_, i) => i) : color ? Array.from({ length: MOVE_PADS }, (_, i) => i) : visibleColumns(page);
+  const visibleCols = stripMode ? page.dials.map((_, i) => i) : settingsPanel ? Array.from({ length: modSlot && import_ModulationStore3.ModulationStore.isLent(modSlot.index) ? page.dials.length : modPageWidth() }, (_, i) => i) : color ? Array.from({ length: MOVE_PADS }, (_, i) => i) : throughLast(visibleColumns(page));
+  const drawGroups = !stripMode && !settingsPanel && !color;
+  const namedCols = new Set(drawGroups ? slotGroups(page, visibleCols).filter((g) => g.label).flatMap(({ start, span }) => Array.from({ length: span }, (_, k) => start + k)) : []);
+  const underName = (i, node) => namedCols.has(i) && node ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { className: "tweakers-move-slot-named", children: node }, `named-${i}`) : node;
   const clusterCols = explorationOpen ? MOVE_DIALS : stripMode ? Math.min(MOVE_DIALS, visibleCols.length) || MOVE_DIALS : visibleCols.length;
   const kitPadCols = Math.max(0, ...padRows.map((row2) => row2.length));
   const appPadCols = Math.max(0, ...surface.pads.filter((cell) => !cell.empty).map((cell) => cell.x + 1));
@@ -17497,7 +17504,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                             style: stripMode ? { "--move-strip-len": page.dials.length, "--move-offset": stripOffset } : void 0,
                             children: [
                               /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { className: "tweakers-move-dials", "data-scroll": stripMode || void 0, children: [
-                                !stripMode && !settingsPanel && !color && slotGroups(page, visibleCols).map(({ start, span, label }) => /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
+                                drawGroups && slotGroups(page, visibleCols).map(({ start, span, label }) => /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
                                   "div",
                                   {
                                     className: "tweakers-move-slot-group",
@@ -17511,7 +17518,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   },
                                   `group-${start}`
                                 )),
-                                visibleCols.map((i) => {
+                                visibleCols.map((i) => underName(i, (() => {
                                   if (isSpanContinuation(page, i)) return null;
                                   if (!stripMode && visibleCols.includes(i - 1) && trimSpanAt(i - 1)) return null;
                                   if (underFace(i)) return null;
@@ -18361,7 +18368,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                     },
                                     meta.path
                                   );
-                                })
+                                })()))
                               ] }),
                               color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MoveOpacityPads, { color, disabled: import_TweakStore19.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : shownPadRows.map((row2) => {
                                 if (appRowAt(row2) !== null && !surface.pads.length) {
@@ -18439,7 +18446,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                                 {
                                                   name: named ? meta.label : null,
                                                   options,
-                                                  activeIdx: active
+                                                  activeIdx: active,
+                                                  labels: !!meta.moveTabsLabels
                                                 }
                                               ),
                                               /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("div", { className: "tweakers-move-tab-zones", role: "tablist", "aria-label": meta.label, children: options.map((opt, i) => /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(

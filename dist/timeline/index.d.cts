@@ -455,6 +455,12 @@ type SelectConfig = {
      */
     moveTabs?: boolean | 'named';
     /**
+     * A tabs strip only: an option that carries an `icon` keeps its name
+     * beside the picture, instead of the picture standing alone — for modes
+     * the glyph alone would not name.
+     */
+    moveTabsLabels?: boolean;
+    /**
      * The shape an option stands for: `t` in [0,1] → y, auto-fitted and drawn
      * in the Move slot in place of the option's name, which moves to a small
      * tag at the top. Return `null` for options that have no shape.

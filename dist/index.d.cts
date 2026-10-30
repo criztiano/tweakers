@@ -155,69 +155,6 @@ declare const MOVE_STRIP_EVENT = "move-tweakers:strip";
  *  every second so a kit that binds late still learns to keep the room off
  *  the track row; the kit steers the hardware in and out on `open` edges. */
 declare const MOVE_SETTINGS_EVENT = "move-tweakers:settings";
-/**
- * The Move's control surface, laid out to Cri's Figma spec (file
- * USU9CW2vC3SrvKsnHVnYGi, node 802:319; slot components 802:756 and
- * 800:1737): a track row of coloured markers — one per page, so an app
- * with a single panel gets a single tick and name — 8 dial slots hosting
- * slider ports, and the pad grid — toggle chips on the first row, value
- * chips on the second, at the same columns as their hardware pads
- * (move-layout keeps both surfaces in agreement).
- *
- * `dock` decides where it lives: `viewport` portals it to `<body>` and pins
- * it to the window's bottom edge; `flow` leaves it inline where the host
- * placed it. Both wear the same surface, padding and slot geometry.
- *
- * Only occupied slots/columns are shown: a column renders when it holds a
- * dial, a toggle chip, or a value chip, at its full 8-wide slot size; the
- * visible cluster centres in the panel and the header row shares its width,
- * so the page name lines up with the first visible slot. Hidden columns
- * are skipped, never renumbered — column i is still hardware knob i.
- *
- * Value chips substitute the dial in their column: hold one to peek at
- * its value in the dial slot, tap to latch it in — the chip inverts and
- * pulses until tapped again. The same gestures on the physical pads
- * arrive through the kit's override event and read identically here.
- *
- * An xy control takes a dial slot as a 2D pad: the field draws behind the
- * label (no slider at the bottom) with crosshair lines meeting at the dot.
- * Dragging the slot sets both axes; on the hardware the column's knob
- * turns X, and the volume knob turns Y while that knob is touched.
- *
- * A range control takes a dial slot too: the bar fills between two handle
- * ticks, and a drag grabs the nearest handle. On the hardware the column's
- * knob edits the low handle and the volume knob edits the high one while
- * that knob is touched — the xy pad's two-handed concept on one axis.
- * Bipolar/origin sliders anchor their fill at the origin mark.
- *
- * A select with options takes a dial slot as a stepped enum dial: the bar
- * splits into one cell per option, the active cell filled, and the readout
- * shows the option's label. A click moves it on to the next option; a drag
- * steps through them, right or down being the next.
- *
- * Every other one-value slot — a plain dial, a face's bar, a trim edge —
- * takes the cursor the way its knob takes the hand: a drag turns it from
- * where it is (right or up raises it), and a press alone never moves it. A
- * still Shift+click puts any slot back to its default, the knob's Shift+tap.
- * Holding Shift mid-drag switches to fine mode: pointer travel applies at
- * 0.1× relative to where shift went down, and releasing shift rebases at 1×
- * so the value never jumps.
- *
- * The panel also carries the Move's Menu button, pinned to the window's
- * top-right corner, and the computer's keys for Undo (⌘Z), Delete
- * (Backspace) and Copy (⌘C) — each running what its button holds.
- *
- * Controls wired to a modulation slot wear the dock panel's own modulation
- * ring — the slot's colour, and an arc running from the control's value to
- * where the modulation is holding it — in the slot's corner, and
- * the track row carries one circle per slot — the on-screen step button.
- *
- * With `scroll` the page stops being 8 slots wide. Every control keeps a
- * full slot, the row scrolls through them — the big wheel on the hardware,
- * the mouse wheel or a drag on the rail here — and the eight slots on screen
- * are the eight the dials are holding, their pads with them, so all of them
- * can be reached without a single one shrinking to a chip.
- */
 declare function MovePanel({ theme, productionEnabled, panels: only, dock, scroll, focused, headerStart, headerEnd, settings, functionChips }: MovePanelProps): react_jsx_runtime.JSX.Element | null;
 
 interface MoveSlotProps {
@@ -2160,6 +2097,12 @@ type SelectConfig = {
      */
     moveTabs?: boolean | 'named';
     /**
+     * A tabs strip only: an option that carries an `icon` keeps its name
+     * beside the picture, instead of the picture standing alone — for modes
+     * the glyph alone would not name.
+     */
+    moveTabsLabels?: boolean;
+    /**
      * The shape an option stands for: `t` in [0,1] → y, auto-fitted and drawn
      * in the Move slot in place of the option's name, which moves to a small
      * tag at the top. Return `null` for options that have no shape.
@@ -2669,6 +2612,8 @@ type ControlMeta = {
     /** Select declared `moveTabs` — it lies across the small slots as a tabs
      *  strip instead of claiming a dial; `'named'` adds its leading name pad. */
     moveTabs?: boolean | 'named';
+    /** Tabs strip whose glyphed options keep their names beside the glyph. */
+    moveTabsLabels?: boolean;
     /** Select's rendering mode or Move face, or a slider's `dial` / `value` form. */
     display?: 'dropdown' | 'segmented' | 'aspect' | 'value' | 'track' | 'dial';
     /** The bar under a Move slot's readout: a slider's fill (default on), a
@@ -5008,11 +4953,13 @@ declare function MovePadColorBody({ label, color }: {
  * the select's own name, set against the run it names; that pad is a head,
  * not a choice — nothing selects it, and on the hardware it stays dark.
  */
-declare function MovePadTabsBody({ name, options, activeIdx }: {
+declare function MovePadTabsBody({ name, options, activeIdx, labels }: {
     /** The leading name pad's text, or null when every pad is an option. */
     name?: string | null;
     options: NonNullable<ControlMeta['options']>;
     activeIdx: number;
+    /** A glyphed option keeps its name beside the glyph (`moveTabsLabels`). */
+    labels?: boolean;
 }): react_jsx_runtime.JSX.Element;
 /** One cut of a band: where it sits, and whether it is cutting anything. */
 type MovePadBandHand = {
