@@ -1,4 +1,4 @@
-import { C as ControlMeta, M as MoveEdges, P as PanelConfig } from './TweakStore-ChzZDfFF.js';
+import { C as ControlMeta, M as MoveEdges, P as PanelConfig } from './TweakStore-DomsHY9V.js';
 import { ModPageLayout } from './modulation-core.js';
 import { XYValue } from './xy-pad-core.js';
 import { RangeValue } from './range-slider-core.js';
@@ -290,6 +290,28 @@ declare function enumAspect(meta: ControlMeta, value: unknown): {
     h: number;
     text: string;
 } | null;
+/** One of the four ways an arrows select (`display: 'arrows'`) can point. */
+type MoveArrowDirection = 'up' | 'right' | 'down' | 'left';
+/** The four ways in the order the face draws them: clockwise from the top. */
+declare const MOVE_ARROW_DIRECTIONS: readonly MoveArrowDirection[];
+/** A direction written as a word — up, right, down, left, or the compass's
+ *  north, east, south, west, in any case — or null for anything else. */
+declare function parseArrow(text: unknown): MoveArrowDirection | null;
+/**
+ * The arrows an arrows select (`display: 'arrows'`) draws: one per option,
+ * clockwise from the top, each with the option it picks, and which one is
+ * chosen now. Two to four options, each naming a
+ * different direction by its value; anything else — an option that is no
+ * direction, two naming the same one — is null, and the select keeps the
+ * ordinary enum face.
+ */
+declare function enumArrows(meta: ControlMeta, value: unknown): {
+    arrows: {
+        dir: MoveArrowDirection;
+        index: number;
+    }[];
+    chosen: MoveArrowDirection;
+} | null;
 declare function enumIndex(meta: ControlMeta, value: unknown): number;
 /** A range dial's two ends, each 0..1 — the two numbers on the wire. */
 declare function normalizeRangeDial(meta: ControlMeta, value: unknown): {
@@ -325,4 +347,4 @@ declare function dialOrigin(meta: ControlMeta): number;
 /** Axis positions 0..1 back to the control's real {x, y}, kit-identical. */
 declare function denormalizeXYDial(meta: ControlMeta, x01: number, y01: number): XYValue;
 
-export { ENUM_SHAPE_SAMPLES, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MoveBandCell, type MoveEdgesCell, type MoveLayoutIssueCode, type MovePage, type MoveTabCell, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, denormalizeXYDial, dialOrigin, dialSpan, enumAspect, enumIndex, enumOptionGroup, enumOptionIcon, enumOptionLabel, enumOptionPicture, enumOptionValue, enumShapePath, filterChipValue, filterResonanceChip, filterShapePath, isColumnFilter, isEnumDial, isMoveDial, isMoveTabs, isMultiselectDial, isNamedTabs, isPadSpanContinuation, isSpanContinuation, isToggleDial, moveAppPadRow, moveBandCell, moveEdgesCell, movePadRows, moveTabCell, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeToggleDial, normalizeXYDial, padSpan, parseAspect, reportMoveLayoutIssue, setMoveLayoutReporter, slotGroups, visibleColumns };
+export { ENUM_SHAPE_SAMPLES, MOVE_ARROW_DIRECTIONS, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MoveArrowDirection, type MoveBandCell, type MoveEdgesCell, type MoveLayoutIssueCode, type MovePage, type MoveTabCell, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, denormalizeXYDial, dialOrigin, dialSpan, enumArrows, enumAspect, enumIndex, enumOptionGroup, enumOptionIcon, enumOptionLabel, enumOptionPicture, enumOptionValue, enumShapePath, filterChipValue, filterResonanceChip, filterShapePath, isColumnFilter, isEnumDial, isMoveDial, isMoveTabs, isMultiselectDial, isNamedTabs, isPadSpanContinuation, isSpanContinuation, isToggleDial, moveAppPadRow, moveBandCell, moveEdgesCell, movePadRows, moveTabCell, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeToggleDial, normalizeXYDial, padSpan, parseArrow, parseAspect, reportMoveLayoutIssue, setMoveLayoutReporter, slotGroups, visibleColumns };

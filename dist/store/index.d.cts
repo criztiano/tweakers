@@ -489,11 +489,16 @@ type SelectConfig = {
     /**
      * 'segmented' renders the options as an inline segmented control instead of a dropdown. Suits 2–4 short options.
      *
-     * On the Move panel, two faces of the stepped dial:
+     * On the Move panel, faces of the stepped dial:
      * - `aspect` — every option's value is a proportion, "W:H" ("16:9", "3:4"):
      *   the slot draws a frame in the chosen proportion, as large as fits,
      *   with the ratio written inside it. A value that is not a W:H keeps the
      *   ordinary enum face.
+     * - `arrows` — every option's value names a direction, two to four of
+     *   'up', 'right', 'down', 'left' (or 'north', 'east', 'south', 'west'),
+     *   no two the same: the slot draws a plate with an arrow for each, the
+     *   chosen one lit, and a tap on an arrow takes it. Anything else keeps
+     *   the ordinary enum face.
      * - `value` — the chosen option's name is the headline and the control's
      *   name a tag on top, the way a slider's `display: 'value'` reads: no list.
      * - `grid` — with a `preview`: every option's shape as a small tile, the
@@ -504,7 +509,7 @@ type SelectConfig = {
      * Each one is still an enum dial: a click or drag steps it, the column's
      * knob steps it on the Move. Elsewhere it is an ordinary dropdown.
      */
-    display?: 'dropdown' | 'segmented' | 'aspect' | 'value' | 'grid';
+    display?: 'dropdown' | 'segmented' | 'aspect' | 'arrows' | 'value' | 'grid';
     /**
      * The `aspect` and `value` faces only: draw the pagination cells under the
      * face, one per option, the chosen one lit. Off by default — the face
@@ -1040,7 +1045,7 @@ type ControlMeta = {
     /** Tabs strip whose glyphed options keep their names beside the glyph. */
     moveTabsLabels?: boolean;
     /** Select's rendering mode or Move face, or a slider's `dial` / `value` form. */
-    display?: 'dropdown' | 'segmented' | 'aspect' | 'value' | 'grid' | 'track' | 'dial';
+    display?: 'dropdown' | 'segmented' | 'aspect' | 'arrows' | 'value' | 'grid' | 'track' | 'dial';
     /** The bar under a Move slot's readout: a slider's fill (default on), a
      *  select face's pagination cells (default off). */
     track?: boolean;

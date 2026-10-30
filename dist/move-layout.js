@@ -679,6 +679,31 @@ function enumAspect(meta, value) {
   const ratio = option === void 0 ? null : parseAspect(enumOptionValue(option));
   return ratio ? { ...ratio, text: enumOptionLabel(option) } : null;
 }
+var MOVE_ARROW_DIRECTIONS = ["up", "right", "down", "left"];
+var ARROW_WORDS = {
+  up: "up",
+  north: "up",
+  right: "right",
+  east: "right",
+  down: "down",
+  south: "down",
+  left: "left",
+  west: "left"
+};
+function parseArrow(text) {
+  return typeof text === "string" ? ARROW_WORDS[text.trim().toLowerCase()] ?? null : null;
+}
+function enumArrows(meta, value) {
+  if (meta.type !== "select" || meta.display !== "arrows" || !isEnumDial(meta)) return null;
+  const options = meta.options;
+  if (options.length < 2 || options.length > MOVE_ARROW_DIRECTIONS.length) return null;
+  const dirs = options.map((o) => parseArrow(enumOptionValue(o)));
+  if (dirs.some((d) => d === null) || new Set(dirs).size !== dirs.length) return null;
+  return {
+    arrows: MOVE_ARROW_DIRECTIONS.filter((d) => dirs.includes(d)).map((dir) => ({ dir, index: dirs.indexOf(dir) })),
+    chosen: dirs[enumIndex(meta, value)]
+  };
+}
 function enumIndex(meta, value) {
   const i = (meta.options ?? []).findIndex((o) => enumOptionValue(o) === value);
   return Math.max(0, i);
@@ -747,6 +772,7 @@ function denormalizeXYDial(meta, x01, y01) {
 }
 export {
   ENUM_SHAPE_SAMPLES,
+  MOVE_ARROW_DIRECTIONS,
   MOVE_DIALS,
   MOVE_PADS,
   MOVE_TRACKS,
@@ -760,6 +786,7 @@ export {
   denormalizeXYDial,
   dialOrigin,
   dialSpan,
+  enumArrows,
   enumAspect,
   enumIndex,
   enumOptionGroup,
@@ -792,6 +819,7 @@ export {
   normalizeToggleDial,
   normalizeXYDial,
   padSpan,
+  parseArrow,
   parseAspect,
   reportMoveLayoutIssue,
   setMoveLayoutReporter,

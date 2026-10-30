@@ -1,7 +1,8 @@
 import type { ControlMeta, SelectLevel } from './store/TweakStore';
 import {
   normalizeDial, denormalizeDial, normalizeRangeDial, denormalizeRangeDial,
-  normalizeFilterDial, denormalizeFilterDial, dialOrigin, isEnumDial, enumIndex, enumOptionLabel,
+  normalizeFilterDial, denormalizeFilterDial, dialOrigin, isEnumDial, enumIndex, enumOptionLabel, enumArrows,
+  type MoveArrowDirection,
 } from './move-layout';
 import { fineDragValue } from './shortcut-utils';
 import { resolveAxis, valueFromPoint, pointFromValue, normalizeValue, centerValue, applyDetentAxis, type XYValue } from './xy-pad-core';
@@ -362,15 +363,68 @@ export function moveListRowIn(slot: Element, e: MoveSlotPointer) {
   );
 }
 
+/* ── the arrows face: a tap on an arrow takes it ─────────────────── */
+
+/** The plate an arrows face draws its arrows on — the box a press is read against. */
+const MOVE_ARROWS_PLATE_SELECTOR = '.tweakers-move-dial-arrows-plate';
+
 /**
- * The row a passing pointer is over wears `data-hover` — the list draws
- * under the slot's own pointer handling, so its rows never see the pointer
- * themselves. Only a hovering pointer: a press walks the cursor instead,
- * and a finger on glass has no hover to show. `null` clears it.
+ * Which way a press on an arrows face's plate points: the quarter of the
+ * plate it landed in, cut along the diagonals — the top quarter is up, the
+ * right one right. Null off the plate, and on its very centre, which points
+ * nowhere.
+ */
+export function moveArrowDirAt(box: MoveSlotBox, e: Pick<MoveSlotPointer, 'clientX' | 'clientY'>): MoveArrowDirection | null {
+  const x = e.clientX - box.left;
+  const y = e.clientY - box.top;
+  if (x < 0 || y < 0 || x >= box.width || y >= box.height) return null;
+  const dx = x - box.width / 2;
+  const dy = y - box.height / 2;
+  if (dx === 0 && dy === 0) return null;
+  return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+}
+
+/**
+ * Which option a still press on an arrows face takes: the arrow drawn in the
+ * plate's quarter under it. -1 off the plate, and in a quarter with no arrow
+ * — a direction that is not an option has nothing to press — so the click
+ * moves the choice on, as a click on any picture face does.
+ */
+export function moveArrowAt(arrows: readonly { dir: MoveArrowDirection; index: number }[], box: MoveSlotBox, e: Pick<MoveSlotPointer, 'clientX' | 'clientY'>) {
+  const dir = moveArrowDirAt(box, e);
+  return arrows.find((a) => a.dir === dir)?.index ?? -1;
+}
+
+/**
+ * Which option a still press on an option slot points at: on an arrows face
+ * the arrow under it ({@link moveArrowAt}), on a list or a grid the row or
+ * tile under it ({@link moveListRowIn}); -1 when it points at none.
+ */
+export function moveOptionRowIn(slot: Element, meta: ControlMeta, value: unknown, e: MoveSlotPointer) {
+  const arrows = enumArrows(meta, value);
+  const plate = arrows ? slot.querySelector(MOVE_ARROWS_PLATE_SELECTOR) : null;
+  return arrows && plate ? moveArrowAt(arrows.arrows, plate.getBoundingClientRect(), e) : moveListRowIn(slot, e);
+}
+
+/**
+ * The row (or an arrows face's arrow) a passing pointer is over wears
+ * `data-hover` — the list draws under the slot's own pointer handling, so
+ * its rows never see the pointer themselves. Only a hovering pointer: a
+ * press walks the cursor instead, and a finger on glass has no hover to
+ * show. `null` clears it.
  */
 export function moveListHover(slot: Element, e: (MoveSlotPointer & { buttons: number; pointerType: string }) | null) {
-  const at = e && e.buttons === 0 && e.pointerType !== 'touch' ? moveListRowIn(slot, e) : -1;
-  slot.querySelectorAll(MOVE_LIST_ROWS_SELECTOR).forEach((row, i) => row.toggleAttribute('data-hover', i === at));
+  const hovers = !!e && e.buttons === 0 && e.pointerType !== 'touch';
+  const rows = slot.querySelectorAll(MOVE_LIST_ROWS_SELECTOR);
+  // No rows: an arrows face, the arrow in the quarter under the pointer.
+  const plate = rows.length ? null : slot.querySelector(MOVE_ARROWS_PLATE_SELECTOR);
+  if (plate) {
+    const dir = hovers ? moveArrowDirAt(plate.getBoundingClientRect(), e!) : null;
+    plate.querySelectorAll('[data-dir]').forEach((arrow) => arrow.toggleAttribute('data-hover', arrow.getAttribute('data-dir') === dir));
+    return;
+  }
+  const at = hovers ? moveListRowIn(slot, e!) : -1;
+  rows.forEach((row, i) => row.toggleAttribute('data-hover', i === at));
 }
 
 /** A multiselect's rows, as the store normalized them. */
