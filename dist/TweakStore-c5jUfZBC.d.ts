@@ -628,6 +628,12 @@ type SelectConfig = {
      */
     moveTabs?: boolean | 'named';
     /**
+     * A tabs strip only: an option that carries an `icon` keeps its name
+     * beside the picture, instead of the picture standing alone — for modes
+     * the glyph alone would not name.
+     */
+    moveTabsLabels?: boolean;
+    /**
      * The shape an option stands for: `t` in [0,1] → y, auto-fitted and drawn
      * in the Move slot in place of the option's name, which moves to a small
      * tag at the top. Return `null` for options that have no shape.
@@ -1114,6 +1120,8 @@ type ControlMeta = {
     /** Select declared `moveTabs` — it lies across the small slots as a tabs
      *  strip instead of claiming a dial; `'named'` adds its leading name pad. */
     moveTabs?: boolean | 'named';
+    /** Tabs strip whose glyphed options keep their names beside the glyph. */
+    moveTabsLabels?: boolean;
     /** Select's rendering mode or Move face, or a slider's `dial` / `value` form. */
     display?: 'dropdown' | 'segmented' | 'aspect' | 'value' | 'track' | 'dial';
     /** The bar under a Move slot's readout: a slider's fill (default on), a
