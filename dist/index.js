@@ -10151,18 +10151,25 @@ function playMoveSteerLock() {
 }
 
 // src/move-steer.ts
+var JOG = "move-tweakers:jog";
+var JOG_CLICK = "move-tweakers:jog-click";
 var MOVE_STEER_TARGET = [
+  ".tweakers-move-wheel-screen",
   '.tweakers-move-dial:not([data-empty]):not([data-kind="blank"])',
   '.tweakers-move-pad:not([data-empty="true"])',
   "button:not(:disabled)",
   '[role="option"]',
   '[role="tab"]'
 ].join(", ");
-var POINTS_INTO = ".tweakers-list-screen-row, .tweakers-move-dial-tile, .tweakers-move-dial-arrows-plate";
+var LIST_ROWS = ".tweakers-list-screen-row, .tweakers-move-dial-tile";
+var WHEEL_LIST = ".tweakers-move-wheel-screen";
+var ROW_TRAVEL = 16;
+var FLUNG = 200;
 var MOVE_STEER_AXIS_SLOP = 4;
 var CLICK_SLOP = 3;
 var SUCK_MS = 260;
-var SHOOT_MS = 300;
+var SHOOT_MS = 180;
+var CATCH_UP = 0.12;
 var sent = /* @__PURE__ */ new WeakSet();
 var steered = /* @__PURE__ */ new WeakSet();
 var isMoveSteer = (e) => steered.has("nativeEvent" in e ? e.nativeEvent : e);
@@ -10204,7 +10211,7 @@ function attachMoveSteer(root) {
   let landing = 0;
   let wheelHold = false;
   let wheelRest;
-  let hovered = null;
+  let walked = 0;
   const springs = /* @__PURE__ */ new Map();
   let frame = 0;
   let then = 0;
@@ -10216,7 +10223,18 @@ function attachMoveSteer(root) {
     lastHand = { x: m.x + offset.x, y: m.y + offset.y };
     return lastHand;
   };
-  const points = (el) => !!el.querySelector(POINTS_INTO);
+  const isWheelList = (el) => !!el?.matches(WHEEL_LIST);
+  const hasRows = (el) => !!el?.querySelector(LIST_ROWS);
+  const turnWheel = (step) => {
+    const e = new CustomEvent(JOG, { detail: { delta: step, shift: false }, cancelable: true });
+    window.dispatchEvent(e);
+    if (e.defaultPrevented) return;
+    const screen = MoveSurfaceStore.getState().screen;
+    if (screen) MoveSurfaceStore.selectScreen(Math.max(0, Math.min(screen.items.length - 1, screen.index + step)));
+  };
+  const clickWheel = () => {
+    window.dispatchEvent(new CustomEvent(JOG_CLICK, { detail: { shift: false }, cancelable: true }));
+  };
   const targets = () => {
     const panel = root();
     if (!panel) return [];
@@ -10260,23 +10278,10 @@ function attachMoveSteer(root) {
     target.dispatchEvent(e);
     return e;
   };
-  const hover = () => {
-    const p = hand();
-    const el = inside && selected ? under(p) ?? selected : null;
-    if (el !== hovered) {
-      if (hovered?.isConnected) send(hovered, "pointerout", p, { button: -1, buttons: 0, relatedTarget: el });
-      if (el) send(el, "pointerover", p, { button: -1, buttons: 0, relatedTarget: hovered });
-      hovered = el;
-    }
-    if (el) send(el, "pointermove", p, { button: -1, buttons: 0 });
-  };
   const tension = (el) => {
     if (reduced() || el !== selected || hold || press || performance.now() - lastMove > MOVE_STEER_REST_MS) return { x: 0, y: 0 };
-    const b = boxOf(el);
-    const r = moveSteerReach(b, points(el));
-    if (!points(el)) return { x: offset.x / r.x, y: offset.y / r.y };
-    const edge = (o, reach) => Math.sign(o) * Math.max(0, Math.abs(o) - (reach - 24)) / 24;
-    return { x: edge(offset.x, r.x), y: edge(offset.y, r.y) };
+    const r = moveSteerReach(boxOf(el), false);
+    return { x: offset.x / r.x, y: offset.y / r.y };
   };
   const pose = (el, s) => {
     const style = el.style;
@@ -10295,7 +10300,7 @@ function attachMoveSteer(root) {
     frame = 0;
     const dt = then ? (now - then) / 1e3 : 1 / 60;
     then = now;
-    if (inside && selected && !hold && !press && now - lastMove > MOVE_STEER_REST_MS && !points(selected)) {
+    if (inside && selected && !hold && !press && now - lastMove > MOVE_STEER_REST_MS) {
       const k = 1 - Math.exp(-dt / 0.05);
       offset = { x: offset.x * (1 - k), y: offset.y * (1 - k) };
       if (Math.abs(offset.x) + Math.abs(offset.y) < 0.5) offset = { x: 0, y: 0 };
@@ -10361,14 +10366,14 @@ function attachMoveSteer(root) {
     springs.clear();
   };
   const ghost = (kind, from, to, ms, token, done) => {
-    if (!veil || reduced()) {
+    if (reduced()) {
       done();
       return null;
     }
     const g = document.createElement("i");
     g.className = `tweakers-move-steer-ghost tweakers-move-steer-${kind}`;
     if (kind === "arrow") g.innerHTML = ARROW;
-    veil.append(g);
+    layer().append(g);
     const panel = root();
     const ease = moveSteerEase(panel ? getComputedStyle(panel).getPropertyValue(token) : "");
     const way = { ...heading };
@@ -10395,13 +10400,21 @@ function attachMoveSteer(root) {
     } };
   };
   let flight = null;
+  let sky = null;
+  const layer = () => {
+    if (sky?.isConnected) return sky;
+    sky = document.createElement("div");
+    sky.className = "tweakers-move-steer-sky";
+    const panel = root();
+    if (panel) sky.style.setProperty("--move-text", getComputedStyle(panel).getPropertyValue("--move-text"));
+    document.body.append(sky);
+    return sky;
+  };
   const makeVeil = () => {
     if (veil) return;
     veil = document.createElement("div");
     veil.className = "tweakers-move-steer-veil";
     veil.addEventListener("wheel", onWheel, { passive: false });
-    const panel = root();
-    if (panel) veil.style.setProperty("--move-text", getComputedStyle(panel).getPropertyValue("--move-text"));
     document.body.append(veil);
   };
   const dropVeil = () => {
@@ -10413,6 +10426,7 @@ function attachMoveSteer(root) {
     if (!all.length) return;
     flight?.cancel();
     flight = null;
+    document.documentElement.removeAttribute("data-move-steer");
     makeVeil();
     inside = true;
     const at2 = { x: e.clientX, y: e.clientY };
@@ -10440,7 +10454,6 @@ function attachMoveSteer(root) {
       flight = null;
       if (selected) knock(selected, { x: (m.x - at2.x) / len, y: (m.y - at2.y) / len }, MOVE_STEER_KNOCK * 1.4);
     });
-    hover();
     wake();
   };
   const leave = (shoot) => {
@@ -10449,22 +10462,51 @@ function attachMoveSteer(root) {
     const from = selected ? middle(boxOf(selected)) : null;
     const was = selected;
     inside = false;
-    hover();
     select(null);
     flight?.cancel();
     flight = null;
-    if (!shoot || !from || !real || reduced() || !veil) {
-      unpose();
-      dropVeil();
-      return;
-    }
+    unpose();
+    dropVeil();
+    if (!shoot || !from || !real || reduced()) return;
     const len = Math.hypot(heading.x, heading.y);
-    const dir = len > 0.5 ? { x: heading.x / len, y: heading.y / len } : { x: 0, y: -1 };
+    const dir = len > 0.5 && heading.y / len < -0.3 ? { x: heading.x / len, y: heading.y / len } : { x: 0, y: -1 };
     if (was) knock(was, { x: -dir.x, y: -dir.y });
-    flight = ghost("dot", from, () => real ? { x: real.x, y: real.y } : from, SHOOT_MS, "--move-ease-out", () => {
-      flight = null;
-      if (!inside) dropVeil();
+    const top = panelTop() - 18;
+    const reach = Math.min(240, Math.max(0, from.y - top) / -dir.y);
+    const exit = { x: from.x + dir.x * reach, y: from.y + dir.y * reach };
+    document.documentElement.setAttribute("data-move-steer", "out");
+    flight = ghost("dot", from, () => exit, SHOOT_MS, "--move-ease-out", () => {
+      flight = catchUp(exit);
     });
+  };
+  const catchUp = (at2) => {
+    const g = document.createElement("i");
+    g.className = "tweakers-move-steer-ghost tweakers-move-steer-arrow";
+    g.innerHTML = ARROW;
+    layer().append(g);
+    let off = real ? { x: at2.x - real.x, y: at2.y - real.y } : { x: 0, y: 0 };
+    let last = performance.now();
+    let raf = 0;
+    const done = () => {
+      cancelAnimationFrame(raf);
+      g.remove();
+      flight = null;
+      document.documentElement.removeAttribute("data-move-steer");
+    };
+    const step = (now) => {
+      const k = Math.exp(-Math.min(0.05, (now - last) / 1e3) / CATCH_UP);
+      last = now;
+      off = { x: off.x * k, y: off.y * k };
+      const p = real ? { x: real.x + off.x, y: real.y + off.y } : at2;
+      g.style.transform = `translate(${p.x}px, ${p.y}px)`;
+      if (Math.hypot(off.x, off.y) < 1) {
+        done();
+        return;
+      }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return { cancel: done };
   };
   const send1 = (g, type, shift) => {
     if (type === "pointerdown") g.pressed = true;
@@ -10489,7 +10531,7 @@ function attachMoveSteer(root) {
     clearTimeout(wheelRest);
     release(h.grip);
     if (h.chip !== h.grip) release(h.chip);
-    if (real && real.y < panelTop()) leave(true);
+    if (real && real.y < panelTop() - FLUNG) leave(true);
   };
   const knobAbove = (pad) => {
     const r = (pad.closest(".tweakers-move-pad") ?? pad).getBoundingClientRect();
@@ -10522,6 +10564,15 @@ function attachMoveSteer(root) {
       endHold();
       return;
     }
+    if (g.target.closest(WHEEL_LIST)) {
+      walked += dy;
+      while (Math.abs(walked) >= ROW_TRAVEL) {
+        const step = Math.sign(walked);
+        walked -= step * ROW_TRAVEL;
+        turnWheel(step);
+      }
+      return;
+    }
     if (!g.pressed) {
       send1(g, "pointerdown", shiftKey && g.hands === 1);
       if (g.target.closest("[data-peek]")) {
@@ -10552,7 +10603,12 @@ function attachMoveSteer(root) {
     endHold();
     const held = inside ? regain() : null;
     if (!held) return;
-    const p = hand();
+    if (isWheelList(held)) {
+      clickWheel();
+      return;
+    }
+    const box = boxOf(held);
+    const p = hasRows(held) ? { x: box.left + 3, y: box.top + 3 } : hand();
     const at2 = under(p);
     const target = at2 && held.contains(at2) ? at2 : held;
     press = { target, x: p.x, y: p.y, pressed: true, hands: 1 };
@@ -10621,22 +10677,21 @@ function attachMoveSteer(root) {
       send(press.target, "pointermove", press, { button: -1, buttons: e.buttons, shiftKey: e.shiftKey });
       return;
     }
-    if (e.clientY < panelTop()) {
-      leave(true);
-      return;
-    }
     const pace = TweakStore10.getValues(MOVE_PANEL_SETTINGS);
     const gain = (v) => typeof v === "number" && v > 0 ? v : MOVE_STEER_GAIN;
-    navigate(dx * gain(pace?.handSpeedX), dy * gain(pace?.handSpeedY));
+    const out = navigate(dx * gain(pace?.handSpeedX), dy * gain(pace?.handSpeedY));
+    const top = panelTop();
+    if (out && e.clientY < top || e.clientY < top - FLUNG) leave(true);
   };
   const navigate = (dx, dy) => {
-    if (performance.now() < landing || !regain()) return;
+    if (performance.now() < landing || !regain()) return false;
     lastMove = performance.now();
+    let out = false;
     let all = null;
     let boxes = [];
     const { offset: next, passes } = moveSteerTravel(
       { x: offset.x + dx, y: offset.y + dy },
-      () => moveSteerReach(boxOf(selected), points(selected)),
+      () => moveSteerReach(boxOf(selected), false),
       (dir, _step, o) => {
         if (!all) {
           all = targets();
@@ -10646,7 +10701,10 @@ function attachMoveSteer(root) {
         const fromBox = from >= 0 ? boxes[from] : boxOf(selected);
         const m = middle(fromBox);
         const i = moveSteerNext(fromBox, from >= 0 ? boxes : [...boxes, fromBox], { x: m.x + o.x, y: m.y + o.y }, dir);
-        if (i < 0) return false;
+        if (i < 0) {
+          out || (out = dir.y < 0);
+          return false;
+        }
         const was = selected;
         select(all[i]);
         knock(all[i], dir);
@@ -10655,14 +10713,10 @@ function attachMoveSteer(root) {
       }
     );
     offset = next;
-    if (passes.length && points(selected)) {
-      const d = passes[passes.length - 1];
-      const r = moveSteerReach(boxOf(selected), true);
-      if (d.x) offset.x = -d.x * (r.x - 24);
-      else offset.y = -d.y * (r.y - 24);
-    }
-    hover();
+    walked = 0;
+    void passes;
     wake();
+    return out;
   };
   const onDown = (e) => {
     if (sent.has(e) || !inside || e.pointerType !== "mouse") return;
@@ -10683,10 +10737,6 @@ function attachMoveSteer(root) {
     if (e.ctrlKey && !hold) return;
     const held = regain();
     if (!held) return;
-    if (held.closest('[role="listbox"]') && !held.matches(".tweakers-move-dial")) {
-      scrollUnder(e);
-      return;
-    }
     if (!hold) {
       beginHold();
       wheelHold = !!hold;
@@ -10704,41 +10754,25 @@ function attachMoveSteer(root) {
       }, 160);
     }
   };
-  const scrollUnder = (e) => {
-    const p = hand();
-    const at2 = under(p) ?? selected;
-    if (!at2) return;
-    const turned = send(at2, "wheel", p, {
-      deltaX: e.deltaX,
-      deltaY: e.deltaY,
-      deltaZ: e.deltaZ,
-      deltaMode: e.deltaMode,
-      shiftKey: e.shiftKey,
-      altKey: e.altKey,
-      metaKey: e.metaKey,
-      ctrlKey: e.ctrlKey
-    });
-    if (turned.defaultPrevented) return;
-    let box = at2;
-    while (box && box !== root()) {
-      const style = getComputedStyle(box);
-      if (/(auto|scroll)/.test(style.overflowY) && box.scrollHeight > box.clientHeight) break;
-      box = box.parentElement;
-    }
-    if (!box || box === root()) return;
-    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? box.clientHeight : 1;
-    box.scrollTop += e.deltaY * unit;
-    const now = under(p)?.closest(MOVE_STEER_TARGET);
-    if (now && now !== selected) {
-      select(now);
-      offset = { x: 0, y: 0 };
-      hover();
-    }
-  };
   const onOut = (e) => {
     if (!e.relatedTarget) real = null;
   };
   const onKeyDown = (e) => {
+    if (sent.has(e)) return;
+    if (inside && /^Arrow(Up|Down|Left|Right)$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey && !editable(document.activeElement)) {
+      const held = regain();
+      if (held && (isWheelList(held) || hasRows(held))) {
+        own(e);
+        if (isWheelList(held)) {
+          if (e.key === "ArrowUp" || e.key === "ArrowDown") turnWheel(e.key === "ArrowDown" ? 1 : -1);
+        } else {
+          const k = new KeyboardEvent("keydown", { key: e.key, code: e.code, shiftKey: e.shiftKey, bubbles: true, cancelable: true });
+          sent.add(k);
+          held.dispatchEvent(k);
+        }
+        return;
+      }
+    }
     if (e.key !== moveSteerKey() || e.repeat) return;
     if (wheelHold) {
       wheelHold = false;
