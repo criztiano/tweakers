@@ -95,8 +95,11 @@ describe('the way in and out', () => {
     const up = { x: 0, y: -1 };
     expect(moveSteerArc(from, to, up, 0)).toEqual(from);
     expect(moveSteerArc(from, to, up, 1)).toEqual(to);
-    // Early on it is still going the way the pointer went.
-    expect(moveSteerArc(from, to, up, 0.2).y).toBeLessThan(-10);
+    // It leans a little the way the pointer went, but it is going to its end.
+    const early = moveSteerArc(from, to, up, 0.2);
+    expect(early.y).toBeLessThan(-2);
+    expect(early.y).toBeGreaterThan(-10);
+    expect(early.x).toBeGreaterThan(10);
     // No heading to read: straight.
     expect(moveSteerArc(from, to, { x: 0, y: 0 }, 0.5)).toEqual({ x: 50, y: 0 });
   });

@@ -161,18 +161,23 @@ export function moveSteerEase(curve: string): (t: number) => number {
   };
 }
 
+/** How far the arc leans toward the pointer's heading: 0 is a straight line. */
+export const MOVE_STEER_ARC_BEND = 0.3;
+
 /**
- * A point on the arc from `from` to `to` at `t`: it leaves along `heading`
- * (the way the pointer was going) and bends round onto its end, so a change
- * of direction reads as a curve, never a corner. A heading too small to
- * read flies straight.
+ * A point on the arc from `from` to `to` at `t`: it goes to its end, only
+ * leaning a little toward `heading` (the way the pointer was going), so the
+ * flight follows the hand with a slight curve and never doubles back. A
+ * heading too small to read flies straight.
  */
 export function moveSteerArc(from: MoveSteerVec, to: MoveSteerVec, heading: MoveSteerVec, t: number): MoveSteerVec {
   const dist = Math.hypot(to.x - from.x, to.y - from.y);
   const len = Math.hypot(heading.x, heading.y);
-  const bend = len > 0.5
-    ? { x: from.x + (heading.x / len) * dist * 0.55, y: from.y + (heading.y / len) * dist * 0.55 }
-    : { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+  const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+  const lean = len > 0.5
+    ? { x: from.x + (heading.x / len) * dist * 0.5, y: from.y + (heading.y / len) * dist * 0.5 }
+    : mid;
+  const bend = { x: mid.x + (lean.x - mid.x) * MOVE_STEER_ARC_BEND, y: mid.y + (lean.y - mid.y) * MOVE_STEER_ARC_BEND };
   const u = 1 - t;
   return {
     x: u * u * from.x + 2 * u * t * bend.x + t * t * to.x,
