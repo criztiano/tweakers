@@ -10361,8 +10361,41 @@ function attachMoveSteer(root) {
     document.body.append(veil);
   };
   const dropVeil = () => {
+    uncapture();
     veil?.remove();
     veil = null;
+  };
+  let lockOrigin = null;
+  let silent = false;
+  let releasing = false;
+  const captured = () => !!veil && document.pointerLockElement === veil;
+  const capture = () => {
+    if (!veil || captured() || typeof veil.requestPointerLock !== "function") return;
+    lockOrigin = real ? { x: real.x, y: real.y } : null;
+    try {
+      const asked = veil.requestPointerLock();
+      asked?.catch?.(() => {
+        silent = false;
+      });
+    } catch {
+      silent = false;
+    }
+  };
+  const uncapture = () => {
+    if (!captured()) return;
+    releasing = true;
+    document.exitPointerLock();
+  };
+  const onLockChange = () => {
+    if (captured()) return;
+    silent = releasing;
+    releasing = false;
+    if (lockOrigin && real) real = { x: lockOrigin.x, y: lockOrigin.y, id: real.id };
+    lockOrigin = null;
+  };
+  const onLockError = () => {
+    silent = false;
+    releasing = false;
   };
   const enter = (at2) => {
     const all = targets();
@@ -10370,6 +10403,7 @@ function attachMoveSteer(root) {
     unloose();
     makeVeil();
     inside = true;
+    if (silent) capture();
     const slots = all.filter((el) => el.matches(".tweakers-move-dial"));
     const pool = slots.length ? slots : all;
     const top = Math.min(...pool.map((el) => boxOf(el).top));
@@ -10393,6 +10427,7 @@ function attachMoveSteer(root) {
   };
   let loose = null;
   const leave = (shoot) => {
+    uncapture();
     endHold();
     endPress(false);
     const from = selected ? middle(boxOf(selected)) : null;
@@ -10477,6 +10512,7 @@ function attachMoveSteer(root) {
   const beginHold = () => {
     const held = hold || press || !inside || editable(document.activeElement) ? null : regain();
     if (!held) return;
+    capture();
     const p = hand();
     const at2 = under(p);
     const target = at2 && held.contains(at2) ? at2 : held;
@@ -10531,6 +10567,7 @@ function attachMoveSteer(root) {
     endHold();
     const held = inside ? regain() : null;
     if (!held) return;
+    capture();
     if (isWheelList(held)) {
       clickWheel();
       return;
@@ -10573,8 +10610,9 @@ function attachMoveSteer(root) {
   };
   const onMove = (e) => {
     if (sent.has(e) || e.pointerType !== "mouse") return;
+    const locked = captured();
     const before = real;
-    real = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    if (!locked) real = { x: e.clientX, y: e.clientY, id: e.pointerId };
     if (!inside) {
       if (loose) {
         if (veil) own(e);
@@ -10595,9 +10633,9 @@ function attachMoveSteer(root) {
       return;
     }
     own(e);
-    if (!before) return;
-    const dx = e.clientX - before.x;
-    const dy = e.clientY - before.y;
+    if (!locked && !before) return;
+    const dx = locked ? e.movementX : e.clientX - before.x;
+    const dy = locked ? e.movementY : e.clientY - before.y;
     if (hold) {
       if (!moveSteerHeld(e)) endHold();
       else {
@@ -10617,7 +10655,7 @@ function attachMoveSteer(root) {
     const gain = (v) => typeof v === "number" && v > 0 ? v : MOVE_STEER_GAIN;
     const catching = 1 - Math.exp(-(performance.now() - enteredAt) / MOVE_STEER_CATCH_MS);
     const out = navigate(dx * gain(pace?.handSpeedX) * catching, dy * gain(pace?.handSpeedY) * catching);
-    if (out || e.clientY < panelTop() - FLUNG) leave(true);
+    if (out || !locked && e.clientY < panelTop() - FLUNG) leave(true);
   };
   const navigate = (dx, dy) => {
     if (!regain()) return false;
@@ -10729,6 +10767,8 @@ function attachMoveSteer(root) {
     if (document.hidden) onAway();
   };
   window.addEventListener("pointermove", onMove, true);
+  document.addEventListener("pointerlockchange", onLockChange);
+  document.addEventListener("pointerlockerror", onLockError);
   window.addEventListener("pointerdown", onDown, true);
   window.addEventListener("pointerup", onUp, true);
   for (const type of ["mousedown", "mouseup", "click", "dblclick", "auxclick", "contextmenu"]) window.addEventListener(type, onMouse, true);
@@ -10742,6 +10782,8 @@ function attachMoveSteer(root) {
     unloose();
     if (frame) cancelAnimationFrame(frame);
     window.removeEventListener("pointermove", onMove, true);
+    document.removeEventListener("pointerlockchange", onLockChange);
+    document.removeEventListener("pointerlockerror", onLockError);
     window.removeEventListener("pointerdown", onDown, true);
     window.removeEventListener("pointerup", onUp, true);
     for (const type of ["mousedown", "mouseup", "click", "dblclick", "auxclick", "contextmenu"]) window.removeEventListener(type, onMouse, true);
