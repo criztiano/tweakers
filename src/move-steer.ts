@@ -42,7 +42,7 @@ import {
 } from './move-steer-core';
 import { TweakStore } from './store/TweakStore';
 import { MOVE_PANEL_SETTINGS } from './move-track-labels';
-import { playMoveSteerLock } from './move-steer-sound';
+import { playMoveSteerLock, primeMoveSteerLock } from './move-steer-sound';
 import { MoveSurfaceStore } from './move-surface-store';
 import { MOVE_OPTION_DETENT } from './move-slot-core';
 
@@ -375,6 +375,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     if (!all.length) return;
     makeVeil();
     inside = true;
+    primeMoveSteerLock();
     const slots = all.filter((el) => el.matches('.tweakers-move-dial'));
     const pool = slots.length ? slots : all;
     const top = Math.min(...pool.map((el) => boxOf(el).top));
@@ -633,6 +634,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
       if (inside) { inside = false; select(null); wake(); }
       return;
     }
+    if (!inside) primeMoveSteerLock();
     inside = true;
     let el = t.closest(MOVE_STEER_TARGET);
     for (let up = el?.parentElement?.closest(MOVE_STEER_TARGET); up && panel.contains(up); up = up.parentElement?.closest(MOVE_STEER_TARGET)) el = up;

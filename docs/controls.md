@@ -189,8 +189,8 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
   hand turns the way the fingers go, exactly as ⌘ and the mouse turn it,
   with the same tick, and lets go when they stop.
 - **⌘ takes the control** (Ctrl off a Mac), with a short tick
-  (`move-steer-sound`; a drawn placeholder until the real sound is in —
-  the file's place is described there). While ⌘ is held the hand stays
+  (`move-steer-sound`: Cri's pick, carried in the code as `sounds/steer-lock`;
+  a drawn tick if it cannot play). While ⌘ is held the hand stays
   where it is and the mouse's travel turns the control, as a drag on it
   would — a dial turns from where it is, an option steps, a list walks.
   When ⌘ comes up the control lets go, and the hand is still where it
