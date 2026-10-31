@@ -10163,7 +10163,6 @@ function attachMoveSteer(root) {
   let press = null;
   let pressTravel = 0;
   let map = null;
-  let rise = 0;
   let speed = 0;
   let lastStamp = 0;
   let wheelHold = false;
@@ -10362,7 +10361,6 @@ function attachMoveSteer(root) {
     lastMove = 0;
     const gain = pace();
     map = { hand: { x: at2.x, y: middle(boxOf(best)).y }, from: { ...at2 }, gain };
-    rise = map.hand.y - panelTop() - (at2.y - panelTop()) * gain.y;
     knock(best, { x: 0, y: 1 }, MOVE_STEER_KNOCK * 1.4);
     wake();
   };
@@ -10372,8 +10370,8 @@ function attachMoveSteer(root) {
     inside = false;
     map = null;
     select(null);
-    unpose();
     dropVeil();
+    wake();
   };
   const send1 = (g, type, shift) => {
     if (type === "pointerdown") g.pressed = true;
@@ -10548,15 +10546,11 @@ function attachMoveSteer(root) {
     const dt = Math.max(1, e.timeStamp - lastStamp);
     lastStamp = e.timeStamp;
     speed = speed * 0.7 + Math.hypot(dx, dy) / dt * 0.3;
-    steerBack(dy);
+    if (e.clientY < panelTop()) {
+      leave();
+      return;
+    }
     navigate();
-  };
-  const steerBack = (dy) => {
-    if (!map || !dy) return;
-    const top = panelTop();
-    const now = map.hand.y - top - (map.from.y - top) * map.gain.y;
-    const step = Math.min(Math.abs(rise - now), Math.abs(dy) * map.gain.y * 0.3);
-    map.hand.y += Math.sign(rise - now) * step;
   };
   const navigate = () => {
     const held = regain();
@@ -10564,16 +10558,7 @@ function attachMoveSteer(root) {
     const gain = pace();
     if (gain.x !== map.gain.x || gain.y !== map.gain.y) pin(hand());
     lastMove = performance.now();
-    let p = hand();
-    const top = panelTop();
-    if (p.y < top - 4) {
-      if (real && real.y < top) {
-        leave();
-        return;
-      }
-      map.hand.y += top - 4 - p.y;
-      p = hand();
-    }
+    const p = hand();
     const all = targets();
     const boxes = all.map(boxOf);
     const at2 = all.indexOf(held);
@@ -10674,6 +10659,7 @@ function attachMoveSteer(root) {
   return () => {
     leave();
     if (frame) cancelAnimationFrame(frame);
+    unpose();
     window.removeEventListener("pointermove", onMove, true);
     window.removeEventListener("pointerdown", onDown, true);
     window.removeEventListener("pointerup", onUp, true);
