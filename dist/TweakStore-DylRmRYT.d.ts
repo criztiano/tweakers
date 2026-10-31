@@ -240,6 +240,21 @@ type MoveNumericDrawing = {
     back: boolean;
     forward: boolean;
 };
+/**
+ * A small picture an action pad wears in place of its name — for a button
+ * that opens a choice and names what is chosen ("Curve: Snappy", "Offset:
+ * +0.2 s"). Each kind is the small sibling of a big face: `curve` the curve
+ * grid's resting tile (`points`: y at even steps of x over 0..1, free to dip
+ * under 0 or rise over 1), `offset` the offset face's room (`value`: the
+ * share of the range, −1..1, 0 in the middle).
+ */
+type MoveActionFace = {
+    kind: 'curve';
+    points: number[];
+} | {
+    kind: 'offset';
+    value: number;
+};
 /** Invalid or incompatible metadata falls back to the ordinary face. No label inference. */
 declare function moveNumericDrawing(meta: ControlMeta, value: unknown): MoveNumericDrawing | null;
 /** Where a take's two edges sit on one shared line, each 0..1 across its own
@@ -501,6 +516,13 @@ type ActionConfig = {
      * small slot).
      */
     icon?: string;
+    /**
+     * On a Move pad, a small picture in place of the name: a curve, or an
+     * offset — for a button that opens a choice and names what is chosen. The
+     * label stays the pad's accessible name and tooltip. Without it the pad
+     * draws its name, as before.
+     */
+    face?: MoveActionFace;
 };
 /**
  * Explicit switch form, for what a bare `false` cannot say: a name a key
@@ -836,6 +858,12 @@ type SliderConfig = {
     /** The y-range the shape is drawn in — fixed, so a bigger value draws a
      *  bigger shape. Default [-1, 1]. */
     shapeDomain?: [number, number];
+    /**
+     * Move panel: always a value chip, never one of the eight dials — a small
+     * amount that shapes the control above it (an effect's Jitter under its
+     * dial). Seat it with `movePads`, and a row option to pick its pad row.
+     */
+    moveChip?: boolean;
 };
 /**
  * Scrub-anywhere numeric readout. Unlike a slider it has no track — drag the
@@ -1109,6 +1137,8 @@ type ControlMeta = {
     collapsible?: boolean;
     /** Action declared a `caption` — the row names what the button acts on. */
     caption?: string;
+    /** Action declared a `face` — its Move pad draws that picture, not its name. */
+    face?: MoveActionFace;
     /** Top-level folder under a `_tabs` root — it is a tab, and its children are that tab's page. */
     tab?: boolean;
     /** The synthetic segmented select driving `_tab` — it renders as the panel's tab bar, never as a row. */
@@ -1144,6 +1174,8 @@ type ControlMeta = {
     shape?: (value: number) => ((t: number) => number) | null | undefined;
     /** Slider shape's fixed y-range. */
     shapeDomain?: [number, number];
+    /** Slider declared `moveChip` — a value chip, never a dial. */
+    moveChip?: boolean;
     /** Select dial width in hardware columns; defaults to one. */
     moveSpan?: 1 | 2;
     /** Select declared `moveTabs` — it lies across the small slots as a tabs
@@ -1239,6 +1271,8 @@ type PanelConfig = {
     moveTopRow?: string[];
     /** Value chips sunk onto the action pad row, retained on the same terms as `hints`. */
     moveActionRow?: string[];
+    /** Small slots seated on the fourth pad row, retained on the same terms as `hints`. */
+    moveBottomRow?: string[];
     /** Actions and switches lowered onto the value pad row, retained on the same terms as `hints`. */
     moveValueRow?: string[];
     /** Big slots drawn as one container, retained on the same terms as `hints`. */
@@ -1255,4 +1289,4 @@ type PanelConfig = {
     kind?: 'timeline' | 'modulation' | 'kit';
 };
 
-export { moveGrainGap as A, moveGrainPicture as B, type ControlMeta as C, moveGrainRole as D, moveGrainSpan as E, moveKeyboardValue as F, moveLanes as G, moveMultibandRole as H, moveMultibandSpan as I, moveNumericDrawing as J, movePlaybackMode as K, moveTrimSpan as L, type MoveEdges as M, moveVectorAxes as N, moveVectorStage as O, type PanelConfig as P, moveVisualReading as Q, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, type TweakConfig as a, type TransitionConfig as b, type SpringConfig as c, MOVE_BAND_H as d, MOVE_BAND_W as e, MOVE_GRAIN as f, MOVE_STAGE as g, type MoveGateRole as h, type MoveGrainPicture as i, type MoveGrainRole as j, type MoveGrainSelectVisual as k, type MoveGrainSliderVisual as l, type MoveGrainSpan as m, type MoveGrainVisual as n, type MoveMultibandRole as o, type MoveNumericDrawing as p, type MovePlaybackMode as q, type MoveSelectVisual as r, type MoveSliderVisual as s, type MoveStage as t, type MoveToggleVisual as u, type MoveTone as v, type MoveVisual as w, moveBandCuts as x, moveChannelPosition as y, moveGateSpan as z };
+export { moveGateSpan as A, moveGrainGap as B, type ControlMeta as C, moveGrainPicture as D, moveGrainRole as E, moveGrainSpan as F, moveKeyboardValue as G, moveLanes as H, moveMultibandRole as I, moveMultibandSpan as J, moveNumericDrawing as K, movePlaybackMode as L, type MoveNumericDrawing as M, moveTrimSpan as N, moveVectorAxes as O, type PanelConfig as P, moveVectorStage as Q, type ResolvedValues as R, type ShortcutConfig as S, type TweakValue as T, moveVisualReading as U, type MoveEdges as a, type TweakConfig as b, type TransitionConfig as c, type SpringConfig as d, MOVE_BAND_H as e, MOVE_BAND_W as f, MOVE_GRAIN as g, MOVE_STAGE as h, type MoveActionFace as i, type MoveGateRole as j, type MoveGrainPicture as k, type MoveGrainRole as l, type MoveGrainSelectVisual as m, type MoveGrainSliderVisual as n, type MoveGrainSpan as o, type MoveGrainVisual as p, type MoveMultibandRole as q, type MovePlaybackMode as r, type MoveSelectVisual as s, type MoveSliderVisual as t, type MoveStage as u, type MoveToggleVisual as v, type MoveTone as w, type MoveVisual as x, moveBandCuts as y, moveChannelPosition as z };

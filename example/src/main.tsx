@@ -4,11 +4,16 @@ import { TweakStore, ModulationStore, MoveFunctions, MovePresetStore, PresetExpl
 import 'tweakers/styles.css';
 import { Library } from './Library';
 import FlowerPlayground from './FlowerPlayground';
+import FourthRow from './FourthRow';
 import { registerLibraryPanel, PANEL_NAME } from './panel';
 import { bindKeyboardHardware } from './hardware';
 
-const isFlowerPlayground = window.location.pathname.replace(/\/$/, '') === '/flowers';
+const route = window.location.pathname.replace(/\/$/, '');
+const isFlowerPlayground = route === '/flowers';
+// The fourth pad row and the button faces, on an eight-column page of its own.
+const isFourthRow = route === '/rows';
 if (isFlowerPlayground) document.title = 'Flower playground · Tweakers';
+else if (isFourthRow) document.title = 'Fourth pad row · Tweakers';
 else registerLibraryPanel();
 
 // Handles for poking the live stores from the console — a library is a place
@@ -53,6 +58,6 @@ function MoveBridge() {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {isFlowerPlayground ? <FlowerPlayground /> : <><MoveBridge /><Library /></>}
+    {isFlowerPlayground ? <FlowerPlayground /> : isFourthRow ? <FourthRow /> : <><MoveBridge /><Library /></>}
   </StrictMode>
 );

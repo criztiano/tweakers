@@ -5487,6 +5487,43 @@
   box-shadow: -2px 2px 0 0 var(--move-bg), -3px 3px 0 0 var(--move-text);
 }
 
+/* A button wearing its face (`face` on the action): the picture has the pad
+   to itself, inside the pad's own edge, and the button's corner stays. Each
+   is a big face at pad size, by the same parts: the curve the curve grid's
+   resting tile, the offset the offset face's room. */
+.tweakers-move-pad[data-face] {
+  padding: 0;
+}
+
+.tweakers-move-pad[data-face="curve"] .tweakers-move-dial-tile.tweakers-move-dial-rest {
+  inset: 3px;
+  border-radius: 4px;
+}
+
+/* the curve keeps the tile's air, a little more across: a pad is wide and short */
+.tweakers-move-pad[data-face="curve"] .tweakers-move-dial-tile-shape {
+  top: 22%;
+  left: 20%;
+  width: 60%;
+  height: 56%;
+}
+
+.tweakers-move-pad[data-face="curve"] .tweakers-move-dial-tile-shape path {
+  stroke-width: 2;
+}
+
+.tweakers-move-pad[data-face="offset"] {
+  --move-offset-inset: 14px;
+  --move-offset-room: 10px;
+  --move-offset-foot: 5px;
+  --move-offset-rule: 1.5px;
+  --move-offset-pin-w: 9px;
+  --move-offset-pin-h: 12px;
+  --move-offset-way-w: 8px;
+  --move-offset-way-gap: 4px;
+  --move-offset-hatch: 3px;
+}
+
 /* The band — a high cut over a low cut, one column two pads tall. The cell
    keeps a pad's height so its row does not grow; the face hangs from it over
    the pad under it (32 + 4 + 32), and that pad's cell stays empty below. The

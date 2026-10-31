@@ -12,6 +12,7 @@ import {
   MovePadValueBody,
   MovePadActionBody,
   MovePadIconLabelBody,
+  MovePadFaceBody,
   MovePadAppBody,
   MovePadTabsBody,
   MovePadColorBody,
@@ -28,6 +29,8 @@ import {
   curveComposition,
   type MoveSlotKind,
   type MovePadKind,
+  type MoveActionFace,
+  moveActionDrawing,
 } from 'tweakers';
 import { PANEL_ID, INSTRUMENTS_NAME, MOD_LFO, MOD_ENV, MOD_CURVE, MOD_SH } from './panel';
 
@@ -348,6 +351,18 @@ export const SMALL_SLOTS: Specimen[] = [
     render: () => <MovePadIconLabelBody icon="download" label="Export" />,
   },
   {
+    kind: 'curve',
+    description: MOVE_PAD_LIBRARY.curve.description,
+    note: 'A menu pad that has chosen Overshoot: the curve grid’s resting tile, small. Give an action a face: { kind: \'curve\', points } — y at even steps of x.',
+    render: () => <PadFace face={{ kind: 'curve', points: Array.from({ length: 33 }, (_, i) => { const t = i / 32 - 1; return 1 + 2.70158 * t ** 3 + 1.70158 * t * t; }) }} />,
+  },
+  {
+    kind: 'offset',
+    description: MOVE_PAD_LIBRARY.offset.description,
+    note: 'A menu pad nudged +0.2 s of ±0.5 s: the offset face’s room, small. face: { kind: \'offset\', value } — the share of the range, −1..1.',
+    render: () => <PadFace face={{ kind: 'offset', value: 0.4 }} />,
+  },
+  {
     kind: 'app',
     description: MOVE_PAD_LIBRARY.app.description,
     render: () => <MovePadAppBody label="Take 3" color="#52bd06" />,
@@ -397,6 +412,12 @@ export const SMALL_SLOTS: Specimen[] = [
     ),
   },
 ];
+
+/** An action's face, drawn the way the panel draws it. */
+function PadFace({ face }: { face: MoveActionFace }) {
+  const drawing = moveActionDrawing({ type: 'action', path: 'face', label: 'Face', face });
+  return drawing ? <MovePadFaceBody drawing={drawing} /> : null;
+}
 
 /** Small slots read as states as much as faces: on, held, latched. */
 export const SMALL_SLOT_STATES: { label: string; kind: MovePadKind; props: Record<string, unknown>; render: () => ReactNode }[] = [

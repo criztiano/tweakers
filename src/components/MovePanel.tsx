@@ -16,10 +16,10 @@ import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from '../theme';
-import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, filterChipValue, isColumnFilter, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumShapePath, sliderShapePath, enumIndex, enumAspect, enumArrows, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
+import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, filterChipValue, isColumnFilter, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumShapePath, sliderShapePath, enumIndex, enumAspect, enumArrows, moveActionDrawing, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotCurveGridBody, MoveSlotAspectBody, MoveSlotArrowsBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotShape, MoveSlotCurveDots, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody, MoveSlotGlyph } from './move-slots';
+import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotCurveGridBody, MoveSlotAspectBody, MoveSlotArrowsBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotShape, MoveSlotCurveDots, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadFaceBody, MovePadOffsetBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody, MoveSlotGlyph } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing } from '../angle-core';
@@ -3285,7 +3285,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     // What a pad is comes from the control, not the row it
                     // sits in: a value chip lifted onto the top row is still
                     // a value chip.
-                    if (page.toggles[col] === meta || (meta.type === 'toggle' && page.valueActions?.[col] === meta)) {
+                    if (page.toggles[col] === meta || (meta.type === 'toggle' && (page.valueActions?.[col] === meta || page.bottom?.[col] === meta))) {
                       // A captioned picture says its value to the eye; the
                       // screen reader hears the name, then the same words.
                       const caption = meta.icon ? meta.toggleCaption?.[values[meta.path] ? 'on' : 'off'] : undefined;
@@ -3310,15 +3310,23 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     // Action pads carry no value — a press just runs the
                     // app's action, the same as the row's button on screen.
                     if (meta.type === 'action') {
-                      if (MovePadListStore.has(page.panel.id, meta.path)) return <MovePadList key={meta.path} panelId={page.panel.id} path={meta.path} label={meta.label} icon={meta.icon} view={padListView} disabled={TweakStore.isDisabled(page.panel.id, meta.path)} />;
+                      // A button with a `face` wears its picture instead of
+                      // its name; the name stays its accessible name and tip.
+                      const face = moveActionDrawing(meta);
+                      if (MovePadListStore.has(page.panel.id, meta.path)) return <MovePadList key={meta.path} panelId={page.panel.id} path={meta.path} label={meta.label} icon={meta.icon} face={face} view={padListView} disabled={TweakStore.isDisabled(page.panel.id, meta.path)} />;
                       return (
                         <button
                           key={meta.path}
                           className="tweakers-move-pad"
                           data-kind="action"
+                          data-face={face?.kind}
+                          aria-label={face ? meta.label : undefined}
+                          title={face ? meta.label : undefined}
                           onClick={() => TweakStore.triggerAction(page.panel.id, meta.path)}
                         >
-                          {meta.icon
+                          {face
+                            ? <MovePadFaceBody drawing={face} />
+                            : meta.icon
                             ? <MovePadIconLabelBody icon={meta.icon} label={meta.label} />
                             : <MovePadActionBody label={meta.label} />}
                         </button>
@@ -3333,19 +3341,28 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     // the door to the editor. Only the face differs.
                     const isColor = meta.type === 'color';
                     const value = isColor ? null : chipValue(meta);
+                    // A slider wearing the offset face wears its room at pad
+                    // size too — the same picture the big slot draws, scrubbed
+                    // the way any chip is; the name and reading become its tip.
+                    const room = !isColor && meta.moveVisual?.kind === 'offset' ? moveNumericDrawing(meta, values[meta.path]) : null;
+                    const tip = room ? `${meta.label}: ${value!.num}${value!.unit ?? ''}` : undefined;
                     return (
                       <button
                         key={meta.path}
                         className="tweakers-move-pad"
                         data-kind={isColor ? 'color' : 'value'}
+                        data-face={room ? 'offset' : undefined}
                         data-scrub={moveChipScrubs(meta) || undefined}
                         data-held={(held !== null && held.meta.path === meta.path) || hwHeld[meta.path] || undefined}
                         data-latched={chipLatched(col, meta) || undefined}
-                        aria-label={isColor ? meta.label : undefined}
+                        aria-label={isColor ? meta.label : tip}
+                        title={tip}
                         {...chipGesture(col, meta)}
                       >
                         {isColor
                           ? <MovePadColorBody label={meta.label} color={String(values[meta.path])} />
+                          : room?.kind === 'offset'
+                          ? <MovePadOffsetBody origin={room.origin} position={room.position} back={room.back} forward={room.forward} />
                           : <MovePadValueBody label={meta.label} value={value!.num} unit={value!.unit}>
                               <MoveModRing panelId={page.panel.id} path={meta.path} pad />
                             </MovePadValueBody>}

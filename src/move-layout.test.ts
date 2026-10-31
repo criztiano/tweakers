@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { TweakStore } from './store/TweakStore';
-import { buildMovePages, movePadRows, moveBandCell, moveEdgesCell, slotGroups, visibleColumns, enumOptionIcon, enumShapePath, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, setMoveLayoutReporter, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage, type MoveLayoutIssueCode } from './move-layout';
+import { TweakStore, type ControlMeta } from './store/TweakStore';
+import { buildMovePages, movePadRows, moveBandCell, moveEdgesCell, slotGroups, visibleColumns, enumOptionIcon, enumShapePath, moveActionDrawing, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, setMoveLayoutReporter, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage, type MoveLayoutIssueCode } from './move-layout';
 
 /** Run `fn` with the issue feed captured, restoring the console sink after. */
 function capturingIssues<T>(fn: () => T): { result: T; issues: [MoveLayoutIssueCode, string][] } {
@@ -813,5 +813,145 @@ describe('move layout', () => {
     TweakStore.registerPanel(id, id, { free: { type: 'number', default: 3 } } as never);
     const [page] = buildMovePages([TweakStore.getPanel(id)!]);
     assert.deepEqual(visibleColumns(page), []);
+  });
+});
+
+describe('the fourth pad row', () => {
+  const dials = Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`d${i}`, [0.5, 0, 1] as [number, number, number]]));
+  const side = { type: 'select', default: 'in', moveTabs: true, options: ['in', 'out', 'set'] } as const;
+  const config = {
+    ...dials,
+    jitter: [0, 0, 1] as [number, number, number],
+    random: [0, 0, 1] as [number, number, number],
+    side,
+    autoPlay: true,
+    playIn: { type: 'action', label: 'In' },
+    playOut: { type: 'action', label: 'Out' },
+  } as const;
+  const options = {
+    movePads: { jitter: 0, random: 0, side: 0, autoPlay: 5, playIn: 6, playOut: 7 },
+    moveActionRow: ['random'],
+    moveBottomRow: ['side', 'autoPlay', 'playIn', 'playOut'],
+  };
+
+  it('seats a tabs strip, a switch and two buttons on the fourth row, leaving the rows above to the chips', () => {
+    const id = nextId();
+    const { result: page, issues } = capturingIssues(() => {
+      TweakStore.registerPanel(id, id, config as never, undefined, options);
+      return buildMovePages([TweakStore.getPanel(id)!])[0];
+    });
+    const [top, values, actions, bottom] = movePadRows(page, 0);
+    assert.deepEqual(Array.from(bottom, (m) => m?.path), ['side', 'side', 'side', undefined, undefined, 'autoPlay', 'playIn', 'playOut']);
+    assert.deepEqual([values[0]?.path, actions[0]?.path], ['jitter', 'random']);
+    assert.equal(top.some(Boolean), false, 'the switch left the top row');
+    assert.equal(page.actions.some(Boolean), false, 'the buttons left the action row');
+    assert.deepEqual(issues, []);
+    TweakStore.unregisterPanel(id);
+  });
+
+  it('is empty, and the page unchanged, when the panel names nothing for it', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, config as never, undefined, { ...options, moveBottomRow: undefined });
+    const page = buildMovePages([TweakStore.getPanel(id)!])[0];
+    assert.equal(page.bottom, undefined);
+    const [top, , actions, bottom] = movePadRows(page, 0);
+    assert.deepEqual(bottom, []);
+    assert.deepEqual(top.slice(0, 3).map((m) => m?.path), ['side', 'side', 'side']);
+    assert.deepEqual([top[5]?.path, actions[6]?.path, actions[7]?.path], ['autoPlay', 'playIn', 'playOut']);
+    TweakStore.unregisterPanel(id);
+  });
+
+  it('counts a column held only by the fourth row as shown', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, { a: [0.5, 0, 1], go: { type: 'action', label: 'Go' } }, undefined, {
+      movePads: { go: 3 }, moveBottomRow: ['go'],
+    });
+    const page = buildMovePages([TweakStore.getPanel(id)!])[0];
+    assert.deepEqual(visibleColumns(page), [0, 3]);
+    TweakStore.unregisterPanel(id);
+  });
+
+  it('gives way to the app when it claims the pads, and says so', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, config as never, undefined, options);
+    const page = buildMovePages([TweakStore.getPanel(id)!])[0];
+    const { result, issues } = capturingIssues(() => [movePadRows(page, 1), movePadRows(page, 2)]);
+    assert.deepEqual(result.map((rows) => rows[3]), [[], []]);
+    assert.ok(issues.some(([code]) => code === 'bottom-row-claimed'));
+    TweakStore.unregisterPanel(id);
+  });
+
+  it('keeps a control on its own row when it names no column, or its cell is taken', () => {
+    const id = nextId();
+    const { result: page, issues } = capturingIssues(() => {
+      TweakStore.registerPanel(id, id, { ...dials, loop: false, again: false, nudge: [0, 0, 1], go: { type: 'action', label: 'Go' } }, undefined, {
+        movePads: { again: 2, nudge: 2, go: 4 },
+        moveBottomRow: ['loop', 'again', 'nudge', 'go'],
+      });
+      return buildMovePages([TweakStore.getPanel(id)!])[0];
+    });
+    assert.deepEqual(Array.from(page.bottom ?? [], (m) => m?.path), [undefined, undefined, 'again', undefined, 'go']);
+    assert.equal(page.toggles[0]?.path, 'loop');
+    assert.equal(page.values[2]?.path, 'nudge');
+    assert.deepEqual(issues.map(([code]) => code).sort(), ['bottom-row-no-column', 'bottom-row-taken']);
+    TweakStore.unregisterPanel(id);
+  });
+});
+
+describe('a slider kept a chip', () => {
+  it('stays a value chip under its dial while dial columns are free', () => {
+    const id = nextId();
+    const config = {
+      scale: [0.7, 0, 3] as [number, number, number],
+      jitter: { type: 'slider', default: 0, min: 0, max: 1, moveChip: true },
+      random: { type: 'slider', default: 0, min: 0, max: 1, moveChip: true },
+      blur: [0.6, 0, 1] as [number, number, number],
+    } as const;
+    const { result: page, issues } = capturingIssues(() => {
+      TweakStore.registerPanel(id, id, config as never, undefined, {
+        movePads: { jitter: 0, random: 0 },
+        moveActionRow: ['random'],
+      });
+      return buildMovePages([TweakStore.getPanel(id)!])[0];
+    });
+    assert.deepEqual(page.dials.map((m) => m?.path), ['scale', 'blur']);
+    const [, values, actions] = movePadRows(page, 0);
+    assert.deepEqual([values[0]?.path, actions[0]?.path], ['jitter', 'random']);
+    assert.deepEqual(issues, []);
+    TweakStore.unregisterPanel(id);
+  });
+});
+
+describe('action faces', () => {
+  const action = (face: unknown) => ({ type: 'action', path: 'pick', label: 'Curve: Snappy', face }) as ControlMeta;
+
+  it('draws a curve face through the curve grid’s own fit', () => {
+    const points = Array.from({ length: 17 }, (_, i) => 1 - (1 - i / 16) ** 3);
+    const sampler = (t: number) => {
+      const x = t * (points.length - 1);
+      const i = Math.min(points.length - 2, Math.floor(x));
+      return points[i] + (points[i + 1] - points[i]) * (x - i);
+    };
+    const grid = { type: 'select', path: 'curve', label: 'Curve', options: ['a'], preview: () => sampler } as ControlMeta;
+    assert.deepEqual(moveActionDrawing(action({ kind: 'curve', points })), { kind: 'curve', d: enumShapePath(grid, 'a') });
+  });
+
+  it('fits an overshoot to the box, ends and all', () => {
+    const drawing = moveActionDrawing(action({ kind: 'curve', points: [0, 1.2, 1] }));
+    assert.equal(drawing?.kind, 'curve');
+    const ys = (drawing as { d: string }).d.match(/-?\d+(?:\.\d+)?/g)!.map(Number).filter((_, i) => i % 2 === 1);
+    assert.deepEqual([Math.min(...ys), Math.max(...ys)], [0, 100]);
+  });
+
+  it('draws an offset face as the offset room, its origin in the middle, held at the ends', () => {
+    assert.deepEqual(moveActionDrawing(action({ kind: 'offset', value: 0.4 })), { kind: 'offset', origin: 0.5, position: 0.7, back: true, forward: true });
+    assert.equal((moveActionDrawing(action({ kind: 'offset', value: -3 })) as { position: number }).position, 0);
+  });
+
+  it('keeps the name for a face it cannot draw, and for a plain button', () => {
+    for (const face of [undefined, { kind: 'curve', points: [1] }, { kind: 'curve', points: [0, NaN] }, { kind: 'offset', value: NaN }, { kind: 'dial' }]) {
+      assert.equal(moveActionDrawing(action(face)), null);
+    }
+    assert.equal(moveActionDrawing({ type: 'slider', path: 'x', label: 'X', face: { kind: 'offset', value: 0 } } as ControlMeta), null);
   });
 });

@@ -1,5 +1,5 @@
 import type { GeneParameter, PresetDNA } from '../preset-genetics';
-import type { MoveSliderVisual, MoveSelectVisual, MoveToggleVisual, MoveVisual } from '../move-visual-core';
+import type { MoveActionFace, MoveSliderVisual, MoveSelectVisual, MoveToggleVisual, MoveVisual } from '../move-visual-core';
 export type { MoveSliderVisual, MoveSelectVisual, MoveToggleVisual, MoveVisual, MovePlaybackMode } from '../move-visual-core';
 // Lightweight state store with subscriptions for tweakers
 
@@ -73,6 +73,13 @@ export type ActionConfig = {
    * small slot).
    */
   icon?: string;
+  /**
+   * On a Move pad, a small picture in place of the name: a curve, or an
+   * offset — for a button that opens a choice and names what is chosen. The
+   * label stays the pad's accessible name and tooltip. Without it the pad
+   * draws its name, as before.
+   */
+  face?: MoveActionFace;
 };
 
 /**
@@ -404,6 +411,12 @@ export type SliderConfig = {
   /** The y-range the shape is drawn in — fixed, so a bigger value draws a
    *  bigger shape. Default [-1, 1]. */
   shapeDomain?: [number, number];
+  /**
+   * Move panel: always a value chip, never one of the eight dials — a small
+   * amount that shapes the control above it (an effect's Jitter under its
+   * dial). Seat it with `movePads`, and a row option to pick its pad row.
+   */
+  moveChip?: boolean;
 };
 
 /**
@@ -776,6 +789,8 @@ export type ControlMeta = {
   collapsible?: boolean;
   /** Action declared a `caption` — the row names what the button acts on. */
   caption?: string;
+  /** Action declared a `face` — its Move pad draws that picture, not its name. */
+  face?: MoveActionFace;
   /** Top-level folder under a `_tabs` root — it is a tab, and its children are that tab's page. */
   tab?: boolean;
   /** The synthetic segmented select driving `_tab` — it renders as the panel's tab bar, never as a row. */
@@ -802,6 +817,8 @@ export type ControlMeta = {
   shape?: (value: number) => ((t: number) => number) | null | undefined;
   /** Slider shape's fixed y-range. */
   shapeDomain?: [number, number];
+  /** Slider declared `moveChip` — a value chip, never a dial. */
+  moveChip?: boolean;
   /** Select dial width in hardware columns; defaults to one. */
   moveSpan?: 1 | 2;
   /** Select declared `moveTabs` — it lies across the small slots as a tabs
@@ -901,6 +918,8 @@ export type PanelConfig = {
   moveTopRow?: string[];
   /** Value chips sunk onto the action pad row, retained on the same terms as `hints`. */
   moveActionRow?: string[];
+  /** Small slots seated on the fourth pad row, retained on the same terms as `hints`. */
+  moveBottomRow?: string[];
   /** Actions and switches lowered onto the value pad row, retained on the same terms as `hints`. */
   moveValueRow?: string[];
   /** Big slots drawn as one container, retained on the same terms as `hints`. */
@@ -1060,6 +1079,16 @@ export type TweakStorePanelOptions = {
    * the switch row, by the same run rules.
    */
   moveActionRow?: string[];
+  /**
+   * Small slots, by control path, that sit on the fourth pad row (y=0) — the
+   * row under the action pads, drawn only when a page puts something on it.
+   * A `moveTabs` select named here lays its run there (its `movePads` column
+   * the start); a switch, an action or a value chip sits there in its
+   * `movePads` column. One with no column, or whose cell is taken, keeps its
+   * own row. While the app claims the pads (`MoveSurfaceStore.setPadRows`)
+   * the row is the app's, and what is named here is not shown.
+   */
+  moveBottomRow?: string[];
   /**
    * Actions, by control path, that sit on the value pad row in their
    * `movePads` column — so one column can stack two buttons (Extract over
@@ -1286,7 +1315,7 @@ class TweakStoreClass {
     // instead of resurrecting it.
     this.overlayPersistedValues(id, target, values, this.mapControlsByPath(controls));
 
-    this.panels.set(id, { id, name, icon: options.icon, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, moveTopRow: options.moveTopRow, moveActionRow: options.moveActionRow, moveValueRow: options.moveValueRow, moveSlotGroups: options.moveSlotGroups, moveBands: options.moveBands, moveEdges: options.moveEdges, module: '_enabled' in config ? true : undefined, kind: options.kind });
+    this.panels.set(id, { id, name, icon: options.icon, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, moveTopRow: options.moveTopRow, moveActionRow: options.moveActionRow, moveBottomRow: options.moveBottomRow, moveValueRow: options.moveValueRow, moveSlotGroups: options.moveSlotGroups, moveBands: options.moveBands, moveEdges: options.moveEdges, module: '_enabled' in config ? true : undefined, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -1306,6 +1335,7 @@ class TweakStoreClass {
     const movePads = options.movePads ?? existing.movePads;
     const moveTopRow = options.moveTopRow ?? existing.moveTopRow;
     const moveActionRow = options.moveActionRow ?? existing.moveActionRow;
+    const moveBottomRow = options.moveBottomRow ?? existing.moveBottomRow;
     const moveValueRow = options.moveValueRow ?? existing.moveValueRow;
     const moveSlotGroups = options.moveSlotGroups ?? existing.moveSlotGroups;
     const moveBands = options.moveBands ?? existing.moveBands;
@@ -1341,7 +1371,7 @@ class TweakStoreClass {
       }
     }
 
-    const nextPanel: PanelConfig = { id, name, icon, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, moveTopRow, moveActionRow, moveValueRow, moveSlotGroups, moveBands, moveEdges, module: '_enabled' in config ? true : undefined, kind: options.kind ?? existing.kind };
+    const nextPanel: PanelConfig = { id, name, icon, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, moveTopRow, moveActionRow, moveBottomRow, moveValueRow, moveSlotGroups, moveBands, moveEdges, module: '_enabled' in config ? true : undefined, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
 
@@ -2367,6 +2397,7 @@ class TweakStoreClass {
           onTap: value.onTap,
           shape: value.shape,
           shapeDomain: value.shapeDomain,
+          moveChip: value.moveChip,
           shortcut,
         });
       } else if (this.isNumberConfig(value)) {
@@ -2403,7 +2434,7 @@ class TweakStoreClass {
       } else if (this.isSpringConfig(value) || this.isEasingConfig(value)) {
         controls.push({ type: 'transition', path, label });
       } else if (this.isActionConfig(value)) {
-        controls.push({ type: 'action', path, label: (value as ActionConfig).label || label, caption: (value as ActionConfig).caption, icon: (value as ActionConfig).icon });
+        controls.push({ type: 'action', path, label: (value as ActionConfig).label || label, caption: (value as ActionConfig).caption, icon: (value as ActionConfig).icon, ...((value as ActionConfig).face ? { face: (value as ActionConfig).face } : {}) });
       } else if (this.isSelectConfig(value)) {
         // `options` is always the flat run of choices — every reader of a
         // select's options sees values; only the Move slot reads the folders.

@@ -163,12 +163,15 @@ __export(index_exports, {
   MovePadAppBody: () => MovePadAppBody,
   MovePadBandBody: () => MovePadBandBody,
   MovePadColorBody: () => MovePadColorBody,
+  MovePadCurveBody: () => MovePadCurveBody,
+  MovePadFaceBody: () => MovePadFaceBody,
   MovePadFadeBody: () => MovePadFadeBody,
   MovePadIconBody: () => MovePadIconBody,
   MovePadIconLabelBody: () => MovePadIconLabelBody,
   MovePadListBody: () => MovePadListBody,
   MovePadListStore: () => MovePadListStore,
   MovePadLoopBody: () => MovePadLoopBody,
+  MovePadOffsetBody: () => MovePadOffsetBody,
   MovePadTabsBody: () => MovePadTabsBody,
   MovePadToggleBody: () => MovePadToggleBody,
   MovePadValueBody: () => MovePadValueBody,
@@ -362,6 +365,7 @@ __export(index_exports, {
   modRange: () => modRange,
   modRingArc: () => modRingArc,
   morphDNA: () => morphDNA,
+  moveActionDrawing: () => moveActionDrawing,
   moveAppPadRow: () => moveAppPadRow,
   moveBandCell: () => moveBandCell,
   moveBandCuts: () => moveBandCuts,
@@ -1845,39 +1849,45 @@ var OFFSET_WAY_FAR = "M6.42822 11.4968C6.11727 11.8078 5.61306 11.8076 5.30201 1
 var OFFSET_WAY_BOX = { w: 13.6609, h: 11.73 };
 var at = (position) => `${place(position) * 100}%`;
 function MoveSlotOffsetBody({ label, value, origin, position, back, forward }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "tweakers-move-dial-tag", children: label }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)(MoveOffsetRoom, { origin, position, back, forward }),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "tweakers-move-dial-option tweakers-move-visual-value", children: value })
+  ] });
+}
+function MoveOffsetRoom({ origin, position, back, forward }) {
   const moved = Math.abs(position - origin) > 1e-9;
   const ways = moved ? [position < origin ? "back" : "forward"] : ["back", "forward"].filter((way) => way === "back" ? back : forward);
   const from = Math.min(place(origin), place(position));
   const to = Math.max(place(origin), place(position));
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "tweakers-move-dial-tag", children: label }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "tweakers-move-offset", "data-moved": moved || void 0, "aria-hidden": "true", children: [
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-        "span",
-        {
-          className: "tweakers-move-offset-span",
-          style: { clipPath: `inset(0 ${(1 - to) * 100}% 0 ${from * 100}%)` }
-        }
-      ),
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "tweakers-move-offset-origin", style: { left: at(origin) } }),
-      ways.map((way) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
-        "svg",
-        {
-          className: "tweakers-move-offset-way",
-          "data-way": way,
-          style: { "--move-offset-at": at(position) },
-          viewBox: `0 0 ${OFFSET_WAY_BOX.w} ${OFFSET_WAY_BOX.h}`,
-          children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("g", { transform: way === "forward" ? `translate(${OFFSET_WAY_BOX.w} 0) scale(-1 1)` : void 0, children: [
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: OFFSET_WAY_NEAR }),
-            /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { className: "tweakers-move-offset-trail", d: OFFSET_WAY_FAR })
-          ] })
-        },
-        way
-      )),
-      /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "tweakers-move-offset-pin", style: { left: at(position) }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("svg", { className: "tweakers-move-offset-head", viewBox: "0 0 15 20.1074", fillRule: "evenodd", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: OFFSET_PIN }) }) })
-    ] }),
-    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "tweakers-move-dial-option tweakers-move-visual-value", children: value })
+  return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { className: "tweakers-move-offset", "data-moved": moved || void 0, "aria-hidden": "true", children: [
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+      "span",
+      {
+        className: "tweakers-move-offset-span",
+        style: { clipPath: `inset(0 ${(1 - to) * 100}% 0 ${from * 100}%)` }
+      }
+    ),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "tweakers-move-offset-origin", style: { left: at(origin) } }),
+    ways.map((way) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(
+      "svg",
+      {
+        className: "tweakers-move-offset-way",
+        "data-way": way,
+        style: { "--move-offset-at": at(position) },
+        viewBox: `0 0 ${OFFSET_WAY_BOX.w} ${OFFSET_WAY_BOX.h}`,
+        children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("g", { transform: way === "forward" ? `translate(${OFFSET_WAY_BOX.w} 0) scale(-1 1)` : void 0, children: [
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: OFFSET_WAY_NEAR }),
+          /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { className: "tweakers-move-offset-trail", d: OFFSET_WAY_FAR })
+        ] })
+      },
+      way
+    )),
+    /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "tweakers-move-offset-pin", style: { left: at(position) }, children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("svg", { className: "tweakers-move-offset-head", viewBox: "0 0 15 20.1074", fillRule: "evenodd", children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("path", { d: OFFSET_PIN }) }) })
   ] });
+}
+function MovePadOffsetBody({ origin, position, back, forward }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(MoveOffsetRoom, { origin, position, back, forward });
 }
 function MoveSlotPlaybackDrawing({ mode }) {
   const icon = mode === "scissors" ? "scissors" : mode === "ping-pong" ? "arrow-left-right" : mode === "bounce" ? "repeat" : "arrow-right";
@@ -2437,7 +2447,7 @@ function buildMovePages(panels) {
     const dials = [];
     let nextCol = 0;
     for (const c of controls) {
-      if (!isDial(c) || isPadColor(c) || balanceRefs.has(c)) continue;
+      if (!isDial(c) || isPadColor(c) || balanceRefs.has(c) || c.moveChip) continue;
       const span = dialSpan(c);
       if (nextCol + span > MOVE_DIALS) {
         if (nextCol >= MOVE_DIALS) break;
@@ -2451,6 +2461,7 @@ function buildMovePages(panels) {
     const actions = [];
     const topValues = [];
     const valueActions = [];
+    const bottom = [];
     const topAt = (i) => toggles[i] ?? topValues[i];
     const cellAt = (row2, i) => row2 === toggles ? topAt(i) : row2 === values ? values[i] ?? valueActions[i] : row2[i];
     const place3 = (row2, rowName, c, col) => {
@@ -2475,10 +2486,11 @@ function buildMovePages(panels) {
         `panel '${panel.id}': control '${c.path}': the ${rowName} row's ${MOVE_PADS} pads are all taken \u2014 dropped`
       );
     };
+    const floor = panel.moveBottomRow ?? [];
     const sunk = (c) => (panel.moveActionRow ?? []).includes(c.path);
     const placeTabs = (c, col) => {
-      const row2 = sunk(c) ? actions : toggles;
-      const rowName = row2 === actions ? "action" : "toggle";
+      const row2 = floor.includes(c.path) ? bottom : sunk(c) ? actions : toggles;
+      const rowName = row2 === bottom ? "bottom" : row2 === actions ? "action" : "toggle";
       const span = padSpan(c);
       if (span > MOVE_PADS) {
         reportMoveLayoutIssue(
@@ -2531,10 +2543,11 @@ function buildMovePages(panels) {
     }
     const seated = (c) => topValues.includes(c) || values.includes(c);
     const lowered = (c) => c.type === "toggle" && !isToggleDial(c) && (panel.moveValueRow ?? []).includes(c.path) && padCols.get(c) != null;
+    const floored = (c) => c.type === "toggle" && !isToggleDial(c) && floor.includes(c.path) && !lowered(c);
     for (const c of controls) {
       const col = padCols.get(c) ?? null;
       if (isMoveTabs(c)) placeTabs(c, col);
-      else if (c.type === "toggle" && !isToggleDial(c) && !lowered(c)) place3(toggles, "toggle", c, col);
+      else if (c.type === "toggle" && !isToggleDial(c) && !lowered(c) && !floored(c)) place3(toggles, "toggle", c, col);
     }
     const lift = panel.moveTopRow ?? [];
     const chipFits = (c) => isDial(c) && !noChip(c) && !dials.includes(c) && !balanceRefs.has(c) && !isPadColor(c);
@@ -2600,9 +2613,32 @@ function buildMovePages(panels) {
       }
     }
     for (const c of controls) {
+      if (!floor.includes(c.path) || isMoveTabs(c)) continue;
+      const toggle = floored(c);
+      if (!toggle && c.type !== "action" && !chipFits(c)) continue;
+      if (topValues.includes(c) || actionValues.includes(c) || valueActions.includes(c)) continue;
+      const col = padCols.get(c) ?? null;
+      const home = toggle ? "it keeps the top row" : c.type === "action" ? "it keeps the action row" : "it keeps the value row";
+      if (col === null) {
+        reportMoveLayoutIssue(
+          "bottom-row-no-column",
+          `panel '${panel.id}': control '${c.path}' is named in moveBottomRow but has no movePads column \u2014 ${c.type === "action" ? "a button reaches the pads only by column" : home}`
+        );
+      } else if (bottom[col] !== void 0) {
+        reportMoveLayoutIssue(
+          "bottom-row-taken",
+          `panel '${panel.id}': control '${c.path}': bottom-row column ${col} holds '${bottom[col].path}' \u2014 ${home}`
+        );
+      } else {
+        bottom[col] = c;
+        continue;
+      }
+      if (toggle) place3(toggles, "toggle", c, col);
+    }
+    for (const c of controls) {
       const col = padCols.get(c) ?? null;
       if (isMoveTabs(c) || c.type === "toggle" && !isToggleDial(c)) continue;
-      if (seated(c) || actionValues.includes(c) || valueActions.includes(c)) continue;
+      if (seated(c) || actionValues.includes(c) || valueActions.includes(c) || bottom.includes(c)) continue;
       if (c.type === "action") {
         if (col !== null && actionValues[col] !== void 0) {
           reportMoveLayoutIssue("action-row-taken", `panel '${panel.id}': action '${c.path}': column ${col} holds the chip '${actionValues[col].path}' \u2014 the action moves along`);
@@ -2634,7 +2670,8 @@ function buildMovePages(panels) {
       actions: actions.slice(0, MOVE_PADS),
       ...topValues.length ? { topValues: topValues.slice(0, MOVE_PADS) } : {},
       ...actionValues.length ? { actionValues: actionValues.slice(0, MOVE_PADS) } : {},
-      ...valueActions.length ? { valueActions: valueActions.slice(0, MOVE_PADS) } : {}
+      ...valueActions.length ? { valueActions: valueActions.slice(0, MOVE_PADS) } : {},
+      ...bottom.length ? { bottom: bottom.slice(0, MOVE_PADS) } : {}
     };
     const rows = movePadRows(page, 0);
     for (const band of panel.moveBands ?? []) {
@@ -2687,8 +2724,16 @@ function movePadRows(page, claimedRows) {
       if (cell) actions[i] = cell;
     }
   }
+  const bottom = page.bottom ?? [];
+  if (claimedRows >= 1 && bottom.some(Boolean)) {
+    reportMoveLayoutIssue(
+      "bottom-row-claimed",
+      `panel '${page.panel.id}': the app claims the bottom pad row \u2014 its moveBottomRow pads are not shown`
+    );
+  }
   if (claimedRows >= 2) return [top, values, [], []];
-  return [top, values, actions, []];
+  if (claimedRows === 1) return [top, values, actions, []];
+  return [top, values, actions, bottom];
 }
 function moveBandCell(page, rows, row2, col) {
   const meta = rows[row2]?.[col];
@@ -2749,7 +2794,7 @@ function slotGroups(page, cols = visibleColumns(page)) {
 function visibleColumns(page) {
   const cols = [];
   for (let i = 0; i < MOVE_DIALS; i++) {
-    if (page.dials[i] || page.toggles[i] || page.topValues?.[i] || page.values[i] || page.actions[i] || page.actionValues?.[i] || page.valueActions?.[i]) cols.push(i);
+    if (page.dials[i] || page.toggles[i] || page.topValues?.[i] || page.values[i] || page.actions[i] || page.actionValues?.[i] || page.valueActions?.[i] || page.bottom?.[i]) cols.push(i);
   }
   return cols;
 }
@@ -2798,6 +2843,9 @@ function enumShapePath(meta, value) {
     return null;
   }
   if (typeof sample !== "function") return null;
+  return fittedShapePath(sample);
+}
+function fittedShapePath(sample) {
   const segments = plotCurve(sample, { count: ENUM_SHAPE_SAMPLES }).segments;
   let lo = Infinity;
   let hi = -Infinity;
@@ -2812,6 +2860,25 @@ function enumShapePath(meta, value) {
   const fill = (v) => span > 0 ? (v - lo) / span : 0.5;
   const d = segments.map((seg) => seg.map((pt, i) => `${i ? "L" : "M"} ${(pt.t * 100).toFixed(2)} ${((1 - fill(pt.v)) * 100).toFixed(2)}`).join(" ")).join(" ");
   return d || null;
+}
+function moveActionDrawing(meta) {
+  const face = meta.type === "action" ? meta.face : void 0;
+  if (face?.kind === "curve") {
+    const ys = Array.isArray(face.points) ? face.points : [];
+    if (ys.length < 2 || !ys.every(Number.isFinite)) return null;
+    const d = fittedShapePath((t) => {
+      const x = Math.min(1, Math.max(0, t)) * (ys.length - 1);
+      const i = Math.min(ys.length - 2, Math.floor(x));
+      return ys[i] + (ys[i + 1] - ys[i]) * (x - i);
+    });
+    return d ? { kind: "curve", d } : null;
+  }
+  if (face?.kind === "offset") {
+    if (typeof face.value !== "number" || !Number.isFinite(face.value)) return null;
+    const share = Math.min(1, Math.max(-1, face.value));
+    return { kind: "offset", origin: 0.5, position: 0.5 + share / 2, back: true, forward: true };
+  }
+  return null;
 }
 function sliderShapePath(meta, value) {
   if (meta.type !== "slider" || !meta.shape) return null;
@@ -3626,10 +3693,7 @@ function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }) {
   }, [activeIdx, options.length]);
   const chosen = shapes[activeIdx] ?? null;
   return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
-    /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("span", { className: "tweakers-move-dial-tile tweakers-move-dial-rest", "aria-hidden": "true", children: [
-      chosen && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotCurveDots, { d: chosen }),
-      chosen && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotShape, { d: chosen, className: "tweakers-move-dial-tile-shape" })
-    ] }),
+    /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveCurveRestTile, { d: chosen }),
     /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { ref: popRef, className: "tweakers-move-dial-pop", style: { "--move-grid-columns": MOVE_GRID_COLUMNS }, children: /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { ref: gridRef, className: "tweakers-move-dial-grid", role: "listbox", "aria-label": label, children: options.map((opt, i) => {
       const group = enumOptionGroup(opt);
       const heads = group !== null && group !== (i > 0 ? enumOptionGroup(options[i - 1]) : null);
@@ -3651,19 +3715,27 @@ function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }) {
     }) }) })
   ] });
 }
+function MoveCurveRestTile({ d, cells }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("span", { className: "tweakers-move-dial-tile tweakers-move-dial-rest", "aria-hidden": "true", children: [
+    d && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotCurveDots, { d, cells }),
+    d && /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotShape, { d, className: "tweakers-move-dial-tile-shape" })
+  ] });
+}
 var MOVE_CURVE_DOT_CELLS = 8;
+var MOVE_PAD_CURVE_DOT_CELLS = { x: 4, y: 2 };
 function curveEnds(d) {
   const nums = d.match(/-?\d+(?:\.\d+)?/g)?.map(Number) ?? [];
   if (nums.length < 4) return null;
   return { x0: nums[0], y0: nums[1], x1: nums[nums.length - 2], y1: nums[nums.length - 1] };
 }
-function MoveSlotCurveDots({ d, className = "tweakers-move-dial-tile-shape tweakers-move-dial-dots" }) {
+function MoveSlotCurveDots({ d, className = "tweakers-move-dial-tile-shape tweakers-move-dial-dots", cells }) {
   const ends = curveEnds(d);
   if (!ends) return null;
-  const n = MOVE_CURVE_DOT_CELLS;
-  const dx = (ends.x1 - ends.x0) / n || 100 / n;
-  const rise = (ends.y0 - ends.y1) / n;
-  const dy = Math.abs(rise) > 0.5 ? Math.abs(rise) : 100 / n;
+  const nx = cells?.x ?? MOVE_CURVE_DOT_CELLS;
+  const ny = cells?.y ?? MOVE_CURVE_DOT_CELLS;
+  const dx = (ends.x1 - ends.x0) / nx || 100 / nx;
+  const rise = (ends.y0 - ends.y1) / ny;
+  const dy = Math.abs(rise) > 0.5 ? Math.abs(rise) : 100 / ny;
   const run = (from, step) => {
     const at2 = [];
     for (let v = from - Math.ceil((from + 40) / step) * step; v <= 140; v += step) at2.push(v);
@@ -4475,6 +4547,12 @@ function MovePadWaveBody({ label, percent }) {
 function MovePadActionBody({ label }) {
   return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("span", { className: "tweakers-move-pad-title", children: label });
 }
+function MovePadCurveBody({ d }) {
+  return /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveCurveRestTile, { d, cells: MOVE_PAD_CURVE_DOT_CELLS });
+}
+function MovePadFaceBody({ drawing }) {
+  return drawing.kind === "curve" ? /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MovePadCurveBody, { d: drawing.d }) : /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MovePadOffsetBody, { origin: drawing.origin, position: drawing.position, back: drawing.back, forward: drawing.forward });
+}
 function MovePadIconLabelBody({ icon, label }) {
   return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("span", { className: "tweakers-move-pad-icon-label", children: [
     /* @__PURE__ */ (0, import_jsx_runtime3.jsx)(MoveSlotIcon, { icon, className: "tweakers-move-pad-icon" }),
@@ -4621,6 +4699,8 @@ var MOVE_PAD_LIBRARY = {
   list: { description: "a checked list above a small pad; its dial walks, Sample selects, a second pad press runs \u2014 or, single, a picker: Sample takes the row and the pad names it", component: MovePadListBody },
   action: { description: "a button: a press runs the app\u2019s action", component: MovePadActionBody },
   "icon-label": { description: "a button wearing its picture beside its name \u2014 a press runs the app\u2019s action", component: MovePadIconLabelBody },
+  curve: { description: "a button wearing the curve it has chosen \u2014 the curve grid\u2019s resting tile at pad size; a press runs the app\u2019s action", component: MovePadCurveBody },
+  offset: { description: "a button wearing the nudge it has chosen \u2014 the offset face\u2019s room at pad size; a press runs the app\u2019s action", component: MovePadOffsetBody },
   app: { description: "a cell the app paints itself \u2014 a track, a slice, a step", component: MovePadAppBody },
   bend: { description: "hold and drag to bend the envelope ramp above it", component: MovePadToggleBody },
   wave: { description: "hold and drag for the stage\u2019s own sine, tap to flip it", component: MovePadWaveBody },
@@ -4678,10 +4758,11 @@ var MOVE_SLOT_LIBRARY = {
 
 // src/components/MovePadList.tsx
 var import_jsx_runtime4 = require("react/jsx-runtime");
-function MovePadList({ panelId, path, label, icon, view, disabled }) {
+function MovePadList({ panelId, path, label, icon, face, view, disabled }) {
   const root = (0, import_react4.useRef)(null);
   const open2 = view?.panelId === panelId && view.path === path;
   const shown = open2 ? view.submitLabel ?? label : MovePadListStore.choice(panelId, path)?.label ?? label;
+  const drawn = face && !(open2 && view.submitLabel) ? face : null;
   (0, import_react4.useEffect)(() => () => {
     const current = MovePadListStore.getView();
     if (current?.panelId === panelId && current.path === path) MovePadListStore.close();
@@ -4733,10 +4814,13 @@ function MovePadList({ panelId, path, label, icon, view, disabled }) {
         "aria-haspopup": "listbox",
         "aria-busy": open2 && view.pending || void 0,
         disabled: disabled || open2 && view.pending,
+        "data-face": drawn?.kind,
+        "aria-label": drawn ? shown : void 0,
+        title: drawn ? shown : void 0,
         onClick: () => {
           void MovePadListStore.activate(panelId, path);
         },
-        children: icon ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(MovePadIconLabelBody, { icon, label: shown }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(MovePadActionBody, { label: shown })
+        children: drawn ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(MovePadFaceBody, { drawing: drawn }) : icon ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(MovePadIconLabelBody, { icon, label: shown }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(MovePadActionBody, { label: shown })
       }
     ),
     open2 && /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "tweakers-move-dial-screen tweakers-move-pad-list-overlay", onWheel: (event) => {
@@ -18921,7 +19005,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           ))
                                         ] }) }, `band-${col}`);
                                       }
-                                      if (page.toggles[col] === meta || meta.type === "toggle" && page.valueActions?.[col] === meta) {
+                                      if (page.toggles[col] === meta || meta.type === "toggle" && (page.valueActions?.[col] === meta || page.bottom?.[col] === meta)) {
                                         const caption = meta.icon ? meta.toggleCaption?.[values[meta.path] ? "on" : "off"] : void 0;
                                         return /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
                                           "button",
@@ -18940,31 +19024,39 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         );
                                       }
                                       if (meta.type === "action") {
-                                        if (MovePadListStore.has(page.panel.id, meta.path)) return /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MovePadList, { panelId: page.panel.id, path: meta.path, label: meta.label, icon: meta.icon, view: padListView, disabled: import_TweakStore19.TweakStore.isDisabled(page.panel.id, meta.path) }, meta.path);
+                                        const face = moveActionDrawing(meta);
+                                        if (MovePadListStore.has(page.panel.id, meta.path)) return /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MovePadList, { panelId: page.panel.id, path: meta.path, label: meta.label, icon: meta.icon, face, view: padListView, disabled: import_TweakStore19.TweakStore.isDisabled(page.panel.id, meta.path) }, meta.path);
                                         return /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
                                           "button",
                                           {
                                             className: "tweakers-move-pad",
                                             "data-kind": "action",
+                                            "data-face": face?.kind,
+                                            "aria-label": face ? meta.label : void 0,
+                                            title: face ? meta.label : void 0,
                                             onClick: () => import_TweakStore19.TweakStore.triggerAction(page.panel.id, meta.path),
-                                            children: meta.icon ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MovePadIconLabelBody, { icon: meta.icon, label: meta.label }) : /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MovePadActionBody, { label: meta.label })
+                                            children: face ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MovePadFaceBody, { drawing: face }) : meta.icon ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MovePadIconLabelBody, { icon: meta.icon, label: meta.label }) : /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MovePadActionBody, { label: meta.label })
                                           },
                                           meta.path
                                         );
                                       }
                                       const isColor = meta.type === "color";
                                       const value = isColor ? null : chipValue(meta);
+                                      const room = !isColor && meta.moveVisual?.kind === "offset" ? moveNumericDrawing(meta, values[meta.path]) : null;
+                                      const tip = room ? `${meta.label}: ${value.num}${value.unit ?? ""}` : void 0;
                                       return /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
                                         "button",
                                         {
                                           className: "tweakers-move-pad",
                                           "data-kind": isColor ? "color" : "value",
+                                          "data-face": room ? "offset" : void 0,
                                           "data-scrub": moveChipScrubs(meta) || void 0,
                                           "data-held": held !== null && held.meta.path === meta.path || hwHeld[meta.path] || void 0,
                                           "data-latched": chipLatched(col, meta) || void 0,
-                                          "aria-label": isColor ? meta.label : void 0,
+                                          "aria-label": isColor ? meta.label : tip,
+                                          title: tip,
                                           ...chipGesture(col, meta),
-                                          children: isColor ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MovePadColorBody, { label: meta.label, color: String(values[meta.path]) }) : /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MovePadValueBody, { label: meta.label, value: value.num, unit: value.unit, children: /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MoveModRing, { panelId: page.panel.id, path: meta.path, pad: true }) })
+                                          children: isColor ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MovePadColorBody, { label: meta.label, color: String(values[meta.path]) }) : room?.kind === "offset" ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MovePadOffsetBody, { origin: room.origin, position: room.position, back: room.back, forward: room.forward }) : /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MovePadValueBody, { label: meta.label, value: value.num, unit: value.unit, children: /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MoveModRing, { panelId: page.panel.id, path: meta.path, pad: true }) })
                                         },
                                         meta.path
                                       );
@@ -23239,12 +23331,15 @@ var import_TweakStore22 = require("tweakers/store");
   MovePadAppBody,
   MovePadBandBody,
   MovePadColorBody,
+  MovePadCurveBody,
+  MovePadFaceBody,
   MovePadFadeBody,
   MovePadIconBody,
   MovePadIconLabelBody,
   MovePadListBody,
   MovePadListStore,
   MovePadLoopBody,
+  MovePadOffsetBody,
   MovePadTabsBody,
   MovePadToggleBody,
   MovePadValueBody,
@@ -23438,6 +23533,7 @@ var import_TweakStore22 = require("tweakers/store");
   modRange,
   modRingArc,
   morphDNA,
+  moveActionDrawing,
   moveAppPadRow,
   moveBandCell,
   moveBandCuts,

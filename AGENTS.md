@@ -44,7 +44,9 @@ can find.
 
 ## 2. Layout is a contract, not a preference
 
-- **Eight dial columns, four tracks, three pad rows.** `buildMovePages`,
+- **Eight dial columns, four tracks, four pad rows** — the Move's own grid.
+  The fourth (lowest, y=0) holds only what a panel names in `moveBottomRow`,
+  and an app that claims the pads takes it back. `buildMovePages`,
   `dialSpan`, `visibleColumns` and `movePadRows` decide the geometry. App CSS
   does not.
 - **No magic geometry.** Never invent a column count, a minimum, or a

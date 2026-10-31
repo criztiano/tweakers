@@ -199,6 +199,21 @@ type MoveToggleVisual = {
     swing?: () => number | null;
 };
 type MoveVisual = MoveSliderVisual | MoveSelectVisual | MoveToggleVisual;
+/**
+ * A small picture an action pad wears in place of its name — for a button
+ * that opens a choice and names what is chosen ("Curve: Snappy", "Offset:
+ * +0.2 s"). Each kind is the small sibling of a big face: `curve` the curve
+ * grid's resting tile (`points`: y at even steps of x over 0..1, free to dip
+ * under 0 or rise over 1), `offset` the offset face's room (`value`: the
+ * share of the range, −1..1, 0 in the middle).
+ */
+type MoveActionFace = {
+    kind: 'curve';
+    points: number[];
+} | {
+    kind: 'offset';
+    value: number;
+};
 
 /**
  * gradient-core — DOM-free gradient math shared by every framework port of the
@@ -387,6 +402,13 @@ type ActionConfig = {
      * small slot).
      */
     icon?: string;
+    /**
+     * On a Move pad, a small picture in place of the name: a curve, or an
+     * offset — for a button that opens a choice and names what is chosen. The
+     * label stays the pad's accessible name and tooltip. Without it the pad
+     * draws its name, as before.
+     */
+    face?: MoveActionFace;
 };
 /**
  * Explicit switch form, for what a bare `false` cannot say: a name a key
@@ -722,6 +744,12 @@ type SliderConfig = {
     /** The y-range the shape is drawn in — fixed, so a bigger value draws a
      *  bigger shape. Default [-1, 1]. */
     shapeDomain?: [number, number];
+    /**
+     * Move panel: always a value chip, never one of the eight dials — a small
+     * amount that shapes the control above it (an effect's Jitter under its
+     * dial). Seat it with `movePads`, and a row option to pick its pad row.
+     */
+    moveChip?: boolean;
 };
 /**
  * Scrub-anywhere numeric readout. Unlike a slider it has no track — drag the
@@ -1018,6 +1046,8 @@ type ControlMeta = {
     collapsible?: boolean;
     /** Action declared a `caption` — the row names what the button acts on. */
     caption?: string;
+    /** Action declared a `face` — its Move pad draws that picture, not its name. */
+    face?: MoveActionFace;
     /** Top-level folder under a `_tabs` root — it is a tab, and its children are that tab's page. */
     tab?: boolean;
     /** The synthetic segmented select driving `_tab` — it renders as the panel's tab bar, never as a row. */
@@ -1053,6 +1083,8 @@ type ControlMeta = {
     shape?: (value: number) => ((t: number) => number) | null | undefined;
     /** Slider shape's fixed y-range. */
     shapeDomain?: [number, number];
+    /** Slider declared `moveChip` — a value chip, never a dial. */
+    moveChip?: boolean;
     /** Select dial width in hardware columns; defaults to one. */
     moveSpan?: 1 | 2;
     /** Select declared `moveTabs` — it lies across the small slots as a tabs
@@ -1150,6 +1182,8 @@ type PanelConfig = {
     moveTopRow?: string[];
     /** Value chips sunk onto the action pad row, retained on the same terms as `hints`. */
     moveActionRow?: string[];
+    /** Small slots seated on the fourth pad row, retained on the same terms as `hints`. */
+    moveBottomRow?: string[];
     /** Actions and switches lowered onto the value pad row, retained on the same terms as `hints`. */
     moveValueRow?: string[];
     /** Big slots drawn as one container, retained on the same terms as `hints`. */
@@ -1302,6 +1336,16 @@ type TweakStorePanelOptions = {
      * the switch row, by the same run rules.
      */
     moveActionRow?: string[];
+    /**
+     * Small slots, by control path, that sit on the fourth pad row (y=0) — the
+     * row under the action pads, drawn only when a page puts something on it.
+     * A `moveTabs` select named here lays its run there (its `movePads` column
+     * the start); a switch, an action or a value chip sits there in its
+     * `movePads` column. One with no column, or whose cell is taken, keeps its
+     * own row. While the app claims the pads (`MoveSurfaceStore.setPadRows`)
+     * the row is the app's, and what is named here is not shown.
+     */
+    moveBottomRow?: string[];
     /**
      * Actions, by control path, that sit on the value pad row in their
      * `movePads` column — so one column can stack two buttons (Extract over
