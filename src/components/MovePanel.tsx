@@ -548,7 +548,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // One face for every track button: the marker, then the page's picture
   // and its name as the row's look asks. A picture alone still names its
   // page to a screen reader and under the pointer.
-  const trackFace = (panel: PanelConfig, color: string) => {
+  // A page's number key, when it has one, rides beside its name.
+  const trackFace = (panel: PanelConfig, color: string, key?: number) => {
     const icon = trackLabelStyle === 'name' ? undefined : moveTrackIcon(panel);
     return (
       <>
@@ -557,6 +558,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
         {icon && trackLabelStyle === 'icon'
           ? <span className="tweakers-move-track-label" data-hidden>{panel.name}</span>
           : <span className="tweakers-move-track-label">{panel.name}</span>}
+        {key !== undefined && <kbd className="tweakers-move-track-key" aria-hidden="true">{key}</kbd>}
       </>
     );
   };
@@ -896,6 +898,22 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // Undo, Delete and Copy on the computer's keys, for whatever the buttons
   // hold — the Move's editing keys without a picture of them on screen.
   useEffect(() => attachMoveKeys(), []);
+  // The number keys are the track buttons: 1 to 4 take the page there, as
+  // the Move's track buttons do — never while a field has the keys.
+  const selectPageRef = useRef<(index: number) => void>(() => {});
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      const n = /^[1-9]$/.test(e.key) ? Number(e.key) : 0;
+      if (!n || n > MOVE_TRACKS) return;
+      e.preventDefault();
+      selectPageRef.current(n - 1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   useEffect(() => () => {
     if (MovePresetStore.getView()?.panelId === pageId) MovePresetStore.cancel();
     if (MovePresetStore.getSaving()?.panelId === pageId) MovePresetStore.cancelSave();
@@ -1768,6 +1786,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     // Tell the hardware side; the kit relays it when the bridge is up.
     window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: next.panel.id } }));
   };
+  selectPageRef.current = selectPage;
   // Where the window sits in the whole set — counted in controls, since that
   // is what the wheel moves by and what a person is looking for.
   const stripStops = stripMode ? stripOffsets(page) : [];
@@ -1932,6 +1951,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       data-active={pg === page}
                       aria-selected={pg === page}
                       aria-controls={panelIdForTabs}
+                      aria-keyshortcuts={i < MOVE_TRACKS ? String(i + 1) : undefined}
                       title={trackLabelStyle === 'icon' ? pg.panel.name : undefined}
                       tabIndex={pg === page ? 0 : -1}
                       onClick={() => selectPage(i)}
@@ -1950,7 +1970,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           ?.focus();
                       }}
                     >
-                      {trackFace(pg.panel, MOVE_TRACK_COLORS[i])}
+                      {trackFace(pg.panel, MOVE_TRACK_COLORS[i], i < MOVE_TRACKS ? i + 1 : undefined)}
                     </button>
                   ))}
                 </div>
