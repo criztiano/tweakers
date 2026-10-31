@@ -43,7 +43,7 @@ export { MoveViews } from './move-views';
 export type { MoveViewsState, MoveViewWait, MoveViewTask, MoveViewLoadOptions } from './move-views';
 export { MOVE_VIEW_MOTIONS, MOVE_VIEW_PRESENTATION, MOVE_VIEW_WAIT, moveViewChoreography } from './move-view-core';
 export type { MoveViewMotion, MoveViewChange, MoveViewChoreography, MoveViewLayer, MoveViewTween } from './move-view-core';
-export { buildMovePages, buildModMovePage, slotGroups, movePadRows, moveAppPadRow, visibleColumns, isToggleDial, normalizeToggleDial, denormalizeToggleDial, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, padSpan, isMoveDial, isMoveTabs, isNamedTabs, moveTabCell, moveBandCell, moveEdgesCell, isSpanContinuation, isPadSpanContinuation, enumOptionIcon, enumArrows, moveActionDrawing, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
+export { buildMovePages, buildModMovePage, slotGroups, movePadRows, moveAppPadRow, visibleColumns, isToggleDial, normalizeToggleDial, denormalizeToggleDial, normalizeDial, normalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, normalizeFilterDial, denormalizeFilterDial, filterShapePath, dialOrigin, dialSpan, padSpan, isMoveDial, isMoveTabs, isNamedTabs, moveTabCell, moveBandCell, moveEdgesCell, isSpanContinuation, isPadSpanContinuation, enumOptionIcon, enumArrows, moveActionDrawing, moveNestChildren, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS } from './move-layout';
 export type { MovePage, MoveBandCell, MoveEdgesCell, MoveArrowDirection, MoveActionDrawing } from './move-layout';
 
 // The endless strip — a page with more slots than the Move has dials

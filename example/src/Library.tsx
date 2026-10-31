@@ -174,6 +174,14 @@ export function Library() {
       </Section>
 
       <Section
+        id="nest"
+        title="Nested layer"
+        lede="When a page has no slot left and one dial needs more knobs, those knobs name it in moveNest and take no slot at all. A small + in the dial's corner says there is more inside. Double-click it, double tap it, or focus it and press Enter: a sheet of the same slots lifts over the grid, each one on a dial column of its own, and everything else steps back. Escape, the Move's Back or the ‹ tab at its foot puts it away. The instrument above is a strip, which has room for every slot, so the layer lives on an eight-column page of its own."
+      >
+        <a className="kit-link" href="/nest">Open the nested layer page</a>
+      </Section>
+
+      <Section
         id="presets"
         title="Presets"
         lede="A whole page, saved and walked through on the wheel. The navigator lives behind the Move’s Menu button: it opens a list beside the slots, and every row you rest on plays right away — the slots move under it. Keep one with the wheel press, put your old settings back with Back, or hold Mute to hear where you came from."
@@ -1110,6 +1118,8 @@ const CSS = `
 .kit-card-head button { padding: 4px 10px; color: var(--kit-dim); font: inherit; font-size: 12px; background: none; border: 1px solid var(--kit-line); border-radius: 999px; cursor: pointer; }
 .kit-card-head button:hover { color: var(--kit-fg); border-color: var(--kit-fg); }
 .kit-page :focus-visible { outline: 2px solid var(--kit-fg); outline-offset: 2px; }
+.kit-link { display: inline-block; padding: 4px 12px; color: var(--kit-fg); font-size: 13px; text-decoration: none; border: 1px solid var(--kit-line); border-radius: 999px; }
+.kit-link:hover { border-color: var(--kit-fg); }
 
 /* A specimen tile: the kit's own surface, with the panel's chrome taken off
    so only the face is left. The tokens still come from .tweakers-move. */

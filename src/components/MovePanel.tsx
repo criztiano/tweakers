@@ -16,7 +16,7 @@ import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from '../theme';
-import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, filterChipValue, isColumnFilter, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumShapePath, sliderShapePath, enumIndex, enumAspect, enumArrows, moveActionDrawing, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
+import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, filterChipValue, isColumnFilter, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumShapePath, sliderShapePath, enumIndex, enumAspect, enumArrows, moveActionDrawing, moveNestChildren, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
 import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotCurveGridBody, MoveSlotAspectBody, MoveSlotArrowsBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotShape, MoveSlotCurveDots, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadFaceBody, MovePadOffsetBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody, MoveSlotGlyph } from './move-slots';
@@ -36,6 +36,7 @@ import {
   moveOptionStep, moveOptionClick, moveChipScrubs, moveListHover, moveListWalk, moveListRowIn, moveOptionRowIn, moveListKey, moveMultiselectOptions,
   moveMultiselectChecked, moveMultiselectToggle, moveListAria, moveListBackIn, moveSelectAria, moveSelectClick,
   moveSelectFromWalk, moveSelectWalkCount, moveSelectWalkIndex, type MovePress,
+  moveIsDoubleTap, moveTapMark, moveTapTravel, type MoveTapMark,
 } from '../move-slot-core';
 import { attachMoveKeys } from '../move-keys';
 import { MoveMenuButton } from './MoveMenuButton';
@@ -62,6 +63,7 @@ import { MoveAgentStore, MOVE_JOG_HOLD_EVENT, type MoveAgentChoice, type MoveAge
 import { Drawer } from '@base-ui/react/drawer';
 import { ListScreen } from './ListScreen';
 import { MovePanelMotion } from './MovePanelMotion';
+import { MoveNestLayer, MoveNestMark } from './MoveNestLayer';
 
 export interface MovePanelProps {
   theme?: TweakTheme;
@@ -441,6 +443,16 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // Which filter hand a gesture grabbed (left half = cutoff, right half =
   // resonance) — locked at pointer-down, like the range handle.
   const filterHandRef = useRef<'cutoff' | 'resonance'>('cutoff');
+  // The nested layer (`moveNest`): which page's dial has its layer lifted over
+  // the grid. Screen only, for now: the knobs keep editing the page under it
+  // and no wire event carries it (the hardware kit does not know the layer
+  // yet); the Move's Back key closes it through MoveFunctions, as Escape does.
+  const [nestOpen, setNestOpen] = useState<{ pageId: string; path: string } | null>(null);
+  // The last press on a dial that has a layer (the double tap's first half),
+  // whether the second half is being swallowed, and the dial row it lifts off.
+  const nestTap = useRef<MoveTapMark | null>(null);
+  const nestSwallow = useRef(false);
+  const dialsRef = useRef<HTMLDivElement>(null);
 
   // Volume-dial readout: a static value renders as set; a getValue is polled
   // per animation frame while mounted, for readouts that move (a playhead).
@@ -1221,6 +1233,13 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     if (searchTarget && !screenSearch && !presetSearch && !paletteSearch) MoveSearchStore.close();
   });
 
+  // The layer stands only on the page it was opened on, while its dial is
+  // still there: a page or track switch, or the dial leaving, closes it.
+  const nestPath = nestOpen && nestOpen.pageId === pageId && !explorationOpen && moveNestChildren(page, nestOpen.path).length ? nestOpen.path : null;
+  useEffect(() => {
+    if (nestOpen && !nestPath) setNestOpen(null);
+  }, [nestOpen, nestPath]);
+
   if (!mounted || typeof window === 'undefined' || pages.length === 0 || !page || !values) return null;
 
   // What a slot reads out, and how a pointer turns it, live in
@@ -1797,6 +1816,72 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     </div>
   );
 
+  // The nested layer's door: a double-click or a double tap on a dial that
+  // carries one, or Enter while it has focus. The dial row listens in the
+  // capture phase, ahead of the dial's own drag and tap: the first press is
+  // the dial's as ever, and a second that completes a double tap is swallowed
+  // whole — down, up and click — while what the first one changed (an option
+  // stepped, a switch flipped) is put back, so opening the layer leaves no
+  // value behind. A slot standing in for a chip is the chip's, not the dial's.
+  const nestDial = (target: EventTarget | null): { meta: ControlMeta; cell: HTMLElement } | null => {
+    const row = dialsRef.current;
+    const cell = (target as Element | null)?.closest?.('.tweakers-move-dial') as HTMLElement | null;
+    if (!row || !cell || !row.contains(cell)) return null;
+    // Which column: the cell's place along the row, in whole columns.
+    const r = row.getBoundingClientRect();
+    const c = cell.getBoundingClientRect();
+    const col = visibleCols[Math.round(((c.left - r.left) / (r.width || 1)) * visibleCols.length)];
+    const meta = col === undefined ? undefined : page.dials[col];
+    if (!meta || !moveNestChildren(page, meta.path).length || dialAt(col!) !== meta) return null;
+    return { meta, cell };
+  };
+  const openNest = (meta: ControlMeta) => {
+    if (MoveColorStore.getView()?.path === meta.path) MoveColorStore.close();
+    setNestOpen({ pageId: page.panel.id, path: meta.path });
+  };
+  const nestDoor = page.nested ? {
+    onPointerDownCapture: (e: React.PointerEvent<HTMLDivElement>) => {
+      nestSwallow.current = false;
+      const hit = e.button > 0 ? null : nestDial(e.target);
+      const mark = nestTap.current;
+      if (hit && moveIsDoubleTap(mark, hit.meta.path, e.timeStamp)) {
+        e.stopPropagation();
+        e.preventDefault();
+        nestTap.current = null;
+        nestSwallow.current = true;
+        if (!Object.is(values[hit.meta.path], mark.value)) TweakStore.updateValue(page.panel.id, hit.meta.path, mark.value as never);
+        openNest(hit.meta);
+        return;
+      }
+      nestTap.current = hit ? moveTapMark(hit.meta.path, e, e.timeStamp, values[hit.meta.path]) : null;
+    },
+    onPointerMoveCapture: (e: React.PointerEvent<HTMLDivElement>) => {
+      if (e.buttons) moveTapTravel(nestTap.current, e);
+    },
+    onPointerUpCapture: (e: React.PointerEvent<HTMLDivElement>) => {
+      if (nestSwallow.current) e.stopPropagation();
+    },
+    onClickCapture: (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!nestSwallow.current) return;
+      nestSwallow.current = false;
+      e.stopPropagation();
+      e.preventDefault();
+    },
+    onKeyDownCapture: (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.key !== 'Enter' || e.repeat || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const hit = nestDial(e.target);
+      if (!hit) return;
+      e.stopPropagation();
+      e.preventDefault();
+      openNest(hit.meta);
+    },
+  } : undefined;
+  const nestView = nestPath ? {
+    parent: page.dials.find((d) => d?.path === nestPath)!,
+    children: moveNestChildren(page, nestPath),
+    origin: Math.max(0, visibleCols.indexOf(page.dials.findIndex((d) => d?.path === nestPath))),
+  } : null;
+
   const content = (
     <div className="tweakers-root tweakers-move-root" data-theme={theme} data-dock={dock}>
       <MoveAgentButton theme={theme} />
@@ -1827,6 +1912,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
         {!explorationOpen && roomWave && <MoveRoomWave theme={theme} />}
         <div
           className="tweakers-move-inner"
+          data-nest={nestView ? true : undefined}
           style={{
             '--move-cols': clusterCols,
             '--move-surface-cols': surfaceCols,
@@ -2046,7 +2132,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                 ? ({ '--move-strip-len': page.dials.length, '--move-offset': stripOffset } as React.CSSProperties)
                 : undefined}
             >
-            <div className="tweakers-move-dials" data-scroll={stripMode || undefined}>
+            <div ref={dialsRef} className="tweakers-move-dials" data-scroll={stripMode || undefined} {...nestDoor}>
               {/* A slot under a group's name stands below the name's band;
                   every other slot on the row takes the row's full height, so
                   the tops line up. The mark is a box that lays nothing out. */}
@@ -2961,6 +3047,10 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                   </div>
                 );
               })()))}
+              {/* A dial with a nested layer says so in its corner. */}
+              {page.nested && visibleCols.map((i, at) => page.dials[i] && !isSpanContinuation(page, i) && moveNestChildren(page, page.dials[i].path).length > 0 && dialAt(i) === page.dials[i]
+                ? <MoveNestMark key={`nest-${i}`} column={at} />
+                : null)}
             </div>
 
             {/* Trailing empty pad rows collapse: a row shows only if it, or any
@@ -3455,6 +3545,18 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
             )}
           </div>}
           </div>
+          {page.nested && (
+            <MoveNestLayer
+              panelId={page.panel.id}
+              view={nestView}
+              row={dialsRef}
+              returnFocus={() => Array.from(dialsRef.current?.querySelectorAll<HTMLElement>('.tweakers-move-dial') ?? [])
+                .find((cell) => nestDial(cell)?.meta.path === nestPath) ?? null}
+              valueFirst={(meta) => (meta.type === 'slider' && meta.display === 'value')
+                || ((focused || page.panel.kind === 'kit') && !(meta.min === 0 && meta.max === 1))}
+              onClose={() => setNestOpen(null)}
+            />
+          )}
         </div>
       </div>
     </div>

@@ -5,6 +5,7 @@ import 'tweakers/styles.css';
 import { Library } from './Library';
 import FlowerPlayground from './FlowerPlayground';
 import FourthRow from './FourthRow';
+import NestedLayer from './NestedLayer';
 import { registerLibraryPanel, PANEL_NAME } from './panel';
 import { bindKeyboardHardware } from './hardware';
 
@@ -12,8 +13,11 @@ const route = window.location.pathname.replace(/\/$/, '');
 const isFlowerPlayground = route === '/flowers';
 // The fourth pad row and the button faces, on an eight-column page of its own.
 const isFourthRow = route === '/rows';
+// A dial's nested layer, on an eight-column page of its own.
+const isNestedLayer = route === '/nest';
 if (isFlowerPlayground) document.title = 'Flower playground · Tweakers';
 else if (isFourthRow) document.title = 'Fourth pad row · Tweakers';
+else if (isNestedLayer) document.title = 'Nested layer · Tweakers';
 else registerLibraryPanel();
 
 // Handles for poking the live stores from the console — a library is a place
@@ -58,6 +62,6 @@ function MoveBridge() {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {isFlowerPlayground ? <FlowerPlayground /> : isFourthRow ? <FourthRow /> : <><MoveBridge /><Library /></>}
+    {isFlowerPlayground ? <FlowerPlayground /> : isFourthRow ? <FourthRow /> : isNestedLayer ? <NestedLayer /> : <><MoveBridge /><Library /></>}
   </StrictMode>
 );

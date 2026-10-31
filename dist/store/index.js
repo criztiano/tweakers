@@ -1452,6 +1452,9 @@ var TweakStoreClass = class {
           children: this.parseConfig(folderConfig, path, shortcuts)
         });
       }
+      const nest = value?.moveNest;
+      const added = controls[controls.length - 1];
+      if (typeof nest === "string" && nest && added?.path === path && added.type !== "folder") added.moveNest = nest;
     }
     if (prefix === "" && config._tabs === true) {
       const isFolder = (control) => control.type === "folder";

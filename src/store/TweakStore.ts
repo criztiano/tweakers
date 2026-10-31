@@ -142,6 +142,8 @@ export type ToggleConfig = {
    * slot's name becomes the caption under the picture ("120.0 BPM").
    */
   moveVisual?: MoveToggleVisual;
+  /** Move panel: a child of that dial's nested layer, never a slot of its own — see `SliderConfig.moveNest`. */
+  moveNest?: string;
 };
 
 export type SelectConfig = {
@@ -225,6 +227,8 @@ export type SelectConfig = {
    * preview tracks its bell and flip while the picker stays a picker.
    */
   preview?: (value: string) => ((t: number) => number) | null | undefined;
+  /** Move panel: a child of that dial's nested layer, never a slot of its own — see `SliderConfig.moveNest`. */
+  moveNest?: string;
 };
 
 export type ColorConfig = {
@@ -234,6 +238,8 @@ export type ColorConfig = {
   alpha?: boolean;
   /** Shows the shared saved-swatches row (persisted per machine). Default false. */
   palette?: boolean;
+  /** Move panel: a child of that dial's nested layer, never a slot of its own — see `SliderConfig.moveNest`. */
+  moveNest?: string;
 };
 
 export type GradientConfig = {
@@ -245,6 +251,8 @@ export type GradientConfig = {
    * like a colour scale or a shader lookup, where a shape would do nothing.
    */
   form?: 'fill' | 'ramp';
+  /** Move panel: a child of that dial's nested layer, never a slot of its own — see `SliderConfig.moveNest`. */
+  moveNest?: string;
 };
 
 export type BalanceConfig = {
@@ -254,6 +262,8 @@ export type BalanceConfig = {
   b: string;
   /** Mix position 0..1 — 0 is all `a`, 1 is all `b`. Default 0.5. */
   default?: number;
+  /** Move panel: a child of that dial's nested layer, never a slot of its own — see `SliderConfig.moveNest`. */
+  moveNest?: string;
 };
 
 export type XYConfig = {
@@ -273,6 +283,8 @@ export type XYConfig = {
   returnToCenter?: boolean;
   /** Show the live value next to each axis label (default false = label only). */
   showValues?: boolean;
+  /** Move panel: a child of that dial's nested layer, never a slot of its own — see `SliderConfig.moveNest`. */
+  moveNest?: string;
 };
 
 export type TextConfig = {
@@ -309,6 +321,8 @@ export type FilterConfig = {
    * peeks. The value stays the same `{ cutoff, resonance }` pair.
    */
   moveVertical?: boolean;
+  /** Move panel: a child of that dial's nested layer, never a slot of its own — see `SliderConfig.moveNest`. */
+  moveNest?: string;
 };
 
 /**
@@ -328,6 +342,8 @@ export type TransferConfig = {
   grid?: number;
   /** Names for the two axes, shown small at the edges. */
   axisLabels?: { x?: string; y?: string };
+  /** Move panel: a child of that dial's nested layer, never a slot of its own — see `SliderConfig.moveNest`. */
+  moveNest?: string;
 };
 
 export type RangeConfig = {
@@ -338,6 +354,8 @@ export type RangeConfig = {
   default?: RangeValue;
   /** Falls back to inferStep(min, max) when omitted. */
   step?: number;
+  /** Move panel: a child of that dial's nested layer, never a slot of its own — see `SliderConfig.moveNest`. */
+  moveNest?: string;
 };
 
 /**
@@ -417,6 +435,17 @@ export type SliderConfig = {
    * dial). Seat it with `movePads`, and a row option to pick its pad row.
    */
   moveChip?: boolean;
+  /**
+   * Move panel: a child of a dial's nested layer — the extra knobs a dial
+   * needs when the page has no slot left for them. Names the parent dial by
+   * path, the key form `moveSlotGroups` entries use (`'dispersion'`, or
+   * `'folder.dispersion'` inside a folder). The child never takes a slot on
+   * the page; a double-click or double-tap on the parent, or Enter on it,
+   * lifts the layer over the grid. Any control that can be a big slot can be
+   * a child; the strip (`scroll`) has room for every slot, so it keeps
+   * children in its row.
+   */
+  moveNest?: string;
 };
 
 /**
@@ -437,6 +466,8 @@ export type NumberConfig = {
   formatValue?: (value: number) => string;
   /** `vertical` stacks the label above a centered value (column card). */
   orientation?: 'horizontal' | 'vertical';
+  /** Move panel: a child of that dial's nested layer, never a slot of its own — see `SliderConfig.moveNest`. */
+  moveNest?: string;
 };
 
 /**
@@ -551,6 +582,8 @@ export type MultiSelectConfig = {
   type: 'multiselect';
   options: (string | MultiSelectOption)[];
   default?: string[];
+  /** Move panel: a child of that dial's nested layer, never a slot of its own — see `SliderConfig.moveNest`. */
+  moveNest?: string;
 };
 
 export type GalleryItem = {
@@ -819,6 +852,9 @@ export type ControlMeta = {
   shapeDomain?: [number, number];
   /** Slider declared `moveChip` — a value chip, never a dial. */
   moveChip?: boolean;
+  /** Declared `moveNest` — a child of that dial's nested layer, by the dial's
+   *  path; it never takes a slot on the page (move-layout's `nested`). */
+  moveNest?: string;
   /** Select dial width in hardware columns; defaults to one. */
   moveSpan?: 1 | 2;
   /** Select declared `moveTabs` — it lies across the small slots as a tabs
@@ -2531,6 +2567,11 @@ class TweakStoreClass {
           children: this.parseConfig(folderConfig, path, shortcuts),
         });
       }
+      // `moveNest` rides on any control kind, so it is read once for all of
+      // them rather than threaded through every branch above.
+      const nest = (value as { moveNest?: unknown } | null)?.moveNest;
+      const added = controls[controls.length - 1];
+      if (typeof nest === 'string' && nest && added?.path === path && added.type !== 'folder') added.moveNest = nest;
     }
 
     // `_tabs: true` at the panel root promotes every top-level folder to a tab:
