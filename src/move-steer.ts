@@ -333,16 +333,21 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   /*
    * Capture: the page holds the pointer (the browser's pointer lock), so the
    * real pointer cannot wander off below the window while the hand is in —
-   * the panel hears only the mouse's travel. The first lock needs a press
-   * or ⌘ in the panel (the browser asks for one, and says once how Esc lets
-   * go); after the hand lets go of a lock itself, the next way in locks
-   * again without asking. With no lock the hand works as before.
+   * the panel hears only the mouse's travel. The browser grants a lock
+   * without a press only after the page let go of the last one itself, so
+   * the hand arms it on the first click anywhere on the page — a lock taken
+   * and let go at once, the click already done — and from then on every way
+   * in locks without asking. A press or ⌘ in the panel locks too. If the
+   * browser takes the lock away (Esc, another app), the next click arms it
+   * again. With no lock the hand works as before.
    */
   /** Where the real pointer was when the lock took it — where it comes back. */
   let lockOrigin: MoveSteerVec | null = null;
   /** The last lock was let go by the hand: the next may be taken without a press. */
   let silent = false;
   let releasing = false;
+  /** A lock taken only to arm the next ones: let go the moment it is held. */
+  let arming = false;
   const captured = () => !!veil && document.pointerLockElement === veil;
   const capture = () => {
     if (!veil || captured() || typeof veil.requestPointerLock !== 'function') return;
@@ -358,14 +363,30 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     document.exitPointerLock();
   };
   const onLockChange = () => {
-    if (captured()) return;
+    const held = document.pointerLockElement;
+    if (held) {
+      if (arming && held !== veil) { arming = false; releasing = true; document.exitPointerLock(); }
+      return;
+    }
     silent = releasing;
     releasing = false;
     // The real pointer is back where the lock took it.
     if (lockOrigin && real) real = { x: lockOrigin.x, y: lockOrigin.y, id: real.id };
     lockOrigin = null;
   };
-  const onLockError = () => { silent = false; releasing = false; };
+  const onLockError = () => { silent = false; releasing = false; arming = false; };
+
+  /** The first click on the page — done, so nothing of it is lost — arms the lock. */
+  const onArm = (e: MouseEvent) => {
+    if (!e.isTrusted || silent || arming || inside || document.pointerLockElement) return;
+    const body = document.body;
+    if (typeof body?.requestPointerLock !== 'function') return;
+    arming = true;
+    try {
+      const asked = body.requestPointerLock() as unknown as Promise<void> | undefined;
+      asked?.catch?.(() => { arming = false; });
+    } catch { arming = false; }
+  };
 
   const enter = (at: MoveSteerVec) => {
     const all = targets();
@@ -755,6 +776,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   window.addEventListener('pointermove', onMove, true);
   document.addEventListener('pointerlockchange', onLockChange);
   document.addEventListener('pointerlockerror', onLockError);
+  window.addEventListener('click', onArm);
   window.addEventListener('pointerdown', onDown, true);
   window.addEventListener('pointerup', onUp, true);
   for (const type of ['mousedown', 'mouseup', 'click', 'dblclick', 'auxclick', 'contextmenu'] as const) window.addEventListener(type, onMouse, true);
@@ -770,6 +792,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     window.removeEventListener('pointermove', onMove, true);
     document.removeEventListener('pointerlockchange', onLockChange);
     document.removeEventListener('pointerlockerror', onLockError);
+    window.removeEventListener('click', onArm);
     window.removeEventListener('pointerdown', onDown, true);
     window.removeEventListener('pointerup', onUp, true);
     for (const type of ['mousedown', 'mouseup', 'click', 'dblclick', 'auxclick', 'contextmenu'] as const) window.removeEventListener(type, onMouse, true);

@@ -142,9 +142,12 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
   the sides or the bottom: a veil over the window holds the real pointer
   while the hand is in, and once the browser allows it the page captures
   the pointer outright (pointer lock), so it can never wander off below
-  the window. The first capture needs a press or ⌘ in the panel — the
-  browser then says once that Esc lets go — and every way in after the
-  hand let go of a capture itself is captured again without asking. On
+  the window. A browser captures without a press only after the page let
+  go of the last capture itself, so the hand arms it on the first click
+  anywhere on the page (a capture taken and let go at once, after the click
+  is done); from then on every way in is captured without asking. If the
+  browser takes it away (Esc, another app), the next click arms it again.
+  A page can never move the pointer itself. On
   the way out the real pointer comes back where the capture took it.
 - **The pointer is a hand on a control, not a place.** Its travel runs
   quicker than the page's, across and up and down apart — the kit's own
