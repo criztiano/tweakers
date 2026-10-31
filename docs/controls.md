@@ -133,8 +133,11 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
 - **Below the controls' top there is no arrow.** Coming down into the
   panel's controls the arrow is gone and the hand takes the big slot
   nearest across on the top row of slots, which lights and takes the hit.
-  The moment the mouse is back up over the controls' top, the hand lets
-  go and the arrow is simply back where the mouse is, as it came in; the
+  The moment the mouse goes back up over the controls' top — meaning to —
+  the hand lets go and the arrow is simply back where the mouse is, as it
+  came in. A move clearly up leaves right at the top; a sideways move that
+  strays up, or a slow creep, may go up to `MOVE_STEER_EXIT_SLACK` px over it
+  and the hand still holds (`moveSteerLeaves`). Then the
   control it held eases back — its light and glow fade
   (`--move-steer-out`), its lean springs home. Nothing flies
   and nothing captures the pointer: a veil over the window keeps the page
