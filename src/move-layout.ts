@@ -48,6 +48,11 @@ export interface MovePage {
    *  named column where no chip holds it — so a column can stack two buttons,
    *  one over the other. Absent: none. */
   valueActions?: ControlMeta[];
+  /** The fourth pad row (y=0), under the action pads: what the panel names in
+   *  `moveBottomRow` — a tabs strip's run, and switches, buttons and value
+   *  chips each in its `movePads` column. It is the app's reserved row when
+   *  the app claims the pads, and then it shows nothing. Absent: none. */
+  bottom?: ControlMeta[];
 }
 
 const flat = (controls: ControlMeta[], out: ControlMeta[] = []): ControlMeta[] => {
@@ -260,6 +265,9 @@ export type MoveLayoutIssueCode =
   | 'action-row-taken'
   | 'value-row-no-column'
   | 'value-row-taken'
+  | 'bottom-row-no-column'
+  | 'bottom-row-taken'
+  | 'bottom-row-claimed'
   | 'top-row-no-column'
   | 'pad-row-full'
   | 'tabs-oversized'
@@ -364,6 +372,8 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
       // row, so a cell is free only when neither holds it.
       const topValues: ControlMeta[] = [];
       const valueActions: ControlMeta[] = [];
+      // The fourth row holds only what the panel names in `moveBottomRow`.
+      const bottom: ControlMeta[] = [];
       const topAt = (i: number) => toggles[i] ?? topValues[i];
       const cellAt = (row: ControlMeta[], i: number) => (row === toggles ? topAt(i) : row === values ? values[i] ?? valueActions[i] : row[i]);
       // A named column is taken as read; everything else — and anything whose
@@ -400,11 +410,13 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
       // than quietly shortened, because a mode picker missing two of its modes
       // is a worse lie than a mode picker that is missing. A strip the panel
       // names in `moveActionRow` takes the action row instead, by the same
-      // rules — its own buttons then pack around it.
+      // rules — its own buttons then pack around it — and one named in
+      // `moveBottomRow` the fourth row, under them.
+      const floor = panel.moveBottomRow ?? [];
       const sunk = (c: ControlMeta) => (panel.moveActionRow ?? []).includes(c.path);
       const placeTabs = (c: ControlMeta, col: number | null) => {
-        const row = sunk(c) ? actions : toggles;
-        const rowName = row === actions ? 'action' : 'toggle';
+        const row = floor.includes(c.path) ? bottom : sunk(c) ? actions : toggles;
+        const rowName = row === bottom ? 'bottom' : row === actions ? 'action' : 'toggle';
         const span = padSpan(c);
         if (span > MOVE_PADS) {
           reportMoveLayoutIssue(
@@ -473,10 +485,14 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
       //    before any chip or button asks for a cell there.
       const lowered = (c: ControlMeta) =>
         c.type === 'toggle' && !isToggleDial(c) && (panel.moveValueRow ?? []).includes(c.path) && padCols.get(c) != null;
+      // A switch named in `moveBottomRow` waits for 3d, after every strip has
+      // its run, so it can never take a cell a strip declared after it needed.
+      const floored = (c: ControlMeta) =>
+        c.type === 'toggle' && !isToggleDial(c) && floor.includes(c.path) && !lowered(c);
       for (const c of controls) {
         const col = padCols.get(c) ?? null;
         if (isMoveTabs(c)) placeTabs(c, col);
-        else if (c.type === 'toggle' && !isToggleDial(c) && !lowered(c)) place(toggles, 'toggle', c, col);
+        else if (c.type === 'toggle' && !isToggleDial(c) && !lowered(c) && !floored(c)) place(toggles, 'toggle', c, col);
       }
 
       // 3. A value chip the panel names in `moveTopRow` rides the top row in
@@ -564,11 +580,40 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         }
       }
 
+      // 3d. A switch, a button or a value chip the panel names in
+      //     `moveBottomRow` sits on the fourth row in its movePads column, under
+      //     the action pads. No column, or a taken cell, and it keeps its own
+      //     row: a switch the top row, a button the action row, a chip the
+      //     value row. A control already seated on another row stays there.
+      for (const c of controls) {
+        if (!floor.includes(c.path) || isMoveTabs(c)) continue;
+        const toggle = floored(c);
+        if (!toggle && c.type !== 'action' && !chipFits(c)) continue;
+        if (topValues.includes(c) || actionValues.includes(c) || valueActions.includes(c)) continue;
+        const col = padCols.get(c) ?? null;
+        const home = toggle ? 'it keeps the top row' : c.type === 'action' ? 'it keeps the action row' : 'it keeps the value row';
+        if (col === null) {
+          reportMoveLayoutIssue(
+            'bottom-row-no-column',
+            `panel '${panel.id}': control '${c.path}' is named in moveBottomRow but has no movePads column — ${c.type === 'action' ? 'a button reaches the pads only by column' : home}`
+          );
+        } else if (bottom[col] !== undefined) {
+          reportMoveLayoutIssue(
+            'bottom-row-taken',
+            `panel '${panel.id}': control '${c.path}': bottom-row column ${col} holds '${bottom[col].path}' — ${home}`
+          );
+        } else {
+          bottom[col] = c;
+          continue;
+        }
+        if (toggle) place(toggles, 'toggle', c, col);
+      }
+
       // 4. Everything else, in the order the panel declares it.
       for (const c of controls) {
         const col = padCols.get(c) ?? null;
-        if (isMoveTabs(c) || (c.type === 'toggle' && !isToggleDial(c))) continue;   /* seated in 2 */
-        if (seated(c) || actionValues.includes(c) || valueActions.includes(c)) continue; /* seated in 1 or 3 */
+        if (isMoveTabs(c) || (c.type === 'toggle' && !isToggleDial(c))) continue;   /* seated in 2 or 3d */
+        if (seated(c) || actionValues.includes(c) || valueActions.includes(c) || bottom.includes(c)) continue; /* seated in 1 or 3 */
         // Actions reach the pads only when the page asks for them by column —
         // every app has buttons, and none of them expect a hardware pad.
         if (c.type === 'action') {
@@ -617,6 +662,7 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         ...(topValues.length ? { topValues: topValues.slice(0, MOVE_PADS) } : {}),
         ...(actionValues.length ? { actionValues: actionValues.slice(0, MOVE_PADS) } : {}),
         ...(valueActions.length ? { valueActions: valueActions.slice(0, MOVE_PADS) } : {}),
+        ...(bottom.length ? { bottom: bottom.slice(0, MOVE_PADS) } : {}),
       };
       // 5. A band whose two chips did not land one over the other in a column
       //    draws as those two chips — said out loud, like any quiet decision.
@@ -658,9 +704,10 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
  *
  * Plain: y=3 the switches — the first row of small slots, the one drawn
  * directly under the dials — y=2 the value chips, y=1 the action pads, y=0
- * the ALT pad. An app that claims both bottom rows takes y=1 and y=0, so the
- * actions have nowhere left to sit; a single-row claim is the bottom row
- * alone and the actions keep theirs (see PROTOCOL.md).
+ * what the page names in `moveBottomRow` (empty unless it names something).
+ * An app that claims both bottom rows takes y=1 and y=0, so the actions and
+ * the fourth row have nowhere left to sit; a single-row claim is the bottom
+ * row alone and the actions keep theirs (see PROTOCOL.md).
  */
 export function movePadRows(page: MovePage, claimedRows: number): ControlMeta[][] {
   let top = page.toggles;
@@ -691,8 +738,18 @@ export function movePadRows(page: MovePage, claimedRows: number): ControlMeta[][
       if (cell) actions[i] = cell;
     }
   }
+  // The fourth row is the app's reserved row whenever the app claims pads:
+  // what the page named for it then has nowhere to sit.
+  const bottom = page.bottom ?? [];
+  if (claimedRows >= 1 && bottom.some(Boolean)) {
+    reportMoveLayoutIssue(
+      'bottom-row-claimed',
+      `panel '${page.panel.id}': the app claims the bottom pad row — its moveBottomRow pads are not shown`
+    );
+  }
   if (claimedRows >= 2) return [top, values, [], []];
-  return [top, values, actions, []];
+  if (claimedRows === 1) return [top, values, actions, []];
+  return [top, values, actions, bottom];
 }
 
 /**
@@ -807,7 +864,7 @@ export function slotGroups(page: MovePage, cols: number[] = visibleColumns(page)
 export function visibleColumns(page: MovePage): number[] {
   const cols: number[] = [];
   for (let i = 0; i < MOVE_DIALS; i++) {
-    if (page.dials[i] || page.toggles[i] || page.topValues?.[i] || page.values[i] || page.actions[i] || page.actionValues?.[i] || page.valueActions?.[i]) cols.push(i);
+    if (page.dials[i] || page.toggles[i] || page.topValues?.[i] || page.values[i] || page.actions[i] || page.actionValues?.[i] || page.valueActions?.[i] || page.bottom?.[i]) cols.push(i);
   }
   return cols;
 }

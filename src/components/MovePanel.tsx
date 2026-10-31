@@ -3285,7 +3285,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     // What a pad is comes from the control, not the row it
                     // sits in: a value chip lifted onto the top row is still
                     // a value chip.
-                    if (page.toggles[col] === meta || (meta.type === 'toggle' && page.valueActions?.[col] === meta)) {
+                    if (page.toggles[col] === meta || (meta.type === 'toggle' && (page.valueActions?.[col] === meta || page.bottom?.[col] === meta))) {
                       // A captioned picture says its value to the eye; the
                       // screen reader hears the name, then the same words.
                       const caption = meta.icon ? meta.toggleCaption?.[values[meta.path] ? 'on' : 'off'] : undefined;

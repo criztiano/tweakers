@@ -1135,6 +1135,8 @@ Big slots that read as one thing can share a container: `moveSlotGroups: [['thre
 
 A column has three small rows. `moveTopRow` lifts a value chip onto the switch row, and `moveActionRow` sinks one onto the action row, both in the chip's `movePads` column. That lets one column carry a switch and two chips — a take's Solo, its high cut and its low cut. `moveValueRow` raises an action onto the value row in its `movePads` column, so one column can stack two buttons — Extract over Export.
 
+The Move has a fourth pad row under those three. `moveBottomRow` seats things there: a tabs strip's run (from its `movePads` column), and a switch, a button or a value chip in its `movePads` column. A text animator puts its In / Out / Set tabs, Auto-play and its two play buttons there, which leaves the two rows under every dial to small value chips. The row is drawn only on a page that puts something on it, and it is the app's whenever the app claims the pads.
+
 A switch that should only be on while a finger holds it — a solo, a preview — says `moveHold: true`. Its pad turns the value on at the press and off at the release, on the screen and on the hardware, so nothing stays latched by accident.
 
 On a pad, a switch with an `icon` is drawn as the picture alone, with no name — the whole pad inverting says it is on. Give it a `caption` and the picture stands in for the name while the words beside it say the value in force. One string reads the same in both states; `{ off, on }` turns the words with the press:

@@ -815,3 +815,85 @@ describe('move layout', () => {
     assert.deepEqual(visibleColumns(page), []);
   });
 });
+
+describe('the fourth pad row', () => {
+  const dials = Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`d${i}`, [0.5, 0, 1] as [number, number, number]]));
+  const side = { type: 'select', default: 'in', moveTabs: true, options: ['in', 'out', 'set'] } as const;
+  const config = {
+    ...dials,
+    jitter: [0, 0, 1] as [number, number, number],
+    random: [0, 0, 1] as [number, number, number],
+    side,
+    autoPlay: true,
+    playIn: { type: 'action', label: 'In' },
+    playOut: { type: 'action', label: 'Out' },
+  } as const;
+  const options = {
+    movePads: { jitter: 0, random: 0, side: 0, autoPlay: 5, playIn: 6, playOut: 7 },
+    moveActionRow: ['random'],
+    moveBottomRow: ['side', 'autoPlay', 'playIn', 'playOut'],
+  };
+
+  it('seats a tabs strip, a switch and two buttons on the fourth row, leaving the rows above to the chips', () => {
+    const id = nextId();
+    const { result: page, issues } = capturingIssues(() => {
+      TweakStore.registerPanel(id, id, config as never, undefined, options);
+      return buildMovePages([TweakStore.getPanel(id)!])[0];
+    });
+    const [top, values, actions, bottom] = movePadRows(page, 0);
+    assert.deepEqual(Array.from(bottom, (m) => m?.path), ['side', 'side', 'side', undefined, undefined, 'autoPlay', 'playIn', 'playOut']);
+    assert.deepEqual([values[0]?.path, actions[0]?.path], ['jitter', 'random']);
+    assert.equal(top.some(Boolean), false, 'the switch left the top row');
+    assert.equal(page.actions.some(Boolean), false, 'the buttons left the action row');
+    assert.deepEqual(issues, []);
+    TweakStore.unregisterPanel(id);
+  });
+
+  it('is empty, and the page unchanged, when the panel names nothing for it', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, config as never, undefined, { ...options, moveBottomRow: undefined });
+    const page = buildMovePages([TweakStore.getPanel(id)!])[0];
+    assert.equal(page.bottom, undefined);
+    const [top, , actions, bottom] = movePadRows(page, 0);
+    assert.deepEqual(bottom, []);
+    assert.deepEqual(top.slice(0, 3).map((m) => m?.path), ['side', 'side', 'side']);
+    assert.deepEqual([top[5]?.path, actions[6]?.path, actions[7]?.path], ['autoPlay', 'playIn', 'playOut']);
+    TweakStore.unregisterPanel(id);
+  });
+
+  it('counts a column held only by the fourth row as shown', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, { a: [0.5, 0, 1], go: { type: 'action', label: 'Go' } }, undefined, {
+      movePads: { go: 3 }, moveBottomRow: ['go'],
+    });
+    const page = buildMovePages([TweakStore.getPanel(id)!])[0];
+    assert.deepEqual(visibleColumns(page), [0, 3]);
+    TweakStore.unregisterPanel(id);
+  });
+
+  it('gives way to the app when it claims the pads, and says so', () => {
+    const id = nextId();
+    TweakStore.registerPanel(id, id, config as never, undefined, options);
+    const page = buildMovePages([TweakStore.getPanel(id)!])[0];
+    const { result, issues } = capturingIssues(() => [movePadRows(page, 1), movePadRows(page, 2)]);
+    assert.deepEqual(result.map((rows) => rows[3]), [[], []]);
+    assert.ok(issues.some(([code]) => code === 'bottom-row-claimed'));
+    TweakStore.unregisterPanel(id);
+  });
+
+  it('keeps a control on its own row when it names no column, or its cell is taken', () => {
+    const id = nextId();
+    const { result: page, issues } = capturingIssues(() => {
+      TweakStore.registerPanel(id, id, { ...dials, loop: false, again: false, nudge: [0, 0, 1], go: { type: 'action', label: 'Go' } }, undefined, {
+        movePads: { again: 2, nudge: 2, go: 4 },
+        moveBottomRow: ['loop', 'again', 'nudge', 'go'],
+      });
+      return buildMovePages([TweakStore.getPanel(id)!])[0];
+    });
+    assert.deepEqual(Array.from(page.bottom ?? [], (m) => m?.path), [undefined, undefined, 'again', undefined, 'go']);
+    assert.equal(page.toggles[0]?.path, 'loop');
+    assert.equal(page.values[2]?.path, 'nudge');
+    assert.deepEqual(issues.map(([code]) => code).sort(), ['bottom-row-no-column', 'bottom-row-taken']);
+    TweakStore.unregisterPanel(id);
+  });
+});

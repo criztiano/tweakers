@@ -901,6 +901,8 @@ export type PanelConfig = {
   moveTopRow?: string[];
   /** Value chips sunk onto the action pad row, retained on the same terms as `hints`. */
   moveActionRow?: string[];
+  /** Small slots seated on the fourth pad row, retained on the same terms as `hints`. */
+  moveBottomRow?: string[];
   /** Actions and switches lowered onto the value pad row, retained on the same terms as `hints`. */
   moveValueRow?: string[];
   /** Big slots drawn as one container, retained on the same terms as `hints`. */
@@ -1060,6 +1062,16 @@ export type TweakStorePanelOptions = {
    * the switch row, by the same run rules.
    */
   moveActionRow?: string[];
+  /**
+   * Small slots, by control path, that sit on the fourth pad row (y=0) — the
+   * row under the action pads, drawn only when a page puts something on it.
+   * A `moveTabs` select named here lays its run there (its `movePads` column
+   * the start); a switch, an action or a value chip sits there in its
+   * `movePads` column. One with no column, or whose cell is taken, keeps its
+   * own row. While the app claims the pads (`MoveSurfaceStore.setPadRows`)
+   * the row is the app's, and what is named here is not shown.
+   */
+  moveBottomRow?: string[];
   /**
    * Actions, by control path, that sit on the value pad row in their
    * `movePads` column — so one column can stack two buttons (Extract over
@@ -1286,7 +1298,7 @@ class TweakStoreClass {
     // instead of resurrecting it.
     this.overlayPersistedValues(id, target, values, this.mapControlsByPath(controls));
 
-    this.panels.set(id, { id, name, icon: options.icon, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, moveTopRow: options.moveTopRow, moveActionRow: options.moveActionRow, moveValueRow: options.moveValueRow, moveSlotGroups: options.moveSlotGroups, moveBands: options.moveBands, moveEdges: options.moveEdges, module: '_enabled' in config ? true : undefined, kind: options.kind });
+    this.panels.set(id, { id, name, icon: options.icon, controls, values, shortcuts: shortcuts ?? {}, hints: options.hints, affordances: options.affordances, labels: options.labels, movePads: options.movePads, moveTopRow: options.moveTopRow, moveActionRow: options.moveActionRow, moveBottomRow: options.moveBottomRow, moveValueRow: options.moveValueRow, moveSlotGroups: options.moveSlotGroups, moveBands: options.moveBands, moveEdges: options.moveEdges, module: '_enabled' in config ? true : undefined, kind: options.kind });
     this.snapshots.set(id, { ...values });
     this.baseValues.set(id, { ...values });
     this.notifyGlobal();
@@ -1306,6 +1318,7 @@ class TweakStoreClass {
     const movePads = options.movePads ?? existing.movePads;
     const moveTopRow = options.moveTopRow ?? existing.moveTopRow;
     const moveActionRow = options.moveActionRow ?? existing.moveActionRow;
+    const moveBottomRow = options.moveBottomRow ?? existing.moveBottomRow;
     const moveValueRow = options.moveValueRow ?? existing.moveValueRow;
     const moveSlotGroups = options.moveSlotGroups ?? existing.moveSlotGroups;
     const moveBands = options.moveBands ?? existing.moveBands;
@@ -1341,7 +1354,7 @@ class TweakStoreClass {
       }
     }
 
-    const nextPanel: PanelConfig = { id, name, icon, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, moveTopRow, moveActionRow, moveValueRow, moveSlotGroups, moveBands, moveEdges, module: '_enabled' in config ? true : undefined, kind: options.kind ?? existing.kind };
+    const nextPanel: PanelConfig = { id, name, icon, controls, values: nextValues, shortcuts: shortcuts ?? existing.shortcuts, hints, affordances, labels, movePads, moveTopRow, moveActionRow, moveBottomRow, moveValueRow, moveSlotGroups, moveBands, moveEdges, module: '_enabled' in config ? true : undefined, kind: options.kind ?? existing.kind };
     this.panels.set(id, nextPanel);
     this.snapshots.set(id, { ...nextValues });
 
