@@ -1,16 +1,14 @@
+import { MOVE_STEER_LOCK_WAV } from './sounds/steer-lock';
+
 /**
  * The steering hand's lock sound: a short tick when ⌘ takes a control
- * (move-steer), so the hand hears what it caught.
- *
- * PLACEHOLDER: until Cri picks the real sound it is drawn here, a quick
- * falling tick. To put the real one in, add the file as
- * `src/sounds/steer-lock.<wav|mp3|ogg>`, give tsup the `dataurl` loader for
- * that extension (the sound then rides inside the bundle, so no app needs a
- * loader of its own), import it here and set `MOVE_STEER_LOCK_SOUND` to the
- * import. The file plays as it is mastered.
+ * (move-steer), so the hand hears what it caught. Cri's pick, kept inside
+ * the code (`sounds/steer-lock`); it plays as it is mastered. Without a
+ * sound to play the hand draws its own quick falling tick instead, at
+ * `MOVE_STEER_LOCK_GAIN`.
  */
-export const MOVE_STEER_LOCK_SOUND: string | null = null;
-/** How loud the placeholder tick plays, 0…1 — under the hand, never over the music. */
+export const MOVE_STEER_LOCK_SOUND: string | null = MOVE_STEER_LOCK_WAV;
+/** How loud the drawn tick plays, 0…1 — under the hand, never over the music. */
 export const MOVE_STEER_LOCK_GAIN = 0.12;
 
 let audio: AudioContext | null = null;
@@ -45,6 +43,12 @@ const tick = (ctx: AudioContext, at: number) => {
   osc.start(at);
   osc.stop(at + 0.08);
 };
+
+/** Gets the lock sound ready, so the first ⌘ already hears it on time. */
+export function primeMoveSteerLock() {
+  const ctx = context();
+  if (ctx && MOVE_STEER_LOCK_SOUND) void load(ctx, MOVE_STEER_LOCK_SOUND);
+}
 
 /** Plays the lock sound. Silent where the page has no audio, or before the user has touched the page. */
 export function playMoveSteerLock() {
