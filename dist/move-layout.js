@@ -276,7 +276,8 @@ function buildMovePages(panels) {
     );
   }
   return plain.slice(0, MOVE_TRACKS).map((panel) => {
-    const controls = flat(panel.controls);
+    const all = flat(panel.controls);
+    const controls = all.filter((c) => !c.moveNest);
     const padCols = new Map(controls.map((c) => [c, padColumn(panel, c)]));
     const balanceRefs = /* @__PURE__ */ new Map();
     for (const c of controls) {
@@ -516,6 +517,8 @@ function buildMovePages(panels) {
       ...valueActions.length ? { valueActions: valueActions.slice(0, MOVE_PADS) } : {},
       ...bottom.length ? { bottom: bottom.slice(0, MOVE_PADS) } : {}
     };
+    const nested = moveNests(panel, all, dials);
+    if (nested) page.nested = nested;
     const rows = movePadRows(page, 0);
     for (const band of panel.moveBands ?? []) {
       const on = [band.high, band.low].filter((path) => rows.some((r) => r.some((m) => m?.path === path)));
@@ -542,6 +545,44 @@ function buildMovePages(panels) {
     return page;
   });
 }
+function moveNests(panel, controls, dials) {
+  var _a;
+  const out = {};
+  const used = {};
+  for (const c of controls) {
+    if (!c.moveNest) continue;
+    const parent = dials.find((d) => d?.path === c.moveNest);
+    if (!parent) {
+      const named = controls.find((x) => x.path === c.moveNest);
+      reportMoveLayoutIssue(
+        "nest-no-parent",
+        `panel '${panel.id}': control '${c.path}' names moveNest '${c.moveNest}', ${named ? "which holds no dial on the page" : "and there is no such control"} \u2014 not shown`
+      );
+      continue;
+    }
+    if (!isNestable(c)) {
+      reportMoveLayoutIssue(
+        "nest-not-a-slot",
+        `panel '${panel.id}': control '${c.path}' (${c.type}) cannot be a big slot \u2014 not shown in the nested layer of '${parent.path}'`
+      );
+      continue;
+    }
+    const span = dialSpan(c);
+    const at = used[parent.path] ?? 0;
+    if (at + span > MOVE_DIALS) {
+      reportMoveLayoutIssue(
+        "nest-full",
+        `panel '${panel.id}': control '${c.path}': the nested layer of '${parent.path}' has no column left of its ${MOVE_DIALS} \u2014 not shown`
+      );
+      continue;
+    }
+    used[parent.path] = at + span;
+    (out[_a = parent.path] ?? (out[_a] = [])).push(c);
+  }
+  return Object.keys(out).length ? out : void 0;
+}
+var isNestable = (c) => isDial(c) || c.type === "toggle";
+var moveNestChildren = (page, path) => path && page?.nested?.[path] || [];
 function movePadRows(page, claimedRows) {
   let top = page.toggles;
   let values = page.values;
@@ -883,6 +924,7 @@ export {
   moveAppPadRow,
   moveBandCell,
   moveEdgesCell,
+  moveNestChildren,
   movePadRows,
   moveTabCell,
   normalizeDial,

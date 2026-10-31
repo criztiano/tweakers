@@ -1,4 +1,4 @@
-import { M as MoveNumericDrawing, C as ControlMeta, a as MoveEdges, P as PanelConfig } from './TweakStore-DylRmRYT.js';
+import { M as MoveNumericDrawing, C as ControlMeta, a as MoveEdges, P as PanelConfig } from './TweakStore-BXM15Qe1.js';
 import { ModPageLayout } from './modulation-core.js';
 import { XYValue } from './xy-pad-core.js';
 import { RangeValue } from './range-slider-core.js';
@@ -56,6 +56,11 @@ interface MovePage {
      *  chips each in its `movePads` column. It is the app's reserved row when
      *  the app claims the pads, and then it shows nothing. Absent: none. */
     bottom?: ControlMeta[];
+    /** Each dial's nested layer, by the dial's path: the controls that name it
+     *  in `moveNest`, in the order the panel declares them. They take no slot
+     *  on the page; the panel lifts them over the grid when the dial is
+     *  double-tapped. Only dials on this page carry one. Absent: none. */
+    nested?: Record<string, ControlMeta[]>;
 }
 /** A select with real choices becomes an enum dial — the kit's exact rule. */
 declare const isEnumDial: (c: ControlMeta) => boolean;
@@ -146,11 +151,13 @@ declare function buildModMovePage(panel: PanelConfig, layout?: ModPageLayout | n
  * Tests (and apps that want the feed) can swap the sink with
  * `setMoveLayoutReporter`; `null` restores the deduped console.warn.
  */
-type MoveLayoutIssueCode = 'panel-dropped' | 'dial-dropped' | 'pad-column-invalid' | 'pad-column-on-dial' | 'balance-color-placed' | 'pad-column-taken' | 'top-row-taken' | 'slot-group-apart' | 'action-row-no-column' | 'action-row-taken' | 'value-row-no-column' | 'value-row-taken' | 'bottom-row-no-column' | 'bottom-row-taken' | 'bottom-row-claimed' | 'top-row-no-column' | 'pad-row-full' | 'tabs-oversized' | 'tabs-no-room' | 'band-apart' | 'edges-apart';
+type MoveLayoutIssueCode = 'panel-dropped' | 'dial-dropped' | 'pad-column-invalid' | 'pad-column-on-dial' | 'balance-color-placed' | 'pad-column-taken' | 'top-row-taken' | 'slot-group-apart' | 'action-row-no-column' | 'action-row-taken' | 'value-row-no-column' | 'value-row-taken' | 'bottom-row-no-column' | 'bottom-row-taken' | 'bottom-row-claimed' | 'top-row-no-column' | 'pad-row-full' | 'tabs-oversized' | 'tabs-no-room' | 'band-apart' | 'edges-apart' | 'nest-no-parent' | 'nest-not-a-slot' | 'nest-full';
 type MoveLayoutReporter = (code: MoveLayoutIssueCode, message: string) => void;
 declare function setMoveLayoutReporter(fn: MoveLayoutReporter | null): void;
 declare function reportMoveLayoutIssue(code: MoveLayoutIssueCode, message: string): void;
 declare function buildMovePages(panels: PanelConfig[]): MovePage[];
+/** A dial's nested layer — its children, in order — or none. */
+declare const moveNestChildren: (page: MovePage | undefined, path: string | null | undefined) => ControlMeta[];
 /**
  * The pad grid's four rows, top to bottom, exactly as the hardware stacks
  * them — screen row 0 is the row nearest the knobs.
@@ -381,4 +388,4 @@ declare function dialOrigin(meta: ControlMeta): number;
 /** Axis positions 0..1 back to the control's real {x, y}, kit-identical. */
 declare function denormalizeXYDial(meta: ControlMeta, x01: number, y01: number): XYValue;
 
-export { ENUM_SHAPE_SAMPLES, MOVE_ARROW_DIRECTIONS, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MoveActionDrawing, type MoveArrowDirection, type MoveBandCell, type MoveEdgesCell, type MoveLayoutIssueCode, type MovePage, type MoveTabCell, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, denormalizeXYDial, dialOrigin, dialSpan, enumArrows, enumAspect, enumIndex, enumOptionGroup, enumOptionIcon, enumOptionLabel, enumOptionPicture, enumOptionValue, enumShapePath, filterChipValue, filterResonanceChip, filterShapePath, isColumnFilter, isEnumDial, isMoveDial, isMoveTabs, isMultiselectDial, isNamedTabs, isPadSpanContinuation, isSpanContinuation, isToggleDial, moveActionDrawing, moveAppPadRow, moveBandCell, moveEdgesCell, movePadRows, moveTabCell, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeToggleDial, normalizeXYDial, padSpan, parseArrow, parseAspect, reportMoveLayoutIssue, setMoveLayoutReporter, sliderShapePath, slotGroups, visibleColumns };
+export { ENUM_SHAPE_SAMPLES, MOVE_ARROW_DIRECTIONS, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MoveActionDrawing, type MoveArrowDirection, type MoveBandCell, type MoveEdgesCell, type MoveLayoutIssueCode, type MovePage, type MoveTabCell, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, denormalizeXYDial, dialOrigin, dialSpan, enumArrows, enumAspect, enumIndex, enumOptionGroup, enumOptionIcon, enumOptionLabel, enumOptionPicture, enumOptionValue, enumShapePath, filterChipValue, filterResonanceChip, filterShapePath, isColumnFilter, isEnumDial, isMoveDial, isMoveTabs, isMultiselectDial, isNamedTabs, isPadSpanContinuation, isSpanContinuation, isToggleDial, moveActionDrawing, moveAppPadRow, moveBandCell, moveEdgesCell, moveNestChildren, movePadRows, moveTabCell, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeToggleDial, normalizeXYDial, padSpan, parseArrow, parseAspect, reportMoveLayoutIssue, setMoveLayoutReporter, sliderShapePath, slotGroups, visibleColumns };
