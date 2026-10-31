@@ -438,6 +438,10 @@
   /* A big slot at rest sits a step quieter than the chip; the slot whose
      dial is in the hand comes back up to the chip, so the eye finds it. */
   --move-slot-rest: color-mix(in srgb, var(--move-chip) 60%, var(--move-bg));
+  /* The steering hand's dot: where the hidden pointer is, a soft glow in the
+     text's ink, only while it moves. */
+  --move-steer-dot: color-mix(in srgb, var(--move-text) 22%, transparent);
+  --move-steer-dot-size: 56px;
   /* A drawn screen's grid (the gate, the cleaner, the band pad): the well
      it sits in, and the cells across it. */
   --move-face-well: var(--move-bg);
@@ -1645,8 +1649,45 @@
   transition: background-color var(--move-duration-press) var(--move-ease-out);
 }
 
-.tweakers-move-dial[data-active] {
+.tweakers-move-dial[data-active],
+.tweakers-move-dial[data-steer] {
   --move-dial-surface: var(--move-chip);
+}
+
+/* The steering hand (move-steer): over the slots the arrow gives way — the
+   pointer only selects, and the slot it selected comes up as a touched one.
+   A pad in the hand wears its focus ring. While ⌘ holds a control the arrow
+   stays away wherever the pointer wanders. */
+.tweakers-move-grid[data-steering],
+.tweakers-move-grid[data-steering] *,
+:root[data-move-steer="held"],
+:root[data-move-steer="held"] * {
+  cursor: none !important;
+}
+
+.tweakers-move-pad[data-steer] {
+  outline: var(--move-color-stroke) solid var(--move-text);
+  outline-offset: var(--move-color-stroke);
+}
+
+.tweakers-move-steer-dot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 40;
+  width: var(--move-steer-dot-size);
+  height: var(--move-steer-dot-size);
+  margin: calc(var(--move-steer-dot-size) / -2) 0 0 calc(var(--move-steer-dot-size) / -2);
+  border-radius: 50%;
+  background: radial-gradient(circle closest-side, var(--move-steer-dot), transparent);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 360ms var(--move-ease-out);
+}
+
+.tweakers-move-steer-dot[data-on] {
+  opacity: 1;
+  transition-duration: 90ms;
 }
 
 /* Grouped slots (`moveSlotGroups`): the container carries the slot surface

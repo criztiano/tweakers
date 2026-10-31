@@ -21,7 +21,7 @@ export function MoveColorSlot({ panelId, meta, active, open, latched = false, cl
   const disabled = TweakStore.isDisabled(panelId, meta.path);
   const color = MoveColorStore.read(panelId, meta.path);
   return <button
-    type="button" className={className ? `tweakers-move-dial ${className}` : 'tweakers-move-dial'} style={style} data-kind="color"
+    type="button" className={className ? `tweakers-move-dial ${className}` : 'tweakers-move-dial'} style={style} data-kind="color" data-hands="2"
     data-active={active || open || undefined} data-latched={latched || undefined} data-disabled={disabled || undefined}
     aria-label={`${meta.label}, hue ${Math.round(color.h)} degrees. Open color editor`}
     aria-expanded={open} aria-haspopup="dialog" disabled={disabled}
