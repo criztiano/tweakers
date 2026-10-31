@@ -38,14 +38,16 @@ import { TweakStore } from './store/TweakStore';
 import { MOVE_PANEL_SETTINGS } from './move-track-labels';
 import { playMoveSteerLock } from './move-steer-sound';
 import { MoveSurfaceStore } from './move-surface-store';
+import { MOVE_OPTION_DETENT } from './move-slot-core';
 
 /** The big wheel's events (MovePanel's MOVE_JOG_EVENT / MOVE_JOG_CLICK_EVENT; spelled out to keep the panel out of this module). */
 const JOG = 'move-tweakers:jog';
 const JOG_CLICK = 'move-tweakers:jog-click';
 
-/** What the hand can hold: a slot, a pad, a button among the controls, the wheel's list (as one control). */
+/** What the hand can hold: a slot, a pad, a button among the controls, the wheel's list and a row of tabs (each as one control). */
 export const MOVE_STEER_TARGET = [
   '.tweakers-move-wheel-screen',
+  '.tweakers-move-tabs',
   '.tweakers-move-dial:not([data-empty]):not([data-kind="blank"])',
   '.tweakers-move-pad:not([data-empty="true"])',
   'button:not(:disabled)',
@@ -55,6 +57,8 @@ export const MOVE_STEER_TARGET = [
 /** A control with rows: the hand holds it whole, and only ⌘, two fingers or the arrow keys walk it. */
 const LIST_ROWS = '.tweakers-list-screen-row, .tweakers-move-dial-tile';
 const WHEEL_LIST = '.tweakers-move-wheel-screen';
+/** A row of tabs: one select in the hand, its options stepped, never pointed at. */
+const TABS = '.tweakers-move-tabs';
 /** The travel that walks the wheel's list one row. */
 const ROW_TRAVEL = 16;
 /** Shift's travel, in px, before it decides which axis it locks. */
@@ -199,6 +203,22 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   };
   const clickWheel = () => {
     window.dispatchEvent(new CustomEvent(JOG_CLICK, { detail: { shift: false }, cancelable: true }));
+  };
+
+  /**
+   * A row of tabs in the hand is one select: it steps to the option `step`
+   * along — round to the first after the last when `wrap` — by pressing
+   * that option's own tab, so the tabs answer exactly as a click on them.
+   */
+  const stepTabs = (tabs: Element, step: number, wrap: boolean) => {
+    const zones = Array.from(tabs.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+    const n = zones.length;
+    if (!n) return;
+    const at = Math.max(0, zones.findIndex((z) => z.getAttribute('aria-selected') === 'true'));
+    const next = wrap ? (((at + step) % n) + n) % n : Math.max(0, Math.min(n - 1, at + step));
+    const zone = zones[next];
+    if (next === at || !zone || zone.disabled) return;
+    send(zone, 'click', middle(boxOf(zone)), { button: 0, detail: 1 } as PointerEventInit);
   };
 
   /**
@@ -441,6 +461,17 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   const steer = (h: Hold, dx: number, dy: number, shiftKey: boolean) => {
     let g = h.grip;
     if (!g.target.isConnected) { endHold(); return; }
+    const tabs = g.target.closest(TABS);
+    if (tabs) {
+      // Right or down is the next option, one per detent, as an option slot steps.
+      walked += dx + dy;
+      while (Math.abs(walked) >= MOVE_OPTION_DETENT) {
+        const step = Math.sign(walked);
+        walked -= step * MOVE_OPTION_DETENT;
+        stepTabs(tabs, step, false);
+      }
+      return;
+    }
     if (g.target.closest(WHEEL_LIST)) {
       // The wheel's list walks a row per stretch of travel, down the list.
       walked += dy;
@@ -486,6 +517,8 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     if (!held) return;
     // A click on the wheel's list takes its row, as the wheel's press does.
     if (isWheelList(held)) { clickWheel(); return; }
+    // A tap on a row of tabs moves it on to the next option, round to the first.
+    if (held.matches(TABS)) { stepTabs(held, 1, true); return; }
     // A list's rows are never picked by where a press lands — only ⌘, two
     // fingers or the arrow keys walk it — so its press lands on its corner,
     // clear of the rows: the knob's tap, not a row.
@@ -633,6 +666,11 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
       // The arrow keys walk a list in the hand: the wheel's list as the wheel
       // does, a slot's list through its own keys.
       const held = regain();
+      if (held?.matches(TABS)) {
+        own(e);
+        stepTabs(held, e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 1, false);
+        return;
+      }
       if (held && (isWheelList(held) || hasRows(held))) {
         own(e);
         if (isWheelList(held)) {
