@@ -444,6 +444,10 @@
   --move-steer-lift: color-mix(in srgb, var(--move-text) 9%, transparent);
   --move-steer-glow: color-mix(in srgb, var(--move-text) 26%, transparent);
   --move-steer-glow-size: 16px;
+  /* How long the light and glow take to come up in the hand (quick) and to
+     go when the hand lets go (softer). */
+  --move-steer-in: 120ms;
+  --move-steer-out: 280ms;
   /* A drawn screen's grid (the gate, the cleaner, the band pad): the well
      it sits in, and the cells across it. */
   --move-face-well: var(--move-bg);
@@ -1695,7 +1699,19 @@
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
-  transition: background-color var(--move-duration-press) var(--move-ease-out);
+  transition:
+    background-color var(--move-steer-out) var(--move-ease-out),
+    box-shadow var(--move-steer-out) var(--move-ease-out);
+}
+
+/* Coming into the hand is quick; leaving it eases out. (The pad's press
+   keeps its own spring.) */
+.tweakers-move-dial[data-steer] {
+  transition-duration: var(--move-steer-in), var(--move-steer-in);
+}
+
+.tweakers-move-pad[data-steer] {
+  transition-duration: var(--move-spring-press-duration), var(--move-duration-press), var(--move-steer-in);
 }
 
 .tweakers-move-dial[data-active],
@@ -5369,7 +5385,8 @@
   white-space: nowrap;
   cursor: pointer;
   transition: transform var(--move-spring-press-duration) var(--move-spring-press),
-    opacity var(--move-duration-press) var(--move-ease-out);
+    opacity var(--move-duration-press) var(--move-ease-out),
+    box-shadow var(--move-steer-out) var(--move-ease-out);
 }
 
 .tweakers-move-pad:not([data-empty="true"]):active,
