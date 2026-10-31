@@ -157,11 +157,11 @@ export const MOVE_STEER_KNOCK = 14;
 /* ── the way in and out: the arrow glides ── */
 
 /** Right after the arrow comes out, it takes this much more of the pointer's own travel… */
-export const MOVE_STEER_BUMP = 0.6;
+export const MOVE_STEER_BUMP = 0.25;
 /** …fading to none over about this long, in ms. */
 export const MOVE_STEER_BUMP_MS = 180;
 /** The pointer travel, in px, over which the arrow closes on the real pointer. */
-export const MOVE_STEER_CLOSE = 140;
+export const MOVE_STEER_CLOSE = 50;
 
 /**
  * The arrow on its way out, one pointer move on: it moves only as the
