@@ -81,12 +81,12 @@ these gestures; an app wires nothing.
   (Shift creeps at 0.1×). The drag never latches the chip. A still click
   keeps the Move's gesture: a tap latches and a hold peeks. A colour chip
   and a filter's resonance chip keep the Move's gesture only.
-- **Hover is a hand on the knob.** A pointer resting on a list slot — a
-  select's list, a multiselect, folders — opens a long list to its whole run,
-  as a touched knob does, and the row under it lights halfway to the chosen
-  one, saying what a click takes. A finger on glass has no hover: a tap
-  opens and picks as before. Every kit list row (`ListScreen`) wears the
-  same hover.
+- **Hover selects, it never opens.** A pointer resting on a list slot — a
+  select's list, a multiselect, folders, a curve's grid — puts it in the hand
+  (the steering hand, below) without opening it; it opens to its whole run
+  only while ⌘ or two fingers turn it, as a knob's list opens only under a
+  finger on the Move. A finger on glass has no hover: a tap opens and picks
+  as before. Every kit list row (`ListScreen`) wears the same hover.
 - **A colour takes both hands.** Across turns the hue (the knob), up and down
   the luminosity (the volume knob) — up is lighter. A still click opens the
   editor.
@@ -121,6 +121,102 @@ default in an integration; it is used only on Cri's direct request for that app.
 parts. The XY face also accepts a shape path for the modulation curve preview.
 The parent supplies normalized screen coordinates (Y down), grid division count,
 and the formatted readout. It retains every gesture and store subscription.
+
+### The steering hand: ⌘ instead of a click
+
+The mouse can play the panel the way a hand plays the Move — no click, no
+hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
+
+- **The Panel hand can be switched off.** The switch beside the Menu button
+  (the Panel settings' `steerHand`, persisted) turns the hand off: the
+  pointer moves freely over the controls, presses land as they always do,
+  and the control under the pointer is the one in the hand — lit the same
+  way, turned the same way by ⌘ (the pointer hidden while it turns), two
+  fingers and the keys.
+- **The header keeps the arrow.** The page names and the header's buttons
+  are small, and a pointer reaches them better: the hand's ground starts at
+  the controls under the header, a step further below it.
+- **Below the controls' top there is no arrow.** Coming down into the
+  panel's controls the arrow is gone and the hand takes the big slot
+  nearest across on the top row of slots, which lights and takes the hit.
+  The moment the mouse goes back up over the controls' top — meaning to —
+  the hand lets go and the arrow is simply back where the mouse is, as it
+  came in. A move clearly up leaves right at the top; a sideways move that
+  strays up, or a slow creep, may go up to `MOVE_STEER_EXIT_SLACK` px over it
+  and the hand still holds (`moveSteerLeaves`). Then the
+  control it held eases back — its light and glow fade
+  (`--move-steer-out`), its lean springs home. Nothing flies
+  and nothing captures the pointer: a veil over the window keeps the page
+  from hearing it while the hand is in.
+- **The hand is where the mouse is, magnified.** The hand point is the real
+  pointer mapped around where it came in (`moveSteerMap`) — 2× across and
+  1.5× up and down by default, set on the kit's own **Panel** settings page
+  (Hand speed ←→ and ↑↓, `MOVE_STEER_GAIN_X` / `_Y`), persisted like the rest
+  of the page. Never travel added up, so the hand and the real pointer can
+  never drift apart, and the same place of the mouse is always the same
+  place of the hand. Coming in, the hand lands in the middle of the top
+  slot, so the move that brought the mouse in has that slot's lower half to
+  spend. The hand holds a control until it is past its edge by a margin
+  that grows when the mouse moves slowly (`moveSteerMargin`) — never more
+  than half the control's own size, so a small pad holds as long as a pad
+  can — then steps to the next control that way, one at a time
+  (`moveSteerSettle`): a quick move runs through several, a careful one
+  lands on the next and never slips past it. Up and
+  down the way is wider (`MOVE_STEER_CONE_DOWN`): rows of pads are short and
+  wide, so with nothing right below, the pad a column over in the next row
+  is where the hand goes. Pulling at
+  a control leans and stretches it toward the pull, and the control the
+  hand lands on takes a knock and lights up; a rest lets the tension go.
+  In the hand everything reads the same: a big slot comes up to the chip,
+  a pad or a button a step brighter than it rests (`--move-steer-lift`),
+  and each glows from the inside (`--move-steer-glow`) — no ring. Being in
+  the hand never opens anything: a slot's list and a curve's grid open
+  only while ⌘ or two fingers turn it (or a finger is on the Move's knob).
+  After a ⌘ turn or a drag the hand stays where it stood.
+- **Every press lands on the hand.** A click and a drag reach the control
+  in the hand, where the hand is; a drag runs at the page's pace from there.
+- **A list is one control.** The wheel's list, and a slot's list, are held
+  whole: moving the hand never walks or scrolls them, and a press on a
+  slot's list is its knob's tap, never a row. ⌘ and the mouse, two fingers,
+  or the arrow keys walk a list in the hand — the wheel's list as the big
+  wheel turns it (its own turn and press events, so whoever reads the wheel
+  walks it), a slot's list through its own keys.
+- **A row of tabs is one select.** The hand holds the whole row: a tap
+  moves it on to the next option, round to the first; ⌘ and the mouse, two
+  fingers or the arrow keys step it, one option per detent, right or down
+  the next. It never takes the tab where the hand happens to be.
+- **Two fingers turn.** On a trackpad (or a mouse wheel) the control in the
+  hand turns the way the fingers go, exactly as ⌘ and the mouse turn it,
+  with the same tick, and lets go when they stop.
+- **⌘ takes the control** (Ctrl off a Mac), with a short tick
+  (`move-steer-sound`; a drawn placeholder until the real sound is in —
+  the file's place is described there). While ⌘ is held the hand stays
+  where it is and the mouse's travel turns the control, as a drag on it
+  would — a dial turns from where it is, an option steps, a list walks.
+  When ⌘ comes up the control lets go, and the hand is still where it
+  stood. A steer is never a tap: it never latches a chip, steps an
+  option on its own or opens an editor. A click while ⌘ is held ends the
+  steer and goes through as a click.
+- **Two hands split the travel.** A control the Move turns with its knob and
+  the volume knob together — xy, range, colour (`data-hands="2"` on the
+  slot) — takes across for the knob (X, the low end, the hue) and up and
+  down for the volume knob (Y, the high end, the luminosity, up raising
+  it). Shift locks the travel to the axis it goes along most, decided after
+  a few pixels; elsewhere Shift is fine (0.1×) as in a drag.
+- **A chip lends its control to the knob above.** Held, a chip peeks into
+  the big slot over it, as its pad does on the Move, and the travel turns
+  it there — a number, an option or a colour alike.
+- **Pictures turn, never jump.** Under ⌘ the xy point, the filter's hand and
+  the needle turn from their value; nothing goes to where the pointer is.
+
+### Page keys and the track chip
+
+The number keys 1 to 4 are the track buttons: each takes its page, as the
+Move's track buttons do, never while a field has the keys. Each page's
+number sits faint beside its name (`aria-keyshortcuts` says it too). The
+page on show wears its colour as a full chip — its marker line opens out
+into the chip on the kit's UI spring — and the names of the other pages
+stay readable beside it.
 
 ### A slot on its own: `MoveSlot`
 

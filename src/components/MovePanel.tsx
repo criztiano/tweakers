@@ -16,7 +16,7 @@ import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from '../theme';
-import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, filterChipValue, isColumnFilter, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumShapePath, sliderShapePath, enumIndex, enumAspect, enumArrows, moveActionDrawing, moveNestChildren, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
+import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, normalizeFilterDial, filterShapePath, filterChipValue, isColumnFilter, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumShapePath, sliderShapePath, enumIndex, enumAspect, enumArrows, moveActionDrawing, moveNestChildren, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
 import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotCurveGridBody, MoveSlotAspectBody, MoveSlotArrowsBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotShape, MoveSlotCurveDots, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadFaceBody, MovePadOffsetBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody, MoveSlotGlyph } from './move-slots';
@@ -29,8 +29,9 @@ import {
   MOVE_TAP_SLOP,
   moveDialKey, moveRangeValue, moveFilterValue, moveXYValue, moveXYRest, moveNeedleValue,
   moveTransferValue, moveRampStop, moveRampValue, moveDialPercent, moveDialReading,
-  moveRangeReading, moveChipValue, moveXYGrid, moveShapePath,
+  moveRangeReading, moveChipValue, moveXYGrid, moveShapePath, moveSteerAnchor, moveRangeSteer,
 } from '../move-slot-core';
+import { attachMoveSteer, isMoveSteer } from '../move-steer';
 import {
   movePressStart, movePressTravel, movePressEnd, moveTurnValue, moveTurnExtent,
   moveOptionStep, moveOptionClick, moveChipScrubs, moveListHover, moveListWalk, moveListRowIn, moveOptionRowIn, moveListKey, moveMultiselectOptions,
@@ -40,6 +41,7 @@ import {
 } from '../move-slot-core';
 import { attachMoveKeys } from '../move-keys';
 import { MoveMenuButton } from './MoveMenuButton';
+import { MoveHandToggle } from './MoveHandToggle';
 import { MoveAgentButton } from './MoveAgentButton';
 import { MoveGateDisplay } from './MoveGateDisplay';
 import { MoveMultibandDisplay } from './MoveMultibandDisplay';
@@ -477,6 +479,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     setVolume(MoveVolumeDisplay.get());
     return MoveVolumeDisplay.subscribe(() => setVolume(MoveVolumeDisplay.get()));
   }, []);
+  // The steering hand (move-steer): below the panel's top the pointer is a
+  // hand on a control, and a held ⌘ turns what it holds.
+  useEffect(() => attachMoveSteer(() => panelRef.current), []);
   useEffect(() => {
     const poll = volume?.getValue;
     if (!poll) {
@@ -556,7 +561,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // One face for every track button: the marker, then the page's picture
   // and its name as the row's look asks. A picture alone still names its
   // page to a screen reader and under the pointer.
-  const trackFace = (panel: PanelConfig, color: string) => {
+  // A page's number key, when it has one, rides beside its name.
+  const trackFace = (panel: PanelConfig, color: string, key?: number) => {
     const icon = trackLabelStyle === 'name' ? undefined : moveTrackIcon(panel);
     return (
       <>
@@ -565,6 +571,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
         {icon && trackLabelStyle === 'icon'
           ? <span className="tweakers-move-track-label" data-hidden>{panel.name}</span>
           : <span className="tweakers-move-track-label">{panel.name}</span>}
+        {key !== undefined && <kbd className="tweakers-move-track-key" aria-hidden="true">{key}</kbd>}
       </>
     );
   };
@@ -904,6 +911,22 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
   // Undo, Delete and Copy on the computer's keys, for whatever the buttons
   // hold — the Move's editing keys without a picture of them on screen.
   useEffect(() => attachMoveKeys(), []);
+  // The number keys are the track buttons: 1 to 4 take the page there, as
+  // the Move's track buttons do — never while a field has the keys.
+  const selectPageRef = useRef<(index: number) => void>(() => {});
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      const n = /^[1-9]$/.test(e.key) ? Number(e.key) : 0;
+      if (!n || n > MOVE_TRACKS) return;
+      e.preventDefault();
+      selectPageRef.current(n - 1);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   useEffect(() => () => {
     if (MovePresetStore.getView()?.panelId === pageId) MovePresetStore.cancel();
     if (MovePresetStore.getSaving()?.panelId === pageId) MovePresetStore.cancelSave();
@@ -1783,6 +1806,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     // Tell the hardware side; the kit relays it when the bridge is up.
     window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: next.panel.id } }));
   };
+  selectPageRef.current = selectPage;
   // Where the window sits in the whole set — counted in controls, since that
   // is what the wheel moves by and what a person is looking for.
   const stripStops = stripMode ? stripOffsets(page) : [];
@@ -1890,6 +1914,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
         open={!!presetScreen || paletteScreen}
         label={paletteScreen || colorOpenPanel ? 'Palettes' : 'Presets'}
       />
+      <MoveHandToggle theme={theme} />
       {/* While a composer floats above it the whole instrument comes forward,
           over the app's own panels — you are working in it. */}
       <div ref={panelRef} className="tweakers-move" data-dock={dock} data-settings={settingsOpen || undefined} data-move-motion-key={`${motionSurface}:${motionPage}|${pages.map((pg) => pg.panel.id).join(' ')}`} data-overlay={padListView || explorationOpen || composition || audioWave != null || ModOverlay || roomWave || color || presetSave ? true : undefined}>
@@ -2014,6 +2039,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       data-active={pg === page}
                       aria-selected={pg === page}
                       aria-controls={panelIdForTabs}
+                      aria-keyshortcuts={i < MOVE_TRACKS ? String(i + 1) : undefined}
                       title={trackLabelStyle === 'icon' ? pg.panel.name : undefined}
                       tabIndex={pg === page ? 0 : -1}
                       onClick={() => selectPage(i)}
@@ -2032,7 +2058,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                           ?.focus();
                       }}
                     >
-                      {trackFace(pg.panel, MOVE_TRACK_COLORS[i])}
+                      {trackFace(pg.panel, MOVE_TRACK_COLORS[i], i < MOVE_TRACKS ? i + 1 : undefined)}
                     </button>
                   ))}
                 </div>
@@ -2266,6 +2292,8 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                         fineRef.current = null;
                         setDragPath(meta.path);
                         armMod(meta.path);
+                        // A steer turns the hand it takes from where it is.
+                        if (isMoveSteer(e)) moveSteerAnchor(fineRef, e, () => normalizeFilterDial(meta, values[meta.path]));
                         filterFromPointer(e, meta, true, take);
                       }}
                       onPointerMove={(e) => {
@@ -2379,6 +2407,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       data-kind="dial"
                       data-active={active || undefined}
                       onPointerDown={(e) => {
+                        // A steer has no place on the face to point the
+                        // needle at: it turns it, as the knob does.
+                        if (isMoveSteer(e)) { beginPress(e, meta.path, normalizeDial(meta, values[meta.path])); return; }
                         try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
                         fineRef.current = null;
                         setDragPath(meta.path);
@@ -2386,10 +2417,12 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                         needleFromPointer(e, meta);
                       }}
                       onPointerMove={(e) => {
-                        if (dragPath === meta.path) needleFromPointer(e, meta);
+                        const p = movePressTravel(pressRef, meta.path, e, () => normalizeDial(meta, values[meta.path]));
+                        if (p) write(meta, moveTurnValue(meta, p, e, moveTurnExtent(e.currentTarget.getBoundingClientRect())));
+                        else if (dragPath === meta.path && pressRef.current?.path !== meta.path) needleFromPointer(e, meta);
                       }}
-                      onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
-                      onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
+                      onPointerUp={() => { pressRef.current = null; setDragPath(null); fineRef.current = null; }}
+                      onPointerCancel={() => { pressRef.current = null; setDragPath(null); fineRef.current = null; }}
                     >
                       <MoveModRing panelId={page.panel.id} path={meta.path} />
                       <MoveSlotDialBody
@@ -2462,13 +2495,19 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       key={meta.path}
                       className="tweakers-move-dial"
                       data-kind="xy"
+                      data-hands="2"
                       data-preview={preview ? true : undefined}
                       data-sub={valueFirst || undefined}
                       data-active={active || undefined}
                       onPointerDown={(e) => {
                         if (e.button > 0) return;
                         beginPress(e, meta.path, 0);
-                        if (!cycles) xyFromPointer(e, meta);
+                        // A steer moves the point from where it is, across
+                        // and up and down at once — the knob and the volume knob.
+                        if (isMoveSteer(e)) {
+                          const xa = resolveAxis(meta.xAxis), ya = resolveAxis(meta.yAxis);
+                          moveSteerAnchor(fineRef, e, () => pointFromValue(normalizeValue(values[meta.path] as Partial<XYValue>, xa, ya), xa, ya));
+                        } else if (!cycles) xyFromPointer(e, meta);
                       }}
                       onPointerMove={(e) => {
                         const p = movePressTravel(pressRef, meta.path, e, () => 0);
@@ -2506,16 +2545,21 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                       key={meta.path}
                       className="tweakers-move-dial"
                       data-kind="range"
+                      data-hands="2"
                       data-active={active || undefined}
                       onPointerDown={(e) => {
                         try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
                         fineRef.current = null;
                         setDragPath(meta.path);
                         armMod(meta.path);
-                        rangeFromPointer(e, meta, true);
+                        // A steer holds both ends: across the low, up and down the high.
+                        if (isMoveSteer(e)) moveSteerAnchor(fineRef, e, () => normalizeRangeDial(meta, values[meta.path]));
+                        else rangeFromPointer(e, meta, true);
                       }}
                       onPointerMove={(e) => {
-                        if (dragPath === meta.path) rangeFromPointer(e, meta, false);
+                        if (dragPath !== meta.path) return;
+                        if (isMoveSteer(e) && fineRef.current) write(meta, moveRangeSteer(meta, e, e.currentTarget.getBoundingClientRect(), fineRef.current));
+                        else rangeFromPointer(e, meta, false);
                       }}
                       onPointerUp={() => { setDragPath(null); fineRef.current = null; }}
                       onPointerCancel={() => { setDragPath(null); fineRef.current = null; }}
@@ -3322,6 +3366,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                               aria-valuenow={Number(values[m.path])}
                               aria-valuetext={moveVisualReading(m, Number(values[m.path]))}
                               aria-orientation="horizontal"
+                              data-peek="true"
                               data-held={chipHeld(m) || undefined}
                               data-latched={chipLatched(at, m) || undefined}
                               onKeyDown={(k) => dialFromKeyboard(k, m)}
@@ -3361,6 +3406,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                                 type="button"
                                 className="tweakers-move-band-zone"
                                 aria-label={m.label}
+                                data-peek="true"
                                 data-held={chipHeld(m) || undefined}
                                 data-latched={chipLatched(col, m) || undefined}
                                 {...chipGesture(col, m)}
@@ -3443,6 +3489,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                         data-kind={isColor ? 'color' : 'value'}
                         data-face={room ? 'offset' : undefined}
                         data-scrub={moveChipScrubs(meta) || undefined}
+                        data-peek="true"
                         data-held={(held !== null && held.meta.path === meta.path) || hwHeld[meta.path] || undefined}
                         data-latched={chipLatched(col, meta) || undefined}
                         aria-label={isColor ? meta.label : tip}

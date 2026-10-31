@@ -56,6 +56,31 @@ export function moveFineAnchor(fine: MoveGestureRef<MoveFineAnchor | null>, e: M
 }
 
 /**
+ * The steering hand's press (move-steer): a steer has no place on the face,
+ * only a hand, so a face that would jump to the pointer turns from its value
+ * instead — the anchor is set at the press, at 1×, as a Shift release would
+ * leave it.
+ */
+export function moveSteerAnchor(fine: MoveGestureRef<MoveFineAnchor | null>, e: MoveSlotPointer, snapshot: () => unknown) {
+  fine.current = { shift: e.shiftKey, x: e.clientX, y: e.clientY, v: snapshot() };
+  return fine.current;
+}
+
+/**
+ * A range in the steering hand takes both of its hands at once, as the Move
+ * gives them: across is the knob's low end, up the volume knob's high end.
+ * Travel reads from the steer's anchor, the track's width for the whole
+ * range; the low end never passes the high one.
+ */
+export function moveRangeSteer(meta: ControlMeta, e: MoveSlotPointer, box: MoveSlotBox, anchor: MoveFineAnchor): RangeValue {
+  const span = Math.max(1, box.width - MOVE_DIAL_TRACK_INSET * 2);
+  const a = anchor.v as { lo: number; hi: number };
+  const hi = clamp01(a.hi - (e.clientY - anchor.y) / span);
+  const lo = Math.min(hi, clamp01(a.lo + (e.clientX - anchor.x) / span));
+  return denormalizeRangeDial(meta, lo, hi);
+}
+
+/**
  * The keyboard on a focused slot: arrows step, shift steps fine, Home and End
  * go to the ends. Null for any key that is not an edit — or any chord, which
  * belongs to the page.
