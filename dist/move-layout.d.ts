@@ -1,4 +1,4 @@
-import { C as ControlMeta, M as MoveEdges, P as PanelConfig } from './TweakStore-2gTztyWr.js';
+import { M as MoveNumericDrawing, C as ControlMeta, a as MoveEdges, P as PanelConfig } from './TweakStore-DmbMECG0.js';
 import { ModPageLayout } from './modulation-core.js';
 import { XYValue } from './xy-pad-core.js';
 import { RangeValue } from './range-slider-core.js';
@@ -51,6 +51,11 @@ interface MovePage {
      *  named column where no chip holds it — so a column can stack two buttons,
      *  one over the other. Absent: none. */
     valueActions?: ControlMeta[];
+    /** The fourth pad row (y=0), under the action pads: what the panel names in
+     *  `moveBottomRow` — a tabs strip's run, and switches, buttons and value
+     *  chips each in its `movePads` column. It is the app's reserved row when
+     *  the app claims the pads, and then it shows nothing. Absent: none. */
+    bottom?: ControlMeta[];
 }
 /** A select with real choices becomes an enum dial — the kit's exact rule. */
 declare const isEnumDial: (c: ControlMeta) => boolean;
@@ -141,7 +146,7 @@ declare function buildModMovePage(panel: PanelConfig, layout?: ModPageLayout | n
  * Tests (and apps that want the feed) can swap the sink with
  * `setMoveLayoutReporter`; `null` restores the deduped console.warn.
  */
-type MoveLayoutIssueCode = 'panel-dropped' | 'dial-dropped' | 'pad-column-invalid' | 'pad-column-on-dial' | 'balance-color-placed' | 'pad-column-taken' | 'top-row-taken' | 'slot-group-apart' | 'action-row-no-column' | 'action-row-taken' | 'value-row-no-column' | 'value-row-taken' | 'top-row-no-column' | 'pad-row-full' | 'tabs-oversized' | 'tabs-no-room' | 'band-apart' | 'edges-apart';
+type MoveLayoutIssueCode = 'panel-dropped' | 'dial-dropped' | 'pad-column-invalid' | 'pad-column-on-dial' | 'balance-color-placed' | 'pad-column-taken' | 'top-row-taken' | 'slot-group-apart' | 'action-row-no-column' | 'action-row-taken' | 'value-row-no-column' | 'value-row-taken' | 'bottom-row-no-column' | 'bottom-row-taken' | 'bottom-row-claimed' | 'top-row-no-column' | 'pad-row-full' | 'tabs-oversized' | 'tabs-no-room' | 'band-apart' | 'edges-apart';
 type MoveLayoutReporter = (code: MoveLayoutIssueCode, message: string) => void;
 declare function setMoveLayoutReporter(fn: MoveLayoutReporter | null): void;
 declare function reportMoveLayoutIssue(code: MoveLayoutIssueCode, message: string): void;
@@ -155,9 +160,10 @@ declare function buildMovePages(panels: PanelConfig[]): MovePage[];
  *
  * Plain: y=3 the switches — the first row of small slots, the one drawn
  * directly under the dials — y=2 the value chips, y=1 the action pads, y=0
- * the ALT pad. An app that claims both bottom rows takes y=1 and y=0, so the
- * actions have nowhere left to sit; a single-row claim is the bottom row
- * alone and the actions keep theirs (see PROTOCOL.md).
+ * what the page names in `moveBottomRow` (empty unless it names something).
+ * An app that claims both bottom rows takes y=1 and y=0, so the actions and
+ * the fourth row have nowhere left to sit; a single-row claim is the bottom
+ * row alone and the actions keep theirs (see PROTOCOL.md).
  */
 declare function movePadRows(page: MovePage, claimedRows: number): ControlMeta[][];
 /**
@@ -272,6 +278,26 @@ declare const ENUM_SHAPE_SAMPLES = 64;
  * question has one answer both surfaces can be tested against.
  */
 declare function enumShapePath(meta: ControlMeta, value: unknown): string | null;
+/** What an action pad's `face` draws: a curve's path, or the offset room. */
+type MoveActionDrawing = {
+    kind: 'curve';
+    d: string;
+} | Extract<MoveNumericDrawing, {
+    kind: 'offset';
+}>;
+/**
+ * The picture an action pad wears in place of its name (its `face`), or null
+ * for a plain button — a face that cannot be drawn (too few points, a value
+ * that is not a number) keeps the name. Each is the small sibling of a big
+ * face, drawn from the same numbers:
+ *
+ * - `curve`: y samples at even steps of x over 0..1, joined straight, fitted
+ *   to the box exactly as the curve grid fits its options — so the pad and
+ *   the grid draw one curve the same way.
+ * - `offset`: a share of the range, −1..1, as the offset face's room with its
+ *   origin in the middle; past either end it is held at the end.
+ */
+declare function moveActionDrawing(meta: ControlMeta): MoveActionDrawing | null;
 /**
  * The shape a slider's value makes (its `shape`), as an SVG path filling a
  * 100×100 box, y down — or null when the slider has none. Drawn in the
@@ -355,4 +381,4 @@ declare function dialOrigin(meta: ControlMeta): number;
 /** Axis positions 0..1 back to the control's real {x, y}, kit-identical. */
 declare function denormalizeXYDial(meta: ControlMeta, x01: number, y01: number): XYValue;
 
-export { ENUM_SHAPE_SAMPLES, MOVE_ARROW_DIRECTIONS, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MoveArrowDirection, type MoveBandCell, type MoveEdgesCell, type MoveLayoutIssueCode, type MovePage, type MoveTabCell, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, denormalizeXYDial, dialOrigin, dialSpan, enumArrows, enumAspect, enumIndex, enumOptionGroup, enumOptionIcon, enumOptionLabel, enumOptionPicture, enumOptionValue, enumShapePath, filterChipValue, filterResonanceChip, filterShapePath, isColumnFilter, isEnumDial, isMoveDial, isMoveTabs, isMultiselectDial, isNamedTabs, isPadSpanContinuation, isSpanContinuation, isToggleDial, moveAppPadRow, moveBandCell, moveEdgesCell, movePadRows, moveTabCell, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeToggleDial, normalizeXYDial, padSpan, parseArrow, parseAspect, reportMoveLayoutIssue, setMoveLayoutReporter, sliderShapePath, slotGroups, visibleColumns };
+export { ENUM_SHAPE_SAMPLES, MOVE_ARROW_DIRECTIONS, MOVE_DIALS, MOVE_PADS, MOVE_TRACKS, type MoveActionDrawing, type MoveArrowDirection, type MoveBandCell, type MoveEdgesCell, type MoveLayoutIssueCode, type MovePage, type MoveTabCell, buildModMovePage, buildMovePages, denormalizeDial, denormalizeEnumDial, denormalizeFilterDial, denormalizeRangeDial, denormalizeToggleDial, denormalizeXYDial, dialOrigin, dialSpan, enumArrows, enumAspect, enumIndex, enumOptionGroup, enumOptionIcon, enumOptionLabel, enumOptionPicture, enumOptionValue, enumShapePath, filterChipValue, filterResonanceChip, filterShapePath, isColumnFilter, isEnumDial, isMoveDial, isMoveTabs, isMultiselectDial, isNamedTabs, isPadSpanContinuation, isSpanContinuation, isToggleDial, moveActionDrawing, moveAppPadRow, moveBandCell, moveEdgesCell, movePadRows, moveTabCell, normalizeDial, normalizeEnumDial, normalizeFilterDial, normalizeRangeDial, normalizeToggleDial, normalizeXYDial, padSpan, parseArrow, parseAspect, reportMoveLayoutIssue, setMoveLayoutReporter, sliderShapePath, slotGroups, visibleColumns };

@@ -180,6 +180,21 @@ type MoveToggleVisual = {
     kind: 'metronome';
     swing?: () => number | null;
 };
+/**
+ * A small picture an action pad wears in place of its name — for a button
+ * that opens a choice and names what is chosen ("Curve: Snappy", "Offset:
+ * +0.2 s"). Each kind is the small sibling of a big face: `curve` the curve
+ * grid's resting tile (`points`: y at even steps of x over 0..1, free to dip
+ * under 0 or rise over 1), `offset` the offset face's room (`value`: the
+ * share of the range, −1..1, 0 in the middle).
+ */
+type MoveActionFace = {
+    kind: 'curve';
+    points: number[];
+} | {
+    kind: 'offset';
+    value: number;
+};
 
 /**
  * gradient-core — DOM-free gradient math shared by every framework port of the
@@ -349,6 +364,13 @@ type ActionConfig = {
      * small slot).
      */
     icon?: string;
+    /**
+     * On a Move pad, a small picture in place of the name: a curve, or an
+     * offset — for a button that opens a choice and names what is chosen. The
+     * label stays the pad's accessible name and tooltip. Without it the pad
+     * draws its name, as before.
+     */
+    face?: MoveActionFace;
 };
 type ToggleConfig = {
     type: 'toggle';

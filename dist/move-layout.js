@@ -304,6 +304,7 @@ function buildMovePages(panels) {
     const actions = [];
     const topValues = [];
     const valueActions = [];
+    const bottom = [];
     const topAt = (i) => toggles[i] ?? topValues[i];
     const cellAt = (row, i) => row === toggles ? topAt(i) : row === values ? values[i] ?? valueActions[i] : row[i];
     const place = (row, rowName, c, col) => {
@@ -328,10 +329,11 @@ function buildMovePages(panels) {
         `panel '${panel.id}': control '${c.path}': the ${rowName} row's ${MOVE_PADS} pads are all taken \u2014 dropped`
       );
     };
+    const floor = panel.moveBottomRow ?? [];
     const sunk = (c) => (panel.moveActionRow ?? []).includes(c.path);
     const placeTabs = (c, col) => {
-      const row = sunk(c) ? actions : toggles;
-      const rowName = row === actions ? "action" : "toggle";
+      const row = floor.includes(c.path) ? bottom : sunk(c) ? actions : toggles;
+      const rowName = row === bottom ? "bottom" : row === actions ? "action" : "toggle";
       const span = padSpan(c);
       if (span > MOVE_PADS) {
         reportMoveLayoutIssue(
@@ -384,10 +386,11 @@ function buildMovePages(panels) {
     }
     const seated = (c) => topValues.includes(c) || values.includes(c);
     const lowered = (c) => c.type === "toggle" && !isToggleDial(c) && (panel.moveValueRow ?? []).includes(c.path) && padCols.get(c) != null;
+    const floored = (c) => c.type === "toggle" && !isToggleDial(c) && floor.includes(c.path) && !lowered(c);
     for (const c of controls) {
       const col = padCols.get(c) ?? null;
       if (isMoveTabs(c)) placeTabs(c, col);
-      else if (c.type === "toggle" && !isToggleDial(c) && !lowered(c)) place(toggles, "toggle", c, col);
+      else if (c.type === "toggle" && !isToggleDial(c) && !lowered(c) && !floored(c)) place(toggles, "toggle", c, col);
     }
     const lift = panel.moveTopRow ?? [];
     const chipFits = (c) => isDial(c) && !noChip(c) && !dials.includes(c) && !balanceRefs.has(c) && !isPadColor(c);
@@ -453,9 +456,32 @@ function buildMovePages(panels) {
       }
     }
     for (const c of controls) {
+      if (!floor.includes(c.path) || isMoveTabs(c)) continue;
+      const toggle = floored(c);
+      if (!toggle && c.type !== "action" && !chipFits(c)) continue;
+      if (topValues.includes(c) || actionValues.includes(c) || valueActions.includes(c)) continue;
+      const col = padCols.get(c) ?? null;
+      const home = toggle ? "it keeps the top row" : c.type === "action" ? "it keeps the action row" : "it keeps the value row";
+      if (col === null) {
+        reportMoveLayoutIssue(
+          "bottom-row-no-column",
+          `panel '${panel.id}': control '${c.path}' is named in moveBottomRow but has no movePads column \u2014 ${c.type === "action" ? "a button reaches the pads only by column" : home}`
+        );
+      } else if (bottom[col] !== void 0) {
+        reportMoveLayoutIssue(
+          "bottom-row-taken",
+          `panel '${panel.id}': control '${c.path}': bottom-row column ${col} holds '${bottom[col].path}' \u2014 ${home}`
+        );
+      } else {
+        bottom[col] = c;
+        continue;
+      }
+      if (toggle) place(toggles, "toggle", c, col);
+    }
+    for (const c of controls) {
       const col = padCols.get(c) ?? null;
       if (isMoveTabs(c) || c.type === "toggle" && !isToggleDial(c)) continue;
-      if (seated(c) || actionValues.includes(c) || valueActions.includes(c)) continue;
+      if (seated(c) || actionValues.includes(c) || valueActions.includes(c) || bottom.includes(c)) continue;
       if (c.type === "action") {
         if (col !== null && actionValues[col] !== void 0) {
           reportMoveLayoutIssue("action-row-taken", `panel '${panel.id}': action '${c.path}': column ${col} holds the chip '${actionValues[col].path}' \u2014 the action moves along`);
@@ -487,7 +513,8 @@ function buildMovePages(panels) {
       actions: actions.slice(0, MOVE_PADS),
       ...topValues.length ? { topValues: topValues.slice(0, MOVE_PADS) } : {},
       ...actionValues.length ? { actionValues: actionValues.slice(0, MOVE_PADS) } : {},
-      ...valueActions.length ? { valueActions: valueActions.slice(0, MOVE_PADS) } : {}
+      ...valueActions.length ? { valueActions: valueActions.slice(0, MOVE_PADS) } : {},
+      ...bottom.length ? { bottom: bottom.slice(0, MOVE_PADS) } : {}
     };
     const rows = movePadRows(page, 0);
     for (const band of panel.moveBands ?? []) {
@@ -540,8 +567,16 @@ function movePadRows(page, claimedRows) {
       if (cell) actions[i] = cell;
     }
   }
+  const bottom = page.bottom ?? [];
+  if (claimedRows >= 1 && bottom.some(Boolean)) {
+    reportMoveLayoutIssue(
+      "bottom-row-claimed",
+      `panel '${page.panel.id}': the app claims the bottom pad row \u2014 its moveBottomRow pads are not shown`
+    );
+  }
   if (claimedRows >= 2) return [top, values, [], []];
-  return [top, values, actions, []];
+  if (claimedRows === 1) return [top, values, actions, []];
+  return [top, values, actions, bottom];
 }
 function moveBandCell(page, rows, row, col) {
   const meta = rows[row]?.[col];
@@ -602,7 +637,7 @@ function slotGroups(page, cols = visibleColumns(page)) {
 function visibleColumns(page) {
   const cols = [];
   for (let i = 0; i < MOVE_DIALS; i++) {
-    if (page.dials[i] || page.toggles[i] || page.topValues?.[i] || page.values[i] || page.actions[i] || page.actionValues?.[i] || page.valueActions?.[i]) cols.push(i);
+    if (page.dials[i] || page.toggles[i] || page.topValues?.[i] || page.values[i] || page.actions[i] || page.actionValues?.[i] || page.valueActions?.[i] || page.bottom?.[i]) cols.push(i);
   }
   return cols;
 }
@@ -651,6 +686,9 @@ function enumShapePath(meta, value) {
     return null;
   }
   if (typeof sample !== "function") return null;
+  return fittedShapePath(sample);
+}
+function fittedShapePath(sample) {
   const segments = plotCurve(sample, { count: ENUM_SHAPE_SAMPLES }).segments;
   let lo = Infinity;
   let hi = -Infinity;
@@ -665,6 +703,25 @@ function enumShapePath(meta, value) {
   const fill = (v) => span > 0 ? (v - lo) / span : 0.5;
   const d = segments.map((seg) => seg.map((pt, i) => `${i ? "L" : "M"} ${(pt.t * 100).toFixed(2)} ${((1 - fill(pt.v)) * 100).toFixed(2)}`).join(" ")).join(" ");
   return d || null;
+}
+function moveActionDrawing(meta) {
+  const face = meta.type === "action" ? meta.face : void 0;
+  if (face?.kind === "curve") {
+    const ys = Array.isArray(face.points) ? face.points : [];
+    if (ys.length < 2 || !ys.every(Number.isFinite)) return null;
+    const d = fittedShapePath((t) => {
+      const x = Math.min(1, Math.max(0, t)) * (ys.length - 1);
+      const i = Math.min(ys.length - 2, Math.floor(x));
+      return ys[i] + (ys[i + 1] - ys[i]) * (x - i);
+    });
+    return d ? { kind: "curve", d } : null;
+  }
+  if (face?.kind === "offset") {
+    if (typeof face.value !== "number" || !Number.isFinite(face.value)) return null;
+    const share = Math.min(1, Math.max(-1, face.value));
+    return { kind: "offset", origin: 0.5, position: 0.5 + share / 2, back: true, forward: true };
+  }
+  return null;
 }
 function sliderShapePath(meta, value) {
   if (meta.type !== "slider" || !meta.shape) return null;
@@ -822,6 +879,7 @@ export {
   isPadSpanContinuation,
   isSpanContinuation,
   isToggleDial,
+  moveActionDrawing,
   moveAppPadRow,
   moveBandCell,
   moveEdgesCell,
