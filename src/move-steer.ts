@@ -119,8 +119,8 @@ const boxOf = (el: Element): MoveSteerBox => {
 const middle = (b: MoveSteerBox): MoveSteerVec => ({ x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 });
 const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-/** The arrow the page shows, drawn while it glides in or out. */
-const ARROW = '<svg viewBox="0 0 14 20" aria-hidden="true"><path d="M1 1v15.5l4-3.8 2.7 6.1 2.6-1.1-2.6-6h5.6z"/></svg>';
+/** The system's arrow, copied as closely as a page can: drawn while it glides out, until the real one takes over. */
+const ARROW = '<svg viewBox="0 0 16 24" aria-hidden="true"><path d="M1.5 1.5V18.2l3.9-3.6 2.8 6.6 2.7-1.1-2.7-6.5h5.2z"/></svg>';
 
 /**
  * Puts the steering hand on a panel: `root` is the panel, read on every
