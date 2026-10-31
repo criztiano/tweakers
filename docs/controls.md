@@ -153,7 +153,10 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
   spend. The hand holds a control until it is past its edge by a margin
   that grows when the mouse moves slowly (`moveSteerMargin`), then lands on
   the control it is over, or the nearest that way (`moveSteerSettle`); a
-  careful move never slips past more than the control it means. Pulling at
+  careful move never slips past more than the control it means. Up and
+  down the way is wider (`MOVE_STEER_CONE_DOWN`): rows of pads are short and
+  wide, so with nothing right below, the pad a column over in the next row
+  is where the hand goes. Pulling at
   a control leans and stretches it toward the pull, and the control the
   hand lands on takes a knock and lights up; a rest lets the tension go.
   In the hand everything reads the same: a big slot comes up to the chip,
@@ -170,6 +173,10 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
   or the arrow keys walk a list in the hand — the wheel's list as the big
   wheel turns it (its own turn and press events, so whoever reads the wheel
   walks it), a slot's list through its own keys.
+- **A row of tabs is one select.** The hand holds the whole row: a tap
+  moves it on to the next option, round to the first; ⌘ and the mouse, two
+  fingers or the arrow keys step it, one option per detent, right or down
+  the next. It never takes the tab where the hand happens to be.
 - **Two fingers turn.** On a trackpad (or a mouse wheel) the control in the
   hand turns the way the fingers go, exactly as ⌘ and the mouse turn it,
   with the same tick, and lets go when they stop.
