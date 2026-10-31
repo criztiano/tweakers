@@ -4588,7 +4588,7 @@ function MovePadTabsBody({ name, options, activeIdx, labels = false }) {
 var BAND_CAPTIONS = { high: "Hi", low: "Lo" };
 function MovePadBandBody({ low, high, upper = "high" }) {
   const cuts = moveBandCuts(low.at, high.at);
-  const hands = { low, high };
+  const hands2 = { low, high };
   return /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)(import_jsx_runtime3.Fragment, { children: [
     /* @__PURE__ */ (0, import_jsx_runtime3.jsxs)("div", { className: "tweakers-move-band-screen", children: [
       /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("div", { className: "tweakers-move-band-cells", "aria-hidden": "true", children: Array.from({ length: 32 }, (_, i) => /* @__PURE__ */ (0, import_jsx_runtime3.jsx)("i", {}, i)) }),
@@ -4612,8 +4612,8 @@ function MovePadBandBody({ low, high, upper = "high" }) {
       "span",
       {
         className: "tweakers-move-band-caption",
-        "data-held": hands[hand].held || void 0,
-        "data-latched": hands[hand].latched || void 0,
+        "data-held": hands2[hand].held || void 0,
+        "data-latched": hands2[hand].latched || void 0,
         children: BAND_CAPTIONS[hand]
       },
       hand
@@ -10156,6 +10156,17 @@ function moveFineAnchor(fine, e, snapshot) {
   }
   return fine.current;
 }
+function moveSteerAnchor(fine, e, snapshot) {
+  fine.current = { shift: e.shiftKey, x: e.clientX, y: e.clientY, v: snapshot() };
+  return fine.current;
+}
+function moveRangeSteer(meta, e, box, anchor) {
+  const span = Math.max(1, box.width - MOVE_DIAL_TRACK_INSET * 2);
+  const a = anchor.v;
+  const hi = clamp018(a.hi - (e.clientY - anchor.y) / span);
+  const lo = Math.min(hi, clamp018(a.lo + (e.clientX - anchor.x) / span));
+  return denormalizeRangeDial(meta, lo, hi);
+}
 function moveDialKey(meta, value, e) {
   if (e.altKey || e.ctrlKey || e.metaKey) return null;
   return moveKeyboardValue(meta, value, e.key, e.shiftKey);
@@ -10452,6 +10463,238 @@ function moveXYGrid(meta) {
 function moveShapePath(points) {
   if (points.length < 2) return "";
   return points.map((v, i) => `${i ? "L" : "M"} ${(i / (points.length - 1) * 100).toFixed(2)} ${((1 - v) * 100).toFixed(2)}`).join(" ");
+}
+
+// src/move-steer.ts
+var MOVE_STEER_SLOT = '.tweakers-move-dial:not([data-empty]):not([data-kind="blank"]), .tweakers-move-pad:not([data-empty="true"]):not(:disabled)';
+var MOVE_STEER_AREA = ".tweakers-move-grid:not([data-presets])";
+var MOVE_STEER_AXIS_SLOP = 4;
+var MOVE_STEER_DOT_MS = 450;
+var steered = /* @__PURE__ */ new WeakSet();
+var isMoveSteer = (e) => steered.has("nativeEvent" in e ? e.nativeEvent : e);
+var MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+var moveSteerKey = (mac = MAC) => mac ? "Meta" : "Control";
+var moveSteerHeld = (e, mac = MAC) => mac ? e.metaKey : e.ctrlKey;
+function moveSteerAxis(lock, dx, dy) {
+  if (!lock.axis) {
+    lock.x += dx;
+    lock.y += dy;
+    if (Math.hypot(lock.x, lock.y) < MOVE_STEER_AXIS_SLOP) return { dx: 0, dy: 0 };
+    lock.axis = Math.abs(lock.x) >= Math.abs(lock.y) ? "x" : "y";
+    return lock.axis === "x" ? { dx: lock.x, dy: 0 } : { dx: 0, dy: lock.y };
+  }
+  return lock.axis === "x" ? { dx, dy: 0 } : { dx: 0, dy };
+}
+var hands = (el) => el.closest('[data-hands="2"]') ? 2 : 1;
+var editable = (el) => !!el && (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el.isContentEditable);
+function attachMoveSteer(root, dot) {
+  if (typeof window === "undefined" || typeof document === "undefined") return () => {
+  };
+  let area = null;
+  let selected = null;
+  let hold = null;
+  let last = null;
+  let dotTimer;
+  const select = (slot) => {
+    if (slot === selected) return;
+    selected?.removeAttribute("data-steer");
+    selected = slot;
+    selected?.setAttribute("data-steer", "");
+  };
+  const hideDot = () => {
+    clearTimeout(dotTimer);
+    dot()?.removeAttribute("data-on");
+  };
+  const showDot = (x, y) => {
+    const el = dot();
+    if (!el) return;
+    const base = (el.offsetParent ?? el.parentElement)?.getBoundingClientRect();
+    el.style.transform = `translate(${x - (base?.left ?? 0)}px, ${y - (base?.top ?? 0)}px)`;
+    el.setAttribute("data-on", "");
+    clearTimeout(dotTimer);
+    dotTimer = setTimeout(hideDot, MOVE_STEER_DOT_MS);
+  };
+  const leave = () => {
+    area?.removeAttribute("data-steering");
+    area = null;
+    select(null);
+    hideDot();
+  };
+  const send = (h, g, type, shift) => {
+    const e = new PointerEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      clientX: g.x,
+      clientY: g.y,
+      pointerId: h.pointerId,
+      pointerType: "mouse",
+      isPrimary: true,
+      button: type === "pointermove" ? -1 : 0,
+      buttons: type === "pointercancel" ? 0 : 1,
+      shiftKey: shift
+    });
+    steered.add(e);
+    if (type === "pointerdown") g.pressed = true;
+    g.target.dispatchEvent(e);
+  };
+  const release = (h, g) => {
+    if (!g?.pressed || !g.target.isConnected) return;
+    send(h, g, "pointercancel", false);
+    for (let el = g.target; el; el = el.parentElement) {
+      try {
+        if (el.hasPointerCapture(h.pointerId)) el.releasePointerCapture(h.pointerId);
+      } catch {
+      }
+      if (el === root()) break;
+    }
+  };
+  const end = () => {
+    const h = hold;
+    if (!h) return;
+    hold = null;
+    document.documentElement.removeAttribute("data-move-steer");
+    release(h, h.grip);
+    if (h.chip !== h.grip) release(h, h.chip);
+  };
+  const knobAbove = (pad) => {
+    const r = (pad.closest(".tweakers-move-pad") ?? pad).getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    let best = null;
+    let bottom = -Infinity;
+    root()?.querySelectorAll(".tweakers-move-dial").forEach((d) => {
+      const k = d.getBoundingClientRect();
+      if (cx >= k.left && cx <= k.right && k.bottom <= r.top + 1 && k.bottom > bottom) {
+        best = d;
+        bottom = k.bottom;
+      }
+    });
+    return best;
+  };
+  const begin = () => {
+    if (hold || !last || editable(document.activeElement)) return;
+    const under = document.elementFromPoint(last.x, last.y);
+    const slot = (under && area?.contains(under) ? under.closest(MOVE_STEER_SLOT) : null) ?? (selected?.isConnected ? selected : null);
+    if (!slot) return;
+    select(slot);
+    const r = slot.getBoundingClientRect();
+    const inside = last.x >= r.left && last.x <= r.right && last.y >= r.top && last.y <= r.bottom;
+    const x = inside ? last.x : r.left + r.width / 2;
+    const y = inside ? last.y : r.top + r.height / 2;
+    const at2 = inside ? under : document.elementFromPoint(x, y);
+    const target = at2 && slot.contains(at2) ? at2 : slot;
+    hold = {
+      grip: { target, x, y, pressed: false, hands: hands(target) },
+      chip: null,
+      px: last.x,
+      py: last.y,
+      pointerId: last.id,
+      shift: false,
+      lock: { axis: null, x: 0, y: 0 }
+    };
+    document.documentElement.setAttribute("data-move-steer", "held");
+  };
+  const steer = (h, e) => {
+    let dx = e.clientX - h.px;
+    let dy = e.clientY - h.py;
+    h.px = e.clientX;
+    h.py = e.clientY;
+    let g = h.grip;
+    if (!g.target.isConnected) {
+      end();
+      return;
+    }
+    if (!g.pressed) {
+      send(h, g, "pointerdown", e.shiftKey && g.hands === 1);
+      if (g.target.closest("[data-peek]")) {
+        h.chip = g;
+        return;
+      }
+    } else if (h.chip === g) {
+      const knob = knobAbove(g.target);
+      if (knob) {
+        const k = knob.getBoundingClientRect();
+        g = h.grip = { target: knob, x: k.left + k.width / 2, y: k.top + k.height / 2, pressed: false, hands: hands(knob) };
+        send(h, g, "pointerdown", e.shiftKey && g.hands === 1);
+      } else h.chip = null;
+    }
+    let shift = e.shiftKey;
+    if (g.hands === 2) {
+      if (shift !== h.shift) h.lock = { axis: null, x: 0, y: 0 };
+      h.shift = shift;
+      if (shift) ({ dx, dy } = moveSteerAxis(h.lock, dx, dy));
+      shift = false;
+    }
+    if (!dx && !dy) return;
+    g.x += dx;
+    g.y += dy;
+    send(h, g, "pointermove", shift);
+  };
+  const onMove = (e) => {
+    if (steered.has(e) || e.pointerType !== "mouse") return;
+    last = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    if (hold) {
+      if (!moveSteerHeld(e)) end();
+      else {
+        e.stopPropagation();
+        showDot(e.clientX, e.clientY);
+        steer(hold, e);
+        return;
+      }
+    }
+    const panel = root();
+    const t = e.target instanceof Element ? e.target : null;
+    const now = t && panel?.contains(t) ? t.closest(MOVE_STEER_AREA) : null;
+    if (!now || !panel?.contains(now)) {
+      if (area) leave();
+      return;
+    }
+    if (now !== area) {
+      area?.removeAttribute("data-steering");
+      area = now;
+      area.setAttribute("data-steering", "");
+    }
+    const slot = t.closest(MOVE_STEER_SLOT);
+    if (slot && now.contains(slot)) select(slot);
+    showDot(e.clientX, e.clientY);
+  };
+  const onKeyDown = (e) => {
+    if (e.key === moveSteerKey() && !e.repeat && area) begin();
+  };
+  const onKeyUp = (e) => {
+    if (e.key === moveSteerKey()) end();
+  };
+  const onDown = (e) => {
+    if (!steered.has(e)) end();
+  };
+  const onAway = () => {
+    end();
+    leave();
+  };
+  const onOut = (e) => {
+    if (!e.relatedTarget && !hold) leave();
+  };
+  const onVisibility = () => {
+    if (document.hidden) onAway();
+  };
+  window.addEventListener("pointermove", onMove, true);
+  window.addEventListener("pointerdown", onDown, true);
+  window.addEventListener("keydown", onKeyDown, true);
+  window.addEventListener("keyup", onKeyUp, true);
+  window.addEventListener("blur", onAway);
+  document.addEventListener("mouseout", onOut);
+  document.addEventListener("visibilitychange", onVisibility);
+  return () => {
+    end();
+    leave();
+    window.removeEventListener("pointermove", onMove, true);
+    window.removeEventListener("pointerdown", onDown, true);
+    window.removeEventListener("keydown", onKeyDown, true);
+    window.removeEventListener("keyup", onKeyUp, true);
+    window.removeEventListener("blur", onAway);
+    document.removeEventListener("mouseout", onOut);
+    document.removeEventListener("visibilitychange", onVisibility);
+  };
 }
 
 // src/move-keys.ts
@@ -12368,6 +12611,7 @@ function MoveColorSlot({ panelId, meta, active, open: open2, latched = false, cl
       className: className ? `tweakers-move-dial ${className}` : "tweakers-move-dial",
       style,
       "data-kind": "color",
+      "data-hands": "2",
       "data-active": active || open2 || void 0,
       "data-latched": latched || void 0,
       "data-disabled": disabled || void 0,
@@ -15881,7 +16125,7 @@ function MoveAutomationLanes({
   const tickX = (seconds) => duration > 0 ? share(seconds / duration) * width : 0;
   const rowHeight = timelineRowHeight(Math.max(1, lanes.length));
   const selected = selection.key ? lanes.find((l) => l.key === selection.key) : void 0;
-  const editable = !!selected && !recording;
+  const editable2 = !!selected && !recording;
   const card = /* @__PURE__ */ (0, import_jsx_runtime18.jsx)(
     "div",
     {
@@ -16013,7 +16257,7 @@ function MoveAutomationLanes({
             {
               type: "button",
               className: "tweakers-move-automation-tool",
-              disabled: !editable || selected?.interp === "color",
+              disabled: !editable2 || selected?.interp === "color",
               title: "Smooth the lane, or the selected stretch \xB7 Shift smooths harder",
               onClick: (e) => selected && store.smooth(selected.key, e.shiftKey),
               children: "Smooth"
@@ -16024,7 +16268,7 @@ function MoveAutomationLanes({
             {
               type: "button",
               className: "tweakers-move-automation-tool",
-              disabled: !editable || !selection.range,
+              disabled: !editable2 || !selection.range,
               title: "Clear the selected stretch to a straight run",
               onClick: () => selected && selection.range && store.clearRange(selected.key, selection.range.from, selection.range.to),
               children: "Clear"
@@ -16035,7 +16279,7 @@ function MoveAutomationLanes({
             {
               type: "button",
               className: "tweakers-move-automation-tool",
-              disabled: !editable,
+              disabled: !editable2,
               title: "Delete the lane \u2014 the control is its own again",
               onClick: () => selected && store.deleteLane(selected.key),
               children: "Delete lane"
@@ -16717,6 +16961,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     setVolume(MoveVolumeDisplay.get());
     return MoveVolumeDisplay.subscribe(() => setVolume(MoveVolumeDisplay.get()));
   }, []);
+  const steerDotRef = (0, import_react19.useRef)(null);
+  (0, import_react19.useEffect)(() => attachMoveSteer(() => panelRef.current, () => steerDotRef.current), []);
   (0, import_react19.useEffect)(() => {
     const poll = volume?.getValue;
     if (!poll) {
@@ -17658,6 +17904,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     ),
     /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-settings": settingsOpen || void 0, "data-move-motion-key": `${motionSurface}:${motionPage}|${pages.map((pg) => pg.panel.id).join(" ")}`, "data-overlay": padListView || explorationOpen || composition || audioWave != null || ModOverlay || roomWave || color || presetSave ? true : void 0, children: [
       !explorationOpen && colorMeta && /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MoveColorDisplay, { panelId: page.panel.id, meta: colorMeta, anchor: panelRef, theme }),
+      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("i", { ref: steerDotRef, className: "tweakers-move-steer-dot", "aria-hidden": "true" }),
       /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(PresetExploration, {}),
       presetSave && /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MovePresetSaveInput, { suggested: presetSave.suggested }),
       /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(import_react20.AnimatePresence, { children: agent && !agent.sheet && !presetSave && /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MoveAgentPrompt, { view: agent }, "agent") }),
@@ -17932,6 +18179,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           fineRef.current = null;
                                           setDragPath(meta.path);
                                           armMod(meta.path);
+                                          if (isMoveSteer(e)) moveSteerAnchor(fineRef, e, () => normalizeFilterDial(meta, values[meta.path]));
                                           filterFromPointer(e, meta, true, take);
                                         },
                                         onPointerMove: (e) => {
@@ -17956,7 +18204,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   if (meta.type === "gradient") {
                                     const g = normalizeGradient(values[meta.path]);
                                     const open2 = colorMeta?.path === meta.path;
-                                    const editable = g.stops.length <= MOVE_GRADIENT_STOPS;
+                                    const editable2 = g.stops.length <= MOVE_GRADIENT_STOPS;
                                     const index = open2 ? Math.min(MoveColorStore.getStop(), g.stops.length - 1) : Math.min(rampStop[meta.path] ?? 0, g.stops.length - 1);
                                     return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(
                                       "div",
@@ -17964,9 +18212,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         className: "tweakers-move-dial",
                                         "data-kind": "ramp",
                                         "data-active": active || open2 || void 0,
-                                        role: editable ? "button" : void 0,
-                                        "aria-expanded": editable ? open2 : void 0,
-                                        "aria-haspopup": editable ? "dialog" : void 0,
+                                        role: editable2 ? "button" : void 0,
+                                        "aria-expanded": editable2 ? open2 : void 0,
+                                        "aria-haspopup": editable2 ? "dialog" : void 0,
                                         onPointerDown: (e) => {
                                           try {
                                             e.currentTarget.setPointerCapture(e.pointerId);
@@ -17990,7 +18238,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           rampGesture.current = null;
                                           setDragPath(null);
                                           fineRef.current = null;
-                                          if (tapped && editable && !import_TweakStore19.TweakStore.isDisabled(page.panel.id, meta.path)) {
+                                          if (tapped && editable2 && !import_TweakStore19.TweakStore.isDisabled(page.panel.id, meta.path)) {
                                             MoveColorStore.toggle(page.panel.id, meta.path);
                                           }
                                         },
@@ -18056,6 +18304,10 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         "data-kind": "dial",
                                         "data-active": active || void 0,
                                         onPointerDown: (e) => {
+                                          if (isMoveSteer(e)) {
+                                            beginPress(e, meta.path, normalizeDial(meta, values[meta.path]));
+                                            return;
+                                          }
                                           try {
                                             e.currentTarget.setPointerCapture(e.pointerId);
                                           } catch {
@@ -18066,13 +18318,17 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           needleFromPointer(e, meta);
                                         },
                                         onPointerMove: (e) => {
-                                          if (dragPath === meta.path) needleFromPointer(e, meta);
+                                          const p = movePressTravel(pressRef, meta.path, e, () => normalizeDial(meta, values[meta.path]));
+                                          if (p) write2(meta, moveTurnValue(meta, p, e, moveTurnExtent(e.currentTarget.getBoundingClientRect())));
+                                          else if (dragPath === meta.path && pressRef.current?.path !== meta.path) needleFromPointer(e, meta);
                                         },
                                         onPointerUp: () => {
+                                          pressRef.current = null;
                                           setDragPath(null);
                                           fineRef.current = null;
                                         },
                                         onPointerCancel: () => {
+                                          pressRef.current = null;
                                           setDragPath(null);
                                           fineRef.current = null;
                                         },
@@ -18156,13 +18412,17 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       {
                                         className: "tweakers-move-dial",
                                         "data-kind": "xy",
+                                        "data-hands": "2",
                                         "data-preview": preview ? true : void 0,
                                         "data-sub": valueFirst || void 0,
                                         "data-active": active || void 0,
                                         onPointerDown: (e) => {
                                           if (e.button > 0) return;
                                           beginPress(e, meta.path, 0);
-                                          if (!cycles) xyFromPointer(e, meta);
+                                          if (isMoveSteer(e)) {
+                                            const xa2 = resolveAxis(meta.xAxis), ya2 = resolveAxis(meta.yAxis);
+                                            moveSteerAnchor(fineRef, e, () => pointFromValue(normalizeValue(values[meta.path], xa2, ya2), xa2, ya2));
+                                          } else if (!cycles) xyFromPointer(e, meta);
                                         },
                                         onPointerMove: (e) => {
                                           const p = movePressTravel(pressRef, meta.path, e, () => 0);
@@ -18204,6 +18464,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       {
                                         className: "tweakers-move-dial",
                                         "data-kind": "range",
+                                        "data-hands": "2",
                                         "data-active": active || void 0,
                                         onPointerDown: (e) => {
                                           try {
@@ -18213,10 +18474,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           fineRef.current = null;
                                           setDragPath(meta.path);
                                           armMod(meta.path);
-                                          rangeFromPointer(e, meta, true);
+                                          if (isMoveSteer(e)) moveSteerAnchor(fineRef, e, () => normalizeRangeDial(meta, values[meta.path]));
+                                          else rangeFromPointer(e, meta, true);
                                         },
                                         onPointerMove: (e) => {
-                                          if (dragPath === meta.path) rangeFromPointer(e, meta, false);
+                                          if (dragPath !== meta.path) return;
+                                          if (isMoveSteer(e) && fineRef.current) write2(meta, moveRangeSteer(meta, e, e.currentTarget.getBoundingClientRect(), fineRef.current));
+                                          else rangeFromPointer(e, meta, false);
                                         },
                                         onPointerUp: () => {
                                           setDragPath(null);
@@ -18958,6 +19222,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                                   "aria-valuenow": Number(values[m.path]),
                                                   "aria-valuetext": moveVisualReading(m, Number(values[m.path])),
                                                   "aria-orientation": "horizontal",
+                                                  "data-peek": "true",
                                                   "data-held": chipHeld(m) || void 0,
                                                   "data-latched": chipLatched(at2, m) || void 0,
                                                   onKeyDown: (k) => dialFromKeyboard(k, m),
@@ -18996,6 +19261,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                               type: "button",
                                               className: "tweakers-move-band-zone",
                                               "aria-label": m.label,
+                                              "data-peek": "true",
                                               "data-held": chipHeld(m) || void 0,
                                               "data-latched": chipLatched(col, m) || void 0,
                                               ...chipGesture(col, m),
@@ -19051,6 +19317,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           "data-kind": isColor ? "color" : "value",
                                           "data-face": room ? "offset" : void 0,
                                           "data-scrub": moveChipScrubs(meta) || void 0,
+                                          "data-peek": "true",
                                           "data-held": held !== null && held.meta.path === meta.path || hwHeld[meta.path] || void 0,
                                           "data-latched": chipLatched(col, meta) || void 0,
                                           "aria-label": isColor ? meta.label : tip,
@@ -20694,7 +20961,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
   }
   if (meta.type === "gradient") {
     const g = normalizeGradient(value);
-    const editable = g.stops.length <= MOVE_GRADIENT_STOPS;
+    const editable2 = g.stops.length <= MOVE_GRADIENT_STOPS;
     const view = MoveColorStore.getView();
     const open2 = view?.panelId === panelId && view.path === meta.path;
     const index = Math.min(open2 ? MoveColorStore.getStop() : heldStop, g.stops.length - 1);
@@ -20705,9 +20972,9 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
         style,
         "data-kind": "ramp",
         "data-active": active || open2 || void 0,
-        role: editable ? "button" : void 0,
-        "aria-expanded": editable ? open2 : void 0,
-        "aria-haspopup": editable ? "dialog" : void 0,
+        role: editable2 ? "button" : void 0,
+        "aria-expanded": editable2 ? open2 : void 0,
+        "aria-haspopup": editable2 ? "dialog" : void 0,
         ...drag(meta, (e, down) => {
           const rect = e.currentTarget.getBoundingClientRect();
           if (down) {
@@ -20724,7 +20991,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
         }, () => {
           const tapped = tap.current && !tap.current.moved;
           tap.current = null;
-          if (tapped && editable && !off(meta)) MoveColorStore.toggle(panelId, meta.path);
+          if (tapped && editable2 && !off(meta)) MoveColorStore.toggle(panelId, meta.path);
         }),
         children: [
           /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(MoveModRing, { panelId, path: meta.path }),
