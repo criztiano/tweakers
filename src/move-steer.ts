@@ -144,23 +144,27 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   };
   const points = (el: Element) => !!el.querySelector(POINTS_INTO);
 
-  /** The controls the hand can land on now: outermost, shown, below the panel's top. */
+  /**
+   * The controls the hand can land on now: outermost, shown, below the
+   * panel's top. A row scrolled out of its list is there only for a hand
+   * already in that list — walking on scrolls it in.
+   */
   const targets = () => {
     const panel = root();
     if (!panel) return [];
     const top = panelTop() - 1;
+    const within = selected?.closest('[role="listbox"]') ?? null;
     return Array.from(panel.querySelectorAll(MOVE_STEER_TARGET)).filter((el) => {
       if (el.parentElement?.closest(MOVE_STEER_TARGET) || el.closest('[aria-hidden="true"], [inert]')) return false;
       const b = boxOf(el);
-      if (b.right - b.left < 4 || b.bottom - b.top < 4 || b.top < top) return false;
-      // A row scrolled out of its list is not there.
+      if (b.right - b.left < 4 || b.bottom - b.top < 4) return false;
       const list = el.closest('[role="listbox"]');
       if (list && list !== el) {
         const v = boxOf(list);
         const y = (b.top + b.bottom) / 2;
-        if (y < v.top || y > v.bottom) return false;
+        if (y < v.top || y > v.bottom) return list === within;
       }
-      return true;
+      return b.top >= top;
     });
   };
 

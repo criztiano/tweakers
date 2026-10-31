@@ -41,9 +41,10 @@ export function moveSteerReach(b: MoveSteerBox, points: boolean): MoveSteerVec {
 
 /**
  * The control the hand lands on when it lets go of `from` going `dir` (one
- * axis, ±1): the nearest whose middle lies that way, closeness across the
- * travel counted twice so the hand keeps its row or column. -1 at the panel's
- * edge — nothing lies that way.
+ * axis, ±1): the nearest whose middle lies that way — within a cone, so a
+ * control far off to the side never counts — closeness across the travel
+ * counted twice so the hand keeps its row or column. -1 at the panel's edge:
+ * nothing lies that way.
  */
 export function moveSteerNext(from: MoveSteerBox, boxes: readonly MoveSteerBox[], at: MoveSteerVec, dir: MoveSteerVec) {
   const c = mid(from);
@@ -53,12 +54,15 @@ export function moveSteerNext(from: MoveSteerBox, boxes: readonly MoveSteerBox[]
     if (b === from) return;
     const m = mid(b);
     let gap: number, across: number;
+    // Only what lies that way, within a cone: a control far off to the
+    // side is not "that way" just because it sits a little further along.
+    const along = dir.x ? (m.x - c.x) * dir.x : (m.y - c.y) * dir.y;
+    const aside = dir.x ? Math.abs(m.y - c.y) : Math.abs(m.x - c.x);
+    if (along <= 1 || along < aside * 0.5) return;
     if (dir.x) {
-      if ((m.x - c.x) * dir.x <= 1) return;
       gap = dir.x > 0 ? Math.max(0, b.left - from.right) : Math.max(0, from.left - b.right);
       across = at.y < b.top ? b.top - at.y : at.y > b.bottom ? at.y - b.bottom : 0;
     } else {
-      if ((m.y - c.y) * dir.y <= 1) return;
       gap = dir.y > 0 ? Math.max(0, b.top - from.bottom) : Math.max(0, from.top - b.bottom);
       across = at.x < b.left ? b.left - at.x : at.x > b.right ? at.x - b.right : 0;
     }

@@ -19,6 +19,13 @@ describe('the next control the hand lands on', () => {
     expect(moveSteerNext(p2, all, mid(p2), { x: 0, y: -1 })).toBe(1);
   });
 
+  it('never counts a control far off to the side as that way', () => {
+    const tab = box(-200, -60, 60, 24);
+    const row = box(-200, 300, 120, 26);
+    expect(moveSteerNext(row, [tab, row], mid(row), { x: -1, y: 0 })).toBe(-1);
+    expect(moveSteerNext(row, [tab, row], mid(row), { x: 0, y: -1 })).toBe(0);
+  });
+
   it('finds nothing past the panel edge', () => {
     expect(moveSteerNext(c, all, mid(c), { x: 1, y: 0 })).toBe(-1);
     expect(moveSteerNext(a, all, mid(a), { x: 0, y: -1 })).toBe(-1);
