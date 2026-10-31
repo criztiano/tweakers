@@ -2287,6 +2287,21 @@ function enumShapePath(meta, value) {
   const d = segments.map((seg) => seg.map((pt, i) => `${i ? "L" : "M"} ${(pt.t * 100).toFixed(2)} ${((1 - fill(pt.v)) * 100).toFixed(2)}`).join(" ")).join(" ");
   return d || null;
 }
+function sliderShapePath(meta, value) {
+  if (meta.type !== "slider" || !meta.shape) return null;
+  let sample;
+  try {
+    sample = meta.shape(Number(value));
+  } catch {
+    return null;
+  }
+  if (typeof sample !== "function") return null;
+  const [lo, hi] = meta.shapeDomain && meta.shapeDomain[0] < meta.shapeDomain[1] ? meta.shapeDomain : [-1, 1];
+  const held = (t) => Math.min(hi, Math.max(lo, sample(t)));
+  const segments = plotCurve(held, { count: ENUM_SHAPE_SAMPLES * 2, domain: [lo, hi] }).segments;
+  const d = segments.map((seg) => seg.map((pt, i) => `${i ? "L" : "M"} ${(pt.t * 100).toFixed(2)} ${((1 - pt.v) * 100).toFixed(2)}`).join(" ")).join(" ");
+  return d || null;
+}
 function parseAspect(text) {
   const m = typeof text === "string" ? /^\s*(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)\s*$/.exec(text) : null;
   if (!m) return null;
@@ -3116,7 +3131,7 @@ function curveEnds(d) {
   if (nums.length < 4) return null;
   return { x0: nums[0], y0: nums[1], x1: nums[nums.length - 2], y1: nums[nums.length - 1] };
 }
-function MoveSlotCurveDots({ d }) {
+function MoveSlotCurveDots({ d, className = "tweakers-move-dial-tile-shape tweakers-move-dial-dots" }) {
   const ends = curveEnds(d);
   if (!ends) return null;
   const n = MOVE_CURVE_DOT_CELLS;
@@ -3130,7 +3145,7 @@ function MoveSlotCurveDots({ d }) {
   };
   const xs = run(ends.x0, dx);
   const ys = run(ends.y1, dy);
-  return /* @__PURE__ */ jsx3("svg", { className: "tweakers-move-dial-tile-shape tweakers-move-dial-dots", "aria-hidden": "true", children: ys.flatMap((y) => xs.map((x) => /* @__PURE__ */ jsx3("circle", { cx: `${x.toFixed(2)}%`, cy: `${y.toFixed(2)}%`, r: 1 }, `${x.toFixed(2)}:${y.toFixed(2)}`))) });
+  return /* @__PURE__ */ jsx3("svg", { className, "aria-hidden": "true", children: ys.flatMap((y) => xs.map((x) => /* @__PURE__ */ jsx3("circle", { cx: `${x.toFixed(2)}%`, cy: `${y.toFixed(2)}%`, r: 1 }, `${x.toFixed(2)}:${y.toFixed(2)}`))) });
 }
 var MOVE_GRID_COLUMNS = 4;
 var MOVE_GRID_MARGIN = 8;
@@ -3725,12 +3740,25 @@ function MoveSlotScopeBody({
   label,
   value,
   pct,
+  originPct = null,
+  atOrigin = false,
+  named = true,
   children
 }) {
   return /* @__PURE__ */ jsxs3(Fragment4, { children: [
     /* @__PURE__ */ jsx3("div", { className: "tweakers-move-scope-display", children }),
-    /* @__PURE__ */ jsx3(MoveSlotReadout, { label, value }),
-    /* @__PURE__ */ jsx3("div", { className: "tweakers-move-dial-bar", children: /* @__PURE__ */ jsx3("div", { className: "tweakers-move-dial-fill", style: { width: `${pct}%` } }) })
+    /* @__PURE__ */ jsx3(MoveSlotReadout, { label: named ? label : "", value }),
+    /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-dial-bar", children: [
+      /* @__PURE__ */ jsx3(
+        "div",
+        {
+          className: "tweakers-move-dial-fill",
+          "data-zero": atOrigin || void 0,
+          style: originPct != null ? { marginLeft: `${Math.min(pct, originPct)}%`, width: `${Math.abs(pct - originPct)}%` } : { width: `${pct}%` }
+        }
+      ),
+      atOrigin && /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-zero", style: { left: `calc(2px + (100% - 4px) * ${(originPct ?? 0) / 100})` } })
+    ] })
   ] });
 }
 function MoveSlotToggleBody({ label, checked, icon, onIcon, offIcon }) {
@@ -17213,7 +17241,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   const valueFirst = meta.type === "slider" && meta.display === "value" || (focused || !!settingsPanel || page.panel.kind === "kit") && !(meta.min === 0 && meta.max === 1);
                                   const scopeSlot = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.scope : void 0;
                                   const waveSlot = settingsPanel && meta.type !== "xy" ? modLayout?.dials.find((d) => d.path === meta.path)?.preview : void 0;
-                                  const scope = scopeSlot && modSettings ? /* @__PURE__ */ jsx20(MoveScope, { index: modSettings.index }) : waveSlot && modSettings ? /* @__PURE__ */ jsx20(MoveWavePreview, { index: modSettings.index }) : null;
+                                  const sliderShape = sliderShapePath(meta, values[meta.path]);
+                                  const scope = scopeSlot && modSettings ? /* @__PURE__ */ jsx20(MoveScope, { index: modSettings.index }) : waveSlot && modSettings ? /* @__PURE__ */ jsx20(MoveWavePreview, { index: modSettings.index }) : sliderShape ? /* @__PURE__ */ jsxs14(Fragment9, { children: [
+                                    /* @__PURE__ */ jsx20(MoveSlotCurveDots, { d: sliderShape, className: "tweakers-move-scope-wave tweakers-move-dial-dots" }),
+                                    /* @__PURE__ */ jsx20(MoveSlotShape, { d: sliderShape, className: "tweakers-move-scope-wave" })
+                                  ] }) : null;
                                   if (padListView?.panelId === page.panel.id && (page.actions[i] ?? page.valueActions?.[i])?.path === padListView.path) {
                                     const listPath = `${padListView.panelId}:${padListView.path}`;
                                     return /* @__PURE__ */ jsx20(
@@ -17792,6 +17824,15 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         className: "tweakers-move-dial",
                                         "data-kind": "scope",
                                         "data-active": active || void 0,
+                                        role: "slider",
+                                        tabIndex: disabled ? -1 : 0,
+                                        "aria-label": meta.label,
+                                        "aria-valuemin": meta.min ?? 0,
+                                        "aria-valuemax": meta.max ?? 1,
+                                        "aria-valuenow": Number(values[meta.path]),
+                                        "aria-disabled": disabled || void 0,
+                                        "data-disabled": disabled || void 0,
+                                        onKeyDown: (e) => dialFromKeyboard(e, meta),
                                         ...dialDrag(meta),
                                         children: [
                                           /* @__PURE__ */ jsx20(MoveModRing, { panelId: page.panel.id, path: meta.path }),
@@ -17801,6 +17842,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                               label: meta.label,
                                               value: chipValue(meta).num + (meta.unit ? ` ${meta.unit}` : ""),
                                               pct: dialPercent(meta),
+                                              ...sliderShape ? {
+                                                named: false,
+                                                originPct: dialOrigin(meta) > 0 ? dialOrigin(meta) * 100 : null,
+                                                atOrigin: dialOrigin(meta) > 0 && Math.abs(normalizeDial(meta, values[meta.path]) - dialOrigin(meta)) < 1e-6
+                                              } : {},
                                               children: scope
                                             }
                                           )
@@ -20359,6 +20405,27 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
         ]
       }
     );
+  }
+  const sliderShape = sliderShapePath(meta, value);
+  if (sliderShape) {
+    return /* @__PURE__ */ jsxs15("div", { className: cls, style, "data-kind": "scope", "data-active": active || void 0, ...slider(meta), ...turn(meta), children: [
+      /* @__PURE__ */ jsx21(MoveModRing, { panelId, path: meta.path }),
+      /* @__PURE__ */ jsxs15(
+        MoveSlotScopeBody,
+        {
+          label: meta.label,
+          value: moveDialReading(meta, value),
+          pct: moveDialPercent(meta, value),
+          named: false,
+          originPct: dialOrigin(meta) > 0 ? dialOrigin(meta) * 100 : null,
+          atOrigin: dialOrigin(meta) > 0 && Math.abs(normalizeDial(meta, value) - dialOrigin(meta)) < 1e-6,
+          children: [
+            /* @__PURE__ */ jsx21(MoveSlotCurveDots, { d: sliderShape, className: "tweakers-move-scope-wave tweakers-move-dial-dots" }),
+            /* @__PURE__ */ jsx21(MoveSlotShape, { d: sliderShape, className: "tweakers-move-scope-wave" })
+          ]
+        }
+      )
+    ] });
   }
   const drawing = moveNumericDrawing(meta, value);
   const origin01 = dialOrigin(meta);

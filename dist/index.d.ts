@@ -2293,6 +2293,18 @@ type SliderConfig = {
      * invisible to the structure diff like `formatValue`.
      */
     onTap?: () => void;
+    /**
+     * The shape the value makes, drawn in the slot behind its readout on the
+     * Move panel — the scope slot's face, for a value you read as a picture
+     * (a bend's wave, a swing's arc): you turn the shape you are watching.
+     * Given the value, a sampler of t in [0,1]; it may close over the app's
+     * other controls, so it is a function, invisible to the structure diff,
+     * and refreshed through `syncCurveConfigs` like a curve row's `sample`.
+     */
+    shape?: (value: number) => ((t: number) => number) | null | undefined;
+    /** The y-range the shape is drawn in — fixed, so a bigger value draws a
+     *  bigger shape. Default [-1, 1]. */
+    shapeDomain?: [number, number];
 };
 /**
  * Scrub-anywhere numeric readout. Unlike a slider it has no track — drag the
@@ -2620,6 +2632,10 @@ type ControlMeta = {
     moveHold?: boolean;
     /** Select's per-option shape sampler — swapped in place by syncCurveConfigs. */
     preview?: (value: string) => ((t: number) => number) | null | undefined;
+    /** Slider's drawn shape for its value — swapped in place by syncCurveConfigs. */
+    shape?: (value: number) => ((t: number) => number) | null | undefined;
+    /** Slider shape's fixed y-range. */
+    shapeDomain?: [number, number];
     /** Select dial width in hardware columns; defaults to one. */
     moveSpan?: 1 | 2;
     /** Select declared `moveTabs` — it lies across the small slots as a tabs
@@ -4912,11 +4928,18 @@ declare function MoveSlotEnvBody({ points, stages, joints, }: {
  * dial's own readout floats over it and the fill bar keeps the bottom.
  * The control stays a control — you turn the wave you're watching.
  */
-declare function MoveSlotScopeBody({ label, value, pct, children, }: {
+declare function MoveSlotScopeBody({ label, value, pct, originPct, atOrigin, named, children, }: {
     label: string;
     value: ReactNode;
     /** Fill extent, 0–100. */
     pct: number;
+    /** Bipolar/origin anchor position, 0–100 — null for a plain fill. */
+    originPct?: number | null;
+    /** Parked on the origin exactly — the dial's zero. */
+    atOrigin?: boolean;
+    /** `false`: the picture says what the slot is, so no name stands over it
+     *  (the value still shows in the hand). */
+    named?: boolean;
     /** The live wave — an svg the host keeps ticking. */
     children: ReactNode;
 }): react_jsx_runtime.JSX.Element;

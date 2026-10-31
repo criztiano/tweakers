@@ -666,6 +666,21 @@ function enumShapePath(meta, value) {
   const d = segments.map((seg) => seg.map((pt, i) => `${i ? "L" : "M"} ${(pt.t * 100).toFixed(2)} ${((1 - fill(pt.v)) * 100).toFixed(2)}`).join(" ")).join(" ");
   return d || null;
 }
+function sliderShapePath(meta, value) {
+  if (meta.type !== "slider" || !meta.shape) return null;
+  let sample;
+  try {
+    sample = meta.shape(Number(value));
+  } catch {
+    return null;
+  }
+  if (typeof sample !== "function") return null;
+  const [lo, hi] = meta.shapeDomain && meta.shapeDomain[0] < meta.shapeDomain[1] ? meta.shapeDomain : [-1, 1];
+  const held = (t) => Math.min(hi, Math.max(lo, sample(t)));
+  const segments = plotCurve(held, { count: ENUM_SHAPE_SAMPLES * 2, domain: [lo, hi] }).segments;
+  const d = segments.map((seg) => seg.map((pt, i) => `${i ? "L" : "M"} ${(pt.t * 100).toFixed(2)} ${((1 - pt.v) * 100).toFixed(2)}`).join(" ")).join(" ");
+  return d || null;
+}
 function parseAspect(text) {
   const m = typeof text === "string" ? /^\s*(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)\s*$/.exec(text) : null;
   if (!m) return null;
@@ -823,6 +838,7 @@ export {
   parseAspect,
   reportMoveLayoutIssue,
   setMoveLayoutReporter,
+  sliderShapePath,
   slotGroups,
   visibleColumns
 };

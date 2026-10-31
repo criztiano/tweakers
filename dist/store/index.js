@@ -948,6 +948,12 @@ var TweakStoreClass = class {
             control.response = value.response;
             changed = true;
           }
+        } else if (this.isSliderConfig(value) && value.shape) {
+          const control = this.findControlByPath(panel.controls, path);
+          if (control?.type === "slider" && control.shape !== value.shape) {
+            control.shape = value.shape;
+            changed = true;
+          }
         } else if (this.isSelectConfig(value) && value.preview) {
           const control = this.findControlByPath(panel.controls, path);
           if (control?.type === "select" && control.preview !== value.preview) {
@@ -1305,6 +1311,8 @@ var TweakStoreClass = class {
           track: value.track,
           wrap: value.wrap,
           onTap: value.onTap,
+          shape: value.shape,
+          shapeDomain: value.shapeDomain,
           shortcut
         });
       } else if (this.isNumberConfig(value)) {

@@ -152,6 +152,12 @@ export const CONFIG = {
     preview: (name: string) => EASINGS[name] ?? null,
   },
 
+  /* a value read as a picture: the bend draws the arc it puts in a path */
+  bend: {
+    type: 'slider', default: 0.5, min: -1, max: 1, bipolar: true,
+    shape: (v: number) => (t: number) => v * Math.sin(Math.PI * t),
+  },
+
   /* a choice that is a pattern: each option's picture fills the slot */
   texture: {
     type: 'select', default: 'stripes',

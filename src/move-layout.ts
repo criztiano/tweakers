@@ -916,6 +916,31 @@ export function enumShapePath(meta: ControlMeta, value: unknown): string | null 
     .join(' ');
   return d || null;
 }
+/**
+ * The shape a slider's value makes (its `shape`), as an SVG path filling a
+ * 100×100 box, y down — or null when the slider has none. Drawn in the
+ * slider's fixed `shapeDomain` (default −1..1), never refitted, so the
+ * value's size reads as the drawing's size; past the domain it is held at
+ * the edge.
+ */
+export function sliderShapePath(meta: ControlMeta, value: unknown): string | null {
+  if (meta.type !== 'slider' || !meta.shape) return null;
+  let sample: ((t: number) => number) | null | undefined;
+  try {
+    sample = meta.shape(Number(value));
+  } catch {
+    return null;                      /* a throwing shape draws nothing */
+  }
+  if (typeof sample !== 'function') return null;
+  const [lo, hi] = meta.shapeDomain && meta.shapeDomain[0] < meta.shapeDomain[1] ? meta.shapeDomain : [-1, 1];
+  const held = (t: number) => Math.min(hi, Math.max(lo, sample!(t)));
+  const segments = plotCurve(held, { count: ENUM_SHAPE_SAMPLES * 2, domain: [lo, hi] }).segments;
+  const d = segments
+    .map((seg) => seg.map((pt, i) => `${i ? 'L' : 'M'} ${(pt.t * 100).toFixed(2)} ${((1 - pt.v) * 100).toFixed(2)}`).join(' '))
+    .join(' ');
+  return d || null;
+}
+
 /** A proportion written "W:H" — "16:9", "4:3", "1.85:1" — as its two sides,
  *  or null for anything else (a zero or negative side included). */
 export function parseAspect(text: unknown): { w: number; h: number } | null {

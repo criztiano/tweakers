@@ -597,7 +597,7 @@ function curveEnds(d: string): { x0: number; y0: number; x1: number; y1: number 
  * placed in percent of the shape's own box, so they stay round however the
  * box is stretched.
  */
-function MoveSlotCurveDots({ d }: { d: string }) {
+export function MoveSlotCurveDots({ d, className = 'tweakers-move-dial-tile-shape tweakers-move-dial-dots' }: { d: string; className?: string }) {
   const ends = curveEnds(d);
   if (!ends) return null;
   const n = MOVE_CURVE_DOT_CELLS;
@@ -614,7 +614,7 @@ function MoveSlotCurveDots({ d }: { d: string }) {
   const xs = run(ends.x0, dx);
   const ys = run(ends.y1, dy);
   return (
-    <svg className="tweakers-move-dial-tile-shape tweakers-move-dial-dots" aria-hidden="true">
+    <svg className={className} aria-hidden="true">
       {ys.flatMap((y) => xs.map((x) => (
         <circle key={`${x.toFixed(2)}:${y.toFixed(2)}`} cx={`${x.toFixed(2)}%`} cy={`${y.toFixed(2)}%`} r={1} />
       )))}
@@ -1591,21 +1591,37 @@ export function MoveSlotEnvBody({
  * The control stays a control — you turn the wave you're watching.
  */
 export function MoveSlotScopeBody({
-  label, value, pct, children,
+  label, value, pct, originPct = null, atOrigin = false, named = true, children,
 }: {
   label: string;
   value: ReactNode;
   /** Fill extent, 0–100. */
   pct: number;
+  /** Bipolar/origin anchor position, 0–100 — null for a plain fill. */
+  originPct?: number | null;
+  /** Parked on the origin exactly — the dial's zero. */
+  atOrigin?: boolean;
+  /** `false`: the picture says what the slot is, so no name stands over it
+   *  (the value still shows in the hand). */
+  named?: boolean;
   /** The live wave — an svg the host keeps ticking. */
   children: ReactNode;
 }) {
   return (
     <>
       <div className="tweakers-move-scope-display">{children}</div>
-      <MoveSlotReadout label={label} value={value} />
+      <MoveSlotReadout label={named ? label : ''} value={value} />
       <div className="tweakers-move-dial-bar">
-        <div className="tweakers-move-dial-fill" style={{ width: `${pct}%` }} />
+        <div
+          className="tweakers-move-dial-fill"
+          data-zero={atOrigin || undefined}
+          style={originPct != null
+            ? { marginLeft: `${Math.min(pct, originPct)}%`, width: `${Math.abs(pct - originPct)}%` }
+            : { width: `${pct}%` }}
+        />
+        {atOrigin && (
+          <span className="tweakers-move-dial-zero" style={{ left: `calc(2px + (100% - 4px) * ${(originPct ?? 0) / 100})` }} />
+        )}
       </div>
     </>
   );

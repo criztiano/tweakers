@@ -651,6 +651,18 @@ type SliderConfig = {
      * invisible to the structure diff like `formatValue`.
      */
     onTap?: () => void;
+    /**
+     * The shape the value makes, drawn in the slot behind its readout on the
+     * Move panel — the scope slot's face, for a value you read as a picture
+     * (a bend's wave, a swing's arc): you turn the shape you are watching.
+     * Given the value, a sampler of t in [0,1]; it may close over the app's
+     * other controls, so it is a function, invisible to the structure diff,
+     * and refreshed through `syncCurveConfigs` like a curve row's `sample`.
+     */
+    shape?: (value: number) => ((t: number) => number) | null | undefined;
+    /** The y-range the shape is drawn in — fixed, so a bigger value draws a
+     *  bigger shape. Default [-1, 1]. */
+    shapeDomain?: [number, number];
 };
 /**
  * Scrub-anywhere numeric readout. Unlike a slider it has no track — drag the
