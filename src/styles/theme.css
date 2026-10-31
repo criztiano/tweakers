@@ -3933,8 +3933,12 @@
   overflow: hidden;
 }
 
+/* In the steering hand a slot's list and a curve's grid open only while
+   the hand turns them — ⌘ held, or two fingers going (`data-steer-held`) —
+   as they open only while a finger is on the Move's knob, never because
+   the hand is merely there. */
 .tweakers-move-dial[data-active] .tweakers-move-dial-screen[data-grow],
-.tweakers-move-dial[data-steer] .tweakers-move-dial-screen[data-grow] {
+.tweakers-move-dial[data-steer-held] .tweakers-move-dial-screen[data-grow] {
   top: auto;
   height: min(var(--move-screen-full), 50vh);
   z-index: 6;
@@ -3946,7 +3950,7 @@
    that hovers — a tap on glass must not leave the list standing open. */
 @media (hover: hover) {
   .tweakers-move-dial:not([data-disabled]):hover .tweakers-move-dial-screen[data-grow],
-  .tweakers-move-dial:not([data-disabled])[data-steer] .tweakers-move-dial-screen[data-grow] {
+  .tweakers-move-dial:not([data-disabled])[data-steer-held] .tweakers-move-dial-screen[data-grow] {
     top: auto;
     height: min(var(--move-screen-full), 50vh);
     z-index: 6;
@@ -4003,7 +4007,7 @@
 }
 
 .tweakers-move-dial[data-active] .tweakers-move-dial-pop,
-.tweakers-move-dial[data-steer] .tweakers-move-dial-pop {
+.tweakers-move-dial[data-steer-held] .tweakers-move-dial-pop {
   visibility: visible;
   opacity: 1;
   pointer-events: auto;
@@ -4012,7 +4016,7 @@
 
 @media (hover: hover) {
   .tweakers-move-dial:not([data-disabled]):hover .tweakers-move-dial-pop,
-  .tweakers-move-dial:not([data-disabled])[data-steer] .tweakers-move-dial-pop {
+  .tweakers-move-dial:not([data-disabled])[data-steer-held] .tweakers-move-dial-pop {
     visibility: visible;
     opacity: 1;
     pointer-events: auto;
@@ -4022,9 +4026,9 @@
 
 /* A tile was clicked: folded away until the pointer leaves the slot. */
 .tweakers-move-dial[data-active] .tweakers-move-dial-pop[data-closed],
-.tweakers-move-dial[data-steer] .tweakers-move-dial-pop[data-closed],
+.tweakers-move-dial[data-steer-held] .tweakers-move-dial-pop[data-closed],
 .tweakers-move-dial:not([data-disabled]):hover .tweakers-move-dial-pop[data-closed],
-.tweakers-move-dial:not([data-disabled])[data-steer] .tweakers-move-dial-pop[data-closed] {
+.tweakers-move-dial:not([data-disabled])[data-steer-held] .tweakers-move-dial-pop[data-closed] {
   visibility: hidden;
   opacity: 0;
   pointer-events: none;

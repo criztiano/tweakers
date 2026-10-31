@@ -479,6 +479,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     hold = null;
     wheelHold = false;
     clearTimeout(wheelRest);
+    root()?.querySelectorAll('[data-steer-held]').forEach((el) => el.removeAttribute('data-steer-held'));
     release(h.grip);
     if (h.chip !== h.grip) release(h.chip);
     if (real && real.y < panelTop() - FLUNG) leave(true);
@@ -504,6 +505,8 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     const at = under(p);
     const target = at && held.contains(at) ? at : held;
     hold = { grip: { target, x: p.x, y: p.y, pressed: false, hands: hands(target) }, chip: null, shift: false, lock: { axis: null, x: 0, y: 0 } };
+    // Held, the control opens what it opens under a finger on its knob.
+    held.setAttribute('data-steer-held', '');
     playMoveSteerLock();
     for (const el of springs.keys()) springs.get(el)!.vx = springs.get(el)!.vy = 0;
     wake();

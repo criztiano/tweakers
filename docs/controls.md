@@ -148,7 +148,9 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
   holds the way it pulls; past a threshold — the same travel for every
   control, or the whole of a list it points into — it lets go, lands in the
   middle of the next control that way, and that control takes a knock and
-  lights up. In the hand everything reads the same: a big slot comes up to
+  lights up. Being in the hand never opens anything: a slot's list and a
+  curve's grid open only while ⌘ or two fingers turn it (or a finger is on
+  the Move's knob). In the hand everything reads the same: a big slot comes up to
   the chip, a pad or a button a step brighter than it rests
   (`--move-steer-lift`), and each glows from the inside
   (`--move-steer-glow`) — no ring. At the panel's edge it stretches and stays. A rest lets the
