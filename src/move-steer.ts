@@ -27,7 +27,7 @@
  * travel turns that knob.
  */
 import {
-  MOVE_STEER_GAIN, MOVE_STEER_KNOCK, moveSteerArc, moveSteerEase, MOVE_STEER_REST_MS, moveSteerNext, moveSteerPose, moveSteerReach,
+  MOVE_STEER_GAIN, MOVE_STEER_KNOCK, moveSteerEase, moveSteerOut, moveSteerOutRate, MOVE_STEER_REST_MS, moveSteerNext, moveSteerPose, moveSteerReach,
   moveSteerSpring, moveSteerTravel, type MoveSteerBox, type MoveSteerSpring, type MoveSteerVec,
 } from './move-steer-core';
 import { TweakStore } from './store/TweakStore';
@@ -59,11 +59,9 @@ const FLUNG = 200;
 export const MOVE_STEER_AXIS_SLOP = 4;
 /** A press that travels less than this is a click. */
 const CLICK_SLOP = 3;
-/** The arrow's flight in, and the dot's flight out, in ms. */
+/** The arrow's flight in, in ms. */
 const SUCK_MS = 260;
-const SHOOT_MS = 180;
-/** How quickly the arrow, once out, closes on where the real pointer is (time constant, s). */
-const CATCH_UP = 0.12;
+
 
 /** Every event the hand sends; the ⌘ gestures are also in `steered`. */
 const sent = new WeakSet<Event>();
@@ -144,7 +142,6 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   let hold: Hold | null = null;
   let press: Grip | null = null;
   let pressTravel = 0;
-  let heading: MoveSteerVec = { x: 0, y: -1 };
   /** Until when the hand is still catching the arrow: the travel that brought it in moves nothing. */
   let landing = 0;
   /** A hold the trackpad's two fingers opened, and the timer that lets it go when they stop. */
@@ -314,30 +311,26 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   /* ── the way in and the way out ── */
 
   /**
-   * A flight on an arc (move-steer-core): the arrow sucked in, or the dot
-   * shot out. It leaves the way the pointer was going and bends round onto
-   * `to`, read every frame — the arrow it lands on may still be moving —
-   * eased by the kit's own token (`--move-ease-in` in, `--move-ease-out`
-   * out).
+   * The arrow sucked in: straight from where the pointer came in to the
+   * control, shrinking and fading, eased by the kit's `--move-ease-in`. The
+   * control is read every frame — the page may shift under it.
    */
-  const ghost = (kind: 'arrow' | 'dot', from: MoveSteerVec, to: () => MoveSteerVec, ms: number, token: string, done: () => void) => {
+  const suck = (from: MoveSteerVec, to: () => MoveSteerVec, done: () => void) => {
     if (reduced()) { done(); return null; }
     const g = document.createElement('i');
-    g.className = `tweakers-move-steer-ghost tweakers-move-steer-${kind}`;
-    if (kind === 'arrow') g.innerHTML = ARROW;
+    g.className = 'tweakers-move-steer-ghost tweakers-move-steer-arrow';
+    g.innerHTML = ARROW;
     layer().append(g);
     const panel = root();
-    const ease = moveSteerEase(panel ? getComputedStyle(panel).getPropertyValue(token) : '');
-    const way = { ...heading };
-    const scale = kind === 'arrow' ? [1, 0.15] : [0.35, 1];
+    const ease = moveSteerEase(panel ? getComputedStyle(panel).getPropertyValue('--move-ease-in') : '');
     const start = performance.now();
     let raf = 0;
     const step = (now: number) => {
-      const t = Math.min(1, (now - start) / ms);
+      const t = Math.min(1, (now - start) / SUCK_MS);
       const e = ease(t);
-      const p = moveSteerArc(from, to(), way, e);
-      g.style.transform = `translate(${p.x}px, ${p.y}px) scale(${scale[0]! + (scale[1]! - scale[0]!) * e})`;
-      if (kind === 'arrow') g.style.opacity = String(1 - 0.8 * e);
+      const end = to();
+      g.style.transform = `translate(${from.x + (end.x - from.x) * e}px, ${from.y + (end.y - from.y) * e}px) scale(${1 - 0.85 * e})`;
+      g.style.opacity = String(1 - 0.8 * e);
       if (t < 1) { raf = requestAnimationFrame(step); return; }
       g.remove();
       done();
@@ -368,15 +361,14 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   };
   const dropVeil = () => { veil?.remove(); veil = null; };
 
-  const enter = (e: PointerEvent) => {
+  const enter = (at: MoveSteerVec) => {
     const all = targets();
     if (!all.length) return;
     flight?.cancel();
     flight = null;
-    document.documentElement.removeAttribute('data-move-steer');
+    unloose();
     makeVeil();
     inside = true;
-    const at = { x: e.clientX, y: e.clientY };
     // The hand lands on the big slot nearest across, on the top row of
     // slots — the page's own controls, not the header above them.
     const slots = all.filter((el) => el.matches('.tweakers-move-dial'));
@@ -397,7 +389,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     const m = middle(boxOf(selected!));
     const len = Math.hypot(m.x - at.x, m.y - at.y) || 1;
     // The arrow is sucked in; the control takes it.
-    flight = ghost('arrow', at, () => (selected?.isConnected ? middle(boxOf(selected)) : m), SUCK_MS, '--move-ease-in', () => {
+    flight = suck(at, () => (selected?.isConnected ? middle(boxOf(selected)) : m), () => {
       flight = null;
       if (selected) knock(selected, { x: (m.x - at.x) / len, y: (m.y - at.y) / len }, MOVE_STEER_KNOCK * 1.4);
     });
@@ -405,12 +397,17 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   };
 
   /**
-   * The way out. The dot is shot out of the control the way the hand was
-   * going, to just over the panel's top; there it is the arrow again, and
-   * the arrow closes on where the real pointer is as the hand goes on, so it
-   * never jumps sideways. Until it has caught up the page's own arrow stays
-   * hidden, but the page has the pointer back: a click lands as usual.
+   * The way out: the arrow comes back just over the panel's top, above the
+   * control the hand let go of, and from there it is the pointer — moving
+   * only as the mouse moves, a little quicker for a moment (the bump), and
+   * closing on where the real pointer is as it goes (move-steer-core's
+   * `moveSteerOut`). The page's own arrow stays hidden until the two meet;
+   * while the real pointer is still down over the panel the veil keeps the
+   * page from hearing it, and the arrow, not the real pointer, decides
+   * whether the hand comes back in.
    */
+  let loose: { g: HTMLElement; at: MoveSteerVec; since: number; rate: number } | null = null;
+
   const leave = (shoot: boolean) => {
     endHold();
     endPress(false);
@@ -421,44 +418,42 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     flight?.cancel();
     flight = null;
     unpose();
-    dropVeil();
-    if (!shoot || !from || !real || reduced()) return;
-    const len = Math.hypot(heading.x, heading.y);
-    const dir = len > 0.5 && heading.y / len < -0.3 ? { x: heading.x / len, y: heading.y / len } : { x: 0, y: -1 };
-    if (was) knock(was, { x: -dir.x, y: -dir.y });
-    const top = panelTop() - 18;
-    const reach = Math.min(240, Math.max(0, from.y - top) / -dir.y);
-    const exit = { x: from.x + dir.x * reach, y: from.y + dir.y * reach };
-    document.documentElement.setAttribute('data-move-steer', 'out');
-    flight = ghost('dot', from, () => exit, SHOOT_MS, '--move-ease-out', () => { flight = catchUp(exit); });
-  };
-
-  /** The arrow, from where the dot came out, closing on the real pointer. */
-  const catchUp = (at: MoveSteerVec) => {
+    if (!shoot || !from || !real || reduced()) { dropVeil(); return; }
+    if (was) knock(was, { x: 0, y: 1 });
     const g = document.createElement('i');
     g.className = 'tweakers-move-steer-ghost tweakers-move-steer-arrow';
     g.innerHTML = ARROW;
     layer().append(g);
-    let off = real ? { x: at.x - real.x, y: at.y - real.y } : { x: 0, y: 0 };
-    let last = performance.now();
-    let raf = 0;
-    const done = () => {
-      cancelAnimationFrame(raf);
-      g.remove();
-      flight = null;
-      document.documentElement.removeAttribute('data-move-steer');
-    };
-    const step = (now: number) => {
-      const k = Math.exp(-Math.min(0.05, (now - last) / 1000) / CATCH_UP);
-      last = now;
-      off = { x: off.x * k, y: off.y * k };
-      const p = real ? { x: real.x + off.x, y: real.y + off.y } : at;
-      g.style.transform = `translate(${p.x}px, ${p.y}px)`;
-      if (Math.hypot(off.x, off.y) < 1) { done(); return; }
-      raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-    return { cancel: done };
+    loose = { g, at: { x: from.x, y: panelTop() - 4 }, since: performance.now(), rate: 0 };
+    document.documentElement.setAttribute('data-move-steer', 'out');
+    placeLoose();
+  };
+
+  const placeLoose = () => {
+    if (loose) loose.g.style.transform = `translate(${loose.at.x}px, ${loose.at.y}px)`;
+  };
+
+  const unloose = () => {
+    if (!loose) return;
+    loose.g.remove();
+    loose = null;
+    document.documentElement.removeAttribute('data-move-steer');
+  };
+
+  /** One pointer move with the arrow out. Answers true when the hand comes back in. */
+  const followLoose = (e: PointerEvent, d: MoveSteerVec) => {
+    const l = loose!;
+    const top = panelTop();
+    const out = e.clientY < top;
+    // The real pointer over the panel's top again: the page has it back, and
+    // the arrow starts closing on it, at a pace set by the gap it has now.
+    if (out && veil) dropVeil();
+    if (out && !l.rate) l.rate = moveSteerOutRate(Math.hypot(e.clientX - l.at.x, e.clientY - l.at.y));
+    l.at = moveSteerOut(l.at, { x: e.clientX, y: e.clientY }, d, performance.now() - l.since, out ? l.rate : 0);
+    if (l.at.y >= top + 4) return true;
+    placeLoose();
+    if (out && Math.hypot(e.clientX - l.at.x, e.clientY - l.at.y) < 1.5) unloose();
+    return false;
   };
 
   /* ── ⌘: the hand takes the control ── */
@@ -609,13 +604,20 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     if (sent.has(e) || e.pointerType !== 'mouse') return;
     const before = real;
     real = { x: e.clientX, y: e.clientY, id: e.pointerId };
-    // The way the pointer is going, smoothed: the flights in and out leave that way.
-    if (before) heading = { x: heading.x * 0.6 + (e.clientX - before.x) * 0.4, y: heading.y * 0.6 + (e.clientY - before.y) * 0.4 };
     if (!inside) {
+      if (loose) {
+        if (veil) own(e);
+        if (before && followLoose(e, { x: e.clientX - before.x, y: e.clientY - before.y })) {
+          const at = loose.at;
+          own(e);
+          enter(at);
+        }
+        return;
+      }
       const panel = root();
       const t = e.target instanceof Element ? e.target : null;
       const over = !!panel && !!t && (panel.contains(t) || t === veil || !!veil?.contains(t));
-      if (over && e.buttons === 0 && e.clientY >= panelTop()) { own(e); enter(e); }
+      if (over && e.buttons === 0 && e.clientY >= panelTop()) { own(e); enter({ x: e.clientX, y: e.clientY }); }
       return;
     }
     own(e);
@@ -638,10 +640,9 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     const pace = TweakStore.getValues(MOVE_PANEL_SETTINGS);
     const gain = (v: unknown) => (typeof v === 'number' && v > 0 ? v : MOVE_STEER_GAIN);
     const out = navigate(dx * gain(pace?.handSpeedX), dy * gain(pace?.handSpeedY));
-    // The way out is up past the top row, with the real pointer over the
-    // panel's top by then — or the pointer flung far above it.
-    const top = panelTop();
-    if ((out && e.clientY < top) || e.clientY < top - FLUNG) leave(true);
+    // The way out is up past the top row — or the pointer flung far above
+    // the panel's top.
+    if (out || e.clientY < panelTop() - FLUNG) leave(true);
   };
 
   /** Moves the hand; true when it pushes up past the panel's top row — the way out. */
@@ -753,6 +754,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   document.addEventListener('visibilitychange', onVisibility);
   return () => {
     leave(false);
+    unloose();
     if (frame) cancelAnimationFrame(frame);
     window.removeEventListener('pointermove', onMove, true);
     window.removeEventListener('pointerdown', onDown, true);

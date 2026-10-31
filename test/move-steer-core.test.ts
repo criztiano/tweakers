@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   MOVE_STEER_REACH_MAX, MOVE_STEER_REACH_MIN, MOVE_STEER_RUBBER, moveSteerNext, moveSteerPose, moveSteerReach,
-  moveSteerSpring, moveSteerTravel, moveSteerEase, moveSteerArc, type MoveSteerBox,
+  moveSteerSpring, moveSteerTravel, moveSteerEase, moveSteerOut, moveSteerOutRate, MOVE_STEER_OUT_BUMP, MOVE_STEER_OUT_CLOSE, type MoveSteerBox,
 } from '../src/move-steer-core';
 
 const box = (left: number, top: number, w: number, h: number): MoveSteerBox => ({ left, top, right: left + w, bottom: top + h });
@@ -90,17 +90,22 @@ describe('the way in and out', () => {
     expect(moveSteerEase('')(0.3)).toBe(0.3);
   });
 
-  it('leaves along the heading and bends round onto the end', () => {
-    const from = { x: 0, y: 0 }, to = { x: 100, y: 0 };
-    const up = { x: 0, y: -1 };
-    expect(moveSteerArc(from, to, up, 0)).toEqual(from);
-    expect(moveSteerArc(from, to, up, 1)).toEqual(to);
-    // It leans a little the way the pointer went, but it is going to its end.
-    const early = moveSteerArc(from, to, up, 0.2);
-    expect(early.y).toBeLessThan(-2);
-    expect(early.y).toBeGreaterThan(-10);
-    expect(early.x).toBeGreaterThan(10);
-    // No heading to read: straight.
-    expect(moveSteerArc(from, to, { x: 0, y: 0 }, 0.5)).toEqual({ x: 50, y: 0 });
+  it('moves the arrow out only as the pointer moves, a little more at first', () => {
+    const at = { x: 0, y: 0 }, real = { x: 300, y: 0 };
+    expect(moveSteerOut(at, real, { x: 0, y: 0 }, 0, 1)).toEqual(at);
+    expect(moveSteerOut(at, real, { x: 0, y: -10 }, 0, 0)).toEqual({ x: 0, y: -10 * (1 + MOVE_STEER_OUT_BUMP) });
+    expect(moveSteerOut(at, real, { x: 0, y: -10 }, 5000, 0).y).toBeCloseTo(-10, 5);
+  });
+
+  it('closes on the real pointer as the pointer travels, once that is out too', () => {
+    let at = { x: 0, y: 0 };
+    const real = { x: 300, y: -40 };
+    const rate = moveSteerOutRate(Math.hypot(real.x - at.x, real.y - at.y));
+    const d = { x: 0, y: -8 };
+    for (let travel = 0; travel < MOVE_STEER_OUT_CLOSE + 8; travel += 8) {
+      real.y += d.y;
+      at = moveSteerOut(at, real, d, 1000, rate);
+    }
+    expect(Math.hypot(at.x - real.x, at.y - real.y)).toBeLessThan(1);
   });
 });

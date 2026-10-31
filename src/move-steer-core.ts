@@ -161,26 +161,30 @@ export function moveSteerEase(curve: string): (t: number) => number {
   };
 }
 
-/** How far the arc leans toward the pointer's heading: 0 is a straight line. */
-export const MOVE_STEER_ARC_BEND = 0.3;
+/** Right after the way out, the arrow takes this much more of the pointer's own travel… */
+export const MOVE_STEER_OUT_BUMP = 0.6;
+/** …fading to none over about this long, in ms. */
+export const MOVE_STEER_OUT_BUMP_MS = 180;
+/** The pointer travel, in px, over which the arrow closes on the real pointer. */
+export const MOVE_STEER_OUT_CLOSE = 140;
 
 /**
- * A point on the arc from `from` to `to` at `t`: it goes to its end, only
- * leaning a little toward `heading` (the way the pointer was going), so the
- * flight follows the hand with a slight curve and never doubles back. A
- * heading too small to read flies straight.
+ * The arrow on its way out, one pointer move on: it moves only as the
+ * pointer moves — the pointer's own travel `d`, a little more just after the
+ * way out (the bump, fading in `MOVE_STEER_OUT_BUMP_MS`) — and, once the real
+ * pointer is out over the panel's top too, each move also closes `rate` px
+ * of the gap to the real pointer per px of travel (`moveSteerOutRate`), so
+ * the two meet after `MOVE_STEER_OUT_CLOSE` px. No path of its own, no time of
+ * its own: a still pointer is a still arrow.
  */
-export function moveSteerArc(from: MoveSteerVec, to: MoveSteerVec, heading: MoveSteerVec, t: number): MoveSteerVec {
-  const dist = Math.hypot(to.x - from.x, to.y - from.y);
-  const len = Math.hypot(heading.x, heading.y);
-  const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
-  const lean = len > 0.5
-    ? { x: from.x + (heading.x / len) * dist * 0.5, y: from.y + (heading.y / len) * dist * 0.5 }
-    : mid;
-  const bend = { x: mid.x + (lean.x - mid.x) * MOVE_STEER_ARC_BEND, y: mid.y + (lean.y - mid.y) * MOVE_STEER_ARC_BEND };
-  const u = 1 - t;
-  return {
-    x: u * u * from.x + 2 * u * t * bend.x + t * t * to.x,
-    y: u * u * from.y + 2 * u * t * bend.y + t * t * to.y,
-  };
+export function moveSteerOut(at: MoveSteerVec, real: MoveSteerVec, d: MoveSteerVec, sinceMs: number, rate: number): MoveSteerVec {
+  const k = 1 + MOVE_STEER_OUT_BUMP * Math.exp(-sinceMs / MOVE_STEER_OUT_BUMP_MS);
+  const p = { x: at.x + d.x * k, y: at.y + d.y * k };
+  const gap = Math.hypot(real.x - p.x, real.y - p.y);
+  if (!rate || !gap) return p;
+  const c = Math.min(1, (rate * Math.hypot(d.x, d.y)) / gap);
+  return { x: p.x + (real.x - p.x) * c, y: p.y + (real.y - p.y) * c };
 }
+
+/** How fast the arrow closes a `gap` to the real pointer: px of gap per px of travel. */
+export const moveSteerOutRate = (gap: number) => Math.max(0.25, gap / MOVE_STEER_OUT_CLOSE);
