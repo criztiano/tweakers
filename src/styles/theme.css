@@ -550,7 +550,18 @@
      stand on the dial row's columns; its corners follow the slots' inside. */
   --move-nest-pad: 8px;
   --move-nest-radius: calc(var(--move-radius) + var(--move-nest-pad));
-  --move-nest-shadow: var(--move-list-shadow);
+  --move-nest-bg: #555452;
+  /* Smooth Shadows (movements.dev, size 30, intensity 0.3): soft layers that
+     drop further and fade as they widen, tinted toward the instrument's warm
+     ink rather than black, over a hairline that keeps the edge crisp. */
+  --move-nest-shadow-color: 18 15 15;
+  --move-nest-shadow:
+    0 0 0 0.5px rgb(255 255 255 / 0.1),
+    0 2px 5px rgb(var(--move-nest-shadow-color) / 0.29),
+    0 10px 9px rgb(var(--move-nest-shadow-color) / 0.26),
+    0 22px 12px rgb(var(--move-nest-shadow-color) / 0.15),
+    0 38px 15px rgb(var(--move-nest-shadow-color) / 0.04),
+    0 60px 16px rgb(var(--move-nest-shadow-color) / 0.01);
   /* It comes up on the ease-out and clears out faster on the exit curve,
      from just under its size and a little below its place. */
   --move-nest-duration: 220ms;
@@ -1782,7 +1793,7 @@
   align-items: flex-start;
   gap: var(--move-nest-pad);
   padding: var(--move-nest-pad);
-  background: var(--move-bg);
+  background: var(--move-nest-bg);
   color: var(--move-text);
   border-radius: var(--move-nest-radius);
   box-shadow: var(--move-nest-shadow);
