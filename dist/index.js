@@ -9940,6 +9940,7 @@ var MOVE_STEER_MARGIN = 10;
 var MOVE_STEER_REACH_MIN = 34;
 var MOVE_STEER_REACH_MAX = 70;
 var MOVE_STEER_RUBBER = 1.3;
+var MOVE_STEER_CATCH_MS = 120;
 var MOVE_STEER_REST_MS = 110;
 var mid = (b) => ({ x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 });
 function moveSteerReach(b, points) {
@@ -10185,7 +10186,7 @@ function attachMoveSteer(root) {
   let hold = null;
   let press = null;
   let pressTravel = 0;
-  let arriving = null;
+  let enteredAt = 0;
   let wheelHold = false;
   let wheelRest;
   let walked = 0;
@@ -10386,45 +10387,12 @@ function attachMoveSteer(root) {
     select(best);
     offset = { x: 0, y: 0 };
     lastMove = 0;
-    if (!reduced()) {
-      const g = document.createElement("i");
-      g.className = "tweakers-move-steer-ghost tweakers-move-steer-arrow";
-      g.innerHTML = ARROW;
-      layer().append(g);
-      const gap = Math.hypot(middle(boxOf(best)).x - at2.x, middle(boxOf(best)).y - at2.y);
-      arriving = { g, at: { ...at2 }, since: performance.now(), rate: moveSteerGlideRate(gap), gap };
-      placeArriving();
-    }
+    enteredAt = performance.now();
+    knock(best, { x: 0, y: 1 }, MOVE_STEER_KNOCK * 1.4);
     wake();
-  };
-  const placeArriving = () => {
-    if (!arriving) return;
-    const to = selected?.isConnected ? middle(boxOf(selected)) : arriving.at;
-    const left = Math.min(1, Math.hypot(to.x - arriving.at.x, to.y - arriving.at.y) / (arriving.gap || 1));
-    arriving.g.style.transform = `translate(${arriving.at.x}px, ${arriving.at.y}px) scale(${0.35 + 0.65 * left})`;
-  };
-  const land = (dir = { x: 0, y: 1 }) => {
-    if (!arriving) return;
-    arriving.g.remove();
-    arriving = null;
-    const len = Math.hypot(dir.x, dir.y) || 1;
-    if (selected) knock(selected, { x: dir.x / len, y: dir.y / len }, MOVE_STEER_KNOCK * 1.4);
-  };
-  const followArriving = (d) => {
-    const a = arriving;
-    const held = regain();
-    if (!held) {
-      land(d);
-      return;
-    }
-    const to = middle(boxOf(held));
-    a.at = moveSteerGlide(a.at, to, d, performance.now() - a.since, a.rate);
-    if (Math.hypot(to.x - a.at.x, to.y - a.at.y) < 1.5) land(d);
-    else placeArriving();
   };
   let loose = null;
   const leave = (shoot) => {
-    land();
     endHold();
     endPress(false);
     const from = selected ? middle(boxOf(selected)) : null;
@@ -10509,7 +10477,6 @@ function attachMoveSteer(root) {
   const beginHold = () => {
     const held = hold || press || !inside || editable(document.activeElement) ? null : regain();
     if (!held) return;
-    land();
     const p = hand();
     const at2 = under(p);
     const target = at2 && held.contains(at2) ? at2 : held;
@@ -10564,7 +10531,6 @@ function attachMoveSteer(root) {
     endHold();
     const held = inside ? regain() : null;
     if (!held) return;
-    land();
     if (isWheelList(held)) {
       clickWheel();
       return;
@@ -10632,10 +10598,6 @@ function attachMoveSteer(root) {
     if (!before) return;
     const dx = e.clientX - before.x;
     const dy = e.clientY - before.y;
-    if (arriving && !hold && !press) {
-      followArriving({ x: dx, y: dy });
-      return;
-    }
     if (hold) {
       if (!moveSteerHeld(e)) endHold();
       else {
@@ -10653,11 +10615,12 @@ function attachMoveSteer(root) {
     }
     const pace = TweakStore10.getValues(MOVE_PANEL_SETTINGS);
     const gain = (v) => typeof v === "number" && v > 0 ? v : MOVE_STEER_GAIN;
-    const out = navigate(dx * gain(pace?.handSpeedX), dy * gain(pace?.handSpeedY));
+    const catching = 1 - Math.exp(-(performance.now() - enteredAt) / MOVE_STEER_CATCH_MS);
+    const out = navigate(dx * gain(pace?.handSpeedX) * catching, dy * gain(pace?.handSpeedY) * catching);
     if (out || e.clientY < panelTop() - FLUNG) leave(true);
   };
   const navigate = (dx, dy) => {
-    if (arriving || !regain()) return false;
+    if (!regain()) return false;
     lastMove = performance.now();
     let out = false;
     let all = null;
