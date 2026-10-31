@@ -10466,7 +10466,14 @@ function moveShapePath(points) {
 }
 
 // src/move-steer-core.ts
-var MOVE_STEER_GAIN = 2.4;
+var MOVE_STEER_GAIN_X = 2;
+var MOVE_STEER_GAIN_Y = 1.5;
+var MOVE_STEER_FULL_SPEED = 0.6;
+var MOVE_STEER_CRAWL = 0.35;
+function moveSteerPace(speed) {
+  const t = Math.min(1, Math.max(0, speed / MOVE_STEER_FULL_SPEED));
+  return MOVE_STEER_CRAWL + (1 - MOVE_STEER_CRAWL) * t * t * (3 - 2 * t);
+}
 var MOVE_STEER_MARGIN = 10;
 var MOVE_STEER_REACH_MIN = 34;
 var MOVE_STEER_REACH_MAX = 70;
@@ -10604,8 +10611,8 @@ var MoveTrackLabels = {
         },
         // The steering hand's pace (move-steer): pointer pixels to hand
         // pixels inside the panel, across and up and down apart.
-        handSpeedX: { type: "slider", default: MOVE_STEER_GAIN, min: 0.5, max: 5, step: 0.1, display: "value" },
-        handSpeedY: { type: "slider", default: MOVE_STEER_GAIN, min: 0.5, max: 5, step: 0.1, display: "value" }
+        handSpeedX: { type: "slider", default: MOVE_STEER_GAIN_X, min: 0.5, max: 5, step: 0.1, display: "value" },
+        handSpeedY: { type: "slider", default: MOVE_STEER_GAIN_Y, min: 0.5, max: 5, step: 0.1, display: "value" }
       },
       void 0,
       { kind: "kit", persist: true, labels: { trackLabels: "Track labels", handSpeedX: "Hand speed \u2190\u2192", handSpeedY: "Hand speed \u2191\u2193" } }
@@ -10718,6 +10725,8 @@ function attachMoveSteer(root) {
   let press = null;
   let pressTravel = 0;
   let enteredAt = 0;
+  let speed = 0;
+  let lastStamp = 0;
   let wheelHold = false;
   let wheelRest;
   let walked = 0;
@@ -10725,7 +10734,10 @@ function attachMoveSteer(root) {
   let frame = 0;
   let then = 0;
   let lastHand = { x: 0, y: 0 };
-  const panelTop = () => root()?.getBoundingClientRect().top ?? Infinity;
+  const panelTop = () => {
+    const panel = root();
+    return (panel?.querySelector(".tweakers-move-controls") ?? panel)?.getBoundingClientRect().top ?? Infinity;
+  };
   const hand = () => {
     if (!selected?.isConnected) return lastHand;
     const m = middle(boxOf(selected));
@@ -11207,9 +11219,13 @@ function attachMoveSteer(root) {
       return;
     }
     const pace = import_TweakStore11.TweakStore.getValues(MOVE_PANEL_SETTINGS);
-    const gain = (v) => typeof v === "number" && v > 0 ? v : MOVE_STEER_GAIN;
+    const gain = (v, fallback) => typeof v === "number" && v > 0 ? v : fallback;
     const catching = 1 - Math.exp(-(performance.now() - enteredAt) / MOVE_STEER_CATCH_MS);
-    const out = navigate(dx * gain(pace?.handSpeedX) * catching, dy * gain(pace?.handSpeedY) * catching);
+    const dt = Math.max(1, e.timeStamp - lastStamp);
+    lastStamp = e.timeStamp;
+    speed = speed * 0.7 + Math.hypot(dx, dy) / dt * 0.3;
+    const k = catching * moveSteerPace(speed);
+    const out = navigate(dx * gain(pace?.handSpeedX, MOVE_STEER_GAIN_X) * k, dy * gain(pace?.handSpeedY, MOVE_STEER_GAIN_Y) * k);
     if (out || !locked && e.clientY < panelTop() - FLUNG) leave(true);
   };
   const navigate = (dx, dy) => {
