@@ -551,17 +551,17 @@
   --move-nest-pad: 8px;
   --move-nest-radius: calc(var(--move-radius) + var(--move-nest-pad));
   --move-nest-bg: #555452;
-  /* Smooth Shadows (movements.dev, size 30, intensity 0.3): soft layers that
+  /* Smooth Shadows (movements.dev, size 50, intensity 0.36): soft layers that
      drop further and fade as they widen, tinted toward the instrument's warm
      ink rather than black, over a hairline that keeps the edge crisp. */
   --move-nest-shadow-color: 18 15 15;
   --move-nest-shadow:
     0 0 0 0.5px rgb(255 255 255 / 0.1),
-    0 2px 5px rgb(var(--move-nest-shadow-color) / 0.29),
-    0 10px 9px rgb(var(--move-nest-shadow-color) / 0.26),
-    0 22px 12px rgb(var(--move-nest-shadow-color) / 0.15),
-    0 38px 15px rgb(var(--move-nest-shadow-color) / 0.04),
-    0 60px 16px rgb(var(--move-nest-shadow-color) / 0.01);
+    0 5px 11px rgb(var(--move-nest-shadow-color) / 0.35),
+    0 20px 19px rgb(var(--move-nest-shadow-color) / 0.31),
+    0 45px 26px rgb(var(--move-nest-shadow-color) / 0.18),
+    0 80px 31px rgb(var(--move-nest-shadow-color) / 0.05),
+    0 125px 34px rgb(var(--move-nest-shadow-color) / 0.01);
   /* It comes up on the ease-out and clears out faster on the exit curve,
      from just under its size and a little below its place. */
   --move-nest-duration: 220ms;
@@ -1805,6 +1805,9 @@
   transition:
     opacity var(--move-nest-exit-duration) var(--move-ease-exit),
     transform var(--move-nest-exit-duration) var(--move-ease-exit);
+  /* Its own layer for as long as it stands, so its rise and fade run on the
+     compositor and never repaint its slots. */
+  will-change: transform, opacity;
 }
 
 .tweakers-move-nest[data-open] .tweakers-move-nest-sheet {
@@ -1840,6 +1843,15 @@
   transition:
     opacity var(--move-nest-exit-duration) var(--move-ease-exit),
     filter var(--move-nest-exit-duration) var(--move-ease-exit);
+}
+
+/* While a sheet stands — on its way in, up, and on its way out — what is
+   behind it is a layer of its own: the blur and fade then run on the
+   compositor over one picture, instead of repainting the whole grid blurred
+   on every frame. */
+.tweakers-move-inner:has(> .tweakers-move-nest) > .tweakers-move-tracks,
+.tweakers-move-inner:has(> .tweakers-move-nest) > .tweakers-move-controls {
+  will-change: opacity, filter;
 }
 
 .tweakers-move-inner[data-nest] > .tweakers-move-tracks,

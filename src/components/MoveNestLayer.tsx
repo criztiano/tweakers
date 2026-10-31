@@ -99,15 +99,26 @@ export function MoveNestLayer({ panelId, view, row, returnFocus, valueFirst, onC
     return () => watch.disconnect();
   }, [present]);
 
-  // Opening: style the closed look once, then lift — the transition runs
-  // between the two. Closing: drop the look; the sheet leaves once its fade
-  // ends (or at once, when nothing is moving).
+  // Opening: the sheet first lands and paints in its closed look — its slots
+  // mounted, its layers made — and lifts on a later frame, so all of that
+  // work stays out of the movement's first frame. Closing: drop the look; the
+  // sheet leaves once its fade ends (or at once, when nothing is moving).
+  useEffect(() => {
+    if (!present || !open || lifted) return;
+    // No frames to wait for (a server, a test): lift at once.
+    if (typeof requestAnimationFrame === 'undefined') {
+      setLifted(true);
+      return;
+    }
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => setLifted(true));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open, present, lifted]);
+
   useLayoutEffect(() => {
     if (!present) return;
-    if (open && !lifted) {
-      sheet.current?.getBoundingClientRect();
-      setLifted(true);
-    } else if (!open && lifted) {
+    if (!open && lifted) {
       setLifted(false);
     } else if (!open && !lifted) {
       const moving = sheet.current?.getAnimations?.().length ?? 0;
