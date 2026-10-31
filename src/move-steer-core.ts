@@ -135,3 +135,47 @@ export function moveSteerSpring(s: MoveSteerSpring, to: MoveSteerVec, dt: number
 
 /** The knock a control takes when the hand lands on it, in tension per second. */
 export const MOVE_STEER_KNOCK = 14;
+
+/* ── the way in and out: an arc ── */
+
+/**
+ * A `cubic-bezier(…)` easing as a function of time, read from the kit's own
+ * easing tokens; anything else answers a straight line.
+ */
+export function moveSteerEase(curve: string): (t: number) => number {
+  const m = /cubic-bezier\(\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\)/.exec(curve);
+  if (!m) return (t) => t;
+  const [x1, y1, x2, y2] = m.slice(1).map(Number) as [number, number, number, number];
+  const at = (a: number, b: number, s: number) => 3 * a * s * (1 - s) ** 2 + 3 * b * s * s * (1 - s) + s ** 3;
+  const slope = (a: number, b: number, s: number) => 3 * a * (1 - s) ** 2 + 6 * (b - a) * s * (1 - s) + 3 * (1 - b) * s * s;
+  return (t) => {
+    if (t <= 0) return 0;
+    if (t >= 1) return 1;
+    let s = t;
+    for (let i = 0; i < 8; i++) {
+      const d = slope(x1, x2, s);
+      if (Math.abs(d) < 1e-6) break;
+      s = Math.min(1, Math.max(0, s - (at(x1, x2, s) - t) / d));
+    }
+    return at(y1, y2, s);
+  };
+}
+
+/**
+ * A point on the arc from `from` to `to` at `t`: it leaves along `heading`
+ * (the way the pointer was going) and bends round onto its end, so a change
+ * of direction reads as a curve, never a corner. A heading too small to
+ * read flies straight.
+ */
+export function moveSteerArc(from: MoveSteerVec, to: MoveSteerVec, heading: MoveSteerVec, t: number): MoveSteerVec {
+  const dist = Math.hypot(to.x - from.x, to.y - from.y);
+  const len = Math.hypot(heading.x, heading.y);
+  const bend = len > 0.5
+    ? { x: from.x + (heading.x / len) * dist * 0.55, y: from.y + (heading.y / len) * dist * 0.55 }
+    : { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+  const u = 1 - t;
+  return {
+    x: u * u * from.x + 2 * u * t * bend.x + t * t * to.x,
+    y: u * u * from.y + 2 * u * t * bend.y + t * t * to.y,
+  };
+}

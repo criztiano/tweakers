@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   MOVE_STEER_REACH_MAX, MOVE_STEER_REACH_MIN, MOVE_STEER_RUBBER, moveSteerNext, moveSteerPose, moveSteerReach,
-  moveSteerSpring, moveSteerTravel, type MoveSteerBox,
+  moveSteerSpring, moveSteerTravel, moveSteerEase, moveSteerArc, type MoveSteerBox,
 } from '../src/move-steer-core';
 
 const box = (left: number, top: number, w: number, h: number): MoveSteerBox => ({ left, top, right: left + w, bottom: top + h });
@@ -78,5 +78,26 @@ describe('the lean', () => {
     while (moveSteerSpring(s, { x: 0, y: 0 }, 1 / 60) && frames < 600) frames++;
     expect(frames).toBeLessThan(120);
     expect(Math.abs(s.x)).toBeLessThan(0.01);
+  });
+});
+
+describe('the way in and out', () => {
+  it('eases by the kit token, and goes straight for anything else', () => {
+    const out = moveSteerEase('cubic-bezier(0.2, 0, 0, 1)');
+    expect(out(0)).toBe(0);
+    expect(out(1)).toBe(1);
+    expect(out(0.3)).toBeGreaterThan(0.5);
+    expect(moveSteerEase('')(0.3)).toBe(0.3);
+  });
+
+  it('leaves along the heading and bends round onto the end', () => {
+    const from = { x: 0, y: 0 }, to = { x: 100, y: 0 };
+    const up = { x: 0, y: -1 };
+    expect(moveSteerArc(from, to, up, 0)).toEqual(from);
+    expect(moveSteerArc(from, to, up, 1)).toEqual(to);
+    // Early on it is still going the way the pointer went.
+    expect(moveSteerArc(from, to, up, 0.2).y).toBeLessThan(-10);
+    // No heading to read: straight.
+    expect(moveSteerArc(from, to, { x: 0, y: 0 }, 0.5)).toEqual({ x: 50, y: 0 });
   });
 });

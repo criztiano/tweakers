@@ -27,7 +27,7 @@
  * travel turns that knob.
  */
 import {
-  MOVE_STEER_GAIN, MOVE_STEER_KNOCK, MOVE_STEER_REST_MS, moveSteerNext, moveSteerPose, moveSteerReach,
+  MOVE_STEER_GAIN, MOVE_STEER_KNOCK, moveSteerArc, moveSteerEase, MOVE_STEER_REST_MS, moveSteerNext, moveSteerPose, moveSteerReach,
   moveSteerSpring, moveSteerTravel, type MoveSteerBox, type MoveSteerSpring, type MoveSteerVec,
 } from './move-steer-core';
 import { TweakStore } from './store/TweakStore';
@@ -47,12 +47,9 @@ const POINTS_INTO = '.tweakers-list-screen-row, .tweakers-move-dial-tile, .tweak
 export const MOVE_STEER_AXIS_SLOP = 4;
 /** A press that travels less than this is a click. */
 const CLICK_SLOP = 3;
-/** The arrow's flight in, in ms. */
-const SUCK_MS = 240;
-/** The dot's flight out: the speed it leaves at, along the hand's last travel, in px/s; the pull that bends it onto the arrow. */
-const SHOOT_SPEED = 1500;
-const SHOOT_PULL = 320;
-const SHOOT_DAMP = 2 * 0.7 * Math.sqrt(SHOOT_PULL);
+/** The arrow's flight in, and the dot's flight out, in ms. */
+const SUCK_MS = 260;
+const SHOOT_MS = 300;
 
 /** Every event the hand sends; the ⌘ gestures are also in `steered`. */
 const sent = new WeakSet<Event>();
@@ -297,24 +294,39 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
 
   /* ── the way in and the way out ── */
 
-  const ghost = (kind: 'arrow' | 'dot', from: MoveSteerVec, to: () => MoveSteerVec, ms: number, ease: string, done: () => void) => {
-    if (!veil || reduced() || typeof veil.animate !== 'function') { done(); return null; }
+  /**
+   * A flight on an arc (move-steer-core): the arrow sucked in, or the dot
+   * shot out. It leaves the way the pointer was going and bends round onto
+   * `to`, read every frame — the arrow it lands on may still be moving —
+   * eased by the kit's own token (`--move-ease-in` in, `--move-ease-out`
+   * out).
+   */
+  const ghost = (kind: 'arrow' | 'dot', from: MoveSteerVec, to: () => MoveSteerVec, ms: number, token: string, done: () => void) => {
+    if (!veil || reduced()) { done(); return null; }
     const g = document.createElement('i');
     g.className = `tweakers-move-steer-ghost tweakers-move-steer-${kind}`;
     if (kind === 'arrow') g.innerHTML = ARROW;
     veil.append(g);
-    const end = to();
-    const turn = kind === 'arrow' ? [1, 0.15] : [0.35, 1];
-    const a = g.animate([
-      { transform: `translate(${from.x}px, ${from.y}px) scale(${turn[0]})`, opacity: 1 },
-      { transform: `translate(${end.x}px, ${end.y}px) scale(${turn[1]})`, opacity: kind === 'arrow' ? 0.2 : 1 },
-    ], { duration: ms, easing: ease, fill: 'forwards' });
-    const finish = () => { g.remove(); done(); };
-    a.onfinish = finish;
-    a.oncancel = () => g.remove();
-    return a;
+    const panel = root();
+    const ease = moveSteerEase(panel ? getComputedStyle(panel).getPropertyValue(token) : '');
+    const way = { ...heading };
+    const scale = kind === 'arrow' ? [1, 0.15] : [0.35, 1];
+    const start = performance.now();
+    let raf = 0;
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / ms);
+      const e = ease(t);
+      const p = moveSteerArc(from, to(), way, e);
+      g.style.transform = `translate(${p.x}px, ${p.y}px) scale(${scale[0]! + (scale[1]! - scale[0]!) * e})`;
+      if (kind === 'arrow') g.style.opacity = String(1 - 0.8 * e);
+      if (t < 1) { raf = requestAnimationFrame(step); return; }
+      g.remove();
+      done();
+    };
+    raf = requestAnimationFrame(step);
+    return { cancel: () => { cancelAnimationFrame(raf); g.remove(); } };
   };
-  let flight: Animation | null = null;
+  let flight: { cancel: () => void } | null = null;
 
   const makeVeil = () => {
     if (veil) return;
@@ -354,7 +366,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     const m = middle(boxOf(selected!));
     const len = Math.hypot(m.x - at.x, m.y - at.y) || 1;
     // The arrow is sucked in; the control takes it.
-    flight = ghost('arrow', at, () => middle(boxOf(selected!)), SUCK_MS, 'cubic-bezier(0.6, 0, 0.9, 0.4)', () => {
+    flight = ghost('arrow', at, () => (selected?.isConnected ? middle(boxOf(selected)) : m), SUCK_MS, '--move-ease-in', () => {
       flight = null;
       if (selected) knock(selected, { x: (m.x - at.x) / len, y: (m.y - at.y) / len }, MOVE_STEER_KNOCK * 1.4);
     });
@@ -378,39 +390,10 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     const len = Math.hypot(heading.x, heading.y);
     const dir = len > 0.5 ? { x: heading.x / len, y: heading.y / len } : { x: 0, y: -1 };
     if (was) knock(was, { x: -dir.x, y: -dir.y });
-    launch(from, dir);
-  };
-
-  /**
-   * The dot's flight out: launched along `dir`, pulled onto the arrow
-   * wherever the real pointer now is, and gone — with the veil — once it
-   * lands there.
-   */
-  let shot = 0;
-  const launch = (from: MoveSteerVec, dir: MoveSteerVec) => {
-    const g = document.createElement('i');
-    g.className = 'tweakers-move-steer-ghost tweakers-move-steer-dot';
-    veil!.append(g);
-    const s = { x: from.x, y: from.y, vx: dir.x * SHOOT_SPEED, vy: dir.y * SHOOT_SPEED };
-    const start = performance.now();
-    let last = start;
-    const land = () => { cancelAnimationFrame(shot); shot = 0; g.remove(); if (!inside) dropVeil(); };
-    flight = { cancel: () => { cancelAnimationFrame(shot); shot = 0; g.remove(); } } as Animation;
-    const fly = (now: number) => {
-      const dt = Math.min((now - last) / 1000, 1 / 30);
-      last = now;
-      const to = real ?? from;
-      s.vx += (SHOOT_PULL * (to.x - s.x) - SHOOT_DAMP * s.vx) * dt;
-      s.vy += (SHOOT_PULL * (to.y - s.y) - SHOOT_DAMP * s.vy) * dt;
-      s.x += s.vx * dt;
-      s.y += s.vy * dt;
-      const grow = Math.min(1, (now - start) / 120);
-      g.style.transform = `translate(${s.x}px, ${s.y}px) scale(${0.35 + 0.65 * grow})`;
-      const near = Math.hypot(to.x - s.x, to.y - s.y) < 4 && Math.hypot(s.vx, s.vy) < 220;
-      if (near || now - start > 700) { flight = null; land(); return; }
-      shot = requestAnimationFrame(fly);
-    };
-    shot = requestAnimationFrame(fly);
+    flight = ghost('dot', from, () => (real ? { x: real.x, y: real.y } : from), SHOOT_MS, '--move-ease-out', () => {
+      flight = null;
+      if (!inside) dropVeil();
+    });
   };
 
   /* ── ⌘: the hand takes the control ── */
@@ -542,6 +525,8 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     if (sent.has(e) || e.pointerType !== 'mouse') return;
     const before = real;
     real = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    // The way the pointer is going, smoothed: the flights in and out leave that way.
+    if (before) heading = { x: heading.x * 0.6 + (e.clientX - before.x) * 0.4, y: heading.y * 0.6 + (e.clientY - before.y) * 0.4 };
     if (!inside) {
       const panel = root();
       const t = e.target instanceof Element ? e.target : null;
@@ -553,8 +538,6 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     if (!before) return;
     const dx = e.clientX - before.x;
     const dy = e.clientY - before.y;
-    // The way the hand is going, smoothed: the dot leaves the panel that way.
-    heading = { x: heading.x * 0.6 + dx * 0.4, y: heading.y * 0.6 + dy * 0.4 };
     if (hold) {
       if (!moveSteerHeld(e)) endHold();
       else { steer(hold, dx, dy, e.shiftKey); return; }
