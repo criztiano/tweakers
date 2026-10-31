@@ -40,6 +40,7 @@ import {
 } from '../move-slot-core';
 import { attachMoveKeys } from '../move-keys';
 import { MoveMenuButton } from './MoveMenuButton';
+import { MoveHandToggle } from './MoveHandToggle';
 import { MoveAgentButton } from './MoveAgentButton';
 import { MoveGateDisplay } from './MoveGateDisplay';
 import { MoveMultibandDisplay } from './MoveMultibandDisplay';
@@ -1828,6 +1829,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
         open={!!presetScreen || paletteScreen}
         label={paletteScreen || colorOpenPanel ? 'Palettes' : 'Presets'}
       />
+      <MoveHandToggle theme={theme} />
       {/* While a composer floats above it the whole instrument comes forward,
           over the app's own panels — you are working in it. */}
       <div ref={panelRef} className="tweakers-move" data-dock={dock} data-settings={settingsOpen || undefined} data-move-motion-key={`${motionSurface}:${motionPage}|${pages.map((pg) => pg.panel.id).join(' ')}`} data-overlay={padListView || explorationOpen || composition || audioWave != null || ModOverlay || roomWave || color || presetSave ? true : undefined}>

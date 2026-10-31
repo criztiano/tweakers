@@ -1512,6 +1512,23 @@
   line-height: 0;
 }
 
+/* With the Panel hand off, the free pointer is hidden while ⌘ turns the
+   control under it — the hand holds it there. */
+:root[data-move-steer="held"],
+:root[data-move-steer="held"] * {
+  cursor: none !important;
+}
+
+/* The steering hand's switch, beside the Menu button: lit while the hand
+   holds the pointer over the controls. */
+.tweakers-move-hand-toggle {
+  position: fixed;
+  top: 16px;
+  left: 56px;
+  z-index: 10003;
+  line-height: 0;
+}
+
 .tweakers-move-menu-button {
   display: grid;
   place-items: center;
@@ -3923,11 +3940,11 @@
   box-shadow: var(--move-list-shadow);
 }
 
-/* The cursor over a slot is a hand on its knob: a long list opens to the
-   whole run, so every row can be seen and pointed at. Only for a pointer
-   that hovers — a tap on glass must not leave the list standing open. */
+/* The hand turning a slot (⌘ held, two fingers going) is a finger on its
+   knob: a long list opens to the whole run. The pointer only resting over
+   it never opens it — that is the hand selecting, as on the Move a knob's
+   list opens only under a finger. */
 @media (hover: hover) {
-  .tweakers-move-dial:not([data-disabled]):hover .tweakers-move-dial-screen[data-grow],
   .tweakers-move-dial:not([data-disabled])[data-steer-held] .tweakers-move-dial-screen[data-grow] {
     top: auto;
     height: min(var(--move-screen-full), 50vh);
@@ -3993,7 +4010,6 @@
 }
 
 @media (hover: hover) {
-  .tweakers-move-dial:not([data-disabled]):hover .tweakers-move-dial-pop,
   .tweakers-move-dial:not([data-disabled])[data-steer-held] .tweakers-move-dial-pop {
     visibility: visible;
     opacity: 1;
@@ -4005,7 +4021,6 @@
 /* A tile was clicked: folded away until the pointer leaves the slot. */
 .tweakers-move-dial[data-active] .tweakers-move-dial-pop[data-closed],
 .tweakers-move-dial[data-steer-held] .tweakers-move-dial-pop[data-closed],
-.tweakers-move-dial:not([data-disabled]):hover .tweakers-move-dial-pop[data-closed],
 .tweakers-move-dial:not([data-disabled])[data-steer-held] .tweakers-move-dial-pop[data-closed] {
   visibility: hidden;
   opacity: 0;
