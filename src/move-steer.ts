@@ -2,8 +2,9 @@
  * The steering hand: the computer's way to play the panel without a click.
  *
  * Coming down into the panel's controls the arrow is gone, and the nearest
- * slot on the top row lights up; the moment the mouse is back up over
- * them, the arrow is back where the mouse is and the control fades out. The header above keeps the arrow: its buttons are
+ * slot on the top row lights up; the moment the mouse goes back up over
+ * them — meaning to, not straying up on a sideways move — the arrow is
+ * back where the mouse is and the control fades out. The header above keeps the arrow: its buttons are
  * small, and a pointer reaches them better.
  *
  * Inside, the pointer is a hand on a control, not a place (move-steer-core).
@@ -30,7 +31,7 @@
  * travel turns that knob.
  */
 import {
-  MOVE_STEER_GAIN_X, MOVE_STEER_GAIN_Y, MOVE_STEER_KNOCK, moveSteerMap, moveSteerMargin, moveSteerSettle,
+  MOVE_STEER_GAIN_X, MOVE_STEER_GAIN_Y, MOVE_STEER_KNOCK, moveSteerLeaves, moveSteerMap, moveSteerMargin, moveSteerSettle,
   MOVE_STEER_REST_MS, moveSteerPose, moveSteerReach, moveSteerSpring, type MoveSteerBox, type MoveSteerSpring, type MoveSteerVec,
 } from './move-steer-core';
 import { TweakStore } from './store/TweakStore';
@@ -143,8 +144,9 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
    * ⌘ turn, a drag).
    */
   let map: { hand: MoveSteerVec; from: MoveSteerVec; gain: MoveSteerVec } | null = null;
-  /** The pointer's smoothed speed (px/ms), and when it last moved. */
+  /** The pointer's smoothed speed (px/ms) and way (px/ms per axis), and when it last moved. */
   let speed = 0;
+  let way: MoveSteerVec = { x: 0, y: 0 };
   let lastStamp = 0;
   /** A hold the trackpad's two fingers opened, and the timer that lets it go when they stop. */
   let wheelHold = false;
@@ -556,8 +558,10 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     const dt = Math.max(1, e.timeStamp - lastStamp);
     lastStamp = e.timeStamp;
     speed = speed * 0.7 + (Math.hypot(dx, dy) / dt) * 0.3;
-    // Back up over the controls' top: the hand lets go, as it came in.
-    if (e.clientY < panelTop()) { leave(); return; }
+    way = { x: way.x * 0.7 + (dx / dt) * 0.3, y: way.y * 0.7 + (dy / dt) * 0.3 };
+    // Back up over the controls' top, meaning to: the hand lets go, as it
+    // came in. A sideways move that strays up does not.
+    if (moveSteerLeaves(panelTop() - e.clientY, way)) { leave(); return; }
     navigate();
   };
 

@@ -29,6 +29,27 @@ export function moveSteerMargin(speed: number) {
   return MOVE_STEER_MARGIN + MOVE_STEER_SLOW_MARGIN * (1 - t * t * (3 - 2 * t));
 }
 
+/** How far over the controls' top a drift sideways or a slow creep up may go and the hand still holds… */
+export const MOVE_STEER_EXIT_SLACK = 48;
+/** …and the speed up, in px/ms, at which a move straight up leaves right at the top. */
+export const MOVE_STEER_EXIT_SPEED = 0.5;
+
+/**
+ * Whether the hand lets go, the pointer `depth` px over the controls' top
+ * and moving at `v` (px/ms, smoothed; up is negative): a move clearly up —
+ * mostly up, and quick — leaves at the top; a move mostly sideways that
+ * strays up, or a slow creep, has to go up to `MOVE_STEER_EXIT_SLACK` further.
+ */
+export function moveSteerLeaves(depth: number, v: MoveSteerVec) {
+  if (depth <= 0) return false;
+  const speed = Math.hypot(v.x, v.y);
+  const up = Math.max(0, -v.y);
+  const straight = speed ? up / speed : 0;
+  const quick = Math.min(1, up / MOVE_STEER_EXIT_SPEED);
+  const intent = straight * straight * (0.5 + 0.5 * quick);
+  return depth >= MOVE_STEER_EXIT_SLACK * (1 - intent);
+}
+
 /** The tension a pull needs to read in full, from a control's middle, in hand pixels. */
 export const MOVE_STEER_REACH_MIN = 34;
 export const MOVE_STEER_REACH_MAX = 70;

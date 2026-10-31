@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   MOVE_STEER_REACH_MAX, MOVE_STEER_REACH_MIN, MOVE_STEER_MARGIN, MOVE_STEER_SLOW_MARGIN, MOVE_STEER_FULL_SPEED,
-  moveSteerNext, moveSteerPose, moveSteerReach, moveSteerSpring, moveSteerMap, moveSteerMargin, moveSteerSettle, type MoveSteerBox,
+  moveSteerNext, moveSteerPose, moveSteerReach, moveSteerSpring, moveSteerMap, moveSteerMargin, moveSteerSettle, moveSteerLeaves, MOVE_STEER_EXIT_SLACK, type MoveSteerBox,
 } from '../src/move-steer-core';
 
 const box = (left: number, top: number, w: number, h: number): MoveSteerBox => ({ left, top, right: left + w, bottom: top + h });
@@ -87,5 +87,22 @@ describe('the lean', () => {
     while (moveSteerSpring(s, { x: 0, y: 0 }, 1 / 60) && frames < 600) frames++;
     expect(frames).toBeLessThan(120);
     expect(Math.abs(s.x)).toBeLessThan(0.01);
+  });
+});
+
+describe('the way out', () => {
+  it('is right at the top for a move clearly up', () => {
+    expect(moveSteerLeaves(1, { x: 0, y: -0.8 })).toBe(true);
+    expect(moveSteerLeaves(0, { x: 0, y: -0.8 })).toBe(false);
+  });
+
+  it('holds a sideways move that strays up, until it goes the whole slack', () => {
+    expect(moveSteerLeaves(20, { x: 0.8, y: -0.15 })).toBe(false);
+    expect(moveSteerLeaves(MOVE_STEER_EXIT_SLACK, { x: 0.8, y: -0.15 })).toBe(true);
+  });
+
+  it('holds a slow creep up longer than a quick move up', () => {
+    expect(moveSteerLeaves(12, { x: 0, y: -0.05 })).toBe(false);
+    expect(moveSteerLeaves(12, { x: 0, y: -0.6 })).toBe(true);
   });
 });
