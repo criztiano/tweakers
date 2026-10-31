@@ -133,8 +133,10 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
 - **Below the controls' top there is no arrow.** Coming down into the
   panel's controls the arrow is gone and the hand takes the big slot
   nearest across on the top row of slots, which lights and takes the hit.
-  Going back up past the top row, the hand lets go and the arrow is simply
-  back where the mouse is — always just above the controls. Nothing flies
+  The moment the mouse is back up over the controls' top, the hand lets
+  go and the arrow is simply back where the mouse is, as it came in; the
+  control it held eases back — its light and glow fade
+  (`--move-steer-out`), its lean springs home. Nothing flies
   and nothing captures the pointer: a veil over the window keeps the page
   from hearing it while the hand is in.
 - **The hand is where the mouse is, magnified.** The hand point is the real
@@ -156,8 +158,7 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
   and each glows from the inside (`--move-steer-glow`) — no ring. Being in
   the hand never opens anything: a slot's list and a curve's grid open
   only while ⌘ or two fingers turn it (or a finger is on the Move's knob).
-  After a ⌘ turn or a drag the hand stays where it stood, and up and down
-  its map steers back toward the line it came in on, a share of each move.
+  After a ⌘ turn or a drag the hand stays where it stood.
 - **Every press lands on the hand.** A click and a drag reach the control
   in the hand, where the hand is; a drag runs at the page's pace from there.
 - **A list is one control.** The wheel's list, and a slot's list, are held
