@@ -411,6 +411,12 @@ export type SliderConfig = {
   /** The y-range the shape is drawn in — fixed, so a bigger value draws a
    *  bigger shape. Default [-1, 1]. */
   shapeDomain?: [number, number];
+  /**
+   * Move panel: always a value chip, never one of the eight dials — a small
+   * amount that shapes the control above it (an effect's Jitter under its
+   * dial). Seat it with `movePads`, and a row option to pick its pad row.
+   */
+  moveChip?: boolean;
 };
 
 /**
@@ -811,6 +817,8 @@ export type ControlMeta = {
   shape?: (value: number) => ((t: number) => number) | null | undefined;
   /** Slider shape's fixed y-range. */
   shapeDomain?: [number, number];
+  /** Slider declared `moveChip` — a value chip, never a dial. */
+  moveChip?: boolean;
   /** Select dial width in hardware columns; defaults to one. */
   moveSpan?: 1 | 2;
   /** Select declared `moveTabs` — it lies across the small slots as a tabs
@@ -2389,6 +2397,7 @@ class TweakStoreClass {
           onTap: value.onTap,
           shape: value.shape,
           shapeDomain: value.shapeDomain,
+          moveChip: value.moveChip,
           shortcut,
         });
       } else if (this.isNumberConfig(value)) {

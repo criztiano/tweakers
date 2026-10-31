@@ -356,7 +356,9 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
       const dials: ControlMeta[] = [];
       let nextCol = 0;
       for (const c of controls) {
-        if (!isDial(c) || isPadColor(c) || balanceRefs.has(c)) continue;
+        // A slider declared `moveChip` never races for a dial: it is the
+        // small amount under one.
+        if (!isDial(c) || isPadColor(c) || balanceRefs.has(c) || c.moveChip) continue;
         const span = dialSpan(c);
         if (nextCol + span > MOVE_DIALS) {
           if (nextCol >= MOVE_DIALS) break;

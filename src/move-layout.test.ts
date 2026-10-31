@@ -898,6 +898,30 @@ describe('the fourth pad row', () => {
   });
 });
 
+describe('a slider kept a chip', () => {
+  it('stays a value chip under its dial while dial columns are free', () => {
+    const id = nextId();
+    const config = {
+      scale: [0.7, 0, 3] as [number, number, number],
+      jitter: { type: 'slider', default: 0, min: 0, max: 1, moveChip: true },
+      random: { type: 'slider', default: 0, min: 0, max: 1, moveChip: true },
+      blur: [0.6, 0, 1] as [number, number, number],
+    } as const;
+    const { result: page, issues } = capturingIssues(() => {
+      TweakStore.registerPanel(id, id, config as never, undefined, {
+        movePads: { jitter: 0, random: 0 },
+        moveActionRow: ['random'],
+      });
+      return buildMovePages([TweakStore.getPanel(id)!])[0];
+    });
+    assert.deepEqual(page.dials.map((m) => m?.path), ['scale', 'blur']);
+    const [, values, actions] = movePadRows(page, 0);
+    assert.deepEqual([values[0]?.path, actions[0]?.path], ['jitter', 'random']);
+    assert.deepEqual(issues, []);
+    TweakStore.unregisterPanel(id);
+  });
+});
+
 describe('action faces', () => {
   const action = (face: unknown) => ({ type: 'action', path: 'pick', label: 'Curve: Snappy', face }) as ControlMeta;
 
