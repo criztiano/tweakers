@@ -5976,7 +5976,7 @@ declare function MoveWaveform({ buffer, asset, ranges, variant, getProgress, pro
  * or the picture alone. With no picture on the row there is nothing to
  * choose, so the choice stands greyed out and the row shows names.
  */
-/** The kit's own settings page: the track row's look, and the steering hand's pace across and up and down. */
+/** The kit's own settings page: the track row's look, and the steering hand — on or not, and its pace across and up and down. */
 declare const MOVE_PANEL_SETTINGS = "move-panel";
 type MoveTrackLabelStyle = 'name' | 'both' | 'icon';
 declare const MOVE_TRACK_LABEL_STYLES: MoveTrackLabelStyle[];
