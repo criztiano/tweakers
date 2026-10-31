@@ -1,4 +1,4 @@
-import { P as PanelConfig, C as ControlMeta } from './TweakStore-DylRmRYT.js';
+import { P as PanelConfig, C as ControlMeta } from './TweakStore-BXM15Qe1.js';
 import { MovePage } from './move-layout.js';
 import './gradient-core.js';
 import './color-core.js';

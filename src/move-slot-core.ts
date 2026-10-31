@@ -281,6 +281,35 @@ export function movePressTravel(press: MoveGestureRef<MovePress | null>, path: s
   return p;
 }
 
+/* ── the double tap: a dial's way into its nested layer ─────────── */
+
+/** Two still presses on one dial within this long are a double tap — the
+ *  mouse's double-click, a finger's or a pen's double tap. */
+export const MOVE_DOUBLE_TAP_MS = 300;
+
+/** The last press on a dial that has a nested layer: which dial, when it went
+ *  down (an event's timeStamp), what the dial held then, and whether it has
+ *  travelled into a drag. */
+export type MoveTapMark = { path: string; at: number; x: number; y: number; value: unknown; moved: boolean };
+
+export const moveTapMark = (path: string, e: MoveSlotPointer, at: number, value: unknown): MoveTapMark =>
+  ({ path, at, x: e.clientX, y: e.clientY, value, moved: false });
+
+/** A press that slips past a tap's slack is a drag, and a drag never starts a double tap. */
+export function moveTapTravel(mark: MoveTapMark | null, e: MoveSlotPointer) {
+  if (mark && !mark.moved && Math.hypot(e.clientX - mark.x, e.clientY - mark.y) >= MOVE_TAP_SLOP) mark.moved = true;
+}
+
+/**
+ * Whether a press on `path` at `at` completes a double tap: the last press
+ * went down on the same dial, stayed a tap, and is recent enough. The panel
+ * then opens the layer and swallows the second press, so the dial's own drag
+ * or tap never sees it — and puts back what the first press changed, the
+ * value in `mark` (an option stepped, a switch flipped).
+ */
+export const moveIsDoubleTap = (mark: MoveTapMark | null, path: string, at: number): mark is MoveTapMark =>
+  !!mark && mark.path === path && !mark.moved && at - mark.at >= 0 && at - mark.at <= MOVE_DOUBLE_TAP_MS;
+
 /** Ends the press on `path`; true when it never travelled — a tap. */
 export function movePressEnd(press: MoveGestureRef<MovePress | null>, path: string) {
   const p = press.current;
