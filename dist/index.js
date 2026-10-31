@@ -1917,7 +1917,7 @@ function buildMovePages(panels) {
     const dials = [];
     let nextCol = 0;
     for (const c of controls) {
-      if (!isDial(c) || isPadColor(c) || balanceRefs.has(c)) continue;
+      if (!isDial(c) || isPadColor(c) || balanceRefs.has(c) || c.moveChip) continue;
       const span = dialSpan(c);
       if (nextCol + span > MOVE_DIALS) {
         if (nextCol >= MOVE_DIALS) break;

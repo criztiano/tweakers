@@ -685,6 +685,12 @@ type SliderConfig = {
     /** The y-range the shape is drawn in — fixed, so a bigger value draws a
      *  bigger shape. Default [-1, 1]. */
     shapeDomain?: [number, number];
+    /**
+     * Move panel: always a value chip, never one of the eight dials — a small
+     * amount that shapes the control above it (an effect's Jitter under its
+     * dial). Seat it with `movePads`, and a row option to pick its pad row.
+     */
+    moveChip?: boolean;
 };
 /**
  * Scrub-anywhere numeric readout. Unlike a slider it has no track — drag the

@@ -1352,6 +1352,7 @@ var TweakStoreClass = class {
           onTap: value.onTap,
           shape: value.shape,
           shapeDomain: value.shapeDomain,
+          moveChip: value.moveChip,
           shortcut
         });
       } else if (this.isNumberConfig(value)) {
