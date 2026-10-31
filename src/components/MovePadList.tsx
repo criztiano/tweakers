@@ -1,15 +1,21 @@
 import { useEffect, useRef } from 'react';
 import { MovePadListStore, type MovePadListView } from '../move-pad-list';
-import { MovePadActionBody, MovePadIconLabelBody, MovePadListBody } from './move-slots';
+import type { MoveActionDrawing } from '../move-layout';
+import { MovePadActionBody, MovePadFaceBody, MovePadIconLabelBody, MovePadListBody } from './move-slots';
 
 /** The action pad anchors its list; the shared list body supplies every row. */
-export function MovePadList({ panelId, path, label, icon, view, disabled }: {
-  panelId: string; path: string; label: string; icon?: string; view: MovePadListView | null; disabled: boolean;
+export function MovePadList({ panelId, path, label, icon, face, view, disabled }: {
+  panelId: string; path: string; label: string; icon?: string;
+  /** The action's `face`: the pad wears it, the name its accessible name and tip. */
+  face?: MoveActionDrawing | null;
+  view: MovePadListView | null; disabled: boolean;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const open = view?.panelId === panelId && view.path === path;
   // A picker's closed pad names its choice rather than its action.
   const shown = open ? view.submitLabel ?? label : MovePadListStore.choice(panelId, path)?.label ?? label;
+  // A face stays on while the list is open, unless the open pad names a submit.
+  const drawn = face && !(open && view.submitLabel) ? face : null;
   useEffect(() => () => {
     const current = MovePadListStore.getView();
     if (current?.panelId === panelId && current.path === path) MovePadListStore.close();
@@ -42,8 +48,11 @@ export function MovePadList({ panelId, path, label, icon, view, disabled }: {
   return <div className="tweakers-move-pad-list-anchor" ref={root}>
     <button type="button" className="tweakers-move-pad" data-kind="list" data-confirm={open || undefined} data-pending={open && view.pending || undefined}
       aria-expanded={open} aria-haspopup="listbox" aria-busy={open && view.pending || undefined} disabled={disabled || (open && view.pending)}
+      data-face={drawn?.kind} aria-label={drawn ? shown : undefined} title={drawn ? shown : undefined}
       onClick={() => { void MovePadListStore.activate(panelId, path); }}>
-      {icon
+      {drawn
+        ? <MovePadFaceBody drawing={drawn} />
+        : icon
         ? <MovePadIconLabelBody icon={icon} label={shown} />
         : <MovePadActionBody label={shown} />}
     </button>

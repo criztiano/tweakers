@@ -4,6 +4,7 @@ import { resolveAxis, type XYValue } from './xy-pad-core';
 import { plotCurve } from './curve-preview-core';
 import { clampRange, type RangeValue } from './range-slider-core';
 import { resolveFilterAxis, normalizeFilterValue, filterHand01, filterHandValue, defaultFilterResponse, filterResponsePath, type FilterValue } from './filter-core';
+import type { MoveNumericDrawing } from './move-visual-core';
 
 /**
  * The Move's control surface, as the bridge kit maps it (move-tweakers v0):
@@ -946,6 +947,12 @@ export function enumShapePath(meta: ControlMeta, value: unknown): string | null 
     return null;                      /* a throwing preview draws nothing */
   }
   if (typeof sample !== 'function') return null;
+  return fittedShapePath(sample);
+}
+
+/** A sampler (t 0..1 → y) as a path filling the 100×100 box, y up — the one
+ *  fit every shape face draws through, at slot size and at pad size. */
+function fittedShapePath(sample: (t: number) => number): string | null {
   const segments = plotCurve(sample, { count: ENUM_SHAPE_SAMPLES }).segments;
 
   // The curve row fits with headroom so a thick stroke never clips at the
@@ -973,6 +980,44 @@ export function enumShapePath(meta: ControlMeta, value: unknown): string | null 
     .join(' ');
   return d || null;
 }
+
+/** What an action pad's `face` draws: a curve's path, or the offset room. */
+export type MoveActionDrawing =
+  | { kind: 'curve'; d: string }
+  | Extract<MoveNumericDrawing, { kind: 'offset' }>;
+
+/**
+ * The picture an action pad wears in place of its name (its `face`), or null
+ * for a plain button — a face that cannot be drawn (too few points, a value
+ * that is not a number) keeps the name. Each is the small sibling of a big
+ * face, drawn from the same numbers:
+ *
+ * - `curve`: y samples at even steps of x over 0..1, joined straight, fitted
+ *   to the box exactly as the curve grid fits its options — so the pad and
+ *   the grid draw one curve the same way.
+ * - `offset`: a share of the range, −1..1, as the offset face's room with its
+ *   origin in the middle; past either end it is held at the end.
+ */
+export function moveActionDrawing(meta: ControlMeta): MoveActionDrawing | null {
+  const face = meta.type === 'action' ? meta.face : undefined;
+  if (face?.kind === 'curve') {
+    const ys = Array.isArray(face.points) ? face.points : [];
+    if (ys.length < 2 || !ys.every(Number.isFinite)) return null;
+    const d = fittedShapePath((t) => {
+      const x = Math.min(1, Math.max(0, t)) * (ys.length - 1);
+      const i = Math.min(ys.length - 2, Math.floor(x));
+      return ys[i] + (ys[i + 1] - ys[i]) * (x - i);
+    });
+    return d ? { kind: 'curve', d } : null;
+  }
+  if (face?.kind === 'offset') {
+    if (typeof face.value !== 'number' || !Number.isFinite(face.value)) return null;
+    const share = Math.min(1, Math.max(-1, face.value));
+    return { kind: 'offset', origin: 0.5, position: 0.5 + share / 2, back: true, forward: true };
+  }
+  return null;
+}
+
 /**
  * The shape a slider's value makes (its `shape`), as an SVG path filling a
  * 100×100 box, y down — or null when the slider has none. Drawn in the

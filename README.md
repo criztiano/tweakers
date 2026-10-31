@@ -1137,6 +1137,8 @@ A column has three small rows. `moveTopRow` lifts a value chip onto the switch r
 
 The Move has a fourth pad row under those three. `moveBottomRow` seats things there: a tabs strip's run (from its `movePads` column), and a switch, a button or a value chip in its `movePads` column. A text animator puts its In / Out / Set tabs, Auto-play and its two play buttons there, which leaves the two rows under every dial to small value chips. The row is drawn only on a page that puts something on it, and it is the app's whenever the app claims the pads.
 
+A button can wear a small picture in place of its name: `face: { kind: 'curve', points }` (y at even steps of x over 0..1) draws the curve grid's resting tile at pad size, and `face: { kind: 'offset', value }` (−1..1) the offset face's room. The label stays the pad's accessible name and tooltip. It suits a menu pad that names its choice — "Curve: Snappy", "Offset: +0.2 s".
+
 A switch that should only be on while a finger holds it — a solo, a preview — says `moveHold: true`. Its pad turns the value on at the press and off at the release, on the screen and on the hardware, so nothing stays latched by accident.
 
 On a pad, a switch with an `icon` is drawn as the picture alone, with no name — the whole pad inverting says it is on. Give it a `caption` and the picture stands in for the name while the words beside it say the value in force. One string reads the same in both states; `{ off, on }` turns the words with the press:

@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { TweakStore } from './store/TweakStore';
-import { buildMovePages, movePadRows, moveBandCell, moveEdgesCell, slotGroups, visibleColumns, enumOptionIcon, enumShapePath, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, setMoveLayoutReporter, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage, type MoveLayoutIssueCode } from './move-layout';
+import { TweakStore, type ControlMeta } from './store/TweakStore';
+import { buildMovePages, movePadRows, moveBandCell, moveEdgesCell, slotGroups, visibleColumns, enumOptionIcon, enumShapePath, moveActionDrawing, normalizeDial, denormalizeDial, normalizeXYDial, denormalizeXYDial, normalizeRangeDial, denormalizeRangeDial, normalizeEnumDial, denormalizeEnumDial, dialOrigin, setMoveLayoutReporter, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage, type MoveLayoutIssueCode } from './move-layout';
 
 /** Run `fn` with the issue feed captured, restoring the console sink after. */
 function capturingIssues<T>(fn: () => T): { result: T; issues: [MoveLayoutIssueCode, string][] } {
@@ -895,5 +895,39 @@ describe('the fourth pad row', () => {
     assert.equal(page.values[2]?.path, 'nudge');
     assert.deepEqual(issues.map(([code]) => code).sort(), ['bottom-row-no-column', 'bottom-row-taken']);
     TweakStore.unregisterPanel(id);
+  });
+});
+
+describe('action faces', () => {
+  const action = (face: unknown) => ({ type: 'action', path: 'pick', label: 'Curve: Snappy', face }) as ControlMeta;
+
+  it('draws a curve face through the curve grid’s own fit', () => {
+    const points = Array.from({ length: 17 }, (_, i) => 1 - (1 - i / 16) ** 3);
+    const sampler = (t: number) => {
+      const x = t * (points.length - 1);
+      const i = Math.min(points.length - 2, Math.floor(x));
+      return points[i] + (points[i + 1] - points[i]) * (x - i);
+    };
+    const grid = { type: 'select', path: 'curve', label: 'Curve', options: ['a'], preview: () => sampler } as ControlMeta;
+    assert.deepEqual(moveActionDrawing(action({ kind: 'curve', points })), { kind: 'curve', d: enumShapePath(grid, 'a') });
+  });
+
+  it('fits an overshoot to the box, ends and all', () => {
+    const drawing = moveActionDrawing(action({ kind: 'curve', points: [0, 1.2, 1] }));
+    assert.equal(drawing?.kind, 'curve');
+    const ys = (drawing as { d: string }).d.match(/-?\d+(?:\.\d+)?/g)!.map(Number).filter((_, i) => i % 2 === 1);
+    assert.deepEqual([Math.min(...ys), Math.max(...ys)], [0, 100]);
+  });
+
+  it('draws an offset face as the offset room, its origin in the middle, held at the ends', () => {
+    assert.deepEqual(moveActionDrawing(action({ kind: 'offset', value: 0.4 })), { kind: 'offset', origin: 0.5, position: 0.7, back: true, forward: true });
+    assert.equal((moveActionDrawing(action({ kind: 'offset', value: -3 })) as { position: number }).position, 0);
+  });
+
+  it('keeps the name for a face it cannot draw, and for a plain button', () => {
+    for (const face of [undefined, { kind: 'curve', points: [1] }, { kind: 'curve', points: [0, NaN] }, { kind: 'offset', value: NaN }, { kind: 'dial' }]) {
+      assert.equal(moveActionDrawing(action(face)), null);
+    }
+    assert.equal(moveActionDrawing({ type: 'slider', path: 'x', label: 'X', face: { kind: 'offset', value: 0 } } as ControlMeta), null);
   });
 });

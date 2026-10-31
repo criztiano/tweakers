@@ -16,10 +16,10 @@ import { CurveComposer } from './CurveComposer';
 import type { CurveSegment } from '../curve-composer-core';
 import { isDevDefault } from '../env';
 import type { TweakTheme } from '../theme';
-import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, filterChipValue, isColumnFilter, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumShapePath, sliderShapePath, enumIndex, enumAspect, enumArrows, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
+import { buildMovePages, buildModMovePage, slotGroups, visibleColumns, movePadRows, moveAppPadRow, normalizeDial, denormalizeDial, normalizeRangeDial, filterShapePath, filterChipValue, isColumnFilter, dialOrigin, dialSpan, isEnumDial, isSpanContinuation, isPadSpanContinuation, isMoveTabs, isNamedTabs, padSpan, moveTabCell, moveBandCell, moveEdgesCell, enumOptionValue, enumOptionLabel, enumOptionIcon, enumOptionPicture, enumShapePath, sliderShapePath, enumIndex, enumAspect, enumArrows, moveActionDrawing, MOVE_TRACKS, MOVE_DIALS, MOVE_PADS, type MovePage } from '../move-layout';
 import { buildMoveStrip, clampStripOffset, stepStripOffset, pageStripOffset, stripDialColumns, stripDialSlots, stripWindowPads, stripOffsets, stripSlotCount, stripSlotIndex } from '../move-strip';
 import { resolveFilterAxis, normalizeFilterValue } from '../filter-core';
-import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotCurveGridBody, MoveSlotAspectBody, MoveSlotArrowsBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotShape, MoveSlotCurveDots, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody, MoveSlotGlyph } from './move-slots';
+import { moveSlotKind, MoveSlotXYBody, MoveSlotDefaultBody, MoveSlotEnumBody, MoveSlotCurveGridBody, MoveSlotAspectBody, MoveSlotArrowsBody, MoveSlotEnumCells, MoveSlotMultiselectBody, MoveSlotRangeBody, MoveSlotFilterBody, MoveSlotNumericBody, MoveSlotTrimSpanBody, MoveSlotGateBody, MoveSlotVectorBody, MoveSlotGrainBody, MoveSlotLanesBody, MoveSlotMultibandBody, MoveSlotChannelBody, MoveSlotEnvBody, MoveSlotScopeBody, MoveSlotToggleBody, MoveSlotMetronomeBody, MoveSlotTransferBody, MoveSlotRampBody, MoveSlotDialBody, MoveSlotShape, MoveSlotCurveDots, MovePadToggleBody, MovePadIconBody, MovePadValueBody, MovePadActionBody, MovePadIconLabelBody, MovePadFaceBody, MovePadAppBody, MovePadWaveBody, MovePadTabsBody, MovePadColorBody, MovePadBandBody, MovePadFadeBody, MovePadLoopBody, MoveSlotGlyph } from './move-slots';
 import { normalizeGradient, rampCss } from '../gradient-core';
 import { LONG_PRESS_MS } from '../color-core';
 import { valueToBearing } from '../angle-core';
@@ -3310,15 +3310,23 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
                     // Action pads carry no value — a press just runs the
                     // app's action, the same as the row's button on screen.
                     if (meta.type === 'action') {
-                      if (MovePadListStore.has(page.panel.id, meta.path)) return <MovePadList key={meta.path} panelId={page.panel.id} path={meta.path} label={meta.label} icon={meta.icon} view={padListView} disabled={TweakStore.isDisabled(page.panel.id, meta.path)} />;
+                      // A button with a `face` wears its picture instead of
+                      // its name; the name stays its accessible name and tip.
+                      const face = moveActionDrawing(meta);
+                      if (MovePadListStore.has(page.panel.id, meta.path)) return <MovePadList key={meta.path} panelId={page.panel.id} path={meta.path} label={meta.label} icon={meta.icon} face={face} view={padListView} disabled={TweakStore.isDisabled(page.panel.id, meta.path)} />;
                       return (
                         <button
                           key={meta.path}
                           className="tweakers-move-pad"
                           data-kind="action"
+                          data-face={face?.kind}
+                          aria-label={face ? meta.label : undefined}
+                          title={face ? meta.label : undefined}
                           onClick={() => TweakStore.triggerAction(page.panel.id, meta.path)}
                         >
-                          {meta.icon
+                          {face
+                            ? <MovePadFaceBody drawing={face} />
+                            : meta.icon
                             ? <MovePadIconLabelBody icon={meta.icon} label={meta.label} />
                             : <MovePadActionBody label={meta.label} />}
                         </button>

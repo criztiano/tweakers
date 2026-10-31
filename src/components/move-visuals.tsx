@@ -219,6 +219,27 @@ export function MoveSlotOffsetBody({ label, value, origin, position, back, forwa
   back: boolean;
   forward: boolean;
 }) {
+  return (
+    <>
+      <span className="tweakers-move-dial-tag">{label}</span>
+      <MoveOffsetRoom origin={origin} position={position} back={back} forward={forward} />
+      <span className="tweakers-move-dial-option tweakers-move-visual-value">{value}</span>
+    </>
+  );
+}
+
+/**
+ * The offset face's room alone — the hatched track, the untouched place, the
+ * pin and its ways out. The big slot sets it between a name and a reading;
+ * an action pad wears it alone (`MovePadOffsetBody`), sized by the same
+ * `--move-offset-*` measures, so the two read as one face at two sizes.
+ */
+export function MoveOffsetRoom({ origin, position, back, forward }: {
+  origin: number;
+  position: number;
+  back: boolean;
+  forward: boolean;
+}) {
   const moved = Math.abs(position - origin) > 1e-9;
   const ways: ('back' | 'forward')[] = moved
     ? [position < origin ? 'back' : 'forward']
@@ -226,40 +247,47 @@ export function MoveSlotOffsetBody({ label, value, origin, position, back, forwa
   const from = Math.min(place(origin), place(position));
   const to = Math.max(place(origin), place(position));
   return (
-    <>
-      <span className="tweakers-move-dial-tag">{label}</span>
-      <div className="tweakers-move-offset" data-moved={moved || undefined} aria-hidden="true">
-        {/* The stretch it has been pushed across, cut out of a layer the full
-            width of the room — so its ruling stays in step with the ruling
-            either side of it instead of restarting at the cut. */}
-        <span
-          className="tweakers-move-offset-span"
-          style={{ clipPath: `inset(0 ${(1 - to) * 100}% 0 ${from * 100}%)` }}
-        />
-        <span className="tweakers-move-offset-origin" style={{ left: at(origin) }} />
-        {ways.map((way) => (
-          <svg
-            key={way}
-            className="tweakers-move-offset-way"
-            data-way={way}
-            style={{ '--move-offset-at': at(position) } as CSSProperties}
-            viewBox={`0 0 ${OFFSET_WAY_BOX.w} ${OFFSET_WAY_BOX.h}`}
-          >
-            <g transform={way === 'forward' ? `translate(${OFFSET_WAY_BOX.w} 0) scale(-1 1)` : undefined}>
-              <path d={OFFSET_WAY_NEAR} />
-              <path className="tweakers-move-offset-trail" d={OFFSET_WAY_FAR} />
-            </g>
-          </svg>
-        ))}
-        <span className="tweakers-move-offset-pin" style={{ left: at(position) }}>
-          <svg className="tweakers-move-offset-head" viewBox="0 0 15 20.1074" fillRule="evenodd">
-            <path d={OFFSET_PIN} />
-          </svg>
-        </span>
-      </div>
-      <span className="tweakers-move-dial-option tweakers-move-visual-value">{value}</span>
-    </>
+    <div className="tweakers-move-offset" data-moved={moved || undefined} aria-hidden="true">
+      {/* The stretch it has been pushed across, cut out of a layer the full
+          width of the room — so its ruling stays in step with the ruling
+          either side of it instead of restarting at the cut. */}
+      <span
+        className="tweakers-move-offset-span"
+        style={{ clipPath: `inset(0 ${(1 - to) * 100}% 0 ${from * 100}%)` }}
+      />
+      <span className="tweakers-move-offset-origin" style={{ left: at(origin) }} />
+      {ways.map((way) => (
+        <svg
+          key={way}
+          className="tweakers-move-offset-way"
+          data-way={way}
+          style={{ '--move-offset-at': at(position) } as CSSProperties}
+          viewBox={`0 0 ${OFFSET_WAY_BOX.w} ${OFFSET_WAY_BOX.h}`}
+        >
+          <g transform={way === 'forward' ? `translate(${OFFSET_WAY_BOX.w} 0) scale(-1 1)` : undefined}>
+            <path d={OFFSET_WAY_NEAR} />
+            <path className="tweakers-move-offset-trail" d={OFFSET_WAY_FAR} />
+          </g>
+        </svg>
+      ))}
+      <span className="tweakers-move-offset-pin" style={{ left: at(position) }}>
+        <svg className="tweakers-move-offset-head" viewBox="0 0 15 20.1074" fillRule="evenodd">
+          <path d={OFFSET_PIN} />
+        </svg>
+      </span>
+    </div>
   );
+}
+
+/** The offset face at pad size: the room alone, on a button that opens the
+ *  choice — where the nudge sits is the reading; the name is the tooltip. */
+export function MovePadOffsetBody({ origin, position, back, forward }: {
+  origin: number;
+  position: number;
+  back: boolean;
+  forward: boolean;
+}) {
+  return <MoveOffsetRoom origin={origin} position={position} back={back} forward={forward} />;
 }
 
 /** Reuse the bundled option icons for playback, mirroring forward for reverse. */

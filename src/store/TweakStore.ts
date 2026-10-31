@@ -1,5 +1,5 @@
 import type { GeneParameter, PresetDNA } from '../preset-genetics';
-import type { MoveSliderVisual, MoveSelectVisual, MoveToggleVisual, MoveVisual } from '../move-visual-core';
+import type { MoveActionFace, MoveSliderVisual, MoveSelectVisual, MoveToggleVisual, MoveVisual } from '../move-visual-core';
 export type { MoveSliderVisual, MoveSelectVisual, MoveToggleVisual, MoveVisual, MovePlaybackMode } from '../move-visual-core';
 // Lightweight state store with subscriptions for tweakers
 
@@ -73,6 +73,13 @@ export type ActionConfig = {
    * small slot).
    */
   icon?: string;
+  /**
+   * On a Move pad, a small picture in place of the name: a curve, or an
+   * offset — for a button that opens a choice and names what is chosen. The
+   * label stays the pad's accessible name and tooltip. Without it the pad
+   * draws its name, as before.
+   */
+  face?: MoveActionFace;
 };
 
 /**
@@ -776,6 +783,8 @@ export type ControlMeta = {
   collapsible?: boolean;
   /** Action declared a `caption` — the row names what the button acts on. */
   caption?: string;
+  /** Action declared a `face` — its Move pad draws that picture, not its name. */
+  face?: MoveActionFace;
   /** Top-level folder under a `_tabs` root — it is a tab, and its children are that tab's page. */
   tab?: boolean;
   /** The synthetic segmented select driving `_tab` — it renders as the panel's tab bar, never as a row. */
@@ -2416,7 +2425,7 @@ class TweakStoreClass {
       } else if (this.isSpringConfig(value) || this.isEasingConfig(value)) {
         controls.push({ type: 'transition', path, label });
       } else if (this.isActionConfig(value)) {
-        controls.push({ type: 'action', path, label: (value as ActionConfig).label || label, caption: (value as ActionConfig).caption, icon: (value as ActionConfig).icon });
+        controls.push({ type: 'action', path, label: (value as ActionConfig).label || label, caption: (value as ActionConfig).caption, icon: (value as ActionConfig).icon, ...((value as ActionConfig).face ? { face: (value as ActionConfig).face } : {}) });
       } else if (this.isSelectConfig(value)) {
         // `options` is always the flat run of choices — every reader of a
         // select's options sees values; only the Move slot reads the folders.

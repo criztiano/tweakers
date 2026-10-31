@@ -2,11 +2,11 @@ import type { MovePadListView } from '../move-pad-list';
 import { Fragment, useEffect, useLayoutEffect, useRef } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { moveBandCuts, moveGrainPicture, moveLanes, moveNumericDrawing, movePlaybackMode, MOVE_GRAIN, type MoveGrainSpan, moveVectorStage, MOVE_BAND_H, MOVE_BAND_W, MOVE_STAGE, type MovePlaybackMode, type MoveTone } from '../move-visual-core';
-import { MoveGauge, MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotPlaybackDrawing } from './move-visuals';
-export { MoveSlotNumericBody, MoveSlotOffsetBody, MoveSlotDiaphragmBody, MoveSlotStreakBody, MoveSlotClockBody, MoveSlotPlaybackDrawing, MOVE_GAUGE, moveGaugeBearing } from './move-visuals';
+import { MoveGauge, MoveSlotNumericBody, MoveSlotOffsetBody, MovePadOffsetBody, MoveSlotPlaybackDrawing } from './move-visuals';
+export { MoveSlotNumericBody, MoveSlotOffsetBody, MovePadOffsetBody, MoveOffsetRoom, MoveSlotDiaphragmBody, MoveSlotStreakBody, MoveSlotClockBody, MoveSlotPlaybackDrawing, MOVE_GAUGE, moveGaugeBearing } from './move-visuals';
 import type { ControlMeta, SelectLevel } from '../store/TweakStore';
 import { ICON_BADGE_OFF, ICON_BADGE_ON, LUCIDE_ICONS } from '../icons';
-import { enumArrows, enumAspect, enumOptionGroup, enumOptionIcon, enumOptionLabel, enumOptionValue, type MoveArrowDirection } from '../move-layout';
+import { enumArrows, enumAspect, enumOptionGroup, enumOptionIcon, enumOptionLabel, enumOptionValue, type MoveActionDrawing, type MoveArrowDirection } from '../move-layout';
 import { springParams } from '../transition-math';
 import { LIVELY_UI } from '../move-lively';
 import { parseHex } from '../color-core';
@@ -546,10 +546,7 @@ export function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }: {
   const chosen = shapes[activeIdx] ?? null;
   return (
     <>
-      <span className="tweakers-move-dial-tile tweakers-move-dial-rest" aria-hidden="true">
-        {chosen && <MoveSlotCurveDots d={chosen} />}
-        {chosen && <MoveSlotShape d={chosen} className="tweakers-move-dial-tile-shape" />}
-      </span>
+      <MoveCurveRestTile d={chosen} />
       <div ref={popRef} className="tweakers-move-dial-pop" style={{ '--move-grid-columns': MOVE_GRID_COLUMNS } as CSSProperties}>
         <div ref={gridRef} className="tweakers-move-dial-grid" role="listbox" aria-label={label}>
           {options.map((opt, i) => {
@@ -578,8 +575,29 @@ export function MoveSlotCurveGridBody({ label, options, activeIdx, shapes }: {
   );
 }
 
+/**
+ * The curve grid's resting tile: one curve on the screen's dark ground, its
+ * dots laid on the curve. The big slot fills itself with it; an action pad
+ * wears the same tile at pad size (`MovePadCurveBody`), with fewer dots so
+ * they stay dots.
+ */
+export function MoveCurveRestTile({ d, cells }: { d: string | null; cells?: MoveCurveDotCells }) {
+  return (
+    <span className="tweakers-move-dial-tile tweakers-move-dial-rest" aria-hidden="true">
+      {d && <MoveSlotCurveDots d={d} cells={cells} />}
+      {d && <MoveSlotShape d={d} className="tweakers-move-dial-tile-shape" />}
+    </span>
+  );
+}
+
 /** Grid cells between a curve's start and its end, on each axis. */
 export const MOVE_CURVE_DOT_CELLS = 8;
+
+/** How many dot cells a curve's run and its rise are cut into. */
+export type MoveCurveDotCells = { x: number; y: number };
+
+/** The pad's tile is a few dots tall: its run in four, its rise in two. */
+export const MOVE_PAD_CURVE_DOT_CELLS: MoveCurveDotCells = { x: 4, y: 2 };
 
 /** Where a shape path starts and ends, in its 0–100 box — or null. */
 function curveEnds(d: string): { x0: number; y0: number; x1: number; y1: number } | null {
@@ -597,14 +615,20 @@ function curveEnds(d: string): { x0: number; y0: number; x1: number; y1: number 
  * placed in percent of the shape's own box, so they stay round however the
  * box is stretched.
  */
-export function MoveSlotCurveDots({ d, className = 'tweakers-move-dial-tile-shape tweakers-move-dial-dots' }: { d: string; className?: string }) {
+export function MoveSlotCurveDots({ d, className = 'tweakers-move-dial-tile-shape tweakers-move-dial-dots', cells }: {
+  d: string;
+  className?: string;
+  /** Cells across the run and the rise; MOVE_CURVE_DOT_CELLS each by default. */
+  cells?: MoveCurveDotCells;
+}) {
   const ends = curveEnds(d);
   if (!ends) return null;
-  const n = MOVE_CURVE_DOT_CELLS;
-  const dx = (ends.x1 - ends.x0) / n || 100 / n;
-  const rise = (ends.y0 - ends.y1) / n;
+  const nx = cells?.x ?? MOVE_CURVE_DOT_CELLS;
+  const ny = cells?.y ?? MOVE_CURVE_DOT_CELLS;
+  const dx = (ends.x1 - ends.x0) / nx || 100 / nx;
+  const rise = (ends.y0 - ends.y1) / ny;
   // A shape that ends where it starts has no rise to divide: square cells.
-  const dy = Math.abs(rise) > 0.5 ? Math.abs(rise) : 100 / n;
+  const dy = Math.abs(rise) > 0.5 ? Math.abs(rise) : 100 / ny;
   const run = (from: number, step: number) => {
     const at: number[] = [];
     // The box sits inside the tile's margin: run past it on both sides.
@@ -1866,7 +1890,7 @@ function MoveSlotBadge({ on }: { on: boolean }) {
  * the same promise: each pad under the shared screen is still its own chip.
  * `fade` and `loop` claim two pads side by side in one row on the same terms.
  */
-export type MovePadKind = 'toggle' | 'icon' | 'value' | 'action' | 'icon-label' | 'app' | 'bend' | 'wave' | 'tabs' | 'color' | 'list' | 'band' | 'fade' | 'loop';
+export type MovePadKind = 'toggle' | 'icon' | 'value' | 'action' | 'icon-label' | 'curve' | 'offset' | 'app' | 'bend' | 'wave' | 'tabs' | 'color' | 'list' | 'band' | 'fade' | 'loop';
 
 /** A switch: the indicator top-left, the name beside it, the whole pad
  *  inverting when it is on. */
@@ -1928,6 +1952,19 @@ export function MovePadWaveBody({ label, percent }: { label: string; percent: nu
 /** A button: no value to carry, so the name has the pad to itself. */
 export function MovePadActionBody({ label }: { label: string }) {
   return <span className="tweakers-move-pad-title">{label}</span>;
+}
+
+/** A button wearing a curve (its `face`): the curve grid's resting tile at
+ *  pad size — the chosen curve is the reading, the name the tooltip. */
+export function MovePadCurveBody({ d }: { d: string }) {
+  return <MoveCurveRestTile d={d} cells={MOVE_PAD_CURVE_DOT_CELLS} />;
+}
+
+/** An action pad's face, as `moveActionDrawing` gave it. */
+export function MovePadFaceBody({ drawing }: { drawing: MoveActionDrawing }) {
+  return drawing.kind === 'curve'
+    ? <MovePadCurveBody d={drawing.d} />
+    : <MovePadOffsetBody origin={drawing.origin} position={drawing.position} back={drawing.back} forward={drawing.forward} />;
 }
 
 /** A button that shows what it does twice: its picture, then its name — the
@@ -2181,6 +2218,8 @@ export const MOVE_PAD_LIBRARY = {
   list: { description: 'a checked list above a small pad; its dial walks, Sample selects, a second pad press runs — or, single, a picker: Sample takes the row and the pad names it', component: MovePadListBody },
   action: { description: 'a button: a press runs the app’s action', component: MovePadActionBody },
   'icon-label': { description: 'a button wearing its picture beside its name — a press runs the app’s action', component: MovePadIconLabelBody },
+  curve: { description: 'a button wearing the curve it has chosen — the curve grid’s resting tile at pad size; a press runs the app’s action', component: MovePadCurveBody },
+  offset: { description: 'a button wearing the nudge it has chosen — the offset face’s room at pad size; a press runs the app’s action', component: MovePadOffsetBody },
   app: { description: 'a cell the app paints itself — a track, a slice, a step', component: MovePadAppBody },
   bend: { description: 'hold and drag to bend the envelope ramp above it', component: MovePadToggleBody },
   wave: { description: 'hold and drag for the stage’s own sine, tap to flip it', component: MovePadWaveBody },
