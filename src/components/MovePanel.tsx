@@ -466,10 +466,9 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
     setVolume(MoveVolumeDisplay.get());
     return MoveVolumeDisplay.subscribe(() => setVolume(MoveVolumeDisplay.get()));
   }, []);
-  // The steering hand (move-steer): over the slots the pointer selects, the
-  // dot marks it while it moves, and a held ⌘ turns what it selected.
-  const steerDotRef = useRef<HTMLElement>(null);
-  useEffect(() => attachMoveSteer(() => panelRef.current, () => steerDotRef.current), []);
+  // The steering hand (move-steer): below the panel's top the pointer is a
+  // hand on a control, and a held ⌘ turns what it holds.
+  useEffect(() => attachMoveSteer(() => panelRef.current), []);
   useEffect(() => {
     const poll = volume?.getValue;
     if (!poll) {
@@ -1814,7 +1813,6 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
           over the app's own panels — you are working in it. */}
       <div ref={panelRef} className="tweakers-move" data-dock={dock} data-settings={settingsOpen || undefined} data-move-motion-key={`${motionSurface}:${motionPage}|${pages.map((pg) => pg.panel.id).join(' ')}`} data-overlay={padListView || explorationOpen || composition || audioWave != null || ModOverlay || roomWave || color || presetSave ? true : undefined}>
         {!explorationOpen && colorMeta && <MoveColorDisplay panelId={page.panel.id} meta={colorMeta} anchor={panelRef} theme={theme} />}
-        <i ref={steerDotRef} className="tweakers-move-steer-dot" aria-hidden="true" />
         <PresetExploration />
         {presetSave && <MovePresetSaveInput suggested={presetSave.suggested} />}
         <AnimatePresence>{agent && !agent.sheet && !presetSave && <MoveAgentPrompt key="agent" view={agent} />}</AnimatePresence>

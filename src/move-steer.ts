@@ -1,40 +1,59 @@
 /**
  * The steering hand: the computer's way to play the panel without a click.
  *
- * Over the panel's slots the arrow goes away. The pointer only says which
- * control is in the hand — the slot under it comes up the way a touched
- * knob's slot does, and stays up across the gaps between slots — and a soft
- * dot shows where it is while it moves. Holding ⌘ (Ctrl off a Mac) takes
- * that control: from then on the mouse's travel turns it, wherever the
- * pointer wanders, until ⌘ comes up. Nothing is pressed, so nothing taps — a
- * steer never latches a chip or steps an option on its own.
+ * Coming down into the panel, the arrow is sucked into the nearest control
+ * and stays gone until the pointer goes back up over the panel's top edge —
+ * then it is shot back out of the control it held. Below that edge there is
+ * no arrow anywhere, and no way out to the sides or the bottom.
  *
- * The hand is a pointer of its own. Its travel reaches the slot as the
- * pointer gesture the face already answers (move-slot-core), so every face
- * steers exactly as it drags; a face that would jump to where a press lands
- * asks `isMoveSteer` and turns from its value instead. A slot with two hands
- * (`data-hands="2"`: xy, range, colour — the controls the Move's volume knob
- * reaches while their knob is held) splits the travel, across for the knob
- * and up and down for the volume knob, and there Shift locks the travel to
- * the axis it moves along most. Everywhere else Shift keeps its meaning:
- * fine. A chip (`data-peek`) does what its pad does on the Move: held, it
- * lends its control to the knob above it, and the travel turns that knob.
+ * Inside, the pointer is a hand on a control, not a place (move-steer-core).
+ * Its travel, quicker than the page's, leans and stretches the control the
+ * way it pulls; past the control's threshold the hand lets go and lands on
+ * the next control that way, which takes the hit and lights up. A rest lets
+ * the tension go. The panel never sees the real pointer: every press, wheel
+ * and hover reaches the control in the hand, where the hand is.
+ *
+ * Holding ⌘ (Ctrl off a Mac) takes the control: the hand stays where it is
+ * and the mouse's travel turns the control, as a drag on it would — the
+ * travel reaches the slot as the pointer gesture its face already answers
+ * (move-slot-core), and a face that would jump to where a press lands asks
+ * `isMoveSteer` and turns from its value instead. Letting go is never a tap.
+ * A slot with two hands (`data-hands="2"`: xy, range, colour — the controls
+ * the Move's volume knob reaches while their knob is held) splits the
+ * travel, across for the knob and up and down for the volume knob, and there
+ * Shift locks the travel to the axis it moves along most; everywhere else
+ * Shift keeps its meaning, fine. A chip (`data-peek`) does what its pad does
+ * on the Move: held, it lends its control to the knob above it, and the
+ * travel turns that knob.
  */
+import {
+  MOVE_STEER_GAIN, MOVE_STEER_KNOCK, MOVE_STEER_REST_MS, moveSteerNext, moveSteerPose, moveSteerReach,
+  moveSteerSpring, moveSteerTravel, type MoveSteerBox, type MoveSteerSpring, type MoveSteerVec,
+} from './move-steer-core';
 
-/** What can be in the hand: a big slot, or a pad. */
-export const MOVE_STEER_SLOT =
-  '.tweakers-move-dial:not([data-empty]):not([data-kind="blank"]), .tweakers-move-pad:not([data-empty="true"]):not(:disabled)';
-/** Where the arrow gives way to the hand: the slots and pads — never while a list fills the grid. */
-export const MOVE_STEER_AREA = '.tweakers-move-grid:not([data-presets])';
+/** What the hand can hold: a slot, a pad, a header button, a row of the wheel's list. */
+export const MOVE_STEER_TARGET = [
+  '.tweakers-move-dial:not([data-empty]):not([data-kind="blank"])',
+  '.tweakers-move-pad:not([data-empty="true"])',
+  'button:not(:disabled)',
+  '[role="option"]',
+  '[role="tab"]',
+].join(', ');
+/** A control the hand points into — its rows or arrows are picked where the hand is. */
+const POINTS_INTO = '.tweakers-list-screen-row, .tweakers-move-dial-tile, .tweakers-move-dial-arrows-plate';
 /** Shift's travel, in px, before it decides which axis it locks. */
 export const MOVE_STEER_AXIS_SLOP = 4;
-/** How long the dot stays after the pointer stops. */
-export const MOVE_STEER_DOT_MS = 450;
+/** A press that travels less than this is a click. */
+const CLICK_SLOP = 3;
+/** The arrow's flight in, and the dot's flight out, in ms. */
+const SUCK_MS = 240;
+const SHOOT_MS = 210;
 
-/** The pointer events the hand sent — a face asks with `isMoveSteer`. */
+/** Every event the hand sends; the ⌘ gestures are also in `steered`. */
+const sent = new WeakSet<Event>();
 const steered = new WeakSet<Event>();
 
-/** Whether a pointer event came from the steering hand, not a press. */
+/** Whether a pointer event came from the steering hand's ⌘ gesture, not a press. */
 export const isMoveSteer = (e: Event | { nativeEvent: Event }) =>
   steered.has('nativeEvent' in e ? e.nativeEvent : e);
 
@@ -68,93 +87,313 @@ export function moveSteerAxis(lock: MoveSteerLock, dx: number, dy: number) {
 /** A press the hand holds: where it went down, and where the hand has taken it since. */
 type Grip = { target: Element; x: number; y: number; pressed: boolean; hands: 1 | 2 };
 
+/** ⌘ held on a control. */
 type Hold = {
   /** What the travel turns: the slot's own press, or the knob a held chip lent its control to. */
   grip: Grip;
   /** A chip held down — the Move's hold-a-pad-and-turn-the-knob — while its knob turns. */
   chip: Grip | null;
-  /** The real pointer's last place, to read its travel from. */
-  px: number;
-  py: number;
-  pointerId: number;
   shift: boolean;
   lock: MoveSteerLock;
 };
 
 const hands = (el: Element) => (el.closest('[data-hands="2"]') ? 2 : 1);
-
 const editable = (el: Element | null) =>
   !!el && (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || (el as HTMLElement).isContentEditable);
+const boxOf = (el: Element): MoveSteerBox => {
+  const r = el.getBoundingClientRect();
+  return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+};
+const middle = (b: MoveSteerBox): MoveSteerVec => ({ x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 });
+const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/** The arrow the page shows, drawn for the moment it is sucked in. */
+const ARROW = '<svg viewBox="0 0 14 20" aria-hidden="true"><path d="M1 1v15.5l4-3.8 2.7 6.1 2.6-1.1-2.6-6h5.6z"/></svg>';
 
 /**
- * Puts the steering hand on a panel: `root` is the panel (read on every
- * event, so it may mount late), `dot` the element that marks the pointer.
- * Answers the detach.
+ * Puts the steering hand on a panel: `root` is the panel, read on every
+ * event, so it may mount late. Answers the detach.
  */
-export function attachMoveSteer(root: () => HTMLElement | null, dot: () => HTMLElement | null): () => void {
+export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   if (typeof window === 'undefined' || typeof document === 'undefined') return () => {};
-  let area: Element | null = null;
+
+  /** Over the whole window while the hand is in the panel: the arrow's absence, and what catches the real pointer. */
+  let veil: HTMLDivElement | null = null;
+  let inside = false;
   let selected: Element | null = null;
+  /** The hand, in hand pixels from the middle of what it holds. */
+  let offset: MoveSteerVec = { x: 0, y: 0 };
+  let real: { x: number; y: number; id: number } | null = null;
+  let lastMove = 0;
   let hold: Hold | null = null;
-  let last: { x: number; y: number; id: number } | null = null;
-  let dotTimer: ReturnType<typeof setTimeout> | undefined;
+  let press: Grip | null = null;
+  let pressTravel = 0;
+  let hovered: Element | null = null;
+  const springs = new Map<Element, MoveSteerSpring>();
+  let frame = 0;
+  let then = 0;
 
-  const select = (slot: Element | null) => {
-    if (slot === selected) return;
-    selected?.removeAttribute('data-steer');
-    selected = slot;
-    selected?.setAttribute('data-steer', '');
+  /** Where the hand was last — what a control gone from the page is replaced by. */
+  let lastHand: MoveSteerVec = { x: 0, y: 0 };
+  const panelTop = () => root()?.getBoundingClientRect().top ?? Infinity;
+  const hand = (): MoveSteerVec => {
+    if (!selected?.isConnected) return lastHand;
+    const m = middle(boxOf(selected));
+    lastHand = { x: m.x + offset.x, y: m.y + offset.y };
+    return lastHand;
   };
+  const points = (el: Element) => !!el.querySelector(POINTS_INTO);
 
-  const hideDot = () => {
-    clearTimeout(dotTimer);
-    dot()?.removeAttribute('data-on');
-  };
-  const showDot = (x: number, y: number) => {
-    const el = dot();
-    if (!el) return;
-    const base = (el.offsetParent ?? el.parentElement)?.getBoundingClientRect();
-    el.style.transform = `translate(${x - (base?.left ?? 0)}px, ${y - (base?.top ?? 0)}px)`;
-    el.setAttribute('data-on', '');
-    clearTimeout(dotTimer);
-    dotTimer = setTimeout(hideDot, MOVE_STEER_DOT_MS);
-  };
-
-  const leave = () => {
-    area?.removeAttribute('data-steering');
-    area = null;
-    select(null);
-    hideDot();
-  };
-
-  const send = (h: Hold, g: Grip, type: 'pointerdown' | 'pointermove' | 'pointercancel', shift: boolean) => {
-    const e = new PointerEvent(type, {
-      bubbles: true, cancelable: true, composed: true,
-      clientX: g.x, clientY: g.y, pointerId: h.pointerId, pointerType: 'mouse', isPrimary: true,
-      button: type === 'pointermove' ? -1 : 0, buttons: type === 'pointercancel' ? 0 : 1, shiftKey: shift,
+  /** The controls the hand can land on now: outermost, shown, below the panel's top. */
+  const targets = () => {
+    const panel = root();
+    if (!panel) return [];
+    const top = panelTop() - 1;
+    return Array.from(panel.querySelectorAll(MOVE_STEER_TARGET)).filter((el) => {
+      if (el.parentElement?.closest(MOVE_STEER_TARGET) || el.closest('[aria-hidden="true"], [inert]')) return false;
+      const b = boxOf(el);
+      if (b.right - b.left < 4 || b.bottom - b.top < 4 || b.top < top) return false;
+      // A row scrolled out of its list is not there.
+      const list = el.closest('[role="listbox"]');
+      if (list && list !== el) {
+        const v = boxOf(list);
+        const y = (b.top + b.bottom) / 2;
+        if (y < v.top || y > v.bottom) return false;
+      }
+      return true;
     });
-    steered.add(e);
-    if (type === 'pointerdown') g.pressed = true;
-    g.target.dispatchEvent(e);
   };
 
-  const release = (h: Hold, g: Grip | null) => {
+  /** What is under the hand, the veil looked through. */
+  const under = (p: MoveSteerVec) => {
+    const panel = root();
+    for (const el of document.elementsFromPoint(p.x, p.y)) {
+      if (el === veil || veil?.contains(el)) continue;
+      return panel?.contains(el) ? el : null;
+    }
+    return null;
+  };
+
+  const send = (target: Element, type: string, p: MoveSteerVec, init: PointerEventInit = {}, steer = false) => {
+    const Kind = type.startsWith('pointer') ? PointerEvent : type === 'wheel' ? WheelEvent : MouseEvent;
+    const e = new Kind(type, {
+      bubbles: type !== 'pointerenter' && type !== 'pointerleave', cancelable: true, composed: true,
+      clientX: p.x, clientY: p.y, pointerId: real?.id ?? 1, pointerType: 'mouse', isPrimary: true,
+      ...init,
+    } as PointerEventInit);
+    sent.add(e);
+    if (steer) steered.add(e);
+    target.dispatchEvent(e);
+    return e;
+  };
+
+  /** The hover the page would have had: the control under the hand hears the pointer over it. */
+  const hover = () => {
+    const p = hand();
+    const el = inside && selected ? (under(p) ?? selected) : null;
+    if (el !== hovered) {
+      if (hovered?.isConnected) send(hovered, 'pointerout', p, { button: -1, buttons: 0, relatedTarget: el });
+      if (el) send(el, 'pointerover', p, { button: -1, buttons: 0, relatedTarget: hovered });
+      hovered = el;
+    }
+    if (el) send(el, 'pointermove', p, { button: -1, buttons: 0 });
+  };
+
+  /* ── motion: a spring per control, run on the frame clock ── */
+
+  const tension = (el: Element): MoveSteerVec => {
+    if (reduced() || el !== selected || hold || press || performance.now() - lastMove > MOVE_STEER_REST_MS) return { x: 0, y: 0 };
+    const b = boxOf(el);
+    const r = moveSteerReach(b, points(el));
+    if (!points(el)) return { x: offset.x / r.x, y: offset.y / r.y };
+    // A control the hand points into leans only near its edges.
+    const edge = (o: number, reach: number) => Math.sign(o) * Math.max(0, Math.abs(o) - (reach - 24)) / 24;
+    return { x: edge(offset.x, r.x), y: edge(offset.y, r.y) };
+  };
+
+  const pose = (el: Element, s: MoveSteerSpring) => {
+    const style = (el as HTMLElement).style;
+    if (!style) return;
+    if (Math.abs(s.x) + Math.abs(s.y) < 0.002) { style.translate = ''; style.scale = ''; return; }
+    const r = el.getBoundingClientRect();
+    const p = moveSteerPose(s, { x: r.width, y: r.height });
+    style.translate = `${p.tx.toFixed(2)}px ${p.ty.toFixed(2)}px`;
+    style.scale = `${p.sx.toFixed(4)} ${p.sy.toFixed(4)}`;
+  };
+
+  const tick = (now: number) => {
+    frame = 0;
+    const dt = then ? (now - then) / 1000 : 1 / 60;
+    then = now;
+    // At rest the hand settles back in the middle of what it holds.
+    if (inside && selected && !hold && !press && now - lastMove > MOVE_STEER_REST_MS && !points(selected)) {
+      const k = 1 - Math.exp(-dt / 0.05);
+      offset = { x: offset.x * (1 - k), y: offset.y * (1 - k) };
+      if (Math.abs(offset.x) + Math.abs(offset.y) < 0.5) offset = { x: 0, y: 0 };
+    }
+    if (inside && selected && !springs.has(selected)) springs.set(selected, { x: 0, y: 0, vx: 0, vy: 0 });
+    let moving = inside && now - lastMove <= MOVE_STEER_REST_MS + 40;
+    for (const [el, s] of springs) {
+      if (!el.isConnected) { springs.delete(el); continue; }
+      const still = !moveSteerSpring(s, tension(el), dt);
+      if (still && el !== selected) { springs.delete(el); s.x = s.y = 0; }
+      pose(el, s);
+      moving ||= !still;
+    }
+    if (moving) wake();
+    else then = 0;
+  };
+  const wake = () => { if (!frame) frame = requestAnimationFrame(tick); };
+
+  /** A control takes a knock, `dir` the way it came from. */
+  const knock = (el: Element, dir: MoveSteerVec, by = MOVE_STEER_KNOCK) => {
+    if (reduced()) return;
+    const s = springs.get(el) ?? { x: 0, y: 0, vx: 0, vy: 0 };
+    s.vx += dir.x * by;
+    s.vy += dir.y * by;
+    springs.set(el, s);
+    wake();
+  };
+
+  const select = (el: Element | null) => {
+    if (el === selected) return;
+    selected?.removeAttribute('data-steer');
+    selected = el;
+    selected?.setAttribute('data-steer', '');
+    if (selected?.matches('[role="option"]')) selected.scrollIntoView({ block: 'nearest' });
+  };
+
+  /** The control in the hand, or — when the page took it away — the one nearest where it was. */
+  const regain = () => {
+    if (selected?.isConnected) return selected;
+    const all = targets();
+    if (!all.length) { select(null); return null; }
+    let best = all[0]!;
+    let d = Infinity;
+    for (const el of all) {
+      const m = middle(boxOf(el));
+      const dist = Math.hypot(m.x - lastHand.x, m.y - lastHand.y);
+      if (dist < d) { d = dist; best = el; }
+    }
+    select(best);
+    offset = { x: 0, y: 0 };
+    return best;
+  };
+
+  const unpose = () => {
+    for (const el of springs.keys()) pose(el, { x: 0, y: 0, vx: 0, vy: 0 });
+    springs.clear();
+  };
+
+  /* ── the way in and the way out ── */
+
+  const ghost = (kind: 'arrow' | 'dot', from: MoveSteerVec, to: () => MoveSteerVec, ms: number, ease: string, done: () => void) => {
+    if (!veil || reduced() || typeof veil.animate !== 'function') { done(); return null; }
+    const g = document.createElement('i');
+    g.className = `tweakers-move-steer-ghost tweakers-move-steer-${kind}`;
+    if (kind === 'arrow') g.innerHTML = ARROW;
+    veil.append(g);
+    const end = to();
+    const turn = kind === 'arrow' ? [1, 0.15] : [0.35, 1];
+    const a = g.animate([
+      { transform: `translate(${from.x}px, ${from.y}px) scale(${turn[0]})`, opacity: 1 },
+      { transform: `translate(${end.x}px, ${end.y}px) scale(${turn[1]})`, opacity: kind === 'arrow' ? 0.2 : 1 },
+    ], { duration: ms, easing: ease, fill: 'forwards' });
+    const finish = () => { g.remove(); done(); };
+    a.onfinish = finish;
+    a.oncancel = () => g.remove();
+    return a;
+  };
+  let flight: Animation | null = null;
+
+  const makeVeil = () => {
+    if (veil) return;
+    veil = document.createElement('div');
+    veil.className = 'tweakers-move-steer-veil';
+    veil.addEventListener('wheel', onWheel, { passive: false });
+    const panel = root();
+    if (panel) veil.style.setProperty('--move-text', getComputedStyle(panel).getPropertyValue('--move-text'));
+    document.body.append(veil);
+  };
+  const dropVeil = () => { veil?.remove(); veil = null; };
+
+  const enter = (e: PointerEvent) => {
+    const all = targets();
+    if (!all.length) return;
+    flight?.cancel();
+    flight = null;
+    makeVeil();
+    inside = true;
+    const at = { x: e.clientX, y: e.clientY };
+    let best = all[0]!;
+    let d = Infinity;
+    for (const el of all) {
+      const m = middle(boxOf(el));
+      const dist = Math.hypot((m.x - at.x) / 2, m.y - at.y);
+      if (dist < d) { d = dist; best = el; }
+    }
+    if (!selected || !selected.isConnected) {
+      select(best);
+      offset = { x: 0, y: 0 };
+    }
+    lastMove = 0;
+    const m = middle(boxOf(selected!));
+    const len = Math.hypot(m.x - at.x, m.y - at.y) || 1;
+    // The arrow is sucked in; the control takes it.
+    flight = ghost('arrow', at, () => middle(boxOf(selected!)), SUCK_MS, 'cubic-bezier(0.6, 0, 0.9, 0.4)', () => {
+      flight = null;
+      if (selected) knock(selected, { x: (m.x - at.x) / len, y: (m.y - at.y) / len }, MOVE_STEER_KNOCK * 1.4);
+    });
+    hover();
+    wake();
+  };
+
+  const leave = (shoot: boolean) => {
+    endHold();
+    endPress(false);
+    const from = selected ? middle(boxOf(selected)) : null;
+    const was = selected;
+    inside = false;
+    hover();
+    select(null);
+    flight?.cancel();
+    flight = null;
+    if (!shoot || !from || !real) { unpose(); dropVeil(); return; }
+    // The control kicks back as the dot leaves it for the arrow.
+    if (was) {
+      const len = Math.hypot(real.x - from.x, real.y - from.y) || 1;
+      knock(was, { x: (from.x - real.x) / len, y: (from.y - real.y) / len });
+    }
+    flight = ghost('dot', from, () => (real ? { x: real.x, y: real.y } : from), SHOOT_MS, 'cubic-bezier(0.1, 0.8, 0.25, 1)', () => {
+      flight = null;
+      if (!inside) dropVeil();
+    });
+  };
+
+  /* ── ⌘: the hand takes the control ── */
+
+  const send1 = (g: Grip, type: 'pointerdown' | 'pointermove' | 'pointercancel', shift: boolean) => {
+    if (type === 'pointerdown') g.pressed = true;
+    send(g.target, type, g, { button: type === 'pointermove' ? -1 : 0, buttons: type === 'pointercancel' ? 0 : 1, shiftKey: shift }, true);
+  };
+
+  const release = (g: Grip | null) => {
     if (!g?.pressed || !g.target.isConnected) return;
-    send(h, g, 'pointercancel', false);
+    send1(g, 'pointercancel', false);
     for (let el: Element | null = g.target; el; el = el.parentElement) {
-      try { if (el.hasPointerCapture(h.pointerId)) el.releasePointerCapture(h.pointerId); } catch { /* gone */ }
+      try { if (real && el.hasPointerCapture(real.id)) el.releasePointerCapture(real.id); } catch { /* gone */ }
       if (el === root()) break;
     }
   };
 
   /** Lets go: the face hears a cancel, never a release — a steer is not a tap. */
-  const end = () => {
+  const endHold = () => {
     const h = hold;
     if (!h) return;
     hold = null;
-    document.documentElement.removeAttribute('data-move-steer');
-    release(h, h.grip);
-    if (h.chip !== h.grip) release(h, h.chip);
+    release(h.grip);
+    if (h.chip !== h.grip) release(h.chip);
+    if (real && real.y < panelTop()) leave(true);
   };
 
   /** The big slot over a pad, in its column — the knob a held chip lends its control to. */
@@ -170,49 +409,35 @@ export function attachMoveSteer(root: () => HTMLElement | null, dot: () => HTMLE
     return best as Element | null;
   };
 
-  const begin = () => {
-    if (hold || !last || editable(document.activeElement)) return;
-    // The slot under the pointer now — the page may have changed under a
-    // still pointer — else the one kept across a gap.
-    const under = document.elementFromPoint(last.x, last.y);
-    const slot = (under && area?.contains(under) ? under.closest(MOVE_STEER_SLOT) : null) ?? (selected?.isConnected ? selected : null);
-    if (!slot) return;
-    select(slot);
-    const r = slot.getBoundingClientRect();
-    const inside = last.x >= r.left && last.x <= r.right && last.y >= r.top && last.y <= r.bottom;
-    const x = inside ? last.x : r.left + r.width / 2;
-    const y = inside ? last.y : r.top + r.height / 2;
-    const at = inside ? under : document.elementFromPoint(x, y);
-    const target = at && slot.contains(at) ? at : slot;
-    hold = {
-      grip: { target, x, y, pressed: false, hands: hands(target) }, chip: null,
-      px: last.x, py: last.y, pointerId: last.id, shift: false, lock: { axis: null, x: 0, y: 0 },
-    };
-    document.documentElement.setAttribute('data-move-steer', 'held');
+  const beginHold = () => {
+    const held = hold || press || !inside || editable(document.activeElement) ? null : regain();
+    if (!held) return;
+    const p = hand();
+    const at = under(p);
+    const target = at && held.contains(at) ? at : held;
+    hold = { grip: { target, x: p.x, y: p.y, pressed: false, hands: hands(target) }, chip: null, shift: false, lock: { axis: null, x: 0, y: 0 } };
+    for (const el of springs.keys()) springs.get(el)!.vx = springs.get(el)!.vy = 0;
+    wake();
   };
 
-  const steer = (h: Hold, e: PointerEvent) => {
-    let dx = e.clientX - h.px;
-    let dy = e.clientY - h.py;
-    h.px = e.clientX;
-    h.py = e.clientY;
+  const steer = (h: Hold, dx: number, dy: number, shiftKey: boolean) => {
     let g = h.grip;
-    if (!g.target.isConnected) { end(); return; }
+    if (!g.target.isConnected) { endHold(); return; }
     if (!g.pressed) {
-      send(h, g, 'pointerdown', e.shiftKey && g.hands === 1);
-      // A chip lends its control to the knob above it while it is held,
-      // as the Move's pad does: the travel turns the knob from the next
-      // move on, once the slot has taken the chip's face.
+      send1(g, 'pointerdown', shiftKey && g.hands === 1);
+      // A chip lends its control to the knob above it while it is held, as
+      // the Move's pad does: the travel turns the knob from the next move on,
+      // once the slot has taken the chip's face.
       if (g.target.closest('[data-peek]')) { h.chip = g; return; }
     } else if (h.chip === g) {
       const knob = knobAbove(g.target);
       if (knob) {
         const k = knob.getBoundingClientRect();
         g = h.grip = { target: knob, x: k.left + k.width / 2, y: k.top + k.height / 2, pressed: false, hands: hands(knob) };
-        send(h, g, 'pointerdown', e.shiftKey && g.hands === 1);
+        send1(g, 'pointerdown', shiftKey && g.hands === 1);
       } else h.chip = null;              /* no knob over it: it turns in place */
     }
-    let shift = e.shiftKey;
+    let shift = shiftKey;
     if (g.hands === 2) {
       if (shift !== h.shift) h.lock = { axis: null, x: 0, y: 0 };
       h.shift = shift;
@@ -222,60 +447,171 @@ export function attachMoveSteer(root: () => HTMLElement | null, dot: () => HTMLE
     if (!dx && !dy) return;
     g.x += dx;
     g.y += dy;
-    send(h, g, 'pointermove', shift);
+    send1(g, 'pointermove', shift);
+  };
+
+  /* ── a press: it lands where the hand is ── */
+
+  const beginPress = (e: PointerEvent) => {
+    endHold();
+    const held = inside ? regain() : null;
+    if (!held) return;
+    const p = hand();
+    const at = under(p);
+    const target = at && held.contains(at) ? at : held;
+    press = { target, x: p.x, y: p.y, pressed: true, hands: 1 };
+    pressTravel = 0;
+    const init = { button: e.button, buttons: e.buttons, shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey };
+    send(target, 'pointerdown', p, init);
+    send(target, 'mousedown', p, init);
+    wake();
+  };
+
+  const endPress = (click: boolean, e?: PointerEvent) => {
+    const g = press;
+    if (!g) return;
+    press = null;
+    const init = { button: e?.button ?? 0, buttons: 0, shiftKey: !!e?.shiftKey, altKey: !!e?.altKey, metaKey: !!e?.metaKey, ctrlKey: !!e?.ctrlKey };
+    if (!g.target.isConnected) return;
+    if (!click) { send(g.target, 'pointercancel', g, init); return; }
+    send(g.target, 'pointerup', g, init);
+    send(g.target, 'mouseup', g, init);
+    if (pressTravel < CLICK_SLOP) {
+      // The real press never reached the page, so it moved no focus: a field takes it here.
+      if (editable(g.target)) (g.target as HTMLElement).focus();
+      send(g.target, 'click', g, { ...init, detail: 1 } as PointerEventInit);
+    }
+    // The hand stays where the press left it.
+    if (selected) {
+      const m = middle(boxOf(selected));
+      offset = { x: g.x - m.x, y: g.y - m.y };
+    }
+  };
+
+  /* ── the real pointer ── */
+
+  const own = (e: Event) => {
+    e.stopPropagation();
+    if (e.cancelable) e.preventDefault();
   };
 
   const onMove = (e: PointerEvent) => {
-    if (steered.has(e) || e.pointerType !== 'mouse') return;
-    last = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    if (sent.has(e) || e.pointerType !== 'mouse') return;
+    const before = real;
+    real = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    if (!inside) {
+      const panel = root();
+      const t = e.target instanceof Element ? e.target : null;
+      const over = !!panel && !!t && (panel.contains(t) || t === veil || !!veil?.contains(t));
+      if (over && e.buttons === 0 && e.clientY >= panelTop()) { own(e); enter(e); }
+      return;
+    }
+    own(e);
+    if (!before) return;
+    const dx = e.clientX - before.x;
+    const dy = e.clientY - before.y;
     if (hold) {
-      if (!moveSteerHeld(e)) end();
-      else {
-        // The real pointer is the hand's now: the faces under it hear nothing.
-        e.stopPropagation();
-        showDot(e.clientX, e.clientY);
-        steer(hold, e);
-        return;
-      }
+      if (!moveSteerHeld(e)) endHold();
+      else { steer(hold, dx, dy, e.shiftKey); return; }
+      if (!inside) return;
     }
-    const panel = root();
-    const t = e.target instanceof Element ? e.target : null;
-    const now = t && panel?.contains(t) ? t.closest(MOVE_STEER_AREA) : null;
-    if (!now || !panel?.contains(now)) { if (area) leave(); return; }
-    if (now !== area) {
-      area?.removeAttribute('data-steering');
-      area = now;
-      area.setAttribute('data-steering', '');
+    if (press) {
+      // A drag moves at the page's pace, from where the hand pressed.
+      press.x += dx;
+      press.y += dy;
+      pressTravel += Math.hypot(dx, dy);
+      send(press.target, 'pointermove', press, { button: -1, buttons: e.buttons, shiftKey: e.shiftKey });
+      return;
     }
-    const slot = t!.closest(MOVE_STEER_SLOT);
-    if (slot && now.contains(slot)) select(slot);
-    showDot(e.clientX, e.clientY);
+    if (e.clientY < panelTop()) { leave(true); return; }
+    navigate(dx * MOVE_STEER_GAIN, dy * MOVE_STEER_GAIN);
   };
 
+  const navigate = (dx: number, dy: number) => {
+    if (!regain()) return;
+    lastMove = performance.now();
+    let all: Element[] | null = null;
+    let boxes: MoveSteerBox[] = [];
+    const { offset: next, passes } = moveSteerTravel(
+      { x: offset.x + dx, y: offset.y + dy },
+      () => moveSteerReach(boxOf(selected!), points(selected!)),
+      (dir, _step, o) => {
+        if (!all) { all = targets(); boxes = all.map(boxOf); }
+        const from = all.indexOf(selected!);
+        const fromBox = from >= 0 ? boxes[from]! : boxOf(selected!);
+        const m = middle(fromBox);
+        const i = moveSteerNext(fromBox, from >= 0 ? boxes : [...boxes, fromBox], { x: m.x + o.x, y: m.y + o.y }, dir);
+        if (i < 0) return false;
+        const was = selected!;
+        select(all[i]!);
+        knock(all[i]!, dir);
+        if (!springs.has(was)) springs.set(was, { x: 0, y: 0, vx: 0, vy: 0 });
+        return true;
+      },
+    );
+    offset = next;
+    // A control pointed into from its edge is entered at that edge.
+    if (passes.length && points(selected!)) {
+      const d = passes[passes.length - 1]!;
+      const r = moveSteerReach(boxOf(selected!), true);
+      if (d.x) offset.x = -d.x * (r.x - 24);
+      else offset.y = -d.y * (r.y - 24);
+    }
+    hover();
+    wake();
+  };
+
+  const onDown = (e: PointerEvent) => {
+    if (sent.has(e) || !inside || e.pointerType !== 'mouse') return;
+    own(e);
+    if (e.button === 0) beginPress(e);
+  };
+  const onUp = (e: PointerEvent) => {
+    if (sent.has(e) || !inside || e.pointerType !== 'mouse') return;
+    own(e);
+    endPress(true, e);
+  };
+  // The real pointer's own mouse and click events never reach the page while the hand is in.
+  const onMouse = (e: MouseEvent) => { if (!sent.has(e) && inside) own(e); };
+  const onWheel = (e: WheelEvent) => {
+    if (sent.has(e) || !inside) return;
+    own(e);
+    const at = under(hand()) ?? selected;
+    if (at) {
+      send(at, 'wheel', hand(), {
+        deltaX: e.deltaX, deltaY: e.deltaY, deltaZ: e.deltaZ, deltaMode: e.deltaMode,
+        shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey,
+      } as PointerEventInit);
+    }
+  };
+  // Off the window and back: the jump in between is no travel.
+  const onOut = (e: MouseEvent) => { if (!e.relatedTarget) real = null; };
+
   const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key === moveSteerKey() && !e.repeat && area) begin();
+    if (e.key === moveSteerKey() && !e.repeat) beginHold();
   };
   const onKeyUp = (e: KeyboardEvent) => {
-    if (e.key === moveSteerKey()) end();
+    if (e.key === moveSteerKey()) endHold();
   };
-  // A real press while steering ends the steer and goes through as itself.
-  const onDown = (e: PointerEvent) => { if (!steered.has(e)) end(); };
-  const onAway = () => { end(); leave(); };
-  const onOut = (e: MouseEvent) => { if (!e.relatedTarget && !hold) leave(); };
+  const onAway = () => { endHold(); endPress(false); real = null; };
   const onVisibility = () => { if (document.hidden) onAway(); };
 
   window.addEventListener('pointermove', onMove, true);
   window.addEventListener('pointerdown', onDown, true);
+  window.addEventListener('pointerup', onUp, true);
+  for (const type of ['mousedown', 'mouseup', 'click', 'dblclick', 'auxclick', 'contextmenu'] as const) window.addEventListener(type, onMouse, true);
   window.addEventListener('keydown', onKeyDown, true);
   window.addEventListener('keyup', onKeyUp, true);
   window.addEventListener('blur', onAway);
   document.addEventListener('mouseout', onOut);
   document.addEventListener('visibilitychange', onVisibility);
   return () => {
-    end();
-    leave();
+    leave(false);
+    if (frame) cancelAnimationFrame(frame);
     window.removeEventListener('pointermove', onMove, true);
     window.removeEventListener('pointerdown', onDown, true);
+    window.removeEventListener('pointerup', onUp, true);
+    for (const type of ['mousedown', 'mouseup', 'click', 'dblclick', 'auxclick', 'contextmenu'] as const) window.removeEventListener(type, onMouse, true);
     window.removeEventListener('keydown', onKeyDown, true);
     window.removeEventListener('keyup', onKeyUp, true);
     window.removeEventListener('blur', onAway);
