@@ -51,10 +51,11 @@ engine adapters and domain overlays can remain local.
 
 ## Interaction grammar
 
-- On the computer the pointer selects and ⌘ turns (the steering hand,
-  `docs/controls.md`): the selected slot wears the touched surface, and the
-  pointer is a soft dot that shows only while it moves. Do not give slots a
-  cursor of their own over the grid; the hand hides it.
+- On the computer the pointer is a hand and ⌘ turns (the steering hand,
+  `docs/controls.md`): below the panel's top there is no arrow, the control
+  in the hand wears the touched surface (a button or row its focus ring),
+  leans into the pull, and takes a knock when the hand lands on it. Any
+  hover look a control has, it also wears in the hand (`[data-steer]`).
 - Basic slots show the name at rest and the value on touch. Picture slots read
   name, picture, caption. Value-first is an existing presentation, not a new control.
 - Show a curve when the user is shaping a curve. A shape enum should provide a
