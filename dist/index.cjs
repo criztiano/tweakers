@@ -10553,36 +10553,18 @@ function moveSteerSpring(s, to, dt) {
   return Math.abs(to.x - s.x) + Math.abs(to.y - s.y) > 2e-3 || Math.abs(s.vx) + Math.abs(s.vy) > 0.02;
 }
 var MOVE_STEER_KNOCK = 14;
-function moveSteerEase(curve) {
-  const m = /cubic-bezier\(\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\)/.exec(curve);
-  if (!m) return (t) => t;
-  const [x1, y1, x2, y2] = m.slice(1).map(Number);
-  const at2 = (a, b, s) => 3 * a * s * (1 - s) ** 2 + 3 * b * s * s * (1 - s) + s ** 3;
-  const slope = (a, b, s) => 3 * a * (1 - s) ** 2 + 6 * (b - a) * s * (1 - s) + 3 * (1 - b) * s * s;
-  return (t) => {
-    if (t <= 0) return 0;
-    if (t >= 1) return 1;
-    let s = t;
-    for (let i = 0; i < 8; i++) {
-      const d = slope(x1, x2, s);
-      if (Math.abs(d) < 1e-6) break;
-      s = Math.min(1, Math.max(0, s - (at2(x1, x2, s) - t) / d));
-    }
-    return at2(y1, y2, s);
-  };
-}
-var MOVE_STEER_OUT_BUMP = 0.6;
-var MOVE_STEER_OUT_BUMP_MS = 180;
-var MOVE_STEER_OUT_CLOSE = 140;
-function moveSteerOut(at2, real, d, sinceMs, rate) {
-  const k = 1 + MOVE_STEER_OUT_BUMP * Math.exp(-sinceMs / MOVE_STEER_OUT_BUMP_MS);
+var MOVE_STEER_BUMP = 0.6;
+var MOVE_STEER_BUMP_MS = 180;
+var MOVE_STEER_CLOSE = 140;
+function moveSteerGlide(at2, to, d, sinceMs, rate) {
+  const k = 1 + MOVE_STEER_BUMP * Math.exp(-sinceMs / MOVE_STEER_BUMP_MS);
   const p = { x: at2.x + d.x * k, y: at2.y + d.y * k };
-  const gap = Math.hypot(real.x - p.x, real.y - p.y);
+  const gap = Math.hypot(to.x - p.x, to.y - p.y);
   if (!rate || !gap) return p;
   const c = Math.min(1, rate * Math.hypot(d.x, d.y) / gap);
-  return { x: p.x + (real.x - p.x) * c, y: p.y + (real.y - p.y) * c };
+  return { x: p.x + (to.x - p.x) * c, y: p.y + (to.y - p.y) * c };
 }
-var moveSteerOutRate = (gap) => Math.max(0.25, gap / MOVE_STEER_OUT_CLOSE);
+var moveSteerGlideRate = (gap) => Math.max(0.25, gap / MOVE_STEER_CLOSE);
 
 // src/move-steer.ts
 var import_TweakStore11 = require("tweakers/store");
@@ -10697,7 +10679,6 @@ var ROW_TRAVEL = 16;
 var FLUNG = 200;
 var MOVE_STEER_AXIS_SLOP = 4;
 var CLICK_SLOP = 3;
-var SUCK_MS = 260;
 var sent = /* @__PURE__ */ new WeakSet();
 var steered = /* @__PURE__ */ new WeakSet();
 var isMoveSteer = (e) => steered.has("nativeEvent" in e ? e.nativeEvent : e);
@@ -10735,7 +10716,7 @@ function attachMoveSteer(root) {
   let hold = null;
   let press = null;
   let pressTravel = 0;
-  let landing = 0;
+  let arriving = null;
   let wheelHold = false;
   let wheelRest;
   let walked = 0;
@@ -10892,39 +10873,6 @@ function attachMoveSteer(root) {
     for (const el of springs.keys()) pose(el, { x: 0, y: 0, vx: 0, vy: 0 });
     springs.clear();
   };
-  const suck = (from, to, done) => {
-    if (reduced()) {
-      done();
-      return null;
-    }
-    const g = document.createElement("i");
-    g.className = "tweakers-move-steer-ghost tweakers-move-steer-arrow";
-    g.innerHTML = ARROW;
-    layer().append(g);
-    const panel = root();
-    const ease = moveSteerEase(panel ? getComputedStyle(panel).getPropertyValue("--move-ease-in") : "");
-    const start = performance.now();
-    let raf = 0;
-    const step = (now) => {
-      const t = Math.min(1, (now - start) / SUCK_MS);
-      const e = ease(t);
-      const end = to();
-      g.style.transform = `translate(${from.x + (end.x - from.x) * e}px, ${from.y + (end.y - from.y) * e}px) scale(${1 - 0.85 * e})`;
-      g.style.opacity = String(1 - 0.8 * e);
-      if (t < 1) {
-        raf = requestAnimationFrame(step);
-        return;
-      }
-      g.remove();
-      done();
-    };
-    raf = requestAnimationFrame(step);
-    return { cancel: () => {
-      cancelAnimationFrame(raf);
-      g.remove();
-    } };
-  };
-  let flight = null;
   let sky = null;
   const layer = () => {
     if (sky?.isConnected) return sky;
@@ -10949,8 +10897,6 @@ function attachMoveSteer(root) {
   const enter = (at2) => {
     const all = targets();
     if (!all.length) return;
-    flight?.cancel();
-    flight = null;
     unloose();
     makeVeil();
     inside = true;
@@ -10971,25 +10917,51 @@ function attachMoveSteer(root) {
     select(best);
     offset = { x: 0, y: 0 };
     lastMove = 0;
-    landing = performance.now() + SUCK_MS;
-    const m = middle(boxOf(selected));
-    const len = Math.hypot(m.x - at2.x, m.y - at2.y) || 1;
-    flight = suck(at2, () => selected?.isConnected ? middle(boxOf(selected)) : m, () => {
-      flight = null;
-      if (selected) knock(selected, { x: (m.x - at2.x) / len, y: (m.y - at2.y) / len }, MOVE_STEER_KNOCK * 1.4);
-    });
+    if (!reduced()) {
+      const g = document.createElement("i");
+      g.className = "tweakers-move-steer-ghost tweakers-move-steer-arrow";
+      g.innerHTML = ARROW;
+      layer().append(g);
+      const gap = Math.hypot(middle(boxOf(best)).x - at2.x, middle(boxOf(best)).y - at2.y);
+      arriving = { g, at: { ...at2 }, since: performance.now(), rate: moveSteerGlideRate(gap), gap };
+      placeArriving();
+    }
     wake();
+  };
+  const placeArriving = () => {
+    if (!arriving) return;
+    const to = selected?.isConnected ? middle(boxOf(selected)) : arriving.at;
+    const left = Math.min(1, Math.hypot(to.x - arriving.at.x, to.y - arriving.at.y) / (arriving.gap || 1));
+    arriving.g.style.transform = `translate(${arriving.at.x}px, ${arriving.at.y}px) scale(${0.35 + 0.65 * left})`;
+  };
+  const land = (dir = { x: 0, y: 1 }) => {
+    if (!arriving) return;
+    arriving.g.remove();
+    arriving = null;
+    const len = Math.hypot(dir.x, dir.y) || 1;
+    if (selected) knock(selected, { x: dir.x / len, y: dir.y / len }, MOVE_STEER_KNOCK * 1.4);
+  };
+  const followArriving = (d) => {
+    const a = arriving;
+    const held = regain();
+    if (!held) {
+      land(d);
+      return;
+    }
+    const to = middle(boxOf(held));
+    a.at = moveSteerGlide(a.at, to, d, performance.now() - a.since, a.rate);
+    if (Math.hypot(to.x - a.at.x, to.y - a.at.y) < 1.5) land(d);
+    else placeArriving();
   };
   let loose = null;
   const leave = (shoot) => {
+    land();
     endHold();
     endPress(false);
     const from = selected ? middle(boxOf(selected)) : null;
     const was = selected;
     inside = false;
     select(null);
-    flight?.cancel();
-    flight = null;
     unpose();
     if (!shoot || !from || !real || reduced()) {
       dropVeil();
@@ -11018,8 +10990,8 @@ function attachMoveSteer(root) {
     const top = panelTop();
     const out = e.clientY < top;
     if (out && veil) dropVeil();
-    if (out && !l.rate) l.rate = moveSteerOutRate(Math.hypot(e.clientX - l.at.x, e.clientY - l.at.y));
-    l.at = moveSteerOut(l.at, { x: e.clientX, y: e.clientY }, d, performance.now() - l.since, out ? l.rate : 0);
+    if (out && !l.rate) l.rate = moveSteerGlideRate(Math.hypot(e.clientX - l.at.x, e.clientY - l.at.y));
+    l.at = moveSteerGlide(l.at, { x: e.clientX, y: e.clientY }, d, performance.now() - l.since, out ? l.rate : 0);
     if (l.at.y >= top + 4) return true;
     placeLoose();
     if (out && Math.hypot(e.clientX - l.at.x, e.clientY - l.at.y) < 1.5) unloose();
@@ -11068,6 +11040,7 @@ function attachMoveSteer(root) {
   const beginHold = () => {
     const held = hold || press || !inside || editable(document.activeElement) ? null : regain();
     if (!held) return;
+    land();
     const p = hand();
     const at2 = under(p);
     const target = at2 && held.contains(at2) ? at2 : held;
@@ -11122,6 +11095,7 @@ function attachMoveSteer(root) {
     endHold();
     const held = inside ? regain() : null;
     if (!held) return;
+    land();
     if (isWheelList(held)) {
       clickWheel();
       return;
@@ -11189,6 +11163,10 @@ function attachMoveSteer(root) {
     if (!before) return;
     const dx = e.clientX - before.x;
     const dy = e.clientY - before.y;
+    if (arriving && !hold && !press) {
+      followArriving({ x: dx, y: dy });
+      return;
+    }
     if (hold) {
       if (!moveSteerHeld(e)) endHold();
       else {
@@ -11210,7 +11188,7 @@ function attachMoveSteer(root) {
     if (out || e.clientY < panelTop() - FLUNG) leave(true);
   };
   const navigate = (dx, dy) => {
-    if (performance.now() < landing || !regain()) return false;
+    if (arriving || !regain()) return false;
     lastMove = performance.now();
     let out = false;
     let all = null;
