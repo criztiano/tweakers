@@ -132,6 +132,11 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   let press: Grip | null = null;
   let pressTravel = 0;
   let heading: MoveSteerVec = { x: 0, y: -1 };
+  /** Until when the hand is still catching the arrow: the travel that brought it in moves nothing. */
+  let landing = 0;
+  /** A hold the trackpad's two fingers opened, and the timer that lets it go when they stop. */
+  let wheelHold = false;
+  let wheelRest: ReturnType<typeof setTimeout> | undefined;
   let hovered: Element | null = null;
   const springs = new Map<Element, MoveSteerSpring>();
   let frame = 0;
@@ -150,14 +155,13 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
 
   /**
    * The controls the hand can land on now: outermost, shown, below the
-   * panel's top. A row scrolled out of its list is there only for a hand
-   * already in that list — walking on scrolls it in.
+   * panel's top. A row scrolled out of its list is not there: the hand never
+   * scrolls a list on its own — the wheel does.
    */
   const targets = () => {
     const panel = root();
     if (!panel) return [];
     const top = panelTop() - 1;
-    const within = selected?.closest('[role="listbox"]') ?? null;
     return Array.from(panel.querySelectorAll(MOVE_STEER_TARGET)).filter((el) => {
       if (el.parentElement?.closest(MOVE_STEER_TARGET) || el.closest('[aria-hidden="true"], [inert]')) return false;
       const b = boxOf(el);
@@ -166,7 +170,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
       if (list && list !== el) {
         const v = boxOf(list);
         const y = (b.top + b.bottom) / 2;
-        if (y < v.top || y > v.bottom) return list === within;
+        if (y < v.top || y > v.bottom) return false;
       }
       return b.top >= top;
     });
@@ -268,7 +272,6 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     selected?.removeAttribute('data-steer');
     selected = el;
     selected?.setAttribute('data-steer', '');
-    if (selected?.matches('[role="option"]')) selected.scrollIntoView({ block: 'nearest' });
   };
 
   /** The control in the hand, or — when the page took it away — the one nearest where it was. */
@@ -364,6 +367,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     select(best);
     offset = { x: 0, y: 0 };
     lastMove = 0;
+    landing = performance.now() + SUCK_MS;
     const m = middle(boxOf(selected!));
     const len = Math.hypot(m.x - at.x, m.y - at.y) || 1;
     // The arrow is sucked in; the control takes it.
@@ -418,6 +422,8 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     const h = hold;
     if (!h) return;
     hold = null;
+    wheelHold = false;
+    clearTimeout(wheelRest);
     release(h.grip);
     if (h.chip !== h.grip) release(h.chip);
     if (real && real.y < panelTop()) leave(true);
@@ -560,7 +566,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   };
 
   const navigate = (dx: number, dy: number) => {
-    if (!regain()) return;
+    if (performance.now() < landing || !regain()) return;
     lastMove = performance.now();
     let all: Element[] | null = null;
     let boxes: MoveSteerBox[] = [];
@@ -605,22 +611,61 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   };
   // The real pointer's own mouse and click events never reach the page while the hand is in.
   const onMouse = (e: MouseEvent) => { if (!sent.has(e) && inside) own(e); };
+  /**
+   * Two fingers on the trackpad turn the control in the hand, as ⌘ and the
+   * mouse do — the way the fingers go, as a drag would — and let go when
+   * they stop. A row of the wheel's list scrolls its list instead.
+   */
   const onWheel = (e: WheelEvent) => {
     if (sent.has(e) || !inside) return;
     own(e);
-    const at = under(hand()) ?? selected;
-    if (at) {
-      send(at, 'wheel', hand(), {
-        deltaX: e.deltaX, deltaY: e.deltaY, deltaZ: e.deltaZ, deltaMode: e.deltaMode,
-        shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey,
-      } as PointerEventInit);
+    if (e.ctrlKey && !hold) return;                 /* a pinch, not a turn */
+    const held = regain();
+    if (!held) return;
+    if (held.closest('[role="listbox"]') && !held.matches('.tweakers-move-dial')) { scrollUnder(e); return; }
+    if (!hold) {
+      beginHold();
+      wheelHold = !!hold;
     }
+    if (!hold) return;
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+    steer(hold, -e.deltaX * unit, -e.deltaY * unit, e.shiftKey);
+    if (wheelHold) {
+      clearTimeout(wheelRest);
+      wheelRest = setTimeout(() => { if (wheelHold) { wheelHold = false; endHold(); } }, 160);
+    }
+  };
+  /** The wheel on a list: the list scrolls under a hand that stays put, and the row now under it is the one held. */
+  const scrollUnder = (e: WheelEvent) => {
+    const p = hand();
+    const at = under(p) ?? selected;
+    if (!at) return;
+    const turned = send(at, 'wheel', p, {
+      deltaX: e.deltaX, deltaY: e.deltaY, deltaZ: e.deltaZ, deltaMode: e.deltaMode,
+      shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey,
+    } as PointerEventInit);
+    if (turned.defaultPrevented) return;
+    // A page's own scrolling never follows a made-up wheel: the list is scrolled here.
+    let box: Element | null = at;
+    while (box && box !== root()) {
+      const style = getComputedStyle(box);
+      if (/(auto|scroll)/.test(style.overflowY) && box.scrollHeight > box.clientHeight) break;
+      box = box.parentElement;
+    }
+    if (!box || box === root()) return;
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? box.clientHeight : 1;
+    box.scrollTop += e.deltaY * unit;
+    const now = under(p)?.closest(MOVE_STEER_TARGET);
+    if (now && now !== selected) { select(now); offset = { x: 0, y: 0 }; hover(); }
   };
   // Off the window and back: the jump in between is no travel.
   const onOut = (e: MouseEvent) => { if (!e.relatedTarget) real = null; };
 
   const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key === moveSteerKey() && !e.repeat) beginHold();
+    if (e.key !== moveSteerKey() || e.repeat) return;
+    // ⌘ over a trackpad turn keeps the control: the fingers' rest no longer lets it go.
+    if (wheelHold) { wheelHold = false; clearTimeout(wheelRest); return; }
+    beginHold();
   };
   const onKeyUp = (e: KeyboardEvent) => {
     if (e.key === moveSteerKey()) endHold();
