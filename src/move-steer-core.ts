@@ -110,9 +110,11 @@ export function moveSteerNext(from: MoveSteerBox, boxes: readonly MoveSteerBox[]
     let gap: number, across: number;
     // Only what lies that way, within a cone: a control far off to the
     // side is not "that way" just because it sits a little further along.
+    // Up and down the cone is wider — rows of pads are short and wide, so
+    // the pad a column over in the next row still lies below.
     const along = dir.x ? (m.x - c.x) * dir.x : (m.y - c.y) * dir.y;
     const aside = dir.x ? Math.abs(m.y - c.y) : Math.abs(m.x - c.x);
-    if (along <= 1 || along < aside * 0.5) return;
+    if (along <= 1 || along < aside * (dir.x ? MOVE_STEER_CONE_ACROSS : MOVE_STEER_CONE_DOWN)) return;
     if (dir.x) {
       gap = dir.x > 0 ? Math.max(0, b.left - from.right) : Math.max(0, from.left - b.right);
       across = at.y < b.top ? b.top - at.y : at.y > b.bottom ? at.y - b.bottom : 0;
@@ -155,6 +157,10 @@ export function moveSteerSpring(s: MoveSteerSpring, to: MoveSteerVec, dt: number
   s.y += s.vy * step;
   return Math.abs(to.x - s.x) + Math.abs(to.y - s.y) > 0.002 || Math.abs(s.vx) + Math.abs(s.vy) > 0.02;
 }
+
+/** How far off to the side a control may sit and still lie that way: across, and up or down (per px along). */
+export const MOVE_STEER_CONE_ACROSS = 0.5;
+export const MOVE_STEER_CONE_DOWN = 0.25;
 
 /** The knock a control takes when the hand lands on it, in tension per second. */
 export const MOVE_STEER_KNOCK = 14;

@@ -26,6 +26,16 @@ describe('the next control the hand lands on', () => {
     expect(moveSteerNext(row, [tab, row], mid(row), { x: 0, y: -1 })).toBe(0);
   });
 
+  it('goes down to the pad a column over when none sits right below', () => {
+    // A row of four pads, and the row under it holding only its first three.
+    const row1 = [0, 1, 2, 3].map((i) => box(i * 130, 0, 120, 32));
+    const row2 = [0, 1, 2].map((i) => box(i * 130, 36, 120, 32));
+    const pads = [...row1, ...row2];
+    const from = row1[3]!;
+    expect(moveSteerNext(from, pads, mid(from), { x: 0, y: 1 })).toBe(6);
+    expect(moveSteerSettle(from, pads, { x: mid(from).x, y: 60 }, 10)).toEqual({ index: 6, dir: { x: 0, y: 1 } });
+  });
+
   it('finds nothing past the panel edge', () => {
     expect(moveSteerNext(c, all, mid(c), { x: 1, y: 0 })).toBe(-1);
     expect(moveSteerNext(a, all, mid(a), { x: 0, y: -1 })).toBe(-1);
