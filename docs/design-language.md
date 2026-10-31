@@ -51,6 +51,10 @@ engine adapters and domain overlays can remain local.
 
 ## Interaction grammar
 
+- On the computer the pointer selects and ⌘ turns (the steering hand,
+  `docs/controls.md`): the selected slot wears the touched surface, and the
+  pointer is a soft dot that shows only while it moves. Do not give slots a
+  cursor of their own over the grid; the hand hides it.
 - Basic slots show the name at rest and the value on touch. Picture slots read
   name, picture, caption. Value-first is an existing presentation, not a new control.
 - Show a curve when the user is shaping a curve. A shape enum should provide a

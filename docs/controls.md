@@ -106,6 +106,34 @@ these gestures; an app wires nothing.
 XY, range, filter, transfer, needle and ramp slots keep their picture's own
 gesture — the point, handle or stop goes where the cursor puts it.
 
+### The steering hand: ⌘ instead of a click
+
+The mouse can play the panel the way a hand plays the Move — no click, no
+hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
+
+- **The pointer selects.** Over the slots and pads the arrow goes away. The
+  slot under the pointer comes up as a touched knob's slot does (a pad wears
+  its focus ring), and it stays selected across the gaps between slots. A
+  soft dot marks the pointer while it moves and fades when it stops. The
+  header, the wheel list and an open preset or palette list keep the arrow.
+- **⌘ takes the control** (Ctrl off a Mac). While ⌘ is held, the mouse's
+  travel turns the selected control, wherever the pointer goes, as a drag
+  on it would — a dial turns from where it is, an option steps, a list
+  walks. When ⌘ comes up the control lets go. A steer is never a tap: it
+  never latches a chip, steps an option on its own or opens an editor. A
+  click while ⌘ is held ends the steer and goes through as a click.
+- **Two hands split the travel.** A control the Move turns with its knob and
+  the volume knob together — xy, range, colour (`data-hands="2"` on the
+  slot) — takes across for the knob (X, the low end, the hue) and up and
+  down for the volume knob (Y, the high end, the luminosity, up raising
+  it). Shift locks the travel to the axis it goes along most, decided after
+  a few pixels; elsewhere Shift is fine (0.1×) as in a drag.
+- **A chip lends its control to the knob above.** Held, a chip peeks into
+  the big slot over it, as its pad does on the Move, and the travel turns
+  it there — a number, an option or a colour alike.
+- **Pictures turn, never jump.** Under ⌘ the xy point, the filter's hand and
+  the needle turn from their value; nothing goes to where the pointer is.
+
 A select with `moveSpan: 2` uses the same list face and gestures across two
 adjacent columns. Both knobs select the same value; later controls and their
 pads retain their physical column indices. `moveTabs` takes precedence and
