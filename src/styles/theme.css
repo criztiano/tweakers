@@ -1744,7 +1744,7 @@
   box-shadow: inset 0 0 var(--move-steer-glow-size) var(--move-steer-glow);
 }
 
-.tweakers-move [data-steer]:not(.tweakers-move-dial),
+.tweakers-move [data-steer]:not(.tweakers-move-dial):not(.tweakers-move-tabs),
 .tweakers-move-tabs[data-steer] .tweakers-move-tabs-run {
   box-shadow:
     inset 0 0 var(--move-steer-glow-size) var(--move-steer-glow),
