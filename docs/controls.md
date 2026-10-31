@@ -130,8 +130,9 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
 - **Below the panel's top there is no arrow.** Coming down into the panel the
   arrow is sucked into the big slot nearest across, on the top row of
   slots; going back up over the top edge, a dot is shot out of the control
-  in the hand the way the hand was going, and bends onto the arrow where it
-  comes back. There is no way out to the sides or the bottom: a veil over
+  in the hand and lands on the arrow where it comes back. Both fly on an
+  arc: they leave the way the pointer was going and bend round onto their
+  end, eased by the kit's `--move-ease-in` (in) and `--move-ease-out` (out). There is no way out to the sides or the bottom: a veil over
   the window holds the real pointer while the hand is in.
 - **The pointer is a hand on a control, not a place.** Its travel runs
   quicker than the page's, across and up and down apart — the kit's own
@@ -140,13 +141,18 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
   holds the way it pulls; past a threshold — the same travel for every
   control, or the whole of a list it points into — it lets go, lands in the
   middle of the next control that way, and that control takes a knock and
-  lights up. At the panel's edge it stretches and stays. A rest lets the
+  lights up. In the hand everything reads the same: a big slot comes up to
+  the chip, a pad or a button a step brighter than it rests
+  (`--move-steer-lift`), and each glows from the inside
+  (`--move-steer-glow`) — no ring. At the panel's edge it stretches and stays. A rest lets the
   tension go: the hand settles back in the middle (move-steer-core). The
   header's buttons and the wheel list's rows are controls like any other.
 - **Every press lands on the hand.** A click, a drag, the mouse wheel and the
   hover a list opens on all reach the control in the hand, where the hand
   is; a drag runs at the page's pace from there.
-- **⌘ takes the control** (Ctrl off a Mac). While ⌘ is held the hand stays
+- **⌘ takes the control** (Ctrl off a Mac), with a short tick
+  (`move-steer-sound`; a drawn placeholder until the real sound is in —
+  the file's place is described there). While ⌘ is held the hand stays
   where it is and the mouse's travel turns the control, as a drag on it
   would — a dial turns from where it is, an option steps, a list walks.
   When ⌘ comes up the control lets go; above the panel's top it also lets
