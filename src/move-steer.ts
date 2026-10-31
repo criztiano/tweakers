@@ -2,8 +2,8 @@
  * The steering hand: the computer's way to play the panel without a click.
  *
  * Coming down into the panel's controls the arrow is gone, and the nearest
- * slot on the top row lights up; going back up past them, the arrow is back
- * where the mouse is. The header above keeps the arrow: its buttons are
+ * slot on the top row lights up; the moment the mouse is back up over
+ * them, the arrow is back where the mouse is and the control fades out. The header above keeps the arrow: its buttons are
  * small, and a pointer reaches them better.
  *
  * Inside, the pointer is a hand on a control, not a place (move-steer-core).
@@ -143,8 +143,6 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
    * ⌘ turn, a drag).
    */
   let map: { hand: MoveSteerVec; from: MoveSteerVec; gain: MoveSteerVec } | null = null;
-  /** How far the hand sits below the pointer's line where it came in — the map steers back to it. */
-  let rise = 0;
   /** The pointer's smoothed speed (px/ms), and when it last moved. */
   let speed = 0;
   let lastStamp = 0;
@@ -362,20 +360,23 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     lastMove = 0;
     const gain = pace();
     map = { hand: { x: at.x, y: middle(boxOf(best)).y }, from: { ...at }, gain };
-    rise = map.hand.y - panelTop() - (at.y - panelTop()) * gain.y;
     knock(best, { x: 0, y: 1 }, MOVE_STEER_KNOCK * 1.4);
     wake();
   };
 
-  /** The way out: the hand lets go and the arrow is simply back — where the mouse is, just over the controls. */
+  /**
+   * The way out: the hand lets go and the arrow is simply back where the
+   * mouse is, at the controls' top. The control it held eases back — its
+   * light and glow fade, its lean springs home — rather than drop at once.
+   */
   const leave = () => {
     endHold();
     endPress(false);
     inside = false;
     map = null;
     select(null);
-    unpose();
     dropVeil();
+    wake();
   };
 
   /* ── ⌘: the hand takes the control ── */
@@ -555,26 +556,12 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     const dt = Math.max(1, e.timeStamp - lastStamp);
     lastStamp = e.timeStamp;
     speed = speed * 0.7 + (Math.hypot(dx, dy) / dt) * 0.3;
-    steerBack(dy);
+    // Back up over the controls' top: the hand lets go, as it came in.
+    if (e.clientY < panelTop()) { leave(); return; }
     navigate();
   };
 
-  /**
-   * After the hand stood still while the mouse went on (a ⌘ turn, a drag),
-   * its map up and down may sit apart from the line it came in on — and on
-   * that line the hand is past the top row exactly when the pointer is over
-   * the controls. A share of each move up or down steers it back, too little
-   * to feel.
-   */
-  const steerBack = (dy: number) => {
-    if (!map || !dy) return;
-    const top = panelTop();
-    const now = map.hand.y - top - (map.from.y - top) * map.gain.y;
-    const step = Math.min(Math.abs(rise - now), Math.abs(dy) * map.gain.y * 0.3);
-    map.hand.y += Math.sign(rise - now) * step;
-  };
-
-  /** Puts the hand where the pointer is, and on the control it is over; past the top row is the way out. */
+  /** Puts the hand where the pointer is, and on the control it is over. */
   const navigate = () => {
     const held = regain();
     if (!held || !map) return;
@@ -582,16 +569,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     const gain = pace();
     if (gain.x !== map.gain.x || gain.y !== map.gain.y) pin(hand());
     lastMove = performance.now();
-    let p = hand();
-    const top = panelTop();
-    if (p.y < top - 4) {
-      // Out past the top row — once the pointer is over the controls too,
-      // so the arrow is only ever back above them. Until then the hand
-      // waits on the top row.
-      if (real && real.y < top) { leave(); return; }
-      map.hand.y += top - 4 - p.y;
-      p = hand();
-    }
+    const p = hand();
     const all = targets();
     const boxes = all.map(boxOf);
     const at = all.indexOf(held);
@@ -686,6 +664,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   return () => {
     leave();
     if (frame) cancelAnimationFrame(frame);
+    unpose();
     window.removeEventListener('pointermove', onMove, true);
     window.removeEventListener('pointerdown', onDown, true);
     window.removeEventListener('pointerup', onUp, true);
