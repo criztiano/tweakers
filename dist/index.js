@@ -9944,6 +9944,17 @@ function moveSteerMargin(speed) {
   const t = Math.min(1, Math.max(0, speed / MOVE_STEER_FULL_SPEED));
   return MOVE_STEER_MARGIN + MOVE_STEER_SLOW_MARGIN * (1 - t * t * (3 - 2 * t));
 }
+var MOVE_STEER_EXIT_SLACK = 48;
+var MOVE_STEER_EXIT_SPEED = 0.5;
+function moveSteerLeaves(depth, v) {
+  if (depth <= 0) return false;
+  const speed = Math.hypot(v.x, v.y);
+  const up = Math.max(0, -v.y);
+  const straight = speed ? up / speed : 0;
+  const quick = Math.min(1, up / MOVE_STEER_EXIT_SPEED);
+  const intent = straight * straight * (0.5 + 0.5 * quick);
+  return depth >= MOVE_STEER_EXIT_SLACK * (1 - intent);
+}
 var MOVE_STEER_REACH_MIN = 34;
 var MOVE_STEER_REACH_MAX = 70;
 var MOVE_STEER_REST_MS = 110;
@@ -10164,6 +10175,7 @@ function attachMoveSteer(root) {
   let pressTravel = 0;
   let map = null;
   let speed = 0;
+  let way = { x: 0, y: 0 };
   let lastStamp = 0;
   let wheelHold = false;
   let wheelRest;
@@ -10546,7 +10558,8 @@ function attachMoveSteer(root) {
     const dt = Math.max(1, e.timeStamp - lastStamp);
     lastStamp = e.timeStamp;
     speed = speed * 0.7 + Math.hypot(dx, dy) / dt * 0.3;
-    if (e.clientY < panelTop()) {
+    way = { x: way.x * 0.7 + dx / dt * 0.3, y: way.y * 0.7 + dy / dt * 0.3 };
+    if (moveSteerLeaves(panelTop() - e.clientY, way)) {
       leave();
       return;
     }
