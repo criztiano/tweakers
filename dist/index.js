@@ -9967,14 +9967,21 @@ function moveSteerMap(hand, from, gain, at2) {
   return { x: hand.x + (at2.x - from.x) * gain.x, y: hand.y + (at2.y - from.y) * gain.y };
 }
 function moveSteerSettle(from, boxes, at2, margin) {
-  if (at2.x >= from.left - margin && at2.x <= from.right + margin && at2.y >= from.top - margin && at2.y <= from.bottom + margin) return null;
-  const ox = at2.x < from.left ? at2.x - from.left : at2.x > from.right ? at2.x - from.right : 0;
-  const oy = at2.y < from.top ? at2.y - from.top : at2.y > from.bottom ? at2.y - from.bottom : 0;
-  const dir = Math.abs(ox) >= Math.abs(oy) ? { x: Math.sign(ox), y: 0 } : { x: 0, y: Math.sign(oy) };
-  const over = boxes.findIndex((b) => b !== from && at2.x >= b.left && at2.x <= b.right && at2.y >= b.top && at2.y <= b.bottom);
-  if (over >= 0) return { index: over, dir };
-  const next = moveSteerNext(from, boxes, at2, dir);
-  return next >= 0 ? { index: next, dir } : null;
+  let here = from;
+  let landed = null;
+  for (let step = 0; step < 8; step++) {
+    const mx = Math.min(margin, (here.right - here.left) / 2 + MOVE_STEER_MARGIN);
+    const my = Math.min(margin, (here.bottom - here.top) / 2 + MOVE_STEER_MARGIN);
+    if (at2.x >= here.left - mx && at2.x <= here.right + mx && at2.y >= here.top - my && at2.y <= here.bottom + my) break;
+    const ox = at2.x < here.left ? at2.x - here.left : at2.x > here.right ? at2.x - here.right : 0;
+    const oy = at2.y < here.top ? at2.y - here.top : at2.y > here.bottom ? at2.y - here.bottom : 0;
+    const dir = Math.abs(ox) / mx >= Math.abs(oy) / my ? { x: Math.sign(ox), y: 0 } : { x: 0, y: Math.sign(oy) };
+    const next = moveSteerNext(here, boxes, at2, dir);
+    if (next < 0 || boxes[next] === from) break;
+    landed = { index: next, dir };
+    here = boxes[next];
+  }
+  return landed;
 }
 function moveSteerNext(from, boxes, at2, dir) {
   const c = mid(from);
