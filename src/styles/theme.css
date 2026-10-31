@@ -681,6 +681,9 @@
   max-width: calc(100% - 8px);
   align-self: center;
   padding: 4px;
+  /* A step further from the controls: the header keeps the page's arrow,
+     the controls below it are the steering hand's (move-steer). */
+  margin-bottom: 4px;
 }
 
 .tweakers-move-tracks-group {

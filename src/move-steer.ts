@@ -39,7 +39,7 @@ import { MoveSurfaceStore } from './move-surface-store';
 const JOG = 'move-tweakers:jog';
 const JOG_CLICK = 'move-tweakers:jog-click';
 
-/** What the hand can hold: a slot, a pad, a header button, the wheel's list (as one control). */
+/** What the hand can hold: a slot, a pad, a button among the controls, the wheel's list (as one control). */
 export const MOVE_STEER_TARGET = [
   '.tweakers-move-wheel-screen',
   '.tweakers-move-dial:not([data-empty]):not([data-kind="blank"])',
@@ -153,7 +153,15 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
 
   /** Where the hand was last — what a control gone from the page is replaced by. */
   let lastHand: MoveSteerVec = { x: 0, y: 0 };
-  const panelTop = () => root()?.getBoundingClientRect().top ?? Infinity;
+  /**
+   * Where the hand's ground begins: the panel's controls. The header above
+   * them — the page names and the header's buttons, small targets a pointer
+   * reaches better — keeps the page's own arrow.
+   */
+  const panelTop = () => {
+    const panel = root();
+    return (panel?.querySelector('.tweakers-move-controls') ?? panel)?.getBoundingClientRect().top ?? Infinity;
+  };
   const hand = (): MoveSteerVec => {
     if (!selected?.isConnected) return lastHand;
     const m = middle(boxOf(selected));
