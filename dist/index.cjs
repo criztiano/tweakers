@@ -10517,7 +10517,7 @@ function moveSteerNext(from, boxes, at2, dir) {
     let gap, across;
     const along = dir.x ? (m.x - c.x) * dir.x : (m.y - c.y) * dir.y;
     const aside = dir.x ? Math.abs(m.y - c.y) : Math.abs(m.x - c.x);
-    if (along <= 1 || along < aside * 0.5) return;
+    if (along <= 1 || along < aside * (dir.x ? MOVE_STEER_CONE_ACROSS : MOVE_STEER_CONE_DOWN)) return;
     if (dir.x) {
       gap = dir.x > 0 ? Math.max(0, b.left - from.right) : Math.max(0, from.left - b.right);
       across = at2.y < b.top ? b.top - at2.y : at2.y > b.bottom ? at2.y - b.bottom : 0;
@@ -10555,6 +10555,8 @@ function moveSteerSpring(s, to, dt) {
   s.y += s.vy * step;
   return Math.abs(to.x - s.x) + Math.abs(to.y - s.y) > 2e-3 || Math.abs(s.vx) + Math.abs(s.vy) > 0.02;
 }
+var MOVE_STEER_CONE_ACROSS = 0.5;
+var MOVE_STEER_CONE_DOWN = 0.25;
 var MOVE_STEER_KNOCK = 14;
 
 // src/move-steer.ts
@@ -10658,6 +10660,7 @@ var JOG = "move-tweakers:jog";
 var JOG_CLICK = "move-tweakers:jog-click";
 var MOVE_STEER_TARGET = [
   ".tweakers-move-wheel-screen",
+  ".tweakers-move-tabs",
   '.tweakers-move-dial:not([data-empty]):not([data-kind="blank"])',
   '.tweakers-move-pad:not([data-empty="true"])',
   "button:not(:disabled)",
@@ -10666,6 +10669,7 @@ var MOVE_STEER_TARGET = [
 ].join(", ");
 var LIST_ROWS = ".tweakers-list-screen-row, .tweakers-move-dial-tile";
 var WHEEL_LIST = ".tweakers-move-wheel-screen";
+var TABS = ".tweakers-move-tabs";
 var ROW_TRAVEL = 16;
 var MOVE_STEER_AXIS_SLOP = 4;
 var CLICK_SLOP = 3;
@@ -10742,6 +10746,16 @@ function attachMoveSteer(root) {
   };
   const clickWheel = () => {
     window.dispatchEvent(new CustomEvent(JOG_CLICK, { detail: { shift: false }, cancelable: true }));
+  };
+  const stepTabs = (tabs, step, wrap) => {
+    const zones = Array.from(tabs.querySelectorAll('[role="tab"]'));
+    const n = zones.length;
+    if (!n) return;
+    const at2 = Math.max(0, zones.findIndex((z) => z.getAttribute("aria-selected") === "true"));
+    const next = wrap ? ((at2 + step) % n + n) % n : Math.max(0, Math.min(n - 1, at2 + step));
+    const zone = zones[next];
+    if (next === at2 || !zone || zone.disabled) return;
+    send(zone, "click", middle(boxOf(zone)), { button: 0, detail: 1 });
   };
   const targets = () => {
     const panel = root();
@@ -10974,6 +10988,16 @@ function attachMoveSteer(root) {
       endHold();
       return;
     }
+    const tabs = g.target.closest(TABS);
+    if (tabs) {
+      walked += dx + dy;
+      while (Math.abs(walked) >= MOVE_OPTION_DETENT) {
+        const step = Math.sign(walked);
+        walked -= step * MOVE_OPTION_DETENT;
+        stepTabs(tabs, step, false);
+      }
+      return;
+    }
     if (g.target.closest(WHEEL_LIST)) {
       walked += dy;
       while (Math.abs(walked) >= ROW_TRAVEL) {
@@ -11015,6 +11039,10 @@ function attachMoveSteer(root) {
     if (!held) return;
     if (isWheelList(held)) {
       clickWheel();
+      return;
+    }
+    if (held.matches(TABS)) {
+      stepTabs(held, 1, true);
       return;
     }
     const box = boxOf(held);
@@ -11160,6 +11188,11 @@ function attachMoveSteer(root) {
     if (sent.has(e)) return;
     if (inside && /^Arrow(Up|Down|Left|Right)$/.test(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey && !editable(document.activeElement)) {
       const held = regain();
+      if (held?.matches(TABS)) {
+        own(e);
+        stepTabs(held, e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 1, false);
+        return;
+      }
       if (held && (isWheelList(held) || hasRows(held))) {
         own(e);
         if (isWheelList(held)) {
