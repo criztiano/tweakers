@@ -10561,9 +10561,9 @@ function moveSteerSpring(s, to, dt) {
   return Math.abs(to.x - s.x) + Math.abs(to.y - s.y) > 2e-3 || Math.abs(s.vx) + Math.abs(s.vy) > 0.02;
 }
 var MOVE_STEER_KNOCK = 14;
-var MOVE_STEER_BUMP = 0.6;
+var MOVE_STEER_BUMP = 0.25;
 var MOVE_STEER_BUMP_MS = 180;
-var MOVE_STEER_CLOSE = 140;
+var MOVE_STEER_CLOSE = 50;
 function moveSteerGlide(at2, to, d, sinceMs, rate) {
   const k = 1 + MOVE_STEER_BUMP * Math.exp(-sinceMs / MOVE_STEER_BUMP_MS);
   const p = { x: at2.x + d.x * k, y: at2.y + d.y * k };
@@ -10711,7 +10711,7 @@ var boxOf = (el) => {
 };
 var middle = (b) => ({ x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 });
 var reduced = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
-var ARROW = '<svg viewBox="0 0 14 20" aria-hidden="true"><path d="M1 1v15.5l4-3.8 2.7 6.1 2.6-1.1-2.6-6h5.6z"/></svg>';
+var ARROW = '<svg viewBox="0 0 16 24" aria-hidden="true"><path d="M1.5 1.5V18.2l3.9-3.6 2.8 6.6 2.7-1.1-2.7-6.5h5.2z"/></svg>';
 function attachMoveSteer(root) {
   if (typeof window === "undefined" || typeof document === "undefined") return () => {
   };
