@@ -1048,7 +1048,10 @@ function Card({ item, onShow, tall }: { item: Specimen; onShow: (path: string) =
               {item.render?.()}
             </div>
           ) : (
-            <button type="button" className="tweakers-move-pad" data-kind={item.kind === 'bend' ? 'bend' : item.kind}>
+            // A face is an action wearing a picture: the panel's own button.
+            <button type="button" className="tweakers-move-pad"
+              data-kind={item.kind === 'curve' || item.kind === 'offset' ? 'action' : item.kind}
+              data-face={item.kind === 'curve' || item.kind === 'offset' ? item.kind : undefined}>
               {item.render?.()}
             </button>
           )}
