@@ -140,7 +140,12 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
   is a still arrow — no flight of its own — and the page's own arrow stays
   hidden until the two meet. There is no way out to
   the sides or the bottom: a veil over the window holds the real pointer
-  while the hand is in.
+  while the hand is in, and once the browser allows it the page captures
+  the pointer outright (pointer lock), so it can never wander off below
+  the window. The first capture needs a press or ⌘ in the panel — the
+  browser then says once that Esc lets go — and every way in after the
+  hand let go of a capture itself is captured again without asking. On
+  the way out the real pointer comes back where the capture took it.
 - **The pointer is a hand on a control, not a place.** Its travel runs
   quicker than the page's, across and up and down apart — the kit's own
   **Panel** settings page holds both (Hand speed ←→ and ↑↓, 2.4× by

@@ -328,7 +328,44 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     veil.addEventListener('wheel', onWheel, { passive: false });
     document.body.append(veil);
   };
-  const dropVeil = () => { veil?.remove(); veil = null; };
+  const dropVeil = () => { uncapture(); veil?.remove(); veil = null; };
+
+  /*
+   * Capture: the page holds the pointer (the browser's pointer lock), so the
+   * real pointer cannot wander off below the window while the hand is in —
+   * the panel hears only the mouse's travel. The first lock needs a press
+   * or ⌘ in the panel (the browser asks for one, and says once how Esc lets
+   * go); after the hand lets go of a lock itself, the next way in locks
+   * again without asking. With no lock the hand works as before.
+   */
+  /** Where the real pointer was when the lock took it — where it comes back. */
+  let lockOrigin: MoveSteerVec | null = null;
+  /** The last lock was let go by the hand: the next may be taken without a press. */
+  let silent = false;
+  let releasing = false;
+  const captured = () => !!veil && document.pointerLockElement === veil;
+  const capture = () => {
+    if (!veil || captured() || typeof veil.requestPointerLock !== 'function') return;
+    lockOrigin = real ? { x: real.x, y: real.y } : null;
+    try {
+      const asked = veil.requestPointerLock() as unknown as Promise<void> | undefined;
+      asked?.catch?.(() => { silent = false; });
+    } catch { silent = false; }
+  };
+  const uncapture = () => {
+    if (!captured()) return;
+    releasing = true;
+    document.exitPointerLock();
+  };
+  const onLockChange = () => {
+    if (captured()) return;
+    silent = releasing;
+    releasing = false;
+    // The real pointer is back where the lock took it.
+    if (lockOrigin && real) real = { x: lockOrigin.x, y: lockOrigin.y, id: real.id };
+    lockOrigin = null;
+  };
+  const onLockError = () => { silent = false; releasing = false; };
 
   const enter = (at: MoveSteerVec) => {
     const all = targets();
@@ -336,6 +373,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     unloose();
     makeVeil();
     inside = true;
+    if (silent) capture();
     // The hand lands on the big slot nearest across, on the top row of
     // slots — the page's own controls, not the header above them.
     const slots = all.filter((el) => el.matches('.tweakers-move-dial'));
@@ -373,6 +411,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   let loose: { g: HTMLElement; at: MoveSteerVec; since: number; rate: number } | null = null;
 
   const leave = (shoot: boolean) => {
+    uncapture();
     endHold();
     endPress(false);
     const from = selected ? middle(boxOf(selected)) : null;
@@ -463,6 +502,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   const beginHold = () => {
     const held = hold || press || !inside || editable(document.activeElement) ? null : regain();
     if (!held) return;
+    capture();
     const p = hand();
     const at = under(p);
     const target = at && held.contains(at) ? at : held;
@@ -520,6 +560,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     endHold();
     const held = inside ? regain() : null;
     if (!held) return;
+    capture();
     // A click on the wheel's list takes its row, as the wheel's press does.
     if (isWheelList(held)) { clickWheel(); return; }
     // A list's rows are never picked by where a press lands — only ⌘, two
@@ -567,8 +608,10 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
 
   const onMove = (e: PointerEvent) => {
     if (sent.has(e) || e.pointerType !== 'mouse') return;
+    const locked = captured();
     const before = real;
-    real = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    // Under the lock the real pointer stands still; only its travel comes.
+    if (!locked) real = { x: e.clientX, y: e.clientY, id: e.pointerId };
     if (!inside) {
       if (loose) {
         if (veil) own(e);
@@ -586,9 +629,9 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
       return;
     }
     own(e);
-    if (!before) return;
-    const dx = e.clientX - before.x;
-    const dy = e.clientY - before.y;
+    if (!locked && !before) return;
+    const dx = locked ? e.movementX : e.clientX - before!.x;
+    const dy = locked ? e.movementY : e.clientY - before!.y;
     if (hold) {
       if (!moveSteerHeld(e)) endHold();
       else { steer(hold, dx, dy, e.shiftKey); return; }
@@ -608,7 +651,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     const out = navigate(dx * gain(pace?.handSpeedX) * catching, dy * gain(pace?.handSpeedY) * catching);
     // The way out is up past the top row — or the pointer flung far above
     // the panel's top.
-    if (out || e.clientY < panelTop() - FLUNG) leave(true);
+    if (out || (!locked && e.clientY < panelTop() - FLUNG)) leave(true);
   };
 
   /** Moves the hand; true when it pushes up past the panel's top row — the way out. */
@@ -710,6 +753,8 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   const onVisibility = () => { if (document.hidden) onAway(); };
 
   window.addEventListener('pointermove', onMove, true);
+  document.addEventListener('pointerlockchange', onLockChange);
+  document.addEventListener('pointerlockerror', onLockError);
   window.addEventListener('pointerdown', onDown, true);
   window.addEventListener('pointerup', onUp, true);
   for (const type of ['mousedown', 'mouseup', 'click', 'dblclick', 'auxclick', 'contextmenu'] as const) window.addEventListener(type, onMouse, true);
@@ -723,6 +768,8 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     unloose();
     if (frame) cancelAnimationFrame(frame);
     window.removeEventListener('pointermove', onMove, true);
+    document.removeEventListener('pointerlockchange', onLockChange);
+    document.removeEventListener('pointerlockerror', onLockError);
     window.removeEventListener('pointerdown', onDown, true);
     window.removeEventListener('pointerup', onUp, true);
     for (const type of ['mousedown', 'mouseup', 'click', 'dblclick', 'auxclick', 'contextmenu'] as const) window.removeEventListener(type, onMouse, true);
