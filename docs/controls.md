@@ -130,11 +130,16 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
 - **Below the panel's top there is no arrow.** Coming down into the panel the
   arrow is sucked into the big slot nearest across, on the top row of
   slots, and the travel that brought it in moves nothing until it has
-  landed; going back up over the top edge, a dot is shot out of the control
-  in the hand and lands on the arrow where it comes back. Both go straight
-  for their end on a slight arc, leaning the way the pointer was going
-  (`MOVE_STEER_ARC_BEND`), eased by the kit's `--move-ease-in` (in) and `--move-ease-out` (out). There is no way out to the sides or the bottom: a veil over
-  the window holds the real pointer while the hand is in.
+  landed. The way out is up past the top row (the header's buttons are a
+  row like any other), with the real pointer over the panel's top by then —
+  or the pointer flung far above it. A dot is shot out of the control in
+  the hand the way the hand was going, to just over the panel's top; there
+  it is the arrow again, and the arrow closes on where the real pointer is
+  as you go on, so it never jumps sideways. The flights lean a little the
+  way the pointer was going (`MOVE_STEER_ARC_BEND`), eased by the kit's
+  `--move-ease-in` (in) and `--move-ease-out` (out). There is no way out to
+  the sides or the bottom: a veil over the window holds the real pointer
+  while the hand is in.
 - **The pointer is a hand on a control, not a place.** Its travel runs
   quicker than the page's, across and up and down apart — the kit's own
   **Panel** settings page holds both (Hand speed ←→ and ↑↓, 2.4× by
@@ -148,14 +153,17 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
   (`--move-steer-glow`) — no ring. At the panel's edge it stretches and stays. A rest lets the
   tension go: the hand settles back in the middle (move-steer-core). The
   header's buttons and the wheel list's rows are controls like any other.
-- **Every press lands on the hand.** A click, a drag and the hover a list
-  opens on all reach the control in the hand, where the hand is; a drag
-  runs at the page's pace from there. The hand never scrolls a list on its
-  own.
+- **Every press lands on the hand.** A click and a drag reach the control
+  in the hand, where the hand is; a drag runs at the page's pace from there.
+- **A list is one control.** The wheel's list, and a slot's list, are held
+  whole: moving the hand never walks or scrolls them, and a press on a
+  slot's list is its knob's tap, never a row. ⌘ and the mouse, two fingers,
+  or the arrow keys walk a list in the hand — the wheel's list as the big
+  wheel turns it (its own turn and press events, so whoever reads the wheel
+  walks it), a slot's list through its own keys.
 - **Two fingers turn.** On a trackpad (or a mouse wheel) the control in the
   hand turns the way the fingers go, exactly as ⌘ and the mouse turn it,
-  with the same tick, and lets go when they stop. On a row of the wheel's
-  list they scroll the list under the hand instead.
+  with the same tick, and lets go when they stop.
 - **⌘ takes the control** (Ctrl off a Mac), with a short tick
   (`move-steer-sound`; a drawn placeholder until the real sound is in —
   the file's place is described there). While ⌘ is held the hand stays
