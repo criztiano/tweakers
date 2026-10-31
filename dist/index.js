@@ -2399,58 +2399,6 @@ function dialOrigin(meta) {
   return origin === void 0 ? 0 : normalizeDial(meta, origin);
 }
 
-// src/angle-core.ts
-var ANGLE_DEAD_ZONE_PX = 4;
-function decimalsForStep2(step) {
-  const s = String(step);
-  const dot = s.indexOf(".");
-  return dot === -1 ? 0 : s.length - dot - 1;
-}
-function snapAngle(value, min, step) {
-  if (!(step > 0)) return value;
-  return parseFloat((min + Math.round((value - min) / step) * step).toFixed(decimalsForStep2(step)));
-}
-function normalizeAngle(value, min, max, wrap) {
-  const span = max - min;
-  if (!wrap || span <= 0) return Math.min(max, Math.max(min, value));
-  const t = ((value - min) % span + span) % span;
-  return min + t;
-}
-function valueToBearing(value, min, max) {
-  const span = max - min || 1;
-  return (value - min) / span * 360;
-}
-function bearingToValue(bearing, min, max) {
-  const span = max - min || 1;
-  return min + (bearing % 360 + 360) % 360 / 360 * span;
-}
-function angleFromPointer(dx, dy, current, min, max, step, wrap) {
-  if (Math.hypot(dx, dy) < ANGLE_DEAD_ZONE_PX) return null;
-  const bearing = Math.atan2(dx, -dy) * 180 / Math.PI;
-  let value = bearingToValue(bearing, min, max);
-  if (wrap) {
-    const span = max - min;
-    while (value - current > span / 2) value -= span;
-    while (current - value > span / 2) value += span;
-  }
-  return normalizeAngle(snapAngle(value, min, step), min, max, wrap);
-}
-function nudgeAngle(value, delta, min, max, step, wrap) {
-  return normalizeAngle(snapAngle(value + delta * (step || 1), min, step), min, max, wrap);
-}
-function arcPath(from, to, radius, cx = 0, cy = 0) {
-  const point = (deg) => {
-    const rad = (deg - 90) * Math.PI / 180;
-    return `${(cx + radius * Math.cos(rad)).toFixed(3)} ${(cy + radius * Math.sin(rad)).toFixed(3)}`;
-  };
-  const delta = to - from;
-  if (Math.abs(delta) < 0.01) return "";
-  if (Math.abs(delta) >= 359.99) {
-    return `M ${point(from)} A ${radius} ${radius} 0 0 1 ${point(from + 180)} A ${radius} ${radius} 0 0 1 ${point(from + 359.99)}`;
-  }
-  return `M ${point(from)} A ${radius} ${radius} 0 ${Math.abs(delta) > 180 ? 1 : 0} ${delta > 0 ? 1 : 0} ${point(to)}`;
-}
-
 // src/transition-math.ts
 import { isEasingConfigValue, isSpringConfigValue } from "tweakers/store";
 function round2(value) {
@@ -3332,45 +3280,51 @@ function MoveSlotRampBody({ label, value, css, stop, stops }) {
     /* @__PURE__ */ jsx3(MoveSlotDisplayFoot, { label, value })
   ] });
 }
-var NEEDLE_R = 8.5;
-var DIAL_TICK_STEP = 30;
-var DIAL_TICK_IN = 9.5;
-var DIAL_TICK_MINOR = 10.25;
-var DIAL_TICK_MAJOR = 11;
-function dialTicks(major) {
+var DIAL_TICK_STEP = 5;
+var DIAL_TICK_OUT = 11;
+var DIAL_TICK_IN = { fine: 9.6, major: 9, compass: 8.4 };
+function dialTicks(major, lo = 0, hi = 360) {
   let d = "";
   for (let deg = 0; deg < 360; deg += DIAL_TICK_STEP) {
-    if (deg % 90 === 0 !== major) continue;
+    if (deg % 30 === 0 !== major || deg < lo - 0.01 || deg > hi + 0.01) continue;
     const rad = (deg - 90) * Math.PI / 180;
-    const out = major ? DIAL_TICK_MAJOR : DIAL_TICK_MINOR;
+    const from = deg % 90 === 0 ? DIAL_TICK_IN.compass : major ? DIAL_TICK_IN.major : DIAL_TICK_IN.fine;
     const at2 = (r) => `${(r * Math.cos(rad)).toFixed(3)} ${(r * Math.sin(rad)).toFixed(3)}`;
-    d += `M${at2(DIAL_TICK_IN)} L${at2(out)} `;
+    d += `M${at2(from)} L${at2(DIAL_TICK_OUT)} `;
   }
   return d.trim();
 }
-var DIAL_TICKS_MINOR = dialTicks(false);
+var DIAL_TICKS_FINE = dialTicks(false);
 var DIAL_TICKS_MAJOR = dialTicks(true);
+function dialSweep(origin, bearing, major) {
+  if (Math.abs(bearing - origin) < 0.01) return "";
+  return dialTicks(major, Math.min(origin, bearing), Math.max(origin, bearing));
+}
 var NEEDLE_SPRING = springParams(LIVELY_UI);
 var NEEDLE_REST = 0.05;
-function needleTip(bearing) {
+function needleEnds(bearing) {
   const rad = (bearing - 90) * Math.PI / 180;
-  return { x2: (NEEDLE_R * Math.cos(rad)).toFixed(3), y2: (NEEDLE_R * Math.sin(rad)).toFixed(3) };
+  const at2 = (r) => [(r * Math.cos(rad)).toFixed(3), (r * Math.sin(rad)).toFixed(3)];
+  const [x1, y1] = at2(DIAL_TICK_IN.compass);
+  const [x2, y2] = at2(DIAL_TICK_OUT);
+  return { x1, y1, x2, y2 };
 }
 function foldBearing(deg) {
   return (deg % 360 + 360) % 360;
 }
 function MoveSlotDialBody({ label, value, bearing, origin, follow = false }) {
   const hand = useRef3(null);
-  const sweep = useRef3(null);
+  const sweepFine = useRef3(null);
+  const sweepMajor = useRef3(null);
   const needle = useRef3({ at: bearing, speed: 0, to: bearing, origin, frame: 0 });
   useLayoutEffect(() => {
     const n = needle.current;
     n.origin = origin;
     const draw = (deg) => {
-      const tip2 = needleTip(deg);
-      hand.current?.setAttribute("x2", tip2.x2);
-      hand.current?.setAttribute("y2", tip2.y2);
-      sweep.current?.setAttribute("d", arcPath(n.origin, foldBearing(deg), NEEDLE_R));
+      const ends2 = needleEnds(deg);
+      for (const [k, v] of Object.entries(ends2)) hand.current?.setAttribute(k, v);
+      sweepFine.current?.setAttribute("d", dialSweep(n.origin, foldBearing(deg), false));
+      sweepMajor.current?.setAttribute("d", dialSweep(n.origin, foldBearing(deg), true));
     };
     const still = !follow || typeof window === "undefined" || typeof window.requestAnimationFrame !== "function" || !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const to = n.at + ((bearing - n.at) % 360 + 540) % 360 - 180;
@@ -3414,16 +3368,19 @@ function MoveSlotDialBody({ label, value, bearing, origin, follow = false }) {
     if (n.frame) window.cancelAnimationFrame(n.frame);
     n.frame = 0;
   }, []);
-  const tip = needleTip(bearing);
+  const ends = needleEnds(bearing);
   return /* @__PURE__ */ jsxs3(Fragment4, { children: [
-    /* @__PURE__ */ jsx3(MoveSlotDisplay, { children: /* @__PURE__ */ jsxs3("svg", { className: "tweakers-move-slot-needle", viewBox: "-12 -12 24 24", "aria-hidden": "true", children: [
-      /* @__PURE__ */ jsx3("path", { className: "tweakers-move-needle-tick", d: DIAL_TICKS_MINOR }),
-      /* @__PURE__ */ jsx3("path", { className: "tweakers-move-needle-tick", "data-major": true, d: DIAL_TICKS_MAJOR }),
-      /* @__PURE__ */ jsx3("circle", { className: "tweakers-move-needle-face", cx: "0", cy: "0", r: NEEDLE_R }),
-      /* @__PURE__ */ jsx3("path", { ref: sweep, className: "tweakers-move-needle-sweep", d: arcPath(origin, bearing, NEEDLE_R) }),
-      /* @__PURE__ */ jsx3("line", { ref: hand, className: "tweakers-move-needle-hand", x1: "0", y1: "0", x2: tip.x2, y2: tip.y2 })
-    ] }) }),
-    /* @__PURE__ */ jsx3(MoveSlotDisplayFoot, { label, value })
+    /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-tag", children: label }),
+    /* @__PURE__ */ jsx3("div", { className: "tweakers-move-dial-ring", children: /* @__PURE__ */ jsxs3("div", { className: "tweakers-move-dial-ring-face", children: [
+      /* @__PURE__ */ jsxs3("svg", { className: "tweakers-move-slot-needle", viewBox: "-12 -12 24 24", "aria-hidden": "true", children: [
+        /* @__PURE__ */ jsx3("path", { className: "tweakers-move-needle-tick", d: DIAL_TICKS_FINE }),
+        /* @__PURE__ */ jsx3("path", { className: "tweakers-move-needle-tick", "data-major": true, d: DIAL_TICKS_MAJOR }),
+        /* @__PURE__ */ jsx3("path", { ref: sweepFine, className: "tweakers-move-needle-tick", "data-lit": true, d: dialSweep(origin, bearing, false) }),
+        /* @__PURE__ */ jsx3("path", { ref: sweepMajor, className: "tweakers-move-needle-tick", "data-major": true, "data-lit": true, d: dialSweep(origin, bearing, true) }),
+        /* @__PURE__ */ jsx3("line", { ref: hand, className: "tweakers-move-needle-hand", ...ends })
+      ] }),
+      /* @__PURE__ */ jsx3("span", { className: "tweakers-move-dial-ring-value", children: value })
+    ] }) })
   ] });
 }
 function MoveSlotRangeBody({
@@ -9403,6 +9360,58 @@ function setGradientSquash(value, squash) {
 }
 function setGradientRotation(value, rotation) {
   return { ...value, rotation: wrapAngle(rotation) };
+}
+
+// src/angle-core.ts
+var ANGLE_DEAD_ZONE_PX = 4;
+function decimalsForStep2(step) {
+  const s = String(step);
+  const dot = s.indexOf(".");
+  return dot === -1 ? 0 : s.length - dot - 1;
+}
+function snapAngle(value, min, step) {
+  if (!(step > 0)) return value;
+  return parseFloat((min + Math.round((value - min) / step) * step).toFixed(decimalsForStep2(step)));
+}
+function normalizeAngle(value, min, max, wrap) {
+  const span = max - min;
+  if (!wrap || span <= 0) return Math.min(max, Math.max(min, value));
+  const t = ((value - min) % span + span) % span;
+  return min + t;
+}
+function valueToBearing(value, min, max) {
+  const span = max - min || 1;
+  return (value - min) / span * 360;
+}
+function bearingToValue(bearing, min, max) {
+  const span = max - min || 1;
+  return min + (bearing % 360 + 360) % 360 / 360 * span;
+}
+function angleFromPointer(dx, dy, current, min, max, step, wrap) {
+  if (Math.hypot(dx, dy) < ANGLE_DEAD_ZONE_PX) return null;
+  const bearing = Math.atan2(dx, -dy) * 180 / Math.PI;
+  let value = bearingToValue(bearing, min, max);
+  if (wrap) {
+    const span = max - min;
+    while (value - current > span / 2) value -= span;
+    while (current - value > span / 2) value += span;
+  }
+  return normalizeAngle(snapAngle(value, min, step), min, max, wrap);
+}
+function nudgeAngle(value, delta, min, max, step, wrap) {
+  return normalizeAngle(snapAngle(value + delta * (step || 1), min, step), min, max, wrap);
+}
+function arcPath(from, to, radius, cx = 0, cy = 0) {
+  const point = (deg) => {
+    const rad = (deg - 90) * Math.PI / 180;
+    return `${(cx + radius * Math.cos(rad)).toFixed(3)} ${(cy + radius * Math.sin(rad)).toFixed(3)}`;
+  };
+  const delta = to - from;
+  if (Math.abs(delta) < 0.01) return "";
+  if (Math.abs(delta) >= 359.99) {
+    return `M ${point(from)} A ${radius} ${radius} 0 0 1 ${point(from + 180)} A ${radius} ${radius} 0 0 1 ${point(from + 359.99)}`;
+  }
+  return `M ${point(from)} A ${radius} ${radius} 0 ${Math.abs(delta) > 180 ? 1 : 0} ${delta > 0 ? 1 : 0} ${point(to)}`;
 }
 
 // src/transfer-core.ts

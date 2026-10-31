@@ -4721,10 +4721,14 @@ declare function MoveSlotRampBody({ label, value, css, stop, stops }: {
 }): react_jsx_runtime.JSX.Element;
 /**
  * The dial slot — a needle, for the values whose two ends are the same place.
- * A bar would put 359° and 1° as far apart as a slot can show them. A graded
- * ring stands round the face, a tick every 30° and the four compass points
- * longer, so a bearing can be read at a glance; it is quieter than the needle
- * and the sweep, and it never moves.
+ * A bar would put 359° and 1° as far apart as a slot can show them. The face
+ * is only marks, on the slot itself with no well behind: a graded ring — a
+ * tick every 5°, longer every 30°, longest on the compass points — whose
+ * needle is one bright mark in the ring itself, on the value's bearing, and
+ * the value large in its middle, in the big readouts' line face. The name is
+ * the tag on top, as on every picture face. The ticks from the origin to the
+ * needle are lit, so the ring tells how far the value has turned as well as
+ * where it points.
  *
  * In the hand (`follow` off) the needle is the value, 1:1, every frame. A
  * change from anywhere else — a preset, an agent, automation — has the needle
@@ -4737,7 +4741,7 @@ declare function MoveSlotDialBody({ label, value, bearing, origin, follow }: {
     value: ReactNode;
     /** Compass bearing in degrees, 0 = up, clockwise. */
     bearing: number;
-    /** The bearing the sweep grows out of. */
+    /** The bearing the lit ticks grow out of. */
     origin: number;
     /** Ease to a new bearing rather than jump — off while the dial is in the hand. */
     follow?: boolean;
