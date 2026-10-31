@@ -81,12 +81,12 @@ these gestures; an app wires nothing.
   (Shift creeps at 0.1×). The drag never latches the chip. A still click
   keeps the Move's gesture: a tap latches and a hold peeks. A colour chip
   and a filter's resonance chip keep the Move's gesture only.
-- **Hover is a hand on the knob.** A pointer resting on a list slot — a
-  select's list, a multiselect, folders — opens a long list to its whole run,
-  as a touched knob does, and the row under it lights halfway to the chosen
-  one, saying what a click takes. A finger on glass has no hover: a tap
-  opens and picks as before. Every kit list row (`ListScreen`) wears the
-  same hover.
+- **Hover selects, it never opens.** A pointer resting on a list slot — a
+  select's list, a multiselect, folders, a curve's grid — puts it in the hand
+  (the steering hand, below) without opening it; it opens to its whole run
+  only while ⌘ or two fingers turn it, as a knob's list opens only under a
+  finger on the Move. A finger on glass has no hover: a tap opens and picks
+  as before. Every kit list row (`ListScreen`) wears the same hover.
 - **A colour takes both hands.** Across turns the hue (the knob), up and down
   the luminosity (the volume knob) — up is lighter. A still click opens the
   editor.
@@ -127,6 +127,12 @@ and the formatted readout. It retains every gesture and store subscription.
 The mouse can play the panel the way a hand plays the Move — no click, no
 hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
 
+- **The Panel hand can be switched off.** The switch beside the Menu button
+  (the Panel settings' `steerHand`, persisted) turns the hand off: the
+  pointer moves freely over the controls, presses land as they always do,
+  and the control under the pointer is the one in the hand — lit the same
+  way, turned the same way by ⌘ (the pointer hidden while it turns), two
+  fingers and the keys.
 - **The header keeps the arrow.** The page names and the header's buttons
   are small, and a pointer reaches them better: the hand's ground starts at
   the controls under the header, a step further below it.
