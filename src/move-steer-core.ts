@@ -18,6 +18,8 @@ export const MOVE_STEER_REACH_MIN = 34;
 export const MOVE_STEER_REACH_MAX = 70;
 /** At the panel's edge the hand stretches this far past the reach, and no further. */
 export const MOVE_STEER_RUBBER = 1.3;
+/** Coming in, the hand's travel fades in over about this long, in ms, so the move that brought the arrow in does not carry on. */
+export const MOVE_STEER_CATCH_MS = 120;
 /** A pause this long, in ms, lets the tension go. */
 export const MOVE_STEER_REST_MS = 110;
 
@@ -138,21 +140,20 @@ export const MOVE_STEER_KNOCK = 14;
 
 /* ── the way in and out: the arrow glides ── */
 
-/** Right after the arrow goes in or out, it takes this much more of the pointer's own travel… */
+/** Right after the arrow comes out, it takes this much more of the pointer's own travel… */
 export const MOVE_STEER_BUMP = 0.6;
 /** …fading to none over about this long, in ms. */
 export const MOVE_STEER_BUMP_MS = 180;
-/** The pointer travel, in px, over which the arrow closes on where it is going. */
+/** The pointer travel, in px, over which the arrow closes on the real pointer. */
 export const MOVE_STEER_CLOSE = 140;
 
 /**
- * The arrow on its way in or out, one pointer move on: it moves only as the
+ * The arrow on its way out, one pointer move on: it moves only as the
  * pointer moves — the pointer's own travel `d`, a little more just after it
- * crossed (the bump, fading in `MOVE_STEER_BUMP_MS`) — and each move also
- * closes `rate` px of the gap to `to` per px of travel (`moveSteerGlideRate`),
- * so it gets there after `MOVE_STEER_CLOSE` px: on the way in, the control
- * the hand lands on; on the way out, the real pointer. No path of its own,
- * no time of its own: a still pointer is a still arrow.
+ * came out (the bump, fading in `MOVE_STEER_BUMP_MS`) — and each move also
+ * closes `rate` px of the gap to `to`, the real pointer, per px of travel
+ * (`moveSteerGlideRate`), so the two meet after `MOVE_STEER_CLOSE` px. No path
+ * of its own, no time of its own: a still pointer is a still arrow.
  */
 export function moveSteerGlide(at: MoveSteerVec, to: MoveSteerVec, d: MoveSteerVec, sinceMs: number, rate: number): MoveSteerVec {
   const k = 1 + MOVE_STEER_BUMP * Math.exp(-sinceMs / MOVE_STEER_BUMP_MS);

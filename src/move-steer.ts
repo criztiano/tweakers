@@ -1,7 +1,7 @@
 /**
  * The steering hand: the computer's way to play the panel without a click.
  *
- * Coming down into the panel, the arrow glides into the nearest control
+ * Coming down into the panel, the arrow is gone at once into the nearest control
  * and stays gone until the pointer goes back up over the panel's top edge —
  * then it is shot back out of the control it held. Below that edge there is
  * no arrow anywhere, and no way out to the sides or the bottom.
@@ -27,7 +27,7 @@
  * travel turns that knob.
  */
 import {
-  MOVE_STEER_GAIN, MOVE_STEER_KNOCK, moveSteerGlide, moveSteerGlideRate, MOVE_STEER_REST_MS, moveSteerNext, moveSteerPose, moveSteerReach,
+  MOVE_STEER_CATCH_MS, MOVE_STEER_GAIN, MOVE_STEER_KNOCK, moveSteerGlide, moveSteerGlideRate, MOVE_STEER_REST_MS, moveSteerNext, moveSteerPose, moveSteerReach,
   moveSteerSpring, moveSteerTravel, type MoveSteerBox, type MoveSteerSpring, type MoveSteerVec,
 } from './move-steer-core';
 import { TweakStore } from './store/TweakStore';
@@ -140,8 +140,8 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   let hold: Hold | null = null;
   let press: Grip | null = null;
   let pressTravel = 0;
-  /** The arrow on its way in: until it reaches the control, the travel moves it, not the hand. */
-  let arriving: { g: HTMLElement; at: MoveSteerVec; since: number; rate: number; gap: number } | null = null;
+  /** When the hand came in: its travel fades in from there (`MOVE_STEER_CATCH_MS`). */
+  let enteredAt = 0;
   /** A hold the trackpad's two fingers opened, and the timer that lets it go when they stop. */
   let wheelHold = false;
   let wheelRest: ReturnType<typeof setTimeout> | undefined;
@@ -352,46 +352,12 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     select(best);
     offset = { x: 0, y: 0 };
     lastMove = 0;
-    // The arrow glides in from where it came, as it glides out: only as the
-    // mouse moves, a little quicker at first, closing on the control.
-    if (!reduced()) {
-      const g = document.createElement('i');
-      g.className = 'tweakers-move-steer-ghost tweakers-move-steer-arrow';
-      g.innerHTML = ARROW;
-      layer().append(g);
-      const gap = Math.hypot(middle(boxOf(best)).x - at.x, middle(boxOf(best)).y - at.y);
-      arriving = { g, at: { ...at }, since: performance.now(), rate: moveSteerGlideRate(gap), gap };
-      placeArriving();
-    }
+    // The arrow is gone the moment it is in: the slot lights and takes the
+    // hit, and the hand's travel fades in, so the move that brought the
+    // arrow in never carries the hand on down the panel.
+    enteredAt = performance.now();
+    knock(best, { x: 0, y: 1 }, MOVE_STEER_KNOCK * 1.4);
     wake();
-  };
-
-  const placeArriving = () => {
-    if (!arriving) return;
-    // It shrinks into the control as it closes on it.
-    const to = selected?.isConnected ? middle(boxOf(selected)) : arriving.at;
-    const left = Math.min(1, Math.hypot(to.x - arriving.at.x, to.y - arriving.at.y) / (arriving.gap || 1));
-    arriving.g.style.transform = `translate(${arriving.at.x}px, ${arriving.at.y}px) scale(${0.35 + 0.65 * left})`;
-  };
-
-  /** The arrow reaches the control: it is gone into it, and the control takes the hit. */
-  const land = (dir: MoveSteerVec = { x: 0, y: 1 }) => {
-    if (!arriving) return;
-    arriving.g.remove();
-    arriving = null;
-    const len = Math.hypot(dir.x, dir.y) || 1;
-    if (selected) knock(selected, { x: dir.x / len, y: dir.y / len }, MOVE_STEER_KNOCK * 1.4);
-  };
-
-  /** One pointer move with the arrow on its way in. */
-  const followArriving = (d: MoveSteerVec) => {
-    const a = arriving!;
-    const held = regain();
-    if (!held) { land(d); return; }
-    const to = middle(boxOf(held));
-    a.at = moveSteerGlide(a.at, to, d, performance.now() - a.since, a.rate);
-    if (Math.hypot(to.x - a.at.x, to.y - a.at.y) < 1.5) land(d);
-    else placeArriving();
   };
 
   /**
@@ -399,7 +365,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
    * control the hand let go of, and from there it is the pointer — moving
    * only as the mouse moves, a little quicker for a moment (the bump), and
    * closing on where the real pointer is as it goes (move-steer-core's
-   * `moveSteerGlide`, the way in's glide run backward). The page's own arrow stays hidden until the two meet;
+   * `moveSteerGlide`). The page's own arrow stays hidden until the two meet;
    * while the real pointer is still down over the panel the veil keeps the
    * page from hearing it, and the arrow, not the real pointer, decides
    * whether the hand comes back in.
@@ -407,7 +373,6 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   let loose: { g: HTMLElement; at: MoveSteerVec; since: number; rate: number } | null = null;
 
   const leave = (shoot: boolean) => {
-    land();
     endHold();
     endPress(false);
     const from = selected ? middle(boxOf(selected)) : null;
@@ -498,7 +463,6 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   const beginHold = () => {
     const held = hold || press || !inside || editable(document.activeElement) ? null : regain();
     if (!held) return;
-    land();
     const p = hand();
     const at = under(p);
     const target = at && held.contains(at) ? at : held;
@@ -556,7 +520,6 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     endHold();
     const held = inside ? regain() : null;
     if (!held) return;
-    land();
     // A click on the wheel's list takes its row, as the wheel's press does.
     if (isWheelList(held)) { clickWheel(); return; }
     // A list's rows are never picked by where a press lands — only ⌘, two
@@ -626,8 +589,6 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     if (!before) return;
     const dx = e.clientX - before.x;
     const dy = e.clientY - before.y;
-    // The arrow still on its way in takes the travel, not the hand.
-    if (arriving && !hold && !press) { followArriving({ x: dx, y: dy }); return; }
     if (hold) {
       if (!moveSteerHeld(e)) endHold();
       else { steer(hold, dx, dy, e.shiftKey); return; }
@@ -643,7 +604,8 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     }
     const pace = TweakStore.getValues(MOVE_PANEL_SETTINGS);
     const gain = (v: unknown) => (typeof v === 'number' && v > 0 ? v : MOVE_STEER_GAIN);
-    const out = navigate(dx * gain(pace?.handSpeedX), dy * gain(pace?.handSpeedY));
+    const catching = 1 - Math.exp(-(performance.now() - enteredAt) / MOVE_STEER_CATCH_MS);
+    const out = navigate(dx * gain(pace?.handSpeedX) * catching, dy * gain(pace?.handSpeedY) * catching);
     // The way out is up past the top row — or the pointer flung far above
     // the panel's top.
     if (out || e.clientY < panelTop() - FLUNG) leave(true);
@@ -651,7 +613,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
 
   /** Moves the hand; true when it pushes up past the panel's top row — the way out. */
   const navigate = (dx: number, dy: number) => {
-    if (arriving || !regain()) return false;
+    if (!regain()) return false;
     lastMove = performance.now();
     let out = false;
     let all: Element[] | null = null;

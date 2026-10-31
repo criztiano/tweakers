@@ -127,19 +127,18 @@ and the formatted readout. It retains every gesture and store subscription.
 The mouse can play the panel the way a hand plays the Move — no click, no
 hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
 
-- **Below the panel's top there is no arrow.** Coming in and going out are
-  one glide, run either way. Coming down into the panel, the hand takes the
-  big slot nearest across on the top row of slots, and the arrow stays
-  where it crossed: from there it moves only as the mouse moves — a little
-  quicker for a moment (`MOVE_STEER_BUMP`) — closing on the slot within
-  `MOVE_STEER_CLOSE` px of travel and shrinking into it; the slot takes the
-  hit, and only then does the travel move the hand (⌘, a click or two
-  fingers land it at once). The way out is up past the top row (the
-  header's buttons are a row like any other), or the pointer flung far
-  over the panel's top: the arrow comes back just over the top, above the
-  control the hand let go of, and glides the same way onto the real
-  pointer. A still mouse is a still arrow — no flight of its own — and the
-  page's own arrow stays hidden until the two meet. There is no way out to
+- **Below the panel's top there is no arrow.** Coming down into the panel the
+  arrow is gone at once: the hand takes the big slot nearest across on the
+  top row of slots, which lights and takes the hit, and the hand's travel
+  fades in over a moment (`MOVE_STEER_CATCH_MS`), so the move that brought
+  the arrow in never carries it on down the panel. The way out is up past
+  the top row (the header's buttons are a row like any other), or the
+  pointer flung far over the panel's top: the arrow comes back just over
+  the top, above the control the hand let go of, and moves only as the
+  mouse moves — a little quicker for a moment (`MOVE_STEER_BUMP`), closing
+  on the real pointer within `MOVE_STEER_CLOSE` px of travel. A still mouse
+  is a still arrow — no flight of its own — and the page's own arrow stays
+  hidden until the two meet. There is no way out to
   the sides or the bottom: a veil over the window holds the real pointer
   while the hand is in.
 - **The pointer is a hand on a control, not a place.** Its travel runs
