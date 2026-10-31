@@ -151,9 +151,11 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
   place of the hand. Coming in, the hand lands in the middle of the top
   slot, so the move that brought the mouse in has that slot's lower half to
   spend. The hand holds a control until it is past its edge by a margin
-  that grows when the mouse moves slowly (`moveSteerMargin`), then lands on
-  the control it is over, or the nearest that way (`moveSteerSettle`); a
-  careful move never slips past more than the control it means. Up and
+  that grows when the mouse moves slowly (`moveSteerMargin`) — never more
+  than half the control's own size, so a small pad holds as long as a pad
+  can — then steps to the next control that way, one at a time
+  (`moveSteerSettle`): a quick move runs through several, a careful one
+  lands on the next and never slips past it. Up and
   down the way is wider (`MOVE_STEER_CONE_DOWN`): rows of pads are short and
   wide, so with nothing right below, the pad a column over in the next row
   is where the hand goes. Pulling at
