@@ -131,13 +131,14 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
   arrow is sucked into the big slot nearest across, on the top row of
   slots, and the travel that brought it in moves nothing until it has
   landed. The way out is up past the top row (the header's buttons are a
-  row like any other), with the real pointer over the panel's top by then —
-  or the pointer flung far above it. A dot is shot out of the control in
-  the hand the way the hand was going, to just over the panel's top; there
-  it is the arrow again, and the arrow closes on where the real pointer is
-  as you go on, so it never jumps sideways. The flights lean a little the
-  way the pointer was going (`MOVE_STEER_ARC_BEND`), eased by the kit's
-  `--move-ease-in` (in) and `--move-ease-out` (out). There is no way out to
+  row like any other), or the pointer flung far over the panel's top. The
+  arrow comes back just over the top, above the control the hand let go
+  of, and from there it moves only as the mouse moves — a little quicker
+  for a moment (`MOVE_STEER_OUT_BUMP`), and closing on the real pointer as
+  you go, meeting it within `MOVE_STEER_OUT_CLOSE` px of travel. A still
+  mouse is a still arrow: no flight of its own. The page's own arrow stays
+  hidden until the two meet. The arrow coming in is sucked straight into
+  the control, eased by the kit's `--move-ease-in`. There is no way out to
   the sides or the bottom: a veil over the window holds the real pointer
   while the hand is in.
 - **The pointer is a hand on a control, not a place.** Its travel runs
