@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   MOVE_STEER_REACH_MAX, MOVE_STEER_REACH_MIN, MOVE_STEER_RUBBER, moveSteerNext, moveSteerPose, moveSteerReach,
-  moveSteerSpring, moveSteerTravel, moveSteerGlide, moveSteerGlideRate, MOVE_STEER_BUMP, MOVE_STEER_CLOSE, type MoveSteerBox,
+  moveSteerSpring, moveSteerTravel, moveSteerGlide, moveSteerGlideRate, moveSteerPace, MOVE_STEER_CRAWL, MOVE_STEER_FULL_SPEED, MOVE_STEER_BUMP, MOVE_STEER_CLOSE, type MoveSteerBox,
 } from '../src/move-steer-core';
 
 const box = (left: number, top: number, w: number, h: number): MoveSteerBox => ({ left, top, right: left + w, bottom: top + h });
@@ -99,5 +99,15 @@ describe('the way in and out', () => {
       at = moveSteerGlide(at, real, d, 1000, rate);
     }
     expect(Math.hypot(at.x - real.x, at.y - real.y)).toBeLessThan(1);
+  });
+});
+
+describe('the hand following the pointer\'s speed', () => {
+  it('crawls when the pointer crawls, and takes its full pace when it moves', () => {
+    expect(moveSteerPace(0)).toBe(MOVE_STEER_CRAWL);
+    expect(moveSteerPace(MOVE_STEER_FULL_SPEED)).toBe(1);
+    expect(moveSteerPace(5)).toBe(1);
+    expect(moveSteerPace(MOVE_STEER_FULL_SPEED / 2)).toBeGreaterThan(MOVE_STEER_CRAWL);
+    expect(moveSteerPace(MOVE_STEER_FULL_SPEED / 2)).toBeLessThan(1);
   });
 });

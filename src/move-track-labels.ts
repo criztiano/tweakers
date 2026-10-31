@@ -1,4 +1,4 @@
-import { MOVE_STEER_GAIN } from './move-steer-core';
+import { MOVE_STEER_GAIN_X, MOVE_STEER_GAIN_Y } from './move-steer-core';
 import { LUCIDE_ICONS } from './icons';
 import { TweakStore, type PanelConfig, type TweakValue } from './store/TweakStore';
 
@@ -56,8 +56,8 @@ export const MoveTrackLabels = {
         },
         // The steering hand's pace (move-steer): pointer pixels to hand
         // pixels inside the panel, across and up and down apart.
-        handSpeedX: { type: 'slider', default: MOVE_STEER_GAIN, min: 0.5, max: 5, step: 0.1, display: 'value' },
-        handSpeedY: { type: 'slider', default: MOVE_STEER_GAIN, min: 0.5, max: 5, step: 0.1, display: 'value' },
+        handSpeedX: { type: 'slider', default: MOVE_STEER_GAIN_X, min: 0.5, max: 5, step: 0.1, display: 'value' },
+        handSpeedY: { type: 'slider', default: MOVE_STEER_GAIN_Y, min: 0.5, max: 5, step: 0.1, display: 'value' },
       },
       undefined,
       { kind: 'kit', persist: true, labels: { trackLabels: 'Track labels', handSpeedX: 'Hand speed ←→', handSpeedY: 'Hand speed ↑↓' } }

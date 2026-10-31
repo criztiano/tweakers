@@ -27,7 +27,7 @@
  * travel turns that knob.
  */
 import {
-  MOVE_STEER_CATCH_MS, MOVE_STEER_GAIN, MOVE_STEER_KNOCK, moveSteerGlide, moveSteerGlideRate, MOVE_STEER_REST_MS, moveSteerNext, moveSteerPose, moveSteerReach,
+  MOVE_STEER_CATCH_MS, MOVE_STEER_GAIN_X, MOVE_STEER_GAIN_Y, MOVE_STEER_KNOCK, moveSteerPace, moveSteerGlide, moveSteerGlideRate, MOVE_STEER_REST_MS, moveSteerNext, moveSteerPose, moveSteerReach,
   moveSteerSpring, moveSteerTravel, type MoveSteerBox, type MoveSteerSpring, type MoveSteerVec,
 } from './move-steer-core';
 import { TweakStore } from './store/TweakStore';
@@ -142,6 +142,9 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   let pressTravel = 0;
   /** When the hand came in: its travel fades in from there (`MOVE_STEER_CATCH_MS`). */
   let enteredAt = 0;
+  /** The pointer's smoothed speed (px/ms), and when it last moved. */
+  let speed = 0;
+  let lastStamp = 0;
   /** A hold the trackpad's two fingers opened, and the timer that lets it go when they stop. */
   let wheelHold = false;
   let wheelRest: ReturnType<typeof setTimeout> | undefined;
@@ -675,9 +678,14 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
       return;
     }
     const pace = TweakStore.getValues(MOVE_PANEL_SETTINGS);
-    const gain = (v: unknown) => (typeof v === 'number' && v > 0 ? v : MOVE_STEER_GAIN);
+    const gain = (v: unknown, fallback: number) => (typeof v === 'number' && v > 0 ? v : fallback);
     const catching = 1 - Math.exp(-(performance.now() - enteredAt) / MOVE_STEER_CATCH_MS);
-    const out = navigate(dx * gain(pace?.handSpeedX) * catching, dy * gain(pace?.handSpeedY) * catching);
+    // The pointer's speed, smoothed: a slow move takes more travel per control.
+    const dt = Math.max(1, e.timeStamp - lastStamp);
+    lastStamp = e.timeStamp;
+    speed = speed * 0.7 + (Math.hypot(dx, dy) / dt) * 0.3;
+    const k = catching * moveSteerPace(speed);
+    const out = navigate(dx * gain(pace?.handSpeedX, MOVE_STEER_GAIN_X) * k, dy * gain(pace?.handSpeedY, MOVE_STEER_GAIN_Y) * k);
     // The way out is up past the top row — or the pointer flung far above
     // the panel's top.
     if (out || (!locked && e.clientY < panelTop() - FLUNG)) leave(true);

@@ -9,8 +9,24 @@
  * hand settles back in the middle of its control.
  */
 
-/** The hand's travel per pointer pixel: the panel goes by quicker than the page. */
-export const MOVE_STEER_GAIN = 2.4;
+/** The hand's travel per pointer pixel, across and up and down: the panel goes by quicker than the page (Cri's feel test, 2× and 1.5×). */
+export const MOVE_STEER_GAIN_X = 2;
+export const MOVE_STEER_GAIN_Y = 1.5;
+
+/** The pointer speed, in px/ms, at which the hand takes its full pace. */
+export const MOVE_STEER_FULL_SPEED = 0.6;
+/** The share of its pace the hand keeps at a crawl. */
+export const MOVE_STEER_CRAWL = 0.35;
+
+/**
+ * The hand's pace for a pointer `speed` (px/ms): a slow, careful move
+ * takes more travel per control, so it never slips past more than the
+ * one it means; a quick one takes the full pace. Eased in between.
+ */
+export function moveSteerPace(speed: number) {
+  const t = Math.min(1, Math.max(0, speed / MOVE_STEER_FULL_SPEED));
+  return MOVE_STEER_CRAWL + (1 - MOVE_STEER_CRAWL) * t * t * (3 - 2 * t);
+}
 /** How far past a control's edge, in hand pixels, the hand still holds it. */
 export const MOVE_STEER_MARGIN = 10;
 /** The travel from a control's middle that lets go of it, whatever its size, in hand pixels. */
